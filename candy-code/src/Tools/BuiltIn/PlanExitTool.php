@@ -58,6 +58,10 @@ use SugarCraft\Code\Tools\ToolResult;
  * ({@see \SugarCraft\Code\Chat}) and `serve`
  * ({@see \SugarCraft\Code\Host\TurnRunner}) apply {@see approval()} once
  * the turn has ended. `Alt+M` still leaves plan mode without asking.
+ *
+ * S-X06 (2026-11-13): this class's with*() methods hand-carry their constructor
+ * inputs (fewer than seven, so exempt from the mutate() sweep); the ruling and
+ * its guard live in tests/Support/MutateDriftGuardTest.php.
  */
 #[BuiltInTool(name: self::NAME, permission: ToolPermissionClass::NoAsk, position: 22, gloss: 'leave plan mode: put the written plan to the user for approval')]
 final readonly class PlanExitTool implements Tool, BuildsFromCatalog, DelegatesToEngine, RelaysPermissionAsks, TakesToolCallId

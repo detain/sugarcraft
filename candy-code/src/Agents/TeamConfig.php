@@ -12,6 +12,10 @@ namespace SugarCraft\Code\Agents;
  * methods to produce derived instances. The on-disk location of the team
  * mailboxes is owned by {@see Team} (which builds {@see Mailbox}), not by
  * this config.
+ *
+ * S-X06 (2026-11-13): this class's with*() methods hand-carry their constructor
+ * inputs (fewer than seven, so exempt from the mutate() sweep); the ruling and
+ * its guard live in tests/Support/MutateDriftGuardTest.php.
  */
 final readonly class TeamConfig
 {

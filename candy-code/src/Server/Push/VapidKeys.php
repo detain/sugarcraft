@@ -38,6 +38,10 @@ use SugarCraft\Code\Support\PrivateRetainedDir;
  * state dir) is replaced by a fresh pair on the next read, exactly like the
  * owner token: a corrupted identity is not salvageable, and every pushed
  * message with the old key would have been refused regardless.
+ *
+ * S-X06 (2026-11-13): this class's with*() methods hand-carry their constructor
+ * inputs (fewer than seven, so exempt from the mutate() sweep); the ruling and
+ * its guard live in tests/Support/MutateDriftGuardTest.php.
  */
 final class VapidKeys
 {

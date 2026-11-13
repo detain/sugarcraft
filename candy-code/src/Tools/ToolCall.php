@@ -4,6 +4,11 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Tools;
 
+/**
+ * S-X06 (2026-11-13): this class's with*() methods hand-carry their constructor
+ * inputs (fewer than seven, so exempt from the mutate() sweep); the ruling and
+ * its guard live in tests/Support/MutateDriftGuardTest.php.
+ */
 final readonly class ToolCall
 {
     /** Bytes of the raw payload quoted back in {@see argumentsErrorFor()}'s message. */

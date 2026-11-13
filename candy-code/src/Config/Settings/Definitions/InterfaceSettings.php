@@ -391,7 +391,7 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withLabel(Lang::t('settings.transcriptJsonl.label'))
                 ->withHelp(Lang::t('settings.transcriptJsonl.help'))
                 ->withReaderSymbol(Bootstrap::class . '::sessionStore')
-                ->withReadBy('`Bootstrap::sessionStore()` → `EnhancedSessionStore::withJsonlMirror()` (the store mirror) and the `JsonlTranscriptWriter::enabled()` flag read by `ScriptHook::stdinPayload()` (`transcript_path`)'),
+                ->withReadBy('`Bootstrap::sessionStore()` → `EnhancedSessionStore::attachJsonlMirror()` (the store mirror) and the `JsonlTranscriptWriter::enabled()` flag read by `ScriptHook::stdinPayload()` (`transcript_path`)'),
         ];
     }
 }

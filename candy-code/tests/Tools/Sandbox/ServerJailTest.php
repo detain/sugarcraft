@@ -209,7 +209,7 @@ final class ServerJailTest extends TestCase
         $user = '/home/op/' . uniqid('candy-config-', true) . '.json';
         $client = new McpClient('/nonexistent/' . uniqid('mcp-', true) . '/.mcp.json', userConfigPath: $user);
         $jail = new RecordingTestJail();
-        $client->withSandbox($jail, null, '/trust/root');
+        $client->setSandbox($jail, null, '/trust/root');
         $prefix = new ReflectionMethod(McpClient::class, 'stdioJailPrefix');
         $prefix->setAccessible(true);
 
@@ -255,7 +255,7 @@ final class ServerJailTest extends TestCase
 
         // Jail installed: the same project-tier false is now IGNORED and
         // the user must be told.
-        $client->withSandbox(new RecordingTestJail(), null, '/trust/root');
+        $client->setSandbox(new RecordingTestJail(), null, '/trust/root');
         self::assertNotSame([], $prefix->invoke($client, 'projSrv', $projTier, false, null));
         self::assertStringContainsString('projSrv', $client->sandboxOptOutNotice());
     }
@@ -265,7 +265,7 @@ final class ServerJailTest extends TestCase
         $user = '/home/op/' . uniqid('candy-config-', true) . '.json';
         $client = new McpClient('/nonexistent/' . uniqid('mcp-', true) . '/.mcp.json', userConfigPath: $user);
         $refusal = 'synthetic-' . uniqid('refusal-', true);
-        $client->withSandbox(new RecordingTestJail(), $refusal, '/trust/root');
+        $client->setSandbox(new RecordingTestJail(), $refusal, '/trust/root');
         $prefix = new ReflectionMethod(McpClient::class, 'stdioJailPrefix');
         $prefix->setAccessible(true);
 

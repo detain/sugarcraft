@@ -551,18 +551,7 @@ final readonly class AnthropicProvider implements ProviderInterface, MarksPrompt
      */
     public function withServiceTier(?string $tier): static
     {
-        return new self(
-            $this->apiKey,
-            $this->baseUrl,
-            $this->defaultModel,
-            $this->httpSeamInjected ? $this->http : null,
-            $this->httpStreamSeamInjected ? $this->httpStream : null,
-            $this->modelPrices,
-            $this->promptCache,
-            $this->contextWindowOverride,
-            $this->thinkingBudget,
-            $tier,
-        );
+        return $this->mutate(['serviceTier' => $tier]);
     }
 
     /**
@@ -649,17 +638,31 @@ final readonly class AnthropicProvider implements ProviderInterface, MarksPrompt
      */
     public function withModel(string $model): static
     {
-        return new self(
-            $this->apiKey,
-            $this->baseUrl,
-            $model,
-            $this->httpSeamInjected ? $this->http : null,
-            $this->httpStreamSeamInjected ? $this->httpStream : null,
-            $this->modelPrices,
-            $this->promptCache,
-            $this->contextWindowOverride,
-            $this->thinkingBudget,
-            $this->serviceTier,
-        );
+        return $this->mutate(['defaultModel' => $model]);
+    }
+
+    /**
+     * The ONE place this provider's ten constructor inputs are carried over
+     * (S-X06; replaces two positional ten-argument lists). Named, so a
+     * reordered constructor cannot silently swap two fields. The injected
+     * seams are forwarded as-is and the DEFAULT transport is rebuilt, for the
+     * stale-`$this` reason given at {@see withModel()}.
+     *
+     * @param array<string, mixed> $changes
+     */
+    private function mutate(array $changes): static
+    {
+        return new self(...array_merge([
+            'apiKey' => $this->apiKey,
+            'baseUrl' => $this->baseUrl,
+            'defaultModel' => $this->defaultModel,
+            'http' => $this->httpSeamInjected ? $this->http : null,
+            'httpStream' => $this->httpStreamSeamInjected ? $this->httpStream : null,
+            'modelPrices' => $this->modelPrices,
+            'promptCache' => $this->promptCache,
+            'contextWindowOverride' => $this->contextWindowOverride,
+            'thinkingBudget' => $this->thinkingBudget,
+            'serviceTier' => $this->serviceTier,
+        ], $changes));
     }
 }

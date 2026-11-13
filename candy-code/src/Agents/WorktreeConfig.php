@@ -48,6 +48,10 @@ use SugarCraft\Code\Support\ContainedPath;
  * @note This class is mutable (not `readonly class`) to support the ::new()
  * static factory which reads .candy-code/config.json at construction time.
  * Individual properties remain readonly once constructed.
+ *
+ * S-X06 (2026-11-13): this class's with*() methods hand-carry their constructor
+ * inputs (fewer than seven, so exempt from the mutate() sweep); the ruling and
+ * its guard live in tests/Support/MutateDriftGuardTest.php.
  */
 final class WorktreeConfig
 {

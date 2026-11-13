@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Tools\Sandbox;
 
 use SugarCraft\Code\Background\BackgroundSupervisor;
 use SugarCraft\Code\Support\ProcessContainment;
+use SugarCraft\Core\Concerns\Mutable;
 
 /**
  * The optional bubblewrap write-jail the `Bash` tool runs its commands in on
@@ -94,6 +95,8 @@ use SugarCraft\Code\Support\ProcessContainment;
  */
 final readonly class Bubblewrap implements SandboxBackend
 {
+    use Mutable;
+
     /**
      * The kernel interface Ubuntu 24.04 gates unprivileged user namespaces
      * behind — the sysctl named in the class doc-block, spelled out so
@@ -250,12 +253,12 @@ final readonly class Bubblewrap implements SandboxBackend
 
     public function withNetwork(bool $network): self
     {
-        return new self($this->binary, $network, $this->nestedUserns, $this->protectedPaths, $this->allowlist, $this->egressSocket, $this->allowedDomains);
+        return $this->mutate(['network' => $network]);
     }
 
     public function withBinary(string $binary): self
     {
-        return new self($binary, $this->network, $this->nestedUserns, $this->protectedPaths, $this->allowlist, $this->egressSocket, $this->allowedDomains);
+        return $this->mutate(['binary' => $binary]);
     }
 
     /**
@@ -266,7 +269,7 @@ final readonly class Bubblewrap implements SandboxBackend
      */
     public function withNestedUserns(bool $nestedUserns): self
     {
-        return new self($this->binary, $this->network, $nestedUserns, $this->protectedPaths, $this->allowlist, $this->egressSocket, $this->allowedDomains);
+        return $this->mutate(['nestedUserns' => $nestedUserns]);
     }
 
     /**
@@ -284,7 +287,7 @@ final readonly class Bubblewrap implements SandboxBackend
      */
     public function withProtectedPaths(array $protectedPaths): self
     {
-        return new self($this->binary, $this->network, $this->nestedUserns, $protectedPaths, $this->allowlist, $this->egressSocket, $this->allowedDomains);
+        return $this->mutate(['protectedPaths' => $protectedPaths]);
     }
 
     /**
@@ -300,7 +303,7 @@ final readonly class Bubblewrap implements SandboxBackend
      */
     public function withEgress(string $socketPath, array $domains): self
     {
-        return new self($this->binary, false, $this->nestedUserns, $this->protectedPaths, true, $socketPath, $domains);
+        return $this->mutate(['network' => false, 'allowlist' => true, 'egressSocket' => $socketPath, 'allowedDomains' => $domains]);
     }
 
     /**
@@ -313,7 +316,7 @@ final readonly class Bubblewrap implements SandboxBackend
      */
     public function withAllowedDomains(array $domains): self
     {
-        return new self($this->binary, false, $this->nestedUserns, $this->protectedPaths, true, null, $domains);
+        return $this->mutate(['network' => false, 'allowlist' => true, 'egressSocket' => null, 'allowedDomains' => $domains]);
     }
 
     /**

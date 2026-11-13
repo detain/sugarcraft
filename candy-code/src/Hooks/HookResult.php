@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Hooks;
 
+use SugarCraft\Core\Concerns\Mutable;
+
 /**
  * One hook's decision about a pending tool call.
  *
@@ -42,6 +44,8 @@ namespace SugarCraft\Code\Hooks;
  */
 final readonly class HookResult
 {
+    use Mutable;
+
     public const ALLOW = 'allow';
     public const DENY = 'deny';
     public const MODIFY = 'modify';
@@ -290,17 +294,7 @@ final readonly class HookResult
             return $this;
         }
 
-        return new self(
-            $this->action,
-            $this->message,
-            $this->modifiedInput,
-            $context,
-            $this->askedBy,
-            $this->refusedBy,
-            $this->continue,
-            $this->stopReason,
-            $this->askEveryTime,
-        );
+        return $this->mutate(['additionalContext' => $context]);
     }
 
     /**
@@ -313,17 +307,7 @@ final readonly class HookResult
      */
     public function withAskedBy(array $names): self
     {
-        return new self(
-            $this->action,
-            $this->message,
-            $this->modifiedInput,
-            $this->additionalContext,
-            array_values(array_unique($names)),
-            $this->refusedBy,
-            $this->continue,
-            $this->stopReason,
-            $this->askEveryTime,
-        );
+        return $this->mutate(['askedBy' => array_values(array_unique($names))]);
     }
 
     /**
@@ -339,17 +323,7 @@ final readonly class HookResult
             return $this;
         }
 
-        return new self(
-            $this->action,
-            $this->message,
-            $this->modifiedInput,
-            $this->additionalContext,
-            $this->askedBy,
-            $name,
-            $this->continue,
-            $this->stopReason,
-            $this->askEveryTime,
-        );
+        return $this->mutate(['refusedBy' => $name]);
     }
 
     /**
@@ -447,17 +421,7 @@ final readonly class HookResult
             return $this;
         }
 
-        return new self(
-            $this->action,
-            $this->message,
-            $this->modifiedInput,
-            $this->additionalContext,
-            $this->askedBy,
-            $this->refusedBy,
-            $this->continue,
-            $this->stopReason,
-            $reason,
-        );
+        return $this->mutate(['askEveryTime' => $reason]);
     }
 
     /**

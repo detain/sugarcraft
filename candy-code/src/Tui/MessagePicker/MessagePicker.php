@@ -45,6 +45,10 @@ use function str_pad;
  * them beside the next state, and neither writes to the conversation itself.
  * That is the DirectoryPicker's keyboard-owned law again: every mutation of
  * the session belongs to the host that reads this class's answer.
+ *
+ * S-X06 (2026-11-13): this class's with*() methods hand-carry their constructor
+ * inputs (fewer than seven, so exempt from the mutate() sweep); the ruling and
+ * its guard live in tests/Support/MutateDriftGuardTest.php.
  */
 final class MessagePicker
 {

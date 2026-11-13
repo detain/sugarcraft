@@ -6,6 +6,11 @@ namespace SugarCraft\Code\Messages;
 
 use SugarCraft\Code\Usage;
 
+/**
+ * S-X06 (2026-11-13): this class's with*() methods hand-carry their constructor
+ * inputs (fewer than seven, so exempt from the mutate() sweep); the ruling and
+ * its guard live in tests/Support/MutateDriftGuardTest.php.
+ */
 final readonly class AssistantMessage implements Message
 {
     public function __construct(

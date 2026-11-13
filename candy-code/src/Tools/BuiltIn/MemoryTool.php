@@ -70,6 +70,10 @@ use SugarCraft\Code\Tools\ToolResult;
  * trigger spelling, the index heading block and its persisted-trigger
  * gate, and the listing's unarmed shape — the armed end-to-end listing rides
  * the `when:` persistence seam named in the lane report.
+ *
+ * S-X06 (2026-11-13): this class's with*() methods hand-carry their constructor
+ * inputs (fewer than seven, so exempt from the mutate() sweep); the ruling and
+ * its guard live in tests/Support/MutateDriftGuardTest.php.
  */
 #[BuiltInTool(name: 'Memory', permission: ToolPermissionClass::NoAsk, position: 12, gloss: 'view, save, edit, delete and recall the persistent memory notes indexed in the system prompt, the past sessions of this project, or the compaction journal')]
 final readonly class MemoryTool implements Tool, BuildsFromCatalog, AcceptsShellOwner

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Tui\Menu;
 
+use SugarCraft\Core\Concerns\Mutable;
+
 /**
  * One row of one menu: a leaf (command or toggle), a submenu header owning
  * children, or a separator. Immutable in the house shape — a toggled check
@@ -26,6 +28,8 @@ namespace SugarCraft\Code\Tui\Menu;
  */
 final class MenuNode
 {
+    use Mutable;
+
     /**
      * @param list<self> $children
      */
@@ -66,7 +70,7 @@ final class MenuNode
 
     public function withChecked(bool $checked): self
     {
-        return new self($this->kind, $this->id, $this->label, $this->icon, $checked, $this->enabled, $this->children, $this->zone);
+        return $this->mutate(['checked' => $checked]);
     }
 
     /** May the cursor rest on this row and may Enter choose it? Separators and disabled rows: no. */

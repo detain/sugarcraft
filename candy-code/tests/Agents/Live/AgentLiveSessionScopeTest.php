@@ -93,7 +93,7 @@ final class AgentLiveSessionScopeTest extends TestCase
     {
         $answers = ['explore' => 'red'];
         $live = AgentLiveRegistry::new(static fn (): float => 60.0);
-        $live->withColorResolver(static fn (string $name): ?string => $answers[$name] ?? null);
+        $live->setColorResolver(static fn (string $name): ?string => $answers[$name] ?? null);
 
         $live->apply(self::openInSession('run_a', 'explore', 'ses_a'));
         self::assertSame('red', $live->get('run_a')?->color, 'the fold asked the manager-side resolver by the frame name');
@@ -126,7 +126,7 @@ final class AgentLiveSessionScopeTest extends TestCase
      * The seed itself, pinned at the launch (the lane-ab pool-constitution
      * shape): a real `Bootstrap::workspace()` — not a test-side construction
      * — must hand the folded roster its colour resolver. Every unit pin
-     * above arms the resolver by hand, so without this one the withColorResolver
+     * above arms the resolver by hand, so without this one the setColorResolver
      * line could be deleted from the production seed and the whole suite
      * would stay green while every live run paints unaccented.
      */

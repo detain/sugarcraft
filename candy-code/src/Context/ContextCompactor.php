@@ -54,6 +54,10 @@ use SugarCraft\Code\Util\TokenEstimate;
  * the same figure the status bar shows, so the two can no longer disagree about
  * how full the window is. The bare countTokens() path remains for callers that
  * measure a wire with no Message list behind it.
+ *
+ * S-X06 (2026-11-13): this class's with*() methods hand-carry their constructor
+ * inputs (fewer than seven, so exempt from the mutate() sweep); the ruling and
+ * its guard live in tests/Support/MutateDriftGuardTest.php.
  */
 final class ContextCompactor
 {

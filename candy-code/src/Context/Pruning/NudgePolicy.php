@@ -43,6 +43,10 @@ use SugarCraft\Code\Tools\ToolCall;
  *
  * The texts are constants ({@see text()}), pure functions of the kind, so an
  * anchored row renders the same bytes on every request.
+ *
+ * S-X06 (2026-11-13): this class's with*() methods hand-carry their constructor
+ * inputs (fewer than seven, so exempt from the mutate() sweep); the ruling and
+ * its guard live in tests/Support/MutateDriftGuardTest.php.
  */
 final readonly class NudgePolicy
 {

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Bundles;
 
+use SugarCraft\Core\Concerns\Mutable;
+
 /**
  * ONE plugin row of a marketplace manifest, with the provenance the row can
  * honestly carry: where it came from (source type, repo, URL, or a path
@@ -27,6 +29,8 @@ namespace SugarCraft\Code\Bundles;
  */
 final class MarketplaceEntry
 {
+    use Mutable;
+
     /** Source spellings the manifest format allows. */
     public const SOURCE_PATH = 'path';
 
@@ -107,51 +111,18 @@ final class MarketplaceEntry
      */
     public function withPinnedSha(string $sha): self
     {
-        return new self(
-            $this->name,
-            $this->sourceType,
-            $this->path,
-            $this->repo,
-            $this->url,
-            $sha,
-            $this->description,
-            $this->version,
-            $this->category,
-            $this->keywords,
-        );
+        return $this->mutate(['sha' => $sha]);
     }
 
     /** This entry with its category set (manifests spell it in several places). */
     public function withCategory(string $category): self
     {
-        return new self(
-            $this->name,
-            $this->sourceType,
-            $this->path,
-            $this->repo,
-            $this->url,
-            $this->sha,
-            $this->description,
-            $this->version,
-            $category,
-            $this->keywords,
-        );
+        return $this->mutate(['category' => $category]);
     }
 
     /** This entry with its keyword list replaced. */
     public function withKeywords(array $keywords): self
     {
-        return new self(
-            $this->name,
-            $this->sourceType,
-            $this->path,
-            $this->repo,
-            $this->url,
-            $this->sha,
-            $this->description,
-            $this->version,
-            $this->category,
-            $keywords,
-        );
+        return $this->mutate(['keywords' => $keywords]);
     }
 }

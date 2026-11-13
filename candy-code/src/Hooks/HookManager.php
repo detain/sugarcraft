@@ -32,7 +32,7 @@ final class HookManager
 
     /**
      * The backend `type: prompt` entries will be answered on, or null when
-     * this launch has no title backend. {@see withPromptBackend()} installs it
+     * this launch has no title backend. {@see setPromptBackend()} installs it
      * from `Bootstrap::hooks()` BEFORE any {@see loadEntries()} call, because
      * {@see PromptHook::fromConfig()} captures the backend into the hook row
      * it builds — a setter that ran after the file load would leave every
@@ -44,7 +44,7 @@ final class HookManager
     /**
      * The jail `hooks`-scoped script rows spawn inside, or null when this
      * launch asked for no such scope (or `bashSandbox` is off). {@see
-     * withScriptSandbox()} installs it from `Bootstrap::hooks()` BEFORE any
+     * setScriptSandbox()} installs it from `Bootstrap::hooks()` BEFORE any
      * {@see loadEntries()} call for exactly the reason the prompt backend
      * above has: {@see ScriptHook::fromConfig()} builds the row at load time,
      * and a setter that ran after the file load would leave every script hook
@@ -95,18 +95,16 @@ final class HookManager
     /**
      * Install the backend `type: prompt` entries are answered on.
      *
-     * MUTATES and returns `$this` on purpose, unlike the house `with*`
-     * immutability idiom: this is the LAUNCH-OWNED chain object (the one
+     * MUTATES and returns `$this`, which is why it is a `set*` and not a `with*`
+     * (S-X06: a `with*` name promises a new instance): this is the LAUNCH-OWNED chain object (the one
      * `Bootstrap::hooks()` builds and hands to every consumer), and a clone
      * here would orphan the built-ins and file hooks already registered on
-     * the original. The name follows the design block's seam exactly because
-     * that is the call site `Bootstrap::hooks()` writes.
-     *
+     * the original.      *
      * @param null|Backend $backend the title backend, or null when this
      *                              launch has none — prompt hooks then take
      *                              their documented no-backend door
      */
-    public function withPromptBackend(?Backend $backend): self
+    public function setPromptBackend(?Backend $backend): self
     {
         $this->promptBackend = $backend;
 
@@ -116,8 +114,8 @@ final class HookManager
     /**
      * Install the jail `hooks`-scoped script rows run inside (C-TOOL-4.d).
      *
-     * MUTATES and returns `$this` on purpose, following the {@see
-     * withPromptBackend()} precedent exactly: this is the LAUNCH-OWNED chain
+     * MUTATES and returns `$this` (a `set*`, not a `with*`), following the {@see
+     * setPromptBackend()} precedent exactly: this is the LAUNCH-OWNED chain
      * object, and a clone here would orphan the built-ins and file hooks
      * already registered on the original. Install BEFORE {@see
      * loadEntries()} — the law stated at {@see $scriptSandbox}.
@@ -127,7 +125,7 @@ final class HookManager
      *        jail; a scoped script hook is refused rather than run
      *        unconfined when it is non-null
      */
-    public function withScriptSandbox(?SandboxBackend $sandbox, ?string $refusal): self
+    public function setScriptSandbox(?SandboxBackend $sandbox, ?string $refusal): self
     {
         $this->scriptSandbox = $sandbox;
         $this->scriptSandboxRefusal = $refusal;

@@ -48,6 +48,10 @@ use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
  * window and prices come from its own row of the model database.
  *
  * No total-request timeout is added here or anywhere on a provider call.
+ *
+ * S-X06 (2026-11-13): this class's with*() methods hand-carry their constructor
+ * inputs (fewer than seven, so exempt from the mutate() sweep); the ruling and
+ * its guard live in tests/Support/MutateDriftGuardTest.php.
  */
 final class FallbackProvider implements ProviderInterface, ReportsServedModel, MarksPromptCache, RebindsModel
 {

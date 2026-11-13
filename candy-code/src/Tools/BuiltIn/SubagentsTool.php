@@ -36,6 +36,10 @@ use SugarCraft\Code\Tools\ToolResult;
  * PERMISSION CLASS: no-ask. It reads and writes only harness state — the
  * cards, the session's own mailbox, and a `cancel` control line, which stops
  * a run resumable and can never widen what it may do.
+ *
+ * S-X06 (2026-11-13): this class's with*() methods hand-carry their constructor
+ * inputs (fewer than seven, so exempt from the mutate() sweep); the ruling and
+ * its guard live in tests/Support/MutateDriftGuardTest.php.
  */
 #[BuiltInTool(name: 'Subagents', permission: ToolPermissionClass::NoAsk, position: 31, gloss: 'list, wait for or cancel the sub-agents it launched, and read the messages they sent back')]
 final readonly class SubagentsTool implements Tool, BuildsFromCatalog, DelegatesToEngine

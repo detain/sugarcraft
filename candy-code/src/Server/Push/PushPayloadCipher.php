@@ -35,6 +35,10 @@ namespace SugarCraft\Code\Server\Push;
  * fresh salt, so both are generated inside every {@see encrypt()} call in
  * production ({@see new()}); {@see withEntropy()} exists so the RFC's own
  * worked example can be pinned byte-exact — no production path uses it.
+ *
+ * S-X06 (2026-11-13): this class's with*() methods hand-carry their constructor
+ * inputs (fewer than seven, so exempt from the mutate() sweep); the ruling and
+ * its guard live in tests/Support/MutateDriftGuardTest.php.
  */
 final class PushPayloadCipher
 {

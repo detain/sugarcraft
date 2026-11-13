@@ -14,6 +14,10 @@ namespace SugarCraft\Code\Agents\Board;
  * `<agent>-<n>`, n being the member's 1-based place in the batch, so two
  * members running the same agent stay distinct and a model can tell from the
  * id alone which of them it is talking to.
+ *
+ * S-X06 (2026-11-13): this class's with*() methods hand-carry their constructor
+ * inputs (fewer than seven, so exempt from the mutate() sweep); the ruling and
+ * its guard live in tests/Support/MutateDriftGuardTest.php.
  */
 final readonly class BoardMember
 {

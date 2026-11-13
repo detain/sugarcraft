@@ -45,6 +45,10 @@ use SugarCraft\Code\Support\TimedFileLock;
  * ("trust on first use"): that is the launch the user just opted in to, and
  * no weaker than the root-only grant it replaces. From then on a change is
  * refused.
+ *
+ * S-X06 (2026-11-13): this class's with*() methods hand-carry their constructor
+ * inputs (fewer than seven, so exempt from the mutate() sweep); the ruling and
+ * its guard live in tests/Support/MutateDriftGuardTest.php.
  */
 final class McpTrustPins
 {

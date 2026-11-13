@@ -43,6 +43,10 @@ use SugarCraft\Code\Support\MediaStore;
  * business, the client forwards the array verbatim); and fact (f) is
  * enforced HERE — fetch lands bytes in MediaStore and hands back the PATH,
  * nothing downstream ever sees a b64 string.
+ *
+ * S-X06 (2026-11-13): this class's with*() methods hand-carry their constructor
+ * inputs (fewer than seven, so exempt from the mutate() sweep); the ruling and
+ * its guard live in tests/Support/MutateDriftGuardTest.php.
  */
 final class JobClient
 {

@@ -28,6 +28,10 @@ namespace SugarCraft\Code\Observability;
  * config; {@see post()} — the synchronous Guzzle leg — stays the shutdown
  * and no-loop shape, and the batch layer routes to it whenever the async leg
  * is absent or the sink is closing.
+ *
+ * S-X06 (2026-11-13): this class's with*() methods hand-carry their constructor
+ * inputs (fewer than seven, so exempt from the mutate() sweep); the ruling and
+ * its guard live in tests/Support/MutateDriftGuardTest.php.
  */
 final class OtelSink implements EventSink
 {

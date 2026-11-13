@@ -7,12 +7,15 @@ namespace SugarCraft\Code\Skills;
 use SugarCraft\Code\Context\PromptFence;
 use SugarCraft\Code\Context\Utf8Scrub;
 use SugarCraft\Code\Support\Frontmatter;
+use SugarCraft\Core\Concerns\Mutable;
 
 /**
  * A skill loaded from a SKILL.md file.
  */
 final readonly class Skill
 {
+    use Mutable;
+
     public function __construct(
         public string $name,
         public string $description,
@@ -223,24 +226,7 @@ final readonly class Skill
 
     public function withName(string $name): self
     {
-        return new self(
-            name: $name,
-            description: $this->description,
-            userInvocable: $this->userInvocable,
-            disableModelInvocation: $this->disableModelInvocation,
-            allowedTools: $this->allowedTools,
-            disallowedTools: $this->disallowedTools,
-            model: $this->model,
-            effort: $this->effort,
-            context: $this->context,
-            paths: $this->paths,
-            content: $this->content,
-            sourcePath: $this->sourcePath,
-            source: $this->source,
-            origin: $this->origin,
-            requires: $this->requires,
-            agent: $this->agent,
-        );
+        return $this->mutate(['name' => $name]);
     }
 
     /**
@@ -249,24 +235,7 @@ final readonly class Skill
      */
     public function withOrigin(SkillOrigin $origin): self
     {
-        return new self(
-            name: $this->name,
-            description: $this->description,
-            userInvocable: $this->userInvocable,
-            disableModelInvocation: $this->disableModelInvocation,
-            allowedTools: $this->allowedTools,
-            disallowedTools: $this->disallowedTools,
-            model: $this->model,
-            effort: $this->effort,
-            context: $this->context,
-            paths: $this->paths,
-            content: $this->content,
-            sourcePath: $this->sourcePath,
-            source: $this->source,
-            origin: $origin,
-            requires: $this->requires,
-            agent: $this->agent,
-        );
+        return $this->mutate(['origin' => $origin]);
     }
 
     /**
@@ -278,24 +247,7 @@ final readonly class Skill
      */
     public function withContent(string $content): self
     {
-        return new self(
-            name: $this->name,
-            description: $this->description,
-            userInvocable: $this->userInvocable,
-            disableModelInvocation: $this->disableModelInvocation,
-            allowedTools: $this->allowedTools,
-            disallowedTools: $this->disallowedTools,
-            model: $this->model,
-            effort: $this->effort,
-            context: $this->context,
-            paths: $this->paths,
-            content: $content,
-            sourcePath: $this->sourcePath,
-            source: $this->source,
-            origin: $this->origin,
-            requires: $this->requires,
-            agent: $this->agent,
-        );
+        return $this->mutate(['content' => $content]);
     }
 
     /**

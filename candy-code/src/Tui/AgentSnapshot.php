@@ -8,6 +8,10 @@ namespace SugarCraft\Code\Tui;
  * Internal snapshot for a single agent's token-tracking state.
  *
  * @internal
+ *
+ * S-X06 (2026-11-13): this class's with*() methods hand-carry their constructor
+ * inputs (fewer than seven, so exempt from the mutate() sweep); the ruling and
+ * its guard live in tests/Support/MutateDriftGuardTest.php.
  */
 final class AgentSnapshot
 {

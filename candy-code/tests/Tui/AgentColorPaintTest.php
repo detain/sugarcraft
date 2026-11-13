@@ -66,7 +66,7 @@ final class AgentColorPaintTest extends TestCase
     public function testTheStripPaintsADeclaredRunAndLeavesTheOthersOnTheirStatusColour(): void
     {
         $live = AgentLiveRegistry::new(static fn (): float => 1000.0);
-        $live->withColorResolver(static fn (string $name): ?string => $name === 'explore' ? 'orange' : null);
+        $live->setColorResolver(static fn (string $name): ?string => $name === 'explore' ? 'orange' : null);
         $live->apply(self::openFrame('run_a', 'explore'));
         $live->apply(self::openFrame('run_b', 'reviewer'));
 
@@ -85,7 +85,7 @@ final class AgentColorPaintTest extends TestCase
     public function testTheActivityLineTintsItsGlyphThroughTheSameDoor(): void
     {
         $live = AgentLiveRegistry::new(static fn (): float => 1000.0);
-        $live->withColorResolver(static fn (string $name): ?string => $name === 'explore' ? 'orange' : 'scarlet');
+        $live->setColorResolver(static fn (string $name): ?string => $name === 'explore' ? 'orange' : 'scarlet');
         $live->apply(self::openFrame('run_a', 'explore'));
         $live->apply(self::openFrame('run_b', 'reviewer'));
 
@@ -106,13 +106,13 @@ final class AgentColorPaintTest extends TestCase
         $accent = AgentColor::resolve('orange', $this->theme);
 
         $live = AgentLiveRegistry::new(static fn (): float => 1000.0);
-        $live->withColorResolver(static fn (string $name): ?string => 'orange');
+        $live->setColorResolver(static fn (string $name): ?string => 'orange');
         $live->apply(self::openFrame('run_a', 'explore'));
         $tinted = AgentViewHeader::render('explore', $live->get('run_a'), [], 100, $this->theme, 0, 1000.0);
         self::assertStringContainsString(Style::new()->bold()->foreground($accent)->render('explore'), $tinted);
 
         $plain = AgentLiveRegistry::new(static fn (): float => 1000.0);
-        $plain->withColorResolver(static fn (string $name): ?string => 'scarlet');
+        $plain->setColorResolver(static fn (string $name): ?string => 'scarlet');
         $plain->apply(self::openFrame('run_b', 'explore'));
         $untinted = AgentViewHeader::render('explore', $plain->get('run_b'), [], 100, $this->theme, 0, 1000.0);
         self::assertStringContainsString(Style::new()->bold()->render('explore'), $untinted, 'illegible word: the byte-identical plain bold of the era before this step');
@@ -184,7 +184,7 @@ final class AgentColorPaintTest extends TestCase
         $chat = new Chat(agentManager: $manager);
         $live = $chat->agentLive();
         if ($declaredColor !== null) {
-            $live->withColorResolver(static fn (string $name): ?string => $name === 'alpha' ? $declaredColor : null);
+            $live->setColorResolver(static fn (string $name): ?string => $name === 'alpha' ? $declaredColor : null);
         }
         $live->apply(new SubAgentActivity('started', $run->id, 'alpha', 'do the thing', 1, '', parentCallId: 'tc_1'));
 

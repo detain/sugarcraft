@@ -56,6 +56,10 @@ use SugarCraft\Code\Tools\Catalog\ToolPermissionClass;
  * inline with a one-line note, the honest degraded shape rather than a
  * refusal that would strand the skill. `asset` reads stay inline either way:
  * they are file reads, not executions.
+ *
+ * S-X06 (2026-11-13): this class's with*() methods hand-carry their constructor
+ * inputs (fewer than seven, so exempt from the mutate() sweep); the ruling and
+ * its guard live in tests/Support/MutateDriftGuardTest.php.
  */
 #[BuiltInTool(name: 'Skill', permission: ToolPermissionClass::Read, position: 10, gloss: 'level 2 of the progressive-disclosure design below')]
 final readonly class SkillTool implements Tool, BuildsFromCatalog, \SugarCraft\Code\Tools\ExemptFromParallelDeadline

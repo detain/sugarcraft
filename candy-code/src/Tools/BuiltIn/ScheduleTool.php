@@ -70,6 +70,10 @@ use SugarCraft\Code\Tools\ToolResult;
  *
  * The result prose stays English in the code like every other tool's: a tool
  * result is the model's channel, not a screen string (lang/en.php header).
+ *
+ * S-X06 (2026-11-13): this class's with*() methods hand-carry their constructor
+ * inputs (fewer than seven, so exempt from the mutate() sweep); the ruling and
+ * its guard live in tests/Support/MutateDriftGuardTest.php.
  */
 #[BuiltInTool(name: self::NAME, permission: ToolPermissionClass::Ask, position: 41, gloss: 'create, list or delete schedules that fire recurring background prompts')]
 final readonly class ScheduleTool implements Tool, BuildsFromCatalog, DelegatesToEngine, TakesToolCallId

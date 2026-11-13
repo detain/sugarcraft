@@ -99,7 +99,7 @@ final class BootstrapPromptHookWiringTest extends TestCase
         $this->assertInstanceOf(
             EngineBackend::class,
             $hook->backend,
-            'the launch built no title backend into the prompt hook — deleting the withPromptBackend install from Bootstrap::hooks() lands here',
+            'the launch built no title backend into the prompt hook — deleting the setPromptBackend install from Bootstrap::hooks() lands here',
         );
     }
 
@@ -166,7 +166,7 @@ final class BootstrapPromptHookWiringTest extends TestCase
 
         $this->assertSame(
             $early,
-            $early->withPromptBackend($backend),
+            $early->setPromptBackend($backend),
             'the setter is the mutating chain-owner it names itself — a returned clone would orphan every registration made on the original',
         );
         $early->loadEntries([$row[1]], 'wiring-test.yaml');

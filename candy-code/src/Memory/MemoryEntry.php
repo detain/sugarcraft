@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Memory;
 
+use SugarCraft\Core\Concerns\Mutable;
+
 /**
  * Represents a single memory entry in the cross-session memory system.
  *
@@ -21,6 +23,8 @@ namespace SugarCraft\Code\Memory;
  */
 final readonly class MemoryEntry
 {
+    use Mutable;
+
     /** The canonical prefix marking a path-glob `when:` trigger. */
     public const WHEN_PATH_PREFIX = 'path:';
 
@@ -236,16 +240,7 @@ final readonly class MemoryEntry
      */
     public function withType(string $type): self
     {
-        return new self(
-            id: $this->id,
-            type: $type,
-            tags: $this->tags,
-            scope: $this->scope,
-            content: $this->content,
-            createdAt: $this->createdAt,
-            modifiedAt: $this->modifiedAt,
-            when: $this->when,
-        );
+        return $this->mutate(['type' => $type]);
     }
 
     /**
@@ -253,16 +248,7 @@ final readonly class MemoryEntry
      */
     public function withTags(array $tags): self
     {
-        return new self(
-            id: $this->id,
-            type: $this->type,
-            tags: $tags,
-            scope: $this->scope,
-            content: $this->content,
-            createdAt: $this->createdAt,
-            modifiedAt: $this->modifiedAt,
-            when: $this->when,
-        );
+        return $this->mutate(['tags' => $tags]);
     }
 
     /**
@@ -270,16 +256,7 @@ final readonly class MemoryEntry
      */
     public function withScope(string $scope): self
     {
-        return new self(
-            id: $this->id,
-            type: $this->type,
-            tags: $this->tags,
-            scope: $scope,
-            content: $this->content,
-            createdAt: $this->createdAt,
-            modifiedAt: $this->modifiedAt,
-            when: $this->when,
-        );
+        return $this->mutate(['scope' => $scope]);
     }
 
     /**
@@ -287,16 +264,7 @@ final readonly class MemoryEntry
      */
     public function withContent(string $content): self
     {
-        return new self(
-            id: $this->id,
-            type: $this->type,
-            tags: $this->tags,
-            scope: $this->scope,
-            content: $content,
-            createdAt: $this->createdAt,
-            modifiedAt: $this->modifiedAt,
-            when: $this->when,
-        );
+        return $this->mutate(['content' => $content]);
     }
 
     /**
@@ -304,16 +272,7 @@ final readonly class MemoryEntry
      */
     public function withCreatedAt(\DateTimeImmutable $createdAt): self
     {
-        return new self(
-            id: $this->id,
-            type: $this->type,
-            tags: $this->tags,
-            scope: $this->scope,
-            content: $this->content,
-            createdAt: $createdAt,
-            modifiedAt: $this->modifiedAt,
-            when: $this->when,
-        );
+        return $this->mutate(['createdAt' => $createdAt]);
     }
 
     /**
@@ -321,16 +280,7 @@ final readonly class MemoryEntry
      */
     public function withModifiedAt(\DateTimeImmutable $modifiedAt): self
     {
-        return new self(
-            id: $this->id,
-            type: $this->type,
-            tags: $this->tags,
-            scope: $this->scope,
-            content: $this->content,
-            createdAt: $this->createdAt,
-            modifiedAt: $modifiedAt,
-            when: $this->when,
-        );
+        return $this->mutate(['modifiedAt' => $modifiedAt]);
     }
 
     /**
@@ -343,16 +293,7 @@ final readonly class MemoryEntry
      */
     public function withWhen(string $when): self
     {
-        return new self(
-            id: $this->id,
-            type: $this->type,
-            tags: $this->tags,
-            scope: $this->scope,
-            content: $this->content,
-            createdAt: $this->createdAt,
-            modifiedAt: $this->modifiedAt,
-            when: $when === '' ? '' : self::normalizeWhen($when),
-        );
+        return $this->mutate(['when' => $when === '' ? '' : self::normalizeWhen($when)]);
     }
 
     /**

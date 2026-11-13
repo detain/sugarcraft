@@ -262,23 +262,34 @@ final class HttpHook implements BoundedHookInterface
             ? max(self::MIN_TIMEOUT_SECONDS, $seconds)
             : self::MIN_TIMEOUT_SECONDS;
 
-        $clone = new self(
-            $this->name,
-            $this->event,
-            $this->matcher,
-            $this->url,
-            $this->description,
-            $this->headers,
-            $this->allowedEnvVars,
-            min($this->timeoutSeconds(), $requested),
-            $this->dialect,
-            $this->advisory,
-            $this->resolveAddresses,
-            $this->isBlockedAddress,
-            $this->transfer,
-        );
+        return $this->mutate(['timeoutSeconds' => min($this->timeoutSeconds(), $requested)]);
+    }
 
-        return $clone;
+    /**
+     * The ONE place this hook's thirteen constructor inputs — every seam
+     * included — are carried over (S-X06); a `with*()` names only what it
+     * changes. The closures are stored, not promoted, so the generic
+     * {@see \SugarCraft\Core\Concerns\Mutable} splat does not fit.
+     *
+     * @param array<string, mixed> $changes
+     */
+    private function mutate(array $changes): self
+    {
+        return new self(...array_merge([
+            'name' => $this->name,
+            'event' => $this->event,
+            'matcher' => $this->matcher,
+            'url' => $this->url,
+            'description' => $this->description,
+            'headers' => $this->headers,
+            'allowedEnvVars' => $this->allowedEnvVars,
+            'timeoutSeconds' => $this->timeoutSeconds,
+            'dialect' => $this->dialect,
+            'advisory' => $this->advisory,
+            'resolveAddresses' => $this->resolveAddresses,
+            'isBlockedAddress' => $this->isBlockedAddress,
+            'transfer' => $this->transfer,
+        ], $changes));
     }
 
     /**

@@ -39,7 +39,7 @@ final class EnhancedSessionStore
 
     /**
      * C-SES-8.g: the JSONL mirror this store was told to feed after each
-     * committed transcript save — null unless {@see withJsonlMirror()} was
+     * committed transcript save — null unless {@see attachJsonlMirror()} was
      * called, which only the launch wiring does, and only when the
      * `transcriptJsonl` setting is on. Null is the whole story when it is
      * off: no journal, no extra work on the save path.
@@ -2103,15 +2103,14 @@ final class EnhancedSessionStore
 
     /**
      * C-SES-8.g: accept the JSONL mirror this store feeds after each
-     * committed transcript save. A service-side setter, not a value-object
-     * wither: {@see EnhancedSessionStore} owns a live PDO connection and the
+     * committed transcript save. A service-side mutator, deliberately NOT a `with*`
+     * (S-X06 server-009: that name promises a new instance): {@see EnhancedSessionStore} owns a live PDO connection and the
      * identity {@see \WeakMap}s, and the object Chat, the hooks and the
      * picker all hold is exactly one per launch — a `clone` here would fork
      * a second live store whose saves the launch never sees. So it sets and
-     * returns $this, and the name carries the house `with*` spelling the
-     * design block asked for.
+     * returns $this.
      */
-    public function withJsonlMirror(JsonlTranscriptWriter $mirror): self
+    public function attachJsonlMirror(JsonlTranscriptWriter $mirror): self
     {
         $this->jsonlMirror = $mirror;
 

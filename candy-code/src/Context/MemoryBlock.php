@@ -8,6 +8,7 @@ use SugarCraft\Code\Agents\MemoryScope;
 use SugarCraft\Code\Memory\MemoryEntry;
 use SugarCraft\Code\Memory\MemoryStore;
 use SugarCraft\Code\Workspace\GitRunner;
+use SugarCraft\Core\Concerns\Mutable;
 use SugarCraft\Core\Util\Width;
 
 /**
@@ -131,6 +132,8 @@ use SugarCraft\Core\Util\Width;
  */
 final class MemoryBlock implements PromptSection
 {
+    use Mutable;
+
     /**
      * Most index lines rendered (one per note), newest first. Anything past
      * this is dropped and the block says so.
@@ -376,20 +379,7 @@ final class MemoryBlock implements PromptSection
             throw new \InvalidArgumentException('memory caps must nest: entry bytes <= user bytes <= total bytes, user entries <= entries');
         }
 
-        return new self(
-            $this->entries,
-            $this->skipped,
-            $this->fromRepository,
-            $this->userEntries,
-            $this->userSkipped,
-            $this->captured,
-            $this->recordedInCheckout,
-            $maxEntries,
-            $maxBytes,
-            $maxEntryBytes,
-            $userMaxEntries,
-            $userMaxBytes,
-        );
+        return $this->mutate(['maxEntries' => $maxEntries, 'maxBytes' => $maxBytes, 'maxEntryBytes' => $maxEntryBytes, 'userMaxEntries' => $userMaxEntries, 'userMaxBytes' => $userMaxBytes]);
     }
 
     /**

@@ -74,6 +74,10 @@ namespace SugarCraft\Code\Notebook;
  * Non-v4 documents — nbformat 3, a stray JSON file, anything whose `cells`
  * is not a list — are REFUSED at {@see parse()} by returning null; this
  * class never coerces a notebook it does not fully understand.
+ *
+ * S-X06 (2026-11-13): this class's with*() methods hand-carry their constructor
+ * inputs (fewer than seven, so exempt from the mutate() sweep); the ruling and
+ * its guard live in tests/Support/MutateDriftGuardTest.php.
  */
 final class Notebook
 {

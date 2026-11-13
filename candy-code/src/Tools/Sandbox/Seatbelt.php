@@ -40,6 +40,10 @@ use SugarCraft\Code\Support\ProcessContainment;
  * namespace for a jail to hide behind.
  *
  * @see https://developer.apple.com/library/archive/documentation/Security/Conceptual/SeatBeltGuide/
+ *
+ * S-X06 (2026-11-13): this class's with*() methods hand-carry their constructor
+ * inputs (fewer than seven, so exempt from the mutate() sweep); the ruling and
+ * its guard live in tests/Support/MutateDriftGuardTest.php.
  */
 final readonly class Seatbelt implements SandboxBackend
 {

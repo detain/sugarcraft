@@ -41,6 +41,10 @@ use SugarCraft\Forms\Field\Slider;
  * sampler name ends with a scheduler's name and the schedule is still
  * Automatic, a KNOWN sampler prefix splits into sampler + scheduler; an
  * unknown prefix stays whole rather than inventing a sampler.
+ *
+ * S-X06 (2026-11-13): this class's with*() methods hand-carry their constructor
+ * inputs (fewer than seven, so exempt from the mutate() sweep); the ruling and
+ * its guard live in tests/Support/MutateDriftGuardTest.php.
  */
 final class ParamsSection implements Section, FieldValuedSection
 {

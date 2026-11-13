@@ -64,6 +64,10 @@ use SugarCraft\Code\Util\TokenTracker;
  * plus the copies' own accumulated advisor spend this turn. E646 holds: there
  * is no blanket wall-clock timeout around the completion; the provider's own
  * per-read timeouts stand, as they do for every other backend call.
+ *
+ * S-X06 (2026-11-13): this class's with*() methods hand-carry their constructor
+ * inputs (fewer than seven, so exempt from the mutate() sweep); the ruling and
+ * its guard live in tests/Support/MutateDriftGuardTest.php.
  */
 #[BuiltInTool(name: self::NAME, permission: ToolPermissionClass::NoAsk, position: 44, gloss: 'consult a second model, tool-less and off a bounded transcript digest, on one question about this conversation; offered only when `advisorModel` is set')]
 final readonly class AdvisorTool implements Tool, BuildsFromCatalog, DelegatesToEngine, TakesToolCallId

@@ -39,6 +39,10 @@ use SugarCraft\Code\Support\AtomicFileWriter;
  *
  * This is a SugarCraft architecture type, not a port: charmbracelet/crush has
  * no `/editor`; the command is Aider's.
+ *
+ * S-X06 (2026-11-13): this class's with*() methods hand-carry their constructor
+ * inputs (fewer than seven, so exempt from the mutate() sweep); the ruling and
+ * its guard live in tests/Support/MutateDriftGuardTest.php.
  */
 final class EditorCommand
 {

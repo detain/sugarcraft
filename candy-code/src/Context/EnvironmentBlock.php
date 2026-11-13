@@ -859,12 +859,7 @@ final readonly class EnvironmentBlock implements PromptSection
      */
     public function withWriteSinceLastRender(bool $writeSinceLastRender): self
     {
-        $copy = new self($this->cwd, $this->modelName, $this->now, $this->platform, $writeSinceLastRender, $this->volatile, $this->diffsAfterWrites, $this->diffMaxBytes, $this->knowledgeCutoff, $this->projectReferences);
-        if (isset($this->enclosingRepo)) {
-            $copy->enclosingRepo = $this->enclosingRepo;
-        }
-
-        return $copy;
+        return $this->mutate(['writeSinceLastRender' => $writeSinceLastRender]);
     }
 
     /**
@@ -1002,12 +997,7 @@ final readonly class EnvironmentBlock implements PromptSection
      */
     public function withVolatile(bool $volatile): self
     {
-        $copy = new self($this->cwd, $this->modelName, $this->now, $this->platform, $this->writeSinceLastRender, $volatile, $this->diffsAfterWrites, $this->diffMaxBytes, $this->knowledgeCutoff, $this->projectReferences);
-        if (isset($this->enclosingRepo)) {
-            $copy->enclosingRepo = $this->enclosingRepo;
-        }
-
-        return $copy;
+        return $this->mutate(['volatile' => $volatile]);
     }
 
     /**
@@ -1055,7 +1045,31 @@ final readonly class EnvironmentBlock implements PromptSection
             return $this;
         }
 
-        $copy = new self($this->cwd, $this->modelName, $this->now, $this->platform, $this->writeSinceLastRender, $this->volatile, $diffs, $max, $this->knowledgeCutoff, $references);
+        return $this->mutate(['diffsAfterWrites' => $diffs, 'diffMaxBytes' => $max, 'projectReferences' => $references]);
+    }
+
+    /**
+     * The ONE place this block's ten constructor inputs are carried over
+     * (S-X06), plus the lazily-computed enclosing-repo memo, which is
+     * not a constructor input and so is the field a generic
+     * `get_object_vars` splat would silently drop.
+     *
+     * @param array<string, mixed> $changes
+     */
+    private function mutate(array $changes): self
+    {
+        $copy = new self(...array_merge([
+            'cwd' => $this->cwd,
+            'modelName' => $this->modelName,
+            'now' => $this->now,
+            'platform' => $this->platform,
+            'writeSinceLastRender' => $this->writeSinceLastRender,
+            'volatile' => $this->volatile,
+            'diffsAfterWrites' => $this->diffsAfterWrites,
+            'diffMaxBytes' => $this->diffMaxBytes,
+            'knowledgeCutoff' => $this->knowledgeCutoff,
+            'projectReferences' => $this->projectReferences,
+        ], $changes));
         if (isset($this->enclosingRepo)) {
             $copy->enclosingRepo = $this->enclosingRepo;
         }

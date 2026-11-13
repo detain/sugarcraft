@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Workflows;
 
+use SugarCraft\Core\Concerns\Mutable;
+
 /**
  * Represents the result of a complete workflow execution.
  *
@@ -12,6 +14,8 @@ namespace SugarCraft\Code\Workflows;
  */
 final readonly class WorkflowResult
 {
+    use Mutable;
+
     /**
      * @param string            $workflowId    Unique identifier of the executed workflow.
      * @param WorkflowStatus    $status        Final execution status of the workflow.
@@ -43,18 +47,7 @@ final readonly class WorkflowResult
     /** P1-8: this result with $count leading stages marked as carried from a record. */
     public function withStagesCarried(int $count): self
     {
-        return new self(
-            $this->workflowId,
-            $this->status,
-            $this->stageResults,
-            $this->context,
-            $this->totalTokens,
-            $this->totalCost,
-            $this->startedAt,
-            $this->completedAt,
-            $this->announcements,
-            max(0, $count),
-        );
+        return $this->mutate(['stagesCarried' => max(0, $count)]);
     }
 
     /**

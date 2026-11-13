@@ -22,6 +22,10 @@ namespace SugarCraft\Code\Agents\Live;
  * Immutable; {@see toArray()} / {@see fromArray()} are the mailbox line's
  * payload, and {@see fromArray()} answers null for anything that is not one,
  * because a mailbox file is writable by any process of the user.
+ *
+ * S-X06 (2026-11-13): this class's with*() methods hand-carry their constructor
+ * inputs (fewer than seven, so exempt from the mutate() sweep); the ruling and
+ * its guard live in tests/Support/MutateDriftGuardTest.php.
  */
 final class AgentMessage
 {

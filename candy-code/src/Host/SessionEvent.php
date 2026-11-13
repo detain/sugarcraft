@@ -33,6 +33,10 @@ namespace SugarCraft\Code\Host;
  * the wrong row the way an index would.
  *
  * Immutable: {@see withSeq()} is how the log stamps the number it allocated.
+ *
+ * S-X06 (2026-11-13): this class's with*() methods hand-carry their constructor
+ * inputs (fewer than seven, so exempt from the mutate() sweep); the ruling and
+ * its guard live in tests/Support/MutateDriftGuardTest.php.
  */
 final class SessionEvent
 {

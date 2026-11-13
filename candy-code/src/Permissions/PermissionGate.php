@@ -83,6 +83,10 @@ use SugarCraft\Code\Tools\McpToolBridge;
  * the subject — see {@see autoBreaker()}.
  *
  * @see PermissionMode for the full set of modes
+ *
+ * S-X06 (2026-11-13): this class's with*() methods hand-carry their constructor
+ * inputs (fewer than seven, so exempt from the mutate() sweep); the ruling and
+ * its guard live in tests/Support/MutateDriftGuardTest.php.
  */
 final class PermissionGate
 {

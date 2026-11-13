@@ -190,6 +190,21 @@ final readonly class WebFetch implements Tool, ParallelSafe, BuildsFromCatalog
             throw new \InvalidArgumentException('WebFetch limits must be at least 1.');
         }
 
+        return $this->mutate(
+            timeoutSeconds: $timeoutSeconds ?? $this->timeoutSeconds,
+            maxWireBytes: $maxWireBytes ?? $this->maxWireBytes,
+        );
+    }
+
+    /**
+     * The ONE place this tool's seven constructor inputs are carried over
+     * (S-X06): the constructor takes callables and stores closures, so the
+     * generic `get_object_vars` splat of {@see \SugarCraft\Core\Concerns\Mutable}
+     * does not apply; a new `with*()` overrides by name here instead of
+     * re-listing the carry.
+     */
+    private function mutate(?int $timeoutSeconds = null, ?int $maxWireBytes = null): self
+    {
         return new self(
             $this->resolveAddresses,
             $this->isBlockedAddress,

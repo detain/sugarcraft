@@ -100,6 +100,10 @@ use SugarCraft\Code\Workflows\WorkflowTask;
  * long, and asks permission questions. {@see ExemptFromParallelDeadline} is
  * declared for the reason Task declares it — the tool bounds itself, by each
  * stage's `config.timeout` and each agent's step cap.
+ *
+ * S-X06 (2026-11-13): this class's with*() methods hand-carry their constructor
+ * inputs (fewer than seven, so exempt from the mutate() sweep); the ruling and
+ * its guard live in tests/Support/MutateDriftGuardTest.php.
  */
 #[BuiltInTool(name: self::NAME, permission: ToolPermissionClass::Write, position: 17, gloss: 'runs a model-authored YAML plan of staged sub-agents')]
 final readonly class WorkflowTool implements Tool, BuildsFromCatalog, DelegatesToEngine, ExemptFromParallelDeadline

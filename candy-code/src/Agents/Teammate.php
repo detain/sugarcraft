@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Agents;
 
+use SugarCraft\Core\Concerns\Mutable;
+
 /**
  * Represents a teammate agent within a team.
  *
@@ -13,6 +15,8 @@ namespace SugarCraft\Code\Agents;
  */
 final readonly class Teammate
 {
+    use Mutable;
+
     /**
      * @param list<string> $tools
      */
@@ -52,15 +56,6 @@ final readonly class Teammate
      */
     public function withWorktreePath(string $worktreePath): self
     {
-        return new self(
-            id: $this->id,
-            teamId: $this->teamId,
-            name: $this->name,
-            type: $this->type,
-            model: $this->model,
-            tools: $this->tools,
-            worktreePath: $worktreePath,
-            branch: $this->branch,
-        );
+        return $this->mutate(['worktreePath' => $worktreePath]);
     }
 }

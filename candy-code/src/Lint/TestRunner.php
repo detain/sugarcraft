@@ -39,6 +39,10 @@ use SugarCraft\Code\Tools\Sandbox\SandboxScope;
  * reported as slow instead of getting the whole turn killed as hung.
  *
  * Immutable: every `with*()` returns a copy.
+ *
+ * S-X06 (2026-11-13): this class's with*() methods hand-carry their constructor
+ * inputs (fewer than seven, so exempt from the mutate() sweep); the ruling and
+ * its guard live in tests/Support/MutateDriftGuardTest.php.
  */
 final class TestRunner
 {

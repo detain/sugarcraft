@@ -70,6 +70,10 @@ use SugarCraft\Code\Support\ContainedPath;
  *
  * Dotted keys are stored FLAT on disk (`"compaction.autoPercent": 80`), because
  * {@see LayeredSettings::merge()} is key-wise.
+ *
+ * S-X06 (2026-11-13): this class's with*() methods hand-carry their constructor
+ * inputs (fewer than seven, so exempt from the mutate() sweep); the ruling and
+ * its guard live in tests/Support/MutateDriftGuardTest.php.
  */
 final class SettingsWriter
 {

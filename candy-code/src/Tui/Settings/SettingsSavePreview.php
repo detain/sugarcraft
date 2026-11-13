@@ -4,12 +4,13 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Tui\Settings;
 
-use SugarCraft\Core\Util\Width;
 use SugarCraft\Code\Config\Settings\ApplyMode;
 use SugarCraft\Code\Config\Settings\SettingsSchema;
 use SugarCraft\Code\Config\Settings\SettingsTier;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Theme;
+use SugarCraft\Core\Concerns\Mutable;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Diff\Diff;
 use SugarCraft\Diff\DiffOptions;
 use SugarCraft\Diff\LineKind;
@@ -37,6 +38,8 @@ use SugarCraft\Style\Style;
  */
 final class SettingsSavePreview
 {
+    use Mutable;
+
     /**
      * @param array<string, mixed> $set
      * @param list<string> $unset
@@ -89,7 +92,7 @@ final class SettingsSavePreview
      */
     public function withNotes(array $notes): self
     {
-        return new self($this->tier, $this->path, $this->before, $this->after, $this->set, $this->unset, $this->refusals, array_values($notes), $this->was, $this->turnRunning);
+        return $this->mutate(['notes' => array_values($notes)]);
     }
 
     /**
@@ -99,7 +102,7 @@ final class SettingsSavePreview
      */
     public function withTurnRunning(bool $running): self
     {
-        return new self($this->tier, $this->path, $this->before, $this->after, $this->set, $this->unset, $this->refusals, $this->notes, $this->was, $running);
+        return $this->mutate(['turnRunning' => $running]);
     }
 
     /** A preview that cannot proceed, e.g. the target file is unreadable. */

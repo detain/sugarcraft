@@ -192,7 +192,7 @@ final class McpClient
 
     /**
      * C-TOOL-4.e: the sandboxScope `mcp` jail installed by
-     * {@see withSandbox()} — null means nothing jails (the `mcp` scope is not
+     * {@see setSandbox()} — null means nothing jails (the `mcp` scope is not
      * requested or `bashSandbox` is off), a backend means every stdio server
      * that does not carry the user-tier `"sandbox": false` opt-out spawns
      * behind its prefix.
@@ -332,7 +332,7 @@ final class McpClient
      *                             C-MCP-1 survives the jail without making
      *                             `$HOME` writable)
      */
-    public function withSandbox(?SandboxBackend $jail, ?string $refusal, string $writableRoot): void
+    public function setSandbox(?SandboxBackend $jail, ?string $refusal, string $writableRoot): void
     {
         $this->sandboxJail = $jail;
         $this->sandboxRefusal = $refusal;

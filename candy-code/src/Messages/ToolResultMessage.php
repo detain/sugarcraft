@@ -5,9 +5,12 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Messages;
 
 use SugarCraft\Code\Usage;
+use SugarCraft\Core\Concerns\Mutable;
 
 final readonly class ToolResultMessage implements Message
 {
+    use Mutable;
+
     /**
      * $imageBytes/$imageProtocol carry an image-bearing {@see
      * \SugarCraft\Code\Tools\ToolResult} (e.g. {@see
@@ -64,16 +67,7 @@ final readonly class ToolResultMessage implements Message
      */
     public function withToolCallId(string $toolCallId): self
     {
-        return new self(
-            $toolCallId,
-            $this->content,
-            $this->isError,
-            $this->imageBytes,
-            $this->imageProtocol,
-            $this->usage,
-            $this->documentBytes,
-            $this->documentName,
-        );
+        return $this->mutate(['toolCallId' => $toolCallId]);
     }
 
     public function isError(): bool

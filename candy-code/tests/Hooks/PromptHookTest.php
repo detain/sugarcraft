@@ -487,7 +487,7 @@ final class PromptHookTest extends TestCase
             (new \ReflectionProperty(HookManager::class, 'registry'))->getValue($m);
 
         $armed = new HookManager(new HookRegistry());
-        $armed->withPromptBackend($backend);
+        $armed->setPromptBackend($backend);
         $armed->loadEntries([$row], 'test');
         $hook = $registryOf($armed)->get('PreToolUse', 'the gate');
         $this->assertInstanceOf(PromptHook::class, $hook);

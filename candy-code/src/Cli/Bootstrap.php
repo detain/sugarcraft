@@ -2044,7 +2044,7 @@ final class Bootstrap
             // learns the colour word its preset declares (null when the name
             // is off-roster or the preset declared none).
             ->withService(\SugarCraft\Code\Agents\Live\AgentLiveRegistry::class, \SugarCraft\Code\Agents\Live\AgentLiveRegistry::new()
-                ->withColorResolver(static fn (string $name): ?string => $agentManager->get($name)?->color))
+                ->setColorResolver(static fn (string $name): ?string => $agentManager->get($name)?->color))
             // O-2f: the runner a server host listen()s on; without it every
             // Chat lineage falls back to a runner of its own (TurnRunner::of()).
             ->withService(\SugarCraft\Code\Host\TurnRunner::class, \SugarCraft\Code\Host\TurnRunner::new())
@@ -6264,7 +6264,7 @@ public static function useMaxCost(?string $maxCost): void
         // call carries no total-request timeout (E646) — only the provider's
         // connect timeout, exactly as ExecReviewer's does — and this backend's
         // spend never settles into the chat's /budget accounting.
-        $hooks->withPromptBackend(self::titleBackend());
+        $hooks->setPromptBackend(self::titleBackend());
 
         // C-TOOL-4.d: `sandboxScope` pairs each supporting run with the
         // `bashSandbox` jail — the laws live at the one door below. Script-
@@ -6277,7 +6277,7 @@ public static function useMaxCost(?string $maxCost): void
             $jails[$scope] = $forScope($scope, $sandboxConfig);
         }
         $hookJail = $jails[\SugarCraft\Code\Tools\Sandbox\SandboxScope::SCOPE_HOOKS];
-        $hooks->withScriptSandbox($hookJail, $hookJail === null ? null : (new Bash(sandbox: $hookJail))->sandboxRefusal());
+        $hooks->setScriptSandbox($hookJail, $hookJail === null ? null : (new Bash(sandbox: $hookJail))->sandboxRefusal());
 
         // Post-edit format (EDT-1): the user's `formatCommands` map rewrites
         // each edited file, and the launch's shared read ledger is told about
@@ -9081,7 +9081,7 @@ public static function useMaxCost(?string $maxCost): void
             \SugarCraft\Code\Tools\Sandbox\SandboxScope::SCOPE_MCP,
             $sandboxConfig,
         );
-        $client->withSandbox($mcpJail, $mcpJail === null ? null : (new Bash(sandbox: $mcpJail))->sandboxRefusal(), $trustRoot);
+        $client->setSandbox($mcpJail, $mcpJail === null ? null : (new Bash(sandbox: $mcpJail))->sandboxRefusal(), $trustRoot);
 
         // Registered BEFORE start, and the order matters: startServers() adds
         // each server to the client as it comes up, so a client that throws
@@ -10388,7 +10388,7 @@ public static function useMaxCost(?string $maxCost): void
         // flag, no mirror, and `transcript_path` is a present null.
         if (\SugarCraft\Code\Config\Settings\UiSettings::bool(self::TRANSCRIPT_JSONL_SETTING)) {
             \SugarCraft\Code\Share\JsonlTranscriptWriter::setEnabled(true);
-            $store->withJsonlMirror(new \SugarCraft\Code\Share\JsonlTranscriptWriter(
+            $store->attachJsonlMirror(new \SugarCraft\Code\Share\JsonlTranscriptWriter(
                 projectRoot: LaunchContext::projectRootForSettings(),
             ));
         }

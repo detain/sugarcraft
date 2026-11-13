@@ -59,6 +59,10 @@ use SugarCraft\Code\Util\TokenEstimate;
  * {@see TaskTool} gives a delegated run it was granted to, private to that
  * run and never the parent's. Never {@see \SugarCraft\Code\Tools\ParallelSafe}:
  * the ledger lives in the turn's own process ({@see MutatesContextLedger}).
+ *
+ * S-X06 (2026-11-13): this class's with*() methods hand-carry their constructor
+ * inputs (fewer than seven, so exempt from the mutate() sweep); the ruling and
+ * its guard live in tests/Support/MutateDriftGuardTest.php.
  */
 #[BuiltInTool(name: 'Prune', permission: ToolPermissionClass::NoAsk, position: 14, gloss: 'drop or distill its own finished tool outputs from what it is sent, by their `<ctx-ref r="N"/>` refs')]
 final readonly class Prune implements Tool, BuildsFromCatalog, MutatesContextLedger

@@ -50,6 +50,10 @@ use SugarCraft\Code\Tools\Sandbox\SandboxScope;
  * `tools/check-child-lifetimes.php` without a row of its own.
  *
  * Immutable: every `with*()` returns a copy.
+ *
+ * S-X06 (2026-11-13): this class's with*() methods hand-carry their constructor
+ * inputs (fewer than seven, so exempt from the mutate() sweep); the ruling and
+ * its guard live in tests/Support/MutateDriftGuardTest.php.
  */
 final class LintRunner
 {

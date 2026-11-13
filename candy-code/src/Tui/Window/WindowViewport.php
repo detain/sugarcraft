@@ -15,6 +15,10 @@ use SugarCraft\Core\Util\Width;
  * restored viewport can be trusted without re-checking it. Scroll 0 is the
  * BOTTOM of the transcript (the follow-live position), which is what
  * {@see WindowViewports::restore()} answers for a window it never saw.
+ *
+ * S-X06 (2026-11-13): this class's with*() methods hand-carry their constructor
+ * inputs (fewer than seven, so exempt from the mutate() sweep); the ruling and
+ * its guard live in tests/Support/MutateDriftGuardTest.php.
  */
 final class WindowViewport
 {

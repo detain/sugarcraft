@@ -6,6 +6,7 @@ namespace SugarCraft\Code;
 
 use SugarCraft\Code\Permissions\DenialKind;
 use SugarCraft\Code\Tools\ToolResult as EngineToolResult;
+use SugarCraft\Core\Concerns\Mutable;
 use SugarCraft\Image\Mosaic;
 
 /**
@@ -45,6 +46,8 @@ use SugarCraft\Image\Mosaic;
  */
 final class ToolResult
 {
+    use Mutable;
+
     /**
      * Process-lifetime cache of the terminal's image-rendering capability,
      * keyed by the configured render mode (W2.2).
@@ -200,21 +203,7 @@ final class ToolResult
      */
     public function withImage(string $imageBytes, ?string $imagePath = null): self
     {
-        return new self(
-            $this->name,
-            $this->result,
-            $this->error,
-            $this->id,
-            imageBytes: $imageBytes,
-            imagePath: $imagePath,
-            imageProtocol: self::probeMosaic()->protocol(),
-            diff: $this->diff,
-            durationMs: $this->durationMs,
-            description: $this->description,
-            arguments: $this->arguments,
-            denial: $this->denial,
-            exitCode: $this->exitCode,
-        );
+        return $this->mutate(['imageBytes' => $imageBytes, 'imagePath' => $imagePath, 'imageProtocol' => self::probeMosaic()->protocol()]);
     }
 
     /**
@@ -231,21 +220,7 @@ final class ToolResult
     {
         $trimmed = $description === null ? null : trim($description);
 
-        return new self(
-            $this->name,
-            $this->result,
-            $this->error,
-            $this->id,
-            $this->imageBytes,
-            $this->imagePath,
-            $this->imageProtocol,
-            $this->diff,
-            $this->durationMs,
-            $trimmed === '' ? null : $trimmed,
-            $this->arguments,
-            $this->denial,
-            $this->exitCode,
-        );
+        return $this->mutate(['description' => $trimmed === '' ? null : $trimmed]);
     }
 
     /**
@@ -256,21 +231,7 @@ final class ToolResult
      */
     public function withArguments(array $arguments): self
     {
-        return new self(
-            $this->name,
-            $this->result,
-            $this->error,
-            $this->id,
-            $this->imageBytes,
-            $this->imagePath,
-            $this->imageProtocol,
-            $this->diff,
-            $this->durationMs,
-            $this->description,
-            $arguments,
-            $this->denial,
-            $this->exitCode,
-        );
+        return $this->mutate(['arguments' => $arguments]);
     }
 
     /**

@@ -406,16 +406,28 @@ final readonly class GeminiProvider implements ProviderInterface, RebindsModel, 
      */
     public function withModel(string $model): static
     {
-        return new self(
-            $this->apiKey,
-            $this->baseUrl,
-            $model,
-            $this->http,
-            $this->httpStream,
-            $this->modelPrices,
-            $this->thinkingBudget,
-            $this->contextWindowOverride,
-            $this->promptCache,
-        );
+        return $this->mutate(['defaultModel' => $model]);
+    }
+
+    /**
+     * The ONE place this provider's nine constructor inputs are carried over
+     * (S-X06; replaces a positional nine-argument list). Named, so a
+     * reordered constructor cannot silently swap two fields.
+     *
+     * @param array<string, mixed> $changes
+     */
+    private function mutate(array $changes): static
+    {
+        return new self(...array_merge([
+            'apiKey' => $this->apiKey,
+            'baseUrl' => $this->baseUrl,
+            'defaultModel' => $this->defaultModel,
+            'http' => $this->http,
+            'httpStream' => $this->httpStream,
+            'modelPrices' => $this->modelPrices,
+            'thinkingBudget' => $this->thinkingBudget,
+            'contextWindowOverride' => $this->contextWindowOverride,
+            'promptCache' => $this->promptCache,
+        ], $changes));
     }
 }

@@ -6,8 +6,9 @@ namespace SugarCraft\Code\Tui\MediaForm;
 
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Media\MediaRequest;
-use SugarCraft\Code\Tui\MediaForm\Enum\Schedulers;
 use SugarCraft\Code\Tui\MediaForm\Enum\Samplers;
+use SugarCraft\Code\Tui\MediaForm\Enum\Schedulers;
+use SugarCraft\Core\Concerns\Mutable;
 use SugarCraft\Forms\Field;
 use SugarCraft\Forms\Field\NumberField;
 use SugarCraft\Forms\Field\Slider;
@@ -46,6 +47,8 @@ use SugarCraft\Forms\Field\Text;
  */
 final readonly class FieldSpec
 {
+    use Mutable;
+
     public const string WIDGET_SLIDER = 'slider';
     public const string WIDGET_NUMBER = 'number';
     public const string WIDGET_TEXT = 'text';
@@ -200,21 +203,7 @@ final readonly class FieldSpec
      */
     public function withDisplayProps(array $props): self
     {
-        return new self(
-            key: $this->key,
-            labelKey: $this->labelKey,
-            widget: $this->widget,
-            min: \array_key_exists(DisplayOverrides::PROP_MINIMUM, $props) ? $props[DisplayOverrides::PROP_MINIMUM] : $this->min,
-            max: \array_key_exists(DisplayOverrides::PROP_MAXIMUM, $props) ? $props[DisplayOverrides::PROP_MAXIMUM] : $this->max,
-            step: \array_key_exists(DisplayOverrides::PROP_STEP, $props) ? $props[DisplayOverrides::PROP_STEP] : $this->step,
-            default: \array_key_exists(DisplayOverrides::PROP_VALUE, $props) ? $props[DisplayOverrides::PROP_VALUE] : $this->default,
-            section: $this->section,
-            infotextLabel: $this->infotextLabel,
-            options: $this->options,
-            choices: $this->choices,
-            defaultList: $this->defaultList,
-            rows: $this->rows,
-        );
+        return $this->mutate(['min' => \array_key_exists(DisplayOverrides::PROP_MINIMUM, $props) ? $props[DisplayOverrides::PROP_MINIMUM] : $this->min, 'max' => \array_key_exists(DisplayOverrides::PROP_MAXIMUM, $props) ? $props[DisplayOverrides::PROP_MAXIMUM] : $this->max, 'step' => \array_key_exists(DisplayOverrides::PROP_STEP, $props) ? $props[DisplayOverrides::PROP_STEP] : $this->step, 'default' => \array_key_exists(DisplayOverrides::PROP_VALUE, $props) ? $props[DisplayOverrides::PROP_VALUE] : $this->default]);
     }
 
     /**

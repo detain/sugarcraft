@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Agents\Board;
 
+use SugarCraft\Core\Concerns\Mutable;
+
 /**
  * One post on a {@see Board}: who wrote it, to whom, what kind, the body,
  * and — for CLAIM and RELEASE only — the paths the post stands on.
@@ -14,6 +16,8 @@ namespace SugarCraft\Code\Agents\Board;
  */
 final readonly class BoardEntry
 {
+    use Mutable;
+
     /**
      * @param list<string> $paths the files a CLAIM stands on, or the files a
      *        RELEASE clears; empty for every other kind
@@ -103,7 +107,7 @@ final readonly class BoardEntry
      */
     public function withPaths(array $paths): self
     {
-        return new self($this->id, $this->from, $this->to, $this->kind, $this->body, $this->replyTo, $this->at, array_values($paths));
+        return $this->mutate(['paths' => array_values($paths)]);
     }
 
     /** Whether $member is who this entry is for: addressed to it, or to everyone. */

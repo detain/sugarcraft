@@ -367,7 +367,7 @@ final class AgentLiveRegistryTest extends TestCase
     public function testTheFoldRidesTheFramesSessionAndTheSeedColorsIt(): void
     {
         $registry = AgentLiveRegistry::new(static fn (): float => 50.0);
-        $registry->withColorResolver(static fn (string $name): ?string => $name === 'explore' ? 'red' : null);
+        $registry->setColorResolver(static fn (string $name): ?string => $name === 'explore' ? 'red' : null);
 
         $registry->apply(new SubAgentActivity('started', 'run_s1', 'explore', 'a task', 1, '', parentCallId: 'tc_9', parentSessionId: 'ses_top'));
         self::assertSame('ses_top', $registry->get('run_s1')?->parentSessionId);

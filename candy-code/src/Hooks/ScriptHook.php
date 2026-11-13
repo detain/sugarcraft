@@ -522,7 +522,7 @@ final readonly class ScriptHook implements BoundedHookInterface
      * @param null|SandboxBackend $sandbox the jail this row's `hooks` scope
      *        was paired into by
      *        {@see \SugarCraft\Code\Tools\Sandbox\SandboxFactory::forScope()}
-     *        through {@see HookManager::withScriptSandbox()}, or null when the
+     *        through {@see HookManager::setScriptSandbox()}, or null when the
      *        scope is not asked for (or `bashSandbox` is off) — the row then
      *        runs exactly as it always did (C-TOOL-4.d).
      * @param null|string $sandboxRefusal the launch's ONE probe answer for
@@ -657,39 +657,18 @@ final readonly class ScriptHook implements BoundedHookInterface
         $floor = self::EXIT_POLL_MICROSECONDS / 1_000_000;
         $requested = is_finite($seconds) ? max($floor, $seconds) : $floor;
 
-        return new self(
-            $this->name,
-            $this->event,
-            $this->matcher,
-            $this->command,
-            $this->description,
-            min($this->timeoutSeconds(), $requested),
-            // THE CLONE CARRIES THE CLOCK. HookRegistry charges each hook what
-            // is left of the chain budget through exactly this method; dropping
-            // the seam here would silently re-anchor the clamped copy to the
-            // wall clock and every scripted-clock expectation downstream of a
-            // clamp would be measuring the scheduler again.
-            $this->clock,
-            // And the clone carries the DIALECT for the same reason: this is
-            // the one method a loader's rows pass through on the way into the
-            // registry ({@see HookRegistry}'s chain clamp), so losing the pair
-            // here would quietly hand a Claude Code hook the native exit table
-            // the moment the chain budget was shortened.
-            $this->dialect,
-            $this->advisory,
-            // The jail pair rides for the same reason the dialect does: a
-            // row clamped after {@see withSandbox()} must not shed its
-            // confinement (or its recorded refusal) on the way in.
-            $this->sandbox,
-            $this->sandboxRefusal,
-        );
+        // THE CLONE CARRIES the clock, dialect, advisory flag and the jail pair:
+        // {@see mutate()} carries every field, so a chain clamp can neither
+        // re-anchor the clamped copy to the wall clock, hand a Claude Code hook
+        // the native exit table, nor shed a jail set by {@see withSandbox()}.
+        return $this->mutate(['timeoutSeconds' => min($this->timeoutSeconds(), $requested)]);
     }
 
     /**
      * The same hook confined to a sandbox jail (C-TOOL-4.d).
      *
      * IMMUTABLE like every other `with*` on this class — unlike {@see
-     * HookManager::withScriptSandbox()}, which mutates the launch-owned
+     * HookManager::setScriptSandbox()}, which mutates the launch-owned
      * manager on purpose; the manager hands each freshly-built row through
      * this door at load time.
      *
@@ -703,19 +682,32 @@ final readonly class ScriptHook implements BoundedHookInterface
      */
     public function withSandbox(?SandboxBackend $sandbox, ?string $refusal): self
     {
-        return new self(
-            $this->name,
-            $this->event,
-            $this->matcher,
-            $this->command,
-            $this->description,
-            $this->timeoutSeconds,
-            $this->clock,
-            $this->dialect,
-            $this->advisory,
-            $sandbox,
-            $refusal,
-        );
+        return $this->mutate(['sandbox' => $sandbox, 'sandboxRefusal' => $refusal]);
+    }
+
+    /**
+     * The ONE place this hook's eleven constructor inputs are carried over
+     * (S-X06): `$clock` is stored as a closure, so the generic
+     * {@see \SugarCraft\Core\Concerns\Mutable} splat does not fit. A new
+     * `with*()` names only what it changes.
+     *
+     * @param array<string, mixed> $changes
+     */
+    private function mutate(array $changes): self
+    {
+        return new self(...array_merge([
+            'name' => $this->name,
+            'event' => $this->event,
+            'matcher' => $this->matcher,
+            'command' => $this->command,
+            'description' => $this->description,
+            'timeoutSeconds' => $this->timeoutSeconds,
+            'clock' => $this->clock,
+            'dialect' => $this->dialect,
+            'advisory' => $this->advisory,
+            'sandbox' => $this->sandbox,
+            'sandboxRefusal' => $this->sandboxRefusal,
+        ], $changes));
     }
 
     public function name(): string

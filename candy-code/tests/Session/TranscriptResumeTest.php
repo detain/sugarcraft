@@ -273,7 +273,7 @@ final class TranscriptResumeTest extends TestCase
         $store = $this->store();
         $this->assertSame(
             $store,
-            $store->withJsonlMirror(new JsonlTranscriptWriter($journal, '/tmp/proj-mirror')),
+            $store->attachJsonlMirror(new JsonlTranscriptWriter($journal, '/tmp/proj-mirror')),
             'the setter answers the SAME live store — one PDO handle, one identity map, one launch',
         );
 
@@ -299,7 +299,7 @@ final class TranscriptResumeTest extends TestCase
     public function testARolledBackSaveLeavesTheMirrorUntouched(): void
     {
         $journal = $this->dir . '/journal';
-        $store = $this->store()->withJsonlMirror(new JsonlTranscriptWriter($journal, '/tmp/proj-mirror'));
+        $store = $this->store()->attachJsonlMirror(new JsonlTranscriptWriter($journal, '/tmp/proj-mirror'));
 
         $handle = fopen('php://memory', 'r');
         try {

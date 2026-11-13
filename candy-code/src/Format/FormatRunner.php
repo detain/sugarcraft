@@ -12,6 +12,7 @@ use SugarCraft\Code\Tools\Concerns\CapturesProcessOutput;
 use SugarCraft\Code\Tools\PathJail;
 use SugarCraft\Code\Tools\Sandbox\SandboxBackend;
 use SugarCraft\Code\Tools\Sandbox\SandboxScope;
+use SugarCraft\Core\Concerns\Mutable;
 
 /**
  * Formats one file with the command configured for its extension (EDT-1).
@@ -69,6 +70,8 @@ use SugarCraft\Code\Tools\Sandbox\SandboxScope;
  */
 final class FormatRunner
 {
+    use Mutable;
+
     use CapturesProcessOutput;
 
     /** The settings key the extension => command map is read from. */
@@ -163,13 +166,13 @@ final class FormatRunner
             }
         }
 
-        return new self($commands, $this->timeoutSeconds, $suppressed, $this->autoEnabled, $this->projectTrusted, $this->binaryPresent, $this->sandbox);
+        return $this->mutate(['commands' => $commands, 'suppressed' => $suppressed]);
     }
 
     /** The same runner with each format run bounded at $seconds (floored at 10 ms). */
     public function withTimeout(float $seconds): self
     {
-        return new self($this->commands, is_finite($seconds) ? max(0.01, $seconds) : self::DEFAULT_TIMEOUT_SECONDS, $this->suppressed, $this->autoEnabled, $this->projectTrusted, $this->binaryPresent, $this->sandbox);
+        return $this->mutate(['timeoutSeconds' => is_finite($seconds) ? max(0.01, $seconds) : self::DEFAULT_TIMEOUT_SECONDS]);
     }
 
     /**
@@ -190,7 +193,7 @@ final class FormatRunner
      */
     public function withSandbox(?SandboxBackend $sandbox): self
     {
-        return new self($this->commands, $this->timeoutSeconds, $this->suppressed, $this->autoEnabled, $this->projectTrusted, $this->binaryPresent, $sandbox);
+        return $this->mutate(['sandbox' => $sandbox]);
     }
 
     /**
@@ -204,15 +207,7 @@ final class FormatRunner
      */
     public function withAuto(bool $enabled, bool $projectTrusted, ?callable $binaryPresent = null): self
     {
-        return new self(
-            $this->commands,
-            $this->timeoutSeconds,
-            $this->suppressed,
-            $enabled,
-            $projectTrusted,
-            $binaryPresent === null ? null : \Closure::fromCallable($binaryPresent),
-            $this->sandbox,
-        );
+        return $this->mutate(['autoEnabled' => $enabled, 'projectTrusted' => $projectTrusted, 'binaryPresent' => $binaryPresent === null ? null : \Closure::fromCallable($binaryPresent)]);
     }
 
     /** Whether the auto arm is live: the settings bit AND the trust gate. */

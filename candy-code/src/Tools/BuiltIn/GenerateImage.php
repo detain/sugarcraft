@@ -4,12 +4,11 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Tools\BuiltIn;
 
-use SugarCraft\Code\Providers\ProviderFactory;
 use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Cli\Bootstrap;
+use SugarCraft\Code\Events\MediaProgress;
 use SugarCraft\Code\Media\BatchResults;
 use SugarCraft\Code\Media\Capability\EndpointFamily;
-use SugarCraft\Code\Events\MediaProgress;
 use SugarCraft\Code\Media\Infotext;
 use SugarCraft\Code\Media\MediaArtifact;
 use SugarCraft\Code\Media\MediaRequest;
@@ -22,6 +21,7 @@ use SugarCraft\Code\Media\Sd\SdException;
 use SugarCraft\Code\Media\Sd\SdTransport;
 use SugarCraft\Code\Media\Sd\SdTransportResult;
 use SugarCraft\Code\Protocol\Schema\Schema;
+use SugarCraft\Code\Providers\ProviderFactory;
 use SugarCraft\Code\Support\MediaStore;
 use SugarCraft\Code\Support\ToolCancelRequests;
 use SugarCraft\Code\ToolResult as BootProbe;
@@ -35,6 +35,7 @@ use SugarCraft\Code\Tools\DelegatesToEngine;
 use SugarCraft\Code\Tools\TakesToolCallId;
 use SugarCraft\Code\Tools\Tool;
 use SugarCraft\Code\Tools\ToolResult;
+use SugarCraft\Core\Concerns\Mutable;
 
 /**
  * Render a still image from a text prompt against a configured Stable
@@ -104,6 +105,8 @@ use SugarCraft\Code\Tools\ToolResult;
 #[BuiltInTool(name: 'GenerateImage', permission: ToolPermissionClass::Ask, position: 33, gloss: 'render a still image from a text prompt on the configured Stable Diffusion server (sdapi or sglang-diffusion)')]
 final readonly class GenerateImage implements Tool, BuildsFromCatalog, DelegatesToEngine, AcceptsHeartbeat, TakesToolCallId
 {
+    use Mutable;
+
     use TruncatesOutput;
 
     public const NAME = 'GenerateImage';
@@ -153,65 +156,25 @@ final readonly class GenerateImage implements Tool, BuildsFromCatalog, Delegates
 
     public function withEngine(EngineBackend $engine, ?\Closure $heartbeat = null, ?\Closure $subAgentEmitter = null): self
     {
-        return new self(
-            $engine,
-            $this->transport,
-            $this->baseUrl,
-            $this->settings,
-            $this->mediaRoot,
-            $this->pollIntervalSeconds,
-            $this->pollSleeper,
-            $subAgentEmitter,
-            $this->storeSession,
-        );
+        return $this->mutate(['engine' => $engine, 'eventEmitter' => $subAgentEmitter]);
     }
 
     /** The same tool dialling through $transport at $base (a test seam). */
     public function withFakeDial(SdTransport $transport, ?string $base = null, array $settings = []): self
     {
-        return new self(
-            $this->engine,
-            $transport,
-            $base,
-            $settings,
-            $this->mediaRoot,
-            $this->pollIntervalSeconds,
-            $this->pollSleeper,
-            $this->eventEmitter,
-            $this->storeSession,
-        );
+        return $this->mutate(['transport' => $transport, 'baseUrl' => $base, 'settings' => $settings]);
     }
 
     /** The same tool saving artifacts under $root instead of the home tree. */
     public function withMediaRoot(?string $root): self
     {
-        return new self(
-            $this->engine,
-            $this->transport,
-            $this->baseUrl,
-            $this->settings,
-            $root,
-            $this->pollIntervalSeconds,
-            $this->pollSleeper,
-            $this->eventEmitter,
-            $this->storeSession,
-        );
+        return $this->mutate(['mediaRoot' => $root]);
     }
 
     /** The same tool pacing its progress loop without real sleeps. */
     public function withLoopPacing(?float $intervalSeconds, ?\Closure $sleeper): self
     {
-        return new self(
-            $this->engine,
-            $this->transport,
-            $this->baseUrl,
-            $this->settings,
-            $this->mediaRoot,
-            $intervalSeconds,
-            $sleeper,
-            $this->eventEmitter,
-            $this->storeSession,
-        );
+        return $this->mutate(['pollIntervalSeconds' => $intervalSeconds, 'pollSleeper' => $sleeper]);
     }
 
     /**
@@ -221,17 +184,7 @@ final readonly class GenerateImage implements Tool, BuildsFromCatalog, Delegates
      */
     public function withStoreSession(?string $session): self
     {
-        return new self(
-            $this->engine,
-            $this->transport,
-            $this->baseUrl,
-            $this->settings,
-            $this->mediaRoot,
-            $this->pollIntervalSeconds,
-            $this->pollSleeper,
-            $this->eventEmitter,
-            $session,
-        );
+        return $this->mutate(['storeSession' => $session]);
     }
 
     public function name(): string

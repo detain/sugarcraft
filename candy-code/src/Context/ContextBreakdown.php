@@ -9,6 +9,7 @@ use SugarCraft\Code\Message;
 use SugarCraft\Code\Tools\Tool;
 use SugarCraft\Code\Usage;
 use SugarCraft\Code\Util\TokenEstimate;
+use SugarCraft\Core\Concerns\Mutable;
 
 /**
  * What the next request's context window is spent on — the figures `/context`
@@ -39,6 +40,8 @@ use SugarCraft\Code\Util\TokenEstimate;
  */
 final readonly class ContextBreakdown
 {
+    use Mutable;
+
     /** How many of the biggest messages {@see measure()} keeps by default. */
     public const LARGEST_MESSAGES = 5;
 
@@ -160,18 +163,7 @@ final readonly class ContextBreakdown
         }
         $block = $ledger->activeBlock();
 
-        return new self(
-            $this->window,
-            $this->sections,
-            $this->toolCount,
-            $this->toolTokens,
-            $this->historyTokens,
-            $this->historyMessages,
-            $this->uiOnlyRows,
-            $this->largest,
-            $this->lastCache,
-            $this->sessionCache,
-            [
+        return $this->mutate(['pruning' => [
                 'mode' => $ledger->effectiveMode()->value,
                 'sessionMode' => $ledger->mode !== null,
                 'outputs' => \count($rows),
@@ -181,15 +173,7 @@ final readonly class ContextBreakdown
                 'contextRowTokens' => array_sum($ledger->droppedContextRows),
                 'block' => $block === null ? null : ['id' => $block->id, 'compressed' => $block->compressedTokens, 'summary' => $block->summaryTokens],
                 'rows' => array_reverse(\array_slice($rows, -self::PRUNED_ROWS)),
-            ],
-            $this->cacheBreaks,
-            $this->instructionFiles,
-            mcpToolCount: $this->mcpToolCount,
-            mcpToolTokens: $this->mcpToolTokens,
-            mcpServers: $this->mcpServers,
-            agentsTokens: $this->agentsTokens,
-            compactorConfig: $this->compactorConfig,
-        );
+            ]]);
     }
 
     /**
@@ -204,26 +188,7 @@ final readonly class ContextBreakdown
      */
     public function withCacheBreaks(int $breaks, ?array $last): self
     {
-        return new self(
-            $this->window,
-            $this->sections,
-            $this->toolCount,
-            $this->toolTokens,
-            $this->historyTokens,
-            $this->historyMessages,
-            $this->uiOnlyRows,
-            $this->largest,
-            $this->lastCache,
-            $this->sessionCache,
-            $this->pruning,
-            ['breaks' => max(0, $breaks), 'last' => $last],
-            $this->instructionFiles,
-            mcpToolCount: $this->mcpToolCount,
-            mcpToolTokens: $this->mcpToolTokens,
-            mcpServers: $this->mcpServers,
-            agentsTokens: $this->agentsTokens,
-            compactorConfig: $this->compactorConfig,
-        );
+        return $this->mutate(['cacheBreaks' => ['breaks' => max(0, $breaks), 'last' => $last]]);
     }
 
     /**

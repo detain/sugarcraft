@@ -71,6 +71,10 @@ use SugarCraft\Code\Util\TokenEstimate;
  *
  * PERMISSION CLASS: no-ask — like `Prune`, it writes only the harness's own
  * record of what the model is sent, and `/decompress` undoes it.
+ *
+ * S-X06 (2026-11-13): this class's with*() methods hand-carry their constructor
+ * inputs (fewer than seven, so exempt from the mutate() sweep); the ruling and
+ * its guard live in tests/Support/MutateDriftGuardTest.php.
  */
 #[BuiltInTool(name: 'Compress', permission: ToolPermissionClass::NoAsk, position: 16, gloss: 'replace a closed range of the conversation with its own summary — only on a turn you start with `/compress`')]
 final readonly class Compress implements Tool, BuildsFromCatalog, MutatesContextLedger

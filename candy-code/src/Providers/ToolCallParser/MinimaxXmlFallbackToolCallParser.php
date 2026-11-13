@@ -38,6 +38,10 @@ use SugarCraft\Code\Tools\ToolCall;
  * inherited the flaw by copying this class's shape and is where it was caught;
  * this is where it shipped. Both now scan positionally via
  * {@see MarkupScanner}, whose docblock carries the reproduction and the guard.
+ *
+ * S-X06 (2026-11-13): this class's with*() methods hand-carry their constructor
+ * inputs (fewer than seven, so exempt from the mutate() sweep); the ruling and
+ * its guard live in tests/Support/MutateDriftGuardTest.php.
  */
 final readonly class MinimaxXmlFallbackToolCallParser implements ToolCallParserInterface, ToolSchemaAware, EnvelopeAware
 {

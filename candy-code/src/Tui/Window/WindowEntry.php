@@ -16,6 +16,10 @@ use InvalidArgumentException;
  * agent, and {@see self::withChildren()} refuses an agent as a child, so the
  * two-level shape the strip paints is a type fact here rather than a
  * rendering-time hope.
+ *
+ * S-X06 (2026-11-13): this class's with*() methods hand-carry their constructor
+ * inputs (fewer than seven, so exempt from the mutate() sweep); the ruling and
+ * its guard live in tests/Support/MutateDriftGuardTest.php.
  */
 final class WindowEntry
 {

@@ -60,6 +60,10 @@ use SugarCraft\Code\Tools\ToolResult;
  * {@see \SugarCraft\Code\Backend\EngineBackend::turnTools()} binds the
  * turn's approver through {@see withPermissionApprover()}: the TUI child's
  * channel (the 1.C modal), `serve`'s `permission.requested`.
+ *
+ * S-X06 (2026-11-13): this class's with*() methods hand-carry their constructor
+ * inputs (fewer than seven, so exempt from the mutate() sweep); the ruling and
+ * its guard live in tests/Support/MutateDriftGuardTest.php.
  */
 #[BuiltInTool(name: self::NAME, permission: ToolPermissionClass::NoAsk, position: 21, gloss: 'put one question to the user, with optional choices, and wait for the answer')]
 final readonly class AskUserTool implements Tool, BuildsFromCatalog, DelegatesToEngine, RelaysPermissionAsks, TakesToolCallId

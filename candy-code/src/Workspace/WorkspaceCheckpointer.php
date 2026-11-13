@@ -57,6 +57,10 @@ use SugarCraft\Code\Support\HomeDirectory;
  * when it was taken, null for an unborn branch and a shadow), `ref`,
  * `gitDir`, `workTree`, `untracked` (files recorded) and `skipped` (files
  * left out by the limits above).
+ *
+ * S-X06 (2026-11-13): this class's with*() methods hand-carry their constructor
+ * inputs (fewer than seven, so exempt from the mutate() sweep); the ruling and
+ * its guard live in tests/Support/MutateDriftGuardTest.php.
  */
 final class WorkspaceCheckpointer
 {

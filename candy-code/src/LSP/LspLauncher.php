@@ -58,6 +58,10 @@ use SugarCraft\Code\Tools\Sandbox\SandboxBackend;
  * fork-safe, so forked turns, tool calls and sub-agents share the servers.
  * {@see \SugarCraft\Code\Cli\Bootstrap::lspClient()} owns the memo and the
  * shutdown hook.
+ *
+ * S-X06 (2026-11-13): this class's with*() methods hand-carry their constructor
+ * inputs (fewer than seven, so exempt from the mutate() sweep); the ruling and
+ * its guard live in tests/Support/MutateDriftGuardTest.php.
  */
 final class LspLauncher
 {
@@ -177,7 +181,7 @@ final class LspLauncher
     /**
      * Install the `lsp` scope jail (C-TOOL-4.e), before {@see launch()} — the
      * same install-before-use posture as 4.d's
-     * {@see \SugarCraft\Code\Hooks\HookManager::withScriptSandbox()}. A null
+     * {@see \SugarCraft\Code\Hooks\HookManager::setScriptSandbox()}. A null
      * jail (the default, or no scope) leaves every server exactly as it was
      * before the scope existed. `$refusal` pairs the one probe
      * {@see \SugarCraft\Code\Tools\BuiltIn\Bash::sandboxRefusal()} answers for

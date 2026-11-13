@@ -240,7 +240,7 @@ final class ScopedRunnerJailTest extends TestCase
 
         // HookManager captures the pair per script row and ONLY script rows.
         $manager = new HookManager(new HookRegistry());
-        $manager->withScriptSandbox(Bubblewrap::new('/bin/true'), 'carried refusal');
+        $manager->setScriptSandbox(Bubblewrap::new('/bin/true'), 'carried refusal');
         $manager->loadEntries(
             HookConfig::parse("hooks:\n  PreToolUse:\n    - name: paired\n      command: 'true'\n"),
             '/some/hooks.yaml',

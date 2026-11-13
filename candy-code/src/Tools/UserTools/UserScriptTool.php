@@ -58,6 +58,10 @@ use SugarCraft\Code\Tools\ToolResult;
  * The call's arguments also reach the child VERBATIM as JSON in
  * `CANDY_CODE_TOOL_INPUT`, so a script that prefers reading stdin-style
  * structured input to shelling out placeholders has one.
+ *
+ * S-X06 (2026-11-13): this class's with*() methods hand-carry their constructor
+ * inputs (fewer than seven, so exempt from the mutate() sweep); the ruling and
+ * its guard live in tests/Support/MutateDriftGuardTest.php.
  */
 final readonly class UserScriptTool implements Tool, AcceptsHeartbeat, AcceptsWorktreeJail
 {

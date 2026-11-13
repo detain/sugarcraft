@@ -43,6 +43,10 @@ use SugarCraft\Forms\Field\Text;
  * The final "Output size" row is a live recompute ({@see HiresMath}, §2.4)
  * over the draft MediaForm committed last — it previews the request, it is
  * never sent.
+ *
+ * S-X06 (2026-11-13): this class's with*() methods hand-carry their constructor
+ * inputs (fewer than seven, so exempt from the mutate() sweep); the ruling and
+ * its guard live in tests/Support/MutateDriftGuardTest.php.
  */
 final class HiresSection implements Section, FieldValuedSection, DraftContextSection
 {

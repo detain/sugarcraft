@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Protocol;
 
 use SugarCraft\Code\Host\SessionEvent;
+use SugarCraft\Core\Concerns\Mutable;
 
 /**
  * One event as the wire carries it (Appendix O §6.4): the `params` of an
@@ -20,6 +21,8 @@ use SugarCraft\Code\Host\SessionEvent;
  */
 final class EventEnvelope
 {
+    use Mutable;
+
     /** The JSON-RPC notification method every event rides in. */
     public const METHOD = 'event';
 
@@ -86,7 +89,7 @@ final class EventEnvelope
      */
     public function withData(array $data): self
     {
-        return new self($this->sessionId, $this->seq, $this->type, $this->ts, $this->turnId, $this->durable, [...$this->data, ...$data]);
+        return $this->mutate(['data' => [...$this->data, ...$data]]);
     }
 
     /**

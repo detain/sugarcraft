@@ -31,6 +31,7 @@ use SugarCraft\Code\Tools\DelegatesToEngine;
 use SugarCraft\Code\Tools\TakesToolCallId;
 use SugarCraft\Code\Tools\Tool;
 use SugarCraft\Code\Tools\ToolResult;
+use SugarCraft\Core\Concerns\Mutable;
 
 /**
  * Render a short video from a text prompt against a job-capable media server
@@ -87,6 +88,8 @@ use SugarCraft\Code\Tools\ToolResult;
 #[BuiltInTool(name: 'GenerateVideo', permission: ToolPermissionClass::Ask, position: 34, gloss: 'render a short video from a text prompt on the configured video job server')]
 final readonly class GenerateVideo implements Tool, BuildsFromCatalog, DelegatesToEngine, AcceptsHeartbeat, TakesToolCallId
 {
+    use Mutable;
+
     use TruncatesOutput;
 
     public const NAME = 'GenerateVideo';
@@ -136,65 +139,25 @@ final readonly class GenerateVideo implements Tool, BuildsFromCatalog, Delegates
 
     public function withEngine(EngineBackend $engine, ?\Closure $heartbeat = null, ?\Closure $subAgentEmitter = null): self
     {
-        return new self(
-            $engine,
-            $this->transport,
-            $this->baseUrl,
-            $this->settings,
-            $this->mediaRoot,
-            $this->pollIntervalSeconds,
-            $this->pollSleeper,
-            $subAgentEmitter,
-            $this->storeSession,
-        );
+        return $this->mutate(['engine' => $engine, 'eventEmitter' => $subAgentEmitter]);
     }
 
     /** The same tool dialling through $transport at $base (a test seam). */
     public function withFakeDial(SdTransport $transport, ?string $base = null, array $settings = []): self
     {
-        return new self(
-            $this->engine,
-            $transport,
-            $base,
-            $settings,
-            $this->mediaRoot,
-            $this->pollIntervalSeconds,
-            $this->pollSleeper,
-            $this->eventEmitter,
-            $this->storeSession,
-        );
+        return $this->mutate(['transport' => $transport, 'baseUrl' => $base, 'settings' => $settings]);
     }
 
     /** The same tool saving artifacts under $root instead of the home tree. */
     public function withMediaRoot(?string $root): self
     {
-        return new self(
-            $this->engine,
-            $this->transport,
-            $this->baseUrl,
-            $this->settings,
-            $root,
-            $this->pollIntervalSeconds,
-            $this->pollSleeper,
-            $this->eventEmitter,
-            $this->storeSession,
-        );
+        return $this->mutate(['mediaRoot' => $root]);
     }
 
     /** The same tool pacing its job-poll loop without real sleeps. */
     public function withLoopPacing(?float $intervalSeconds, ?\Closure $sleeper): self
     {
-        return new self(
-            $this->engine,
-            $this->transport,
-            $this->baseUrl,
-            $this->settings,
-            $this->mediaRoot,
-            $intervalSeconds,
-            $sleeper,
-            $this->eventEmitter,
-            $this->storeSession,
-        );
+        return $this->mutate(['pollIntervalSeconds' => $intervalSeconds, 'pollSleeper' => $sleeper]);
     }
 
     /**
@@ -204,17 +167,7 @@ final readonly class GenerateVideo implements Tool, BuildsFromCatalog, Delegates
      */
     public function withStoreSession(?string $sessionId): self
     {
-        return new self(
-            $this->engine,
-            $this->transport,
-            $this->baseUrl,
-            $this->settings,
-            $this->mediaRoot,
-            $this->pollIntervalSeconds,
-            $this->pollSleeper,
-            $this->eventEmitter,
-            $sessionId,
-        );
+        return $this->mutate(['storeSession' => $sessionId]);
     }
 
     public function name(): string

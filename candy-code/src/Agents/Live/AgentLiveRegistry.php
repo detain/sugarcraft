@@ -100,7 +100,7 @@ final class AgentLiveRegistry
      * The workspace's preset-colour resolver (P-AGENT.a): a run name → the
      * colour word its preset declares, or null when the name is off-roster
      * or declares none. Seeded once at build time
-     * ({@see withColorResolver()}); {@see apply()} threads it into every
+     * ({@see setColorResolver()}); {@see apply()} threads it into every
      * fold so a run carries its colour from the first frame seen.
      *
      * @var (\Closure(string): ?string)|null
@@ -150,12 +150,11 @@ final class AgentLiveRegistry
      * Seed the preset-colour resolver (P-AGENT.a). Build-time only, like the
      * clock in {@see new()}: this writes the one field that never moves after
      * the workspace is made, so it returns $this for the seeding chain in
-     * {@see \SugarCraft\Code\Cli\Bootstrap::workspace()} rather than pretending
-     * to be one of the value-object `with*()`s it is not.
+     * {@see \SugarCraft\Code\Cli\Bootstrap::workspace()}, which is why it is a `set*`, not a `with*()` (S-X06).
      *
      * @param (\Closure(string): ?string)|null $resolver name → declared colour word
      */
-    public function withColorResolver(?\Closure $resolver): self
+    public function setColorResolver(?\Closure $resolver): self
     {
         $this->colorResolver = $resolver;
 

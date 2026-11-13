@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Hooks;
 
+use SugarCraft\Core\Concerns\Mutable;
+
 /**
  * Context passed to a hook execution.
  *
@@ -24,6 +26,8 @@ namespace SugarCraft\Code\Hooks;
  */
 final readonly class HookContext
 {
+    use Mutable;
+
     /**
      * @param (\Closure(): void)|null $heartbeat
      */
@@ -43,51 +47,18 @@ final readonly class HookContext
     /** The same context carrying $heartbeat ({@see $heartbeat}). */
     public function withHeartbeat(?\Closure $heartbeat): self
     {
-        return new self(
-            sessionId: $this->sessionId,
-            toolName: $this->toolName,
-            toolArgs: $this->toolArgs,
-            toolInput: $this->toolInput,
-            toolOutput: $this->toolOutput,
-            model: $this->model,
-            provider: $this->provider,
-            projectRoot: $this->projectRoot,
-            heartbeat: $heartbeat,
-            toolFailed: $this->toolFailed,
-        );
+        return $this->mutate(['heartbeat' => $heartbeat]);
     }
 
     /** The same call marked failed ({@see $toolFailed}) — or cleared. */
     public function withToolFailed(bool $failed): self
     {
-        return new self(
-            sessionId: $this->sessionId,
-            toolName: $this->toolName,
-            toolArgs: $this->toolArgs,
-            toolInput: $this->toolInput,
-            toolOutput: $this->toolOutput,
-            model: $this->model,
-            provider: $this->provider,
-            projectRoot: $this->projectRoot,
-            heartbeat: $this->heartbeat,
-            toolFailed: $failed,
-        );
+        return $this->mutate(['toolFailed' => $failed]);
     }
 
     public function withToolInput(string $input): self
     {
-        return new self(
-            sessionId: $this->sessionId,
-            toolName: $this->toolName,
-            toolArgs: $this->toolArgs,
-            toolInput: $input,
-            toolOutput: $this->toolOutput,
-            model: $this->model,
-            provider: $this->provider,
-            projectRoot: $this->projectRoot,
-            heartbeat: $this->heartbeat,
-            toolFailed: $this->toolFailed,
-        );
+        return $this->mutate(['toolInput' => $input]);
     }
 
     /**
@@ -110,33 +81,11 @@ final readonly class HookContext
      */
     public function withRewrittenArgs(array $args, string $input): self
     {
-        return new self(
-            sessionId: $this->sessionId,
-            toolName: $this->toolName,
-            toolArgs: $args,
-            toolInput: $input,
-            toolOutput: $this->toolOutput,
-            model: $this->model,
-            provider: $this->provider,
-            projectRoot: $this->projectRoot,
-            heartbeat: $this->heartbeat,
-            toolFailed: $this->toolFailed,
-        );
+        return $this->mutate(['toolArgs' => $args, 'toolInput' => $input]);
     }
 
     public function withToolOutput(string $output): self
     {
-        return new self(
-            sessionId: $this->sessionId,
-            toolName: $this->toolName,
-            toolArgs: $this->toolArgs,
-            toolInput: $this->toolInput,
-            toolOutput: $output,
-            model: $this->model,
-            provider: $this->provider,
-            projectRoot: $this->projectRoot,
-            heartbeat: $this->heartbeat,
-            toolFailed: $this->toolFailed,
-        );
+        return $this->mutate(['toolOutput' => $output]);
     }
 }

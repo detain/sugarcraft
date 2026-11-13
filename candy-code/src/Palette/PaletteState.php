@@ -24,6 +24,10 @@ namespace SugarCraft\Code\Palette;
  * grapheme-cluster boundary: segmentation is the writer's job (Chat's palette
  * keys keep every caret on a boundary), and the renderer defends the paint
  * independently.
+ *
+ * S-X06 (2026-11-13): this class's with*() methods hand-carry their constructor
+ * inputs (fewer than seven, so exempt from the mutate() sweep); the ruling and
+ * its guard live in tests/Support/MutateDriftGuardTest.php.
  */
 final class PaletteState
 {
