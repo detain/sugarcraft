@@ -53,6 +53,14 @@ use SugarCraft\Forms\Util\RenderSafe;
  * forms only. Thousands separators are refused with a message, never guessed
  * — "1,000" is ambiguous across locales and this widget does not guess.
  *
+ * A validator attached via withValidator (SF-24, {@see HasValidation} —
+ * the rule storage; the verdict lanes below) judges the COMMITTED value,
+ * never the draft. Parse refusal and the rule share the one visible error
+ * slot: a bad draft shows the parse message, every successful commit
+ * re-runs the rule, and a draft edit clears the stale row exactly like it
+ * clears a stale parse message — the value (the rule's subject) survives
+ * both untouched. The never-set empty box carries no verdict.
+ *
  * Keys while focused:
  *   Up / Down              one step (from the committed value, or from min
  *                          while never-set — the step ladder starts at min)
@@ -76,6 +84,7 @@ final class NumberField implements Field, Hydratable
 {
     use HasThemeChrome;
     use HasHydration;
+    use HasValidation;
 
     use HasHideFunc;
     use HasDynamicLabels;
@@ -346,10 +355,13 @@ final class NumberField implements Field, Hydratable
     {
         $coerced = self::coerce($this->key, $this->min, $this->max, $this->step, $raw);
         $display = self::display($coerced);
-        if ($coerced === $this->value && $this->error === null && $this->text->value === $display) {
+        // SF-24: a successful commit writes the validator verdict, not a
+        // bare clear — the committed number is the rule's subject.
+        $verdict = $this->fieldValidator === null ? null : ($this->fieldValidator)($coerced);
+        if ($coerced === $this->value && $this->error === $verdict && $this->text->value === $display) {
             return $this;
         }
-        return $this->mutate(text: $this->text->setValue($display), value: $coerced, valueSet: true, error: null, errorSet: true);
+        return $this->mutate(text: $this->text->setValue($display), value: $coerced, valueSet: true, error: $verdict, errorSet: true);
     }
 
     /** Walk the ladder by $delta steps from the committed value (or min while never-set). */
@@ -364,11 +376,18 @@ final class NumberField implements Field, Hydratable
     private function redrawDisplay(): self
     {
         $display = $this->value === null ? '' : self::display($this->value);
-        if ($this->text->value === $display && $this->error === null) {
+        // An empty-draft commit abandons the draft; it does NOT abandon the
+        // verdict on the committed value (SF-24) — the slot refreshes to
+        // whatever the rule says about the value that stays, and a never-set
+        // box settles to the no-verdict null.
+        $verdict = $this->fieldValidator === null || $this->value === null
+            ? null
+            : ($this->fieldValidator)($this->value);
+        if ($this->text->value === $display && $this->error === $verdict) {
             return $this;
         }
         $next = $this->mutate(text: $this->text->setValue($display));
-        return $next->error === null ? $next : $next->mutate(error: null, errorSet: true);
+        return $next->error === $verdict ? $next : $next->mutate(error: $verdict, errorSet: true);
     }
 
     /** Record a parse error; the committed value and draft stay untouched. */

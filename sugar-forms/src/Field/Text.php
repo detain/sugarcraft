@@ -91,7 +91,15 @@ final class Text implements \SugarCraft\Forms\Field, \SugarCraft\Forms\AsyncVali
     /** The parsed override map carried by the inner widget. @return array<string,string> */
     public function keyOverrides(): array              { return $this->area->keyOverrides(); }
 
-    /** @param \Closure(string):?string $fn */
+    /**
+     * Attach the validation closure (sugar-forms-026 warning): Text holds
+     * ONE closure-only slot and a second call REPLACES the first — unlike
+     * Input, which chains appends and keeps the first-error-wins order.
+     * There is no Validator-instance path and no null-to-clear here: pass a
+     * closure, or pass a fresh one to swap it.
+     *
+     * @param \Closure(string):?string $fn
+     */
     public function withValidator(\Closure $fn): self
     {
         return $this->carryNonCtorState(new self($this->key, $this->area, $this->title, $this->description, $this->error, $fn, $this->validateOn));

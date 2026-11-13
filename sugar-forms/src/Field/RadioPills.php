@@ -62,6 +62,7 @@ final class RadioPills implements Field, Hydratable
 {
     use HasThemeChrome;
     use HasHydration;
+    use HasValidation;
 
     use HasHideFunc;
     use HasDynamicLabels;
@@ -289,6 +290,12 @@ final class RadioPills implements Field, Hydratable
         if ($desc  !== '') { $lines[] = RenderSafe::clean($desc); }
 
         $lines[] = $this->buildPillRow($theme);
+        // The verdict row lands AFTER the pill line: the row geometry the
+        // mouse hit-test counts (pillsRow() walks title/desc only) is
+        // untouched, so click zones do not shift under a live error.
+        foreach ($this->validationErrorLines($showErrors, $theme) as $errorLine) {
+            $lines[] = $errorLine;
+        }
         return implode("\n", $lines);
     }
 
@@ -310,8 +317,11 @@ final class RadioPills implements Field, Hydratable
      *             2026-10-24). REMOVED-IN: 2.0.0
      */
     public function getDescription(): string { return $this->description(); }
-    /** Latest validator error, or null when the value passes validation. */
-    public function error(): ?string { return null; }
+    /**
+     * The validation surface — withValidator (plus its validator alias),
+     * error and revalidate — arrives via {@see HasValidation}; the rule
+     * judges the selected label (SF-24).
+     */
     /**
      * @deprecated Use the bare {@see self::error()} read (accessor era,
      *             2026-10-24). REMOVED-IN: 2.0.0
@@ -320,11 +330,6 @@ final class RadioPills implements Field, Hydratable
     public function skippable(): bool        { return false; }
     public function consumes(Msg $msg): bool { return false; }
 
-    /**
-     * @internal Radio state has nothing to re-judge: selection is commit,
-     *           so the contract is the identity rebuild.
-     */
-    public function revalidate(): Field { return $this; }
 
     // ------------------------------------------------------------------
     // Internals
@@ -472,7 +477,7 @@ final class RadioPills implements Field, Hydratable
         ?string $description = null,
         ?int $width = null,
     ): self {
-        return $this->carryNonCtorState(new self(
+        return $this->validationRide($this->carryNonCtorState(new self(
             key:         $this->key,
             options:     $options ?? $this->options,
             cursor:      $cursor   ?? $this->cursor,
@@ -480,6 +485,6 @@ final class RadioPills implements Field, Hydratable
             title:       $title    ?? $this->title,
             description: $description ?? $this->description,
             width:       $width    ?? $this->width,
-        ));
+        )));
     }
 }

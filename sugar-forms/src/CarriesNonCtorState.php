@@ -31,7 +31,11 @@ namespace SugarCraft\Forms;
  * The trait also OWNS the plan-5.11 per-error help slot ($errorHelp,
  * storage only — the public API lives in {@see HasErrorHelp}): the render
  * value must survive every rebuild exactly like the closures do, and this
- * carrier is the single funnel that guarantees it.
+ * carrier is the single funnel that guarantees it. Same for the async
+ * validator closure. Since SF-24 it conditionally carries the
+ * {@see \SugarCraft\Forms\Field\HasValidation} slots as well — trait
+ * composition means only the adopter classes declare them, so the copy
+ * is property_exists-guarded.
  */
 trait CarriesNonCtorState
 {
@@ -65,6 +69,14 @@ trait CarriesNonCtorState
         $next->readonly        = $this->readonly;
         $next->errorHelp       = $this->errorHelp;
         $next->asyncValidator  = $this->asyncValidator;
+        // SF-24 (sugar-forms-026): the HasValidation slots exist only on the
+        // classes that adopted that trait, and this carrier rebuilds every
+        // label-trait Field — property_exists keeps the non-adopters whole
+        // while adopters get the same single-funnel guarantee.
+        if (property_exists($next, 'fieldValidator')) {
+            $next->fieldValidator = $this->fieldValidator;
+            $next->fieldError     = $this->fieldError;
+        }
         return $next;
     }
 }

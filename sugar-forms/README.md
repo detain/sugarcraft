@@ -133,15 +133,15 @@ $form = Form::new(
 | `Input`       | Single-line text (wraps `SugarCraft\Forms\TextInput\TextInput`)     | `withPlaceholder`, `withCharLimit`, `withWidth`, `withPrompt`, `withValidator(Validator\|\Closure)` (chains; first error wins), `withTitleFunc` / `withDescriptionFunc`, `withPassword(bool $on = true, string $echoChar = '*')`, `withPasswordMask(?string $pattern, string $echoChar = '*')`, `withSuggestions(list<string>)`, `withSuggestionsFunc(\Closure(string):list<string>)`, `withFuzzySuggestions(list<string>)`, `withAsyncSuggestions(callable $fetcher, int $debounceMs = 150, …)` | typing, Home/End, Left/Right, Backspace/Delete, ctrl+a / ctrl+e / ctrl+u / ctrl+k; Up/Down history recall and the Enter submit-validator run only when a custom key map frees those keys (by default they drive field navigation); a host PasteMsg is consumed as typed text (CR/LF stripped) |
 | `Text`        | Multi-line text editor                                      | `withCharLimit`, `withHeight`, `withWidth`, `withValidator(closure only; replaces)` | full buffer editing; Enter newline and Up/Down caret rows are claimed (they arrive despite nav); ctrl+a/e/u/k + ctrl+c/x/o chords (under the default map Ctrl+C is abort — the copy/cut chords need a custom map that frees Ctrl+C); a host PasteMsg replaces the selection; Tab indents only when a custom map frees it (default: Tab navigates) |
 | `Confirm`     | Yes/no boolean                                              | `withLabels(affirmative, negative)`, `withDefault(bool)`, `withValidator(Validator\|\Closure(bool):?string\|null)` (replaces; null clears), `withTitleFunc`, `withDescriptionFunc` | Left/Right or h/l answer, y / n answer; Tab toggles only when a custom map frees it (default: Tab navigates) |
-| `Select`      | Single-choice list (wraps `SugarCraft\Forms\ItemList\ItemList`)     | `withOptions(...)`, `withWidth(int)`, `withVisibleLines(int)` (page by LINES, not items — `withHeight` counts items, so described entries can double the painted rows), `withTitleFunc`, `withDescriptionFunc`, `withFuzzySuggestions(list<string>)`, `withAsyncSuggestions(callable $fetcher, int $debounceMs = 150, …)`, `withEnum(\BackedEnum::class)` | list keys Up/Down or k/j, PageUp/PageDown, Home/g, End/G; the / key opens the filter (typing + Backspace narrow, Enter/Escape end it — claimed); click to position when focused |
-| `MultiSelect` | Multi-choice list (k/j vim keys + space to toggle)          | `withOptions(...)`, `withWidth(int)`, `withLimit(int)` | Up/Down or k/j, Home/g, End/G, Space toggles the cursor, digits 1-9 toggle the option in that slot (first option = 1; a digit past the list end is inert, modified digits stay free) |
+| `Select`      | Single-choice list (wraps `SugarCraft\Forms\ItemList\ItemList`)     | `withOptions(...)`, `withWidth(int)`, `withVisibleLines(int)` (page by LINES, not items — `withHeight` counts items, so described entries can double the painted rows), `withTitleFunc`, `withDescriptionFunc`, `withFuzzySuggestions(list<string>)`, `withAsyncSuggestions(callable $fetcher, int $debounceMs = 150, …)`, `withEnum(\BackedEnum::class)`, `withValidator(Validator\|\Closure\|null)` (replaces; null clears) | list keys Up/Down or k/j, PageUp/PageDown, Home/g, End/G; the / key opens the filter (typing + Backspace narrow, Enter/Escape end it — claimed); click to position when focused |
+| `MultiSelect` | Multi-choice list (k/j vim keys + space to toggle)          | `withOptions(...)`, `withWidth(int)`, `withLimit(int)`, `withValidator(\Closure\|null)` (custom slot; closure-only, see matrix) | Up/Down or k/j, Home/g, End/G, Space toggles the cursor, digits 1-9 toggle the option in that slot (first option = 1; a digit past the list end is inert, modified digits stay free) |
 | `Note`        | Read-only paragraph; skipped by tab navigation              | `withTitle`, `withDescription`, `withHeight(int)`, `withNext(bool)`, `withNextLabel(string)` (turns it into an interactive button page) | none (inert) |
-| `FilePicker`  | Filesystem picker (wraps `SugarCraft\Forms\FilePicker\FilePicker`) | `withDirAllowed`, `withFileAllowed`, `withAllowedExtensions` (a display filter only — see FilePicker trust model below, never a sandbox), `withShowHidden` (starting directory via `FilePicker::new($key, $cwd)`) | Up/Down or k/j, Home/End, Enter selects or enters a directory, Backspace/Left ascend, Right enters; no filter typing, no mouse |
+| `FilePicker`  | Filesystem picker (wraps `SugarCraft\Forms\FilePicker\FilePicker`) | `withDirAllowed`, `withFileAllowed`, `withAllowedExtensions` (a display filter only — see FilePicker trust model below, never a sandbox), `withShowHidden` (starting directory via `FilePicker::new($key, $cwd)`), `withValidator(Validator\|\Closure\|null)` (replaces; null clears) | Up/Down or k/j, Home/End, Enter selects or enters a directory, Backspace/Left ascend, Right enters; no filter typing, no mouse |
 | `Date`        | Calendar-grid date picker (`YYYY-MM-DD` value, arrow-walked grid) | `withValue(?string)`, `withValidator(Validator\|\Closure\|null)` (replaces; null clears) | Left/Right or h/l day, Up/Down or k/j week (claimed arrows); Shift+Left/Right and PageUp/PageDown month, Home/End month edges, Space commits; movement auto-commits |
 | `Slider`      | Numeric range slider (keyboard drag, snapping step)         | `withMin` / `withMax` / `withStep`, `withValue(int\|float)`, `withValidator(Validator\|\Closure\|null)` (replaces; null clears) | Left/Right or h/l step, Home/End clamp; mouse only when the host routes MouseMsg or calls the zone-drag API — the widget never negotiates drag itself |
-| `Color`       | Hex color picker with swatch preview                        | `withValue(string $hex)`, `withTruecolor(bool)` | Left/Right or h/l green, Up/Down or k/j blue (claimed arrows); PageUp/PageDown red, Home/End clamp green |
-| `NumberField` | Bounded numeric input — draft text + committed value aligned to `withStep()` multiples | `withMin` / `withMax` / `withStep`, `withValue(int\|float)`, `withoutValue()` (never-set ≠ 0), `withPlaceholder`, `withWidth` | Up/Down plus or minus 1 (claimed arrows), PageUp/PageDown by tens, Home/End clamp; typing and editing ride the inner Input; Enter commits only when a custom map frees it (default: Enter submits or advances) |
-| `RadioPills`  | Horizontal pill row, single choice by arrows or mouse; windows the roster around the selection when a width is set | `withOptions(...)`, `withValue(label)`, `withTitle`, `withDescription`, `withTitleFunc` / `withDescriptionFunc`, `withWidth` | Left/Right or h/l, Home/End; pill-zone clicks when the host routes MouseMsg (press, drag and release equivalent) |
+| `Color`       | Hex color picker with swatch preview                        | `withValue(string $hex)`, `withTruecolor(bool)`, `withValidator(Validator\|\Closure\|null)` (replaces; null clears) | Left/Right or h/l green, Up/Down or k/j blue (claimed arrows); PageUp/PageDown red, Home/End clamp green |
+| `NumberField` | Bounded numeric input — draft text + committed value aligned to `withStep()` multiples | `withMin` / `withMax` / `withStep`, `withValue(int\|float)`, `withoutValue()` (never-set ≠ 0), `withPlaceholder`, `withWidth`, `withValidator(Validator\|\Closure\|null)` (judges the committed value; null clears) | Up/Down plus or minus 1 (claimed arrows), PageUp/PageDown by tens, Home/End clamp; typing and editing ride the inner Input; Enter commits only when a custom map frees it (default: Enter submits or advances) |
+| `RadioPills`  | Horizontal pill row, single choice by arrows or mouse; windows the roster around the selection when a width is set | `withOptions(...)`, `withValue(label)`, `withTitle`, `withDescription`, `withTitleFunc` / `withDescriptionFunc`, `withWidth`, `withValidator(Validator\|\Closure\|null)` (replaces; null clears) | Left/Right or h/l, Home/End; pill-zone clicks when the host routes MouseMsg (press, drag and release equivalent) |
 
 #### FilePicker trust model
 
@@ -239,7 +239,7 @@ Form::groups(
 | `withTheme(Theme)` | Switch the colour palette. |
 | `withAccessible(bool)` | Render one `label: value` line for the focused field — for screen readers / dumb terminals. Echo-mode fields project their display characters via `displayValue()`; the stored secret is never read aloud. |
 | `withShowHelp(bool)` | Toggles the multi-group `Step X of Y` indicator (view() consults it only alongside more-than-one group and the group's own help flag). It renders no footer: `keyBinds()` / `help()` compose host-facing binding rows that view() never draws. |
-| `withShowErrors(bool)` | False suppresses the inline `! error` row (and its `? ` help line) that `Input::view()`, `Text::view()`, `MultiSelect::view()` and `NumberField::view()` print for fields with active errors, and the same row in the accessible view; the error summary block from `withErrorSummary()` is a separate composer and stays rendered. |
+| `withShowErrors(bool)` | False suppresses the inline `! error` row (and its `? ` help line) that every field with an active verdict prints in its `view()` — since SF-24 that covers the whole selectable roster, not just the text surfaces, and the same row in the accessible view; the error summary block from `withErrorSummary()` is a separate composer and stays rendered. |
 | `withWidth(int)`, `withHeight(int)` | Pin the rendered geometry. Width is a ceiling: it threads into the width-aware fields (Input/Text/NumberField/Select/MultiSelect/Slider/RadioPills — each keeps its own narrower budget where set) and clips the form's own chrome; Confirm, Note, Date, Color and FilePicker render at natural width. Height stays advisory. |
 | `withTimeout(int $ms)` | Stores a wall-clock budget (ms) for the host runtime to consult; the `Form` model itself starts no timer. |
 | `withKeyMap(?KeyMap)` | Override the bindings for `Next` / `Prev` / `Submit` / `Abort` on a single form. |
@@ -323,10 +323,27 @@ block; runnable full-page shapes live under `examples/`.
 
 ### Validators and dynamic labels
 
-`Input`, `Text`, `Confirm`, `Date` and `Slider` support `withValidator` — a ready-made validator instance or a closure (per-field union in the table above; `null` clears wherever the union admits it). The other fields (`Select`, `MultiSelect`, `Note`, `FilePicker`, `NumberField`, `RadioPills`, `Color`) carry no validator today. The closure
-runs on every keystroke (or every value flip for `Confirm`) and returns
-`null` for valid or an error string. The error renders inline beneath the
-field and shows up in `Form::errors()`.
+Every **selectable** field answers `withValidator` (sugar-forms-026 closed
+the lumpy matrix — `Note` remains the one inert display field, with nothing
+to judge). The full shipped matrix, re-derived from code:
+
+| Field | Slot shape | `Validator` instance | Closure subject | When the rule runs |
+| ----- | ---------- | -------------------- | --------------- | ------------------ |
+| `Input` | **chains** — every call appends, first error wins | yes (string) | `string` buffer | per keystroke by default; `withValidateOn` defers to blur/submit |
+| `Text` | single — **a second call REPLACES the first**; no `null` arm (closure-only, `Validator` not accepted) | no | `string` buffer | per keystroke by default; `withValidateOn` defers |
+| `Confirm` | single; `null` clears | yes — `bool` reads `'1'`/`''` | `bool` answer | attach, every toggle, submit gate |
+| `Select` | single; `null` clears | yes — `null` selection reads `''` | selected label (`string\|null`; `BackedEnum` in enum mode) | attach, every value flip, submit gate |
+| `MultiSelect` | single custom slot, `null` clears — the min/max COUNT check judges first and owns the row | no (the subject is a list; pass a closure) | `list<string>` selected labels | attach, every toggle, submit gate |
+| `FilePicker` | single; `null` clears | yes — unpicked reads `''` | selected path (`string\|null`) | attach, every selection move, submit gate |
+| `Date` | single; `null` clears | yes | `?string` (`YYYY-MM-DD`) | attach, every day commit, submit gate |
+| `Slider` | single; `null` clears | yes (number string-cast) | `int\|float` | attach, every step, submit gate |
+| `Color` | single; `null` clears | yes | hex `string` (`#rrggbb`) | attach, every axis move, submit gate |
+| `NumberField` | single; `null` clears | yes (number string-cast) | committed `int\|float` (never-set box carries no verdict) | commit only — Enter, blur, submit gate; a draft edit clears the row |
+| `RadioPills` | single; `null` clears | yes — empty row reads `''` | selected label (`string\|null`) | attach, every pill move, submit gate |
+
+The rules return `null` for valid or an error string; the verdict renders
+inline beneath the field (governed by `withShowErrors`) and shows up in
+`Form::errors()` / `Form::validateAll()`.
 
 Use `withTitleFunc(\Closure(): string)` / `withDescriptionFunc(...)` on any
 field to compute labels lazily — handy when the label depends on values from
@@ -338,10 +355,12 @@ a previous group.
 (`Required`, `Email`, `MinLength`, `MaxLength`, `Pattern`). All implement the
 `Validator` interface (returns `true` on valid, an error `string` on
 invalid). On `Input`, multiple `withValidator()` calls chain — each call appends
-to the validator list and the first error wins. On the other validating fields a
-second call replaces the first: `Text` holds one closure-only slot, and
-`Confirm`, `Date` and `Slider` hold a single `Validator\|\Closure\|null` slot
-(`null` clears).
+to the validator list and the first error wins. On every other validating field
+a second call replaces the first: `Text` holds one closure-only slot (no `null`
+arm), the rest hold a single `Validator\|\Closure\|null` slot (`null` clears).
+`MultiSelect`'s slot sits alongside — not inside — its `withMin`/`withMax`
+count constraint: a count violation owns the row, the rule runs only once the
+selection is within bounds.
 
 | Class | Error message | Notes |
 | ----- | ------------- | ----- |

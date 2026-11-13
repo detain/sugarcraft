@@ -34,6 +34,7 @@ final class MultiSelect implements \SugarCraft\Forms\Field, \SugarCraft\Forms\Hy
 {
     use HasThemeChrome;
     use HasHydration;
+    use HasValidation;
 
     use HasErrorHelp;
     use HasHideFunc;
@@ -113,7 +114,7 @@ final class MultiSelect implements \SugarCraft\Forms\Field, \SugarCraft\Forms\Hy
         }
         return $this->mutate(
             selected: $set,
-            error: $this->computeConstraintError(self::countTrue($set)),
+            error: $this->selectionError($set),
             touchError: true,
         );
     }
@@ -266,7 +267,11 @@ final class MultiSelect implements \SugarCraft\Forms\Field, \SugarCraft\Forms\Hy
     public function getError(): ?string { return $this->error(); }
     public function revalidate(): Field
     {
-        return $this->mutate(error: $this->computeConstraintError(self::countTrue($this->selected)), touchError: true);
+        // SF-24 identity law (E736 1.3): an unchanged verdict returns $this —
+        // the old unconditional mutate() rebuild re-instantiated the field on
+        // every submit-gate pass for nothing.
+        $err = $this->selectionError($this->selected);
+        return $err === $this->error ? $this : $this->mutate(error: $err, touchError: true);
     }
     public function skippable(): bool         { return false; }
 
@@ -330,7 +335,7 @@ final class MultiSelect implements \SugarCraft\Forms\Field, \SugarCraft\Forms\Hy
             }
             $next[$idx] = true;
         }
-        return $this->mutate(selected: $next, error: $this->computeConstraintError(self::countTrue($next)), touchError: true);
+        return $this->mutate(selected: $next, error: $this->selectionError($next), touchError: true);
     }
 
     /** @param array<int,bool> $set */
@@ -344,26 +349,55 @@ final class MultiSelect implements \SugarCraft\Forms\Field, \SugarCraft\Forms\Hy
     }
 
     /**
-     * Compute the min/max constraint error for a given selection count.
-     * Used by both toggle() (for immediate user feedback) and revalidate()
-     * (for submit-time / validateAll enforcement).
+     * The full constraint verdict for a selection set: the min/max count
+     * bounds first (they are the widget's own contract and win the single
+     * visible error slot), then the SF-24 custom rule, fed the selected
+     * option labels in option order. Used by both toggle() (for immediate
+     * user feedback) and revalidate() (for submit-time / validateAll
+     * enforcement).
      *
-     * Called on every Space keypress — E736 plan 3.4 asked whether the
-     * Lang::t() lookup merits caching. Measured ~1 µs per call (flat array
-     * lookup + strtr); the surrounding mutate()+view() pass costs orders of
-     * magnitude more, so no memo is kept: caching resolved strings per
-     * (min,max) pair would add an invalidation surface for no perceptible
-     * gain.
+     * The Lang::t() legs inside remain uncached on the E736 plan 3.4
+     * measurement (~1 µs per call against a mutate()+view() pass that
+     * costs orders of magnitude more); the added rule leg only runs when a
+     * validator is attached, so the no-validator hot path keeps its old
+     * cost profile.
+     *
+     * @param array<int,bool> $set
      */
-    private function computeConstraintError(int $count): ?string
+    private function selectionError(array $set): ?string
     {
+        $count = self::countTrue($set);
         if ($this->min > 0 && $count < $this->min) {
             return Lang::t('multiselect.pick_at_least', ['n' => (string) $this->min]);
         }
         if ($this->max > 0 && $count > $this->max) {
             return Lang::t('multiselect.pick_at_most', ['n' => (string) $this->max]);
         }
-        return null;
+        if ($this->fieldValidator === null) {
+            return null;
+        }
+        $labels = [];
+        foreach ($set as $index => $on) {
+            if ($on && isset($this->options[$index])) {
+                $labels[] = $this->options[$index];
+            }
+        }
+        return ($this->fieldValidator)($labels);
+    }
+
+    /**
+     * SF-24 custom slot alongside the count constraint. The rule receives
+     * the list of selected option labels (option order); the min/max bounds
+     * are judged first — a count violation owns the row. Replaces the
+     * previous rule; null clears. Deliberately closure-only: the subject is
+     * a LIST, which the string-typed Validator contract cannot express (the
+     * trait's alias fails loud here by TypeError, which is the point).
+     */
+    public function withValidator(?\Closure $validator): self
+    {
+        $next                 = $this->mutate();
+        $next->fieldValidator = $validator;
+        return $next->revalidate();
     }
 
     /**

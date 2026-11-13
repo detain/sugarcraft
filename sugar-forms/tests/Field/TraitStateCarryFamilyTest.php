@@ -13,6 +13,8 @@ use SugarCraft\Forms\Field\FilePicker;
 use SugarCraft\Forms\Field\Input;
 use SugarCraft\Forms\Field\MultiSelect;
 use SugarCraft\Forms\Field\Note;
+use SugarCraft\Forms\Field\NumberField;
+use SugarCraft\Forms\Field\RadioPills;
 use SugarCraft\Forms\Field\Select;
 use SugarCraft\Forms\Field\Slider;
 use SugarCraft\Forms\Field\Text;
@@ -32,6 +34,17 @@ use SugarCraft\Forms\Tests\Support\LoopHygiene;
 final class TraitStateCarryFamilyTest extends TestCase
 {
     use LoopHygiene;
+
+    /**
+     * Probe classes carrying the HasValidation storage pair (SF-24 roster —
+     * see the per-class census below; the arm at the bottom proves the slots
+     * actually ride the carrier). NumberField and RadioPills adopt the trait
+     * too but are outside the probe roster, so they join only the survival
+     * arm.
+     *
+     * @var list<class-string>
+     */
+    private const VALIDATION_CENSUSED = [Select::class, MultiSelect::class, Color::class, FilePicker::class];
 
     /**
      * @return array<string, array{0: class-string, 1: string}>
@@ -107,12 +120,16 @@ final class TraitStateCarryFamilyTest extends TestCase
      * plan-5.11 per-error help slot plus the plan-5.2 async-validator
      * closure (round 89 lane y3: HasReadonly, then CarriesNonCtorState's own
      * $errorHelp and $asyncValidator joined the sanctioned clone-and-carry
-     * family). Any further such slot (new trait or new private non-ctor
-     * property) must land here too — this census reddens first so a drop
-     * can never ship silently again.
+     * family). SF-24 (sugar-forms-026) added the HasValidation storage pair
+     * ($fieldError/$fieldValidator) to four of these classes — the census is
+     * per-class now, and a class adopting the validation trait without
+     * joining VALIDATION_CENSUSED reddens here just like before.
+     * Any further such slot (new trait or new private non-ctor
+     * property) must land here too — this census fails closed if it ever
+     * ships silently.
      */
     #[\PHPUnit\Framework\Attributes\DataProvider('carryProbeClasses')]
-    public function testNonCtorStateIsExactlyTheThreeLabelClosures(string $class): void
+    public function testNonCtorStateMatchesThePerClassCensus(string $class): void
     {
         $ref = new \ReflectionClass($class);
         $ctorParams = array_map(
@@ -171,7 +188,11 @@ final class TraitStateCarryFamilyTest extends TestCase
             $nonCtor[] = $prop->getName();
         }
         sort($nonCtor);
-        $this->assertSame(['asyncValidator', 'descriptionFunc', 'errorHelp', 'hideFunc', 'readonly', 'titleFunc'], $nonCtor);
+        $expected = ['asyncValidator', 'descriptionFunc', 'errorHelp', 'hideFunc', 'readonly', 'titleFunc'];
+        if (in_array($class, self::VALIDATION_CENSUSED, true)) {
+            $expected = ['asyncValidator', 'descriptionFunc', 'errorHelp', 'fieldError', 'fieldValidator', 'hideFunc', 'readonly', 'titleFunc'];
+        }
+        $this->assertSame($expected, $nonCtor);
     }
 
     /**
@@ -217,13 +238,47 @@ final class TraitStateCarryFamilyTest extends TestCase
      * census reads the carrier TRAIT source — Confirm's private carrier is
      * deliberately not in scope: it has no $errorHelp slot to copy.
      */
-    public function testTheSharedCarrierCopiesAllSixSlots(): void
+    public function testTheSharedCarrierCopiesAllDeclaredSlots(): void
     {
         $src = (string) file_get_contents(
             (new \ReflectionClass(\SugarCraft\Forms\CarriesNonCtorState::class))->getFileName()
         );
         foreach (['hideFunc', 'titleFunc', 'descriptionFunc', 'readonly', 'errorHelp', 'asyncValidator'] as $slot) {
             $this->assertMatchesRegularExpression('/\$next->' . $slot . '\s*=\s*\$this->' . $slot . ';/', $src);
+        }
+        // SF-24 (sugar-forms-026): the HasValidation pair rides the same
+        // funnel, property_exists-guarded because non-adopters share the
+        // carrier — pin the gate AND both legs so a silent drop reddens.
+        $this->assertStringContainsString("property_exists(\$next, 'fieldValidator')", $src);
+        foreach (['fieldValidator', 'fieldError'] as $slot) {
+            $this->assertMatchesRegularExpression('/\$next->' . $slot . '\s*=\s*\$this->' . $slot . ';/', $src);
+        }
+    }
+
+    /**
+     * Fail-closed survival arm: every HasValidation host must keep its rule
+     * AND its verdict across the mutate() rebuild funnel (the E741 family
+     * law applied to the SF-24 slots), and revalidate() on an unchanged
+     * verdict must return the same instance (the Field contract's identity
+     * law).
+     */
+    public function testValidationSlotsRideEveryAdoptersRebuild(): void
+    {
+        $rule = static fn (mixed $v): ?string => 'BAD';
+        foreach ([
+            'Select'      => Select::new('k')->withOptions('a', 'b'),
+            'MultiSelect' => MultiSelect::new('k')->withOptions('a', 'b'),
+            'Color'       => Color::new('k'),
+            'FilePicker'  => FilePicker::new('k'),
+            // NumberField judges the committed value; an empty box carries
+            // no verdict, so seed one (SF-24 matrix, README validators).
+            'NumberField' => NumberField::new('k')->withValue(5),
+            'RadioPills'  => RadioPills::new('k')->withOptions('a', 'b'),
+        ] as $name => $field) {
+            $armed   = $field->withValidator($rule);
+            $rebuilt = $armed->withTitle('T');
+            $this->assertSame('BAD', $rebuilt->error(), $name . ': validator lost across rebuild (E741)');
+            $this->assertSame($rebuilt, $rebuilt->revalidate(), $name . ': revalidate() broke the identity law');
         }
     }
 

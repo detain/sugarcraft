@@ -39,6 +39,7 @@ final class Select implements \SugarCraft\Forms\Field, \SugarCraft\Forms\Hydrata
 {
     use HasThemeChrome;
     use HasHydration;
+    use HasValidation;
 
     use HasHideFunc;
     use HasDynamicLabels;
@@ -483,6 +484,9 @@ final class Select implements \SugarCraft\Forms\Field, \SugarCraft\Forms\Hydrata
         if ($title !== '') { $lines[] = $caret . $this->themedTitle($title, $theme) . $this->readonlyTitleSuffix(); }
         if ($desc  !== '') { $lines[] = RenderSafe::clean($desc); }
         $lines[] = $this->list->view($theme);
+        foreach ($this->validationErrorLines($showErrors, $theme) as $errorLine) {
+            $lines[] = $errorLine;
+        }
         return implode("\n", $lines);
     }
 
@@ -504,24 +508,20 @@ final class Select implements \SugarCraft\Forms\Field, \SugarCraft\Forms\Hydrata
     public function getDescription(): string { return $this->description(); }
 
     /**
-     * Select carries no validator surface, so it can never hold an error:
-     * its value is by construction the highlighted {@see ItemList} entry
-     * (or null when empty), which is always a legal choice. These two are
-     * the correct no-op of the Field contract (E736 1.3) —
-     * {@see \SugarCraft\Forms\Field::revalidate()} degenerates to
-     * "re-run validators" over an empty validator set, returning `$this`
-     * unchanged, exactly as the contract's idempotence clause demands.
-     * Any future change that gives Select a validator/constraint MUST
-     * replace both — until then Form::validateAll() passing a Select
-     * through untouched is intended, not a silent skip.
+     * Validation arrived with SF-24 (sugar-forms-026): the rule judges the
+     * selected option string (null on an empty list) via {@see
+     * HasValidation}. The old "can never hold an error" doctrine was the
+     * matrix hole this closes — the highlighted entry is a legal CHOICE
+     * but no longer the end of the story: hosts may require a category of
+     * option the list itself cannot express. The whole validation surface —
+     * withValidator, validator, error, revalidate — arrives via
+     * {@see HasValidation}.
      */
-    public function error(): ?string       { return null; }
     /**
      * @deprecated Use the bare {@see self::error()} read (accessor era,
      *             2026-10-24). REMOVED-IN: 2.0.0
      */
     public function getError(): ?string { return $this->error(); }
-    public function revalidate(): Field       { return $this; }
     public function skippable(): bool         { return false; }
 
     /**
@@ -569,7 +569,7 @@ final class Select implements \SugarCraft\Forms\Field, \SugarCraft\Forms\Hydrata
 
     private function mutate(?ItemList $list = null, ?string $title = null, ?string $description = null, ?string $enumClass = null, ?array $fuzzyCandidates = null, bool $fuzzyCandidatesSet = false): self
     {
-        return $this->carryNonCtorState(new self(
+        return $this->validationRide($this->carryNonCtorState(new self(
             key:                       $this->key,
             list:                      $list        ?? $this->list,
             title:                     $title       ?? $this->title,
@@ -582,6 +582,6 @@ final class Select implements \SugarCraft\Forms\Field, \SugarCraft\Forms\Hydrata
             pendingAsyncFilterText:    $this->pendingAsyncFilterText,
             asyncSuggestionsFetchTimeoutSeconds: $this->asyncSuggestionsFetchTimeoutSeconds,
             enumClass:                 $enumClass  ?? $this->enumClass,
-        ));
+        )));
     }
 }

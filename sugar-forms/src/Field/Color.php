@@ -34,11 +34,12 @@ use SugarCraft\Forms\Lang;
  * index); {@see withTruecolor()} switches to `48;2;r;g;b` for terminals
  * where a compositor's cube disagrees with xterm's.
  *
- * There is deliberately no validator: the grid cannot produce an
- * unrepresentable value (the hex accessor derives from cube indices, and
- * {@see withValue()} snaps any legal hex string onto the nearest cube
- * corner at the boundary). {@see revalidate()} is therefore a no-op, like
- * {@see Note}'s — the Field interface still demands the slot.
+ * Validation rides {@see HasValidation} (sugar-forms-026): withValidator
+ * (and its validator alias), error and revalidate judge the committed hex
+ * — a value the grid can always represent, the cube indices decide the
+ * subject, withValue() only snaps — so verdicts move exactly when the
+ * colour moves. Note keeps the validator-free doctrine: it has no value to
+ * judge.
  *
  * Keys while focused (bubbles' axis mapping):
  *   <- / ->          green column   h / l
@@ -60,6 +61,7 @@ final class Color implements \SugarCraft\Forms\Field, \SugarCraft\Forms\Hydratab
 {
     use HasThemeChrome;
     use HasHydration;
+    use HasValidation;
 
     use HasHideFunc;
     use HasDynamicLabels;
@@ -212,6 +214,9 @@ final class Color implements \SugarCraft\Forms\Field, \SugarCraft\Forms\Hydratab
         }
 
         $lines[] = sprintf('%s  R%d G%d B%d', $this->hex(), $this->red, $this->green, $this->blue);
+        foreach ($this->validationErrorLines($showErrors, $theme) as $errorLine) {
+            $lines[] = $errorLine;
+        }
         return implode("\n", $lines);
     }
 
@@ -231,8 +236,6 @@ final class Color implements \SugarCraft\Forms\Field, \SugarCraft\Forms\Hydratab
      *             2026-10-24). REMOVED-IN: 2.0.0
      */
     public function getDescription(): string { return $this->description(); }
-    /** Latest validator error, or null when the value passes validation. */
-    public function error(): ?string { return null; }
     /**
      * @deprecated Use the bare {@see self::error()} read (accessor era,
      *             2026-10-24). REMOVED-IN: 2.0.0
@@ -255,10 +258,6 @@ final class Color implements \SugarCraft\Forms\Field, \SugarCraft\Forms\Hydratab
         };
     }
 
-    /**
-     * @internal No validator can exist on this field — see class docblock.
-     */
-    public function revalidate(): Field { return $this; }
 
     // ------------------------------------------------------------------
     // Internals
@@ -314,7 +313,7 @@ final class Color implements \SugarCraft\Forms\Field, \SugarCraft\Forms\Hydratab
         ?string $description = null,
         ?bool $truecolor = null,
     ): self {
-        return $this->carryNonCtorState(new self(
+        return $this->validationRide($this->carryNonCtorState(new self(
             key:         $this->key,
             red:         $red       ?? $this->red,
             green:       $green     ?? $this->green,
@@ -323,6 +322,6 @@ final class Color implements \SugarCraft\Forms\Field, \SugarCraft\Forms\Hydratab
             title:       $title     ?? $this->title,
             description: $description ?? $this->description,
             truecolor:   $truecolor ?? $this->truecolor,
-        ));
+        )));
     }
 }

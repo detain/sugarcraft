@@ -22,7 +22,11 @@ use SugarCraft\Forms\Util\RenderSafe;
  * confirms a choice).
  *
  * Enter and Backspace are forwarded to the picker (descend / ascend) so
- * the field declares itself a consumer of those keys.
+ * the field declares itself a consumer of those keys. Validation rides
+ * {@see HasValidation} (sugar-forms-026): withValidator (and the validator
+ * alias) attaches a rule judging the selected path — null = nothing picked
+ * yet — so a browse that clears the selection re-runs it exactly like an
+ * explicit pick.
 
  * NOTE (sugar-forms-058, 2026-11-13): upstream names in this class were re-spelled to canonical grammar from earlier prose and are NOT verified against a pinned charmbracelet checkout; per-symbol verification is gated on a research-lane huh/bubbles reference. Treat them as indicative, not proven.
  * ANTECEDENT (sugar-forms-058): the upstream shape is charmbracelet/bubbles filepicker. Divergences shipped here: (1) no typed-directory filter navigation (entry lists are browsed by arrows/paging only, not filtered by typed path text); (2) no mouse support in the picker overlay. */
@@ -30,6 +34,7 @@ final class FilePicker implements \SugarCraft\Forms\Field, \SugarCraft\Forms\Hyd
 {
     use HasThemeChrome;
     use HasHydration;
+    use HasValidation;
 
     use HasHideFunc;
     use HasDynamicLabels;
@@ -112,6 +117,9 @@ final class FilePicker implements \SugarCraft\Forms\Field, \SugarCraft\Forms\Hyd
             // display site). Value semantics stay raw; cleaning is view-only.
             $lines[] = '→ ' . RenderSafe::clean((string) $this->picker->selected());
         }
+        foreach ($this->validationErrorLines($showErrors, $theme) as $errorLine) {
+            $lines[] = $errorLine;
+        }
         return implode("\n", $lines);
     }
 
@@ -131,14 +139,11 @@ final class FilePicker implements \SugarCraft\Forms\Field, \SugarCraft\Forms\Hyd
      *             2026-10-24). REMOVED-IN: 2.0.0
      */
     public function getDescription(): string { return $this->description(); }
-    /** Latest validator error, or null when the value passes validation. */
-    public function error(): ?string { return null; }
     /**
      * @deprecated Use the bare {@see self::error()} read (accessor era,
      *             2026-10-24). REMOVED-IN: 2.0.0
      */
     public function getError(): ?string { return $this->error(); }
-    public function revalidate(): Field      { return $this; }
     public function skippable(): bool       { return false; }
 
     /**
@@ -173,11 +178,11 @@ final class FilePicker implements \SugarCraft\Forms\Field, \SugarCraft\Forms\Hyd
 
     private function mutate(?PickerWidget $picker = null, ?string $title = null, ?string $description = null): self
     {
-        return $this->carryNonCtorState(new self(
+        return $this->validationRide($this->carryNonCtorState(new self(
             key:         $this->key,
             picker:      $picker      ?? $this->picker,
             title:       $title       ?? $this->title,
             description: $description ?? $this->description,
-        ));
+        )));
     }
 }
