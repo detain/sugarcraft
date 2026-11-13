@@ -124,6 +124,16 @@ final class Config
     /** Stats server. */
     public readonly string $statsListenAddr;
 
+    /**
+     * 108: low-frequency flush target for the shared Stats counters
+     * (relative paths resolve under the data dir). '' — the shipped
+     * default — keeps history volatile, exactly the pre-108 behavior.
+     */
+    public readonly string $statsPersistPath;
+
+    /** Seconds between monotonic merges into statsPersistPath (S07-vocabulary integer). */
+    public readonly int $statsFlushIntervalSeconds;
+
     /** Path to data directory. */
     public readonly string $dataPath;
 
@@ -272,6 +282,18 @@ final class Config
 
         $stats = $data['stats'] ?? [];
         $this->statsListenAddr = (string) ($stats['listen_addr'] ?? ':23233');
+        // 108: empty/absent persist_path = volatile (the default); a raw
+        // resolvePath('') would hand back the data dir itself, so gate
+        // the empty string BEFORE resolution.
+        $statsPersistRaw       = (string) ($stats['persist_path'] ?? '');
+        $this->statsPersistPath = $statsPersistRaw === '' ? '' : $this->resolvePath($statsPersistRaw, $dataPath);
+        $this->statsFlushIntervalSeconds = self::parseInt(
+            'stats.flush_interval_seconds',
+            $stats['flush_interval_seconds'] ?? null,
+            60,
+            1,
+            86_400
+        );
 
         $this->dataPath = $dataPath;
     }

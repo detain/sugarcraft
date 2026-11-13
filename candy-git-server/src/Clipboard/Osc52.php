@@ -33,8 +33,20 @@ final class Osc52
     /** Secondary selection. */
     public const SELECTION_SECONDARY = 's';
 
-    /** Cap on buffered events — a client that never drains pendingEvents() must not grow memory unbounded. */
+    /**
+     * Secondary cap on buffered event COUNT (104). It is no longer the
+     * memory story — the byte budget below is — but it keeps the small-
+     * payload churn honest without walking anything.
+     */
     private const MAX_EVENTS = 1000;
+
+    /**
+     * 104: the memory budget is BYTES, not a count. OSC 52 payloads are
+     * attacker-chosen length, so "1000 events" had been unbounded memory
+     * dressed as a cap — the stated prohibition against unbounded growth
+     * needed the unit the payload actually consumes.
+     */
+    private const MAX_PENDING_BYTES = 262_144;
 
     /** Valid selection names. */
     private const VALID_SELECTIONS = [
@@ -48,6 +60,16 @@ final class Osc52
 
     /** @var list<array{kind: string, selection: string, payload?: string}> Pending events */
     private array $events = [];
+
+    /**
+     * 104: ring cursor — eviction unsets the head slot and advances this
+     * index (O(1) per drop) instead of array_slice-ing the whole list on
+     * every overflow; pendingEvents() compacts once at drain.
+     */
+    private int $eventHead = 0;
+
+    /** @var int buffered payload bytes, kept at or below MAX_PENDING_BYTES. */
+    private int $eventBytes = 0;
 
     /** @var list<callable> Listeners for clipboard changes */
     private array $listeners = [];
@@ -145,8 +167,11 @@ final class Osc52
      */
     public function pendingEvents(): array
     {
-        $events = $this->events;
-        $this->events = [];
+        $events = \array_values($this->events);
+        $this->events     = [];
+        $this->eventHead  = 0;
+        $this->eventBytes = 0;
+
         return $events;
     }
 
@@ -175,6 +200,26 @@ final class Osc52
     }
 
     /**
+     * Remove a previously registered onChange listener (104 — the API
+     * was append-only, so a listener outliving its session or transport
+     * could never be detached). Identity match on the same callable;
+     * returns whether anything was removed.
+     */
+    public function offChange(callable $listener): bool
+    {
+        $kept = [];
+        foreach ($this->listeners as $candidate) {
+            if ($candidate !== $listener) {
+                $kept[] = $candidate;
+            }
+        }
+        $removed = \count($kept) !== \count($this->listeners);
+        $this->listeners = $kept;
+
+        return $removed;
+    }
+
+    /**
      * Get the list of valid selection names.
      *
      * @return list<string>
@@ -189,15 +234,31 @@ final class Osc52
     // -------------------------------------------------------------------------
 
     /**
-     * Buffer an event, evicting the oldest when over MAX_EVENTS.
+     * Buffer an event under the byte budget (104) with O(1) ring
+     * eviction, the count cap as the secondary bound. A single payload
+     * past the whole budget evicts ITSELF rather than displacing the
+     * entire backlog — a one-event giant is exactly the shape the cap
+     * exists to refuse.
      *
      * @param array{kind: string, selection: string, payload?: string} $event
      */
     private function recordEvent(array $event): void
     {
         $this->events[] = $event;
-        if (\count($this->events) > self::MAX_EVENTS) {
-            $this->events = \array_slice($this->events, -self::MAX_EVENTS);
+        $this->eventBytes += \strlen((string) ($event['payload'] ?? ''));
+
+        // 104: byte budget first (payloads are attacker-chosen length),
+        // count second. count() already excludes evicted slots, so the
+        // live size is count() itself; eviction drops the OLDEST by
+        // advancing the head cursor — no re-slice of the whole list per
+        // overflow.
+        while (
+            \array_key_exists($this->eventHead, $this->events)
+            && ($this->eventBytes > self::MAX_PENDING_BYTES || \count($this->events) > self::MAX_EVENTS)
+        ) {
+            $this->eventBytes -= \strlen((string) ($this->events[$this->eventHead]['payload'] ?? ''));
+            unset($this->events[$this->eventHead]);
+            $this->eventHead++;
         }
     }
 
@@ -208,6 +269,10 @@ final class Osc52
      */
     private function notifyListeners(array $event): void
     {
+        // PHP array-by-value iteration: this loop already runs over a
+        // snapshot of the list, so a listener that calls offChange()
+        // (itself or a sibling) mid-dispatch cannot skip or double-fire
+        // this same notification (104 documented shape).
         foreach ($this->listeners as $listener) {
             $listener($event);
         }

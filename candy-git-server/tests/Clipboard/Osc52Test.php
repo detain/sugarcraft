@@ -316,4 +316,108 @@ final class Osc52Test extends TestCase
         $this->assertSame('50', $events[0]['payload']);
         $this->assertSame('1049', $events[999]['payload']);
     }
+
+    // -------------------------------------------------------------------------
+    // S36-era re-aim + S37 (finding 104): the BYTE budget, ring eviction
+    // -------------------------------------------------------------------------
+
+    public function testByteBudgetEvictsLongPayloadsBeforeTheCountCap(): void
+    {
+        // 104: 1000 SHORT-event-shaped caps do not bound memory when each
+        // payload is attacker-chosen length. Two ~200 KiB writes are past
+        // the 256 KiB budget while being only 2 of 1000 allowed events —
+        // the old shape held both; the budget now drops the oldest.
+        $big = str_repeat('A', 200_000);
+        $this->clipboard->write('c', $big);
+        $this->clipboard->write('c', $big . 'x');
+
+        $events = $this->clipboard->pendingEvents();
+
+        $this->assertCount(1, $events, 'the byte budget must evict the older giant before count ever matters');
+        $this->assertSame(200_001, strlen((string) $events[0]['payload']), 'the NEWEST tail survives');
+
+        // A payload past the WHOLE budget evicts itself, not the backlog.
+        $this->clipboard->write('c', str_repeat('C', 300_000));
+        $this->clipboard->write('c', 'small-after-giant');
+        $events = $this->clipboard->pendingEvents();
+        $this->assertCount(1, $events);
+        $this->assertSame('small-after-giant', $events[0]['payload'], 'the self-evicted giant leaves the next event intact');
+    }
+
+    public function testRingCursorAndBudgetResetCleanlyOnDrain(): void
+    {
+        // Cycle: overflow, drain, refill, overflow again. A stale head
+        // cursor or byte counter across the drain would either refuse to
+        // evict (the old buffer's ghost bytes) or evict the NEWEST event
+        // (a head that runs past the fresh list).
+        $big = str_repeat('B', 200_000);
+        $this->clipboard->write('c', $big);
+        $this->clipboard->write('c', $big);
+        $this->clipboard->pendingEvents(); // drain: bytes 0, head reset
+
+        $this->clipboard->write('c', $big);          // 200k — fits
+        $this->clipboard->write('c', $big . 'x');    // 400k — evicts the first
+
+        $events = $this->clipboard->pendingEvents();
+        $this->assertCount(1, $events, 'the second overflow must still evict the oldest');
+        $this->assertSame(200_001, strlen((string) $events[0]['payload']), 'and keep the newest');
+        $this->assertSame([], $this->clipboard->pendingEvents(), 'drain empties');
+    }
+
+    public function testCountCapSurvivesUnderTheByteBudget(): void
+    {
+        // Thousands of tiny events stay within the byte budget, so the
+        // secondary count cap does the bounding there (re-proves the
+        // re-aimed while-condition without weakening the old pin).
+        for ($i = 0; $i < 1005; $i++) {
+            $this->clipboard->parse('c;a');
+        }
+
+        $this->assertCount(1000, $this->clipboard->pendingEvents());
+    }
+
+    public function testOffChangeDetachesTheExactListener(): void
+    {
+        $kept = [];
+        $gone = [];
+        $keptListener = static function (array $event) use (&$kept): void {
+            $kept[] = $event['kind'];
+        };
+        $goneListener = static function (array $event) use (&$gone): void {
+            $gone[] = $event['kind'];
+        };
+
+        $this->clipboard->onChange($keptListener);
+        $this->clipboard->onChange($goneListener);
+
+        $this->assertTrue($this->clipboard->offChange($goneListener));
+        $this->clipboard->write('c', 'payload');
+
+        $this->assertSame(['write'], $kept, 'the sibling listener still fires');
+        $this->assertSame([], $gone, 'the removed listener never fires again (104)');
+        $this->assertFalse($this->clipboard->offChange($goneListener), 'removing twice reports honestly');
+    }
+
+    public function testMidDispatchRemovalDoesNotAlterTheCurrentNotification(): void
+    {
+        $fired = [];
+        $clipboard = $this->clipboard;
+        $late = static function (array $event) use (&$fired): void {
+            $fired[] = 'late';
+        };
+        $first = static function (array $event) use (&$fired, $clipboard, $late): void {
+            $fired[] = 'first';
+            $clipboard->offChange($late); // detach the sibling mid-dispatch
+        };
+
+        $this->clipboard->onChange($first);
+        $this->clipboard->onChange($late);
+        $this->clipboard->write('c', 'one');
+
+        $this->assertSame(['first', 'late'], $fired, 'the in-flight dispatch is a snapshot — removals land NEXT time');
+
+        $fired = [];
+        $this->clipboard->write('c', 'two');
+        $this->assertSame(['first'], $fired, 'the detached listener is gone from the next dispatch');
+    }
 }
