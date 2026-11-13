@@ -84,6 +84,9 @@ final class ConversationRouter
     /** @var array<string, PromiseInterface<void>> platform → tail of that face's chunk chain (per conversation below) */
     private array $deliveryTails = [];
 
+    /** @var array<string, PromiseInterface<string>> binding key → in-flight session.create promise (msteams-15 single-flight memo) */
+    private array $creating = [];
+
     private ?QueueGate $queueGate = null;
 
     /** @var \Closure(string, array<string,mixed>, list<string>): void|null */
@@ -658,7 +661,19 @@ final class ConversationRouter
 
     // ── plumbing ────────────────────────────────────────────────────────
 
-    /** @return PromiseInterface<string> */
+    /**
+     * Resolve the session a binding key rides, minting it on first contact.
+     *
+     * SINGLE-FLIGHT (msteams-15): concurrent first-contacts share ONE
+     * in-flight promise per key — the TokenBroker::token() memo is the
+     * house pattern. The cleaner arms are attached at creation time, so
+     * they run on EVERY settle path: a success leaves the memo empty with
+     * the binding in place (the `existing` door catches followers from
+     * then on), and a failure leaves no trace — the next inbound mints a
+     * fresh attempt instead of riding a poisoned promise forever.
+     *
+     * @return PromiseInterface<string>
+     */
     private function sessionFor(string $key, array $ref): PromiseInterface
     {
         $existing = $this->map->sessionIdFor($key);
@@ -666,17 +681,38 @@ final class ConversationRouter
             return \React\Promise\resolve($existing);
         }
 
-        return $this->serve->createSession(self::grammarName($key))->then(function (array $created) use ($key, $ref): string {
-            $sessionId = (string) ($created['id'] ?? '');
-            if ($sessionId === '') {
-                throw new \RuntimeException('session.create returned no id');
-            }
-            $this->map->bind($key, $sessionId);
-            $this->map->rememberConversation($sessionId, $key, $ref);
-            $this->followNow($sessionId, $key);
+        $pending = $this->creating[$key] ?? null;
+        if ($pending !== null) {
+            return $pending;
+        }
 
-            return $sessionId;
-        });
+        $memo = $this->serve->createSession(self::grammarName($key))
+            ->then(function (array $created) use ($key, $ref): string {
+                $sessionId = (string) ($created['id'] ?? '');
+                if ($sessionId === '') {
+                    throw new \RuntimeException('session.create returned no id');
+                }
+                $this->map->bind($key, $sessionId);
+                $this->map->rememberConversation($sessionId, $key, $ref);
+                $this->followNow($sessionId, $key);
+
+                return $sessionId;
+            })
+            ->then(
+                function (string $sessionId) use ($key): string {
+                    unset($this->creating[$key]);
+
+                    return $sessionId;
+                },
+                function (\Throwable $e) use ($key): never {
+                    unset($this->creating[$key]);
+
+                    throw $e;
+                }
+            );
+        $this->creating[$key] = $memo;
+
+        return $memo;
     }
 
     /**

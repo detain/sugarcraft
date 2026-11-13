@@ -141,6 +141,43 @@ final class ConversationRouterTest extends TestCase
         self::assertSame(1, $this->serve->sendSeen, 'a re-delivered inbound id must never double-prompt the session');
     }
 
+    public function testConcurrentFirstContactsShareOneSessionCreate(): void
+    {
+        $this->boot();
+
+        // Both inbounds land in the SAME tick — the create RPC cannot
+        // settle without a loop turn, so the second contact must ride the
+        // first's in-flight promise (msteams-15 single-flight). inboundDm
+        // is deliberately unused here: it pumps between calls, which is
+        // exactly the serialization this pin refuses to fake.
+        $ref = ['conversationId' => '19:dm-9@thread.v2', 'serviceUrl' => 'https://s.test'];
+        $this->router->inbound('msteams', self::DM_KEY, $ref + ['activityId' => 'm-1'], 'first', false, 'm-1');
+        $this->router->inbound('msteams', self::DM_KEY, $ref + ['activityId' => 'm-2'], 'second', false, 'm-2');
+        self::runFor($this->loop, 300);
+
+        self::assertSame(1, $this->serve->createSeen, 'a racing first-contact must not mint a second session');
+        self::assertSame(2, $this->serve->sendSeen, 'both prompts still ride the one session');
+        self::assertSame('second', $this->serve->seenText, 'the later prompt dispatches after the first on the shared session');
+    }
+
+    public function testAFailedSessionCreateLeavesNoMemoBehind(): void
+    {
+        $this->boot();
+        $this->serve->createWithoutId = true;
+        $this->inboundDm('poisoned', false, 'm-1');
+
+        self::assertSame(1, $this->serve->createSeen);
+        self::assertSame(0, $this->serve->sendSeen, 'a session that never materialized prompts nothing');
+        self::assertNotEmpty($this->face->delivered, 'the open failure still answers in the chat (failWith arm)');
+
+        $this->serve->createWithoutId = false;
+        $this->inboundDm('retry', false, 'm-2');
+
+        self::assertSame(2, $this->serve->createSeen, 'the next inbound mints a fresh attempt — a rejected promise is never memoized');
+        self::assertSame(1, $this->serve->sendSeen);
+        self::assertSame('retry', $this->serve->seenText);
+    }
+
     public function testAMentionWhileTheSessionIsBusySteers(): void
     {
         $this->boot();

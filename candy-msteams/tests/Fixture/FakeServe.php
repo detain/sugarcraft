@@ -61,6 +61,13 @@ final class FakeServe
 
     public ?string $createName = null;
 
+    /**
+     * Test-only dial (msteams-15): session.create answers WITHOUT an id so
+     * the router's no-id arm rejects — pins that a failed create never
+     * stays in the single-flight memo.
+     */
+    public bool $createWithoutId = false;
+
     public ?int $lastAfterSeq = null;
 
     /**
@@ -289,9 +296,13 @@ final class FakeServe
             case 'session.create':
                 $this->createSeen++;
                 $this->createName = isset($params['name']) ? (string) $params['name'] : null;
+                $result = ['name' => $params['name'] ?? null, 'status' => 'idle'];
+                if (!$this->createWithoutId) {
+                    $result = ['id' => 'sess_fixture_1'] + $result;
+                }
                 $this->emit($id, [
                     'jsonrpc' => '2.0', 'id' => $rpcId,
-                    'result' => (object) ['id' => 'sess_fixture_1', 'name' => $params['name'] ?? null, 'status' => 'idle'],
+                    'result' => (object) $result,
                 ]);
                 break;
             case 'session.subscribe':
