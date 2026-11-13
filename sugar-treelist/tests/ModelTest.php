@@ -2314,6 +2314,91 @@ final class ModelTest extends TestCase
         }
     }
 
+    // -- malformed UTF-8 repair at the render choke (sugar-treelist-012) ----
+
+    /** @return list<string> */
+    private function decoratedLines(string $value, int $height = 6, int $wrap = 6): array
+    {
+        return Model::new()
+            ->withItems(new StringItem($value))
+            ->withWidth(20)
+            ->withHeight($height)
+            ->withWrap($wrap)
+            ->withPrefixer(new DefaultPrefixer())
+            ->withSuffixer(new DefaultSuffixer())
+            ->lines();
+    }
+
+    public function testOverlongMalformedWordRendersRepairedCellsNotASilentEmptyRow(): void
+    {
+        // 40 stray 0xC3 lead bytes glued to a 20-char tail used to collapse
+        // splitOverWidth() to one silently EMPTY row (grapheme_strlen()
+        // returns NULL on invalid UTF-8, so the chunk loop never ran). The
+        // repair turns each invalid subsequence into one '?' cell and the
+        // tail survives on its own rows.
+        $long = \str_repeat("\xC3", 40) . 'tail-content-here-xx';
+        $lines = $this->decoratedLines($long);
+
+        $this->assertSame([
+            '╭ 0 > ?????????????<',
+            '│     ?????????????',
+            '│     ?????????????',
+            '│     ?tail-content',
+            '│     -here-xx',
+        ], $lines);
+
+        $joined = \implode("\n", $lines);
+        $this->assertStringNotContainsString("\xC3", $joined);
+        $this->assertTrue(
+            \mb_check_encoding($joined, 'UTF-8'),
+            'the frame sink never carries invalid UTF-8 out of lines()',
+        );
+    }
+
+    public function testShortAndOverlongMalformedValuesTakeTheSameRepairPath(): void
+    {
+        // The acceptance shape: the identical invalid byte must surface as
+        // the identical '?' replacement on the fits-in-one-row path (the
+        // short value used to emit its raw bytes verbatim) and on the
+        // splitOverWidth() path — one repair, not two divergent failures.
+        $short = $this->decoratedLines("a\xFFz", height: 1, wrap: 1);
+        $long  = $this->decoratedLines("a\xFFz" . \str_repeat('q', 30));
+
+        $this->assertSame(['╭ 0 > a?z          <'], $short);
+        $this->assertSame('╭ 0 > a?zqqqqqqqqqq<', $long[0]);
+    }
+
+    public function testWellFormedUtf8PassesTheRepairByteForByte(): void
+    {
+        // mb_convert_encoding must be a no-op on valid input — a repair that
+        // churned well-formed text would be a far worse bug than the one it
+        // cures. € (3-byte) and 😀 (4-byte) prove both lead lengths survive.
+        $lines = $this->decoratedLines('Price: €5 😀 end');
+
+        $this->assertSame([
+            '╭ 0 > Price: €5 😀 <',
+            '│     end',
+        ], $lines);
+    }
+
+    public function testLinesStreamCarriesTheRepairedFrameIdentically(): void
+    {
+        $value = str_repeat("\xC3", 40) . 'tail-content-here-xx';
+        $model = Model::new()
+            ->withItems(new StringItem($value))
+            ->withWidth(20)
+            ->withHeight(6)
+            ->withWrap(6)
+            ->withPrefixer(new DefaultPrefixer())
+            ->withSuffixer(new DefaultSuffixer());
+
+        $streamed = [];
+        foreach ($model->linesStream() as $line) {
+            $streamed[] = $line;
+        }
+        $this->assertSame($model->lines(), $streamed);
+    }
+
     /**
      * @return list<\Stringable>
      */

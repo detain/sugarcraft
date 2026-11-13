@@ -1341,6 +1341,23 @@ final class Model
     }
 
     /**
+     * Replace every maximal malformed UTF-8 subsequence with the substitute
+     * character '?' (ASCII, one display cell).
+     *
+     * Well-formed input is untouched byte for byte (validated: € and emoji
+     * survive intact), and the repair can only shrink or preserve length —
+     * each invalid subsequence is at least one byte and yields exactly one —
+     * so the render-window invariant "every displayed cell costs at least
+     * one raw byte" keeps holding after repair. The durable core-side cure
+     * is blocked (sugar-core Sanitize::repairUtf8 is private, an Outside
+     * item), so the repair lives at this lib's own choke.
+     */
+    private static function repairUtf8(string $text): string
+    {
+        return \mb_convert_encoding($text, 'UTF-8', 'UTF-8');
+    }
+
+    /**
      * Viewport guarantee for an assembled row (sugar-treelist-006): the
      * reservation a Prefixer/Suffixer DECLARED at init time is what wrap and
      * suffix padding are charged against; whatever the extension actually
@@ -1385,6 +1402,12 @@ final class Model
             return [$s, 0];
         }
         $length = \grapheme_strlen($s);
+        if ($length === null) {
+            // Malformed bytes carry zero display width (Width::string agrees),
+            // so there are no cells this field can honestly release; keeping
+            // the string whole matches what the clamp already measures.
+            return [$s, 0];
+        }
         $keep   = $length;
         $released = 0;
         while ($keep > 0 && $released < $cells) {
@@ -1453,14 +1476,21 @@ final class Model
         // 200k-line value costs O(budget), not O(value). The one shape
         // laziness cannot bound is a single huge paragraph, so the RAW scan
         // window is sized to the budget too: every displayed cell needs at
-        // least one raw byte (sanitize and CR-fold never grow the value), so
-        // rowsNeeded × (contentWidth + 1) + 1 bytes is provably enough, and
-        // anything beyond it is undisplaysize. The window is additionally
-        // hard-capped at MAX_ITEM_RENDER_BYTES — a huge viewport must not
-        // widen the scan past a fixed ceiling either. Whenever raw bytes
-        // remain outside the window the tail was dropped and the frame carries
-        // a loud truncation marker row: prefix content is never a silent lie.
-        $rawValue = (string) $item->value;
+        // least one raw byte (repair, sanitize and CR-fold never grow the
+        // value), so rowsNeeded × (contentWidth + 1) + 1 bytes is provably
+        // enough, and anything beyond it is undisplaysize. The window is
+        // additionally hard-capped at MAX_ITEM_RENDER_BYTES — a huge viewport
+        // must not widen the scan past a fixed ceiling either. Whenever raw
+        // bytes remain outside the window the tail was dropped and the frame
+        // carries a loud truncation marker row: prefix content is never a
+        // silent lie.
+        // Malformed UTF-8 is repaired HERE, before any grapheme-aware step:
+        // Sanitize is byte-oriented and preserves invalid sequences, and
+        // grapheme_strlen() returns NULL for them — an over-long malformed
+        // word used to collapse splitOverWidth() to one silently EMPTY row
+        // while a SHORT malformed value emitted its raw bytes verbatim (the
+        // same damage, shape-dependent). One repair path covers both.
+        $rawValue = self::repairUtf8((string) $item->value);
         $rawLength = \strlen($rawValue);
         $rowCap    = $this->wrap > 0 ? $this->wrap : $this->height;
         $window    = min(

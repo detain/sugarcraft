@@ -73,7 +73,11 @@ receiver unchanged, exactly like the canonicals. The aliases are removed in
 CR→LF fold): C0/C1 control bytes, DEL, any ANSI embedded in the item text, and
 mouse-zone sentinels (U+E000/U+E001) are stripped at render time, and carriage
 returns become line breaks (content splits, never overwrites) — item content
-can forge neither a frame nor a click zone. The only styles that reach the
+can forge neither a frame nor a click zone. Malformed UTF-8 is repaired at the
+same choke before any grapheme-aware step: each invalid byte subsequence
+becomes one `?` cell (well-formed text is untouched), so short and over-long
+damaged values take the same path and a damaged word never collapses to a
+silently empty row. The only styles that reach the
 output are the SGR parameters you pass to
 `withLineStyle()`/`withCurrentStyle()` — each is sanitize-then-reject: leading
 escape/`[`/`m` decoration bytes are trimmed before the `[0-9;]` gate, so a
