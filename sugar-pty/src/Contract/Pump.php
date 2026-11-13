@@ -42,11 +42,14 @@ interface Pump
      * @param resource  $stdinStream  PHP stream resource (e.g. STDIN)
      * @param resource  $stdoutStream PHP stream resource (e.g. STDOUT)
      * @param Child|null $child  null when no child to monitor (stdin→master only)
-     * @return int  the child's exit code if it has already exited by
-     *              the time the pump returns; 0 if there is no child
-     *              to monitor (stdin→master only); -1 if a child was
-     *              supplied but is still running (caller must kill +
-     *              wait()).
+     * @return int  the child's exit code if it has already exited and the
+     *              status was readable by the time the pump returns; 0 if
+     *              there is no child to monitor (stdin→master only); -1
+     *              when a child was supplied but its exit status is
+     *              unknown — still running (caller must kill + wait()), or
+     *              exited with the status already consumed by an external
+     *              waitpid (Contract\Child::exitCode()'s null leg). The
+     *              pump never promotes that unknown to a fabricated 0.
      * @see portable-pty.Pump.Run()
      */
     public function run(

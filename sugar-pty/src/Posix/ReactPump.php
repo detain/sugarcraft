@@ -612,7 +612,9 @@ final class ReactPump
                 fn () => $this->finish(),
             );
             if ($this->opts->onChildExit !== null) {
-                ($this->opts->onChildExit)($this->child->exitCode() ?? 0);
+                // null code = reaped by an external waitpid: report the
+                // unknown (-1), never a fabricated clean exit (PTY-05).
+                ($this->opts->onChildExit)($this->child->exitCode() ?? -1);
             }
             return;
         }
@@ -756,7 +758,9 @@ final class ReactPump
         if ($this->child === null) {
             $result = 0;
         } elseif ($this->child->exited()) {
-            $result = $this->child->exitCode() ?? 0;
+            // exited-but-null = external reap won the race; the promise
+            // carries the unknown (-1), matching PosixPump (PTY-05).
+            $result = $this->child->exitCode() ?? -1;
         } else {
             $result = -1;
         }

@@ -130,7 +130,11 @@ final class PosixPump implements PumpContract
             return 0;
         }
         if ($child->exited()) {
-            return $child->exitCode() ?? 0;
+            // exited() with a null code means the status died in someone
+            // else's waitpid (Contract\Child::exitCode()'s documented null
+            // leg). -1 = "not observed", the same unknown the still-running
+            // leg reports; a 0 here would fabricate a clean exit.
+            return $child->exitCode() ?? -1;
         }
         return -1;
     }
