@@ -11,6 +11,7 @@ use SugarCraft\Code\Agents\Live\AgentInbox;
 use SugarCraft\Code\Agents\Live\AgentRunCards;
 use SugarCraft\Code\Agents\Live\AgentRunStatus;
 use SugarCraft\Code\Agents\WorktreeHandoff;
+use SugarCraft\Code\Lang;
 
 /**
  * The command-output half of the agent run status surface (roadmap A3): a
@@ -31,9 +32,11 @@ use SugarCraft\Code\Agents\WorktreeHandoff;
  * reaches the screen. Run ids and parents are already ID_PATTERN-gated by the
  * card reader.
  *
- * The prose is literal English like the messaging tools' output, not a locale
- * key: these strings carry run data mid-sentence and belong with the tool
- * surface that shares their shape (SubagentsTool precedent).
+ * The five whole-sentence refusals and empty-state answers are `host.agents.*`
+ * locale keys (S-H05, G-13): they are the user-visible framing of a host
+ * command. The report ROWS stay literal English — they interleave run data
+ * mid-sentence and share the model-facing `Subagents` tool's row shape
+ * (SubagentsTool precedent), which is English by the G-13 ruling.
  *
  * RS-AGENT-A5 adds {@see self::handoff()}: the same command-output posture
  * applied to a finished agent's WORKTREE — branch facts, a read-only
@@ -60,12 +63,12 @@ final class AgentStatusCommands
     public static function tree(?string $scope, ?string $root = null): string
     {
         if ($scope === null || $scope === '') {
-            return 'No run cards to show: this session has no id to look its delegated runs up under.';
+            return Lang::t('host.agents.tree.no_scope');
         }
 
         $rows = AgentRunStatus::tree($scope, AgentRunCards::MAIN, $root);
         if ($rows === []) {
-            return 'No delegated agent runs are on record for this session.';
+            return Lang::t('host.agents.tree.empty');
         }
 
         $lines = ['Agent run tree, oldest first (indent marks the launcher):'];
@@ -158,15 +161,14 @@ final class AgentStatusCommands
                 JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE,
             );
             if ($json === false) {
-                return 'Could not encode the capability roster; refusing to print a partial manifest.';
+                return Lang::t('host.agents.capabilities.encode_failed');
             }
 
             return $json;
         }
 
         if ($rows === []) {
-            return 'No capability manifests are on record yet. `agents capabilities` publishes this '
-                . "session's roster and lists everything discoverable.";
+            return Lang::t('host.agents.capabilities.empty');
         }
 
         $lines = ['Discoverable agent capabilities (a manifest is data, not permission):'];
@@ -202,8 +204,7 @@ final class AgentStatusCommands
         $report = WorktreeHandoff::inspect($repoRoot, $agentId);
 
         if (!$report['known']) {
-            return 'No worktree is on record for "' . PermissionsCommand::reportField($agentId)
-                . '" in this repository — `agents handoff` reports trees this project\'s agent runtime created.';
+            return Lang::t('host.agents.handoff.unknown', ['agent' => PermissionsCommand::reportField($agentId)]);
         }
 
         $lines = ['Hand-off report for "' . PermissionsCommand::reportField($agentId) . '":'];
