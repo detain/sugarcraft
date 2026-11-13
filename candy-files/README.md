@@ -32,7 +32,7 @@ works, and a German `(j/n)` answers to `j`.
 ┃    notes.md                    12.0KB    ┃  │    Xorg.0.log                   4.0KB    │
 ┃    todo.txt                      512B    ┃  └──────────────────────────────────────────┘
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
- focus: left · Tab swap · ↑↓ jk move · Home/End g/G jump · Enter open · ← h up · space select · s sort · . hidden · c copy · m move · R rename · d delete · r refresh · q quit · / search · Esc clear · t duplicate tab · ^w close tab · ^tab cycle · ^PgUp/^PgDn tabs · u/^z undo · ^y redo · ? help · Ctrl+O open · 1-9 tabs · Ctrl+a all · v invert · * pattern
+ focus: left · Tab swap · ↑↓ jk move · Home/End g/G jump · Enter open · l view · ← h up · space select · s sort · . hidden · c copy · m move · R rename · d delete · r refresh · q quit · / search · Esc clear · t duplicate tab · ^w close tab · ^tab cycle · ^PgUp/^PgDn tabs · u/^z undo · ^y redo · ? help · Ctrl+O open · 1-9 tabs · Ctrl+a all · v invert · * pattern
 ```
 
 ## Run it
