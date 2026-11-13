@@ -254,6 +254,17 @@ Filter state transitions (the `unfiltered` from-state is the state once `without
 | `unfiltered` | `filtering` | `withFilterFn()` called (filter applied, items reduced) |
 | `filtering` | `unfiltered` | `withoutFilter()` called (original items restored) |
 
+The machine is deliberately two cases. Upstream (lipgloss bubbles) models a
+third `FilterApplied` state bridging "a predicate is installed" and "it has
+been run over the authoritative storage" — a window that exists there because
+filter-aware mutations can land on the *view* instead of the full list. This
+port keeps the pristine list as the single authoritative storage and
+re-derives the projection on every mutation (the live-view law below), so
+configuration and application are the same clone transition: `filtering` says
+both, `unfiltered` says neither, and a third state would describe no
+behavior. `withoutFilter()` therefore restores the complete pristine list —
+including any items appended, removed, or re-sorted while filtering.
+
 A filter is a **live view**, not a one-time snapshot: while filtering,
 `withItem()`/`withItems()`/`withItemsFromArray()`/`removeItem()`/`clear()`/`sort()`
 all act on the authoritative list and the projection is re-derived immediately
@@ -387,6 +398,20 @@ real hits contain contiguously, or drop the pre-screen and pay the scan.
 
 **Filtering a Model as the user types** is `withFuzzyFilter()` (the coverage
 rule, re-projected from the pristine list per call); see [Filtering](#filtering).
+
+### Match positions and highlighting
+
+Upstream also carried per-candidate matched indexes on its ranks and echoed
+them back as highlighted filter results (the `Rank{Index, MatchedIndexes}` +
+`MatchesForItem` filter-aware-rendering leg). That leg is not part of this
+port: `FuzzyMatch::match()` reports `[item, score]` pairs only. Hosts that
+want the matched runs styled have the pieces in the sugar-fuzzy sibling —
+`SmithWatermanMatcher` hands back `MatchResult` objects carrying the indexes,
+and `SugarCraft\Fuzzy\Highlighter` wraps matched runs in a caller-supplied
+styler. Placing that inside the list's gutters is host-side work — and note
+the render choke sanitizes SGR embedded in item values (see Item Types), so
+paint highlights with styles at render time (styled gutters, per-row
+`withLineStyle()`), never as raw escape bytes inside the text.
 
 ## Deprecation & delegation
 

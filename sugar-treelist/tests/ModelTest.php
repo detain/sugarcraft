@@ -2655,4 +2655,20 @@ final class ModelTest extends TestCase
         }
         return $values;
     }
+
+    /**
+     * sugar-treelist-017 disclosure: the filter machine is exactly the two
+     * shipped cases — the upstream third FilterApplied state has nowhere to
+     * live here (predicate installation and projection application are the
+     * same clone transition). If a third case ever returns, the README
+     * "deliberately two cases" paragraph and the enum docblock have to be
+     * re-written with it, so the shape is pinned, not prose-trusted.
+     */
+    public function testFilterStateMachineIsExactlyTheTwoDisclosedCases(): void
+    {
+        $this->assertSame(
+            [FilterState::unfiltered, FilterState::filtering],
+            FilterState::cases()
+        );
+    }
 }

@@ -38,6 +38,14 @@ use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
  * carried structurally (each hit keeps its input position through the sort;
  * PHP's usort is unstable), and duplicate strings collapse to one scoring pass
  * because score is a pure function of (query, candidate).
+ *
+ * Match positions are out of scope: this door reports [item, score] pairs,
+ * never per-candidate matched indexes (upstream's Rank{Index, MatchedIndexes}
+ * + MatchesForItem filter-aware highlighting leg never landed here). Hosts
+ * that want the matched runs styled have the pieces in the sugar-fuzzy
+ * sibling — SmithWatermanMatcher hands back MatchResult objects carrying the
+ * indexes, and SugarCraft\Fuzzy\Highlighter wraps matched runs in a
+ * caller-supplied styler. See "Match positions and highlighting" in the README.
  */
 final class FuzzyMatch
 {
