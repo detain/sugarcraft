@@ -20,14 +20,15 @@ use SugarCraft\Testing\Input\TickMsg;
  */
 final class ScriptedInputFidelityTest extends TestCase
 {
-    public function testTicksDefaultYieldsTheHarnessTickMsg(): void
+    public function testTicksWithoutFactoryThrowsTheNamedRefusal(): void
     {
-        $msgs = ScriptedInput::new()->ticks(3)->build();
+        // The vacuous-tick trap is enforced, not merely warned: a factory is
+        // required, so a bare ticks() can never enqueue harness TickMsgs that
+        // match nothing in a lib that ships its own class.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('ticks() requires a tick factory');
 
-        self::assertCount(3, $msgs);
-        foreach ($msgs as $msg) {
-            self::assertInstanceOf(TickMsg::class, $msg);
-        }
+        ScriptedInput::new()->ticks(3);
     }
 
     public function testTicksFactoryYieldsTheCallerTickClass(): void

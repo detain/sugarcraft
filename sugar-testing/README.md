@@ -360,7 +360,7 @@ $input = ScriptedInput::new()
     ->key('h', ctrl: true)  // Ctrl+h
     ->arrow('down')         // lowercase direction vocabulary
     ->enter()
-    ->ticks(5)              // 5 harness TickMsgs — see the tick note below
+    ->ticks(5, factory: static fn (int $i, float $s) => new \SugarCraft\Testing\Input\TickMsg($s))  // factory required — see the tick note below
     ->resize(120, 40)
     ->key('q')
     ->build();              // list<Msg>, feed with $sim->send(...$input)
@@ -376,9 +376,10 @@ drain, production-style), `mouse(...)`, `wheel(...)`, `paste(content)`,
 `build()`, `count()`, and constants `READ_SIZE`, `PASTE_START`, `PASTE_END`.
 
 **Ticks.** Every fleet lib ships its *own* tick message class (`minesweeper`,
-`widgets`, `forms`, … each match their own), so a bare `ticks(5)` enqueues the
-harness's `SugarCraft\Testing\Input\TickMsg` — which matches **nothing** in
-your model. Pass the factory to script your lib's real tick:
+`widgets`, `forms`, … each match their own), so the factory is required: a
+bare `ticks(5)` throws `InvalidArgumentException` instead of quietly enqueuing
+the harness's `SugarCraft\Testing\Input\TickMsg` — which would match **nothing**
+in your model and pass vacuously. Script your lib's real tick:
 
 ```php
 ->ticks(3, factory: fn (int $i, float $s) => new \My\Lib\Msg\TickMsg($s))

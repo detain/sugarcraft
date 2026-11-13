@@ -160,7 +160,7 @@ final class ScriptedInputTest extends TestCase
 
     public function testTicksAppendsTickMessages(): void
     {
-        $input = ScriptedInput::new()->ticks(3);
+        $input = ScriptedInput::new()->ticks(3, factory: static fn (int $i, float $s) => new \SugarCraft\Testing\Input\TickMsg($s));
 
         $messages = $input->build();
 
@@ -173,7 +173,7 @@ final class ScriptedInputTest extends TestCase
 
     public function testTicksWithCustomInterval(): void
     {
-        $input = ScriptedInput::new()->ticks(2, 0.5);
+        $input = ScriptedInput::new()->ticks(2, 0.5, static fn (int $i, float $s) => new \SugarCraft\Testing\Input\TickMsg($s));
 
         $messages = $input->build();
 

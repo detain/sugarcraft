@@ -5,6 +5,7 @@ declare(strict_types=1);
 return [
     // Input validation
     'input.invalid_arrow' => 'Invalid arrow direction: {dir}',
+    'input.ticks_factory_required' => 'ticks() requires a tick factory: the harness cannot guess your lib tick class, and the harness TickMsg matches nothing in models that ship their own; pass factory: static fn (int $i, float $s) => new YourTickMsg($s)',
 
     // Golden file operations
     'golden.write_failed' => 'Failed to write golden file {path}: {reason}',

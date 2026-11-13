@@ -27,7 +27,7 @@ use SugarCraft\Testing\Lang;
  *   ScriptedInput::new()
  *       ->key('a')
  *       ->enter()
- *       ->ticks(5)          // matches nothing unless your lib uses this TickMsg — see ticks()
+ *       ->ticks(5, 1.0, static fn (int $i, float $s) => new \Your\TickMsg($s))  // factory required — see ticks()
  *       ->resize(80, 24)
  *       ->key('q')
  *       ->build();
@@ -231,8 +231,10 @@ final readonly class ScriptedInput
      * between the others. A model therefore only advances if it matches the
      * exact class it was written to match, and fleet libs each ship their
      * OWN TickMsg class (SugarCraft\Dash\TickMsg, SugarCraft\Forms\TickMsg,
-     * ...). Feeding this harness's {@see TickMsg} to a lib with its own
-     * class matches NOTHING and passes vacuously.
+     * ...). Enqueueing this harness's {@see TickMsg} into a lib with its own
+     * class matches NOTHING and passes vacuously — so a tick factory is
+     * REQUIRED: omitting it throws instead of warning in prose. The harness
+     * cannot guess your lib's tick class; the factory states it.
      *
      * Two correct uses:
      *  - pass a $factory minting your lib's tick class:
@@ -241,16 +243,19 @@ final readonly class ScriptedInput
      *
      * @param int $count Number of ticks
      * @param float $seconds Interval each tick represents
-     * @param (callable(int, float): Msg)|null $factory Produces the tick message for index/interval
+     * @param (callable(int, float): Msg)|null $factory Produces the tick message for index/interval; required — a null factory throws
      * @return self
+     * @throws \InvalidArgumentException when $factory is null (the vacuous-tick trap, enforced)
      */
     public function ticks(int $count, float $seconds = 1.0, ?callable $factory = null): self
     {
+        if ($factory === null) {
+            throw new \InvalidArgumentException(Lang::t('input.ticks_factory_required'));
+        }
+
         $messages = $this->messages;
         for ($i = 0; $i < $count; $i++) {
-            $messages[] = $factory !== null
-                ? $factory($i, $seconds)
-                : new TickMsg($seconds);
+            $messages[] = $factory($i, $seconds);
         }
         return new self($messages, $this->reader);
     }

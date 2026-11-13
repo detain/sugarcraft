@@ -163,7 +163,7 @@ final class ScriptedInputRuntimeParityTest extends TestCase
 
     public function testPushAndTicksKeepParserState(): void
     {
-        $messages = ScriptedInput::new()->bytes("\x1b[")->ticks(1)->key('k')->bytes('A')->build();
+        $messages = ScriptedInput::new()->bytes("\x1b[")->ticks(1, factory: static fn (int $i, float $s) => new \SugarCraft\Testing\Input\TickMsg($s))->key('k')->bytes('A')->build();
 
         $this->assertCount(3, $messages);
         $this->assertSame(KeyType::Up, $messages[2]->type);
