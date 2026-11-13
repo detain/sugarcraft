@@ -40,6 +40,10 @@ final class ExternalModuleTeardownTest extends TestCase
 
     public function testDestructKillsAPluginThatIgnoresStdinEofAndSigtermAndLeavesNoChild(): void
     {
+        if (\PHP_OS_FAMILY === 'Windows') {
+            $this->markTestSkipped('the fixture is a /bin/sh trap script; Windows has no SIGTERM');
+        }
+
         if (!\function_exists('pcntl_signal')) {
             $this->markTestSkipped('the stubborn-child fixture needs ext-pcntl in the child');
         }
@@ -94,6 +98,10 @@ final class ExternalModuleTeardownTest extends TestCase
 
     public function testDestructStopsAtTheSigtermRungForAChildThatIgnoresEofButHeedsTerm(): void
     {
+        if (\PHP_OS_FAMILY === 'Windows') {
+            $this->markTestSkipped('the fixture is a /bin/sh trap script; Windows has no SIGTERM');
+        }
+
         // E723 re-verify of the E366 ladder: the stubborn-child test above
         // proves the child ends up dead inside the total bound, and the cat
         // test below proves the grace rung answers early — but NOTHING yet

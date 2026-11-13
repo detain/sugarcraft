@@ -147,6 +147,9 @@ final class ExternalModuleTest extends TestCase
      */
     public function testExternalModuleSpawnsAndCommunicates(): void
     {
+        if (\PHP_OS_FAMILY === 'Windows') {
+            $this->markTestSkipped('echo-plugin.sh needs a POSIX shell fixture runner');
+        }
         $pluginPath = __DIR__ . '/../fixtures/echo-plugin.sh';
         if (!file_exists($pluginPath)) {
             $this->markTestSkipped('echo-plugin.sh not found');

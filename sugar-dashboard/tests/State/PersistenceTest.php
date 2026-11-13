@@ -167,6 +167,10 @@ final class PersistenceTest extends TestCase
      */
     public function testSavePublishesPrivateModesForFileAndCreatedDir(): void
     {
+        if (\PHP_OS_FAMILY === 'Windows') {
+            $this->markTestSkipped('POSIX mode bits do not exist on Windows');
+        }
+
         if (PHP_OS_FAMILY === 'Windows') {
             $this->markTestSkipped('POSIX permission bits are not honoured on Windows');
         }

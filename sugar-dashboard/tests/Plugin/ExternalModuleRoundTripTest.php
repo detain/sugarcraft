@@ -20,6 +20,10 @@ final class ExternalModuleRoundTripTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        if (\PHP_OS_FAMILY === 'Windows') {
+            $this->markTestSkipped('echo-plugin.sh needs a POSIX shell fixture runner');
+        }
+
         $this->fixturePath = __DIR__ . '/../fixtures/echo-plugin.sh';
 
         if (!file_exists($this->fixturePath)) {

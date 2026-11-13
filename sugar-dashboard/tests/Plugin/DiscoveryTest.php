@@ -52,6 +52,10 @@ final class DiscoveryTest extends TestCase
 
     public function testScanSkipsNonExecutableFiles(): void
     {
+        if (\PHP_OS_FAMILY === 'Windows') {
+            $this->markTestSkipped('Windows has no execute permission bit: Discovery treats extension-bearing files as executable there');
+        }
+
         $tmpDir = sys_get_temp_dir() . '/sugar-dashboard-test-' . uniqid();
         mkdir($tmpDir, 0755, true);
 
@@ -251,6 +255,10 @@ final class DiscoveryTest extends TestCase
      */
     public function testWorldWritableDirectoryRefused(): void
     {
+        if (\PHP_OS_FAMILY === 'Windows') {
+            $this->markTestSkipped('POSIX mode bits (0777) do not exist on Windows');
+        }
+
         $tmpDir = sys_get_temp_dir() . '/sugar-dashboard-0777-' . uniqid();
         mkdir($tmpDir, 0700, true);
         file_put_contents($tmpDir . '/evil.php', "#!/usr/bin/env php\n");
@@ -282,6 +290,10 @@ final class DiscoveryTest extends TestCase
      */
     public function testGroupWritableDirectoryRefused(): void
     {
+        if (\PHP_OS_FAMILY === 'Windows') {
+            $this->markTestSkipped('POSIX mode bits (0775) do not exist on Windows');
+        }
+
         $tmpDir = sys_get_temp_dir() . '/sugar-dashboard-0775-' . uniqid();
         mkdir($tmpDir, 0700, true);
         file_put_contents($tmpDir . '/maybe.php', "#!/usr/bin/env php\n");
