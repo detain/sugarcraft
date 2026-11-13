@@ -48,7 +48,10 @@ composer require sugarcraft/sugar-ssh-server
     raises a `PtyException` when pcntl is missing; SIGWINCH size forwarding
     alone degrades gracefully without it.
   - a usable **`/dev/ptmx`** — PTY allocation fails in restricted containers
-    and on many shared hosts.
+    and on many shared hosts. Remedies: grant the device and a devpts to the
+    container (`--device=/dev/ptmx` plus a devpts mount at `/dev/pts`), or
+    keep the connection behind sshd and use the legacy transport below,
+    which needs none of the three InProcessTransport requirements.
 - The **legacy `HostSshdTransport`** runs the middleware chain inline against
   the PTY sshd already allocated — it needs none of the three above.
 - **`ext-ssh2` is not used by this library at all** and the manifest does not
@@ -434,6 +437,30 @@ final class HelloBanner implements Middleware
     }
 }
 ```
+
+### Observability surface (minor accessors)
+
+- `Server::transport()` returns the transport `serve()` will run; `Keepalive::interval()`
+  returns the seconds the armed value object carries.
+- `DefaultChannelHandler` keeps its negotiation state readable for a custom
+  handler that wraps it: `execAllowed($session, $argv)` is the two-gate
+  decision itself, and `ptyAllocated()` (`?bool` until the pty-request is
+  answered), `shellRequested()`, `execRequested()`, `pendingCommand()` and
+  `envVars()` report what the channel has recorded so far.
+- `InProcessTransport::setKeepaliveCallback()` is the low-level seat under
+  the keepalive story (its only shipped caller is `armKeepalive()`): the
+  zero-argument callback fires in the pump loop whenever `stream_select`
+  reports no ready streams, with no further guarantees -- embedders want
+  `Server::withKeepalive()`, documented above. `InProcessTransport::pty()`
+  returns the live `MasterPty`, valid only while the pump loop runs (it
+  throws otherwise) -- which is how a custom pump callback can write to the
+  master as well.
+- The `Session` constructor also takes the five protocol-metadata fields
+  (`sessionId`, `authMethod`, `keyFingerprint`, `clientVersion`,
+  `serverVersion`) as optional named args -- the direct-ctor shape beside
+  the transport-shaped one: `withProtocolMetadata()` (see [Session
+  metadata](#session-metadata)) is how the transport fills them, and
+  `examples/showcase.php` shows the ctor consumed named-argument-style.
 
 ### Constructor options
 
@@ -1175,3 +1202,6 @@ Runnable examples:
 ## Credits & inspiration
 
 Originally inspired by the Go [Charm](https://github.com/charmbracelet) ecosystem; SugarCraft is developed as a native PHP project.
+
+Used by within the monorepo: `sugar-metrics` carries
+`sugarcraft/sugar-ssh-server` as a hard require in its manifest.
