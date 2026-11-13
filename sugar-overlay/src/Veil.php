@@ -332,6 +332,15 @@ final class Veil
      * withUntrustedContent(), which sweeps on arrival and lets zones be
      * composed afterwards).
      *
+     * The verbatim path carries C0 controls as well: a raw TAB ships into
+     * the frame painted at the terminal's next 8-column stop while Width
+     * charges it 4 cells, and a raw CR measures 0 yet repaints column 0 —
+     * either one desyncs delta frames. Only withUntrustedContent() folds
+     * them (CR to LF, TAB to four spaces). Physical tab-stop accounting is
+     * deliberately NOT modelled on this channel: Width's fixed-4 is the
+     * fleet measure, and the 8-stop truth is sugar-core Width's problem,
+     * not one consumer's.
+     *
      * Replayed TERMINAL output is in scope on the SGR side: the pen parser
      * is a full ECMA-48 fold — colon sub-parameter colors (`38:2:1:2:3`
      * and the color-space form `38:2::1:2:3`) arm a pen exactly like the

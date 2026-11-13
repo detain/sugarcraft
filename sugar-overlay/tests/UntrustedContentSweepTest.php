@@ -182,4 +182,22 @@ final class UntrustedContentSweepTest extends TestCase
         $this->assertStringContainsString('38;2;255;0;0', $delta, 'the colon color reached the diff pen');
         $this->assertStringContainsString('1m', $delta, 'the bold riding after the color is kept too (sugar-overlay-005)');
     }
+
+    public function testRawChannelShipsC0BytesWithTheFixedFourTabMeasure(): void
+    {
+        // SO-37 declared-contract pin (sugar-overlay-006 doc leg): on the
+        // verbatim channel nothing folds — the TAB and CR bytes ship into
+        // the composed frame while Width charges TAB 4 cells and CR 0.
+        // The terminal disagrees (8-column stops; CR repaints column 0),
+        // which is exactly why attacker-reachable text must enter through
+        // withUntrustedContent(). Physical tab-stop accounting is
+        // deliberately NOT modelled here: Width's fixed-4 is the fleet
+        // measure, and the 8-stop truth belongs to sugar-core Width.
+        $veil  = Veil::new()->withPosition(Position::TOP, Position::LEFT);
+        $frame = $veil->composite("a\tb\rx", self::BG, Position::TOP, Position::LEFT);
+
+        $this->assertStringContainsString("\t", $frame, 'the raw channel ships the TAB byte verbatim');
+        $this->assertStringContainsString("\r", $frame, 'the raw channel ships the CR byte verbatim');
+        $this->assertSame(7, MarkedFrame::measure("a\tb\rx"), 'TAB costs 4 measured cells, CR costs 0 — the desync the docblock names');
+    }
 }
