@@ -103,7 +103,11 @@ vocabulary — `new StyleGuide` helpers `fromJsonString()` / `fromFile()`
 `theme()` projects a subset — about thirteen element names (`h1`–`h6`,
 `paragraph`, `strong`, `emph`, `codespan`, `code_block`, `link`,
 `block_quote`, `list`, `hr`, `strikethrough`) plus four chroma slots
-(keyword, string, number, comment); everything else stays addressable
+(keyword, string, number, comment). Heading casing carries across too:
+`"uppercase": true` / `"lowercase": true` on any `h1`–`h6` block feeds
+the Theme's `headingCase` selector, and a document spelling both lands
+on upper — a house tie-break, since glamour's own corpora never do.
+Everything else stays addressable
 through `element()` / `chroma()`, nothing is silently lost.
 `Theme::fromFile($path, ?int $maxBytes = null)` throws `RuntimeException`
 on an unreadable file or one exceeding the ceiling; `Theme::fromJsonString($json)` throws `InvalidArgumentException`

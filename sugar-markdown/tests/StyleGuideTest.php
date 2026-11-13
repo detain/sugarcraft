@@ -7,6 +7,7 @@ namespace SugarCraft\Markdown\Tests;
 use PHPUnit\Framework\Attributes\WithoutErrorHandler;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\Util\Color;
+use SugarCraft\Markdown\Renderer;
 use SugarCraft\Markdown\StyleGuide;
 use SugarCraft\Markdown\Theme;
 use SugarCraft\Style\Style;
@@ -389,5 +390,33 @@ final class StyleGuideTest extends TestCase
 
         $guide = StyleGuide::fromJsonString('{"document":{},"emph":{"bold":0}}');
         $this->assertSame('x', $guide->theme()->italic->render('x'), 'int 0 is flag-off');
+    }
+
+    /**
+     * SM-S14 fidelity: `uppercase` / `lowercase` on a heading primitive
+     * now feed the Theme's single headingCase selector instead of being
+     * silently ignored, and the renderer applies it — byte-exact.
+     */
+    public function testGlamourHeadingCaseDecodesIntoTheThemeSlot(): void
+    {
+        $upper = StyleGuide::fromJsonString('{"document":{},"h1":{"uppercase":true}}')->theme();
+        $this->assertSame('upper', $upper->headingCase);
+        $this->assertStringContainsString(
+            'HELLO',
+            (new Renderer($upper))->render("# hello\n"),
+            'an uppercase h1 renders upper-cased heading bytes',
+        );
+
+        $lower = StyleGuide::fromJsonString('{"document":{},"h2":{"lowercase":true}}')->theme();
+        $this->assertSame('lower', $lower->headingCase);
+
+        $both = StyleGuide::fromJsonString('{"document":{},"h1":{"lowercase":true},"h3":{"uppercase":true}}')->theme();
+        $this->assertSame('upper', $both->headingCase, 'upper wins the conflict (documented house rule)');
+
+        $none = StyleGuide::fromJsonString('{"document":{},"h1":{"bold":true}}')->theme();
+        $this->assertSame('none', $none->headingCase, 'flag absent keeps the plain selector');
+
+        $shared = StyleGuide::fromJsonString('{"document":{},"heading":{"uppercase":true}}')->theme();
+        $this->assertSame('upper', $shared->headingCase, 'the shared heading block counts too');
     }
 }

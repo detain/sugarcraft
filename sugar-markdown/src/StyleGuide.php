@@ -33,8 +33,9 @@ use SugarCraft\Style\Style;
  *
  * WHAT DECODES: colours and attribute flags, the document's
  * `block_prefix` / `block_suffix` / `indent` / `margin`, `paragraph` block
- * affixes, and the chroma families Keyword / LiteralString / LiteralNumber
- * / Comment.
+ * affixes, the chroma families Keyword / LiteralString / LiteralNumber
+ * / Comment, and the `uppercase` / `lowercase` spellings on the heading
+ * blocks (folded into the Theme's single `headingCase` selector).
  *
  * WHAT THEME() DROPS, and why: line-control `block_prefix` /
  * `block_suffix` on NON-document elements (glamour uses "\n" there purely
@@ -238,6 +239,7 @@ final class StyleGuide
             number:              $this->chromaStyle('LiteralNumber') ?? $this->chromaStyle('Number'),
             comment:             $this->chromaStyle('Comment'),
             strike:              $this->style('strikethrough'),
+            headingCase:         $this->headingCase(),
             documentMargin:      $this->documentMargin,
             documentIndent:      $this->documentIndent,
             paragraphPrefix:     (string) ($paragraph['block_prefix'] ?? ''),
@@ -253,6 +255,30 @@ final class StyleGuide
         $primitive = $this->elements[$element] ?? null;
 
         return $primitive === null ? null : self::styleFrom($primitive);
+    }
+
+    /**
+     * SM-S14: glamour spells heading casing as `uppercase` / `lowercase`
+     * on the h1-h6 primitives (or the shared `heading` block); the Theme
+     * carries one `headingCase` selector. A document that asks for both
+     * lands on `upper` — house tie-break, stated in the README; glamour's
+     * own corpora set exactly one flag per heading level, so upstream the
+     * two spellings never collide and there is no behaviour to mirror.
+     */
+    private function headingCase(): string
+    {
+        $lower = false;
+        foreach (['heading', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'] as $element) {
+            $primitive = $this->elements[$element] ?? [];
+            if (self::flagOn($primitive['uppercase'] ?? null)) {
+                return 'upper';
+            }
+            if (self::flagOn($primitive['lowercase'] ?? null)) {
+                $lower = true;
+            }
+        }
+
+        return $lower ? 'lower' : 'none';
     }
 
     /**
