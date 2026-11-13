@@ -182,6 +182,8 @@ Limits of the embedded YAML reader: flat entries only, and a nested list is writ
 | Esc / ^C  | Quit without connecting (exit 130; on a real terminal ^C raises SIGINT, which the picker traps to restore the terminal first) |
 | (typing)  | Type to filter (once non-empty, `j`/`k` count as letters); Backspace deletes one filter codepoint (a compound emoji or flag may need two presses) |
 
+Arrow keys arrive as an `ESC [ A`-style byte burst; the decoder waits 150 ms for follow-on bytes so a burst fragmented by latency (tmux under load, a WAN hop) still reads as one keypress. Set `ESCDELAY` (milliseconds) to tune that window.
+
 ## Implementation
 
 The picker is a tiny standalone widget — not a full SugarWidgets `List`. The lifecycle is

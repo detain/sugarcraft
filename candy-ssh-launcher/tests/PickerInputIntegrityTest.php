@@ -621,4 +621,140 @@ PHP;
             @unlink($script);
         }
     }
+
+    /**
+     * Real-stream picker seam (-017/-097): the memory streams every other
+     * leg uses bypass stream_select entirely, so the burst window never
+     * executed in-suite. A socketpair input exercises the select branch
+     * deterministically — pre-buffered bursts fire with zero sleeps, and
+     * fork-paced writes probe the window's width itself.
+     *
+     * @return array{0:Picker,1:resource,2:resource}
+     */
+    private function makeSocketPicker(): array
+    {
+        $pair = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+        $this->assertIsArray($pair);
+        $out = fopen('php://memory', 'w+');
+        $this->assertNotFalse($out);
+        $p = new class ($pair[0], $out) extends Picker {
+            /** @param unused */
+            protected function setRawMode(bool $_on): void { /* noop in tests */ }
+        };
+        return [$p, $pair[0], $pair[1]];
+    }
+
+    /**
+     * @return list<Endpoint>
+     */
+    private function threeEndpoints(): array
+    {
+        return [
+            new Endpoint(name: 'production', host: 'prod.example.com'),
+            new Endpoint(name: 'staging',    host: 'stage.example.com'),
+            new Endpoint(name: 'dev',        host: 'dev.example.com'),
+        ];
+    }
+
+    /**
+     * -097 execution pin: a pre-buffered `ESC [ A CR` burst on a REAL
+     * stream must wake the select branch immediately (no sleeps), decode
+     * as Down, and Enter-pick row 1 — never type the orphaned letters.
+     */
+    public function testRealStreamBurstDecodesWithoutSleeps(): void
+    {
+        [$p, $reader, $writer] = $this->makeSocketPicker();
+        try {
+            $this->assertGreaterThan(0, fwrite($writer, "\x1b[B\r"));
+            $picked = $p->pick($this->threeEndpoints());
+            $this->assertNotNull($picked, 'pre-buffered burst was not promoted to Down+Enter');
+            $this->assertSame('stage.example.com', $picked->host, 'Down must land on row 1 before Enter');
+        } finally {
+            fclose($reader);
+            fclose($writer);
+        }
+    }
+
+    /**
+     * -017 width pin: an `ESC [ B` (Down) burst fragmented by 120 ms sits inside
+     * the 150 ms follow-up window, so it still promotes to Down. Restoring
+     * the old 50 ms window reddens this leg (the lone-ESC cancel path
+     * returns null and the `[A` orphan never moves the cursor).
+     */
+    public function testFragmentedBurstWithinWindowPromotesToDown(): void
+    {
+        if (!function_exists('pcntl_fork') || !function_exists('pcntl_waitpid')) {
+            $this->markTestSkipped('the fragmented-burst pin needs pcntl_fork');
+        }
+        [$p, $reader, $writer] = $this->makeSocketPicker();
+        $pid = pcntl_fork();
+        $this->assertGreaterThanOrEqual(0, $pid);
+        if ($pid === 0) {
+            fclose($reader);
+            fwrite($writer, "\x1b");
+            usleep(120_000);
+            fwrite($writer, "[B\r");
+            fclose($writer);
+            exit(0);
+        }
+        try {
+            fclose($writer);
+            $picked = $p->pick($this->threeEndpoints());
+            $this->assertNotNull($picked, 'fragmented burst must promote within the window, not cancel');
+            $this->assertSame('stage.example.com', $picked->host);
+        } finally {
+            pcntl_waitpid($pid, $status);
+            fclose($reader);
+        }
+    }
+
+    /**
+     * ESCDELAY arm (-017's named escape hatch): the same fragmented burst
+     * must fall out of a deliberately narrowed 40 ms window — the lone-ESC
+     * cancel fires (pick returns null, the picker never dispatches).
+     */
+    public function testEscDelayNarrowsTheWindow(): void
+    {
+        if (!function_exists('pcntl_fork') || !function_exists('pcntl_waitpid')) {
+            $this->markTestSkipped('the ESCDELAY pin needs pcntl_fork');
+        }
+        [$p, $reader, $writer] = $this->makeSocketPicker();
+        $before = getenv('ESCDELAY');
+        putenv('ESCDELAY=40');
+        try {
+            $pid = pcntl_fork();
+            $this->assertGreaterThanOrEqual(0, $pid);
+            if ($pid === 0) {
+                fclose($reader);
+                fwrite($writer, "\x1b");
+                usleep(120_000);
+                fwrite($writer, "[B\r");
+                fclose($writer);
+                exit(0);
+            }
+            fclose($writer);
+            $this->assertNull($p->pick($this->threeEndpoints()), 'ESCDELAY=40 must expire the 120 ms gap');
+            pcntl_waitpid($pid, $status);
+        } finally {
+            putenv($before === false ? 'ESCDELAY' : 'ESCDELAY=' . $before);
+            fclose($reader);
+        }
+    }
+
+    /**
+     * -097 expiry leg on a real stream: ESC with the peer kept open and no
+     * follow-on bytes is the genuine Esc keypress — the picker cancels
+     * (returns null) after the window instead of hanging.
+     */
+    public function testLoneEscOnOpenRealStreamExpiresToCancel(): void
+    {
+        [$p, $reader, $writer] = $this->makeSocketPicker();
+        try {
+            $this->assertGreaterThan(0, fwrite($writer, "\x1b"));
+            $this->assertNull($p->pick($this->threeEndpoints()));
+        } finally {
+            fclose($reader);
+            fclose($writer);
+        }
+    }
 }

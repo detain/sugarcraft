@@ -73,6 +73,18 @@ class Picker
      */
     private const MIN_COLS = 12;
 
+    /**
+     * Microseconds the escape decoder waits for the follow-on bytes of a
+     * burst after ESC (-017). The historical hard 50 ms mis-decoded an
+     * `ESC [ A` split by tmux-under-load or WAN latency into a lone-ESC
+     * cancel: exit 130 with the `[A` orphaned in the stream. 150 ms
+     * absorbs fragmented bursts; the cost lands only on a deliberate
+     * lone-Esc press (a still-visible-instant pause). `ESCDELAY`
+     * (milliseconds — ncurses' name for the same knob) overrides, clamped
+     * to [0, 5000] ms so a typo cannot wedge the picker.
+     */
+    private const ESC_FOLLOWUP_MICROSECONDS = 150_000;
+
     /** @var resource */
     protected $in;
     /** @var resource */
@@ -554,7 +566,12 @@ class Picker
     /**
      * Test seam: the real terminal size when $out is a tty, null
      * otherwise. {@see PickerChromeTest} overrides it to force geometry
-     * without a PTY.
+     * without a PTY. Leg-coverage map (-097): the real-stream select branch
+     * of this class never ran in-suite until PickerInputIntegrityTest's
+     * socketpair pins — burst promotion, ESCDELAY override, and the
+     * lone-ESC expiry each exercise a different leg; the memory-stream
+     * bypass is exercised by every byte-pinned `drive()` test, and the
+     * clamp geometry legs by PickerChromeTest.
      *
      * @return ?array{cols:?int, rows:?int}
      */
@@ -779,14 +796,28 @@ class Picker
     }
 
     /**
+     * The follow-up window in microseconds: the documented constant, or
+     * `ESCDELAY` (milliseconds) when it parses as plain digits (-017's
+     * named escape hatch).
+     */
+    private static function escFollowupMicroseconds(): int
+    {
+        $delay = getenv('ESCDELAY');
+        if ($delay !== false && preg_match('/^\d{1,4}$/', $delay) === 1) {
+            return (int) $delay * 1000;
+        }
+        return self::ESC_FOLLOWUP_MICROSECONDS;
+    }
+
+    /**
      * ESC arrived — classify the rest of the sequence.
      *
      * `ESC [ …` is CSI (params through a 0x40-0x7E final byte), `ESC O x`
      * is SS3 (a single final byte), a lone ESC (nothing arrives within the
-     * 50 ms window) is the Esc keypress itself, and anything else is a
-     * 2-byte Meta/Alt chord. All but the lone ESC are opaque key events:
-     * pick()'s switch ignores the unknown ones and isTextKey() refuses to
-     * type them.
+     * follow-up window, see {@see escFollowupMicroseconds()}) is the Esc
+     * keypress itself, and anything else is a 2-byte Meta/Alt chord. All
+     * but the lone ESC are opaque key events: pick()'s switch ignores the
+     * unknown ones and isTextKey() refuses to type them.
      */
     private function readEscapeSequence(): string
     {
@@ -838,7 +869,9 @@ class Picker
     /**
      * One byte, giving up (returning '') when none is pending: memory
      * streams have everything buffered already, real TTY/pipe streams get
-     * the same 50 ms grace the original ESC window used.
+     * the follow-up window of {@see escFollowupMicroseconds()} — which is
+     * what promotes a latency-fragmented `ESC [ A` burst to a real
+     * keypress instead of a lone-ESC cancel (-017).
      */
     private function nextByteWithWait(): string
     {
@@ -849,7 +882,8 @@ class Picker
         $r = [$this->in];
         $w = null;
         $e = null;
-        if (@stream_select($r, $w, $e, 0, 50000) < 1) {
+        $usec = self::escFollowupMicroseconds();
+        if (@stream_select($r, $w, $e, intdiv($usec, 1_000_000), $usec % 1_000_000) < 1) {
             return '';
         }
         $c = fread($this->in, 1);
