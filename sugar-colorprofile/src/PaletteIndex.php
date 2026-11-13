@@ -40,7 +40,7 @@ namespace SugarCraft\ColorProfile;
  * never a contract (a process churning more than the limit of distinct palettes
  * simply pays rebuilds; it can never get a wrong answer from it).
  */
-final class PaletteIndex
+final class PaletteIndex implements \Countable
 {
     /** Relative slack on the pruning bound, absorbing float noise in the rotated coordinates. */
     private const PRUNE_SLACK = 1.000001;
@@ -116,6 +116,7 @@ final class PaletteIndex
      */
     public function nearest(Color $color): int
     {
+        $queryLab = null;
         if ($this->metric === ColorDistance::Euclidean) {
             $query = [(float) $color->r, (float) $color->g, (float) $color->b];
         } else {
@@ -177,7 +178,7 @@ final class PaletteIndex
                 }
             }
 
-            $distance = $this->distanceTo($color, $slot);
+            $distance = $this->distanceTo($color, $slot, $queryLab);
             if (
                 $bestIdx < 0
                 || $distance < $best
@@ -316,8 +317,16 @@ final class PaletteIndex
      * difference per bestRgbIndex() under Euclidean, DeltaE::cie76() over the
      * verbatim toLab() triples under Cie76 (the oracle's betweenLab leg).
      * Tie verdicts are therefore bit-for-bit identical, not merely equal.
+     *
+     * $queryLab is the scan's metric-space query triple, computed ONCE per
+     * nearest() call (CP-44: recomputing toLab per visited candidate
+     * re-imposed the hot-loop overhead this class's own header law forbids);
+     * unused under Euclidean, where the raw-integer arithmetic the oracle
+     * uses runs off $color itself.
+     *
+     * @param array{l: float, a: float, b: float}|null $queryLab
      */
-    private function distanceTo(Color $color, int $slot): int|float
+    private function distanceTo(Color $color, int $slot, ?array $queryLab): int|float
     {
         if ($this->metric === ColorDistance::Euclidean) {
             /** @var Color $entry */
@@ -329,8 +338,11 @@ final class PaletteIndex
             return $dr * $dr + $dg * $dg + $db * $db;
         }
 
-        /** @var array{l: float, a: float, b: float} $queryLab */
-        $queryLab = ColorMath::toLab($color->r, $color->g, $color->b);
+        if ($queryLab === null) {
+            // Fail loud, not recompute: the whole point of this seam is that
+            // the Lab query exists exactly once per scan.
+            throw new \LogicException('PaletteIndex::distanceTo under a Lab metric requires the precomputed query triple');
+        }
 
         /** @var array{l: float, a: float, b: float} $entryLab */
         $entryLab = $this->recheck[$slot];

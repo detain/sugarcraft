@@ -232,4 +232,23 @@ final class PaletteIndexTest extends TestCase
             }
         }
     }
+
+    /**
+     * CP-44 pin: the class answers the GLOBAL count() — the method existed
+     * without the interface, so count($index) FATALED while
+     * count($index->palette()) worked. The interface is declared now; the
+     * global door and the accessor must agree.
+     */
+    public function testTheIndexIsCountableThroughTheGlobalFunction(): void
+    {
+        $index = PaletteIndex::fromPalette([
+            new Color(10, 20, 30),
+            new Color(200, 10, 10),
+            new Color(0, 255, 255),
+        ]);
+
+        $this->assertInstanceOf(\Countable::class, $index);
+        $this->assertSame(3, count($index));
+        $this->assertSame($index->count(), count($index));
+    }
 }
