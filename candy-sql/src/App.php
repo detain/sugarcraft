@@ -386,6 +386,15 @@ final class App implements Model
                 || ($msg->type === KeyType::Enter && $msg->ctrl)) {
                 return $this->beginRunQuery();
             }
+            // SQL-O04 (v1, keyword-only per owner ruling 3a): Ctrl+Space
+            // completes the word at the caret against the SQL keyword
+            // roster. The chord rides the modern terminal's ctrl-decoded
+            // Space (kitty protocol); legacy terminals that report
+            // Ctrl+Space as a bare space simply keep typing — the key is
+            // inert there, never a wrong insert.
+            if ($msg->type === KeyType::Space && $msg->ctrl) {
+                return $this->completeKeyword();
+            }
             return [$this->editQuery($msg), null];
         }
         if ($this->ui->pane === Pane::Tables) {
@@ -795,6 +804,57 @@ final class App implements Model
             return [$this, null];
         }
         return [$this->withAdminPage($newPage), $cmd];
+    }
+
+    /**
+     * SQL-O04 v1: Ctrl+Space completion for the keyword at the caret. The
+     * replacement is driven through the widget's own doors (Backspace
+     * KeyMsgs + insertString) so cursor and surrounding text stay the
+     * widget's business — no cross-lib edit of sugar-forms. One candidate
+     * completes outright; several advance the caret word to their longest
+     * common prefix when that is longer, otherwise the status line lists
+     * them (capped — the roster is a floor, not a ceiling to show).
+     */
+    private function completeKeyword(): array
+    {
+        $editor = $this->editor();
+        $word = Completer::wordAt($editor->lines, $editor->line(), $editor->column());
+        if ($word === '') {
+            return [$this->withQueryStatus('nothing to complete — type the start of a keyword'), null];
+        }
+        $candidates = Completer::candidates($word);
+        if ($candidates === []) {
+            return [$this->withQueryStatus('no keyword completes "' . $word . '"'), null];
+        }
+        $insert = count($candidates) === 1
+            ? $candidates[0]
+            : (strlen(Completer::longestCommonPrefix($candidates)) > strlen($word)
+                ? Completer::longestCommonPrefix($candidates)
+                : '');
+        if ($insert === '') {
+            $listed = array_slice($candidates, 0, 8);
+            $more = count($candidates) - count($listed);
+            return [$this->withQueryStatus(
+                count($candidates) . ' complete "' . $word . '": ' . implode(', ', $listed)
+                . ($more > 0 ? ' …' : '')
+            ), null];
+        }
+        $next = $editor;
+        for ($i = 0, $n = strlen($word); $i < $n; $i++) {
+            [$next, ] = $next->update(new KeyMsg(KeyType::Backspace, ''));
+            assert($next instanceof TextArea);
+        }
+        $next = $next->insertString($insert);
+        return [$this->mutate([
+            'query' => $this->query->withEditor($next)->withRecallIndex(null),
+            'ui'    => $this->ui->withStatus('completed ' . $word . ' → ' . $insert),
+        ]), null];
+    }
+
+    /** Completion echoes ride the query pane's status channel. */
+    private function withQueryStatus(string $status): self
+    {
+        return $this->mutate(['ui' => $this->ui->withStatus($status)->withError(null)]);
     }
 
     private function editQuery(KeyMsg $msg): self

@@ -334,6 +334,10 @@ KEYBOARD SHORTCUTS (TUI)
                ExplainView: the Rows pane shows the colour-coded plan tree,
                not the flat provider grid — and any ANALYZE modifier is
                STRIPPED, the inspector never executes what it inspects
+  Ctrl+Space   Complete the keyword at the caret (Query editor). v1 is
+               keyword-only — table/column (schema) completion is not
+               offered yet; one candidate completes, a shared prefix
+               advances, otherwise the status line lists candidates
   Ctrl+F       Add the current query to the favorites list (session
                state only — no pane browses it, and it is not persisted)
   Ctrl+Shift+F Remove the current query from the favorites list
