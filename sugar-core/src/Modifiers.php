@@ -68,4 +68,22 @@ final class Modifiers
     {
         return !$this->shift && !$this->alt && !$this->ctrl;
     }
+
+    /**
+     * Test one {@see SHIFT} / {@see ALT} / {@see CTRL} bit. The single
+     * predicate behind the msg-level {@see \SugarCraft\Core\Msg\Modifiable::has()}
+     * idiom, so key and mouse events answer modifier questions the same
+     * way regardless of which internal shape their carrier stores.
+     */
+    public function has(int $modifier): bool
+    {
+        return match ($modifier) {
+            self::SHIFT => $this->shift,
+            self::ALT   => $this->alt,
+            self::CTRL  => $this->ctrl,
+            default => throw new \InvalidArgumentException(
+                Lang::t('modifiers.unknown_bit', ['modifier' => $modifier])
+            ),
+        };
+    }
 }

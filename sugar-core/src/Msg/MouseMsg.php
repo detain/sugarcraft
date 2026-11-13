@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Core\Msg;
 
 use SugarCraft\Core\Msg;
+use SugarCraft\Core\Modifiers;
 use SugarCraft\Core\MouseAction;
 use SugarCraft\Core\MouseButton;
 
@@ -21,7 +22,7 @@ use SugarCraft\Core\MouseButton;
  * match on the event kind via `instanceof`; existing `instanceof
  * MouseMsg` checks keep working since each subclass extends this base.
  */
-class MouseMsg implements Msg
+class MouseMsg implements Msg, Modifiable
 {
     public function __construct(
         public readonly int $x,
@@ -32,5 +33,25 @@ class MouseMsg implements Msg
         public readonly bool $alt = false,
         public readonly bool $ctrl = false,
     ) {
+    }
+
+    /**
+     * Bundle the modifier booleans into the shared value shape — the
+     * exact parity table: `$shift` ↔ {@see Modifiers::SHIFT},
+     * `$alt` ↔ {@see Modifiers::ALT}, `$ctrl` ↔ {@see Modifiers::CTRL}.
+     * sc-23 (finding sugar-core-024): key and mouse events now answer
+     * the same {@see Modifiable} questions; the public booleans stay.
+     */
+    public function modifiers(): Modifiers
+    {
+        return Modifiers::of(shift: $this->shift, alt: $this->alt, ctrl: $this->ctrl);
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function has(int $modifier): bool
+    {
+        return $this->modifiers()->has($modifier);
     }
 }

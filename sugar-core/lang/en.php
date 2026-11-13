@@ -66,4 +66,5 @@ return [
     'ansi.clipboard_payload_too_large' => 'clipboard payload is {bytes} bytes, over the {limit}-byte OSC 52 bound',
     'raw_mode.stream_not_mappable' => 'raw mode was requested on stream {stream}, but its descriptor names no stty-targetable device — pass a terminal stream that resolves to a path, or a non-tty stream, and the toggle no-ops',
     'raw_mode.stty_failed' => 'stty rejected mode {mode} with exit {status} — the terminal discipline was not changed',
+'modifiers.unknown_bit' => 'unknown modifier bit {modifier}: expected one of Modifiers::SHIFT, Modifiers::ALT or Modifiers::CTRL',
 ];

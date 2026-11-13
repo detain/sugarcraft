@@ -18,7 +18,7 @@ use SugarCraft\Core\Msg;
  * {@see Modifiers} value, or {@see text()} / {@see code()} as
  * v2-style aliases for `$rune` / `$type`.
  */
-class KeyMsg implements Msg
+class KeyMsg implements Msg, Modifiable
 {
     public function __construct(
         public readonly KeyType $type,
@@ -69,5 +69,15 @@ class KeyMsg implements Msg
     public function modifiers(): Modifiers
     {
         return new Modifiers(shift: $this->shift, alt: $this->alt, ctrl: $this->ctrl);
+    }
+
+    /**
+     * {@inheritdoc} — shared idiom with the mouse family (sc-23):
+     * `if ($msg->has(Modifiers::CTRL))` reads the same on a key press
+     * and a click, whatever shape the carrier stores underneath.
+     */
+    public function has(int $modifier): bool
+    {
+        return $this->modifiers()->has($modifier);
     }
 }
