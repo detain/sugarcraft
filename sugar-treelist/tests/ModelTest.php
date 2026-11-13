@@ -1897,6 +1897,27 @@ final class ModelTest extends TestCase
         }
     }
 
+    /**
+     * sugar-treelist-039 (strict arm): a single grapheme wider than the whole
+     * content column cannot be split. At contentWidth 1 a 2-cell character
+     * used to render an over-wide row (pre-clamp era), then the t06 clamp
+     * traded that for a silently EMPTY row — data loss. The shipped contract
+     * now substitutes a 1-cell '?' marker: the row fits, and the geometry is
+     * never bought by erasing caller data.
+     */
+    public function testUnsplittableWideGraphemeIsSubstitutedNotErasedAtWidthOne(): void
+    {
+        $m = Model::new()->withWidth(1)->withHeight(4)->withItem('中');
+        $lines = $m->lines();
+
+        $this->assertSame(['?'], $lines, 'substituted, never silently empty');
+        $this->assertSame(1, Width::string($lines[0]), 'the row honors the 1-cell budget');
+
+        // A genuinely empty item is NOT substituted — the marker is for
+        // eaten content only.
+        $this->assertSame([''], Model::new()->withWidth(1)->withHeight(4)->withItem('')->lines());
+    }
+
     public function testGutterlessNarrowViewportIsNotARefusal(): void
     {
         // The refusal is about the GUTTERS eating the frame, not about narrow

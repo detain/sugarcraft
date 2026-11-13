@@ -231,6 +231,13 @@ viewport has. Scrolling uses a scroll-end clamp: near the bottom of the list
 the window slides back so the frame stays full and the cursor row is always
 inside it — short lists simply show everything.
 
+One width-corner contract (sugar-treelist-039): a single grapheme wider
+than the whole content column cannot be split. A pre-clamp build let such a
+row overflow the viewport; the row clamp then turned it into a silently
+EMPTY row — data loss. The shipped rule is strict substitution: eaten
+content always leaves a 1-cell `?` marker, so the geometry holds and the
+row is never blank without cause.
+
 ## Filtering
 
 Attach a filter function to narrow the visible items. The model tracks filter state via the `FilterState` enum; `filterState()` is `null` on a fresh model and only becomes an explicit state after the first `withFilterFn()` / `withoutFilter()` call (semantically a never-filtered list is unfiltered, it just carries no recorded state yet):

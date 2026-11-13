@@ -1604,6 +1604,7 @@ final class Model
         }
         // Fall order: suffix, prefix, content — the earlier legs only pay
         // while cells remain in that leg.
+        $hadContent = $content !== '';
         [$suffix, $dropped] = $this->dropRightCells($suffix, $over);
         $over -= $dropped;
         if ($over > 0) {
@@ -1612,6 +1613,14 @@ final class Model
         }
         if ($over > 0) {
             [$content, ] = $this->dropRightCells($content, $over);
+            if ($content === '' && $hadContent) {
+                // Strict arm of the width-1 contract (sugar-treelist-039):
+                // a content leg eaten whole by the clamp — the single 2-cell
+                // grapheme in a 1-cell column — is substituted with a 1-cell
+                // marker, never left as a silently EMPTY row (the t06 clamp
+                // had traded the old over-wide row for data loss).
+                $content = '?';
+            }
         }
         return $prefix . $content . $suffix;
     }
@@ -1957,7 +1966,11 @@ final class Model
      * Width — CJK/emoji count 2 cells) fits maxWidth; grapheme-count
      * chunking let a CJK word of width 16 through a 12-cell viewport
      * unsplitted. A grapheme wider than the whole budget cannot be split
-     * further and keeps its own (overflowing) chunk.
+     * further and keeps its own chunk here; the row-composition clamp
+     * (clampRowToViewport) then substitutes a 1-cell marker for content it
+     * would otherwise erase — the strict arm of the sugar-treelist-039
+     * contract: geometry is never bought by silently dropping caller data.
+     * Pinned by ModelTest::testUnsplittableWideGraphemeIsSubstitutedNotErasedAtWidthOne.
      *
      * @param int|null $maxChunks Stop after this many chunks (row budget).
      *
