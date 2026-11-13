@@ -94,13 +94,16 @@ final class ReadmeSnippetsTest extends TestCase
         $this->assertSame(0, $status, "php -l failed for {$name}:\n" . $stderr);
     }
 
+    /** [XPL-01] Windows has no /dev/null; its null device is NUL. */
+    private const NULL_DEVICE = DIRECTORY_SEPARATOR === '\\' ? 'NUL' : '/dev/null';
+
     /**
      * @dataProvider runnableSnippetProvider
      */
     public function testEveryDocumentedSnippetRunsToCompletion(string $name, string $body): void
     {
         $file = $this->materialise($name, $body);
-        [$status, $stderr] = $this->runPhp([
+        [$status, $stderr, $stdout] = $this->runPhp([
             '-d', 'display_errors=stderr',
             '-d', 'error_reporting=E_ALL',
             '-d', 'max_execution_time=15',
@@ -108,6 +111,19 @@ final class ReadmeSnippetsTest extends TestCase
         ]);
         $this->assertSame(0, $status, "running {$name} exited {$status}:\n" . $stderr);
         $this->assertSame('', $stderr, "running {$name} wrote to stderr:\n" . $stderr);
+
+        if ($name === 'example demo.php') {
+            // [XPL-01 floor] The VHS GIF records this exact surface; if the
+            // demo ever runs green while printing nothing useful, the pinned
+            // level labels catch the silent rot. (The finding's old '[svc]'
+            // literal predates the current cookie-prefix demo — pinned to
+            // live bytes instead.)
+            $this->assertStringContainsString('🍪', $stdout, 'demo prefix surface missing');
+            $this->assertStringContainsString('INF', $stdout);
+            $this->assertStringContainsString('WRN', $stdout);
+            $this->assertStringContainsString('ERR', $stdout);
+            $this->assertStringContainsString('Starting the oven', $stdout);
+        }
     }
 
     /**
@@ -120,7 +136,7 @@ final class ReadmeSnippetsTest extends TestCase
     {
         [$status, $stderr] = $this->runPhp([
             __DIR__ . '/../examples/panic-handler.php',
-        ], stdin: '/dev/null');
+        ], stdin: self::NULL_DEVICE);
 
         $this->assertSame(255, $status, 'the fatal-error demo must exit through the shutdown handler');
         $this->assertStringContainsString('PANIC', $stderr, 'panic banner missing from the report');
@@ -132,6 +148,15 @@ final class ReadmeSnippetsTest extends TestCase
         // A broken extractor would silently green the run pin — floor it.
         $blocks = self::readmePhpBlocks();
         $this->assertGreaterThanOrEqual(12, \count($blocks), 'README php snippet extraction found too few blocks — did the fence shape change?');
+    }
+
+    public function testNullDeviceRedirectConstantRecomputesPerPlatform(): void
+    {
+        // [XPL-01] Shape pin: the single const must equal the platform's real
+        // null device — the Windows arm of the fix, provable by construction
+        // on any host.
+        $value = (new \ReflectionClass(self::class))->getReflectionConstant('NULL_DEVICE')->getValue();
+        $this->assertSame(\DIRECTORY_SEPARATOR === '\\' ? 'NUL' : '/dev/null', $value);
     }
 
     /**
@@ -160,7 +185,7 @@ final class ReadmeSnippetsTest extends TestCase
     /**
      * @param list<string> $argv
      *
-     * @return array{0: int, 1: string} [exit status, captured stderr]
+     * @return array{0: int, 1: string, 2: string} [exit status, captured stderr, captured stdout]
      */
     private function runPhp(array $argv, string $stdin = ''): array
     {
@@ -169,10 +194,11 @@ final class ReadmeSnippetsTest extends TestCase
         foreach ($argv as $arg) {
             $command .= ' ' . \escapeshellarg($arg);
         }
-        $command .= ' <' . \escapeshellarg($stdin === '' ? '/dev/null' : $stdin) . ' 2>' . \escapeshellarg($errorFile);
+        // [XPL-01] One NULL_DEVICE const serves both redirect shapes.
+        $command .= ' <' . \escapeshellarg($stdin === '' ? self::NULL_DEVICE : $stdin) . ' 2>' . \escapeshellarg($errorFile);
 
         \exec($command, $lines, $status);
 
-        return [$status, (string) \file_get_contents($errorFile)];
+        return [$status, (string) \file_get_contents($errorFile), \implode("\n", $lines ?? [])];
     }
 }
