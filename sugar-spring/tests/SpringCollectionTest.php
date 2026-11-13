@@ -6,6 +6,7 @@ namespace SugarCraft\Spring\Tests;
 
 use SugarCraft\Spring\Spring;
 use SugarCraft\Spring\SpringCollection;
+use SugarCraft\Spring\SpringPreset;
 use PHPUnit\Framework\TestCase;
 
 final class SpringCollectionTest extends TestCase
@@ -208,22 +209,26 @@ final class SpringCollectionTest extends TestCase
     {
         // Under-damped springs pass THROUGH the target with real velocity:
         // a position-only stop would paint "done" while the value rings.
-        $spring = new Spring(1.0 / 60.0, 13.416, 0.365); // Wobbly
-        $collection = (new SpringCollection())->withSpring('a', $spring, 0.0, 0.0, 100.0);
+        // The old leg hunted 600 frames for a lucky crossing and SKIPPED
+        // itself on a miss (finding 011 — a vacuous pass is a lying pass);
+        // this seeds the crossing state directly: position exactly AT the
+        // target, velocity very much alive. It doubles as the pin that
+        // SpringCollection::tick()'s settled-skip consults the FULL
+        // predicate — a position-only skip verdict would freeze this
+        // member at 100.0 and never let it ring through.
+        $spring = SpringPreset::Wobbly->resolve()->spring();
+        $collection = (new SpringCollection())->withSpring('a', $spring, 100.0, 5.0, 100.0);
 
-        // Advance until position happens to sit ON the target mid-ring.
-        for ($i = 0; $i < 600; $i++) {
-            $collection = $collection->tick();
-            if (abs($collection->position('a') - 100.0) < 1e-4 && abs($collection->velocity('a')) > 1.0) {
-                $this->assertFalse(
-                    $collection->settled(),
-                    'at-target position with a live velocity must NOT be settled'
-                );
+        $this->assertFalse(
+            $collection->settled(),
+            'at-target position with a live velocity must NOT be settled',
+        );
 
-                return;
-            }
-        }
-        $this->markTestSkipped('did not cross the target with a live velocity within 600 frames');
+        $after = $collection->tick();
+
+        $this->assertGreaterThan(100.0, $after->position('a'), 'the live velocity must carry the value past the target');
+        $this->assertGreaterThan(1.0, abs($after->velocity('a')), 'velocity must survive the tick — the member is still ringing');
+        $this->assertFalse($after->settled(), 'the frame after the crossing is still not settled');
     }
 
     public function testVelocityAndAllVelocitiesExposeStoredState(): void
