@@ -1400,24 +1400,51 @@ final class TableTest extends TestCase
         $this->assertSame(1, $t2->TotalRows());
     }
 
-    public function testSortByNonPrimaryAppendsSort(): void
+    /**
+     * ST-05: the old multi-key sort test was vacuous — its secondary key
+     * only ever saw rows already ordered by insertion, so deleting the
+     * tie-break leg left it green. Fixture rebuilt so the secondary key
+     * DISCRIMINATES: city is primary (two rows tie on NYC), name is the
+     * tie-breaker, and the full ordered sequence is asserted.
+     */
+    public function testSortByAppendsSecondaryTieBreaker(): void
     {
         $t = Table::fromColumns([
             Column::new('name', 'Name', 10),
             Column::new('city', 'City', 10),
         ])->withRows([
-            Row::new(RowData::from(['name' => 'Alice', 'city' => 'NYC'])),
             Row::new(RowData::from(['name' => 'Bob', 'city' => 'NYC'])),
+            Row::new(RowData::from(['name' => 'Alice', 'city' => 'NYC'])),
             Row::new(RowData::from(['name' => 'Carol', 'city' => 'CHI'])),
         ]);
 
-        // Primary sort by name asc, secondary by city asc
-        $t2 = $t->SortBy('name', true, true)->SortBy('city', true, false);
-        $rows = $t2->filteredSortedRows();
-        // Bob should come before Alice because Bob's city (NYC) < Alice's... wait no
-        // Actually both Alice and Bob have NYC, so within NYC, alphabetical by name: Alice < Bob
-        // Carol is in CHI which comes after NYC
-        $this->assertSame('Carol', $rows[2]->data->get('name'));
+        // Primary city asc (CHI < NYC), secondary name asc breaks the NYC tie.
+        $t2 = $t->SortBy('city', true, true)->SortBy('name', true, false);
+        $names = \array_map(fn (Row $r): string => $r->data->get('name'), $t2->filteredSortedRows());
+
+        $this->assertSame(['Carol', 'Alice', 'Bob'], $names);
+    }
+
+    /**
+     * ST-05 mirror: a differing PRIMARY must not be reordered by the
+     * secondary. name desc wins over city asc; if the comparator consulted
+     * keys in the wrong order (or the secondary leaked dominance) the
+     * sequence would flip to Alice-before-Bob.
+     */
+    public function testPrimarySortNotReorderedBySecondary(): void
+    {
+        $t = Table::fromColumns([
+            Column::new('name', 'Name', 10),
+            Column::new('city', 'City', 10),
+        ])->withRows([
+            Row::new(RowData::from(['name' => 'Alice', 'city' => 'CHI'])),
+            Row::new(RowData::from(['name' => 'Bob', 'city' => 'NYC'])),
+        ]);
+
+        $t2 = $t->SortBy('name', false, true)->SortBy('city', true, false);
+        $names = \array_map(fn (Row $r): string => $r->data->get('name'), $t2->filteredSortedRows());
+
+        $this->assertSame(['Bob', 'Alice'], $names);
     }
 
     public function testClearSortClearsAllSorts(): void
