@@ -1,0 +1,56 @@
+<p class="lede" style="margin-top: 28px;">The gitignore engine a repository-walking tool needs, extracted from candy-code so every app answers "is this path ignored?" the same way. <strong>It never touches the filesystem</strong>: the caller injects each ignore file's contents, so a TUI, a git server and a tree browser share one engine. A cloned repository supplies both the patterns and the paths, so patterns are treated as hostile input. First-party — there is no upstream Go port.</p>
+
+    <h3 style="margin-top: 32px;">Install</h3>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-ignore</code></pre>
+
+    <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
+    <pre class="code"><code class="language-php">use SugarCraft\Ignore\IgnoreRules;
+
+$rules = IgnoreRules::fromPaths([
+    '.gitignore'        =&gt; file_get_contents('.gitignore'),
+    'pkg/.gitignore'    =&gt; "!keep.log\n",
+    '.git/info/exclude' =&gt; "scratch.txt\n",
+]);
+
+$rules-&gt;ignores('app/debug.log', false);  // ".gitignore: *.log" (the deciding rule) or null
+$rules-&gt;isIgnored('pkg/keep.log', false); // false
+$rules-&gt;ignores('build', true);           // directory-only rules need $isDir</code></pre>
+
+    <h3 style="margin-top: 32px;">The laws</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>No IO</strong><span>Contents are injected as a path =&gt; text map; each file is scoped to its own directory and deeper files override shallower ones.</span></div>
+      <div class="feature"><strong>git semantics</strong><span>Negation, trailing-slash directory rules, anchoring, <code>*</code> <code>?</code> classes, <code>**</code> forms, escapes, <code>.git/info/exclude</code> below every file, and no re-including under an ignored directory.</span></div>
+      <div class="feature"><strong>Bounded cost</strong><span>Simple shapes run on PCRE; anything that could backtrack runs on a lazily built DFA. A PCRE limit error is never read as "no match".</span></div>
+      <div class="feature"><strong>Fails closed</strong><span>A rule too costly to decide hides (a negation does not re-include) and is reported on <code>undecidableRules()</code>, not logged under a TUI.</span></div>
+    </div>
+
+    <h3 style="margin-top: 40px;">Use it for</h3>
+    <ul>
+      <li><strong>Agent file tools</strong> — candy-code's Glob, Grep and repo map.</li>
+      <li><strong>File browsers and git tooling</strong> — candy-files, candy-git and candy-git-server.</li>
+    </ul>
+
+    <h3 style="margin-top: 40px;">Source</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/sugar-ignore">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-ignore/blob/master/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-ignore/blob/master/tests">Test suite</a></li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+
+    <h3 style="margin-top: 32px;">API</h3>
+<table class="api-table">
+<caption>API surface</caption>
+<thead><tr><th scope="col">Class</th><th scope="col">Method</th><th scope="col">Description</th></tr></thead>
+<tr><td>IgnoreRules</td><td>static new(?string $root = null): self</td><td>Empty ruleset; nothing is ignored</td></tr>
+<tr><td>IgnoreRules</td><td>static fromPaths(array $files, ?string $root = null): self</td><td>Build from <code>path =&gt; contents</code>; absolute paths under <code>$root</code> are stripped</td></tr>
+<tr><td>IgnoreRules</td><td>withFile(string $path, string $contents): self</td><td>A new instance carrying one more (or replaced) ignore file</td></tr>
+<tr><td>IgnoreRules</td><td>ignores(string $relPath, bool $isDir): ?string</td><td>The deciding <code>&lt;file&gt;: &lt;pattern&gt;</code>, or null when not ignored</td></tr>
+<tr><td>IgnoreRules</td><td>isIgnored(string $relPath, bool $isDir): bool</td><td>Boolean form of <code>ignores()</code></td></tr>
+<tr><td>IgnoreRules</td><td>undecidableRules(): array / undecidablePatterns(): array</td><td>Rules too costly to decide, resolved toward hiding</td></tr>
+<tr><td>Pattern</td><td>static parse(string $line): ?self / pcreMatch(string $subject): ?bool</td><td>One compiled ignore line and its PCRE fast path (null on a PCRE limit error)</td></tr>
+<tr><td>Automaton</td><td>static for(Pattern $pattern): self / match(string $subject): ?bool</td><td>Backtrack-free matcher; null when over budget</td></tr>
+</table>
+  </div>
+</section>

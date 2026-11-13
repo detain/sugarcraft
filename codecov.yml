@@ -201,6 +201,9 @@ flag_management:
     - name: sugar-releases
       paths: ["sugar-releases/src/**"]
       carryforward: true
+    - name: sugar-ignore
+      paths: ["sugar-ignore/src/**"]
+      carryforward: true
     - name: sugar-toast
       paths: ["sugar-toast/src/**"]
       carryforward: true
@@ -566,6 +569,12 @@ component_management:
         - "sugar-releases/src/**"
       flag_regexes:
         - "^sugar-releases$"
+    - component_id: sugar-ignore
+      name: sugar-ignore
+      paths:
+        - "sugar-ignore/src/**"
+      flag_regexes:
+        - "^sugar-ignore$"
     - component_id: sugar-toast
       name: sugar-toast
       paths:

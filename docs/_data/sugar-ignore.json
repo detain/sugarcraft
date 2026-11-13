@@ -1,0 +1,11 @@
+{
+    "title": "SugarCraft — SugarIgnore",
+    "description": "SugarIgnore: gitignore-style ignore matching over injected file contents (no IO) — negation, dir-only, anchoring, **, escapes, nested ignore files, .git/info/exclude precedence, and a backtrack-free matcher that fails closed on hostile patterns. Extracted from candy-code; first-party.",
+    "ogTitle": "SugarCraft — SugarIgnore",
+    "ogDescription": "One ignore engine for every tool that walks a repository: hand it the ignore files' contents, ask whether a path is ignored, and get the deciding rule back — safe against hostile patterns.",
+    "emoji": "",
+    "displayName": "SugarIgnore",
+    "tagline": "gitignore matching over injected contents — fails closed on hostile patterns",
+    "phpVersion": "8.3+",
+    "detailMeta": "          <span class=\"tag-chip accent\">first-party</span>\n          <span class=\"tag-chip\">gitignore</span>\n          <span class=\"tag-chip\">glob</span>\n          <span class=\"tag-chip\">no-io</span>"
+}

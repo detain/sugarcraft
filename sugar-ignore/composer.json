@@ -1,0 +1,45 @@
+{
+    "name": "sugarcraft/sugar-ignore",
+    "description": "gitignore-style ignore matching over injected file contents (no IO): negation, dir-only, anchoring, **, escapes, nested ignore files, git/info/exclude precedence, and a backtrack-free matcher that fails closed on hostile patterns. Extracted from candy-code.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "gitignore",
+        "ignore",
+        "glob",
+        "pattern-matching",
+        "git",
+        "sugarcraft"
+    ],
+    "homepage": "https://github.com/sugarcraft/sugar-ignore",
+    "authors": [
+        {
+            "name": "Joe Huss",
+            "email": "detain@interserver.net",
+            "role": "Maintainer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/sugarcraft/sugar-ignore/issues",
+        "source": "https://github.com/sugarcraft/sugar-ignore",
+        "docs": "https://sugarcraft.github.io/lib/sugar-ignore.html"
+    },
+    "require": {
+        "php": "^8.3"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "SugarCraft\\Ignore\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "SugarCraft\\Ignore\\Tests\\": "tests/"
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}

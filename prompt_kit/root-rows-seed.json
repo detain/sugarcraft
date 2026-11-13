@@ -891,6 +891,20 @@
                 ],
                 "dead": []
             }
+        },
+        "sugar-ignore": {
+            "readme": {
+                "needles": [
+                    "gitignore-style ignore matching over injected file contents (no IO) — negation, dir-only, anchoring, `**`, escapes, nested ignore files, `.git/info/exclude` precedence, and a backtrack-free matcher that fails closed on hostile patterns. Extracted from candy-code."
+                ],
+                "dead": []
+            },
+            "matchups": {
+                "needles": [
+                    "gitignore-style ignore matching over injected file contents (no IO)"
+                ],
+                "dead": []
+            }
         }
     }
 }

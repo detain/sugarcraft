@@ -230,6 +230,7 @@ stub (plan_rename.md step 2.3). The pre-rename project/home runtime dirs (`~/.su
 | **SugarDatepicker** | sugar + datepicker = date picker. literal. |
 | **SugarQuickpick** | sugar + quickpick = fuzzy quick-pick / filter overlay component. "quickpick" says the function plainly, matching the established terminal picker concept (was CandyHermit — the inherited upstream name retired with the 2026-10 rename). <!-- @rename-keep -->
 | **SugarReleases** | sugar + releases = release-fetch / self-update engine. literal: it selects, verifies and swaps in published releases (extracted from candy-code's `self-update`, 2026-11, owner decision G-10). |
+| **SugarIgnore** | sugar + ignore = gitignore-style ignore-rule engine. literal: it answers "is this path ignored?" from injected ignore-file contents (extracted from candy-code, 2026-11, owner decision G-10). |
 | **SugarToast** | toast = notification metaphor IS the function. delightful. |
 | **SugarNavstack** | nav stack = push/pop navigation stack + breadcrumb trail IS the function. delightful. (renamed from SugarCrumbs 2026-10). <!-- @rename-keep --> |
 | **SugarAnsiParser** | ansi + parser = ECMA-48 state machine. "ansi" is the established term for the escape-code standard. Foundation layer extracted from sugar-vterm. |
