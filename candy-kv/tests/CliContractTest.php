@@ -148,6 +148,32 @@ final class CliContractTest extends TestCase
         $this->assertStringContainsString('-debug', $run['stderr']);
     }
 
+    public function testListDashSeparatedSingleDashDelimitsRows(): void
+    {
+        // kv-036 user-visible contract: the separated bare-dash spelling
+        // answers rc 0 with the dash as the column delimiter — the exact
+        // shape the attached `-d-` form already produced.
+        $this->runKv(['set', 'alpha', 'one']);
+        $this->runKv(['set', 'beta', 'two']);
+
+        $run = $this->runKv(['list', '-d', '-']);
+        $this->assertSame(0, $run['exit'], $run['stderr']);
+        $this->assertMatchesRegularExpression('/^alpha-one$/m', $run['stdout']);
+        $this->assertMatchesRegularExpression('/^beta-two$/m', $run['stdout']);
+
+        $attached = $this->runKv(['list', '-d-']);
+        $this->assertSame($attached['stdout'], $run['stdout'], 'both spellings answer one byte-identical table');
+    }
+
+    public function testTrailingDashDIsAUsageError(): void
+    {
+        // kv-100 user-visible contract: the lost-delimiter trip folds into
+        // the exit-2 usage class and names the missing value.
+        $run = $this->runKv(['list', '-d']);
+        $this->assertSame(2, $run['exit'], $run['stdout']);
+        $this->assertStringContainsString('Option -d requires a delimiter value', $run['stderr']);
+    }
+
     public function testTextForcedNulValueIsRefusedAndBinaryDoorRoundTrips(): void
     {
         // kv-008: `--text` sold as a force switch silently minted

@@ -156,10 +156,14 @@ final class ArgParser
      * Parse arguments for the `list` command.
      *
      * The -d option accepts both spellings: the attached form `-d:` (or
-     * `-d|`) and the separated form `-d :`. A bare -d at the very end of
-     * the argument list keeps the pinned default tab delimiter, but a -d
-     * whose next token is another flag is a usage error — the delimiter
-     * must be visible in the command line, never borrowed from an option.
+     * `-d|`) and the separated form `-d :`. The delimiter must be VISIBLE
+     * in the command line: a -d whose next token is another flag refuses,
+     * and a -d at the very end refuses too (kv-100) — silently keeping the
+     * tab default on a half-typed command is the guess the parser's
+     * refuse-rather-than-guess law forbids, while plain omission of -d
+     * remains the one legitimate route to tab. A bare `-` IS a visible
+     * delimiter (kv-036): the single-dash exemption is the parser-wide
+     * isOptionLike law, so `list -d -` and `list -d-` answer alike.
      *
      * @param list<string> $argv  Full argv array.
      * @param int         $offset Offset where list subcommand args begin.
@@ -200,15 +204,23 @@ final class ArgParser
                     $delimiter = $attached;
                 } else {
                     $next = $tokens[$p + 1] ?? null;
-                    if ($next === null && $tail === []) {
-                        // Bare -d at end of list: keep the documented tab default.
-                        continue;
+                    if ($next === null) {
+                        // kv-100: a trailing -d lost its value to bad quoting
+                        // or an editor trip; answering with the tab default it
+                        // never asked for would hide the mistake. Omitting -d
+                        // entirely is the documented route to tab.
+                        throw new \InvalidArgumentException('Option -d requires a delimiter value.');
                     }
-                    if ($next === null || str_starts_with($next, '-')) {
+                    if (self::isOptionLike($next)) {
+                        // kv-004 law on the echoed token: it is argv bytes.
                         throw new \InvalidArgumentException(
-                            'Option -d requires a delimiter value, got flag-like "' . ($next ?? '') . '".'
+                            'Option -d requires a delimiter value, got flag-like "' . Store::sanitizeForTty($next) . '".'
                         );
                     }
+                    // kv-036: a bare '-' fails isOptionLike (the exemption is
+                    // parser-wide, not per-flag), so it lands here as the
+                    // visible delimiter it is — same answer as the attached
+                    // `-d-` spelling.
                     $delimiter = $next;
                     $p++;
                 }

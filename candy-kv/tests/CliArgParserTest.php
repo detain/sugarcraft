@@ -107,9 +107,12 @@ final class CliArgParserTest extends TestCase
 
     public function testListOptsCustomDelimiterEmpty(): void
     {
-        $result = ArgParser::list(['candy-kv', 'list', '-d'], 2);
-        // Empty -d defaults to tab
-        $this->assertSame("\t", $result['delimiter']);
+        // kv-100 FLIP: this pin used to codify the silent tab default on a
+        // trailing -d. The delimiter must be visible; a half-typed command
+        // is a usage error, and omission of -d is the route to tab.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Option -d requires a delimiter value.');
+        ArgParser::list(['candy-kv', 'list', '-d'], 2);
     }
 
     public function testListOptsPattern(): void
@@ -310,10 +313,40 @@ final class CliArgParserTest extends TestCase
         $this->assertNull($result['pattern']);
     }
 
-    public function testListBareTrailingDelimiterKeepsTab(): void
+    public function testListBareTrailingDelimiterRefuses(): void
     {
-        $result = ArgParser::list(['candy-kv', 'list', '-d'], 2);
-        $this->assertSame("\t", $result['delimiter']);
+        // kv-100 (see the sibling flip above): trailing -d is the lost-value
+        // class, not the tab-request class.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('requires a delimiter value');
+        ArgParser::list(['candy-kv', 'list', '-d'], 2);
+    }
+
+    public function testListBareDashIsAVisibleSeparatedDelimiter(): void
+    {
+        // kv-036: '-' fails isOptionLike (the single-dash exemption is
+        // parser-wide), so the separated form must answer exactly what the
+        // attached `-d-` spelling already did.
+        $result = ArgParser::list(['candy-kv', 'list', '-d', '-'], 2);
+        $this->assertSame('-', $result['delimiter']);
+
+        $withPattern = ArgParser::list(['candy-kv', 'list', '-d', '-', 'user-*'], 2);
+        $this->assertSame('-', $withPattern['delimiter']);
+        $this->assertSame('user-*', $withPattern['pattern']);
+    }
+
+    public function testListFlagLikeDelimiterValueStillRefuses(): void
+    {
+        // The isOptionLike swap must not open the hole it closes: -d facing
+        // a real option-shaped token still refuses, and the token is echoed
+        // scrubbed (kv-004).
+        try {
+            ArgParser::list(['candy-kv', 'list', '-d', "-r\x1b[31m"], 2);
+            $this->fail('option-shaped token is not a delimiter');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('flag-like', $e->getMessage());
+            $this->assertStringNotContainsString("\x1b", $e->getMessage(), 'the echoed token is argv bytes — scrubbed on construction');
+        }
     }
 
     // ─── strict contract (lib-fixes-1103 wave A) ────────────────────────────
