@@ -339,7 +339,7 @@ final class RenameLib
                 return 1;
             }
             $parent = dirname("$root/$to");
-            if (!is_dir($parent) && !mkdir($parent, 0777, true) && !is_dir($parent)) {
+            if (!is_dir($parent) && !mkdir($parent, 0755, true) && !is_dir($parent)) {
                 fwrite(STDERR, "rename-lib: could not create parent directory: $parent\n");
 
                 return 1;

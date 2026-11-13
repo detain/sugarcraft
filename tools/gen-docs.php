@@ -361,7 +361,7 @@ if ($mode === '--check') {
         $drift++;
     }
 } else {
-    if (!is_dir(dirname($searchPath)) && !mkdir(dirname($searchPath), 0777, true) && !is_dir(dirname($searchPath))) {
+    if (!is_dir(dirname($searchPath)) && !mkdir(dirname($searchPath), 0755, true) && !is_dir(dirname($searchPath))) {
         fwrite(STDERR, "cannot create " . dirname($searchPath) . "\n");
         exit(1);
     }

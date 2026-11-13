@@ -420,7 +420,7 @@ foreach ($pages as $rel => $content) {
         continue;
     }
     $dir = \dirname($file);
-    if (!\is_dir($dir) && !\mkdir($dir, 0777, true) && !\is_dir($dir)) {
+    if (!\is_dir($dir) && !\mkdir($dir, 0755, true) && !\is_dir($dir)) {
         \fwrite(\STDERR, "error: cannot create {$dir}\n");
         exit(1);
     }
