@@ -77,22 +77,30 @@ final class ParserTest extends TestCase
     public function testDiscardAbandonsInFlightStringsWithoutDispatch(): void
     {
         // sap-07 (finding 020): discard() is the anti-verb of reset().
-        $handler = new DebugHandler();
-        $parser  = new Parser($handler);
-
-        $parser->feed("\x1b]0;half an osc");
-        $parser->feed("\x1bPqhalf a dcs");
-        $parser->discard();
-
-        $this->assertSame([], $handler->filter('osc'), 'discard must not dispatch OSC');
-        $this->assertSame([], $handler->filter('dcs'), 'discard must not dispatch DCS');
-        $this->assertSame(State::Ground, $parser->currentState());
+        // NOTE the stream discipline: an ESC arriving INSIDE an in-flight
+        // string dispatches it first (the fidelity contract), so each
+        // in-flight leg gets its own parser — feeding `ESC P` after a bare
+        // `ESC ]` OSC would legitimately deliver an oscDispatch before any
+        // discard() ran.
+        $oscHandler = new DebugHandler();
+        $osc        = new Parser($oscHandler);
+        $osc->feed("\x1b]0;half an osc");
+        $osc->discard();
+        $this->assertSame([], $oscHandler->filter('osc'), 'discard must not dispatch OSC');
+        $this->assertSame(State::Ground, $osc->currentState());
 
         // The next sequence starts clean: no 'half an osc' bleed-through.
-        $parser->feed("\x1b]1;fresh\x07");
-        $osc = $handler->filter('osc');
-        $this->assertCount(1, $osc);
-        $this->assertSame('1;fresh', $osc[0]['detail']);
+        $osc->feed("\x1b]1;fresh\x07");
+        $log = $oscHandler->filter('osc');
+        $this->assertCount(1, $log);
+        $this->assertSame('1;fresh', $log[0]['detail']);
+
+        $dcsHandler = new DebugHandler();
+        $dcs        = new Parser($dcsHandler);
+        $dcs->feed("\x1bPqhalf a dcs");
+        $dcs->discard();
+        $this->assertSame([], $dcsHandler->filter('dcs'), 'discard must not dispatch DCS');
+        $this->assertSame(State::Ground, $dcs->currentState());
     }
 
     public function testResetKeepsItsFlushSemantics(): void
