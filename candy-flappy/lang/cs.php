@@ -43,4 +43,5 @@ return [
     'notty.line2'            => 'stdout není interaktivní terminál nebo byl zjištěn TERM=dumb.',
     'size.notice'            => 'candy-flappy potřebuje terminál {need}; tento má {have}.',
     'size.resume'            => 'Změňte velikost okna a hra pokračuje přesně tady.',
+    'config.no_dir'          => 'nelze najít umístění vaší konfigurace — nastavte $HOME nebo $XDG_CONFIG_HOME na místo, kde vaše konfigurace je.',
 ];

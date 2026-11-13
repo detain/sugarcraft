@@ -74,6 +74,8 @@ final class LocaleParityTest extends TestCase
         $this->assertArrayHasKey('notty.line2', $en);
         $this->assertArrayHasKey('size.notice', $en);
         $this->assertArrayHasKey('size.resume', $en);
+        // flappy-71: the config-fatal remedy copy.
+        $this->assertArrayHasKey('config.no_dir', $en);
     }
 
     #[DataProvider('localeFiles')]

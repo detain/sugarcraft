@@ -200,10 +200,29 @@ final class BinNoTtyPreflightTest extends TestCase
         unset($stdout);
 
         self::assertSame(2, $exit, 'a config-fatal is an invocation error, never 255: ' . $stderr);
-        self::assertStringContainsString('config directory', $stderr);
+        // flappy-71: the copy is Lang-routed now, so the pin holds a token
+        // every locale's value carries — the remedy's variable name itself.
+        self::assertStringContainsString('$XDG_CONFIG_HOME', $stderr);
         self::assertStringNotContainsString('#0', $stderr, 'no trace frames may reach the terminal');
         self::assertStringNotContainsString('SugarCraft\\', $stderr, 'no internal class names');
         self::assertSame(1, substr_count(trim($stderr), "\n") + 1, 'exactly one refusal line');
+    }
+
+    public function testUnresolvableConfigCopySpeaksTheDetectedLanguage(): void
+    {
+        // flappy-71 (finding -061): the config-fatal is Lang-routed — bin
+        // sets the locale long before the first Game is built, so a
+        // LANG=de launch must get the German remedy back. The English
+        // hard-coded throw this row replaced reddens exactly this arm.
+        [$exit, $stdout, $stderr] = self::drive([
+            'HOME' => '',
+            'CLICOLOR_FORCE' => '1',
+            'LANG' => 'de_DE.UTF-8',
+        ]);
+        unset($stdout);
+
+        self::assertSame(2, $exit);
+        self::assertStringContainsString('Konfigurationsverzeichnis', $stderr, 'the German remedy copy must render: ' . $stderr);
     }
 
     public function testDiagnosticFlagsStillAnswerWhilePiped(): void    {

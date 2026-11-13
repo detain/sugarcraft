@@ -43,4 +43,5 @@ return [
     'notty.line2'            => 'stdout が対話型ターミナルでないか、TERM=dumb が検出されました。',
     'size.notice'            => 'candy-flappy には {need} のターミナルが必要です。現在は {have} です。',
     'size.resume'            => 'ウィンドウを広げると、このままゲームが再開します。',
+    'config.no_dir'          => '設定ファイルの場所が見つかりません — $HOME または $XDG_CONFIG_HOME を設定ファイルのあるディレクトリに設定してください。',
 ];

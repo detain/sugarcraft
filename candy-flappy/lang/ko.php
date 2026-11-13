@@ -43,4 +43,5 @@ return [
     'notty.line2'            => 'stdout이 대화형 터미널이 아니거나 TERM=dumb이 감지되었습니다.',
     'size.notice'            => 'candy-flappy에는 {need} 터미널이 필요합니다; 이 터미널은 {have}입니다.',
     'size.resume'            => '창 크기를 조정하면 바로 여기서 게임이 이어집니다.',
+    'config.no_dir'          => '설정 위치를 찾을 수 없습니다 — $HOME 또는 $XDG_CONFIG_HOME을 설정 파일이 있는 위치로 지정하세요.',
 ];

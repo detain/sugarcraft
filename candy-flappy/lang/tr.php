@@ -43,4 +43,5 @@ return [
     'notty.line2'            => 'stdout etkileşimli bir terminal değil veya TERM=dumb algılandı.',
     'size.notice'            => 'candy-flappy {need} bir terminal ister; bu {have}.',
     'size.resume'            => 'Pencereyi büyütün, oyun tam burada devam eder.',
+    'config.no_dir'          => 'yapılandırmanızın konumu bulunamıyor — $HOME veya $XDG_CONFIG_HOME ortam değişkenini yapılandırma dizininize ayarlayın.',
 ];

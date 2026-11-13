@@ -44,4 +44,5 @@ return [
     'notty.line2'            => 'stdout 不是交互式终端，或检测到 TERM=dumb。',
     'size.notice'            => 'candy-flappy 需要 {need} 的终端；当前是 {have}。',
     'size.resume'            => '调整窗口大小，游戏就会在此继续。',
+    'config.no_dir'          => '找不到配置所在的位置 — 请将 $HOME 或 $XDG_CONFIG_HOME 指向你的配置目录。',
 ];

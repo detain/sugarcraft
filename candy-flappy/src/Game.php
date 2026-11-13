@@ -200,7 +200,11 @@ final class Game implements Model
         }
         $home = getenv('HOME') ?: ($_SERVER['HOME'] ?? '');
         if ($home === '') {
-            throw new \RuntimeException('Cannot resolve a config directory: no $HOME or $XDG_CONFIG_HOME set');
+            // flappy-71 (finding -061): remedy copy, not just diagnosis —
+            // and Lang-routed (bin sets the locale before the first Game is
+            // built, so a config-fatal already speaks the user's language;
+            // the lookup's own default is en, so this is throw-safe).
+            throw new \RuntimeException(Lang::t('config.no_dir'));
         }
         return $home . '/.config';
     }

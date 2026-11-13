@@ -43,4 +43,5 @@ return [
     'notty.line2'            => 'stdout non è un terminale interattivo oppure è stato rilevato TERM=dumb.',
     'size.notice'            => 'candy-flappy richiede un terminale {need}; questo è {have}.',
     'size.resume'            => 'Ridimensiona la finestra e il gioco riprende esattamente qui.',
+    'config.no_dir'          => 'impossibile trovare la posizione della configurazione — imposta $HOME o $XDG_CONFIG_HOME sulla cartella che la contiene.',
 ];

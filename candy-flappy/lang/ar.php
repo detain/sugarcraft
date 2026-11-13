@@ -43,4 +43,5 @@ return [
     'notty.line2'            => 'stdout ليست طرفية تفاعلية، أو تم اكتشاف TERM=dumb.',
     'size.notice'            => 'يحتاج candy-flappy إلى طرفية بمقاس {need}؛ هذه بمقاس {have}.',
     'size.resume'            => 'غيّر حجم النافذة وستستمر اللعبة من هنا تمامًا.',
+    'config.no_dir'          => 'تعذر العثور على موقع الإعدادات — عيّن $HOME أو $XDG_CONFIG_HOME إلى المكان الذي توجد فيه إعداداتك.',
 ];
