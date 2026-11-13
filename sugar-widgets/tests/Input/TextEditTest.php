@@ -287,4 +287,28 @@ final class TextEditTest extends TestCase
         $this->assertSame(2, $t->caret());
         $this->assertSame('98', $t->withNumeric(false)->text());
     }
+
+    public function testNumericRejectionNeverMovesTheCaret(): void
+    {
+        // #043: a rejected rune in numeric mode must not advance the
+        // caret re-anchor over untouched text. Mid-field case first.
+        // (Digits-only seed: new(numeric:true) filters its own seed text.)
+        $t = TextEdit::new('123', 1, numeric: true);
+        $r = $t->insert('x');
+        $this->assertSame('123', $r->text());
+        $this->assertSame(1, $r->caret(), 'rejected rune leaves the caret in place');
+        // Boundary edges: caret 0 and caret == length.
+        $r0 = TextEdit::new('123', 0, numeric: true)->insert('x');
+        $this->assertSame(0, $r0->caret());
+        $rEnd = TextEdit::new('123', 3, numeric: true)->insert('x');
+        $this->assertSame(3, $rEnd->caret());
+        // Multi-char mixed input is rejected whole, not partially spliced.
+        $rm = TextEdit::new('123', 1, numeric: true)->insert('1x2');
+        $this->assertSame('123', $rm->text());
+        $this->assertSame(1, $rm->caret());
+        // Positive control: an accepted digit still advances the caret.
+        $ok = TextEdit::new('123', 1, numeric: true)->insert('7');
+        $this->assertSame('1723', $ok->text());
+        $this->assertSame(2, $ok->caret());
+    }
 }
