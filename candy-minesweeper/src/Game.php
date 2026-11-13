@@ -78,6 +78,15 @@ final class Game implements Model
          */
         public readonly bool $newBest = false,
         /**
+         * The preset's previous best time (seconds) that the NEW BEST badge
+         * on this finished game beat — null when the badge is a first win
+         * (no record existed to name). Stamped by afterAction() together
+         * with $newBest so the banner can quote the fallen record (010);
+         * the badge alone would otherwise be the only hint a tally existed,
+         * and the merged tally has already overwritten the old number.
+         */
+        public readonly ?int $beatenRecord = null,
+        /**
          * Live terminal size, seeded at boot and replaced by every
          * {@see WindowSizeMsg} (startup dispatch + SIGWINCH). The default is
          * the classic 80×24 so headless fixtures render as they always did;
@@ -252,6 +261,7 @@ final class Game implements Model
                 'startedAt'      => null,
                 'elapsedSeconds' => null,
                 'newBest'        => false,
+                'beatenRecord'   => null,
                 'notice'         => Lang::t('ui.restarted'),
             ]), null];
         }
@@ -343,7 +353,13 @@ final class Game implements Model
         $prev    = $preset !== null && $next->stats !== null ? $next->stats->bestTime($preset) : null;
         $isBest  = $preset !== null && $next->stats !== null && !$next->restoredGame
             && $won && $seconds !== null && ($prev === null || $seconds < $prev);
-        $recorded = $next->recordResult($elapsed)->mutate(['newBest' => $isBest]);
+        $recorded = $next->recordResult($elapsed)->mutate([
+            'newBest'      => $isBest,
+            // The fallen record must be named while it is still knowable:
+            // recordResult() folds the new time into the tally, so $prev is
+            // the last moment the beaten number exists in memory.
+            'beatenRecord' => $isBest ? $prev : null,
+        ]);
         $recorded->persistStats();
 
         return $recorded;

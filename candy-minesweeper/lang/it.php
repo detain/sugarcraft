@@ -19,6 +19,11 @@ return [
     'custom.min_mines' => 'è richiesta almeno 1 mina',
     'custom.max_mines' => 'troppe mine — lascia un\'area di partenza sicura',
     'ui.status' => 'mine: {mines}  ·  bandiere: {flags}  ·  rimanenti: {remaining}  ·  tempo: {time}',
+    'ui.status_stats' => '{preset}  ·  bandiere: {flags}  ·  rimanenti: {remaining}  ·  tempo: {time}  ·  record: {best}',
+    'ui.preset_easy' => 'facile',
+    'ui.preset_standard' => 'standard',
+    'ui.preset_medium' => 'medio',
+    'ui.preset_expert' => 'esperto',
     'ui.boom' => '💥 boom — premi r per ricominciare',
     'ui.cleared' => '★ completato — premi r per giocare ancora',
     'ui.help_rules' => 'un numero conta le mine vicine',
@@ -34,5 +39,6 @@ return [
     'ui.chord_not_ready' => 'il chord richiede bandiere pari al numero',
     'ui.resume' => 'Una partita ti aspetta — premi L per caricarla',
     'ui.new_best' => 'NUOVO RECORD',
+    'ui.beat_best' => '{prev} → NUOVO RECORD',
     'ui.fit_notice' => 'candy-minesweeper richiede un terminale alto {need} righe; questo ne ha {have}. Ingrandisci la finestra: il gioco riprende appena lo spazio basta. q per uscire.',
 ];

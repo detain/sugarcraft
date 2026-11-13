@@ -19,6 +19,11 @@ return [
     'custom.min_mines' => 'minimaal 1 mijn vereist',
     'custom.max_mines' => 'te veel mijnen — laat een veilig startgebied over',
     'ui.status' => 'mijnen: {mines}  ·  vlaggen: {flags}  ·  over: {remaining}  ·  tijd: {time}',
+    'ui.status_stats' => '{preset}  ·  vlaggen: {flags}  ·  over: {remaining}  ·  tijd: {time}  ·  beste: {best}',
+    'ui.preset_easy' => 'makkelijk',
+    'ui.preset_standard' => 'standaard',
+    'ui.preset_medium' => 'gemiddeld',
+    'ui.preset_expert' => 'expert',
     'ui.boom' => '💥 boem — druk op r om opnieuw te starten',
     'ui.cleared' => '★ gewonnen — druk op r om opnieuw te spelen',
     'ui.help_rules' => 'een getal telt de mijnen eromheen',
@@ -34,5 +39,6 @@ return [
     'ui.chord_not_ready' => 'midden-klik vraagt vlaggen gelijk aan het getal',
     'ui.resume' => 'Er wacht een opgeslagen spel — druk op L om het te laden',
     'ui.new_best' => 'NIEUW RECORD',
+    'ui.beat_best' => '{prev} → NIEUW RECORD',
     'ui.fit_notice' => 'candy-minesweeper heeft een terminal van {need} regels nodig; deze heeft {have}. Vergroot het venster — het spel hervat zodra het past. Druk op q om te stoppen.',
 ];

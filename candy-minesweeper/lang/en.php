@@ -19,6 +19,11 @@ return [
     'custom.min_mines'           => 'at least 1 mine required',
     'custom.max_mines'           => 'too many mines — leave a safe starting area',
     'ui.status' => 'mines: {mines}  ·  flags: {flags}  ·  remaining: {remaining}  ·  time: {time}',
+    'ui.status_stats' => '{preset}  ·  flags: {flags}  ·  remaining: {remaining}  ·  time: {time}  ·  best: {best}',
+    'ui.preset_easy' => 'easy',
+    'ui.preset_standard' => 'standard',
+    'ui.preset_medium' => 'medium',
+    'ui.preset_expert' => 'expert',
     'ui.boom' => '💥 boom — press r to restart',
     'ui.cleared' => '★ cleared — press r to play again',
     'ui.help_rules' => 'a number counts nearby mines',
@@ -34,5 +39,6 @@ return [
     'ui.chord_not_ready' => 'chord needs the flags to match the number',
     'ui.resume' => 'a savegame is waiting — press L to load it',
     'ui.new_best' => 'NEW BEST',
+    'ui.beat_best' => '{prev} → NEW BEST',
     'ui.fit_notice' => 'candy-minesweeper needs a terminal {need} rows tall; this one has {have}. Enlarge the window — the game resumes the moment it fits. Press q to quit.',
 ];

@@ -19,6 +19,11 @@ return [
     'custom.min_mines' => '至少需要 1 个地雷',
     'custom.max_mines' => '地雷太多——请保留一个安全的起始区域',
     'ui.status' => '地雷: {mines}  ·  旗帜: {flags}  ·  剩余: {remaining}  ·  时间: {time}',
+    'ui.status_stats' => '{preset}  ·  旗帜: {flags}  ·  剩余: {remaining}  ·  时间: {time}  ·  最佳: {best}',
+    'ui.preset_easy' => '初级',
+    'ui.preset_standard' => '标准',
+    'ui.preset_medium' => '中级',
+    'ui.preset_expert' => '专家',
     'ui.boom' => '💥 砰 — 按 r 重新开始',
     'ui.cleared' => '★ 通关 — 按 r 再玩一局',
     'ui.help_rules' => '数字表示周围的地雷数',
@@ -34,5 +39,6 @@ return [
     'ui.chord_not_ready' => '开周围需插旗数与数字一致',
     'ui.resume' => '有存档等待 — 按 L 读取',
     'ui.new_best' => '新纪录',
+    'ui.beat_best' => '{prev} → 新纪录',
     'ui.fit_notice' => 'candy-minesweeper 需要 {need} 行高的终端；当前只有 {have} 行。放大窗口即可继续游戏。按 q 退出。',
 ];

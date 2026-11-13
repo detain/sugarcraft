@@ -19,6 +19,11 @@ return [
     'custom.min_mines' => 'требуется хотя бы 1 мина',
     'custom.max_mines' => 'слишком много мин — оставьте безопасную стартовую область',
     'ui.status' => 'мины: {mines}  ·  флаги: {flags}  ·  осталось: {remaining}  ·  время: {time}',
+    'ui.status_stats' => '{preset}  ·  флаги: {flags}  ·  осталось: {remaining}  ·  время: {time}  ·  рекорд: {best}',
+    'ui.preset_easy' => 'лёгкий',
+    'ui.preset_standard' => 'стандартный',
+    'ui.preset_medium' => 'средний',
+    'ui.preset_expert' => 'эксперт',
     'ui.boom' => '💥 бум — нажмите r для новой игры',
     'ui.cleared' => '★ поле раскрыто — нажмите r, чтобы сыграть снова',
     'ui.help_rules' => 'цифра — число мин рядом',
@@ -34,5 +39,6 @@ return [
     'ui.chord_not_ready' => 'для аккорда флаги должны равняться числу',
     'ui.resume' => 'Сохранение ждёт — нажмите L для загрузки',
     'ui.new_best' => 'НОВЫЙ РЕКОРД',
+    'ui.beat_best' => '{prev} → НОВЫЙ РЕКОРД',
     'ui.fit_notice' => 'candy-minesweeper требует терминал высотой {need} строк; этот содержит {have}. Увеличьте окно — игра продолжится, как только всё поместится. q — выход.',
 ];

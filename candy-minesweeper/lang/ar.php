@@ -19,6 +19,11 @@ return [
     'custom.min_mines' => 'مطلوب لغم واحد على الأقل',
     'custom.max_mines' => 'ألغام كثيرة جدًا — اترك منطقة بداية آمنة',
     'ui.status' => 'ألغام: {mines}  ·  أعلام: {flags}  ·  متبقٍ: {remaining}  ·  وقت: {time}',
+    'ui.status_stats' => '{preset}  ·  أعلام: {flags}  ·  متبقٍ: {remaining}  ·  وقت: {time}  ·  أفضل: {best}',
+    'ui.preset_easy' => 'سهل',
+    'ui.preset_standard' => 'قياسي',
+    'ui.preset_medium' => 'متوسط',
+    'ui.preset_expert' => 'خبير',
     'ui.boom' => '💥 بوم — اضغط r لإعادة البدء',
     'ui.cleared' => '★ تمّ المسح — اضغط r للعب مجدداً',
     'ui.help_rules' => 'الرقم يحسب الألغام المجاورة',
@@ -34,5 +39,6 @@ return [
     'ui.chord_not_ready' => 'الفتح حوله يحتاج أعلامًا تطابق الرقم',
     'ui.resume' => 'هناك حفظ بانتظارك — اضغط L للتحميل',
     'ui.new_best' => 'رقم قياسي جديد',
+    'ui.beat_best' => '{prev} → رقم قياسي جديد',
     'ui.fit_notice' => 'تحتاج candy-minesweeper إلى طرفية بارتفاع {need} صفاً؛ هذا الطرف {have}. وسّع النافذة وستستأنف اللعبة فور اتساعها لها. اضغط q للخروج.',
 ];

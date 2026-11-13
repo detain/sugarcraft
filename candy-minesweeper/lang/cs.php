@@ -19,6 +19,11 @@ return [
     'custom.min_mines' => 'je vyžadováno alespoň 1 mina',
     'custom.max_mines' => 'příliš mnoho min — nechte bezpečnou výchozí oblast',
     'ui.status' => 'miny: {mines}  ·  vlajky: {flags}  ·  zbývá: {remaining}  ·  čas: {time}',
+    'ui.status_stats' => '{preset}  ·  vlajky: {flags}  ·  zbývá: {remaining}  ·  čas: {time}  ·  nejlepší: {best}',
+    'ui.preset_easy' => 'snadný',
+    'ui.preset_standard' => 'standardní',
+    'ui.preset_medium' => 'střední',
+    'ui.preset_expert' => 'expert',
     'ui.boom' => '💥 bouch — stiskněte r pro restart',
     'ui.cleared' => '★ vyčištěno — stiskněte r pro novou hru',
     'ui.help_rules' => 'číslo udává počet min v okolí',
@@ -34,5 +39,6 @@ return [
     'ui.chord_not_ready' => 'pro open-around musí vlajky odpovídat číslu',
     'ui.resume' => 'Uložená hra čeká — stiskni L pro načtení',
     'ui.new_best' => 'NOVÝ REKORD',
+    'ui.beat_best' => '{prev} → NOVÝ REKORD',
     'ui.fit_notice' => 'candy-minesweeper potřebuje terminál vysoký {need} řádků; tento má {have}. Zvětšete okno — hra se obnoví, jakmile se board vejde. Q skončí.',
 ];

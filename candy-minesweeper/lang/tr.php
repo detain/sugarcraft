@@ -19,6 +19,11 @@ return [
     'custom.min_mines' => 'en az 1 mayın gerekli',
     'custom.max_mines' => 'çok fazla mayın — güvenli bir başlangıç alanı bırakın',
     'ui.status' => 'mayın: {mines}  ·  bayrak: {flags}  ·  kalan: {remaining}  ·  süre: {time}',
+    'ui.status_stats' => '{preset}  ·  bayrak: {flags}  ·  kalan: {remaining}  ·  süre: {time}  ·  en iyi: {best}',
+    'ui.preset_easy' => 'kolay',
+    'ui.preset_standard' => 'standart',
+    'ui.preset_medium' => 'orta',
+    'ui.preset_expert' => 'uzman',
     'ui.boom' => '💥 bum — yeniden başlatmak için r tuşuna basın',
     'ui.cleared' => '★ tamamlandı — tekrar oynamak için r tuşuna basın',
     'ui.help_rules' => 'sayı yakındaki mayınları sayar',
@@ -34,5 +39,6 @@ return [
     'ui.chord_not_ready' => 'çevre açma için bayraklar sayıyla eşit olmalı',
     'ui.resume' => 'Bir kayıt bekliyor — yüklemek için L tuşuna bas',
     'ui.new_best' => 'YENİ REKOR',
+    'ui.beat_best' => '{prev} → YENİ REKOR',
     'ui.fit_notice' => 'candy-minesweeper {need} satır yüksekliğinde bir terminal ister; bu terminal {have} satır. Pencereyi büyütün — oyun sığdığı anda devam eder. q çıkar.',
 ];

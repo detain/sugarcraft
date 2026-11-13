@@ -12,6 +12,7 @@ use SugarCraft\Minesweeper\Cell;
 use SugarCraft\Minesweeper\Difficulty;
 use SugarCraft\Minesweeper\Game;
 use SugarCraft\Minesweeper\Renderer;
+use SugarCraft\Minesweeper\Stats;
 use SugarCraft\Core\Util\Width;
 
 /**
@@ -80,8 +81,9 @@ final class FooterWidthGuardTest extends TestCase
             }
             $safe[] = $row;
         }
+        $safeBoard = Board::fromRows(3, 3, 1, $safe, minesPlaced: true, exploded: false, revealedCount: 8, flaggedCount: 0);
         $won = new Game(
-            board: Board::fromRows(3, 3, 1, $safe, minesPlaced: true, exploded: false, revealedCount: 8, flaggedCount: 0),
+            board: $safeBoard,
             cursorX: 2,
             cursorY: 2,
             elapsedSeconds: 3625,
@@ -91,7 +93,25 @@ final class FooterWidthGuardTest extends TestCase
         return [['fresh', $fresh], ['exploded', $exploded], ['won+3digit', $won],
             // EXPERT (30×16) is the widest shipped preset board — 16+8 = 24
             // rows, the exact boot-fit floor, and the longest footer budget.
-            ['expert', Game::withDifficulty(Difficulty::EXPERT)]];
+            ['expert', Game::withDifficulty(Difficulty::EXPERT)],
+            // msw-08: the stats variant of the status line (preset name +
+            // best-time segment with the widest legal number) and the
+            // banner that quotes a beaten record — both ride the same
+            // budget as the plain strings, in every locale.
+            ['stats-status', Game::withDifficulty(
+                Difficulty::EXPERT,
+                static fn(int $max): int => 0,
+                stats: new Stats(expertGames: 1, expertBest: 3599),
+            )],
+            ['stats-beat-banner', new Game(
+                board: $safeBoard,
+                cursorX: 2,
+                cursorY: 2,
+                elapsedSeconds: 3625,
+                stats: new Stats(easyGames: 2, easyWins: 1, easyBest: 3600),
+                newBest: true,
+                beatenRecord: 3600,
+            )]];
     }
 
     public function testEveryFrameLineFitsEightyColumnsInEveryLocale(): void
@@ -134,6 +154,12 @@ final class FooterWidthGuardTest extends TestCase
             ['fresh', Game::withDifficulty(Difficulty::EASY)],
             ['expert', Game::withDifficulty(Difficulty::EXPERT)],
             ['toasted', Game::withDifficulty(Difficulty::STANDARD, notice: 'saved')],
+            // msw-08 stats status must word-wrap inside the live columns too.
+            ['stats', Game::withDifficulty(
+                Difficulty::EXPERT,
+                static fn(int $max): int => 0,
+                stats: new Stats(expertGames: 1, expertBest: 3599),
+            )],
         ];
         $locales = array_map('basename', array_combine($glob = glob(__DIR__ . '/../lang/*.php') ?: [], $glob));
         $this->assertNotEmpty($locales);

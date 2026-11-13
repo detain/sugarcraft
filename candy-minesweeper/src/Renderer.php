@@ -493,7 +493,12 @@ final class Renderer
                 $suffix .= ' · ' . self::formatTime($g->elapsedSeconds);
             }
             if ($b->isWon() && $g->newBest) {
-                $suffix .= ' · ' . Lang::t('ui.new_best');
+                // A badge that names the number it beat tells the player a
+                // tally exists and where they stood; a first win has no
+                // fallen record to quote and keeps the bare badge.
+                $suffix .= ' · ' . ($g->beatenRecord !== null
+                    ? Lang::t('ui.beat_best', ['prev' => self::formatTime($g->beatenRecord)])
+                    : Lang::t('ui.new_best'));
             }
             return [
                 Lang::t($b->exploded ? 'ui.boom' : 'ui.cleared') . $suffix,
@@ -503,6 +508,32 @@ final class Renderer
         $remaining = max(0, $b->mineCount - $b->flagCount());
         $elapsed = $g->elapsed();
         $time = $elapsed !== null ? self::formatTime((int) $elapsed) : '0:00';
+        $style = SugarStyle::new()->foreground(Color::hex(self::ink('#a78bfa', '#6d28d9')));
+        if ($g->stats !== null) {
+            // Stats are being kept (opt-in via CANDY_MINESWEEPER_STATS), so
+            // the status line must show what they know: the preset's name
+            // (or the raw W×H×M shape of a board no preset matches — the
+            // only on-screen evidence custom sizes exist, 095) and the
+            // current best, with a dash placeholder until one is set. The
+            // mine count yields its segment to the preset name, which
+            // encodes the count; custom boards spell the count in the head.
+            $preset = $g->difficulty();
+            $label = $preset !== null
+                ? Lang::t('ui.preset_' . strtolower($preset->name))
+                : $b->width . '×' . $b->height . '×' . $b->mineCount;
+            // Custom boards tally nothing, so they have no bucket to read.
+            $best = $preset !== null ? $g->stats->bestTime($preset) : null;
+            return [
+                Lang::t('ui.status_stats', [
+                    'preset'    => $label,
+                    'flags'     => $b->flagCount(),
+                    'remaining' => $remaining,
+                    'time'      => $time,
+                    'best'      => $best !== null ? self::formatTime($best) : '--',
+                ]),
+                $style,
+            ];
+        }
         return [
             Lang::t('ui.status', [
                 'mines'     => $b->mineCount,
@@ -510,7 +541,7 @@ final class Renderer
                 'remaining' => $remaining,
                 'time'      => $time,
             ]),
-            SugarStyle::new()->foreground(Color::hex(self::ink('#a78bfa', '#6d28d9'))),
+            $style,
         ];
     }
 

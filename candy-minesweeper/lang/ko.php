@@ -19,6 +19,11 @@ return [
     'custom.min_mines' => '지뢰는 최소 1개 필요합니다',
     'custom.max_mines' => '지뢰가 너무 많습니다 — 안전한 시작 영역을 남기세요',
     'ui.status' => '지뢰: {mines}  ·  깃발: {flags}  ·  남은: {remaining}  ·  시간: {time}',
+    'ui.status_stats' => '{preset}  ·  깃발: {flags}  ·  남은: {remaining}  ·  시간: {time}  ·  최고: {best}',
+    'ui.preset_easy' => '초급',
+    'ui.preset_standard' => '표준',
+    'ui.preset_medium' => '중급',
+    'ui.preset_expert' => '전문가',
     'ui.boom' => '💥 펑 — 다시 시작하려면 r',
     'ui.cleared' => '★ 클리어 — 다시 하려면 r',
     'ui.help_rules' => '숫자는 주변 지뢰 수를 뜻함',
@@ -34,5 +39,6 @@ return [
     'ui.chord_not_ready' => '주변 열려면 깃발 수가 숫자와 맞아야 함',
     'ui.resume' => '세이브가 기다리는 중 — L로 로드',
     'ui.new_best' => '신기록',
+    'ui.beat_best' => '{prev} → 신기록',
     'ui.fit_notice' => 'candy-minesweeper에는 {need}줄 높이의 터미널이 필요합니다. 현재 {have}줄입니다. 창을 키우면 게임이 곧바로 재개됩니다. q로 종료.',
 ];

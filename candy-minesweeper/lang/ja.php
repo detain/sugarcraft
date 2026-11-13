@@ -19,6 +19,11 @@ return [
     'custom.min_mines' => '地雷は1つ以上必要です',
     'custom.max_mines' => '地雷が多すぎます — 安全な開始領域を残してください',
     'ui.status' => '地雷: {mines}  ·  フラグ: {flags}  ·  残り: {remaining}  ·  時間: {time}',
+    'ui.status_stats' => '{preset}  ·  フラグ: {flags}  ·  残り: {remaining}  ·  時間: {time}  ·  最高: {best}',
+    'ui.preset_easy' => '初級',
+    'ui.preset_standard' => '標準',
+    'ui.preset_medium' => '中級',
+    'ui.preset_expert' => 'エキスパート',
     'ui.boom' => '💥 ドカン — r で再スタート',
     'ui.cleared' => '★ クリア — r でもう一度',
     'ui.help_rules' => '数字は周囲の地雷の数',
@@ -34,5 +39,6 @@ return [
     'ui.chord_not_ready' => '周囲を開くには旗数が数字と一致する必要がある',
     'ui.resume' => 'セーブデータがあります — L でロード',
     'ui.new_best' => '新記録',
+    'ui.beat_best' => '{prev} → 新記録',
     'ui.fit_notice' => 'candy-minesweeper には高さ {need} 行のターミナルが必要です。現在は {have} 行です。ウィンドウを広げると、収まり次第ゲームに復帰します。q で終了。',
 ];

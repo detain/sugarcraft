@@ -19,6 +19,11 @@ return [
     'custom.min_mines' => 'au moins 1 mine est requise',
     'custom.max_mines' => 'trop de mines — laissez une zone de départ sûre',
     'ui.status' => 'mines : {mines}  ·  drapeaux : {flags}  ·  restants : {remaining}  ·  temps : {time}',
+    'ui.status_stats' => '{preset}  ·  drapeaux : {flags}  ·  restants : {remaining}  ·  temps : {time}  ·  record : {best}',
+    'ui.preset_easy' => 'facile',
+    'ui.preset_standard' => 'standard',
+    'ui.preset_medium' => 'moyen',
+    'ui.preset_expert' => 'expert',
     'ui.boom' => '💥 boum — appuyez sur r pour recommencer',
     'ui.cleared' => '★ gagné — appuyez sur r pour rejouer',
     'ui.help_rules' => 'un chiffre compte les mines voisines',
@@ -34,5 +39,6 @@ return [
     'ui.chord_not_ready' => 'le groupement exige des drapeaux égalant le chiffre',
     'ui.resume' => 'Une sauvegarde attend — appuyez sur L pour la charger',
     'ui.new_best' => 'NOUVEAU RECORD',
+    'ui.beat_best' => '{prev} → NOUVEAU RECORD',
     'ui.fit_notice' => 'candy-minesweeper nécessite un terminal de {need} lignes ; celui-ci en a {have}. Agrandissez la fenêtre — la partie reprend dès qu’elle tient. q pour quitter.',
 ];

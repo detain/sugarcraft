@@ -19,6 +19,11 @@ return [
     'custom.min_mines' => 'mindestens 1 Mine erforderlich',
     'custom.max_mines' => 'zu viele Minen — lassen Sie einen sicheren Startbereich',
     'ui.status' => 'Minen: {mines}  ·  Flaggen: {flags}  ·  verbleibend: {remaining}  ·  Zeit: {time}',
+    'ui.status_stats' => '{preset}  ·  Flaggen: {flags}  ·  verbleibend: {remaining}  ·  Zeit: {time}  ·  Bestzeit: {best}',
+    'ui.preset_easy' => 'einfach',
+    'ui.preset_standard' => 'standard',
+    'ui.preset_medium' => 'mittel',
+    'ui.preset_expert' => 'experte',
     'ui.boom' => '💥 Boom — drücken Sie r für einen Neustart',
     'ui.cleared' => '★ Geschafft — drücken Sie r für eine neue Partie',
     'ui.help_rules' => 'eine Zahl zählt die Minen daneben',
@@ -34,5 +39,6 @@ return [
     'ui.chord_not_ready' => 'Chord braucht Flaggen passend zur Zahl',
     'ui.resume' => 'Ein Spielstand wartet — mit L laden',
     'ui.new_best' => 'NEUER REKORD',
+    'ui.beat_best' => '{prev} → NEUER REKORD',
     'ui.fit_notice' => 'candy-minesweeper benötigt einen Terminal mit {need} Zeilen; dieser hat {have}. Vergrößern Sie das Fenster — das Spiel setzt ein, sobald es passt. q beendet.',
 ];
