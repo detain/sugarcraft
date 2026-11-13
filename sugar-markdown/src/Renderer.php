@@ -1654,15 +1654,14 @@ final class Renderer
         if (!$isAutolink && $this->textCase !== null) {
             // A heading's case transform has already reached the link text,
             // so `HTTPS://EX.COM/A` no longer equals its own URL. Decide
-            // autolink-ness from the uncased text instead; the autolink
-            // branch prints the URL itself, which keeps its case.
-            $outerCase = $this->textCase;
-            $this->textCase = null;
-            try {
-                $isAutolink = $this->renderChildren($l) === $url;
-            } finally {
-                $this->textCase = $outerCase;
-            }
+            // autolink-ness from the raw child literal instead of calling
+            // renderChildren() a second time with case suspended (SM-S41:
+            // the re-run paid the sanitize + emoji + style battery again on
+            // every heading link). A CommonMark autolink carries exactly one
+            // Text child whose decoded literal is the destination.
+            $child = $l->firstChild();
+            $isAutolink = $child instanceof Text && $child->next() === null
+                && $child->getLiteral() === $url;
         }
 
         if ($isAutolink) {
