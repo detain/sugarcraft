@@ -8,6 +8,7 @@ use React\EventLoop\Loop;
 use React\EventLoop\LoopInterface;
 use React\EventLoop\TimerInterface;
 use React\Promise\PromiseInterface;
+use SugarCraft\Code\Host\SessionEvent;
 use SugarCraft\Code\Protocol\Dispatcher;
 use SugarCraft\Code\Protocol\ErrorCode;
 use SugarCraft\Code\Protocol\EventEnvelope;
@@ -18,6 +19,7 @@ use SugarCraft\Code\Protocol\RpcError;
 use SugarCraft\Code\Server\ServerConfig;
 use SugarCraft\Code\Server\Ws\Connection;
 use SugarCraft\Code\Server\Ws\MessageHandler;
+use SugarCraft\Code\Server\Ws\Outbox;
 use SugarCraft\Code\Support\Directories\DirectoryBrowserException;
 
 /**
@@ -227,7 +229,7 @@ final class Gateway implements MessageHandler
 
         if (\in_array($method, self::METHODS, true)) {
             if (!isset($this->greeted[$connection->id()])) {
-                $connection->send(JsonRpc::error($id, RpcError::of(ErrorCode::NotInitialized, 'send server.hello first')));
+                $this->send($connection, JsonRpc::error($id, RpcError::of(ErrorCode::NotInitialized, 'send server.hello first')));
 
                 return;
             }
@@ -240,7 +242,7 @@ final class Gateway implements MessageHandler
         try {
             $root = $this->routeOf($params);
         } catch (RpcError $e) {
-            $connection->send(JsonRpc::error($id, $e));
+            $this->send($connection, JsonRpc::error($id, $e));
 
             return;
         }
@@ -255,7 +257,7 @@ final class Gateway implements MessageHandler
             return;
         }
         if (!isset($this->greeted[$connection->id()])) {
-            $connection->send(JsonRpc::error($id, RpcError::of(ErrorCode::NotInitialized, 'send server.hello first')));
+            $this->send($connection, JsonRpc::error($id, RpcError::of(ErrorCode::NotInitialized, 'send server.hello first')));
 
             return;
         }
@@ -347,7 +349,7 @@ final class Gateway implements MessageHandler
             $was = isset($this->subscribers[$sessionId][$connection->id()]);
             unset($this->subscribers[$sessionId][$connection->id()], $this->cursors[$connection->id()][$sessionId]);
             if ($others !== []) {
-                $connection->send(JsonRpc::result($id, ['unsubscribed' => $was]));
+                $this->send($connection, JsonRpc::result($id, ['unsubscribed' => $was]));
 
                 return;
             }
@@ -375,7 +377,7 @@ final class Gateway implements MessageHandler
                             $result->root ??= $root;
                         }
                         if ($connection->isOpen()) {
-                            $connection->send((string) \json_encode(
+                            $this->send($connection, (string) \json_encode(
                                 ['jsonrpc' => JsonRpc::VERSION, 'id' => $id, 'result' => $result],
                                 \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE,
                             ));
@@ -385,7 +387,7 @@ final class Gateway implements MessageHandler
             },
         )->then(null, function (\Throwable $e) use ($connection, $id, $root): void {
             if ($connection->isOpen()) {
-                $connection->send(JsonRpc::error($id, $e instanceof RpcError ? $e : RpcError::of(
+                $this->send($connection, JsonRpc::error($id, $e instanceof RpcError ? $e : RpcError::of(
                     ErrorCode::Internal,
                     \sprintf('the workspace host for %s failed: %s', $root, \substr($e->getMessage(), 0, 300)),
                     'workspace_failed',
@@ -419,7 +421,7 @@ final class Gateway implements MessageHandler
     {
         try {
             if ($method === 'workspace.list') {
-                $connection->send(JsonRpc::result($id, ['items' => $this->workspaceList()]));
+                $this->send($connection, JsonRpc::result($id, ['items' => $this->workspaceList()]));
 
                 return;
             }
@@ -429,17 +431,17 @@ final class Gateway implements MessageHandler
                 : $this->canonicalRoot($params->root ?? null);
             if ($method === 'workspace.open') {
                 if ($root === $this->primaryRoot) {
-                    $connection->send(JsonRpc::result($id, ['root' => $root, 'primary' => true, 'running' => true, 'pid' => \getmypid()]));
+                    $this->send($connection, JsonRpc::result($id, ['root' => $root, 'primary' => true, 'running' => true, 'pid' => \getmypid()]));
 
                     return;
                 }
                 $this->rootClients[$root][$connection->id()] = $connection;
                 $this->hostFor($root)->then(
-                    static function (WorkspaceHostClient $host) use ($connection, $id, $root): void {
-                        $connection->send(JsonRpc::result($id, ['root' => $root, 'primary' => false, 'running' => true, 'pid' => $host->pid()]));
+                    function (WorkspaceHostClient $host) use ($connection, $id, $root): void {
+                        $this->send($connection, JsonRpc::result($id, ['root' => $root, 'primary' => false, 'running' => true, 'pid' => $host->pid()]));
                     },
-                    static function (\Throwable $e) use ($connection, $id): void {
-                        $connection->send(JsonRpc::error($id, $e instanceof RpcError ? $e : RpcError::of(ErrorCode::Internal, \substr($e->getMessage(), 0, 300), 'workspace_failed')));
+                    function (\Throwable $e) use ($connection, $id): void {
+                        $this->send($connection, JsonRpc::error($id, $e instanceof RpcError ? $e : RpcError::of(ErrorCode::Internal, \substr($e->getMessage(), 0, 300), 'workspace_failed')));
                     },
                 );
 
@@ -452,32 +454,32 @@ final class Gateway implements MessageHandler
             }
             $host = $this->hosts[$root] ?? null;
             if ($host === null) {
-                $connection->send(JsonRpc::result($id, ['closed' => false]));
+                $this->send($connection, JsonRpc::result($id, ['closed' => false]));
 
                 return;
             }
             if (($params->force ?? false) === true) {
                 $this->retire($root, 'closed by a client');
-                $connection->send(JsonRpc::result($id, ['closed' => true]));
+                $this->send($connection, JsonRpc::result($id, ['closed' => true]));
 
                 return;
             }
             $host->rpc()->call('server.health')->then(
                 function (array $health) use ($connection, $id, $root): void {
                     if ((int) ($health['turnsRunning'] ?? 0) > 0) {
-                        $connection->send(JsonRpc::error($id, RpcError::of(ErrorCode::Busy, 'a turn is running in that workspace; cancel it or close with force', 'turn_running')));
+                        $this->send($connection, JsonRpc::error($id, RpcError::of(ErrorCode::Busy, 'a turn is running in that workspace; cancel it or close with force', 'turn_running')));
 
                         return;
                     }
                     $this->retire($root, 'closed by a client');
-                    $connection->send(JsonRpc::result($id, ['closed' => true]));
+                    $this->send($connection, JsonRpc::result($id, ['closed' => true]));
                 },
                 static function (\Throwable $e) use ($connection, $id): void {
-                    $connection->send(JsonRpc::error($id, RpcError::of(ErrorCode::Internal, \substr($e->getMessage(), 0, 300), 'workspace_failed')));
+                    $this->send($connection, JsonRpc::error($id, RpcError::of(ErrorCode::Internal, \substr($e->getMessage(), 0, 300), 'workspace_failed')));
                 },
             );
         } catch (RpcError $e) {
-            $connection->send(JsonRpc::error($id, $e));
+            $this->send($connection, JsonRpc::error($id, $e));
         }
     }
 
@@ -556,6 +558,8 @@ final class Gateway implements MessageHandler
         }
         $notification->params->root = $root;
         $text = (string) \json_encode($notification, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE);
+        $message = \json_decode($text, true, JsonRpc::MAX_DEPTH);
+        $message = \is_array($message) ? $message : null;
 
         $targets = $sessionId === null ? ($this->rootClients[$root] ?? []) : ($this->subscribers[$sessionId] ?? []);
         $seq = ($envelope['durable'] ?? false) === true && \is_int($envelope['seq'] ?? null) ? $envelope['seq'] : null;
@@ -566,10 +570,38 @@ final class Gateway implements MessageHandler
                 }
                 $this->cursors[$connectionId][$sessionId] = $seq;
             }
-            if ($connection->isOpen()) {
-                $connection->send($text);
+            if (!$connection->isOpen()) {
+                continue;
             }
+            if ($message === null || $seq !== null || ($envelope['durable'] ?? false) === true) {
+                $this->send($connection, $text);
+
+                continue;
+            }
+            // Live-only: sheddable under overflow, deltas of one part coalesce.
+            $this->outbox($connection)?->pushEphemeral(
+                $message,
+                \in_array($envelope['type'] ?? null, [SessionEvent::ASSISTANT_DELTA, SessionEvent::REASONING_DELTA], true)
+                    ? $sessionId . '|' . $envelope['type'] . '|' . ($envelope['turnId'] ?? '')
+                    : null,
+            );
         }
+    }
+
+    /**
+     * Every gateway-emitted frame goes through the connection's {@see Outbox}
+     * (the primary dispatcher's, so order is shared with its own frames and the
+     * byte ceiling covers both) - never straight onto the socket.
+     */
+    private function send(Connection $connection, string $text): void
+    {
+        // Unregistered means closed: nothing queues for a gone peer.
+        $this->outbox($connection)?->push($text);
+    }
+
+    private function outbox(Connection $connection): ?Outbox
+    {
+        return $this->primary->outboxFor($connection);
     }
 
     /**
@@ -595,7 +627,7 @@ final class Gateway implements MessageHandler
             ])->notification());
             foreach ($this->subscribers[$sessionId] as $connection) {
                 if ($connection->isOpen()) {
-                    $connection->send($text);
+                    $this->send($connection, $text);
                 }
             }
             unset($this->subscribers[$sessionId]);

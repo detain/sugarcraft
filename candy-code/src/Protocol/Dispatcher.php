@@ -319,6 +319,12 @@ final class Dispatcher implements MessageHandler
         $this->start();
     }
 
+    /** The registered connection's {@see Outbox}; null once it has closed. */
+    public function outboxFor(Connection $connection): ?Outbox
+    {
+        return ($this->clients[$connection->id()] ?? null)?->outbox();
+    }
+
     public function onMessage(Connection $connection, string $payload): void
     {
         $client = $this->clients[$connection->id()] ?? null;
