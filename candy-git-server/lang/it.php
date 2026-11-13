@@ -30,10 +30,14 @@ return [
     'cli.next_step_2'          => '  2. Crea un repository: candy-git-server repo create <nome> {path} (aggiungi --public per pubblicarlo in lettura anonima)',
 
     'cli.next_step_3'          => '  3. Servi via smart HTTP: candy-git-server serve --http --repo-root {path}/repositories',
-    'cli.usage_user_root'      => 'Uso: candy-git-server user add|key|list|token',
+    'cli.usage_user_root'      => 'Uso: candy-git-server user add|key|list|token|remove|deactivate',
     'cli.usage_user_add'       => 'Uso: candy-git-server user add <username> [data-path] [--password <pw>|-] [--admin|--read]',
     'cli.usage_user_token' => 'Usage: candy-git-server user token <username> [ttl-seconds] [data-path] genera una firma del token proxy HTTP',
-    'cli.usage_user_key'       => 'Uso: candy-git-server user key <username> [key-file]',
+'cli.usage_user_key'       => 'Uso: candy-git-server user key <username> [key-file]',    'cli.usage_user_remove' => 'Uso: candy-git-server user remove <username> [data-path]',
+    'cli.usage_user_deactivate' => 'Uso: candy-git-server user deactivate <username> [data-path]',
+    'cli.user_removed' => "Utente '{username}' rimosso da {path}",
+    'cli.user_deactivated' => "Utente '{username}' disattivato (active: {active})",
+    'cli.user_already_deactivated_note' => "L'utente '{username}' era già inattivo; nulla è cambiato oltre alla ripubblicazione della riga.",
     'cli.user_created'         => "Utente '{username}' creato (admin: {admin})",
     // S21: least-privilege `user add` flags (finding 036).
     'cli.user_add_flags_conflict' => '--admin e --read sono mutuamente esclusivi.',

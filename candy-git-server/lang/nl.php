@@ -30,10 +30,14 @@ return [
     'cli.next_step_2'          => '  2. Maak een repository: candy-git-server repo create <naam> {path} (voeg --public toe om anoniem lezen te publiceren)',
 
     'cli.next_step_3'          => '  3. Serveer via smart HTTP: candy-git-server serve --http --repo-root {path}/repositories',
-    'cli.usage_user_root'      => 'Gebruik: candy-git-server user add|key|list|token',
+    'cli.usage_user_root'      => 'Gebruik: candy-git-server user add|key|list|token|remove|deactivate',
     'cli.usage_user_add'       => 'Gebruik: candy-git-server user add <username> [data-path] [--password <pw>|-] [--admin|--read]',
     'cli.usage_user_token' => 'Usage: candy-git-server user token <username> [ttl-seconds] [data-path] een HTTP-proxytokensignatuur aanmaken',
-    'cli.usage_user_key'       => 'Gebruik: candy-git-server user key <username> [key-file]',
+'cli.usage_user_key'       => 'Gebruik: candy-git-server user key <username> [key-file]',    'cli.usage_user_remove' => 'Gebruik: candy-git-server user remove <username> [data-path]',
+    'cli.usage_user_deactivate' => 'Gebruik: candy-git-server user deactivate <username> [data-path]',
+    'cli.user_removed' => "Gebruiker '{username}' verwijderd uit {path}",
+    'cli.user_deactivated' => "Gebruiker '{username}' gedeactiveerd (active: {active})",
+    'cli.user_already_deactivated_note' => "Gebruiker '{username}' was al inactief; er is niets gewijzigd behalve het opnieuw publiceren van de rij.",
     'cli.user_created'         => "Gebruiker '{username}' aangemaakt (admin: {admin})",
     // S21: least-privilege `user add` flags (finding 036).
     'cli.user_add_flags_conflict' => '--admin en --read sluiten elkaar uit.',

@@ -110,6 +110,46 @@ final class UserStore
     }
 
     /**
+     * Remove an account outright. Returns false (and changes nothing)
+     * when no such user exists — the same checked-answer contract
+     * add() honors. S23 (finding 040): this is the revocation door the
+     * enforced isActive machinery always needed but never had; without
+     * it, deactivating an account meant hand-editing users.json (and
+     * walking straight into the strict-vocabulary refusals).
+     */
+    public function remove(string $username): bool
+    {
+        if (!isset($this->users[$username])) {
+            return false;
+        }
+        unset($this->users[$username]);
+        $this->dirty = true;
+
+        return true;
+    }
+
+    /**
+     * Flip an account inactive, keeping every credential intact (an
+     * inactive account can be reactivated by editing nothing but this
+     * row). Returns the UPDATED immutable VO — the echo's truth rides
+     * the object the store just committed — or null when the account
+     * does not exist. Callers wrap this in transaction() like every
+     * other mutation.
+     */
+    public function deactivate(string $username): ?User
+    {
+        $user = $this->users[$username] ?? null;
+        if ($user === null) {
+            return null;
+        }
+        $off = $user->withActive(false);
+        $this->users[$username] = $off;
+        $this->dirty = true;
+
+        return $off;
+    }
+
+    /**
      * Run one whole-file transaction under an exclusive sidecar lock:
      * re-read the on-disk bytes, hand this instance to $mutator, and
      * publish iff the mutator changed anything. Concurrent control-plane

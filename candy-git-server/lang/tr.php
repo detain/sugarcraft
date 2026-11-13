@@ -30,10 +30,14 @@ return [
     'cli.next_step_2'          => '  2. Depo oluştur: candy-git-server repo create <ad> {path} (anonim okumaya açmak için --public ekle)',
 
     'cli.next_step_3'          => '  3. Smart HTTP ile sun: candy-git-server serve --http --repo-root {path}/repositories',
-    'cli.usage_user_root'      => 'Kullanım: candy-git-server user add|key|list|token',
+    'cli.usage_user_root'      => 'Kullanım: candy-git-server user add|key|list|token|remove|deactivate',
     'cli.usage_user_add'       => 'Kullanım: candy-git-server user add <username> [data-path] [--password <pw>|-] [--admin|--read]',
     'cli.usage_user_token' => 'Usage: candy-git-server user token <username> [ttl-seconds] [data-path] mint an HTTP proxy token signature',
-    'cli.usage_user_key'       => 'Kullanım: candy-git-server user key <username> [key-file]',
+'cli.usage_user_key'       => 'Kullanım: candy-git-server user key <username> [key-file]',    'cli.usage_user_remove' => 'Kullanım: candy-git-server user remove <username> [data-path]',
+    'cli.usage_user_deactivate' => 'Kullanım: candy-git-server user deactivate <username> [data-path]',
+    'cli.user_removed' => "'{username}' kullanıcısı {path} içinden kaldırıldı",
+    'cli.user_deactivated' => "'{username}' kullanıcısı devre dışı bırakıldı (active: {active})",
+    'cli.user_already_deactivated_note' => "'{username}' kullanıcısı zaten etkin değildi; satırın yeniden yayınlanması dışında bir şey değişmedi.",
     'cli.user_created'         => "'{username}' kullanıcısı oluşturuldu (admin: {admin})",
     // S21: least-privilege `user add` flags (finding 036).
     'cli.user_add_flags_conflict' => '--admin ve --read birbiriyle çelişir.',

@@ -30,10 +30,14 @@ return [
     'cli.next_step_2'          => '  2. Vytvořte repozitář: candy-git-server repo create <název> {path} (pro anonymní čtení přidejte --public)',
 
     'cli.next_step_3'          => '  3. Obsluhujte přes smart HTTP: candy-git-server serve --http --repo-root {path}/repositories',
-    'cli.usage_user_root'      => 'Použití: candy-git-server user add|key|list|token',
+    'cli.usage_user_root'      => 'Použití: candy-git-server user add|key|list|token|remove|deactivate',
     'cli.usage_user_add'       => 'Použití: candy-git-server user add <username> [data-path] [--password <pw>|-] [--admin|--read]',
     'cli.usage_user_token' => 'Usage: candy-git-server user token <username> [ttl-seconds] [data-path] mint an HTTP proxy token signature',
-    'cli.usage_user_key'       => 'Použití: candy-git-server user key <username> [key-file]',
+'cli.usage_user_key'       => 'Použití: candy-git-server user key <username> [key-file]',    'cli.usage_user_remove' => 'Použití: candy-git-server user remove <username> [data-path]',
+    'cli.usage_user_deactivate' => 'Použití: candy-git-server user deactivate <username> [data-path]',
+    'cli.user_removed' => "Uživatel '{username}' byl odebrán z {path}",
+    'cli.user_deactivated' => "Uživatel '{username}' byl deaktivován (active: {active})",
+    'cli.user_already_deactivated_note' => "Uživatel '{username}' již byl neaktivní; kromě opětovného zveřejnění řádku se nic nezměnilo.",
     'cli.user_created'         => "Uživatel '{username}' vytvořen (admin: {admin})",
     // S21: least-privilege `user add` flags (finding 036).
     'cli.user_add_flags_conflict' => '--admin a --read se vzájemně vylučují.',

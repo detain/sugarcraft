@@ -30,10 +30,14 @@ return [
     'cli.next_step_2'          => '  2. 创建仓库: candy-git-server repo create <名称> {path} (加 --public 公开匿名读取)',
 
     'cli.next_step_3'          => '  3. 通过 smart HTTP 服务: candy-git-server serve --http --repo-root {path}/repositories',
-    'cli.usage_user_root'      => '用法：candy-git-server user add|key|list|token',
+    'cli.usage_user_root'      => '用法：candy-git-server user add|key|list|token|remove|deactivate',
     'cli.usage_user_add'       => '用法：candy-git-server user add <username> [data-path] [--password <pw>|-] [--admin|--read]',
     'cli.usage_user_token' => 'Usage: candy-git-server user token <username> [ttl-seconds] [data-path] mint an HTTP proxy token signature',
-    'cli.usage_user_key'       => '用法：candy-git-server user key <username> [key-file]',
+'cli.usage_user_key'       => '用法：candy-git-server user key <username> [key-file]',    'cli.usage_user_remove' => '用法：candy-git-server user remove <username> [data-path]',
+    'cli.usage_user_deactivate' => '用法：candy-git-server user deactivate <username> [data-path]',
+    'cli.user_removed' => "用户 '{username}' 已从 {path} 移除",
+    'cli.user_deactivated' => "用户 '{username}' 已停用（active: {active}）",
+    'cli.user_already_deactivated_note' => "用户 '{username}' 本来就已停用；除重新发布该行外没有变化。",
     'cli.user_created'         => "用户 '{username}' 已创建（admin: {admin}）",
     // S21: least-privilege `user add` flags (finding 036).
     'cli.user_add_flags_conflict' => '--admin 与 --read 互斥，不能同时使用。',

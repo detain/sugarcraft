@@ -30,10 +30,14 @@ return [
     'cli.next_step_2'          => '  2. أنشئ مستودعًا: candy-git-server repo create <اسم> {path} (أضف --public للنشر للقراءة المجهولة)',
 
     'cli.next_step_3'          => '  3. قدّم عبر smart HTTP: candy-git-server serve --http --repo-root {path}/repositories',
-    'cli.usage_user_root'      => 'الاستخدام: candy-git-server user add|key|list|token',
+    'cli.usage_user_root'      => 'الاستخدام: candy-git-server user add|key|list|token|remove|deactivate',
     'cli.usage_user_add'       => 'الاستخدام: candy-git-server user add <username> [data-path] [--password <pw>|-] [--admin|--read]',
     'cli.usage_user_token' => 'Usage: candy-git-server user token <username> [ttl-seconds] [data-path] إنشاء توقيع رمز الوكيل HTTP',
-    'cli.usage_user_key'       => 'الاستخدام: candy-git-server user key <username> [key-file]',
+'cli.usage_user_key'       => 'الاستخدام: candy-git-server user key <username> [key-file]',    'cli.usage_user_remove' => 'الاستخدام: candy-git-server user remove <username> [data-path]',
+    'cli.usage_user_deactivate' => 'الاستخدام: candy-git-server user deactivate <username> [data-path]',
+    'cli.user_removed' => "تمت إزالة المستخدم '{username}' من {path}",
+    'cli.user_deactivated' => "تم تعطيل المستخدم '{username}' (active: {active})",
+    'cli.user_already_deactivated_note' => "كان المستخدم '{username}' غير نشط أصلًا؛ لم يتغير شيء سوى إعادة نشر الصف.",
     'cli.user_created'         => "تم إنشاء المستخدم '{username}' (admin: {admin})",
     // S21: least-privilege `user add` flags (finding 036).
     'cli.user_add_flags_conflict' => 'لا يمكن استخدام --admin و --read معًا.',

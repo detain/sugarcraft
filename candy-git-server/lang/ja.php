@@ -30,10 +30,14 @@ return [
     'cli.next_step_2'          => '  2. リポジトリ作成: candy-git-server repo create <名前> {path} (匿名読み取りで公開するには --public)',
 
     'cli.next_step_3'          => '  3. smart HTTP で配信: candy-git-server serve --http --repo-root {path}/repositories',
-    'cli.usage_user_root'      => '用法：candy-git-server user add|key|list|token',
+    'cli.usage_user_root'      => '用法：candy-git-server user add|key|list|token|remove|deactivate',
     'cli.usage_user_add'       => '用法：candy-git-server user add <username> [data-path] [--password <pw>|-] [--admin|--read]',
     'cli.usage_user_token' => 'Usage: candy-git-server user token <username> [ttl-seconds] [data-path] HTTPプロキシートークン署名を発行する',
-    'cli.usage_user_key'       => '用法：candy-git-server user key <username> [key-file]',
+'cli.usage_user_key'       => '用法：candy-git-server user key <username> [key-file]',    'cli.usage_user_remove' => '使い方: candy-git-server user remove <username> [data-path]',
+    'cli.usage_user_deactivate' => '使い方: candy-git-server user deactivate <username> [data-path]',
+    'cli.user_removed' => "ユーザー '{username}' を {path} から削除しました",
+    'cli.user_deactivated' => "ユーザー '{username}' を無効化しました (active: {active})",
+    'cli.user_already_deactivated_note' => "ユーザー '{username}' は既に無効でした。行の再公開以外に変化はありません。",
     'cli.user_created'         => "ユーザー '{username}' を作成（admin: {admin}）",
     // S21: least-privilege `user add` flags (finding 036).
     'cli.user_add_flags_conflict' => '--admin と --read は同時に指定できません。',

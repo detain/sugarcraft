@@ -35,10 +35,14 @@ return [
 
     'cli.next_step_3'          => '  3. Über smart HTTP ausliefern: candy-git-server serve --http --repo-root {path}/repositories',
     // bin/candy-git-server — user
-    'cli.usage_user_root'      => 'Nutzung: candy-git-server user add|key|list|token',
+    'cli.usage_user_root'      => 'Nutzung: candy-git-server user add|key|list|token|remove|deactivate',
     'cli.usage_user_add'       => 'Nutzung: candy-git-server user add <username> [data-path] [--password <pw>|-] [--admin|--read]',
     'cli.usage_user_token' => 'Usage: candy-git-server user token <username> [ttl-seconds] [data-path] HTTP-Proxy-Token-Signatur erzeugen',
-    'cli.usage_user_key'       => 'Nutzung: candy-git-server user key <username> [key-file]',
+'cli.usage_user_key'       => 'Nutzung: candy-git-server user key <username> [key-file]',    'cli.usage_user_remove' => 'Verwendung: candy-git-server user remove <username> [data-path]',
+    'cli.usage_user_deactivate' => 'Verwendung: candy-git-server user deactivate <username> [data-path]',
+    'cli.user_removed' => "Benutzer '{username}' aus {path} entfernt",
+    'cli.user_deactivated' => "Benutzer '{username}' deaktiviert (active: {active})",
+    'cli.user_already_deactivated_note' => "Benutzer '{username}' war bereits inaktiv; außer dem erneuten Veröffentlichen der Zeile hat sich nichts geändert.",
     'cli.user_created'         => "Benutzer '{username}' erstellt (admin: {admin})",
     // S21: least-privilege `user add` flags (finding 036).
     'cli.user_add_flags_conflict' => '--admin und --read schließen sich gegenseitig aus.',

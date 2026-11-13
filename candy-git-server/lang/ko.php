@@ -30,10 +30,14 @@ return [
     'cli.next_step_2'          => '  2. 저장소 생성: candy-git-server repo create <이름> {path} (익명 공개 읽기는 --public 추가)',
 
     'cli.next_step_3'          => '  3. smart HTTP로 서비스: candy-git-server serve --http --repo-root {path}/repositories',
-    'cli.usage_user_root'      => '사용법: candy-git-server user add|key|list|token',
+    'cli.usage_user_root'      => '사용법: candy-git-server user add|key|list|token|remove|deactivate',
     'cli.usage_user_add'       => '사용법: candy-git-server user add <username> [data-path] [--password <pw>|-] [--admin|--read]',
     'cli.usage_user_token' => 'Usage: candy-git-server user token <username> [ttl-seconds] [data-path] HTTP 프록시 토큰 서명 발급',
-    'cli.usage_user_key'       => '사용법: candy-git-server user key <username> [key-file]',
+'cli.usage_user_key'       => '사용법: candy-git-server user key <username> [key-file]',    'cli.usage_user_remove' => '사용법: candy-git-server user remove <username> [data-path]',
+    'cli.usage_user_deactivate' => '사용법: candy-git-server user deactivate <username> [data-path]',
+    'cli.user_removed' => "사용자 '{username}'을(를) {path}에서 제거했습니다",
+    'cli.user_deactivated' => "사용자 '{username}' 비활성화됨 (active: {active})",
+    'cli.user_already_deactivated_note' => "사용자 '{username}'은(는) 이미 비활성 상태였습니다. 행을 다시 게시한 것을 제외하고는 변경된 것이 없습니다.",
     'cli.user_created'         => "사용자 '{username}' 생성됨 (admin: {admin})",
     // S21: least-privilege `user add` flags (finding 036).
     'cli.user_add_flags_conflict' => '--admin 및 --read는 동시에 사용할 수 없습니다.',

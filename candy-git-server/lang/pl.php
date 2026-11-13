@@ -30,10 +30,14 @@ return [
     'cli.next_step_2'          => '  2. Utwórz repozytorium: candy-git-server repo create <nazwa> {path} (dodaj --public, aby udostępnić anonimowe odczyty)',
 
     'cli.next_step_3'          => '  3. Obsługuj przez smart HTTP: candy-git-server serve --http --repo-root {path}/repositories',
-    'cli.usage_user_root'      => 'Użycie: candy-git-server user add|key|list|token',
+    'cli.usage_user_root'      => 'Użycie: candy-git-server user add|key|list|token|remove|deactivate',
     'cli.usage_user_add'       => 'Użycie: candy-git-server user add <username> [data-path] [--password <pw>|-] [--admin|--read]',
     'cli.usage_user_token' => 'Usage: candy-git-server user token <username> [ttl-seconds] [data-path] wygeneruj podpis tokena proxy HTTP',
-    'cli.usage_user_key'       => 'Użycie: candy-git-server user key <username> [key-file]',
+'cli.usage_user_key'       => 'Użycie: candy-git-server user key <username> [key-file]',    'cli.usage_user_remove' => 'Użycie: candy-git-server user remove <username> [data-path]',
+    'cli.usage_user_deactivate' => 'Użycie: candy-git-server user deactivate <username> [data-path]',
+    'cli.user_removed' => "Użytkownik '{username}' został usunięty z {path}",
+    'cli.user_deactivated' => "Użytkownik '{username}' został dezaktywowany (active: {active})",
+    'cli.user_already_deactivated_note' => "Użytkownik '{username}' był już nieaktywny; nic się nie zmieniło poza ponownym opublikowaniem wiersza.",
     'cli.user_created'         => "Użytkownik '{username}' utworzony (admin: {admin})",
     // S21: least-privilege `user add` flags (finding 036).
     'cli.user_add_flags_conflict' => '--admin i --read wykluczają się wzajemnie.',

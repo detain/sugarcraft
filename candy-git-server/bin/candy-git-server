@@ -12,6 +12,8 @@ declare(strict_types=1);
  *   candy-git-server init                          Initialize a new data directory
  *   candy-git-server user add <username>           Add a user
  *   candy-git-server user key <username> <keyfile> Add an SSH key
+ *   candy-git-server user remove <username>        Delete an account
+ *   candy-git-server user deactivate <username>    Disable an account, keep its credentials
  *   candy-git-server repo list                     List repos
  *   candy-git-server repo create <name>            Create a repo
  *   candy-git-server help                          Show this help
@@ -500,13 +502,79 @@ function cmdUser(array $args): int
     $subargs    = \array_slice($args, 1);
 
     return match ($subcommand) {
-        'add'    => cmdUserAdd($subargs),
-        'key'    => cmdUserKey($subargs),
-        'list'   => cmdUserList($subargs),
-        'token'  => cmdUserToken($subargs),
-        'help'   => say(Lang::t('cli.usage_user_root')),
-        default  => cmdUnknown("user {$subcommand}"),
+        'add'        => cmdUserAdd($subargs),
+        'key'        => cmdUserKey($subargs),
+        'list'       => cmdUserList($subargs),
+        'token'      => cmdUserToken($subargs),
+        'remove'     => cmdUserRemove($subargs),
+        'deactivate' => cmdUserDeactivate($subargs),
+        'help'       => say(Lang::t('cli.usage_user_root')),
+        default      => cmdUnknown("user {$subcommand}"),
     };
+}
+
+/**
+ * `user remove <username> [datadir]` — delete an account outright
+ * (S23, finding 040: the deletion door the enforced isActive machinery
+ * always needed). The answer comes from inside the transaction, never
+ * a pre-check snapshot; an unknown name is an honest refusal.
+ */
+function cmdUserRemove(array $args): int
+{
+    $username = $args[0] ?? '';
+    if ($username === '' || !bin_valid_account_name($username)) {
+        return error(Lang::t('cli.usage_user_remove') . "\n");
+    }
+    $dataPath = bin_data_path($args[1] ?? null);
+
+    try {
+        $store = UserStore::forDataPath($dataPath);
+        $removed = $store->transaction(static fn (UserStore $store): bool => $store->remove($username));
+        if (!$removed) {
+            return error(Lang::t('cli.user_not_found', ['username' => $username, 'path' => $store->path()]) . "\n");
+        }
+    } catch (\RuntimeException $e) {
+        return error('candy-git-server: ' . $e->getMessage() . "\n");
+    }
+
+    echo Lang::t('cli.user_removed', ['username' => $username, 'path' => $store->path()]) . "\n";
+
+    return 0;
+}
+
+/**
+ * `user deactivate <username> [datadir]` — flip the account inactive
+ * while every credential stays intact (S23, finding 040). The echo
+ * reports the REAL persisted row: deactivating an already-inactive
+ * account says so honestly rather than pretending to revoke twice.
+ */
+function cmdUserDeactivate(array $args): int
+{
+    $username = $args[0] ?? '';
+    if ($username === '' || !bin_valid_account_name($username)) {
+        return error(Lang::t('cli.usage_user_deactivate') . "\n");
+    }
+    $dataPath = bin_data_path($args[1] ?? null);
+
+    try {
+        $store = UserStore::forDataPath($dataPath);
+        $updated = $store->transaction(static fn (UserStore $store): ?User => $store->deactivate($username));
+        if ($updated === null) {
+            return error(Lang::t('cli.user_not_found', ['username' => $username, 'path' => $store->path()]) . "\n");
+        }
+    } catch (\RuntimeException $e) {
+        return error('candy-git-server: ' . $e->getMessage() . "\n");
+    }
+
+    echo Lang::t('cli.user_deactivated', [
+        'username' => $username,
+        'active'   => $updated->isActive ? 'true' : 'false',
+    ]) . "\n";
+    if (!$updated->isActive) {
+        echo Lang::t('cli.user_already_deactivated_note', ['username' => $username]) . "\n";
+    }
+
+    return 0;
 }
 
 /**

@@ -384,4 +384,95 @@ final class UserStoreControlPlaneTest extends TestCase
             });
         });
     }
+
+    // -------------------------------------------------------------------------
+    // S23 (finding 040): the revocation door — remove + deactivate
+    // -------------------------------------------------------------------------
+
+    public function testRemoveInsideTheTransactionErasesTheRowForEveryFreshReader(): void
+    {
+        $path = $this->tmpDir . '/users.json';
+        $store = new UserStore($path);
+        $store->transaction(static fn (UserStore $s): bool => $s->add(User::new('alice')));
+
+        $stale = new UserStore($path);
+        $this->assertTrue($stale->transaction(static fn (UserStore $s): bool => $s->remove('alice')));
+
+        $fresh = new UserStore($path);
+        $this->assertNull($fresh->find('alice'), 'a committed remove must be visible to the next reader');
+        $this->assertSame([], $fresh->all());
+    }
+
+    public function testRemoveOfUnknownUserAnswersFalseAndPublishesNothing(): void
+    {
+        $path = $this->tmpDir . '/users.json';
+        $store = new UserStore($path);
+        $store->transaction(static fn (UserStore $s): bool => $s->add(User::new('bob')));
+        $bytesBefore = (string) \file_get_contents($path);
+
+        $answer = $store->transaction(static fn (UserStore $s): bool => $s->remove('ghost'));
+        $this->assertFalse($answer);
+        $this->assertSame($bytesBefore, \file_get_contents($path), 'an unpublishable no-op must not rewrite the store');
+    }
+
+    public function testDeactivateCommitsTheInactiveRowAndKeepsEveryCredential(): void
+    {
+        $path = $this->tmpDir . '/users.json';
+        $store = new UserStore($path);
+        $on = $store->transaction(static function (UserStore $s): User {
+            $u = User::new('carol')->withPasswordHash(\password_hash('pw', \PASSWORD_DEFAULT));
+            $s->put($u);
+
+            return $u;
+        });
+
+        $off = $store->transaction(static fn (UserStore $s): ?User => $s->deactivate('carol'));
+        $this->assertNotNull($off);
+        $this->assertFalse($off->isActive, 'the returned VO is the row that was committed');
+        $this->assertSame($on->passwordHash, $off->passwordHash, 'credentials survive deactivation intact');
+
+        $fresh = new UserStore($path);
+        $reread = $fresh->find('carol');
+        $this->assertNotNull($reread);
+        $this->assertFalse($reread->isActive, 'the inactive posture reached disk');
+    }
+
+    public function testUnknownUserRemoveAndDeactivateExitOneOverTheCli(): void
+    {
+        $env = ['CANDY_GIT_SERVER_DATA_PATH' => $this->tmpDir];
+        $rm = $this->runBin(['user', 'remove', 'ghost'], $env);
+        $this->assertSame(1, $rm['rc'], 'revoking a name that never existed is a refusal, not a success');
+        $this->assertStringContainsString('No such user', $rm['err']);
+        $this->assertFileDoesNotExist($this->tmpDir . '/users.json');
+
+        $off = $this->runBin(['user', 'deactivate', 'ghost'], $env);
+        $this->assertSame(1, $off['rc']);
+        $this->assertStringContainsString('No such user', $off['err']);
+    }
+
+    public function testRemoveAndDeactivateRoundTripOverTheCli(): void
+    {
+        $env = ['CANDY_GIT_SERVER_DATA_PATH' => $this->tmpDir];
+        $this->assertSame(0, $this->runBin(['user', 'add', 'alice'], $env)['rc']);
+
+        $deact = $this->runBin(['user', 'deactivate', 'alice'], $env);
+        $this->assertSame(0, $deact['rc'], $deact['err']);
+        $this->assertStringContainsString('active: false', $deact['out']);
+        $row = \json_decode((string) \file_get_contents($this->tmpDir . '/users.json'), true);
+        $this->assertFalse($row['users']['alice']['active'], 'the echo must match the persisted row');
+
+        // Second deactivate is honest about the repeat, never a false new revocation.
+        $again = $this->runBin(['user', 'deactivate', 'alice'], $env);
+        $this->assertSame(0, $again['rc']);
+        $this->assertStringContainsString('already inactive', $again['out']);
+
+        $rm = $this->runBin(['user', 'remove', 'alice'], $env);
+        $this->assertSame(0, $rm['rc'], $rm['err']);
+        $this->assertStringContainsString('removed from', $rm['out']);
+        $row = \json_decode((string) \file_get_contents($this->tmpDir . '/users.json'), true);
+        $this->assertArrayNotHasKey('alice', $row['users']);
+
+        $list = $this->runBin(['user', 'list'], $env);
+        $this->assertStringNotContainsString('alice', $list['out']);
+    }
 }

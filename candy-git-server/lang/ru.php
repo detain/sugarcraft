@@ -30,10 +30,14 @@ return [
     'cli.next_step_2'          => '  2. Создайте репозиторий: candy-git-server repo create <имя> {path} (добавьте --public для анонимного чтения)',
 
     'cli.next_step_3'          => '  3. Служите через smart HTTP: candy-git-server serve --http --repo-root {path}/repositories',
-    'cli.usage_user_root'      => 'Использование: candy-git-server user add|key|list|token',
+    'cli.usage_user_root'      => 'Использование: candy-git-server user add|key|list|token|remove|deactivate',
     'cli.usage_user_add'       => 'Использование: candy-git-server user add <username> [data-path] [--password <pw>|-] [--admin|--read]',
     'cli.usage_user_token' => 'Usage: candy-git-server user token <username> [ttl-seconds] [data-path] выпустить подпись токена HTTP-прокси',
-    'cli.usage_user_key'       => 'Использование: candy-git-server user key <username> [key-file]',
+'cli.usage_user_key'       => 'Использование: candy-git-server user key <username> [key-file]',    'cli.usage_user_remove' => 'Использование: candy-git-server user remove <username> [data-path]',
+    'cli.usage_user_deactivate' => 'Использование: candy-git-server user deactivate <username> [data-path]',
+    'cli.user_removed' => "Пользователь '{username}' удалён из {path}",
+    'cli.user_deactivated' => "Пользователь '{username}' деактивирован (active: {active})",
+    'cli.user_already_deactivated_note' => "Пользователь '{username}' уже был неактивен; ничего не изменилось, кроме повторной публикации строки.",
     'cli.user_created'         => "Пользователь '{username}' создан (admin: {admin})",
     // S21: least-privilege `user add` flags (finding 036).
     'cli.user_add_flags_conflict' => 'Флаги --admin и --read исключают друг друга.',
