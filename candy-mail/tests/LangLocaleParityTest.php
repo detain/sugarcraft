@@ -83,6 +83,43 @@ final class LangLocaleParityTest extends TestCase
     }
 
     /**
+     * The docs-fix-1023 mechanical sweep shipped corrupted CJK substitutions
+     * into the ja/ko catalogs (finding candy-mail-001): hanja look-alikes
+     * dropped into kana/hangul words (丕-for-ホ, 宍-for-有, 亖-for-せ, 浩/有-for-호/유)
+     * and simplified-Chinese bytes (认证) riding the Japanese catalog where
+     * the Japanese 認証 belongs. Enumerated per-locale denylists so a
+     * re-sweep can never silently re-poison a value — the sets are catalog
+     * local on purpose: 有/効 are legitimate in zh-cn/ja, poison in ko.
+     *
+     * @return array<string, array{0: string, 1: string}>
+     */
+    public static function cjkCorruptionProvider(): array
+    {
+        return [
+            'ja' => ['ja.php', '/[\x{4E15}\x{5B8D}\x{4E96}\x{8BA4}\x{8BC1}\x{4EAA}\x{535C}]/u'],
+            'ko' => ['ko.php', '/[\x{6D69}\x{6709}\x{6548}]/u'],
+        ];
+    }
+
+    /**
+     * @param string $file    locale file name beside lang/
+     * @param string $pattern denylist over the observed corrupt codepoints
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('cjkCorruptionProvider')]
+    public function testCjkCatalogsCarryNoCorruptedCodepoints(string $file, string $pattern): void
+    {
+        $values = require \dirname(__DIR__) . '/lang/' . $file;
+
+        foreach ($values as $key => $value) {
+            $this->assertSame(
+                0,
+                \preg_match($pattern, $value),
+                \sprintf('%s[%s] carries a corrupted codepoint from the docs-fix-1023 sweep (candy-mail-001)', $file, $key)
+            );
+        }
+    }
+
+    /**
      * @param string $file
      */
     #[\PHPUnit\Framework\Attributes\DataProvider('localeProvider')]
