@@ -97,6 +97,7 @@ final class Table
     private int $maxLines = 0;
     private ?\Closure $filterFunc = null;
     private bool $paginationWrap = false;
+    private bool $rowSeparator = false;
     private string $staticFooter = '';
 
     /** Vertical scroll offset — first visible row index in the filtered+sorted view. */
@@ -1207,6 +1208,18 @@ final class Table
     }
 
     /**
+     * Draw a horizontal rule between data rows (OG-5 / ST-71), the same rule
+     * the header uses, never after the last row. Off by default. Mirrors
+     * Evertras/bubble-table's per-row separator lines.
+     */
+    public function withRowSeparator(bool $v = true): self
+    {
+        $clone = clone $this;
+        $clone->rowSeparator = $v;
+        return $clone;
+    }
+
+    /**
      * Fixed footer text (OG-5 / ST-69) replacing the Page/Rows label. It is
      * shown whenever the footer is shown, paginated or not; '' (default)
      * restores the pagination footer. Mirrors
@@ -2256,7 +2269,8 @@ final class Table
         // empty table with a header rendered a blank box.
         $emptyRows = $rowCount === 0 ? 1 : 0;
 
-        $bufferHeight = $topBorderRows + $headerRows + $totalRowHeight + $emptyRows + $footerRows + $bottomBorderRows;
+        $separatorRows = $this->rowSeparator ? \max(0, $rowCount - 1) : 0;
+        $bufferHeight = $topBorderRows + $headerRows + $totalRowHeight + $separatorRows + $emptyRows + $footerRows + $bottomBorderRows;
         // Borderless drops the +2 left/right border columns, so the buffer is
         // exactly the content width (every line == $visibleWidth cells).
         $bufferWidth = $visibleWidth + ($this->borderless ? 0 : 2);
@@ -2301,6 +2315,10 @@ final class Table
                 // page turns (audit ST-18 — slot-parity inverted the frame
                 // on every keypress). styleFunc keeps the legacy page-slot
                 // contract untouched.
+                if ($this->rowSeparator && $ri > 0) {
+                    $canvas = $this->fillHeaderSeparatorRow($canvas, $bufferRow, $visibleWidth);
+                    $bufferRow++;
+                }
                 $absoluteIndex = $pageOffset + $ri + $scroll;
                 $isSelected = ($absoluteIndex === $this->selectedIndex) && $this->selectable;
                 if ($this->isExpandedByRow($row)) {

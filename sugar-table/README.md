@@ -940,6 +940,12 @@ Note: `Border::markdownBorder()` is a visual style only — rendered tables are 
 parseable as GitHub-flavoured markdown (the rules are full-width single-cell
 separators, not pipe rows). Do not route `view()` output into markdown renderers.
 
+### Row Separators
+
+`withRowSeparator(true)` draws the header's rule between data rows (never
+after the last one); it works bordered and borderless, with multiline rows,
+and the rule lines count in `renderedLineCount()`.
+
 ## Cell Padding Control
 
 Add inner spacing inside each cell for better visual breathing room:
@@ -1184,6 +1190,7 @@ in this README is still documented — this table is the completeness floor.
 | `withShowHeader(bool $v): self` | — |
 | `withShowFooter(bool $v): self` | — |
 | `withFooterType(FooterType $type): self` | Set the footer display type. |
+| `withRowSeparator(bool $v = true): self` | Rule between data rows |
 | `withStaticFooter(string $text): self` | Fixed footer text replacing the Page/Rows label |
 | `withPaginationWrap(bool $v = true): self` | Cycle cursor/pages instead of clamping |
 | `withFilterFunc(?callable $fn): self` | Host predicate replacing the global-search substring match |
