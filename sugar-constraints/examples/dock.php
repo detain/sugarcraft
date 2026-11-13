@@ -21,8 +21,6 @@ $dock = DockLayout::new('chat')                 // center id; empty sides, 1/3 c
     ->withSlotAdded(Side::Right, 'term')
     ->withStackWeight(Side::Left, 0, 2, 1);     // files takes twice the rows of git
 
-$geometry = $dock->resolve(Region::fromSize(100, 30));
-
 $dump = static function (string $label, Region $frame) use ($dock): void {
     $geometry = $dock->resolve($frame);
     echo "{$label}\n";
