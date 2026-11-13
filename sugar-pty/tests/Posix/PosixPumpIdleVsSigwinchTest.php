@@ -222,4 +222,37 @@ final class PosixPumpIdleVsSigwinchTest extends TestCase
             $pair->master()->close();
         }
     }
+
+    /**
+     * PTY-45: the structural claim — PosixPump arms NO event-loop
+     * timers — belongs to a census, not to a wall-clock envelope
+     * (documented flake envelope on saturated shards, the lesson the
+     * signal-sibling suites learned). PosixPump wakes on
+     * stream_select only: no loop handle, no timer API anywhere in
+     * its body, and no object state at all on an instance. This pin
+     * is deterministic and runs without a PTY.
+     */
+    public function testPosixPumpArmsNoTimersByCensusNotWallClock(): void
+    {
+        $this->requireFfiOnlyCapability();
+
+        $file = (new \ReflectionClass(PosixPump::class))->getFileName();
+        $source = (string) \file_get_contents((string) $file);
+        foreach (['addTimer', 'addPeriodicTimer', 'Loop::get', 'LoopInterface'] as $forbidden) {
+            $this->assertStringNotContainsString(
+                $forbidden,
+                $source,
+                "PosixPump must stay loop-free — {$forbidden} appeared in its body (stream_select is the only wake source)",
+            );
+        }
+
+        $pump = new PosixPump();
+        foreach ((new \ReflectionObject($pump))->getProperties() as $property) {
+            $property->setAccessible(true);
+            $this->assertIsString(
+                $property->getValue($pump),
+                \sprintf('PosixPump property $%s must stay scalar; a loop or timer handle there would arm wall-clock waits', $property->getName()),
+            );
+        }
+    }
 }
