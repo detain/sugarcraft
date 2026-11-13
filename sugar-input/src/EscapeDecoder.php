@@ -18,14 +18,14 @@ use SugarCraft\Input\Event\TerminalReplyEvent;
  * decoders never share buffers.
  *
  * Supported sequences:
- *  - Plain ASCII + control codes (Backspace, Tab, Enter, Esc, Ctrl+letter)
+ *  - Plain ASCII + control codes (Backspace, Tab, Enter, Escape, Ctrl+letter)
  *  - Legacy CSI sequences (arrows, F1-F12, Home/End/PgUp/PgDn, Insert, Delete,
  *    Backtab CSI Z)
  *  - Kitty keyboard protocol events (CSI code ; mods u — no private prefix)
  *  - xterm modifyOtherKeys reports (CSI 27 ; mods ; keysym ~)
  *  - Mouse: SGR 1006 / 1016 (CSI < b ; x ; y M|m), urxvt 1015
  *    (CSI b ; x ; y M), and X10 (CSI M b x y)
- *  - SS3 keys incl. application-keypad mode (ESC O p..y, l, m, M — DECKPAM)
+ *  - SS3 keys including application-keypad mode (ESC O p..y, l, m, M — DECKPAM)
  *  - Focus events (CSI I / CSI O)
  *  - Bracketed paste (CSI 200 ~ ... CSI 201 ~)
  *  - Unsolicited terminal REPLIES (DA1/DA2, DSR/CPR, XTWINOPS, Kitty flags,
@@ -204,7 +204,7 @@ final class EscapeDecoder
     }
 
     /**
-     * Decode a byte buffer into 0+ Events.
+     * Decode a byte buffer into zero or more Events.
      *
      * Incomplete sequences are buffered and decoded on the next call
      * when more bytes arrive. Use remainder() to get unconsumed bytes.
@@ -302,7 +302,7 @@ final class EscapeDecoder
      *
      * Walks a fixed $stream with an integer offset $i rather than repeatedly
      * `substr()`-ing off the front. The common printable/control/DEL/UTF-8
-     * cases advance $i in place — so a 160KB printable paste is O(n), not the
+     * cases advance $i in place — so a 160 KiB printable paste is O(n), not the
      * O(n²) that byte-by-byte substr slicing produced. The escape sub-handlers
      * still take/return strings unchanged, so we pay exactly one substr per
      * escape sequence (not per byte).
@@ -574,14 +574,14 @@ final class EscapeDecoder
      * Buffer an incomplete trailing sequence for the next decode() call,
      * bounding $remainder so a never-terminating sequence cannot grow it
      * without limit (a DoS vector — see MAX_SEQUENCE_LENGTH). Oversized tails
-     * park no bytes but keep the sequence OPEN in the discard state (see
+     * retain no bytes but keep the sequence OPEN in the discard state (see
      * consumeOverflowedSequence()); whatever events were already decoded are
      * still returned.
      */
     private function bufferRemainder(string $tail): void
     {
         if (strlen($tail) > self::MAX_SEQUENCE_LENGTH) {
-            // Cap hit: park nothing — but the sequence is STILL open. Its
+            // Cap hit: retain nothing — but the sequence is STILL open. Its
             // continuation bytes are parameter traffic, not keystrokes, so
             // record the drop once and swallow forward until the final byte
             // (C2a: wiping the buffer and carrying on let the leftover bytes
@@ -1036,9 +1036,8 @@ final class EscapeDecoder
      *
      * Real Kitty frames carry NO private-mode "?" prefix — `CSI ? … u` is the
      * keyboard-flags QUERY/REPLY family and is drained as a TerminalReplyEvent
-     * instead (see classifyPrivateReply). The old decoder had this inverted:
-     * it parsed keys only behind "?" (so "\x1b[97;5u" produced nothing) and
-     * mis-executed parameter consumption on "?" frames.
+     * instead (see classifyPrivateReply). The two shapes are mutually
+     * exclusive by dispatch: a "?" frame is never key traffic.
      *
      * Release is recognized both in the legacy encoding (modifiers OR 0x20) and
      * in the spec encoding (event-type sub-parameter 3; 1=press, 2=repeat).
@@ -1087,7 +1086,7 @@ final class EscapeDecoder
         // The wire modifier field is 1 + the actual bitmask (a bare press is
         // "1", not "0") — de-base before interpreting any bit. When an explicit
         // event-type sub-param is present, release is event-type 3 and the full
-        // spec mask (incl. bit 5 = Meta) maps to modifiers; in the legacy form
+        // spec mask (including bit 5 = Meta) maps to modifiers; in the legacy form
         // the 0x20 bit doubles as the release flag and cannot carry Meta.
         $mask = max(0, $modRaw - 1);
         if ($eventType !== 0) {
@@ -1129,7 +1128,7 @@ final class EscapeDecoder
         }
 
         // A stray paste-END marker outside a paste is terminal noise: consume it
-        // (counted as a drop) rather than parking it in the remainder forever.
+        // (counted as a drop) rather than retaining it in the remainder forever.
         // A full paste-START never reaches here — decode()'s sentinel scan owns
         // it — and a partial marker is held back by splitCsi()'s incomplete path.
         if ($this->options->enablePaste && str_starts_with($csi, '201~')) {
@@ -1432,7 +1431,8 @@ final class EscapeDecoder
      * grammar boundary by splitCsi(), so no '<' and a guaranteed trailing 'M').
      *
      * Only the exact three-decimal-parameter shape is a mouse report; anything
-     * else ending in 'M' (e.g. SU "CSI Ps M", one parameter) falls through to the
+     * else ending in 'M' (e.g. DECprivate SU scroll-up, "CSI Ps M", one
+     * parameter) falls through to the
      * generic unknown-CSI drop.
      *
      * @param string $seq  Complete CSI body ending in 'M'
@@ -1510,7 +1510,7 @@ final class EscapeDecoder
         $this->pasteBuffer = '';
         $this->inPaste = false;
 
-        // Hand the post-paste tail back to decode()'s loop rather than parking
+        // Hand the post-paste tail back to decode()'s loop rather than retaining
         // it in $remainder: a long tail (bytes that legitimately follow the end
         // marker in the same read) stays bounded by the sequence cap applied to
         // its incomplete suffix.
@@ -1566,7 +1566,7 @@ final class EscapeDecoder
      * shape the README threat model names. The paste stays open and discards
      * body bytes until the genuine end marker arrives; reset() is the
      * recovery lever if a forged paste never sends one. A held-back partial
-     * end marker parked in $remainder by the callers survives untouched —
+     * end marker retained in $remainder by the callers survives untouched —
      * wiping it would turn the marker split across the overflow boundary
      * into literal keys.
      *
@@ -2319,7 +2319,7 @@ final class EscapeDecoder
 
     /**
      * Clear the partial-sequence buffer, paste/string state, overflow-discard
-     * states, and reply counters. This is the operator's recovery lever for a
+     * states, and reply counters. This is the host's recovery lever for a
      * forged paste whose 201~ terminator never arrives (the decoder otherwise
      * keeps discarding, by design, so no attacker byte can become a key).
      */
