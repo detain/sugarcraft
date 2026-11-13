@@ -154,12 +154,32 @@ final class TruncateTest extends TestCase
     // ANSI escape codes stripped from width calculation
     // ═══════════════════════════════════════════════════════════════
 
-    public function testTruncateStripsAnsiForWidthCalculation(): void
+    public function testTruncateFittingStyledTextReturnsBytesUnchanged(): void
     {
+        // 139: the old fits path destroyed styles even though nothing was
+        // cut. The fixed contract: a fitting string comes back
+        // byte-identical, escape sequences and all.
         $ansi = "\x1b[31mred\x1b[0m";
-        $result = Truncate::truncate($ansi . 'text', 10);
-        // Width of "redtext" is 7, which fits in 10, so no truncation
+        $this->assertSame(
+            $ansi . 'text',
+            Truncate::truncate($ansi . 'text', 10),
+        );
+    }
+
+    public function testTruncateStillStripsInsideTheCut(): void
+    {
+        // The cut path keeps the documented strip-behavior (kept remainder
+        // is escape-free until the style-preserving canonical lands).
+        $result = Truncate::truncate("\x1b[31mred\x1b[0mtext", 5);
         $this->assertStringNotContainsString("\x1b", $result);
+        $this->assertStringEndsWith('…', $result);
+    }
+
+    public function testTruncateRightFittingStyledTextKeepsStyles(): void
+    {
+        $ansi = "\x1b[32mok\x1b[0m";
+        $result = Truncate::truncateRight($ansi, 10);
+        $this->assertStringContainsString("\x1b[32m", $result);
     }
 
     public function testTruncatePreservesContentAfterAnsiStripped(): void

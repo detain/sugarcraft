@@ -11,8 +11,14 @@ use SugarCraft\Core\Util\Width;
  * Truncation helper with ANSI awareness.
  *
  * Extracts truncation logic from Layout, StackedGrid, and Boxer
- * to provide a single, consistent truncation function that
- * correctly handles ANSI escape codes.
+ * to provide a single, consistent truncation function.
+ *
+ * ANSI contract: a string that FITS the budget comes back byte-identical
+ * (styles are never destroyed by a no-op truncation); a string that must be
+ * cut has its escape sequences stripped from the kept remainder, because the
+ * cell-counting walk is codepoint-based and re-splicing mid-SGR is not safe
+ * until callers move to the style-preserving `Core\Util\Width::truncateAnsi`
+ * canonical (sugar-dashboard-018's consolidation seat).
  */
 final class Truncate
 {
@@ -35,8 +41,10 @@ final class Truncate
 
         $textWidth = Width::string($text);
         if ($textWidth <= $width) {
-            // Strip ANSI from the output for consistency (width was measured on clean text)
-            return Ansi::strip($text);
+            // Fits: return the input byte-identical. Stripping here (the
+            // old behavior) silently destroyed styles through the
+            // canonical helper even though nothing was truncated.
+            return $text;
         }
 
         // Account for ellipsis width
@@ -103,7 +111,9 @@ final class Truncate
         if ($textWidth <= $width) {
             $padding = max(0, $width - $textWidth);
 
-            return str_repeat($fill, $padding) . Ansi::strip($text);
+            // Fits: pad the ORIGINAL bytes (139's strip-on-fits destroyed
+            // styles even when nothing was cut).
+            return str_repeat($fill, $padding) . $text;
         }
 
         // Truncate from the left: keep rightmost chars that fit, prepend ellipsis.
