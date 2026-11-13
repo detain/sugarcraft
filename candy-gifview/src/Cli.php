@@ -223,6 +223,13 @@ final class Cli
                 continue;
             }
 
+            // A lone `-` is the conventional stdin spelling, but this viewer
+            // has no stdin intake at all — it only ever opens a named file
+            // (an unbounded stream would also slip past the size gate) — so
+            // the dash-only token keeps its exemption here: it is treated as
+            // an ordinary path and fails at the engine with the honest
+            // could-not-play line (gifview-019 pins it).
+            //
             // Any other dash-prefixed token (-fps=10, -x) is not a short form
             // this front end speaks: refuse it as an unknown option rather
             // than silently feeding it to the positional ladder as a path.

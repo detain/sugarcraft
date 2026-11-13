@@ -179,6 +179,27 @@ final class CliTest extends TestCase
         $this->assertStringContainsString('unknown option --fps', self::drain($stderr));
     }
 
+    /**
+     * The lone `-` (stdin convention) is not special to this front end —
+     * it keeps its exemption from the dash-refusal hatch, rides the
+     * positional arm, and must be reported as the unopenable path it is
+     * (gifview-019).
+     */
+    public function testTheLoneDashIsRefusedAsAPathNotSwallowed(): void
+    {
+        [$stdout, $stderr] = self::pipes();
+
+        $exit = Cli::main(['candy-gifview', '-'], $stdout, $stderr);
+
+        $this->assertSame(1, $exit);
+        $err = self::drain($stderr);
+        $this->assertStringContainsString("could not play '-'", $err,
+            'the dash rides the positional arm and fails honestly as a path');
+        $this->assertStringNotContainsString('unknown option', $err,
+            'the dash-only token never enters the flag-refusal hatch');
+        $this->assertSame('', self::drain($stdout));
+    }
+
     public function testMissingFileIsWrappedInTheAppCannotPlayLine(): void
     {
         [$stdout, $stderr] = self::pipes();
