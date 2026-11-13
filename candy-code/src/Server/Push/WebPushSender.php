@@ -99,6 +99,14 @@ final class WebPushSender
     /** @var (callable(string): bool)|null */
     private $isBlockedAddress;
 
+    /** How long a vetted host->address answer is reused, seconds. */
+    public const DIAL_CACHE_SECONDS = 300;
+
+    /** @var array<string, array{0: string, 1: float}> host => [dial literal, expiry] */
+    private array $dialCache = [];
+
+    private ?\React\Dns\Resolver\ResolverInterface $dns = null;
+
     private function __construct(
         private readonly VapidKeys $keys,
         private readonly PushPayloadCipher $cipher,
@@ -175,12 +183,82 @@ final class WebPushSender
             ])));
         }
 
-        [$refusal, $dial] = PublicUrlGuard::guardedDialAddress(
-            $subscription->host(),
-            false,
-            $this->resolveAddresses,
-            $this->isBlockedAddress,
+        return $this->vettedDial($subscription->host())->then(
+            fn (array $vetted): \React\Promise\PromiseInterface => $this->post($subscription, $plaintext, $ttlSeconds, $vetted),
         );
+    }
+
+    /**
+     * Resolve + vet the host WITHOUT blocking the loop. The production
+     * resolver is react/dns (UDP on the loop), never the blocking libc lookup — a
+     * slow resolver would otherwise stall every connection's frames for the
+     * whole notify fan-out. A vetted answer is remembered for
+     * {@see DIAL_CACHE_SECONDS}, so a fan-out to many subscriptions on one
+     * push service resolves once; refusals are never cached.
+     *
+     * @return \React\Promise\PromiseInterface<array{0: ?string, 1: ?string}>
+     */
+    private function vettedDial(string $host): \React\Promise\PromiseInterface
+    {
+        $now = microtime(true);
+        $cached = $this->dialCache[$host] ?? null;
+        if ($cached !== null && $cached[1] > $now) {
+            return \React\Promise\resolve([null, $cached[0]]);
+        }
+
+        $vet = function (array $addresses) use ($host, $now): array {
+            $result = PublicUrlGuard::guardedDialAddress(
+                $host,
+                false,
+                static fn (string $h): array => $addresses,
+                $this->isBlockedAddress,
+            );
+            if ($result[0] === null && $result[1] !== null) {
+                $this->dialCache[$host] = [$result[1], $now + self::DIAL_CACHE_SECONDS];
+            }
+
+            return $result;
+        };
+
+        if ($this->resolveAddresses !== null) {
+            return \React\Promise\resolve($vet(($this->resolveAddresses)($host)));
+        }
+
+        return $this->resolveAsync($host)->then($vet);
+    }
+
+    /** @return \React\Promise\PromiseInterface<list<string>> */
+    private function resolveAsync(string $host): \React\Promise\PromiseInterface
+    {
+        if (filter_var($host, FILTER_VALIDATE_IP) !== false) {
+            return \React\Promise\resolve([$host]);
+        }
+        try {
+            $this->dns ??= (new \React\Dns\Resolver\Factory())->createCached(
+                \React\Dns\Config\Config::loadSystemConfigBlocking(),
+            );
+            $resolver = $this->dns;
+        } catch (\Throwable) {
+            return \React\Promise\resolve([]);
+        }
+        $one = static fn (int $type) => $resolver->resolveAll($host, $type)->then(
+            static fn (array $ips): array => array_values(array_map('strval', $ips)),
+            static fn (): array => [],
+        );
+
+        return \React\Promise\all([
+            $one(\React\Dns\Model\Message::TYPE_A),
+            $one(\React\Dns\Model\Message::TYPE_AAAA),
+        ])->then(static fn (array $sets): array => array_merge(...$sets));
+    }
+
+    /**
+     * @param array{0: ?string, 1: ?string} $vetted
+     * @return \React\Promise\PromiseInterface<int>
+     */
+    private function post(PushSubscription $subscription, string $plaintext, int $ttlSeconds, array $vetted): \React\Promise\PromiseInterface
+    {
+        [$refusal, $dial] = $vetted;
         if ($refusal !== null || $dial === null) {
             return \React\Promise\reject(new \RuntimeException(Lang::t('serve.push.endpoint_blocked', [
                 'host' => $subscription->host(),

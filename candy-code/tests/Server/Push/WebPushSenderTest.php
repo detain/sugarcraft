@@ -190,6 +190,53 @@ final class WebPushSenderTest extends TestCase
         self::assertSame([], $this->allDialledUrls());
     }
 
+    public function testAVettedHostIsResolvedOnceAcrossAFanOut(): void
+    {
+        $lookups = 0;
+        $sender = $this->buildSender(
+            static function () use (&$lookups): array {
+                $lookups++;
+
+                return [self::DIAL_ADDRESS];
+            },
+            static fn(): PromiseInterface => \React\Promise\resolve(new Response(201, [], ''))
+        );
+
+        foreach ([1, 2, 3] as $_) {
+            [$status, $error] = $this->settlePromise($sender->send($this->mozillaSubscription(), 'hi'));
+            self::assertNull($error);
+            self::assertSame(201, $status);
+        }
+
+        self::assertSame(1, $lookups, 'the validated host is cached, so fan-out never re-resolves');
+    }
+
+    public function testARefusalIsNeverCached(): void
+    {
+        $lookups = 0;
+        $sender = $this->buildSender(
+            static function () use (&$lookups): array {
+                $lookups++;
+
+                return ['127.0.0.1'];
+            },
+            static fn(): PromiseInterface => \React\Promise\resolve(new Response(201, [], ''))
+        );
+
+        $this->settlePromise($sender->send($this->mozillaSubscription(), 'a'));
+        $this->settlePromise($sender->send($this->mozillaSubscription(), 'b'));
+
+        self::assertSame(2, $lookups);
+    }
+
+    public function testTheSenderNeverCallsTheBlockingSystemResolver(): void
+    {
+        $src = (string) file_get_contents(dirname(__DIR__, 3) . '/src/Server/Push/WebPushSender.php');
+
+        self::assertStringNotContainsString('resolveViaSystemDns', $src);
+        self::assertStringNotContainsString('dns_get_record', $src);
+    }
+
     public function testGoneStatusesComeBackAsDataAndMarkTheSubscriptionGone(): void
     {
         foreach ([404, 410] as $status) {
