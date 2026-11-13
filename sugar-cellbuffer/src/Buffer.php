@@ -26,6 +26,34 @@ final class Buffer implements \JsonSerializable
     use WidePairPlacement;
 
     /**
+     * Per-row structural digests (CB-17 unchanged-row prefilter), computed
+     * LAZILY on first diff touch and pruned on write. Never rides the wire:
+     * __serialize omits it and __unserialize restores an empty memo, so the
+     * fingerprint is a pure in-process accelerator that cannot desync a
+     * reconstituted frame.
+     *
+     * @var array<int, string>
+     */
+    private array $rowKeys = [];
+
+    /**
+     * Test-visible kill switch for the diff() row prefilter (CB-17
+     * acceptance: the equivalence pin runs diff twice over the same grids
+     * and compares the op streams). Production default is ON.
+     */
+    private static bool $rowPrefilter = true;
+
+    public static function setRowPrefilterEnabled(bool $on): void
+    {
+        self::$rowPrefilter = $on;
+    }
+
+    public static function rowPrefilterEnabled(): bool
+    {
+        return self::$rowPrefilter;
+    }
+
+    /**
      * @param list<Cell> $grid Flat grid: index = $row * $width + $col
      */
     private function __construct(
@@ -391,7 +419,7 @@ final class Buffer implements \JsonSerializable
         $grid = $this->grid;
         $this->placeWithPair($grid, $col, $row, $cell);
 
-        return $this->mutate(['grid' => $grid]);
+        return $this->mutate(['grid' => $grid], [$row]); // placeWithPair never crosses a row (idx-1..idx+2 are column-bounded)
     }
 
     /**
@@ -441,7 +469,7 @@ final class Buffer implements \JsonSerializable
             }
         }
 
-        return $this->mutate(['grid' => $grid]);
+        return $this->mutate(['grid' => $grid], $clip === null ? [] : range($clip->origin()->row(), $clip->bottom()));
     }
 
     /**
@@ -476,7 +504,7 @@ final class Buffer implements \JsonSerializable
             }
         }
 
-        return $this->mutate(['grid' => $grid]);
+        return $this->mutate(['grid' => $grid], $clip === null ? [] : range($clip->origin()->row(), $clip->bottom()));
     }
 
     /**
@@ -556,6 +584,39 @@ final class Buffer implements \JsonSerializable
     // ─── Diff ───────────────────────────────────────────────────────────
 
     /**
+     * Lossless structural digest of one row (rune + width + all seven
+     * Style fields + url/id of the link, length-prefixed so no cell content
+     * can forge a delimiter collision). Equal digests PROVE every cell
+     * pair-wise equals() holds; unequal digests fall through to the exact
+     * walk, so the prefilter can only ever remove work, never ops.
+     */
+    private function rowKey(int $row): string
+    {
+        if (!isset($this->rowKeys[$row])) {
+            $base = $row * $this->width;
+            $parts = [];
+            for ($i = 0; $i < $this->width; $i++) {
+                $cell = $this->grid[$base + $i];
+                $rune = $cell->rune();
+                $style = $cell->style();
+                $link = $cell->link();
+                $parts[] = strlen($rune) . ':' . $rune . "\x1e" . $cell->width() . "\x1e"
+                    . ($style === null ? 'n' : implode(':', [
+                        var_export($style->fg(), true), var_export($style->bg(), true),
+                        $style->attrs(), var_export($style->fgSlot(), true),
+                        var_export($style->bgSlot(), true), var_export($style->ul(), true),
+                        var_export($style->ulSlot(), true),
+                    ])) . "\x1e"
+                    . ($link === null ? 'n' : strlen($link->url()) . ':' . $link->url()
+                        . "\x1d" . strlen($link->id()) . ':' . $link->id());
+            }
+            $this->rowKeys[$row] = implode("\x1f", $parts);
+        }
+
+        return $this->rowKeys[$row];
+    }
+
+    /**
      * Compare this buffer against $previous and return the list of
      * operations needed to transform $previous into this buffer.
      *
@@ -588,12 +649,19 @@ final class Buffer implements \JsonSerializable
         $pendingLink = null; // tracked by VALUE (url+id), not object identity
 
         for ($row = 0; $row < $this->height; $row++) {
+            // CB-17: a row whose lossless digest matches is fully equals()
+            // on every cell, and the walk's pending state only mutates on
+            // DIFFERING cells — skipping changes nothing about the op stream.
+            if (self::$rowPrefilter && $previous->rowKey($row) === $this->rowKey($row)) {
+                continue;
+            }
+
             for ($col = 0; $col < $this->width; $col++) {
                 $prevCell = $previous->grid[$row * $this->width + $col];
                 $currCell = $this->grid[$row * $this->width + $col];
 
                 // Skip continuation cells (wide-char padding).
-                if ($currCell->width === 0) {
+                if ($currCell->width() === 0) {
                     continue;
                 }
 
@@ -643,7 +711,7 @@ final class Buffer implements \JsonSerializable
 
                 while ($nextCol < $this->width) {
                     $nextCell = $this->grid[$row * $this->width + $nextCol];
-                    if ($nextCell->width === 0) {
+                    if ($nextCell->width() === 0) {
                         $nextCol++;
                         continue;
                     }
@@ -961,12 +1029,22 @@ final class Buffer implements \JsonSerializable
     /**
      * @return static
      */
-    private function mutate(array $changes): static
+    private function mutate(array $changes, ?array $touchedRows = null): static
     {
-        return new static(...array_merge(
+        $next = new static(...array_merge(
             ['width' => $this->width, 'height' => $this->height, 'grid' => $this->grid],
             $changes,
         ));
+
+        // null touchedRows conservatively drops the whole digest memo (any
+        // sweep may span rows); a list keeps every UNTOUCHED row's cached
+        // key — the steady-state single-cell frame keeps a full-screen
+        // warm memo, which is what makes the CB-17 prefilter O(rows).
+        $next->rowKeys = $touchedRows === null
+            ? []
+            : array_diff_key($this->rowKeys, array_fill_keys($touchedRows, true));
+
+        return $next;
     }
 
     /**
