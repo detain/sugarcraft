@@ -464,4 +464,82 @@ final class TableColumnWidthTest extends TestCase
         $this->assertSame(41, $this->computeTotalWidthOf($hidden));
         $this->assertGreaterThan(41, $visible);
     }
+
+    /**
+     * Audit ST-16 direction one: pinned BELOW the declared solve, visible
+     * columns scale proportionally into the frame — the two-Fixed-30 pin that
+     * used to erase both cells into a blank void now keeps each column a slot
+     * and clips its content through the announcing '…' path.
+     */
+    public function testUnderPinScalesProportionallyAndAnnounces(): void
+    {
+        $t = Table::fromColumns([
+            Column::new('a', 'AAAA', 30),
+            Column::new('b', 'BBBB', 30),
+        ])
+            ->withRows([Row::new(RowData::from(['a' => 'hello world', 'b' => 'goodnight moon']))])
+            ->withWidth(12);
+
+        $widths = $t->computeColumnWidths(12);
+        $this->assertSame(11, \array_sum($widths), 'scaled columns plus the border fill the pinned frame exactly');
+        $this->assertGreaterThanOrEqual(5, $widths[0]);
+        $this->assertGreaterThanOrEqual(5, $widths[1]);
+
+        $view = \preg_replace('/\x1b\[[0-9;]*m/', '', $t->View());
+        $this->assertStringContainsString('hello…', $view, 'clipped content must announce with an ellipsis');
+        $this->assertStringContainsString('good…', $view);
+    }
+
+    /**
+     * Audit ST-16 direction two: pinning ABOVE the natural width of a table
+     * where nothing can grow must throw loudly, never quietly render narrower
+     * than the frame the caller asked for.
+     */
+    public function testOverPinWithoutGrowableColumnThrows(): void
+    {
+        $t = Table::fromColumns([
+            Column::new('a', 'AAAA', 10),
+            Column::new('b', 'BBBB', 10),
+        ])
+            ->withRows([Row::new(RowData::from(['a' => 'x', 'b' => 'y']))])
+            ->withWidth(80);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('cannot be honoured');
+        $t->View();
+    }
+
+    /** The over-pin arm leaves the established last-Flex slack law untouched. */
+    public function testOverPinWithFlexStillAbsorbsViaSlack(): void
+    {
+        $t = Table::fromColumns([
+            Column::new('a', 'AAAA', 10),
+            Column::new('b', 'BBBB', 0)->withColumnWidth(ColumnWidth::Flex),
+        ])
+            ->withRows([Row::new(RowData::from(['a' => 'x', 'b' => 'y']))])
+            ->withWidth(40);
+
+        $widths = $t->computeColumnWidths(40);
+        $this->assertSame(39, \array_sum($widths), 'the last Flex column still swallows the rounding slack');
+        $this->assertSame(29, $widths[1]);
+    }
+
+    /**
+     * A pin above percent-floor distributes its remainder across the visible
+     * Percent columns (round-robin cells): the frame stays exact without the
+     * throw arm firing, since those columns CAN grow.
+     */
+    public function testOverPinPercentColumnsDistributeRemainder(): void
+    {
+        $t = Table::fromColumns([
+            Column::new('a', 'AAAA', 10)->withColumnWidth(ColumnWidth::Percent, 49.0),
+            Column::new('b', 'BBBB', 10)->withColumnWidth(ColumnWidth::Percent, 49.0),
+        ])
+            ->withRows([Row::new(RowData::from(['a' => 'x', 'b' => 'y']))])
+            ->withWidth(22);
+
+        $widths = $t->computeColumnWidths(22);
+        $this->assertSame(21, \array_sum($widths), 'percent columns absorb the rounding remainder');
+        $this->assertSame([11, 10], $widths);
+    }
 }

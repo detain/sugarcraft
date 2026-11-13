@@ -667,6 +667,12 @@ final class Table
      * left after Fixed/Percent columns and the inter-column gaps, so every line
      * renders to exactly $cols cells. 0 restores the natural (column-derived)
      * width.
+     *
+     * A pin is honoured in both directions (audit ST-16): pinning BELOW the
+     * declared solve scales the visible columns down proportionally (content
+     * then clips with a visible '…' instead of vanishing off-canvas), and
+     * pinning ABOVE it with no Flex or Percent column to absorb the surplus
+     * throws — a width that cannot be honoured is announced, never erased.
      */
     public function withWidth(int $cols): self
     {
@@ -1597,24 +1603,71 @@ final class Table
             }
         }
 
-        // With a pinned width, give the last Flex column the integer-rounding
-        // slack so the columns + inter-column gaps sum to EXACTLY $tableWidth
-        // (and a selected row's reverse highlight reaches the right edge).
+        // A pinned width must announce in both wrong directions, never erase
+        // (audit ST-16): under-pin scales every visible column down into the
+        // frame proportionally — content clips through the announcing
+        // clipToWidth '…' path instead of being shoved off-canvas into a
+        // blank; over-pin hands the remainder to the last Flex column (the
+        // integer-rounding slack that makes a selection highlight reach the
+        // right edge), or distributes it across visible Percent columns, and
+        // when nothing can grow the solve throws instead of quietly
+        // rendering narrower than the caller asked for.
         if ($this->targetWidth > 0) {
+            $used = $borderCount;  // inter-column gaps BETWEEN VISIBLE COLUMNS
             $lastFlex = null;
+            $visiblePercent = [];
             foreach ($this->columns as $i => $col) {
-                if ($col->columnWidth === ColumnWidth::Flex && !isset($hiddenLookup[$i])) {
+                if (isset($hiddenLookup[$i])) {
+                    continue;
+                }
+                $used += $widths[$i];
+                if ($col->columnWidth === ColumnWidth::Flex) {
                     $lastFlex = $i;
+                } elseif ($col->columnWidth === ColumnWidth::Percent) {
+                    $visiblePercent[] = $i;
                 }
             }
-            if ($lastFlex !== null) {
-                $used = $borderCount;  // inter-column gaps BETWEEN VISIBLE COLUMNS
+            if ($used > $tableWidth) {
+                $budget = \max(0, $tableWidth - $borderCount);
+                $declared = $used - $borderCount;
+                $fractions = [];
+                $assigned = 0;
                 foreach ($this->columns as $i => $col) {
-                    if (!isset($hiddenLookup[$i])) {
-                        $used += $widths[$i];
+                    if (isset($hiddenLookup[$i])) {
+                        continue;
                     }
+                    $exact = $widths[$i] * $budget / $declared;
+                    $floor = (int) \floor($exact);
+                    $widths[$i] = $floor;
+                    $assigned += $floor;
+                    $fractions[$i] = $exact - $floor;
                 }
-                $widths[$lastFlex] = \max(0, $widths[$lastFlex] + ($tableWidth - $used));
+                \arsort($fractions);
+                $leftover = $budget - $assigned;
+                foreach (\array_keys($fractions) as $i) {
+                    if ($leftover <= 0) {
+                        break;
+                    }
+                    $widths[$i]++;
+                    $leftover--;
+                }
+            } elseif ($used < $tableWidth) {
+                $extra = $tableWidth - $used;
+                if ($lastFlex !== null) {
+                    $widths[$lastFlex] += $extra;
+                } elseif ($visiblePercent !== []) {
+                    $n = \count($visiblePercent);
+                    $base = \intdiv($extra, $n);
+                    $rem = $extra % $n;
+                    foreach ($visiblePercent as $k => $i) {
+                        $widths[$i] += $base + ($k < $rem ? 1 : 0);
+                    }
+                } else {
+                    throw new \RuntimeException(
+                        "Pinned width {$tableWidth} cannot be honoured: no Flex or Percent column can grow"
+                        . " (visible columns and gaps total {$used} cells)"
+                    );
+                }
             }
         }
 
