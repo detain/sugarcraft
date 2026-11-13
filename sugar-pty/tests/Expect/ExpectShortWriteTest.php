@@ -15,11 +15,11 @@ use SugarCraft\Pty\Expect;
  * expectEof()'s retained before-buffer, the builder carries for
  * maxBuffer/searchWindow/recorder, and expectEof() success semantics.
  *
- * The partial-write flush loop is NOT covered here despite the file name:
- * FixtureMaster::write() below accepts every byte it is handed, so any
- * short-write story told in this file would be fiction. That loop's home
- * is ExpectSendRetryTest, whose busyMaster fixture would-blocks and
- * accepts one chunk at a time.
+ * The partial-write flush loop lives here (PTY-44): the pin below
+ * drives a master that accepts only a few bytes per write() and proves
+ * send() advances through the payload in order. ExpectSendRetryTest
+ * keeps the distinct timing legs — would-block (0) absorption, stall
+ * windows restarting on progress, and the never-accepting budget fail.
  */
 final class ExpectShortWriteTest extends TestCase
 {
@@ -158,6 +158,22 @@ final class ExpectShortWriteTest extends TestCase
         $this->assertSame(2048, $expect2->maxBuffer);
         $this->assertSame(512, $expect2->searchWindow);
     }
+
+    // ----- partial-write flush loop (the file's namesake) ----------------
+
+    public function testSendFlushesAChunkEatingMasterInOrder(): void
+    {
+        // 120 bytes into a master that accepts at most 7 per write():
+        // the flush loop must substr-advance, never re-offer accepted
+        // bytes, and only return once every byte landed.
+        $master = new FixtureMaster('', acceptChunk: 7);
+        $payload = \str_repeat('abc123', 20);
+
+        Expect::on($master)->send($payload);
+
+        $this->assertSame($payload, $master->accepted);
+        $this->assertGreaterThanOrEqual(17, $master->writeCalls, 'the fixture must really be starving the loop with partial accepts');
+    }
 }
 
 /**
@@ -167,12 +183,19 @@ final class ExpectShortWriteTest extends TestCase
  */
 final class FixtureMaster implements MasterPty
 {
+    public string $accepted = '';
+    public int $writeCalls = 0;
+
     /**
      * @param list<string|null> $chunks  null = timeout, '' = EOF, string = data
+     * @param int $acceptChunk  0 = accept everything (historic shape);
+     *                          N > 0 = a chunk-eating master that takes at
+     *                          most N bytes per write() (PTY-44 flush-loop pin)
      */
     public function __construct(
         private string $initial = '',
         private array $chunks = [],
+        private int $acceptChunk = 0,
     ) {}
 
     public function read(int $len = 8192, ?float $timeout = null): ?string
@@ -197,7 +220,13 @@ final class FixtureMaster implements MasterPty
 
     public function write(string $bytes): int
     {
-        return \strlen($bytes);
+        $this->writeCalls++;
+        $take = $this->acceptChunk > 0 && \strlen($bytes) > $this->acceptChunk
+            ? \substr($bytes, 0, $this->acceptChunk)
+            : $bytes;
+        $this->accepted .= $take;
+
+        return \strlen($take);
     }
 
     public function resize(int $cols, int $rows): void {}
