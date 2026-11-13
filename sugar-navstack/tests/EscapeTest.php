@@ -108,4 +108,33 @@ final class EscapeTest extends TestCase
         $original = 'Home › Settings › Display';
         $this->assertSame($original, Escape::unescape(Escape::title($original)));
     }
+
+    // ─── NS-23: the documented lossy paths, now executable ────────────────────
+
+    public function testUnescapeSwallowsBackslashOnNeverEscapedInput(): void
+    {
+        // sugar-navstack-027: a title that ALWAYS contained '\ › ' as its
+        // own text (no escape ever ran) is silently rewritten by unescape()
+        // — documented as expected; pinned so the docblock can't drift
+        // toward claiming totality.
+        $neverEscaped = 'Top\ › Middle';
+        $this->assertSame('Top › Middle', Escape::unescape($neverEscaped));
+    }
+
+    public function testDoubleEscapeCostsOneUnescapePerLayer(): void
+    {
+        // title(title(t)) stacks two backslashes ('A\\ > B'); ONE unescape
+        // removes one layer and lands on the SINGLE-escaped shape, not on
+        // t — the lossy leg of "no double-escape marker". Two unescapes
+        // walk back two layers, so the pair stays mechanically symmetric
+        // layer-per-call even while the intermediate is ambiguous.
+        $once  = Escape::title('A > B', ' > ');
+        $twice = Escape::title($once, ' > ');
+        // Seven bytes: A \ \ sp > sp B  (two stacked backslashes).
+        $this->assertSame('A\\\\ > B', $twice);
+
+        $this->assertSame('A\ > B', Escape::unescape($twice, ' > '));
+        $this->assertSame($once, Escape::unescape($twice, ' > '), 'one layer per call');
+        $this->assertSame('A > B', Escape::unescape(Escape::unescape($twice, ' > '), ' > '));
+    }
 }

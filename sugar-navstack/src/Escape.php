@@ -27,6 +27,11 @@ namespace SugarCraft\NavStack;
  * was inserted). There is no double-escape marker. If verbatim round-trip
  * fidelity of raw-backslash titles matters, carry the exact title in the
  * item's data payload and keep the display label escape-safe.
+ *
+ * Naming: {@see title()} escapes a title FOR the crumb stream and
+ * {@see unescape()} takes a title() product BACK; both are named for which
+ * side of the round trip they take, and both wear the same
+ * `(string, $separator = default)` parameter order.
  */
 final class Escape
 {
