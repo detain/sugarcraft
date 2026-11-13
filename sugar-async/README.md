@@ -202,14 +202,14 @@ wait ends, and what happens when the caller cancels the wrapper:
 | `all` / `race` | The fan-in mirrors its members: `all()` waits for every one, `race()` settles with the first to finish; members are never cancelled. | The fan-in has no cancel path of its own — cancel the member promises directly. |
 | `onPending` | With a hook, the notice fires after N seconds and the wait continues. Without a hook, the wrapper rejects with a `TimeoutException` whose message names `(still pending)` while the inner keeps running. | The wrapper releases the notice timer and rejects with `OperationCancelledException`. |
 
-- `withTimeout(?loop, promise, seconds, label:)` — rejects with `TimeoutException`
+- `withTimeout(promise, seconds, loop:, label:)` — rejects with `TimeoutException`
   after N seconds. The inner operation is NOT cancelled and keeps running to
   completion. The timeout timer is armed before the inner's settle handlers attach,
   so an already-settled inner cancels it in the same synchronous pass — no timer is
   left holding the loop. Cancelling the *wrapper* abandons the wait: the timer is
   released and the wrapper rejects with `OperationCancelledException` (the inner
   keeps running — this is a wait-abandonment, not an operation cancel).
-- `withDeadline(?loop, promise, seconds, onTimeout:, label:)` — the variant that
+- `withDeadline(promise, seconds, loop:, onTimeout:, label:)` — the variant that
   stops the work: rejects after N seconds AND `cancel()`s the inner, with an optional
   `onTimeout` abort hook (fired once, errors swallowed) for server-side kills the
   driver's own cancellation cannot perform. Best-effort in the literal sense: a
@@ -217,6 +217,10 @@ wait ends, and what happens when the caller cancels the wrapper:
   failed server-side kill is *unobservable* here — the rejection is the timeout,
   never a receipt that the abort worked. A bounded I/O ceiling — not a blanket
   per-request wall-clock killer.
+  Both wrappers take the promise first and the loop as a trailing optional
+  parameter (`loop:` omitted → shared `Loop::get()`). The historical
+  loop-first positional form still transposes with an `E_USER_DEPRECATED`
+  notice for one more release — loop-first support is REMOVED-IN 2.0.0.
 - `cancellable(promise, token:, onCancel:, label:)` — the returned promise rejects
   immediately with `OperationCancelledException` when the token fires, a late inner
   result is dropped, and an optional `onCancel` hook fires at most once as a
@@ -320,7 +324,6 @@ use SugarCraft\Async\AsyncOps;
 use function React\Promise\resolve;
 
 $promise = AsyncOps::withTimeout(
-    loop: null,                      // shared Loop::get()
     promise: resolve('fast'),        // already settled: no timer is left armed
     seconds: 5.0,
     label: 'login',

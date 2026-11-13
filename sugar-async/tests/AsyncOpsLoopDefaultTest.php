@@ -23,7 +23,7 @@ final class AsyncOpsLoopDefaultTest extends TestCase
     public function testWithTimeoutAcceptsNullForTheSharedLoop(): void
     {
         $outcome = 'UNSET';
-        AsyncOps::withTimeout(null, resolve('v'), 30.0)
+        AsyncOps::withTimeout(promise: resolve('v'), seconds: 30.0)
             ->then(static function (mixed $value) use (&$outcome): void {
                 $outcome = $value;
             });
@@ -34,7 +34,7 @@ final class AsyncOpsLoopDefaultTest extends TestCase
     public function testWithDeadlineAcceptsNullForTheSharedLoop(): void
     {
         $outcome = 'UNSET';
-        AsyncOps::withDeadline(null, resolve('w'), 30.0)
+        AsyncOps::withDeadline(promise: resolve('w'), seconds: 30.0)
             ->then(static function (mixed $value) use (&$outcome): void {
                 $outcome = $value;
             });
@@ -46,7 +46,7 @@ final class AsyncOpsLoopDefaultTest extends TestCase
     {
         $loop = Loop::get();
         $error = null;
-        $outcome = AsyncOps::withTimeout(null, (new Deferred())->promise(), 0.01)
+        $outcome = AsyncOps::withTimeout(promise: (new Deferred())->promise(), seconds: 0.01)
             ->then(
                 static fn (mixed $value): mixed => $value,
                 static function (\Throwable $e) use (&$error, $loop): void {

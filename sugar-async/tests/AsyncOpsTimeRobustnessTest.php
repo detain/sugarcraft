@@ -69,7 +69,7 @@ final class AsyncOpsTimeRobustnessTest extends TestCase
 
         foreach ([NAN, INF, -INF, 0.0, -1.0] as $seconds) {
             try {
-                AsyncOps::withTimeout($this->immediateLoop(), $pending, $seconds);
+                AsyncOps::withTimeout(promise: $pending, seconds: $seconds, loop: $this->immediateLoop());
                 self::fail('withTimeout accepted ' . \var_export($seconds, true));
             } catch (\InvalidArgumentException $e) {
                 self::assertSame('Timeout seconds must be a positive finite number', $e->getMessage());
@@ -83,7 +83,7 @@ final class AsyncOpsTimeRobustnessTest extends TestCase
 
         foreach ([NAN, INF, 0.0] as $seconds) {
             try {
-                AsyncOps::withDeadline($this->immediateLoop(), $pending, $seconds);
+                AsyncOps::withDeadline(promise: $pending, seconds: $seconds, loop: $this->immediateLoop());
                 self::fail('withDeadline accepted ' . \var_export($seconds, true));
             } catch (\InvalidArgumentException $e) {
                 self::assertSame('Deadline seconds must be a positive finite number', $e->getMessage());
@@ -143,9 +143,9 @@ final class AsyncOpsTimeRobustnessTest extends TestCase
     public function testTimeoutMessageNamesLabelAndSecondsWithStructuredFields(): void
     {
         $out = AsyncOps::withTimeout(
-            $this->immediateLoop(),
-            (new Deferred())->promise(),
-            5.0,
+            promise: (new Deferred())->promise(),
+            seconds: 5.0,
+            loop: $this->immediateLoop(),
             label: 'login',
         );
 
@@ -159,8 +159,8 @@ final class AsyncOpsTimeRobustnessTest extends TestCase
 
     public function testTimeoutMessagePluralizesAndKeepsPrecision(): void
     {
-        $singular = AsyncOps::withTimeout($this->immediateLoop(), (new Deferred())->promise(), 1.0);
-        $fraction = AsyncOps::withTimeout($this->immediateLoop(), (new Deferred())->promise(), 0.25);
+        $singular = AsyncOps::withTimeout(promise: (new Deferred())->promise(), seconds: 1.0, loop: $this->immediateLoop());
+        $fraction = AsyncOps::withTimeout(promise: (new Deferred())->promise(), seconds: 0.25, loop: $this->immediateLoop());
 
         $singularError = $this->rejectionOf($singular);
         $fractionError = $this->rejectionOf($fraction);
@@ -174,11 +174,11 @@ final class AsyncOpsTimeRobustnessTest extends TestCase
 
     public function testDeadlineMessageIsPhrasedAsADeadline(): void
     {
-        $plain = AsyncOps::withDeadline($this->immediateLoop(), (new Deferred())->promise(), 30.0);
+        $plain = AsyncOps::withDeadline(promise: (new Deferred())->promise(), seconds: 30.0, loop: $this->immediateLoop());
         $labeled = AsyncOps::withDeadline(
-            $this->immediateLoop(),
-            (new Deferred())->promise(),
-            30.0,
+            promise: (new Deferred())->promise(),
+            seconds: 30.0,
+            loop: $this->immediateLoop(),
             label: 'metrics',
         );
 

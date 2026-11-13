@@ -26,7 +26,7 @@ final class AsyncOpsTest extends TestCase
         $deferred = new Deferred();
         $promise = $deferred->promise();
 
-        $wrapped = AsyncOps::withTimeout($loop, $promise, 0.05);
+        $wrapped = AsyncOps::withTimeout(promise: $promise, seconds: 0.05, loop: $loop);
 
         $rejected = null;
         $wrapped->otherwise(function (\Throwable $e) use (&$rejected): void {
@@ -49,7 +49,7 @@ final class AsyncOpsTest extends TestCase
         $deferred = new Deferred();
         $promise = $deferred->promise();
 
-        $wrapped = AsyncOps::withTimeout($loop, $promise, 5.0);
+        $wrapped = AsyncOps::withTimeout(promise: $promise, seconds: 5.0, loop: $loop);
 
         // Resolve immediately
         $deferred->resolve('success');
@@ -74,7 +74,7 @@ final class AsyncOpsTest extends TestCase
         $deferred = new Deferred();
         $promise = $deferred->promise();
 
-        $wrapped = AsyncOps::withTimeout($loop, $promise, 5.0);
+        $wrapped = AsyncOps::withTimeout(promise: $promise, seconds: 5.0, loop: $loop);
 
         $deferred->reject(new \RuntimeException('fail'));
 
@@ -98,7 +98,7 @@ final class AsyncOpsTest extends TestCase
         $deferred = new Deferred();
 
         $this->expectException(\InvalidArgumentException::class);
-        AsyncOps::withTimeout($loop, $deferred->promise(), 0.0);
+        AsyncOps::withTimeout(promise: $deferred->promise(), seconds: 0.0, loop: $loop);
     }
 
     public function testWithTimeoutOverAlreadyResolvedInnerDoesNotLeakTimer(): void
@@ -117,7 +117,7 @@ final class AsyncOpsTest extends TestCase
         // loop created this late in the process.
         $loop = new \React\EventLoop\StreamSelectLoop();
 
-        $wrapped = AsyncOps::withTimeout($loop, \React\Promise\resolve('done'), 0.5);
+        $wrapped = AsyncOps::withTimeout(promise: \React\Promise\resolve('done'), seconds: 0.5, loop: $loop);
 
         $resolved = null;
         $wrapped->then(function ($v) use (&$resolved): void {
@@ -138,7 +138,7 @@ final class AsyncOpsTest extends TestCase
         // for the same residue-isolation reason as the resolved-limb test.
         $loop = new \React\EventLoop\StreamSelectLoop();
 
-        $wrapped = AsyncOps::withTimeout($loop, \React\Promise\reject(new \RuntimeException('fail')), 0.5);
+        $wrapped = AsyncOps::withTimeout(promise: \React\Promise\reject(new \RuntimeException('fail')), seconds: 0.5, loop: $loop);
 
         $rejected = null;
         $wrapped->otherwise(function (\Throwable $e) use (&$rejected): void {
@@ -789,5 +789,62 @@ final class AsyncOpsTest extends TestCase
         $this->assertInstanceOf(\Error::class, $error);
         $this->assertStringContainsString('then()', $error->getMessage());
         $this->assertSame(2, $attempts, 'the cycle dies at the offending stage instead of keep retrying');
+    }
+
+    public function testLoopFirstCallOrderStillWorksButIsDeprecated(): void
+    {
+        // The one-release compat shim: historical (loop, promise, seconds,
+        // label) positional calls transpose with a notice — external callers
+        // (sugar-forms) ride it until they flip; REMOVED-IN 2.0.0.
+        $loop = new \React\EventLoop\StreamSelectLoop();
+        $inner = new Deferred();
+
+        $notices = [];
+        $previous = set_error_handler(
+            static function (int $severity, string $message) use (&$notices): bool {
+                $notices[] = [$severity, $message];
+                return true;
+            },
+        );
+        try {
+            $wrapped = AsyncOps::withTimeout($loop, $inner->promise(), 30.0, 'legacy-label');
+        } finally {
+            restore_error_handler();
+        }
+
+        $this->assertCount(1, $notices, 'exactly one deprecation notice per loop-first call');
+        [$severity, $message] = $notices[0];
+        $this->assertSame(E_USER_DEPRECATED, $severity);
+        $this->assertStringContainsString('passing the event loop first is deprecated', $message);
+        $this->assertStringContainsString('ends in 2.0.0', $message);
+
+        // The transpose is behaviour, not just noise: same wrapper, same
+        // loop binding, same label threading through the abandonment.
+        $error = null;
+        $wrapped->then(null, static function (\Throwable $e) use (&$error): void {
+            $error = $e;
+        });
+        $wrapped->cancel();
+        $this->assertInstanceOf(OperationCancelledException::class, $error);
+        $this->assertStringContainsString('legacy-label', $error->getMessage());
+
+        // If the shim misbound the slots the timer would sit on another loop
+        // and this private run() would hang; it must return immediately.
+        $loop->run();
+    }
+
+    public function testTwoArgumentDeadlineCallWorks(): void
+    {
+        // withDeadline($promise, $seconds) fatals with a TypeError under the
+        // old loop-first signature; the reordered law makes it the idiomatic
+        // shared-loop call. The already-settled inner cancels the armed timer
+        // in the same synchronous pass, so nothing is left on Loop::get().
+        $out = null;
+        AsyncOps::withDeadline(\React\Promise\resolve('w'), 1.5)
+            ->then(static function (mixed $v) use (&$out): void {
+                $out = $v;
+            });
+
+        $this->assertSame('w', $out);
     }
 }

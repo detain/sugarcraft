@@ -22,6 +22,12 @@ use function React\Promise\resolve;
  *
  * Nothing here blocks the caller: every wait is expressed as a promise,
  * and every timer is armed on a supplied or shared event loop.
+ *
+ * Parameter order is uniform: the wrapped promise leads, and the event loop
+ * is always a trailing optional parameter (house law: no static here takes
+ * the loop first). withTimeout() and withDeadline() still accept the
+ * historical loop-first positional call for one more release — transposed
+ * with an E_USER_DEPRECATED notice, support ends in 2.0.0.
  */
 final class AsyncOps
 {
@@ -36,21 +42,30 @@ final class AsyncOps
      * consumer's in-flight gate open forever — use {@see withDeadline()},
      * which cancels the inner operation on both expiry and abandonment.
      *
-     * @param null|LoopInterface $loop  Event loop; pass null to use the shared Loop::get().
      * @param PromiseInterface $promise
      * @param float $seconds  Timeout in seconds (must be > 0 and finite)
+     * @param LoopInterface|null $loop  Event loop; null (default) uses the shared Loop::get().
      * @param string|null $label  Operation name woven into the rejection
      *        message and carried on {@see TimeoutException::label()} — a TUI
      *        catching one TimeoutException among several wrapped calls needs
      *        the identity as data, not archaeology through the stack trace.
      * @return PromiseInterface
+     *
+     * @deprecated Passing the loop FIRST (loop, promise, seconds, ...) is
+     *             deprecated since 1.x: such calls are transposed with an
+     *             E_USER_DEPRECATED notice. Loop-first support is REMOVED-IN
+     *             2.0.0 — call withTimeout($promise, $seconds, $loop).
      */
     public static function withTimeout(
-        ?LoopInterface $loop,
-        PromiseInterface $promise,
-        float $seconds,
-        ?string $label = null,
+        PromiseInterface|LoopInterface $promise,
+        mixed $seconds = null,
+        LoopInterface|float|int|string|null $loop = null,
+        string|null $label = null,
     ): PromiseInterface {
+        [$promise, $seconds, $loop, , $label] = self::normalizeWaitArgs(
+            __FUNCTION__, $promise, $seconds, $loop, null, $label,
+        );
+
         if ($seconds <= 0 || !is_finite($seconds)) {
             throw new \InvalidArgumentException('Timeout seconds must be a positive finite number');
         }
@@ -140,23 +155,32 @@ final class AsyncOps
      * hook fired, inner cancelled, OperationCancelledException — the wait
      * ending early is still a wait that must not outlive its work.
      *
-     * @param null|LoopInterface $loop  Event loop; pass null to use the shared Loop::get().
      * @param PromiseInterface $promise
      * @param float $seconds  Deadline in seconds (must be > 0 and finite)
+     * @param LoopInterface|null $loop  Event loop; null (default) uses the shared Loop::get().
      * @param null|callable(): void $onTimeout  Abort hook, fired once when the
      *        deadline hits; errors are swallowed so a failed kill cannot mask
      *        the timeout rejection.
      * @param string|null $label  Operation name for the rejection message and
      *        {@see TimeoutException::label()}; see withTimeout().
      * @return PromiseInterface
+     *
+     * @deprecated Passing the loop FIRST (loop, promise, seconds, ...) is
+     *             deprecated since 1.x: such calls are transposed with an
+     *             E_USER_DEPRECATED notice. Loop-first support is REMOVED-IN
+     *             2.0.0 — call withDeadline($promise, $seconds, $loop).
      */
     public static function withDeadline(
-        ?LoopInterface $loop,
-        PromiseInterface $promise,
-        float $seconds,
+        PromiseInterface|LoopInterface $promise,
+        mixed $seconds = null,
+        LoopInterface|float|int|string|null $loop = null,
         ?callable $onTimeout = null,
         ?string $label = null,
     ): PromiseInterface {
+        [$promise, $seconds, $loop, $onTimeout, $label] = self::normalizeWaitArgs(
+            __FUNCTION__, $promise, $seconds, $loop, $onTimeout, $label,
+        );
+
         if ($seconds <= 0 || !is_finite($seconds)) {
             throw new \InvalidArgumentException('Deadline seconds must be a positive finite number');
         }
@@ -740,6 +764,66 @@ final class AsyncOps
         }
         $fraction = random_int(0, PHP_INT_MAX) / PHP_INT_MAX;
         return $backoff + ($backoff * $jitter * $fraction);
+    }
+
+    /**
+     * Accept the lawful (promise, seconds, ..., loop) order and the deprecated
+     * loop-first positional order, and hand back the lawful one.
+     *
+     * @param string $method  Caller name, for messages.
+     * @param PromiseInterface|LoopInterface $promise
+     * @param mixed $seconds
+     * @param mixed $loop
+     * @param mixed $onTimeout
+     * @param mixed $label
+     * @return array{0: PromiseInterface, 1: float, 2: LoopInterface|null, 3: mixed, 4: string|null}
+     */
+    private static function normalizeWaitArgs(
+        string $method,
+        PromiseInterface|LoopInterface $promise,
+        mixed $seconds,
+        mixed $loop,
+        mixed $onTimeout,
+        mixed $label,
+    ): array {
+        if ($promise instanceof LoopInterface) {
+            // Deprecated positional transpose: (loop, promise, seconds, [hook], [label]).
+            trigger_error(
+                $method . '(): passing the event loop first is deprecated — the loop is a trailing'
+                    . ' optional parameter; call ' . $method . '($promise, $seconds, $loop) instead'
+                    . ' (loop-first support ends in 2.0.0).',
+                E_USER_DEPRECATED,
+            );
+            if (!$seconds instanceof PromiseInterface) {
+                throw new \InvalidArgumentException(
+                    $method . '(): a loop-first call must pass the promise as its second argument.',
+                );
+            }
+            if (!is_numeric($loop)) {
+                throw new \InvalidArgumentException(
+                    $method . '(): a loop-first call must pass the seconds as its third argument.',
+                );
+            }
+            [$legacyLoop, $realPromise, $realSeconds] = [$promise, $seconds, $loop];
+            $promise = $realPromise;
+            $seconds = (float) $realSeconds;
+            $loop = $legacyLoop;
+        }
+
+        if (!$promise instanceof PromiseInterface) {
+            throw new \InvalidArgumentException($method . '(): the first argument must be the promise to wrap.');
+        }
+        if (!is_numeric($seconds)) {
+            throw new \InvalidArgumentException($method . '(): the second argument must be the timeout in seconds.');
+        }
+        if ($loop !== null && !$loop instanceof LoopInterface) {
+            throw new \InvalidArgumentException($method . '(): the loop must be an event loop or null.');
+        }
+        if ($label !== null && !is_string($label)) {
+            throw new \InvalidArgumentException($method . '(): the label must be a string or null.');
+        }
+
+        return [$promise, (float) $seconds, $loop, $onTimeout, $label];
     }
 
     /** Message subject: named when the caller passed a label, generic otherwise. */

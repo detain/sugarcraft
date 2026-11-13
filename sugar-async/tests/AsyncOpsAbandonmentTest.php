@@ -55,7 +55,7 @@ final class AsyncOpsAbandonmentTest extends TestCase
             $innerCancelled = true;
         });
 
-        $wrapped = AsyncOps::withTimeout($loop, $inner->promise(), 30.0);
+        $wrapped = AsyncOps::withTimeout(promise: $inner->promise(), seconds: 30.0, loop: $loop);
         $this->assertSame(1, self::armedTimers($loop), 'the timeout timer is armed');
 
         $error = null;
@@ -74,7 +74,7 @@ final class AsyncOpsAbandonmentTest extends TestCase
     {
         $loop = new StreamSelectLoop();
         $inner = new Deferred();
-        $wrapped = AsyncOps::withTimeout($loop, $inner->promise(), 30.0);
+        $wrapped = AsyncOps::withTimeout(promise: $inner->promise(), seconds: 30.0, loop: $loop);
 
         $resolved = null;
         $error = null;
@@ -103,7 +103,7 @@ final class AsyncOpsAbandonmentTest extends TestCase
             $innerCancelled = true;
         });
 
-        $wrapped = AsyncOps::withDeadline($loop, $inner->promise(), 30.0, static function () use (&$hookFired): void {
+        $wrapped = AsyncOps::withDeadline(promise: $inner->promise(), seconds: 30.0, loop: $loop, onTimeout: static function () use (&$hookFired): void {
             $hookFired++;
         });
         $this->assertSame(1, self::armedTimers($loop));
@@ -135,7 +135,7 @@ final class AsyncOpsAbandonmentTest extends TestCase
         $inner->method('cancel')->willThrowException(new \RuntimeException('driver abort exploded'));
 
         $error = null;
-        AsyncOps::withDeadline($loop, $inner, 0.005)
+        AsyncOps::withDeadline(promise: $inner, seconds: 0.005, loop: $loop)
             ->then(null, static function (\Throwable $e) use (&$error): void {
                 $error = $e;
             });
@@ -163,7 +163,7 @@ final class AsyncOpsAbandonmentTest extends TestCase
         $inner->method('cancel')->willThrowException(new \RuntimeException('driver abort exploded'));
 
         $deadlineError = null;
-        $deadline = AsyncOps::withDeadline(new StreamSelectLoop(), $inner, 30.0);
+        $deadline = AsyncOps::withDeadline(promise: $inner, seconds: 30.0, loop: new StreamSelectLoop());
         $deadline->then(null, static function (\Throwable $e) use (&$deadlineError): void {
             $deadlineError = $e;
         });

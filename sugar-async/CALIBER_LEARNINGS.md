@@ -19,6 +19,7 @@
 - **TimeoutException extends RuntimeException** — not a dedicated subclass of any standard exception hierarchy. Catch via `SugarCraft\Async\TimeoutException` or simply `catch (\RuntimeException $e)`.
 
 - **withTimeout must arm the timer BEFORE attaching settle handlers** — react/promise v3 settles an already-resolved inner synchronously inside `then()`; a handler attached first sees an unassigned timer, skips the cancel, and leaks the full-duration timer onto the shared loop (probe: 0.5s timeout ⇒ 0.500s idle-drain pre-fix, ~0s post-fix).
+- **Wait wrappers take the promise first; the loop is a trailing optional parameter** — `withTimeout($promise, $seconds, $loop)` and `withDeadline($promise, $seconds, $loop, $onTimeout, $label)` match every other static in the class. The historical loop-first positional order is accepted through a transposing shim that raises `E_USER_DEPRECATED`; loop-first support is REMOVED-IN 2.0.0 (sugar-forms `Field/Input.php` + `Select.php` call the old order and must flip before 2.0).
 
 - **retry() must wire token cancellation into the pending backoff** — a cancel landing mid-backoff has no natural checkpoint: without an `onCancel` abort that cancels the pending timer and rejects the stage deferred, the promise stays pending and holds the loop for the remaining (doubling) delay. The abort is guarded by a per-stage `settled` flag because the token offers no unregister — a stale registration from an already-run stage must never fire on a later cancel().
 

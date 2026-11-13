@@ -40,7 +40,7 @@ final class AsyncOpsWithDeadlineTest extends TestCase
         $never = new Promise(static function (): void {}, static function (): void {});
 
         $error = null;
-        AsyncOps::withDeadline($loop, $never, 0.05)->then(
+        AsyncOps::withDeadline(promise: $never, seconds: 0.05, loop: $loop)->then(
             null,
             static function (\Throwable $e) use (&$error): void {
                 $error = $e;
@@ -65,7 +65,7 @@ final class AsyncOpsWithDeadlineTest extends TestCase
             },
         );
 
-        AsyncOps::withDeadline($loop, $never, 0.05)->then(null, static fn () => null);
+        AsyncOps::withDeadline(promise: $never, seconds: 0.05, loop: $loop)->then(null, static fn () => null);
 
         $loop->run();
 
@@ -79,7 +79,7 @@ final class AsyncOpsWithDeadlineTest extends TestCase
 
         $kills = 0;
         $error = null;
-        AsyncOps::withDeadline($loop, $never, 0.05, static function () use (&$kills): void {
+        AsyncOps::withDeadline(promise: $never, seconds: 0.05, loop: $loop, onTimeout: static function () use (&$kills): void {
             $kills++;
             throw new \LogicException('kill failed — must not mask the timeout');
         })->then(
@@ -104,7 +104,7 @@ final class AsyncOpsWithDeadlineTest extends TestCase
         $pending = new Deferred();
 
         $outcomes = [];
-        AsyncOps::withDeadline($loop, $pending->promise(), 0.05)->then(
+        AsyncOps::withDeadline(promise: $pending->promise(), seconds: 0.05, loop: $loop)->then(
             static function ($v) use (&$outcomes): void {
                 $outcomes[] = ['resolved', $v];
             },
@@ -129,7 +129,7 @@ final class AsyncOpsWithDeadlineTest extends TestCase
         $loop = new StreamSelectLoop();
 
         $this->expectException(\InvalidArgumentException::class);
-        AsyncOps::withDeadline($loop, resolve('x'), 0.0);
+        AsyncOps::withDeadline(promise: resolve('x'), seconds: 0.0, loop: $loop);
     }
 
     public function testNegativeSecondsThrows(): void
@@ -137,7 +137,7 @@ final class AsyncOpsWithDeadlineTest extends TestCase
         $loop = new StreamSelectLoop();
 
         $this->expectException(\InvalidArgumentException::class);
-        AsyncOps::withDeadline($loop, resolve('x'), -1.0);
+        AsyncOps::withDeadline(promise: resolve('x'), seconds: -1.0, loop: $loop);
     }
 
     public function testPreResolvedInnerResolvesAndLeaksNoTimer(): void
@@ -148,7 +148,7 @@ final class AsyncOpsWithDeadlineTest extends TestCase
         // leak directly: run() returns only at zero armed timers.
         $loop = new StreamSelectLoop();
 
-        $wrapped = AsyncOps::withDeadline($loop, resolve('done'), 0.5);
+        $wrapped = AsyncOps::withDeadline(promise: resolve('done'), seconds: 0.5, loop: $loop);
 
         $resolved = null;
         $wrapped->then(function ($v) use (&$resolved): void {
@@ -167,7 +167,7 @@ final class AsyncOpsWithDeadlineTest extends TestCase
     {
         $loop = new StreamSelectLoop();
 
-        $wrapped = AsyncOps::withDeadline($loop, reject(new \RuntimeException('fail')), 0.5);
+        $wrapped = AsyncOps::withDeadline(promise: reject(new \RuntimeException('fail')), seconds: 0.5, loop: $loop);
 
         $rejected = null;
         $wrapped->then(null, function (\Throwable $e) use (&$rejected): void {
@@ -189,7 +189,7 @@ final class AsyncOpsWithDeadlineTest extends TestCase
 
         $kills = 0;
         $value = null;
-        AsyncOps::withDeadline($loop, resolve([['ok' => 1]]), 30.0, static function () use (&$kills): void {
+        AsyncOps::withDeadline(promise: resolve([['ok' => 1]]), seconds: 30.0, loop: $loop, onTimeout: static function () use (&$kills): void {
             $kills++;
         })->then(static function (array $result) use (&$value): void {
             $value = $result;

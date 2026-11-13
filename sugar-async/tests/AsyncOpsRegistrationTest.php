@@ -118,7 +118,7 @@ final class AsyncOpsRegistrationTest extends TestCase
         $deferred = new Deferred();
 
         $error = null;
-        AsyncOps::withTimeout($loop, $deferred->promise(), 1e-9)
+        AsyncOps::withTimeout(promise: $deferred->promise(), seconds: 1e-9, loop: $loop)
             ->then(null, static function (\Throwable $e) use (&$error): void {
                 $error = $e;
             });
