@@ -6,6 +6,7 @@ namespace SugarCraft\Vcr\Cli;
 
 use SugarCraft\Vcr\EventKind;
 use SugarCraft\Vcr\Format\CassetteLoader;
+use SugarCraft\Vcr\Lang;
 use SugarCraft\Vcr\Support\Scalars;
 
 /**
@@ -71,15 +72,14 @@ final class ReplayCommand implements DocumentedCommand
 
     public function summary(): string
     {
-        return "Stream a cassette's recorded output to stdout";
+        return Lang::t('summary.replay');
     }
 
     public function usage(): string
     {
-        return 'usage: candy-vcr replay <cassette> [--speed=instant|realtime]
+        return Lang::t('cli.usage_label') . ' candy-vcr replay <cassette> [--speed=instant|realtime]
        [--idle-trim=N|--idle-trim N] [--no-trim]' . "\n"
-            . "  Default --speed is instant. The header's playbackSpeed multiplier" . "\n"
-            . "  applies to rendering (render-tape/render-batch), not live replay." . "\n";
+            . '  ' . str_replace("\n", "\n  ", Lang::t('replay.help_speed')) . "\n";
     }
 
     public function run(array $args, $stdout, $stderr): int
@@ -98,23 +98,23 @@ final class ReplayCommand implements DocumentedCommand
             } elseif (str_starts_with($arg, '--idle-trim=')) {
                 $idleTrim = (float) substr($arg, 12);
                 if ($idleTrim <= 0.0) {
-                    fwrite($stderr, "candy-vcr replay: --idle-trim must be > 0 seconds\n");
+                    fwrite($stderr, Lang::t('cli.err', ['verb' => 'replay', 'message' => Lang::t('cli.idle_trim_positive')]) . "\n");
                     return 2;
                 }
             } elseif ($arg === '--idle-trim') {
                 $next = $args[$i + 1] ?? null;
                 if ($next === null || str_starts_with($next, '--')) {
-                    fwrite($stderr, "candy-vcr replay: --idle-trim requires a positive seconds argument\n");
+                    fwrite($stderr, Lang::t('cli.err', ['verb' => 'replay', 'message' => Lang::t('cli.idle_trim_requires')]) . "\n");
                     return 2;
                 }
                 $i++;
                 $idleTrim = (float) $next;
                 if ($idleTrim <= 0.0) {
-                    fwrite($stderr, "candy-vcr replay: --idle-trim must be > 0 seconds\n");
+                    fwrite($stderr, Lang::t('cli.err', ['verb' => 'replay', 'message' => Lang::t('cli.idle_trim_positive')]) . "\n");
                     return 2;
                 }
             } elseif (str_starts_with($arg, '--')) {
-                fwrite($stderr, "candy-vcr replay: unknown option {$arg}\n");
+                fwrite($stderr, Lang::t('cli.unknown_option', ['verb' => 'replay', 'option' => $arg]) . "\n");
                 return 2;
             } else {
                 $path = $arg;
@@ -126,7 +126,7 @@ final class ReplayCommand implements DocumentedCommand
             return 2;
         }
         if (!in_array($speed, ['instant', 'realtime'], true)) {
-            fwrite($stderr, "candy-vcr replay: --speed must be 'instant' or 'realtime'\n");
+            fwrite($stderr, Lang::t('cli.err', ['verb' => 'replay', 'message' => Lang::t('replay.speed_invalid')]) . "\n");
             return 2;
         }
 
@@ -134,7 +134,7 @@ final class ReplayCommand implements DocumentedCommand
         try {
             $cassette = $loader->load($path);
         } catch (\Throwable $e) {
-            fwrite($stderr, "candy-vcr replay: {$e->getMessage()}\n");
+            fwrite($stderr, Lang::t('cli.err', ['verb' => 'replay', 'message' => $e->getMessage()]) . "\n");
             return 1;
         }
         CassetteLoader::writeTapeWarnings($loader, $stderr, 'replay');
@@ -186,12 +186,11 @@ final class ReplayCommand implements DocumentedCommand
             }
 
             if ($interrupted !== 0) {
-                fwrite($stderr, sprintf(
-                    "candy-vcr replay: interrupted after %d of %d events (%d output bytes)\n",
-                    $playedEvents,
-                    $totalEvents,
-                    $outputBytes,
-                ));
+                fwrite($stderr, Lang::t('cli.err', ['verb' => 'replay', 'message' => Lang::t('replay.interrupted', [
+                    'played' => $playedEvents,
+                    'total' => $totalEvents,
+                    'bytes' => $outputBytes,
+                ])]) . "\n");
 
                 return 128 + $interrupted;
             }
@@ -200,7 +199,7 @@ final class ReplayCommand implements DocumentedCommand
                 // A .tape describes KEYSTROKES; compiling it yields input
                 // events and zero output bytes. Printing nothing and exiting
                 // 0 was a dead success — the user wanted render-tape.
-                fwrite($stderr, "candy-vcr replay: {$path} is a tape source with no recorded output bytes — replay shows nothing; use 'candy-vcr render-tape' to render .tape files\n");
+                fwrite($stderr, Lang::t('cli.err', ['verb' => 'replay', 'message' => Lang::t('replay.tape_no_output', ['path' => $path])]) . "\n");
                 return 1;
             }
 
@@ -209,13 +208,12 @@ final class ReplayCommand implements DocumentedCommand
             // with an empty terminal. The verdict goes to STDERR because on a
             // piped stdout the byte stream IS the capture and must stay
             // byte-exact.
-            fwrite($stderr, sprintf(
-                "candy-vcr replay: played %d of %d events (%d output bytes, %.3f s of recorded time)\n",
-                $playedEvents,
-                $totalEvents,
-                $outputBytes,
-                $previousT,
-            ));
+            fwrite($stderr, Lang::t('cli.err', ['verb' => 'replay', 'message' => Lang::t('replay.played', [
+                'played' => $playedEvents,
+                'total' => $totalEvents,
+                'bytes' => $outputBytes,
+                'seconds' => sprintf('%.3f', $previousT),
+            ])]) . "\n");
 
             return 0;
         } finally {

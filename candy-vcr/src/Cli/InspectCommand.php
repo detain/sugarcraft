@@ -7,6 +7,7 @@ namespace SugarCraft\Vcr\Cli;
 use SugarCraft\Vcr\Cassette;
 use SugarCraft\Vcr\EventKind;
 use SugarCraft\Vcr\Format\CassetteLoader;
+use SugarCraft\Vcr\Lang;
 use SugarCraft\Vcr\Player;
 use SugarCraft\Vcr\Render\Renderer;
 use SugarCraft\Vcr\Support\Scalars;
@@ -36,12 +37,12 @@ final class InspectCommand implements DocumentedCommand
 {
     public function summary(): string
     {
-        return 'List the events (or frames with --frames) in a cassette';
+        return Lang::t('summary.inspect');
     }
 
     public function usage(): string
     {
-        return 'usage: candy-vcr inspect <cassette|.tape> [--frames]' . "\n"
+        return Lang::t('cli.usage_label') . ' candy-vcr inspect <cassette|.tape> [--frames]' . "\n"
             . '       [--since=<seconds>] [--until=<seconds>] [--fps=<n>|--fps <n>]' . "\n";
     }
 
@@ -81,7 +82,7 @@ final class InspectCommand implements DocumentedCommand
             } elseif ($arg === '--frames') {
                 $frames = true;
             } elseif (str_starts_with($arg, '--')) {
-                fwrite($stderr, "candy-vcr inspect: unknown option {$arg}\n");
+                fwrite($stderr, Lang::t('cli.unknown_option', ['verb' => 'inspect', 'option' => $arg]) . "\n");
                 return 2;
             } else {
                 $path = $arg;
@@ -89,7 +90,7 @@ final class InspectCommand implements DocumentedCommand
         }
 
         if ($fpsMissingValue) {
-            fwrite($stderr, "candy-vcr inspect: --fps requires a value\n");
+            fwrite($stderr, Lang::t('cli.err', ['verb' => 'inspect', 'message' => Lang::t('inspect.fps_requires_value')]) . "\n");
             return 2;
         }
         // `--since=abc` used to cast to 0.0 through (float) and silently
@@ -98,14 +99,14 @@ final class InspectCommand implements DocumentedCommand
         // refuses at the same rc-2 door as the other misuse shapes.
         if ($sinceRaw !== null) {
             if (!is_numeric($sinceRaw) || !is_finite((float) $sinceRaw) || (float) $sinceRaw < 0.0) {
-                fwrite($stderr, "candy-vcr inspect: --since must be a non-negative number\n");
+                fwrite($stderr, Lang::t('cli.err', ['verb' => 'inspect', 'message' => Lang::t('inspect.since_invalid')]) . "\n");
                 return 2;
             }
             $since = (float) $sinceRaw;
         }
         if ($untilRaw !== null) {
             if (!is_numeric($untilRaw) || !is_finite((float) $untilRaw) || (float) $untilRaw < 0.0) {
-                fwrite($stderr, "candy-vcr inspect: --until must be a non-negative number\n");
+                fwrite($stderr, Lang::t('cli.err', ['verb' => 'inspect', 'message' => Lang::t('inspect.until_invalid')]) . "\n");
                 return 2;
             }
             $until = (float) $untilRaw;
@@ -116,7 +117,7 @@ final class InspectCommand implements DocumentedCommand
             // the same message, whatever spelling of the option was used.
             $parsedFps = $fpsRaw === null ? null : FpsOption::parse($fpsRaw);
         } catch (\InvalidArgumentException $e) {
-            fwrite($stderr, "candy-vcr inspect: {$e->getMessage()}\n");
+            fwrite($stderr, Lang::t('cli.err', ['verb' => 'inspect', 'message' => $e->getMessage()]) . "\n");
             return 2;
         }
         $fps = $parsedFps ?? 30.0;
@@ -130,7 +131,7 @@ final class InspectCommand implements DocumentedCommand
         try {
             $cassette = $loader->load($path);
         } catch (\Throwable $e) {
-            fwrite($stderr, "candy-vcr inspect: {$e->getMessage()}\n");
+            fwrite($stderr, Lang::t('cli.err', ['verb' => 'inspect', 'message' => $e->getMessage()]) . "\n");
             return 1;
         }
         CassetteLoader::writeTapeWarnings($loader, $stderr, 'inspect');
@@ -152,7 +153,7 @@ final class InspectCommand implements DocumentedCommand
             fwrite($stdout, $this->formatEvent($event) . "\n");
             $shown++;
         }
-        fwrite($stdout, sprintf("\n%d / %d event(s) shown\n", $shown, $cassette->eventCount()));
+        fwrite($stdout, "\n" . Lang::t('inspect.shown', ['shown' => $shown, 'total' => $cassette->eventCount()]) . "\n");
         return 0;
     }
 
@@ -203,12 +204,11 @@ final class InspectCommand implements DocumentedCommand
             $prev = $snapshot;
         }
 
-        fwrite($stdout, sprintf(
-            "\nframes: %d  unique: %d  deduped: %d\n",
-            $total,
-            $unique,
-            $dedupCount,
-        ));
+        fwrite($stdout, "\n" . Lang::t('inspect.frames_footer', [
+            'total' => $total,
+            'unique' => $unique,
+            'deduped' => $dedupCount,
+        ]) . "\n");
         return 0;
     }
 
@@ -263,16 +263,15 @@ final class InspectCommand implements DocumentedCommand
      */
     private function renderHeader($stdout, Cassette $cassette): void
     {
-        fwrite($stdout, sprintf(
-            "cassette v%d  %dx%d  runtime=%s  created=%s  duration=%.3fs  events=%d\n",
-            $cassette->header->version,
-            $cassette->header->cols,
-            $cassette->header->rows,
-            $this->displaySafe($cassette->header->runtime),
-            $this->displaySafe($cassette->header->createdAt),
-            $cassette->duration(),
-            $cassette->eventCount(),
-        ));
+        fwrite($stdout, Lang::t('inspect.header', [
+            'version' => $cassette->header->version,
+            'cols' => $cassette->header->cols,
+            'rows' => $cassette->header->rows,
+            'runtime' => $this->displaySafe($cassette->header->runtime),
+            'created' => $this->displaySafe($cassette->header->createdAt),
+            'duration' => sprintf('%.3f', $cassette->duration()),
+            'events' => $cassette->eventCount(),
+        ]) . "\n");
         fwrite($stdout, str_repeat('-', 72) . "\n");
     }
 
@@ -292,9 +291,9 @@ final class InspectCommand implements DocumentedCommand
             EventKind::Quit => '',
             // The path comes off the cassette; a forged snapshot event could
             // carry ANSI/OSC bytes that would be emitted raw to the host.
-            EventKind::Snapshot => 'screenshot: ' . $this->displaySafe(
+            EventKind::Snapshot => Lang::t('inspect.screenshot', ['path' => $this->displaySafe(
                 Scalars::string($event->payload['path'] ?? '?', 'inspect snapshot path')
-            ),
+            )]),
             EventKind::Hide => '',
             EventKind::Show => '',
         };

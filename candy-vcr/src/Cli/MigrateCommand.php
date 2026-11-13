@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Vcr\Cli;
 
 use SugarCraft\Vcr\Format\JsonlFormat;
+use SugarCraft\Vcr\Lang;
 use SugarCraft\Vcr\Migration\MigrationRunner;
 
 /**
@@ -22,16 +23,16 @@ final class MigrateCommand implements DocumentedCommand
 
     public function summary(): string
     {
-        return 'Migrate a cassette to the current format version';
+        return Lang::t('summary.migrate');
     }
 
     public function usage(): string
     {
         return implode("\n", [
-            'usage: candy-vcr migrate <input.cas> [output.cas] [--dry-run] [--info]',
-            '  --dry-run  Validate migration without writing files',
-            '  --info     Show registered migrators and exit',
-            '  Input: JSONL cassettes only (.cas/.jsonl); .cast/.yaml/.tape/.gz inputs are refused',
+            Lang::t('cli.usage_label') . ' candy-vcr migrate <input.cas> [output.cas] [--dry-run] [--info]',
+            '  --dry-run  ' . Lang::t('migrate.help_dry_run'),
+            '  --info     ' . Lang::t('migrate.help_info'),
+            '  ' . Lang::t('migrate.help_input'),
         ]) . "\n";
     }
 
@@ -48,14 +49,14 @@ final class MigrateCommand implements DocumentedCommand
             } elseif ($arg === '--info') {
                 $showInfo = true;
             } elseif (str_starts_with($arg, '--')) {
-                fwrite($stderr, "candy-vcr migrate: unknown option {$arg}\n");
+                fwrite($stderr, Lang::t('cli.unknown_option', ['verb' => 'migrate', 'option' => $arg]) . "\n");
                 return 2;
             } elseif ($inputPath === null) {
                 $inputPath = $arg;
             } elseif ($outputPath === null) {
                 $outputPath = $arg;
             } else {
-                fwrite($stderr, "candy-vcr migrate: too many arguments\n");
+                fwrite($stderr, Lang::t('cli.err', ['verb' => 'migrate', 'message' => Lang::t('migrate.too_many')]) . "\n");
                 return 2;
             }
         }
@@ -73,7 +74,7 @@ final class MigrateCommand implements DocumentedCommand
 
         // Validate input file is readable
         if (!is_readable($inputPath)) {
-            fwrite($stderr, "candy-vcr migrate: cannot read {$inputPath}\n");
+            fwrite($stderr, Lang::t('cli.err', ['verb' => 'migrate', 'message' => Lang::t('migrate.cannot_read', ['path' => $inputPath])]) . "\n");
             return 1;
         }
 
@@ -83,7 +84,7 @@ final class MigrateCommand implements DocumentedCommand
         // the usage door: migrate has exactly one supported input.
         $kind = self::refusedInputKind($inputPath);
         if ($kind !== null) {
-            fwrite($stderr, "candy-vcr migrate: {$inputPath} is a {$kind} file; migrate reads JSONL cassettes (.cas/.jsonl) only\n");
+            fwrite($stderr, Lang::t('cli.err', ['verb' => 'migrate', 'message' => Lang::t('migrate.refused_kind', ['path' => $inputPath, 'kind' => $kind])]) . "\n");
             return 2;
         }
 
@@ -91,14 +92,14 @@ final class MigrateCommand implements DocumentedCommand
             $format = new JsonlFormat();
             $cassette = $format->read($inputPath);
         } catch (\Throwable $e) {
-            fwrite($stderr, "candy-vcr migrate: {$e->getMessage()}\n");
+            fwrite($stderr, Lang::t('cli.err', ['verb' => 'migrate', 'message' => $e->getMessage()]) . "\n");
             return 1;
         }
 
         $originalVersion = $cassette->header->version;
 
         if (!$runner->canMigrate($cassette)) {
-            fwrite($stdout, "cassette is already at the latest format version (v{$originalVersion})\n");
+            fwrite($stdout, Lang::t('migrate.already_latest', ['version' => $originalVersion]) . "\n");
             return 0;
         }
 
@@ -106,7 +107,7 @@ final class MigrateCommand implements DocumentedCommand
         $targetVersion = $migrated->header->version;
 
         if ($dryRun) {
-            fwrite($stdout, "dry-run: would migrate v{$originalVersion} → v{$targetVersion}\n");
+            fwrite($stdout, Lang::t('migrate.dry_run', ['from' => $originalVersion, 'to' => $targetVersion]) . "\n");
             foreach ($runner->describeMigrators() as $m) {
                 if ($m['source'] >= $originalVersion && $m['target'] <= $targetVersion) {
                     fwrite($stdout, "  {$m['source']} → {$m['target']}: {$m['description']}\n");
@@ -120,7 +121,7 @@ final class MigrateCommand implements DocumentedCommand
         // an artifact gunzip refuses. Checked before the in-place backup so
         // the refusal has zero side effects.
         if ($outputPath !== null && str_ends_with(strtolower($outputPath), '.gz')) {
-            fwrite($stderr, "candy-vcr migrate: output cannot be a .gz path; migrate writes plain JSONL\n");
+            fwrite($stderr, Lang::t('cli.err', ['verb' => 'migrate', 'message' => Lang::t('migrate.output_gz')]) . "\n");
             return 2;
         }
 
@@ -147,21 +148,21 @@ final class MigrateCommand implements DocumentedCommand
             // writes straight through the planted name. The link check
             // closes the hole 'x' leaves.
             if (is_link($backupPath)) {
-                fwrite($stderr, "candy-vcr migrate: backup path {$backupPath} is a symlink - refusing to write through it\n");
+                fwrite($stderr, Lang::t('cli.err', ['verb' => 'migrate', 'message' => Lang::t('migrate.backup_symlink', ['path' => $backupPath])]) . "\n");
                 return 1;
             }
             $backupHandle = @fopen($backupPath, 'xb');
             if ($backupHandle === false) {
                 $reason = file_exists($backupPath)
-                    ? "backup {$backupPath} already exists - refusing to overwrite it"
-                    : "could not create backup at {$backupPath}";
-                fwrite($stderr, "candy-vcr migrate: {$reason}\n");
+                    ? Lang::t('migrate.backup_exists', ['path' => $backupPath])
+                    : Lang::t('migrate.backup_create_failed', ['path' => $backupPath]);
+                fwrite($stderr, Lang::t('cli.err', ['verb' => 'migrate', 'message' => $reason]) . "\n");
                 return 1;
             }
             if (!@chmod($backupPath, 0600)) {
                 fclose($backupHandle);
                 @unlink($backupPath);
-                fwrite($stderr, "candy-vcr migrate: cannot restrict permissions on {$backupPath}\n");
+                fwrite($stderr, Lang::t('cli.err', ['verb' => 'migrate', 'message' => Lang::t('migrate.chmod_failed', ['path' => $backupPath])]) . "\n");
                 return 1;
             }
             $sourceHandle = @fopen($inputPath, 'rb');
@@ -171,22 +172,22 @@ final class MigrateCommand implements DocumentedCommand
                 }
                 fclose($backupHandle);
                 @unlink($backupPath);
-                fwrite($stderr, "candy-vcr migrate: could not copy {$inputPath} to {$backupPath}\n");
+                fwrite($stderr, Lang::t('cli.err', ['verb' => 'migrate', 'message' => Lang::t('migrate.copy_failed', ['input' => $inputPath, 'backup' => $backupPath])]) . "\n");
                 return 1;
             }
             fclose($sourceHandle);
             fclose($backupHandle);
-            fwrite($stdout, "backed up original to {$backupPath}\n");
+            fwrite($stdout, Lang::t('migrate.backed_up', ['path' => $backupPath]) . "\n");
         }
 
         try {
             $format->write($migrated, $outputPath);
         } catch (\Throwable $e) {
-            fwrite($stderr, "candy-vcr migrate: could not write {$outputPath}: {$e->getMessage()}\n");
+            fwrite($stderr, Lang::t('cli.err', ['verb' => 'migrate', 'message' => Lang::t('migrate.write_failed', ['path' => $outputPath, 'reason' => $e->getMessage()])]) . "\n");
             return 1;
         }
 
-        fwrite($stdout, "migrated v{$originalVersion} → v{$targetVersion} ({$cassette->eventCount()} events)\n");
+        fwrite($stdout, Lang::t('migrate.done', ['from' => $originalVersion, 'to' => $targetVersion, 'count' => $cassette->eventCount()]) . "\n");
         return 0;
     }
 
@@ -195,10 +196,10 @@ final class MigrateCommand implements DocumentedCommand
      */
     private function showInfo(MigrationRunner $runner, $stdout): int
     {
-        fwrite($stdout, "candy-vcr migration system\n\n");
+        fwrite($stdout, Lang::t('migrate.info_title') . "\n\n");
         $descs = $runner->describeMigrators();
         if ($descs === []) {
-            fwrite($stdout, "no migrators registered\n");
+            fwrite($stdout, Lang::t('migrate.info_none') . "\n");
             return 0;
         }
         foreach ($descs as $d) {
@@ -215,9 +216,9 @@ final class MigrateCommand implements DocumentedCommand
     private static function refusedInputKind(string $path): ?string
     {
         return match (strtolower(pathinfo($path, PATHINFO_EXTENSION))) {
-            'cast' => 'asciinema cast',
+            'cast' => Lang::t('migrate.kind_cast'),
             'yaml', 'yml' => 'YAML',
-            'tape' => 'tape script',
+            'tape' => Lang::t('migrate.kind_tape'),
             'gz' => 'gzip',
             default => null,
         };

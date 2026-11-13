@@ -9,6 +9,7 @@ use SugarCraft\Pty\Posix\PosixPump;
 use SugarCraft\Pty\PtySystemFactory;
 use SugarCraft\Pty\PumpOptions;
 use SugarCraft\Pty\TermiosFactory;
+use SugarCraft\Vcr\Lang;
 use SugarCraft\Vcr\Recorder;
 
 /**
@@ -86,7 +87,7 @@ final class RecordCommand implements DocumentedCommand
 
     public function summary(): string
     {
-        return 'Record a command\'s PTY session into a cassette';
+        return Lang::t('summary.record');
     }
 
     public function run(array $args, $stdout, $stderr): int
@@ -94,7 +95,7 @@ final class RecordCommand implements DocumentedCommand
         try {
             $opts = $this->parseArgs($args, $stderr);
         } catch (\InvalidArgumentException $e) {
-            \fwrite($stderr, "candy-vcr record: {$e->getMessage()}\n");
+            \fwrite($stderr, Lang::t('cli.err', ['verb' => 'record', 'message' => $e->getMessage()]) . "\n");
             return 2;
         }
         if ($opts === null) {
@@ -107,14 +108,14 @@ final class RecordCommand implements DocumentedCommand
         // Compressed recording is API-level (CompressedJsonlFormat); the
         // CLI declines the mismatch instead of shipping it.
         if (\str_ends_with(\strtolower($outputPath), '.gz')) {
-            \fwrite($stderr, "candy-vcr record: --output cannot be a .gz path; record writes plain JSONL — use a .cas/.jsonl name (gzip via CompressedJsonlFormat in the API)\n");
+            \fwrite($stderr, Lang::t('cli.err', ['verb' => 'record', 'message' => Lang::t('record.output_gz')]) . "\n");
             return 2;
         }
         // M10: recording is destructive (fopen 'wb' truncates). Silently
         // annihilating an existing cassette — possibly the ONLY copy of a
         // session — was the default behavior; it now requires --force.
         if (!$opts['force'] && \file_exists($outputPath)) {
-            \fwrite($stderr, "candy-vcr record: refusing to overwrite existing cassette {$outputPath} — pass --force to replace\n");
+            \fwrite($stderr, Lang::t('cli.err', ['verb' => 'record', 'message' => Lang::t('record.refuse_overwrite', ['path' => $outputPath])]) . "\n");
             return 2;
         }
         $cols = $opts['cols'];
@@ -129,7 +130,7 @@ final class RecordCommand implements DocumentedCommand
         // name fails loud before any terminal is opened.
         $resolved = self::resolveExecutable($cmd[0]);
         if ($resolved === null) {
-            \fwrite($stderr, "candy-vcr record: command not found: {$cmd[0]}\n");
+            \fwrite($stderr, Lang::t('cli.err', ['verb' => 'record', 'message' => Lang::t('record.command_not_found', ['cmd' => $cmd[0]])]) . "\n");
             return 2;
         }
         $cmd[0] = $resolved;
@@ -199,7 +200,7 @@ final class RecordCommand implements DocumentedCommand
 
             $recorder->recordQuit();
         } catch (\Throwable $e) {
-            \fwrite($stderr, "candy-vcr record: {$e->getMessage()}\n");
+            \fwrite($stderr, Lang::t('cli.err', ['verb' => 'record', 'message' => $e->getMessage()]) . "\n");
             $exitCode = 1;
             $frameworkFailed = true;
         } finally {
@@ -237,18 +238,16 @@ final class RecordCommand implements DocumentedCommand
         // over an incomplete capture.
         $captureErrors = $recorder?->captureWriteErrors() ?? 0;
         if ($captureErrors > 0) {
-            \fwrite($stderr, \sprintf(
-                "candy-vcr record: cassette capture INCOMPLETE (%d failed write(s)) at %s\n",
-                $captureErrors,
-                $outputPath,
-            ));
+            \fwrite($stderr, Lang::t('cli.err', ['verb' => 'record', 'message' => Lang::t('record.incomplete', [
+                'count' => $captureErrors,
+                'path' => $outputPath,
+            ])]) . "\n");
         }
         if (!$frameworkFailed && $captureErrors === 0) {
-            \fwrite($stderr, \sprintf(
-                "candy-vcr: recorded %s (exit %d)\n",
-                $outputPath,
-                $exitCode,
-            ));
+            \fwrite($stderr, Lang::t('record.recorded', [
+                'path' => $outputPath,
+                'code' => $exitCode,
+            ]) . "\n");
             return $exitCode;
         }
         return $exitCode === 0 ? 1 : $exitCode;
@@ -328,7 +327,7 @@ final class RecordCommand implements DocumentedCommand
                 } elseif ($a === '--output') {
                     $output = $args[++$i] ?? null;
                     if ($output === null) {
-                        throw new \InvalidArgumentException('--output requires a path');
+                        throw new \InvalidArgumentException(Lang::t('record.output_requires'));
                     }
                 } elseif (\str_starts_with($a, '--cols=')) {
                     $cols = (int) \substr($a, 7);
@@ -348,7 +347,7 @@ final class RecordCommand implements DocumentedCommand
                     $captureEnv = true;
                     $envRegex = \substr($a, 12);
                     if (@\preg_match($envRegex, '') === false) {
-                        throw new \InvalidArgumentException("--env-regex='{$envRegex}' is not a valid PCRE pattern");
+                        throw new \InvalidArgumentException(Lang::t('record.env_regex_invalid', ['regex' => $envRegex]));
                     }
                 } elseif ($a === '--env-all' || $a === '--env-allow-secrets') {
                     // FOOTGUN: capture the ENTIRE host environment with NO
@@ -364,23 +363,23 @@ final class RecordCommand implements DocumentedCommand
                 } elseif (\str_starts_with($a, '--idle-trim=')) {
                     $idleTrim = (float) \substr($a, 12);
                     if ($idleTrim <= 0.0) {
-                        throw new \InvalidArgumentException('--idle-trim must be > 0 seconds');
+                        throw new \InvalidArgumentException(Lang::t('cli.idle_trim_positive'));
                     }
                 } elseif ($a === '--idle-trim') {
                     $next = $args[++$i] ?? null;
                     if ($next === null) {
-                        throw new \InvalidArgumentException('--idle-trim requires a positive seconds argument');
+                        throw new \InvalidArgumentException(Lang::t('cli.idle_trim_requires'));
                     }
                     $idleTrim = (float) $next;
                     if ($idleTrim <= 0.0) {
-                        throw new \InvalidArgumentException('--idle-trim must be > 0 seconds');
+                        throw new \InvalidArgumentException(Lang::t('cli.idle_trim_positive'));
                     }
                 } elseif ($a === '--force') {
                     // Overwrite an existing --output target (M10); without
                     // it the run() gate refuses and exits 2.
                     $force = true;
                 } elseif (\str_starts_with($a, '--')) {
-                    throw new \InvalidArgumentException("unknown option {$a}");
+                    throw new \InvalidArgumentException(Lang::t('record.unknown_option', ['option' => $a]));
                 } else {
                     $inOpts = false;
                     $cmd[] = $a;
@@ -393,7 +392,7 @@ final class RecordCommand implements DocumentedCommand
 
         if ($shell) {
             if ($cmd !== []) {
-                throw new \InvalidArgumentException('--shell may not be combined with a positional <cmd>');
+                throw new \InvalidArgumentException(Lang::t('record.shell_with_cmd'));
             }
             $cmd = self::shellCommand();
         }
@@ -403,7 +402,7 @@ final class RecordCommand implements DocumentedCommand
             return null;
         }
         if ($cols <= 0 || $rows <= 0) {
-            throw new \InvalidArgumentException("--cols and --rows must be positive integers (cols={$cols} rows={$rows})");
+            throw new \InvalidArgumentException(Lang::t('record.dims_invalid', ['cols' => $cols, 'rows' => $rows]));
         }
 
         return [
@@ -732,12 +731,10 @@ final class RecordCommand implements DocumentedCommand
     {
         $names = \array_keys($capturedEnv);
         \sort($names);
-        return \sprintf(
-            "candy-vcr record: WARNING --env-all captured the full host environment "
-            . "WITHOUT secret filtering (%d vars): %s\n",
-            \count($names),
-            $names === [] ? '(none)' : \implode(', ', $names),
-        );
+        return Lang::t('record.env_all_warning', [
+            'count' => \count($names),
+            'names' => $names === [] ? Lang::t('record.none') : \implode(', ', $names),
+        ]) . "\n";
     }
 
     /**
@@ -745,37 +742,25 @@ final class RecordCommand implements DocumentedCommand
      */
     public function usage(): string
     {
-        return "usage: candy-vcr record [--output PATH] [--force] [--cols N] [--rows N] [--no-ctty]\n"
+        // Option column is code; the descriptions are translated. Continuation
+        // lines of a description are indented under the text column.
+        $row = static fn (string $flags, string $key): string => \str_pad($flags, 17)
+            . \str_replace("\n", "\n" . \str_repeat(' ', 19), Lang::t($key)) . "\n";
+
+        return Lang::t('cli.usage_label') . " candy-vcr record [--output PATH] [--force] [--cols N] [--rows N] [--no-ctty]\n"
             . "                        [--shell] [--env] [--env-regex=PATTERN]\n"
             . "                        [--env-all] [--idle-trim N] -- <cmd> [args...]\n"
             . "\n"
-            . "  --output PATH    Cassette file to write (default: session-<timestamp>.cas)\n"
-            . "  --force          Replace an existing --output target. Without it, record\n"
-            . "                   refuses (exit 2) rather than silently truncating a\n"
-            . "                   cassette that is already on disk.\n"
-            . "  --cols N         Initial terminal columns (default: 80)\n"
-            . "  --rows N         Initial terminal rows (default: 24)\n"
-            . "  --no-ctty        Spawn without a controlling terminal (Ctrl+C will not\n"
-            . "                   reach the recorded program; default: ctty enabled)\n"
-            . "  --shell          Spawn \$SHELL -l (or /bin/sh -l) instead of an explicit\n"
-            . "                   <cmd>. Mutually exclusive with positional <cmd>.\n"
-            . "  --env            Capture the host environment into the cassette header.\n"
-            . "                   Off by default — env capture is opt-in to avoid leaking\n"
-            . "                   the caller's full shell environment. Keys matching the\n"
-            . "                   secret regex (see --env-regex) are stripped.\n"
-            . "  --env-regex=RE   Override the secret-stripping regex (default conservative\n"
-            . "                   /(SECRET|TOKEN|KEY|PASSWORD|API|CRED|AUTH|PRIV)/i).\n"
-            . "                   An empty pattern is rejected — it can no longer be used\n"
-            . "                   to disable filtering. Implies --env.\n"
-            . "  --env-all        DANGEROUS: capture the FULL host environment with secret\n"
-            . "                   filtering disabled — the cassette will contain credential\n"
-            . "                   values verbatim, and every captured var name is printed to\n"
-            . "                   stderr as a warning. Only use in trusted, isolated\n"
-            . "                   environments. Implies --env. (--env-allow-secrets is a\n"
-            . "                   legacy alias.)\n"
-            . "  --idle-trim N    Compress inter-event gaps longer than N seconds. Trimmed\n"
-            . "                   events carry both `t` (compressed) and `tRaw` (original)\n"
-            . "                   so `replay --no-trim` can opt back into the real cadence.\n";
+            . '  ' . $row('--output PATH', 'record.help_output')
+            . '  ' . $row('--force', 'record.help_force')
+            . '  ' . $row('--cols N', 'record.help_cols')
+            . '  ' . $row('--rows N', 'record.help_rows')
+            . '  ' . $row('--no-ctty', 'record.help_no_ctty')
+            . '  ' . $row('--shell', 'record.help_shell')
+            . '  ' . $row('--env', 'record.help_env')
+            . '  ' . $row('--env-regex=RE', 'record.help_env_regex')
+            . '  ' . $row('--env-all', 'record.help_env_all')
+            . '  ' . $row('--idle-trim N', 'record.help_idle_trim');
     }
 
     /**
@@ -800,7 +785,7 @@ final class RecordCommand implements DocumentedCommand
         try {
             $termios = TermiosFactory::open(0);
         } catch (\Throwable $e) {
-            \fwrite($stderr, "candy-vcr record: termios snapshot skipped ({$e->getMessage()})\n");
+            \fwrite($stderr, Lang::t('cli.err', ['verb' => 'record', 'message' => Lang::t('record.termios_skipped', ['reason' => $e->getMessage()])]) . "\n");
             return null;
         }
 
@@ -812,7 +797,7 @@ final class RecordCommand implements DocumentedCommand
             $raw = $termios->makeRaw();
             $raw->apply();
         } catch (\Throwable $e) {
-            \fwrite($stderr, "candy-vcr record: raw-mode apply failed ({$e->getMessage()})\n");
+            \fwrite($stderr, Lang::t('cli.err', ['verb' => 'record', 'message' => Lang::t('record.raw_failed', ['reason' => $e->getMessage()])]) . "\n");
             return null;
         }
         return $termios;

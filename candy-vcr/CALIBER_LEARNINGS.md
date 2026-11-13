@@ -349,4 +349,15 @@ These are design considerations for future performance optimization:
 None of these are blocking issues — the current implementation is correct
 and production-ready. They are logged here for future optimization work.
 
-
+- **i18n (VCR-S23):** every CLI prose string goes through `SugarCraft\Vcr\Lang::t`
+  (`lang/*.php`, 16 locales). Shared keys: `cli.err` (`candy-vcr {verb}: {message}`) wraps
+  forwarded messages, `cli.unknown_option` is the one unknown-flag line, `cli.usage_label`
+  is the `usage:` word. Throw sites in `FpsOption`/`ChoiceOption`/`RecordCommand::parseArgs`
+  carry NO `candy-vcr ` prefix (ThrowPrefixCensusTest) — the catch re-wraps with `cli.err`.
+  Machine-read output (`header.*`, `event[N]`, inspect rows, `OK`/`FAIL`, JSONL) stays
+  untranslated. Multi-line `record.help_*` / `replay.help_speed` values use bare `\n`; the code
+  indents continuation lines under the option column. Symfony command descriptions are set in
+  `configure()` (not the `#[AsCommand]` attribute) so they follow the locale; `render-batch`
+  pads its table headers by display width (`mb_strwidth`). `lang/` is in the phar
+  `INCLUDE_ROOTS`. Adding a message = key in all 16 files (LocaleParityTest) + a real
+  `Lang::t` use (LangUsageTest).

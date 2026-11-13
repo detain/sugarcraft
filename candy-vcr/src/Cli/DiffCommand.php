@@ -7,6 +7,7 @@ namespace SugarCraft\Vcr\Cli;
 use SugarCraft\Vcr\Cassette;
 use SugarCraft\Vcr\CassetteHeader;
 use SugarCraft\Vcr\Format\CassetteLoader;
+use SugarCraft\Vcr\Lang;
 
 /**
  * `candy-vcr diff [--strict] <a.cas> <b.cas>`
@@ -34,12 +35,12 @@ final class DiffCommand implements DocumentedCommand
 
     public function summary(): string
     {
-        return 'Compare two cassettes event-by-event';
+        return Lang::t('summary.diff');
     }
 
     public function usage(): string
     {
-        return 'usage: candy-vcr diff [--strict] <a.cas> <b.cas>' . "\n";
+        return Lang::t('cli.usage_label') . ' candy-vcr diff [--strict] <a.cas> <b.cas>' . "\n";
     }
 
     public function run(array $args, $stdout, $stderr): int
@@ -52,7 +53,7 @@ final class DiffCommand implements DocumentedCommand
                 continue;
             }
             if (str_starts_with($arg, '--')) {
-                fwrite($stderr, "candy-vcr diff: unknown option {$arg}\n");
+                fwrite($stderr, Lang::t('cli.unknown_option', ['verb' => 'diff', 'option' => $arg]) . "\n");
                 return 2;
             }
             $paths[] = $arg;
@@ -66,20 +67,20 @@ final class DiffCommand implements DocumentedCommand
             $a = $loader->load($paths[0]);
             $b = $loader->load($paths[1]);
         } catch (\Throwable $e) {
-            fwrite($stderr, "candy-vcr diff: {$e->getMessage()}\n");
+            fwrite($stderr, Lang::t('cli.err', ['verb' => 'diff', 'message' => $e->getMessage()]) . "\n");
             return 1;
         }
         CassetteLoader::writeTapeWarnings($loader, $stderr, 'diff');
 
         $diffs = $this->collectDiffs($a, $b, $strict);
         if ($diffs === []) {
-            fwrite($stdout, "cassettes are identical (header fields match; events match kind, payload, and timestamps within 2 ms)\n");
+            fwrite($stdout, Lang::t('diff.identical') . "\n");
             return 0;
         }
         foreach ($diffs as $line) {
             fwrite($stdout, $line . "\n");
         }
-        fwrite($stdout, sprintf("\n%d difference(s)\n", count($diffs)));
+        fwrite($stdout, "\n" . Lang::t('diff.count', ['count' => count($diffs)]) . "\n");
         return 1;
     }
 
@@ -92,13 +93,12 @@ final class DiffCommand implements DocumentedCommand
             $diffs[] = sprintf('header.v: %d != %d', $a->header->version, $b->header->version);
         }
         if ($a->header->cols !== $b->header->cols || $a->header->rows !== $b->header->rows) {
-            $diffs[] = sprintf(
-                'header dimensions: %dx%d != %dx%d',
-                $a->header->cols,
-                $a->header->rows,
-                $b->header->cols,
-                $b->header->rows,
-            );
+            $diffs[] = Lang::t('diff.dimensions', [
+                'a_cols' => $a->header->cols,
+                'a_rows' => $a->header->rows,
+                'b_cols' => $b->header->cols,
+                'b_rows' => $b->header->rows,
+            ]);
         }
 
         // Every remaining scalar header field, compared strictly. cols/rows
@@ -135,7 +135,7 @@ final class DiffCommand implements DocumentedCommand
         $aCount = $a->eventCount();
         $bCount = $b->eventCount();
         if ($aCount !== $bCount) {
-            $diffs[] = sprintf('event count: %d != %d', $aCount, $bCount);
+            $diffs[] = Lang::t('diff.event_count', ['a' => $aCount, 'b' => $bCount]);
         }
 
         $max = max($aCount, $bCount);
@@ -149,33 +149,27 @@ final class DiffCommand implements DocumentedCommand
             $bKind = $bEvent?->kind->value ?? 'none';
 
             if ($aEvent === null) {
-                $diffs[] = sprintf('event[%d]: missing in A, present in B (%s)', $i, $bKind);
+                $diffs[] = Lang::t('diff.missing_in_a', ['index' => $i, 'kind' => $bKind]);
                 continue;
             }
             if ($bEvent === null) {
-                $diffs[] = sprintf('event[%d]: present in A (%s), missing in B', $i, $aKind);
+                $diffs[] = Lang::t('diff.missing_in_b', ['index' => $i, 'kind' => $aKind]);
                 continue;
             }
             if ($aEvent->kind !== $bEvent->kind) {
-                $diffs[] = sprintf(
-                    'event[%d]: kind %s != %s',
-                    $i,
-                    $aKind,
-                    $bKind,
-                );
+                $diffs[] = Lang::t('diff.kind_differs', ['index' => $i, 'a' => $aKind, 'b' => $bKind]);
             }
             if (abs($aEvent->t - $bEvent->t) > self::T_TOLERANCE_SECONDS) {
-                $diffs[] = sprintf(
-                    'event[%d]: t differs (%s != %s)',
-                    $i,
-                    number_format($aEvent->t, 3, '.', ''),
-                    number_format($bEvent->t, 3, '.', ''),
-                );
+                $diffs[] = Lang::t('diff.time_differs', [
+                    'index' => $i,
+                    'a' => number_format($aEvent->t, 3, '.', ''),
+                    'b' => number_format($bEvent->t, 3, '.', ''),
+                ]);
             }
             $aPayload = $strict ? $aEvent->payload : self::stripMigrationMetadata($aEvent->payload);
             $bPayload = $strict ? $bEvent->payload : self::stripMigrationMetadata($bEvent->payload);
             if ($aPayload !== $bPayload) {
-                $diffs[] = sprintf('event[%d] payload differs (%s)', $i, $aKind);
+                $diffs[] = Lang::t('diff.payload_differs', ['index' => $i, 'kind' => $aKind]);
             }
         }
 

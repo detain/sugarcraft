@@ -4,6 +4,11 @@ declare(strict_types=1);
 
 namespace SugarCraft\Vcr\Cli;
 
+use SugarCraft\Vcr\Encode\TapeToGif;
+use SugarCraft\Vcr\Lang;
+use SugarCraft\Vcr\Tape\Compiler;
+use SugarCraft\Vcr\Tape\Lexer;
+use SugarCraft\Vcr\Tape\Parser;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
@@ -11,28 +16,25 @@ use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\ConsoleOutputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
-use SugarCraft\Vcr\Encode\TapeToGif;
-use SugarCraft\Vcr\Tape\Compiler;
-use SugarCraft\Vcr\Tape\Lexer;
-use SugarCraft\Vcr\Tape\Parser;
 
-#[AsCommand(name: 'render-tape', description: 'Render a .tape file to a .gif')]
+#[AsCommand(name: 'render-tape')]
 final class RenderTapeCommand extends Command
 {
     protected function configure(): void
     {
         $this
-            ->addArgument('tape', InputArgument::REQUIRED, 'Path to .tape file')
-            ->addOption('output', 'o', InputOption::VALUE_OPTIONAL, 'Output .gif path (default: same as input with .gif extension)')
-            ->addOption('font', 'f', InputOption::VALUE_OPTIONAL, 'TTF font family name (default: JetBrainsMono)')
-            ->addOption('theme', 't', InputOption::VALUE_OPTIONAL, 'Theme name (default: TokyoNight)', 'TokyoNight')
-            ->addOption('fps', null, InputOption::VALUE_OPTIONAL, 'Frames per second (default: 30)', '30')
-            ->addOption('backend', 'b', InputOption::VALUE_OPTIONAL, 'Rasterizer backend: gd|imagick (default: gd)', 'gd')
-            ->addOption('encoder', 'e', InputOption::VALUE_OPTIONAL, 'GIF encoder: ffmpeg|php (default: ffmpeg)', 'ffmpeg')
-            ->addOption('strict', null, InputOption::VALUE_NONE, 'Error on unknown directives instead of skipping')
-            ->addOption('shell', null, InputOption::VALUE_REQUIRED, 'Execute typed commands in this shell under a real PTY and capture the program output (exec mode). Overrides the tape\'s Set Shell.')
-            ->addOption('exec', null, InputOption::VALUE_NONE, 'Enable exec mode with a default shell ($SHELL or /bin/sh) when the tape sets no Set Shell')
-            ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Print the compiled event stream as JSONL instead of writing a GIF');
+            ->setDescription(Lang::t('desc.render_tape'))
+            ->addArgument('tape', InputArgument::REQUIRED, Lang::t('opt.tape'))
+            ->addOption('output', 'o', InputOption::VALUE_OPTIONAL, Lang::t('opt.output_gif'))
+            ->addOption('font', 'f', InputOption::VALUE_OPTIONAL, Lang::t('opt.font'))
+            ->addOption('theme', 't', InputOption::VALUE_OPTIONAL, Lang::t('opt.theme'), 'TokyoNight')
+            ->addOption('fps', null, InputOption::VALUE_OPTIONAL, Lang::t('opt.fps'), '30')
+            ->addOption('backend', 'b', InputOption::VALUE_OPTIONAL, Lang::t('opt.backend'), 'gd')
+            ->addOption('encoder', 'e', InputOption::VALUE_OPTIONAL, Lang::t('opt.encoder'), 'ffmpeg')
+            ->addOption('strict', null, InputOption::VALUE_NONE, Lang::t('opt.strict'))
+            ->addOption('shell', null, InputOption::VALUE_REQUIRED, Lang::t('opt.shell'))
+            ->addOption('exec', null, InputOption::VALUE_NONE, Lang::t('opt.exec'))
+            ->addOption('dry-run', null, InputOption::VALUE_NONE, Lang::t('opt.dry_run'));
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -52,7 +54,7 @@ final class RenderTapeCommand extends Command
         try {
             $fps = FpsOption::parse($input->getOption('fps')) ?? 30.0;
         } catch (\InvalidArgumentException $e) {
-            $output->writeln("<error>Failed: {$e->getMessage()}</error>");
+            $output->writeln('<error>' . Lang::t('render.failed', ['message' => $e->getMessage()]) . '</error>');
             return 1;
         }
 
@@ -64,7 +66,7 @@ final class RenderTapeCommand extends Command
             $backend = ChoiceOption::parse($input->getOption('backend'), '--backend', ['gd', 'imagick'], 'gd');
             $encoderType = ChoiceOption::parse($input->getOption('encoder'), '--encoder', ['ffmpeg', 'php'], 'ffmpeg');
         } catch (\InvalidArgumentException $e) {
-            $output->writeln("<error>Failed: {$e->getMessage()}</error>");
+            $output->writeln('<error>' . Lang::t('render.failed', ['message' => $e->getMessage()]) . '</error>');
             return 1;
         }
 
@@ -79,8 +81,8 @@ final class RenderTapeCommand extends Command
         $themeName = is_string($themeOpt) ? $themeOpt : 'TokyoNight';
 
         if (!is_file($tapePath)) {
-            $cwdHint = str_starts_with($tapePath, '/') ? '' : ' (cwd: ' . (string) getcwd() . ')';
-            $output->writeln("<error>Failed: tape file not found: {$tapePath}{$cwdHint}</error>");
+            $cwdHint = str_starts_with($tapePath, '/') ? '' : Lang::t('render.cwd_hint', ['cwd' => (string) getcwd()]);
+            $output->writeln('<error>' . Lang::t('render.failed', ['message' => Lang::t('render.tape_not_found', ['path' => $tapePath, 'hint' => $cwdHint])]) . '</error>');
             return 1;
         }
 
@@ -98,9 +100,9 @@ final class RenderTapeCommand extends Command
         $errorOutput = $output instanceof ConsoleOutputInterface
             ? $output->getErrorOutput()
             : $output;
-        $errorOutput->writeln(sprintf('Rendering %s ...', basename($tapePath)));
+        $errorOutput->writeln(Lang::t('render.rendering', ['name' => basename($tapePath)]));
         $progress = static function (int $frames, int $cellW, int $cellH) use ($errorOutput): void {
-            $errorOutput->writeln(sprintf('  %d frames rendered (%dx%d px cells)', $frames, $cellW, $cellH));
+            $errorOutput->writeln(Lang::t('render.progress', ['frames' => $frames, 'w' => $cellW, 'h' => $cellH]));
         };
 
         $tapeToGif = TapeToGif::create([
@@ -123,15 +125,15 @@ final class RenderTapeCommand extends Command
                 'onProgress' => $progress,
             ]);
         } catch (\Throwable $e) {
-            $output->writeln("<error>Failed: {$e->getMessage()}</error>");
+            $output->writeln('<error>' . Lang::t('render.failed', ['message' => $e->getMessage()]) . '</error>');
             return 1;
         }
 
         foreach ($tapeToGif->warnings() as $warning) {
-            $output->writeln("<comment>Warning: {$warning}</comment>");
+            $output->writeln('<comment>' . Lang::t('render.warning', ['warning' => $warning]) . '</comment>');
         }
 
-        $output->writeln("GIF written to {$writtenPath}");
+        $output->writeln(Lang::t('render.gif_written', ['path' => $writtenPath]));
         return 0;
     }
 
@@ -148,12 +150,12 @@ final class RenderTapeCommand extends Command
             // tape by name before it is ever slurped.
             $size = @filesize($tapePath);
             if ($size !== false && $size > Lexer::MAX_TAPE_BYTES) {
-                $output->writeln('<error>Failed: tape file ' . $tapePath . ' exceeds the ' . Lexer::MAX_TAPE_BYTES . '-byte tape cap</error>');
+                $output->writeln('<error>' . Lang::t('render.failed', ['message' => Lang::t('render.tape_too_large', ['path' => $tapePath, 'cap' => Lexer::MAX_TAPE_BYTES])]) . '</error>');
                 return 1;
             }
             $source = @file_get_contents($tapePath);
             if ($source === false) {
-                $output->writeln("<error>Failed: cannot read tape file: {$tapePath}</error>");
+                $output->writeln('<error>' . Lang::t('render.failed', ['message' => Lang::t('render.cannot_read_tape', ['path' => $tapePath])]) . '</error>');
                 return 1;
             }
             $tokens = (new Lexer())->tokenize($source);
@@ -164,7 +166,7 @@ final class RenderTapeCommand extends Command
             // print a clean stream with the bad directive quietly removed.
             $cassette = $compiler->compile($ast, $tapePath, $strict);
         } catch (\Throwable $e) {
-            $output->writeln("<error>Failed: {$e->getMessage()}</error>");
+            $output->writeln('<error>' . Lang::t('render.failed', ['message' => $e->getMessage()]) . '</error>');
             return 1;
         }
 
@@ -175,7 +177,7 @@ final class RenderTapeCommand extends Command
         if ($output instanceof ConsoleOutputInterface) {
             $errOut = $output->getErrorOutput();
             foreach ($compiler->warnings() as $warning) {
-                $errOut->writeln("<comment>Warning: {$warning}</comment>");
+                $errOut->writeln('<comment>' . Lang::t('render.warning', ['warning' => $warning]) . '</comment>');
             }
         }
 

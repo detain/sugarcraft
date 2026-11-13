@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Vcr\Cli;
 
+use SugarCraft\Vcr\Lang;
+
 /**
  * Parses the `--fps` option at the CLI boundary into a render cadence.
  *
@@ -38,13 +40,13 @@ final class FpsOption
         }
         if (!is_numeric($raw)) {
             throw new \InvalidArgumentException(
-                "--fps must be a positive number, got " . var_export($raw, true) . "."
+                Lang::t('fps.not_numeric', ['value' => var_export($raw, true)])
             );
         }
         $fps = (float) $raw;
         if (!is_finite($fps) || $fps <= 0.0) {
             throw new \InvalidArgumentException(
-                "--fps must be a positive finite number of frames per second, got " . var_export($raw, true) . "."
+                Lang::t('fps.not_positive', ['value' => var_export($raw, true)])
             );
         }
         return $fps;

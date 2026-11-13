@@ -287,6 +287,22 @@ hang. Every verb answers `-h` / `--help` with its own usage block on stdout and
 exit 0; `--version` / `-V` answers before verb dispatch — it prints `candy-vcr <version>` on
 stdout and exits 0 (a `dev` stamp in a plain checkout, the composer or phar version otherwise).
 
+### Localization
+
+The CLI prose is translated into the fleet's 16 locales (`ar cs de en es fr it ja ko nl pl pt pt-br ru tr zh-cn`,
+`lang/*.php`, namespace `vcr` through `SugarCraft\Vcr\Lang`). `bin/candy-vcr` picks the locale from
+`LC_ALL` → `LC_MESSAGES` → `LANG` (`T::setLocale(T::detect())`); an unset, `C`/`POSIX` or unshipped
+locale gives English, byte-identical to what this README quotes. Translated: the usage and `--help`
+prose, per-verb summaries, Symfony option descriptions of `render-tape`/`render-batch`, diagnostics,
+and the success/summary lines. Deliberately **not** translated, because scripts and tests match them
+or they are data: flag spellings, the `header.*` / `event[N]` field labels in `diff` output,
+the `t=… kind` event rows and `time<TAB>cursor<TAB>hash` frame rows of `inspect`, the `OK`/`FAIL`
+status tokens, JSONL from `--dry-run`, and messages raised by the library layer below the CLI
+(cassette loading, the tape lexer/parser, the renderers). Placeholders are bound by name, so a
+translation may reorder them; `LocaleParityTest` pins key sets and placeholder names across all
+16 files, and `LangUsageTest` fails on a `Lang::t` key missing from `en.php`, a dead `en.php` key, or a
+re-introduced `candy-vcr <verb>: …` literal in `src/Cli/`.
+
 `inspect` shows each event's timestamp, kind, and a short payload summary (with `--since=<seconds>` / `--until=<seconds>` filters). `replay` streams the cassette's recorded output bytes to stdout — `--speed=realtime` honours the recorded cadence (use it for visual demos), `--speed=instant` (the default when the flag is omitted) flushes everything as fast as the kernel will accept it; the header's `playbackSpeed` multiplier scales rendered output (`render-tape`/`render-batch`), not live replay. `diff` compares headers + per-event payloads and exits non-zero on any difference — event
 timestamps compare with a 2 ms tolerance (`DiffCommand::T_TOLERANCE_SECONDS = 0.002`), and the
 `_id`/`_enc` migration-metadata keys are stripped from both sides before payload comparison so a

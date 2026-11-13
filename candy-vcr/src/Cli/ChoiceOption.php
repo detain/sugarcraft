@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Vcr\Cli;
 
 use InvalidArgumentException;
+use SugarCraft\Vcr\Lang;
 
 /**
  * Parses a flagged choice option against its closed set of known values.
@@ -39,19 +40,17 @@ final class ChoiceOption
                 return $raw;
             }
 
-            throw new InvalidArgumentException(sprintf(
-                '%s must be one of %s, got "%s"',
-                $flag,
-                implode(', ', $known),
-                $raw
-            ));
+            throw new InvalidArgumentException(Lang::t('choice.invalid', [
+                'flag' => $flag,
+                'known' => implode(', ', $known),
+                'got' => $raw,
+            ]));
         }
 
-        throw new InvalidArgumentException(sprintf(
-            '%s must be one of %s, got %s',
-            $flag,
-            implode(', ', $known),
-            get_debug_type($raw)
-        ));
+        throw new InvalidArgumentException(Lang::t('choice.invalid_type', [
+            'flag' => $flag,
+            'known' => implode(', ', $known),
+            'got' => get_debug_type($raw),
+        ]));
     }
 }

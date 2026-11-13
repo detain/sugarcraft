@@ -7,6 +7,7 @@ namespace SugarCraft\Vcr\Cli;
 use SugarCraft\Vcr\Cassette;
 use SugarCraft\Vcr\EventKind;
 use SugarCraft\Vcr\Format\CassetteLoader;
+use SugarCraft\Vcr\Lang;
 use SugarCraft\Vcr\Support\Scalars;
 
 /**
@@ -25,12 +26,12 @@ final class StatsCommand implements DocumentedCommand
 {
     public function summary(): string
     {
-        return 'Show cassette statistics';
+        return Lang::t('summary.stats');
     }
 
     public function usage(): string
     {
-        return 'usage: candy-vcr stats <cassette>' . "\n";
+        return Lang::t('cli.usage_label') . ' candy-vcr stats <cassette>' . "\n";
     }
 
     public function run(array $args, $stdout, $stderr): int
@@ -41,7 +42,7 @@ final class StatsCommand implements DocumentedCommand
         $paths = [];
         foreach ($args as $arg) {
             if (str_starts_with($arg, '--')) {
-                fwrite($stderr, "candy-vcr stats: unknown option {$arg}\n");
+                fwrite($stderr, Lang::t('cli.unknown_option', ['verb' => 'stats', 'option' => $arg]) . "\n");
                 return 2;
             }
             $paths[] = $arg;
@@ -51,7 +52,7 @@ final class StatsCommand implements DocumentedCommand
             return 2;
         }
         if (count($paths) > 1) {
-            fwrite($stderr, "candy-vcr stats: unexpected argument {$paths[1]}\n");
+            fwrite($stderr, Lang::t('cli.err', ['verb' => 'stats', 'message' => Lang::t('stats.unexpected_argument', ['arg' => $paths[1]])]) . "\n");
             return 2;
         }
         $path = $paths[0];
@@ -60,7 +61,7 @@ final class StatsCommand implements DocumentedCommand
         try {
             $cassette = $loader->load($path);
         } catch (\Throwable $e) {
-            fwrite($stderr, "candy-vcr stats: {$e->getMessage()}\n");
+            fwrite($stderr, Lang::t('cli.err', ['verb' => 'stats', 'message' => $e->getMessage()]) . "\n");
             return 1;
         }
         CassetteLoader::writeTapeWarnings($loader, $stderr, 'stats');
@@ -88,14 +89,14 @@ final class StatsCommand implements DocumentedCommand
      */
     private function renderHeader($stdout, Cassette $cassette): void
     {
-        fwrite($stdout, sprintf(
-            "cassette v%d  %dx%d\n  runtime=%s  created=%s\n",
-            $cassette->header->version,
-            $cassette->header->cols,
-            $cassette->header->rows,
-            self::displaySafe($cassette->header->runtime),
-            self::displaySafe($cassette->header->createdAt),
-        ));
+        fwrite($stdout, Lang::t('stats.header', [
+            'version' => $cassette->header->version,
+            'cols' => $cassette->header->cols,
+            'rows' => $cassette->header->rows,
+        ]) . "\n  " . Lang::t('stats.header_meta', [
+            'runtime' => self::displaySafe($cassette->header->runtime),
+            'created' => self::displaySafe($cassette->header->createdAt),
+        ]) . "\n");
         fwrite($stdout, str_repeat('-', 72) . "\n");
     }
 
@@ -131,7 +132,7 @@ final class StatsCommand implements DocumentedCommand
                 $parts[] = sprintf("%s: %d", $kind, $count);
             }
         }
-        $line = "Events: {$cassette->eventCount()}" . ($parts === [] ? '' : '  ' . implode('  ', $parts));
+        $line = Lang::t('stats.events', ['count' => $cassette->eventCount()]) . ($parts === [] ? '' : '  ' . implode('  ', $parts));
         // Long tallies (all seven kinds live) would run past 80 columns.
         fwrite($stdout, wordwrap($line, 78, "\n  ", false) . "\n");
     }
@@ -142,7 +143,7 @@ final class StatsCommand implements DocumentedCommand
     private function renderDuration($stdout, Cassette $cassette): void
     {
         $duration = $cassette->duration();
-        fwrite($stdout, sprintf("Duration: %.3fs\n", $duration));
+        fwrite($stdout, Lang::t('stats.duration', ['seconds' => sprintf('%.3f', $duration)]) . "\n");
     }
 
     /**
@@ -178,9 +179,9 @@ final class StatsCommand implements DocumentedCommand
             $parts[] = "{$type}({$count})";
         }
         if ($rawByteCount > 0) {
-            $parts[] = "raw bytes({$rawByteCount})";
+            $parts[] = Lang::t('stats.raw_bytes', ['count' => $rawByteCount]);
         }
-        fwrite($stdout, "Input msgs: " . implode(', ', $parts) . "\n");
+        fwrite($stdout, Lang::t('stats.input_msgs', ['parts' => implode(', ', $parts)]) . "\n");
     }
 
     /**
@@ -201,11 +202,11 @@ final class StatsCommand implements DocumentedCommand
             }
         }
 
-        fwrite($stdout, sprintf("Output bytes: %d\n", $totalBytes));
+        fwrite($stdout, Lang::t('stats.output_bytes', ['bytes' => $totalBytes]) . "\n");
 
         if ($outputCount > 0) {
             $avg = $totalBytes / $outputCount;
-            fwrite($stdout, sprintf("Avg output/event: %.1f bytes\n", $avg));
+            fwrite($stdout, Lang::t('stats.avg_output', ['bytes' => sprintf('%.1f', $avg)]) . "\n");
         }
     }
 }

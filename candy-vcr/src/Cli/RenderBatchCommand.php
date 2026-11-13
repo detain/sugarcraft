@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Vcr\Cli;
 
+use SugarCraft\Vcr\Encode\TapeToGif;
+use SugarCraft\Vcr\Lang;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Helper\ProgressBar;
@@ -11,23 +13,23 @@ use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
-use SugarCraft\Vcr\Encode\TapeToGif;
 
-#[AsCommand(name: 'render-batch', description: 'Render all .tape files in a directory')]
+#[AsCommand(name: 'render-batch')]
 final class RenderBatchCommand extends Command
 {
     protected function configure(): void
     {
         $this
-            ->addArgument('dir', InputArgument::REQUIRED, 'Directory containing .tape files')
-            ->addOption('output-dir', 'o', InputOption::VALUE_OPTIONAL, 'Output directory for .gif files (default: same as source dir)')
-            ->addOption('font', 'f', InputOption::VALUE_OPTIONAL, 'TTF font family name (default: JetBrainsMono)')
-            ->addOption('recursive', 'r', InputOption::VALUE_NONE, 'Search recursively')
-            ->addOption('backend', 'b', InputOption::VALUE_OPTIONAL, 'Rasterizer backend: gd|imagick (default: gd)', 'gd')
-            ->addOption('encoder', 'e', InputOption::VALUE_OPTIONAL, 'GIF encoder: ffmpeg|php (default: ffmpeg)', 'ffmpeg')
-            ->addOption('theme', 't', InputOption::VALUE_OPTIONAL, 'Theme name (default: TokyoNight)', 'TokyoNight')
-            ->addOption('fps', null, InputOption::VALUE_OPTIONAL, 'Frames per second (default: 30)', '30')
-            ->addOption('strict', null, InputOption::VALUE_NONE, 'Error on unknown directives instead of skipping');
+            ->setDescription(Lang::t('desc.render_batch'))
+            ->addArgument('dir', InputArgument::REQUIRED, Lang::t('opt.dir'))
+            ->addOption('output-dir', 'o', InputOption::VALUE_OPTIONAL, Lang::t('opt.output_dir'))
+            ->addOption('font', 'f', InputOption::VALUE_OPTIONAL, Lang::t('opt.font'))
+            ->addOption('recursive', 'r', InputOption::VALUE_NONE, Lang::t('opt.recursive'))
+            ->addOption('backend', 'b', InputOption::VALUE_OPTIONAL, Lang::t('opt.backend'), 'gd')
+            ->addOption('encoder', 'e', InputOption::VALUE_OPTIONAL, Lang::t('opt.encoder'), 'ffmpeg')
+            ->addOption('theme', 't', InputOption::VALUE_OPTIONAL, Lang::t('opt.theme'), 'TokyoNight')
+            ->addOption('fps', null, InputOption::VALUE_OPTIONAL, Lang::t('opt.fps'), '30')
+            ->addOption('strict', null, InputOption::VALUE_NONE, Lang::t('opt.strict'));
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -43,7 +45,7 @@ final class RenderBatchCommand extends Command
         try {
             $fps = FpsOption::parse($input->getOption('fps')) ?? 30.0;
         } catch (\InvalidArgumentException $e) {
-            $output->writeln("<error>Failed: {$e->getMessage()}</error>");
+            $output->writeln('<error>' . Lang::t('render.failed', ['message' => $e->getMessage()]) . '</error>');
             return 1;
         }
 
@@ -53,7 +55,7 @@ final class RenderBatchCommand extends Command
             $backend = ChoiceOption::parse($input->getOption('backend'), '--backend', ['gd', 'imagick'], 'gd');
             $encoderType = ChoiceOption::parse($input->getOption('encoder'), '--encoder', ['ffmpeg', 'php'], 'ffmpeg');
         } catch (\InvalidArgumentException $e) {
-            $output->writeln("<error>Failed: {$e->getMessage()}</error>");
+            $output->writeln('<error>' . Lang::t('render.failed', ['message' => $e->getMessage()]) . '</error>');
             return 1;
         }
 
@@ -66,23 +68,23 @@ final class RenderBatchCommand extends Command
         $fontFamily = is_string($fontOpt) ? $fontOpt : 'JetBrainsMono';
 
         if (!is_dir($dir)) {
-            $output->writeln("<error>Not a directory: {$dir}</error>");
+            $output->writeln('<error>' . Lang::t('batch.not_directory', ['dir' => $dir]) . '</error>');
             return 1;
         }
 
         $tapeFiles = $this->collectTapeFiles($dir, $recursive);
 
         if ($tapeFiles === []) {
-            $output->writeln("<comment>No .tape files found in {$dir}</comment>");
+            $output->writeln('<comment>' . Lang::t('batch.none_found', ['dir' => $dir]) . '</comment>');
             return 0;
         }
 
         sort($tapeFiles, SORT_STRING);
 
         $total = count($tapeFiles);
-        $output->writeln("Rendering {$total} tape(s) in {$dir}");
+        $output->writeln(Lang::t('batch.rendering', ['total' => $total, 'dir' => $dir]));
         if ($outputDir !== null) {
-            $output->writeln("Output directory: {$outputDir}");
+            $output->writeln(Lang::t('batch.output_directory', ['dir' => $outputDir]));
         }
 
         $progressBar = new ProgressBar($output, $total);
@@ -128,7 +130,7 @@ final class RenderBatchCommand extends Command
             // the second one loudly instead.
             if (isset($claimedOutputs[$outputGif])) {
                 $results[$tapeFile] = [
-                    'status' => "FAIL: skipped — {$outputGif} already claimed by {$claimedOutputs[$outputGif]}",
+                    'status' => 'FAIL: ' . Lang::t('batch.claimed', ['gif' => $outputGif, 'tape' => $claimedOutputs[$outputGif]]),
                     'time' => 0.0,
                 ];
                 $failCount++;
@@ -166,7 +168,7 @@ final class RenderBatchCommand extends Command
 
         $totalTime = microtime(true) - $startTime;
 
-        $output->writeln(sprintf(' %-40s %-10s %s', 'filename', 'status', 'time'));
+        $output->writeln(' ' . self::pad(Lang::t('batch.col_filename'), 40) . ' ' . self::pad(Lang::t('batch.col_status'), 10) . ' ' . Lang::t('batch.col_time'));
         $output->writeln(str_repeat('-', 65));
 
         foreach ($tapeFiles as $tapeFile) {
@@ -189,15 +191,23 @@ final class RenderBatchCommand extends Command
         }
 
         $output->writeln(str_repeat('-', 65));
-        $output->writeln(sprintf(
-            'Total: %d | Succeeded: %d | Failed: %d | Time: %.3fs',
-            $total,
-            $successCount,
-            $failCount,
-            $totalTime
-        ));
+        $output->writeln(Lang::t('batch.total', [
+            'total' => $total,
+            'ok' => $successCount,
+            'failed' => $failCount,
+            'seconds' => sprintf('%.3f', $totalTime),
+        ]));
 
         return $failCount > 0 ? 1 : 0;
+    }
+
+    /**
+     * Pad by display width, not bytes: translated column headers carry
+     * multibyte text, and sprintf's %-Ns would under-pad them.
+     */
+    private static function pad(string $text, int $width): string
+    {
+        return $text . str_repeat(' ', max(0, $width - mb_strwidth($text)));
     }
 
     /**

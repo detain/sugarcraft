@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Vcr\Cli;
 
+use SugarCraft\Vcr\Lang;
 use Symfony\Component\Console\Application as SymfonyApp;
 use Symfony\Component\Console\Command\Command as SymfonyCommand;
 use Symfony\Component\Console\Input\StringInput;
@@ -71,7 +72,7 @@ final class Application
         $name = $args[0];
         $rest = array_slice($args, 1);
         if (!isset($this->commands[$name])) {
-            fwrite($stderr, "candy-vcr: unknown subcommand '{$name}'\n\n");
+            fwrite($stderr, Lang::t('app.unknown_subcommand', ['name' => $name]) . "\n\n");
             $this->printUsage($stderr);
             return 2;
         }
@@ -112,7 +113,7 @@ final class Application
     {
         $command = $this->commands[$name] ?? null;
         if ($command === null) {
-            fwrite($stderr, "candy-vcr: unknown subcommand '{$name}'\n\n");
+            fwrite($stderr, Lang::t('app.unknown_subcommand', ['name' => $name]) . "\n\n");
             $this->printUsage($stderr);
             return 2;
         }
@@ -193,8 +194,8 @@ final class Application
      */
     private function printUsage($out): void
     {
-        fwrite($out, "usage: candy-vcr <subcommand> [options...]\n\n");
-        fwrite($out, "subcommands:\n");
+        fwrite($out, Lang::t('app.usage') . "\n\n");
+        fwrite($out, Lang::t('app.subcommands') . "\n");
         foreach ($this->commands as $name => $cmd) {
             if ($cmd instanceof SymfonyCommand) {
                 fwrite($out, sprintf("  %-14s %s\n", $name, $cmd->getDescription()));
@@ -202,7 +203,7 @@ final class Application
                 fwrite($out, sprintf("  %-14s %s\n", $name, $cmd->summary()));
             }
         }
-        fwrite($out, "\n  --version, -V  Print the version and exit.\n");
+        fwrite($out, "\n  --version, -V  " . Lang::t('app.version_flag') . "\n");
     }
 
     /**

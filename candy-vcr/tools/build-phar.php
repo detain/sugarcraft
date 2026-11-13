@@ -32,7 +32,7 @@ declare(strict_types=1);
  * `--vendor=monorepo` is the loud dev-only hatch and skips ONLY that
  * preflight (the symlink guard still stands).
  *
- * WHAT IS PACKAGED: bin/, src/, fonts/, vendor/ and LICENSE, at the archive
+ * WHAT IS PACKAGED: bin/, src/, lang/, fonts/, vendor/ and LICENSE, at the archive
  * root mirroring the package layout, so bin/candy-vcr's `__DIR__ . '/../vendor'`
  * candidate resolves inside the archive and every `__DIR__`-relative DATA read
  * (FontLoader's `__DIR__ . '/../../fonts/'`, Lang lookups) keeps the layout it
@@ -124,7 +124,7 @@ if (!is_file($package . '/vendor/autoload.php')) {
 }
 
 /** Roots packaged at the archive, verbatim. Everything else stays out. */
-const INCLUDE_ROOTS = ['bin', 'src', 'fonts', 'vendor'];
+const INCLUDE_ROOTS = ['bin', 'src', 'lang', 'fonts', 'vendor'];
 /** Loose files packaged at the archive root. */
 const INCLUDE_FILES = ['LICENSE'];
 /** Never shipped, at any depth. */

@@ -43,6 +43,9 @@ if ($archive !== '') {
     }
     require $path;
 
+    // Locale wiring (LC_ALL / LC_MESSAGES / LANG): before the first message.
+    \SugarCraft\Core\I18n\T::setLocale(\SugarCraft\Core\I18n\T::detect());
+
     exit((new SugarCraft\Vcr\Cli\Application())->run($argv, STDOUT, STDERR));
 }
 
@@ -88,6 +91,12 @@ if ($autoload === null) {
 }
 require $autoload;
 
+use SugarCraft\Core\I18n\T;
 use SugarCraft\Vcr\Cli\Application;
+
+// Locale wiring: honour LC_ALL/LC_MESSAGES/LANG like every translated app.
+// Translated surface = usage/help prose, diagnostics and summaries; flag
+// spellings, cassette data and machine-readable lines stay as written.
+T::setLocale(T::detect());
 
 exit((new Application())->run($argv, STDOUT, STDERR));
