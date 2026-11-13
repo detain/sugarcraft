@@ -9,5 +9,5 @@
 declare(strict_types=1);
 
 return [
-    'database.no_file' => 'candy-sql : fichier SQLite introuvable : {path}',
+    'database.no_file' => 'fichier SQLite introuvable : {path}',
 ];

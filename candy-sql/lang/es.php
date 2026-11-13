@@ -9,5 +9,5 @@
 declare(strict_types=1);
 
 return [
-    'database.no_file' => 'candy-sql: archivo SQLite no encontrado: {path}',
+    'database.no_file' => 'archivo SQLite no encontrado: {path}',
 ];
