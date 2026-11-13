@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace SugarCraft\Kv\Import;
 
-use SugarCraft\Core\Util\Json;
 use SugarCraft\Kv\Store;
 use SugarCraft\Kv\Support\InputPath;
 use SugarCraft\Kv\Support\Ttl;
@@ -38,6 +37,10 @@ use SugarCraft\Kv\YamlDialect;
  * Anything the store cannot hold faithfully is refused up front, before a
  * single write: a list top level, non-scalar values, and non-numeric or
  * non-positive TTLs all raise \RuntimeException naming the offending entry.
+ * JSON numbers keep their document spelling (candy-kv-024): an out-of-range
+ * integer lands as its exact digit string, and a float that storing would
+ * rewrite (3.10, 1e2, 1e999) refuses the import like any other unfaithful
+ * value.
  */
 final class JsonImporter
 {
@@ -135,8 +138,7 @@ final class JsonImporter
         // Guarded decode: a non-array top level (bare scalar/null) is rejected
         // with a clear \RuntimeException instead of silently iterating as an
         // empty foreach downstream. Malformed JSON still surfaces \JsonException.
-        /** @var array<array-key, mixed> $data */
-        $data = Json::decodeArray($json);
+        $data = self::decodeDocument($json);
 
         // A JSON list is not a key/value document. Its integer subscripts
         // would import as entries "0", "1", ... — a silent reshape of the
@@ -220,8 +222,12 @@ final class JsonImporter
                 throw new \InvalidArgumentException('Entry key must not be empty.');
             }
 
-            if (\is_int($value) || \is_float($value)) {
+            if (\is_int($value)) {
                 $value = (string) $value;
+            } elseif (\is_float($value)) {
+                // kv-024: only a float whose canonical text IS a spelling the
+                // document used round-trips as stored text; see floatTextOrFail.
+                $value = self::floatTextOrFail($value, $key, $json);
             } elseif (!\is_string($value)) {
                 // null lands here too: get_debug_type(null) = 'null'. A
                 // null once coerced silently to an empty string — explicit
@@ -283,6 +289,66 @@ final class JsonImporter
         }
 
         return $import();
+    }
+
+    /**
+     * Decode the document with the flags this store's fidelity law needs:
+     * JSON_THROW_ON_ERROR (malformed answers loudly, as sugar-core's shared
+     * Json::decodeArray does) plus JSON_BIGINT_AS_STRING (candy-kv-024) —
+     * an out-of-int-range literal must keep every digit, and without the
+     * flag json_decode hands back a float, so `18446744073709551615` used
+     * to import as '1.844674407371E+19' with the digits destroyed. The
+     * shared helper cannot carry the flag (its rider is tracked for the
+     * core lane, gate G8: kv-local decode flags), so the guarded top-level
+     * check is mirrored here with the same wording.
+     *
+     * @return array<array-key, mixed>
+     *
+     * @throws \JsonException    On malformed JSON.
+     * @throws \RuntimeException When the decoded top level is not an object.
+     */
+    private static function decodeDocument(string $json): array
+    {
+        /** @var mixed $decoded */
+        $decoded = \json_decode($json, true, flags: \JSON_THROW_ON_ERROR | \JSON_BIGINT_AS_STRING);
+
+        if (!\is_array($decoded)) {
+            throw new \RuntimeException(
+                'Expected JSON top level to be an array, got ' . \get_debug_type($decoded) . '.'
+            );
+        }
+
+        return $decoded;
+    }
+
+    /**
+     * The float half of the number fidelity law (candy-kv-024): a decoded
+     * float may be stored only when its canonical text — the shortest repr
+     * that re-parses to the identical value, which is what a plain (string)
+     * cast yields — is a plain fixed-point decimal AND a numeric literal the
+     * raw document actually contains. Otherwise storing rewrites digits the
+     * document spelled: 3.10 would land as '3.1', 1e2 as '100', 1e999 decodes
+     * to the word 'INF'. The README promises exactly this: values that cannot
+     * round-trip as stored text refuse the whole import. Known best-effort
+     * hole: the scan is document-wide, so a drifted spelling that happens to
+     * match a sibling entry's exact literal slips through — every such pair
+     * carries the same digits at least once in the document anyway.
+     */
+    private static function floatTextOrFail(float $value, string $key, string $json): string
+    {
+        $text = (string) $value;
+        if (!\is_finite($value) || \preg_match('/^-?\d++(?:\.\d++)?$/', $text) !== 1) {
+            throw new \RuntimeException(
+                \sprintf('Entry "%s" has the float %s; only exactly-spelled decimal numbers round-trip.', $key, $text)
+            );
+        }
+        if (\preg_match('/(?<![\d.])' . \preg_quote($text, '/') . '(?![\d.eE])/', $json) !== 1) {
+            throw new \RuntimeException(
+                \sprintf('Entry "%s" has the float %s; storing it would rewrite the document spelling, so only exactly-spelled decimal numbers round-trip.', $key, $text)
+            );
+        }
+
+        return $text;
     }
 
     /**

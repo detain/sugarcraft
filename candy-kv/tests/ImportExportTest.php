@@ -337,6 +337,93 @@ final class ImportExportTest extends TestCase
         $importer->importFromString('{not valid json', false);
     }
 
+    // ─── JsonImporter number fidelity (candy-kv-024) ─────────────────────────
+
+    public function testBigIntegersImportWithEveryDigit(): void
+    {
+        // Without JSON_BIGINT_AS_STRING the decoder hands back a float and
+        // the digits are destroyed: this literal used to import as
+        // '1.844674407371E+19'. The flag keeps the exact digit string.
+        $importer = new JsonImporter($this->store);
+        $count = $importer->importFromString('{"big":18446744073709551615,"neg":-18446744073709551616}', false);
+
+        $this->assertSame(2, $count);
+        $this->assertSame('18446744073709551615', $this->store->get('big'));
+        $this->assertSame('-18446744073709551616', $this->store->get('neg'));
+    }
+
+    public function testExactlySpelledFloatsImportAsText(): void
+    {
+        // Positive control for the fidelity law: a float whose canonical
+        // repr is the very literal the document spelled stays legal.
+        $importer = new JsonImporter($this->store);
+        $count = $importer->importFromString('{"pi":3.14159,"half":0.5,"neg":-2.25,"whole":-7}', false);
+
+        $this->assertSame(4, $count);
+        $this->assertSame('3.14159', $this->store->get('pi'));
+        $this->assertSame('0.5', $this->store->get('half'));
+        $this->assertSame('-2.25', $this->store->get('neg'));
+        $this->assertSame('-7', $this->store->get('whole'));
+    }
+
+    public function testTrailingZeroFloatRefusesTheWholeImport(): void
+    {
+        // 3.10 decodes to float 3.1 — storing it rewrites the document's
+        // digits, so the README's refuse-unfaithful-values law applies and
+        // NOTHING commits, not even the row before the drifted one.
+        $importer = new JsonImporter($this->store);
+        try {
+            $importer->importFromString('{"good":"kept","bad":3.10}', false);
+            $this->fail('Expected RuntimeException for the drifted float spelling.');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('Entry "bad" has the float 3.1', $e->getMessage());
+            $this->assertStringContainsString('would rewrite the document spelling', $e->getMessage());
+        }
+        $this->assertSame('', $this->store->get('good'));
+        $this->assertSame([], \iterator_to_array($this->store->list()));
+    }
+
+    public function testExponentSpellingRefusesTheImport(): void
+    {
+        // 1e2 decodes to 100.0; storing would print '100', not the exponent
+        // spelling the document used.
+        $importer = new JsonImporter($this->store);
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Entry "k" has the float 100; storing it would rewrite the document spelling');
+        $importer->importFromString('{"k":1e2}', false);
+    }
+
+    public function testIntegerSpelledFloatRefusesTheImport(): void
+    {
+        // 3.0 decodes to float 3.0 whose canonical text is "3" — the trailing
+        // ".0" the document spelled cannot survive storage.
+        $importer = new JsonImporter($this->store);
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Entry "k" has the float 3; storing it would rewrite the document spelling');
+        $importer->importFromString('{"k":3.0}', false);
+    }
+
+    public function testOverflowedFloatRefusesTheImport(): void
+    {
+        // 1e999 is not malformed to PHP's decoder — it lands as INF, whose
+        // (string) cast is the WORD 'INF'. Not a number the store can hold.
+        $importer = new JsonImporter($this->store);
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Entry "k" has the float INF; only exactly-spelled decimal numbers round-trip');
+        $importer->importFromString('{"k":1e999}', false);
+    }
+
+    public function testHugeTtlSecondsRefuseAsNotWholeSeconds(): void
+    {
+        // The same flag touches the envelope: an out-of-range TTL literal now
+        // arrives as a digit string and the whole-seconds law refuses it (it
+        // used to reach the horizon check laundered as a float).
+        $importer = new JsonImporter($this->store);
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('_ttl entry "k" must be an integer number of seconds, got 18446744073709551615.');
+        $importer->importFromString('{"_ttl":{"k":18446744073709551615},"k":"v"}', false);
+    }
+
     // ─── YamlImporter ─────────────────────────────────────────────────────────
 
     public function testYamlImporterFromFile(): void
