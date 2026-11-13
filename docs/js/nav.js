@@ -2,8 +2,11 @@
  * Dropdown navigation enhancement.
  *
  * The panels themselves open via CSS (:hover and :focus-within at ≥641px).
- * This script is progressive enhancement only — with JS disabled, hovering
- * and keyboard focus still open every panel. Here we add:
+ * This script is progressive enhancement only. With JS disabled the head
+ * setter never adds the 'js' class, so SD-S27's gates change the defaults
+ * instead of breaking: desktop keeps the pure-CSS :hover / :focus-within
+ * reveal, and at phone widths the panels render as open in-flow sheets so
+ * category browsing survives without a click handler (SD-S27). Here we add:
  *
  *   - click/tap toggling of .nav-open on the owning <li> (the mobile path,
  *     and a convenience on desktop),

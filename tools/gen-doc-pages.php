@@ -330,6 +330,7 @@ function page_head(array $page): string
         <link rel="apple-touch-icon" href="{$dir}img/profile.png">
         <link rel="stylesheet" href="{$dir}css/style.css">
         <link rel="stylesheet" href="{$dir}css/search.css">
+    <script>document.documentElement.className += " js";</script>
     </head>
     <body>
 

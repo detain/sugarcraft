@@ -890,6 +890,7 @@ function build_prefix(string $slug, string $title, string $desc, string $ogTitle
         <link rel="icon" type="image/png" href="../img/icons/{$slug}.png">
         <link rel="stylesheet" href="../css/style.css">
             <link rel="stylesheet" href="../css/search.css">
+        <script>document.documentElement.className += " js";</script>
         </head>
         <body>
 

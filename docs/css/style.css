@@ -274,7 +274,11 @@ code, pre, .mono {
 }
 
 .nav-drop {
-    display: none;
+    /* Closed-by-default is a JS contract (SD-S27): nav.js only ever
+       manipulates panels once the 'js' class is on <html>, so the gate
+       ships only for engines that can actually run it. Without JS the
+       desktop rules below keep hover/focus opening (unchanged), and at
+       phone widths the panels degrade to open in-flow sheets. */
     position: absolute;
     top: 100%;
     left: 0;
@@ -288,6 +292,8 @@ code, pre, .mono {
     box-shadow: 0 18px 48px rgba(0, 0, 0, .45);
     padding: 8px;
 }
+
+html.js .nav-drop { display: none; }
 
 .nav-item-drop-right .nav-drop {
     /* Docs▾ sits near the right edge — open its panel leftwards so it can
@@ -334,6 +340,11 @@ code, pre, .mono {
     .nav-item.nav-locked .nav-drop {
         display: none;
     }
+
+    /* SD-S27 mirror of the phone-width gate: without JS the panels must
+       start closed on desktop too, so :hover / :focus-within above (which
+       win by specificity) are the only openers — exactly today's behavior. */
+    html:not(.js) .nav-drop { display: none; }
 
     /* The 40-item package list flows into columns so the panel's height
        stays bounded; overflow-y above catches the remainder. */
@@ -1121,6 +1132,36 @@ pre.code .num  { color: #fcd5b4; }
     .nav-links a, .search-trigger, .nav-drop-toggle { font-size: 0.85rem; padding: 5px 10px; }
     .nav-drop, .nav-item-drop-right .nav-drop { left: 0; right: 0; max-height: 60vh; border-radius: 0 0 14px 14px; }
     .nav-item.nav-open .nav-drop { display: block; }
+
+    /* SD-S27: with JS disabled nothing ever sets .nav-open here, so the
+       panels would be unreachable — the whole point of the mobile bar is
+       category browsing. Instead they render as open, in-flow sheets
+       stacked under their trigger inside the scrollable bar. */
+    html:not(.js) .nav-item { flex-direction: column; align-items: flex-start; }
+    html:not(.js) .nav-drop,
+    html:not(.js) .nav-item-drop-right .nav-drop {
+        display: block;
+        position: static;
+        max-height: none;
+        min-width: 0;
+        border: 0;
+        box-shadow: none;
+        padding: 0;
+        border-radius: 0;
+    }
+    html:not(.js) .nav-drop-toggle {
+        /* Inert without a listener: flatten the button into a static
+           group heading so it neither lies about being clickable nor
+           deletes the only visible category label. */
+        appearance: none;
+        -webkit-appearance: none;
+        background: transparent;
+        border: 0;
+        padding: 5px 10px;
+        color: var(--ink);
+        font-weight: 700;
+        cursor: default;
+    }
     .section { padding: 64px 0; }
     .hero { padding: 64px 0 48px 0; }
     .quickstart { padding: 22px; }
