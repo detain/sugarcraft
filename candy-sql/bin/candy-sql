@@ -339,6 +339,10 @@ KEYBOARD SHORTCUTS (TUI)
   Ctrl+Shift+F Remove the current query from the favorites list
   1-8          Jump to an admin pane (only while the Admin pane is focused)
   q            Quit from the Tables/Rows panes; returns to Tables from Admin
+  x            (Tables/Rows, live result) export the current rows to a CSV
+               path — refuse-overwrite arms until Enter confirms
+  i            (Tables/Rows) import a CSV file into a named table
+  Ctrl+S       Export the live result/preview to CSV from any pane
   Esc          Quit from the Tables/Rows panes; cancels an open Admin dialog
   Backspace    Delete the character before the cursor (Query editor)
 

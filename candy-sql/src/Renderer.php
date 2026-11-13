@@ -12,6 +12,7 @@ use SugarCraft\Forms\ItemList\StringItem;
 use SugarCraft\Table\{Column, Row, RowData, Table};
 use SugarCraft\Sql\Admin\AdminPane;
 use SugarCraft\Sql\Admin\AdminSection;
+use SugarCraft\Sql\App\ExportState;
 use SugarCraft\Sql\Terminal\BorderFrame;
 use SugarCraft\Style\Border;
 use SugarCraft\Style\Layout;
@@ -143,7 +144,11 @@ final class Renderer
             $help = Style::new()->foreground(Color::hex('#7d6e98'))
                 ->render("1-{$paneCount}  select page  ·  j/k  navigate  ·  p  pause  ·  r  reset  ·  tab  switch pane  ·  q  back  ·  esc  cancel dialog");
             $status = '';
-            if ($a->ui->error !== null) {
+            $ioPrompt = self::ioPrompt($a);
+            if ($ioPrompt !== null) {
+                $status = "\n " . Style::new()->foreground(Color::hex('#6ee7b7'))
+                    ->render($ioPrompt);
+            } elseif ($a->ui->error !== null) {
                 // Driver/server error text is untrusted for the terminal —
                 // a hostile server can embed ESC sequences in its message.
                 $status = "\n " . Style::new()->foreground(Color::hex('#ff5f87'))->bold()
@@ -170,11 +175,17 @@ final class Renderer
                 ->render('tab  switch pane  ·  ctrl+r / ctrl+e  run  ·  enter  newline  ·  ↑/↓  recall history  ·  ctrl+c  quit');
         } else {
             $help = Style::new()->foreground(Color::hex('#7d6e98'))
-                ->render('tab  switch pane  ·  enter  load table  ·  q / esc  quit');
+                ->render('tab  switch pane  ·  enter  load table  ·  x  export  ·  i  import  ·  q / esc  quit');
         }
 
         $status = '';
-        if ($a->ui->error !== null) {
+        $ioPrompt = self::ioPrompt($a);
+        if ($ioPrompt !== null) {
+            // SQL-O07: an open file line out-ranks the plain status echo —
+            // it IS the input surface, and its text is user bytes.
+            $status = "\n " . Style::new()->foreground(Color::hex('#6ee7b7'))
+                ->render($ioPrompt);
+        } elseif ($a->ui->error !== null) {
             $status = "\n " . Style::new()->foreground(Color::hex('#ff5f87'))->bold()
                 ->render('error: ' . CellValue::sanitize((string) $a->ui->error));
         } elseif ($a->ui->status !== null) {
@@ -467,5 +478,22 @@ final class Renderer
     private static function focusedTitle(string $title): string
     {
         return Style::new()->bold()->render('▶' . $title);
+    }
+
+    /**
+     * The open file line (SQL-O07) as a status-bar prompt, or null when no
+     * line is open. Buffer/path bytes are user input — sanitized here, the
+     * same law that governs every other echoed string on this line.
+     */
+    private static function ioPrompt(App $a): ?string
+    {
+        $line = CellValue::sanitize($a->io->buffer);
+        return match ($a->io->stage) {
+            ExportState::STAGE_EXPORT_PATH => 'to CSV → ' . $line . '  (enter writes · esc cancels)',
+            ExportState::STAGE_EXPORT_OVERWRITE => 'REPLACE ' . $line . '?  (enter confirms · esc cancels)',
+            ExportState::STAGE_IMPORT_PATH => 'import CSV ← ' . $line . '  (enter · esc cancels)',
+            ExportState::STAGE_IMPORT_TABLE => 'importing ' . CellValue::sanitize($a->io->path) . ' → table ' . $line . '  (enter · esc cancels)',
+            default => null,
+        };
     }
 }

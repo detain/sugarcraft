@@ -48,11 +48,13 @@ use SugarCraft\Sql\Db\DatabaseInterface;
 use SugarCraft\Sql\Db\Flavor;
 use SugarCraft\Sql\Db\MysqlDatabase;
 use SugarCraft\Sql\Db\PreviewQuery;
+use SugarCraft\Sql\Db\Export\CsvExporter;
 use SugarCraft\Sql\Db\ReconnectException;
 use SugarCraft\Sql\App\AdminState;
 use SugarCraft\Sql\App\AppBuilder;
 use SugarCraft\Sql\App\BrowseState;
 use SugarCraft\Sql\App\ConnectionState;
+use SugarCraft\Sql\App\ExportState;
 use SugarCraft\Sql\App\QueryState;
 use SugarCraft\Sql\App\UiState;
 use SugarCraft\Sql\Admin\History\HistoryRecorder;
@@ -87,6 +89,10 @@ use SugarCraft\Sql\Core\Msg\TableRowsLoadedMsg;
  * Tab cycles focus; j/k or arrows move the cursor in list panes;
  * `q` quits from the Tables and Rows panes and returns to Tables
  * from the Admin pane (App::handleKey routing).
+ * File lines (SQL-O07): `Ctrl+S`/`x` export the live result to a CSV path,
+ * `i` imports one into a named table — the open line owns the keyboard,
+ * Enter is the only submit key, and an existing destination arms a
+ * refuse-overwrite confirm before anything is replaced.
  *
  * Query editor:
  *   - The Query pane is backed by a sugar-forms {@see TextArea} — it owns
@@ -112,6 +118,7 @@ final class App implements Model
         public readonly QueryState $query = new QueryState(),
         public readonly UiState $ui = new UiState(),
         public readonly AdminState $admin = new AdminState(),
+        public readonly ExportState $io = new ExportState(),
     ) {}
 
     /**
@@ -313,7 +320,9 @@ final class App implements Model
             && ($this->ui->pane === Pane::Tables || $this->ui->pane === Pane::Rows)
             // SQL-O10: while the `/` line is open it owns the keyboard —
             // Escape abandons the line, and 'q' is just a filter letter.
-            && !($this->ui->pane === Pane::Tables && $this->browse->filterMode)) {
+            && !($this->ui->pane === Pane::Tables && $this->browse->filterMode)
+            // SQL-O07: same law for an open export/import file line.
+            && !$this->io->isPromptOpen()) {
             return [$this, Cmd::quit()];
         }
         if ($msg->type === KeyType::Tab) {
@@ -334,6 +343,31 @@ final class App implements Model
                 ];
             }
             return [$this->withPane($nextPane), null];
+        }
+        // SQL-O07: while a file line is open it owns the keyboard, whichever
+        // pane raised it — printable runes build the path, Enter advances.
+        if ($this->io->isPromptOpen()) {
+            return $this->handleIoKey($msg);
+        }
+        // Openers: Ctrl+S works from any pane that can hold a result; the
+        // letter chords x (export) and i (import) are browser-pane-only so
+        // the Query editor keeps typing those letters. Export needs live
+        // rows; import starts from a path, not from a result.
+        if ($msg->ctrl && $msg->type === KeyType::Char && $msg->rune === 's' && $this->browse->rows !== []) {
+            return $this->openIoLine(ExportState::STAGE_EXPORT_PATH);
+        }
+        if (!$msg->ctrl
+            && $msg->type === KeyType::Char
+            // SQL-O10 law: an open '/' filter line owns printable letters —
+            // 'i'/'x' mid-filter are filter runes, not opener chords.
+            && !$this->browse->filterMode
+            && ($this->ui->pane === Pane::Tables || $this->ui->pane === Pane::Rows)) {
+            if ($msg->rune === 'x' && $this->browse->rows !== []) {
+                return $this->openIoLine(ExportState::STAGE_EXPORT_PATH);
+            }
+            if ($msg->rune === 'i') {
+                return $this->openIoLine(ExportState::STAGE_IMPORT_PATH);
+            }
         }
         // SQL-O11: PgDn/PgUp page the TABLE PREVIEW (the browse window), in
         // either browser pane. A query-pane result is a full buffer, not a
@@ -456,6 +490,162 @@ final class App implements Model
                 ->withFilterText($filterText)
                 ->withTableCursor(0),
         ]);
+    }
+
+    /**
+     * Raise a file line (SQL-O07). The hint lands on the status line but the
+     * prompt renderer owns the visible text while the line is open.
+     *
+     * @return array{self, ?Cmd}
+     */
+    private function openIoLine(string $stage): array
+    {
+        return [$this->mutate([
+            'io' => ExportState::new()->withStage($stage),
+            'ui' => $this->ui->withError(null)->withStatus(null),
+        ]), null];
+    }
+
+    /**
+     * Key handling while an export/import line is open. Enter advances the
+     * stage machine (it is the ONLY submit key — spaces are reserved for
+     * future path input, so no letter or the space bar can fire a write);
+     * Escape closes the line without quitting; printable runes extend the
+     * buffer, and on the refuse-overwrite arm any edit disarms back to
+     * plain path input.
+     *
+     * @return array{self, ?Cmd}
+     */
+    private function handleIoKey(KeyMsg $msg): array
+    {
+        $io = $this->io;
+        if ($msg->type === KeyType::Escape) {
+            return [$this->mutate([
+                'io' => $io->closed(),
+                'ui' => $this->ui->withStatus('file line cancelled'),
+            ]), null];
+        }
+        if ($msg->type === KeyType::Enter) {
+            return $this->ioAdvance();
+        }
+        if ($msg->type === KeyType::Backspace) {
+            if ($io->stage === ExportState::STAGE_EXPORT_OVERWRITE) {
+                return [$this->mutate(['io' => $io->withStage(ExportState::STAGE_EXPORT_PATH)]), null];
+            }
+            if ($io->buffer === '') {
+                return [$this, null];
+            }
+
+            return [$this->mutate(['io' => $io->withBuffer(mb_substr($io->buffer, 0, mb_strlen($io->buffer) - 1))]), null];
+        }
+        if ($msg->type === KeyType::Char && !$msg->ctrl && $msg->rune !== '') {
+            if ($io->stage === ExportState::STAGE_EXPORT_OVERWRITE) {
+                // Any edit disarms the overwrite confirm, char included.
+                return [$this->mutate(['io' => $io
+                    ->withStage(ExportState::STAGE_EXPORT_PATH)
+                    ->withBuffer($io->buffer . $msg->rune),
+                ]), null];
+            }
+
+            return [$this->mutate(['io' => $io->withBuffer($io->buffer . $msg->rune)]), null];
+        }
+
+        return [$this, null];
+    }
+
+    /**
+     * Enter on a file line: the stage machine.
+     *
+     * @return array{self, ?Cmd}
+     */
+    private function ioAdvance(): array
+    {
+        $io = $this->io;
+        if ($io->stage === ExportState::STAGE_EXPORT_PATH) {
+            if ($io->buffer === '') {
+                return [$this->mutate(['ui' => $this->ui->withStatus('a path is required — esc cancels')]), null];
+            }
+            if (is_file($io->buffer)) {
+                return [$this->mutate([
+                    'io' => $io->withStage(ExportState::STAGE_EXPORT_OVERWRITE),
+                    'ui' => $this->ui->withStatus(null),
+                ]), null];
+            }
+
+            return $this->doExport($io->buffer);
+        }
+        if ($io->stage === ExportState::STAGE_EXPORT_OVERWRITE) {
+            return $this->doExport($io->buffer);
+        }
+        if ($io->stage === ExportState::STAGE_IMPORT_PATH) {
+            // The picker is file-gated: advance only onto something real,
+            // so a typo cannot silently name an unreadable source.
+            if ($io->buffer === '' || !is_file($io->buffer)) {
+                return [$this->mutate(['ui' => $this->ui->withStatus('no such file — keep typing or esc cancels')]), null];
+            }
+
+            return [$this->mutate([
+                'io' => $io->withStage(ExportState::STAGE_IMPORT_TABLE)->withPath($io->buffer)->withBuffer(''),
+                'ui' => $this->ui->withStatus(null),
+            ]), null];
+        }
+        if ($io->stage === ExportState::STAGE_IMPORT_TABLE) {
+            if ($io->buffer === '') {
+                return [$this->mutate(['ui' => $this->ui->withStatus('name the target table — esc cancels')]), null];
+            }
+
+            return $this->doImport($io->path, $io->buffer);
+        }
+
+        return [$this, null];
+    }
+
+    /**
+     * @return array{self, ?Cmd}
+     */
+    private function doExport(string $path): array
+    {
+        $rows = $this->browse->rows;
+        $columns = $rows === [] ? [] : array_map('strval', array_keys((array) $rows[0]));
+        try {
+            (new CsvExporter($this->connection->db))->exportReportResults($path, $columns, $rows);
+        } catch (\RuntimeException | \PDOException $e) {
+            return [$this->mutate([
+                'io' => $this->io->closed(),
+                'ui' => $this->ui->withError('export failed: ' . $e->getMessage())->withStatus(null),
+            ]), null];
+        }
+
+        return [$this->mutate([
+            'io' => $this->io->closed(),
+            'ui' => $this->ui->withError(null)->withStatus('exported ' . count($rows) . ' rows to ' . $path),
+        ]), null];
+    }
+
+    /**
+     * @return array{self, ?Cmd}
+     */
+    private function doImport(string $path, string $table): array
+    {
+        try {
+            (new CsvExporter($this->connection->db))->importCsv($path, $table);
+        } catch (\RuntimeException | \PDOException $e) {
+            return [$this->mutate([
+                'io' => $this->io->closed(),
+                'ui' => $this->ui->withError('import failed: ' . $e->getMessage())->withStatus(null),
+            ]), null];
+        }
+
+        $done = $this->mutate([
+            'io' => $this->io->closed(),
+            'ui' => $this->ui->withError(null)->withStatus('imported ' . $path . ' into ' . $table),
+        ]);
+        if ($done->browse->selectedTable === $table) {
+            // The table on screen IS the import target — re-show its window.
+            return [$done->loadTable($table), null];
+        }
+
+        return [$done, null];
     }
 
     private function handleRowsKey(KeyMsg $msg): self

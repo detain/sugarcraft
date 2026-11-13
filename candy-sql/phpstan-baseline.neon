@@ -19,6 +19,10 @@
 # (and its App.php store() argument twin) tolerated one property expressing
 # two value shapes — the flattened snapshots now have dedicated typed slots,
 # so the disagreement (and those entries) are gone.
+# SQL-O07 (2026-11-13) grew the App/update() return.type family 3→7: the file
+# line (handleIoKey/openIoLine arms) adds four MORE returns of the identical
+# house-shaped array{App, ?Cmd}; same documented Cmd-vs-Closure contract
+# mismatch, no new class of silence.
 parameters:
 	ignoreErrors:
 		-
@@ -120,7 +124,7 @@ parameters:
 		-
 			message: '#^Method SugarCraft\\Sql\\App\:\:update\(\) should return array\{SugarCraft\\Core\\Model, Closure\|null\} but returns array\{SugarCraft\\Sql\\App, SugarCraft\\Core\\Cmd\|null\}\.$#'
 			identifier: return.type
-			count: 3
+			count: 7
 			path: src/App.php
 
 		-

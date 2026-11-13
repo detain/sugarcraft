@@ -180,13 +180,14 @@ recall executed statements from the capped history into an empty editor with a
 `history N/M` status readout; a drafted query is never overwritten, and a recall
 walk ends as soon as you edit. Likewise `[x]` on the Reports page regenerates
 `ReportsPage::exportToCsv()` into the page object (readable via `lastExportCsv()`);
-it never touches the filesystem — writing `.csv` files is the separate
-`Db\Export\CsvExporter` API described under Exporters.
+it still never touches the filesystem by itself — but since SQL-O07 the TUI does:
+`Ctrl+S`/`x` (export) and `i` (import) open a file line that reads and writes
+disk through the same `Db\Export\CsvExporter` API described under Exporters.
 
 The admin pages' own `Tab`/`Shift+Tab` tab-cycling handlers (Variables, Connections detail tabs, PerfSchema) and ConnectionsPage's `[1]`/`[2]`/`[3]` detail-tab shortcuts exist in the page code but are unreachable during normal app operation:
 `Tab` cycles the focus pane and the digits select admin pages, both at the app level — the pages' private handlers for those keys are therefore never reached except while a modal dialog is open, where App hands every key to the page instead (the dialog consumes or cancels it) rather than cycling panes or switching pages. Outside that window they are kept only for standalone (non-app) use. The live in-app substitutes are page-local keys App delegates: `h`/`l` (or the arrows) cycle PerfSchema tabs, and the PerfSchema Easy Setup actions run on the `[` / `]` / `.` bracket pair — the same convention the Reports page uses for its own navigation. Connections detail tabs currently have no in-app chord; open the process row's details with `K`/`X`-adjacent selection keys as rendered.
 
-> **Key routing** — `App::update()` consumes, in order: `Ctrl+C` (unconditional quit); on the Admin pane, every key goes to the page while it is modal (`PageBase::isModal()`: the variable-editor dialog, the GTID dialog, a pending kill confirmation, or a staged PerfSchema commit) and `Esc` goes to the page whenever it is present; `q`/`Esc` quit **only from the Tables and Rows browser panes** (in the Query pane `Esc` no longer discards a drafted query); `Tab` cycles the focus pane. In the Tables pane, `/` opens a live filter line over the table names — while it is open the line owns the keyboard (`Esc` abandons it and clears the filter instead of quitting, `q` is just a filter letter, arrows move the filtered cursor, Enter commits and loads) — and cursor movement never fetches: only Enter/Space loads the highlighted table's preview (SQL-O10; the old per-cursor preview round trip auto-floated every table on ERP-sized schemas). `PgDn`/`PgUp` walk that preview in 100-row server-side windows (SQL-O11) — forward only while the current page is full, and the status line counts 'page X (rows a–b)'. In the Query pane, `Ctrl+R`/`Ctrl+E` run the query (both also accept `Ctrl+Enter`) and every other key edits the buffer — except a leading `EXPLAIN`, which is answered with the `ExplainView` colour tree in the Rows pane (SQL-O09; an `ANALYZE` modifier is stripped because PostgreSQL's `EXPLAIN ANALYZE` would execute the statement) — except destructive statements (`DROP`/`TRUNCATE`/`DELETE`/`ALTER`/`RENAME`/`GRANT`/`REVOKE`), whose first press only arms a warning; a second consecutive run whose trimmed statement equals the staged SQL confirms, and any other query run or an edit whose trimmed text differs from the staged SQL disarms (a whitespace-only edit trims to the same statement and leaves the arm standing). On the Admin pane, `App::handleAdminKey()` then intercepts the page picker (`1`–`{n}`, `p`, `r`, `q`→return to Tables); `r` additionally forwards to the active page after dropping the shared `AdminQueryCache`. Pages listed in `RowNavigable` (Variables, Connections, Reports, PerfSchema, Debug) keep their own `j`/`k`/`↑`/`↓` row cursors; on non-row-navigable pages (ServerStatus, Dashboard) those same keys walk the sidebar. All remaining keys are delegated to the active page's `update()` method.
+> **Key routing** — `App::update()` consumes, in order: `Ctrl+C` (unconditional quit); on the Admin pane, every key goes to the page while it is modal (`PageBase::isModal()`: the variable-editor dialog, the GTID dialog, a pending kill confirmation, or a staged PerfSchema commit) and `Esc` goes to the page whenever it is present; `q`/`Esc` quit **only from the Tables and Rows browser panes** (in the Query pane `Esc` no longer discards a drafted query); `Tab` cycles the focus pane. In the Tables pane, `/` opens a live filter line over the table names — while it is open the line owns the keyboard (`Esc` abandons it and clears the filter instead of quitting, `q` is just a filter letter, arrows move the filtered cursor, Enter commits and loads) — and cursor movement never fetches: only Enter/Space loads the highlighted table's preview (SQL-O10; the old per-cursor preview round trip auto-floated every table on ERP-sized schemas). `PgDn`/`PgUp` walk that preview in 100-row server-side windows (SQL-O11) — forward only while the current page is full, and the status line counts 'page X (rows a–b)'. `Ctrl+S`/`x` (export) and `i` (import) open a file line (SQL-O07); while it is open the line owns the keyboard the same way the filter does — `Enter` is its only submit key, `Esc` closes it without quitting, `q` is a path letter — and the export half additionally refuses overwrite: an existing destination arms a `REPLACE …?` confirm that `Enter` accepts and any edit disarms. In the Query pane, `Ctrl+R`/`Ctrl+E` run the query (both also accept `Ctrl+Enter`) and every other key edits the buffer — except a leading `EXPLAIN`, which is answered with the `ExplainView` colour tree in the Rows pane (SQL-O09; an `ANALYZE` modifier is stripped because PostgreSQL's `EXPLAIN ANALYZE` would execute the statement) — except destructive statements (`DROP`/`TRUNCATE`/`DELETE`/`ALTER`/`RENAME`/`GRANT`/`REVOKE`), whose first press only arms a warning; a second consecutive run whose trimmed statement equals the staged SQL confirms, and any other query run or an edit whose trimmed text differs from the staged SQL disarms (a whitespace-only edit trims to the same statement and leaves the arm standing). On the Admin pane, `App::handleAdminKey()` then intercepts the page picker (`1`–`{n}`, `p`, `r`, `q`→return to Tables); `r` additionally forwards to the active page after dropping the shared `AdminQueryCache`. Pages listed in `RowNavigable` (Variables, Connections, Reports, PerfSchema, Debug) keep their own `j`/`k`/`↑`/`↓` row cursors; on non-row-navigable pages (ServerStatus, Dashboard) those same keys walk the sidebar. All remaining keys are delegated to the active page's `update()` method.
 
 > **MySQL / PostgreSQL only** — the Admin pane needs server introspection data. On SQLite, `App::adminPage()` finds no context to serve and falls back to `EmptyServerContext`: the variable, status and plugins accessors return empty sets, `statusVariablesTs()` reports `0.0`, `wasReset()` reports `false`, `refresh()` is a no-op, and `connection()` throws `RuntimeException` (each leg pinned by `EmptyServerContextTest`). No context exposes a processlist accessor — those grids go through `Admin\Connections\ProcesslistProvider` — so run the admin panes against MySQL or PostgreSQL to see live content.
 
@@ -1047,6 +1048,29 @@ $csvString = (new CsvExporter($db))->exportReportResultsToString($columns, $rows
 - **`exportReportResults(path, columns, rows)`** — writes arbitrary result set to a CSV file
 - **`exportReportResultsToString(columns, rows)`** — returns CSV as a string (used by ReportsPage)
 - **`importCsv(path, table)`** — imports a CSV file into a table (flavor-quoted identifiers — backticks on MySQL, double-quotes on PostgreSQL/SQLite)
+
+#### In-app CSV (TUI, SQL-O07)
+
+The exporters spent their life as a library with zero TUI callers; the app now
+ships the missing half:
+
+- **`Ctrl+S` or `x`** (Tables/Rows panes, or `Ctrl+S` from anywhere) opens the
+  `to CSV →` line **when a result or preview is live**: type a path, `Enter`
+  writes the current result set through `exportReportResults(path, columns,
+  rows)`, and the status echoes `exported N rows to <path>`. An existing file
+  is refused: the line arms a `REPLACE <path>?` confirm — `Enter` accepts, any
+  edit disarms.
+- **`i`** (Tables/Rows panes) opens the `import CSV ←` line: `Enter` only
+  advances onto a file that exists (a typo cannot silently name an unreadable
+  source), then a second line names the target table and `Enter` runs
+  `importCsv` — transaction-staged by the importer, so a mid-file failure
+  never leaves a partial import. Importing the table currently on screen
+  reloads its preview window.
+- While a line is open it owns the keyboard (the browser-pane quit keys defer
+  to it, `q` is just a path letter), and `Enter` is the only submit key.
+
+Reports-page `[x]` keeps its narrower meaning: it builds the report CSV into
+page state only and never touches disk.
 
 **Complete exports** — `exportCsv` pages the table through `rows(table, 500, offset)` until it
 reaches the row count, so a 100 000-row table exports in full (it no longer stops at the `rows()`
