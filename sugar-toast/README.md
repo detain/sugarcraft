@@ -251,9 +251,15 @@ if ($msg instanceof RepaintMsg) {
 
 ## Internationalization
 
-User-facing strings are internationalized via `SugarCraft\Toast\Lang::t()`.
-All translatable strings live as bare keys in `lang/en.php`; the `toast` lookup
-namespace is baked into `src/Lang.php`, not a nesting level inside the arrays.
+The translatable chrome — type labels and any host-supplied body text — is
+internationalized via `SugarCraft\Toast\Lang::t()`. All translatable strings
+live as bare keys in `lang/en.php`; the `toast` lookup namespace is baked into
+`src/Lang.php`, not a nesting level inside the arrays.
+
+The fold and truncation markers (` [+(N) more]`, ` …[truncated]`) are
+deliberately **not** lang keys: they are locale-neutral chrome, in the same
+class as the box-drawing glyphs that frame the overlay. They stay byte-stable
+across every locale, which is what lets the cap tests pin them exactly.
 
 **Available keys** (`lang/en.php`):
 
