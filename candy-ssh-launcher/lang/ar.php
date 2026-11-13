@@ -36,6 +36,7 @@ return [
     'cli.ssh_not_executable' => 'candy-ssh-launcher: ثنائي ssh غير موجود أو غير قابل للتنفيذ: {bin}',
     'cli.missing_value'  => 'candy-ssh-launcher: {arg} يتطلب قيمة',
     'cli.no_endpoints'   => 'candy-ssh-launcher: لا توجد نقاط نهاية في {path}',
+    'cli.not_a_terminal' => 'يحتاج المحدد إلى طرفية تفاعلية؛ يجب أن يكون stdin وstdout من نوع TTY. استخدم --list للحصول على مخرج قابل للقراءة آليًا.',
 
     // picker chrome
     'picker.title'       => '── wishlist ──',

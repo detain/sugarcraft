@@ -11,7 +11,9 @@ use SugarCraft\SshLauncher\Lang;
  * End-to-end pins for the bin/candy-ssh-launcher CLI surface: --help on
  * stdout (exit 0), unknown flags refused by name (exit 2), valueless
  * options refused (exit 2), the `--` terminator honored, `--list`
- * non-interactive output, the no-endpoints/cancelled split (exit 1/130),
+ * non-interactive output, the interactive-path TTY gate (exit 2, pipe
+ * runs refuse before dispatching; pty legs drive a real terminal via
+ * script(1)), the no-endpoints/cancelled split (exit 1/130),
  * sanitized error stderr, and LIVE locale resolution (the lang/ files
  * only do something if the bin calls T::setLocale(T::detect())).
  */
@@ -325,14 +327,178 @@ final class BinCliTest extends TestCase
         // F-6: a field the Endpoint layer refuses at dispatch time used to
         // escape as a raw stack trace; it now exits 3 with a named,
         // sanitized stderr line. The name field carries hostile bytes to
-        // prove the same wrap covers the message.
+        // prove the same wrap covers the message. Since the TTY gate the
+        // picker path cannot be driven from a pipe at all, so this leg
+        // runs the bin under its own pty (same harness sshl-40 extends).
         $cfg = $this->writeFixture(
             "- name: \"p\x1b[2Jtest\"\n  host: p.test\n  proxyJump: \"-o=evil\"\n"
         );
-        [$code, , $err] = $this->runBin(['--config', $cfg], [], "\r");
-        $this->assertSame(3, $code, 'stderr: ' . $err);
-        $this->assertStringContainsString('proxyJump', $err);
-        $this->assertStringContainsString('unsafe leading-dash', $err);
-        $this->assertStringNotContainsString("\x1b", $err);
+        [$code, $output] = $this->runUnderPty(
+            ['--config', $cfg, '--ssh', '/bin/true'],
+            selectKey: "\r",
+        );
+        $this->assertSame(3, $code, 'pty output: ' . $this->printable($output));
+        $this->assertStringContainsString('proxyJump', $output);
+        $this->assertStringContainsString('unsafe leading-dash', $output);
+    }
+
+    // ------------------------------------------------------------------
+    // TTY gate (sshl-10 / finding -005): the interactive path refuses
+    // pipes; --list/--help/--version stay pipe-safe by contract.
+    // ------------------------------------------------------------------
+
+    public function testPipedInputIsRefusedWithExitTwoAndNeverDispatches(): void
+    {
+        // The finding's live probe: `printf 'prod\r' | bin --ssh /bin/echo`
+        // used to exit 0 AFTER EXECUTING echo — a piped line completing a
+        // selection unattended. The gate refuses before the picker exists:
+        // exit 2, the localized refusal on stderr, and zero bytes of echo
+        // output (stdout empty is the proof nothing launched).
+        $cfg = $this->writeFixture("- name: prod\n  host: p.test\n");
+        /** @var array<string,string> $en */
+        $en = require \dirname(__DIR__) . '/lang/en.php';
+
+        [$code, $out, $err] = $this->runBin(
+            ['--config', $cfg, '--ssh', '/bin/echo'],
+            [],
+            "prod\r",
+        );
+
+        $this->assertSame(2, $code, 'stdout: ' . $out . ' stderr: ' . $err);
+        $this->assertSame('', $out, 'a piped run must launch nothing and paint nothing');
+        $this->assertSame($en['cli.not_a_terminal'] . "\n", $err, 'refusal names the key verbatim and points at --list');
+        $this->assertStringContainsString('--list', $err);
+    }
+
+    public function testClosedStdinOnTheInteractivePathIsRefused(): void
+    {
+        $cfg = $this->writeFixture("- name: prod\n  host: p.test\n");
+        [$code, $out, $err] = $this->runBin(['--config', $cfg, '--ssh', '/bin/true']);
+
+        $this->assertSame(2, $code, 'stdout: ' . $out . ' stderr: ' . $err);
+        $this->assertStringContainsString('interactive terminal', $err);
+    }
+
+    public function testRedirectedStdoutUnderARealTerminalIsRefused(): void
+    {
+        // Keyboard on a terminal, screen into a file: the frames must not
+        // be painted into the redirect — the gate checks BOTH streams.
+        $cfg = $this->writeFixture("- name: prod\n  host: p.test\n");
+        $capture = tempnam(sys_get_temp_dir(), 'sshlaunch-stdout-') . '.capture';
+        $this->tempFiles[] = $capture;
+
+        [$code, $output] = $this->runUnderPty(
+            ['--config', $cfg, '--ssh', '/bin/true'],
+            redirectStdoutTo: $capture,
+        );
+
+        $this->assertSame(2, $code, 'pty output: ' . $this->printable($output));
+        $this->assertSame('', (string) file_get_contents($capture), 'nothing may be painted into the redirect');
+        $this->assertStringContainsString('interactive terminal', $output, 'the refusal goes to the terminal on stderr');
+    }
+
+    public function testListRemainsPipeSafeUnderTheGate(): void
+    {
+        // Explicit double-hand for the acceptance: the refusal gate sits
+        // AFTER the --list leg on purpose, scripted output keeps working
+        // (exit 0, endpoints printed, no refusal text).
+        $cfg = $this->writeFixture("- name: prod\n  host: p.test\n  user: root\n");
+        [$code, $out, $err] = $this->runBin(['--config', $cfg, '--list']);
+
+        $this->assertSame(0, $code, 'stderr: ' . $err);
+        $this->assertSame("prod\tp.test:22\troot\n", $out);
+        $this->assertStringNotContainsString('interactive terminal', $err);
+    }
+
+    public function testPickerRendersAndSelectsUnderAPty(): void
+    {
+        // End-to-end: under a real pty the picker draws its frame, Enter
+        // completes the selection, and the launch replaces the process
+        // (/bin/echo prints the ssh argv and exits 0) — the gate must not
+        // break the very path it protects.
+        $cfg = $this->writeFixture(implode("\n", [
+            '- name: prod',
+            '  host: p.test',
+            '- name: box',
+            '  host: b.test',
+        ]) . "\n");
+
+        [$code, $output] = $this->runUnderPty(
+            ['--config', $cfg, '--ssh', '/bin/echo'],
+            selectKey: "\r",
+        );
+
+        $this->assertSame(0, $code, 'pty output: ' . $this->printable($output));
+        $this->assertStringContainsString('prod', $output, 'the first frame showed the endpoint list');
+        $this->assertStringContainsString('-- p.test', $output, 'the selection launched ssh at the chosen host (echo printed argv)');
+        $this->assertStringNotContainsString('-- b.test', $output, 'the untouched second endpoint never launched');
+    }
+
+    /**
+     * Run the bin on a pty of its own via util-linux `script -qec` (the
+     * candy-tetris BinaryLaunchTest shape): -e propagates the child's exit
+     * code and the typescript is discarded. $selectKey is typed once the
+     * first picker frame is on screen — earlier keystrokes can be flushed
+     * by the raw-mode switch — and re-sent until the child exits.
+     *
+     * @param list<string> $args
+     * @return array{0:int,1:string} exit code and everything the pty showed
+     */
+    private function runUnderPty(
+        array $args,
+        ?string $selectKey = null,
+        ?string $redirectStdoutTo = null,
+    ): array {
+        $binary = realpath(self::BIN);
+        $this->assertNotFalse($binary);
+        $inner = 'stty rows 24 cols 80 2>/dev/null; exec '
+            . implode(' ', array_map('escapeshellarg', [PHP_BINARY, $binary, ...$args]))
+            . ($redirectStdoutTo !== null ? ' > ' . escapeshellarg($redirectStdoutTo) : '');
+        $process = proc_open(
+            'exec script -qec ' . escapeshellarg($inner) . ' /dev/null',
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+            \dirname(__DIR__),
+            ['PATH' => '/usr/bin:/bin', 'HOME' => \sys_get_temp_dir(), 'TERM' => 'xterm-256color', 'LC_ALL' => 'C', 'LANG' => 'C'],
+        );
+        $this->assertIsResource($process, 'failed to spawn script(1) — is util-linux installed?');
+        stream_set_blocking($pipes[1], false);
+        stream_set_blocking($pipes[2], false);
+
+        $deadline = microtime(true) + 20.0;
+        $nextKeyAt = null;
+        $output = '';
+        while (true) {
+            $output .= (string) stream_get_contents($pipes[1]) . (string) stream_get_contents($pipes[2]);
+            $status = proc_get_status($process);
+            if (!$status['running']) {
+                $exitCode = $status['exitcode'];
+                break;
+            }
+            if ($selectKey !== null && str_contains($output, "\x1b[1;1H")) {
+                $nextKeyAt ??= microtime(true) + 0.3;
+                if (microtime(true) >= $nextKeyAt) {
+                    fwrite($pipes[0], $selectKey);
+                    $nextKeyAt = microtime(true) + 1.0;
+                }
+            }
+            if (microtime(true) >= $deadline) {
+                proc_terminate($process, 9);
+                $this->fail('bin under a pty did not exit within the deadline: ' . $this->printable($output));
+            }
+            usleep(20_000);
+        }
+        $output .= (string) stream_get_contents($pipes[1]) . (string) stream_get_contents($pipes[2]);
+        foreach ($pipes as $pipe) {
+            fclose($pipe);
+        }
+        proc_close($process);
+
+        return [$exitCode, $output];
+    }
+
+    private function printable(string $bytes): string
+    {
+        return addcslashes(substr($bytes, -600), "\0..\37\177");
     }
 }

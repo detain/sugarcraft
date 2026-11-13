@@ -36,6 +36,7 @@ return [
     'cli.ssh_not_executable' => 'candy-ssh-launcher：找不到 ssh 程序或它不可执行：{bin}',
     'cli.missing_value'  => 'candy-ssh-launcher：{arg} 需要值',
     'cli.no_endpoints'   => 'candy-ssh-launcher：{path} 中没有端点',
+    'cli.not_a_terminal' => '选择器需要交互式终端 — stdin 和 stdout 必须是 TTY。如需机器可读输出，请使用 --list。',
 
     // picker chrome
     'picker.title'       => '── wishlist ──',

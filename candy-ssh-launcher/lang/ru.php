@@ -36,6 +36,7 @@ return [
     'cli.ssh_not_executable' => 'candy-ssh-launcher: бинарный файл ssh не найден или не является исполняемым: {bin}',
     'cli.missing_value'  => 'candy-ssh-launcher: {arg} требует значение',
     'cli.no_endpoints'   => 'candy-ssh-launcher: нет endpoints в {path}',
+    'cli.not_a_terminal' => 'для выбора требуется интерактивный терминал: stdin и stdout должны быть TTY. Используйте --list для машинного вывода.',
 
     // picker chrome
     'picker.title'       => '── wishlist ──',

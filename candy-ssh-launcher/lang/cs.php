@@ -36,6 +36,7 @@ return [
     'cli.ssh_not_executable' => 'candy-ssh-launcher: binární soubor ssh nenalezen nebo není spustitelný: {bin}',
     'cli.missing_value'  => 'candy-ssh-launcher: {arg} vyžaduje hodnotu',
     'cli.no_endpoints'   => 'candy-ssh-launcher: žádné endpointy v {path}',
+    'cli.not_a_terminal' => 'výběr vyžaduje interaktivní terminál — stdin a stdout musí být TTY. Pro strojově čitelný výstup použijte --list.',
 
     // picker chrome
     'picker.title'       => '── wishlist ──',

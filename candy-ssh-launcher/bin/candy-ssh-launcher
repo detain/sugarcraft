@@ -16,10 +16,14 @@ declare(strict_types=1);
  * (`pcntl_exec` performs no `$PATH` search — a bare name like `ssh` fails
  * loudly at the gate below; relative paths resolve against the CWD).
  * `--list` prints the resolved endpoints and exits 0 without touching the
- * terminal or ssh. On Enter, the picker replaces the current process with
- * `ssh` connecting to the chosen entry; Esc/Ctrl-C exits 130, a broken or
- * empty config exits 1, a bad argument exits 2, and a field refused at
- * dispatch time (or a failed exec) exits 3 with a sanitized stderr line.
+ * terminal or ssh — it stays safe to drive from pipes. The interactive
+ * picker demands a real terminal on BOTH stdin and stdout (a piped run is
+ * refused with exit 2, because on a pipe its frames are painted into the
+ * wire and any pre-typed line dispatches ssh unattended). On Enter, the
+ * picker replaces the current process with `ssh` connecting to the chosen
+ * entry; Esc/Ctrl-C exits 130, a broken or empty config exits 1, a bad
+ * argument or a non-terminal interactive run exits 2, and a field refused
+ * at dispatch time (or a failed exec) exits 3 with a sanitized stderr line.
  */
 
 use SugarCraft\Core\I18n\T;
@@ -226,6 +230,16 @@ if ($wantList) {
 // (2026-10-23).
 if ($endpoints === []) {
     $fail(Lang::t('cli.no_endpoints', ['path' => Sanitize::untrusted($cfgPath)]), 1);
+}
+
+// The picker draws frames and steers on keystrokes: with stdin a pipe,
+// any buffered line completes a selection and DISPATCHES ssh unattended
+// (measured: `printf 'prod\r' | bin --ssh /bin/echo` exited 0 and exec'd),
+// and a stdout redirect paints raw cursor escape bytes into the wire. The
+// interactive path therefore requires both ends to be TTYs; the --list,
+// --help and --version legs above deliberately stay pipe-safe.
+if (!stream_isatty(STDIN) || !stream_isatty(STDOUT)) {
+    $fail(Lang::t('cli.not_a_terminal'), 2);
 }
 
 $pick = (new Picker())->pick($endpoints);

@@ -36,6 +36,7 @@ return [
     'cli.ssh_not_executable' => 'candy-ssh-launcher: ssh ikilisi bulunamadı veya çalıştırılabilir değil: {bin}',
     'cli.missing_value'  => 'candy-ssh-launcher: {arg} bir değer gerektirir',
     'cli.no_endpoints'   => 'candy-ssh-launcher: {path} içinde endpoint yok',
+    'cli.not_a_terminal' => 'seçici etkileşimli bir terminal gerektirir — stdin ve stdout birer TTY olmalıdır. Makinece okunabilir çıktı için --list kullanın.',
 
     // picker chrome
     'picker.title'       => '── wishlist ──',
