@@ -66,6 +66,25 @@ final class UnsupportedPlatformException extends PtyException
      * exist in this package, and the remaining work is a platform binding the
      * caller's own host is missing, not a feature request.
      */
+    /**
+     * Raised when the POSIX pty backend is hard-pinned on a host it cannot
+     * bind. Mirrors {@see forConPtyUnavailable()}: the forgiving mode is
+     * `auto`, and a pin that says POSIX must never be quietly answered
+     * with ConPTY (no `fd()`/`stream()`, `kill(2)` collapse) just because
+     * the host happens to be Windows — operators believing FFI semantics
+     * held was the exact failure this symmetric refusal removes (PTY-15).
+     */
+    public static function forPosixFfiUnavailable(string $detectedPlatform): self
+    {
+        return new self(\sprintf(
+            'the POSIX pty backend is not available on the platform "%s": it binds libc '
+            . 'posix_openpt/grantpt through FFI and only exists on Linux, Darwin, BSD and Solaris. '
+            . 'SUGARCRAFT_PTY_BACKEND=auto (or unset) answers the host-appropriate backend; '
+            . 'SUGARCRAFT_PTY_BACKEND=conpty pins the Windows ConPTY backend explicitly.',
+            $detectedPlatform,
+        ));
+    }
+
     public static function forConPtyUnavailable(string $reason): self
     {
         return new self(\sprintf(

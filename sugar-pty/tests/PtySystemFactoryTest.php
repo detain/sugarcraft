@@ -236,6 +236,59 @@ final class PtySystemFactoryTest extends TestCase
     }
 
     /**
+     * Both hard pins refuse their contradicting platform symmetrically
+     * (PTY-15): a posix-ffi pin must never be quietly answered with a
+     * ConPtySystem, and the refusal message names auto as the forgiving
+     * mode. The explicit-platform seam lets the Windows corner run on
+     * any host; the env leg pins the host's own behaviour.
+     */
+    public function testPinnedPosixFfiRefusesTheWindowsContradiction(): void
+    {
+        try {
+            PtySystemFactory::resolveFor('posix-ffi', 'Windows');
+            $this->fail('posix-ffi pinned on Windows must throw, not answer ConPtySystem');
+        } catch (UnsupportedPlatformException $e) {
+            $msg = $e->getMessage();
+            $this->assertStringContainsString('POSIX pty backend', $msg);
+            $this->assertStringContainsString('auto', $msg, 'the message must name the forgiving mode');
+            $this->assertStringContainsString('SUGARCRAFT_PTY_BACKEND=conpty', $msg, 'the Windows way to pin must be spelled out');
+        }
+
+        // auto still resolves platform-wise — the refusal binds pins only.
+        $this->assertInstanceOf(ConPtySystem::class, PtySystemFactory::resolveFor('auto', 'Windows'));
+
+        \putenv('SUGARCRAFT_PTY_BACKEND=posix-ffi');
+        try {
+            if (\PHP_OS_FAMILY === 'Windows') {
+                $this->expectException(UnsupportedPlatformException::class);
+                PtySystemFactory::new();
+            } else {
+                $this->assertInstanceOf(PosixPtySystem::class, PtySystemFactory::new());
+            }
+        } finally {
+            \putenv('SUGARCRAFT_PTY_BACKEND');
+        }
+    }
+
+    public function testPinnedConptyResolvesForExplicitWindowsPlatformOffWindows(): void
+    {
+        // The seam takes the platform as given: constructing ConPtySystem
+        // is dependency-free, so the Windows corner must resolve here on a
+        // Linux host without touching the availability probe.
+        $this->assertInstanceOf(ConPtySystem::class, PtySystemFactory::resolveFor('conpty', 'Windows'));
+    }
+
+    public function testPinnedPosixFfiResolvesEveryPosixPlatformAndRefusesUnknown(): void
+    {
+        foreach (['Linux', 'Darwin', 'BSD', 'Solaris'] as $platform) {
+            $this->assertInstanceOf(PosixPtySystem::class, PtySystemFactory::resolveFor('posix-ffi', $platform));
+        }
+
+        $this->expectException(UnsupportedPlatformException::class);
+        PtySystemFactory::resolveFor('posix-ffi', 'Unknown');
+    }
+
+    /**
      * The factory may name Kernel32ConPty only through the static
      * availability probe (which gates on the OS family before any FFI
      * surface). Loading FFI here — at factory time — would break the

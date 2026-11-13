@@ -29,12 +29,15 @@ use SugarCraft\Pty\Windows\Kernel32ConPty;
  * probe (which gates on the OS family before touching FFI at all).
  *
  * Backend selection is controlled by `SUGARCRAFT_PTY_BACKEND`:
- * `posix-ffi` (default on POSIX), `conpty` (forces the Windows ConPTY
- * backend; on a non-Windows host it throws
+ * `posix-ffi` (default on POSIX; on a Windows host it throws
+ * {@see UnsupportedPlatformException} naming `auto` as the forgiving mode —
+ * the pin must never be answered with ConPTY semantics), `conpty` (forces the
+ * Windows ConPTY backend; on a non-Windows host it throws
  * {@see UnsupportedPlatformException} naming the probe's reason),
  * `sidecar` / `pecl` (declared but not implemented in this release — selecting
  * either throws {@see UnsupportedPlatformException}), `auto` (same as
- * unset / default behaviour).
+ * unset / default behaviour). Both hard pins refuse their contradicting
+ * platform symmetrically.
  *
  * Mirrors charmbracelet/x/xpty.Open()'s platform-resolution layer.
  */
@@ -59,12 +62,38 @@ final class PtySystemFactory
             return self::forPlatform(\PHP_OS_FAMILY);
         }
 
+        return self::resolveFor($backend, \PHP_OS_FAMILY);
+    }
+
+    /**
+     * Explicit-platform variant of {@see new()} for tests: resolves a
+     * pinned backend name against a platform string (PHP `PHP_OS_FAMILY`
+     * values) without touching the environment or the host OS family.
+     *
+     * @throws UnsupportedPlatformException when the pin and the platform
+     *     contradict each other in either direction, or an unreleased
+     *     backend is selected.
+     * @throws \InvalidArgumentException    on an unrecognised value.
+     */
+    public static function resolveFor(string $backend, string $platform): PtySystem
+    {
+        if ($backend === 'auto') {
+            return self::forPlatform($platform);
+        }
+
         if ($backend === 'posix-ffi') {
-            return self::forPlatform(\PHP_OS_FAMILY);
+            // The pin means POSIX; a silent ConPTY answer would let an
+            // operator believe FFI semantics held while Windows bindings
+            // answered. Refuse the contradiction, symmetric with conpty.
+            if ($platform === 'Windows') {
+                throw UnsupportedPlatformException::forPosixFfiUnavailable($platform);
+            }
+
+            return self::forPlatform($platform);
         }
 
         if ($backend === 'conpty') {
-            if (\PHP_OS_FAMILY === 'Windows') {
+            if ($platform === 'Windows') {
                 return new ConPtySystem();
             }
 
