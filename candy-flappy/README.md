@@ -210,10 +210,6 @@ The game ends the instant any of three things happen, all handled identically:
 - **Top wall** — the bird's row goes above the ceiling (row < 0). A hard flap into the top edge crashes just like the floor.
 - **Pipe** — the bird's cell lands outside a pipe's open gap.
 
-## High-score persistence
-
-On any finish (crash, `q` quit, or `r` restart) a score that earns a slot on the leaderboard — the ten slots are still open, or it beats the lowest entry — is merged and written to `scores.json` under the config dir (`$XDG_CONFIG_HOME` or `$HOME/.config`, in `.candy-flappy/`). The list is bounded to the top `Game::MAX_HIGH_SCORES` (10) entries; the 🏆 shout belongs only to a run that beats the current best. The write runs off the synchronous `update()` path via a `Cmd` and swallows I/O errors, so a full or unwritable disk can never crash the render loop. The file itself is published through sugar-core's `AtomicJsonFile` (flock + temp-and-rename, `0600` mode) — never a bare truncate-write. Saved scores are loaded on the next `Game::start()`, which **fails soft**: a corrupt, unreadable, or oversized (over `Game::MAX_SCORE_FILE_BYTES`) save is quarantined aside as `scores.json.corrupt-<timestamp>` and play starts with an empty board, so a bad file can never brick launch. Entries are legality-clamped on read: non-integers, zero, negatives, and scores of `Game::SCORE_CEILING` or above are dropped.
-
 ## Testing
 
 ```bash
@@ -237,10 +233,8 @@ vendor/bin/phpunit --filter GoldenRenderTest                    # must pass with
 
 ## Scoring
 
-The score increments by one for each pipe pair whose column passes the bird's
-column (per tick), so surviving is scored, not flapping. Every run that earns
-one of the ten leaderboard slots is merged into the machine's top-ten ladder,
-and the 🏆 belongs to a run that beats the best.
+Each tick, the score rises by one for every pipe that has just slid past
+the bird's column — so surviving is scored, not flapping.
 
 Tuning is compiled in, deliberately: physics constants, tick rate, gap bands
 and key bindings are NOT configurable. The leaderboard and the difficulty
@@ -248,6 +242,23 @@ curve are one coherent game; knobs would let a session claim scores the
 defaults could not produce.
 
 ## High scores, config, and environment
+
+On any finish — crash, `q` quit, or `r` restart — a score that earns a slot
+on the board is written to `scores.json` under the config dir. The board
+holds `Game::MAX_HIGH_SCORES` (10) entries: with a slot still open the run is
+simply added; once all ten are full it has to beat the lowest entry to get
+in. The 🏆 shout belongs only to a run that beats the current best. The write
+runs off the synchronous `update()` path via a `Cmd`, and a failed write never
+breaks the game: an in-loop save gives up silently, an end-of-run save prints
+one warning line to stderr.
+sugar-core's `AtomicJsonFile` publishes the file (flock + temp-and-rename,
+`0600` mode), never a bare truncate-write.
+
+The board loads on the next `Game::start()`, and loading is forgiving. A
+corrupt, unreadable, or oversized (over `Game::MAX_SCORE_FILE_BYTES`) save is
+set aside as `scores.json.corrupt-<timestamp>` and play starts with an empty
+board, so a bad file can never brick launch. On read, entries that are not
+whole positive scores below `Game::SCORE_CEILING` are dropped.
 
 - Save file: `~/.config/.candy-flappy/scores.json` (0600, atomic; a corrupt
   file is quarantined to `scores.json.corrupt-<timestamp>` instead of
