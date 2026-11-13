@@ -1217,6 +1217,16 @@ final class Renderer
      * cannot reform past the gate. Every other scheme passes through to
      * the terminal's opener unfiltered — see the README's Link safety
      * paragraph and the fleet-wide model in docs/TRUST-BOUNDARY.md.
+     *
+     * The list is a DENY-list, and that residual is accepted and dated
+     * 2026-11 (sugar-markdown-068): a private or application-owned scheme
+     * (`event-handler://…`) is not in here, so it still gets a live OSC-8
+     * target. That is inert until something opens it — a future desktop
+     * or in-app opener would turn each one into a click vector. The
+     * closed form is an allow-list behind `withAllowedUrlSchemes()`; it is
+     * deliberately not built, because refusing everything but
+     * `http(s)`/`mailto` would silently discard links hosts are built on.
+     * Stamp: docs/TRUST-BOUNDARY.md §1.
      */
     private const REFUSED_URL_SCHEMES = ['javascript:', 'data:', 'vbscript:'];
 
