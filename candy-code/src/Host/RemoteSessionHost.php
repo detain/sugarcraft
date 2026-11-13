@@ -13,6 +13,7 @@ use React\EventLoop\Loop;
 use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
 use React\Stream\DuplexStreamInterface;
+use SugarCraft\Async\Backoff;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Permissions\PermissionReply;
@@ -913,7 +914,10 @@ final class RemoteSessionHost
     /** Wait out the backoff, then redial. */
     private function scheduleAttempt(): void
     {
-        $delay = \min(self::RECONNECT_MAX_DELAY_SECONDS, self::RECONNECT_BASE_DELAY_SECONDS * (2 ** $this->attempt));
+        // S-P06 (R9): the redial ladder is sugar-async's Backoff (no jitter: one
+        // client, one server). $this->attempt is the 0-based failure count.
+        $delay = Backoff::new(self::RECONNECT_BASE_DELAY_SECONDS * 1000.0, 2.0, (int) (self::RECONNECT_MAX_DELAY_SECONDS * 1000))
+            ->secondsForAttempt($this->attempt + 1);
         $after = $this->after ?? static function (float $seconds, \Closure $run): void {
             Loop::addTimer($seconds, static function () use ($run): void {
                 $run();

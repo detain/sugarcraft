@@ -47,6 +47,7 @@
         "google/cloud-ai-platform": "^1.0",
         "symfony/yaml": "^7.4",
         "sugarcraft/sugar-ansi-parser": "@dev",
+        "sugarcraft/sugar-async": "@dev",
         "sugarcraft/sugar-core": "@dev",
         "sugarcraft/sugar-forms": "@dev",
         "sugarcraft/sugar-style": "@dev",

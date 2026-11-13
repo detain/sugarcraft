@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Tools\BuiltIn;
 
+use SugarCraft\Async\Backoff;
+use SugarCraft\Async\Retry;
 use SugarCraft\Code\Background\BackgroundShellRegistry;
 use SugarCraft\Code\Tools\AcceptsShellOwner;
 use SugarCraft\Code\Tools\CarriesSessionState;
@@ -290,15 +292,14 @@ final readonly class ShellSend implements Tool, AcceptsShellOwner, BuildsFromCat
         if (!\is_string($pidPath) || $pidPath === '') {
             return true;
         }
-        $deadline = \microtime(true) + self::RELAY_ATTACH_BUDGET_MS / 1000;
-        while (!\is_file($pidPath)) {
-            if (\microtime(true) >= $deadline) {
-                return false;
-            }
-            \usleep(self::RELAY_ATTACH_TICK_MS * 1000);
-        }
-
-        return true;
+        // S-P06 (R9): the fixed-tick bounded wait is sugar-async's Retry::bounded
+        // over a factor-1.0 Backoff (a constant tick, no growth, no jitter).
+        return (bool) Retry::bounded(
+            static fn(): bool => \is_file($pidPath),
+            static fn(mixed $ready): bool => $ready === false,
+            self::RELAY_ATTACH_BUDGET_MS,
+            Backoff::new((float) self::RELAY_ATTACH_TICK_MS, 1.0),
+        );
     }
 
     /**
@@ -311,16 +312,13 @@ final readonly class ShellSend implements Tool, AcceptsShellOwner, BuildsFromCat
      */
     private function sendBounded(string $id, string $decoded): array
     {
-        $deadline = \microtime(true) + self::RELAY_ATTACH_BUDGET_MS / 1000;
-        $answer = $this->typedSend($id, $decoded);
-        while ($answer['ok'] !== true
-            && \microtime(true) < $deadline
-            && $this->isRelayAttachWindow((string) ($answer['error'] ?? ''))) {
-            \usleep(self::RELAY_ATTACH_TICK_MS * 1000);
-            $answer = $this->typedSend($id, $decoded);
-        }
-
-        return $answer;
+        return Retry::bounded(
+            fn(): array => $this->typedSend($id, $decoded),
+            fn(mixed $answer): bool => $answer['ok'] !== true
+                && $this->isRelayAttachWindow((string) ($answer['error'] ?? '')),
+            self::RELAY_ATTACH_BUDGET_MS,
+            Backoff::new((float) self::RELAY_ATTACH_TICK_MS, 1.0),
+        );
     }
 
     /**

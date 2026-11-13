@@ -10,6 +10,8 @@ use GuzzleHttp\Exception\RequestException;
 use GuzzleHttp\Exception\TransferException;
 use OpenAI\Exceptions\TransporterException;
 use Psr\Http\Client\NetworkExceptionInterface;
+use SugarCraft\Async\Backoff;
+use SugarCraft\Async\Retry;
 use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
 
 /**
@@ -251,7 +253,7 @@ final class TransientFailure
      * granularity of the transport's own progress wrapper. Public because
      * that granularity is what the slicing test measures against.
      */
-    public const BEAT_SLICE_MICROSECONDS = 1_000_000;
+    public const BEAT_SLICE_MICROSECONDS = Retry::BEAT_SLICE_MICROSECONDS;
 
     /**
      * Whether this thrown failure is worth another attempt.
@@ -469,52 +471,10 @@ final class TransientFailure
             return;
         }
 
-        $nap = $sleeper !== null
-            ? \Closure::fromCallable($sleeper)
-            : static function (int $microseconds): void {
-                usleep($microseconds);
-            };
-
-        // A DEADLINE RATHER THAN ONE `usleep()`, because one `usleep()` is not
-        // a wait, it is a wait UNTIL THE NEXT SIGNAL — see the class docblock
-        // for the measurement. Re-armed from the clock rather than by summing
-        // what was slept, so a handler that itself takes time is paid for out
-        // of the backoff instead of being added to it. Without a beat the
-        // first slice is the whole remaining debt — the exact EINTR-pinned
-        // shape, byte-for-byte; with one, the wait is served in seconds.
-        $deadline = microtime(true) + $owed / 1_000_000;
-
-        while (true) {
-            $remaining = $deadline - microtime(true);
-            if ($remaining <= 0.0) {
-                return;
-            }
-
-            // `ceil`, so a remainder under a microsecond still asks for one and
-            // the loop cannot become a spin on a value that rounds to zero.
-            $micros = (int) ceil($remaining * 1_000_000);
-
-            if ($onBeat !== null && $micros > self::BEAT_SLICE_MICROSECONDS) {
-                $micros = self::BEAT_SLICE_MICROSECONDS;
-            }
-
-            $nap($micros);
-
-            if ($onBeat === null) {
-                continue;
-            }
-
-            // ISS-074: the beat consumer heartbeats "rate-limited, retrying"
-            // between slices and resets its own idle ceiling while doing it.
-            // Fail-soft like every other heartbeat in this codebase (see
-            // HttpClientDefaults' progress wrapper): a throwing beat must
-            // never cost the retry its sleep.
-            try {
-                $onBeat();
-            } catch (\Throwable) {
-                // Fail-soft by contract - the sleep is the payload here.
-            }
-        }
+        // S-P06 (R9): the deadline-resume nap is sugar-async's Retry::nap —
+        // the same loop this class hand-rolled (EINTR-surviving, beat-sliced,
+        // fail-soft beat); $sleeper stays the test seam for the microseconds owed.
+        Retry::nap($owed, $sleeper, null, $onBeat);
     }
 
     /**
@@ -533,15 +493,15 @@ final class TransientFailure
             return 0;
         }
 
-        if ($rng !== null) {
-            $drawn = $rng($owed);
+        // S-P06 (R9): one jitter law, Backoff's full jitter over [0, ceiling].
+        // Backoff speaks whole milliseconds, so the draw is millisecond-granular
+        // (a sub-millisecond debt rounds to its nearest ms); the $rng seam keeps
+        // its microsecond contract and is clamped to [0, ceiling] by the lib.
+        $ms = Backoff::new($owed / 1000.0, 1.0)
+            ->withJitter($rng === null ? null : static fn(int $ceilingMs): int => intdiv($rng($ceilingMs * 1000), 1000))
+            ->forAttempt(1);
 
-            // The seam may be given anything callable; the ceiling is still
-            // a ceiling — and still a floor of zero — whatever it returns.
-            return max(0, min($owed, $drawn));
-        }
-
-        return random_int(0, $owed);
+        return $ms * 1000;
     }
 
     /**
@@ -648,7 +608,8 @@ final class TransientFailure
             return 0;
         }
 
-        return self::baseBackoffMicroseconds($config) * (2 ** ($attempt - 1));
+        // S-P06 (R9): the doubling ladder is Backoff's ceiling schedule.
+        return Backoff::new(self::baseBackoffMicroseconds($config) / 1000.0, 2.0)->ceiling($attempt) * 1000;
     }
 
     /**
