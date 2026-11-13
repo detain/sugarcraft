@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace SugarCraft\Video\Tests;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Video\Decode\FfmpegDecodeFailure;
 use SugarCraft\Video\Decode\FfmpegDecoder;
+use SugarCraft\Video\Decode\RgbFrame;
 use SugarCraft\Video\Source\Probe;
 
 /**
@@ -43,16 +45,24 @@ final class FfmpegDecoderReadinessTest extends TestCase
     }
 
     /**
-     * @testdox a child that dies with no output releases next() promptly with null
+     * @testdox a child that dies abnormally releases the read promptly — with the typed refusal
      *
-     * EOF polarity of the pump contract: an ffmpeg that fails at open (empty
-     * file is a regular path, so the spawn happens; the decode does not)
-     * closes the pipe, and the blocking read returns null within moments —
-     * the child's death IS the read's bound. The recorded exit code and its
-     * error_log line (E366's "the recorded exit code keeps its meaning") are
-     * captured and pinned too.
+     * SV-M22/022 adjudication of the pump-contract first arm. The original
+     * premise ("dies without OUTPUT" meaning silent) predates the M12 law
+     * this decoder now documents at the read site: a dead-abnormal child
+     * THROWS — crash is not end-of-stream. An empty .mp4 dies LOUD (non-zero
+     * exit + stderr text), so "promptly with null" was reachable only while a
+     * zombie-timing race kept proc_get_status reporting the child RUNNING at
+     * the refusal check — green under suite load, deterministic red on an
+     * idle box (found by running this file in isolation for M22). The arm now
+     * pins the CURRENT law, and the promptness budget survives verbatim: the
+     * typed refusal is the prompt release for the abnormal half.
+     *
+     * The clean half ("child ENDS → null promptly") moved to its own honest
+     * fixture below, so EOF polarity is still pinned — with a child that
+     * really does end without output.
      */
-    public function testNextReturnsNullPromptlyWhenChildDiesWithoutOutput(): void
+    public function testNextRefusesTypedPromptlyWhenChildDiesAbnormally(): void
     {
         if (!Probe::hasFFmpeg()) {
             $this->markTestSkipped('ffmpeg not present');
@@ -70,10 +80,48 @@ final class FfmpegDecoderReadinessTest extends TestCase
             $decoder = new FfmpegDecoder();
             $decoder->open($clip, 8, 6, 10.0);
 
+            // SV-M22/022: force the fact the branch under test keys on — the
+            // refusal distinguishes DEAD (throw) from live-but-silent (null),
+            // so pinning the DEAD arm must wait out the death, not race it.
+            // The old test's green under suite load WAS the race, won by the
+            // wrong side (running=true answered null). Poll-until-ceiling,
+            // observing the same proc_get_status the decoder consults — the
+            // process resource is private, the reflection is the seam here.
+            $proc = (new \ReflectionProperty(FfmpegDecoder::class, 'process'))->getValue($decoder);
+            $this->assertIsResource($proc, 'the empty file is a regular path — the spawn must happen');
+            $deadline = microtime(true) + 5.0;
+            while (microtime(true) < $deadline) {
+                $status = @proc_get_status($proc);
+                if (!is_array($status) || !($status['running'] ?? false)) {
+                    break;
+                }
+                usleep(10_000);
+            }
+
+            $thrown = null;
             $start = microtime(true);
-            $this->assertNull($decoder->next(), 'a dead child must release the read as EOF');
-            $this->assertLessThan(5.0, microtime(true) - $start, 'EOF release must be prompt');
-            $this->assertNull($decoder->next(), 'EOF is stable');
+            try {
+                $decoder->next();
+            } catch (FfmpegDecodeFailure $failure) {
+                $thrown = $failure;
+            }
+
+            // SV-M22 review: this 5.0 s bound is the completion-form budget
+            // M22 asks for — next() IS the operation measured; the ceiling
+            // bounds the grace-ladder worst case, not a settle window.
+            $this->assertLessThan(5.0, microtime(true) - $start, 'the typed refusal must release the read as promptly as EOF');
+            $this->assertNotNull($thrown, 'M12: a dead-abnormal child is not EOF — the read refuses typed');
+            $this->assertStringContainsString('exited with code', $thrown->getMessage());
+            $this->assertStringContainsString('ffmpeg said', $thrown->getMessage(), 'the stderr tail rides the refusal');
+
+            $again = null;
+            try {
+                $decoder->next();
+            } catch (FfmpegDecodeFailure $failure) {
+                $again = $failure;
+            }
+
+            $this->assertNotNull($again, 'the typed refusal is stable, not a one-shot');
 
             $decoder->close();
             $this->assertNotSame(0, $decoder->exitCode(), 'ffmpeg must have failed on the empty file');
@@ -88,6 +136,69 @@ final class FfmpegDecoderReadinessTest extends TestCase
             $decoder?->close();
             @unlink($clip);
             @unlink($log);
+        }
+    }
+
+    /**
+     * @testdox a child that ENDS cleanly releases next() promptly with null — the true EOF polarity
+     *
+     * The original arm's honest half: a real end-of-stream (valid one-frame
+     * clip; ffmpeg writes the frame, closes the pipe and exits 0) must
+     * release with null — never the typed refusal — and stay stable. This is
+     * the fixture the pre-M12 test NEEDED; the empty file was always a loud
+     * crash wearing an EOF costume.
+     */
+    public function testNextReturnsNullPromptlyWhenChildEndsCleanly(): void
+    {
+        if (!Probe::hasFFmpeg()) {
+            $this->markTestSkipped('ffmpeg not present');
+        }
+
+        $clip = sys_get_temp_dir() . '/sugar-video-ready-' . getmypid() . '.mp4';
+        $gen = proc_open(
+            [
+                Probe::ffmpeg(), '-hide_banner', '-loglevel', 'error',
+                '-f', 'lavfi', '-i', 'color=c=red:s=8x6:r=10',
+                '-frames:v', '1',
+                '-y', $clip,
+            ],
+            [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']],
+            $genPipes,
+        );
+        $this->assertIsResource($gen, 'ffmpeg clip generation must start');
+        foreach ($genPipes as $p) {
+            if (is_resource($p)) {
+                fclose($p);
+            }
+        }
+
+        $this->assertSame(0, proc_close($gen), 'the one-frame clip must generate cleanly');
+        $this->assertFileExists($clip);
+
+        $decoder = null;
+        try {
+            $decoder = new FfmpegDecoder();
+            $decoder->open($clip, 8, 6, 10.0);
+
+            $start = microtime(true);
+            $frame = $decoder->next();
+            $this->assertInstanceOf(RgbFrame::class, $frame, 'the single frame is delivered');
+            // The decoder sizes its output at cellsH × rowsPerCell pixels
+            // (the CALIBER rowspercell law this lib's decoders honour): an
+            // 8x6 HalfBlock pane decodes 8x12.
+            $this->assertSame(8, $frame->w);
+            $this->assertSame(12, $frame->h);
+
+            $frame2 = $decoder->next();
+            $this->assertLessThan(5.0, microtime(true) - $start, 'the clean end must release promptly');
+            $this->assertNull($frame2, 'a clean-exit child ends the stream — null, not the typed refusal');
+            $this->assertNull($decoder->next(), 'EOF is stable');
+
+            $decoder->close();
+            $this->assertSame(0, $decoder->exitCode(), 'the child exited clean');
+        } finally {
+            $decoder?->close();
+            @unlink($clip);
         }
     }
 
@@ -156,7 +267,9 @@ final class FfmpegDecoderReadinessTest extends TestCase
 
             $this->assertSame(1, preg_match('/CLOSE_SECONDS=([\d.]+)/', $stdout, $m), 'close() timing must be reported');
             // Ceiling: GRACE+TERM+KILL = 3.5s of ladder, +1s slack for the
-            // poll tick and process teardown.
+            // poll tick and process teardown. (SV-M22 review: already the
+            // completion-form budget — CLOSE_SECONDS is stamped inside the
+            // harness around the measured call; no fixed sleep to replace.)
             $this->assertLessThanOrEqual(4.5, (float) $m[1], 'close() must stay inside the canonical ladder ceiling');
 
             // Honest exit-status polarity: a TERM-interrupted ffmpeg exits

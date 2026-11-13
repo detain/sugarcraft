@@ -412,11 +412,16 @@ final class AudioPlayerTest extends TestCase
                 );
             }
 
-            // Give ffplay a moment to actually be up: a real subprocess spawned
-            // through the file-sink descriptors and running.
+            // SV-M22/022: poll-until-with-ceiling (the AudioPlayerTeardownTest
+            // ready-file idiom, predicate = isPlaying()). The old fixed
+            // usleep(300_000) let host load eat the settle window before the
+            // child was even up — a slow spawn read as a dead one. Once READY,
+            // the historical stability window applies, measured from the
+            // ready-poll instead of from the spawn.
+            $ready = $this->waitUntil(static fn (): bool => $player->isPlaying(), 5.0);
             usleep(300_000);
             $this->assertTrue(
-                $player->isPlaying(),
+                $ready && $player->isPlaying(),
                 'ffplay subprocess must be running shortly after start()',
             );
 
@@ -621,7 +626,14 @@ final class AudioPlayerTest extends TestCase
 
             $player = new AudioPlayer($clip);
             $player->start();
-            usleep(100_000); // Give process time to start
+            // SV-M22/022: ready-poll first — a null exitCode must mean
+            // "spawned and alive, not exited", never "proc_get_status has not
+            // seen a child yet". The old fixed usleep(100_000) conflated the
+            // two under load.
+            self::assertTrue(
+                $this->waitUntil(static fn (): bool => $player->isPlaying(), 5.0),
+                'the audio child must reach the playing state within the ceiling',
+            );
 
             $this->assertNull($player->exitCode());
             $player->stop();
@@ -735,6 +747,26 @@ final class AudioPlayerTest extends TestCase
         $player->start();
         // With no binary, processHandle is null and exitCode is never set
         $this->assertNull($player->exitCode());
+    }
+
+    /**
+     * SV-M22/022: the suite's ready-poll idiom — AudioPlayerTeardownTest's
+     * ready-file loop generalized to any predicate. Sleep in 10 ms steps until
+     * the predicate holds or the ceiling elapses; returns whether it held.
+     * Load-sensitive "must be up shortly after start()" asserts must measure
+     * readiness, not the size of a blind settle window.
+     */
+    private function waitUntil(callable $ready, float $ceilingSeconds): bool
+    {
+        $deadline = microtime(true) + $ceilingSeconds;
+        while (microtime(true) < $deadline) {
+            if ($ready()) {
+                return true;
+            }
+            usleep(10_000);
+        }
+
+        return (bool) $ready();
     }
 
     /**
