@@ -49,7 +49,10 @@ final class FilterCommand extends Command
             ->addOption('select-if-one',    null, InputOption::VALUE_NONE,    'Auto-pick when the input has exactly one line.')
             ->addOption('output-delimiter', null, InputOption::VALUE_REQUIRED, 'Separator for multi-select output.', "\n")
             ->addOption('cursor', null, InputOption::VALUE_REQUIRED, 'Glyph rendered before the highlighted item.', '> ')
+            ->addOption('pointer', null, InputOption::VALUE_REQUIRED, 'Alias for --cursor.', null)
             ->addOption('indicator', null, InputOption::VALUE_REQUIRED, 'Alias for --cursor.', null)
+            ->addOption('prompt', null, InputOption::VALUE_REQUIRED, 'Glyph(s) replacing the leading / on the filter probe line.', '')
+            ->addOption('tail', null, InputOption::VALUE_REQUIRED, 'Rows to keep visible below the cursor (0 = unset).', 0)
             ->addOption('unselected-prefix', null, InputOption::VALUE_REQUIRED, 'Glyph rendered before non-cursor items.', null)
             ->addOption('strict', null, InputOption::VALUE_NONE, 'Substring-only match (the default — flag accepted for gum compat).')
             ->addOption('fuzzy', null, InputOption::VALUE_NONE, 'Fuzzy match using Smith-Waterman scoring with highlight indices.')
@@ -96,14 +99,19 @@ final class FilterCommand extends Command
             return Command::SUCCESS;
         }
 
-        // --indicator is an alias for --cursor; user-supplied wins.
-        $cursor = $input->getOption('indicator') ?? $input->getOption('cursor');
+        // --indicator AND --pointer are aliases for --cursor (scriptui-42,
+        // finding 060: gum's `--pointer ↓` died as an unknown option);
+        // user-supplied aliases win over the documented default.
+        $cursor = $input->getOption('pointer')
+            ?? $input->getOption('indicator')
+            ?? $input->getOption('cursor');
         $unselected = $input->getOption('unselected-prefix');
 
         try {
             $height = PositiveInt::parse('height', $input->getOption('height'));
             $limit  = PositiveInt::parse('limit', $input->getOption('limit'));
             $width  = PositiveInt::parse('width', $input->getOption('width'));
+            $tail   = PositiveInt::parse('tail', $input->getOption('tail'));
         } catch (\InvalidArgumentException $e) {
             // A typo'd number must not silently relocate the mode.
             fwrite(STDERR, $e->getMessage() . "\n");
@@ -124,6 +132,8 @@ final class FilterCommand extends Command
             fuzzy:            (bool) $input->getOption('fuzzy'),
             width:            $width,
             placeholder:      (string) $input->getOption('placeholder'),
+            prompt:           (string) $input->getOption('prompt'),
+            tail:             $tail,
         );
         $loop    = \React\EventLoop\Loop::get();
         $options = InteractiveRuntime::programOptions(loop: $loop, 

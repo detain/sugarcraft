@@ -52,6 +52,8 @@ final class FilterModel implements Model
         ?FuzzyMatcher $matcher = null,
         int $width = 0,
         string $placeholder = '',
+        string $prompt = '',
+        int $tail = 0,
     ): self {
         // scriptui-15: the option payload stays RAW — it is the DATA
         // channel (`printf 'a\tb\n' | filter` must hand back the real
@@ -65,6 +67,11 @@ final class FilterModel implements Model
         $options     = array_values($options);
         $value       = \SugarCraft\Core\Util\Sanitize::cellValue($value);
         $placeholder = \SugarCraft\Core\Util\Sanitize::cellValue($placeholder);
+        // scriptui-42 (finding 060): the prompt is a PAINT string (rides the
+        // probe line, never emitted); the tail is the rows-to-keep-below the
+        // cursor budget, clamped into the visible window.
+        $prompt   = \SugarCraft\Core\Util\Sanitize::cellValue($prompt);
+        $tailRows = $tail > 0 ? min($tail, max(0, $height - 1)) : 0;
 
         // 0 = auto width: terminal columns when knowable, else the
         // historical 60-cell list (see ChooseModel for the same rule).
@@ -121,6 +128,8 @@ final class FilterModel implements Model
             fuzzyResults: [],
             matcher: $matcher,
             placeholder: $placeholder,
+            promptGlyph: $prompt,
+            tailRows: $tailRows,
         );
         if ($fuzzy && $value !== '') {
             $filterText = $list->filterValue();
@@ -157,6 +166,11 @@ final class FilterModel implements Model
         // scriptui-18: the hint painted over the bare '/' probe line while
         // the filter text is empty ('' = no ghost, the historical frame).
         public readonly string $placeholder = '',
+        // scriptui-42 (finding 060): --prompt replaces the fixed '/' probe
+        // glyph ('' = the historical slash); --tail N keeps N rows visible
+        // BELOW the cursor (0 = unset, the top-anchored historical window).
+        public readonly string $promptGlyph = '',
+        public readonly int $tailRows = 0,
         ?FuzzyMatcher $matcher = null,
     ) {
         $this->matcher = $matcher ?? new SmithWatermanMatcher();
@@ -320,9 +334,14 @@ final class FilterModel implements Model
         // mirroring ItemList::view()'s layout — with matched characters
         // emphasised via their highlight indices.
         $fuzzyActive = $this->fuzzy && $this->list->filterValue() !== '' && $this->fuzzyResults !== [];
+        // scriptui-42: a custom prompt glyph or a tail budget both need the
+        // model's own row window — ItemList hardcodes '/' (ItemList:197) and
+        // keeps the cursor top-anchored. Single-select plain runs otherwise
+        // delegate byte-for-byte as they always did.
+        $needsCustom  = $this->multi || $this->promptGlyph !== '' || $this->tailRows > 0;
         $body = $fuzzyActive
             ? $this->fuzzyView()
-            : ($this->multi ? $this->markedBody() : Emphasis::stripDecor($this->list->view()));
+            : ($needsCustom ? $this->markedBody() : Emphasis::stripDecor($this->list->view()));
         if ($this->multi) {
             $count = count(array_filter($this->checked));
             $cap = $this->limit > 0 ? "/{$this->limit}" : '';
@@ -337,10 +356,11 @@ final class FilterModel implements Model
     /**
      * scriptui-18: --placeholder reached nowhere — the flag was registered
      * and dropped. The ghost now rides -17's shared span doctrine: while the
-     * filter text is empty, the bare '/' probe line (ItemList:197 and the
-     * fuzzyView mirror of it) carries the dim hint after the slash; the
-     * first typed character extends that same line and the hint is gone.
-     * Bounded to the FIRST exact '/' line so item text can never be touched.
+     * filter text is empty, the bare probe line (ItemList:197's '/', or the
+     * --prompt glyph under scriptui-42, mirrored by the custom bodies)
+     * carries the dim hint after the glyph; the first typed character
+     * extends that same line and the hint is gone. Bounded to the FIRST
+     * exact bare-probe line so item text can never be touched.
      */
     private function ghostFilterLine(string $body): string
     {
@@ -348,10 +368,11 @@ final class FilterModel implements Model
             return $body;
         }
 
-        $ghost = '/' . Emphasis::sgr(Ansi::FAINT) . $this->placeholder . Emphasis::reset();
+        $bare  = $this->promptGlyph !== '' ? $this->promptGlyph : '/';
+        $ghost = $bare . Emphasis::sgr(Ansi::FAINT) . $this->placeholder . Emphasis::reset();
         $lines = explode("\n", $body);
         foreach ($lines as $i => $line) {
-            if ($line === '/') {
+            if ($line === $bare) {
                 $lines[$i] = $ghost;
                 break;
             }
@@ -376,7 +397,7 @@ final class FilterModel implements Model
             $lines[] = RenderSafe::clean($this->list->title);
         }
         if ($this->list->showFilter && ($this->list->filtering || $this->list->filterText !== '')) {
-            $lines[] = '/' . $this->list->filterText;
+            $lines[] = ($this->promptGlyph !== '' ? $this->promptGlyph : '/') . $this->list->filterText;
         }
         if ($visible === []) {
             $lines[] = $this->list->filterText !== '' ? 'No matches.' : 'No items.';
@@ -390,9 +411,14 @@ final class FilterModel implements Model
         // through ITEM IDENTITY (array_search, strict), not title-first
         // matching — duplicate titles tick and mark per ROW, the same
         // space toggle() now writes.
-        $top    = max(0, $this->list->offset);
-        $window = array_slice($visible, $top, $this->list->height);
+        // scriptui-42: --tail shifts the window so TAIL rows stay visible
+        // BELOW the cursor (gum's bottom-hugging footer); unset keeps the
+        // ItemList offset byte-for-byte.
         $cursor = $this->list->index();
+        $top    = $this->tailRows > 0
+            ? max(0, min($cursor - (max(1, $this->list->height) - $this->tailRows - 1), max(0, count($visible) - $this->list->height)))
+            : max(0, $this->list->offset);
+        $window = array_slice($visible, $top, $this->list->height);
         foreach ($window as $i => $item) {
             $idx       = $top + $i;
             $itemTitle = RenderSafe::clean($item->title());
@@ -426,7 +452,7 @@ final class FilterModel implements Model
         if ($this->list->title !== '') {
             $lines[] = $this->list->title;
         }
-        $lines[] = '/' . $this->list->filterText;
+        $lines[] = ($this->promptGlyph !== '' ? $this->promptGlyph : '/') . $this->list->filterText;
 
         $visible = $this->fuzzyVisibleItems();
         // fuzzyVisibleItems() orders by ascending original index; walk the
@@ -627,6 +653,8 @@ final class FilterModel implements Model
             fuzzyOffset:    $fuzzyOffset    ?? $this->fuzzyOffset,
             matcher:        $this->matcher,
             placeholder:    $this->placeholder,
+            promptGlyph:    $this->promptGlyph,
+            tailRows:       $this->tailRows,
         );
     }
 
