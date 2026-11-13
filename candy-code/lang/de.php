@@ -5319,4 +5319,7 @@ Generierungsformular-Entwurf. Bereits im Entwurf vorhandene Werte werden nie
     'mcp.auth_required' => 'MCP-Server haben diesen Start wegen fehlender Zugangsdaten abgelehnt: {servers}.',
     'provider.attachment.oversize_image' => 'Ein Bild aus einem Werkzeugergebnis ({bytes} Bytes) überschreitet das Budget dieses Anbieters von {budget} Bytes, daher erhält das Modell nur die Textbeschreibung.',
     'provider.attachment.oversize_document' => 'Ein Dokument aus einem Werkzeugergebnis ({bytes} Bytes) überschreitet das Budget dieses Anbieters von {budget} Bytes, daher erhält das Modell nur die Textbeschreibung.',
+    'host.agent_resume.feed_degraded' => 'Der Live-Fortschrittsfeed dieses Folgelaufs war gestört: {count} Aktualisierung(en) sind nie angekommen. Der Lauf selbst ist beendet; sein Ergebnis folgt.',
+    'host.agent_resume.feed_broke' => 'Der Fortschrittsfeed des Folgelaufs brach ab, bevor er ein Ergebnis meldete; sein Ausgang ist unbekannt. Prüfen Sie das Transkriptprotokoll des Laufs.',
+    'host.agent_resume.no_fork' => 'Dieser Folgelauf konnte nicht geforkt werden und lief daher in diesem Prozess ohne Live-Fortschrittsfeed.',
 ];

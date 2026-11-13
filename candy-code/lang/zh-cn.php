@@ -5314,4 +5314,7 @@ TXT,
     'mcp.auth_required' => 'MCP 服务器因凭据问题拒绝了本次启动：{servers}。',
     'provider.attachment.oversize_image' => '工具结果中的图片（{bytes} 字节）超过了此提供方 {budget} 字节的上限，因此模型只会收到其文字说明。',
     'provider.attachment.oversize_document' => '工具结果中的文档（{bytes} 字节）超过了此提供方 {budget} 字节的上限，因此模型只会收到其文字说明。',
+    'host.agent_resume.feed_degraded' => '此后续运行的实时进度流已降级：有 {count} 条更新未能送达。运行本身已完成，结果如下。',
+    'host.agent_resume.feed_broke' => '后续运行的进度流在报告结果之前中断，因此其结果未知。请查看该运行的转录日志。',
+    'host.agent_resume.no_fork' => '此后续运行无法派生子进程，因此在当前进程中运行，没有实时进度流。',
 ];

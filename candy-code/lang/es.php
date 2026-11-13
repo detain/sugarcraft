@@ -5319,4 +5319,7 @@ sobrescriben (la ley onlyUnset).',
     'mcp.auth_required' => 'Los servidores MCP rechazaron este inicio por falta de credenciales: {servers}.',
     'provider.attachment.oversize_image' => 'Una imagen de resultado de herramienta ({bytes} bytes) supera el límite de {budget} bytes de este proveedor, así que el modelo solo recibe su descripción de texto.',
     'provider.attachment.oversize_document' => 'Un documento de resultado de herramienta ({bytes} bytes) supera el límite de {budget} bytes de este proveedor, así que el modelo solo recibe su descripción de texto.',
+    'host.agent_resume.feed_degraded' => 'La transmisión de progreso en vivo de esta ejecución de seguimiento se degradó: {count} actualización(es) nunca llegaron. La ejecución terminó; su resultado sigue.',
+    'host.agent_resume.feed_broke' => 'La transmisión de progreso de la ejecución de seguimiento se rompió antes de informar un resultado, así que se desconoce el desenlace. Revise el registro de transcripción de la ejecución.',
+    'host.agent_resume.no_fork' => 'Esta ejecución de seguimiento no pudo bifurcarse, así que se ejecutó en este proceso sin transmisión de progreso en vivo.',
 ];

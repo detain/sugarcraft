@@ -5394,4 +5394,7 @@ overwritten (the onlyUnset law).',
     'mcp.auth_required' => 'MCP servers refused this launch for credentials: {servers}.',
     'provider.attachment.oversize_image' => 'A tool-result image ({bytes} bytes) is over this provider\'s {budget}-byte budget, so the model gets its text caption only.',
     'provider.attachment.oversize_document' => 'A tool-result document ({bytes} bytes) is over this provider\'s {budget}-byte budget, so the model gets its text caption only.',
+    'host.agent_resume.feed_degraded' => 'The live progress feed from this follow-up run degraded: {count} update(s) never arrived. The run itself finished; its result follows.',
+    'host.agent_resume.feed_broke' => 'The progress feed from the follow-up run broke before it reported a result, so its outcome is unknown. Check the run\'s transcript log.',
+    'host.agent_resume.no_fork' => 'This follow-up run could not be forked, so it ran in this process without a live progress feed.',
 ];

@@ -5319,4 +5319,7 @@ sobrescritos (a lei onlyUnset).',
     'mcp.auth_required' => 'Servidores MCP recusaram este arranque por falta de credenciais: {servers}.',
     'provider.attachment.oversize_image' => 'Uma imagem de resultado de ferramenta ({bytes} bytes) excede o limite de {budget} bytes deste fornecedor, pelo que o modelo recebe apenas a legenda em texto.',
     'provider.attachment.oversize_document' => 'Um documento de resultado de ferramenta ({bytes} bytes) excede o limite de {budget} bytes deste fornecedor, pelo que o modelo recebe apenas a legenda em texto.',
+    'host.agent_resume.feed_degraded' => 'O feed de progresso em direto desta execução de seguimento degradou-se: {count} atualização(ões) nunca chegaram. A execução terminou; o resultado segue.',
+    'host.agent_resume.feed_broke' => 'O feed de progresso da execução de seguimento quebrou antes de comunicar um resultado, pelo que o desfecho é desconhecido. Verifique o registo de transcrição da execução.',
+    'host.agent_resume.no_fork' => 'Esta execução de seguimento não pôde ser bifurcada, pelo que correu neste processo sem feed de progresso em direto.',
 ];

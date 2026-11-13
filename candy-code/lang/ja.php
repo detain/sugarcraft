@@ -5316,4 +5316,7 @@ TXT,
     'mcp.auth_required' => '認証情報が原因で、MCP サーバーがこの起動を拒否しました: {servers}。',
     'provider.attachment.oversize_image' => 'ツール結果の画像（{bytes} バイト）がこのプロバイダーの上限 {budget} バイトを超えているため、モデルにはテキストの説明のみが渡されます。',
     'provider.attachment.oversize_document' => 'ツール結果のドキュメント（{bytes} バイト）がこのプロバイダーの上限 {budget} バイトを超えているため、モデルにはテキストの説明のみが渡されます。',
+    'host.agent_resume.feed_degraded' => 'このフォローアップ実行のライブ進捗フィードが劣化しました。{count} 件の更新が届きませんでした。実行自体は完了しており、結果は以下のとおりです。',
+    'host.agent_resume.feed_broke' => 'フォローアップ実行の進捗フィードが結果を報告する前に途切れたため、結果は不明です。実行のトランスクリプトログを確認してください。',
+    'host.agent_resume.no_fork' => 'このフォローアップ実行はフォークできなかったため、ライブ進捗フィードなしでこのプロセス内で実行されました。',
 ];

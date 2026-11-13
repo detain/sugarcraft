@@ -9,6 +9,7 @@ use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
 use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Events\SubAgentActivity;
+use SugarCraft\Code\Lang;
 use SugarCraft\Code\Support\ForkedChild;
 use SugarCraft\Code\Tools\BuiltIn\TaskTool;
 use SugarCraft\Code\Tools\DelegatesToEngine;
@@ -115,9 +116,12 @@ final class AgentResume
             return \React\Promise\resolve(self::execute($task, $this->engine, $args, $onActivity));
         }
 
+        // A fork-capable host that cannot fork this run falls back to the
+        // in-process path; that is a real downgrade (the TUI blocks, frames
+        // arrive late), so the result says so rather than looking identical.
         $pair = @stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
         if ($pair === false) {
-            return \React\Promise\resolve(self::execute($task, $this->engine, $args, $onActivity));
+            return \React\Promise\resolve(self::downgraded(self::execute($task, $this->engine, $args, $onActivity)));
         }
         [$parentEnd, $childEnd] = $pair;
 
@@ -129,7 +133,7 @@ final class AgentResume
             fclose($parentEnd);
             fclose($childEnd);
 
-            return \React\Promise\resolve(self::execute($task, $this->engine, $args, $onActivity));
+            return \React\Promise\resolve(self::downgraded(self::execute($task, $this->engine, $args, $onActivity)));
         }
 
         if ($pid === 0) {
@@ -142,6 +146,11 @@ final class AgentResume
         fclose($childEnd);
 
         return self::collect($parentEnd, $pid, $callId, $onActivity);
+    }
+
+    private static function downgraded(ToolResult $result): ToolResult
+    {
+        return $result->withContent(Lang::t('host.agent_resume.no_fork') . "\n\n" . $result->content());
     }
 
     /**
@@ -179,13 +188,23 @@ final class AgentResume
      *
      * @param resource              $socket
      * @param array<string, string> $args
+     *
+     * @return int how many lines the socket refused; the count rides the
+     *             result line so the parent can say the feed degraded
      */
-    private static function runInChild($socket, DelegatesToEngine $task, EngineBackend $engine, array $args): void
+    private static function runInChild($socket, DelegatesToEngine $task, EngineBackend $engine, array $args): int
     {
-        $write = static function (array $line) use ($socket): void {
+        $dropped = 0;
+        $write = static function (array $line) use ($socket, &$dropped): void {
             $json = json_encode($line, JSON_INVALID_UTF8_SUBSTITUTE | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-            if (\is_string($json)) {
-                @fwrite($socket, $json . "\n");
+            if (!\is_string($json)) {
+                return;
+            }
+            $payload = $json . "\n";
+            // A blocking socket whose peer is gone returns false or a short
+            // count; either way that frame never arrived.
+            if (@fwrite($socket, $payload) !== \strlen($payload)) {
+                $dropped++;
             }
         };
 
@@ -197,8 +216,10 @@ final class AgentResume
                 $write(['k' => 'activity', 'frame' => $activity->toArray()]);
             },
         );
-        $write(['k' => 'result', 'content' => $result->content(), 'error' => $result->isError()]);
+        $write(['k' => 'result', 'content' => $result->content(), 'error' => $result->isError(), 'dropped' => $dropped]);
         @fclose($socket);
+
+        return $dropped;
     }
 
     /**
@@ -217,9 +238,20 @@ final class AgentResume
         $deferred = new Deferred();
         $buffer = '';
         $result = null;
+        $dropped = 0;
 
-        Loop::addReadStream($socket, static function ($stream) use (&$buffer, &$result, $deferred, $pid, $callId, $onActivity): void {
+        Loop::addReadStream($socket, static function ($stream) use (&$buffer, &$result, &$dropped, $deferred, $pid, $callId, $onActivity): void {
             $chunk = @fread($stream, 65536);
+            if ($chunk === false && !feof($stream)) {
+                // A read error is not an end of stream: left armed it would
+                // spin the loop on a dead descriptor forever.
+                Loop::removeReadStream($stream);
+                @fclose($stream);
+                self::reap($pid);
+                $deferred->resolve($result ?? new ToolResult($callId, Lang::t('host.agent_resume.feed_broke'), true));
+
+                return;
+            }
             if (\is_string($chunk) && $chunk !== '') {
                 $buffer .= $chunk;
                 while (($newline = strpos($buffer, "\n")) !== false) {
@@ -236,6 +268,7 @@ final class AgentResume
                         }
                     } elseif (($decoded['k'] ?? null) === 'result') {
                         $result = new ToolResult($callId, (string) ($decoded['content'] ?? ''), ($decoded['error'] ?? true) === true);
+                        $dropped = (int) ($decoded['dropped'] ?? 0);
                     }
                 }
 
@@ -248,7 +281,12 @@ final class AgentResume
             Loop::removeReadStream($stream);
             fclose($stream);
             self::reap($pid);
-            $deferred->resolve($result ?? new ToolResult($callId, 'the follow-up run ended without reporting a result', true));
+            if ($result === null) {
+                $result = new ToolResult($callId, 'the follow-up run ended without reporting a result', true);
+            } elseif ($dropped > 0) {
+                $result = $result->withContent(Lang::t('host.agent_resume.feed_degraded', ['count' => $dropped]) . "\n\n" . $result->content());
+            }
+            $deferred->resolve($result);
         });
 
         return $deferred->promise();

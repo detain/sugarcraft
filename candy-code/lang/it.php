@@ -5320,4 +5320,7 @@ sovrascritti (la legge onlyUnset).',
     'mcp.auth_required' => 'I server MCP hanno rifiutato questo avvio per mancanza di credenziali: {servers}.',
     'provider.attachment.oversize_image' => 'Un\'immagine del risultato di uno strumento ({bytes} byte) supera il limite di {budget} byte di questo provider, quindi il modello riceve solo la didascalia di testo.',
     'provider.attachment.oversize_document' => 'Un documento del risultato di uno strumento ({bytes} byte) supera il limite di {budget} byte di questo provider, quindi il modello riceve solo la didascalia di testo.',
+    'host.agent_resume.feed_degraded' => 'Il feed di avanzamento in tempo reale di questa esecuzione di follow-up si è degradato: {count} aggiornamento/i non sono mai arrivati. L\'esecuzione è terminata; il suo risultato segue.',
+    'host.agent_resume.feed_broke' => 'Il feed di avanzamento dell\'esecuzione di follow-up si è interrotto prima di riportare un risultato, quindi l\'esito è sconosciuto. Controlla il registro di trascrizione dell\'esecuzione.',
+    'host.agent_resume.no_fork' => 'Questa esecuzione di follow-up non ha potuto essere forkata, quindi è stata eseguita in questo processo senza feed di avanzamento in tempo reale.',
 ];

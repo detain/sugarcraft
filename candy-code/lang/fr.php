@@ -5320,4 +5320,7 @@ brouillon du formulaire de génération. Les valeurs déjà présentes dans le b
     'mcp.auth_required' => 'Des serveurs MCP ont refusé ce lancement faute d’identifiants : {servers}.',
     'provider.attachment.oversize_image' => 'Une image issue d’un résultat d’outil ({bytes} octets) dépasse la limite de {budget} octets de ce fournisseur ; le modèle ne reçoit que sa légende textuelle.',
     'provider.attachment.oversize_document' => 'Un document issu d’un résultat d’outil ({bytes} octets) dépasse la limite de {budget} octets de ce fournisseur ; le modèle ne reçoit que sa légende textuelle.',
+    'host.agent_resume.feed_degraded' => 'Le flux de progression en direct de cette exécution de suivi s\'est dégradé : {count} mise(s) à jour ne sont jamais arrivées. L\'exécution elle-même est terminée ; son résultat suit.',
+    'host.agent_resume.feed_broke' => 'Le flux de progression de l\'exécution de suivi s\'est interrompu avant de rapporter un résultat ; son issue est donc inconnue. Consultez le journal de transcription de l\'exécution.',
+    'host.agent_resume.no_fork' => 'Cette exécution de suivi n\'a pas pu être forkée ; elle s\'est donc exécutée dans ce processus, sans flux de progression en direct.',
 ];
