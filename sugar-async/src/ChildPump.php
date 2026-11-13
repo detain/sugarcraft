@@ -111,7 +111,11 @@ final class ChildPump
             $dropped[$slot] += $refused;
         };
 
-        if ($pollPipes ?? WindowsPipes::runtimeNeedsIt()) {
+        // Sockets (ChildStdio's Windows spec) are honest under select() on
+        // every host, so only a set holding a real Windows pipe needs polling.
+        $pollPipes ??= WindowsPipes::runtimeNeedsIt()
+            && array_filter($pipes, static fn ($p): bool => !ChildStdio::isSocket($p)) !== [];
+        if ($pollPipes) {
             return self::pollDrain($pipes, $deadline, $maxBytes, $clock, $stopAtCap, $buffers, $dropped, $capture, $running);
         }
 
@@ -236,7 +240,12 @@ final class ChildPump
 
             $got = false;
             foreach ($pipes as $slot => $pipe) {
-                $chunk = WindowsPipes::readAvailable($pipe, self::READ_BYTES);
+                // A socket among the pipes (ChildStdio's Windows spec) reports
+                // fstat size 0, but it was made non-blocking above, so a plain
+                // read answers at once.
+                $chunk = ChildStdio::isSocket($pipe)
+                    ? (string) @fread($pipe, self::READ_BYTES)
+                    : WindowsPipes::readAvailable($pipe, self::READ_BYTES);
                 if ($chunk !== '') {
                     $capture($slot, $chunk);
                     $got = true;

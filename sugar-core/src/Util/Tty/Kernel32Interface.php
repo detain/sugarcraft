@@ -169,6 +169,12 @@ interface Kernel32Interface
     public function waitForSingleObject(int $h, int $timeoutMs): int;
 
     /**
+     * Whether a process with this pid exists: true / false when Windows can
+     * say for certain, null when it cannot.
+     */
+    public function processAlive(int $pid): ?bool;
+
+    /**
      * Peek at console input events without consuming them.
      *
      * @param int $h CONIN$ handle

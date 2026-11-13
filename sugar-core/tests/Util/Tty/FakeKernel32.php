@@ -327,6 +327,14 @@ final class FakeKernel32 implements \SugarCraft\Core\Util\Tty\Kernel32Interface
         return true;
     }
 
+    /** @var array<int, ?bool> pid → seeded processAlive() answer */
+    public array $processes = [];
+
+    public function processAlive(int $pid): ?bool
+    {
+        return \array_key_exists($pid, $this->processes) ? $this->processes[$pid] : false;
+    }
+
     public function waitForSingleObject(int $_h, int $_timeoutMs): int
     {
         return $this->waitSignalled

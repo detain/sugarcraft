@@ -37,6 +37,11 @@ namespace SugarCraft\Core\Util\Tty;
  */
 final class Kernel32 implements Kernel32Interface
 {
+    private const PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
+    private const STILL_ACTIVE = 259;
+    private const ERROR_ACCESS_DENIED = 5;
+    private const ERROR_INVALID_PARAMETER = 87;
+
     /** Lazily-loaded FFI runtime. */
     private static ?\FFI $ffi = null;
 
@@ -157,6 +162,9 @@ long long CreateFileW(const unsigned short *lpFileName, DWORD dwDesiredAccess,
 
 BOOL CloseHandle(long long h);
 DWORD GetLastError(void);
+
+long long OpenProcess(DWORD dwDesiredAccess, BOOL bInheritHandle, DWORD dwProcessId);
+BOOL GetExitCodeProcess(long long hProcess, DWORD *lpExitCode);
 
 DWORD WaitForSingleObject(long long hHandle, DWORD dwMilliseconds);
 
@@ -498,6 +506,41 @@ CPROTO
     public function getLastError(): int
     {
         return (int) $this->ffi()->GetLastError();
+    }
+
+    /**
+     * Whether a process with this pid exists: OpenProcess for limited query
+     * rights, then GetExitCodeProcess. ERROR_INVALID_PARAMETER (87) from
+     * OpenProcess is Windows saying no process has that pid; ACCESS_DENIED
+     * (5) is a live process this user may not open. Anything else is no
+     * answer (null). A handle whose exit code is no longer STILL_ACTIVE
+     * names a process that has exited.
+     */
+    public function processAlive(int $pid): ?bool
+    {
+        if ($pid <= 0) {
+            return false;
+        }
+        $ffi = $this->ffi();
+        $handle = (int) $ffi->OpenProcess(self::PROCESS_QUERY_LIMITED_INFORMATION, 0, $pid & 0xFFFFFFFF);
+        if ($handle === 0) {
+            return match ((int) $ffi->GetLastError()) {
+                self::ERROR_INVALID_PARAMETER => false,
+                self::ERROR_ACCESS_DENIED => true,
+                default => null,
+            };
+        }
+
+        try {
+            $code = $ffi->new('DWORD');
+            if (!$ffi->GetExitCodeProcess($handle, \FFI::addr($code))) {
+                return null;
+            }
+
+            return (int) $code->cdata === self::STILL_ACTIVE;
+        } finally {
+            $ffi->CloseHandle($handle);
+        }
     }
 
     // ─── Ctrl handler ────────────────────────────────────────────────────────
