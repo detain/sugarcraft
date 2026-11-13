@@ -68,6 +68,26 @@ final class StateObjectsTest extends TestCase
         $this->assertSame([], $s->history, 'original untouched');
     }
 
+    public function testQueryHistoryCapAndDedupe(): void
+    {
+        // client-016: newest-first recording, consecutive-repeat dedupe,
+        // and the documented HISTORY_MAX bound (multi-KB pasted DDL must
+        // not accumulate forever behind an Up-arrow surface).
+        $s = QueryState::new();
+        $s = $s->withRecordedQuery('SELECT 1');
+        $s = $s->withRecordedQuery('SELECT 2');
+        $s = $s->withRecordedQuery('SELECT 2'); // consecutive repeat — dropped
+        $this->assertSame(['SELECT 2', 'SELECT 1'], $s->history);
+
+        $big = str_repeat('A', 5000);
+        for ($i = 0; $i < 250; $i++) {
+            $s = $s->withRecordedQuery($big . $i);
+        }
+        $this->assertCount(QueryState::HISTORY_MAX, $s->history);
+        $this->assertSame($big . '249', $s->history[0], 'newest at the front');
+        $this->assertSame($big . '50', $s->history[QueryState::HISTORY_MAX - 1], 'oldest kept tail');
+    }
+
     public function testUiStateDefaultsAndImmutability(): void
     {
         $s = UiState::new();

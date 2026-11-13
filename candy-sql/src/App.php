@@ -497,17 +497,15 @@ final class App implements Model
         if ($trimmed === '') {
             return $this;
         }
-        // Record in history (front = newest), de-duping consecutive repeats.
-        $history = $this->query->history;
-        if (($history[0] ?? '') !== $trimmed) {
-            array_unshift($history, $trimmed);
-        }
+        // Record in history (front = newest); dedupe + cap live in one
+        // place, QueryState::withRecordedQuery (client-016).
+        $query = $this->query->withRecordedQuery($trimmed);
         try {
             $rows = $this->connection->db->query($sql);
             // Guard against null (e.g., connection lost after handled reconnect).
             if ($rows === null) {
                 return $this->mutate([
-                    'query' => $this->query->withHistory($history),
+                    'query' => $query,
                     'ui' => $this->ui->withError('connection lost; retry')->withStatus(null),
                 ]);
             }
@@ -519,12 +517,12 @@ final class App implements Model
                     // Query results render through ResultTable (horizontal scroll,
                     // JSON pretty, styled NULL). Cleared again on table browse.
                     ->withResultTable(ResultTable::fromRows($rows)),
-                'query' => $this->query->withEditor($this->editor()->reset())->withHistory($history),
+                'query' => $query->withEditor($this->editor()->reset()),
                 'ui' => $this->ui->withError(null)->withStatus(self::rowsSummary(count($rows))),
             ]);
         } catch (\PDOException | ReconnectException $e) {
             return $this->mutate([
-                'query' => $this->query->withHistory($history),
+                'query' => $query,
                 'ui' => $this->ui->withError($e->getMessage())->withStatus(null),
             ]);
         }
@@ -595,11 +593,12 @@ final class App implements Model
         $sql = $this->editor()->value();
         $trimmed = trim($sql);
 
-        // Record in history immediately (front = newest), de-duping consecutive repeats.
-        $history = $this->query->history;
-        if (($history[0] ?? '') !== $trimmed) {
-            array_unshift($history, $trimmed);
-        }
+        // Record in history immediately for the async leg; the sync leg
+        // falls through to runQuery(), which records there. Both arms
+        // dedupe+cap through the same QueryState::withRecordedQuery
+        // (client-016) on the same trimmed text, so neither path can
+        // append the statement twice.
+        $query = $this->query->withRecordedQuery($trimmed);
 
         // SQLite runs synchronously — a local file cannot freeze the event loop
         // and there is no React driver for it. A TLS-verified MySQL-family
@@ -608,16 +607,11 @@ final class App implements Model
         // honest path — see asyncTransportRefusedByTls().
         if (!$this->asyncTransportAvailable()) {
             // Run synchronously and return without a pending command.
-            // runQuery() handles null-safety and error state internally.
-            $updated = $this->runQuery();
-            // Preserve the history that was built above (runQuery uses its own
-            // history derivation, so we fold our pre-derived one in).
-            if ($updated === $this) {
-                // Empty query — runQuery returned unchanged; restore history.
-                return [$this->mutate(['query' => $this->query->withHistory($history)]), null];
-            }
-            // runQuery already built the correct state including history.
-            return [$updated, null];
+            // runQuery() handles null-safety, error state and its own
+            // history recording — beginRunQuery() already refused the
+            // empty editor, so the old "unchanged model, restore history"
+            // arm was unreachable and is gone (client-016).
+            return [$this->runQuery(), null];
         }
 
         // Async flavor (MySQL/Postgres): mark loading and dispatch promise.
@@ -632,7 +626,7 @@ final class App implements Model
                 ->withRowCursor(0)
                 ->withResultTable(null)
                 ->withRowsLoading(true),
-            'query' => $this->query->withHistory($history),
+            'query' => $query,
             'ui' => $this->ui->withError(null)->withStatus('running query…'),
         ]);
         return [$loading, Cmd::promise(fn () => $this->createQueryPromise($trimmed))];
