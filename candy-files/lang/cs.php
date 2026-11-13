@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 return [
     'confirm.delete' => 'smazat {names}? (a/n)',
+    'confirm.delete_permanent' => 'smazat {names}? NATRVALO (a/n)',
     'confirm.copy' => 'kopírovat {names} do {dest}? (a/n)',
     'confirm.move' => 'přesunout {names} do {dest}? (a/n)',
     'confirm.rename' => 'přejmenovat \'{name}\' na: ',
@@ -25,6 +26,7 @@ return [
     'status.deleted' => 'smazáno {count} položek',
     'status.deleted_with_errors' => 'smazáno {count} položek, chyb {errors}',
     'status.deleted_skipped' => 'smazáno {count} položek ({skipped} přeskočeno)',
+    'status.deleted_permanent' => 'smazáno {count} položek ({permanent} trvale)',
     'status.copied' => 'zkopírováno {count} položek',
     'status.copied_with_errors' => 'zkopírováno {count} položek, chyb {errors}',
     'status.copied_skipped' => 'zkopírováno {count} položek ({skipped} přeskočeno)',

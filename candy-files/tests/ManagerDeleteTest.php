@@ -240,6 +240,51 @@ final class ManagerDeleteTest extends TestCase
         $this->assertFileDoesNotExist($ghost);
     }
 
+    /**
+     * CF-04 guard: a temp-dir delete is SAME-device, so the trash rename
+     * succeeds and armDelete must predict the ORDINARY (undo-able) prompt,
+     * never the PERMANENT variant. Proves deleteTouchesForeignDevice() does
+     * not misfire on the common path.
+     */
+    public function testSameDeviceDeleteArmsTheOrdinaryRecoverablePrompt(): void
+    {
+        file_put_contents($this->tmpDir . '/same-dev.txt', 'x');
+        $m = Manager::start($this->tmpDir, $this->tmpDir, $this->lister);
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'j'));
+        [$m] = $m->update(new KeyMsg(KeyType::Char, ' '));
+        [$armed] = $m->update(new KeyMsg(KeyType::Char, 'd'));
+        $this->assertSame(ConfirmState::DeleteSelected, $armed->confirm);
+        $this->assertStringNotContainsString('PERMANENT', $armed->status,
+            'same-device trash move must not advertise a permanent delete: ' . $armed->status);
+    }
+
+    /**
+     * CF-04: when the bytes are already gone (permanent removal — trash ''),
+     * a directory that was recorded with isDir=TRUE has its empty skeleton
+     * re-created by undo. The pre-cure bug recorded isDir=FALSE for every
+     * permanent directory (it asked is_dir('')), so undo fell to the
+     * unrecoverable error branch instead of restoring the directory. This
+     * asserts the recorded flag now drives the skeleton restore.
+     */
+    public function testPermanentDirectoryUndoRecreatesSkeletonWhenFlagWasCaptured(): void
+    {
+        $dir = $this->tmpDir . '/lost-dir';                 // gone (permanently removed)
+        $left = \SugarCraft\Files\Pane::open($this->tmpDir, $this->lister);
+        $m = Manager::builder()
+            ->withLeft($left)
+            ->withRight($left)
+            ->withLister($this->lister)
+            ->withUndoStack([\SugarCraft\Files\UndoAction::delete([
+                // CF-04 shape: isDir TRUE + trash '' (permanent) for a directory.
+                ['path' => $dir, 'isDir' => true, 'trash' => ''],
+            ])])
+            ->build();
+
+        [$undone] = $m->update(new KeyMsg(KeyType::Char, 'u'));
+        $this->assertDirectoryExists($dir, 'a permanent directory undo must rebuild the empty skeleton');
+        $this->assertStringNotContainsString('error', $undone->status, 'status: ' . $undone->status);
+    }
+
     /** Content of the first trashed file matching $needle, or '' if none is found. */
     private function findInTrash(string $needle): string
     {

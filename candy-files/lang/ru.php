@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 return [
     'confirm.delete' => 'удалить {names}? (д/н)',
+    'confirm.delete_permanent' => 'удалить {names}? НАВСЕГДА (д/н)',
     'confirm.copy' => 'скопировать {names} в {dest}? (д/н)',
     'confirm.move' => 'переместить {names} в {dest}? (д/н)',
     'confirm.rename' => 'переименовать \'{name}\' в: ',
@@ -25,6 +26,7 @@ return [
     'status.deleted' => 'удалено элементов: {count}',
     'status.deleted_with_errors' => 'удалено элементов: {count}, ошибок: {errors}',
     'status.deleted_skipped' => 'удалено {count} (пропущено {skipped})',
+    'status.deleted_permanent' => 'удалено {count} (безвозвратно {permanent})',
     'status.copied' => 'скопировано элементов: {count}',
     'status.copied_with_errors' => 'скопировано элементов: {count}, ошибок: {errors}',
     'status.copied_skipped' => 'скопировано {count} (пропущено {skipped})',

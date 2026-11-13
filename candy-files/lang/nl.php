@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 return [
     'confirm.delete' => '{names} verwijderen? (j/n)',
+    'confirm.delete_permanent' => '{names} verwijderen? DEFINITIEF (j/n)',
     'confirm.copy' => '{names} kopiëren naar {dest}? (j/n)',
     'confirm.move' => '{names} verplaatsen naar {dest}? (j/n)',
     'confirm.rename' => '\'{name}\' hernoemen naar: ',
@@ -25,6 +26,7 @@ return [
     'status.deleted' => '{count} items verwijderd',
     'status.deleted_with_errors' => '{count} items verwijderd, {errors} fouten',
     'status.deleted_skipped' => '{count} items verwijderd ({skipped} overgeslagen)',
+    'status.deleted_permanent' => '{count} items verwijderd ({permanent} definitief)',
     'status.copied' => '{count} items gekopieerd',
     'status.copied_with_errors' => '{count} items gekopieerd, {errors} fouten',
     'status.copied_skipped' => '{count} items gekopieerd ({skipped} overgeslagen)',

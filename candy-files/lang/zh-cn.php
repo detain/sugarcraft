@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 return [
     'confirm.delete' => '删除 {names}？(y/n)',
+    'confirm.delete_permanent' => '永久删除 {names}？(y/n)',
     'confirm.copy' => '复制 {names} 到 {dest}？(y/n)',
     'confirm.move' => '移动 {names} 到 {dest}？(y/n)',
     'confirm.rename' => '将 \'{name}\' 重命名为：',
@@ -25,6 +26,7 @@ return [
     'status.deleted' => '已删除 {count} 个条目',
     'status.deleted_with_errors' => '已删除 {count} 个条目，{errors} 个错误',
     'status.deleted_skipped' => '已删除 {count} 个条目（跳过 {skipped} 个）',
+    'status.deleted_permanent' => '已删除 {count} 个条目（永久删除 {permanent} 个）',
     'status.copied' => '已复制 {count} 个条目',
     'status.copied_with_errors' => '已复制 {count} 个条目，{errors} 个错误',
     'status.copied_skipped' => '已复制 {count} 个条目（跳过 {skipped} 个）',

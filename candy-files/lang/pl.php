@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 return [
     'confirm.delete' => 'usunąć {names}? (t/n)',
+    'confirm.delete_permanent' => 'usunąć {names}? NA STAŁE (t/n)',
     'confirm.copy' => 'kopiować {names} do {dest}? (t/n)',
     'confirm.move' => 'przenieść {names} do {dest}? (t/n)',
     'confirm.rename' => 'zmień nazwę \'{name}\' na: ',
@@ -25,6 +26,7 @@ return [
     'status.deleted' => 'usunięto {count} wpisów',
     'status.deleted_with_errors' => 'usunięto {count} wpisów, błędów: {errors}',
     'status.deleted_skipped' => 'usunięto {count} wpisów (pominięto {skipped})',
+    'status.deleted_permanent' => 'usunięto {count} wpisów ({permanent} trwale)',
     'status.copied' => 'skopiowano {count} wpisów',
     'status.copied_with_errors' => 'skopiowano {count} wpisów, błędów: {errors}',
     'status.copied_skipped' => 'skopiowano {count} wpisów (pominięto {skipped})',

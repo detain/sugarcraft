@@ -11,6 +11,7 @@ declare(strict_types=1);
 return [
     // Confirmation prompts
     'confirm.delete'     => 'delete {names}? (y/n)',
+    'confirm.delete_permanent' => 'delete {names}? PERMANENT (y/n)',
     'confirm.copy'       => 'copy {names} to {dest}? (y/n)',
     'confirm.move'      => 'move {names} to {dest}? (y/n)',
     'confirm.rename'     => "rename '{name}' to: ",
@@ -28,6 +29,7 @@ return [
     'status.deleted'           => 'deleted {count} entries',
     'status.deleted_with_errors' => 'deleted {count} entries with {errors} errors',
     'status.deleted_skipped'   => 'deleted {count} entries ({skipped} skipped)',
+    'status.deleted_permanent' => 'deleted {count} entries ({permanent} permanent)',
     'status.copied'           => 'copied {count} entries',
     'status.copied_with_errors' => 'copied {count} entries with {errors} errors',
     'status.copied_skipped'   => 'copied {count} entries ({skipped} skipped)',

@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 return [
     'confirm.delete' => '{names} を削除しますか? (y/n)',
+    'confirm.delete_permanent' => '{names} を完全削除しますか? (y/n)',
     'confirm.copy' => '{names} を {dest} へコピーしますか? (y/n)',
     'confirm.move' => '{names} を {dest} へ移動しますか? (y/n)',
     'confirm.rename' => '\'{name}\' の新しい名前: ',
@@ -25,6 +26,7 @@ return [
     'status.deleted' => '{count} 件削除しました',
     'status.deleted_with_errors' => '{count} 件削除、エラー {errors} 件',
     'status.deleted_skipped' => '{count} 件削除、スキップ {skipped} 件',
+    'status.deleted_permanent' => '{count} 件削除、完全削除 {permanent} 件',
     'status.copied' => '{count} 件コピーしました',
     'status.copied_with_errors' => '{count} 件コピー、エラー {errors} 件',
     'status.copied_skipped' => '{count} 件コピー、スキップ {skipped} 件',

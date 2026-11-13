@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 return [
     'confirm.delete' => 'eliminare {names}? (s/n)',
+    'confirm.delete_permanent' => 'eliminare {names}? DEFINITIVO (s/n)',
     'confirm.copy' => 'copiare {names} in {dest}? (s/n)',
     'confirm.move' => 'spostare {names} in {dest}? (s/n)',
     'confirm.rename' => 'rinomina \'{name}\' in: ',
@@ -25,6 +26,7 @@ return [
     'status.deleted' => '{count} voci eliminate',
     'status.deleted_with_errors' => '{count} voci eliminate, {errors} errori',
     'status.deleted_skipped' => '{count} voci eliminate ({skipped} saltate)',
+    'status.deleted_permanent' => '{count} voci eliminate ({permanent} definitive)',
     'status.copied' => '{count} voci copiate',
     'status.copied_with_errors' => '{count} voci copiate, {errors} errori',
     'status.copied_skipped' => '{count} voci copiate ({skipped} saltate)',

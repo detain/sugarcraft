@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 return [
     'confirm.delete' => '{names} 삭제할까요? (y/n)',
+    'confirm.delete_permanent' => '{names} 영구 삭제할까요? (y/n)',
     'confirm.copy' => '{names}을(를) {dest}에 복사할까요? (y/n)',
     'confirm.move' => '{names}을(를) {dest}에 이동할까요? (y/n)',
     'confirm.rename' => '\'{name}\' 새 이름: ',
@@ -25,6 +26,7 @@ return [
     'status.deleted' => '{count}개 항목 삭제됨',
     'status.deleted_with_errors' => '{count}개 항목 삭제, 오류 {errors}건',
     'status.deleted_skipped' => '{count}개 항목 삭제, 건너뜀 {skipped}건',
+    'status.deleted_permanent' => '{count}개 항목 삭제, 영구 삭제 {permanent}건',
     'status.copied' => '{count}개 항목 복사됨',
     'status.copied_with_errors' => '{count}개 항목 복사, 오류 {errors}건',
     'status.copied_skipped' => '{count}개 항목 복사, 건너뜀 {skipped}건',

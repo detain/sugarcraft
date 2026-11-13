@@ -465,7 +465,52 @@ final class Manager implements Model
         $names = $selectedCount > 0
             ? Lang::t('confirm.selected_entries', ['count' => $selectedCount])
             : "'" . Entry::sanitizeName((string) $current?->name) . "'";
-        return $this->withConfirm(ConfirmState::DeleteSelected, Lang::t('confirm.delete', ['names' => $names]));
+        // CF-04: promise what the filesystem will actually do. The trash is
+        // a rename, but rename across devices fails with EXDEV and the
+        // delete falls back to direct removal — unrecoverable. A prompt on
+        // such an entry used to promise the ordinary (undo-able) delete;
+        // it now says PERMANENT up front.
+        $targets = $selectedCount > 0
+            ? array_keys($this->activePane()->selected)
+            : [(string) $current?->name];
+        $permanent = $this->deleteTouchesForeignDevice($this->activePane()->cwd, $targets);
+        // Two literal Lang::t() calls (not a ternary inside the call): the
+        // key-coverage guard scans for `Lang::t('literal'` and dynamic key
+        // selection must not make declared translations look dead.
+        $prompt = $permanent
+            ? Lang::t('confirm.delete_permanent', ['names' => $names])
+            : Lang::t('confirm.delete', ['names' => $names]);
+        return $this->withConfirm(ConfirmState::DeleteSelected, $prompt);
+    }
+
+    /**
+     * CF-04: would deleting these entries land in the per-process trash,
+     * or fall through to permanent removal? The trash root lives on the
+     * temp directory's device; a target on a different device cannot be
+     * renamed into it (EXDEV), so performDelete() will unlink for good.
+     * This is an ARM-TIME PREDICTION for the confirm prompt only — the
+     * truth is always the failed rename itself (and on platforms where
+     * stat dev is uniform this simply never fires, leaving the ordinary
+     * undo-able path).
+     *
+     * @param list<string> $names
+     */
+    private function deleteTouchesForeignDevice(string $cwd, array $names): bool
+    {
+        $trash = @stat(sys_get_temp_dir());
+        if ($trash === false) {
+            return false;
+        }
+        foreach ($names as $name) {
+            if ($name === '' || $name === '..') {
+                continue;
+            }
+            $st = @stat(Pane::join($cwd, $name));
+            if ($st !== false && $st['dev'] !== $trash['dev']) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -554,6 +599,7 @@ final class Manager implements Model
             ? array_keys($pane->selected)
             : [$pane->currentEntry()?->name];
         $errors = 0;
+        $permanentCount = 0;
         $deletedItems = [];
         foreach ($names as $name) {
             if ($name === null || $name === '..' || $name === '') {
@@ -563,12 +609,25 @@ final class Manager implements Model
             // Move to trash for O(1) undo (no file content read) instead of unlinking directly.
             $trashPath = $this->trashPath($full);
             if ($trashPath === null || !@rename($full, $trashPath)) {
-                // Fall back to direct removal if rename fails (e.g. cross-device)
+                // Fall back to direct removal if rename fails (e.g. cross-device
+                // EXDEV, or the trash root could not be created). CF-04: capture
+                // dir-ness from the ORIGINAL path before removePath() destroys
+                // it — the old code asked is_dir('') after zeroing $trashPath,
+                // so every permanently-deleted directory was recorded as a file
+                // and undo could not even re-create its empty skeleton.
+                $wasDir = is_dir($full);
                 if (!self::removePath($full)) {
                     $errors++;
                     continue;
                 }
                 $trashPath = '';
+                $permanentCount++;
+                $deletedItems[] = [
+                    'path' => $full,
+                    'isDir' => $wasDir,
+                    'trash' => '',
+                ];
+                continue;
             }
             $deletedItems[] = [
                 'path' => $full,
@@ -585,6 +644,10 @@ final class Manager implements Model
         $msg = match (true) {
             $errors > 0 => Lang::t('status.deleted_with_errors', ['count' => count($deletedItems), 'errors' => $errors]),
             $skipped > 0 => Lang::t('status.deleted_skipped', ['count' => count($deletedItems), 'skipped' => $skipped]),
+            // CF-04: undo-able trash moves and unrecoverable permanent removals
+            // get distinct wording — never hide an EXDEV deletion behind the
+            // ordinary "deleted N entries" message.
+            $permanentCount > 0 => Lang::t('status.deleted_permanent', ['count' => count($deletedItems), 'permanent' => $permanentCount]),
             default => Lang::t('status.deleted', ['count' => count($deletedItems)]),
         };
         // Build new undo stack with this deletion

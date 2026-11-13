@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 return [
     'confirm.delete' => 'حذف {names}؟ (y/n)',
+    'confirm.delete_permanent' => 'حذف {names}؟ نهائي (y/n)',
     'confirm.copy' => 'نسخ {names} إلى {dest}؟ (y/n)',
     'confirm.move' => 'نقل {names} إلى {dest}؟ (y/n)',
     'confirm.rename' => 'إعادة تسمية \'{name}\' إلى: ',
@@ -25,6 +26,7 @@ return [
     'status.deleted' => 'تم حذف {count} عناصر',
     'status.deleted_with_errors' => 'تم حذف {count} عناصر مع {errors} أخطاء',
     'status.deleted_skipped' => 'تم حذف {count} عناصر ({skipped} متجاهل)',
+    'status.deleted_permanent' => 'تم حذف {count} عناصر ({permanent} نهائيًا)',
     'status.copied' => 'تم نسخ {count} عناصر',
     'status.copied_with_errors' => 'تم نسخ {count} عناصر مع {errors} أخطاء',
     'status.copied_skipped' => 'تم نسخ {count} عناصر ({skipped} متجاهل)',

@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 return [
     'confirm.delete' => '{names} silinsin mi? (e/h)',
+    'confirm.delete_permanent' => '{names} silinsin mi? KALICI (e/h)',
     'confirm.copy' => '{names}, {dest} konumuna kopyalansın mı? (e/h)',
     'confirm.move' => '{names}, {dest} konumuna taşınsın mı? (e/h)',
     'confirm.rename' => '\'{name}\' yeni adı: ',
@@ -25,6 +26,7 @@ return [
     'status.deleted' => '{count} öğe silindi',
     'status.deleted_with_errors' => '{count} öğe silindi, {errors} hata',
     'status.deleted_skipped' => '{count} öğe silindi ({skipped} atlandı)',
+    'status.deleted_permanent' => '{count} öğe silindi ({permanent} kalıcı)',
     'status.copied' => '{count} öğe kopyalandı',
     'status.copied_with_errors' => '{count} öğe kopyalandı, {errors} hata',
     'status.copied_skipped' => '{count} öğe kopyalandı ({skipped} atlandı)',

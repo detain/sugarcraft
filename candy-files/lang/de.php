@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 return [
     'confirm.delete' => 'lösche {names}? (j/n)',
+    'confirm.delete_permanent' => 'lösche {names}? UNWIDERRUFLICH (j/n)',
     'confirm.copy' => 'kopiere {names} nach {dest}? (j/n)',
     'confirm.move' => 'verschiebe {names} nach {dest}? (j/n)',
     'confirm.rename' => 'benenne \'{name}\' um in: ',
@@ -25,6 +26,7 @@ return [
     'status.deleted' => '{count} Einträge gelöscht',
     'status.deleted_with_errors' => '{count} Einträge gelöscht, {errors} Fehler',
     'status.deleted_skipped' => '{count} Einträge gelöscht ({skipped} übersprungen)',
+    'status.deleted_permanent' => '{count} Einträge gelöscht ({permanent} endgültig)',
     'status.copied' => '{count} Einträge kopiert',
     'status.copied_with_errors' => '{count} Einträge kopiert, {errors} Fehler',
     'status.copied_skipped' => '{count} Einträge kopiert ({skipped} übersprungen)',
