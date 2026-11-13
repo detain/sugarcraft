@@ -105,7 +105,19 @@ final class VoiceConfig
         return \rtrim($this->baseUrl, '/') . '/audio/transcriptions';
     }
 
-    /** @return array<string, mixed> */
+    /**
+     * DELIBERATE SILENCE (candy-code-content-009), same ruling as
+     * {@see \SugarCraft\Code\Media\Sd\Client}'s `settings()`: this reader runs
+     * mid-keystroke (recorder arm, take transcription), where a message has no
+     * surface to land on, so an unreadable settings file reads as "voice off"
+     * — the safe direction, since voice is OFF until a user-tier
+     * `voice.baseUrl` exists. A corrupt file is therefore indistinguishable
+     * HERE from an unconfigured one by design; the diagnosis lives where the
+     * file is actually loaded (Bootstrap's config-read failure reporting and
+     * the doctor/settings surfaces), not on this hot path.
+     *
+     * @return array<string, mixed>
+     */
     private static function readSettings(): array
     {
         try {

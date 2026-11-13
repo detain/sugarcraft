@@ -92,6 +92,14 @@ final class VoiceConfigTest extends TestCase
             'voice has no env hatch by design; the endpoint tier and the key expansion live behind the settings file');
     }
 
+    public function testTheSettingsReadSwallowCarriesItsDeliberateSilenceRuling(): void
+    {
+        $source = (string) \file_get_contents(\dirname(__DIR__, 3) . '/src/Media/Voice/VoiceConfig.php');
+
+        self::assertStringContainsString('DELIBERATE SILENCE', $source,
+            'the catch-to-[] in readSettings() is a ruling, not an accident; the comment must stay with it');
+    }
+
     /** @return list<string> */
     private static function voiceKeys(): array
     {
