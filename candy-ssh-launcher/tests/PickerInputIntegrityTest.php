@@ -451,4 +451,174 @@ PHP;
             @unlink($script);
         }
     }
+
+    /**
+     * -010 unit arm: arming covers the full four-signal set (SIGINT plus
+     * SIGTERM/SIGQUIT/SIGHUP) and disarming returns every one of them to
+     * SIG_DFL — a leaked restore handler outside pick() would silently
+     * convert a later plain `kill` into a frame-erasing exit.
+     */
+    public function testSignalArmingCoversAndDisarmsAllFourTerminalSignals(): void
+    {
+        if (
+            !function_exists('pcntl_async_signals') || !function_exists('pcntl_signal')
+            || !function_exists('pcntl_signal_get_handler')
+            || !function_exists('posix_kill') || !function_exists('posix_getpid')
+        ) {
+            $this->markTestSkipped('the armed-set pin needs ext-pcntl and ext-posix');
+        }
+
+        [, , $p] = $this->makePicker('');
+        $arm = new \ReflectionMethod(Picker::class, 'armCancelSignal');
+        $arm->setAccessible(true);
+        $disarm = new \ReflectionMethod(Picker::class, 'disarmCancelSignal');
+        $disarm->setAccessible(true);
+
+        $signals = [\SIGINT, \SIGTERM, \SIGQUIT, \SIGHUP];
+        try {
+            $arm->invoke($p);
+            foreach ($signals as $sig) {
+                $this->assertIsNotInt(
+                    pcntl_signal_get_handler($sig),
+                    'signal ' . $sig . ' must be a picker handler while armed',
+                );
+            }
+        } finally {
+            $disarm->invoke($p);
+        }
+        foreach ($signals as $sig) {
+            $this->assertSame(
+                \SIG_DFL,
+                pcntl_signal_get_handler($sig),
+                'signal ' . $sig . ' must return to SIG_DFL after disarm',
+            );
+        }
+    }
+
+    /**
+     * @return array<string, array{int}>
+     */
+    public static function terminatingSignalProvider(): array
+    {
+        return [
+            'SIGTERM' => [\SIGTERM],
+            'SIGQUIT' => [\SIGQUIT],
+            'SIGHUP'  => [\SIGHUP],
+        ];
+    }
+
+    /**
+     * -010 subprocess arm: killing a blocked picker mid-pick with a
+     * default-disposition terminating signal must restore the terminal
+     * (the pick() finally never runs for these kills) while keeping the
+     * signal-death exit status — the re-raise, not the handler exit, is
+     * what the shell sees. Pre-fix empirical: rc 15-ish with a RAW-STRANDED
+     * tty and no restore bytes.
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('terminatingSignalProvider')]
+    public function testTerminatingSignalsRestoreTheTerminalBeforeDying(int $sig): void
+    {
+        if (
+            !function_exists('pcntl_async_signals') || !function_exists('pcntl_signal')
+            || !function_exists('posix_kill')
+        ) {
+            $this->markTestSkipped('the terminating-signal pin needs ext-pcntl and ext-posix');
+        }
+
+        $autoload = realpath(__DIR__ . '/../vendor/autoload.php');
+        $this->assertIsString($autoload);
+
+        $child = <<<'PHP'
+<?php
+declare(strict_types=1);
+require '__AUTOLOAD__';
+use SugarCraft\SshLauncher\Endpoint;
+use SugarCraft\SshLauncher\Picker;
+if (function_exists('posix_setrlimit')) {
+    // SIGQUIT's default disposition dumps core; keep the suite's /proc
+    // tidy and the death cheap.
+    @posix_setrlimit(\POSIX_RLIMIT_CORE, 0, 0);
+}
+$c = new class (STDIN, STDOUT) extends Picker {
+    public function setRawMode(bool $on): void
+    {
+        fwrite(STDOUT, ($on ? 'RAW:ON' : 'RAW:OFF') . "\n");
+    }
+};
+$c->pick([new Endpoint(name: 'a', host: 'a.test')]);
+fwrite(STDOUT, "RETURNED\n");
+PHP;
+        $child = str_replace('__AUTOLOAD__', $autoload, $child);
+        $script = tempnam(sys_get_temp_dir(), 'sshlaunch-term-') . '.php';
+        file_put_contents($script, $child);
+
+        $proc = proc_open(
+            [PHP_BINARY, $script],
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+            \dirname(__DIR__),
+            ['PATH' => '/usr/bin:/bin', 'HOME' => \sys_get_temp_dir()],
+        );
+        $this->assertIsResource($proc);
+
+        try {
+            $seen = '';
+            stream_set_blocking($pipes[1], false);
+            $deadline = microtime(true) + 5.0;
+            while (!str_contains($seen, 'RAW:ON') && microtime(true) < $deadline) {
+                $chunk = fread($pipes[1], 128);
+                if ($chunk === false || $chunk === '') {
+                    usleep(20000);
+                    continue;
+                }
+                $seen .= $chunk;
+            }
+            $this->assertStringContainsString('RAW:ON', $seen, 'child never entered raw mode');
+
+            $pid = proc_get_status($proc)['pid'];
+            $this->assertTrue(posix_kill($pid, $sig));
+
+            // Deterministic reap shape: do NOT poll proc_get_status after
+            // the kill (that path caches the reap and proc_close then
+            // reports a flat -1 for any signal death). Closing stdin
+            // lets the child either take the signal through the restore
+            // + re-raise (the arm under test) or wake into the EOF cancel
+            // path — both end in a signal death here — and the EOF drain
+            // keeps proc_close on the raw-WTERMSIG convention.
+            fclose($pipes[0]);
+            $pipes[0] = null;
+            stream_set_blocking($pipes[1], true);
+            $rest = (string) stream_get_contents($pipes[1]);
+            fclose($pipes[1]);
+            $pipes[1] = null;
+            fclose($pipes[2]);
+            $pipes[2] = null;
+            $code = proc_close($proc);
+            $proc = null;
+
+            // PHP reports signal death through this drain path as the raw
+            // wait status: low bits are the termination signal, bit 0x80
+            // is the core-dump flag (set for SIGQUIT's disposition). The
+            // handler must re-raise, never exit() the death away — an
+            // exit($sig) would land as $sig<<8 and fail this mask.
+            $this->assertSame($sig, $code & 0x7f, 'stdout: ' . $seen . $rest);
+            $this->assertStringContainsString(
+                'RAW:OFF',
+                $seen . $rest,
+                'signal ' . $sig . ' path restored the terminal (pre-fix: RAW-STRANDED)',
+            );
+            $this->assertStringNotContainsString('RETURNED', $seen . $rest, 'the process dies; pick() never returns');
+        } finally {
+            foreach ((array) $pipes as $pipe) {
+                if (is_resource($pipe)) {
+                    fclose($pipe);
+                }
+            }
+            if ($proc !== null) {
+                proc_terminate($proc);
+                proc_close($proc);
+            }
+            @unlink($script);
+        }
+    }
 }

@@ -246,10 +246,16 @@ class Picker
      * finally block never runs, the terminal is left non-canonical, and the
      * 130 exit is only the shell's coincidence. The handler restores the
      * terminal FIRST, mirrors the cancel frame, and exits 130 with the same
-     * cli.cancelled line the byte-cancel path produces in bin. ext-pcntl is
-     * a hard composer requirement; the guard below only covers stripped
-     * builds, where ^C keeps its historical unrecovered behavior — a
-     * disclosed fallback, never a silently assumed one (F-3).
+     * cli.cancelled line the byte-cancel path produces in bin. SIGTERM,
+     * SIGQUIT and SIGHUP get the same restore before dying too (-010) —
+     * re-raised with SIG_DFL so the shell-visible status stays 129+signo —
+     * because the pick() finally never runs for a default-disposition kill
+     * and a RAW-stranded tty is not something vim/less-class tools leave
+     * behind. ext-pcntl is a hard composer requirement; the guard below
+     * only covers stripped builds, where ^C keeps its historical
+     * unrecovered behavior — a disclosed fallback, never a silently
+     * assumed one (F-3). The re-raise arms additionally require ext-posix;
+     * without it the SIGINT path keeps its historical coverage.
      */
     private function armCancelSignal(): void
     {
@@ -260,12 +266,32 @@ class Picker
         pcntl_signal(SIGINT, function (int $signal): void {
             pcntl_signal($signal, SIG_DFL);
             pcntl_async_signals($this->asyncSignalsBeforeArm ?? false);
-            $this->setRawMode(false);
-            fwrite($this->out, Ansi::cursorTo(1, 1) . Ansi::eraseScreen());
-            fwrite($this->out, "\n");
+            $this->restoreTerminalForSignal();
             fwrite(STDERR, Lang::t('cli.cancelled') . "\n");
             exit(130);
         });
+        if (function_exists('posix_kill') && function_exists('posix_getpid')) {
+            foreach ([\SIGTERM, \SIGQUIT, \SIGHUP] as $terminating) {
+                pcntl_signal($terminating, function (int $signal): void {
+                    pcntl_signal($signal, SIG_DFL);
+                    pcntl_async_signals($this->asyncSignalsBeforeArm ?? false);
+                    $this->restoreTerminalForSignal();
+                    posix_kill(posix_getpid(), $signal);
+                });
+            }
+        }
+    }
+
+    /**
+     * Common restore sequence for every signal handler: leave raw mode,
+     * erase the transient frame, release the cursor line — the same bytes
+     * the aborted pick() path writes.
+     */
+    private function restoreTerminalForSignal(): void
+    {
+        $this->setRawMode(false);
+        fwrite($this->out, Ansi::cursorTo(1, 1) . Ansi::eraseScreen());
+        fwrite($this->out, "\n");
     }
 
     /**
@@ -277,6 +303,9 @@ class Picker
     {
         if ($this->asyncSignalsBeforeArm !== null && function_exists('pcntl_signal')) {
             pcntl_signal(SIGINT, SIG_DFL);
+            pcntl_signal(SIGTERM, SIG_DFL);
+            pcntl_signal(SIGQUIT, SIG_DFL);
+            pcntl_signal(SIGHUP, SIG_DFL);
             pcntl_async_signals($this->asyncSignalsBeforeArm);
             $this->asyncSignalsBeforeArm = null;
         }
