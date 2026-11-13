@@ -753,6 +753,83 @@ final class BufferTest extends TestCase
         }
     }
 
+    // ─── CB-03: width-aware repeat detection ─────────────────────────────
+
+    public function testMixedWidthSameRuneRunNeverEmitsRepeatRun(): void
+    {
+        // [A(w1), A(w2 lead), cont, blank] vs all-blank: the run collector
+        // hops continuation columns, so both 'A' leads join one run. The
+        // old equality check ignored width, the w1 lead won the REP branch,
+        // and applyDiff() replayed every position at width 1 — the
+        // documented round-trip invariant died silently (live probe:
+        // widths [1,2,0,1] restored as [1,1,1,1]).
+        $prev = Buffer::new(4, 1);
+        $curr = Buffer::fromGrid(4, 1, [
+            Cell::new('A'),
+            Cell::new('A', null, null, 2),
+            Cell::continuation(),
+            Cell::new(),
+        ]);
+
+        $ops = $curr->diff($prev);
+        foreach ($ops as $op) {
+            $this->assertFalse(
+                $op instanceof RepeatRunOp,
+                'a mixed-width same-rune run must ship as SetCellOp, never REP',
+            );
+        }
+
+        $restored = $prev->applyDiff($ops);
+        $this->assertSame(
+            [1, 2, 0, 1],
+            array_map(fn (int $c): int => $restored->cellAt($c, 0)->width(), [0, 1, 2, 3]),
+        );
+        $this->assertSame($curr->toAnsi(), $restored->toAnsi());
+        $this->assertSame($curr->text(), $restored->text());
+    }
+
+    public function testReverseMixedWidthOrderRoundTrips(): void
+    {
+        // The [w2, w1] order survived the old code only because the w2
+        // lead defused the REP branch — positional luck, not law. Pin the
+        // round-trip explicitly now that width is part of the equality.
+        $prev = Buffer::new(4, 1);
+        $curr = Buffer::fromGrid(4, 1, [
+            Cell::new('A', null, null, 2),
+            Cell::continuation(),
+            Cell::new('A'),
+            Cell::new(),
+        ]);
+
+        $restored = $prev->applyDiff($curr->diff($prev));
+
+        $this->assertSame($curr->toAnsi(), $restored->toAnsi());
+        $this->assertSame($curr->text(), $restored->text());
+        $this->assertSame(
+            [2, 0, 1, 1],
+            array_map(fn (int $c): int => $restored->cellAt($c, 0)->width(), [0, 1, 2, 3]),
+        );
+    }
+
+    public function testUniformWidthRepeatStillRoundTrips(): void
+    {
+        // Guard the guard: same-rune same-width runs keep their behaviour.
+        $prev = Buffer::new(8, 1);
+        $curr = Buffer::fromGrid(8, 1, [
+            Cell::new('A', null, null, 2),
+            Cell::continuation(),
+            Cell::new('A', null, null, 2),
+            Cell::continuation(),
+            Cell::new('A', null, null, 2),
+            Cell::continuation(),
+            Cell::new(),
+            Cell::new(),
+        ]);
+
+        $ops = $curr->diff($prev);
+        $this->assertSame($curr->toAnsi(), $prev->applyDiff($ops)->toAnsi());
+    }
+
     public function testByteCountOneCharChangeIn80x24StaysUnder30(): void
     {
         $prev = Buffer::new(80, 24);

@@ -618,8 +618,16 @@ final class Buffer implements \JsonSerializable
                     $repeatWidth = $first->width() > 0 ? $first->width() : 1;
                     $allSame = true;
                     for ($i = 1; $i < $runLen; $i++) {
-                        // Style and link equality by value, not identity
+                        // Style and link equality by value, not identity.
+                        // Width too: a same-rune run of MIXED widths ([w1
+                        // lead, w2 lead] from a run-length grid) must never
+                        // REP at the first lead's width — the replay would
+                        // repaint every position width-1 and desync the
+                        // pair columns against the documented round-trip
+                        // law. Mixed widths fall through to SetCellOp,
+                        // which honours each cell's own width.
                         if ($run[$i]->rune() !== $repeatRune
+                            || $run[$i]->width() !== $first->width()
                             || !Style::valuesEqual($run[$i]->style(), $runStyle)
                             || !Hyperlink::valuesEqual($run[$i]->link(), $runLink)
                         ) {
@@ -871,6 +879,7 @@ final class Buffer implements \JsonSerializable
     {
         $idx = $row * $this->width + $col;
         $previous = $grid[$idx];
+
         $grid[$idx] = $cell;
 
         if ($cell->width() === 2) {
