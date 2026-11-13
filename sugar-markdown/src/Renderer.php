@@ -270,15 +270,42 @@ final class Renderer
         return $this->parser;
     }
 
-    public static function ansi(): self  { return new self(Theme::ansi());  }
-    public static function plain(): self { return new self(Theme::plain()); }
-    public static function ascii(): self { return new self(Theme::ascii()); }
-    public static function notty(): self { return new self(Theme::notty()); }
-    public static function dark(): self  { return new self(Theme::dark());  }
-    public static function light(): self { return new self(Theme::light()); }
-    public static function dracula(): self     { return new self(Theme::dracula()); }
-    public static function tokyoNight(): self  { return new self(Theme::tokyoNight()); }
-    public static function pink(): self        { return new self(Theme::pink()); }
+    public static function ansi(): self
+    {
+        return new self(Theme::ansi());
+    }
+    public static function plain(): self
+    {
+        return new self(Theme::plain());
+    }
+    public static function ascii(): self
+    {
+        return new self(Theme::ascii());
+    }
+    public static function notty(): self
+    {
+        return new self(Theme::notty());
+    }
+    public static function dark(): self
+    {
+        return new self(Theme::dark());
+    }
+    public static function light(): self
+    {
+        return new self(Theme::light());
+    }
+    public static function dracula(): self
+    {
+        return new self(Theme::dracula());
+    }
+    public static function tokyoNight(): self
+    {
+        return new self(Theme::tokyoNight());
+    }
+    public static function pink(): self
+    {
+        return new self(Theme::pink());
+    }
 
     /**
      * Top-level convenience: render Markdown with a one-shot
@@ -846,27 +873,68 @@ final class Renderer
     }
 
     // Short-form aliases.
-    public function theme(Theme $theme): self            { return $this->withTheme($theme); }
-    public function wordWrap(?int $cols): self           { return $this->withWordWrap($cols); }
-    public function hyperlinks(bool $on = true): self    { return $this->withHyperlinks($on); }
-    public function baseURL(?string $url): self          { return $this->withBaseURL($url); }
-    public function tableWrap(bool $on = true): self     { return $this->withTableWrap($on); }
-    public function inlineTableLinks(bool $on = true): self { return $this->withInlineTableLinks($on); }
-    public function tableColumnBudget(bool $on = true): self { return $this->withTableColumnBudget($on); }
+    public function theme(Theme $theme): self
+    {
+        return $this->withTheme($theme);
+    }
+    public function wordWrap(?int $cols): self
+    {
+        return $this->withWordWrap($cols);
+    }
+    public function hyperlinks(bool $on = true): self
+    {
+        return $this->withHyperlinks($on);
+    }
+    public function baseURL(?string $url): self
+    {
+        return $this->withBaseURL($url);
+    }
+    public function tableWrap(bool $on = true): self
+    {
+        return $this->withTableWrap($on);
+    }
+    public function inlineTableLinks(bool $on = true): self
+    {
+        return $this->withInlineTableLinks($on);
+    }
+    public function tableColumnBudget(bool $on = true): self
+    {
+        return $this->withTableColumnBudget($on);
+    }
 
-    public function fenceColumnBudget(bool $on = true): self  { return $this->withFenceColumnBudget($on); }
-    public function lineNumbers(bool $on = true): self         { return $this->withLineNumbers($on); }
-    public function preservedNewLines(bool $on = true): self { return $this->withPreservedNewLines($on); }
-    public function emoji(bool $on = true): self         { return $this->withEmoji($on); }
-    public function standardStyle(string $name): self    { return $this->withStandardStyle($name); }
-    public function styleSheet(StyleSheet $sheet): self  { return $this->withStyleSheet($sheet); }
+    public function fenceColumnBudget(bool $on = true): self
+    {
+        return $this->withFenceColumnBudget($on);
+    }
+    public function lineNumbers(bool $on = true): self
+    {
+        return $this->withLineNumbers($on);
+    }
+    public function preservedNewLines(bool $on = true): self
+    {
+        return $this->withPreservedNewLines($on);
+    }
+    public function emoji(bool $on = true): self
+    {
+        return $this->withEmoji($on);
+    }
+    public function standardStyle(string $name): self
+    {
+        return $this->withStandardStyle($name);
+    }
+    public function styleSheet(StyleSheet $sheet): self
+    {
+        return $this->withStyleSheet($sheet);
+    }
 
     /** @internal mutate-with-overrides for chainable builders. */
     private function mutate(
         ?Theme $theme = null,
-        ?int $wrapWidth = null, bool $wrapWidthSet = false,
+        ?int $wrapWidth = null,
+        bool $wrapWidthSet = false,
         ?bool $emitHyperlinks = null,
-        ?string $baseUrl = null, bool $baseUrlSet = false,
+        ?string $baseUrl = null,
+        bool $baseUrlSet = false,
         ?bool $tableWrap = null,
         ?bool $inlineTableLinks = null,
         ?bool $tableColumnBudget = null,
