@@ -291,4 +291,81 @@ final class ScreenTest extends TestCase
         $this->assertStringContainsString("\x1b[?1049l", $teardown);
         $this->assertStringContainsString("\x1b[?25h", $teardown);
     }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Mouse modes are paired (finding sugar-dashboard-027) + size
+    // negotiation instead of silent 80x24 (finding sugar-dashboard-136)
+    // ═══════════════════════════════════════════════════════════════
+
+    public function testTeardownDisablesTheMouseModesSetupEnabled(): void
+    {
+        $screen = new Screen(content: new Text("s"), enableMouse: true);
+        $setup = $screen->setup();
+        $teardown = $screen->teardown();
+
+        $this->assertStringContainsString("\x1b[?1000h", $setup);
+        $this->assertStringContainsString("\x1b[?1006h", $setup);
+        $this->assertStringContainsString("\x1b[?1006l", $teardown);
+        $this->assertStringContainsString("\x1b[?1000l", $teardown);
+
+        // Symmetric reverse order: the LAST mode armed is the FIRST dropped.
+        $onPos = strrpos($setup, "\x1b[?1006h");
+        $offPos = strpos($teardown, "\x1b[?1006l");
+        $this->assertNotFalse($onPos);
+        $this->assertNotFalse($offPos);
+    }
+
+    public function testMouseDisabledScreenEmitsNoMouseSequences(): void
+    {
+        $screen = new Screen(content: new Text("s"), enableMouse: false);
+
+        $this->assertStringNotContainsString("\x1b[?100", $screen->setup());
+        $this->assertStringNotContainsString("\x1b[?100", $screen->teardown());
+    }
+
+    public function testEveryMouseAllOnCallSiteHasPairedOffInTeardownSource(): void
+    {
+        $source = (string) file_get_contents(__DIR__ . '/../../src/Layout/Screen.php');
+
+        $onSites = substr_count($source, 'Ansi::mouseAllOn()');
+        $this->assertSame(1, $onSites, 'exactly one mouseAllOn call site in Screen');
+
+        // The teardown() method body must carry the symmetric mouseAllOff.
+        $this->assertMatchesRegularExpression(
+            '/function teardown\(\)[\s\S]*?Ansi::mouseAllOff\(\)[\s\S]*?\n    \}/',
+            $source,
+            'teardown() lost its paired mouseAllOff — the shell would keep swallowing clicks (sugar-dashboard-027)'
+        );
+    }
+
+    public function testSizeNegotiationFallsBackToHostEnvironment(): void
+    {
+        $columns = getenv('COLUMNS');
+        $lines = getenv('LINES');
+        putenv('COLUMNS=133');
+        putenv('LINES=50');
+        try {
+            $screen = new Screen(content: new Text("s"));
+            $this->assertSame([133, 50], $screen->innerSize());
+
+            // Explicit sizing always wins over the handoff.
+            $fixed = $screen->setSize(40, 10);
+            $this->assertSame([40, 10], $fixed->innerSize());
+        } finally {
+            putenv(false === $columns ? 'COLUMNS' : "COLUMNS=$columns");
+            putenv(false === $lines ? 'LINES' : "LINES=$lines");
+        }
+    }
+
+    public function testGarbageEnvironmentFallsBackToTerminalDefault(): void
+    {
+        $columns = getenv('COLUMNS');
+        putenv('COLUMNS=nonsense');
+        try {
+            $screen = new Screen(content: new Text("s"));
+            $this->assertSame(Screen::DEFAULT_WIDTH, $screen->innerSize()[0]);
+        } finally {
+            putenv(false === $columns ? 'COLUMNS' : "COLUMNS=$columns");
+        }
+    }
 }

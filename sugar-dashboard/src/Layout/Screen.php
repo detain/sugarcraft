@@ -14,7 +14,7 @@ use SugarCraft\Core\Util\Ansi;
  * - Show/hide cursor
  * - Clear screen (full or partial)
  * - Save/restore cursor position
- * - Screen size detection
+ * - Screen size negotiation (explicit size > host COLUMNS/LINES > 80×24)
  *
  * Mirrors screen management from bubble-screen but adapted
  * to PHP with wither-style immutable setters.
@@ -110,13 +110,23 @@ final class Screen implements \SugarCraft\Dashboard\Foundation\SizedItem
     }
 
     /**
-     * Session trailer matching setup(): restore the cursor and leave the
-     * alternate screen. Pair with the same configuration the preamble was
-     * built from.
+     * Session trailer matching setup(): disable mouse tracking, restore the
+     * cursor and leave the alternate screen. Pair with the same
+     * configuration the preamble was built from.
      */
     public function teardown(): string
     {
         $sequence = '';
+
+        // Reverse order of setup(): the mouse modes were the LAST thing
+        // armed, so they are the FIRST thing dropped (finding
+        // sugar-dashboard-027: without this the user's shell keeps
+        // swallowing clicks as SGR sequences after any abnormal exit —
+        // the paired-mode law candy-code enforces for kitty pushes,
+        // re-here at the mouse layer).
+        if ($this->enableMouse) {
+            $sequence .= Ansi::mouseAllOff();
+        }
 
         if (!$this->showCursor) {
             $sequence .= Ansi::cursorShow();
@@ -130,19 +140,29 @@ final class Screen implements \SugarCraft\Dashboard\Foundation\SizedItem
     }
 
     /**
-     * Get the width of the screen.
+     * Get the width of the screen: explicit setSize() wins; otherwise the
+     * host's COLUMNS handoff (the same env channel the unattended
+     * dashboard-live demo uses — the lib still never ioctls the terminal
+     * itself, finding sugar-dashboard-136); else the 80×24 terminal default.
      */
     private function getWidth(): int
     {
-        return $this->width ?? self::DEFAULT_WIDTH;
+        return $this->width ?? self::negotiatedSize('COLUMNS', self::DEFAULT_WIDTH);
     }
 
     /**
-     * Get the height of the screen.
+     * Get the height of the screen (see getWidth() for the negotiation law).
      */
     private function getHeight(): int
     {
-        return $this->height ?? self::DEFAULT_HEIGHT;
+        return $this->height ?? self::negotiatedSize('LINES', self::DEFAULT_HEIGHT);
+    }
+
+    private static function negotiatedSize(string $envVar, int $default): int
+    {
+        $raw = (string) (getenv($envVar) ?: ($_SERVER[$envVar] ?? ''));
+
+        return ctype_digit($raw) && (int) $raw > 0 ? (int) $raw : $default;
     }
 
     /**
