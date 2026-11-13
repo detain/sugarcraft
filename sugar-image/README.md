@@ -137,6 +137,27 @@ $opts = KittyOptions::transmit()->withCompression(1);
 $compressed = $renderer->renderWithOptions($image, 40, null, $opts);
 ```
 
+Beyond `fromFile()`/`fromString()` the intake doors are: `fromGd()` — adopt
+a GD resource some other code already decoded (`fromGd($gd, 'image/png')`;
+the internal storage contract is PNG, so a non-PNG resource is re-encoded
+through it and budget-checked on the way); `fromRgb()` — raw RGB24/RGBA wire
+bytes plus an explicit box (`fromRgb($bytes, $w, $h, hasAlpha: true)`), the
+kitty/pipe-ingress shape, under the same `MAX_PIXELS` ceiling as every other
+door; `fromAnimatedFile()` — a container's frame list into an `Animation`
+(see **Supported image formats**); and `fromUrl()`/`fromUrlAsync()` — see
+**Remote images**.
+
+Every backend implements `Renderer`: `render()` for the bytes, `name()` for
+the stable identifier (`sixel`, `kitty`, `iterm2`, `chafa`, `halfblock`,
+`quarterblock`, `ascii`, `symbols`), `supportsAlpha()` — true for the
+graphics tiers, false for the text tiers, and informational for now (no
+auto-ladder steers on it yet), `isInline()` — true when `render()` emits
+newline-separated cell text that composes directly into a frame, false when
+it emits one opaque escape blob that must ride an out-of-band overlay (see
+**ImageLayer**) — and `delete()` (**Deleting images**). `Mosaic::renderer()`
+hands back the live instance, tmux envelope included, and `Mosaic` answers
+`isInline()` itself for callers that should not know the protocol.
+
 ## Supported image formats
 
 Codec matrix (sugar-image native paths only):
@@ -171,7 +192,7 @@ The matrix states what decodes where. Three facts it cannot carry:
 ## Limits
 
 Decoding untrusted images is budgeted — the caps are constants on
-`ImageSource`:
+`ImageSource`, and the sequence-length cap is one on `Animation`:
 
 | Budget | Value | What it stops |
 |---|---|---|
@@ -181,6 +202,7 @@ Decoding untrusted images is budgeted — the caps are constants on
 | `FLIP_MAX_CELLS` (private) | 100,000 cells | per-frame ceiling for animated GIFs: one frame wider than `width × height` allows is refused with a mosaic-owned message before sugar-animation's decoder sees it (the sibling's own `Decoder::MAX_CELLS` mirror) |
 | `FLIP_MAX_TOTAL_CELLS` (private) | 400,000 cells | animated-GIF aggregate budget: frames × per-frame pixels — stops a bomb whose every single frame is individually in-budget |
 | `MAX_RIFF_CHUNKS` (private) | 64 | the pure-PHP WebP RIFF walk bails out of a chunk flood instead of iterating forever |
+| `Animation::MAX_FRAMES` | 10,000 frames | the frame-list length itself: `new Animation(...)` and `withFrame()` refuse a longer sequence — a driver walking an unbounded list could pre-materialise unbounded memory, so the cap belongs to the value object, not the walk |
 
 Every refusal cap above is pinned by tests; `FLIP_FRAME_CAP` is the
 documented slice-out and is verified by the flip-walk parity pins around it,
@@ -297,6 +319,42 @@ connector and timeout yourself.
 > process-wide — it is a test seam for exercising these checks without real
 > DNS, not a configuration knob; leave it alone outside tests.
 
+## Async and precomputed renders
+
+Encoding a poster is the expensive part, and a whole-buffer encode monopolises
+the event loop for its duration. The async seam fixes the wait, the precompute
+seam fixes the repetition:
+
+```php
+use SugarCraft\Image\SyncAsyncRenderer;
+
+$adaptive = Mosaic::probe()->adaptive($image);   // in-memory LRU over one source
+
+// renderAsync() returns a promise resolved with the encoded bytes. The
+// default strategy pumps the mosaic's row-lazy seam in budgeted slices and
+// yields the loop between them (PacedAsyncRenderer), so the encode never
+// blocks the TUI that scheduled it; pass a SyncAsyncRenderer to opt into
+// "schedule, then block the loop once" for tests and single-shot scripts.
+$adaptive->renderAsync(24, 36)
+    ->then(fn (string $ansi) => print($ansi));
+
+// withAsync() returns a fresh twin — entries render() memoised on the
+// original do not carry over, and null means "take the default strategy",
+// never "disable async". render() itself stays synchronous on every twin.
+$still = $adaptive->withAsync(new SyncAsyncRenderer($mosaic));
+
+// precompute(): pay the encode once, blockingly, and replay bytes forever.
+$memo = $adaptive->precompute(24, 36);           // PrecomputedImage
+echo $memo->bytes();                              // redraw: zero encode
+echo $memo->cellWidth(), $memo->cellHeight();     // the box it was cut for
+```
+
+The library-wide capability roster (what sugar-image can speak at all, in
+preference order — not a probe of this terminal) is the static
+`Mosaic::supportedProtocols()`; asking what "this" terminal answers is
+`Mosaic::probe()`'s job. A doctor panel prints one beside the other to show
+what the terminal refused.
+
 ## Persistent render cache
 
 Encoding a poster (fetch → GD-decode → scale → protocol-encode) is expensive.
@@ -343,7 +401,10 @@ are always honoured but same-second writes are not strictly least-recently-used
 among themselves; the victim order is at least deterministic — oldest, then
 lowest hashed path.) Writes are atomic (temp file + rename)
 and keys are hashed to derive the filename, so an arbitrary key can never escape
-the cache directory.
+the cache directory. When a poster changes upstream, invalidation is public
+API: `has()` to ask, `delete()` for one key, `clear()` for the store, `count()`
+to census it — and `DiskCache::key()` is static precisely so an invalidator
+can re-derive the same key without the original writer in hand.
 
 `Mosaic` carries the fetch-and-render pair directly, so a poster needs no
 hand-rolled cache plumbing:
@@ -373,6 +434,10 @@ control placement and one that controls the payload encoding:
   are source display extents in *pixels*, and a place frame's cell destination
   travels on the uppercase `X=`/`Y=` pair — the lowercase `x=`/`y=` are the
   spec's source-rectangle pixel offsets, so they crop rather than move.
+  The `s=`/`v=` pair is set by `KittyOptions::withSourceDimensions($w, $h)`;
+  the older `withCellDimensions($w, $h)` carries the identical pixel contract
+  under a misleading name (kept for wire compatibility — neither takes cell
+  counts, and `c=`/`r=` stay renderer-computed either way).
 
 - **Zlib compression** (`o=z`): Pass `withCompression(1)` to compress
   the PNG payload with zlib before base64-encoding; the transmit is
@@ -536,6 +601,16 @@ change is a `Renderer::delete()` plus `KittyRenderer::renderFrame()` — a clean
 per-frame redraw; iTerm2 gets a delete and a full re-render instead, because
 its payload carries no stable per-frame id.
 
+Two timing facts belong to this contract. Scheduling is floored, not literal:
+`AnimationDriver::MIN_TICK_MS` (10 ms) silently clamps a zero or negative
+frame delay, so a sloppy delay cannot livelock the host loop with
+zero-second ticks. And the encode is paced, not non-blocking: `view()` renders
+the current frame inline on the calling thread, so on a slow backend the
+encode cost adds to every frame's wall time regardless of the tick floor.
+Loop-sensitive hosts want the seam above rather than a faster tick —
+`AdaptiveImage::precompute()` encodes once and replays bytes, and
+`PacedAsyncRenderer` budgets the encode into loop-yielding slices.
+
 ```php
 use SugarCraft\Image\Animation;
 use SugarCraft\Image\AnimationDriver;
@@ -635,12 +710,24 @@ misinterprets those sequences. The explicit escape hatches:
   the glyph choice adapts to the palette rather than inheriting the
   truecolour optimum.
 - Sixel keeps its own palette budget: `maxColors` (1–256, default 256) caps
-  the median-cut quantiser for limited-truecolour terminals, and `intensity`
-  (0.0–1.0; null leaves the chafa config default 1.0) scales the
-  `Dither::Ordered` / `Dither::Noise` bias — `intensity` arrives through
-  `Mosaic::sixel(dither, intensity)` or the builder dial
-  `MosaicBuilder::withSixelIntensity()`, and `maxColors` through the
-  builder dial `MosaicBuilder::withSixelMaxColors()` (or a raw renderer
+  the palette the encoder may build, and by default that palette comes from
+  **median-cut over a strided sample of at most 4,096 pixels** — a
+  byte-frozen shape, so tuning `maxColors` never changes which quantiser
+  answers, only how many colours survive it. The chafa `-w` ladder is the
+  opt-in alternative: `withQuality(1–9)` routes the census to the
+  pairwise-nearest-neighbour `Quantizer` (same 4,096-sample budget; the dial
+  moves the histogram depth, and a frame with fewer samples than colours
+  falls back to median-cut because PNN cannot merge below one-per-bin).
+  `intensity` scales the `Dither::Ordered` / `Dither::Noise` bias —
+  null means chafa's config default of 1.0; values above 1.0 clamp to 1.0
+  silently on every path, while the lower door only exists on the builder
+  dial `MosaicBuilder::withSixelIntensity()`, which refuses NaN and negatives
+  — `Mosaic::sixel(dither, intensity)` and a raw `SixelRenderer` hand a
+  negative straight to the bias arithmetic, so the 0.0–1.0 range is a
+  builder-enforced contract and a documented courtesy elsewhere. `intensity`
+  arrives through `Mosaic::sixel(dither, intensity)` or the builder dial,
+  and `maxColors` through the builder dial
+  `MosaicBuilder::withSixelMaxColors()` (or a raw renderer
   passed to `withRenderer()`).
 
 `NO_COLOR` is **not** honoured by any renderer: the variable influences only
@@ -765,7 +852,7 @@ SugarCraft\Image
 │   ├── Iterm2Renderer     # iTerm2 OSC 1337
 │   ├── KittyRenderer      # Kitty APC graphics (chunked PNG, virtual placement)
 │   ├── QuarterBlockRenderer # Unicode ░▒▓█ 2×2 sub-pixel
-│   ├── SixelRenderer      # DEC sixel with median-cut quantizer
+│   ├── SixelRenderer      # DEC sixel; median-cut default, opt-in PNN via withQuality
 │   └── SymbolMapRenderer  # chafa coverage-class symbol engine
 ├── Symbol                 # Glyph corpora: tables, tags, kana + wide defs
 ├── Codec                  # GD-free payload codecs (TIFF encoder, raw RGBA)
@@ -774,7 +861,7 @@ SugarCraft\Image
 ├── Dither                 # Shared dithering arithmetic (Floyd-Steinberg, ordered…)
 ├── Levels                 # Luminance stretching (Rec.709 weights)
 ├── Optimization           # chafa-style output-optimization bitmask (mosaic tiers)
-├── Quantizer              # Pairwise-nearest-neighbour palette quantiser (Sixel budget)
+├── Quantizer              # Pairwise-nearest-neighbour palette quantiser (opt-in Sixel quality rung)
 ├── Render                 # Band splitting
 ├── Scale                  # Scaling / cropping modes for a fixed cell box
 ├── Passthrough            # GNU screen envelope decorators (interface + packetizer)
