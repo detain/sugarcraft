@@ -330,6 +330,10 @@ KEYBOARD SHORTCUTS (TUI)
   Ctrl+Enter   Execute the current query
   Ctrl+R       Execute the current query
   Ctrl+E       Execute the current query
+  EXPLAIN …    (Query editor, leading keyword) a typed EXPLAIN runs through
+               ExplainView: the Rows pane shows the colour-coded plan tree,
+               not the flat provider grid — and any ANALYZE modifier is
+               STRIPPED, the inspector never executes what it inspects
   Ctrl+F       Add the current query to the favorites list (session
                state only — no pane browses it, and it is not persisted)
   Ctrl+Shift+F Remove the current query from the favorites list

@@ -37,6 +37,7 @@ final class QueryState
         public readonly array $favorites = [],
         public readonly int $queryGen = 0,
         public readonly ?int $recallIndex = null,
+        public readonly ?string $plan = null,
     ) {}
 
     public static function new(): self
@@ -100,5 +101,15 @@ final class QueryState
     public function withIncrementedQueryGen(): self
     {
         return $this->mutate(['queryGen' => $this->queryGen + 1]);
+    }
+
+    /**
+     * ANSI tree of the last leading-`EXPLAIN` the user typed (SQL-O09).
+     * {@see \SugarCraft\Sql\Renderer} renders the Rows pane from this while
+     * it is set; the next query or table preview clears it.
+     */
+    public function withPlan(?string $plan): self
+    {
+        return $this->mutate(['plan' => $plan]);
     }
 }

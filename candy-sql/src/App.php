@@ -684,8 +684,9 @@ final class App implements Model
             return $this;
         }
         // Record in history (front = newest); dedupe + cap live in one
-        // place, QueryState::withRecordedQuery (client-016).
-        $query = $this->query->withRecordedQuery($trimmed);
+        // place, QueryState::withRecordedQuery (client-016). A plain run
+        // also replaces any live EXPLAIN plan (SQL-O09).
+        $query = $this->query->withRecordedQuery($trimmed)->withPlan(null);
         try {
             // SQL-C11: the sync leg runs on the UI loop (that is what "sync
             // transport" means here) — the shared wall-clock cap turns an
@@ -784,12 +785,25 @@ final class App implements Model
         $sql = $this->editor()->value();
         $trimmed = trim($sql);
 
+        // SQL-O09: a leading EXPLAIN is answered with the coloured plan tree,
+        // not the flat provider grid the statement used to produce. The
+        // inspector never executes what it inspects: an 'ANALYZE' modifier
+        // (and any explicit FORMAT clause — the providers speak their own
+        // dialect) is STRIPPED here, never honoured, because PostgreSQL's
+        // EXPLAIN ANALYZE RUNS the statement. The plan fetch is the
+        // statement-analysis leg, so it rides the same bounded sync path the
+        // MDL-tab [3] explain already uses.
+        if (($inner = self::explainInner($trimmed)) !== null) {
+            return $this->runExplainPlan($inner, $this->query->withRecordedQuery($trimmed));
+        }
+
         // Record in history immediately for the async leg; the sync leg
         // falls through to runQuery(), which records there. Both arms
         // dedupe+cap through the same QueryState::withRecordedQuery
         // (client-016) on the same trimmed text, so neither path can
-        // append the statement twice.
-        $query = $this->query->withRecordedQuery($trimmed);
+        // append the statement twice. A plain run also replaces any live
+        // EXPLAIN plan (SQL-O09: the tree yields to whatever answers next).
+        $query = $this->query->withRecordedQuery($trimmed)->withPlan(null);
 
         // SQLite runs synchronously — a local file cannot freeze the event loop
         // and there is no React driver for it. A TLS-verified MySQL-family
@@ -960,6 +974,7 @@ final class App implements Model
             ->withPageOffset($pageOffset);
         $loading = $this->mutate([
             'browse' => $browse,
+            'query' => $this->query->withPlan(null),
             'ui' => $this->ui->withError(null)->withStatus('loading…'),
         ]);
         return [$loading, Cmd::promise(fn () => $this->createRowsPromise($name, $browse->loadGen, $pageOffset))];
@@ -974,6 +989,58 @@ final class App implements Model
      *
      * @return array{self, ?Cmd}
      */
+    /**
+     * Split a leading-EXPLAIN statement into the plan question it asks
+     * (SQL-O09). Returns the inner statement to explain, or null when the
+     * text is not a single explainable statement (an embedded semicolon
+     * keeps multi-statement batches out of the plan path — they belong to
+     * the ordinary run leg and its own guards).
+     */
+    private static function explainInner(string $trimmed): ?string
+    {
+        if (preg_match('/^EXPLAIN(?:\s+ANALYZE)?(?:\s*\(\s*FORMAT\s+\w+\s*\)|\s+FORMAT\s*=\s*\w+)?\s+(\S.*)$/is', $trimmed, $m) !== 1) {
+            return null;
+        }
+        $inner = trim($m[1], "; \t\n\r");
+        if ($inner === '' || str_contains($inner, ';')) {
+            return null;
+        }
+
+        return $inner;
+    }
+
+    /**
+     * Fetch and fold the plan tree. Deliberately synchronous on every
+     * flavor: a plan query is an introspection leg, the same cost class as
+     * the admin panels' sync introspection, and it stays under the shared
+     * StatementTimeout bound.
+     *
+     * @return array{self, ?Cmd}
+     */
+    private function runExplainPlan(string $inner, QueryState $query): array
+    {
+        try {
+            $view = $this->syncTimeout()->run(
+                fn (): ExplainView => ExplainView::run($this->connection->db, $inner),
+            );
+        } catch (\PDOException | ReconnectException | StatementTimeoutException $e) {
+            return [$this->mutate([
+                'query' => $query->withPlan(null),
+                'ui' => $this->ui->withError('EXPLAIN failed: ' . $e->getMessage())->withStatus(null),
+            ]), null];
+        }
+
+        return [$this->mutate([
+            'browse' => $this->browse
+                ->withRows([])
+                ->withRowCursor(0)
+                ->withResultTable(null)
+                ->withSelectedTable(null),
+            'query' => $query->withPlan($view->render()),
+            'ui' => $this->ui->withError(null)->withStatus('explain plan — any query run or table preview replaces it'),
+        ]), null];
+    }
+
     private function beginPageShift(bool $forward): array
     {
         $limit = PreviewQuery::DEFAULT_LIMIT;
@@ -1186,11 +1253,13 @@ final class App implements Model
                     ->withResultTable(ResultTable::fromRows($rows))
                     ->withRowsLoading(false)
                     ->withPageOffset($pageOffset),
+                'query' => $this->query->withPlan(null),
                 'ui' => $this->ui->withError(null)->withStatus(self::browseSummary(count($rows), $pageOffset)),
             ]);
         } catch (\PDOException | ReconnectException | StatementTimeoutException $e) {
             return $this->mutate([
                 'browse' => $this->browse->withRowsLoading(false),
+                'query' => $this->query->withPlan(null),
                 'ui' => $this->ui->withError($e->getMessage())->withStatus(null),
             ]);
         }

@@ -6,6 +6,7 @@ namespace SugarCraft\Sql;
 
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Tty;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Forms\ItemList\ItemList;
 use SugarCraft\Forms\ItemList\StringItem;
 use SugarCraft\Table\{Column, Row, RowData, Table};
@@ -278,6 +279,21 @@ final class Renderer
         $budget = (int) floor($terminalCols / 2) - 6;
         $natural = min($numFields * 14, $budget);
         $width = $budget >= 60 ? max(60, $natural) : max(12, $budget);
+
+        if ($a->query->plan !== null) {
+            // SQL-O09: the typed-EXPLAIN tree owns the pane. Lines ride
+            // pre-styled from ExplainView::render() (its own sanitize leg,
+            // C21, already neutralised the server bytes); ANSI-safe
+            // truncation keeps the pane budget, top-first.
+            $lines = array_map(
+                static fn (string $l): string => Width::truncateAnsi($l, max(1, $width - 2)),
+                explode("\n", $a->query->plan),
+            );
+            if (count($lines) > $available) {
+                $lines = array_slice($lines, 0, $available);
+            }
+            return self::frame($a, Pane::Rows, ' explain ', implode("\n", $lines), $width);
+        }
 
         if ($a->browse->rows === []) {
             // Distinguish "no rows here" from "the async browse fetch is still
