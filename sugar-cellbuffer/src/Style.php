@@ -405,8 +405,12 @@ final class Style implements \JsonSerializable
      * 59 do the same for the underline colour; 1 bold, 2 faint, 3 italic,
      * 4 underline, 5 blink, 7 reverse, 8 invisible, 9 strike, 53 overline
      * are the attribute ON codes; 22 clears bold AND faint, 23 italic,
-     * 24 underline, 25 blink, 27 reverse, 28 invisible, 29 strike are the
-     * OFF codes. An extended-colour arm that is truncated or malformed
+     * 24 underline, 25 blink, 27 reverse, 28 invisible, 29 strike and 55
+     * overline are the OFF codes. Codes outside this vocabulary (6, 21,
+     * 26, 51/52/54, the 10-20 block) are deliberately ignored, not errors:
+     * 21 would need a double-underline bit the nine-bit attribute model
+     * does not carry, and its legacy bold-off reading is already served by
+     * 22. An extended-colour arm that is truncated or malformed
      * ends the parse rather than letting its operands be misread as
      * attribute codes.
      *
@@ -542,6 +546,8 @@ final class Style implements \JsonSerializable
                 $attrs &= ~self::ATTR_INVISIBLE;
             } elseif ($p === 29) {
                 $attrs &= ~self::ATTR_STRIKE;
+            } elseif ($p === 55) {
+                $attrs &= ~self::ATTR_OVERLINE;
             }
         }
 

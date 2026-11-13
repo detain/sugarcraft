@@ -669,6 +669,22 @@ final class StyleTest extends TestCase
         $this->assertTrue(Style::fromSgr('3;23') === null);
         $this->assertTrue(Style::fromSgr('5;25') === null);
         $this->assertTrue(Style::fromSgr('8;28') === null);
+        $this->assertFalse(Style::fromSgr('53;55')?->hasOverline() ?? false);
+        $this->assertTrue(Style::fromSgr('53;55') === null);
+    }
+
+    public function testFromSgrIgnoresCodesOutsideItsVocabulary(): void
+    {
+        // Documented deliberate leniency (README roster + fromSgr docblock):
+        // 6/26 proportional spacing, 21 doubly-underlined (no bit in the
+        // nine-bit model; bold-off rides 22), 51/52/54 frames, the 10-20
+        // font block — no throw, and no movement of an existing pen.
+        $carry = Style::fromSgr('1;31');
+        foreach ([6, 10, 15, 20, 21, 26, 51, 52, 54] as $code) {
+            $next = Style::fromSgr((string) $code, $carry);
+            $this->assertTrue(Style::valuesEqual($carry, $next), "SGR {$code} must not move the pen");
+        }
+        $this->assertNull(Style::fromSgr('6;21;26;51'));
     }
 
     public function testFromSgrCarriesThePriorPenThrough(): void
