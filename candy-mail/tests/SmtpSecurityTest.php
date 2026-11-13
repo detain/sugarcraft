@@ -14,7 +14,10 @@ use SugarCraft\Mail\SmtpTransport;
  *  - implicit TLS (SMTPS/465) connects encrypted BEFORE any EHLO;
  *  - TLS is required by DEFAULT: a missing/failed STARTTLS upgrade aborts the
  *    send instead of degrading to plaintext;
- *  - AUTH LOGIN is refused on any cleartext channel, even with TLS waived;
+ *  - AUTH (LOGIN or PLAIN) is refused on any cleartext channel, even with
+ *    TLS waived;
+ *  - the AUTH advertisement list is honoured: SASL PLAIN preferred, LOGIN
+ *    fallback, unusable lists refused rather than guessed;
  *  - withCaFile() threads a custom CA bundle into the ssl context;
  *  - the SMTP password is redacted from __debugInfo().
  *
@@ -239,7 +242,7 @@ final class SmtpSecurityTest extends TestCase
 
             $lastProp = new \ReflectionProperty($transport, 'lastResponse');
             $lastProp->setAccessible(true);
-            $lastProp->setValue($transport, "250-AUTH LOGIN PLAIN\r\n250 HELP");
+            $lastProp->setValue($transport, "250-AUTH LOGIN\r\n250 HELP"); // LOGIN-only: the fallback
 
             // Pre-load the server side of the pair with the 334/334/235 prompts.
             \fwrite($server, "334 VXNlcm5hbWU6\r\n334 UGFzc3dvcmQ6\r\n235 ok\r\n");
@@ -261,6 +264,22 @@ final class SmtpSecurityTest extends TestCase
             @\fclose($client);
             @\fclose($server);
         }
+    }
+
+    public function testAuthMechanismListParsingHonoursBothAdvertisementShapes(): void
+    {
+        // CM-20 (closes 021): the advertisement is a LIST, and both wire
+        // shapes (AUTH <sp> and AUTH=) carry it. A list with no mechanism
+        // this client speaks — including a bare AUTH keyword — parses to the
+        // empty refusal, never a guess.
+        $transport = new SmtpTransport('smtp.example.com');
+        $parse = fn(string $reply): array => $this->invokePrivate($transport, 'authMechanisms', [$reply]);
+
+        $this->assertSame(['CRAM-MD5', 'PLAIN'], $parse("250-AUTH=CRAM-MD5 PLAIN\r\n250 HELP"));
+        $this->assertSame(['LOGIN', 'PLAIN'], $parse("250 AUTH LOGIN PLAIN"));
+        $this->assertSame([], $parse("250-AUTH\r\n250 HELP"), 'bare AUTH advertises nothing usable');
+        $this->assertSame([], $parse("250-STARTTLS\r\n250 HELP"));
+        $this->assertSame([], $parse("250-AUTHX FAKED\r\n250 HELP"), 'an AUTH-prefixed keyword is not AUTH');
     }
 
     public function testEnvelopeWireContractDedupeNoBccAndDotStuffing(): void

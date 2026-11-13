@@ -193,9 +193,97 @@ final class TlsChannelTest extends TestCase
             // The tls:// server answers in ciphertext from the accept; a
             // reaching QUIT through that socket IS the implicit-TLS proof.
             $this->assertStringNotContainsString('STARTTLS', $transcript, 'STARTTLS is a protocol error on an already-secured channel');
-            $this->assertMatchesRegularExpression('/^AUTH LOGIN/m', $transcript);
+            // CM-20: the fake advertises LOGIN + PLAIN, so the ladder's
+            // PLAIN preference must be what the transcript shows.
+            $this->assertMatchesRegularExpression('/^AUTH PLAIN /m', $transcript);
         } finally {
             $this->reap($pid);
+        }
+    }
+
+    public function testPlainOnlyAdvertisementNegotiatesTheSingleCommand(): void
+    {
+        // CM-20 (closes 021) acceptance: a relay whose only speakable
+        // mechanism is PLAIN completes the send instead of walking into the
+        // old blind AUTH LOGIN and a mid-conversation 504.
+        $this->requireHarness();
+        [$port, $pid, $log] = $this->forkFakeSmtp(starttls: true, authList: '250-AUTH=CRAM-MD5 PLAIN');
+
+        try {
+            $transport = (new SmtpTransport(
+                host:     '127.0.0.1',
+                port:     $port,
+                username: 'relay-user',
+                password: 'relay-pass',
+            ))
+                ->withCaFile(self::$serverPem);
+
+            $transport->send($this->email());
+
+            $transcript = $this->pollText($log, 'QUIT', 8.0);
+            $this->assertMatchesRegularExpression('/^AUTH PLAIN /m', $transcript);
+            $this->assertDoesNotMatchRegularExpression('/^AUTH LOGIN/m', $transcript, 'PLAIN was advertised — LOGIN must not be fired');
+            $this->assertStringContainsString('MAIL FROM', $transcript, 'the send completes through the 235');
+        } finally {
+            $this->reap($pid);
+        }
+    }
+
+    public function testLoginOnlyAdvertisementFallsBackToTheThreeStep(): void
+    {
+        // CM-20: LOGIN keeps its place — advertised alone, the legacy
+        // dialogue runs verbatim (base64 username, base64 password).
+        $this->requireHarness();
+        [$port, $pid, $log] = $this->forkFakeSmtp(starttls: false, authList: '250-AUTH LOGIN');
+
+        try {
+            $transport = (new SmtpTransport(
+                host:     '127.0.0.1',
+                port:     $port,
+                username: 'relay-user',
+                password: 'relay-pass',
+            ))
+                ->withImplicitTls(true)
+                ->withCaFile(self::$serverPem);
+
+            $transport->send($this->email());
+
+            $transcript = $this->pollText($log, 'QUIT', 8.0);
+            $this->assertMatchesRegularExpression('/^AUTH LOGIN/m', $transcript);
+            $this->assertStringContainsString('B64:' . base64_encode('relay-user'), $transcript);
+            $this->assertStringContainsString('MAIL FROM', $transcript);
+        } finally {
+            $this->reap($pid);
+        }
+    }
+
+    public function testBareAuthAdvertisementIsRefusedNotGuessed(): void
+    {
+        // CM-20: an AUTH keyword carrying NO mechanism list proves nothing
+        // about what is speakable — the named refusal fires before any
+        // command is guessed onto the wire.
+        $this->requireHarness();
+        [$port, $pid, $log] = $this->forkFakeSmtp(starttls: false, authList: '250-AUTH');
+
+        try {
+            $transport = (new SmtpTransport(
+                host:     '127.0.0.1',
+                port:     $port,
+                username: 'relay-user',
+                password: 'relay-pass',
+            ))
+                ->withImplicitTls(true)
+                ->withCaFile(self::$serverPem);
+
+            $this->expectException(\RuntimeException::class);
+            $this->expectExceptionMessage('did not advertise AUTH');
+            $transport->send($this->email());
+        } finally {
+            $this->reap($pid);
+            $transcript = (string) \file_get_contents($log);
+            $this->assertStringNotContainsString('AUTH', $transcript);
+            $this->assertStringNotContainsString('MAIL FROM', $transcript);
+            @\unlink($log);
         }
     }
 
@@ -239,7 +327,7 @@ final class TlsChannelTest extends TestCase
      *
      * @return array{0:int,1:int,2:string}
      */
-    private function forkFakeSmtp(bool $starttls): array
+    private function forkFakeSmtp(bool $starttls, string $authList = '250-AUTH LOGIN PLAIN'): array
     {
         $ctx = \stream_context_create([
             'ssl' => [
@@ -257,7 +345,7 @@ final class TlsChannelTest extends TestCase
         $pid = \pcntl_fork();
         $this->assertGreaterThanOrEqual(0, $pid, 'fork failed');
         if ($pid === 0) {
-            $this->serveFakeSmtp($server, $log, $starttls);
+            $this->serveFakeSmtp($server, $log, $starttls, $authList);
             exit(0);
         }
         \fclose($server);
@@ -266,7 +354,7 @@ final class TlsChannelTest extends TestCase
     }
 
     /** @param resource $server */
-    private function serveFakeSmtp($server, string $log, bool $starttls): void
+    private function serveFakeSmtp($server, string $log, bool $starttls, string $authList): void
     {
         $conn = @\stream_socket_accept($server, 15.0);
         if (!\is_resource($conn)) {
@@ -295,9 +383,9 @@ final class TlsChannelTest extends TestCase
                     // One keyword per line immediately after the code-dash —
                     // exactly the grammar SmtpTransport::hasExtension parses.
                     if ($starttls && !$postTls) {
-                        $send("250-fake.mail greets\r\n250-STARTTLS\r\n250-AUTH LOGIN PLAIN\r\n250 OK\r\n");
+                        $send("250-fake.mail greets\r\n250-STARTTLS\r\n" . $authList . "\r\n250 OK\r\n");
                     } else {
-                        $send("250-fake.mail greets\r\n250-8BITMIME\r\n250-AUTH LOGIN PLAIN\r\n250 OK\r\n");
+                        $send("250-fake.mail greets\r\n250-8BITMIME\r\n" . $authList . "\r\n250 OK\r\n");
                     }
                     break;
                 case 'STARTTLS':

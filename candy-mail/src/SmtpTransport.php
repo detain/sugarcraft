@@ -27,7 +27,9 @@ use SugarCraft\Async\CancellationToken;
  * STARTTLS upgrade alike) — legacy SSLv3/TLS 1.0/1.1 are never negotiated.
  * {@see withCaFile()} selects a
  * custom CA bundle. Credentials are never sent over an unencrypted channel:
- * AUTH LOGIN refuses to start on a plaintext connection in every mode.
+ * AUTH refuses to start on a plaintext connection in every mode, and the
+ * advertised SASL mechanisms are honoured — PLAIN is negotiated when offered,
+ * LOGIN is the fallback; a list this client cannot speak is a refusal.
  *
  * Mirrors charmbracelet/pop SMTP transport.
  */
@@ -474,16 +476,40 @@ final class SmtpTransport implements Transport
             throw new \RuntimeException(Lang::t('smtp.auth_insecure'));
         }
 
-        if (!$this->hasExtension('AUTH')) {
-            // The old branch returned silently and sent
-            // the message ANONYMOUSLY — a server (or MITM) that strips the AUTH
-            // advertisement got an unauthenticated relay while the caller
-            // believed it had logged in. Fail loud instead; RFC 5321 §2.3.1
-            // makes AUTH an optional extension, so its absence is a policy
-            // decision the transport must not make on the caller's behalf.
+        // The old branch returned silently and sent
+        // the message ANONYMOUSLY — a server (or MITM) that strips the AUTH
+        // advertisement got an unauthenticated relay while the caller
+        // believed it had logged in. Fail loud instead; RFC 5321 §2.3.1
+        // makes AUTH an optional extension, so its absence is a policy
+        // decision the transport must not make on the caller's behalf. The
+        // refusal now covers BOTH shapes of that decision: no AUTH line at
+        // all, and an advertisement carrying no mechanism this client speaks
+        // (a blind-fire at a PLAIN-only or CRAM-MD5-only relay used to walk
+        // into a mid-conversation 504 instead).
+        $mechanisms = self::authMechanisms($this->lastResponse);
+        if ($mechanisms === []) {
             throw new \RuntimeException(Lang::t('smtp.auth_unavailable', ['host' => $this->host]));
         }
 
+        if (\in_array('PLAIN', $mechanisms, true)) {
+            // RFC 4616: SASL PLAIN rides ONE command — base64 of
+            // \0 authcid \0 password. Preferring it costs the relay a single
+            // round instead of the LOGIN three-step, and it is the only
+            // mechanism here that a PLAIN-only advertisement actually speaks.
+            $token = \base64_encode("\0" . $this->username . "\0" . $this->password);
+            $this->sendRaw("AUTH PLAIN {$token}\r\n");
+            $this->readResponse(235); // Authentication successful
+            return;
+        }
+
+        if (!\in_array('LOGIN', $mechanisms, true)) {
+            // The advertisement named mechanisms this client does not
+            // implement (CRAM-MD5, OAUTHBEARER, …). Refuse by name rather
+            // than guess — auth_unavailable is the same loud floor.
+            throw new \RuntimeException(Lang::t('smtp.auth_unavailable', ['host' => $this->host]));
+        }
+
+        // LOGIN-only advertisement: the legacy three-step stays the fallback.
         $this->sendRaw("AUTH LOGIN\r\n");
         $this->readResponse(334); // Username prompt (base64 "Username:")
 
@@ -940,6 +966,38 @@ final class SmtpTransport implements Transport
             }
         }
         return false;
+    }
+
+    /**
+     * The EHLO AUTH advertisement parsed into its mechanism list.
+     *
+     * RFC 4954 §5.1 permits both capability shapes — `AUTH=mech mech` and
+     * `AUTH mech mech` — on any continuation or final line. Walk the reply
+     * with hasExtension()'s code+separator grammar (strip the 4-byte reply
+     * prefix) and split the mechanism list on whitespace. A bare `AUTH`
+     * keyword with no list, and the absence of AUTH entirely, both answer
+     * []: there is nothing to negotiate, which is a refusal, not a guess.
+     *
+     * @return list<string>
+     */
+    private static function authMechanisms(string $reply): array
+    {
+        foreach (\explode("\n", $reply) as $line) {
+            $keyword = \strtoupper(\trim(\substr($line, 4)));
+            if (!\str_starts_with($keyword, 'AUTH')) {
+                continue;
+            }
+            $rest = \substr($keyword, 4);
+            if ($rest !== '' && $rest[0] !== '=' && $rest[0] !== ' ') {
+                continue; // AUTHX-style word is not the AUTH keyword
+            }
+            $list = \trim(\ltrim($rest, "= \t"));
+            if ($list === '') {
+                continue; // bare AUTH with no mechanism list is nothing to negotiate
+            }
+            return \preg_split('/[ \t]+/', $list, -1, \PREG_SPLIT_NO_EMPTY) ?: [];
+        }
+        return [];
     }
 
     private function getHeloHost(): string

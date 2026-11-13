@@ -185,6 +185,12 @@ $email2 = new Email(
 
 - **Fail-closed credentials.** `AUTH LOGIN` never runs on an unencrypted channel —
   regardless of `requireTls`. There is no `allowInsecureAuth` escape hatch by design.
+- **AUTH mechanisms.** The EHLO AUTH advertisement is parsed as a list
+  (RFC 4954 — both `AUTH <sp>` and `AUTH=` shapes). SASL PLAIN is preferred
+  and travels as a single command once the channel is encrypted; the LOGIN
+  three-step stays the fallback for LOGIN-only relays. A server advertising
+  only mechanisms this client does not speak (CRAM-MD5, OAUTHBEARER) gets the
+  named refusal — never a blind command guess.
 - **Opt out (trusted networks only).** `->withRequireTls(false)` restores the historical
   opportunistic behaviour for the STARTTLS upgrade itself; it does not re-open the
   credential floor above.
