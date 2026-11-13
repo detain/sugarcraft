@@ -43,6 +43,15 @@ namespace SugarCraft\Markdown\Render;
  */
 final class SectionScanner
 {
+    /**
+     * Hard ceiling on what one {@see push()} keeps live: the open section
+     * plus the unconsumed buffer tail each stay at roughly this size, and
+     * everything beyond it leaves as provisional sections the consumer's
+     * parser confirms or re-joins. Without it, a newline-less multi-MB
+     * chunk grows the buffer until the process dies (SM-S03).
+     */
+    public const MAX_SECTION_BYTES = 1048576;
+
     private string $buffer = '';
 
     /**
@@ -81,9 +90,27 @@ final class SectionScanner
             if ($done !== null && trim($done) !== '') {
                 $closed[] = $done;
             }
+            if (strlen($this->section) > self::MAX_SECTION_BYTES) {
+                // SM-S03: the open section blew the cap without proposing a
+                // boundary. Flush it provisionally at the line edge — the
+                // consumer's parser confirms or re-joins the cut.
+                $closed[]       = $this->section;
+                $this->section  = '';
+            }
         }
 
         $length = strlen($this->buffer);
+        $live   = $length - $this->consumed;
+        while ($live > self::MAX_SECTION_BYTES) {
+            // SM-S03: no line has completed under the tail, so the buffer
+            // itself is the runaway. Cut a provisional section mid-line:
+            // such a cut can never parse as a heading boundary, so the
+            // consumer's confirm() always re-joins it — the scanner simply
+            // stops holding bytes it may not hold.
+            $closed[]         = substr($this->buffer, $this->consumed, self::MAX_SECTION_BYTES);
+            $this->consumed  += self::MAX_SECTION_BYTES;
+            $live            -= self::MAX_SECTION_BYTES;
+        }
         if ($this->consumed >= $length) {
             $this->buffer   = '';
             $this->consumed = 0;

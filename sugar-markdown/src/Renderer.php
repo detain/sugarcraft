@@ -314,7 +314,12 @@ final class Renderer
      * Pure channel: no timers, no I/O handles, no ReactPHP. Each
      * yielded chunk is a plain string of composed SGR bytes; consuming the
      * generator lazily also makes the input iterable pull-on-demand, so a
-     * caller feeding an unbounded source is never forced to materialise it.
+     * caller feeding an unbounded source never has to materialise the
+     * input. What is materialised is the open section itself: the scanner
+     * caps one at {@see SectionScanner::MAX_SECTION_BYTES} (1 MiB), so
+     * bytes up to a provable boundary stream through, while a single
+     * boundary-less blob is re-joined section by section until its section
+     * finalises (SM-S03).
      *
      * @param iterable<string> $chunks
      * @return \Generator<int, string>

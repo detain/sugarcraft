@@ -6,6 +6,7 @@ namespace SugarCraft\Markdown\Tests\Render;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Markdown\Render\SectionScanner;
+use SugarCraft\Markdown\Renderer;
 
 /**
  * The line-level boundary proposals of {@see SectionScanner} (audit 15b-31
@@ -92,5 +93,102 @@ final class SectionScannerTest extends TestCase
         $scanner = new SectionScanner();
 
         $this->assertSame([], $scanner->push("# A\n\n- one\n# B\n"));
+    }
+
+    /**
+     * SM-S03: a multi-megabyte newline-less push must not grow the scanner
+     * past its cap; the overflow leaves as provisional sections whose
+     * bytes, re-joined, are exactly the bytes fed.
+     */
+    public function testANewlinelessBlobFlushesProvisionalSectionsBounded(): void
+    {
+        $scanner = new SectionScanner();
+        $doc = str_repeat('a', 3 * 1024 * 1024 + 17);
+        $seen = '';
+        $provisional = 0;
+
+        foreach (str_split($doc, 65536) as $chunk) {
+            $closed = $scanner->push($chunk);
+            foreach ($closed as $section) {
+                $provisional++;
+                $seen .= $section;
+            }
+            $live = self::liveBytes($scanner);
+            $this->assertLessThanOrEqual(
+                SectionScanner::MAX_SECTION_BYTES + 2 * 65536,
+                $live,
+                'the scanner live buffer must stay at roughly one cap while feeding a newline-less blob',
+            );
+        }
+        $this->assertGreaterThan(2, $provisional, 'overflow must stream out before finish()');
+
+        $rest = $scanner->finish() ?? '';
+        $this->assertSame(
+            $doc . "\n",
+            $seen . $rest,
+            'provisional cuts must preserve every byte in order (finish() terminates the last line)',
+        );
+    }
+
+    public function testStreamOfAMultiMegabyteNewlinelessParagraphIsByteIdenticalToRender(): void
+    {
+        $renderer = new Renderer();
+        $doc = str_repeat('x', 2_500_000);
+
+        $streamed = '';
+        $chunks = 0;
+        foreach ($renderer->stream(str_split($doc, 65536)) as $body) {
+            $streamed .= $body;
+            $chunks++;
+        }
+
+        $this->assertSame($renderer->render($doc), $streamed);
+        $this->assertSame(1, $chunks, 'a boundary-less document still answers exactly one final chunk');
+    }
+
+    public function testStreamOfGiantLineBledTextIsByteIdenticalAndProgresses(): void
+    {
+        $renderer = new Renderer();
+        // No blank lines: one paragraph of many complete lines, so every
+        // provisional flush lands on a line edge and the parser re-joins it.
+        $doc = implode("\n", array_fill(0, 6000, str_repeat('word ', 80) . 'end'));
+
+        $bodies = iterator_to_array($renderer->stream(str_split($doc, 70000)), false);
+        $this->assertSame($renderer->render($doc), implode('', $bodies));
+    }
+
+    public function testARealBoundaryAfterProvisionalBytesConfirmsAndStreamsEarly(): void
+    {
+        $renderer = new Renderer();
+        $doc = str_repeat('b', 2_000_000) . "\n\n# Head\n\nafter\n";
+
+        $bodies = [];
+        foreach ($renderer->stream(str_split($doc, 65536)) as $body) {
+            $bodies[] = $body;
+            if (count($bodies) > 1) {
+                break; // progress observed: a section answered before finish()
+            }
+        }
+        $this->assertGreaterThan(1, count($bodies), 'the blob section must finalise at the real heading, mid-feed');
+
+        $streamed = implode('', $bodies);
+        $full = '';
+        foreach ($renderer->stream(str_split($doc, 1_048_576)) as $body) {
+            $full .= $body;
+        }
+        $this->assertStringStartsWith($streamed, $full);
+        $this->assertSame($renderer->render($doc), $full);
+    }
+
+    private static function liveBytes(SectionScanner $scanner): int
+    {
+        $read = static function (string $property) use ($scanner) {
+            $p = new \ReflectionProperty(SectionScanner::class, $property);
+            $p->setAccessible(true);
+
+            return $p->getValue($scanner);
+        };
+
+        return strlen($read('section')) + strlen($read('buffer')) - $read('consumed');
     }
 }

@@ -178,6 +178,20 @@ final class SectionStream
      */
     private function confirm(string $source, string $headingLine): void
     {
+        // SM-S03 refusals the parser could only echo, proven from bytes:
+        //  - a mid-line provisional cut: $source has no line ending, so
+        //    $headingLine continues its last line and can never open a
+        //    column-0 ATX heading;
+        //  - a next-section head that is not ATX-shaped at all: the probe's
+        //    only candidate heading line is $headingLine.
+        // Skipping the parse keeps capped-blob re-joins O(1); when either
+        // test is inconclusive the full probe below arbitrates as always.
+        if ($headingLine !== '' && (!str_ends_with($source, "\n")
+            || preg_match('/^ {0,3}#{1,6}([ \t]|$)/', $headingLine) !== 1)) {
+            $this->unconfirmed = $source;
+
+            return;
+        }
         $probe = $source . $headingLine;
         if (!str_ends_with($probe, "\n")) {
             $probe .= "\n";
