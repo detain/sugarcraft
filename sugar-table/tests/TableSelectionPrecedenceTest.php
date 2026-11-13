@@ -45,7 +45,7 @@ final class TableSelectionPrecedenceTest extends TestCase
     {
         $t = Table::fromColumns([Column::new('a', 'A', 10)])
             ->withRows([
-                Row::new(RowData::from(['a' => new StyledCell('cell', '32')])),
+                Row::new(RowData::from(['a' => StyledCell::new('cell', '32')])),
             ])
             ->withStyleFunc(fn(int $r, int $c, string $v): string => '35');
 

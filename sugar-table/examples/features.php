@@ -23,11 +23,11 @@ for ($i = 1; $i <= 40; $i++) {
         default   => ['OK',   '32'],
     };
     $rows[] = Row::new(RowData::from([
-        'id'      => new StyledCell((string) $i, '36'),
-        'host'    => new StyledCell('Server-' . $i, ''),
-        'ip'      => new StyledCell('10.0.' . ($i % 255) . '.1', '90'),
-        'latency' => new StyledCell(($i * 10) . 'ms', ''),
-        'status'  => new StyledCell($statusText, $statusColor),
+        'id'      => StyledCell::new((string) $i, '36'),
+        'host'    => StyledCell::new('Server-' . $i, ''),
+        'ip'      => StyledCell::new('10.0.' . ($i % 255) . '.1', '90'),
+        'latency' => StyledCell::new(($i * 10) . 'ms', ''),
+        'status'  => StyledCell::new($statusText, $statusColor),
     ]));
 }
 

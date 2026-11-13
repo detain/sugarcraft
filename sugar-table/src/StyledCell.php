@@ -14,12 +14,13 @@ final class StyledCell
     public readonly mixed $value;
     public readonly string $style;
 
-    public function __construct(mixed $value, string $ansiStyle = '')
+    private function __construct(mixed $value, string $ansiStyle = '')
     {
         $this->value = $value;
         $this->style = $ansiStyle;
     }
 
+    /** Sole construction door (audit ST-49, finding 060): value objects are built via ::new(). */
     public static function new(mixed $value, string $ansiStyle = ''): self
     {
         return new self(value: $value, ansiStyle: $ansiStyle);

@@ -27,9 +27,15 @@ final class StyledCellTest extends TestCase
         $this->assertSame('', $cell->style);
     }
 
-    public function testConstructorWithEmptyStyle(): void
+    public function testConstructorIsPrivateAndNewIsTheDoor(): void
     {
-        $cell = new StyledCell('test', '');
+        // ST-49 (finding 060): the ctor went private; ::new() covers every
+        // caller (census: examples + tests only, zero external direct-new).
+        $ctor = (new \ReflectionClass(StyledCell::class))->getConstructor();
+        $this->assertNotNull($ctor);
+        $this->assertTrue($ctor->isPrivate(), 'StyledCell must not be constructible outside the class');
+
+        $cell = StyledCell::new('test', '');
         $this->assertSame('test', $cell->value);
         $this->assertSame('', $cell->style);
     }
