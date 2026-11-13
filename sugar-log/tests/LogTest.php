@@ -9,6 +9,7 @@ use SugarCraft\Log\Level;
 use SugarCraft\Log\Log;
 use SugarCraft\Log\Logger;
 use SugarCraft\Log\PanicFormatter;
+use SugarCraft\Log\Tests\Support\StderrNoticeCapture;
 
 /**
  * Coverage tests for the Log static facade.
@@ -315,5 +316,83 @@ final class LogTest extends TestCase
         $this->assertStringContainsString('INF', $content);
         $this->assertStringContainsString('WRN', $content);
         $this->assertStringContainsString('ERR', $content);
+    }
+
+    public function testStaticFormattedProxiesWriteSprintfLines(): void
+    {
+        Log::setLogger($this->logger());
+
+        Log::debugf('dbg %s', 'one');
+        Log::infof('inf %s', 'two');
+        Log::warnf('wrn %d', ['k' => 'v'], 3); // array first-arg = context slot, like the instance helper
+        Log::errorf('err %s', 'four');
+
+        $content = $this->getContent();
+        $this->assertStringContainsString('dbg one', $content);
+        $this->assertStringContainsString('inf two', $content);
+        $this->assertStringContainsString('wrn 3', $content);
+        $this->assertStringContainsString('k=v', $content);
+        $this->assertStringContainsString('err four', $content);
+    }
+
+    public function testStaticFatalfWritesThenThrowsTypedException(): void
+    {
+        Log::setLogger($this->logger());
+
+        try {
+            Log::fatalf('ftl %s', 'five');
+            $this->fail('fatalf must throw after writing');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('ftl five', $e->getMessage());
+        }
+
+        $content = $this->getContent();
+        $this->assertStringContainsString('FTL ftl five', $content);
+    }
+
+    public function testRemovePanicHandlerRestoresTheForeignHandler(): void
+    {
+        $result = StderrNoticeCapture::run(<<<'CODE'
+            \set_exception_handler(static function (\Throwable $e): void {
+                \fwrite(\STDERR, 'FOREIGN-SAW:' . $e->getMessage() . "\n");
+            });
+            \SugarCraft\Log\Log::installPanicHandler(\SugarCraft\Log\PanicFormatter::plain());
+            \SugarCraft\Log\Log::removePanicHandler();
+            throw new \RuntimeException('boom-x');
+            CODE);
+
+        $this->assertStringContainsString('FOREIGN-SAW:boom-x', $result['stderr']);
+        $this->assertStringNotContainsString('report rendered by sugar-log', $result['stderr']);
+    }
+
+    public function testRemovePanicHandlerWithoutInstallIsANoOp(): void
+    {
+        // Without the push-counter guard, a stray remove would pop the
+        // host's handler — the foreign echo below proves nothing was stolen.
+        $result = StderrNoticeCapture::run(<<<'CODE'
+            \set_exception_handler(static function (\Throwable $e): void {
+                \fwrite(\STDERR, 'FOREIGN-SAW:' . $e->getMessage() . "\n");
+            });
+            \SugarCraft\Log\Log::removePanicHandler();
+            throw new \RuntimeException('boom-y');
+            CODE);
+
+        $this->assertStringContainsString('FOREIGN-SAW:boom-y', $result['stderr']);
+    }
+
+    public function testReinstallOverBuiltinDefaultReportsOnce(): void
+    {
+        // No foreign handler: the first install captures null. The old
+        // `panicPrevious ?? capture` test could not distinguish re-install
+        // from first-install then, and chained the stale wrapper — two
+        // banners per exception.
+        $result = StderrNoticeCapture::run(<<<'CODE'
+            \SugarCraft\Log\Log::installPanicHandler(\SugarCraft\Log\PanicFormatter::plain());
+            \SugarCraft\Log\Log::installPanicHandler(\SugarCraft\Log\PanicFormatter::plain());
+            throw new \RuntimeException('twice-y');
+            CODE);
+
+        $this->assertSame(1, \substr_count($result['stderr'], 'report rendered by sugar-log'));
+        $this->assertStringContainsString('twice-y', $result['stderr']);
     }
 }

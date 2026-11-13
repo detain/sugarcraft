@@ -151,6 +151,13 @@ Log::default()->setOutput($fh); // reach the shared logger itself
 Swap the shared logger wholesale with `Log::setLogger(Logger::new(...))`, and
 `Log::reset()` returns to the lazily-created default.
 
+The five severity helpers have formatted twins — `Log::debugf()`,
+`Log::infof()`, `Log::warnf()`, `Log::errorf()`, `Log::fatalf()` — with the
+same sprintf semantics as the `Logger` `*f()` helpers (`fatalf` writes the
+line, then throws). `Log::installPanicHandler()` is undone by
+`Log::removePanicHandler()`, which restores whatever exception handling
+existed before the first install.
+
 ## Structured Fields
 
 ```php

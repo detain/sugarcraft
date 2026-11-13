@@ -15,6 +15,9 @@ use SugarCraft\Log\Support\Stdio;
  *
  * Lives in its own class because PHP can't have static and instance methods
  * sharing a name on `Logger` itself.
+ *
+ * Mirrors charmbracelet/log's package-level functions (Default/SetLogger and
+ * the log verbs); the formatted `*f()` proxies mirror the instance helpers.
  */
 final class Log
 {
@@ -28,6 +31,21 @@ final class Log
 
     /** Monotonic install epoch; stale shutdown hooks self-retire (m5). */
     private static int $panicEpoch = 0;
+
+    /**
+     * True while an install owns the exception-handler chain, even when the
+     * captured foreign handler is null (PHP's builtin) — null alone cannot
+     * tell "first install" from "re-install over a builtin default", and
+     * confusing them would chain our own previous wrapper (double reports).
+     */
+    private static bool $panicInstalled = false;
+
+    /**
+     * Count of set_exception_handler() pushes since uninstall; every push
+     * (capture-noop and wrapper) has exactly one restorable slot, so
+     * removePanicHandler() pops this many to land on the foreign chain.
+     */
+    private static int $panicPushes = 0;
 
     /** Get (or lazily create) the process-wide default logger. */
     public static function default(): Logger
@@ -76,6 +94,36 @@ final class Log
     public static function print(string $message, array $context = []): void
     {
         self::default()->print($message, $context);
+    }
+
+    /**
+     * Formatted proxies mirroring the {@see Logger} `*f` helpers — same
+     * sprintf semantics, same context-slot heuristic, same failure posture
+     * (fatalf writes the record, then throws RuntimeException).
+     */
+    public static function debugf(string $format, mixed $context = [], mixed ...$args): void
+    {
+        self::default()->debugf($format, $context, ...$args);
+    }
+
+    public static function infof(string $format, mixed $context = [], mixed ...$args): void
+    {
+        self::default()->infof($format, $context, ...$args);
+    }
+
+    public static function warnf(string $format, mixed $context = [], mixed ...$args): void
+    {
+        self::default()->warnf($format, $context, ...$args);
+    }
+
+    public static function errorf(string $format, mixed $context = [], mixed ...$args): void
+    {
+        self::default()->errorf($format, $context, ...$args);
+    }
+
+    public static function fatalf(string $format, mixed $context = [], mixed ...$args): void
+    {
+        self::default()->fatalf($format, $context, ...$args);
     }
 
     /**
@@ -179,9 +227,16 @@ final class Log
         // to capture what was registered before us; on RE-install we reuse the
         // foreign handler captured then, so our own earlier wrapper is replaced
         // instead of chained to (which would print a second report per
-        // exception — m5).
-        $previousHandler = self::$panicPrevious ?? \set_exception_handler(static function (): void {});
-        self::$panicPrevious = $previousHandler;
+        // exception — m5). $panicInstalled makes re-install-over-builtin-null
+        // distinguishable from a first install whose foreign handler is null.
+        if (!self::$panicInstalled) {
+            $previousHandler = \set_exception_handler(static function (): void {});
+            ++self::$panicPushes;
+            self::$panicPrevious = $previousHandler;
+            self::$panicInstalled = true;
+        } else {
+            $previousHandler = self::$panicPrevious;
+        }
 
         // Now register the real handler with the captured previous handler.
         \set_exception_handler(static function (\Throwable $e) use ($formatter, $previousHandler): void {
@@ -200,6 +255,7 @@ final class Log
                 $previousHandler($e);
             }
         });
+        ++self::$panicPushes;
 
         // Register shutdown function for fatal errors. PHP offers no way to
         // unregister one, so each hook checks the install epoch and self-retires
@@ -221,6 +277,28 @@ final class Log
                 }
             }
         });
+    }
+
+    /**
+     * Uninstall the handler registered by {@see self::installPanicHandler()},
+     * restoring the exception handling that existed before the FIRST install
+     * (PHP's builtin default when there was none). PHP cannot unregister the
+     * companion shutdown hook, so the install epoch is advanced and every
+     * registered hook self-retires. Idempotent: with nothing installed this
+     * is a no-op — it never pops a handler sugar-log does not own.
+     * {@see self::reset()} deliberately does NOT uninstall the panic
+     * handler; this method is its counterpart (install is process-lifetime
+     * state like setOutput, and must be undoable without one).
+     */
+    public static function removePanicHandler(): void
+    {
+        for ($remaining = self::$panicPushes; $remaining > 0; --$remaining) {
+            \restore_exception_handler();
+        }
+        self::$panicPushes = 0;
+        self::$panicPrevious = null;
+        self::$panicInstalled = false;
+        ++self::$panicEpoch;
     }
 
     /**
