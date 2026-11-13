@@ -65,5 +65,7 @@ return [
     'cli.empty_message' => 'Er is niets te verzenden: het bericht bevat geen tekstbody, geen HTML-onderdeel en geen bijlage. Gebruik --body, voer de invoer via een pipe in, of gebruik --html.',
     'cli.deprecated_env' => '{old} is verouderd; stel in plaats daarvan {new} in.',
     'cli.resend_ignored_inputs' => 'Let op: de Resend-transport is gekozen, dus de SMTP-gebonden invoer {inputs} wordt genegeerd (Resend houdt zijn eigen vaste budget van 10 s verbinden / 30 s verzenden aan).',
+    'cli.invalid_transport' => 'Onbekende --transport-waarde {transport} (toegestaan: smtp, resend)',
+    'cli.resend_key_required' => '--transport=resend heeft een API-sleutel nodig: stel RESEND_API_KEY in (de SMTP-host wordt hierbij genegeerd)',
     'cli.stdin_too_large' => 'De STDIN-invoer overschreed de limiet van {limit} bytes; verkort de invoer of voeg deze toe als bestand.',
 ];

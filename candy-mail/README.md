@@ -237,7 +237,11 @@ environment; `--timeout` is range-checked at parse time on every path). Transpor
 selection is a ladder, not a merge: a non-blank `RESEND_API_KEY` wins outright, the
 Resend leg reads none of `--timeout/--helo/--ca-file` (each one supplied prints a
 stderr note naming it), and the API transport keeps its own fixed 10 s connect /
-30 s transfer budget — the CLI's timeout knob is SMTP-only. A value that begins with a dash needs the inline form
+30 s transfer budget — the CLI's timeout knob is SMTP-only. When both transports are
+configured the ladder can silently spend the WRONG domain's identity (SPF/DKIM
+alignment rides whichever transport answers), so `--transport=smtp|resend` forces the
+choice: `smtp` ignores a present key outright, `resend` refuses without one. The
+zero-flag recipe for a one-off is `env -u RESEND_API_KEY candy-mail …`. A value that begins with a dash needs the inline form
 (`--subject=-50% off`) — a switch is never stolen as another switch's value. The CLI
 requires a `--to` recipient: cc/bcc alone ends in a loud refusal (the library itself
 permits cc/bcc-only sends over SMTP; the Resend API needs at least one `to`).
@@ -249,7 +253,8 @@ Environment variables:
 
 ```bash
 export RESEND_API_KEY=re_xxxxx                # Resend API key (enables the Resend transport)
-export CANDY_MAIL_SMTP_HOST=smtp.gmail.com    # SMTP host (Resend key wins if both set)
+export CANDY_MAIL_SMTP_HOST=smtp.gmail.com    # SMTP host (Resend key wins if both set —
+                                              # force SMTP with --transport=smtp)
 export CANDY_MAIL_SMTP_PORT=587               # SMTP port (default: 587)
 export CANDY_MAIL_SMTP_USERNAME=user          # SMTP username
 export CANDY_MAIL_SMTP_PASSWORD=pass          # SMTP password (app password for Gmail etc.)

@@ -65,5 +65,7 @@ return [
     'cli.empty_message' => 'لا يوجد ما يُرسل: الرسالة لا تحتوي على متن أو جزء HTML أو مرفق. استخدم --body أو مرّر الإدخال أو استخدم --html.',
     'cli.deprecated_env' => 'المتغير {old} مهمل؛ عيّن {new} بدلاً منه.',
     'cli.resend_ignored_inputs' => 'ملاحظة: تم اختيار ناقل Resend، لذا سيتم تجاهل الإدخالات الخاصة بـ SMTP {inputs} (يحتفظ Resend بميزانيته الثابتة: 10 ثوانٍ للاتصال / 30 ثانية للنقل).',
+    'cli.invalid_transport' => 'قيمة --transport غير معروفة: {transport} (المسموح: smtp، resend)',
+    'cli.resend_key_required' => 'يحتاج --transport=resend إلى مفتاح API: عيّن RESEND_API_KEY (يتم تجاهل مضيف SMTP مع هذا الخيار)',
     'cli.stdin_too_large' => 'تجاوز إدخال STDIN الحد البالغ {limit} بايتًا; قلّل الإدخال أو أرفقه كملف.',
 ];

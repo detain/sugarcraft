@@ -597,6 +597,117 @@ final class BinDispatchTest extends TestCase
         $this->assertStringNotContainsString('--ca-file', $result['err']);
     }
 
+    /**
+     * CM-16 acceptance: with BOTH transports configured, --transport=smtp
+     * must drive a real SMTP conversation — EHLO on the wire, not a curl
+     * POST to api.resend.com. The child fake relay logs its RX lines; the
+     * pin asserts the greeting path ran and the send completed.
+     */
+    public function testTransportSmtpOverrideDialsTheRelayNotTheApi(): void
+    {
+        if (!\function_exists('pcntl_fork') || !\function_exists('pcntl_waitpid')) {
+            $this->markTestSkipped('pcntl is required for the forked relay');
+        }
+
+        $server = @\stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
+        $this->assertNotFalse($server, 'could not reserve a loopback port: ' . $errstr);
+        $port = (int) \substr(\strrchr(\stream_socket_get_name($server, false), ':'), 1);
+        $log  = \tempnam(\sys_get_temp_dir(), 'cm16relay');
+
+        $pid = \pcntl_fork();
+        if ($pid === -1) {
+            $this->markTestSkipped('pcntl_fork failed');
+        }
+        if ($pid === 0) {
+            // Child: one-session fake relay. Answers the full dialogue and
+            // logs every client line so the parent can prove the transport.
+            $rx = '';
+            $conn = \stream_socket_accept($server, 10.0);
+            if ($conn !== false) {
+                \fwrite($conn, "220 fake.relay\r\n");
+                while (!\feof($conn)) {
+                    $line = \fgets($conn);
+                    if ($line === false) {
+                        break;
+                    }
+                    $rx .= $line;
+                    $up = \strtoupper(\trim($line));
+                    if (\str_starts_with($up, 'EHLO') || \str_starts_with($up, 'HELO')) {
+                        \fwrite($conn, "250-fake.relay greets\r\n250 HELP\r\n");
+                    } elseif (\str_starts_with($up, 'MAIL') || \str_starts_with($up, 'RCPT')) {
+                        \fwrite($conn, "250 OK\r\n");
+                    } elseif (\str_starts_with($up, 'DATA')) {
+                        \fwrite($conn, "354 go\r\n");
+                        $buf = '';
+                        while (!\feof($conn)) {
+                            $l = \fgets($conn);
+                            if ($l === false) {
+                                break;
+                            }
+                            $buf .= $l;
+                            if (\rtrim($l, "\r\n") === '.') {
+                                break;
+                            }
+                        }
+                        $rx .= $buf;
+                        \fwrite($conn, "250 queued\r\n");
+                    } elseif (\str_starts_with($up, 'QUIT')) {
+                        \fwrite($conn, "221 bye\r\n");
+                        break;
+                    }
+                }
+                \fclose($conn);
+            }
+            \fclose($server);
+            \file_put_contents($log, $rx);
+            \posix_kill(\getmypid(), \SIGKILL);
+            exit(0);
+        }
+        \fclose($server);
+
+        try {
+            $result = $this->runCli(
+                ['--to', 'b@example.com', '--transport', 'smtp'],
+                'hello',
+                [
+                    'CANDY_MAIL_FROM'             => 'a@example.com',
+                    'CANDY_MAIL_SMTP_HOST'        => '127.0.0.1',
+                    'CANDY_MAIL_SMTP_PORT'        => (string) $port,
+                    'CANDY_MAIL_SMTP_REQUIRE_TLS' => '0',
+                    'RESEND_API_KEY'              => 're_poison_the_ladder',
+                ]
+            );
+        } finally {
+            $deadline = \microtime(true) + 5.0;
+            while (\microtime(true) < $deadline) {
+                $status = 0;
+                if (\pcntl_waitpid($pid, $status, \WNOHANG) === $pid || $status > 0) {
+                    break;
+                }
+                \usleep(20000);
+            }
+            @\posix_kill($pid, \SIGKILL);
+            \pcntl_waitpid($pid, $status);
+        }
+
+        $this->assertSame(0, $result['status'], 'the forced SMTP send must complete: ' . $result['err']);
+        $this->assertStringNotContainsString('Resend', $result['err'], 'no ignored-inputs note — Resend was not chosen');
+        $this->assertStringContainsString('Email sent', $result['out']);
+
+        $deadline = \microtime(true) + 5.0;
+        $rx = '';
+        while (\microtime(true) < $deadline) {
+            $rx = (string) @\file_get_contents($log);
+            if (\str_contains($rx, 'QUIT')) {
+                break;
+            }
+            \usleep(20000);
+        }
+        @\unlink($log);
+        $this->assertMatchesRegularExpression('/^EHLO /mi', $rx, 'the wire conversation, not an API POST, carried the send');
+        $this->assertStringContainsString('RCPT TO:<b@example.com>', $rx);
+    }
+
     public function testRelayFailureAnnouncesTheWrapExactlyOnce(): void
     {
         // CM-13 era finding 013: a refused dial printed

@@ -72,5 +72,7 @@ return [
     'cli.empty_message' => 'Nichts zu senden: Die Nachricht enthält keinen Textkörper, keinen HTML-Teil und keine Anlage. Geben Sie --body an, leiten Sie die Eingabe weiter, oder verwenden Sie --html.',
     'cli.deprecated_env' => '{old} ist veraltet; setzen Sie stattdessen {new}.',
     'cli.resend_ignored_inputs' => 'Hinweis: Der Resend-Transport wurde ausgewählt, daher werden die SMTP-bezogenen Eingaben {inputs} ignoriert (Resend behält seine festen Budgets von 10 s Verbindung / 30 s Übertragung bei).',
+    'cli.invalid_transport' => 'Unbekannter --transport-Wert {transport} (zulässig: smtp, resend)',
+    'cli.resend_key_required' => '--transport=resend benötigt einen API-Schlüssel: RESEND_API_KEY setzen (der SMTP-Host wird von dieser Einstellung ignoriert)',
     'cli.stdin_too_large' => 'Die STDIN-Eingabe hat die Grenze von {limit} Byte überschritten; Eingabe kürzen oder als Datei anhängen.',
 ];

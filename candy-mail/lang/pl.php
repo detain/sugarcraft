@@ -65,5 +65,7 @@ return [
     'cli.empty_message' => 'Brak treści do wysłania: wiadomość nie zawiera ciała, części HTML ani załącznika. Użyj --body, przekaż dane standardowym wejściem albo użyj --html.',
     'cli.deprecated_env' => '{old} jest przestarzałe; ustaw zamiast tego {new}.',
     'cli.resend_ignored_inputs' => 'Uwaga: wybrano transport Resend, więc wejścia dotyczące SMTP {inputs} są ignorowane (Resend zachowuje własne stałe limity: 10 s łączenia / 30 s przesyłania).',
+    'cli.invalid_transport' => 'Nieznana wartość --transport: {transport} (dozwolone: smtp, resend)',
+    'cli.resend_key_required' => '--transport=resend wymaga klucza API: ustaw RESEND_API_KEY (host SMTP jest przy tej opcji ignorowany)',
     'cli.stdin_too_large' => 'Dane ze STDIN przekroczyły limit {limit} bajtów; skróć wejście lub dołącz je jako plik.',
 ];

@@ -65,5 +65,7 @@ return [
     'cli.empty_message' => 'Gönderilecek bir şey yok: ileti gövde, HTML bölümü ya da ek taşımıyor. --body kullanın, girdiyi borulayın ya da --html kullanın.',
     'cli.deprecated_env' => '{old} artık kullanılmıyor; bunun yerine {new} ayarlayın.',
     'cli.resend_ignored_inputs' => 'Not: Resend taşıyıcısı seçildi, bu nedenle SMTP kapsamındaki {inputs} girdileri yok sayılır (Resend kendi sabit 10 s bağlanma / 30 s aktarma bütçesini korur).',
+    'cli.invalid_transport' => 'Bilinmeyen --transport değeri: {transport} (izin verilenler: smtp, resend)',
+    'cli.resend_key_required' => '--transport=resend bir API anahtarı ister: RESEND_API_KEY ayarlayın (bu geçersiz kılma SMTP hostunu yok sayar)',
     'cli.stdin_too_large' => 'STDIN girdisi {limit} bayt sınırını aştı; girdiyi kısaltın ya da dosya olarak ekleyin.',
 ];

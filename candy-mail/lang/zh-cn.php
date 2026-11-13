@@ -65,5 +65,7 @@ return [
     'cli.empty_message' => '没有可发送的内容：邮件不包含正文、HTML 部分或附件。请使用 --body、通过管道输入，或使用 --html。',
     'cli.deprecated_env' => '{old} 已弃用；请改用 {new}。',
     'cli.resend_ignored_inputs' => '注意：已选择 Resend 传输，因此 SMTP 相关的输入 {inputs} 将被忽略（Resend 使用其固定的 10 秒连接 / 30 秒传输预算）。',
+    'cli.invalid_transport' => '未知的 --transport 值 {transport}（允许：smtp、resend）',
+    'cli.resend_key_required' => '--transport=resend 需要 API 密钥：请设置 RESEND_API_KEY（此覆盖会忽略 SMTP 主机）',
     'cli.stdin_too_large' => 'STDIN 输入超过了 {limit} 字节上限；请缩减输入或将其作为文件附件。',
 ];

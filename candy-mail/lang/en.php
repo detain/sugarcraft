@@ -72,5 +72,7 @@ return [
     'cli.empty_message' => 'Nothing to send: the message carries no body, no HTML part, and no attachment. Pass --body, pipe input, or use --html.',
     'cli.deprecated_env' => '{old} is deprecated; set {new} instead.',
     'cli.resend_ignored_inputs' => 'Note: the Resend transport was selected, so the SMTP-scoped inputs {inputs} are ignored (Resend keeps its own fixed 10 s connect / 30 s transfer budget).',
+    'cli.invalid_transport' => 'Unknown --transport value {transport} (allowed: smtp, resend)',
+    'cli.resend_key_required' => '--transport=resend needs an API key: set RESEND_API_KEY (the SMTP host is ignored by this override)',
     'cli.stdin_too_large' => 'STDIN input exceeded the {limit}-byte cap; trim the input or attach it as a file.',
 ];

@@ -663,6 +663,52 @@ final class CliTest extends TestCase
         }
     }
 
+    /**
+     * CM-16: --transport forces the choice. 'smtp' must ignore a present
+     * RESEND_API_KEY (the ladder silently spending the wrong domain's
+     * SPF/DKIM identity is the expensive surprise the override exists to
+     * stop); 'resend' must refuse without a key instead of falling through;
+     * any other value refuses naming the allowed set. Without the flag the
+     * ladder stands unchanged.
+     */
+    public function testTransportOverrideForcesTheLadderChoice(): void
+    {
+        $this->setEnv('RESEND_API_KEY', 're_test_key');
+        $this->setEnv('CANDY_MAIL_SMTP_HOST', 'smtp.invalid.example');
+        try {
+            $forced = \SugarCraft\Mail\buildTransport(['transport' => 'smtp']);
+            $this->assertInstanceOf(\SugarCraft\Mail\SmtpTransport::class, $forced, '--transport=smtp ignores a present key');
+            $this->assertSame('smtp.invalid.example', $this->readProperty($forced, 'host'));
+
+            $ladder = \SugarCraft\Mail\buildTransport();
+            $this->assertInstanceOf(\SugarCraft\Mail\ResendTransport::class, $ladder, 'without the override the key still wins');
+
+            $keyed = \SugarCraft\Mail\buildTransport(['transport' => 'resend']);
+            $this->assertInstanceOf(\SugarCraft\Mail\ResendTransport::class, $keyed);
+
+            unset($_ENV['RESEND_API_KEY']);
+            \putenv('RESEND_API_KEY');
+            try {
+                \SugarCraft\Mail\buildTransport(['transport' => 'resend']);
+                $this->fail('--transport=resend without a key must refuse');
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString('RESEND_API_KEY', $e->getMessage());
+            }
+
+            try {
+                \SugarCraft\Mail\buildTransport(['transport' => 'mailgun']);
+                $this->fail('an unknown transport value must refuse');
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString('smtp', $e->getMessage());
+                $this->assertStringContainsString('resend', $e->getMessage());
+            }
+        } finally {
+            unset($_ENV['RESEND_API_KEY'], $_ENV['CANDY_MAIL_SMTP_HOST']);
+            \putenv('RESEND_API_KEY');
+            \putenv('CANDY_MAIL_SMTP_HOST');
+        }
+    }
+
     public function testHelpStatesTheExitCodeContract(): void
     {
         // CM-14: the help tail must carry the exit-code contract itself, not

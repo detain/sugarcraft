@@ -301,7 +301,7 @@ function parseArgs(array $argv): array
     // flag name => opts key, split by how many values they take
     $listFlags    = ['to' => 'to', 'cc' => 'cc', 'bcc' => 'bcc', 'attach' => 'attachments'];
     $boolFlags    = ['help' => 'help', 'version' => 'version', 'render' => 'render'];
-    $scalarFlags  = ['from' => 'from', 'subject' => 'subject', 'body' => 'body', 'reply-to' => 'reply_to', 'html' => 'html', 'helo' => 'helo', 'ca-file' => 'ca_file', 'timeout' => 'timeout'];
+    $scalarFlags  = ['from' => 'from', 'subject' => 'subject', 'body' => 'body', 'reply-to' => 'reply_to', 'html' => 'html', 'helo' => 'helo', 'ca-file' => 'ca_file', 'timeout' => 'timeout', 'transport' => 'transport'];
     $shortAliases = shortFlagAliases();
 
     $i = 1;
@@ -594,11 +594,27 @@ function buildEmail(array $opts, string $stdinBody): Email
  */
 function buildTransport(array $flags = []): Transport
 {
+    // CM-16: --transport=smtp|resend forces the choice. The key-precedence
+    // ladder below is a surprise the moment BOTH transports are configured
+    // (the wrong SPF/DKIM domain silently wins), so the operator gets an
+    // explicit override: smtp ignores a present RESEND_API_KEY outright;
+    // resend requires the key instead of falling through to SMTP.
+    $forced = \strtolower(\trim((string) ($flags['transport'] ?? '')));
+    if ($forced !== '' && !\in_array($forced, ['smtp', 'resend'], true)) {
+        throw new \InvalidArgumentException(Lang::t('cli.invalid_transport', ['transport' => $forced]));
+    }
+
     // Trim the raw value first — a whitespace-only RESEND_API_KEY used
     // to hijack transport selection (resolving truthy while ignoring the
     // full SMTP config). An absent or blank key means "not configured".
     $apiKey = \trim(envString('RESEND_API_KEY'));
-    if ($apiKey !== '') {
+    if ($forced === 'resend' && $apiKey === '') {
+        // The override names the API transport; there is no key to dial it
+        // with. Refuse loudly rather than quietly sending SMTP instead —
+        // the operator asked for exactly one transport.
+        throw new \InvalidArgumentException(Lang::t('cli.resend_key_required'));
+    }
+    if (($forced === '' || $forced === 'resend') && $apiKey !== '') {
         // CM-15: the Resend leg ignores every SMTP-scoped input — say so
         // once, loudly, naming each supplied one, instead of letting the
         // operator believe --timeout/--helo/--ca-file configured the send
@@ -783,6 +799,9 @@ Options:
                        also sets the Message-ID host
   --ca-file <path>     PEM bundle for TLS verification (private CAs)
   --timeout <secs>     Wire timeout, 1-3600 (default 30)
+  --transport <smtp|resend>
+                     Force the transport: 'smtp' ignores a present
+                     RESEND_API_KEY; 'resend' requires one
   --render             Print the SMTP MIME message and exit (no network;
                        broken transport config is still an error, and a
                        Resend-configured send is stamped as a divergence)
