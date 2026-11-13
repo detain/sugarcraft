@@ -200,9 +200,23 @@ final class FormatCommandTest extends TestCase
         $this->assertSame(1, $status);
         // The refusal is a diagnostic: the data stream must stay completely clean.
         $this->assertSame('', $tester->getDisplay());
-        $src = (string) file_get_contents(__DIR__ . '/../../src/Command/FormatCommand.php');
-        $this->assertStringContainsString("in_array(\$type, self::TYPES, true)", $src);
-        $this->assertStringContainsString("Lang::t('runtime.unknown_choice'", $src);
+
+        // scriptui-53: the type door is exercised end-to-end on the real bin
+        // — the refusal sentence lands on captured STDERR with captured
+        // STDOUT clean, BEFORE any read. (The old arms grepped the
+        // in_array(..., true) and Lang::t spellings out of source.) A file
+        // that cannot be opened proves ordering too: the door answers with
+        // the type refusal, never the io.read_failed sentence.
+        $missing = '/definitely/not/here.phpunit-' . getmypid();
+        [$childStatus, $stdout, $stderr] = self::runBinChild(['format', $missing, '--type=bogus']);
+        $this->assertSame(1, $childStatus);
+        $this->assertSame('', $stdout);
+        $this->assertStringContainsString(
+            "Invalid value for --type: 'bogus'. Allowed: markdown|code|template|emoji.",
+            $stderr,
+        );
+        $this->assertStringNotContainsString('Could not read file', $stderr,
+            'the type door must close before anything is read');
     }
 
     public function testUnknownThemeIsRefusedOnStderr(): void
@@ -237,9 +251,21 @@ final class FormatCommandTest extends TestCase
 
     public function testUnresolvedPlaceholdersAreAnnouncedNotSwallowed(): void
     {
-        $src = (string) file_get_contents(__DIR__ . '/../../src/Command/FormatCommand.php');
-        $this->assertStringContainsString('format.template_unresolved', $src);
-        $this->assertStringContainsString('&$unresolved', $src);
+        // scriptui-53: the announcement is exercised on the real bin — a
+        // vanished placeholder must be NAMED on captured STDERR while the
+        // run still succeeds and stdout keeps only the rendered data.
+        // (The old arms grepped the key name and the &$unresolved out-param
+        // spelling from source.)
+        [$status, $stdout, $stderr] = self::runBinChild(
+            ['format', '--type=template'],
+            'value=[{{SC_53_GONE}}] and [{{SC_53_ALSO_GONE}}]',
+        );
+        $this->assertSame(0, $status, 'the announcement is a note, not a failure');
+        $this->assertStringContainsString('value=[] and []', $stdout);
+        $this->assertStringContainsString(
+            'Template: 2 placeholder(s) expanded to empty: SC_53_GONE, SC_53_ALSO_GONE',
+            $stderr,
+        );
     }
 
     public function testControlByteResidueMatchesDocumentedContract(): void
@@ -259,6 +285,36 @@ final class FormatCommandTest extends TestCase
         $this->assertStringContainsString('[5m', $display);
 
         $readme = (string) file_get_contents(__DIR__ . '/../../README.md');
+        // scriptui-53 KEEP (doc-pin): the byte half above is the behaviour
+        // test; this leg pins that the documented exception sentence exists
+        // beside it — the README claim is part of the contract here.
         $this->assertStringContainsString('bracket residue', $readme);
+    }
+
+    /** @return array{0:int,1:string,2:string} [exitCode, stdout, stderr] */
+    private static function runBinChild(array $args, string $stdin = ''): array
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            self::markTestSkipped('bounded child probes require a POSIX timeout(1)');
+        }
+        $bin = \dirname(__DIR__, 2) . '/bin/candy-scriptui';
+        $proc = proc_open(
+            ['timeout', '-s', 'KILL', '20', PHP_BINARY, $bin, ...$args],
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+            \dirname($bin),
+            ['PATH' => (string) getenv('PATH'), 'HOME' => (string) getenv('HOME')],
+        );
+        self::assertIsResource($proc, 'the bin child must spawn');
+        if ($stdin !== '') {
+            fwrite($pipes[0], $stdin);
+        }
+        fclose($pipes[0]);
+        $stdout = (string) stream_get_contents($pipes[1]);
+        $stderr = (string) stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+
+        return [proc_close($proc), $stdout, $stderr];
     }
 }

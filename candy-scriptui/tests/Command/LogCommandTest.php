@@ -78,8 +78,15 @@ final class LogCommandTest extends TestCase
         $tester = self::runLog(['message' => ['hello'], '--format' => '%']);
         $this->assertSame(Command::FAILURE, $tester->getStatusCode());
         $this->assertStringNotContainsString('format string', $tester->getDisplay());
-        $src = (string) file_get_contents(__DIR__ . '/../../src/Command/LogCommand.php');
-        $this->assertStringContainsString("fwrite(STDERR, Lang::t('log.bad_format'", $src);
+
+        // scriptui-53: the graceful refusal is captured at the fd boundary —
+        // the real bin translates the malformed format into the localized
+        // sentence ON captured STDERR, keeping captured STDOUT clean.
+        // (The old arm grepped the fwrite(STDERR...) spelling from source.)
+        [$status, $stdout, $stderr] = self::runBinChild(['log', '--format=%', 'hello']);
+        $this->assertSame(Command::FAILURE, $status);
+        $this->assertSame('', $stdout);
+        $this->assertStringContainsString('Invalid --format string: %.', $stderr);
     }
 
     /**
@@ -126,19 +133,33 @@ final class LogCommandTest extends TestCase
 
         $this->assertSame(1, $status);
         $this->assertStringNotContainsString('unknown --formatter', $tester->getDisplay());
-        $src = (string) file_get_contents(__DIR__ . '/../../src/Command/LogCommand.php');
-        $this->assertStringContainsString("fwrite(STDERR, Lang::t('runtime.unknown_choice'", $src);
-        // The advertised allowed-set must equal the set the guard accepts.
-        $this->assertStringContainsString("'allowed' => 'text|json|logfmt'", $src);
-        $this->assertStringNotContainsString("'allowed' => 'function|json|logfmt|text'", $src);
+
+        // scriptui-53: the advertised set is now proven BEHAVIOURALLY. The
+        // real bin's captured STDERR answers with the exact refusal sentence
+        // (a stale 'function|json|logfmt|text' typo cannot match it), and
+        // every name the sentence advertises is accepted on a live run —
+        // advertisement and acceptance checked against the same observable
+        // the user sees, not against a source literal.
+        [$status, $stdout, $stderr] = self::runBinChild(['log', '--formatter=xml', 'hello']);
+        $this->assertSame(1, $status);
+        $this->assertSame('', $stdout);
+        $this->assertStringContainsString(
+            "Invalid value for --formatter: 'xml'. Allowed: text|json|logfmt.",
+            $stderr,
+        );
+        foreach (['text', 'json', 'logfmt'] as $advertised) {
+            [$okStatus, $okStdout] = self::runBinChild(['log', '--formatter=' . $advertised, 'hello']);
+            $this->assertSame(0, $okStatus, $advertised . ' is advertised as allowed and must run');
+            $this->assertStringNotContainsString('Invalid value for --formatter', $okStdout);
+        }
     }
 
     public function testFileWriteFailureIsLoudNotSilentZero(): void
     {
         $previous = \SugarCraft\Core\I18n\T::locale();
         \SugarCraft\Core\I18n\T::setLocale('en');
+        $target = '/proc/candy-scriptui-no-such-dir/probe.log';
         try {
-            $target = '/proc/candy-scriptui-no-such-dir/probe.log';
             $tester = new CommandTester(new \SugarCraft\ScriptUi\Command\LogCommand());
             $status = $tester->execute(
                 ['message' => ['hello'], '--file' => $target],
@@ -150,7 +171,40 @@ final class LogCommandTest extends TestCase
 
         $this->assertSame(1, $status, 'a failed --file append must not exit 0');
         $this->assertStringNotContainsString('Could not write to file', $tester->getDisplay());
-        $src = (string) file_get_contents(__DIR__ . '/../../src/Command/LogCommand.php');
-        $this->assertStringContainsString("fwrite(STDERR, Lang::t('io.write_failed'", $src);
+
+        // scriptui-53: the loud failure is captured from the real bin's
+        // STDERR at the fd boundary (route AND sentence in one observable),
+        // replacing the source grep of the io.write_failed fwrite call.
+        [$childStatus, $stdout, $stderr] = self::runBinChild(['log', '--file=' . $target, 'hello']);
+        $this->assertSame(1, $childStatus);
+        $this->assertSame('', $stdout, 'the entry must not leak to stdout when the file leg fails');
+        $this->assertStringContainsString("Could not write to file: $target.", $stderr);
+    }
+
+    /** @return array{0:int,1:string,2:string} [exitCode, stdout, stderr] */
+    private static function runBinChild(array $args, string $stdin = ''): array
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            self::markTestSkipped('bounded child probes require a POSIX timeout(1)');
+        }
+        $bin = \dirname(__DIR__, 2) . '/bin/candy-scriptui';
+        $proc = proc_open(
+            ['timeout', '-s', 'KILL', '20', PHP_BINARY, $bin, ...$args],
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+            \dirname($bin),
+            ['PATH' => (string) getenv('PATH'), 'HOME' => (string) getenv('HOME')],
+        );
+        self::assertIsResource($proc, 'the bin child must spawn');
+        if ($stdin !== '') {
+            fwrite($pipes[0], $stdin);
+        }
+        fclose($pipes[0]);
+        $stdout = (string) stream_get_contents($pipes[1]);
+        $stderr = (string) stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+
+        return [proc_close($proc), $stdout, $stderr];
     }
 }
