@@ -50,6 +50,15 @@ final class StorageContractTest extends TestCase
         return new Store($this->tmpDir . '/data', $db);
     }
 
+    /** The live SQLite3 handle behind a Database — for stamping past expiries. */
+    private function handle(Database $db): \SQLite3
+    {
+        $prop = new \ReflectionProperty(Database::class, 'db');
+        $prop->setAccessible(true);
+        /** @var \SQLite3 $sqlite */
+        return $prop->getValue($db);
+    }
+
     /** Collect the keys produced by a Store::list() run in 'keys' mode. */
     private function keysMatching(Store $store, string $pattern): array
     {
@@ -75,7 +84,7 @@ final class StorageContractTest extends TestCase
     /**
      * M4: the pattern half of the contract is SQLite LIKE over the stored
      * text — width is counted in characters, not bytes. 'k?y' fills its
-     * single '_' with the multi-byte 'ä' (three UTF-8 bytes, one codepoint).
+     * single '_' with the multi-byte 'ä' (two UTF-8 bytes, C3 A4).
      * The case half stays byte-faithful via case_sensitive_like = ON.
      */
     public function testGlobWildcardSpansOneCharacterNotOneByte(): void
@@ -100,7 +109,9 @@ final class StorageContractTest extends TestCase
         $this->assertSame(['a*b'], $this->keysMatching($store, 'a\\*b'));
         $this->assertSame(['a?b'], $this->keysMatching($store, 'a\\?b'));
         $this->assertSame(['a*b', 'a?b', 'aXb', 'aYb'], $this->keysMatching($store, 'a*b'));
-        // '?' is any one byte — the literal-? key matches too.
+        // '?' spells LIKE '_', which matches any one CHARACTER — so the
+        // literal-? key matches the bare pattern too (escaping it to '\?'
+        // is what pins exactness, asserted above).
         $this->assertSame(['a*b', 'a?b', 'aXb', 'aYb'], $this->keysMatching($store, 'a?b'));
     }
 
@@ -109,10 +120,18 @@ final class StorageContractTest extends TestCase
         $file = $this->tmpDir . '/prune.db';
         $db = new Database($file, 'prune');
 
-        $db->set('p-b', 'gone', false, 1);
-        $db->set('p-c', 'gone', false, 1);
-        \sleep(2);
+        $db->set('p-b', 'gone', false, 3600);
+        $db->set('p-c', 'gone', false, 3600);
         $db->set('p-a', 'live');
+
+        // Stamp the two doomed rows into the past through the live SQLite
+        // handle (house precedent: DatabaseTest::testCountExcludesExpiredRows)
+        // — no public API accepts a past expiry, and waiting out real seconds
+        // only slows the suite without proving anything more.
+        $stmt = $this->handle($db)->prepare('UPDATE entries SET expires_at = :t WHERE key IN (\'p-b\', \'p-c\')');
+        $stmt->bindValue(':t', \time() - 1, \SQLITE3_INTEGER);
+        $stmt->execute();
+        $stmt->close();
 
         // Under the pattern only the live row is deletable; expired residue
         // survives both delete arms but stays invisible to readers.

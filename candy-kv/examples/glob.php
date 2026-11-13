@@ -57,7 +57,7 @@ foreach ($store->list('config-*') as $e) {
 
 echo "\n=== Delete all user-* entries ===\n";
 $deleted = $store->delete('user-*');
-echo "Deleted: {$deleted} entries\n";
+echo "Deleted: {$deleted} " . ($deleted === 1 ? 'entry' : 'entries') . "\n";
 
 echo "\n=== Remaining entries ===\n";
 foreach ($store->list() as $e) {

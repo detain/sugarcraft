@@ -57,7 +57,7 @@ echo "Integrity: " . ($retrieved === $imgData ? "OK ✓" : "FAILED ✗") . "\n";
 
 // Manual binary entry from raw bytes. Store::set() base64-encodes when the
 // binary flag is set — pass the RAW bytes, not Entry::binary()'s encoded
-// form (doing that double-encoded, printing 30 chars for 22 bytes of data).
+// form (encoding twice would print 44 characters for 22 bytes of data).
 $rawDoc = "PDF-like\x00\xff\xfe\xfd data here";
 $store->set('document', $rawDoc, true);
 

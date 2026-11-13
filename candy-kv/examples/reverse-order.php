@@ -15,6 +15,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/../vendor/autoload.php';
 
+use SugarCraft\Kv\Database;
 use SugarCraft\Kv\Store;
 
 $tmp = sys_get_temp_dir() . '/candy-kv-order-demo-' . uniqid();
@@ -45,7 +46,6 @@ $apple = $store->entry('apple');
 echo "Entry access example — apple => {$apple->value}\n";
 
 // Count via Database directly
-use SugarCraft\Kv\Database;
 $dbFiles = glob("{$tmp}/*.db") ?: [];
 $db = new Database($dbFiles[0], 'demo');
 echo "Count (via Database::count): " . $db->count() . "\n";

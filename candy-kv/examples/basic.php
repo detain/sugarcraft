@@ -57,7 +57,7 @@ echo '  ' . implode(', ', [...$store->list(mode: 'values')]) . "\n";
 
 // Delete
 $store->set('temporary', 'remove me');
-echo "\nBefore delete: " . ($store->get('temporary', 'GONE') !== 'remove me' ? 'N/A' : 'exists');
+echo "\nBefore delete: " . ($store->entry('temporary') === null ? 'N/A' : 'exists');
 $store->delete('temporary');
 echo "\nAfter delete:  " . ($store->entry('temporary') === null ? 'deleted' : 'still there') . "\n";
 
