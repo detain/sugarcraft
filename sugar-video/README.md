@@ -258,6 +258,12 @@ $player = Player::open('clip.mp4', cellsW: 80, cellsH: 24);
 **Host contract** — the caller that owns the loop is responsible for:
 
 - **Resize:** forward terminal resizes to the player as a `WindowSizeMsg`.
+  A player mounted in sugar-core's `Program` gets this forwarding for free —
+  `Program` installs the `SIGWINCH` handler and dispatches the live size —
+  which is why `Reel::play()` rescales without any wiring in the caller; only
+  a host that owns its own loop forwards the signal by hand. Where `pcntl` is
+  absent (a stock Windows CLI) no signal can be caught: close and re-open the
+  player at the new geometry instead.
   `Player` clamps columns to `[10, 200]` and rows to `[5, 80]` (the
   `MIN_COLS`/`MAX_COLS`/`MIN_ROWS`/`MAX_ROWS` constants) and ignores a resize
   that does not change the clamped cell grid. A change rebuilds the decoder
@@ -381,7 +387,7 @@ Playback starts paused — `Space` is the first key you will press.
 
 | Setting | Behaviour |
 | --- | --- |
-| `resize` | Terminal resize (SIGWINCH) re-scales video automatically |
+| `resize` | Terminal resize (SIGWINCH) re-scales video automatically — under `Reel::play()` the `Program` host installs the handler; embedding hosts forward `WindowSizeMsg` themselves (see Host contract) |
 | `loop` | Loop is set at open time via `Reel::new()->withLoop(true)->play()` (no keyboard shortcut) |
 | `subtitles` | Attached at open time via `Reel::withSubtitles()` (no keyboard shortcut) |
 | `audio` | No key toggles audio: on/off is chosen at open time via `Reel::withAudio()`, and `AudioPlayer::pause()` / `resume()` (or `mute()` / `unmute()`) are the only levers, never bound to a key |

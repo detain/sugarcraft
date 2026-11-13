@@ -1033,6 +1033,29 @@ final class ReelTest extends TestCase
         $this->assertSame(1, substr_count($src, 'self::MAX_SUBTITLE_BYTES + 1'), 'the cap+1 read length must appear exactly once');
         $this->assertSame(0, substr_count($src, 'ile_get_contents($path)'), 'the unbounded single-argument form must be gone');
     }
+
+
+    /**
+     * SV-M46: the commented embed example in examples/play.php is the only
+     * resize guidance a manual-loop host reads. It must keep showing the
+     * guarded pcntl arm (function_exists/defined), the live-size query, and
+     * the no-pcntl fallback — and the program it documents must be the one
+     * the example itself relies on (Reel::play() mounts the Player, so the
+     * running example never wires SIGWINCH by hand).
+     */
+    public function testTheEmbedExampleCarriesTheResizeContract(): void
+    {
+        $example = (string) file_get_contents(dirname(__DIR__) . '/examples/play.php');
+
+        $this->assertStringContainsString('pcntl_signal', $example, 'guarded signal arm documented');
+        $this->assertStringContainsString("function_exists('pcntl_signal')", $example, 'the arm is feature-guarded');
+        $this->assertStringContainsString('WindowSizeMsg', $example, 'the message a manual host must forward');
+        $this->assertStringContainsString('stty size', $example, 'the live-size query is shown');
+        $this->assertStringContainsString('no live', $example, 'the absent-pcntl fallback is stated');
+        // The example itself stays signal-free: Program owns that leg.
+        $liveCode = preg_replace('#/\*.*?\*/#s', '', $example) ?? $example;
+        $this->assertStringNotContainsString('pcntl_signal(', $liveCode, 'play.php wires no handler of its own');
+    }
 }
 
 /**

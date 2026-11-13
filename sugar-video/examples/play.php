@@ -192,4 +192,31 @@ try {
  *
  * Space=toggle and the seek keys are KeyMsg/Msg instances on the same
  * update() door; see Player::update() for the full message roster.
+ *
+ * RESIZE is the other thing a loop like this owns: play.php itself never
+ * wires it because Reel::play() mounts the Player inside sugar-core's
+ * Program, which installs a SIGWINCH handler and dispatches a live-sized
+ * WindowSizeMsg on every reflow. A host with its OWN loop must forward the
+ * signal itself — one guarded arm and a queue the loop drains:
+ *
+ *     use SugarCraft\Core\Msg\WindowSizeMsg;
+ *
+ *     $resizes = [];                                    // drained below
+ *     if (function_exists('pcntl_signal') && defined('SIGWINCH')) {
+ *         pcntl_async_signals(true);                    // deliver at VM points
+ *         pcntl_signal(SIGWINCH, static function () use (&$resizes): void {
+ *             [$r, $c] = array_map('intval', array_pad(
+ *                 preg_split('/\s+/', trim((string) shell_exec('stty size 2>/dev/null'))), 2, '0'));
+ *             $resizes[] = new WindowSizeMsg($c ?: 80, $r ?: 24);
+ *         });
+ *     }
+ *     // at the top of the loop, before the TickMsg line:
+ *     //   while ($resizes !== []) {
+ *     //       [$player, $cmd] = $player->update(array_shift($resizes));
+ *     //   }
+ *
+ * Player clamps the geometry and defers the decoder rebuild behind its own
+ * resize debounce, so a dragged window edge costs one re-open, not one per
+ * reflow. Where pcntl is absent (a stock Windows CLI) there is no live
+ * resize: close and re-open the player at the new geometry instead.
  */
