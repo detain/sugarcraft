@@ -113,13 +113,13 @@ candy-kv --version
   immediately" and not "forever" — omit `--ttl` for a forever entry.
 - `set` auto-detects binary: a value containing a NUL byte or invalid UTF-8
   is stored base64-encoded with the binary flag. `--binary` forces that,
-  `--text` forbids it.
+  `--text` forbids it — and a `--text`-forced value that actually contains a
+  NUL byte is refused (usage error, exit 2), because every reader would
+  truncate it at the first NUL; such payloads belong in `--binary`.
 - `get` prints the exact stored bytes (no added newline, no scrubbing) so
   round-trips and `$(candy-kv get k)` stay honest. `--sanitize` collapses the
-  value to one line with C0 controls, ESC and DEL stripped for terminal
-  printing — it is a line-collapse preview, not a terminal neutraliser: a
-  well-formed UTF-8 encoding of a C1 control (e.g. `\xC2\x9B`) passes it
-  untouched.
+  value to one line with C0 controls, ESC, DEL and the UTF-8-encoded C1
+  controls stripped for terminal printing.
 - `--dry-run` reports how many entries `delete` would touch and writes nothing.
 - `--` ends option processing: `set backup -- --ttl=60` stores the literal
   value `--ttl=60`. Only the first `--` ends option processing — a second one

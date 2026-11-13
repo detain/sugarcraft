@@ -163,6 +163,16 @@ function run(Store $store, string $cmd, array $argv, string $bin): void
         // the C string end and invalid UTF-8 breaks the whole-store JSON
         // export. Unless the caller forced --binary/--text, auto-detect both
         // shapes and store base64 with the binary flag set.
+        if ($opts['binary'] === false && \str_contains($value, "\0")) {
+            // kv-008: --text FORCES the unreadable shape — SQLite stores the
+            // cell, but every C-string reader truncates at the first NUL, so
+            // `get` would silently print a prefix of what was set. Refuse at
+            // admission; the auto-detect path already routes such values to
+            // base64, and --binary is the explicit door for them.
+            throw new \InvalidArgumentException(
+                'A value containing NUL bytes cannot be stored as text (--text): readers truncate at the first NUL. Use --binary.'
+            );
+        }
         $binary = $opts['binary'] ?? (str_contains($value, "\0") || !mb_check_encoding($value, 'UTF-8'));
         $store->set($opts['key'], $value, $binary, $opts['ttl']);
         break;

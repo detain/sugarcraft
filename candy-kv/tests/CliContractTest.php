@@ -148,6 +148,24 @@ final class CliContractTest extends TestCase
         $this->assertStringContainsString('-debug', $run['stderr']);
     }
 
+    public function testTextForcedNulValueIsRefusedAndBinaryDoorRoundTrips(): void
+    {
+        // kv-008: `--text` sold as a force switch silently minted
+        // unreadable rows — SQLite keeps the cell but every C-string reader
+        // truncates at the first NUL. Admission now refuses; --binary stays
+        // the byte-exact door.
+        $refused = $this->runKvFeeding(['set', 'nul-k', '--text'], "a\0b");
+        $this->assertNotSame(0, $refused['exit'], 'the forced-text NUL payload must be refused');
+        $this->assertStringContainsString('--binary', $refused['stderr'], 'the refusal must point at the right door');
+        $this->assertSame(1, $this->runKv(['get', 'nul-k'])['exit'], 'the refusal stores nothing');
+
+        $stored = $this->runKvFeeding(['set', 'nul-k', '--binary'], "a\0b");
+        $this->assertSame(0, $stored['exit'], $stored['stderr']);
+        $back = $this->runKv(['get', 'nul-k']);
+        $this->assertSame(0, $back['exit'], $back['stderr']);
+        $this->assertSame("a\0b", $back['stdout'], 'binary door round-trips byte-exact');
+    }
+
     public function testBackslashTerminatedKeyIsRefusedAtTheCliDoor(): void
     {
         // G3 minimum (kv-007): usage-class refusal, exit 2, informative line.
