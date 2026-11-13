@@ -236,4 +236,85 @@ final class ImageLayerTest extends TestCase
         self::assertSame([1, 1], [$paints[0]['row'], $paints[0]['col']]);
         self::assertStringEndsWith("reply: \u{E002} and \u{E0B0}", $body);
     }
+
+    // ---- SI-23: id-space reclamation (findings 017 + 097) -------------------
+
+    public function testReleaseReturnsTheIdToThePoolForNewContent(): void
+    {
+        $layer = new ImageLayer();
+        self::assertSame(0, $layer->placeTracked('A', 1, 1)->imageId);
+        self::assertSame(1, $layer->placeTracked('B', 1, 1)->imageId);
+        self::assertSame(2, $layer->placeTracked('C', 1, 1)->imageId);
+
+        // Old count-based allocation handed D id 3 and left 1 stranded; the
+        // gap-walk door sees 1 as the lowest unclaimed id the moment B's
+        // release forfeits its claim.
+        $layer->release(1);
+        self::assertSame(1, $layer->placeTracked('D', 1, 1)->imageId, 'a released id must be reused by the next new blob');
+
+        // And B, claim-free now, re-registers — at the next free hole.
+        self::assertSame(3, $layer->placeTracked('B', 1, 1)->imageId, 'released bytes re-place as new content');
+    }
+
+    public function testScrollingChurnCyclesTheFreedWindowIdsInsteadOfBurningThem(): void
+    {
+        // The viewport use case from finding 017: one image in view per
+        // frame, every older one released. Ascending-only allocation burned
+        // MAX_IMAGES ids and wedged the layer on blank blocks after a few
+        // thousand scrolls; the free-id walk keeps the live ids alternating
+        // inside the handful of cells the window actually holds.
+        $layer = new ImageLayer();
+        $ids   = [];
+
+        for ($tick = 0; $tick < 10; $tick++) {
+            $placed = $layer->placeTracked("tick-{$tick}", 2, 1);
+            $ids[]  = $placed->imageId;
+            $layer->releaseAllExcept([$placed->imageId]);
+        }
+
+        self::assertSame([0, 1, 0, 1, 0, 1, 0, 1, 0, 1], $ids, 'churn must ride the freed ids, never climb');
+        self::assertCount(1, $layer->placements());
+    }
+
+    public function testRemoveByIdHoldsTheIdClaimTheTerminalStillNeeds(): void
+    {
+        // The paired door: removeById emits NO delete sequence, the terminal
+        // still paints those bytes — so the claim stays, the id is NOT fed
+        // back to the pool, and re-placing the bytes returns it.
+        $layer = new ImageLayer();
+        self::assertSame(0, $layer->placeTracked('A', 1, 1)->imageId);
+        self::assertSame(1, $layer->placeTracked('B', 1, 1)->imageId);
+
+        $layer->removeById(0);
+        self::assertSame(2, $layer->placeTracked('C', 1, 1)->imageId, 'a removed-but-not-released id stays claimed');
+        self::assertSame(0, $layer->placeTracked('A', 1, 1)->imageId, 'the held claim answers the re-place');
+    }
+
+    public function testNonPositiveFootprintsNormalizeToThePaintedSize(): void
+    {
+        $layer = new ImageLayer();
+        $placed = $layer->placeTracked('TINY', -2, 0);
+
+        self::assertSame(0, $placed->imageId);
+        self::assertStringNotContainsString("\n", $placed->marker, 'the marker leg paints the 1x1 it is clamped to');
+
+        $placement = $layer->placements()[0];
+        self::assertSame(1, $placement->widthCells);
+        self::assertSame(1, $placement->heightCells, 'the stored footprint must be the drawn one');
+
+        self::assertSame(0, $layer->imageIdForDigest(ImageLayer::digestFor('TINY', 1, 1)));
+        self::assertNull($layer->imageIdForDigest(ImageLayer::digestFor('TINY', -2, 0)), 'bogus dims key nothing the layer could paint');
+
+        // Both legs of the exhaustion fork share the normalized size: the
+        // blank leg (private door, reached in production only when the id
+        // space is spent) collapses to the same 1x1 geometry the marker leg
+        // painted — same row count, same one-cell row.
+        $blank = new \ReflectionMethod(ImageLayer::class, 'blankBlock');
+        $blank->setAccessible(true);
+        $blankBlock = (string) $blank->invoke(null, -2, 0);
+
+        self::assertSame(' ', $blankBlock);
+        self::assertCount(1, explode("\n", $placed->marker), 'bogus dims must not widen the marker leg');
+        self::assertSame(count(explode("\n", $placed->marker)), count(explode("\n", $blankBlock)), 'both legs agree on rows for the same bogus request');
+    }
 }

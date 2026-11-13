@@ -116,10 +116,23 @@ final class ImageLayer
     /**
      * {@see place()}, but also reporting the overlay id the bytes were assigned.
      *
-     * The id is a property of the content (dedup is by `xxh3` of $bytes), so a
-     * repeat placement returns the id that content already holds — never a new
-     * one. It is `null` only when the id space is exhausted, in which case the
-     * returned marker is a blank block.
+     * The id is a property of the content while the content still claims it
+     * (dedup is by `xxh3` of $bytes), so a repeat placement returns the id
+     * that content already holds — never a new one. Releasing the image
+     * ({@see release()}/{@see releaseAllExcept()}) forfeits the claim: the
+     * id returns to the pool and re-placing the bytes re-registers them,
+     * under the lowest free id (typically the one just freed). It is `null`
+     * only when the id space is exhausted, in which case the returned
+     * marker is a blank block.
+     *
+     * Digest-collision posture (finding 096): the content key is a 64-bit
+     * hash. Two byte strings that collide share an id, and the later
+     * placement silently SWAPS the image behind it (the picture goes wrong;
+     * no metadata corrupts). Accepted deliberately: the inputs are locally
+     * encoded images, not adversarial, and a 2^-64-per-pair accident costs
+     * less than verify-and-rekey would — every dedup hit would have to
+     * byte-compare against the live placement to tell "same image" from
+     * "same unlucky hash".
      *
      * Do not try to recover the id from `array_key_last(placements())`: a dedup
      * hit re-assigns an existing key without moving it, so that reports the
@@ -134,11 +147,20 @@ final class ImageLayer
      */
     public function placeTracked(string $bytes, int $width, int $height): PlacedImage
     {
+        // Normalize the footprint ONCE, at the door (finding 097): blankBlock
+        // and markerBlock each clamp non-positive dimensions internally, but
+        // the stored placement and the window digest kept the raw 0/-2 — so
+        // the layer tracked a footprint the terminal never painted, and the
+        // two exhaustion legs disagreed about which size an image was. What
+        // is drawn, what is stored, and what is keyed are now one value.
+        $width  = max(1, $width);
+        $height = max(1, $height);
+
         $digest = hash('xxh3', $bytes);
         $id = $this->idByDigest[$digest] ?? null;
 
         if ($id === null) {
-            $candidate = count($this->idByDigest);
+            $candidate = $this->lowestFreeId();
             if ($candidate >= ImageOverlay::MAX_IMAGES) {
                 // Claim BEFORE writing: the old `??=` stored a
                 // dead row for every post-exhaustion digest, so the one
@@ -173,13 +195,12 @@ final class ImageLayer
     /**
      * Remove a placement by its image id.
      *
-     * Allows the id space to be reclaimed when an image scrolls out of view.
-     * The content keeps its id (dedup is content-addressed), so re-placing
-     * the same bytes returns that id — but the bytes must be re-sent to the
-     * terminal. No delete sequence is emitted; use {@see release()} when the
-     * terminal-side allocation must be freed too. The removed image's window
-     * digests stop being tracked either way — a digest maps to a placement
-     * that exists now, not one that existed.
+     * The content KEEPS its id claim: the terminal still holds the bytes (no
+     * delete sequence is emitted), so re-placing them returns that id — the
+     * bytes must simply be re-sent. The id space is reclaimed by
+     * {@see release()}, which frees the terminal-side allocation and forfeits
+     * the claim; an image that scrolled out of view permanently should go
+     * through that door, or the PUA window fills with ghosts.
      */
     public function removeById(int $imageId): void
     {
@@ -214,6 +235,8 @@ final class ImageLayer
     /**
      * Free one image: drop its placement (and its window-digest tracking) and
      * return the escape sequence that deletes its terminal-side allocation.
+     * The bytes forfeit their id claim too — this door, not removeById, is
+     * where the id space is reclaimed ({@see lowestFreeId()}).
      * Unknown id → no-op, empty string.
      */
     public function release(int $imageId): string
@@ -224,6 +247,7 @@ final class ImageLayer
 
         unset($this->placementById[$imageId]);
         $this->forgetWindowDigests($imageId);
+        $this->forgetContentClaim($imageId);
 
         return $this->deleteSequence($imageId);
     }
@@ -251,6 +275,7 @@ final class ImageLayer
             }
             unset($this->placementById[$id]);
             $this->forgetWindowDigests($id);
+            $this->forgetContentClaim($id);
             $released[$id] = $this->deleteSequence($id);
         }
 
@@ -289,6 +314,45 @@ final class ImageLayer
         }
 
         unset($this->idByWindowDigest[$digest], $this->windowDigestById[$imageId]);
+    }
+
+    /**
+     * Smallest image id no content still claims (finding 017). Allocation
+     * used to be `count($idByDigest)` — strictly ascending — so a scrolling
+     * viewport churning through release()/releaseAllExcept() burned the PUA
+     * window's 6398 ids while holding a handful of live images, and once
+     * exhausted it stayed exhausted forever: releases never gave ids back.
+     * A claim lives only while content could still re-place under it —
+     * active placements and removeById'd-but-terminal-held bytes — so the
+     * union of `idByDigest`'s values IS the used set, and released ids fall
+     * straight back into the pool.
+     */
+    private function lowestFreeId(): int
+    {
+        $claimed = array_flip(array_values($this->idByDigest));
+
+        $candidate = 0;
+        while (isset($claimed[$candidate])) {
+            $candidate++;
+        }
+
+        return $candidate;
+    }
+
+    /**
+     * A released image no longer holds a terminal-side allocation, so its
+     * bytes forfeit the id: re-placing re-registers (under the then-lowest
+     * free id — usually the very one just freed, see the windowing tests)
+     * and re-sends. Without this the id would stay claimed by dead content
+     * and {@see lowestFreeId()} could never step back into the hole
+     * release() dug.
+     */
+    private function forgetContentClaim(int $imageId): void
+    {
+        $digest = array_search($imageId, $this->idByDigest, true);
+        if ($digest !== false) {
+            unset($this->idByDigest[$digest]);
+        }
     }
 
     /**

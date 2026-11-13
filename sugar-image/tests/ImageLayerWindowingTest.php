@@ -158,15 +158,17 @@ final class ImageLayerWindowingTest extends TestCase
         $this->assertSame('', $layer->release($placed->imageId));
     }
 
-    public function testReleasedContentKeepsItsIdForDedup(): void
+    public function testReleasedContentLandsBackOnItsIdWhileTheHoleStaysFree(): void
     {
         $layer = new ImageLayer();
         $first = $layer->placeTracked('ONE', 4, 1);
         $layer->release($first->imageId);
 
-        // Content-addressed identity survives the release: the same bytes
-        // re-enter under the same id, so stale markers from the scrollback
-        // would paint correctly again.
+        // While nobody else has stepped into the hole, the bytes land back on
+        // their old number: release() forfeits the claim, the id falls into
+        // the free pool, and this layer's lowest-free walk hands out 0 again.
+        // A blob placed before the re-place would take that id first — the
+        // number is a lease on the pool, not property of the bytes.
         $again = $layer->placeTracked('ONE', 4, 1);
         $this->assertSame($first->imageId, $again->imageId);
         $this->assertSame($first->marker, $again->marker);
