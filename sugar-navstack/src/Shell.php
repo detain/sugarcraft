@@ -8,7 +8,9 @@ namespace SugarCraft\NavStack;
  * Shell — combines NavStack + Breadcrumb into a single navigation component.
  *
  * The Shell holds the current view (NavStack) and can render breadcrumbs
- * on demand. This mirrors the bubbleo Shell pattern.
+ * on demand. This mirrors the KevM/bubbleo Shell pattern in spirit; upstream
+ * New() builds a window model (research §2.4) while this port is purely
+ * logical.
  *
  * **Honest immutability.** The `with*()` family returns new Shell objects,
  * but the boundary is thinner than "immutable" suggests, in two ways hosts
@@ -36,7 +38,7 @@ namespace SugarCraft\NavStack;
  * `withPop()` on a depth-1 stack DOES empty it (it is not a no-op there);
  * guard with {@see NavStack::canPop()} to keep a root crumb alive.
  *
- * Mirrors bubbleo Shell (Go); implemented as a native PHP component.
+ * Adapted from KevM/bubbleo Shell (Go); implemented as a native PHP component.
  */
 final class Shell
 {
@@ -57,7 +59,8 @@ final class Shell
      * Breadcrumb instance (see class docblock). Titles pass the same
      * guards as {@see NavStack::push()} (non-empty, depth cap).
      *
-     * Mirrors bubbleo Shell.withPush.
+     * Project addition (research §10) — upstream KevM/bubbleo Shell has no
+     * withPush; it mutates through the Bubble Tea message loop.
      */
     public function withPush(string $title, mixed $data = null): self
     {
@@ -74,7 +77,8 @@ final class Shell
      * {@see NavStack::pop()}. Callers that must keep the root crumb alive
      * guard with {@see NavStack::canPop()} first.
      *
-     * Mirrors bubbleo Shell.withPop.
+     * Project addition — upstream KevM/bubbleo Shell has no withPop; the
+     * Pop semantics it wraps live on NavStack.
      */
     public function withPop(): self
     {
@@ -88,7 +92,8 @@ final class Shell
      * items, and return a new Shell. A negative $index clamps to EMPTY
      * (see {@see NavStack::popTo()}).
      *
-     * Mirrors bubbleo Shell truncation.
+     * Project addition — upstream KevM/bubbleo Shell has no truncation/
+     * withPopTo; see {@see NavStack::popTo()}.
      */
     public function withPopTo(int $index): self
     {
@@ -124,7 +129,8 @@ final class Shell
      * A path with more than {@see NavStack::MAX_STACK_DEPTH} components
      * throws part-way (the returned Shell does not exist).
      *
-     * Mirrors bubbleo Shell.pushDirectory.
+     * Project addition (research §10) — upstream KevM/bubbleo Shell has no
+     * pushDirectory.
      */
     public function pushDirectory(string $path): self
     {

@@ -50,7 +50,8 @@ use SugarCraft\Mouse\Zone;
 final class Breadcrumb
 {
     /**
-     * Mirrors bubbleo Breadcrumb constructor.
+     * Adapted from KevM/bubbleo Breadcrumb — the upstream constructor takes
+     * the navstack model; this port's renderer is stack-free until render.
      */
     public static function new(): self
     {
@@ -334,7 +335,7 @@ final class Breadcrumb
     /**
      * Render the current navigation stack as a breadcrumb string.
      *
-     * Mirrors bubbleo Breadcrumb.render.
+     * Mirrors KevM/bubbleo Breadcrumb.render.
      */
     public function render(NavStack $stack): string
     {
@@ -487,7 +488,7 @@ final class Breadcrumb
      * Truncate titles to fit within maxWidth, returning the surviving titles.
      * Items are kept from most-recent to oldest until they fit.
      *
-     * Deliberate divergence from bubbleo Breadcrumb.truncate: upstream
+     * Deliberate divergence from KevM/bubbleo Breadcrumb.truncate: upstream
      * keeps the last crumb verbatim and can exceed the width budget; this
      * port treats maxWidth as a hard cap (doRender() finishes the job).
      *

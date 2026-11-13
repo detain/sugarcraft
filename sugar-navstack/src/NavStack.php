@@ -50,7 +50,8 @@ final class NavStack
     public const MAX_STACK_DEPTH = 10000;
 
     /**
-     * Mirrors bubbleo NavStack constructor.
+     * Mirrors KevM/bubbleo NavStack (Go); the upstream constructor takes a
+     * window model (research §2.4) — this port's is dependency-free.
      */
     public static function new(): self
     {
@@ -72,7 +73,7 @@ final class NavStack
      * @throws \InvalidArgumentException On an empty title or when pushing
      *                                   would exceed {@see MAX_STACK_DEPTH}
      *
-     * Mirrors bubbleo NavStack.push.
+     * Mirrors KevM/bubbleo NavStack.Push.
      */
     public function push(string $title, mixed $data = null): self
     {
@@ -89,7 +90,7 @@ final class NavStack
      * Pop the topmost item off the stack and return it.
      * Returns null if the stack is empty.
      *
-     * Mirrors bubbleo NavStack.pop.
+     * Mirrors KevM/bubbleo NavStack.Pop.
      */
     public function pop(): ?NavigationItem
     {
@@ -117,7 +118,8 @@ final class NavStack
      * EMPTY (not "keep the root") — callers wanting root-or-deeper semantics
      * guard with `max(0, $index)`; oversized clamps to current depth.
      *
-     * Mirrors bubbleo NavStack truncation.
+     * Project addition (research §10) — upstream KevM/bubbleo NavStack has
+     * no truncation/popTo; the shape follows from Pop/Top semantics.
      */
     public function popTo(int $index): self
     {
@@ -128,7 +130,8 @@ final class NavStack
     /**
      * Peek at the top item without removing it.
      *
-     * Mirrors bubbleo NavStack.current.
+     * Mirrors KevM/bubbleo NavStack.Top (upstream name; the port calls it
+     * current()).
      */
     public function current(): ?NavigationItem
     {
@@ -138,7 +141,8 @@ final class NavStack
     /**
      * Peek at the item below the top.
      *
-     * Mirrors bubbleo NavStack.parent.
+     * Project addition — upstream KevM/bubbleo NavStack has no parent
+     * accessor.
      */
     public function parent(): ?NavigationItem
     {
