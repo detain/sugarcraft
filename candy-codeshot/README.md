@@ -199,7 +199,7 @@ $png = PngRenderer::dracula()
 | `LayoutCalculator` | Canvas maths: content box, header band, shadow margin, totals. |
 | `Segment` | One styled run of text (text + fg/bg/style flags) produced by the parser/highlighter. |
 | `Theme\VsCodeThemeLoader` | Import a VS Code `themes/*.json` colour scheme into a `Theme`. |
-| `Theme\ChromaThemeLoader` | Import a Chroma style map into a `Theme`. |
+| `Theme\FlatPaletteThemeLoader` | Import this library's flat JSON palette file into a `Theme`. |
 | `OutputWriter` (+ `StringOutputWriter`, `FileOutputWriter`) | Buffer/forward helpers for caller-chunked pieces — they do not stream screenshots themselves; the renderers return complete bytes and do not call them. |
 | `Lang` | i18n lookup wrapper (16 locales shipped under `lang/`). |
 
@@ -254,8 +254,9 @@ Build a custom theme via the `Theme` constructor — set background / foreground
 / border / shadow / line-number colour / window-control colours / font family
 / size / line height / highlight band colour (`Theme::$highlight`, a nullable
 string and the default `--highlight` colour; all five bundled presets set
-their own). VS Code and Chroma palettes can be imported with
-`Theme\VsCodeThemeLoader::load()` and `Theme\ChromaThemeLoader::load()`.
+their own). VS Code themes and the library's flat JSON palette files can be
+imported with `Theme\VsCodeThemeLoader::load()` and
+`Theme\FlatPaletteThemeLoader::load()`.
 
 ## Known limitations
 

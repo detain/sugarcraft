@@ -352,7 +352,7 @@ final class VsCodeThemeLoaderTest extends TestCase
     public function testScalarShapesFallBackInsteadOfTypingError(array $shape): void
     {
         // No TypeError may escape: a non-array section carries no colours
-        // and the documented defaults answer (Chroma loader semantics).
+        // and the documented defaults answer (flat-palette loader semantics).
         $theme = VsCodeThemeLoader::fromArray($shape);
 
         $this->assertSame('#0d1117', $theme->background);

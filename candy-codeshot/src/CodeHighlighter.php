@@ -63,7 +63,7 @@ final class CodeHighlighter
     /**
      * Build a highlighter whose {@see TokenKind::Plain} colour tracks the given
      * theme's foreground. Syntax accents come from the theme's own token slots
-     * when it carries them (imported VS Code / chroma themes repaint CODE from
+     * when it carries them (imported VS Code / flat-palette themes repaint CODE from
      * their tokenColors); slots that are null fall back to accents that stay
      * readable on the theme's background: the Dracula set on dark themes, a
      * GitHub-Light-ish set on pale ones.

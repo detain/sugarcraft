@@ -7,7 +7,7 @@ namespace SugarCraft\CodeShot\Theme;
 /**
  * Hex colour normalisation shared by the theme loaders.
  *
- * VS Code and chroma themes both ship #rgb/#rrggbb/#rrggbbaa values; the
+ * VS Code and flat-palette themes both ship #rgb/#rrggbb/#rrggbbaa values; the
  * loaders used to carry byte-identical private copies of the expansion
  * logic, which drifted-invisible the moment one side learned a new format.
  * One implementation, two callers.

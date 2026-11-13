@@ -24,7 +24,7 @@ use SugarCraft\Core\Util\Palettes;
  * Chrome and syntax are two separate axes (cs-07): the window buttons,
  * border and gutter are chrome, and imported themes may only paint the
  * syntax slots — {@see \SugarCraft\CodeShot\Theme\VsCodeThemeLoader} and
- * {@see \SugarCraft\CodeShot\Theme\ChromaThemeLoader} route token scopes
+ * {@see \SugarCraft\CodeShot\Theme\FlatPaletteThemeLoader} route token scopes
  * here, never onto the window colours, so a `keyword` scope can no
  * longer tint the traffic lights. Null token slots fall back to the
  * contrast heuristic in {@see CodeHighlighter::forTheme()}.

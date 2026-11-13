@@ -104,7 +104,7 @@ final class VsCodeThemeLoader
         // cs-11 (FUZZ-03): a VS Code theme is third-party JSON and scalar
         // shapes were live TypeErrors past the documented @throws —
         // {"colors":42} crashed resolveColor's array parameter. Mirror the
-        // Chroma loader's total-function behaviour: a section that is not
+        // Flat-palette loader's total-function behaviour: a section that is not
         // an array carries no colours, and the documented fallbacks answer.
         $colors = is_array($data['colors'] ?? null) ? $data['colors'] : [];
         $tokenColors = is_array($data['tokenColors'] ?? null) ? $data['tokenColors'] : [];

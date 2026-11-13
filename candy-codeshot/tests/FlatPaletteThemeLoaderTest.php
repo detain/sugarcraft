@@ -4,25 +4,25 @@ declare(strict_types=1);
 
 namespace SugarCraft\CodeShot\Tests;
 
-use SugarCraft\CodeShot\Theme\ChromaThemeLoader;
+use SugarCraft\CodeShot\Theme\FlatPaletteThemeLoader;
 use PHPUnit\Framework\TestCase;
 
-final class ChromaThemeLoaderTest extends TestCase
+final class FlatPaletteThemeLoaderTest extends TestCase
 {
     public function testLoadThrowsOnMissingFile(): void
     {
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessageMatches('/not found/');
-        ChromaThemeLoader::load('/nonexistent/theme.json');
+        FlatPaletteThemeLoader::load('/nonexistent/theme.json');
     }
 
     public function testLoadThrowsOnInvalidJson(): void
     {
-        $tmp = tempnam(sys_get_temp_dir(), 'chroma_');
+        $tmp = tempnam(sys_get_temp_dir(), 'flatp_');
         file_put_contents($tmp, 'not json');
         try {
             $this->expectException(\JsonException::class);
-            ChromaThemeLoader::load($tmp);
+            FlatPaletteThemeLoader::load($tmp);
         } finally {
             unlink($tmp);
         }
@@ -39,7 +39,7 @@ final class ChromaThemeLoaderTest extends TestCase
             ],
         ];
 
-        $theme = ChromaThemeLoader::fromArray($data);
+        $theme = FlatPaletteThemeLoader::fromArray($data);
 
         $this->assertSame('#1e1e1e', $theme->background);
         $this->assertSame('#d4d4d4', $theme->foreground);
@@ -63,7 +63,7 @@ final class ChromaThemeLoaderTest extends TestCase
             'colors' => [],
         ];
 
-        $theme = ChromaThemeLoader::fromArray($data);
+        $theme = FlatPaletteThemeLoader::fromArray($data);
 
         $this->assertSame('#111111', $theme->background);
         $this->assertSame('#aaaaaa', $theme->foreground);
@@ -77,7 +77,7 @@ final class ChromaThemeLoaderTest extends TestCase
             'colors' => [],
         ];
 
-        $theme = ChromaThemeLoader::fromArray($data);
+        $theme = FlatPaletteThemeLoader::fromArray($data);
 
         $this->assertSame('#1e1e1e', $theme->background);
         $this->assertSame('#d4d4d4', $theme->foreground);
@@ -89,7 +89,7 @@ final class ChromaThemeLoaderTest extends TestCase
             'colors' => [],
         ];
 
-        $theme = ChromaThemeLoader::fromArray($data);
+        $theme = FlatPaletteThemeLoader::fromArray($data);
 
         $this->assertSame('#0d1117', $theme->background);
         $this->assertSame('#c9d1d9', $theme->foreground);
@@ -107,7 +107,7 @@ final class ChromaThemeLoaderTest extends TestCase
             ],
         ];
 
-        $theme = ChromaThemeLoader::fromArray($data);
+        $theme = FlatPaletteThemeLoader::fromArray($data);
 
         // cs-07 corrected mapping: tokens fill syntax slots; the gutter only
         // backs off to the comment colour, and the chrome buttons stay home.
@@ -121,7 +121,7 @@ final class ChromaThemeLoaderTest extends TestCase
 
     public function testLoadFromFileRoundTrip(): void
     {
-        $tmp = tempnam(sys_get_temp_dir(), 'chroma_');
+        $tmp = tempnam(sys_get_temp_dir(), 'flatp_');
         $json = json_encode([
             'background' => '#282a36',
             'foreground' => '#f8f8f2',
@@ -130,7 +130,7 @@ final class ChromaThemeLoaderTest extends TestCase
         file_put_contents($tmp, $json);
 
         try {
-            $theme = ChromaThemeLoader::load($tmp);
+            $theme = FlatPaletteThemeLoader::load($tmp);
             $this->assertSame('#282a36', $theme->background);
             $this->assertSame('#f8f8f2', $theme->foreground);
         } finally {
@@ -138,7 +138,7 @@ final class ChromaThemeLoaderTest extends TestCase
         }
     }
 
-    public function testFullChromaThemeWithAllColors(): void
+    public function testFullFlatPaletteWithAllColors(): void
     {
         $data = [
             'background' => '#1a1b26',
@@ -161,7 +161,7 @@ final class ChromaThemeLoaderTest extends TestCase
             ],
         ];
 
-        $theme = ChromaThemeLoader::fromArray($data);
+        $theme = FlatPaletteThemeLoader::fromArray($data);
         $this->assertSame('#1a1b26', $theme->background);
         $this->assertSame('#a9b1d6', $theme->foreground);
         $this->assertSame('#565f89', $theme->lineNumber);
@@ -179,12 +179,12 @@ final class ChromaThemeLoaderTest extends TestCase
         $this->assertSame('#27c93f', $theme->windowGreen);
     }
 
-    public function testChromaTopLevelFontFamilyPassesThroughTheSameCharsetDoor(): void
+    public function testPaletteTopLevelFontFamilyPassesThroughTheSameCharsetDoor(): void
     {
-        // chroma carries fontFamily as a top-level key (VsCode reads it from a
+        //a flat palette carries fontFamily as a top-level key (the VS Code loader reads it from a
         // tokenColor's settings), but both loaders hand it to the identical
         // sanitizeFontFamily charset door before it can reach an SVG attribute.
-        $load = static fn (mixed $family): \SugarCraft\CodeShot\Theme => ChromaThemeLoader::fromArray([
+        $load = static fn (mixed $family): \SugarCraft\CodeShot\Theme => FlatPaletteThemeLoader::fromArray([
             'background'  => '#0d1117',
             'foreground'  => '#c9d1d9',
             'colors'      => [],
@@ -219,7 +219,7 @@ final class ChromaThemeLoaderTest extends TestCase
             'null'  => null,
         ];
         foreach ($shapes as $label => $family) {
-            $theme = ChromaThemeLoader::fromArray([
+            $theme = FlatPaletteThemeLoader::fromArray([
                 'background' => '#0d1117',
                 'foreground' => '#c9d1d9',
                 'colors'     => [],
@@ -242,16 +242,51 @@ final class ChromaThemeLoaderTest extends TestCase
         if (!function_exists('posix_mkfifo')) {
             $this->markTestSkipped('posix_mkfifo unavailable');
         }
-        $fifo = sys_get_temp_dir() . '/cs27-chroma-' . bin2hex(random_bytes(6)) . '.fifo';
+        $fifo = sys_get_temp_dir() . '/cs27-flatp-' . bin2hex(random_bytes(6)) . '.fifo';
         if (!posix_mkfifo($fifo, 0600)) {
             $this->markTestSkipped('could not create FIFO (named pipes not permitted here)');
         }
         try {
             $this->expectException(\InvalidArgumentException::class);
             $this->expectExceptionMessageMatches('/not a regular file/');
-            ChromaThemeLoader::load($fifo);
+            FlatPaletteThemeLoader::load($fifo);
         } finally {
             unlink($fifo);
         }
+    }
+
+    public function testVsCodeEditorBackgroundColorKeyIsIgnored(): void
+    {
+        // candy-codeshot-026 (cs-18): the old fallback read `editorBackgroundColor`,
+        // a VS Code key the flat-palette format has never carried — a palette
+        // file must take the VS Code key literally (border defaults, or the
+        // in-schema `background` fallback), never borrow another editor's
+        // namespace. Re-adding the leak reddens this pin.
+        $theme = FlatPaletteThemeLoader::fromArray([
+            'border'                => '#30363d',
+            'editorBackgroundColor' => '#123456',
+        ]);
+        $this->assertSame('#30363d', $theme->border);
+
+        $theme = FlatPaletteThemeLoader::fromArray([
+            'editorBackgroundColor' => '#123456',
+        ]);
+        $this->assertSame('#30363d', $theme->border, 'a lone VS Code key must not move the border');
+    }
+
+    public function testBorderFallsBackToInSchemaBackgroundKey(): void
+    {
+        // With no `border` the fallback now reads the palette's own
+        // `background` key (the honest sibling of the removed VS Code leak);
+        // an invalid background still falls to the documented default.
+        $theme = FlatPaletteThemeLoader::fromArray([
+            'background' => '#282a36',
+        ]);
+        $this->assertSame('#282a36', $theme->border);
+
+        $theme = FlatPaletteThemeLoader::fromArray([
+            'background' => 'rebeccapurple',
+        ]);
+        $this->assertSame('#30363d', $theme->border);
     }
 }
