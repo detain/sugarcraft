@@ -116,6 +116,16 @@ function displayVersion(): string
  * Paths that do not yet exist (e.g. an `--output` target, or a new file in the
  * CWD) are confined by their nearest existing ancestor directory, so creating
  * a file inside the CWD stays allowed while writing outside it does not.
+ *
+ * Guarantees of the returned path (while confined):
+ *  - lexically squashed — no '.', '..', or duplicated separators survive, so
+ *    the file operation resolves exactly what the gate checked; a missing
+ *    intermediate directory can no longer smuggle '..' past the prefix test;
+ *  - a relative '..' that would pop above the CWD root is refused outright;
+ *  - the existing-ancestor part is realpath()-resolved, so symlink hops out
+ *    of the CWD are refused;
+ *  - the final component is never a symlink (lstat catches the dangling
+ *    links realpath() cannot see).
  */
 function candy_codeshot_confine_path(string $path, bool $unsafe): ?string
 {
@@ -135,14 +145,55 @@ function candy_codeshot_confine_path(string $path, bool $unsafe): ?string
     // '/cwd:out.svg' comparison, and wrongly refused the legal write. Off
     // Windows, only a leading slash means absolute.
     $absolutePattern = DIRECTORY_SEPARATOR === '\\' ? '#^([/\\\\]|[A-Za-z]:)#' : '#^/#';
-    $absolute = preg_match($absolutePattern, $path) === 1
-        ? $path
-        : $cwd . DIRECTORY_SEPARATOR . $path;
+    $isAbsolute = preg_match($absolutePattern, $path) === 1;
+
+    // Squash '.'/'..' and repeated separators LEXICALLY before the ancestor
+    // walk. The old shape walked to the nearest existing ancestor and spliced
+    // the raw remainder back on ($real . substr($absolute, strlen($ancestor))),
+    // so uncollapsed '..' survived inside a string that literally started with
+    // the CWD: the prefix check passed and the eventual file operation then
+    // resolved those '..' segments out of the jail (missing-component
+    // traversal — 'oops/../../outside/x.svg' read AND wrote outside, rc 0).
+    $separatorPattern = DIRECTORY_SEPARATOR === '\\' ? '#[/\\\\]+#' : '#/+#';
+    $rootAnchor = '';
+    $components = [];
+    foreach (preg_split($separatorPattern, $path) ?: [] as $component) {
+        if ($component === '' || $component === '.') {
+            continue;
+        }
+        if ($component === '..') {
+            if ($components !== []) {
+                array_pop($components);
+            } elseif ($isAbsolute) {
+                continue; // the root is its own parent; the prefix check still governs
+            } else {
+                return null; // pops above the CWD anchor — traversal refused
+            }
+            continue;
+        }
+        // Windows drive prefix ('C:') anchors an absolute path and is not a
+        // poppable component (on POSIX a colon name stays a plain filename).
+        if ($isAbsolute && $rootAnchor === '' && $components === []
+            && DIRECTORY_SEPARATOR === '\\' && preg_match('#^[A-Za-z]:$#', $component) === 1
+        ) {
+            $rootAnchor = $component . '\\';
+            continue;
+        }
+        $components[] = $component;
+    }
+    $absolute = $isAbsolute
+        ? ($rootAnchor !== '' ? $rootAnchor : DIRECTORY_SEPARATOR) . implode(DIRECTORY_SEPARATOR, $components)
+        : $cwd . ($components === [] ? '' : DIRECTORY_SEPARATOR . implode(DIRECTORY_SEPARATOR, $components));
 
     // Walk up to the nearest existing ancestor so a not-yet-created target is
     // still confined by the directory it would be written into.
     $ancestor = $absolute;
-    while (($real = realpath($ancestor)) === false) {
+    while (true) {
+        clearstatcache(true, $ancestor);
+        $real = realpath($ancestor);
+        if ($real !== false) {
+            break;
+        }
         $parent = dirname($ancestor);
         if ($parent === $ancestor) {
             return null; // ran off the filesystem root without resolving
@@ -155,6 +206,19 @@ function candy_codeshot_confine_path(string $path, bool $unsafe): ?string
     if ($resolved !== $cwd && !str_starts_with($resolved, $prefix)) {
         return null;
     }
+
+    // lstat the final component: realpath() cannot see a DANGLING symlink
+    // (no target to resolve), so a planted 'ln -s /outside/x here' walked
+    // back to the CWD, passed the prefix check as a plain not-yet-existing
+    // file, and the write then followed the link at open time — creating the
+    // target OUTSIDE (reproduced pre-cure: rc 0, file planted). is_link()
+    // catches what realpath() cannot; the cache clear keeps the gate from
+    // trusting a stat taken before the component changed.
+    clearstatcache(true, $resolved);
+    if (is_link($resolved)) {
+        return null;
+    }
+
     return $resolved;
 }
 
@@ -313,9 +377,11 @@ if ($theme === null) {
     exit(2);
 }
 
-// Confine every attacker-influenced filesystem path to the CWD (defeats `../`
-// traversal, absolute-path escapes and symlink hops) unless the operator
-// explicitly opts out with --unsafe-paths.
+// Confine every attacker-influenced filesystem path to the CWD: lexical
+// '..' squashing defeats traversal (including missing-component shapes),
+// the realpath ancestor walk defeats absolute escapes and symlink hops, and
+// the final-component lstat refuses dangling links realpath() cannot see —
+// unless the operator explicitly opts out with --unsafe-paths.
 if ($inputPath !== null) {
     $confined = candy_codeshot_confine_path($inputPath, $unsafePaths);
     if ($confined === null) {

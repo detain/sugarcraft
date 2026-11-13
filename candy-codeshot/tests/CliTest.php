@@ -292,6 +292,180 @@ final class CliTest extends TestCase
         }
     }
 
+    // -------------------------------------------------------------------------
+    // cs-02 jail suite: the confinement gate used to splice the raw,
+    // unnormalised remainder back onto the ancestor-walk realpath, so lexical
+    // '..' segments survived inside a string that LITERALLY started with the
+    // CWD (missing-component traversal) and a DANGLING symlink was invisible
+    // to realpath() (link-hop write landed at the outside target). The gate
+    // now squashes '.'/'..' lexically before the walk, refuses relative
+    // underflow, and lstats the final component. These arms pin the contract.
+    // -------------------------------------------------------------------------
+
+    public function testMissingComponentTraversalOutputRejectedExitsTwo(): void
+    {
+        $dir     = $this->makeTempDir();
+        $outside = $this->makeTempDir();
+        try {
+            // P2 repro shape: 'oops' does not exist, '..' pops below the CWD
+            // and lands in the sibling temp dir. The broken gate returned the
+            // spliced string (prefix check passed) instead of refusing.
+            $result = $this->runCli(
+                ['--no-window', '--no-shadow', '-o', 'oops/../../' . basename($outside) . '/planted.svg'],
+                "x\n",
+                $dir,
+            );
+
+            $this->assertSame(2, $result['exitCode'], $result['stderr']);
+            $this->assertStringContainsString('outside the current working directory', $result['stderr']);
+            $this->assertFileDoesNotExist($outside . '/planted.svg');
+        } finally {
+            $this->rmTree($dir);
+            $this->rmTree($outside);
+        }
+    }
+
+    public function testMissingComponentTraversalInputRejectedExitsTwo(): void
+    {
+        $dir     = $this->makeTempDir();
+        $outside = $this->makeTempDir();
+        try {
+            file_put_contents($outside . '/secret.txt', "topsecret\n");
+            // Read-side mirror of the write arm: the same splice let
+            // file_get_contents reach the outside bytes.
+            $result = $this->runCli(
+                ['--no-window', '--no-shadow', 'oops/../../' . basename($outside) . '/secret.txt'],
+                null,
+                $dir,
+            );
+
+            $this->assertSame(2, $result['exitCode'], $result['stderr']);
+            $this->assertStringContainsString('outside the current working directory', $result['stderr']);
+            $this->assertStringNotContainsString('topsecret', $result['stdout']);
+        } finally {
+            $this->rmTree($dir);
+            $this->rmTree($outside);
+        }
+    }
+
+    public function testDanglingSymlinkOutputRejectedExitsTwo(): void
+    {
+        $dir     = $this->makeTempDir();
+        $outside = $this->makeTempDir();
+        if (!@symlink($outside . '/planted.svg', $dir . '/dangling-out')) {
+            $this->markTestSkipped('symlink() unavailable on this platform');
+        }
+        try {
+            // Target does not exist yet: realpath() fails for link AND falls
+            // back through to the CWD, so the broken gate saw a plain
+            // not-yet-created file and the write followed the link at open
+            // time, planting the outside target (reproduced pre-cure: rc 0).
+            $result = $this->runCli(['--no-window', '--no-shadow', '-o', 'dangling-out'], "x\n", $dir);
+
+            $this->assertSame(2, $result['exitCode'], $result['stderr']);
+            $this->assertStringContainsString('outside the current working directory', $result['stderr']);
+            $this->assertFileDoesNotExist($outside . '/planted.svg');
+        } finally {
+            $this->rmTree($dir);
+            $this->rmTree($outside);
+        }
+    }
+
+    public function testDanglingSymlinkInputRejectedExitsTwo(): void
+    {
+        $dir     = $this->makeTempDir();
+        $outside = $this->makeTempDir();
+        if (!@symlink($outside . '/ghost.txt', $dir . '/dangling-in.txt')) {
+            $this->markTestSkipped('symlink() unavailable on this platform');
+        }
+        try {
+            // Read side of the dangling-link arm: refusal must come from the
+            // gate (exit 2), not incidentally from the failed read (exit 1).
+            $result = $this->runCli(['--no-window', '--no-shadow', 'dangling-in.txt'], null, $dir);
+
+            $this->assertSame(2, $result['exitCode'], $result['stderr']);
+            $this->assertStringContainsString('outside the current working directory', $result['stderr']);
+        } finally {
+            $this->rmTree($dir);
+            $this->rmTree($outside);
+        }
+    }
+
+    public function testSymlinkedOutsideInputRejectedExitsTwo(): void
+    {
+        $dir     = $this->makeTempDir();
+        $outside = $this->makeTempDir();
+        try {
+            file_put_contents($outside . '/secret.txt', "topsecret\n");
+            if (!@symlink($outside . '/secret.txt', $dir . '/link.txt')) {
+                $this->markTestSkipped('symlink() unavailable on this platform');
+            }
+            $result = $this->runCli(['--no-window', '--no-shadow', 'link.txt'], null, $dir);
+
+            $this->assertSame(2, $result['exitCode'], $result['stderr']);
+            $this->assertStringNotContainsString('topsecret', $result['stdout']);
+        } finally {
+            $this->rmTree($dir);
+            $this->rmTree($outside);
+        }
+    }
+
+    public function testPasswdSymlinkInputRejectedExitsTwo(): void
+    {
+        if (!is_readable('/etc/passwd')) {
+            $this->markTestSkipped('no /etc/passwd on this host');
+        }
+        $dir = $this->makeTempDir();
+        try {
+            if (!@symlink('/etc/passwd', $dir . '/sneaky.txt')) {
+                $this->markTestSkipped('symlink() unavailable on this platform');
+            }
+            $result = $this->runCli(['--no-window', '--no-shadow', 'sneaky.txt'], null, $dir);
+
+            $this->assertSame(2, $result['exitCode'], $result['stderr']);
+            $this->assertStringNotContainsString('root:', $result['stdout']);
+        } finally {
+            $this->rmTree($dir);
+        }
+    }
+
+    public function testOutputUnderSymlinkedOutsideDirectoryRejectedExitsTwo(): void
+    {
+        $dir     = $this->makeTempDir();
+        $outside = $this->makeTempDir();
+        if (!@symlink($outside, $dir . '/linkdir')) {
+            $this->markTestSkipped('symlink() unavailable on this platform');
+        }
+        try {
+            $result = $this->runCli(['--no-window', '--no-shadow', '-o', 'linkdir/out.svg'], "x\n", $dir);
+
+            $this->assertSame(2, $result['exitCode'], $result['stderr']);
+            $this->assertFileDoesNotExist($outside . '/out.svg');
+        } finally {
+            $this->rmTree($dir);
+            $this->rmTree($outside);
+        }
+    }
+
+    public function testIntraCwdDotDotSquashStillAllowsContainedPaths(): void
+    {
+        // Positive arm (over-refusal guard): 'sub/..' collapses back inside
+        // the CWD and must keep working, as must the './' prefix.
+        $dir = $this->makeTempDir();
+        try {
+            mkdir($dir . '/sub');
+            $dotdot = $this->runCli(['--no-window', '--no-shadow', '-o', 'sub/../out1.svg'], "test\n", $dir);
+            $this->assertSame(0, $dotdot['exitCode'], $dotdot['stderr']);
+            $this->assertFileExists($dir . '/out1.svg');
+
+            $cur = $this->runCli(['--no-window', '--no-shadow', '-o', './out2.svg'], "test\n", $dir);
+            $this->assertSame(0, $cur['exitCode'], $cur['stderr']);
+            $this->assertFileExists($dir . '/out2.svg');
+        } finally {
+            $this->rmTree($dir);
+        }
+    }
+
     public function testFontWithValidMagicIsEmbedded(): void
     {
         $dir = $this->makeTempDir();
