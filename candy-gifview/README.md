@@ -120,6 +120,13 @@ The key table is fixed in the player model; keys are not rebindable.
   off a terminal (piped output, CI) the viewport falls back to a deterministic
   60×24 cell grid. A probe failure can therefore never surface as a crash —
   the worst answer is the fallback grid.
+- Off a terminal the viewer does not refuse: it plays to stdout as a raw
+  escape stream and still expects its quit keys on stdin. An animation the
+  GIF itself never bounds (no finite loop count) repeats forever, so with
+  stdin at EOF — `/dev/null`, a closed pipe — the run **never ends on its
+  own; it runs until killed**. For scripted or CI use pass `--duration=N`,
+  or wrap the call in `timeout(1)`: `timeout 5 bin/candy-gifview loop.gif
+  </dev/null` — the wrapper returns 124 when the timer kills the viewer.
 - **Platforms**: Linux, macOS and WSL2 are supported. Because sizing now goes
   through the façade, sugar-pty's `SUGARCRAFT_LIBC` rescue environment variable
   is no longer load-bearing for the viewer. On hosts with `ffi.enable=0` the
