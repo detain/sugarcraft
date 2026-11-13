@@ -507,16 +507,25 @@ final class ReelTest extends TestCase
     }
 
     /**
-     * @testdox M10: the allowlist is asserted at every build site, not just the setters
+     * @testdox M10/M16: the allowlist is asserted at every build site, not just the setters
      */
     public function testTheAllowlistGatesEveryRemoteBuildPath(): void
     {
         $src = (string) file_get_contents(dirname(__DIR__) . '/src/Reel.php');
-        // openUrl() + withAllowedHosts() + toPlayer() + play():
-        $this->assertGreaterThanOrEqual(
-            4,
+        // SV-M16 collapsed play()/toPlayer() into ONE build choke
+        // (buildPlayer), so the shape is: openUrl() + withAllowedHosts()
+        // setters + exactly one build-site gate. A second Player::open
+        // call site — a re-duplicated build that could dodge the gate —
+        // reddens the companion assert.
+        $this->assertSame(
+            3,
             substr_count($src, 'self::assertHostAllowed('),
-            'M10: a build path that skipped the gate would let a mutated Reel dial any host',
+            'M10: two setter gates + one build choke, no un-gated build path',
+        );
+        $this->assertSame(
+            1,
+            substr_count($src, '$player = Player::open('),
+            'M16: the build sequence must stay single-sourced behind buildPlayer()',
         );
     }
 
@@ -647,8 +656,8 @@ final class ReelTest extends TestCase
         $this->assertTrue($read($off->withAudio(true)));
 
         $src = (string) file_get_contents(\dirname(__DIR__) . '/src/Reel.php');
-        $this->assertGreaterThanOrEqual(2, substr_count($src, '$player->withAudio(false)'),
-            'both build paths (toPlayer and play) apply the opt-out');
+        $this->assertSame(1, substr_count($src, '$player->withAudio(false)'),
+            'M16: the opt-out rides the single build choke (buildPlayer), one application covers both exits');
     }
 
     public function testTheNonHttpRefusalNeverEchoesUrlCredentials(): void

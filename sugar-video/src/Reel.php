@@ -564,6 +564,29 @@ final class Reel
             throw new \InvalidArgumentException(Lang::t('player.no_source_for_embedding'));
         }
 
+        return $this->buildPlayer($this->path, $this->loop);
+    }
+
+    /**
+     * The single build sequence both public exits share (review 016): the
+     * M10 build-time allowlist re-check, auto-mode resolution, subtitle
+     * read+parse, cell-geometry threading, the 12-argument Player::open and
+     * the M24 audio opt-out. This used to be duplicated verbatim in play()
+     * and toPlayer() — two copies of a security gate is exactly what this
+     * file's own shared-choke comments forbid, and the drift was already
+     * visible in the comments. The synthetic fallback stays live in play()
+     * only: an embedding host must never silently receive a test pattern.
+     */
+    private function buildPlayer(string $path, bool $loop): Player
+    {
+        // M10: the allowlist is only real if it gates every path that can
+        // reach a remote decoder — openUrl()/withAllowedHosts() validate at
+        // set time; this re-checks at BUILD time, where a mutated or
+        // hand-assembled state would otherwise slip a URL past the policy.
+        if ($this->allowedHosts !== null && FfmpegCommandBuilder::isNetworkSource($path)) {
+            self::assertHostAllowed($path, $this->allowedHosts);
+        }
+
         // Resolve auto-mode to the best available mode at runtime.
         $resolvedMode = $this->mode ?? RendererFactory::autoMode();
 
@@ -583,21 +606,13 @@ final class Reel
         // to the real pixel box; one that did not keeps the historical 10×20.
         [$cellPxW, $cellPxH] = $this->resolveCellPx();
 
-        // M10: the allowlist is only real if it gates every path that can
-        // reach a remote decoder — openUrl()/withAllowedHosts() validate at
-        // set time; this re-checks at BUILD time, where a mutated or
-        // hand-assembled state would otherwise slip a URL past the policy.
-        if ($this->allowedHosts !== null && FfmpegCommandBuilder::isNetworkSource($this->path)) {
-            self::assertHostAllowed($this->path, $this->allowedHosts);
-        }
-
         $player = Player::open(
-            $this->path,
+            $path,
             $this->cols,
             $this->rows,
             $this->fps,
             $resolvedMode,
-            $this->loop,
+            $loop,
             $this->ramp,
             $cellPxW,
             $cellPxH,
@@ -627,48 +642,7 @@ final class Reel
             $path = Synthetic::generate();
         }
 
-        // M10: same build-time gate as toPlayer() — the allowlist binds the
-        // synthetic path too (it never matches a network shape, so a local
-        // demo plays untouched; a URL swap into a locked Reel does not).
-        if ($this->allowedHosts !== null && FfmpegCommandBuilder::isNetworkSource($path)) {
-            self::assertHostAllowed($path, $this->allowedHosts);
-        }
-
-        // Resolve auto-mode to the best available mode at runtime.
-        $resolvedMode = $this->mode ?? RendererFactory::autoMode();
-
-        // Parse the subtitle track if a subtitle file was configured. A
-        // missing, oversized, or unreadable file is announced on the error log
-        // and playback continues without captions (never silent).
-        $subtitles = null;
-        if ($this->subtitlePath !== null) {
-            $raw = self::readSubtitleFile($this->subtitlePath);
-            if ($raw !== null) {
-                $subtitles = WebVtt::parse($raw);
-            }
-        }
-
-        // Create the Player with the configured dimensions, fps, render mode, loop flag and ramp,
-        // the remote-source request headers (empty for a local file), and the caller's measured
-        // cell pixel size when one was supplied (10×20 otherwise — see withCellPx()).
-        [$cellPxW, $cellPxH] = $this->resolveCellPx();
-        $player = Player::open(
-            $path,
-            $this->cols,
-            $this->rows,
-            $this->fps,
-            $resolvedMode,
-            $loop,
-            $this->ramp,
-            $cellPxW,
-            $cellPxH,
-            $subtitles,
-            $this->headers,
-            hostRestricted: $this->allowedHosts !== null,
-        );
-
-        // M24: the opt-out is applied to the built player.
-        $player = $this->audioEnabled ? $player : $player->withAudio(false);
+        $player = $this->buildPlayer($path, $loop);
 
         // A size the host set explicitly (withSize()) seeds the very first
         // frame; a Reel that never sized instead asks the terminal. Either
