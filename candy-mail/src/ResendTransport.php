@@ -12,6 +12,10 @@ use SugarCraft\Async\CancellationToken;
  * The HTTPS leg is pinned like the SMTP transports: peer verification on and
  * a TLS 1.2 protocol floor (see {@see curlOptions()}).
  *
+ * SugarCraft-only transport: charmbracelet/pop speaks SMTP only, so there
+ * is no upstream surface this mirrors - the contract is the Resend API
+ * reference itself.
+ *
  * @see https://resend.com/docs/api-reference/emails/send-email
  */
 final class ResendTransport implements Transport

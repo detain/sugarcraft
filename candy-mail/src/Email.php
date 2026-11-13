@@ -212,9 +212,11 @@ final class Email
      * fold it away) and validate it as a bare email.
      * Accepts display-name format "Name <addr@host>" and validates just the address part.
      *
-     * Mirrors charmbracelet/pop address sanitization.
-     * Uses structural validation (has exactly one @, non-empty local part)
-     * rather than FILTER_VALIDATE_EMAIL which rejects short/informal TLDs.
+     * No upstream surface to mirror: charmbracelet/pop delegates address
+     * handling to go-mail, which applies its own rules. This is a native
+     * reading of the RFC 5322 addr-spec shape - structural validation (has
+     * exactly one @, non-empty local part) rather than FILTER_VALIDATE_EMAIL,
+     * which rejects short/informal TLDs.
      */
     private function sanitizeAddr(string $addr): string
     {
@@ -298,7 +300,8 @@ final class Email
     /**
      * Create from a single from/to pair with optional subject/body.
      *
-     * Mirrors charmbracelet/pop Email::new() factory.
+     * Mirrors go-mail NewEmail() - the message library charmbracelet/pop
+     * sends through (pop itself has no Email type) - in the house ::new() factory shape.
      */
     public static function new(
         string $from,

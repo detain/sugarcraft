@@ -8,6 +8,10 @@ use SugarCraft\Async\CancellationToken;
 
 /**
  * Pluggable transport for sending Email messages.
+ *
+ * SugarCraft-only seam: charmbracelet/pop hard-wires its SMTP sender, so
+ * there is no upstream interface to mirror - this abstraction exists to
+ * keep the SMTP and Resend transports interchangeable.
  */
 interface Transport
 {

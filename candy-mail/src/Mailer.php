@@ -8,6 +8,9 @@ use SugarCraft\Async\CancellationToken;
 
 /**
  * High-level email sender wrapping a Transport.
+ *
+ * Mirrors charmbracelet/pop Sender (NewSender over an SMTPSender, Send
+ * dispatching messages) with the transport made pluggable here.
  */
 final class Mailer
 {

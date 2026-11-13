@@ -50,7 +50,7 @@ final class SmtpTransport implements Transport
     /**
      * TEST-ONLY seam (CM-43): null consults extension_loaded('openssl') live;
      * false simulates the extension being absent so the named-refusal arms
-     * are pinned without rebuilding PHP. Mirrors the ResendTransport $apiUrl
+     * are pinned without rebuilding PHP. Follows the ResendTransport $apiUrl
      * injection precedent.
      */
     private ?bool $assumeOpenssl = null;
@@ -769,7 +769,9 @@ final class SmtpTransport implements Transport
      * Apply RFC 5321 §4.5.2 dot-stuffing: prefix each line starting with
      * a literal dot with an extra dot so it isn't interpreted as a terminator.
      *
-     * Mirrors charmbracelet/pop dot-stuffing.
+     * No upstream surface to mirror: charmbracelet/pop delegates message
+     * framing to go-mail, whose SMTP client stuffs internally - this port
+     * owns the step, so the citation is the RFC.
      */
     private function dotStuff(string $mime): string
     {

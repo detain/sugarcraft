@@ -8,6 +8,10 @@ use SugarCraft\Core\Concerns\Mutable;
 
 /**
  * Represents a file attachment on an email.
+ *
+ * Mirrors go-mail attachment handling (filename/content/MIME parts hung off
+ * a message) - the message library charmbracelet/pop sends through; pop
+ * itself exposes no attachment surface.
  */
 final class Attachment
 {
