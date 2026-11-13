@@ -1,6 +1,6 @@
 {
     "name": "sugarcraft/candy-scriptui",
-    "description": "Interactive terminal widgets for shell scripts — composer-installable CLI of SugarCraft TUI primitives, modeled on charmbracelet/gum. 13 interactive subcommands plus completion and version: choose, confirm, file, filter, format, input, join, log, pager, spin, style, table, write.",
+    "description": "Interactive terminal widgets for shell scripts \u2014 composer-installable CLI of SugarCraft TUI primitives, modeled on charmbracelet/gum. 13 interactive subcommands plus completion and version: choose, confirm, file, filter, format, input, join, log, pager, spin, style, table, write.",
     "type": "library",
     "license": "MIT",
     "keywords": [
@@ -46,10 +46,11 @@
         "symfony/console": "^6.4 || ^7.0"
     },
     "require-dev": {
-        "phpunit/phpunit": "^10.5"
+        "phpunit/phpunit": "^10.5",
+        "sugarcraft/sugar-testing": "@dev"
     },
     "suggest": {
-        "ext-pcntl": "Install ext-pcntl so SIGINT/SIGTERM are caught and mapped to the conventional 130/143 exits with graceful child teardown (scriptui-07). Without it signals take the default disposition: the process dies instantly, skipping the exit mapping — the try/finally ladders and the 124-timeout verdict still run for their own paths."
+        "ext-pcntl": "Install ext-pcntl so SIGINT/SIGTERM are caught and mapped to the conventional 130/143 exits with graceful child teardown (scriptui-07). Without it signals take the default disposition: the process dies instantly, skipping the exit mapping \u2014 the try/finally ladders and the 124-timeout verdict still run for their own paths."
     },
     "autoload": {
         "psr-4": {
