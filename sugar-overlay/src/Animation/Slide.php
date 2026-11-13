@@ -25,12 +25,42 @@ use SugarCraft\Overlay\Position;
  *
  * The offset is applied via the returned vertical/horizontal offsets
  * which should be added to the composite() call's xOffset/yOffset.
+ *
+ * Native to sugar-overlay (upstream Bubble Tea carries no animation layer —
+ * the old "matches upstream's horizontal slide semantics" claim, retired by
+ * sugar-overlay-028). The default curve is {@see CubicBezier::easeOut()};
+ * Fade defaults to easeInOut instead, so per-kind defaults are part of the
+ * contract, not a silent swap (sugar-overlay-058).
  */
 final class Slide
 {
     public function __construct(
         private readonly ?CubicBezier $easing = null,
     ) {
+    }
+
+    public static function new(?CubicBezier $easing = null): self
+    {
+        return new self($easing);
+    }
+
+    /**
+     * The eased scalar progress for this curve, saturating at the ends.
+     * Veil::animate() drives the scrim ramp from the SAME value the content
+     * glides on (sugar-overlay-066). The travel offsets themselves keep
+     * using the raw curve — an overshoot that slides a hair past its
+     * landing is visible in the motion and stays.
+     */
+    public function easedProgress(float $progress): float
+    {
+        if ($progress <= 0.0) {
+            return 0.0;
+        }
+        if ($progress >= 1.0) {
+            return 1.0;
+        }
+
+        return \max(0.0, \min(1.0, $this->easing()->evaluate($progress)));
     }
 
     /**

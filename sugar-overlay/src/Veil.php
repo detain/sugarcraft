@@ -36,8 +36,8 @@ final class Veil
     /** @var int Backdrop opacity 0–100 (0 = no dimming, 100 = fully dimmed) */
     private readonly int $backdropOpacity;
 
-    /** @var AnimationKind|null Animation to apply during transitions */
-    private readonly ?AnimationKind $animationKind;
+    /** @var AnimationKind|Fade|Scale|Slide|null Animation driver: a preset kind or a carried instance (with custom easing) */
+    private readonly AnimationKind|Fade|Scale|Slide|null $animation;
 
     /** @var int Stacking order — higher renders on top of lower */
     private readonly int $zIndex;
@@ -91,7 +91,7 @@ final class Veil
 
     /**
      * @param int             $backdropOpacity 0–100 backdrop dimming
-     * @param AnimationKind|null $animationKind Animation kind for transitions
+     * @param AnimationKind|Fade|Scale|Slide|null $animation Animation driver for transitions
      * @param int $zIndex Stacking order
      * @param bool $clickOutsideDismiss Dismiss on outside click
      * @param bool $autoSize Deprecated no-op (dimensions always come from content)
@@ -109,7 +109,7 @@ final class Veil
      */
     private function __construct(
         int $backdropOpacity = 0,
-        ?AnimationKind $animationKind = null,
+        AnimationKind|Fade|Scale|Slide|null $animation = null,
         int $zIndex = 0,
         bool $clickOutsideDismiss = false,
         bool $autoSize = false,
@@ -126,7 +126,7 @@ final class Veil
         bool $reducedMotion = false,
     ) {
         $this->backdropOpacity = \max(0, \min(100, $backdropOpacity));
-        $this->animationKind = $animationKind;
+        $this->animation = $animation;
         $this->zIndex = $zIndex;
         $this->clickOutsideDismiss = $clickOutsideDismiss;
         $this->autoSize = $autoSize;
@@ -182,13 +182,25 @@ final class Veil
     }
 
     /**
-     * Set the animation kind for overlay transitions.
+     * Set the animation for overlay transitions.
      *
-     * Passing null clears the animation (composite runs un-animated).
+     * Pass an {@see AnimationKind} preset (the default curve per kind) or
+     * a configured instance — `Fade::new(CubicBezier::easeIn())`,
+     * `Slide::new($curve)`, `Scale::new($curve)` — to carry custom easing
+     * through animate(): the SAME instance drives the content and the
+     * scrim ramp (one eased progress, no contrast oscillation, and no
+     * second manual apply()+composite() path). Passing null clears the
+     * animation (composite runs un-animated).
      */
-    public function withAnimation(?AnimationKind $kind): self
+    public function withAnimation(AnimationKind|Fade|Scale|Slide|null $animation): self
     {
-        return $this->mutate(animationKind: $kind, animationKindSet: true);
+        return $this->mutate(animation: $animation, animationSet: true);
+    }
+
+    /** Read-only accessor for the animation driver (preset kind or instance). */
+    public function animation(): AnimationKind|Fade|Scale|Slide|null
+    {
+        return $this->animation;
     }
 
     /** Read-only accessor for z-index. */
@@ -613,7 +625,7 @@ final class Veil
         $animXOffset = $xOffset;
         $animYOffset = $yOffset;
 
-        if ($this->animationKind !== null && $progress < 1.0) {
+        if ($this->animation !== null && $progress < 1.0) {
             $result = $this->applyAnimation($foreground, $progress, $vertical, $horizontal);
             $animFg = $result->foreground;
             $animXOffset = $xOffset + $result->horizontalOffset;
@@ -624,13 +636,38 @@ final class Veil
         // the backdrop is untouched, at 1.0 it carries the configured
         // opacity. Without this ramp, a fade-open overlay paints its
         // dimming at full strength on the very first frame — the scrim
-        // snaps while the modal glides.
+        // snaps while the modal glides. The ramp rides the SAME eased
+        // progress the content glides on (sugar-overlay-066: a linear
+        // scrim against eased content made mid-animation contrast
+        // oscillate — two different p-curves fighting over one frame).
         $veil = $this;
-        if ($this->animationKind !== null && $progress < 1.0 && $this->backdropOpacity > 0) {
-            $veil = $this->mutate(backdropOpacity: (int) \round($this->backdropOpacity * $progress));
+        if ($this->animation !== null && $progress < 1.0 && $this->backdropOpacity > 0) {
+            $eased = $this->animationDriver()?->easedProgress($progress) ?? $progress;
+            $veil = $this->mutate(backdropOpacity: (int) \round($this->backdropOpacity * $eased));
         }
 
         return $veil->composite($animFg, $background, $vertical, $horizontal, $animXOffset, $animYOffset);
+    }
+
+    /**
+     * The concrete driver behind the carried animation: a configured
+     * instance passes through (custom easing rides animate()); a preset
+     * kind resolves to that kind's default curve (per-class docblocks
+     * state which curve is whose — the defaults differ, sugar-overlay-058).
+     */
+    private function animationDriver(): Fade|Scale|Slide|null
+    {
+        $animation = $this->animation;
+        if ($animation instanceof Fade || $animation instanceof Scale || $animation instanceof Slide) {
+            return $animation;
+        }
+
+        return match ($animation) {
+            AnimationKind::SLIDE => Slide::new(),
+            AnimationKind::FADE => Fade::new(),
+            AnimationKind::SCALE => Scale::new(),
+            null => null,
+        };
     }
 
     /**
@@ -642,15 +679,16 @@ final class Veil
         Position $vertical,
         Position $horizontal,
     ): AnimationFrame {
-        return match ($this->animationKind) {
-            AnimationKind::SLIDE => AnimationFrame::fromArray((new Slide())->apply($foreground, $progress, $vertical, $horizontal)),
-            AnimationKind::FADE => new AnimationFrame(
-                foreground: (new Fade())->apply($foreground, $progress),
-            ),
-            AnimationKind::SCALE => new AnimationFrame(
-                foreground: (new Scale())->apply($foreground, $progress),
-            ),
-        };
+        $driver = $this->animationDriver();
+        if ($driver instanceof Slide) {
+            return AnimationFrame::fromArray($driver->apply($foreground, $progress, $vertical, $horizontal));
+        }
+
+        if ($driver === null) {
+            throw new \LogicException('Veil::applyAnimation() called with no animation set.');
+        }
+
+        return new AnimationFrame(foreground: $driver->apply($foreground, $progress));
     }
 
     /**
@@ -1172,8 +1210,8 @@ final class Veil
      */
     private function mutate(
         ?int $backdropOpacity = null,
-        ?AnimationKind $animationKind = null,
-        bool $animationKindSet = false,
+        AnimationKind|Fade|Scale|Slide|null $animation = null,
+        bool $animationSet = false,
         ?int $zIndex = null,
         ?bool $clickOutsideDismiss = null,
         ?bool $autoSize = null,
@@ -1194,7 +1232,7 @@ final class Veil
     ): self {
         return new self(
             backdropOpacity: $backdropOpacity ?? $this->backdropOpacity,
-            animationKind: $animationKindSet ? $animationKind : $this->animationKind,
+            animation: $animationSet ? $animation : $this->animation,
             zIndex: $zIndex ?? $this->zIndex,
             clickOutsideDismiss: $clickOutsideDismiss ?? $this->clickOutsideDismiss,
             autoSize: $autoSize ?? $this->autoSize,
@@ -1487,7 +1525,7 @@ final class Veil
     {
         return new self(
             backdropOpacity: $this->backdropOpacity,
-            animationKind: $this->animationKind,
+            animation: $this->animation,
             zIndex: $this->zIndex,
             clickOutsideDismiss: $this->clickOutsideDismiss,
             autoSize: $this->autoSize,

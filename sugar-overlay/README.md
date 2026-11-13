@@ -201,12 +201,18 @@ of its edges survives.
 
 `animate()` steps a transition: progress `0.0` is the start state, `1.0`
 the settled overlay. Values outside `0.0–1.0` saturate (they are clamped,
-never extrapolated). Pick a kind with `withAnimation()`; each kind applies
-its default easing. At `0.0`, `FADE` and `SCALE` render no foreground at
-all and the scrim is fully transparent; `SLIDE` parks the block's full
-extent outside the anchored edge — a whole foreground-width of columns at
-`LEFT`/`RIGHT`, a whole foreground-height of rows at `TOP`/`BOTTOM` — so
-clipping paints nothing but the backdrop, never a sliver.
+never extrapolated). Two units ride one ramp, and the docs keep them
+straight: progress is the float `0.0–1.0`, pen opacity is the integer
+percent `0–100` it produces. Pick a kind with `withAnimation()`; each kind
+applies its default easing. At `0.0`, `FADE` and `SCALE` render no
+foreground at all and the scrim is fully transparent; `SLIDE` parks the
+block's full extent outside the anchored edge — a whole foreground-width of
+columns at `LEFT`/`RIGHT`, a whole foreground-height of rows at
+`TOP`/`BOTTOM` — so clipping paints nothing but the backdrop, never a
+sliver. The fade pen and the scrim are emitted as truecolor `38;2` pens: a
+16- or 256-colour-only host ignores or requantises them, so a fade can
+read as an on/off step and a dim as a jump there — the motion is a
+truecolor feature with a graceful, visible degradation.
 
 | Kind | Default easing | Motion |
 |---|---|---|
@@ -251,10 +257,11 @@ echo $veil->animate("[dialog box]", $bg, Position::TOP, Position::LEFT, 0.3) . "
 
 ### Custom easing
 
-`withAnimation()` always news the kind's default curve. For your own
-`CubicBezier`, construct the animation class directly and drive the
-compositor with its result — the public classes are `Slide`, `Fade` and
-`Scale` (all take `?CubicBezier $easing = null`):
+`withAnimation()` takes an `AnimationKind` preset (the table's default
+curve) or a constructed instance — `Slide`, `Fade` and `Scale` all take
+`?CubicBezier $easing = null` — and a carried instance's curve drives
+`animate()` end to end: the content and the scrim ramp move on the SAME
+eased progress. No manual apply()-then-composite detour is needed:
 
 ```php
 <?php
@@ -262,27 +269,20 @@ use SugarCraft\Overlay\{Position, Veil};
 use SugarCraft\Overlay\Animation\Slide;
 use SugarCraft\Spring\Easing\CubicBezier;
 
-$bg    = str_repeat("..............................\n", 3);
-$fg    = "[dialog box]";
-$slide = new Slide(CubicBezier::easeInOutQuad());
-$step  = $slide->apply($fg, 0.8, Position::TOP, Position::LEFT);
+$bg = str_repeat("..............................\n", 3);
+$fg = "[dialog box]";
 
-echo Veil::new()->composite(
-    $step['foreground'],
-    $bg,
-    Position::TOP,
-    Position::LEFT,
-    $step['horizontalOffset'],
-    $step['verticalOffset'],
-) . "\n";
+echo Veil::new()
+    ->withAnimation(Slide::new(CubicBezier::easeInOutQuad()))
+    ->animate($fg, $bg, Position::TOP, Position::LEFT, 0.8) . "\n";
 ```
 
-`Slide::apply()` returns `array{foreground, verticalOffset,
-horizontalOffset}`; `Fade` and `Scale` return the transformed foreground
-string directly (their `apply()` takes `($foreground, $progress)`).
-The example steps to `0.8` deliberately: at low progress the offsets still
-place the whole block off-canvas, so a `composite()` of an early step
-paints nothing but the backdrop.
+For manual driving the pieces stay public: `Slide::apply()` returns
+`array{foreground, verticalOffset, horizontalOffset}`; `Fade` and `Scale`
+return the transformed foreground string directly (their `apply()` takes
+`($foreground, $progress)`). The example steps to `0.8` deliberately: at
+low progress the offsets still place the whole block off-canvas, so a
+`composite()` of an early step paints nothing but the backdrop.
 
 ## Z-Index and Stacking Order
 

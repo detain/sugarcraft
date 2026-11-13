@@ -21,6 +21,11 @@ use SugarCraft\Spring\Easing\CubicBezier;
  * compositor then paints the backdrop only, as Scale does at progress 0); at
  * opacity 100 the foreground is returned byte-for-byte, original colors
  * included.
+ *
+ * Native to sugar-overlay (upstream Bubble Tea carries no animation layer —
+ * sugar-overlay-028). The default curve is {@see CubicBezier::easeInOut()};
+ * Slide and Scale default to easeOut instead, so per-kind defaults are part
+ * of the contract, not a silent swap (sugar-overlay-058).
  */
 final class Fade
 {
@@ -30,6 +35,28 @@ final class Fade
     public function __construct(
         private readonly ?CubicBezier $easing = null,
     ) {
+    }
+
+    public static function new(?CubicBezier $easing = null): self
+    {
+        return new self($easing);
+    }
+
+    /**
+     * The eased scalar progress for this curve (0.0–1.0, saturating at the
+     * ends). Veil::animate() drives the scrim ramp from the SAME value the
+     * content glides on (sugar-overlay-066).
+     */
+    public function easedProgress(float $progress): float
+    {
+        if ($progress <= 0.0) {
+            return 0.0;
+        }
+        if ($progress >= 1.0) {
+            return 1.0;
+        }
+
+        return \max(0.0, \min(1.0, $this->easing()->evaluate($progress)));
     }
 
     private function easing(): CubicBezier
@@ -59,6 +86,11 @@ final class Fade
         $level = (int) \round(255 * $opacity / 100);
         $pen = "\e[38;2;{$level};{$level};{$level}m";
 
+        // Raw explode/implode is load-bearing (sugar-overlay-060): apply()
+        // must round-trip the foreground's bytes — a trailing "\n" stays.
+        // Lines::split would drop that tail, silently changing output for
+        // every host that reads apply() directly instead of through the
+        // compositor (which splits for itself anyway).
         $lines = \explode("\n", $foreground);
         foreach ($lines as $i => $line) {
             if ($line === '') {
@@ -81,13 +113,8 @@ final class Fade
      */
     public function opacity(float $progress): int
     {
-        if ($progress <= 0.0) {
-            return 0;
-        }
-        if ($progress >= 1.0) {
-            return 100;
-        }
-        $eased = $this->easing()->evaluate($progress);
-        return (int) \max(0, \min(100, \round($eased * 100)));
+        // Overshoot curves (back/elastic) can ease past the interval —
+        // opacity saturates at the ends exactly as the old guards did.
+        return (int) \max(0, \min(100, \round($this->easedProgress($progress) * 100)));
     }
 }

@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Overlay\Tests;
 
-use SugarCraft\Overlay\{Animation\AnimationKind, Position, Veil};
+use SugarCraft\Overlay\{Animation\AnimationKind, Animation\Fade, Position, Veil};
+use SugarCraft\Spring\Easing\CubicBezier;
 use PHPUnit\Framework\TestCase;
 
 final class VeilAnimationTest extends TestCase
@@ -317,6 +318,97 @@ final class VeilAnimationTest extends TestCase
         $this->assertStringContainsString('X', $result);
     }
 
+    /**
+     * SO-12 (sugar-overlay-009): the veil-level API now CARRIES a configured
+     * animation instance — a custom curve reaches animate() without the old
+     * manual apply()+composite() detour, and reads different bytes from the
+     * preset kind whose default curve differs.
+     */
+    public function testCarriedInstanceWithCustomCurveDrivesAnimate(): void
+    {
+        $bg = "bg line one\nbg line two\nbg line three";
+        $fg = "XX";
+
+        $kind    = Veil::new()->withBackdrop(50)->withAnimation(AnimationKind::FADE);
+        $carried = Veil::new()->withBackdrop(50)->withAnimation(
+            Fade::new(CubicBezier::easeIn())
+        );
+        $defaultCurve = Veil::new()->withBackdrop(50)->withAnimation(
+            Fade::new()
+        );
+
+        // Each emit gets its own diff session: the canvas-empty early-return
+        // path would otherwise leave every frame chained on the process
+        // default session (the second identical render would collapse to
+        // the anchor-only delta of the first).
+        $this->assertNotSame(
+            $kind->withoutSession()->animate($fg, $bg, Position::TOP, Position::LEFT, 0.3),
+            $carried->withoutSession()->animate($fg, $bg, Position::TOP, Position::LEFT, 0.3),
+            'a carried easeIn must not collapse onto the preset default curve',
+        );
+        $this->assertSame(
+            $kind->withoutSession()->animate($fg, $bg, Position::TOP, Position::LEFT, 0.3),
+            $defaultCurve->withoutSession()->animate($fg, $bg, Position::TOP, Position::LEFT, 0.3),
+            'an argument-less instance is the preset default, byte for byte',
+        );
+    }
+
+    /**
+     * SO-12 (sugar-overlay-068): animate() and the manual path are ONE
+     * path now — hand-spelling the carried instance's apply() plus the
+     * eased scrim ramp composites the identical frame.
+     */
+    public function testAnimateEqualsTheHandSpelledManualPathForACarriedCurve(): void
+    {
+        $bg     = "bg line one\nbg line two\nbg line three";
+        $fg     = 'XX';
+        $curve  = CubicBezier::easeInOut();
+        $fade   = Fade::new($curve);
+        $eased  = $fade->easedProgress(0.3);
+        $ramped = (int) \round(50 * $eased);
+
+        $animated = Veil::new()
+            ->withBackdrop(50)
+            ->withAnimation($fade)
+            ->animate($fg, $bg, Position::TOP, Position::LEFT, 0.3);
+
+        $manual = Veil::new()
+            ->withBackdrop($ramped)
+            ->composite($fade->apply($fg, 0.3), $bg, Position::TOP, Position::LEFT);
+
+        $this->assertSame($manual, $animated);
+    }
+
+    /**
+     * SO-12 (sugar-overlay-066): the scrim ramp rides the SAME eased
+     * progress the content glides on, not raw clock time. An uncovered
+     * backdrop row must carry the easeInOut(0.3) dim, provably not the
+     * linear-0.3 dim (the two land on different gray levels).
+     */
+    public function testScrimRampFollowsEasedProgressNotLinearTime(): void
+    {
+        $bg = \str_repeat('background text row\n', 4);
+        $fg = 'XX';
+
+        $frame = Veil::new()
+            ->withBackdrop(50)
+            ->withAnimation(AnimationKind::FADE)
+            ->animate($fg, $bg, Position::TOP, Position::LEFT, 0.3);
+
+        $eased  = \max(0.0, \min(1.0, CubicBezier::easeInOut()->evaluate(0.3)));
+        $dimmed = (int) \round(50 * $eased);
+        $level  = (int) \round(255 * (100 - $dimmed) / 100);
+        $linear = (int) \round(50 * 0.3);
+        $linearLevel = (int) \round(255 * (100 - $linear) / 100);
+
+        $this->assertNotSame($level, $linearLevel, 'fixture must separate eased from linear');
+        $this->assertStringContainsString(
+            "\e[38;2;{$level};{$level};{$level}m",
+            $frame,
+            'uncovered rows carry the EASED scrim, not the linear-progress one',
+        );
+    }
+
     public function testAnimateScaleProducesDifferentOutputAtDifferentProgress(): void
     {
         // Scale animation should produce different foreground at different progress values
@@ -386,12 +478,13 @@ final class VeilAnimationTest extends TestCase
     // ─── Helpers ────────────────────────────────────────────────────────────
 
     /**
-     * Get animation kind via reflection since it's a private property.
+     * Read the animation driver through the public accessor (SO-12: the
+     * old private-property reflection has a public twin now).
      */
     private function getAnimationKind(Veil $v): ?AnimationKind
     {
-        $prop = (new \ReflectionClass($v))->getProperty('animationKind');
-        $prop->setAccessible(true);
-        return $prop->getValue($v);
+        $animation = $v->animation();
+
+        return $animation instanceof AnimationKind ? $animation : null;
     }
 }
