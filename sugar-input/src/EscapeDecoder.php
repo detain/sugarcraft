@@ -88,7 +88,9 @@ final class EscapeDecoder
         'D' => 'ArrowLeft',
         'H' => 'Home',
         'F' => 'End',
-        // Application keypad mode: ESC O M is keypad Enter.
+        // Application keypad mode: ESC O M is keypad Enter, named `Enter`
+        // because legacy DECKPAM predates the KP* vocabulary — the one
+        // exception to the one-name law (Kitty 57414 surfaces `KPEnter`).
         'M' => 'Enter',
         // Application-keypad mode (DECKPAM, `ESC =`) sends the whole numeric
         // keypad as SS3 letters: Op..Oy are digits 0..9, Ol the decimal
@@ -1963,7 +1965,10 @@ final class EscapeDecoder
      * invented key. Names use
      * this lib's house vocabulary (ArrowUp, KP0, KPDecimal — not the spec's
      * KpUp spellings) so Kitty frames and their SS3/CSI equivalents decode
-     * to one name. The partition is the same one sugar-core's
+     * to one name. One name is excepted: keypad Enter. Legacy DECKPAM
+     * `ESC O M` predates the KP* vocabulary and decodes to `Enter`, while
+     * Kitty 57414 decodes to `KPEnter` — hosts that care about the keypad
+     * match both names. The partition is the same one sugar-core's
      * KeyType::kittyFunctionalKeys() carries, cross-checked by
      * tests/KeySpecTableParityTest.
      *

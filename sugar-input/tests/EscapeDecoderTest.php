@@ -2882,8 +2882,10 @@ final class EscapeDecoderTest extends TestCase
 
     public function testKeypadEnterStillPlainEnter(): void
     {
-        // ESC O M already decoded to 'Enter' before this wave — locking it so the
-        // keypad additions cannot change that established name.
+        // Keypad Enter is the documented exception to the one-name law:
+        // legacy DECKPAM `ESC O M` surfaces `Enter` (it predates the KP*
+        // vocabulary) while Kitty 57414 surfaces `KPEnter`. Hosts match
+        // both names; neither side may rename the other.
         $events = $this->decoder->decode("\x1bOM");
         $this->assertSame('Enter', $events[0]->key);
     }
