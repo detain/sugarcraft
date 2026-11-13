@@ -25,7 +25,12 @@ declare(strict_types=1);
  *            the tested tree — and the emitted sidecar records which SHA
  *            those bytes came from.
  *   verify — after install, read the app's composer.lock and prove every
- *            sugarcraft/* package resolved from a path repository. A lock
+ *            sugarcraft/* package resolved from a path repository — across
+ *            BOTH the production (packages) and dev (packages-dev) sections:
+ *            the release pipelines' smoke legs install with dev deps, so a
+ *            floating dev sibling (e.g. sugar-testing off Packagist
+ *            dev-master) would ship untested bytes through an otherwise
+ *            green verify. A lock
  *            entry pointing at a network dist URL means the sibling floated
  *            back to Packagist (constraint unsatisfied by the local dir,
  *            renamed package, whatever the cause) and the release must abort.
@@ -268,8 +273,18 @@ if (!is_string($appDir)) {
 }
 $lockPath = rtrim($appDir, '/') . '/composer.lock';
 $lock = pin_read_manifest($lockPath, 'lock');
+// Scan BOTH lock sections: pin_sugarcraft_requires() walks require +
+// require-dev, and the post-verify smoke legs run `composer install`
+// WITH dev deps — the guard must cover exactly what those legs execute.
 /** @var list<array<string,mixed>> $packages */
-$packages = $lock['packages'] ?? [];
+$packages = [];
+foreach (['packages', 'packages-dev'] as $lockSection) {
+    /** @var list<array<string,mixed>> $sectionPackages */
+    $sectionPackages = $lock[$lockSection] ?? [];
+    foreach ($sectionPackages as $package) {
+        $packages[] = $package;
+    }
+}
 $floats = [];
 $checked = 0;
 foreach ($packages as $package) {
@@ -285,7 +300,7 @@ foreach ($packages as $package) {
     }
     $floats[] = $name . ' resolved from ' . ($distUrl !== '' ? $distUrl : 'type ' . ($distType !== '' ? $distType : 'source ' . (string) ($package['source']['url'] ?? 'unknown')));
 }
-printf("pin-siblings: verified %d sugarcraft/* packages in %s\n", $checked, $lockPath);
+printf("pin-siblings: verified %d sugarcraft/* packages (packages + packages-dev) in %s\n", $checked, $lockPath);
 if ($floats !== []) {
     fwrite(STDERR, "pin-siblings: FLOATING siblings (not resolved from the tested tree):\n  - " . implode("\n  - ", $floats) . "\n");
     exit(1);
