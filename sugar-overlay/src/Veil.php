@@ -1081,7 +1081,7 @@ final class Veil
                 }
             }
 
-            $cluster = self::nextCluster($line, $pos);
+            $cluster = Cluster::next($line, $pos);
             $gw      = Width::of($cluster);
 
             if ($gw === 0) {
@@ -1106,53 +1106,6 @@ final class Veil
         }
 
         return $cells;
-    }
-
-    /**
-     * Next user-perceived grapheme cluster starting at byte $pos.
-     *
-     * Pure UTF-8 lead-byte walk (same cascade sugar-charts' BufferHelper
-     * uses): a 1-4 byte base character, then following combining marks
-     * (U+0300–U+036F) and variation selectors (U+FE00–U+FE0F) ride along
-     * so one cell = one rendered glyph rather than stray cells. grapheme_*
-     * is intentionally NOT used: full UAX#29 clustering disagrees with
-     * Width::of()'s East-Asian model on emoji ZWJ sequences, and the diff
-     * must agree with what the emulator paints.
-     */
-    private static function nextCluster(string $s, int $pos): string
-    {
-        $b = \ord($s[$pos]);
-        $len = $b < 0x80 ? 1 : (($b & 0xE0) === 0xC0 ? 2 : (($b & 0xF0) === 0xE0 ? 3 : (($b & 0xF8) === 0xF0 ? 4 : 1)));
-        $cluster = \substr($s, $pos, $len);
-
-        // Attach following combining marks (U+0300–U+036F) and variation
-        // selectors (U+FE00–U+FE0F) so one cell = one rendered glyph.
-        $i = $pos + $len;
-        $sLen = \strlen($s);
-        while ($i < $sLen) {
-            $nb = \ord($s[$i]);
-            if ($nb === 0xCC || $nb === 0xCD) { // U+0300–U+036F (2-byte 0xCC 0x80–0xBF, 0xCD 0x80–0xAF)
-                $cp = (($nb & 0x1F) << 6) | (\ord($s[$i + 1] ?? "\x80") & 0x3F);
-                if ($cp >= 0x0300 && $cp <= 0x036F) {
-                    $cluster .= \substr($s, $i, 2);
-                    $i += 2;
-                    continue;
-                }
-                break;
-            }
-            if ($nb === 0xEF) { // 3-byte U+FE00–U+FE0F: EF B8 80–BF / EF B8 90–8F…
-                $cpSub = \substr($s, $i, 3);
-                if (\preg_match('/\A\xEF\xB8[\x80-\xAF]\z/', $cpSub) === 1) {
-                    $cluster .= $cpSub;
-                    $i += 3;
-                    continue;
-                }
-                break;
-            }
-            break;
-        }
-
-        return $cluster;
     }
 
     /**

@@ -417,7 +417,7 @@ final class MarkedFrame
                 }
             }
 
-            $cluster = Width::nextCluster($line, $i);
+            $cluster = Cluster::next($line, $i);
             $out[] = ['kind' => 'text', 'bytes' => $cluster, 'width' => Width::of($cluster), 'id' => ''];
             $i += \strlen($cluster);
         }
