@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\CellBuffer;
 
+use SugarCraft\CellBuffer\Support\SgrEmitter;
+
 /**
  * Minimal per-cell style record — foreground colour, background colour,
  * palette-slot identity, underline colour, and a raw attribute bitmask.
@@ -398,6 +400,19 @@ final class Style implements \JsonSerializable
     public static function valuesEqual(?self $a, ?self $b): bool
     {
         return $a === null ? $b === null : ($b !== null && $a->equals($b));
+    }
+
+    /**
+     * One-shot full SGR emission for this style (CB-31): the exact bytes
+     * the diff encoder writes whenever its pen transitions onto it — the
+     * canonical emitter (Support\SgrEmitter, relocated in CB-30) is the
+     * single home, so this is the parse→emit identity surface for callers
+     * outside a Buffer stream. Note the leading reset term: emission is
+     * assertive (\x1b[0;…m), self-contained on any terminal state.
+     */
+    public function toAnsi(): string
+    {
+        return SgrEmitter::emit($this);
     }
 
     /**

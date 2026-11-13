@@ -855,4 +855,35 @@ final class StyleTest extends TestCase
 
         $this->assertTrue($fresh->equals(new Style(fg: 0x0A0B0C, bg: null, attrs: 1)));
     }
+
+    /**
+     * CB-31: Style::toAnsi() is the canonical emitter's one-shot surface —
+     * byte-identical to SgrEmitter::emit for the same style (slots, belts,
+     * underlines and all), and exactly the transition substring the diff
+     * encoder writes when its pen lands on this style.
+     */
+    public function testToAnsiIsTheEmitterIdentitySurface(): void
+    {
+        $cases = [
+            new Style(),
+            new Style(fg: 0xFF0000, bg: 0x00FF00, attrs: Style::ATTR_BOLD | Style::ATTR_ITALIC),
+            new Style(fgSlot: 9, attrs: Style::ATTR_UNDERLINE, ul: 0x123456),
+            Style::fromSgr('38;5;9;4;7') ?? new Style(),
+            Style::fromSgr('58;2;1;2;3;4') ?? new Style(),
+        ];
+
+        foreach ($cases as $i => $style) {
+            self::assertSame(
+                \SugarCraft\CellBuffer\Support\SgrEmitter::emit($style),
+                $style->toAnsi(),
+                "case {$i}: toAnsi must be the emitter verbatim",
+            );
+        }
+
+        // End-to-end: the same bytes ride the diff pen-transition path.
+        $style = $cases[2];
+        $prev = \SugarCraft\CellBuffer\Buffer::new(1, 1);
+        $curr = $prev->withCellAt(0, 0, new \SugarCraft\CellBuffer\Cell('x', $style, null, 1));
+        self::assertStringContainsString($style->toAnsi(), $curr->diffToAnsi($prev));
+    }
 }
