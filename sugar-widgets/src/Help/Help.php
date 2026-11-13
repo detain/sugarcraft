@@ -24,7 +24,7 @@ use SugarCraft\Style\Style;
  * both must alias one: `use SugarCraft\Widgets\Key\Help as HelpLabel;`.
  *
  * ```php
- * $help = new Help();
+ * $help = Help::new();
  * echo $help->shortView($keymap);   // "↑/k up • ↓/j down • q quit"
  * echo $help->fullView($keymap);    // multi-column block with aligned key columns
  * echo $help->withShowAll(true)
@@ -39,12 +39,11 @@ use SugarCraft\Style\Style;
 final class Help
 {
     /**
-     * @deprecated Prefer {@see self::new()} — every styling param is optional
-     *     there too, and the factory spells the house convention. Direct
-     *     construction keeps working (BC); privatization is scheduled for
-     *     the next major. e.g. `Help::new()->withSeparator(' | ')`.
+     * Private on purpose (W-09): a direct `new Help(...)` fails with PHP's
+     * "Call to private Help::__construct()" Error; use {@see self::new()},
+     * e.g. `Help::new()->withSeparator(' | ')`.
      */
-    public function __construct(
+    private function __construct(
         public readonly string $separator = ' • ',
         public readonly string $keyDescGap = ' ',
         public readonly string $columnGap  = '    ',
@@ -57,9 +56,7 @@ final class Help
     ) {}
 
     /**
-     * House factory. The public constructor predates the `::new()` +
-     * private-ctor convention and stays for BC; `::new()` is the
-     * documented entry point and forwards every promoted default.
+     * House factory and sole constructor door; forwards every promoted default.
      */
     public static function new(
         string  $separator     = ' • ',

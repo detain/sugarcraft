@@ -37,7 +37,7 @@ final class HelpTest extends TestCase
             $this->b('↓/j', 'down', ['down', 'j']),
             $this->b('q',   'quit'),
         ], []);
-        $this->assertSame('↑/k up • ↓/j down • q quit', (new Help())->shortView($map));
+        $this->assertSame('↑/k up • ↓/j down • q quit', (Help::new())->shortView($map));
     }
 
     public function testShortAliasesRenderByteIdenticalToWithForms(): void
@@ -53,8 +53,8 @@ final class HelpTest extends TestCase
             [$this->b('alpha-key', 'alpha', ['a']), $this->b('beta-key', 'beta', ['b'])],
             [$this->b('q', 'quit')],
         ]);
-        $long  = (new Help())->withSeparator(' • ')->withEllipsis('...')->withFullSeparator("\n\n");
-        $short = (new Help())->separator(' • ')->ellipsis('...')->fullSeparator("\n\n");
+        $long  = (Help::new())->withSeparator(' • ')->withEllipsis('...')->withFullSeparator("\n\n");
+        $short = (Help::new())->separator(' • ')->ellipsis('...')->fullSeparator("\n\n");
         // Width forces ellipsis truncation so the row exercises all three knobs.
         $this->assertSame(
             $long->width(24)->showAll(false)->shortView($map),
@@ -73,7 +73,7 @@ final class HelpTest extends TestCase
             (new Binding(['x']))->withHelp('x', 'cut')->disable(),
             new Binding(['z']), // no help labels
         ], []);
-        $this->assertSame('q quit', (new Help())->shortView($map));
+        $this->assertSame('q quit', (Help::new())->shortView($map));
     }
 
     public function testShortViewCustomSeparator(): void
@@ -82,7 +82,7 @@ final class HelpTest extends TestCase
             $this->b('a', 'alpha'),
             $this->b('b', 'beta'),
         ], []);
-        $help = (new Help())->withSeparator(' | ');
+        $help = (Help::new())->withSeparator(' | ');
         $this->assertSame('a alpha | b beta', $help->shortView($map));
     }
 
@@ -92,7 +92,7 @@ final class HelpTest extends TestCase
             [$this->b('↑/k', 'up', ['up', 'k']),    $this->b('↓/j', 'down', ['down', 'j'])],
             [$this->b('q',   'quit'),  $this->b('?',   'help')],
         ]);
-        $out = (new Help())->fullView($map);
+        $out = (Help::new())->fullView($map);
         $expected =
             "↑/k up      q quit\n"
           . "↓/j down    ? help";
@@ -102,7 +102,7 @@ final class HelpTest extends TestCase
     public function testFullViewEmptyKeyMap(): void
     {
         $map = new FakeKeyMap([], []);
-        $this->assertSame('', (new Help())->fullView($map));
+        $this->assertSame('', (Help::new())->fullView($map));
     }
 
     public function testViewDispatchesByShowAll(): void
@@ -112,7 +112,7 @@ final class HelpTest extends TestCase
         ], [
             [$this->b('q', 'quit')],
         ]);
-        $shortFirst = new Help();
+        $shortFirst = Help::new();
         $this->assertSame('q quit', $shortFirst->view($map));
         $this->assertSame('q quit', $shortFirst->showAll(true)->view($map));
         // Original instance unchanged.
@@ -126,7 +126,7 @@ final class HelpTest extends TestCase
             $this->b('b', 'beta'),
             $this->b('c', 'gamma'),
         ], []);
-        $help = (new Help())->width(15);
+        $help = (Help::new())->width(15);
         $out = $help->shortView($map);
         $this->assertLessThanOrEqual(15, mb_strwidth($out));
         $this->assertStringEndsWith('…', $out);
@@ -138,7 +138,7 @@ final class HelpTest extends TestCase
             $this->b('a', 'alpha'),
             $this->b('b', 'beta'),
         ], []);
-        $help = (new Help())->width(8)->withEllipsis('...');
+        $help = (Help::new())->width(8)->withEllipsis('...');
         $out  = $help->shortView($map);
         $this->assertStringEndsWith('...', $out);
     }
@@ -146,19 +146,19 @@ final class HelpTest extends TestCase
     public function testWidthRejectsNegative(): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        (new Help())->width(-1);
+        (Help::new())->width(-1);
     }
 
     public function testGetWidthRoundTrips(): void
     {
-        $this->assertSame(0,  (new Help())->getWidth());
-        $this->assertSame(20, (new Help())->width(20)->getWidth());
+        $this->assertSame(0,  (Help::new())->getWidth());
+        $this->assertSame(20, (Help::new())->width(20)->getWidth());
     }
 
     public function testShortHelpViewBypassKeyMap(): void
     {
         $bs = [$this->b('q', 'quit'), $this->b('?', 'help')];
-        $this->assertSame('q quit • ? help', (new Help())->shortHelpView($bs));
+        $this->assertSame('q quit • ? help', (Help::new())->shortHelpView($bs));
     }
 
     public function testFullHelpViewBypassKeyMap(): void
@@ -167,7 +167,7 @@ final class HelpTest extends TestCase
             [$this->b('a', 'alpha'), $this->b('b', 'beta')],
             [$this->b('c', 'gamma')],
         ];
-        $out = (new Help())->fullHelpView($cols);
+        $out = (Help::new())->fullHelpView($cols);
         $this->assertStringContainsString('a alpha', $out);
         $this->assertStringContainsString('c gamma', $out);
     }
@@ -178,12 +178,12 @@ final class HelpTest extends TestCase
             [$this->b('ctrl+x', 'a very long description that no terminal sidebar wants')],
             [$this->b('q', 'quit')],
         ];
-        $help = (new Help())->withWidth(100);
+        $help = (Help::new())->withWidth(100);
         $wide = $help->fullHelpView($cols);
         // Generous cap: side-by-side layout survives, nothing truncated.
         $this->assertStringNotContainsString('…', $wide);
 
-        $narrow = (new Help())->withWidth(30)->fullHelpView($cols);
+        $narrow = (Help::new())->withWidth(30)->fullHelpView($cols);
         foreach (explode("\n", $narrow) as $line) {
             $this->assertLessThanOrEqual(30, \SugarCraft\Core\Util\Width::string($line), 'no full-view row overruns maxWidth');
         }
@@ -213,7 +213,7 @@ final class HelpTest extends TestCase
         $map = new FakeKeyMap([], [
             [$this->b('a', 'alpha'), $this->b('b', 'beta')],
         ]);
-        $help = (new Help())->withFullSeparator(' :: ');
+        $help = (Help::new())->withFullSeparator(' :: ');
         $this->assertSame('a alpha :: b beta', $help->fullView($map));
     }
 
@@ -221,7 +221,7 @@ final class HelpTest extends TestCase
     {
         $map = new FakeKeyMap([$this->b('a', 'alpha')], []);
         $styles = new Styles(shortKey: Style::new()->bold());
-        $help = (new Help())->withStyles($styles);
+        $help = (Help::new())->withStyles($styles);
         $rendered = $help->shortView($map);
         // Bold opens with \x1b[1m and resets with \x1b[0m around 'a'.
         $this->assertStringContainsString("\x1b[1ma\x1b[0m", $rendered);
@@ -232,7 +232,7 @@ final class HelpTest extends TestCase
     {
         $map = new FakeKeyMap([$this->b('a', 'alpha')], []);
         $styles = new Styles(shortDesc: Style::new()->italic());
-        $help = (new Help())->withStyles($styles);
+        $help = (Help::new())->withStyles($styles);
         $rendered = $help->shortView($map);
         $this->assertStringContainsString("\x1b[3malpha\x1b[0m", $rendered);
     }
@@ -241,7 +241,7 @@ final class HelpTest extends TestCase
     {
         $map = new FakeKeyMap([$this->b('a', 'alpha'), $this->b('b', 'beta')], []);
         $styles = new Styles(shortSeparator: Style::new()->faint());
-        $help = (new Help())->withStyles($styles);
+        $help = (Help::new())->withStyles($styles);
         $rendered = $help->shortView($map);
         // Default separator is ' • ' — wrapped in faint SGR.
         $this->assertStringContainsString("\x1b[2m • \x1b[0m", $rendered);
@@ -251,7 +251,7 @@ final class HelpTest extends TestCase
     {
         $map = new FakeKeyMap([], [[$this->b('a', 'alpha')]]);
         $styles = new Styles(fullKey: Style::new()->underline());
-        $help = (new Help())->withStyles($styles);
+        $help = (Help::new())->withStyles($styles);
         $rendered = $help->fullView($map);
         $this->assertStringContainsString("\x1b[4ma\x1b[0m", $rendered);
     }
@@ -259,7 +259,7 @@ final class HelpTest extends TestCase
     public function testWithStylesNullClearsStyles(): void
     {
         $map = new FakeKeyMap([$this->b('a', 'alpha')], []);
-        $help = (new Help())
+        $help = (Help::new())
             ->withStyles(new Styles(shortKey: Style::new()->bold()))
             ->withStyles(null);
         $this->assertSame('a alpha', $help->shortView($map));
@@ -277,7 +277,7 @@ final class HelpTest extends TestCase
 
     public function testUpdateWithBindingTogglesShowAll(): void
     {
-        $h = new Help();
+        $h = Help::new();
         $this->assertFalse($h->showAll);
         $toggle = (new Binding(['?']))->withHelp('?', 'help');
         $h2 = $h->updateWithBinding(new \SugarCraft\Core\Msg\KeyMsg(\SugarCraft\Core\KeyType::Char, '?'), $toggle);
@@ -288,7 +288,7 @@ final class HelpTest extends TestCase
 
     public function testUpdateWithBindingIgnoresUnrelatedKey(): void
     {
-        $h = new Help();
+        $h = Help::new();
         $toggle = (new Binding(['?']))->withHelp('?', 'help');
         $h2 = $h->updateWithBinding(new \SugarCraft\Core\Msg\KeyMsg(\SugarCraft\Core\KeyType::Char, 'x'), $toggle);
         $this->assertFalse($h2->showAll);
@@ -296,7 +296,7 @@ final class HelpTest extends TestCase
 
     public function testUpdateWithBindingIgnoresDisabled(): void
     {
-        $h = new Help();
+        $h = Help::new();
         $toggle = (Binding::withDisabled(['?']))->withHelp('?', 'help');
         $h2 = $h->updateWithBinding(new \SugarCraft\Core\Msg\KeyMsg(\SugarCraft\Core\KeyType::Char, '?'), $toggle);
         $this->assertFalse($h2->showAll);
@@ -304,7 +304,7 @@ final class HelpTest extends TestCase
 
     public function testUpdateIsPassThrough(): void
     {
-        $h = new Help();
+        $h = Help::new();
         $this->assertFalse($h->showAll);
 
         // update() always returns $this unchanged; showAll is unaffected.
@@ -323,7 +323,7 @@ final class HelpTest extends TestCase
     public function testKeyDescGapRendersByteExactly(): void
     {
         $map = new FakeKeyMap([$this->b('q', 'quit'), $this->b('a', 'alpha')], []);
-        $help = (new Help())->withKeyDescGap(' :: ');
+        $help = (Help::new())->withKeyDescGap(' :: ');
         $this->assertSame('q :: quit • a :: alpha', $help->shortView($map));
     }
 
@@ -333,7 +333,7 @@ final class HelpTest extends TestCase
             [$this->b('↑', 'up')],
             [$this->b('q', 'quit')],
         ]);
-        $help = (new Help())->withColumnGap('  |  ');
+        $help = (Help::new())->withColumnGap('  |  ');
         // col1 '↑ up' (4 cells) + gap + col2 'q quit', row rtrimmed.
         $this->assertSame('↑ up  |  q quit', $help->fullView($map));
     }
@@ -345,7 +345,7 @@ final class HelpTest extends TestCase
         $enabled  = $this->b('ctrl+a', 'all');
         $disabled = (new Binding(['ctrl+d'], disabled: true))->withHelp('ctrl+d', 'greyed');
         $map = new FakeKeyMap([$enabled, $disabled], [[$enabled], [$disabled]]);
-        $help = new Help();
+        $help = Help::new();
         $this->assertFalse($help->showDisabled, 'default-off: skip-disabled posture preserved');
         $this->assertStringNotContainsString('greyed', $help->shortView($map));
         $this->assertStringNotContainsString('greyed', $help->fullView($map));
@@ -360,9 +360,9 @@ final class HelpTest extends TestCase
     {
         $bare = new Binding(['ctrl+x'], disabled: true); // no help text at all
         $map = new FakeKeyMap([$bare], [[$bare]]);
-        $this->assertSame('', (new Help())->withShowDisabled()->shortView($map));
+        $this->assertSame('', (Help::new())->withShowDisabled()->shortView($map));
         $toggle = (new Binding(['h'], disabled: true))->withHelp('h', 'help');
-        $h = new Help();
+        $h = Help::new();
         $h2 = $h->updateWithBinding(new \SugarCraft\Core\Msg\KeyMsg(\SugarCraft\Core\KeyType::Char, 'h'), $toggle);
         $this->assertSame($h->showAll, $h2->showAll, 'a disabled binding never toggles, flag or not');
     }

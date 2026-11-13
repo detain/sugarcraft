@@ -45,7 +45,7 @@ $keymap = new class($bind) implements KeyMap {
     }
 };
 
-$help = new Help();
+$help = Help::new();
 
 echo "\x1b[36mShort view (one line)\x1b[0m\n";
 echo $help->shortView($keymap) . "\n\n";

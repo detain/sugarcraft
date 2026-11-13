@@ -39,8 +39,9 @@ siblings resolve from Packagist.
 > Likewise `Table`'s `set*` verbs — `setColumns()` / `setCursor()` /
 > `setRows()` / `setHeaders()` / `setSize()` — are dated BC aliases (they
 > always returned new instances; the `with*()` spellings are canonical),
-> and `Progress`, `Help` and `Tabs` carry deprecated public constructors
-> beside their `::new()` factories. Same removal: **2.0**.
+> and `Progress`, `Help` and `Tabs` have PRIVATE constructors: `::new()`
+> is the only door, and a direct `new Progress(...)` fails with PHP's
+> "Call to private ...::__construct()" Error. The `set*` removal: **2.0**.
 
 > `Help::getStyles()` and `Help::getWidth()` are deprecated BC accessors —
 > the house convention is bare accessors, and the property names are the
@@ -58,7 +59,7 @@ The counted inventory lives once, in the intro at the top of this file.
 | Component | What it does | Notable messages |
 |---|---|---|
 | `Cursor\Cursor` | Animated text cursor _(deprecated alias — re-exported from `SugarCraft\Forms\Cursor`)_ | `BlinkMsg` |
-| `Help\Help` | Render short / full key-help footer from a `KeyMap`; `Help::updateWithBinding($msg, $toggle)` flips show-all in response to a key. `Help::new(...)` is the house factory (all eight styling params optional; the public constructor is deprecated BC — removal at 2.0); gap knobs via `withKeyDescGap()` / `withColumnGap()` / `withWidth()`; `withShowDisabled()` pins greyed-out bindings into the footer so a host can document commands that exist but are inactive (off by default; a disabled toggle never flips show-all) | — |
+| `Help\Help` | Render short / full key-help footer from a `KeyMap`; `Help::updateWithBinding($msg, $toggle)` flips show-all in response to a key. `Help::new(...)` is the house factory (all eight styling params optional; the constructor is private); gap knobs via `withKeyDescGap()` / `withColumnGap()` / `withWidth()`; `withShowDisabled()` pins greyed-out bindings into the footer so a host can document commands that exist but are inactive (off by default; a disabled toggle never flips show-all) | — |
 | `Key\Binding` | One key list + label + help row: readonly `keys`/`help`/`disabled`, `matches()` / static `any()` for dispatch, `withHelp()`, `disable()`/`withEnabled()` (the `setKeys()`/`setHelp()`/`setEnabled()` spellings are dated BC aliases), `unbind()`; factories `Binding::new(...)`, `Binding::withDisabled(...)` | — |
 | `Key\KeyMap` | Interface — implement it so `Help` can render your bindings: `shortHelp(): list<Binding>` for the inline row, `fullHelp(): list<list<Binding>>` for the expanded pane (one inner list per column); `Tabs\TabsKeyMap` is the shipped example. Naming, spelled out: three things answer to *KeyMap* in this ecosystem — **this** help-collection contract (`SugarCraft\Widgets\Key\KeyMap`), the sugar-forms submit/abort chords class (`SugarCraft\Forms\...KeyMap`, a different shape entirely), and `Tabs\TabsKeyMap`, which merely *implements* this interface. Likewise two types are called *Help*: the `Key\Help` `{key, desc}` label value object bindings render through, and the `Help\Help` footer component. In a file that needs both, alias one at import: `use SugarCraft\Widgets\Help\Help as HelpFooter;` (or `…Key\Help as HelpLabel`) | — |
 | `Spinner\Spinner` | Animated loading glyph — 12 built-in styles _(deprecated alias — re-exported from `SugarCraft\Forms\Spinner`)_ | `Spinner\TickMsg` |

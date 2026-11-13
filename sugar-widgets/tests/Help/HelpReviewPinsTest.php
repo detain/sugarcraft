@@ -98,8 +98,8 @@ final class HelpReviewPinsTest extends TestCase
             $this->binding('ctrl+a', 'all'),
             $this->binding('q', 'quit'),
         ]);
-        $this->assertSame((new Help())->shortView($map), Help::new()->shortView($map));
-        $this->assertSame((new Help())->fullView($map), Help::new()->fullView($map));
+        $this->assertSame(Help::new()->shortView($map), Help::new()->shortView($map));
+        $this->assertSame(Help::new()->fullView($map), Help::new()->fullView($map));
     }
 
     public function testGapSettersAreHonoured(): void
@@ -119,7 +119,7 @@ final class HelpReviewPinsTest extends TestCase
     public function testWithWidthAliasSharesWidthCoercion(): void
     {
         $this->assertSame(24, Help::new()->withWidth(24)->maxWidth);
-        $this->assertEquals((new Help())->width(24), Help::new()->withWidth(24));
+        $this->assertEquals(Help::new()->width(24), Help::new()->withWidth(24));
         $this->expectException(\InvalidArgumentException::class);
         Help::new()->withWidth(-1);
     }

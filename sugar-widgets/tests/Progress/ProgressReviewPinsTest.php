@@ -30,7 +30,7 @@ final class ProgressReviewPinsTest extends TestCase
     {
         // The raw min/max ladder left NAN untouched by min(), and the fill
         // comparison then rounded NaN up to the full bar (m1).
-        $bar = new Progress(NAN);
+        $bar = Progress::new(NAN);
         self::assertSame(0.0, $bar->percent);
         $viaSetter = Progress::new()->withPercent(NAN);
         self::assertSame(0.0, $viaSetter->percent);

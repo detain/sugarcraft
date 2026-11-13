@@ -51,14 +51,13 @@ final class Progress
     private readonly ?\Closure $colorFunc;
 
     /**
-     * @deprecated Prefer {@see self::new()} plus named-args `with*()` calls:
-     *     this ctor's sixteen flat positional slots share types, so
-     *     `new Progress(50, 20, 'x', 'y', …)` silently mis-assigns. Direct
-     *     construction still works (BC); privatization is scheduled for the
-     *     next major once the factory is the only door.
-     *     e.g. `Progress::new(0.5)->withWidth(20)->withRunes('#', '.')`.
+     * Private on purpose (W-09): the sixteen flat positional slots share
+     * types, so `new Progress(50, 20, 'x', 'y', …)` silently mis-assigned.
+     * A direct `new Progress(...)` now fails with PHP's "Call to private
+     * Progress::__construct()" Error; the only door is {@see self::new()}
+     * plus `with*()`, e.g. `Progress::new(0.5)->withWidth(20)->withRunes('#', '.')`.
      */
-    public function __construct(
+    private function __construct(
         float $percent = 0.0,
         int $width = 40,
         string $fullChar = '█',

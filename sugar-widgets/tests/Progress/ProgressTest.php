@@ -66,12 +66,12 @@ final class ProgressTest extends TestCase
     public function testNegativeWidthRejected(): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        new Progress(width: -1);
+        Progress::new()->withWidth(-1);
     }
 
     public function testConstructorClampsPercentAboveOne(): void
     {
-        $p = new Progress(percent: 1.5, width: 10, showPercent: false);
+        $p = Progress::new(1.5)->withWidth(10)->withShowPercent(false);
         $this->assertSame(1.0, $p->percent);
         // Should render full bar without crashing on negative str_repeat.
         $this->assertSame(str_repeat('█', 10), $p->view());
@@ -79,7 +79,7 @@ final class ProgressTest extends TestCase
 
     public function testConstructorClampsPercentBelowZero(): void
     {
-        $p = new Progress(percent: -0.5, width: 10, showPercent: false);
+        $p = Progress::new(-0.5)->withWidth(10)->withShowPercent(false);
         $this->assertSame(0.0, $p->percent);
         $this->assertSame(str_repeat('░', 10), $p->view());
     }
@@ -484,7 +484,7 @@ final class ProgressTest extends TestCase
     public function testPercentFormatCheckedAtCtorIngress(): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        new Progress(percentFormat: '%q');
+        Progress::new()->withPercentFormat('%q');
     }
 
     public function testValueFormatCheckedAtIngress(): void
@@ -509,7 +509,7 @@ final class ProgressTest extends TestCase
     public function testEmptyRunesRejectedAtIngress(): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        new Progress(fullChar: '', emptyChar: '-');
+        Progress::new()->withRunes('', '-');
     }
 
     public function testColorFuncReturnIsTypeChecked(): void

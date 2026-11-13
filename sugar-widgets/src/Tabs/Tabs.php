@@ -61,13 +61,13 @@ final class Tabs implements Model
     public readonly int $scrollEnd;
 
     /**
-     * @deprecated Prefer {@see self::new()} (named args). The public ctor
-     *     sits beside the factory only for BC; privatization is scheduled
-     *     for the next major.
+     * Private on purpose (W-09): a direct `new Tabs(...)` fails with PHP's
+     * "Call to private Tabs::__construct()" Error; use {@see self::new()}
+     * plus `with*()`.
      *
      * @param list<string> $labels
      */
-    public function __construct(
+    private function __construct(
         public readonly int $active,
         public readonly Style $activeStyle,
         public readonly Style $inactiveStyle,

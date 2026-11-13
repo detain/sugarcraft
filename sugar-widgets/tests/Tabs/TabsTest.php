@@ -286,55 +286,19 @@ final class TabsTest extends TestCase
     public function testConstructorRejectsNegativeActive(): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        new Tabs(
-            active: -1,
-            activeStyle: \SugarCraft\Style\Style::new(),
-            inactiveStyle: \SugarCraft\Style\Style::new(),
-            divider: ' │ ',
-            keyMap: TabsKeyMap::new(),
-            focused: false,
-            wrap: true,
-            width: 80,
-            zoneManager: null,
-            labels: ['Home', 'Profile'],
-            scrollOffset: 0,
-        );
+        Tabs::new(['Home', 'Profile'])->withActive(-1);
     }
 
     public function testConstructorRejectsActiveBeyondLabels(): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        new Tabs(
-            active: 5,
-            activeStyle: \SugarCraft\Style\Style::new(),
-            inactiveStyle: \SugarCraft\Style\Style::new(),
-            divider: ' │ ',
-            keyMap: TabsKeyMap::new(),
-            focused: false,
-            wrap: true,
-            width: 80,
-            zoneManager: null,
-            labels: ['Home', 'Profile'],
-            scrollOffset: 0,
-        );
+        Tabs::new(['Home', 'Profile'])->withActive(5);
     }
 
     public function testEmptyLabelsAllowsAnyActive(): void
     {
         // Empty labels should not throw even with active=0
-        $t = new Tabs(
-            active: 0,
-            activeStyle: \SugarCraft\Style\Style::new(),
-            inactiveStyle: \SugarCraft\Style\Style::new(),
-            divider: ' │ ',
-            keyMap: TabsKeyMap::new(),
-            focused: false,
-            wrap: true,
-            width: 80,
-            zoneManager: null,
-            labels: [],
-            scrollOffset: 0,
-        );
+        $t = Tabs::new([])->withActive(3);
         $this->assertSame([], $t->labels());
     }
 
