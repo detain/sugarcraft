@@ -7,6 +7,7 @@ namespace SugarCraft\Log\Tests;
 use SugarCraft\Log\Log;
 use SugarCraft\Log\Logger;
 use SugarCraft\Log\Level;
+use SugarCraft\Log\Support\Stdio;
 use SugarCraft\Log\Formatter\JsonFormatter;
 use SugarCraft\Log\Formatter\LogfmtFormatter;
 use PHPUnit\Framework\TestCase;
@@ -610,6 +611,42 @@ final class LoggerTest extends TestCase
         // The STDOUT default must still pass the boundary guard untouched.
         $log = Logger::new(reportTimestamp: false);
         $this->assertInstanceOf(Logger::class, $log);
+    }
+
+    public function testStdioHelperReturnsProcessHandlesIdentityAndCached(): void
+    {
+        // [PORT-01] Shape pin: under CLI the lazy resolver must hand back the
+        // process-bound constants themselves (byte-identical CLI behavior),
+        // and repeat calls must return the same cached resource.
+        $this->assertSame(\STDOUT, Stdio::out());
+        $this->assertSame(\STDERR, Stdio::err());
+        $this->assertSame(Stdio::out(), Stdio::out());
+        $this->assertSame(Stdio::err(), Stdio::err());
+
+        // The constructor default flows through the same resolver.
+        $log = Logger::new(reportTimestamp: false);
+        $stream = new \ReflectionProperty(Logger::class, 'stream');
+        $stream->setAccessible(true);
+        $this->assertSame(\STDOUT, $stream->getValue($log));
+    }
+
+    public function testStdioReopensWhenTheCachedHandleWasClosed(): void
+    {
+        // [PORT-01] The announce path may see a freed handle; resolution must
+        // then re-open the channel instead of staying dead. A non-resource
+        // sentinel stands in for "slot holds a dead handle" — dangling
+        // resource ids get recycled inside a long test process, so relying on
+        // fclose() semantics here would be flaky by construction.
+        $cache = new \ReflectionProperty(Stdio::class, 'err');
+        $cache->setAccessible(true);
+        $cache->setValue(null, 'pretend-closed-handle');
+
+        $resolved = Stdio::err();
+        $this->assertIsResource($resolved, 'a dead cache entry must trigger re-resolution');
+
+        // Restore CLI identity for every later test.
+        $cache->setValue(null, null);
+        $this->assertSame(\STDERR, Stdio::err());
     }
 
     public function testErrorStreamRoutesSevereRecordsOnly(): void

@@ -7,6 +7,7 @@ namespace SugarCraft\Log;
 use SugarCraft\Log\Lang;
 use SugarCraft\Log\Formatter\TextFormatter;
 use SugarCraft\Log\PartsOrder;
+use SugarCraft\Log\Support\Stdio;
 use SugarCraft\ColorProfile\Probe;
 use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Style\Style;
@@ -124,7 +125,7 @@ final class Logger
         $this->timeFormat = $timeFormat;
         $this->reportCaller = $reportCaller;
         $this->fields = [];
-        $this->stream = self::requireStream($stream ?? \STDOUT);
+        $this->stream = self::requireStream($stream ?? Stdio::out());
         $this->errorStream = $errorStream === null ? null : self::requireStream($errorStream);
         $this->errorStreamAt = $this->errorStream === null ? null : ($errorStreamAt ?? Level::Error);
     }
@@ -274,12 +275,16 @@ final class Logger
      */
     private function reportWriteFailure(string $why, string $line): void
     {
-        if (!\is_resource(\STDERR)) {
+        // [PORT-01] Stdio::err() is SAPI-safe: under php-fpm \STDERR is not
+        // even defined, so the bare constant read in the old guard crashed
+        // the very path built to report failures.
+        $stderr = Stdio::err();
+        if (null === $stderr) {
             return;
         }
 
         $excerpt = \str_replace(["\n", "\r", "\t"], ' ', Sanitize::untrusted($line));
-        @\fwrite(\STDERR, '[sugar-log] log write failed: ' . $why . ': ' . $excerpt . "\n");
+        @\fwrite($stderr, '[sugar-log] log write failed: ' . $why . ': ' . $excerpt . "\n");
     }
 
     /**

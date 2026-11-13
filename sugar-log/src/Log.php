@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Log;
 
 use SugarCraft\ColorProfile\Probe;
+use SugarCraft\Log\Support\Stdio;
 
 /**
  * Static facade over a process-wide default {@see Logger}.
@@ -142,8 +143,10 @@ final class Log
         bool $showLocals = false,
         array $redactPaths = [],
     ): void {
+        // [PORT-01] SAPI-safe STDERR (php-fpm never defines the constant).
+        $panicStderr = Stdio::err();
         $formatter ??= self::panicFormatterPrefersColor(
-            \is_resource(\STDERR) && \stream_isatty(\STDERR)
+            null !== $panicStderr && \stream_isatty($panicStderr)
         )
             ? PanicFormatter::pretty($showLocals, $redactPaths)
             : PanicFormatter::plain($showLocals, $redactPaths);
@@ -161,11 +164,12 @@ final class Log
         \set_exception_handler(static function (\Throwable $e) use ($formatter, $previousHandler): void {
             self::restoreTerminal();
             $report = $formatter->format($e);
-            // [N7] Exotic hosts can close STDERR; a fwrite to a non-resource
-            // would raise during panic reporting — exactly when only safe
-            // code is allowed to run.
-            if (\is_resource(\STDERR)) {
-                @\fwrite(\STDERR, "\n{$report}\n");
+            // [N7] Exotic hosts can lose STDERR entirely; a fwrite to an
+            // unavailable stream would raise during panic reporting — exactly
+            // when only safe code is allowed to run. [PORT-01] SAPI-safe.
+            $bannerStderr = Stdio::err();
+            if (null !== $bannerStderr) {
+                @\fwrite($bannerStderr, "\n{$report}\n");
             }
 
             // Chain to previous handler if one was registered.
@@ -186,8 +190,11 @@ final class Log
             if ($err !== null && \in_array($err['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR], true)) {
                 self::restoreTerminal();
                 $msg = sprintf('%s: %s in %s on line %d', self::fatalTypeName($err['type']), $err['message'], $err['file'], $err['line']);
-                if (\is_resource(\STDERR)) {
-                    @\fwrite(\STDERR, "\n{$formatter->format(new \ErrorException($msg))}\n");
+                // [PORT-01] SAPI-safe: re-resolve at emit time, the install-time
+                // handle may be gone.
+                $fatalStderr = Stdio::err();
+                if (null !== $fatalStderr) {
+                    @\fwrite($fatalStderr, "\n{$formatter->format(new \ErrorException($msg))}\n");
                 }
             }
         });
@@ -204,15 +211,17 @@ final class Log
         // Guard: only emit ANSI codes when running in a real TTY.
         // fwrite to a closed or non-TTY stream can cause warnings.
         // stream_isatty() is core PHP — no ext-posix dependency.
-        if (!\is_resource(\STDERR) || !\stream_isatty(\STDERR)) {
+        // [PORT-01] SAPI-safe: Stdio::err() never touches an undefined constant.
+        $terminalStderr = Stdio::err();
+        if (null === $terminalStderr || !\stream_isatty($terminalStderr)) {
             return;
         }
 
         // Exit altscreen mode (SGR 1049).
-        \fwrite(\STDERR, "\x1b[?1049l");
+        \fwrite($terminalStderr, "\x1b[?1049l");
         // Show cursor.
-        \fwrite(\STDERR, "\x1b[?25h");
-        \fflush(\STDERR);
+        \fwrite($terminalStderr, "\x1b[?25h");
+        \fflush($terminalStderr);
 
         // Attempt TTY state restore if available.
         if (class_exists(\SugarCraft\Core\Util\Tty::class)) {

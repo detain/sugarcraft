@@ -6,6 +6,7 @@ namespace SugarCraft\Log\Hook;
 
 use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Log\Level;
+use SugarCraft\Log\Support\Stdio;
 
 /**
  * Registry for log hooks — collects callbacks per level and fires them
@@ -104,11 +105,13 @@ final class HookRegistry
      */
     private static function reportHookFailure(\Throwable $e): void
     {
-        if (!\is_resource(\STDERR)) {
+        // [PORT-01] SAPI-safe: see SugarCraft\Log\Support\Stdio.
+        $stderr = Stdio::err();
+        if (null === $stderr) {
             return;
         }
         $detail = \str_replace(["\n", "\r", "\t"], ' ', Sanitize::untrusted($e::class . ': ' . $e->getMessage()));
-        \fwrite(\STDERR, '[sugar-log] hook failed: ' . $detail . "\n");
+        \fwrite($stderr, '[sugar-log] hook failed: ' . $detail . "\n");
     }
 
 }

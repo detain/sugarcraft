@@ -9,6 +9,7 @@ use Psr\Log\LoggerInterface;
 use Psr\Log\LogLevel;
 use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Log\Hook\HookRegistry;
+use SugarCraft\Log\Support\Stdio;
 
 /**
  * PSR-3 bridge wrapping a Logger instance.
@@ -197,11 +198,13 @@ final class PsrBridge implements LoggerInterface
      */
     private static function reportInternalFailure(string $what, \Throwable $e): void
     {
-        if (!\is_resource(\STDERR)) {
+        // [PORT-01] SAPI-safe: see SugarCraft\Log\Support\Stdio.
+        $stderr = Stdio::err();
+        if (null === $stderr) {
             return;
         }
         $detail = \str_replace(["\n", "\r", "\t"], ' ', Sanitize::untrusted($e::class . ': ' . $e->getMessage()));
-        \fwrite(\STDERR, '[sugar-log] ' . $what . ': ' . $detail . "\n");
+        \fwrite($stderr, '[sugar-log] ' . $what . ': ' . $detail . "\n");
     }
 
     /**
