@@ -457,6 +457,15 @@ final class CliContractTest extends TestCase
         $this->assertStringContainsString('Imported 2 entries.', $many['stdout']);
     }
 
+    public function testCliRefusesStreamWrapperImportPathNamingScheme(): void
+    {
+        // kv-019 user-visible contract: wrapper URLs refuse at the import
+        // door, the refusal names the scheme, and nothing is imported.
+        $run = $this->runKvFeeding(['import', 'json', 'phar://nope.phar/data.json'], '{}');
+        $this->assertSame(1, $run['exit'], $run['stdout'] . $run['stderr']);
+        $this->assertStringContainsString('stream wrapper "phar://"', $run['stderr']);
+    }
+
     public function testEmptyAtomicImportCreatesNoDatabaseFile(): void
     {
         // Data-directory law (README): neither the directory nor a database

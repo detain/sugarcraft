@@ -51,9 +51,49 @@ final class ImportExportTest extends TestCase
         $this->assertSame('large', $this->store->get('size'));
     }
 
-    public function testJsonImporterFromString(): void
+    public function testImporterDoorsRefuseStreamWrapperPaths(): void
     {
-        $json = '{"a":"1","b":"2"}';
+        // kv-019: importFromFile() is the PUBLIC library door — wrapping
+        // automation feeds it paths from config and uploads, and a phar://
+        // URL there deserializes attacker metadata inside the store process.
+        foreach ([new JsonImporter($this->store), new YamlImporter($this->store)] as $importer) {
+            foreach (['phar://x.phar/import.json', 'data://text/plain;base64,e30=', 'php://filter/read=string.rot13/resource=x'] as $url) {
+                try {
+                    $importer->importFromFile($url, false);
+                    $this->fail($url . ' must be refused');
+                } catch (\InvalidArgumentException $e) {
+                    $scheme = \strstr($url, '://', true) . '://';
+                    $this->assertStringContainsString('stream wrapper', $e->getMessage(), $url);
+                    $this->assertStringContainsString($scheme, $e->getMessage(), 'refusal names the scheme');
+                }
+            }
+        }
+    }
+
+    public function testRelativePathsStayGreenThroughTheLibraryDoors(): void
+    {
+        // kv-019 allowlist half: plain paths — including relative spellings —
+        // must keep flowing; only wrapper URLs refuse.
+        $jsonPath = $this->tmpDir . '/rel.json';
+        \file_put_contents($jsonPath, '{"rel":"ok"}');
+        $blobPath = $this->tmpDir . '/rel.bin';
+        \file_put_contents($blobPath, 'bytes');
+
+        $cwd = \getcwd();
+        \chdir($this->tmpDir);
+
+        try {
+            $this->assertSame(1, (new JsonImporter($this->store))->importFromFile('rel.json', false));
+            $this->assertSame('ok', $this->store->get('rel'));
+            $this->store->setFile('rel-blob', 'rel.bin');
+            $this->assertSame('bytes', $this->store->get('rel-blob'));
+        } finally {
+            \chdir($cwd);
+        }
+    }
+
+    public function testJsonImporterFromString(): void
+    {        $json = '{"a":"1","b":"2"}';
         $importer = new JsonImporter($this->store);
         $count = $importer->importFromString($json, false);
 

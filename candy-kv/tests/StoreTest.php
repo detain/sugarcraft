@@ -438,6 +438,22 @@ final class StoreTest extends TestCase
         $this->store->setFile('key', '/nonexistent/path/to/file.txt');
     }
 
+    public function testSetFileRefusesStreamWrapperPaths(): void
+    {
+        // kv-019: setFile is a public library door; a phar:// URL would be
+        // deserialized by PHP before the read is even attempted.
+        foreach (['phar://x.phar/blob', 'data://text/plain,secret', 'php://stdin'] as $url) {
+            try {
+                $this->store->setFile('key', $url);
+                $this->fail($url . ' must be refused');
+            } catch (\InvalidArgumentException $e) {
+                $scheme = \strstr($url, '://', true) . '://';
+                $this->assertStringContainsString('stream wrapper', $e->getMessage(), $url);
+                $this->assertStringContainsString($scheme, $e->getMessage(), 'refusal names the scheme');
+            }
+        }
+    }
+
     // ─── Step 15 (b): getFile returns false for missing key ──────────────────
 
     public function testGetFileReturnsFalseForMissingKey(): void

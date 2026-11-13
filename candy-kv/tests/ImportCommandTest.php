@@ -164,6 +164,24 @@ final class ImportCommandTest extends TestCase
         $this->assertStringContainsString('File not found: /nonexistent/path/data.json', $this->captured($this->errStream));
     }
 
+    /**
+     * kv-019: stream-wrapper URLs are refused by scheme name BEFORE anything
+     * touches the filesystem — file_exists() on a phar:// URL already
+     * deserializes the archive's metadata inside this process.
+     */
+    public function testStreamWrapperImportPathsAreRefusedNamingScheme(): void
+    {
+        foreach (['phar://x.phar/data.json', 'data://text/plain;base64,e30=', 'php://filter/read=convert.base64-encode/resource=/etc/passwd', 'glob://*'] as $url) {
+            $scheme = \strstr($url, '://', true) . '://';
+            $exit = $this->cmd->run('json', $url, false);
+
+            $this->assertSame(1, $exit, $url . ' must be refused');
+            $stderr = $this->captured($this->errStream);
+            $this->assertStringContainsString('stream wrapper', $stderr, $url);
+            $this->assertStringContainsString($scheme, $stderr, $url . ' refusal must name the scheme');
+        }
+    }
+
     public function testRunUnknownFormatLeavesStoreUnchanged(): void
     {
         $this->store->set('existing', 'value');

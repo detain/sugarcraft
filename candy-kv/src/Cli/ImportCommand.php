@@ -8,6 +8,7 @@ use SugarCraft\Kv\Import\JsonImporter;
 use SugarCraft\Kv\Import\YamlImporter;
 use SugarCraft\Kv\Lang;
 use SugarCraft\Kv\Store;
+use SugarCraft\Kv\Support\InputPath;
 
 /**
  * CLI command handler for `candy-kv import`.
@@ -80,6 +81,9 @@ final class ImportCommand
                     $count = (new JsonImporter($this->store))->importFromString($json, $atomic);
                 }
             } else {
+                // kv-019: refuse wrapper URLs BEFORE file_exists — the stat
+                // itself deserializes phar archive metadata inside us.
+                InputPath::refuseStreamWrapper($path);
                 if (!\file_exists($path)) {
                     // Sanitize-on-egress: the path is caller-chosen argv bytes.
                     \fwrite($this->stderr, "File not found: " . Store::sanitizeForTty($path) . "\n");

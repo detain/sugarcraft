@@ -6,6 +6,7 @@ namespace SugarCraft\Kv\Import;
 
 use SugarCraft\Core\Util\Json;
 use SugarCraft\Kv\Store;
+use SugarCraft\Kv\Support\InputPath;
 use SugarCraft\Kv\Support\Ttl;
 use SugarCraft\Kv\YamlDialect;
 
@@ -110,6 +111,10 @@ final class JsonImporter
      */
     public function importFromFile(string $path, bool $atomic = true): int
     {
+        // kv-019: this is a PUBLIC library door — the path may come from
+        // config or uploads in wrapping automation, never a terminal argv.
+        InputPath::refuseStreamWrapper($path);
+
         $json = \file_get_contents($path);
         if ($json === false) {
             throw new \RuntimeException("Cannot read JSON file: {$path}");

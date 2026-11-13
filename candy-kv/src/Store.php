@@ -20,6 +20,7 @@ namespace SugarCraft\Kv;
 use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
 use SugarCraft\Kv\Lang;
+use SugarCraft\Kv\Support\InputPath;
 use SugarCraft\Kv\Support\Ttl;
 
 /**
@@ -409,6 +410,10 @@ final class Store
      */
     public function setFile(string $key, string $filePath): Entry
     {
+        // kv-019: public library door — a wrapper URL here would deserialize
+        // archive metadata before the read is even attempted.
+        InputPath::refuseStreamWrapper($filePath);
+
         // @-suppressed: the false return is handled with a proper exception;
         // the C-level warning would otherwise trip failOnWarning suites.
         $bytes = @\file_get_contents($filePath);
