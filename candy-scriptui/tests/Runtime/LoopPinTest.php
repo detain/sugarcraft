@@ -19,6 +19,8 @@ final class LoopPinTest extends TestCase
 {
     public function testPhpunitBootsTheTestBootstrap(): void
     {
+        // scriptui-53 KEEP (config-pin): phpunit.xml IS the contract — the
+        // live proof below only runs because this wiring exists.
         $xml = (string) file_get_contents(__DIR__ . '/../../phpunit.xml');
 
         self::assertStringContainsString('bootstrap="tests/bootstrap.php"', $xml);
@@ -26,6 +28,9 @@ final class LoopPinTest extends TestCase
 
     public function testBootstrapPinsTheStableClockBeforeAnythingElseRuns(): void
     {
+        // scriptui-53 KEEP (order-pin): this process cannot re-run its own
+        // bootstrap to observe ordering; the live loop-class check below is
+        // the downstream witness, this pin guards the sequence itself.
         $boot = (string) file_get_contents(__DIR__ . '/../../tests/bootstrap.php');
 
         self::assertStringContainsString('LoopPin::pinStableClock();', $boot);
@@ -49,6 +54,9 @@ final class LoopPinTest extends TestCase
 
     public function testSugarTestingIsADeclaredDevDependencyWithoutAPathRepo(): void
     {
+        // scriptui-53 KEEP (manifest-pin): the declared dependency shape is
+        // an install-time contract (path-repo closure law), not a runtime
+        // observable.
         $json = json_decode((string) file_get_contents(__DIR__ . '/../../composer.json'), true);
 
         self::assertIsArray($json);

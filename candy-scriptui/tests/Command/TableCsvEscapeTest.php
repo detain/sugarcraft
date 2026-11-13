@@ -63,8 +63,9 @@ final class TableCsvEscapeTest extends TestCase
 
     public function testNoFgetcsvEscapeArgleavesTheSource(): void
     {
-        // Gate-proof: the deprecated (8.4) escape call must be gone —
-        // failOnWarning="true" would turn a stray deprecation into red CI.
+        // Gate-proof (scriptui-53 KEEP, negation-pin): the deprecated (8.4)
+        // escape call must be gone — failOnWarning="true" would turn a stray
+        // deprecation into red CI.
         // (Comments may still NAME the old function; the CALL form may not.)
         $src = (string) file_get_contents(
             dirname(__DIR__, 2) . '/src/Command/TableCommand.php',

@@ -144,6 +144,9 @@ final class DumbPostureTest extends TestCase
 
     public function testTheDumbQuestionIsAskedInExactlyOnePlace(): void
     {
+        // scriptui-53 KEEP (purity): see the in-method rationale — the
+        // single-predicate shape and the getenv absence are re-fork guards
+        // no single-host run can witness.
         // Behavior-level posture is pinned above; this single source-text
         // pin keeps the predicate from being re-forked into a second
         // `=== 'dumb'` comparison (the finding's root: two partial answers).

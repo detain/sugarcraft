@@ -75,6 +75,12 @@ final class OptionListTest extends TestCase
 
     public function testBothListConsumersCallTheSharedSplitter(): void
     {
+        // scriptui-53 KEEP (wiring-pin): the splitter's behaviour is unit-
+        // tested exhaustively and the model's end-to-end preselect is proven
+        // in testCommaTitleIsPreselectableThroughFilterModel, but whether the
+        // CHOOSE/FILTER commands route --selected through it is only visible
+        // inside a live interactive Program (both refuse headless) — so the
+        // call-site itself is the contract.
         $choose = (string) \file_get_contents(__DIR__ . '/../../src/Command/ChooseCommand.php');
         $filter = (string) \file_get_contents(__DIR__ . '/../../src/Command/FilterCommand.php');
         self::assertStringContainsString('OptionList::expand((array) $input->getOption(\'selected\'))', $choose);

@@ -19,7 +19,11 @@ use SugarCraft\ScriptUi\Application;
  */
 final class ComposerMetadataTest extends TestCase
 {
-    /** @return array<string, mixed> */
+    /**
+     * scriptui-53 KEEP (manifest-pin): shared reader for the two headed
+     * manifest tests below — composer.json is the shipped contract itself.
+     * @return array<string, mixed>
+     */
     private static function manifest(): array
     {
         $json = json_decode((string) file_get_contents(__DIR__ . '/../composer.json'), true);
@@ -30,6 +34,10 @@ final class ComposerMetadataTest extends TestCase
 
     public function testTheDescriptionCountsTheLiveRosterHonestly(): void
     {
+        // scriptui-53 KEEP (manifest-pin): composer.json IS the shipped
+        // artifact — the description counting the live roster is an install-
+        // time truth no run command can introspect. The roster is re-derived
+        // from the real Application above the manifest read.
         $app = new Application();
         $names = array_values(array_filter(
             array_keys($app->all()),
@@ -49,6 +57,10 @@ final class ComposerMetadataTest extends TestCase
 
     public function testMbstringIsDeclaredBecauseSrcCallsItDirectly(): void
     {
+        // scriptui-53 KEEP (manifest-pin): the src scan exists to keep the
+        // composer.json declaration paired with direct mb_* use — a
+        // requirement an install-time contract, unobservable at runtime on a
+        // host that always has the extension loaded.
         $require = self::manifest()['require'] ?? [];
         self::assertArrayHasKey('ext-mbstring', $require, 'direct mb_* use must be declared, not transitive');
 

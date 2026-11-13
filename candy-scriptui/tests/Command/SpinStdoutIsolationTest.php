@@ -71,6 +71,11 @@ final class SpinStdoutIsolationTest extends TestCase
 
     public function testCapturePostureSourcePins(): void
     {
+        // scriptui-53 KEEP (cross-platform pin): the spinner-arm behaviour
+        // legs above self-skip when the host has no controlling terminal, so
+        // the forced-capture posture and its option-help promise stay
+        // greppable. The capture behaviour itself is proven by the
+        // runSpinnerBin and FakeProcess legs above.
         $cmd = (string) \file_get_contents(__DIR__ . '/../../src/Command/SpinCommand.php');
 
         self::assertStringContainsString('$headless ? $showOutput : true', $cmd, 'the spinner arm must force captureStdout');

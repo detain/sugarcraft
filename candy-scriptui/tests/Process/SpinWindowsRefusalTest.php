@@ -123,6 +123,10 @@ final class SpinWindowsRefusalTest extends TestCase
      */
     public function testRefusalKeyIsCarriedByEveryLocale(): void
     {
+        // scriptui-53 KEEP (data-pin): the catalogs are loaded as data and
+        // the key contract is checked per-locale — the Windows refusal legs
+        // above self-skip off-Windows, and the first Windows runner must
+        // never be the first probe that the key ships everywhere.
         $files = glob(__DIR__ . '/../../lang/*.php');
         self::assertGreaterThanOrEqual(16, count($files), 'the shipped locale set shrank');
 
@@ -145,6 +149,10 @@ final class SpinWindowsRefusalTest extends TestCase
      */
     public function testGuardAndSurfaceAreWiredInSource(): void
     {
+        // scriptui-53 KEEP (cross-platform pin): the Windows behaviour legs
+        // above self-skip off-Windows, so the guard ORDER (refusal precedes
+        // any proc_open, catch wraps the spawn) is the observable this
+        // platform can check. On Windows the refusal is proven end-to-end.
         $real = (string) file_get_contents(__DIR__ . '/../../src/Process/RealProcess.php');
         $refusal = strpos($real, "'" . self::KEY . "'");
         $spawnOpen = strpos($real, '@\\proc_open');

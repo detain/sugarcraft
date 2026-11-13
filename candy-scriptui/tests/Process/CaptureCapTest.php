@@ -93,6 +93,10 @@ final class CaptureCapTest extends TestCase
 
     public function testSpinCommandRidesTheDropTallyWithOneNotice(): void
     {
+        // scriptui-53 KEEP (count-pin): the single notice rides the live
+        // spinner arm (controlling-terminal only, self-skip elsewhere), so
+        // the one-per-tally shape is pinned in source. RealProcess capture
+        // capping itself is exhaustively behaviour-tested above.
         // Source-shape pin (the CommandSignalAndCursorWiringTest family):
         // both slots' tallies feed exactly one `spinner.output_truncated`
         // notice line on the diagnostics stream. Deleting the notice block

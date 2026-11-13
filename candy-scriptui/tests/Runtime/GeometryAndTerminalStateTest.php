@@ -207,8 +207,19 @@ final class GeometryAndTerminalStateTest extends TestCase
     #[DataProvider('fullscreenCommandProvider')]
     public function testFullscreenCommandsOfferNoAltScreen(string $class): void
     {
+        // scriptui-53: the offer is proven through the live Command
+        // definition (parse-time behaviour), not the addOption text. The
+        // negated thread-through stays grepped: which value useAltScreen
+        // receives is only observable inside a live Program render — the
+        // headless shape refuses before the flag is read.
+        $name = strtolower(preg_replace('/Command$/', '', $class) ?? $class);
+        $command = (new \SugarCraft\ScriptUi\Application())->find($name);
+        self::assertTrue(
+            $command->getDefinition()->hasOption('no-alt-screen'),
+            $class . ' must offer --no-alt-screen on its live definition',
+        );
+
         $src = (string) file_get_contents(\dirname(__DIR__, 2) . '/src/Command/' . $class . '.php');
-        self::assertStringContainsString("addOption('no-alt-screen'", $src);
         self::assertStringContainsString('useAltScreen: ! (bool) $input->getOption(\'no-alt-screen\')', $src);
     }
 
@@ -227,6 +238,10 @@ final class GeometryAndTerminalStateTest extends TestCase
     #[DataProvider('widthAwareCommandProvider')]
     public function testWidthAwareCommandsThreadTheirFlag(string $class): void
     {
+        // scriptui-53 KEEP (wiring-pin): the threaded width reaches the model
+        // viewport only inside a live Program render (these commands refuse
+        // headless); the model-side geometry it feeds is behaviour-tested in
+        // this class.
         $src = (string) file_get_contents(\dirname(__DIR__, 2) . '/src/Command/' . $class . '.php');
         self::assertStringContainsString("getOption('width')", $src, $class . ' must thread --width into its model');
     }

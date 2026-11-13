@@ -131,6 +131,9 @@ final class ThemedFrameTest extends TestCase
 
     public function testEveryInteractiveCommandActuallyWrapsItsModel(): void
     {
+        // scriptui-53 KEEP (wiring-pin): see the in-method rationale — the
+        // frame wraps inside the live Program loop, unreachable headless, so
+        // the wrap/unwrap call sites ARE the contract.
         // The wrap happens inside the live Program loop, which no headless
         // harness can screenshot — so the wiring itself is the contract:
         // each command must route its model through StyledFrame when a

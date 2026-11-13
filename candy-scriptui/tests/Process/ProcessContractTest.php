@@ -61,6 +61,10 @@ final class ProcessContractTest extends TestCase
      */
     public function testDeprecatedDoubleCopyShapeIsGone(): void
     {
+        // scriptui-53 KEEP (absence-census): the consolidation promise is
+        // that second-copy shapes are GONE from every src/Process file;
+        // behaviour can only prove the canonical copy works (RealProcessTest
+        // does), not that a dead delegate snuck back elsewhere.
         $files = \glob(\dirname(__DIR__, 2) . '/src/Process/*.php');
         $this->assertIsArray($files);
         $this->assertNotCount(0, $files);

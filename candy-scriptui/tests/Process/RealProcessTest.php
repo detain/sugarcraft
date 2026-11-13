@@ -141,6 +141,11 @@ final class RealProcessTest extends TestCase
      */
     public function testTerminateIsNotGatedOnThePosixKillExtension(): void
     {
+        // scriptui-53 KEEP (negation-pin): the contract is that a gate is
+        // ABSENT — the old function_exists('posix_kill') guard silently
+        // disabled the signal on FFI-only hosts, and no single-host
+        // behaviour run can witness its regression. The escalate behaviour
+        // itself is proven live in testCloseEscalatesToKillAfterGrace.
         $source = \file_get_contents(__DIR__ . '/../../src/Process/RealProcess.php');
         $this->assertIsString($source);
         $this->assertStringNotContainsString("function_exists('posix_kill')", $source);

@@ -18,6 +18,10 @@ final class NumericDoorCensusTest extends TestCase
 {
     public function testNoIntCastsOnOptionValuesRemain(): void
     {
+        // scriptui-53 KEEP (census-pin, -29 cast-guard family): a repo-wide
+        // absence cannot be witnessed by any single behaviour run — every
+        // command file must be walked. The parse doors themselves are
+        // behaviour-tested (PositiveIntTest, NumericDoor legs).
         $files = glob(__DIR__ . '/../../src/Command/*.php');
         $this->assertNotEmpty($files, 'command roster must be discoverable');
 
@@ -38,6 +42,9 @@ final class NumericDoorCensusTest extends TestCase
 
     public function testNumericFlagRosterIsDoorGuarded(): void
     {
+        // scriptui-53 KEEP (census-pin): pairing option registration with
+        // its parse door is a static roster question across every command
+        // file — behaviour runs cover the doors individually (NumericDoorTest).
         // Every command that registers an int-ish VALUE_REQUIRED option
         // must call PositiveInt::parse (numeric flag roster).
         $numericFlags = ['height', 'width', 'limit', 'char-limit', 'max-lines'];

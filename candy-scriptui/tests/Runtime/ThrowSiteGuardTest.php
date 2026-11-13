@@ -79,10 +79,43 @@ final class ThrowSiteGuardTest extends TestCase
 
     public function testGuardsRouteThroughTheSharedRefusalShape(): void
     {
-        foreach (['SpinCommand', 'TableCommand', 'LogCommand'] as $class) {
-            $path = __DIR__ . '/../../src/Command/' . $class . '.php';
-            $src = (string) \file_get_contents($path);
-            self::assertStringContainsString("Lang::t('runtime.unknown_choice'", $src, $class);
+        // scriptui-53: the shared refusal shape is executed, not grepped —
+        // each guarded flag's bad value must produce the runtime.unknown_choice
+        // sentence on the real bin's captured STDERR with captured STDOUT
+        // clean (the old arms compared Lang::t call text across three files).
+        if (PHP_OS_FAMILY === 'Windows') {
+            self::markTestSkipped('bounded child probes require a POSIX timeout(1)');
+        }
+        /** @var array<string, array{0: list<string>, 1: string, 2: string}> $doors */
+        $doors = [
+            'spin'  => [['spin', '--style=whirl', '--', '/bin/true'], "Invalid value for --style: 'whirl'. Allowed: line|dot", ''],
+            'table' => [['table', '--border=zorg'], "Invalid value for --border: 'zorg'. Allowed: none|normal", "a,b\n"],
+            'log'   => [['log', '--level=whisper', 'hello'], "Invalid value for --level: 'whisper'. Allowed: debug|info", ''],
+        ];
+        $bin = \dirname(__DIR__, 2) . '/bin/candy-scriptui';
+        foreach ($doors as $label => [$args, $needle, $stdin]) {
+            $proc = proc_open(
+                ['timeout', '-s', 'KILL', '20', PHP_BINARY, $bin, ...$args],
+                [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+                $pipes,
+                \dirname($bin),
+                ['PATH' => (string) getenv('PATH'), 'HOME' => (string) getenv('HOME')],
+            );
+            self::assertIsResource($proc, $label . ': the bin child must spawn');
+            if ($stdin !== '') {
+                fwrite($pipes[0], $stdin);
+            }
+            fclose($pipes[0]);
+            $stdout = (string) stream_get_contents($pipes[1]);
+            $stderr = (string) stream_get_contents($pipes[2]);
+            fclose($pipes[1]);
+            fclose($pipes[2]);
+            $status = proc_close($proc);
+
+            self::assertSame(1, $status, $label . ' must refuse the unlisted value with FAILURE');
+            self::assertSame('', $stdout, $label . ': the refusal is diagnostics, never the data stream');
+            self::assertStringContainsString($needle, $stderr,
+                $label . ' must answer with the shared runtime.unknown_choice sentence');
         }
     }
 }

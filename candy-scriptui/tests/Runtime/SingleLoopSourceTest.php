@@ -37,6 +37,9 @@ final class SingleLoopSourceTest extends TestCase
     #[DataProvider('commandProvider')]
     public function testEachCommandCapturesTheLoopExactlyOnce(string $file): void
     {
+        // scriptui-53 KEEP (purity): the count IS the contract — the defect
+        // is a FUTURE second read, which no present-day behaviour run can
+        // witness. -51's documented grep-pin, kept by the scriptui-53 ruling.
         $src = (string) file_get_contents(__DIR__ . '/../../src/Command/' . $file);
 
         if (!str_contains($src, 'TimeoutGuard::arm')) {
@@ -56,6 +59,9 @@ final class SingleLoopSourceTest extends TestCase
 
     public function testRuntimeTakesTheLoopFromItsCaller(): void
     {
+        // scriptui-53 KEEP (purity): the options factory must be
+        // parameter-driven; the singleton count pin is -51's cure text,
+        // unobservable while caller and callee happen to agree.
         $src = (string) file_get_contents(__DIR__ . '/../../src/Runtime/InteractiveRuntime.php');
 
         // The headless nullness probe may resolve the singleton for itself
@@ -69,6 +75,9 @@ final class SingleLoopSourceTest extends TestCase
 
     public function testNobodySwapsTheSingletonMidFlight(): void
     {
+        // scriptui-53 KEEP (absence-purity): Loop::set() would only bite on
+        // a host that swaps the singleton mid-flight — no in-suite run
+        // reaches that state, so the absence is the observable.
         foreach (['src/Command', 'src/Runtime', 'src/Model'] as $dir) {
             foreach ((array) glob(__DIR__ . '/../../' . $dir . '/*.php') as $file) {
                 $src = (string) file_get_contents((string) $file);

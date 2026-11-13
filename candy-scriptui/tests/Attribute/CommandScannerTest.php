@@ -118,8 +118,8 @@ final class CommandScannerTest extends TestCase
      * docs-fix-1023 NIT: a #[Command] class the scanner cannot construct used
      * to be dropped in total silence — the tool would just be missing a
      * subcommand nobody could explain. scan() now records it in skipped()
-     * (and warns on STDERR; the constant stream cannot be captured in-process,
-     * so the roster is the tested contract, pinned structurally for the warn).
+     * (and warns on STDERR; scriptui-53 captures that stream at the process
+     * boundary, so the roster AND the warning are behavioural now).
      */
     public function testScannerReportsUnconstructibleCommandsInsteadOfVanishingThem(): void
     {
@@ -141,10 +141,35 @@ final class CommandScannerTest extends TestCase
             'an un-constructible command must surface in skipped()',
         );
 
-        $src = (string) file_get_contents(
-            __DIR__ . '/../../src/Discovery/CommandScanner.php'
+        // scriptui-53: the loud pairing is captured at the fd boundary — a
+        // real child scanning the fixture namespace answers with the skip
+        // warning on its captured STDERR (stdout clean). (The old arm
+        // grepped the warning text out of CommandScanner.php.)
+        if (PHP_OS_FAMILY === 'Windows') {
+            self::markTestSkipped('bounded child probes require a POSIX timeout(1)');
+        }
+        $root = \dirname(__DIR__, 2);
+        $code = 'require ' . var_export($root . '/vendor/autoload.php', true) . ';'
+            . ' require_once ' . var_export($root . '/tests/Fixtures/Command/NeedsDependencyCommand.php', true) . ';'
+            . ' $app = new \SugarCraft\ScriptUi\Application(); $app->setAutoExit(false);'
+            . ' (new \SugarCraft\ScriptUi\Discovery\CommandScanner())->scan('
+            . var_export('SugarCraft\\ScriptUi\\Tests\\Fixtures\\Command', true) . ', $app);';
+        $proc = proc_open(
+            ['timeout', '-s', 'KILL', '20', PHP_BINARY, '-r', $code],
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $childPipes,
+            $root,
+            ['PATH' => (string) getenv('PATH'), 'HOME' => (string) getenv('HOME')],
         );
-        $this->assertStringContainsString('candy-scriptui: skipping command', $src,
+        $this->assertIsResource($proc, 'the probe child must spawn');
+        fclose($childPipes[0]);
+        $childStdout = (string) stream_get_contents($childPipes[1]);
+        $childStderr = (string) stream_get_contents($childPipes[2]);
+        fclose($childPipes[1]);
+        fclose($childPipes[2]);
+        $this->assertSame(0, proc_close($proc));
+        $this->assertSame('', $childStdout, 'the skip warning is a diagnostic, never program output');
+        $this->assertStringContainsString('candy-scriptui: skipping command', $childStderr,
             'the skip roster must stay paired with its loud STDERR warning');
 
         // scan() resets the roster between runs (no ghost entries).

@@ -127,12 +127,12 @@ final class BinStartupLocaleTest extends TestCase
         );
         self::assertStringNotContainsString('Invalid value', $stderr);
         self::assertStringNotContainsString('Erlaubt', $stderr);
-        $pt = (string) file_get_contents(__DIR__ . '/../lang/pt.php');
-        $ptBr = (string) file_get_contents(__DIR__ . '/../lang/pt-br.php');
         // scriptui-53 KEEP (data-pin): the expected wording is read from the
         // catalogs themselves (the only ground truth for it) and asserted
-        // against the executed child's STDERR — the behaviour leg above the
-        // data compare is the test, this only sources the needle.
+        // against the executed child's STDERR — the behaviour leg is the
+        // test, this only sources the needle.
+        $pt = (string) file_get_contents(__DIR__ . '/../lang/pt.php');
+        $ptBr = (string) file_get_contents(__DIR__ . '/../lang/pt-br.php');
         // Values may be single- or double-quoted PHP literals (scriptui-56
         // re-quotes values containing apostrophes as doubles); either form
         // satisfies the contract, so the pin accepts both.

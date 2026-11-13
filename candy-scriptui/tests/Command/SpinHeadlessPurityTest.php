@@ -78,6 +78,10 @@ final class SpinHeadlessPurityTest extends TestCase
      */
     public function testFallbackLiteralIsGoneAndArmIsWired(): void
     {
+        // scriptui-53 KEEP (cross-platform pin): the setsid subprocess legs
+        // above self-skip on hosts without util-linux setsid(1), so the
+        // fallback's absence and the dispatch wiring must stay greppable
+        // everywhere the behaviour legs cannot run.
         $cmd = (string) file_get_contents(__DIR__ . '/../../src/Command/SpinCommand.php');
         self::assertStringNotContainsString('withoutRenderer', $cmd, 'the raw-STDIN key-seeding Program fallback must never return');
         self::assertStringContainsString('InteractiveRuntime::isHeadless()', $cmd);

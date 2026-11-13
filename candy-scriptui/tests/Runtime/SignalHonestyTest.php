@@ -19,6 +19,8 @@ final class SignalHonestyTest extends TestCase
 {
     public function testComposerSuggestsExtPcntl(): void
     {
+        // scriptui-53 KEEP (manifest-pin): the suggest entry IS the contract
+        // — it is an install-time declaration no runtime probe can observe.
         $manifest = \json_decode(
             (string) \file_get_contents(__DIR__ . '/../../composer.json'),
             true,
@@ -52,6 +54,10 @@ final class SignalHonestyTest extends TestCase
 
     public function testEveryCancellationOptionPassesThroughTheWarningArm(): void
     {
+        // scriptui-53 KEEP (count-pin, -51 grep-pin family): the warning is
+        // only emitted on a pcntl-less host running the live arm —
+        // extension_loaded('pcntl') is the truth of this box, so no
+        // behaviour run here can enumerate the construction sites.
         $src = (string) \file_get_contents(__DIR__ . '/../../src/Runtime/InteractiveRuntime.php');
 
         // Each catchInterrupts: true construction is wrapped by the

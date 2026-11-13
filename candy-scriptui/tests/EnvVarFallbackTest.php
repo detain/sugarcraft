@@ -84,6 +84,9 @@ final class EnvVarFallbackTest extends TestCase
         $this->assertSame($expectedVersion, $version);
 
         // The host root's version must never surface as the tool's own.
+        // (scriptui-53 KEEP, data-source: both composer.json reads source
+        // expected values for the EXECUTED versionFromComposer — the probe
+        // is behaviour, the JSON is only the ground-truth needle.)
         $rootJson = json_decode(file_get_contents(dirname(__DIR__, 2) . '/composer.json'), true);
         if (is_array($rootJson) && isset($rootJson['version'])) {
             $this->assertNotSame($rootJson['version'], $version);
