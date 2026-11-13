@@ -143,6 +143,7 @@ final class Renderer
                 $scoreText . $highScorePlain,
                 Lang::t('ui.crash_full'),
                 Lang::t('ui.crash_short'),
+                Lang::t('ui.crash_floor'),
             );
             $hint = Style::new()->foreground(Color::hex(self::CRASH))->bold()
                 ->render($hintPlain);
@@ -238,6 +239,7 @@ final class Renderer
                 $scoreText . $recordPlain,
                 Lang::t('ui.plain_crash_full'),
                 Lang::t('ui.plain_crash_short'),
+                Lang::t('ui.plain_crash_floor'),
             );
             return implode("\n", $rows) . "\n " . $scoreText . $recordPlain . '    ' . $hint . "\n";
         }
@@ -324,13 +326,24 @@ final class Renderer
      * frame. Contract (m6): $prefixPlain carries EVERY visible cell between the
      * leading space and the 4-space joiner — trailing padding on the score /
      * best segment included — so the budget equals the assembled row exactly.
+     *
+     * flappy-14 (finding -021): an optional third tier. With the 🏆 banner on
+     * the crash card even the short hint overruns the 62-column floor and
+     * fit() clipped it mid-word; the floor tier (keys only, splat noun
+     * dropped) keeps a COMPLETE hint whole. When even that cannot fit the
+     * hint is omitted whole rather than clipped — a missing affordance is
+     * honest, a mid-word 'q qu' is the m6 defect class.
      */
-    private static function pickHint(Game $g, string $prefixPlain, string $hintFull, string $hintShort): string
+    private static function pickHint(Game $g, string $prefixPlain, string $hintFull, string $hintShort, string $hintFloor = ''): string
     {
-        if (Width::of(' ' . $prefixPlain) + 4 + Width::of($hintFull) <= $g->frameCols) {
+        $used = Width::of(' ' . $prefixPlain) + 4;
+        if ($used + Width::of($hintFull) <= $g->frameCols) {
             return $hintFull;
         }
-        return $hintShort;
+        if ($hintFloor === '' || $used + Width::of($hintShort) <= $g->frameCols) {
+            return $hintShort;
+        }
+        return $used + Width::of($hintFloor) <= $g->frameCols ? $hintFloor : '';
     }
 
     /** Last-resort guarantee (M26): no rendered row exceeds the viewport. */

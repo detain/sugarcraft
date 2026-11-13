@@ -199,4 +199,39 @@ final class TerminalPostureTest extends TestCase
         [$re,] = $g->update(new KeyMsg(KeyType::Char, 'r'));
         $this->assertStringContainsString('needs a 62x21 terminal', $re->view());
     }
+
+    public function testCrashRecordHintStaysWholeDownToTheFloor(): void
+    {
+        // flappy-14 (finding -021): with the 🏆 banner on the crash card the
+        // assembled status row overran MIN_COLS=62 and fit() clipped the
+        // short tier mid-word ('💥 splat — r retry · q q…'); at score 1234
+        // the quit affordance disappeared. A floor tier (keys only, splat
+        // noun dropped) must keep ONE complete crash hint whole across the
+        // 62..82 band (82 = where fit() starts skipping the row walk).
+        $en = require __DIR__ . '/../lang/en.php';
+        $tiers = [$en['ui.crash_full'], $en['ui.crash_short'], $en['ui.crash_floor']];
+        $g = new Game(
+            bird: $this->sized(62, 24)->bird,
+            pipes: [],
+            score: 1234,
+            crashed: true,
+            highScores: [1234],
+            newRecord: true,
+            configDir: $this->hermeticConfigDir(),
+        );
+        foreach (range(62, 82) as $cols) {
+            [$sized,] = $g->update(new WindowSizeMsg($cols, 24));
+            $rows = explode("\n", rtrim($sized->view(), "\n"));
+            $status = (string) end($rows);
+            $this->assertLessThanOrEqual($cols, Width::of($status), "status row exceeds $cols cols");
+            $whole = false;
+            foreach ($tiers as $tier) {
+                if (str_contains($status, $tier) === true) {
+                    $whole = true;
+                    break;
+                }
+            }
+            $this->assertTrue($whole, "no complete crash hint survived at $cols cols: '$status'");
+        }
+    }
 }

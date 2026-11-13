@@ -56,10 +56,10 @@ final class LocaleParityTest extends TestCase
         foreach (
             [
                 'score', 'best', 'new_best', 'plain_new_best',
-                'crash_full', 'crash_short',
+                'crash_full', 'crash_short', 'crash_floor',
                 'ready_full', 'ready_short',
                 'live_full', 'live_short',
-                'plain_crash_full', 'plain_crash_short',
+                'plain_crash_full', 'plain_crash_short', 'plain_crash_floor',
                 'plain_ready_full', 'plain_ready_short',
                 'plain_live_full', 'plain_live_short',
                 'quit_hint',
