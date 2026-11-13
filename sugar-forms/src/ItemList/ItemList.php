@@ -183,6 +183,39 @@ final class ItemList implements Model
     /** Render the component as a multi-line ANSI string. */
     public function view(): string
     {
+        return implode("\n", $this->clip($this->renderLines()));
+    }
+
+    /**
+     * SF-002: view() used to emit every line unclipped — a 200-cell title,
+     * an indented description, the status bar or the filter echo overflowed
+     * the declared width and the host terminal soft-wrapped them, desyncing
+     * the height/mouse layout. Every emitted line is now truncated to
+     * `$this->width` measured in VISIBLE CELLS (the cursor's reverse-video
+     * segment and the prefixes ride Width::truncateAnsi's ANSI-aware pass;
+     * trailing SGR resets are harvested, not counted). width == 0 declares
+     * no budget: the byte-identical legacy path.
+     *
+     * @param list<string> $lines
+     * @return list<string>
+     */
+    private function clip(array $lines): array
+    {
+        if ($this->width <= 0) {
+            return $lines;
+        }
+        $width = $this->width;
+        return array_map(
+            static fn(string $line): string => Width::truncateAnsi($line, $width),
+            $lines
+        );
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function renderLines(): array
+    {
         $visible = $this->visibleItems();
         $count   = count($visible);
         $lines   = [];
@@ -201,7 +234,7 @@ final class ItemList implements Model
             if ($this->showStatusBar && ($status = $this->status()) !== '') {
                 $lines[] = $status;
             }
-            return implode("\n", $lines);
+            return $lines;
         }
 
         $top    = max(0, $this->offset);
@@ -230,7 +263,7 @@ final class ItemList implements Model
         if ($this->showStatusBar && ($status = $this->status()) !== '') {
             $lines[] = $status;
         }
-        return implode("\n", $lines);
+        return $lines;
     }
 
     public function selectedItem(): ?Item
