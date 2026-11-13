@@ -125,4 +125,57 @@ final class ToastFrameTest extends TestCase
         $rect = $toast->actionRects()[0];
         $this->assertInstanceOf(Action::class, $toast->actionAt($rect['col'], $rect['row']));
     }
+
+    public function testPlaceAtInPlaceReproducesTheCompositedBoxRowsAndRects(): void
+    {
+        // FRAME-inset: over a blank background, the cropped box rows are
+        // exactly the composited rows' box rectangle.
+        $toast = $this->toastWithAction(Position::TopRight);
+        $frame = $toast->frame('', 60, 10);
+        $this->assertNotNull($frame->bounds);
+        ['x' => $bx, 'y' => $by, 'width' => $bw, 'height' => $bh] = $frame->bounds;
+
+        $placed = $frame->placeAt($bx, $by);
+        $this->assertSame($frame->actionRects(), $placed->actionRects());
+        $this->assertSame($bh, \count($placed->boxRows()));
+        $full = $frame->boxRows();
+        foreach ($placed->boxRows() as $i => $line) {
+            $this->assertSame(
+                \SugarCraft\Core\Util\Width::takeAnsi(\SugarCraft\Core\Util\Width::dropAnsi($full[$by + $i], $bx), $bw),
+                $line
+            );
+            $this->assertSame($bw, \SugarCraft\Core\Util\Width::string($line));
+        }
+    }
+
+    public function testPlaceAtInsetTranslatesOriginBoundsAndHitRects(): void
+    {
+        $toast = $this->toastWithAction(Position::TopRight);
+        $frame = $toast->frame('', 60, 10);
+        $inset = $frame->placeAt(3, 2);
+
+        $this->assertSame(['x' => 3, 'y' => 2, 'width' => $frame->bounds['width'], 'height' => $frame->bounds['height']], $inset->bounds);
+        $orig = $frame->actionRects()[0];
+        $moved = $inset->actionRects()[0];
+        $this->assertSame($orig['col'] - $frame->bounds['x'] + 3, $moved['col']);
+        $this->assertSame($orig['row'] - $frame->bounds['y'] + 2, $moved['row']);
+        $this->assertNotNull($inset->actionAt($moved['col'], $moved['row']));
+        $this->assertNull($frame->placeAt(3, 2)->actionAt($orig['col'], $orig['row'] + 20));
+    }
+
+    public function testPlaceAtOnAHandBuiltFrameThrows(): void
+    {
+        $this->expectException(\LogicException::class);
+        (new ToastFrame(0, 0, "x\n"))->placeAt(1, 1);
+    }
+
+    public function testBoundsSpanTheWholeStack(): void
+    {
+        $toast = Toast::new(30)->withPosition(Position::TopLeft)
+            ->alert(ToastType::Info, 'one')->alert(ToastType::Info, 'two');
+        $frame = $toast->frame('', 60, 20);
+        $this->assertSame(0, $frame->bounds['x']);
+        $this->assertSame(0, $frame->bounds['y']);
+        $this->assertSame(6, $frame->bounds['height']);
+    }
 }

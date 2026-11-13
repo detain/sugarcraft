@@ -597,7 +597,8 @@ already over the new cap survive until the next push evicts them.
 | `->actionRects(?string $background = null, ?int $viewportWidth = null, ?int $viewportHeight = null): list<array{action:Action,alert:Alert,alertIndex:int,actionIndex:int,row:int,col:int,width:int}>` | Frame cells of every painted `[Label]` button — omitted args read the last render, mismatched args throw; the `"+N more"` fold is prose, never a rect |
 | `->frame(?string $background = null, ?int $viewportWidth = null, ?int $viewportHeight = null): ?ToastFrame` | The rendered frame as a value object (`boxRows()`/`actionRects()`/`actionAt()`); `null` when nothing renders |
 | `->actionAt(int $col, int $row, ?string $background = null, ?int $viewportWidth = null, ?int $viewportHeight = null): ?Action` | The dispatch door: which Action (if any) covers a frame cell — top-most (newest) box wins where rows overlap |
-| `ToastFrame::boxRows(): list<string>` | The composed frame as lines (no trailing-newline artefact) — over an empty background, exactly the box rows |
+| `ToastFrame::boxRows(): list<string>` | The composed frame as lines (no trailing-newline artefact) — the full viewport-sized frame; use `placeAt()` for the box rectangle alone |
+| `ToastFrame::placeAt(int $col, int $row): ToastFrame` | Re-anchor the painted boxes at a host-chosen cell (inset): a frame whose `boxRows()` are only the boxes' bounding rectangle, background stripped, with `x`/`y`/`bounds` and every hit rect translated to the new origin |
 | `Lang::t(string $key, array $params = []): string` | Translate a known key ('dismiss', 'count', 'type.*') — see Internationalization |
 | `->view(string $background, int $viewportWidth = 80, int $viewportHeight = 24): string` | Render the toast layer over the background — frame bounds and ellipsize laws in Stacking & The Frame |
 

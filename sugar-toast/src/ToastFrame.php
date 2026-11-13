@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Toast;
 
+use SugarCraft\Core\Util\Width;
+
 /**
  * A rendered frame: the exact bytes {@see Toast::view()} painted, plus the
  * geometry that produced them.
@@ -34,6 +36,14 @@ final class ToastFrame
         public readonly string $rows,
         /** Hit-test rectangles of every painted action button, queue order. */
         public readonly array $rects = [],
+        /**
+         * Bounding rectangle of EVERY painted box (a stack spans more than
+         * the newest box). null on a hand-built frame, which cannot be
+         * re-placed — the geometry is only trustworthy from Toast::frame().
+         *
+         * @var array{x:int,y:int,width:int,height:int}|null
+         */
+        public readonly ?array $bounds = null,
     ) {
     }
 
@@ -75,5 +85,47 @@ final class ToastFrame
             }
         }
         return null;
+    }
+
+    /**
+     * Re-anchor the painted boxes at a host-chosen cell: the inset door the
+     * nine anchors cannot express (candy-code wants a top-right box inset
+     * from the screen edge, and hand-pasted rows with a re-derived x).
+     *
+     * Returns a frame whose rows are ONLY the bounding rectangle of the
+     * boxes — background stripped, cell-exact cut through the ANSI — with
+     * x/y/bounds and every hit rect translated so ($col, $row) is where the
+     * rectangle's top-left cell now lives. Pasting boxRows() at ($col,
+     * $row) reproduces the composited box; placeAt(bounds x, bounds y)
+     * reproduces it in place.
+     *
+     * @throws \LogicException on a frame not produced by Toast::frame()
+     */
+    public function placeAt(int $col, int $row): self
+    {
+        if ($this->bounds === null) {
+            throw new \LogicException('placeAt() needs a frame produced by Toast::frame(): its box bounds are unknown');
+        }
+        ['x' => $bx, 'y' => $by, 'width' => $bw, 'height' => $bh] = $this->bounds;
+        $lines = $this->boxRows();
+        $cropped = [];
+        for ($r = $by; $r < $by + $bh; $r++) {
+            $cropped[] = Width::takeAnsi(Width::dropAnsi($lines[$r] ?? '', $bx), $bw);
+        }
+        $dx = $col - $bx;
+        $dy = $row - $by;
+        $rects = [];
+        foreach ($this->rects as $rect) {
+            $rect['col'] += $dx;
+            $rect['row'] += $dy;
+            $rects[] = $rect;
+        }
+        return new self(
+            $this->x + $dx,
+            $this->y + $dy,
+            \implode("\n", $cropped) . "\n",
+            $rects,
+            ['x' => $col, 'y' => $row, 'width' => $bw, 'height' => $bh],
+        );
     }
 }

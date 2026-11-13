@@ -1237,7 +1237,23 @@ final class Toast
         if ($memo['frame'] === null) {
             $boxes = $memo['layout']['boxes'];
             $top = $boxes[\count($boxes) - 1];
-            $memo['frame'] = new ToastFrame($top['x'], $top['y'], $memo['output'], $this->computeRects($memo['layout']));
+            $x0 = PHP_INT_MAX;
+            $y0 = PHP_INT_MAX;
+            $x1 = 0;
+            $y1 = 0;
+            foreach ($boxes as $placed) {
+                $x0 = \min($x0, $placed['x']);
+                $y0 = \min($y0, $placed['y']);
+                $x1 = \max($x1, $placed['x'] + $placed['buffer']->width());
+                $y1 = \max($y1, $placed['y'] + $placed['buffer']->height());
+            }
+            $memo['frame'] = new ToastFrame(
+                $top['x'],
+                $top['y'],
+                $memo['output'],
+                $this->computeRects($memo['layout']),
+                ['x' => $x0, 'y' => $y0, 'width' => $x1 - $x0, 'height' => $y1 - $y0],
+            );
             $this->frameMemo = $memo;
         }
         return $memo['frame'];
