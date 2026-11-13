@@ -477,12 +477,14 @@ index. Non-finite `t` flows through `ease()` unguarded: `NAN` returns `NAN`
 from every case, `INF` survives the polynomial curves (answering `+INF` or
 `-INF` depending on the term signs) but flips to `NAN` inside the trig of
 every `Elastic*` and `Back*` case — clamp upstream. The solver-backed
-`CubicBezier::evaluate()` takes the opposite policy: it refuses a non-finite
+`CubicBezier::ease()` takes the opposite policy: it refuses a non-finite
 `t` outright, because a Newton iteration has nothing honest to answer with.
 
-Curves implement `SugarCraft\Spring\Easing\EasingFunction`, the extension
-seam: write your own `ease()` and pass it anywhere an easing function is
-consumed.
+Both easing kinds — the analytic `Easing` enum and the solver-backed
+`CubicBezier` curves — implement `SugarCraft\Spring\Easing\EasingFunction`,
+the extension seam: write your own `ease()` and pass it anywhere an easing
+function is consumed (the same name does not make same-named enum cases and
+presets value-twins: `CubicIn` is literally `t³`, its bezier fit is not).
 
 ### CubicBezier
 
@@ -500,7 +502,7 @@ The Penner rows are named for the easing family, not for a CSS standard list:
 use SugarCraft\Spring\Easing\CubicBezier;
 
 // CSS named easings
-$ease      = CubicBezier::ease();       // 0.25, 0.10, 0.25, 1.00
+$ease      = CubicBezier::cssEase();    // 0.25, 0.10, 0.25, 1.00
 $easeIn   = CubicBezier::easeIn();      // 0.42, 0.00, 1.00, 1.00
 $easeOut  = CubicBezier::easeOut();    // 0.00, 0.00, 0.58, 1.00
 $easeInOut = CubicBezier::easeInOut(); // 0.42, 0.00, 0.58, 1.00
@@ -540,14 +542,14 @@ $easeInOutCirc  = CubicBezier::easeInOutCirc();
 
 for ($f = 0; $f <= 60; $f++) {
     $t = $f / 60.0;
-    echo sprintf("frame %2d  eased=%.4f\n", $f, $easeInOutCubic->evaluate($t));
+    echo sprintf("frame %2d  eased=%.4f\n", $f, $easeInOutCubic->ease($t));
 }
 ```
 
-`CubicBezier::evaluate(float $t): float` takes a finite `t` (a non-finite
+`CubicBezier::ease(float $t): float` takes a finite `t` (a non-finite
 value throws; a finite out-of-range `t` is neither refused nor clamped, but
-past roughly 1e2 the solver saturates to an endpoint — `evaluate(1e3)` is
-exactly `1.0` on `ease()`) and returns the
+past roughly 1e2 the solver saturates to an endpoint — `ease(1e3)` is
+exactly `1.0` on `cssEase()`) and returns the
 eased progress. The x-mapping is solved to `[0, 1]` monotonicity (control
 x-values are range-checked); the y-output lands exactly on `(0, 1)` for all 26
 named presets, and no preset overshoots the interval — every named curve's
@@ -606,8 +608,9 @@ back-flavoured control points — same honesty rule as `Easing`.
   `ease(float $t): float`. Cases: `Linear`, `QuadraticIn/Out/InOut`,
   `CubicIn/Out/InOut`, `ElasticIn/Out/InOut`, `BounceIn/Out/InOut`,
   `BackIn/Out/InOut`.
-- **`CubicBezier`** — `evaluate(float $t): float`. 26 static factories: the
-  five CSS timing keywords (`linear`, `ease`, `easeIn`, `easeOut`,
+- **`CubicBezier`** — `ease(float $t): float` (implements the `EasingFunction`
+  seam; `evaluate()` is the deprecated alias until 2.0.0). 26 static factories:
+  the five CSS timing keywords (`linear`, `ease` as `cssEase()`, `easeIn`, `easeOut`,
   `easeInOut`) and 21 Penner-style curves (`easeIn/Out/InOut` × `Sine`, `Quad`,
   `Cubic`, `Quart`, `Quint`, `Expo`, `Circ`) expressed as bezier control
   points.

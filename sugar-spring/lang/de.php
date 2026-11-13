@@ -35,6 +35,7 @@ return [
     'bezier.points_finite' => 'cubic-bezier-Stützpunkte müssen endlich sein, erhalten: [{x1}, {y1}, {x2}, {y2}]',
     'bezier.x_range' => 'Die x-Werte der CubicBezier-Stützpunkte müssen in [0, 1] liegen; erhalten: x1={x1}, x2={x2}',
     'bezier.t_finite' => 't muss endlich sein; erhalten: {t}',
+    'bezier.unknown_static' => 'CubicBezier hat keine statische Factory {name}',
     'projectile.dt_finite' => 'deltaTime muss endlich sein; erhalten {deltaTime}',
     'projectile.negative_dt' => 'deltaTime muss >= 0 sein; erhalten {deltaTime}',
     'projectile.components_finite' => 'Komponenten des Projektil-{name} müssen endlich sein',

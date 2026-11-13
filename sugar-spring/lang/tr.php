@@ -35,6 +35,7 @@ return [
     'bezier.points_finite' => 'cubic-bezier kontrol noktaları sonlu olmalı, alınan [{x1}, {y1}, {x2}, {y2}]',
     'bezier.x_range' => 'CubicBezier kontrol noktalarının x değerleri [0, 1] aralığında olmalı; alınan x1={x1}, x2={x2}',
     'bezier.t_finite' => 't sonlu olmalıdır; alınan {t}',
+    'bezier.unknown_static' => 'CubicBezier içinde {name} adlı statik fabrika yok',
     'projectile.dt_finite' => 'deltaTime sonlu olmalı; alınan {deltaTime}',
     'projectile.negative_dt' => 'deltaTime >= 0 olmalı; alınan {deltaTime}',
     'projectile.components_finite' => 'Mermi {name} bileşenleri sonlu olmalı',

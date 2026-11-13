@@ -12,7 +12,11 @@ namespace SugarCraft\Spring\Easing;
  * physics simulations, or UI transitions).
  *
  * PHP 8.1+ backed enums that implement this interface (such as {@see Easing})
- * are already suitable for this role.
+ * are already suitable for this role. The library's curve class
+ * {@see CubicBezier} implements it through its solver-backed sampler
+ * {@see CubicBezier::ease()}; an enum case and a same-named preset are
+ * value families, not drop-in twins (analytic vs bezier fit, and the enum
+ * passes non-finite `t` through where CubicBezier refuses it).
  */
 interface EasingFunction
 {

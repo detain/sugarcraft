@@ -35,6 +35,7 @@ return [
     'bezier.points_finite' => 'cubic-bezier の制御点は有限値でなければなりません。取得値: [{x1}, {y1}, {x2}, {y2}]',
     'bezier.x_range' => 'CubicBezier の制御点の x 値は [0, 1] 内である必要があります。取得値: x1={x1}, x2={x2}',
     'bezier.t_finite' => 't は有限である必要があります。取得値: {t}',
+    'bezier.unknown_static' => 'CubicBezier に static ファクトリー {name} はありません',
     'projectile.dt_finite' => 'deltaTime は有限である必要があります。取得値: {deltaTime}',
     'projectile.negative_dt' => 'deltaTime は 0 以上である必要があります。取得値: {deltaTime}',
     'projectile.components_finite' => 'Projectile の {name} コンポーネントは有限である必要があります',

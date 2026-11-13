@@ -35,6 +35,7 @@ return [
     'bezier.points_finite' => 'punkty kontrolne cubic-bezier muszą być skończone, otrzymano [{x1}, {y1}, {x2}, {y2}]',
     'bezier.x_range' => 'wartości x punktów kontrolnych CubicBezier muszą być w [0, 1]; otrzymano x1={x1}, x2={x2}',
     'bezier.t_finite' => 't musi być skończone; otrzymano {t}',
+    'bezier.unknown_static' => 'CubicBezier nie ma statycznej fabryki {name}',
     'projectile.dt_finite' => 'deltaTime musi być skończone; otrzymano {deltaTime}',
     'projectile.negative_dt' => 'deltaTime musi być >= 0; otrzymano {deltaTime}',
     'projectile.components_finite' => 'Składowe {name} pocisku muszą być skończone',

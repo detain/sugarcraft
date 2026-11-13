@@ -72,12 +72,12 @@ final class LangTest extends TestCase
         $this->assertGreaterThan(0, count($cases));
     }
 
-    public function testCubicBezierHasEvaluateMethod(): void
+    public function testCubicBezierHasEaseSamplerMethod(): void
     {
         $reflection = new \ReflectionClass(CubicBezier::class);
-        $this->assertTrue($reflection->hasMethod('evaluate'));
+        $this->assertTrue($reflection->hasMethod('ease'));
 
-        $evaluateMethod = $reflection->getMethod('evaluate');
+        $evaluateMethod = $reflection->getMethod('ease');
         $params = $evaluateMethod->getParameters();
 
         $this->assertCount(1, $params);
@@ -88,7 +88,7 @@ final class LangTest extends TestCase
 
     public function testCubicBezierStaticFactoriesReturnInstance(): void
     {
-        $ease = CubicBezier::ease();
+        $ease = CubicBezier::cssEase();
         $this->assertInstanceOf(CubicBezier::class, $ease);
 
         $linear = CubicBezier::linear();

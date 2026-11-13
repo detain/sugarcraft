@@ -24,10 +24,18 @@ use SugarCraft\Spring\Lang;
  * repair restored the original-table Circ value precisely so the family stays
  * internally consistent with its Quint/Expo neighbours.
  *
+ * Implements the {@see EasingFunction} seam through its sampler
+ * {@see ease()}. A bezier curve and the same-named {@see Easing} enum case
+ * are different value families, not drop-in twins: the enum is analytic
+ * (CubicIn is literally t³), this curve is a table fit, and their non-finite
+ * policies diverge by design — {@see Easing} passes NAN/INF through, this
+ * sampler refuses them (a Newton iteration has nothing honest to answer
+ * with).
+ *
  * @see https://www.w3.org/TR/css-easing-3/#cubic-bezier-algo
  * @see https://github.com/ai/easings.net (2022 table in src/easings.yml; pre-2022 table mirrored at https://30secondsofcode.org/css/s/easing-variables/)
  */
-final readonly class CubicBezier
+final readonly class CubicBezier implements EasingFunction
 {
     private const NEWTON_ITERATIONS    = 8;
     private const NEWTON_MIN_STEP      = 0.000_001;
@@ -90,11 +98,33 @@ final readonly class CubicBezier
 
     // ─── CSS named easings ────────────────────────────────────────────────
 
-    public static function ease(): self           { return new self(0.25, 0.10, 0.25, 1.00); }
+    /**
+     * The CSS `ease` transition-timing-function keyword. Named `cssEase()`
+     * because the seam sampler {@see ease()} owns the bare spelling — PHP
+     * forbids one name as both static preset and instance sampler. The
+     * legacy static `CubicBezier::ease()` cannot forward through
+     * `__callStatic()` (the engine resolves it to the instance method and
+     * raises an Error) and fails loudly instead; migrate to `cssEase()`.
+     */
+    public static function cssEase(): self       { return new self(0.25, 0.10, 0.25, 1.00); }
     public static function easeIn(): self         { return new self(0.42, 0.00, 1.00, 1.00); }
     public static function easeOut(): self        { return new self(0.00, 0.00, 0.58, 1.00); }
     public static function easeInOut(): self      { return new self(0.42, 0.00, 0.58, 1.00); }
     public static function linear(): self         { return new self(0.00, 0.00, 1.00, 1.00); }
+
+    /**
+     * BC door for the CSS-keyword preset, honestly stated: PHP resolves a
+     * static call to the instance sampler `ease()` and raises an Error
+     * WITHOUT consulting `__callStatic`, so no deprecation forwarder can
+     * exist for `CubicBezier::ease()`. The legacy spelling fails LOUDLY
+     * until 2.0.0; `cssEase()` is the preset. This hook guards the other
+     * static misses only: a typo must fail with a named refusal here, not
+     * quietly become some preset.
+     */
+    public static function __callStatic(string $name, array $arguments): self
+    {
+        throw new \BadMethodCallException(Lang::t('bezier.unknown_static', ['name' => $name]));
+    }
 
     public static function easeInSine(): self     { return new self(0.47, 0.00, 0.75, 0.72); }
     public static function easeOutSine(): self    { return new self(0.39, 0.58, 0.57, 1.00); }
@@ -146,7 +176,8 @@ final readonly class CubicBezier
     // ─── Evaluation ───────────────────────────────────────────────────────
 
     /**
-     * Evaluate the cubic bezier at normalized time $t ∈ [0, 1].
+     * Ease normalized time $t ∈ [0, 1] through this curve — the seam sampler
+     * of {@see EasingFunction}.
      *
      * Range honesty: designed for $t in [0, 1]; a non-finite $t (NAN, INF)
      * is refused outright — before that door existed such values silently
@@ -154,14 +185,14 @@ final readonly class CubicBezier
      * A finite out-of-range $t is NOT rejected and NOT clamped — the Newton
      * solve walks the polynomial outside [0, 1], though past roughly 1e2 the
      * solve loses to the bounded subdivision fallback, which returns an
-     * endpoint: on ease(), evaluate(1e3) is exactly 1.0 and evaluate(-1e3)
+     * endpoint: on cssEase(), ease(1e3) is exactly 1.0 and ease(-1e3)
      * lands near 0. The RETURN value is likewise unclamped: control points with y
      * outside [0, 1] (the back/elastic style of control point) legitimately overshoot
      * beyond 0..1 progress — note that the `Easing` enum's Back and Elastic cases are
      * analytic overshoots, not beziers, and CubicBezier ships no Back preset itself —
      * and clamping would flatten exactly the motion those curves exist to express.
      */
-    public function evaluate(float $t): float
+    public function ease(float $t): float
     {
         if (!is_finite($t)) {
             throw new \InvalidArgumentException(Lang::t('bezier.t_finite', ['t' => $t]));
@@ -179,6 +210,19 @@ final readonly class CubicBezier
         // Find t' such that x(t') = $t, then return y(t')
         $tPrime = $this->solveCubicX($t);
         return $this->sampleCurveY($tPrime);
+    }
+
+    /**
+     * @deprecated Use {@see ease()}, the seam sampler. REMOVED-IN: 2.0.0.
+     */
+    public function evaluate(float $t): float
+    {
+        trigger_error(
+            'CubicBezier::evaluate() is deprecated; use ease() which satisfies the EasingFunction seam. REMOVED-IN: 2.0.0.',
+            E_USER_DEPRECATED,
+        );
+
+        return $this->ease($t);
     }
 
     /**

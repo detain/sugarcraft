@@ -35,6 +35,7 @@ return [
     'bezier.points_finite' => 'cubic-bezier 控制点必须为有限值，得到 [{x1}, {y1}, {x2}, {y2}]',
     'bezier.x_range' => 'CubicBezier 控制点的 x 值必须在 [0, 1] 内；得到 x1={x1}, x2={x2}',
     'bezier.t_finite' => 't 必须有限；得到 {t}',
+    'bezier.unknown_static' => 'CubicBezier 没有名为 {name} 的静态工厂',
     'projectile.dt_finite' => 'deltaTime 必须为有限值；得到 {deltaTime}',
     'projectile.negative_dt' => 'deltaTime 必须 >= 0；得到 {deltaTime}',
     'projectile.components_finite' => '抛射体 {name} 分量必须为有限值',

@@ -35,6 +35,7 @@ return [
     'bezier.points_finite' => 'يجب أن تكون نقاط تحكم cubic-bezier منتهية، المُدخل [{x1}, {y1}, {x2}, {y2}]',
     'bezier.x_range' => 'يجب أن تكون قيم x لنقاط تحكم CubicBezier ضمن [0, 1]؛ المُدخل x1={x1}, x2={x2}',
     'bezier.t_finite' => 'يجب أن تكون t محدودة؛ المُدخل {t}',
+    'bezier.unknown_static' => 'CubicBezier لا يحتوي على مصنع ثابت {name}',
     'projectile.dt_finite' => 'يجب أن تكون deltaTime منتهية؛ القيمة المستلمة: {deltaTime}',
     'projectile.negative_dt' => 'يجب أن تكون deltaTime أكبر من أو تساوي 0؛ القيمة المستلمة: {deltaTime}',
     'projectile.components_finite' => 'يجب أن تكون مكونات {name} للمقذوف منتهية',

@@ -35,6 +35,7 @@ return [
     'bezier.points_finite' => 'les points de contrôle cubic-bezier doivent être finis, obtenu : [{x1}, {y1}, {x2}, {y2}]',
     'bezier.x_range' => 'les valeurs x des points de contrôle de CubicBezier doivent être dans [0, 1] ; obtenu : x1={x1}, x2={x2}',
     'bezier.t_finite' => 't doit être fini ; obtenu : {t}',
+    'bezier.unknown_static' => 'Fabrique statique CubicBezier inconnue : {name}',
     'projectile.dt_finite' => 'deltaTime doit être finie ; reçu : {deltaTime}',
     'projectile.negative_dt' => 'deltaTime doit être >= 0 ; reçu : {deltaTime}',
     'projectile.components_finite' => 'Les composants {name} du projectile doivent être finis',

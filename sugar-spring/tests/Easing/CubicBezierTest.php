@@ -14,45 +14,45 @@ final class CubicBezierTest extends TestCase
     public function testLinearReturnsInputUnchanged(): void
     {
         $cb = CubicBezier::linear();
-        $this->assertSame(0.0, $cb->evaluate(0.0));
-        $this->assertSame(0.25, $cb->evaluate(0.25));
-        $this->assertSame(0.5, $cb->evaluate(0.5));
-        $this->assertSame(0.75, $cb->evaluate(0.75));
-        $this->assertSame(1.0, $cb->evaluate(1.0));
+        $this->assertSame(0.0, $cb->ease(0.0));
+        $this->assertSame(0.25, $cb->ease(0.25));
+        $this->assertSame(0.5, $cb->ease(0.5));
+        $this->assertSame(0.75, $cb->ease(0.75));
+        $this->assertSame(1.0, $cb->ease(1.0));
     }
 
     public function testEaseAtBoundariesReturns0And1(): void
     {
-        $cb = CubicBezier::ease();
-        $this->assertEqualsWithDelta(0.0, $cb->evaluate(0.0), self::EPS);
-        $this->assertEqualsWithDelta(1.0, $cb->evaluate(1.0), self::EPS);
+        $cb = CubicBezier::cssEase();
+        $this->assertEqualsWithDelta(0.0, $cb->ease(0.0), self::EPS);
+        $this->assertEqualsWithDelta(1.0, $cb->ease(1.0), self::EPS);
     }
 
     public function testEaseInIsAccelerating(): void
     {
         $cb = CubicBezier::easeIn();
         // easeIn at t=0.5 should be less than 0.5 (slow start)
-        $this->assertLessThan(0.5, $cb->evaluate(0.5));
+        $this->assertLessThan(0.5, $cb->ease(0.5));
     }
 
     public function testEaseOutIsDecelerating(): void
     {
         $cb = CubicBezier::easeOut();
         // easeOut at t=0.5 should be greater than 0.5 (fast start)
-        $this->assertGreaterThan(0.5, $cb->evaluate(0.5));
+        $this->assertGreaterThan(0.5, $cb->ease(0.5));
     }
 
     public function testEaseInOutIsSymmetric(): void
     {
         $cb = CubicBezier::easeInOut();
         // At midpoint should be 0.5
-        $this->assertEqualsWithDelta(0.5, $cb->evaluate(0.5), self::EPS);
+        $this->assertEqualsWithDelta(0.5, $cb->ease(0.5), self::EPS);
     }
 
     public function testAllCssStandardPresetsReturnValidRange(): void
     {
         $methods = [
-            'ease', 'easeIn', 'easeOut', 'easeInOut',
+            'cssEase', 'easeIn', 'easeOut', 'easeInOut',
             'easeInSine', 'easeOutSine', 'easeInOutSine',
             'easeInQuad', 'easeOutQuad', 'easeInOutQuad',
             'easeInCubic', 'easeOutCubic', 'easeInOutCubic',
@@ -70,7 +70,7 @@ final class CubicBezierTest extends TestCase
             // the closed interval it pins.
             for ($i = 0; $i <= 10; $i++) {
                 $t = $i / 10.0;
-                $result = $cb->evaluate($t);
+                $result = $cb->ease($t);
                 $this->assertGreaterThanOrEqual(0.0, $result, "$method at t=$t must not be negative");
                 $this->assertLessThanOrEqual(1.0, $result, "$method at t=$t must not exceed 1");
             }
@@ -81,7 +81,7 @@ final class CubicBezierTest extends TestCase
     {
         // easeInQuad: y = x². At x=0.5, y=0.25
         $cb = CubicBezier::easeInQuad();
-        $this->assertEqualsWithDelta(0.25, $cb->evaluate(0.5), 0.01);
+        $this->assertEqualsWithDelta(0.25, $cb->ease(0.5), 0.01);
     }
 
     public function testEaseOutQuadAtMidpoint(): void
@@ -90,8 +90,8 @@ final class CubicBezierTest extends TestCase
         // which does not exactly equal the power-function 1-(1-x)².
         // Verify it is between linear (0.5) and 1.0
         $cb = CubicBezier::easeOutQuad();
-        $this->assertGreaterThan(0.5, $cb->evaluate(0.5));
-        $this->assertLessThan(1.0, $cb->evaluate(0.5));
+        $this->assertGreaterThan(0.5, $cb->ease(0.5));
+        $this->assertLessThan(1.0, $cb->ease(0.5));
     }
 
     public function testEaseInCubicAtMidpoint(): void
@@ -100,32 +100,32 @@ final class CubicBezierTest extends TestCase
         // which differs from the pure t³ power function.
         // Verify it is between 0 and linear (0.5)
         $cb = CubicBezier::easeInCubic();
-        $this->assertGreaterThan(0.0, $cb->evaluate(0.5));
-        $this->assertLessThan(0.5, $cb->evaluate(0.5));
+        $this->assertGreaterThan(0.0, $cb->ease(0.5));
+        $this->assertLessThan(0.5, $cb->ease(0.5));
     }
 
     public function testEaseOutCubicAtMidpoint(): void
     {
         // easeOutCubic: y = 1-(1-x)³. At x=0.5, y = 1-0.125 = 0.875
         $cb = CubicBezier::easeOutCubic();
-        $this->assertEqualsWithDelta(0.875, $cb->evaluate(0.5), 0.01);
+        $this->assertEqualsWithDelta(0.875, $cb->ease(0.5), 0.01);
     }
 
     public function testCustomControlPoints(): void
     {
         // Custom bezier that's more extreme than easeOut
         $cb = new CubicBezier(0.0, 0.0, 0.8, 1.0);
-        $this->assertGreaterThan(0.5, $cb->evaluate(0.5));
-        $this->assertGreaterThanOrEqual(0.0, $cb->evaluate(0.0));
-        $this->assertLessThanOrEqual(1.0, $cb->evaluate(1.0));
+        $this->assertGreaterThan(0.5, $cb->ease(0.5));
+        $this->assertGreaterThanOrEqual(0.0, $cb->ease(0.0));
+        $this->assertLessThanOrEqual(1.0, $cb->ease(1.0));
     }
 
     public function testEaseInBackExists(): void
     {
         // easeInBack has a slight overshoot on the left (negative values clamped to 0)
         $cb = CubicBezier::easeInCirc();
-        $this->assertGreaterThanOrEqual(0.0, $cb->evaluate(0.0));
-        $this->assertLessThanOrEqual(1.0, $cb->evaluate(1.0));
+        $this->assertGreaterThanOrEqual(0.0, $cb->ease(0.0));
+        $this->assertLessThanOrEqual(1.0, $cb->ease(1.0));
     }
 
     /**
@@ -200,7 +200,7 @@ final class CubicBezierTest extends TestCase
     public function testSampleCurveDerivativeXMatchesFiniteDifferenceOracle(): void
     {
         $methods = [
-            'ease', 'easeIn', 'easeOut', 'easeInOut', 'linear',
+            'cssEase', 'easeIn', 'easeOut', 'easeInOut', 'linear',
             'easeInSine', 'easeOutSine', 'easeInOutSine',
             'easeInQuad', 'easeOutQuad', 'easeInOutQuad',
             'easeInCubic', 'easeOutCubic', 'easeInOutCubic',
@@ -228,20 +228,20 @@ final class CubicBezierTest extends TestCase
     }
 
     /**
-     * evaluate() is deliberately UNCLAMPED in the OUTPUT and for finite
+     * ease() is deliberately UNCLAMPED in the OUTPUT and for finite
      * out-of-range t — back/elastic control points overshoot [0,1] by design
      * and a finite out-of-domain t extrapolates rather than throwing. Pinned
      * so a future "tidy-up" clamp is a disclosed behavior change, not a
      * silent one. Non-finite t is the exception: refused since step 35
-     * (see testEvaluateRefusesNonFiniteT).
+     * (see testSamplerRefusesNonFiniteT).
      */
-    public function testEvaluateOvershootsFreelyAndExtrapolatesOutsideDomain(): void
+    public function testSamplerOvershootsFreelyAndExtrapolatesOutsideDomain(): void
     {
         $cb = new CubicBezier(0.68, -0.60, 0.32, 1.60); // easeInOutBack-style
         $sawUndershoot = false;
         $sawOvershoot  = false;
         for ($t = 0.0; $t <= 1.0; $t += 0.01) {
-            $value = $cb->evaluate($t);
+            $value = $cb->ease($t);
             $sawUndershoot = $sawUndershoot || $value < 0.0;
             $sawOvershoot  = $sawOvershoot || $value > 1.0;
         }
@@ -249,10 +249,10 @@ final class CubicBezierTest extends TestCase
         $this->assertTrue($sawOvershoot, 'y must rise above 1 for >1 control points');
 
         // Out-of-range t does not throw; the solver silently extrapolates.
-        $this->assertSame(0.0, $cb->evaluate(0.0));
-        $this->assertSame(1.0, $cb->evaluate(1.0));
-        $this->assertTrue(is_finite($cb->evaluate(1.5)));
-        $this->assertTrue(is_finite($cb->evaluate(-0.5)));
+        $this->assertSame(0.0, $cb->ease(0.0));
+        $this->assertSame(1.0, $cb->ease(1.0));
+        $this->assertTrue(is_finite($cb->ease(1.5)));
+        $this->assertTrue(is_finite($cb->ease(-0.5)));
     }
 
     /**
@@ -263,12 +263,12 @@ final class CubicBezierTest extends TestCase
      *
      * @dataProvider nonFiniteTimeProvider
      */
-    public function testEvaluateRefusesNonFiniteT(float $t): void
+    public function testSamplerRefusesNonFiniteT(float $t): void
     {
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('t must be finite');
 
-        CubicBezier::ease()->evaluate($t);
+        CubicBezier::cssEase()->ease($t);
     }
 
     /** @return array<string, array{float}> */
@@ -281,19 +281,19 @@ final class CubicBezierTest extends TestCase
      * Finite out-of-range t stays unclamped and unrefused, but the solver's
      * honesty has a documented shape: past ~1e2 the Newton iteration loses
      * to the bounded subdivision fallback, which answers with an endpoint
-     * (measured: ease()->evaluate(1e3) === 1.0 exactly; -1e3 lands within
+     * (measured: ease()->ease(1e3) === 1.0 exactly; -1e3 lands within
      * 1e-6 of 0.0). A far-out t therefore saturates instead of extrapolating
      * wildly — pinned so a solver rewrite that changes the shape is disclosed.
      */
     public function testFarOutFiniteTSaturatesToTheEndpoints(): void
     {
-        $cb = CubicBezier::ease();
+        $cb = CubicBezier::cssEase();
 
-        $this->assertSame(1.0, $cb->evaluate(1e3));
-        $this->assertLessThan(1e-6, $cb->evaluate(-1e3));
+        $this->assertSame(1.0, $cb->ease(1e3));
+        $this->assertLessThan(1e-6, $cb->ease(-1e3));
         // Moderate out-of-range t still genuinely extrapolates.
-        $this->assertEqualsWithDelta(0.8966768501516175, $cb->evaluate(1.5), 1e-9);
-        $this->assertEqualsWithDelta(0.39423701507036757, $cb->evaluate(-0.5), 1e-9);
+        $this->assertEqualsWithDelta(0.8966768501516175, $cb->ease(1.5), 1e-9);
+        $this->assertEqualsWithDelta(0.39423701507036757, $cb->ease(-0.5), 1e-9);
     }
 
     /**
@@ -315,7 +315,7 @@ final class CubicBezierTest extends TestCase
     public static function frozenFactoryTupleRosterProvider(): array
     {
         return [
-            'ease'           => ['ease',           [0.25, 0.10, 0.25, 1.00]],
+            'cssEase'        => ['cssEase',           [0.25, 0.10, 0.25, 1.00]],
             'easeIn'         => ['easeIn',         [0.42, 0.00, 1.00, 1.00]],
             'easeOut'        => ['easeOut',        [0.00, 0.00, 0.58, 1.00]],
             'easeInOut'      => ['easeInOut',      [0.42, 0.00, 0.58, 1.00]],
@@ -356,14 +356,14 @@ final class CubicBezierTest extends TestCase
     public function testPresetFamilyShapeProbes(string $factory, array $tuple): void
     {
         $cb = CubicBezier::$factory();
-        $this->assertSame(0.0, $cb->evaluate(0.0), "$factory endpoint 0");
-        $this->assertSame(1.0, $cb->evaluate(1.0), "$factory endpoint 1");
+        $this->assertSame(0.0, $cb->ease(0.0), "$factory endpoint 0");
+        $this->assertSame(1.0, $cb->ease(1.0), "$factory endpoint 1");
 
         $prev = -2.0;
         $min  = 1.0;
         $max  = 0.0;
         for ($i = 0; $i <= 100; $i++) {
-            $value = $cb->evaluate($i / 100.0);
+            $value = $cb->ease($i / 100.0);
             $this->assertGreaterThanOrEqual($prev - 1e-12, $value, "$factory monotone at i=$i");
             $prev = $value;
             $min  = min($min, $value);
@@ -375,6 +375,65 @@ final class CubicBezierTest extends TestCase
             $this->assertGreaterThanOrEqual(0.0, $min, "$factory dips below 0 with in-range control points");
             $this->assertLessThanOrEqual(1.0, $max, "$factory exceeds 1 with in-range control points");
         }
+    }
+
+    /**
+     * SPR-03 seam: the curve class finally implements the extension
+     * interface its own docblock always advertised it satisfied.
+     */
+    public function testSatisfiesTheEasingFunctionSeam(): void
+    {
+        $this->assertInstanceOf(\SugarCraft\Spring\Easing\EasingFunction::class, CubicBezier::cssEase());
+        $this->assertSame(1.0, CubicBezier::linear()->ease(1.0));
+    }
+
+    /**
+     * BC leg of the rename: the deprecated evaluate() sampler alias returns
+     * byte-identical values to ease(), warning once per use with the dated
+     * REMOVED-IN stamp. The legacy STATIC ease() is a different story: no
+     * forwarder is dispatchable (the engine resolves it to the instance
+     * sampler and raises an Error), so the pin here is that it fails LOUDLY
+     * — never quietly returning a preset.
+     */
+    public function testLegacyNamesAnswerDeprecatedOrLoud(): void
+    {
+        $captured = [];
+        set_error_handler(static function (int $errno, string $errstr) use (&$captured): bool {
+            $captured[] = [$errno, $errstr];
+            return true;
+        }, E_USER_DEPRECATED);
+        try {
+            $cb = CubicBezier::easeInOutCubic();
+            foreach ([0.0, 0.25, 0.5, 0.75, 1.0] as $t) {
+                $this->assertSame($cb->ease($t), $cb->evaluate($t), 'evaluate() alias byte-equals ease() at t=' . $t);
+            }
+        } finally {
+            restore_error_handler();
+        }
+
+        $this->assertCount(5, $captured);
+        foreach ($captured as [$errno, $errstr]) {
+            $this->assertSame(E_USER_DEPRECATED, $errno);
+            $this->assertStringContainsString('REMOVED-IN: 2.0.0', $errstr);
+        }
+
+        $this->expectException(\Error::class);
+        $this->expectExceptionMessage('cannot be called statically');
+
+        /** @phpstan-ignore-next-line intentional legacy-spelling probe */
+        CubicBezier::ease();
+    }
+
+    /**
+     * Loudness leg: __callStatic is the CSS-preset door ONLY — a typo'd
+     * static must not quietly become some preset. Mutation of the door's
+     * name guard to a catch-all reddens this pin.
+     */
+    public function testUnknownStaticCallRefusesLoudly(): void
+    {
+        $this->expectException(\BadMethodCallException::class);
+        /** @phpstan-ignore-next-line intentional wrong-API probe */
+        CubicBezier::easeInOutQuarty();
     }
 
     /**
@@ -412,7 +471,7 @@ final class CubicBezierTest extends TestCase
         // And the solver still lands every cited preset inside the epsilon band.
         foreach ([CubicBezier::easeInOutExpo(), CubicBezier::easeInOutCirc(), CubicBezier::easeIn()] as $curve) {
             foreach ([0.13, 0.37, 0.61, 0.88] as $x) {
-                $t = $curve->evaluate($x);
+                $t = $curve->ease($x);
                 $this->assertTrue(is_finite($t));
             }
         }
