@@ -593,9 +593,10 @@ jobs:
           fi
 
       # E671 (2026-09-10): the candy-code cell shards through
-      # scripts/parallel-tests.sh instead of the ~9.3-minute serial run
-      # (round-63 junit time=559.6s) — the suite was the wall-clock critical
-      # path of every push that touches it. K equals the runner core count,
+      # scripts/parallel-tests.sh instead of the 53.2-minute serial run
+      # (RT-26 re-derivation 2026-11-12: the sum of the committed durations
+      # table below) — the suite was the wall-clock critical path of every
+      # push that touches it. K equals the runner core count,
       # capped at 4: ubuntu-latest is 2 vCPU (free tier) / 4 vCPU (paid), and
       # MEASURED contention discipline says never oversubscribe — at 2x
       # (K=8 on 4 cpus) the suite grew 1 wall-clock-race failure, at 4x it grew
@@ -611,11 +612,19 @@ jobs:
       # re-derives `tests` LIVE from `phpunit --list-tests` inside this very
       # suite at every merge. The double lock means adding tests without
       # refreshing BOTH artifacts cannot go green. --timeout 1200 per shard:
-      # the suite outgrew 600. At 21,147 tests the LPT buckets are ~443s at K=4
-      # (durations from the serial run), and measured CI shard walls ranged
-      # 330-600s on 2026-10-06 — two shards were killed at exactly 600s while
-      # still passing. 1200 restores ~2x headroom on the slowest legit shard
-      # and still bounds a hung one well under the ~30 min serial run.
+      # the suite outgrew 600, and that era's numbers (two shards killed at
+      # exactly 600s while still passing, 2026-10-06) are history. RT-26
+      # (2026-11-12) re-put the tuning figures from the committed durations
+      # table. THE WALL IS FLOOR-BOUND: no K ever beats the slowest single
+      # file, and the LPT K=4 MAX BUCKET is what --timeout must clear, not
+      # the average shard.
+      # TSV-PIN tests=32341 files=1966 serial_sum=3192.4 floor=287.4 floor_file=candy-code/tests/Renderer/KeyHelpTest.php lpt_k4_max=798.1 timeout_test=1200
+      # Every value on that line is re-derived from the committed durations
+      # table and suite-figure.json by tools/tests/ParallelShardTuningTest.php
+      # — prose and probe drift only as far as the next red suite. 1200s is
+      # ~1.5x the max legit bucket and still bounds a hung shard far under
+      # the serial wall. tests= rides the figure ReadmeSuiteFigureDriftTest
+      # re-derives live, so this line cannot quietly age past the trio.
       - name: Install ripgrep (candy-code)
         if: matrix.lib == 'candy-code'
         # GrepEngineDifferentialTest::parityCases() answers [] when rg is
@@ -1083,9 +1092,11 @@ jobs:
       # Codecov upload downstream is untouched and cannot tell merged from
       # serial. test-merge-clover.php runs FIRST: a merger regression must fail
       # in seconds, not after a full-suite wall. --timeout 1800 per shard: the
-      # K=4 buckets are ~443s and pcov overhead is up to ~2x on a slow runner —
-      # shards were killed at 900s on 2026-10-05 — so 1800 keeps headroom while
-      # still bounding a hung shard.
+      # K=4 max bucket is 798.1s (RT-26 re-pin; machine values on the test
+      # job's TSV-PIN line) and pcov overhead is up to ~2x on a slow runner —
+      # shards were killed at 900s on 2026-10-05 — so 1800 still clears 2x the
+      # max bucket while bounding a hung shard.
+      # TUNING-REF timeout_cov=1800 pcov_multiple=2
       # The engine is still pcov (setup-php above); only the report SHAPE
       # (K files merged) changed, and merge-clover.php refuses missing or
       # malformed shard reports fail-closed.
