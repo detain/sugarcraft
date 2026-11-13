@@ -171,4 +171,16 @@ final class MouseVocabularyTest extends TestCase
         $this->assertSame('SGR underline curly', Inspector::describeCsi('4:3', 'm'));
         $this->assertSame('SGR foreground 256-color 200', Inspector::describeCsi('38;5;200', 'm'));
     }
+
+    public function testUnderlineColourExtendedArm(): void
+    {
+        // AIP-09 (finding 008): 58 reads the same colour grammar as 38/48 and
+        // never re-reads its trailing component as a plain SGR 4.
+        $this->assertSame('SGR underline colour 256-color 4', Inspector::describeCsi('58;5;4', 'm'));
+        $this->assertSame('SGR underline colour rgb(10,20,30)', Inspector::describeCsi('58;2;10;20;30', 'm'));
+        $this->assertSame('SGR underline colour rgb(80,160,240)', Inspector::describeCsi('58:2::80:160:240', 'm'));
+        $this->assertSame('SGR underline colour 256-color 9', Inspector::describeCsi('58:5:9', 'm'));
+        $this->assertSame('SGR underline colour truncated 256-color', Inspector::describeCsi('58;5', 'm'));
+        $this->assertSame('SGR underline colour default', Inspector::describeCsi('59', 'm'));
+    }
 }

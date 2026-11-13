@@ -251,9 +251,12 @@ final class Inspector
                 $parts[] = self::underlineStyleName((int) $underlined[1]);
                 continue;
             }
-            // 38;5;n (256-color fg) and 38;2;r;g;b (truecolor fg).
-            if ($code === 38 || $code === 48) {
-                $kind = $code === 38 ? 'foreground' : 'background';
+            // 38;5;n (256-color fg) and 38;2;r;g;b (truecolor fg) — and 58,
+            // the underline-colour twin of both, with the same sub-parameter
+            // grammar in both spellings (finding 008; 59 defaults it and is
+            // named in sgrName).
+            if ($code === 38 || $code === 48 || $code === 58) {
+                $kind = match ($code) { 38 => 'foreground', 48 => 'background', default => 'underline colour' };
                 // Colon spelling (`38:5:n`, `38:2::r:g:b`) carries the whole
                 // colour spec in one parameter group (ECMA-48 §14.1.1); the
                 // semicolon spelling spreads it over adjacent parameters.

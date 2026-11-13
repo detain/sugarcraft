@@ -129,7 +129,8 @@ foreach ($streaming->finish() as $segment) {
 
 ## What it decodes
 
-- **SGR** — foreground / background (16, 256, 24-bit truecolor) +
+- **SGR** — foreground / background / underline colour (16, 256, 24-bit
+  truecolor, 58/59) +
   bold / italic / underline (all `4:N` styles) / blink / reverse / conceal /
   strikethrough / faint / framed / encircled / overlined / super- and
   subscript, plus the matching off codes.
