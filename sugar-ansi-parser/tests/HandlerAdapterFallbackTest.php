@@ -202,4 +202,81 @@ final class HandlerAdapterFallbackTest extends TestCase
         $bare->execute(0x07);
         $bare->csiDispatch(ord('G'), [5], 0, 0);
     }
+
+    public function testWiredNamedConstructorObservesEveryFamilyBareNewDrops(): void
+    {
+        // Finding sugar-ansi-parser-007, arm a: wired() makes the fallback a
+        // required argument. One stream through the real parser covers all
+        // four families the bare shape loses silently — BEL, the ESC family,
+        // DCS, SOS — while the sieve-consumed CSI leg keeps routing to the
+        // shared CsiHandler side, so wired() is behaviourally the same
+        // adapter, only the shape is enforced.
+        $csi = $this->createMock(CsiHandler::class);
+        $osc = $this->createMock(OscHandler::class);
+        $fallback = $this->createMock(Handler::class);
+
+        // escDispatch sees TWO finals on this stream, in feed order: 77 (the
+        // ESC M leg) and 92 (the backslash of the DCS string-terminator —
+        // the ESC-abort dispatches the in-flight DCS first, then the
+        // trailing backslash of ST itself lands as an ESC final: the machine
+        // treats ESC inside a string as introducer+final, sap-07 contract).
+        $escSeen = [];
+        $fallback->expects($this->once())->method('execute')->with(0x07);
+        $fallback->expects($this->exactly(2))->method('escDispatch')->willReturnCallback(
+            static function (int $final, int $intermediate) use (&$escSeen): void {
+                $escSeen[] = [$final, $intermediate];
+            }
+        );
+        $fallback->expects($this->once())->method('dcsDispatch')->with(ord('m'), [1], 0, 0, '');
+        $fallback->expects($this->once())->method('sosPmApcDispatch')->with('sos', 'x');
+        $csi->expects($this->once())->method('cuu')->with(3);
+
+        $parser = new Parser(HandlerAdapter::wired($csi, $osc, $fallback));
+        $parser->feed("\x07\x1bM\x1bP1m\x1b\\\x98x\x9c\x1b[3A");
+
+        $this->assertSame([[77, 0], [92, 0]], $escSeen, 'ESC M, then the ST backslash final after the DCS abort-dispatch');
+    }
+
+    public function testWithFallbackReturnsANewAdapterAndLeavesTheOriginalAlone(): void
+    {
+        // Finding sugar-ansi-parser-007, arm b: the swap constructs rather
+        // than mutates. A trace-tagged pair of fallbacks plus a shared CSI
+        // side pins all three properties at once: the derived adapter routes
+        // the dropped family ONLY to the new fallback, the consumed family
+        // still lands on the same CsiHandler object, and the original keeps
+        // its own fallback after the derived was created.
+        $csi = $this->createMock(CsiHandler::class);
+        $osc = $this->createMock(OscHandler::class);
+        $old = $this->createMock(Handler::class);
+        $new = $this->createMock(Handler::class);
+
+        $trace = [];
+        $old->method('escDispatch')->willReturnCallback(
+            static function (int $final) use (&$trace): void {
+                $trace[] = 'old:esc' . $final;
+            }
+        );
+        $new->method('escDispatch')->willReturnCallback(
+            static function (int $final) use (&$trace): void {
+                $trace[] = 'new:esc' . $final;
+            }
+        );
+        $csi->method('cuu')->willReturnCallback(
+            static function (int $n) use (&$trace): void {
+                $trace[] = 'csi:cuu' . $n;
+            }
+        );
+
+        $original = new HandlerAdapter($csi, $osc, $old);
+        $derived = $original->withFallback($new);
+        $this->assertNotSame($original, $derived);
+
+        $derivedParser = new Parser($derived);
+        $derivedParser->feed("\x1bM");   // dropped family -> only the new fallback
+        $derivedParser->feed("\x1b[3A"); // consumed family -> the shared csi side
+
+        (new Parser($original))->feed("\x1bM"); // original still on the old one
+
+        $this->assertSame(['new:esc77', 'csi:cuu3', 'old:esc77'], $trace);
+    }
 }

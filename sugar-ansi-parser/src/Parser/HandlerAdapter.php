@@ -33,11 +33,43 @@ namespace SugarCraft\AnsiParser\Parser;
  */
 final class HandlerAdapter implements BulkPrintHandler
 {
+    /**
+     * Construction-site note for finding sugar-ansi-parser-007: the three-
+     * argument shape is the safe one, but the `$fallback` stays optional for
+     * BC — built WITHOUT it the sieve's drops are silent, which is exactly
+     * the trap renderer bridges keep falling into.
+     *
+     * @see self::wired() for the shape that makes the fallback mandatory.
+     */
     public function __construct(
         private readonly CsiHandler $csi,
         private readonly OscHandler $osc,
         private readonly ?Handler $fallback = null,
     ) {
+    }
+
+    /**
+     * Named constructor with a MANDATORY fallback — the compile-time refusal
+     * of the silent-drop shape (finding sugar-ansi-parser-007, arm a). The
+     * bare three-arg `new` remains for BC, but code that must observe the
+     * ESC family, DCS, SOS/PM/APC payloads, unmapped CSI finals and the
+     * non-routed executes can now say so at the call site instead of
+     * discovering the loss in a screenshot.
+     */
+    public static function wired(CsiHandler $csi, OscHandler $osc, Handler $fallback): self
+    {
+        return new self($csi, $osc, $fallback);
+    }
+
+    /**
+     * A NEW adapter whose sieve-unconsumed events route to $fallback, sharing
+     * this one's csi/osc sides (finding sugar-ansi-parser-007, arm b). The
+     * swap constructs rather than mutates — the adapter is stateless — so
+     * $this keeps its existing fallback (or silence) untouched.
+     */
+    public function withFallback(Handler $fallback): self
+    {
+        return new self($this->csi, $this->osc, $fallback);
     }
 
     public function printChar(string $rune): void
