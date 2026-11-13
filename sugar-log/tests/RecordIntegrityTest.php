@@ -190,6 +190,36 @@ final class RecordIntegrityTest extends TestCase
         $this->assertSame(['user' => true, 'ctx_user' => true, 'ctx_ctx_user' => true], $used);
     }
 
+    public function testEmptyContextKeyIsNamespacedLikeAReservedName(): void
+    {
+        // An empty key collides with no name but still addresses nothing:
+        // claim() namespaces it through the same walk, and a real `ctx_`
+        // entry queued behind it must shift again, not steal the slot.
+        $used = [];
+        $this->assertSame('ctx_', RecordKeys::claim('', $used));
+        $this->assertSame('ctx_ctx_', RecordKeys::claim('', $used));
+        $this->assertSame('ctx_ctx_ctx_', RecordKeys::claim('ctx_', $used));
+
+        $this->assertSame(
+            'level=INFO msg=test ctx_=value ctx_ctx_=later' . "\n",
+            $this->logfmtLine(['' => 'value', 'ctx_' => 'later']),
+        );
+        $this->assertSame('value', self::parseLogfmt($this->logfmtLine(['' => 'value']))['ctx_']);
+
+        $decoded = \json_decode(\trim((new JsonFormatter(false))->format(
+            Level::Info,
+            'test',
+            ['' => 'value', 'ctx_' => 'later'],
+            new \DateTimeImmutable('2026-01-01 00:00:00'),
+            null,
+            null,
+        )), true);
+        $this->assertIsArray($decoded);
+        $this->assertSame('value', $decoded['ctx_']);
+        $this->assertSame('later', $decoded['ctx_ctx_']);
+        $this->assertArrayNotHasKey('', $decoded);
+    }
+
     public function testLineBoundaryCodepointsForceQuoting(): void
     {
         // [m13] U+2028/U+2029 are line boundaries to splitlines()/JS readers

@@ -412,7 +412,9 @@ Untrusted data can never forge or reshape a record:
   (`level`, `msg`, `time`, `caller`, `prefix`, `_encode_error`) are renamed
   with a repeated
   `ctx_` prefix in both JSON and logfmt output (`level` → `ctx_level`,
-  `ctx_level` → `ctx_ctx_level`). Decoded records therefore always carry the
+  `ctx_level` → `ctx_ctx_level`). An empty context key namespaces the same way
+  (`''` → `ctx_`): decoders never see a bare `=` token or a `""` member.
+  Decoded records therefore always carry the
   *real* level, time and message no matter what a context array contains.
 - **Hostile shapes** — reference cycles in context terminate at a depth cap
   (`[...]`), non-finite floats become `'INF'`/`'-INF'`/`'NAN'`, a throwing

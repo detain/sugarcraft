@@ -16,7 +16,9 @@ namespace SugarCraft\Log\Formatter;
  *
  * Policy: reserved names are never overwritten. A context key that collides
  * with a reserved name — or with an already-accepted key in the same record —
- * is namespaced by prepending `ctx_` until it is free. The mapping is
+ * is namespaced by prepending `ctx_` until it is free. The empty-string key is
+ * namespaced too: it collides with nothing, but it still names nothing, and a
+ * decoder must never be handed a bare `=` token or a `""` member. The mapping is
  * deterministic and disclosed in the README so downstream consumers can rely
  * on `ctx_<key>` appearing whenever the raw name is reserved.
  */
@@ -46,8 +48,11 @@ final class RecordKeys
      */
     public static function claim(string $key, array &$used): string
     {
+        // The empty key names nothing: left bare it would emit an unaddressable
+        // `=value` token in logfmt and a `""` member in JSON, so it is claimed
+        // like any other clash — first pass lands on `ctx_` via the loop below.
         $candidate = $key;
-        while (\in_array($candidate, self::RESERVED, true) || isset($used[$candidate])) {
+        while ($candidate === '' || \in_array($candidate, self::RESERVED, true) || isset($used[$candidate])) {
             $candidate = self::PREFIX . $candidate;
         }
         $used[$candidate] = true;
