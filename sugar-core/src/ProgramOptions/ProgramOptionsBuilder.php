@@ -19,7 +19,23 @@ use React\EventLoop\LoopInterface;
  *       ->build();
  *
  * All options have sane defaults matching {@see ProgramOptions} defaults.
- * The builder validates constraints when {@see build()} is called.
+ *
+ * The builder is IMMUTABLE (sc-19, finding sugar-core-021): every
+ * `with*()` returns a fresh instance via a private clone-mutate, per the
+ * repo-wide fluent law (`sugar-style/src/Style.php` canonical). The
+ * previous shape mutated `$this` and returned it, so a shared builder
+ * cross-contaminated every chain forked from it — and the docblock
+ * claimed validation ran at {@see build()} when both guards
+ * (`withFramerate`, `withWindowSize`) actually fire EAGERLY at the
+ * setter. `build()` itself is unconditional assembly.
+ *
+ * Nullable knobs carry no `$XSet` sentinel: for every one of them
+ * (input/output/loop/environment/windowSize/colorProfile/filter/termios/
+ * subscriptions) null IS the meaning — "leave the ProgramOptions
+ * default" — so set-null and unset are observably identical to the
+ * caller, which is precisely the house-law condition for NOT pairing a
+ * sentinel. A reset is therefore expressible as `->withLoop(null)` and
+ * behaves the same as never calling it.
  */
 final class ProgramOptionsBuilder
 {
@@ -50,22 +66,34 @@ final class ProgramOptionsBuilder
     private bool $exitOnStdinEof = true;
     private bool $synchronizedOutput = true;
 
+    /**
+     * The single mutate door: clone, set one field, return the new
+     * instance. `clone` is a shallow copy, which is exactly right here —
+     * every field is either a scalar or a reference-carrying handle the
+     * caller owns outside the builder (streams, loop, closures).
+     *
+     * @param string $field one of this class's private knobs
+     */
+    private function mutate(string $field, mixed $value): self
+    {
+        $clone        = clone $this;
+        $clone->{$field} = $value;
+        return $clone;
+    }
+
     public function withUseAltScreen(bool $useAltScreen): self
     {
-        $this->useAltScreen = $useAltScreen;
-        return $this;
+        return $this->mutate('useAltScreen', $useAltScreen);
     }
 
     public function withCatchInterrupts(bool $catchInterrupts): self
     {
-        $this->catchInterrupts = $catchInterrupts;
-        return $this;
+        return $this->mutate('catchInterrupts', $catchInterrupts);
     }
 
     public function withHideCursor(bool $hideCursor): self
     {
-        $this->hideCursor = $hideCursor;
-        return $this;
+        return $this->mutate('hideCursor', $hideCursor);
     }
 
     public function withFramerate(float $framerate): self
@@ -73,68 +101,57 @@ final class ProgramOptionsBuilder
         if ($framerate <= 0) {
             throw new \InvalidArgumentException('Framerate must be positive');
         }
-        $this->framerate = $framerate;
-        return $this;
+        return $this->mutate('framerate', $framerate);
     }
 
     public function withMouseMode(\SugarCraft\Core\MouseMode $mouseMode): self
     {
-        $this->mouseMode = $mouseMode;
-        return $this;
+        return $this->mutate('mouseMode', $mouseMode);
     }
 
     public function withReportFocus(bool $reportFocus): self
     {
-        $this->reportFocus = $reportFocus;
-        return $this;
+        return $this->mutate('reportFocus', $reportFocus);
     }
 
     public function withBracketedPaste(bool $bracketedPaste): self
     {
-        $this->bracketedPaste = $bracketedPaste;
-        return $this;
+        return $this->mutate('bracketedPaste', $bracketedPaste);
     }
 
     public function withUnicodeMode(bool $unicodeMode): self
     {
-        $this->unicodeMode = $unicodeMode;
-        return $this;
+        return $this->mutate('unicodeMode', $unicodeMode);
     }
 
     public function withInlineMode(bool $inlineMode): self
     {
-        $this->inlineMode = $inlineMode;
-        return $this;
+        return $this->mutate('inlineMode', $inlineMode);
     }
 
     public function withOpenTty(bool $openTty): self
     {
-        $this->openTty = $openTty;
-        return $this;
+        return $this->mutate('openTty', $openTty);
     }
 
     public function withInput(mixed $input): self
     {
-        $this->input = $input;
-        return $this;
+        return $this->mutate('input', $input);
     }
 
     public function withOutput(mixed $output): self
     {
-        $this->output = $output;
-        return $this;
+        return $this->mutate('output', $output);
     }
 
     public function withLoop(?LoopInterface $loop): self
     {
-        $this->loop = $loop;
-        return $this;
+        return $this->mutate('loop', $loop);
     }
 
     public function withEnvironment(?array $environment): self
     {
-        $this->environment = $environment;
-        return $this;
+        return $this->mutate('environment', $environment);
     }
 
     public function withWindowSize(?array $windowSize): self
@@ -147,78 +164,69 @@ final class ProgramOptionsBuilder
                 throw new \InvalidArgumentException('windowSize cols and rows must be positive');
             }
         }
-        $this->windowSize = $windowSize;
-        return $this;
+        return $this->mutate('windowSize', $windowSize);
     }
 
     public function withColorProfile(?ColorProfile $colorProfile): self
     {
-        $this->colorProfile = $colorProfile;
-        return $this;
+        return $this->mutate('colorProfile', $colorProfile);
     }
 
     public function withCatchPanics(bool $catchPanics): self
     {
-        $this->catchPanics = $catchPanics;
-        return $this;
+        return $this->mutate('catchPanics', $catchPanics);
     }
 
     public function withWithoutRenderer(bool $withoutRenderer): self
     {
-        $this->withoutRenderer = $withoutRenderer;
-        return $this;
+        return $this->mutate('withoutRenderer', $withoutRenderer);
     }
 
     public function withFilter(?\Closure $filter): self
     {
-        $this->filter = $filter;
-        return $this;
+        return $this->mutate('filter', $filter);
     }
 
     public function withCellDiffRenderer(bool $cellDiffRenderer): self
     {
-        $this->cellDiffRenderer = $cellDiffRenderer;
-        return $this;
+        return $this->mutate('cellDiffRenderer', $cellDiffRenderer);
     }
 
     public function withWithoutSignalHandler(bool $withoutSignalHandler): self
     {
-        $this->withoutSignalHandler = $withoutSignalHandler;
-        return $this;
+        return $this->mutate('withoutSignalHandler', $withoutSignalHandler);
     }
 
     public function withTermios(?Termios $termios): self
     {
-        $this->termios = $termios;
-        return $this;
+        return $this->mutate('termios', $termios);
     }
 
     public function withSubscriptions(?\Closure $subscriptions): self
     {
-        $this->subscriptions = $subscriptions;
-        return $this;
+        return $this->mutate('subscriptions', $subscriptions);
     }
 
     public function withSanitizePaste(bool $sanitizePaste): self
     {
-        $this->sanitizePaste = $sanitizePaste;
-        return $this;
+        return $this->mutate('sanitizePaste', $sanitizePaste);
     }
 
     public function withExitOnStdinEof(bool $exitOnStdinEof): self
     {
-        $this->exitOnStdinEof = $exitOnStdinEof;
-        return $this;
+        return $this->mutate('exitOnStdinEof', $exitOnStdinEof);
     }
 
     public function withSynchronizedOutput(bool $synchronizedOutput): self
     {
-        $this->synchronizedOutput = $synchronizedOutput;
-        return $this;
+        return $this->mutate('synchronizedOutput', $synchronizedOutput);
     }
 
     /**
-     * Build the {@see ProgramOptions} instance.
+     * Assemble the {@see ProgramOptions} from the current knob set.
+     * Unconditional: both value constraints are enforced eagerly at
+     * their setters (see class docblock), so build() never throws for a
+     * well-typed chain.
      */
     public function build(): ProgramOptions
     {
