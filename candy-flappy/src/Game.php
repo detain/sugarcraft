@@ -98,14 +98,15 @@ final class Game implements Model
     public const SCORE_CEILING = 100000;
 
     /** @var \Closure(int $maxInclusive): int */
-    private \Closure $rand;
+    private readonly \Closure $rand;
 
-    private string $highScoreFilePath;
+    /** Where the leaderboard persists (derived from configDir, write-once). */
+    private readonly string $highScoreFilePath;
 
     /** Raw config dir as supplied to the constructor — threaded through
-     *  {@see advance()} / {@see withBird()} so the persist target survives
-     *  every derived instance instead of silently reverting to the default. */
-    private ?string $configDir;
+     *  every derived instance via {@see mutate()} so the persist target
+     *  survives instead of silently reverting to the default. */
+    private readonly ?string $configDir;
 
     /**
      * @param list<Pipe> $pipes
