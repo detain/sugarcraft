@@ -92,6 +92,31 @@ final class LoggerTest extends TestCase
         $log->fatal('bye');
     }
 
+    public function testFatalThrowsTypedExceptionWithSweptSingleLineMessage(): void
+    {
+        // [SEC-01/PHP-01] The fatal throw is the one emit-path sink that shows
+        // raw caller text on the crash display: control bytes must not survive
+        // (ESC/OSC would move the cursor, set the title, or forge lines) and
+        // newlines must not break the one-record-one-line contract.
+        $log = $this->logger();
+
+        try {
+            $log->fatal("bye\nplease\x1b]0;title\x07 and\ttabs");
+            $this->fail('expected FatalLoggedException');
+        } catch (\SugarCraft\Log\FatalLoggedException $e) {
+            // Typed class (bridge detects via instanceof, not string equality).
+            $message = $e->getMessage();
+            $this->assertStringContainsString('fatal log:', $message);
+            $this->assertStringContainsString('bye', $message);
+            $this->assertStringContainsString('please', $message);
+            $this->assertStringNotContainsString("\x1b", $message);
+            $this->assertStringNotContainsString("\x07", $message);
+            $this->assertStringNotContainsString("\n", $message);
+            $this->assertStringNotContainsString("\t", $message);
+            $this->assertSame($message, str_replace(["\n", "\r", "\t"], ' ', $message), 'message must be single-line');
+        }
+    }
+
     public function testWithCreatesChildWithExtraFields(): void
     {
         $log = $this->logger();

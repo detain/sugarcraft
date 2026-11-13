@@ -172,7 +172,11 @@ final class PsrBridge implements LoggerInterface
             // signal the direct-API caller. The record has landed; PSR-3
             // forbids propagating. Anything else — a throwing formatter, cast
             // inside the emit path — is a real failure worth reporting.
-            if ($sugarCraftLevel === Level::Fatal && $e->getMessage() === Lang::t('logger.fatal', ['message' => $text])) {
+            // [PHP-01] Typed detection: the old message-string equality was
+            // invisible coupling — a wording change, a locale flip between the
+            // two Lang::t call sites, or an unrelated RuntimeException
+            // carrying identical text silently flipped swallow vs report.
+            if ($sugarCraftLevel === Level::Fatal && $e instanceof FatalLoggedException) {
                 // fall through to hooks: the record is on the wire
             } else {
                 self::reportInternalFailure('log write failed', $e);

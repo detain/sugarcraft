@@ -380,6 +380,33 @@ final class PsrBridgeTest extends TestCase
         $this->assertTrue($hookSawRecord, 'hooks fire after the record is written');
     }
 
+    public function testUnrelatedThrowWithOldFatalTextIsReportedNotSwallowed(): void
+    {
+        // [PHP-01] Pre-fix, PsrBridge recognized the fatal signal by comparing
+        // the caught exception's message to Lang::t('logger.fatal', ...). An
+        // unrelated RuntimeException carrying that exact text was therefore
+        // silently swallowed. With typed instanceof detection it is reported
+        // on STDERR as an internal failure — child capture pins the bytes.
+        $result = StderrNoticeCapture::run(<<<'PHP'
+            // A formatter that detonates at Fatal level with the old magic text.
+            $text = 'forged';
+            $formatter = new class implements SugarCraft\Log\Formatter {
+                public function format(SugarCraft\Log\Level $level, string $message, array $context, DateTimeImmutable $time, ?string $caller, ?string $prefix): string
+                {
+                    // Exactly what the string-equality arm used to match:
+                    throw new RuntimeException(SugarCraft\Log\Lang::t('logger.fatal', ['message' => 'forged']));
+                }
+            };
+            $logger = SugarCraft\Log\Logger::new(formatter: $formatter, stream: fopen('php://stdout', 'w'), level: SugarCraft\Log\Level::Debug, reportTimestamp: false);
+            $bridge = new SugarCraft\Log\PsrBridge($logger);
+            $bridge->emergency('forged');
+            PHP);
+
+        $this->assertSame(0, $result['exitCode'], 'PSR-3 never-propagate still holds: ' . $result['stderr']);
+        $this->assertStringStartsWith('[sugar-log] log write failed: ', $result['stderr']);
+        $this->assertStringContainsString('fatal log: forged', $result['stderr'], 'identical-text foreign throw must be announced now, not swallowed');
+    }
+
     public function testFatalViaBridgeFiresHooksAndStillNeverThrows(): void
     {
         // [C1 x M7] The fatal swallow must not skip the hook dispatch either.

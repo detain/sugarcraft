@@ -216,7 +216,16 @@ final class Logger
         $this->writeRecord($target, $line);
 
         if ($level === Level::Fatal) {
-            throw new \RuntimeException(Lang::t('logger.fatal', ['message' => $message]));
+            // [SEC-01] Sweep + flatten the raw caller message before it enters
+            // the exception text: an uncaught fatal prints this string through
+            // PHP's error output, where surviving ESC/OSC bytes could move the
+            // cursor, set the window title, or forge extra lines.
+            $swept = \str_replace(["\n", "\r", "\t"], ' ', Sanitize::untrusted($message));
+
+            // [PHP-01] Typed throw: the PsrBridge detects the fatal signal by
+            // instanceof, not by message equality. RuntimeException subclass
+            // keeps every pre-existing catcher's contract.
+            throw new FatalLoggedException(Lang::t('logger.fatal', ['message' => $swept]));
         }
     }
 
