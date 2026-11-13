@@ -5,11 +5,132 @@ declare(strict_types=1);
 namespace SugarCraft\AnsiParser\Tests;
 
 use SugarCraft\AnsiParser\Parser\DebugHandler;
+use SugarCraft\AnsiParser\Parser\Handler;
 use SugarCraft\AnsiParser\Parser\Parser;
 use PHPUnit\Framework\TestCase;
 
+final class OverflowSignalRecorder implements Handler
+{
+    /** Wired by the test right after the Parser is constructed (parser-owner pull, the same route subparams() documents). */
+    public Parser $parser;
+
+    /** @var list<string> one `kind:true|false` entry per dispatch, read INSIDE the dispatch */
+    public array $signals = [];
+
+    private function signal(string $kind): void
+    {
+        $this->signals[] = $kind . ':' . var_export($this->parser->stringOverflowed(), true);
+    }
+
+    public function printChar(string $rune): void
+    {
+    }
+
+    public function execute(int $byte): void
+    {
+    }
+
+    public function escDispatch(int $final, int $intermediate): void
+    {
+    }
+
+    public function csiDispatch(int $final, array $params, int $prefix, int $intermediate): void
+    {
+        $this->signal('csi');
+    }
+
+    public function oscDispatch(string $data): void
+    {
+        $this->signal('osc');
+    }
+
+    public function dcsDispatch(int $final, array $params, int $prefix, int $intermediate, string $data): void
+    {
+        $this->signal('dcs');
+    }
+
+    public function sosPmApcDispatch(string $kind, string $data): void
+    {
+        $this->signal($kind);
+    }
+}
+
 final class ParserOverflowTest extends TestCase
 {
+    private static function cappedParser(int $cap): array
+    {
+        $handler = new OverflowSignalRecorder();
+        $parser = new Parser($handler, false, $cap);
+        $handler->parser = $parser;
+        return [$handler, $parser];
+    }
+
+    public function testStringOverflowLatchArmsPerStringStateFromInsideDispatch(): void
+    {
+        // sap-06 (finding 013): cap-exact and cap-minus-one must read false,
+        // a flood must read TRUE from inside the dispatch, for each of the
+        // four string legs.
+        $legs = [
+            'osc' => static fn(string $p): string => "\x1b]" . $p . "\x07",
+            'dcs' => static fn(string $p): string => "\x1bPq" . $p . "\x9c",
+            'apc' => static fn(string $p): string => "\x1b_" . $p . "\x9c",
+            'pm'  => static fn(string $p): string => "\x1b^" . $p . "\x9c",
+        ];
+        $cap = 8;
+        foreach ($legs as $kind => $wrap) {
+            foreach ([[$cap - 1, 'false'], [$cap, 'false'], [$cap + 250, 'true']] as [$size, $expected]) {
+                [$handler, $parser] = self::cappedParser($cap);
+                $parser->parseComplete($wrap(str_repeat('x', $size)));
+                $this->assertSame(
+                    [$kind . ':' . $expected],
+                    $handler->signals,
+                    "$kind leg with payload size $size (cap $cap)",
+                );
+                $this->assertFalse(
+                    $parser->stringOverflowed(),
+                    'the dispatch that consumed the signal clears it (pull-window contract)',
+                );
+            }
+        }
+    }
+
+    public function testStringOverflowLatchOnTheIterm1337PreludeLeg(): void
+    {
+        // The annotation's per-leg roster names 1337 explicitly: a DCS
+        // 1337 File upload whose base64 body floods the cap must surface
+        // the signal (the complement to Iterm1337::parseFile's one-way
+        // length check, which cannot see declared == delivered > cap).
+        [$handler, $parser] = self::cappedParser(16);
+        $parser->parseComplete("\x1bP1337;A=1q" . str_repeat('B', 60) . "\x9c");
+
+        $this->assertSame(['dcs:true'], $handler->signals);
+    }
+
+    public function testCrossTypeCancelDiscardsTheOverflowSignalUnread(): void
+    {
+        // sap-06 window semantics: a cancelled prelude never dispatches, so
+        // its pending signal must not bleed into the NEXT string's dispatch.
+        [$handler, $parser] = self::cappedParser(8);
+        $parser->parseComplete("\x9f" . str_repeat('x', 40) . "\x9d" . 'clean' . "\x9c");
+
+        $this->assertSame(
+            ['osc:false'],
+            $handler->signals,
+            'the flooded APC dies un-dispatched (cross-type cancel) and the fresh OSC reads false',
+        );
+    }
+
+    public function testNoSignalWithoutFlooding(): void
+    {
+        // Regression guard the other way: a stream that never touches the
+        // cap must keep the latch false all the way through — an
+        // always-true latch would make the accessor noise.
+        [$handler, $parser] = self::cappedParser(64);
+        $parser->parseComplete("text \x1b[31m\x1b]0;t\x07\x1b_pa\x9c");
+
+        $this->assertSame(['csi:false', 'osc:false', 'apc:false'], $handler->signals);
+    }
+
     /**
      * Step 3: Parameter values are clamped to 65535 to prevent integer overflow.
      * No float promotion — the value must be a proper int.

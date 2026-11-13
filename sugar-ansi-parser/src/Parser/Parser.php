@@ -74,6 +74,14 @@ final class Parser
     /** OSC / DCS / SOS / PM / APC payload accumulator. */
     private string $stringBuffer = '';
 
+    /**
+     * Set by {@see put()} and the {@see feed()} sweep whenever the
+     * maxStringBuffer cap clips payload; readable from inside the string
+     * dispatch it belongs to via {@see stringOverflowed()}, consumed by that
+     * dispatch (finding sugar-ansi-parser-013, sap-06).
+     */
+    private bool $stringOverflow = false;
+
     /** Default string-buffer cap (64 KiB) — prevents memory exhaustion from malicious sequences. */
     private const MAX_STRING_BUFFER = 65536;
 
@@ -286,14 +294,18 @@ final class Parser
                 // hold like OSC's C0 ignore band, or a same-state
                 // re-introducer Start — is advanced one byte at a time, so
                 // every sequence boundary keeps its exact per-byte semantics.
-                // The cap ride stays: at maxStringBuffer the put() route drops
-                // further payload bytes silently, so a clipped run skips its
-                // uncollectable remainder to the same landing point (the
-                // truncation-signal gap is a separate row, not fixed here).
+                // Cap semantics: at maxStringBuffer the put() route drops
+                // further payload bytes and now SETS the stringOverflow
+                // latch (finding 013: the drop becomes signalable, sap-06),
+                // so a clipped run skips its uncollectable remainder to the
+                // same landing point the byte-per-byte machine reaches.
                 $terminators = Transitions::terminators($this->state);
                 $run = strcspn($bytes, $terminators, $i);
                 if ($run > 0) {
                     $free = $this->maxStringBuffer - strlen($this->stringBuffer);
+                    if ($run > $free) {
+                        $this->stringOverflow = true;
+                    }
                     if ($free > 0) {
                         $this->stringBuffer .= substr($bytes, $i, min($run, $free));
                     }
@@ -480,6 +492,29 @@ final class Parser
         return $groups;
     }
 
+    /**
+     * Whether the string payload of the sequence CURRENTLY BEING DISPATCHED
+     * was clipped by the maxStringBuffer cap (finding sugar-ansi-parser-013,
+     * sap-06). Both collection routes set it — the per-byte put() drop and
+     * the bulk sweep's clipped run.
+     *
+     * The read window mirrors {@see subparams()}'s pull contract: meaningful
+     * only from inside `oscDispatch()`/`dcsDispatch()`/`sosPmApcDispatch()`
+     * for the dispatch that consumes it — the parser clears the flag when
+     * the dispatch completes, and an abandoned prelude (cross-type C1
+     * cancel, no-dispatch Ground drop, clear()) discards it unread.
+     * Outside that window it reads false.
+     *
+     * Complement, not replacement: `Codec\Iterm1337::parseFile`'s one-way
+     * size check (it flags only delivered < declared) cannot see a flood
+     * whose declared length also exceeds the cap; this accessor is the
+     * parser-side truth the decoder consults when its owner wired it.
+     */
+    public function stringOverflowed(): bool
+    {
+        return $this->stringOverflow;
+    }
+
     private function advance(int $byte): void
     {
         if ($this->state === self::S_UTF8) {
@@ -566,6 +601,9 @@ final class Parser
             && ((1 << $from) & self::STRING_STATE_MASK) !== 0
         ) {
             $this->stringBuffer = '';
+            // Abandonment without dispatch: a signal nobody gets to read is
+            // stale the moment the payload dies (sap-06 window semantics).
+            $this->stringOverflow = false;
         }
         $this->state = $next;
     }
@@ -592,6 +630,7 @@ final class Parser
         $this->subparams = [];
         $this->cmd = 0;
         $this->stringBuffer = '';
+        $this->stringOverflow = false; // sap-06: an abandoned prelude's signal dies with it
     }
 
     private function collect(int $byte): void
@@ -657,6 +696,7 @@ final class Parser
             && ((1 << $from) & self::STRING_STATE_MASK) !== 0
         ) {
             $this->stringBuffer = '';
+            $this->stringOverflow = false; // the cancelled prelude's signal dies un-read (sap-06)
         }
 
         // For DCS, the byte that triggers Start IS the final command.
@@ -683,6 +723,9 @@ final class Parser
     private function put(int $byte): void
     {
         if (strlen($this->stringBuffer) >= $this->maxStringBuffer) {
+            // Cap reached: the byte is dropped and the drop is now
+            // SIGNALABLE (finding 013, sap-06) — see stringOverflowed().
+            $this->stringOverflow = true;
             return;
         }
         $this->stringBuffer .= chr($byte);
@@ -725,6 +768,9 @@ final class Parser
                 $this->handler->csiDispatch($byte, $this->params, $prefix, $intermediate);
         }
         $this->stringBuffer = '';
+        // The consuming dispatch takes the truncation signal with it: the
+        // handler above already had its read window (sap-06).
+        $this->stringOverflow = false;
     }
 
     /**

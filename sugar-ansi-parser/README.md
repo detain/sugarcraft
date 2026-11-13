@@ -206,13 +206,20 @@ product:
 - **Payload cap:** DCS/OSC/SOS/PM/APC payload stops accumulating at **64 KiB**
   (default; constructor arg 3, `$maxStringBuffer`, changes it — any positive
   int, so smaller values tighten the cap — by explicit consumer choice;
-  sugar-vterm keeps the default). The cap is invisible to
-  decoders: past it, `put()` silently stops, so `Codec\Iterm1337` sees a short
-  base64 payload with no truncation marker from the parser itself (its File
-  view reports `payload truncated` when fewer bytes arrive than declared — a
-  payload LONGER than declared passes unflagged, as the check is one-way;
+  sugar-vterm keeps the default). Past the cap, payload bytes are dropped —
+  both the per-byte path and the bulk sweep — and the drop is **signalable**:
+  `Parser::stringOverflowed()` read from inside `oscDispatch()`/
+  `dcsDispatch()`/`sosPmApcDispatch()` reports whether THAT dispatch's
+  payload was truncated (the window is the same contract as `subparams()`:
+  consumed by the dispatch that carries it, discarded unread when the
+  prelude is abandoned without dispatch — cross-type C1 cancel, `clear()`).
+  The complement, not the same signal: `Codec\Iterm1337`'s File view reports
+  `payload truncated` only when fewer bytes arrive than declared (a payload
+  LONGER than declared passes unflagged, as the check is one-way;
   `Codec\KittyApc` has no size declaration to cross-check and simply
-  describes a short payload as-is). Chunked protocols are the real answer.
+  describes a short payload as-is) — decoders receive the parser-side
+  truncation truth only where their owner wires the accessor. Chunked
+  protocols are still the real answer.
 - **Parameter caps:** at most **32 slots**; a `:` or `;` arriving at the cap
   is dropped and following digits merge into the 32nd slot, and each value
   clamps at **65535**. Past the cap the colon-structure flags stay aligned
