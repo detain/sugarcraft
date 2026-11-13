@@ -717,6 +717,10 @@ function cmdUserAdd(array $args): int
 
     $username = $args[0];
     $password = null;
+    // 096: an argv-carried password (any of the three spellings below)
+    // is cleartext in ps /proc/pid/cmdline for the whole bcrypt window;
+    // the value-less form and the '-' sentinel read STDIN instead.
+    $passwordFromArgv = false;
     // S21 least-privilege (finding 036): an account is NOT an admin by
     // default. --admin raises the full-can global posture; --read states
     // the default out loud (mutually exclusive with --admin). The old
@@ -727,15 +731,27 @@ function cmdUserAdd(array $args): int
     $positional = [];
     for ($i = 1; $i < \count($args); $i++) {
         if ($args[$i] === '--password') {
-            $password = $args[$i + 1] ?? null;
-            if ($password === null) {
-                return error(Lang::t('cli.password_flag_needs_value') . "\n");
+            $next = $args[$i + 1] ?? null;
+            if ($next === '-') {
+                // Explicit stdin sentinel: consume it, read STDIN below.
+                $password = '-';
+                $i++;
+            } elseif ($next !== null && !\str_starts_with($next, '--')) {
+                // Legacy greedy argv value — works, but warns (096).
+                $password     = $next;
+                $passwordFromArgv = true;
+                $i++;
+            } else {
+                // Value-less headline form (096): end of args or a
+                // following --flag; STDIN carries the secret, argv never
+                // sees it.
+                $password = '-';
             }
-            $i++;
             continue;
         }
         if (\str_starts_with($args[$i], '--password=')) {
-            $password = \substr($args[$i], \strlen('--password='));
+            $password         = \substr($args[$i], \strlen('--password='));
+            $passwordFromArgv = true;
             continue;
         }
         if ($args[$i] === '--admin') {
@@ -750,6 +766,9 @@ function cmdUserAdd(array $args): int
     }
     if ($admin && $explicitRead) {
         return error(Lang::t('cli.user_add_flags_conflict') . "\n");
+    }
+    if ($passwordFromArgv) {
+        \fwrite(\STDERR, 'candy-git-server: ' . Lang::t('cli.password_argv_exposed') . "\n");
     }
     if ($password === '-') {
         $raw = \stream_get_contents(\STDIN);
@@ -791,6 +810,10 @@ function cmdUserAdd(array $args): int
     echo Lang::t('cli.user_key_hint', ['username' => $username]) . "\n";
     if ($password !== null) {
         echo Lang::t('cli.user_password_stored') . "\n";
+    } else {
+        // 019: a factor-less account authenticates nothing — not HTTP
+        // push, not SSH. The old shape let this land in total silence.
+        \fwrite(\STDERR, 'candy-git-server: ' . Lang::t('cli.user_add_no_password', ['username' => $username]) . "\n");
     }
     echo "Persisted to {$store->path()}\n";
 

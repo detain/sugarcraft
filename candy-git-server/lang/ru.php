@@ -42,6 +42,7 @@ return [
     // S21: least-privilege `user add` flags (finding 036).
     'cli.user_add_flags_conflict' => 'Флаги --admin и --read исключают друг друга.',
     'cli.user_password_stored' => 'Пароль сохранён в виде хеша.',
+    'cli.user_add_no_password' => 'предупреждение: у \'{username}\' пока нет пароля и SSH-ключа; HTTP push и SSH будут отклонять его, пока не появятся \'user key\' или --password',
     'cli.user_key_hint'        => "Используйте 'candy-git-server user key {username} <key-file|->' для добавления SSH-ключа.",
     'cli.user_key_read_failed' => 'Не удалось прочитать ключ из: {file}',
     'cli.user_key_added'       => "Ключ добавлен для пользователя '{username}'",
@@ -101,8 +102,8 @@ return [
     'cli.token_no_config' => 'token: нет читаемого конфига в {data}/config.yaml — выполните init или укажите путь к данным',
     'cli.token_no_secret' => 'token: http.auth_secret не настроен для этого пути к данным; задайте его в секции http: файла config.yaml перед выпуском токенов',
     'cli.token_ttl_capped' => 'token: запрошенный TTL {ttl}с превышает предел {max}с, настроенный в {key}; уменьшите TTL или поднимите этот ключ в config.yaml',
-    'cli.password_flag_needs_value' => 'candy-git-server: --password требует значение (\'-\' читает из stdin)',
     'cli.password_flag_empty' => 'candy-git-server: --password требует непустое значение',
+    'cli.password_argv_exposed' => 'предупреждение: пароль, переданный в командной строке, виден в ps /proc/pid/cmdline во время bcrypt; --password без значения читает его из STDIN',
     'cli.username_invalid' => 'Недопустимое имя пользователя: \'{username}\' (буквы, цифры, точка, подчёркивание, дефис; не только точки)',
     'cli.user_exists' => 'Пользователь \'{username}\' уже существует в {path}',
     'cli.user_not_found' => 'Пользователь \'{username}\' не найден в {path} — сначала выполните \'candy-git-server user add {username}\'.',

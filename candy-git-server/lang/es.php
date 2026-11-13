@@ -47,6 +47,7 @@ return [
     // S21: least-privilege `user add` flags (finding 036).
     'cli.user_add_flags_conflict' => '--admin y --read son mutuamente excluyentes.',
     'cli.user_password_stored' => 'Contraseña almacenada como hash.',
+    'cli.user_add_no_password' => 'advertencia: «{username}» aún no tiene contraseña ni clave SSH; el push HTTP y SSH la rechazarán hasta que añada \'user key\' o un --password',
     'cli.user_key_hint'        => "Use 'candy-git-server user key {username} <key-file|->' para agregar una clave SSH pública.",
     'cli.user_key_read_failed' => 'Error al leer la clave desde: {file}',
     'cli.user_key_added'       => "Clave agregada para el usuario '{username}'",
@@ -110,8 +111,8 @@ Resaltado:   {highlight}
     'cli.token_no_config' => 'token: no hay configuración legible en {data}/config.yaml — ejecute init o indiquee una ruta de datos',
     'cli.token_no_secret' => 'token: http.auth_secret no esta configurado para esta ruta de datos; definalo en la seccion http: de config.yaml antes de emitir tokens',
     'cli.token_ttl_capped' => 'token: el TTL solicitado de {ttl}s supera el limite de {max}s configurado en {key}; reduzca el TTL o eleve esa clave en config.yaml',
-    'cli.password_flag_needs_value' => 'candy-git-server: --password requiere un valor (\'-\' lee de stdin)',
     'cli.password_flag_empty' => 'candy-git-server: --password requiere un valor no vacio',
+    'cli.password_argv_exposed' => 'advertencia: la contraseña pasada en la línea de órdenes es visible en ps /proc/pid/cmdline durante bcrypt; --password sin valor la lee de STDIN',
     'cli.username_invalid' => 'Nombre de usuario no valido: \'{username}\' (letras, digitos, punto, guion bajo, guion; no solo puntos)',
     'cli.user_exists' => 'El usuario \'{username}\' ya existe en {path}',
     'cli.user_not_found' => 'No existe el usuario \'{username}\' en {path} — ejecute primero \'candy-git-server user add {username}\'.',

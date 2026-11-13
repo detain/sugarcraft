@@ -34,7 +34,7 @@ return [
     'cli.initializing'         => 'Initializing CandyGitServer data directory: {path}',
     'cli.done'                 => 'Done.',
     'cli.next_steps'           => 'Next steps:',
-    'cli.next_step_1'          => '  1. Create an account: candy-git-server user add --admin admin {path}',
+    'cli.next_step_1' => '  1. Create an account: candy-git-server user add <name> {path} --password - (the value-less form reads STDIN - keep secrets off argv)',
 
     'cli.next_step_2'          => '  2. Create a repository: candy-git-server repo create <name> {path} (add --public to publish it for anonymous read)',
 
@@ -52,6 +52,7 @@ return [
     // S21: least-privilege `user add` flags (finding 036).
     'cli.user_add_flags_conflict' => '--admin and --read are mutually exclusive.',
     'cli.user_password_stored' => 'Password stored as a hash.',
+    'cli.user_add_no_password' => 'warning: \'{username}\' has no password and no SSH key yet; HTTP push and SSH sessions will refuse it until \'user key\' or a --password lands',
     'cli.user_key_hint'        => "Use 'candy-git-server user key {username} <key-file|->' to add an SSH public key.",
     'cli.user_key_read_failed' => 'Failed to read key from: {file}',
     'cli.user_key_added'       => "Key added for user '{username}'",
@@ -110,8 +111,8 @@ Last mirror attempt: {mirror_last_try}',
     'cli.token_no_config' => 'token: no readable config at {data}/config.yaml — run init or pass a data-path',
     'cli.token_no_secret' => 'token: http.auth_secret is not configured for this data path; set it under the http: section of config.yaml before minting tokens',
     'cli.token_ttl_capped' => 'token: requested TTL {ttl}s exceeds the ceiling {max}s configured under {key}; lower the TTL or raise that key in config.yaml',
-    'cli.password_flag_needs_value' => 'candy-git-server: --password requires a value (\'-\' reads from stdin)',
     'cli.password_flag_empty' => 'candy-git-server: --password requires a non-empty value',
+    'cli.password_argv_exposed' => 'warning: the password passed on the command line is visible in process listings (ps /proc/pid/cmdline) while bcrypt runs; --password with no value reads it from STDIN instead',
     'cli.username_invalid' => 'Invalid username: \'{username}\' (letters, digits, dot, underscore, hyphen; not all dots)',
     'cli.user_exists' => 'User \'{username}\' already exists in {path}',
     'cli.user_not_found' => 'No such user \'{username}\' in {path} — run \'candy-git-server user add {username}\' first.',

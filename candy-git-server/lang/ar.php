@@ -42,6 +42,7 @@ return [
     // S21: least-privilege `user add` flags (finding 036).
     'cli.user_add_flags_conflict' => 'لا يمكن استخدام --admin و --read معًا.',
     'cli.user_password_stored' => 'تم حفظ كلمة المرور بصيغة تجزئة.',
+    'cli.user_add_no_password' => 'تحذير: لا يملك \'{username}\' كلمة مرور ولا مفتاح SSH بعد؛ سيرفض HTTP push وSSH حتى تضيف \'user key\' أو --password',
     'cli.user_key_hint'        => "استخدم 'candy-git-server user key {username} <key-file|->' لإضافة مفتاح SSH العام.",
     'cli.user_key_read_failed' => 'فشل قراءة المفتاح من: {file}',
     'cli.user_key_added'       => "تمت إضافة المفتاح للمستخدم '{username}'",
@@ -101,8 +102,8 @@ return [
     'cli.token_no_config' => 'token: لا يوجد إعداد قابل للقراءة في {data}/config.yaml — شغّل init أو مرّر مسار بيانات',
     'cli.token_no_secret' => 'token: http.auth_secret غير مُهيأ لمسار البيانات هذا؛ اضبطه تحت قسم http: في config.yaml قبل إصدار الرموز',
     'cli.token_ttl_capped' => 'token: مدة TTL المطلوبة {ttl} ثانية تتجاوز الحد {max} ثانية المضبوط تحت {key}; قلل المدة أو ارفع هذا المفتاح في config.yaml',
-    'cli.password_flag_needs_value' => 'candy-git-server: --password يتطلب قيمة (\'-\' تقرأ من stdin)',
     'cli.password_flag_empty' => 'candy-git-server: --password يتطلب قيمة غير فارغة',
+    'cli.password_argv_exposed' => 'تحذير: كلمة المرور الممررة في سطر الأوامر مرئية عبر ps /proc/pid/cmdline أثناء bcrypt؛ --password بدون قيمة تقرأها من STDIN',
     'cli.username_invalid' => 'اسم مستخدم غير صالح: \'{username}\' (حروف وأرقام ونقطة وشرطة سفلية وشرطة؛ ليس نقاطًا فقط)',
     'cli.user_exists' => 'المستخدم \'{username}\' موجود بالفعل في {path}',
     'cli.user_not_found' => 'لا يوجد مستخدم \'{username}\' في {path} — شغّل أولاً \'candy-git-server user add {username}\'.',

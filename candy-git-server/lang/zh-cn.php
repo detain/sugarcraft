@@ -42,6 +42,7 @@ return [
     // S21: least-privilege `user add` flags (finding 036).
     'cli.user_add_flags_conflict' => '--admin 与 --read 互斥，不能同时使用。',
     'cli.user_password_stored' => '密码已作为哈希存储。',
+    'cli.user_add_no_password' => '警告：\'{username}\' 尚无密码和 SSH 密钥；在添加 \'user key\' 或 --password 之前，HTTP push 和 SSH 都会拒绝它',
     'cli.user_key_hint'        => "使用 'candy-git-server user key {username} <key-file|->' 添加 SSH 公钥。",
     'cli.user_key_read_failed' => '读取密钥失败：{file}',
     'cli.user_key_added'       => "已为用户 '{username}' 添加密钥",
@@ -101,8 +102,8 @@ return [
     'cli.token_no_config' => 'token: {data}/config.yaml 没有可读配置 — 请运行 init 或指定数据路径',
     'cli.token_no_secret' => 'token: 此数据路径未配置 http.auth_secret；请在 config.yaml 的 http: 段中设置后再签发令牌',
     'cli.token_ttl_capped' => 'token: 请求的 TTL {ttl}秒超过 {key} 配置的上限 {max}秒；请降低 TTL，或在 config.yaml 中提高该键值',
-    'cli.password_flag_needs_value' => 'candy-git-server: --password 需要一个值（\'-\' 从标准输入读取）',
     'cli.password_flag_empty' => 'candy-git-server: --password 需要非空值',
+    'cli.password_argv_exposed' => '警告：命令行传入的密码在 bcrypt 运行期间可通过 ps /proc/pid/cmdline 看到；不带值的 --password 会从 STDIN 读取',
     'cli.username_invalid' => '无效用户名：\'{username}\'（仅限字母、数字、点、下划线、连字符；不能全为点）',
     'cli.user_exists' => '用户 \'{username}\' 已存在于 {path}',
     'cli.user_not_found' => '{path} 中没有用户 \'{username}\' — 请先运行 \'candy-git-server user add {username}\'。',

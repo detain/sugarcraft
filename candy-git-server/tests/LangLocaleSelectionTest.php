@@ -104,7 +104,6 @@ final class LangLocaleSelectionTest extends TestCase
             'cli.init_publish_failed' => ['data'],
             'cli.token_no_config' => ['data'],
             'cli.token_no_secret' => [],
-            'cli.password_flag_needs_value' => [],
             'cli.password_flag_empty' => [],
             'cli.username_invalid' => ['username'],
             'cli.user_exists' => ['username', 'path'],
@@ -127,6 +126,12 @@ final class LangLocaleSelectionTest extends TestCase
 
         // The mint refusal still names the ONLY parsed signing key.
         self::assertStringContainsString('http.auth_secret', (string) $en['cli.token_no_secret']);
+
+        // 096 retirement (S36): value-less --password is no longer a
+        // refusal — it is the headline STDIN form — so the needs_value
+        // copy must never come back.
+        self::assertStringNotContainsString('cli.password_flag_needs_value', $bin);
+        self::assertArrayNotHasKey('cli.password_flag_needs_value', $en);
     }
 
     public function testInitNextStepsTeachTheWorkingRecipe(): void
@@ -138,6 +143,12 @@ final class LangLocaleSelectionTest extends TestCase
         $en = include \dirname(__DIR__) . '/lang/en.php';
         self::assertStringContainsString('serve --http --repo-root', $en['cli.next_step_3']);
         self::assertStringContainsString('user add', $en['cli.next_step_1']);
+        // 019: the printed onboarding step must not mint a factor-less
+        // account — the retired 'user add --admin admin' shape persisted
+        // password_hash: null and refused pushes forever, off a name the
+        // attack list guesses first. STDIN steer replaces it.
+        self::assertStringContainsString('--password -', $en['cli.next_step_1']);
+        self::assertStringNotContainsString('--admin admin', $en['cli.next_step_1']);
         self::assertStringContainsString('--public', $en['cli.next_step_2']);
         self::assertArrayNotHasKey('cli.next_step_4', $en);
     }

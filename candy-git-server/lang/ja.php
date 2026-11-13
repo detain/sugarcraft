@@ -42,6 +42,7 @@ return [
     // S21: least-privilege `user add` flags (finding 036).
     'cli.user_add_flags_conflict' => '--admin と --read は同時に指定できません。',
     'cli.user_password_stored' => 'パスワードはハッシュとして保存されました。',
+    'cli.user_add_no_password' => '警告: \'{username}\' にはまだパスワードも SSH 鍵もありません。\'user key\' か --password が入るまで HTTP push と SSH は拒否されます',
     'cli.user_key_hint'        => "SSH 公開鍵を追加するには 'candy-git-server user key {username} <key-file|->' を使用してください。",
     'cli.user_key_read_failed' => '鍵の読み取りに失敗：{file}',
     'cli.user_key_added'       => "ユーザー '{username}' に鍵を追加しました",
@@ -101,8 +102,8 @@ return [
     'cli.token_no_config' => 'token: 読み取り可能な設定がありません {data}/config.yaml — init を実行するかデータパスを指定してください',
     'cli.token_no_secret' => 'token: このデータパスに http.auth_secret が設定されていません。トークンを発行する前に config.yaml の http: セクションに設定してください',
     'cli.token_ttl_capped' => 'token: 要求された TTL {ttl}秒は {key} の上限 {max}秒 を超えています。TTL を下げるか、config.yaml でこのキーを引き上げてください',
-    'cli.password_flag_needs_value' => 'candy-git-server: --password には値が必要です (\'-\' は標準入力から読み込み)',
     'cli.password_flag_empty' => 'candy-git-server: --password には空でない値が必要です',
+    'cli.password_argv_exposed' => '警告: コマンドラインに渡したパスワードは bcrypt 実行中に ps /proc/pid/cmdline から参照されます。値なしの --password は STDIN から読み込みます',
     'cli.username_invalid' => '無効なユーザー名: \'{username}\' (使用可能: 英数字、ドット、アンダースコア、ハイフン。ドットのみは不可)',
     'cli.user_exists' => 'ユーザー \'{username}\' は {path} に既に存在します',
     'cli.user_not_found' => 'ユーザー \'{username}\' は {path} に見つかりません — まず \'candy-git-server user add {username}\' を実行してください。',

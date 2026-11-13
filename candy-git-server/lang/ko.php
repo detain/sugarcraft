@@ -42,6 +42,7 @@ return [
     // S21: least-privilege `user add` flags (finding 036).
     'cli.user_add_flags_conflict' => '--admin 및 --read는 동시에 사용할 수 없습니다.',
     'cli.user_password_stored' => '비밀번호가 해시로 저장되었습니다.',
+    'cli.user_add_no_password' => '경고: \'{username}\'에는 아직 비밀번호도 SSH 키도 없습니다. \'user key\' 또는 --password가 설정될 때까지 HTTP push와 SSH가 거부됩니다',
     'cli.user_key_hint'        => "SSH 공개키를 추가하려면 'candy-git-server user key {username} <key-file|->'을 사용하세요.",
     'cli.user_key_read_failed' => '파일에서 키 읽기 실패: {file}',
     'cli.user_key_added'       => "사용자 '{username}'에 키 추가됨",
@@ -101,8 +102,8 @@ return [
     'cli.token_no_config' => 'token: 읽을 수 있는 구성이 없습니다 {data}/config.yaml — init을 실행하거나 데이터 경로를 지정하세요',
     'cli.token_no_secret' => 'token: 이 데이터 경로에 http.auth_secret이 구성되어 있지 않습니다. 토큰을 발행하기 전에 config.yaml의 http: 섹션에 설정하세요',
     'cli.token_ttl_capped' => 'token: 요청한 TTL {ttl}초가 {key}의 상한 {max}초를 초과합니다. TTL을 낮추거나 config.yaml에서 이 키를 올리세요',
-    'cli.password_flag_needs_value' => 'candy-git-server: --password에는 값이 필요합니다 (\'-\'는 표준 입력에서 읽음)',
     'cli.password_flag_empty' => 'candy-git-server: --password에는 비어 있지 않은 값이 필요합니다',
+    'cli.password_argv_exposed' => '경고: 명령줄에 전달된 비밀번호는 bcrypt 실행 중 ps /proc/pid/cmdline에서 보입니다. 값 없는 --password는 STDIN에서 읽습니다',
     'cli.username_invalid' => '잘못된 사용자 이름: \'{username}\' (문자, 숫자, 점, 밑줄, 하이픈만 가능; 점만은 불가)',
     'cli.user_exists' => '사용자 \'{username}\'이(가) {path}에 이미 있습니다',
     'cli.user_not_found' => '{path}에 사용자 \'{username}\'이(가) 없습니다 — 먼저 \'candy-git-server user add {username}\'를 실행하세요.',
