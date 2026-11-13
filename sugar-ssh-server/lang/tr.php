@@ -35,4 +35,11 @@ return [
     'keyboardinteractive.auth_failed' => 'Kimlik doğrulama başarısız.',
     'keyboardinteractive.input_visible' => 'Bu uçbirim sessize alınmadı: buraya yazdığınız her şey geri yansıtılır.',
     'channel.exec_refused'            => 'Exec request refused: {program}',
+    'transport.pty_outside_loop' => 'pty() etkin pompalama döngüsü dışında çağrıldı',
+    'keyboardinteractive.bad_challenge' => 'Challenge {index} bir istem dizisi veya "prompt" anahtarınlı bir dizi olmalı; alınan: {got}.',
+    'auth.reject_user' => 'kullanıcıya izin yok: {name}',
+    'auth.reject_key' => 'anahtara izin yok: {fingerprint}',
+    'auth.reject_unpaired' => 'anahtar istenen kullanıcıyla eşleşmiyor: {fingerprint} / {name}',
+    'auth.reject_validation' => 'anahtar doğrulaması başarısız: {fingerprint}',
+    'middleware.async_auth_failed' => 'kimlik doğrulama başarısız: {why}',
 ];

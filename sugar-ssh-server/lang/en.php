@@ -35,4 +35,11 @@ return [
     'keyboardinteractive.auth_failed' => 'Authentication failed.',
     'keyboardinteractive.input_visible' => 'This terminal is not silenced: everything you type here is echoed back.',
     'channel.exec_refused'            => 'Exec request refused: {program}',
+    'transport.pty_outside_loop'      => 'pty() called outside of active pump loop',
+    'keyboardinteractive.bad_challenge' => 'Challenge {index} must be a prompt string or an array with a string "prompt" key; got {got}.',
+    'auth.reject_user'                => 'user not allowed: {name}',
+    'auth.reject_key'                 => 'key not allowed: {fingerprint}',
+    'auth.reject_unpaired'            => 'key not paired with the requested user: {fingerprint} as {name}',
+    'auth.reject_validation'          => 'key validation failed: {fingerprint}',
+    'middleware.async_auth_failed'    => 'auth failed: {why}',
 ];

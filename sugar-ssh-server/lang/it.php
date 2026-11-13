@@ -35,4 +35,11 @@ return [
     'keyboardinteractive.auth_failed' => 'Autenticazione non riuscita.',
     'keyboardinteractive.input_visible' => 'Questo terminale non è disattivato: tutto ciò che digiti qui verrà visualizzato.',
     'channel.exec_refused'            => 'Exec request refused: {program}',
+    'transport.pty_outside_loop' => 'pty() chiamato fuori dal ciclo di pump attivo',
+    'keyboardinteractive.bad_challenge' => 'La challenge {index} deve essere una stringa prompt o un array con una chiave "prompt" di tipo stringa; ottenuto: {got}.',
+    'auth.reject_user' => 'utente non consentito: {name}',
+    'auth.reject_key' => 'chiave non consentita: {fingerprint}',
+    'auth.reject_unpaired' => 'chiave non abbinata all’utente richiesto: {fingerprint} come {name}',
+    'auth.reject_validation' => 'convalida della chiave fallita: {fingerprint}',
+    'middleware.async_auth_failed' => 'autenticazione fallita: {why}',
 ];

@@ -35,4 +35,11 @@ return [
     'keyboardinteractive.auth_failed' => 'Autenticação falhou.',
     'keyboardinteractive.input_visible' => 'Este terminal não está silenciado: tudo o que escrever aqui será mostrado.',
     'channel.exec_refused'            => 'Exec request refused: {program}',
+    'transport.pty_outside_loop' => 'pty() chamado fora do ciclo de bombeamento ativo',
+    'keyboardinteractive.bad_challenge' => 'O desafio {index} deve ser uma string de prompt ou uma matriz com uma chave "prompt" de string; obtido: {got}.',
+    'auth.reject_user' => 'usuário não permitido: {name}',
+    'auth.reject_key' => 'chave não permitida: {fingerprint}',
+    'auth.reject_unpaired' => 'chave não associada ao usuário solicitado: {fingerprint} como {name}',
+    'auth.reject_validation' => 'falha na validação da chave: {fingerprint}',
+    'middleware.async_auth_failed' => 'autenticação falhou: {why}',
 ];

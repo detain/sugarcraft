@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\SshServer\Tests\Middleware;
 
+use SugarCraft\Core\I18n\T;
 use SugarCraft\SshServer\Context;
 use SugarCraft\SshServer\Middleware\Auth;
 use SugarCraft\SshServer\Session;
@@ -192,6 +193,31 @@ final class AuthTest extends TestCase
         $this->assertFalse($reached);
         $this->assertStringContainsString('Unauthorized', $readErr());
         $this->assertStringContainsString('key not allowed', $readErr());
+    }
+
+    public function testRejectionReasonFollowsTheSelectedLocale(): void
+    {
+        // Routing proof for the i18n wave: the reject fragments resolve
+        // through the Lang catalogues, not as English literals glued at
+        // the call site — selecting a locale must change what lands on
+        // stderr (and the auth.unauthorized wrapper too).
+        $prev = T::locale();
+        try {
+            T::setLocale('de');
+            [$err, $readErr] = $this->stderr();
+            $a = new Auth(['bob'], [], $err);
+            $reached = false;
+            $a->handle(Context::background(), $this->session('alice'), function () use (&$reached): void {
+                $reached = true;
+            });
+            $this->assertFalse($reached);
+
+            $out = $readErr();
+            $this->assertStringContainsString('Nicht autorisiert. (Benutzer nicht erlaubt: alice', $out);
+            $this->assertStringNotContainsString('user not allowed', $out);
+        } finally {
+            T::setLocale($prev);
+        }
     }
 
     public function testSshUserAuthBlobWithMd5Fingerprint(): void

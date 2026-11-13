@@ -169,7 +169,7 @@ final class InProcessTransport implements Transport, ChildSpawner
     public function pty(): MasterPty
     {
         if ($this->master === null) {
-            throw new \RuntimeException('pty() called outside of active pump loop');
+            throw new \RuntimeException(Lang::t('transport.pty_outside_loop'));
         }
         return $this->master;
     }

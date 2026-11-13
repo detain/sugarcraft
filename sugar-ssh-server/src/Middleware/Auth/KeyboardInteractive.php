@@ -172,8 +172,10 @@ final class KeyboardInteractive implements Middleware
                 continue;
             }
             throw new \InvalidArgumentException(
-                'Challenge ' . $index . ' must be a prompt string or an array with a string'
-                . ' "prompt" key; got ' . \get_debug_type($challenge) . '.'
+                Lang::t('keyboardinteractive.bad_challenge', [
+                    'index' => (string) $index,
+                    'got'   => \get_debug_type($challenge),
+                ])
             );
         }
         return $normalised;

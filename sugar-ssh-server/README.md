@@ -603,7 +603,7 @@ name it also chose for itself. `Session::$lang` is that same peer-asserted
 value: log it, do not obey it.
 
 Coverage is uneven, and the suite keeps the list honest rather than letting
-it grow quietly: eleven of the twenty-six keys are still English placeholders
+it grow quietly: eleven of the thirty-three keys are still English placeholders
 in all fifteen translated locales (`ACCEPTED_UNTRANSLATED` in
 `tests/LangRosterTest.php`; curing one means deleting it from the roster).
 

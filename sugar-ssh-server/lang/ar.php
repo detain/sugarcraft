@@ -35,4 +35,11 @@ return [
     'keyboardinteractive.auth_failed' => 'فشلت المصادقة.',
     'keyboardinteractive.input_visible' => 'لم يتم إسكات هذا الطرفية: كل ما تكتبه هنا يظهر على الشاشة.',
     'channel.exec_refused'            => 'Exec request refused: {program}',
+    'transport.pty_outside_loop' => 'تم استدعاء pty() خارج حلقة الضخ النشطة',
+    'keyboardinteractive.bad_challenge' => 'يجب أن يكون التحدي {index} سلسلة مطالبة نصية أو مصفوفًا يحتوي على مفتاح "prompt" نصي؛ تم الحصول على: {got}.',
+    'auth.reject_user' => 'المستخدم غير مسموح به: {name}',
+    'auth.reject_key' => 'المفتاح غير مسموح به: {fingerprint}',
+    'auth.reject_unpaired' => 'المفتاح غير مرتبط بالمستخدم المطلوب: {fingerprint} باسم {name}',
+    'auth.reject_validation' => 'فشل التحقق من المفتاح: {fingerprint}',
+    'middleware.async_auth_failed' => 'فشلت المصادقة: {why}',
 ];

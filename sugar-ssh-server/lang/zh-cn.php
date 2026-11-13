@@ -35,4 +35,11 @@ return [
     'keyboardinteractive.auth_failed' => '认证失败。',
     'keyboardinteractive.input_visible' => '此终端未静音: 您在此处输入的任何内容都会被回显.',
     'channel.exec_refused'            => 'Exec request refused: {program}',
+    'transport.pty_outside_loop' => 'pty() 在活动的泵循环之外被调用',
+    'keyboardinteractive.bad_challenge' => 'Challenge {index} 必须是提示字符串或带字符串 "prompt" 键的数组；得到：{got}。',
+    'auth.reject_user' => '不允许的用户：{name}',
+    'auth.reject_key' => '不允许的密钥：{fingerprint}',
+    'auth.reject_unpaired' => '密钥与请求的用户不匹配：{fingerprint} 作为 {name}',
+    'auth.reject_validation' => '密钥验证失败：{fingerprint}',
+    'middleware.async_auth_failed' => '认证失败：{why}',
 ];

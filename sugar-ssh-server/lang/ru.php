@@ -35,4 +35,11 @@ return [
     'keyboardinteractive.auth_failed' => 'Ошибка аутентификации.',
     'keyboardinteractive.input_visible' => 'Этот терминал не отключён: всё, что вы здесь наберёте, будет отображено.',
     'channel.exec_refused'            => 'Exec request refused: {program}',
+    'transport.pty_outside_loop' => 'pty() вызван вне активного цикла накачки',
+    'keyboardinteractive.bad_challenge' => 'Вызов {index} должен быть строкой запроса или массивом со строковым ключом "prompt"; получено: {got}.',
+    'auth.reject_user' => 'пользователь не разрешён: {name}',
+    'auth.reject_key' => 'ключ не разрешён: {fingerprint}',
+    'auth.reject_unpaired' => 'ключ не связан с запрошенным пользователем: {fingerprint} как {name}',
+    'auth.reject_validation' => 'проверка ключа не удалась: {fingerprint}',
+    'middleware.async_auth_failed' => 'ошибка аутентификации: {why}',
 ];

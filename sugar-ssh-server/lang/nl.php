@@ -35,4 +35,11 @@ return [
     'keyboardinteractive.auth_failed' => 'Verificatie mislukt.',
     'keyboardinteractive.input_visible' => 'Deze terminal is niet gedempt: alles wat u hier typt wordt teruggegeven.',
     'channel.exec_refused'            => 'Exec request refused: {program}',
+    'transport.pty_outside_loop' => 'pty() aangeroepen buiten een actieve pump-loop',
+    'keyboardinteractive.bad_challenge' => 'Challenge {index} moet een prompt-tekenreeks of een array met een tekenreeissleutel "prompt" zijn; gekregen: {got}.',
+    'auth.reject_user' => 'gebruiker niet toegestaan: {name}',
+    'auth.reject_key' => 'sleutel niet toegestaan: {fingerprint}',
+    'auth.reject_unpaired' => 'sleutel niet gekoppeld aan de gevraagde gebruiker: {fingerprint} als {name}',
+    'auth.reject_validation' => 'validatie van sleutel mislukt: {fingerprint}',
+    'middleware.async_auth_failed' => 'authenticatie mislukt: {why}',
 ];

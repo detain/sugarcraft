@@ -35,4 +35,11 @@ return [
     'keyboardinteractive.auth_failed' => '인증에 실패했습니다.',
     'keyboardinteractive.input_visible' => '이 터미널은 음소거되지 않았습니다: 여기에 입력한 모든 내용이 표시됩니다.',
     'channel.exec_refused'            => 'Exec request refused: {program}',
+    'transport.pty_outside_loop' => 'pty()가 활성 풀프 루프 외에서 호출되었습니다',
+    'keyboardinteractive.bad_challenge' => '챌맹지 {index}는 프롬프트 문자열 또는 문자열 "prompt" 키가 있는 배열이어야 합니다; 받은 값: {got}.',
+    'auth.reject_user' => '사용자가 허용되지 않았습니다: {name}',
+    'auth.reject_key' => '키가 허용되지 않았습니다: {fingerprint}',
+    'auth.reject_unpaired' => '키가 요청된 사용자와 항상이 아닙니다: {fingerprint} / {name}',
+    'auth.reject_validation' => '키 검증 실패: {fingerprint}',
+    'middleware.async_auth_failed' => '인증 실패: {why}',
 ];

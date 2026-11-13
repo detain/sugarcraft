@@ -35,4 +35,11 @@ return [
     'keyboardinteractive.auth_failed' => 'Ověření selhalo.',
     'keyboardinteractive.input_visible' => 'Tento terminál není ztišen: vše, co zde napíšete, se zobrazí zpět.',
     'channel.exec_refused'            => 'Exec request refused: {program}',
+    'transport.pty_outside_loop' => 'pty() zavoláno mimo aktivní pumpovací smyčku',
+    'keyboardinteractive.bad_challenge' => 'Výzva {index} musí být řetězec promptu nebo pole s řetězcovým klíčem "prompt"; získáno: {got}.',
+    'auth.reject_user' => 'uživatel není povolen: {name}',
+    'auth.reject_key' => 'klíč není povolen: {fingerprint}',
+    'auth.reject_unpaired' => 'klíč nenále¹í požadovanému uživateli: {fingerprint} jako {name}',
+    'auth.reject_validation' => 'ověření klíče selhalo: {fingerprint}',
+    'middleware.async_auth_failed' => 'ověřené selhalo: {why}',
 ];

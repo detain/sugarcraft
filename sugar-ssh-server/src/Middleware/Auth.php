@@ -153,7 +153,7 @@ final class Auth implements Middleware
     public function handle(Context $ctx, Session $session, callable $next): void
     {
         if ($this->users !== [] && !in_array($session->user, $this->users, true)) {
-            $this->reject($session, 'user not allowed: ' . $this->sanitize($session->user));
+            $this->reject($session, Lang::t('auth.reject_user', ['name' => $this->sanitize($session->user)]));
             return;
         }
         if ($this->keyFingerprints !== [] || $this->fingerprintValidator !== null || $this->userKeys !== []) {
@@ -161,7 +161,7 @@ final class Auth implements Middleware
             if ($this->keyFingerprints !== []
                 && ($fp === null || !$this->listContains($fp, $this->keyFingerprints))
             ) {
-                $this->reject($session, 'key not allowed: ' . $this->sanitize($fp ?? '<missing>'));
+                $this->reject($session, Lang::t('auth.reject_key', ['fingerprint' => $this->sanitize($fp ?? '<missing>')]));
                 return;
             }
             if ($this->userKeys !== [] && !$this->keyBelongsTo($fp, $session->user)) {
@@ -169,8 +169,10 @@ final class Auth implements Middleware
                 // absent) but the name that owns this key is not the name
                 // that asked. Without a separate reason an operator
                 // reading the log cannot tell the two failures apart.
-                $this->reject($session, 'key not paired with the requested user: ' . $this->sanitize($fp ?? '<missing>')
-                    . ' as ' . $this->sanitize($session->user));
+                $this->reject($session, Lang::t('auth.reject_unpaired', [
+                    'fingerprint' => $this->sanitize($fp ?? '<missing>'),
+                    'name'        => $this->sanitize($session->user),
+                ]));
                 return;
             }
             // The allowlist only proves the presented (forgeable) value
@@ -179,7 +181,7 @@ final class Auth implements Middleware
             if ($this->fingerprintValidator !== null
                 && !($this->fingerprintValidator)($fp ?? '', $session)
             ) {
-                $this->reject($session, 'key validation failed: ' . $this->sanitize($fp ?? '<missing>'));
+                $this->reject($session, Lang::t('auth.reject_validation', ['fingerprint' => $this->sanitize($fp ?? '<missing>')]));
                 return;
             }
         }

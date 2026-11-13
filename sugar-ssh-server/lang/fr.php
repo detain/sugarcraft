@@ -35,4 +35,11 @@ return [
     'keyboardinteractive.auth_failed' => 'Échec de l’authentification.',
     'keyboardinteractive.input_visible' => 'Ce terminal n\'est pas masqué : tout ce que vous tapez ici est affiché.',
     'channel.exec_refused'            => 'Exec request refused: {program}',
+    'transport.pty_outside_loop' => 'pty() appelé en dehors de la boucle de pompage active',
+    'keyboardinteractive.bad_challenge' => 'Le défi {index} doit être une chaîne de prompt ou un tableau avec une clé "prompt" de type chaîne ; obtenu : {got}.',
+    'auth.reject_user' => 'utilisateur non autorisé : {name}',
+    'auth.reject_key' => 'clé non autorisée : {fingerprint}',
+    'auth.reject_unpaired' => 'clé non associée à l’utilisateur demandé : {fingerprint} comme {name}',
+    'auth.reject_validation' => 'échec de la validation de la clé : {fingerprint}',
+    'middleware.async_auth_failed' => 'échec d’authentification : {why}',
 ];

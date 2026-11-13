@@ -40,11 +40,20 @@ use SugarCraft\SshServer\Session;
  *     {
  *         return $this->ldap->verify($session->user)->then(
  *             fn () => $next($ctx, $session),
- *             fn (\Throwable $e) => throw new \RuntimeException('auth failed: ' . $e->getMessage(), 0, $e)
+ *             fn (\Throwable $e) => throw new \RuntimeException(
+ *                 Lang::t('middleware.async_auth_failed', ['why' => $e->getMessage()]),
+ *                 0,
+ *                 $e
+ *             )
  *         );
  *     }
  * }
  * ```
+ *
+ * The failure message goes through {@see \SugarCraft\SshServer\Lang}
+ * rather than a concatenated English literal: an ssh server answers
+ * peers in whatever locale the operator selected, and middleware is
+ * part of those answers.
  *
  * The base class declares no constructor, so a subclass constructor does
  * not call `parent::__construct()` — there is nothing to call.

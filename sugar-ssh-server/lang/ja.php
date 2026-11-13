@@ -35,4 +35,11 @@ return [
     'keyboardinteractive.auth_failed' => '認証に失敗しました。',
     'keyboardinteractive.input_visible' => 'この端末はエコーをオフにしていません: ここに入力した内容はすべて表示されます。',
     'channel.exec_refused'            => 'Exec request refused: {program}',
+    'transport.pty_outside_loop' => 'pty() がアクティブなポンプループの外で呼び出されました',
+    'keyboardinteractive.bad_challenge' => 'チャレンジ {index} は、プロンプト文字列または文字列の "prompt" キーを持つ配列でなくてはなります。取得した型: {got}。',
+    'auth.reject_user' => 'ユーザーは許可されていません: {name}',
+    'auth.reject_key' => '鍵は許可されていません: {fingerprint}',
+    'auth.reject_unpaired' => '鍵が要求されたユーザーと対応付けられていません: {fingerprint} (ユーザー {name})',
+    'auth.reject_validation' => '鍵の検証に失敗しました: {fingerprint}',
+    'middleware.async_auth_failed' => '認許失敗: {why}',
 ];
