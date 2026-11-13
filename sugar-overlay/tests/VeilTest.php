@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Overlay\Tests;
 
+use SugarCraft\CellBuffer\Buffer;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Core\{MouseAction, MouseButton, Msg\MouseMsg};
 use SugarCraft\Style\Border;
@@ -1343,9 +1344,29 @@ final class VeilTest extends TestCase
         $this->assertSame(2, $fresh->positionX());
         $this->assertSame(1, $fresh->positionY());
         // Backdrop is preserved through the chain (verify composite behavior)
-        $bg = str_repeat(" ", 20);
-        $result = $fresh->composite("X", $bg, Position::TOP, Position::LEFT);
-        $this->assertIsString($result); // Should composite with backdrop=60
+        // Session state is observable too: withoutSession() swaps in a fresh
+        // RenderSession, so content the original already remembers is emitted
+        // as a full frame again — and the backdrop survives into that frame.
+        $bg = str_repeat(' ', 20);
+        $full1 = $v->composite('X', $bg, Position::TOP, Position::LEFT);
+        $this->assertSame(
+            'X'."\e[38;2;102;102;102m".str_repeat(' ', 19)."\e[39m",
+            $full1,
+            'backdrop 60 renders through the copy chain (255 x 0.4 = 102 grey pen behind the bright glyph)',
+        );
+
+        $delta = $v->composite('X', $bg, Position::TOP, Position::LEFT);
+        $this->assertSame(
+            "\e[1;1H",
+            $delta,
+            'the original session remembers the frame: a repaint is a bare home anchor',
+        );
+
+        $this->assertSame(
+            $full1,
+            $fresh->composite('X', $bg, Position::TOP, Position::LEFT),
+            'withoutSession() resets the remembered frame: the same content is a full emission again',
+        );
     }
 
     // ─── Step 6: backdrop delta correctness ─────────────────────────────────────
@@ -1378,20 +1399,27 @@ final class VeilTest extends TestCase
      */
     public function testDimOpacity25ProducesDistinctOutput(): void
     {
-        $bg = str_repeat(" ", 20);
-        foreach ([25, 50, 75, 100] as $opacity) {
-            $v = Veil::new()->withBackdrop($opacity);
-            $result = $v->composite("X", $bg, Position::TOP, Position::LEFT);
-            $this->assertIsString($result);
+        // Exact grey per opacity: (int) round(255 * (1 - opacity/100)) —
+        // 25 -> 191, 50 -> 128, 75 -> 64, 100 -> 0.
+        $bg = str_repeat(' ', 20);
+        $frames = [];
+        foreach ([25 => 191, 50 => 128, 75 => 64, 100 => 0] as $opacity => $grey) {
+            $frames[$opacity] = Veil::new()
+                ->withBackdrop($opacity)
+                ->composite('X', $bg, Position::TOP, Position::LEFT);
+            $this->assertStringContainsString(
+                "\e[38;2;{$grey};{$grey};{$grey}m",
+                $frames[$opacity],
+                "backdrop {$opacity}% must paint the {$grey}-grey dim pen",
+            );
         }
-        // At minimum: all should produce some kind of dimming (not no-op)
-        // and they should all produce some SGR code
-        $v25 = Veil::new()->withBackdrop(25);
-        $v100 = Veil::new()->withBackdrop(100);
-        $r25 = $v25->composite("X", $bg, Position::TOP, Position::LEFT);
-        $r100 = $v100->composite("X", $bg, Position::TOP, Position::LEFT);
-        // 100% backdrop should produce distinct (near-black) output vs 25%
-        $this->assertNotSame(\trim($r25), \trim($r100), '25% and 100% opacity should produce visually distinct dim output');
+        foreach (array_keys($frames) as $a) {
+            foreach (array_keys($frames) as $b) {
+                if ($a < $b) {
+                    $this->assertNotSame($frames[$a], $frames[$b], "opacities {$a} and {$b} must not collapse");
+                }
+            }
+        }
     }
 
     // ─── dimLine ANSI preservation ─────────────────────────────────────────────
@@ -1458,10 +1486,9 @@ final class VeilTest extends TestCase
         $v = Veil::new()->withBackdrop(100);
         $result = $v->composite($fg, $bg, Position::TOP, Position::LEFT, xOffset: 999);
 
-        // Background should still be present (dimmed) but no foreground visible at its position
-        $this->assertStringContainsString('.', $result);
-        // The entire row should be dimmed since foreground is off-screen
-        $this->assertStringContainsString("38;2;", $result);
+        // Entirely clipped: the frame is the fully dimmed background row and
+        // the off-screen glyph appears nowhere on the wire.
+        $this->assertSame("\e[38;2;0;0;0m..........\e[39m", $result);
     }
 
     /**
@@ -1478,9 +1505,21 @@ final class VeilTest extends TestCase
         $result = $v->composite($fg, $bg, Position::TOP, Position::LEFT, xOffset: 18);
         $lines = $this->veil->splitLines($result);
 
-        // With backdrop, some part should be dimmed
-        $this->assertIsString($result);
-        $this->assertStringContainsString("38;2;", $result);
+        // Byte-exact: eighteen dimmed dots then the two on-canvas glyphs in
+        // the bright foreground pen — columns 20 and 21 are clipped away.
+        $this->assertSame(
+            "\e[38;2;128;128;128m..................\e[39mXX",
+            $result,
+        );
+
+        // Geometry, not pen: the painted extent is cells 0..19 and the glyphs
+        // land at columns 18 and 19 only.
+        $buffer = Buffer::fromString($result, 20, 1);
+        $runes = '';
+        for ($col = 0; $col < $buffer->width(); ++$col) {
+            $runes .= $buffer->cellAt($col, 0)->rune();
+        }
+        $this->assertSame('..................XX', $runes, 'the clip boundary is the canvas width');
     }
 
     // ─── Position accessors via withPosition ─────────────────────────────────
