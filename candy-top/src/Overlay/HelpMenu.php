@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Top\Overlay;
 
 use SugarCraft\Core\Msg;
+use SugarCraft\Core\I18n\T;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Top\Input\KeyName;
 use SugarCraft\Top\Input\KeyTable;
@@ -272,6 +273,26 @@ final class HelpMenu implements Overlay
     }
 
     /**
+     * Memo for {@see self::plan()}; bounded so a resize storm cannot grow it
+     * forever (the pattern {@see Surface}'s proven SGR memo uses). The plan
+     * is pure in (width, perColumn, locale) — the key carries all three, so
+     * a locale switch lands on its own entries and never serves stale
+     * headings. Table swaps under a constant locale (T::reset in tests,
+     * a lang-pack re-seed) clear the memo through
+     * {@see self::forgetPlanCache()} instead.
+     */
+    private const PLAN_LIMIT = 64;
+
+    /** @var array<string, list<list<list<array{heading: string, lines: list<array{0: string, 1: string}>, row: int, segment: int, segments: int}>>>> */
+    private static array $plans = [];
+
+    /** Drop every memoised plan — the seam for translation-table swaps. */
+    public static function forgetPlanCache(): void
+    {
+        self::$plans = [];
+    }
+
+    /**
      * The whole grid as pages of framed section boxes, independent of the
      * terminal beyond width and per-column height: every section becomes a
      * box (heading + its rows in roster order, descriptions wrapped to the
@@ -301,6 +322,11 @@ final class HelpMenu implements Overlay
      */
     public static function plan(int $width, int $perColumn): array
     {
+        $key = $width . ':' . $perColumn . ':' . T::locale();
+        if (isset(self::$plans[$key])) {
+            return self::$plans[$key];
+        }
+
         $columnCount = self::columnsFor($width);
         $descriptionWidth = max(1, self::columnWidth($width, $columnCount) - 2 - self::KEY_COL);
         $chunkMax = max(1, $perColumn - 2);
@@ -365,7 +391,11 @@ final class HelpMenu implements Overlay
         }
         $pages[] = $columns;
 
-        return $pages;
+        if (count(self::$plans) >= self::PLAN_LIMIT) {
+            self::$plans = [];
+        }
+
+        return self::$plans[$key] = $pages;
     }
 
     /**

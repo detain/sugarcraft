@@ -495,4 +495,28 @@ final class HelpFramedLayoutTest extends OverlayTestCase
             }
         }
     }
+
+    public function testPlanIsMemoisedAndForgettable(): void
+    {
+        $width = HelpMenu::widthFor(120);
+        HelpMenu::forgetPlanCache();
+
+        $grid = new \ReflectionProperty(HelpMenu::class, 'plans');
+        $this->assertSame([], $grid->getValue(), 'the memo starts empty after the forget seam');
+
+        $first = HelpMenu::plan($width, 9);
+        $this->assertSame([$width . ':9:' . \SugarCraft\Core\I18n\T::locale()], array_keys($grid->getValue()), 'one key per plan');
+        $again = HelpMenu::plan($width, 9);
+        $this->assertSame($first, $again, 'the second call serves the identical grid');
+
+        // Bound: 65 distinct capacities cannot grow the memo past its cap —
+        // Surface's memo pattern resets wholesale on overflow.
+        for ($capacity = 2; $capacity <= 66; $capacity++) {
+            HelpMenu::plan($width, $capacity);
+        }
+        $this->assertLessThanOrEqual(64, count($grid->getValue()), 'the memo stays bounded under a key storm');
+
+        HelpMenu::forgetPlanCache();
+        $this->assertSame([], $grid->getValue(), 'the forget seam clears the memo');
+    }
 }
