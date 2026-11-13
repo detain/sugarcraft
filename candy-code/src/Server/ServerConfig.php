@@ -854,6 +854,14 @@ final class ServerConfig
      * - the prompt is the injection surface; it must exist (a hook with no
      *   prompt would run the payload as the whole instruction).
      *
+     * Refusal text is an operator-only diagnostic, untranslated by the G-13
+     * ruling (CALIBER_LEARNINGS 'G-13 CLASS RULING', S-V07): it names user-config
+     * keys and hook settings to the person who edits `config.json` and reads the
+     * serve startup output or log — never a chat or browser surface — so every
+     * message here stays English, like {@see \SugarCraft\Code\Protocol\WebStrings}'s
+     * server-side text. A message that DOES reach an end user is keyed through
+     * `Lang::t` at its own seat (see `serve.browse_root.*`).
+     *
      * @return array<string,array{secret:string,prompt:string,permissionMode:PermissionMode|null,rate:int,signature:null|array{scheme:string,header:string,deliveryHeader:string|null}}>
      *
      * @throws ServerConfigException

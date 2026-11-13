@@ -20,6 +20,12 @@ use SugarCraft\Code\Support\PrivateRetainedDir;
  * `CANDY_CODE_SERVER_TOKEN` overrides the file for containers, and must itself
  * be at least {@see MIN_OVERRIDE_LENGTH} characters so an override cannot be
  * the weak link. Every comparison is `hash_equals`.
+ *
+ * The `\RuntimeException` texts here (unreadable token file, override-blocks-rotate)
+ * are operator-only diagnostics, untranslated by the G-13 ruling (S-V07;
+ * CALIBER_LEARNINGS 'G-13 CLASS RULING'): they surface in the serve startup
+ * output and log for the person running the server, never on a chat or
+ * browser surface, and name file paths and env vars verbatim.
  */
 final class TokenStore
 {
