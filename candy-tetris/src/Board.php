@@ -31,6 +31,29 @@ final class Board
     public function __construct(?array $cells = null)
     {
         if ($cells !== null) {
+            // Fail at the bad input, not far downstream (candy-tetris-074):
+            // the docblock's list-shape was a faith contract, and a short
+            // row surfaced as Undefined-array-key warnings from isOccupied
+            // dozens of calls away from whoever built the grid. Every
+            // in-repo producer is well-shaped — this guard exists for the
+            // next one that isn't.
+            if (count($cells) !== self::ROWS) {
+                throw new \InvalidArgumentException(sprintf(
+                    'board carries %d rows, expected exactly %d (HIDDEN_ROWS + VISIBLE_ROWS)',
+                    count($cells),
+                    self::ROWS,
+                ));
+            }
+            foreach ($cells as $row => $cellsInRow) {
+                if (!is_array($cellsInRow) || count($cellsInRow) !== self::COLS) {
+                    throw new \InvalidArgumentException(sprintf(
+                        'board row %d carries %s cells, expected exactly %d',
+                        $row,
+                        is_array($cellsInRow) ? (string) count($cellsInRow) : gettype($cellsInRow),
+                        self::COLS,
+                    ));
+                }
+            }
             $this->cells = $cells;
             return;
         }

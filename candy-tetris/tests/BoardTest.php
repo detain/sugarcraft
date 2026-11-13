@@ -164,4 +164,48 @@ final class BoardTest extends TestCase
         $this->assertSame(Tetromino::T, $rows[5][3]);
         $this->assertSame(Tetromino::L, $rows[10][7]);
     }
+
+    /**
+     * candy-tetris-074: the ctor's shape promise was docblock faith; a
+     * malformed grid now explodes AT the constructor naming the offender
+     * instead of surfacing as far-field Undefined-array-key warnings.
+     */
+    public function testTheCtorRefusesAWrongRowCountAtTheBadInput(): void
+    {
+        try {
+            new Board(array_fill(0, Board::ROWS - 1, array_fill(0, Board::COLS, null)));
+            $this->fail('a short stack must refuse at the constructor, not downstream');
+        } catch (\InvalidArgumentException $problem) {
+            $this->assertMatchesRegularExpression('/carries 23 rows, expected exactly 24/', $problem->getMessage());
+        }
+    }
+
+    public function testTheCtorRefusesAShortRowNamingIt(): void
+    {
+        $rows = array_fill(0, Board::ROWS, array_fill(0, Board::COLS, null));
+        $rows[7] = array_fill(0, Board::COLS - 1, null);
+
+        try {
+            new Board($rows);
+            $this->fail('a short row must refuse at the constructor, not as a far-field warning');
+        } catch (\InvalidArgumentException $problem) {
+            $this->assertMatchesRegularExpression('/row 7 carries 9 cells, expected exactly 10/', $problem->getMessage());
+        }
+    }
+
+    public function testTheCtorRefusesANonArrayRow(): void
+    {
+        $rows = array_fill(0, Board::ROWS, array_fill(0, Board::COLS, null));
+        $rows[2] = 'not a row';
+
+        $this->expectException(\InvalidArgumentException::class);
+        new Board($rows);
+    }
+
+    public function testTheCtorAcceptsTheDocumentedFullShape(): void
+    {
+        $b = new Board(array_fill(0, Board::ROWS, array_fill(0, Board::COLS, null)));
+
+        $this->assertFalse($b->isOccupied(0, 0));
+    }
 }

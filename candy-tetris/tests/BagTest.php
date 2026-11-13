@@ -43,6 +43,58 @@ final class BagTest extends TestCase
         $this->assertSame(['I', 'J', 'L', 'O', 'S', 'T', 'Z'], $sorted);
     }
 
+    /**
+     * candy-tetris-067: the drought guarantee the class docblock asserts
+     * ("any 13 consecutive pieces contain a whole bag"; a single kind at
+     * most three times in such a window) was prose, not law. Pin it over
+     * 100 bags (700 pieces) per seed — deterministic streams, so a red
+     * here is reproducible to the salt.
+     */
+    public function testAHundredBagRunNeverStarvesAKindAndNeverRepeatsItTooDensely(): void
+    {
+        $kinds = array_map(static fn(Tetromino $k): string => $k->value, Tetromino::cases());
+
+        foreach ([1, 2, 3, 5, 8, 13, 21, 34] as $salt) {
+            $stream = self::drawAll(Bag::seeded($salt), 700);
+            self::assertCount(700, $stream, "seed $salt: 100 bags is 700 pieces");
+
+            foreach ($kinds as $kind) {
+                $lastSeen = null;
+                foreach ($stream as $index => $drawn) {
+                    if ($drawn !== $kind) {
+                        continue;
+                    }
+                    if ($lastSeen !== null) {
+                        self::assertLessThanOrEqual(
+                            13,
+                            $index - $lastSeen,
+                            "seed $salt: kind $kind went drought for " . ($index - $lastSeen) . ' draws',
+                        );
+                    }
+                    $lastSeen = $index;
+                }
+            }
+
+            foreach (array_chunk($stream, 13) as $windowIndex => $window) {
+                if (count($window) < 13) {
+                    continue;
+                }
+                self::assertEqualsSorted($kinds, array_values(array_unique($window)), "seed $salt window $windowIndex");
+                $counts = array_count_values($window);
+                foreach ($counts as $kind => $count) {
+                    self::assertLessThanOrEqual(3, $count, "seed $salt window $windowIndex: $kind x $count");
+                }
+            }
+        }
+    }
+
+    private static function assertEqualsSorted(array $expected, array $actual, string $message): void
+    {
+        sort($expected);
+        sort($actual);
+        self::assertSame($expected, $actual, $message);
+    }
+
     public function testTwoBagsContainEachKindTwice(): void
     {
         $seen = self::drawAll(self::deterministicBag(), 14);
