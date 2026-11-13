@@ -16,6 +16,7 @@ return [
     'glamour.json_object' => 'thema-configuratie moet een JSON-object zijn',
     'render.no_input_tty' => 'geen invoer: geef een bestand op of stuur Markdown naar standard input',
     'render.no_input_empty' => 'geen invoer: standard input is leeg',
+    'render.pager_needs_tty' => 'de pager heeft een terminal nodig; render naar standaarduitvoer zonder -p',
     'render.file_missing' => 'kan {path} niet openen: bestand bestaat niet',
     'render.file_is_directory' => 'kan {path} niet openen: het is een map',
     'render.file_unreadable' => 'kan {path} niet openen: bestand niet leesbaar',

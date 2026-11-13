@@ -16,7 +16,7 @@ use PHPUnit\Framework\TestCase;
  */
 final class LocaleParityTest extends TestCase
 {
-    private const EXPECTED_KEY_COUNT = 13;
+    private const EXPECTED_KEY_COUNT = 14;
 
     /** @return array<string, array<string, string>> */
     private function allLocales(): array

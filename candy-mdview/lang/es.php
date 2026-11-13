@@ -16,6 +16,7 @@ return [
     'glamour.json_object' => 'la configuración del tema debe ser un objeto JSON',
     'render.no_input_tty' => 'sin entrada: indique un archivo o envíe Markdown por la entrada estándar',
     'render.no_input_empty' => 'sin entrada: la entrada estándar está vacía',
+    'render.pager_needs_tty' => 'el paginador necesita una terminal; renderizad a la salida estándar sin -p',
     'render.file_missing' => 'no se puede abrir {path}: el archivo no existe',
     'render.file_is_directory' => 'no se puede abrir {path}: es un directorio',
     'render.file_unreadable' => 'no se puede abrir {path}: no se puede leer',

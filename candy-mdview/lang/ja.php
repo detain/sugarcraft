@@ -16,6 +16,7 @@ return [
     'glamour.json_object' => 'テーマ設定は JSON オブジェクトでなければなりません',
     'render.no_input_tty' => '入力なし: ファイルを指定するか Markdown を標準入力にパイプしてください',
     'render.no_input_empty' => '入力なし: 標準入力が空です',
+    'render.pager_needs_tty' => 'ページャーにはターミナルが必要です。-p を外して標準出力へレンダリングしてください',
     'render.file_missing' => '{path} を開けません: ファイルが存在しません',
     'render.file_is_directory' => '{path} を開けません: ディレクトリです',
     'render.file_unreadable' => '{path} を開けません: ファイルを読み取れません',

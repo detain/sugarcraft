@@ -16,6 +16,7 @@ return [
     'glamour.json_object' => 'konfiguracja motywu musi być obiektem JSON',
     'render.no_input_tty' => 'brak wejścia: podaj plik lub prześlij Markdown na standardowe wejście',
     'render.no_input_empty' => 'brak wejścia: standardowe wejście jest puste',
+    'render.pager_needs_tty' => 'pager wymaga terminala; renderuj na standardowe wyjście bez -p',
     'render.file_missing' => 'nie można otworzyć {path}: nie ma takiego pliku',
     'render.file_is_directory' => 'nie można otworzyć {path}: to katalog',
     'render.file_unreadable' => 'nie można otworzyć {path}: plik nieczytelny',

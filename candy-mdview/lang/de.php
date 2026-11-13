@@ -16,6 +16,7 @@ return [
     'glamour.json_object' => 'Themenkonfiguration muss ein JSON-Objekt sein',
     'render.no_input_tty' => 'keine Eingabe: Datei als Argument übergeben oder Markdown in die Standardeingabe pipeilen',
     'render.no_input_empty' => 'keine Eingabe: die Standardeingabe ist leer',
+    'render.pager_needs_tty' => 'Pager benötigt ein Terminal; stattdessen ohne -p auf die Standardausgabe rendern',
     'render.file_missing' => 'kann {path} nicht öffnen: Datei nicht gefunden',
     'render.file_is_directory' => 'kann {path} nicht öffnen: ist ein Verzeichnis',
     'render.file_unreadable' => 'kann {path} nicht öffnen: Datei nicht lesbar',

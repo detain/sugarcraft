@@ -16,6 +16,7 @@ return [
     'glamour.json_object' => 'إعدادات السمة يجب أن تكون كائن JSON',
     'render.no_input_tty' => 'لا يوجد إدخال: حدد ملفًا أو أرسل Markdown إلى الإدخال القياسي',
     'render.no_input_empty' => 'لا يوجد إدخال: الإدخال القياسي فارغ',
+    'render.pager_needs_tty' => 'المُستعرض يحتاج إلى طرفية؛ اعرض في الإخراج القياسي بدلاً من ذلك (بدون -p)',
     'render.file_missing' => 'تعذر فتح {path}: الملف غير موجود',
     'render.file_is_directory' => 'تعذر فتح {path}: إنه دليل',
     'render.file_unreadable' => 'تعذر فتح {path}: الملف غير قابل للقراءة',

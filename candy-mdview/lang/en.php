@@ -16,6 +16,7 @@ return [
     'glamour.json_object' => 'glamour theme config must be a JSON object',
     'render.no_input_tty' => 'no input: pass a file argument or pipe Markdown to standard input',
     'render.no_input_empty' => 'no input: standard input is empty',
+    'render.pager_needs_tty' => 'pager needs a terminal; render to stdout instead (drop -p)',
     'render.file_missing' => 'open {path}: no such file',
     'render.file_is_directory' => 'open {path}: is a directory',
     'render.file_unreadable' => 'open {path}: cannot read file',

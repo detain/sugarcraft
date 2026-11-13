@@ -16,6 +16,7 @@ return [
     'glamour.json_object' => 'конфигурация темы должна быть объектом JSON',
     'render.no_input_tty' => 'нет ввода: укажите файл или передайте Markdown на стандартный ввод',
     'render.no_input_empty' => 'нет ввода: стандартный ввод пуст',
+    'render.pager_needs_tty' => 'пагинатору нужен терминал; выполните рендер в стандартный вывод без -p',
     'render.file_missing' => 'не удаётся открыть {path}: файл не найден',
     'render.file_is_directory' => 'не удаётся открыть {path}: это каталог',
     'render.file_unreadable' => 'не удаётся открыть {path}: файл нечитабелен',

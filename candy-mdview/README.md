@@ -74,7 +74,12 @@ Flags:
   means full decoration. Labelled links always show their visible `text (url)`
   tail; plain autolinks and `mailto:` targets render the URL itself as the
   text, so the address stays visible either way.
-- `--pager` / `-p` — open in a fullscreen pager.
+- `--pager` / `-p` — open in a fullscreen pager. Requires a real terminal:
+  when neither stdout is a terminal nor `/dev/tty` can be opened, the run
+  refuses with exit code 2 naming stdout rendering as the replacement
+  (drop `-p`) — the pager arms the alt screen and mouse tracking the
+  moment it starts, so a non-terminal run would paint escape sequences
+  into your redirect target instead of a screen.
 - `--ansi` / `--no-ansi` — force / forbid decorated output.
 
 Two independent chains decide color, and it matters which one you are in:

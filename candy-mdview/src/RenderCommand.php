@@ -55,6 +55,13 @@ final class RenderCommand extends Command
     /** @var callable|null */
     private static $stdinTtyCallback = null;
 
+    /**
+     * @deprecated test seam only — see the note at setStdinTtyCallback().
+     *
+     * @var callable|null
+     */
+    private static $pagerDevTtyCallback = null;
+
     /** @deprecated test seam only */
     public static function setColorProbeCallback(?callable $callback): void
     {
@@ -77,6 +84,15 @@ final class RenderCommand extends Command
     public static function setStdinTtyCallback(?callable $callback): void
     {
         self::$stdinTtyCallback = $callback;
+    }
+
+    /**
+     * @deprecated test seam only — decides the /dev/tty fallback of the
+     * pager-surface guard without probing the real controlling terminal.
+     */
+    public static function setPagerDevTtyCallback(?callable $callback): void
+    {
+        self::$pagerDevTtyCallback = $callback;
     }
 
     protected function configure(): void
@@ -126,6 +142,13 @@ final class RenderCommand extends Command
             $onTerminal = self::decoratedOutput($input, $output);
             $theme      = self::resolveTheme($input, $onTerminal);
             $raw        = self::readDocument($fileArg);
+            if ($input->getOption('pager') === true) {
+                // Refuse before any painting: the escape-soup capture and
+                // the no-terminal hang both happen INSIDE the Program, so
+                // the surface question is answered up front like every
+                // mainstream pager answers it.
+                self::requirePagerSurface();
+            }
         } catch (\InvalidArgumentException $usage) {
             self::writeError($output, $usage->getMessage());
             return Command::INVALID;
@@ -271,6 +294,49 @@ final class RenderCommand extends Command
             return (bool) (self::$stdinTtyCallback)();
         }
         return defined('STDIN') === true && TtyDetect::isAtty(STDIN) === true;
+    }
+
+    /**
+     * `-p` requires an interactive surface. The Program arms the alt-screen,
+     * hides the cursor and enables mouse tracking unconditionally, so a run
+     * with neither a tty STDOUT nor an openable /dev/tty writes escape-sequence
+     * soup into whatever stdout points at (measured: 2,320 bytes beginning
+     * ^[[?1049h captured into the user's redirect target — anyone later
+     * cat-ing that file gets a hijacked terminal) and starves the input pump
+     * forever (observed rc=124 twice, zero stderr, no refusal). STDOUT tty
+     * first: the plain interactive run. Else /dev/tty: the documented
+     * `cmd | candy-mdview -p` lane, where the keyboard lives on the real
+     * terminal even though stdin carries the pipe.
+     *
+     * @throws \InvalidArgumentException naming the replacement workflow
+     */
+    private static function requirePagerSurface(): void
+    {
+        if (self::stdoutIsTerminal() === true) {
+            return;
+        }
+
+        $devTtyReachable = self::$pagerDevTtyCallback !== null
+            ? (bool) (self::$pagerDevTtyCallback)()
+            : self::devTtyOpenable();
+
+        if ($devTtyReachable === true) {
+            return;
+        }
+
+        throw new \InvalidArgumentException(Lang::t('render.pager_needs_tty'));
+    }
+
+    /** Whether a controlling terminal can be opened for the pager keyboard. */
+    private static function devTtyOpenable(): bool
+    {
+        $tty = @fopen('/dev/tty', 'r+b');
+        if ($tty === false) {
+            return false;
+        }
+        fclose($tty);
+
+        return true;
     }
 
     /**

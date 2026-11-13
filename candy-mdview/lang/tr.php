@@ -16,6 +16,7 @@ return [
     'glamour.json_object' => 'tema yapılandırması bir JSON nesnesi olmalı',
     'render.no_input_tty' => 'girdi yok: bir dosya belirtin veya Markdown\'ı standart girdiye yönlendirin',
     'render.no_input_empty' => 'girdi yok: standart girdi boş',
+    'render.pager_needs_tty' => 'sayfalayıcı bir terminal ister; -p olmadan standart çıktıya işleyin',
     'render.file_missing' => '{path} açılamadı: dosya yok',
     'render.file_is_directory' => '{path} açılamadı: bir dizin',
     'render.file_unreadable' => '{path} açılamadı: dosya okunamıyor',

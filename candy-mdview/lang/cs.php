@@ -16,6 +16,7 @@ return [
     'glamour.json_object' => 'konfigurace motivu musí být objekt JSON',
     'render.no_input_tty' => 'žádný vstup: zadejte soubor nebo nasměrujte Markdown na standardní vstup',
     'render.no_input_empty' => 'žádný vstup: standardní vstup je prázdný',
+    'render.pager_needs_tty' => 'pager vyžaduje terminál; vykreslete na standardní výstup bez -p',
     'render.file_missing' => 'nelze otevřít {path}: soubor neexistuje',
     'render.file_is_directory' => 'nelze otevřít {path}: je to adresář',
     'render.file_unreadable' => 'nelze otevřít {path}: soubor nelze číst',

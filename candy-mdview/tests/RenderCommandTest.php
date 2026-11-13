@@ -409,6 +409,74 @@ final class RenderCommandTest extends TestCase
         fclose($small);
     }
 
+    public function testPagerRefusesWithNothingWrittenToTheDocumentChannel(): void
+    {
+        // Finding 006: `-p` with a captured stdout and no controlling
+        // terminal used to write 2,320 bytes of alt-screen/mouse escape
+        // soup into the redirect target and then hang forever with zero
+        // input (rc=124, observed twice, zero stderr). The refusal is a
+        // named usage fault now: exit 2, localized message on stderr, and
+        // the document channel stays byte-empty.
+        RenderCommand::setTerminalCheckCallback(fn () => false);
+        RenderCommand::setPagerDevTtyCallback(fn () => false);
+
+        $tmp = tempnam(sys_get_temp_dir(), 'mdview-');
+        $this->assertNotFalse($tmp);
+        file_put_contents($tmp, "# doc\n");
+        try {
+            $input = $this->createMock(InputInterface::class);
+            $input->method('getArgument')->willReturnCallback(
+                static fn (string $name): mixed => $name === 'file' ? $tmp : null
+            );
+            $input->method('getOption')->willReturnMap($this->optionMap(['pager' => true]));
+
+            $payload = null;
+            $output  = $this->createMock(OutputInterface::class);
+            $output->method('write')->willReturnCallback(
+                static function ($m) use (&$payload): void {
+                    $payload = (string) $m;
+                }
+            );
+            $captured = '';
+            $output->method('writeln')->willReturnCallback(
+                static function ($m) use (&$captured): void {
+                    $captured .= (string) $m;
+                }
+            );
+
+            $rc = $this->invokeExecute(new RenderCommand(), $input, $output);
+            $this->assertSame(Command::INVALID, $rc);
+            $this->assertStringContainsString('pager needs a terminal', $captured);
+            $this->assertStringContainsString('drop -p', $captured);
+            $this->assertNull($payload, 'the refusal must not paint anything into the document channel');
+        } finally {
+            unlink($tmp);
+        }
+    }
+
+    public function testPagerSurfaceGuardPassesEachDocumentedLeg(): void
+    {
+        // Leg (a): STDOUT is a tty — the plain interactive run. The
+        // /dev/tty seam stays false and must never decide this case.
+        RenderCommand::setTerminalCheckCallback(fn () => true);
+        RenderCommand::setPagerDevTtyCallback(fn () => false);
+        $this->invokeStatic('requirePagerSurface');
+        $this->assertTrue(true, 'tty stdout reached the guard end without throwing');
+
+        // Leg (b): STDOUT is not a tty but /dev/tty is reachable — the
+        // documented `cmd | candy-mdview -p` lane shape.
+        RenderCommand::setTerminalCheckCallback(fn () => false);
+        RenderCommand::setPagerDevTtyCallback(fn () => true);
+        $this->invokeStatic('requirePagerSurface');
+        $this->assertTrue(true, 'reachable /dev/tty reached the guard end without throwing');
+
+        // Neither: named, localized refusal.
+        RenderCommand::setPagerDevTtyCallback(fn () => false);
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('pager needs a terminal');
+        $this->invokeStatic('requirePagerSurface');
+    }
+
     public function testExecuteWithWidthOptionEnablesWordWrap(): void
     {
         RenderCommand::setTerminalCheckCallback(fn () => false);
@@ -520,6 +588,7 @@ final class RenderCommandTest extends TestCase
         RenderCommand::setColorProbeCallback(null);
         RenderCommand::setTerminalCheckCallback(null);
         RenderCommand::setStdinTtyCallback(null);
+        RenderCommand::setPagerDevTtyCallback(null);
         T::setLocale($this->savedLocale);
         foreach ($this->savedColorEnv as $key => $value) {
             if ($value === false) {

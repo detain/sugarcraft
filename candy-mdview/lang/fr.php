@@ -16,6 +16,7 @@ return [
     'glamour.json_object' => 'la configuration du thème doit être un objet JSON',
     'render.no_input_tty' => 'aucune entrée : indiquez un fichier ou envoyez du Markdown sur l\'entrée standard',
     'render.no_input_empty' => 'aucune entrée : l\'entrée standard est vide',
+    'render.pager_needs_tty' => 'le paginateur exige un terminal ; rendez plutôt en sortie standard (retirez -p)',
     'render.file_missing' => 'impossible d\'ouvrir {path} : fichier inexistant',
     'render.file_is_directory' => 'impossible d\'ouvrir {path} : c\'est un répertoire',
     'render.file_unreadable' => 'impossible d\'ouvrir {path} : fichier illisible',

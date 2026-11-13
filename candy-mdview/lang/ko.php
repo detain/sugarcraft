@@ -16,6 +16,7 @@ return [
     'glamour.json_object' => '테마 설정은 JSON 객체여야 합니다',
     'render.no_input_tty' => '입력 없음: 파일을 지정하거나 Markdown을 표준 입력으로 파이프하세요',
     'render.no_input_empty' => '입력 없음: 표준 입력이 비어 있습니다',
+    'render.pager_needs_tty' => '페이지에는 터미널이 필요합니다. -p 없이 표준 출력으로 렌더링하세요',
     'render.file_missing' => '{path} 열 수 없음: 파일이 없습니다',
     'render.file_is_directory' => '{path} 열 수 없음: 디렉터리입니다',
     'render.file_unreadable' => '{path} 열 수 없음: 파일을 읽을 수 없습니다',
