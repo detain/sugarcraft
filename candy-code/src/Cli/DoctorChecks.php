@@ -121,7 +121,7 @@ final class DoctorChecks
      */
     public static function sessionStoreRow(int $count, int $bytes): array
     {
-        $detail = Lang::t('cli.doctor.sessions', ['count' => $count])
+        $detail = Lang::t($count === 1 ? 'cli.doctor.sessions_one' : 'cli.doctor.sessions_other', ['count' => $count])
             . ' (' . self::humanBytes($bytes) . ')';
         if ($bytes > self::SESSION_STORE_WARN_BYTES) {
             return ['status' => 'WARN', 'detail' => $detail . ' — prune with CANDY_CODE_SESSION_RETENTION_DAYS'];
@@ -562,7 +562,7 @@ final class DoctorChecks
                     $inventory['error'] !== null
                         => ['status' => 'FAIL', 'detail' => $inventory['path'] . ' ' . $inventory['error']],
                     default
-                        => ['status' => 'OK', 'detail' => Lang::t('cli.doctor.mcp_servers', [
+                        => ['status' => 'OK', 'detail' => Lang::t(\count($inventory['servers']) === 1 ? 'cli.doctor.mcp_servers_one' : 'cli.doctor.mcp_servers_other', [
                             'count' => \count($inventory['servers']),
                             'path' => $inventory['path'],
                         ])],

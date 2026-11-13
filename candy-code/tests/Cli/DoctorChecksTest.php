@@ -166,7 +166,7 @@ final class DoctorChecksTest extends TestCase
     {
         $quiet = DoctorChecks::sessionStoreRow(3, 4096);
         self::assertSame('OK', $quiet['status']);
-        self::assertStringContainsString('3 session(s) stored', $quiet['detail']);
+        self::assertStringContainsString('3 sessions stored', $quiet['detail']);
         self::assertStringContainsString(' (4.0 KiB)', $quiet['detail']);
         self::assertStringNotContainsString("\n", $quiet['detail'], 'still a table cell, not a paragraph');
 

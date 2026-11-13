@@ -145,27 +145,27 @@ final class DoctorChannelsChecks
 
         $problems = [];
         if ($stale !== []) {
-            $problems[] = Lang::t('cli.doctor.bundles_stale', [
+            $problems[] = Lang::t(count($stale) === 1 ? 'cli.doctor.bundles_stale_one' : 'cli.doctor.bundles_stale_other', [
                 'count' => (string) count($stale),
                 'names' => implode(', ', $stale),
             ]);
         }
         if ($escaping > 0) {
-            $problems[] = Lang::t('cli.doctor.bundles_escape', ['count' => (string) $escaping]);
+            $problems[] = Lang::t($escaping === 1 ? 'cli.doctor.bundles_escape_one' : 'cli.doctor.bundles_escape_other', ['count' => (string) $escaping]);
         }
         if ($loose !== []) {
-            $problems[] = Lang::t('cli.doctor.bundles_loose', [
+            $problems[] = Lang::t(count($loose) === 1 ? 'cli.doctor.bundles_loose_one' : 'cli.doctor.bundles_loose_other', [
                 'count' => (string) count($loose),
                 'reasons' => implode(', ', array_unique($loose)),
             ]);
         }
         if ($unarmed > 0) {
-            $problems[] = Lang::t('cli.doctor.bundles_first_sight', ['count' => (string) $unarmed]);
+            $problems[] = Lang::t($unarmed === 1 ? 'cli.doctor.bundles_first_sight_one' : 'cli.doctor.bundles_first_sight_other', ['count' => (string) $unarmed]);
         }
         if ($problems !== []) {
             return ['status' => 'WARN', 'detail' => implode('; ', $problems)];
         }
-        return ['status' => 'OK', 'detail' => Lang::t('cli.doctor.bundles_ok', ['count' => (string) $entryPoints])];
+        return ['status' => 'OK', 'detail' => Lang::t($entryPoints === 1 ? 'cli.doctor.bundles_ok_one' : 'cli.doctor.bundles_ok_other', ['count' => (string) $entryPoints])];
     }
 
     /**
@@ -191,7 +191,7 @@ final class DoctorChannelsChecks
 
         if (!is_file($path)) {
             if ($corrals > 0) {
-                return ['status' => 'WARN', 'detail' => Lang::t('cli.doctor.inbound_corralled', [
+                return ['status' => 'WARN', 'detail' => Lang::t($corrals === 1 ? 'cli.doctor.inbound_corralled_one' : 'cli.doctor.inbound_corralled_other', [
                     'count' => (string) $corrals,
                     'path' => $path,
                 ])];
@@ -206,7 +206,7 @@ final class DoctorChannelsChecks
             return ['status' => 'FAIL', 'detail' => Lang::t('cli.doctor.file_loose_mode', ['path' => $path, 'mode' => $mode])];
         }
         if ($corrals > 0) {
-            return ['status' => 'WARN', 'detail' => Lang::t('cli.doctor.inbound_corralled', [
+            return ['status' => 'WARN', 'detail' => Lang::t($corrals === 1 ? 'cli.doctor.inbound_corralled_one' : 'cli.doctor.inbound_corralled_other', [
                 'count' => (string) $corrals,
                 'path' => $path,
             ])];

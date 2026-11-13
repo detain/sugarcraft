@@ -144,7 +144,7 @@ final class DoctorChannelsChecksTest extends TestCase
 
         self::assertSame('WARN', $row['status']);
         self::assertStringContainsString('ghost', $row['detail']);
-        self::assertStringContainsString('match no discovered bundle', $row['detail']);
+        self::assertStringContainsString('matches no discovered bundle', $row['detail']);
     }
 
     public function testAFirstSightEntryPointWarnsQuarantine(): void
@@ -167,7 +167,7 @@ final class DoctorChannelsChecksTest extends TestCase
         $row = DoctorChannelsChecks::channelBundlesRow(null, [$bundle], ['alpha'], $this->store());
 
         self::assertSame('OK', $row['status']);
-        self::assertStringContainsString('all armed', $row['detail']);
+        self::assertStringContainsString('armed', $row['detail']);
     }
 
     public function testALooseEntryPointReasonTravels(): void
@@ -193,7 +193,7 @@ final class DoctorChannelsChecksTest extends TestCase
         $row = DoctorChannelsChecks::channelBundlesRow(null, [$bundle], ['alpha', 'ghost'], $this->store());
 
         self::assertSame('WARN', $row['status']);
-        self::assertStringContainsString('match no discovered bundle', $row['detail']);
+        self::assertStringContainsString('matches no discovered bundle', $row['detail']);
         self::assertStringContainsString('not yet armed', $row['detail']);
         self::assertStringContainsString('; ', $row['detail']);
     }

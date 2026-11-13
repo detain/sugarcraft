@@ -1903,7 +1903,7 @@ final class BinCandyCodeDispatchTest extends TestCase
         );
 
         $this->assertStringNotContainsString('retention removed', $result['stderr']);
-        $this->assertStringContainsString('2 session(s) stored', $result['stdout']);
+        $this->assertStringContainsString('2 sessions stored', $result['stdout']);
 
         $after = new EnhancedSessionStore($dbPath);
         $this->assertNotNull($after->getSession('sess-ancient-01'), 'doctor deleted a stored conversation');
