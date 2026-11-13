@@ -455,10 +455,16 @@ final class Game implements Model
                         ), $merged->persistCmd()];
                     }
                 }
+                // flappy-40 (finding -056): the plain restart reuses the
+                // in-memory leaderboard — a synchronous readScores() inside
+                // the key handler put disk latency (NFS $HOME stutter) on
+                // the input path, and between-board external edits are
+                // indistinguishable in-game anyway. The persist leg was
+                // already deferred through a Cmd; the read leg follows.
                 return [new self(
                     bird: Bird::spawn(self::BIRD_COL, self::HEIGHT / 2.0),
                     pipes: [],
-                    highScores: self::readScores($this->highScoreFilePath),
+                    highScores: $this->highScores,
                     rand: $this->rand,
                     configDir: $this->configDir,
                     frameCols: $this->frameCols,
