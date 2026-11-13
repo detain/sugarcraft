@@ -33,6 +33,51 @@ final class AnsiOutputParserTest extends TestCase
         $this->assertSame('', $chunk);
     }
 
+    public function testConstructorRejectsNonPositiveReadChunk(): void
+    {
+        // Same guard wording as Expect and the input twin (PTY-34).
+        $handler = new SgrHandler();
+        foreach ([0, -5] as $chunkSize) {
+            try {
+                new AnsiOutputParser(
+                    new FakeMasterPty2(''),
+                    new Parser($handler),
+                    $handler,
+                    $chunkSize,
+                );
+                $this->fail("readChunk {$chunkSize} must be rejected");
+            } catch (\InvalidArgumentException $exception) {
+                $this->assertSame("readChunk must be >= 1, got {$chunkSize}", $exception->getMessage());
+            }
+        }
+    }
+
+    public function testConfirmedEofIsLatchedAndIdleIsNot(): void
+    {
+        $idle = AnsiOutputParser::forMaster(new FakeMasterPty2(''));
+        $this->assertSame('', $idle->readChunk(0.001));
+        $this->assertFalse($idle->isEof(), 'nothing-yet must not read as stream-end');
+
+        $eof = AnsiOutputParser::forMaster(new FakeMasterPty2('', eof: true));
+        $this->assertSame('', $eof->readChunk(0.001));
+        $this->assertTrue($eof->isEof());
+        $this->assertSame('', $eof->readChunk(0.001), 'EOF answer stays stable');
+
+        $transitions = AnsiOutputParser::forMaster(new FakeMasterPty2('', eof: true));
+        $this->assertSame([], $transitions->readChunkWithTransitions(0.001));
+        $this->assertTrue($transitions->isEof());
+    }
+
+    public function testResetClearsTheLatchedEof(): void
+    {
+        $parser = AnsiOutputParser::forMaster(new FakeMasterPty2('', eof: true));
+        $parser->readChunk(0.001);
+        $this->assertTrue($parser->isEof());
+
+        $parser->reset();
+        $this->assertFalse($parser->isEof());
+    }
+
     public function testReadChunkReturnsRawBytes(): void
     {
         $master = new FakeMasterPty2("hello");

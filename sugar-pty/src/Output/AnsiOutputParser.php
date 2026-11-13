@@ -25,12 +25,18 @@ use SugarCraft\Pty\Contract\MasterPty;
  */
 final class AnsiOutputParser
 {
+    private bool $sawEof = false;
+
     public function __construct(
         private readonly MasterPty $master,
         private readonly Parser $parser,
         private readonly SgrHandler $handler,
         private int $readChunk = 8192,
-    ) {}
+    ) {
+        if ($readChunk < 1) {
+            throw new \InvalidArgumentException("readChunk must be >= 1, got {$readChunk}");
+        }
+    }
 
     /**
      * Create a new parser for the given master PTY.
@@ -57,11 +63,23 @@ final class AnsiOutputParser
      *                 SGR state is tracked in the handler (drain transitions
      *                 via {@see SgrHandler::drainTransitions()} or use
      *                 {@see readChunkWithTransitions()}).
+     *
+     * An empty return covers BOTH "nothing yet" and "the stream ended" —
+     * the master read taxonomy distinguishes them (null = idle, `''` =
+     * confirmed EOF) and the EOF verdict is latched here: ask
+     * {@see isEof()} when the caller must know whether an empty chunk
+     * means wait-more or stop-reading (the twin's rule, mirrored from
+     * {@see \SugarCraft\Pty\Input\PtyInputDecoder}).
      */
     public function readChunk(float $timeout = 0.05): string
     {
         $bytes = $this->master->read($this->readChunk, $timeout);
-        if ($bytes === null || $bytes === '') {
+        if ($bytes === '') {
+            $this->sawEof = true;
+
+            return '';
+        }
+        if ($bytes === null) {
             return '';
         }
 
@@ -85,7 +103,12 @@ final class AnsiOutputParser
     public function readChunkWithTransitions(float $timeout = 0.05): array
     {
         $bytes = $this->master->read($this->readChunk, $timeout);
-        if ($bytes === null || $bytes === '') {
+        if ($bytes === '') {
+            $this->sawEof = true;
+
+            return [];
+        }
+        if ($bytes === null) {
             return [];
         }
 
@@ -109,13 +132,23 @@ final class AnsiOutputParser
     }
 
     /**
+     * Latched once a read observed master EOF (`''`). Cleared only by
+     * {@see reset()}.
+     */
+    public function isEof(): bool
+    {
+        return $this->sawEof;
+    }
+
+    /**
      * Reset to ground state: clears the VT parser, the tracked SGR state,
-     * and the pending transition log — after this call the parser behaves
-     * as if it had never consumed any bytes.
+     * the pending transition log, and the latched EOF verdict — after this
+     * call the parser behaves as if it had never consumed any bytes.
      */
     public function reset(): void
     {
         $this->parser->reset();
         $this->handler->reset();
+        $this->sawEof = false;
     }
 }
