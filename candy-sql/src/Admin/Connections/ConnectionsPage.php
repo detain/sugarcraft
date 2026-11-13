@@ -558,13 +558,18 @@ final class ConnectionsPage extends PageBase implements RowNavigable
 
     /**
      * Render the page-specific key hints (the global status bar only shows the
-     * generic admin keys, so the kill shortcuts need advertising here).
+     * generic admin keys, so the kill shortcuts need advertising here). The
+     * kill shortcuts are dropped when there is nothing to kill — SQL-P16
+     * (adminpages-033): an empty processlist used to advertise `K`/`X`
+     * bindings that could only ever beep at the user.
      */
     private function renderKeyHints(): string
     {
-        return Style::new()->foreground(Color::hex('#6b7280'))->render(
-            'j/k:nav  K:kill  X:kill-query  f:filter  r:refresh',
-        );
+        $hints = $this->filteredProcesslist() === []
+            ? 'j/k:nav  f:filter  r:refresh'
+            : 'j/k:nav  K:kill  X:kill-query  f:filter  r:refresh';
+
+        return Style::new()->foreground(Color::hex('#6b7280'))->render($hints);
     }
 
     /**

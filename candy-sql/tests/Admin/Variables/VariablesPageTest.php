@@ -104,7 +104,7 @@ final class VariablesPageTest extends TestCase
         $page = new VariablesPage($this->context);
         $result = $page->view();
 
-        $this->assertStringContainsString('[j/k] nav', $result); // Tab is globally consumed by the pane cycle - the footer must not advertise it
+        $this->assertStringContainsString('[j/k] rows', $result); // SQL-P16: grid-mode legend (tree mode swaps it for '[j/k] tree'). Tab is globally consumed by the pane cycle - the footer must not advertise it
         // D-M18 (2026-11-03): q backs out to Tables in-app, not quit.
         $this->assertStringContainsString('[q] back', $result);
     }
@@ -631,6 +631,245 @@ final class VariablesPageTest extends TestCase
         $errorMsg = $this->getPrivateField($errorPage, 'editErrorMessage');
         $this->assertNotNull($errorMsg);
         $this->assertStringContainsString('1238', $errorMsg);
+    }
+
+    // ─── SQL-P16: category sidebar focus + honest legend (adminpages-033) ────
+
+    private function sgrStrip(string $s): string
+    {
+        return (string) preg_replace('/\x1b\[[0-9;]*m/u', '', $s);
+    }
+
+    public function testNoCatalogPageHidesCategoriesPanelAndLegend(): void
+    {
+        $this->db->setQueryResult([
+            ['Variable_name' => 'Uptime', 'Value' => '3600'],
+        ]);
+
+        $page = new VariablesPage($this->context);
+        $view = $this->sgrStrip($page->view());
+
+        $this->assertStringNotContainsString('Categories', $view);
+        $this->assertStringNotContainsString('(no data)', $view); // the dead-chrome placeholder is gone
+        $this->assertStringNotContainsString('[c] categories', $view);
+        $this->assertStringContainsString('[j/k] rows', $view);
+    }
+
+    public function testCatalogPageShowsCategoryGroups(): void
+    {
+        $catalog = Catalog::new(__DIR__ . '/../../../data');
+        $catalog->load();
+
+        $this->db->setQueryResult([
+            ['Variable_name' => 'max_connections', 'Value' => '100'],
+        ]);
+
+        $page = new VariablesPage($this->context, $catalog);
+        $view = $this->sgrStrip($page->view());
+
+        $this->assertStringContainsString('Categories', $view);
+        $this->assertStringContainsString('admin', $view); // first catalog group (verified non-vacuous)
+        $this->assertStringContainsString('[c] categories', $view);
+        $this->assertStringContainsString('[Enter/e] edit(dynamic)', $view);
+        $this->assertStringNotContainsString('Categories ▸', $view); // unfocused header carries no marker
+    }
+
+    public function testEmptyGridSuppressesEditHint(): void
+    {
+        $catalog = Catalog::new(__DIR__ . '/../../../data');
+        $catalog->load();
+
+        $this->db->setQueryResult([]);
+
+        $page = new VariablesPage($this->context, $catalog);
+        $view = $this->sgrStrip($page->view());
+
+        $this->assertStringContainsString('No data available yet.', $view); // PageBase honest empty state
+        $this->assertStringNotContainsString('edit(dynamic)', $view); // no rows → no edit advertised
+    }
+
+    public function testCCKeyFocusesTreeAndSwapsLegend(): void
+    {
+        $catalog = Catalog::new(__DIR__ . '/../../../data');
+        $catalog->load();
+
+        $this->db->setQueryResult([
+            ['Variable_name' => 'max_connections', 'Value' => '100'],
+        ]);
+
+        $page = new VariablesPage($this->context, $catalog);
+        $page->view(); // load variables + categories
+
+        [$focused, $cmd] = $page->update(new KeyMsg(KeyType::Char, 'c'));
+        $this->assertNull($cmd);
+        $this->assertTrue($this->getPrivateField($focused, 'categoryFocused'));
+        $this->assertSame(0, $this->getPrivateField($focused, 'categoryCursor')); // snapped to 'All'
+
+        $view = $this->sgrStrip($focused->view());
+        $this->assertStringContainsString('Categories ▸', $view);
+        $this->assertStringContainsString('[j/k] tree', $view);
+        $this->assertStringContainsString('▸ All', $view);
+    }
+
+    public function testTreeCursorMovesWithJKAndClamps(): void
+    {
+        $catalog = Catalog::new(__DIR__ . '/../../../data');
+        $catalog->load();
+
+        $this->db->setQueryResult([
+            ['Variable_name' => 'max_connections', 'Value' => '100'],
+        ]);
+
+        $page = new VariablesPage($this->context, $catalog);
+        $page->view();
+
+        [$focused, ] = $page->update(new KeyMsg(KeyType::Char, 'c'));
+        [$down, ] = $focused->update(new KeyMsg(KeyType::Char, 'j'));
+        $this->assertSame(1, $this->getPrivateField($down, 'categoryCursor'));
+        $this->assertStringContainsString('▸ admin', $this->sgrStrip($down->view()));
+
+        [$up, ] = $down->update(new KeyMsg(KeyType::Char, 'k'));
+        $this->assertSame(0, $this->getPrivateField($up, 'categoryCursor')); // floor
+
+        [$arrow, ] = $up->update(new KeyMsg(KeyType::Up)); // arrows drive the ring too
+        $this->assertSame(0, $this->getPrivateField($arrow, 'categoryCursor'));
+
+        $ceiling = $up;
+        for ($i = 0; $i < 200; $i++) {
+            [$ceiling, ] = $ceiling->update(new KeyMsg(KeyType::Char, 'j'));
+        }
+        $groups = $catalog->groups();
+        $this->assertSame(count($groups), $this->getPrivateField($ceiling, 'categoryCursor')); // entries = All + groups, last index
+    }
+
+    public function testEnterOnTreeAppliesCategoryAndReturnsToGrid(): void
+    {
+        $catalog = Catalog::new(__DIR__ . '/../../../data');
+        $catalog->load();
+
+        $this->db->setQueryResult([
+            ['Variable_name' => 'max_connections', 'Value' => '100'],
+        ]);
+
+        $page = new VariablesPage($this->context, $catalog);
+        $page->view();
+
+        [$focused, ] = $page->update(new KeyMsg(KeyType::Char, 'c'));
+        [$down, ] = $focused->update(new KeyMsg(KeyType::Char, 'j'));
+        [$applied, ] = $down->update(new KeyMsg(KeyType::Enter));
+
+        $this->assertFalse($this->getPrivateField($applied, 'categoryFocused'));
+        $this->assertSame('admin', $this->getPrivateField($applied, 'activeCategory'));
+        $this->assertStringContainsString('[j/k] rows', $this->sgrStrip($applied->view()));
+
+        // Re-entry snaps the cursor onto the applied group (ring remembers the eye).
+        [$refocused, ] = $applied->update(new KeyMsg(KeyType::Char, 'c'));
+        $this->assertSame(1, $this->getPrivateField($refocused, 'categoryCursor'));
+
+        // 'All' selection clears the filter.
+        [$toAll, ] = $refocused->update(new KeyMsg(KeyType::Char, 'k'));
+        [$allApplied, ] = $toAll->update(new KeyMsg(KeyType::Char, 'e')); // e is the tree-side alias of Enter
+        $this->assertNull($this->getPrivateField($allApplied, 'activeCategory'));
+    }
+
+    public function testEscapeReleasesTreeWithoutApplying(): void
+    {
+        $catalog = Catalog::new(__DIR__ . '/../../../data');
+        $catalog->load();
+
+        $this->db->setQueryResult([
+            ['Variable_name' => 'max_connections', 'Value' => '100'],
+        ]);
+
+        $page = new VariablesPage($this->context, $catalog);
+        $page->view();
+
+        [$focused, ] = $page->update(new KeyMsg(KeyType::Char, 'c'));
+        [$down, ] = $focused->update(new KeyMsg(KeyType::Char, 'j'));
+        [$released, ] = $down->update(new KeyMsg(KeyType::Escape));
+
+        $this->assertFalse($this->getPrivateField($released, 'categoryFocused'));
+        $this->assertNull($this->getPrivateField($released, 'activeCategory')); // nothing applied
+
+        // Re-entry snaps the cursor back onto the applied category ('All'),
+        // not the orphaned position the abandoned ring left behind.
+        [$refocused, ] = $released->update(new KeyMsg(KeyType::Char, 'c'));
+        $this->assertSame(0, $this->getPrivateField($refocused, 'categoryCursor'));
+    }
+
+    public function testTreeModeSuppressesGridKeysButHonoursQ(): void
+    {
+        $catalog = Catalog::new(__DIR__ . '/../../../data');
+        $catalog->load();
+
+        $this->db->setQueryResult([
+            ['Variable_name' => 'max_connections', 'Value' => '100'],
+        ]);
+
+        $page = new VariablesPage($this->context, $catalog);
+        $page->view();
+
+        [$focused, ] = $page->update(new KeyMsg(KeyType::Char, 'c'));
+
+        [$wPage, ] = $focused->update(new KeyMsg(KeyType::Char, 'w'));
+        $this->assertFalse($this->getPrivateField($wPage, 'showReadWriteOnly')); // w did not leak to the grid
+        $this->assertSame(0, $this->getPrivateField($wPage, 'categoryCursor'));
+
+        [$sPage, ] = $focused->update(new KeyMsg(KeyType::Char, 's'));
+        $this->assertFalse($this->getPrivateField($sPage, 'searchFocused'));
+
+        [$quitPage, ] = $focused->update(new KeyMsg(KeyType::Char, 'q'));
+        $this->assertNotSame($focused, $quitPage); // q leaves the pane from either side (legend promise)
+    }
+
+    public function testCKeyIsNoOpWithoutCategories(): void
+    {
+        $this->db->setQueryResult([
+            ['Variable_name' => 'Uptime', 'Value' => '3600'],
+        ]);
+
+        $page = new VariablesPage($this->context); // no catalog → no ring
+        $page->view();
+
+        [$same, ] = $page->update(new KeyMsg(KeyType::Char, 'c'));
+        $this->assertFalse($this->getPrivateField($same, 'categoryFocused'));
+    }
+
+    public function testEnterOnGridReachesEditor(): void
+    {
+        $catalog = Catalog::new(__DIR__ . '/../../../data');
+        $catalog->load();
+        $editor = VariableEditor::new($this->context, $catalog);
+
+        $this->db->setQueryResult([
+            ['Variable_name' => 'max_connections', 'Value' => '100'],
+        ]);
+
+        $page = new VariablesPage($this->context, $catalog, $editor);
+        $page->view(); // load variables
+
+        [$newPage, ] = $page->update(new KeyMsg(KeyType::Enter)); // Enter is the same intent as 'e'
+
+        $this->assertSame('input', $this->getPrivateField($newPage, 'editDialogPhase'));
+        $this->assertSame('max_connections', $this->getPrivateField($newPage, 'editVarName'));
+    }
+
+    public function testTabResetClearsSidebarFocus(): void
+    {
+        $catalog = Catalog::new(__DIR__ . '/../../../data');
+        $catalog->load();
+
+        $this->db->setQueryResult([
+            ['Variable_name' => 'max_connections', 'Value' => '100'],
+        ]);
+
+        $page = new VariablesPage($this->context, $catalog);
+        $page->view();
+
+        [$focused, ] = $page->update(new KeyMsg(KeyType::Char, 'c'));
+        [$afterTab, ] = $focused->update(new KeyMsg(KeyType::Tab));
+
+        $this->assertFalse($this->getPrivateField($afterTab, 'categoryFocused')); // a pane change releases the ring
     }
 
     // ─── Helpers ─────────────────────────────────────────────────────────────

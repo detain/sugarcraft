@@ -283,4 +283,30 @@ final class ConnectionsPageTest extends TestCase
         // Should still work (navigating down works even at last row if there are more)
         $this->assertNotSame($page, $newPage);
     }
+
+    // ─── SQL-P16 (adminpages-033): kill hints must not lie on an empty page ──
+
+    public function testKeyHintsAdvertiseKillWhenRowsPresent(): void
+    {
+        $this->db->setQueryResult([
+            ['PROCESSLIST_ID' => '1', 'PROCESSLIST_USER' => 'root', 'PROCESSLIST_HOST' => 'localhost', 'PROCESSLIST_DB' => '', 'PROCESSLIST_COMMAND' => 'Sleep', 'PROCESSLIST_TIME' => '10', 'PROCESSLIST_STATE' => '', 'PROCESSLIST_INFO' => '', 'PROCESSLIST_ATTRS' => ''],
+        ]);
+
+        $view = ConnectionsPage::new($this->context)->view();
+
+        $this->assertStringContainsString('K:kill', $view);
+        $this->assertStringContainsString('X:kill-query', $view);
+        $this->assertStringContainsString('f:filter', $view);
+    }
+
+    public function testKeyHintsDropKillOnEmptyProcesslist(): void
+    {
+        $this->db->setQueryResult([]);
+
+        $view = ConnectionsPage::new($this->context)->view();
+
+        $this->assertStringNotContainsString('K:kill', $view); // no rows → no kill advertised
+        $this->assertStringNotContainsString('X:kill-query', $view);
+        $this->assertStringContainsString('f:filter', $view); // filter stays: it can still be undone
+    }
 }

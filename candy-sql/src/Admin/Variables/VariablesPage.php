@@ -70,6 +70,16 @@ final class VariablesPage extends PageBase implements RowNavigable
     private string $activeTab = self::TAB_STATUS;
     private string $searchQuery = '';
     private ?string $activeCategory = null;
+
+    /**
+     * SQL-P16 (adminpages-033): which region owns input. The Categories
+     * sidebar used to be display-only chrome — no key could move a cursor
+     * into it, and the legend's bare "j/k navigate" could not say which
+     * side it meant. $categoryFocused pins the side; the tree cursor is the
+     * in-flight choice before Enter applies it.
+     */
+    private bool $categoryFocused = false;
+    private int $categoryCursor = 0;
     private bool $showReadWriteOnly = false;
     private int $selectedRowIndex = 0;
     private bool $searchFocused = false;
@@ -274,6 +284,40 @@ final class VariablesPage extends PageBase implements RowNavigable
             return [$this->withToggleTab(), null];
         }
 
+        // SQL-P16 (adminpages-033): ONE explicit sidebar↔grid jump key.
+        // 'c' toggles the tree's ownership of input; while it holds, j/k
+        // move the tree cursor, Enter/e applies the highlighted category
+        // (landing back on the grid), 'c'/Esc release. w/s stay grid-side
+        // (suppressed in tree mode), q always leaves the pane.
+        if ($ch === 'c') {
+            if ($this->categories === []) {
+                return [$this, null]; // SQL-P16: no ring to focus when the catalog gave no categories
+            }
+
+            return [$this->withCategoryFocus(!$this->categoryFocused), null];
+        }
+
+        if ($this->categoryFocused) {
+            if ($ch === 'j' || $type === KeyType::Down) {
+                return [$this->withCategoryCursor($this->categoryCursor + 1), null];
+            }
+            if ($ch === 'k' || $type === KeyType::Up) {
+                return [$this->withCategoryCursor($this->categoryCursor - 1), null];
+            }
+            if ($type === KeyType::Enter || $ch === 'e') {
+                return [$this->applyCategorySelection(), null];
+            }
+            if ($type === KeyType::Escape) {
+                return [$this->withCategoryFocus(false), null];
+            }
+            if ($ch === 'q') {
+                // The legend promises q always leaves the pane — keep it true
+                // while the tree holds input (SQL-P16).
+                return [$this->withQuit(), null];
+            }
+            return [$this, null];
+        }
+
         // w toggles read/write filter
         if ($ch === 'w') {
             return [$this->withToggleReadWrite(), null];
@@ -293,8 +337,13 @@ final class VariablesPage extends PageBase implements RowNavigable
             return [$this->withNavigateUp(), null];
         }
 
-        // e opens editor for selected variable
+        // e opens editor for selected variable (Enter is the same intent —
+        // SQL-P16: "editor reachable via e/Enter" is the probe the finding
+        // never saw pass)
         if ($ch === 'e') {
+            return $this->handleEdit();
+        }
+        if ($type === KeyType::Enter) {
             return $this->handleEdit();
         }
 
@@ -514,6 +563,8 @@ final class VariablesPage extends PageBase implements RowNavigable
         $clone->gridScrollOffset = 0; // SQL-P09: cursor parks at the top → window re-anchors
         $clone->activeCategory = null;
         $clone->searchFocused = false;
+        $clone->categoryFocused = false;
+        $clone->categoryCursor = 0; // SQL-P16: a filter reset clears the ring too
         return $clone;
     }
 
@@ -529,6 +580,8 @@ final class VariablesPage extends PageBase implements RowNavigable
         $clone->gridScrollOffset = 0; // SQL-P09: cursor parks at the top → window re-anchors
         $clone->activeCategory = null;
         $clone->searchFocused = false;
+        $clone->categoryFocused = false;
+        $clone->categoryCursor = 0; // SQL-P16: a filter reset clears the ring too
         return $clone;
     }
 
@@ -573,6 +626,52 @@ final class VariablesPage extends PageBase implements RowNavigable
         $clone->selectedRowIndex = 0;
         $clone->gridScrollOffset = 0; // SQL-P09: cursor parks at the top → window re-anchors
         return $clone;
+    }
+
+    /**
+     * SQL-P16: sidebar focus withers (adminpages-033). Re-entry snaps the
+     * cursor to the applied category so the ring continues where the eye is.
+     */
+    private function withCategoryFocus(bool $focused): self
+    {
+        $clone = clone $this;
+        $clone->categoryFocused = $focused;
+        if ($focused) {
+            $clone->categoryCursor = $this->categoryIndexFor($this->activeCategory);
+        }
+
+        return $clone;
+    }
+
+    private function withCategoryCursor(int $index): self
+    {
+        $entries = $this->categoryEntries();
+        $clone = clone $this;
+        $clone->categoryCursor = max(0, min(count($entries) - 1, $index));
+
+        return $clone;
+    }
+
+    private function applyCategorySelection(): self
+    {
+        $picked = $this->categoryEntries()[$this->categoryCursor] ?? 'All';
+        $applied = $this->withCategory($picked === 'All' ? null : $picked);
+        $applied->categoryFocused = false;
+
+        return $applied;
+    }
+
+    /** @return list<string> */
+    private function categoryEntries(): array
+    {
+        return ['All', ...$this->categories];
+    }
+
+    private function categoryIndexFor(?string $category): int
+    {
+        $index = array_search($category ?? 'All', $this->categoryEntries(), true);
+
+        return $index === false ? 0 : (int) $index;
     }
 
     private function withSearchFocused(bool $focused): self
@@ -868,6 +967,14 @@ final class VariablesPage extends PageBase implements RowNavigable
 
     private function renderLayout(): string
     {
+        // SQL-P16 (adminpages-034): the Categories panel used to be permanent
+        // chrome whose only empty-state content was "(no data)" — every
+        // capture without catalog groups showed a dead column stealing grid
+        // width. Hide-when-empty: dead chrome gone; with data it rides.
+        if ($this->categories === []) {
+            return $this->renderVariableGrid(80);
+        }
+
         $leftPanel = $this->renderCategoryTree(25);
         $rightPanel = $this->renderVariableGrid(80);
 
@@ -876,23 +983,35 @@ final class VariablesPage extends PageBase implements RowNavigable
 
     private function renderCategoryTree(int $width): string
     {
-        $header = Style::new()->bold()->foreground(Color::hex('#c084fc'))->render('Categories');
+        // SQL-P16 (adminpages-033): the focus ring. While the tree owns
+        // input its header carries a ▸ and the cursor row is marked — the
+        // user can SEE which side a keystroke lands on. Unfocused, the
+        // applied category keeps the old green marker and the header stays
+        // plain, so the panel reads as state, not as a competing cursor.
+        $headerLabel = $this->categoryFocused ? 'Categories ▸' : 'Categories';
+        $header = Style::new()->bold()->foreground(Color::hex('#c084fc'))->render($headerLabel);
 
-        if ($this->categories === []) {
-            return $header . "\n" . Style::new()->faint()->render('  (no data)');
-        }
+        // (adminpages-034: the old '(no data)' empty leg is gone with the
+        // panel itself — renderLayout() only calls this when there ARE
+        // categories; dead chrome was the finding.)
 
         // "All" plus each catalog group, rendered through Forms\ItemList so the
         // selection styling and scroll window are the widget's job.
         $entries = ['All', ...$this->categories];
         $items = [];
-        foreach ($entries as $entry) {
+        foreach ($entries as $index => $entry) {
             $active = ($entry === 'All' && $this->activeCategory === null)
                 || $entry === $this->activeCategory;
+            $isCursor = $this->categoryFocused && $index === $this->categoryCursor;
+
+            $style = $isCursor
+                ? Style::new()->bold()->foreground(Color::hex('#22d3ee'))
+                : ($active
+                    ? Style::new()->bold()->foreground(Color::hex('#4ade80'))
+                    : Style::new()->foreground(Color::hex('#6b7280')));
+
             $items[] = new StringItem(
-                $active
-                    ? Style::new()->bold()->foreground(Color::hex('#4ade80'))->render($entry)
-                    : Style::new()->foreground(Color::hex('#6b7280'))->render($entry)
+                ($isCursor || ($active && !$this->categoryFocused) ? '▸ ' : '  ') . $style->render($entry),
             );
         }
 
@@ -953,8 +1072,22 @@ final class VariablesPage extends PageBase implements RowNavigable
 
     private function renderFooter(): string
     {
+        // SQL-P16 (adminpages-033): the legend names what j/k actually moves
+        // right now (tree vs rows), and the edit hint only rides when the
+        // grid has rows to edit — "f:filter-style action copy on a No data
+        // page" was the chrome lie this leg fixes.
+        $parts = $this->categories === []
+            ? [$this->categoryFocused ? '[j/k] tree' : '[j/k] rows']
+            : ['[c] categories', $this->categoryFocused ? '[j/k] tree' : '[j/k] rows'];
+        if ($this->getFilteredVariableNames() !== []) {
+            $parts[] = '[Enter/e] edit(dynamic)';
+        }
+        $parts[] = '[w] rw filter';
+        $parts[] = '[s] search';
+        $parts[] = '[q] back';
+
         return Style::new()->foreground(Color::hex('#6b7280'))
-            ->render('[w] rw filter  [s] search  [j/k] nav  [e] edit(dynamic)  [q] back');
+            ->render(implode('  ', $parts));
     }
 
     /**
