@@ -12,7 +12,8 @@ use SugarCraft\Image\TmuxPassthrough;
 /**
  * Transactional tmux allow-passthrough ensure/restore.
  *
- * A fake `tmux` planted on PATH records every invocation to a sidecar log
+ * A fake `tmux` named by TmuxBinary's absolute-path override records every
+ * invocation to a sidecar log
  * and emulates the option state in a sidecar file, so the pins below prove
  * the SEQUENCE and the ARMS — show → (set) → restore, and restore via the
  * `-u` clear ONLY when the option was previously unset, explicit re-set
@@ -41,6 +42,7 @@ final class TmuxPassthroughTest extends TestCase
     private ?string $pathBackup = null;
     private ?string $tmuxBackup = null;
     private ?string $kittyBackup = null;
+    private ?string $binaryBackup = null;
 
     protected function setUp(): void
     {
@@ -49,6 +51,8 @@ final class TmuxPassthroughTest extends TestCase
         $this->pathBackup = self::envOrNull('PATH');
         $this->tmuxBackup = self::envOrNull('TMUX');
         $this->kittyBackup = self::envOrNull('KITTY_WINDOW_ID');
+        $this->binaryBackup = self::envOrNull(\SugarCraft\Image\Support\TmuxBinary::ENV_OVERRIDE);
+        putenv(\SugarCraft\Image\Support\TmuxBinary::ENV_OVERRIDE);
 
         $this->dir = sys_get_temp_dir() . '/s15-fake-tmux-' . getmypid() . '-' . uniqid();
         mkdir($this->dir, 0700);
@@ -75,6 +79,7 @@ final class TmuxPassthroughTest extends TestCase
         $this->restoreEnv('PATH', $this->pathBackup);
         $this->restoreEnv('TMUX', $this->tmuxBackup);
         $this->restoreEnv('KITTY_WINDOW_ID', $this->kittyBackup);
+        $this->restoreEnv(\SugarCraft\Image\Support\TmuxBinary::ENV_OVERRIDE, $this->binaryBackup);
         putenv('FAKE_TMUX_LOG');
         putenv('FAKE_TMUX_STATE');
         putenv('FAKE_TMUX_DIR');
@@ -185,7 +190,10 @@ final class TmuxPassthroughTest extends TestCase
 
     public function testAMissingTmuxBinaryFailsSoft(): void
     {
-        putenv('PATH=' . $this->dir . '/nowhere');
+        // Post-SI-01 the hermetic miss door is the override grammar: a
+        // broken absolute override is REFUSED with no roster consult, so
+        // no exec happens at all — fail-soft with an empty sidecar.
+        putenv(\SugarCraft\Image\Support\TmuxBinary::ENV_OVERRIDE . '=' . $this->dir . '/nowhere');
         $this->assertFalse(TmuxPassthrough::ensure());
         $this->assertFalse(TmuxPassthrough::isApplied());
         $this->assertFileDoesNotExist($this->log);
@@ -322,7 +330,7 @@ SH;
         putenv('FAKE_TMUX_DIR=' . $this->dir);
         putenv('FAKE_TMUX_LOG=' . $this->log);
         putenv('FAKE_TMUX_STATE=' . $this->state);
-        putenv('PATH=' . $this->dir . ($this->pathBackup === null ? '' : ':' . $this->pathBackup));
+        putenv(\SugarCraft\Image\Support\TmuxBinary::ENV_OVERRIDE . '=' . $this->dir . '/tmux');
     }
 
     /** @return list<string> every recorded invocation, in order */

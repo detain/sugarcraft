@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Image;
 
+use SugarCraft\Image\Support\TmuxBinary;
+
 /**
  * Transactional tmux `allow-passthrough` management.
  *
@@ -197,13 +199,20 @@ final class TmuxPassthrough
      */
     private static function runTmux(array $args): ?array
     {
+        $binary = TmuxBinary::path();
+        if ($binary === null) {
+            // Fail-soft law: no gate-passing tmux means no transaction,
+            // never a PATH-searched gamble (the bare-name door this
+            // resolution exists to close).
+            return null;
+        }
         $descriptorSpec = [
             0 => ['file', '/dev/null', 'r'],
             1 => ['pipe', 'w'],
             2 => ['file', '/dev/null', 'w'],
         ];
         $pipes = [];
-        $proc = @proc_open(array_merge(['tmux'], $args), $descriptorSpec, $pipes);
+        $proc = @proc_open(array_merge([$binary], $args), $descriptorSpec, $pipes);
         if (!is_resource($proc)) {
             foreach ($pipes ?? [] as $pipe) {
                 if (is_resource($pipe)) {

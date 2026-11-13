@@ -89,6 +89,9 @@ return [
     // screen passthrough
     'screen.stream_not_sixel' => 'Band streaming is only available for the Sixel renderer, not {name}',
 
+    // Detect query mode
+    'detect.stty_not_restored' => 'sugar-image: the terminal settings saved for a capability probe could not be restored; stty sane was applied — re-apply any custom tty settings if this terminal had them',
+
     // Animation
     'animation.empty'                 => 'Animation requires at least one frame',
     'animation.delay_count_mismatch'  => 'Frame count ({frameCount}) and delay count ({delayCount}) must match',

@@ -7,6 +7,8 @@ namespace SugarCraft\Image;
 use SugarCraft\ColorProfile\Probe\Capability as ProbeCapability;
 use SugarCraft\ColorProfile\Probe\TerminalProbe;
 use SugarCraft\Core\Util\TtyDetect;
+use SugarCraft\Image\Support\SttyBinary;
+use SugarCraft\Image\Support\TmuxBinary;
 
 /**
  * Terminal image-protocol capability detection.
@@ -649,6 +651,13 @@ final class Detect
      */
     private static function runTmuxFeatureQuery(): ?string
     {
+        $binary = TmuxBinary::path();
+        if ($binary === null) {
+            // No gate-passing tmux: the tri-state answer is AUTO (null)
+            // — the same degrade a dead spawn produced, minus the PATH
+            // search this resolution exists to close.
+            return null;
+        }
         $descriptorSpec = [
             0 => ['file', '/dev/null', 'r'],
             1 => ['pipe', 'w'],
@@ -656,7 +665,7 @@ final class Detect
         ];
         $pipes = [];
         $proc = @proc_open(
-            ['tmux', 'display-message', '-p', self::CLIENT_FEATURES_FORMAT],
+            [$binary, 'display-message', '-p', self::CLIENT_FEATURES_FORMAT],
             $descriptorSpec,
             $pipes
         );
@@ -1044,7 +1053,9 @@ final class Detect
      *    never happens;
      *  - not an interactive tty: nothing echoes, nothing canonicalises,
      *    so there is nothing to fix;
-     *  - `stty -g` answered empty (no `stty` binary, exotic terminal):
+     *  - no gate-passing `stty` binary resolves (see {@see SttyBinary}):
+     *    the snapshot cannot even be taken;
+     *  - `stty -g` answered empty (exotic terminal):
      *    restoring would then be impossible, and a probe stuck in
      *    raw mode is worse than one that echoes.
      *
@@ -1057,11 +1068,19 @@ final class Detect
             return null;
         }
 
-        $saved = trim((string) shell_exec('stty -g 2>/dev/null'));
+        $stty = SttyBinary::path();
+        if ($stty === null) {
+            // No gate-passing stty: the snapshot is impossible, so the
+            // probe stays out of raw mode (the same outcome a bare
+            // `stty -g` miss produced, without the PATH search).
+            return null;
+        }
+
+        $saved = trim((string) shell_exec(escapeshellarg($stty) . ' -g 2>/dev/null'));
         if ($saved === '') {
             return null;
         }
-        shell_exec('stty -icanon -echo min 1 time 0 2>/dev/null');
+        shell_exec(escapeshellarg($stty) . ' -icanon -echo min 1 time 0 2>/dev/null');
 
         return $saved;
     }
@@ -1072,7 +1091,41 @@ final class Detect
         if ($saved === null) {
             return;
         }
-        shell_exec('stty ' . escapeshellarg($saved) . ' 2>/dev/null');
+        $stty = SttyBinary::path();
+        if ($stty === null) {
+            return;
+        }
+
+        // Verified restore (finding 011): a fire-and-forget write could
+        // strand the user's terminal in raw mode — echo dead, lines
+        // unpasteable — and nobody downstream would ever know. `stty -g`
+        // output is designed to round-trip (coreutils: what -g prints is
+        // what re-applies), so a re-read that differs means the restore
+        // genuinely failed. Retry once, and if it still disagrees fall
+        // back to `stty sane` — defaults beat a wedged tty — announcing
+        // the retreat once, on stderr, never on the stream graphics
+        // share.
+        if (self::restoreStty($stty, $saved)) {
+            return;
+        }
+        if (self::restoreStty($stty, $saved)) {
+            return;
+        }
+
+        shell_exec(escapeshellarg($stty) . ' sane 2>/dev/null');
+        fwrite(STDERR, Lang::t('detect.stty_not_restored') . "\n");
+    }
+
+    /**
+     * One restore write plus its verification re-read.
+     *
+     * @return bool true when the re-read confirms the snapshot
+     */
+    private static function restoreStty(string $stty, string $saved): bool
+    {
+        shell_exec(escapeshellarg($stty) . ' ' . escapeshellarg($saved) . ' 2>/dev/null');
+
+        return trim((string) shell_exec(escapeshellarg($stty) . ' -g 2>/dev/null')) === $saved;
     }
 
     /**

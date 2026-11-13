@@ -33,8 +33,10 @@ use SugarCraft\Image\Detect;
  *
  * No test contacts a real tmux server: the tri-state is either forced
  * through the {@see Detect::setTmuxTermFeaturesOverride()} seam (and the
- * zero-process cost is pinned with PATH pointed at a directory with no tmux
- * in it) or answered by a fake `tmux` shell script planted FIRST on PATH —
+ * zero-process cost is pinned with {@see \SugarCraft\Image\Support\TmuxBinary::ENV_OVERRIDE}
+ * pointed at an unusable absolute path — a broken override is refused
+ * without any roster consult, so no exec can happen at all) or answered
+ * by a fake `tmux` shell script named by that same absolute override —
  * the TmuxPassthroughTest discipline, including the sidecar log that pins
  * the exact argv our probe sends. $TMUX itself is always this test's own
  * made-up socket string; the fake never connects anywhere.
@@ -55,8 +57,9 @@ final class DetectTmuxTest extends TestCase
     {
         parent::setUp();
         // Clear exactly the keys TermDb consults (see DetectTest),
-        // plus PATH — this file plants a fake tmux binary on it.
-        $keys = array_merge(\SugarCraft\Image\TermDb::ENV_KEYS, ['PATH']);
+        // plus PATH (legacy planter hygiene) and the binary overrides —
+        // this file names its fake tmux through TmuxBinary's override.
+        $keys = array_merge(\SugarCraft\Image\TermDb::ENV_KEYS, ['PATH', \SugarCraft\Image\Support\TmuxBinary::ENV_OVERRIDE, \SugarCraft\Image\Support\SttyBinary::ENV_OVERRIDE]);
         foreach ($keys as $key) {
             $this->savedEnv[$key] = getenv($key);
             putenv($key);
@@ -125,10 +128,12 @@ final class DetectTmuxTest extends TestCase
 
     public function testFeatureYesClaimsSixelWithoutQuerying(): void
     {
-        // No usable tmux binary anywhere on PATH: reaching sixel=true proves
-        // the short-circuit consumed the override WITHOUT spawning — the
-        // yes answer never pays for a round-trip it already has.
-        putenv('PATH=' . $this->dir . '/empty');
+        // The override names an unusable absolute path: a broken override
+        // is REFUSED without any roster consult, so no real binary can
+        // spawn at all. Reaching sixel=true proves the short-circuit
+        // consumed the features override WITHOUT spawning — the yes answer
+        // never pays for a round-trip it already has.
+        putenv(\SugarCraft\Image\Support\TmuxBinary::ENV_OVERRIDE . '=' . $this->dir . '/missing');
         Detect::setTmuxTermFeaturesOverride(true);
 
         $cap = Detect::probe();
@@ -294,9 +299,10 @@ final class DetectTmuxTest extends TestCase
     // ------------------------------------------------------------ harness
 
     /**
-     * Plant a fake `tmux` whose display-message answers $stdout with $exit.
-     * FIRST on PATH, argv logged to the sidecar (TmuxPassthroughTest law:
-     * a real server is never contacted by this file).
+     * Plant a fake `tmux` whose display-message answers $stdout with $exit,
+     * named by TmuxBinary's absolute-path override (argv logged to the
+     * sidecar — TmuxPassthroughTest law: a real server is never contacted
+     * by this file, and post-SI-01 the roster never consults PATH anyway).
      */
     private function plantFakeTmuxReply(string $body, int $exit): void
     {
@@ -310,7 +316,7 @@ exit 0
 SH;
         file_put_contents($this->dir . '/tmux', $script . "\n");
         chmod($this->dir . '/tmux', 0700);
-        putenv('PATH=' . $this->dir . ($this->savedEnv['PATH'] === false ? '' : ':' . $this->savedEnv['PATH']));
+        putenv(\SugarCraft\Image\Support\TmuxBinary::ENV_OVERRIDE . '=' . $this->dir . '/tmux');
     }
 
     /** @return list<string> every recorded invocation, in order */
