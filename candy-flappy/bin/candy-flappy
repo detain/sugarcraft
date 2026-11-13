@@ -8,11 +8,12 @@ declare(strict_types=1);
     // 8.3.6): when `php candy-flappy.phar` runs, THIS file is the archive's
     // stub and the process is NOT inside the archive — Phar::running()
     // answers '' there, and a bare '/x.phar/entry' path fails
-    // is_file()/require for every caller. Two identities cover the two phar
-    // shapes: the stub names itself in __FILE__, and a require-from-inside
-    // names the archive in Phar::running(). Both are addressed the only way
-    // that works, as a phar:// URI. When an archive identity exists, the
-    // archive's own vendor is the ONLY root — a stray vendor beside (or
+    // is_file()/require for every caller. Three identities cover the three
+    // phar shapes: the stub names itself in __FILE__, a require-from-inside
+    // names the archive in Phar::running(), and a RENAMED suffix-less
+    // archive maps itself under its build-time alias (below). All are
+    // addressed the only way that works, as a phar:// URI. When an archive
+    // identity exists, the archive's own vendor is the ONLY root — a stray vendor beside (or
     // above) a downloaded phar must never boot the app with code from
     // outside the frozen archive. In every composer-mode checkout both
     // probes answer nothing and the filesystem candidates are untouched.
@@ -25,8 +26,12 @@ declare(strict_types=1);
     // archive branch below still drops ALL filesystem legs when a phar is
     // running, so the isolation property is untouched.
     $candidates = ['vendor/autoload.php', __DIR__ . '/../vendor/autoload.php', __DIR__ . '/../../../autoload.php'];
-    $archive = \Phar::running(false) !== ''
-        ? 'phar://' . \Phar::running(false)
+    // Phar can be absent entirely (`php -n` drops the shared module, the
+    // exact shape found in the field). Absence is exactly the '' non-archive
+    // answer this guard already handles — ask before calling.
+    $running = class_exists('Phar') ? \Phar::running(false) : '';
+    $archive = $running !== ''
+        ? 'phar://' . $running
         : (str_ends_with(__FILE__, '.phar') ? 'phar://' . __FILE__ : '');
     if ($archive !== '') {
         $candidates = [$archive . '/vendor/autoload.php'];
@@ -35,6 +40,29 @@ declare(strict_types=1);
         if (is_file($path)) {
             require $path;
             return;
+        }
+    }
+    // flappy-34 (finding -083): the renamed, suffix-less archive — the
+    // composer-install / `wget -O candy-flappy` shape. PHP neither
+    // auto-mounts it (the CLI runs it as a plain script, Phar::running()
+    // answers '') nor resolves phar://__FILE__ (measured PHP 8.3.6: without
+    // a .phar segment the wrapper cannot locate the archive), so every
+    // identity above misses and the boot used to die at the refusal below.
+    // Phar::mapPhar() DOES find the signature inside the running file and
+    // mounts it under its build-time alias — the third identity of a phar.
+    // The alias is owned by tools/build-phar.php's fixed-alias `new Phar(…)`
+    // call; PharBuildScriptTest pins both sides agree and boots a faithful
+    // renamed stub subprocess. A plain source run has no signature to map:
+    // the probe fails and lands on the honest refusal below, as before.
+    if ($archive === '' && class_exists('Phar')) {
+        try {
+            if (@\Phar::mapPhar('candy-flappy.phar') !== false
+                && is_file('phar://candy-flappy.phar/vendor/autoload.php')) {
+                require 'phar://candy-flappy.phar/vendor/autoload.php';
+                return;
+            }
+        } catch (\Throwable) {
+            // Not an archive (or the alias drifted): fall through.
         }
     }
     fwrite(STDERR, "candy-flappy: cannot find composer autoload.php\n");

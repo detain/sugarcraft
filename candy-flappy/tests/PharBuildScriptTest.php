@@ -20,7 +20,12 @@ use SugarCraft\Flappy\Support\Version;
  *     options it does not know — the door its guard wording relies on.
  *  3. Support\Version answers CURRENT outside an archive, refuses every
  *     un-stampable path with null, and judges the stamp itself as a pure
- *     function: CURRENT is overridden ONLY under a stamped phar.
+ *     function: CURRENT is overridden ONLY under a stamped phar — and the
+ *     stamped-positive arm of current() runs from INSIDE a synthetic
+ *     archive (flappy-30);
+ *  4. the RENAMED, suffix-less archive boots through the Phar::mapPhar()
+ *     door, whose alias the builder stamps — both sides pinned, and a
+ *     faithful stub subprocess actually executes it (flappy-34).
  */
 final class PharBuildScriptTest extends TestCase
 {
@@ -56,6 +61,135 @@ final class PharBuildScriptTest extends TestCase
             $bin,
             'the require-from-inside identity must be addressed too',
         );
+    }
+
+    public function testTheRenamedPharDoorIsPinnedOnBothSides(): void
+    {
+        // flappy-34 (finding -083, fleet family): the renamed-download
+        // identity (`wget … -O candy-flappy`, the composer bin-install shape)
+        // boots through Phar::mapPhar(); the guard literal and the build's
+        // archive alias are a PAIR — candy-code's measurement is that one
+        // without the other is dead code — so both sides pin here, in the
+        // same shape candy-kv and candy-gifview carry.
+        $bin = file_get_contents(__DIR__ . '/../bin/candy-flappy');
+        self::assertIsString($bin);
+        self::assertStringContainsString("\\Phar::mapPhar('candy-flappy.phar')", $bin);
+
+        $build = file_get_contents(__DIR__ . '/../tools/build-phar.php');
+        self::assertIsString($build);
+        self::assertStringContainsString("new Phar(\$outArg, 0, 'candy-flappy.phar')", $build);
+    }
+
+    public function testARenamedArchiveBootsThroughTheMapPharDoor(): void
+    {
+        // The subprocess law: a full-vendor build stays by hand (class
+        // docblock), but the load-bearing bytes for THIS law are the stub —
+        // bin/candy-flappy verbatim + __HALT_COMPILER — and the archive's
+        // own vendor/autoload.php. The fixture seals exactly those against
+        // the real alias and drops the `.phar` suffix, reproducing the
+        // renamed-download recipe; pre-port both invocations answered
+        // "cannot find composer autoload.php" with rc 1.
+        if (!extension_loaded('phar')) {
+            self::markTestSkipped('ext-phar unavailable');
+        }
+
+        $dir = sys_get_temp_dir() . '/flappy-renamed-phar-' . bin2hex(random_bytes(6));
+        self::assertTrue(mkdir($dir, 0o700, true), 'fixture dir must be creatable');
+        $repoAutoload = realpath(__DIR__ . '/../vendor/autoload.php');
+        self::assertIsString($repoAutoload, 'sanity: the checkout vendor exists');
+        $archive = $dir . '/candy-flappy.phar';
+        try {
+            $gen = $dir . '/gen.php';
+            file_put_contents($gen, implode("\n", [
+                '<' . '?php',
+                '$phar = new Phar($argv[3], 0, "candy-flappy.phar");',
+                '$phar->startBuffering();',
+                '$phar->addFromString("vendor/autoload.php", "<" . "?php require " . var_export($argv[2], true) . ";");',
+                '$phar->setStub(file_get_contents($argv[1]) . ' . "'__HALT_COMPILER();'" . ');',
+                '$phar->stopBuffering();',
+                'echo "built\\n";',
+            ]) . "\n");
+
+            [$exit, $out, $err] = self::runPhp(['-d', 'phar.readonly=0', $gen, realpath(__DIR__ . '/../bin/candy-flappy'), $repoAutoload, $archive]);
+            self::assertSame(0, $exit, "fixture build must succeed, got: $err$out");
+
+            $bare = $dir . '/candy-flappy';
+            self::assertTrue(rename($archive, $bare), 'renaming the archive away from .phar is the whole scenario');
+
+            // The boot must NOT lean on the M6 bare-leg: the phpunit CWD
+            // (the lib root) carries a real vendor/autoload.php, so a child
+            // run there would boot even with no door at all. Run the fixture
+            // from its own vendor-less directory — the mapPhar door is then
+            // the only path that can answer, which is what makes the alias
+            // mutation redden this arm.
+            [$exit, $out] = self::runCwd($dir, [PHP_BINARY, $bare, '--version']);
+            self::assertSame(0, $exit, 'php <bare-name> must boot via mapPhar');
+            self::assertStringContainsString('candy-flappy', $out);
+
+            if (PHP_OS_FAMILY !== 'Windows') {
+                self::assertTrue(chmod($bare, 0o755), 'fixture must be executable');
+                // The shebang path: exec the archive itself, no php binary.
+                [$exit, $out, $err] = self::runCwd($dir, [$bare, '--version']);
+                self::assertSame(0, $exit, "the shebang exec of a renamed archive must boot, got: $err");
+                self::assertStringContainsString('candy-flappy', $out);
+            }
+        } finally {
+            foreach (glob($dir . '/*') ?: [] as $leftover) {
+                @unlink($leftover);
+            }
+            @rmdir($dir);
+        }
+    }
+
+    /**
+     * One bounded child php run.
+     *
+     * @param list<string> $args
+     *
+     * @return array{0: int, 1: string, 2: string} exit code, stdout, stderr
+     */
+    private static function runPhp(array $args): array
+    {
+        $proc = proc_open(
+            [PHP_BINARY, ...$args],
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+        );
+        self::assertIsResource($proc);
+        fclose($pipes[0]);
+        $out = (string) stream_get_contents($pipes[1]);
+        $err = (string) stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+
+        return [proc_close($proc), $out, $err];
+    }
+
+    /**
+     * A child run with an explicit working directory (the renamed-archive
+     * boot must not inherit the phpunit CWD, whose vendor/ would boot it
+     * through the bare-leg no matter what the door does).
+     *
+     * @param list<string> $argv
+     *
+     * @return array{0: int, 1: string, 2: string} exit code, stdout, stderr
+     */
+    private static function runCwd(string $cwd, array $argv): array
+    {
+        $proc = proc_open(
+            $argv,
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+            $cwd,
+        );
+        self::assertIsResource($proc);
+        fclose($pipes[0]);
+        $out = (string) stream_get_contents($pipes[1]);
+        $err = (string) stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+
+        return [proc_close($proc), $out, $err];
     }
 
     public function testTheBuildScriptRefusesUnknownOptionsWithExitTwo(): void
@@ -208,20 +342,6 @@ final class PharBuildScriptTest extends TestCase
         $script = realpath(__DIR__ . '/../tools/build-phar.php');
         self::assertIsString($script, 'sanity: the build script exists');
 
-        $proc = proc_open(
-            [PHP_BINARY, '-d', 'phar.readonly=0', $script, ...$args],
-            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
-            $pipes,
-        );
-        self::assertIsResource($proc);
-        // The child must not wait on us: close stdin immediately.
-        fclose($pipes[0]);
-        // Drain both pipes to EOF before judging (pipe-EOF law).
-        $out = (string) stream_get_contents($pipes[1]);
-        $err = (string) stream_get_contents($pipes[2]);
-        fclose($pipes[1]);
-        fclose($pipes[2]);
-
-        return [proc_close($proc), $out, $err];
+        return self::runPhp(['-d', 'phar.readonly=0', $script, ...$args]);
     }
 }
