@@ -88,4 +88,5 @@ return [
     'email.too_many_bytes' => 'Attachments total {bytes} bytes, exceeding the {limit}-byte whole-document ceiling - split the send or attach fewer bytes',
     'smtp.size_exceeded' => 'The composed message is {bytes} bytes; the relay advertised a SIZE ceiling of {limit} bytes - refused before DATA',
     'attachment.wrapper_refused' => 'Refusing to read {path}: stream wrapper protocols (phar://, data://, ...) are not attachment sources - a phar archive is metadata-unserialized the moment it is touched. Pass a native file path, optionally with a file:// prefix.',
+    'resend.invalid_api_key' => 'The Resend API key has a shape that cannot ride an Authorization header: it must be printable ASCII with no spaces or control characters.',
 ];

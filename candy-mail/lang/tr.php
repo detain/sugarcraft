@@ -81,4 +81,5 @@ return [
     'email.too_many_bytes' => 'Ekler toplamasi {bytes} bayt, tum belge tavani olan {limit} bayti asiyor — gonderimi bolun veya daha az bayt ekleyin',
     'smtp.size_exceeded' => 'Olusturulan mesaj {bytes} bayt; aktarici {limit} baytluk SIZE tavani ilan etti — DATA oncesinde reddedildi',
     'attachment.wrapper_refused' => '{path} okunamadı: akış sarmalayıcı protokolleri (phar://, data://, ...) ek kaynağı değildir - bir phar arşivi dokunulduğu anda üstverisi geri ayrıştırılır. Yerel bir dosya yolu verin, isteğe bağlı olarak file:// önekiyle.',
+    'resend.invalid_api_key' => 'Resend API anahtarının Authorization başlığına taşınamayacak bir biçimi var: yazılabilir ASCII olmalı, boşluk veya kontrol karakteri içermemeli.',
 ];

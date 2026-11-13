@@ -81,4 +81,5 @@ return [
     'email.too_many_bytes' => 'Přílohy celkem {bytes} B překročují strop {limit} B pro celý dokument - rozdělte odeslání nebo přiložte méně bajtů',
     'smtp.size_exceeded' => 'Složená zpráva má {bytes} B; relé inzerovalo strop SIZE {limit} B - zamítnuto před DATA',
     'attachment.wrapper_refused' => 'Čtení {path} zamítnuto: stream wrapper protokoly (phar://, data://, ...) nejsou zdrojem příloh - metadata phar archivu se deserializují okamžikem dotyku. Zadejte nativní cestu k souboru, volitelně s prefixem file://.',
+    'resend.invalid_api_key' => 'Klíč Resend API má tvar, který neprojde hlavičkou Authorization: musí to tisknutelné ASCII bez mezer a řídicích znaků.',
 ];

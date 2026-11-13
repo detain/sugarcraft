@@ -88,4 +88,5 @@ return [
     'email.too_many_bytes' => 'Anhänge insgesamt {bytes} Bytes überschreiten die Dokumentgrenze von {limit} Bytes - bitte den Versand aufteilen oder weniger Bytes anhängen',
     'smtp.size_exceeded' => 'Die zusammengesetzte Nachricht ist {bytes} Bytes groß; der Relay bewirbt eine SIZE-Grenze von {limit} Bytes - vor DATA abgelehnt',
     'attachment.wrapper_refused' => 'Lesen von {path} verweigert: Stream-Wrapper-Protokolle (phar://, data://, ...) sind keine Anlagequellen - ein phar-Archiv wird beim ersten Antasten als Metadaten deserialisiert. Geben Sie einen nativen Dateipfad an, optional mit file://-Präfix.',
+    'resend.invalid_api_key' => 'Der Resend-API-Schluessel hat eine Form, die keinen Authorization-Header passieren kann: druckbares ASCII ohne Leer- oder Steuerzeichen ist erforderlich.',
 ];

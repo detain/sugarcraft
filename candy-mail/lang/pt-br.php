@@ -81,4 +81,5 @@ return [
     'email.too_many_bytes' => 'Os anexos totalizam {bytes} bytes, excedendo o teto de {limit} bytes do documento completo - divida o envio ou anexe menos bytes',
     'smtp.size_exceeded' => 'A mensagem composta tem {bytes} bytes; o relay anunciou um teto SIZE de {limit} bytes - recusado antes de DATA',
     'attachment.wrapper_refused' => 'Leitura de {path} recusada: protocolos de contêiner de fluxo (phar://, data://, ...) não são fontes de anexo - um arquivo phar tem seus metadados desserializados assim que é tocado. Informe um caminho de arquivo nativo, opcionalmente com prefixo file://.',
+    'resend.invalid_api_key' => 'A chave de API Resend tem um formato que não cabe num cabeçalho Authorization: deve ser ASCII imprimível, sem espaços nem caracteres de controle.',
 ];

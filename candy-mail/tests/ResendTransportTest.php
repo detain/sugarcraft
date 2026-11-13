@@ -359,6 +359,42 @@ final class ResendTransportTest extends TestCase
     }
 
     /**
+     * CM-52: the API key rides the Authorization header verbatim; a CRLF in
+     * it would forge an extra header on a credential-bearing request. The
+     * shape gate at construction refuses control-byte/space-bearing keys and
+     * the options pin proves the empty CURLOPT_PROXY (ambient proxies can no
+     * longer relay the bearer token uninvited).
+     */
+    public function testApiKeyShapeIsParsedAtTheBoundary(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        new ResendTransport("secret\r\nX-Forged: yes");
+    }
+
+    public function testTabAndSpaceBearingKeysAreRefusedToo(): void
+    {
+        foreach (["has space", "has\ttab"] as $bad) {
+            $thrown = null;
+            try {
+                new ResendTransport($bad);
+            } catch (\InvalidArgumentException $e) {
+                $thrown = $e;
+            }
+            $this->assertNotNull($thrown, 'whitespace in a bearer token must not reach the header');
+        }
+        // Printable ASCII passes untouched (the shape gate is not a format gate).
+        $transport = new ResendTransport('re_legit-key_123!');
+        $this->assertInstanceOf(ResendTransport::class, $transport);
+    }
+
+    public function testProxyIsExplicitlyDisabledForCredentialBearingCalls(): void
+    {
+        $options = $this->invokeCurlOptions(new ResendTransport('re_test_key'), '{}');
+        $this->assertArrayHasKey(\CURLOPT_PROXY, $options);
+        $this->assertSame('', $options[\CURLOPT_PROXY]);
+    }
+
+    /**
      * @return array<int, mixed>
      */
     private function invokeCurlOptions(ResendTransport $transport, string $json): array    {

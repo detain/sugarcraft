@@ -81,4 +81,5 @@ return [
     'email.too_many_bytes' => '첨부 합계 {bytes}바이트가 문서 전체 상한 {limit}바이트를 초과했습니다 — 전송을 분할하거나 첨부 바이트를 줄이십시오',
     'smtp.size_exceeded' => '작성된 메시지는 {bytes}바이트입니다. 중계기가 SIZE 상한 {limit}바이트를 공지했습니다 — DATA前に 거부됨',
     'attachment.wrapper_refused' => '{path} 읽기 거부: 스트림 래퍼 프로토콜(phar://, data:// 등)은 첨부 소스가 아닙니다 - phar 아카이브는 만지는 순간 메타데이터가 역직렬화됩니다. 네이티브 파일 경로를 지정하세요(file:// 접두사 허용).',
+    'resend.invalid_api_key' => 'Resend API 키 형식이 Authorization 헤더에 실릴 수 없습니다 - 공백이나 제어문자 없는 인쇄용 ASCII여야 합니다.',
 ];

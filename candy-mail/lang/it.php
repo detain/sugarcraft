@@ -81,4 +81,5 @@ return [
     'email.too_many_bytes' => 'Gli allegati totalizzano {bytes} byte, superando il limite di {limit} byte del documento completo: suddividere l\'invio o allegare meno byte',
     'smtp.size_exceeded' => 'Il messaggio composto pesa {bytes} byte; il relay pubblicizza un limite SIZE di {limit} byte: rifiutato prima di DATA',
     'attachment.wrapper_refused' => 'Lettura di {path} rifiutata: i protocolli stream wrapper (phar://, data://, ...) non sono sorgenti di allegati: un archivio phar viene deserializzato nei metadati non appena toccato. Passare un percorso di file nativo, eventualmente con prefisso file://.',
+    'resend.invalid_api_key' => 'La chiave API Resend ha una forma che non può viaggiare in un header Authorization: deve essere ASCII stampabile, senza spazi o caratteri di controllo.',
 ];

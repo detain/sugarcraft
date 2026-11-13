@@ -38,6 +38,15 @@ final class ResendTransport implements Transport
         if ($apiKey === '') {
             $apiKey = $_ENV['RESEND_API_KEY'] ?? \getenv('RESEND_API_KEY', true) ?: '';
         }
+        if ($apiKey !== '' && \preg_match('/^[\x21-\x7E]+$/', $apiKey) !== 1) {
+            // CM-52 boundary parse: the key is emitted verbatim into
+            // 'Authorization: Bearer <key>' by curlOptions(). A CRLF inside
+            // an ambient RESEND_API_KEY would forge an EXTRA header on a
+            // credential-bearing request - reject the shape at construction,
+            // where the caller still owns the value, rather than mid-HTTP.
+            // (Empty stays empty: send() owns that refusal.)
+            throw new \InvalidArgumentException(Lang::t('resend.invalid_api_key'));
+        }
         $this->apiKey = $apiKey;
         $this->apiUrl = $apiUrl !== '' ? $apiUrl : self::API_URL;
     }
@@ -171,6 +180,12 @@ final class ResendTransport implements Transport
             // curl >= 7.34 treats this as a minimum and still negotiates 1.3
             // when the endpoint supports it.
             \CURLOPT_SSLVERSION => \CURL_SSLVERSION_TLSv1_2,
+            // An explicit empty PROXY switches off curl's ambient proxy
+            // autodetection: http_proxy/ALL_PROXY in the environment would
+            // silently route this bearer token through a third-party relay
+            // the caller never chose. No-proxy is the safe default; honouring
+            // CANDY_MAIL_PROXY is a later-if-demand decision, not a default.
+            \CURLOPT_PROXY => '',
         ];
     }
 

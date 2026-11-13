@@ -81,4 +81,5 @@ return [
     'email.too_many_bytes' => '添付合計 {bytes} バイトは文書全体の上限 {limit} バイトを超えています — 送信を分割するか、添付バイトを減らしてください',
     'smtp.size_exceeded' => '合成されたメッセージは {bytes} バイトです。リレーは SIZE 上限 {limit} バイトを通告しています — DATA 前に拒否されました',
     'attachment.wrapper_refused' => '{path} の読み取りを拒否しました: ストリームラッパープロトコル (phar://, data:// など) は添付ファイルの入力元ではありません — phar アーカイブは触れた瞬間にメタデータがデシリアライズされます。ファイルパスはネイティブなものを指定してください (file:// 接頭辞は可)。',
+    'resend.invalid_api_key' => 'Resend API キーの形式が Authorization ヘッダーに載せられるものではありません: スペースや制御文字を含まない印字可能 ASCII である必要があります。',
 ];

@@ -81,4 +81,5 @@ return [
     'email.too_many_bytes' => 'Załączniki łącznie zajmują {bytes} bajtów, przekraczając limit {limit} bajtów dla całego dokumentu — podziel wysyłkę lub dołącz mniej bajtów',
     'smtp.size_exceeded' => 'Skomponowana wiadomość ma {bytes} bajtów; relay zgłosił limit SIZE {limit} bajtów — odmówiono przed DATA',
     'attachment.wrapper_refused' => 'Odmowa odczytu {path}: protokoły strumieni (phar://, data://, ...) nie są źródłami załączników - archiwum phar jest deserializowane z metadanych w chwili dotknięcia. Podaj natywną ścieżkę pliku, opcjonalnie z prefiksem file://.',
+    'resend.invalid_api_key' => 'Klucz API Resend ma postać niekompatybilną z nagłówkiem Authorization: musi to być drukowalny ASCII bez spacji i znaków sterujących.',
 ];

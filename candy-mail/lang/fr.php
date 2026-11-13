@@ -88,4 +88,5 @@ return [
     'email.too_many_bytes' => 'Les pièces jointes totalisent {bytes} octets, dépassant le plafond de {limit} octets du document complet - divisez l\'envoi ou joignez moins d\'octets',
     'smtp.size_exceeded' => 'Le message composé pèse {bytes} octets ; le relais annonce un plafond SIZE de {limit} octets - refusé avant DATA',
     'attachment.wrapper_refused' => 'Lecture de {path} refusée : les protocoles conteneur de flux (phar://, data://, ...) ne sont pas des sources de pièce jointe — une archive phar est désérialisée en métadonnées dès qu\'on la touche. Indiquez un chemin de fichier natif, éventuellement préfixé file://.',
+    'resend.invalid_api_key' => 'La clé API Resend a une forme incapable de transiter dans un en-tête Authorization : de l\'ASCII imprimable, sans espaces ni caractères de contrôle.',
 ];

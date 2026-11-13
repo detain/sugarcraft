@@ -81,4 +81,5 @@ return [
     'email.too_many_bytes' => '附件总计 {bytes} 字节，超过整个文档 {limit} 字节的上限 — 请拆分发送或减少附件字节',
     'smtp.size_exceeded' => '组装后的消息为 {bytes} 字节；中继通告的 SIZE 上限为 {limit} 字节 — 在 DATA 前拒绝',
     'attachment.wrapper_refused' => '拒绝读取 {path}：流包装器协议（phar://、data:// 等）不是附件来源 - phar 归档一被触碰就会反序列化其元数据。请提供本地文件路径，可带 file:// 前缀。',
+    'resend.invalid_api_key' => 'Resend API 密钥的格式无法放入 Authorization 头：必须是不含空格或控制字符的可打印 ASCII。',
 ];
