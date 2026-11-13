@@ -7,6 +7,7 @@ namespace SugarCraft\DatePicker\Tests;
 use SugarCraft\DatePicker\DatePicker;
 use SugarCraft\DatePicker\EventStore;
 use SugarCraft\DatePicker\Model;
+use SugarCraft\DatePicker\PickerEvent;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use PHPUnit\Framework\TestCase;
@@ -152,7 +153,7 @@ final class ModelTest extends TestCase
         $this->assertTrue($store->hasEvents());
         $events = $store->release();
         $this->assertCount(1, $events);
-        $this->assertSame('cursor_moved', $events[0]['type']);
+        $this->assertSame(PickerEvent::CURSOR_MOVED, $events[0]['type']);
     }
 
     public function testModelRecordsRangeStartedThenDateSelectedInRangeMode(): void
@@ -170,7 +171,7 @@ final class ModelTest extends TestCase
         $model = $model->update(new KeyMsg(KeyType::Enter))[0];
         $armed = $store->release();
         $this->assertNotEmpty($armed, 'arming the range must record an event');
-        $this->assertSame('range_started', $armed[0]['type']);
+        $this->assertSame(PickerEvent::RANGE_STARTED, $armed[0]['type']);
         $this->assertNotNull($model->picker()->rangeStart(), 'rangeStart should be set');
 
         // Second Enter on a later day: completes the range, records date_selected
@@ -178,7 +179,7 @@ final class ModelTest extends TestCase
         $model = new Model($model->picker()->MoveCursorRight(), $store);
         $model = $model->update(new KeyMsg(KeyType::Enter))[0];
         $events = $store->release();
-        $selected = array_values(array_filter($events, static fn(array $e): bool => $e['type'] === 'date_selected'));
+        $selected = array_values(array_filter($events, static fn(array $e): bool => $e['type'] === PickerEvent::DATE_SELECTED));
         $this->assertCount(1, $selected, 'date_selected should be recorded after rangeEnd is set');
         $this->assertSame('2026-05-01', $selected[0]['payload']['rangeStart'],
             'the completed-range payload must carry the start');
@@ -299,7 +300,7 @@ final class ModelTest extends TestCase
 
         $cleared = array_values(array_filter(
             $store->release(),
-            static fn(array $e): bool => $e['type'] === 'date_cleared',
+            static fn(array $e): bool => $e['type'] === PickerEvent::DATE_CLEARED,
         ));
         $this->assertCount(1, $cleared);
         $this->assertNull($model->picker()->SelectedDate());
@@ -319,7 +320,7 @@ final class ModelTest extends TestCase
 
         $selected = array_values(array_filter(
             $store->release(),
-            static fn(array $e): bool => $e['type'] === 'date_selected',
+            static fn(array $e): bool => $e['type'] === PickerEvent::DATE_SELECTED,
         ));
         $this->assertCount(2, $selected, 'a changed selection must re-record');
         $this->assertSame('2026-05-01', $selected[0]['payload']['date']);
@@ -332,7 +333,7 @@ final class ModelTest extends TestCase
         $same = $same->update(new KeyMsg(KeyType::Enter))[0];
         $this->assertCount(1, array_filter(
             $store2->release(),
-            static fn(array $e): bool => $e['type'] === 'date_selected',
+            static fn(array $e): bool => $e['type'] === PickerEvent::DATE_SELECTED,
         ), 're-selecting the same date must not duplicate');
     }
 
@@ -451,7 +452,7 @@ final class ModelTest extends TestCase
         $this->assertSame('2026-05-01', $model->picker()->SelectedDate()?->format('Y-m-d'));
 
         $events = $store->release();
-        $selected = array_values(array_filter($events, static fn(array $e): bool => $e['type'] === 'date_selected'));
+        $selected = array_values(array_filter($events, static fn(array $e): bool => $e['type'] === PickerEvent::DATE_SELECTED));
         $this->assertCount(1, $selected);
         $this->assertSame('2026-05-01', $selected[0]['payload']['date'],
             'The date transition must be recorded once with the selected value');
@@ -469,7 +470,7 @@ final class ModelTest extends TestCase
         $model = $model->update(new KeyMsg(KeyType::Enter))[0];
 
         $events = $store->release();
-        $selected = array_values(array_filter($events, static fn(array $e): bool => $e['type'] === 'date_selected'));
+        $selected = array_values(array_filter($events, static fn(array $e): bool => $e['type'] === PickerEvent::DATE_SELECTED));
         $this->assertCount(1, $selected,
             'Re-entering the same selecting state must not re-record');
         $this->assertSame('2026-05-01', $model->picker()->SelectedDate()?->format('Y-m-d'));

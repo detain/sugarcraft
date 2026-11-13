@@ -6,6 +6,7 @@ namespace SugarCraft\DatePicker\Tests;
 
 use SugarCraft\CellBuffer\Style;
 use SugarCraft\DatePicker\DatePicker;
+use SugarCraft\DatePicker\PickerEvent;
 use SugarCraft\DatePicker\EventStore;
 use PHPUnit\Framework\TestCase;
 
@@ -89,7 +90,7 @@ final class SemanticsPinsTest extends TestCase
         $store = new EventStore(static fn (): int => 0);
         $total = EventStore::MAX_EVENTS + 25;
         for ($i = 0; $i < $total; $i++) {
-            $store->record('cursor_moved', ['seq' => $i]);
+            $store->record(PickerEvent::CURSOR_MOVED, ['seq' => $i]);
         }
 
         $this->assertSame(EventStore::MAX_EVENTS, $store->count());

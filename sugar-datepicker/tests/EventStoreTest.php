@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\DatePicker\Tests;
 
 use SugarCraft\DatePicker\EventStore;
+use SugarCraft\DatePicker\PickerEvent;
 use SugarCraft\DatePicker\EventStoreInterface;
 use PHPUnit\Framework\TestCase;
 
@@ -76,7 +77,7 @@ final class EventStoreTest extends TestCase
     {
         // docs-fix-1023 E2: deterministic timestamps for tests/replay.
         $store = new EventStore(static fn(): int => 1_762_000_000);
-        $store->record('date_selected', ['date' => '2026-05-01']);
+        $store->record(PickerEvent::DATE_SELECTED, ['date' => '2026-05-01']);
 
         $events = $store->release();
         $this->assertCount(1, $events);
@@ -87,10 +88,39 @@ final class EventStoreTest extends TestCase
     {
         $store = new EventStore();
         $before = time();
-        $store->record('cursor_moved', ['index' => 3]);
+        $store->record(PickerEvent::CURSOR_MOVED, ['index' => 3]);
         $events = $store->release();
 
         $this->assertGreaterThanOrEqual($before, $events[0]['time']);
         $this->assertLessThanOrEqual(time(), $events[0]['time']);
+    }
+
+    /**
+     * dp-20: the PickerEvent constant VALUES are published wire vocabulary.
+     * The literals here are spelled independently of the class on purpose —
+     * renaming a const value without a deliberate wire-change ruling reddens
+     * this pin (and hosts' stored transcripts) loudly.
+     */
+    public function testEventConstantValuesAreStableWireContract(): void
+    {
+        $this->assertSame('cursor_moved', PickerEvent::CURSOR_MOVED);
+        $this->assertSame('range_started', PickerEvent::RANGE_STARTED);
+        $this->assertSame('date_selected', PickerEvent::DATE_SELECTED);
+        $this->assertSame('date_cleared', PickerEvent::DATE_CLEARED);
+    }
+
+    public function testAllFourWireKindsRoundTripThroughTheStore(): void
+    {
+        $store = new EventStore();
+        $store->record(PickerEvent::CURSOR_MOVED, ['index' => 2]);
+        $store->record(PickerEvent::RANGE_STARTED, ['date' => '2026-05-02']);
+        $store->record(PickerEvent::DATE_SELECTED, ['date' => '2026-05-09']);
+        $store->record(PickerEvent::DATE_CLEARED, []);
+
+        $types = array_map(static fn(array $e): string => $e['type'], $store->release());
+        $this->assertSame(
+            [PickerEvent::CURSOR_MOVED, PickerEvent::RANGE_STARTED, PickerEvent::DATE_SELECTED, PickerEvent::DATE_CLEARED],
+            $types,
+        );
     }
 }

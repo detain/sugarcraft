@@ -9,6 +9,12 @@ namespace SugarCraft\DatePicker;
  */
 interface EventStoreInterface
 {
+    /**
+     * @param PickerEvent::* $type event kind from the {@see PickerEvent}
+     *                             vocabulary; runtime stays permissive — the
+     *                             constants are documentation and typo
+     *                             protection, not validation
+     */
     public function record(string $type, array $payload = []): void;
 
     /**

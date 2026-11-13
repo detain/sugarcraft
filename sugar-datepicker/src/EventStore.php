@@ -27,6 +27,11 @@ final class EventStore implements EventStoreInterface
     ) {
     }
 
+    /**
+     * @param PickerEvent::* $type event kind (see {@see PickerEvent}); permissive
+     *                             at runtime by design — constants are
+     *                             documentation + typo protection
+     */
     public function record(string $type, array $payload = []): void
     {
         $time = $this->clock !== null ? ($this->clock)() : time();

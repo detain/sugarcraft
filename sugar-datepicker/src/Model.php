@@ -63,7 +63,9 @@ final class Model implements \SugarCraft\Core\Model
      * mode), Escape to clearDate in single mode — in range mode Escape clears
      * the pending range and never the selection — and Home/End to the
      * first/last valid day.
-     * Records events to the EventStore when one is injected.
+     * Records events to the EventStore when one is injected — and this is the
+     * ONLY recording channel: {@see DatePicker::handleKey()} is the non-TEA
+     * imperative surface and records nothing by design (see {@see PickerEvent}).
      *
      * Chord policy (single source of truth, pinned in full by
      * {@see ModelTest::testChordMatrix()}): the four ACTION keys
@@ -133,7 +135,7 @@ final class Model implements \SugarCraft\Core\Model
         }
 
         if ($next->cursorIndex() !== $prev->cursorIndex()) {
-            $this->store->record('cursor_moved', [
+            $this->store->record(PickerEvent::CURSOR_MOVED, [
                 'index' => $next->cursorIndex(),
             ]);
         }
@@ -141,13 +143,13 @@ final class Model implements \SugarCraft\Core\Model
         if ($next->isRangeMode()) {
             // range start armed (was unset, now set): the start transition.
             if ($prev->rangeStart() === null && $next->rangeStart() !== null) {
-                $this->store->record('range_started', [
+                $this->store->record(PickerEvent::RANGE_STARTED, [
                     'date' => $next->rangeStart()?->format('Y-m-d'),
                 ]);
             }
             // range completed (start set, end just became non-null).
             if ($next->rangeEnd() !== null && $prev->rangeEnd() === null) {
-                $this->store->record('date_selected', [
+                $this->store->record(PickerEvent::DATE_SELECTED, [
                     'date'       => $next->rangeEnd()?->format('Y-m-d'),
                     'rangeStart' => $next->rangeStart()?->format('Y-m-d'),
                     'rangeEnd'   => $next->rangeEnd()?->format('Y-m-d'),
@@ -158,11 +160,11 @@ final class Model implements \SugarCraft\Core\Model
             $nextDate = $next->selectedDate();
 
             if ($nextDate !== null && self::day($nextDate) !== self::day($prevDate)) {
-                $this->store->record('date_selected', [
+                $this->store->record(PickerEvent::DATE_SELECTED, [
                     'date' => $nextDate->format('Y-m-d'),
                 ]);
             } elseif ($nextDate === null && $prevDate !== null) {
-                $this->store->record('date_cleared', []);
+                $this->store->record(PickerEvent::DATE_CLEARED, []);
             }
         }
     }
@@ -172,15 +174,6 @@ final class Model implements \SugarCraft\Core\Model
         return $d?->format('Y-m-d') ?? '';
     }
 
-    /**
-     * Render the date-picker view as an ANSI string, delegating the layout
-     * options to DatePicker::View() (the total width is clamped there).
-     *
-     * NOTE: the Core\Model contract declares view() with no parameters, so a
-     * host driving this model through the framework gets the 21×9 default.
-     * To choose a width or the week-number column, call View() on the picker
-     * (or this view() with arguments) directly rather than via the contract.
-     */
     /**
      * Render the grid. Null arguments fall back to the picker's configured
      * state (withWidth()/withShowWeekNumbers()), so a framework-driven host

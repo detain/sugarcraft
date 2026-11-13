@@ -256,16 +256,27 @@ month through the `Model`; larger jumps between months and years go through the
 
 `Model::new()` takes an optional `EventStore` as its second argument. When one
 is attached, every state *transition* — a value change, never a flag edge — is
-recorded as a typed event the host drains with `release()` after each update:
+recorded as a typed event the host drains with `release()` after each update.
+Event kinds are `PickerEvent` constants; compare against the constants, never
+hand-copied strings (a typo in a raw literal fails silently, a typo in a class
+constant does not):
 
-- **`cursor_moved`** — payload `{index}` — the cursor index changed.
-- **`range_started`** — payload `{date}` (`Y-m-d`) — range mode's first Enter
-  armed the start (unset → set).
-- **`date_selected`** — single mode: payload `{date}` when the selected day
-  changed; range mode: `{date, rangeStart, rangeEnd}` when the end becomes
-  non-null (the start-arming Enter is reported by `range_started`, not here).
-- **`date_cleared`** — empty payload `{}` — the single-mode selection went from
-  set to unset (Esc or a toggling Enter).
+- **`PickerEvent::CURSOR_MOVED`** (`'cursor_moved'`) — payload `{index}` — the
+  cursor index changed.
+- **`PickerEvent::RANGE_STARTED`** (`'range_started'`) — payload `{date}`
+  (`Y-m-d`) — range mode's first Enter armed the start (unset → set).
+- **`PickerEvent::DATE_SELECTED`** (`'date_selected'`) — single mode: payload
+  `{date}` when the selected day changed; range mode: `{date, rangeStart,
+  rangeEnd}` when the end becomes non-null (the start-arming Enter is reported
+  by `RANGE_STARTED`, not here).
+- **`PickerEvent::DATE_CLEARED`** (`'date_cleared'`) — empty payload `{}` — the
+  single-mode selection went from set to unset (Esc or a toggling Enter).
+
+Recording channel (settled ruling): the TEA `Model` is the *only* emitter.
+`DatePicker::handleKey()` and the imperative methods are the non-TEA surface
+and record nothing — a host driving the picker directly either wraps it in a
+`Model` or diffs picker states itself; that asymmetry is the contract, not an
+oversight.
 
 The recording is deliberately partial in range mode: an Esc that clears a range
 and a third Enter that restarts one complete no selection, so they record
@@ -277,6 +288,9 @@ and a third Enter that restarts one complete no selection, so they record
 
 Beyond `DatePicker` itself, the shipped public classes are:
 
+- **`PickerEvent`** — final const-only class: the four recorded event kinds
+  (`CURSOR_MOVED`, `RANGE_STARTED`, `DATE_SELECTED`, `DATE_CLEARED`) as the
+  published wire vocabulary; see Events below.
 - **`DateRange`** — an immutable start/end value object: promoted public
   readonly `$start`/`$end` plus `withStart()`/`withEnd()` clones;
   `contains($date)` (compares calendar days, timezone-safe — while the range is
