@@ -944,6 +944,10 @@ final readonly class ScriptHook implements BoundedHookInterface
         // for the measurement of both.
         $budget = $this->timeoutSeconds();
         $deadline = ($this->clock)() + $budget;
+        // Registered so a quit can SIGTERM this hook's group (see
+        // Chat::abandonActiveHookGroups()); released before proc_close().
+        $hookPid = (int) (proc_get_status($process)['pid'] ?? 0);
+        \SugarCraft\Code\Support\HookProcessGroups::register($hookPid);
 
         // ISS-038: the child's stdin is no longer closed on sight. It carries
         // the {@see stdinPayload()} JSON — the Claude-Code-shaped contract most
@@ -984,6 +988,7 @@ final readonly class ScriptHook implements BoundedHookInterface
         fclose($pipes[1]);
         fclose($pipes[2]);
 
+        \SugarCraft\Code\Support\HookProcessGroups::release($hookPid);
         $exitCode = proc_close($process);
 
         if ($timedOut) {
