@@ -158,10 +158,12 @@ The key table is fixed in the player model; keys are not rebindable.
   over-disclosing is the honest direction. `Cli::MAX_FRAMES`
   (4096) is only the outer ceiling.
 - Intake is also bounded by file size (`Cli::MAX_INPUT_BYTES`, 64 MiB): files
-  over the cap are refused before they are buffered. The size check and the
-  read are two separate looks at the path, so a file swapped between them can
-  still land a few bytes past the cap. FIFOs and devices are blocked by the
-  engine's `is_file()` gate. A resident-cell budget
+  over the cap are refused. The gate is the read itself — at most cap + 1
+  bytes are ever pulled and the length actually seen decides — so there is
+  no check-then-read window for a growing file to slip through, and a host
+  whose stat cannot express the size (32-bit over 2 GiB) fails closed, not
+  open. FIFOs and devices are blocked by the `is_file()` gate ahead of the
+  open, with the engine's own refusal wording. A resident-cell budget
   (`Cli::MAX_RESIDENT_CELLS`, 6 million frame cells for the current viewport)
   bounds the other axis. The engine separately bounds the requested OUTPUT
   grid at 100,000 cells (`Decoder::MAX_CELLS`) and gates the source GIF's own

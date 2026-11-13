@@ -56,9 +56,11 @@ final class Cli
     public const MAX_FRAMES = 4_096;
 
     /**
-     * Refuse files larger than this before reading them: the intake is a
-     * single file_get_contents, so an open-and-quit on a huge file must not
-     * buffer it (a 64 MiB GIF is far beyond anything a terminal can play).
+     * Upper bound on the bytes the intake may ever buffer: the read itself
+     * is capped at this + 1 and the length actually seen decides (gifview-16
+     * — no check-then-read ladder), so an open-and-quit on a huge file
+     * cannot buffer it (a 64 MiB GIF is far beyond anything a terminal can
+     * play).
      */
     public const MAX_INPUT_BYTES = 64 * 1024 * 1024;
 
@@ -424,10 +426,12 @@ final class Cli
     }
 
     /**
-     * Default intake: refuse oversized files before reading, then read the
-     * file once and materialise its frames for the given grid, bounded by
-     * {@see MAX_FRAMES} and {@see MAX_RESIDENT_CELLS} (fail-loud: the drain
-     * stops one item past each cap instead of buffering the whole stream).
+     * Default intake: read the file ONCE with a bounded read — never more
+     * than {@see MAX_INPUT_BYTES} + 1 bytes are pulled, and the length
+     * actually seen decides the refusal — then materialise its frames for
+     * the given grid, bounded by {@see MAX_FRAMES} and
+     * {@see MAX_RESIDENT_CELLS} (fail-loud: the drain stops one item past
+     * each cap instead of buffering the whole stream).
      *
      * @return array{list<\SugarCraft\Animation\Frame>, ?int} [frames, loops]
      *         — the loop count is audited over the same bytes inside this
@@ -435,14 +439,35 @@ final class Cli
      */
     private static function decodeFrames(string $path, int $cellsW, int $cellsH): array
     {
-        $size = @\filesize($path);
-        if (\is_int($size) && $size > self::MAX_INPUT_BYTES) {
+        // The gate is the read, not a promise made one syscall earlier.
+        // The old ladder (a stat look, then the engine's whole-file slurp)
+        // failed both census halves: a file that grew between the two looks
+        // slipped past the cap, and on hosts whose stat cannot express the
+        // size (32-bit over 2 GiB — false or float answers) the is_int()
+        // skip let the gate fail OPEN. Here a growing file simply reads its
+        // cap + 1 bytes and refuses on length, and the refusal is the same
+        // cli.reason_bytes_over the rescue relays. Non-regular paths (FIFOs,
+        // devices, missing files) keep the engine's own is_file() refusal —
+        // same key, same brand the main()/watchProbe() rescue already strips.
+        if (!\is_file($path)) {
+            throw new \RuntimeException(\SugarCraft\Animation\Lang::t('decoder.no_file', ['path' => $path]));
+        }
+        $handle = @\fopen($path, 'rb');
+        if ($handle === false) {
+            throw new \RuntimeException(\SugarCraft\Animation\Lang::t('decoder.unreadable', ['path' => $path]));
+        }
+        // + 1 byte of headroom is the whole point: reading AT the cap could
+        // not tell "exactly at the cap" from "grew past it mid-read".
+        $bytes = \stream_get_contents($handle, self::MAX_INPUT_BYTES + 1);
+        \fclose($handle);
+        if ($bytes === false) {
+            throw new \RuntimeException(\SugarCraft\Animation\Lang::t('decoder.unreadable', ['path' => $path]));
+        }
+        if (\strlen($bytes) > self::MAX_INPUT_BYTES) {
             throw new \RuntimeException(Lang::t('cli.reason_bytes_over', [
                 'max' => (string) \intdiv(self::MAX_INPUT_BYTES, 1_048_576),
             ]));
         }
-
-        $bytes = Decoder::readFile($path);
 
         // The loop-count audit runs HERE, inside the intake, not in the
         // caller: a 'not a GIF' throw from loopCount() is then absorbed by

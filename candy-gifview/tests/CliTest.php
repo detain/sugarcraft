@@ -263,6 +263,88 @@ final class CliTest extends TestCase
         $this->assertSame('', self::drain($stdout));
     }
 
+    /**
+     * gifview-16: a character device is not a file — the is_file() gate
+     * ahead of the open refuses it with the engine's own wording, never a
+     * blocking read and never a slurp.
+     */
+    public function testADevicePathIsRefusedByTheIsFileGate(): void
+    {
+        if (!\file_exists('/dev/null')) {
+            $this->markTestSkipped('/dev/null is absent on this host; nothing to refuse.');
+        }
+
+        [$stdout, $stderr] = self::pipes();
+
+        $exit = Cli::main(['candy-gifview', '/dev/null'], $stdout, $stderr);
+
+        $this->assertSame(1, $exit);
+        $err = self::drain($stderr);
+        $this->assertStringContainsString('no such file', $err, 'the engine refusal wording is kept');
+        $this->assertStringContainsString('/dev/null', $err);
+    }
+
+    /**
+     * gifview-16: a FIFO is neither a regular file nor openable for a
+     * bounded read — it must die at the same is_file() gate, not block on
+     * a writer-less open.
+     */
+    public function testAFifoIsRefusedByTheIsFileGate(): void
+    {
+        if (!\function_exists('posix_mkfifo')) {
+            $this->markTestSkipped('no posix_mkfifo on this host; pin would be vacuous.');
+        }
+
+        $path = \tempnam(sys_get_temp_dir(), 'sc_gifview_fifo_');
+        $this->assertIsString($path);
+        $this->assertTrue(@unlink($path), 'tempnam file must be removable before mkfifo');
+        if (!@posix_mkfifo($path, 0600)) {
+            $this->markTestSkipped('posix_mkfifo refused on this host/filesystem.');
+        }
+        $this->artifacts[] = $path;
+
+        [$stdout, $stderr] = self::pipes();
+
+        $exit = Cli::main(['candy-gifview', $path], $stdout, $stderr);
+
+        $this->assertSame(1, $exit);
+        $this->assertStringContainsString('no such file', self::drain($stderr));
+    }
+
+    /**
+     * The size gate is the BOUNDED READ, not a filesize() promise (gifview-16):
+     * the intake must derive at most MAX_INPUT_BYTES + 1 bytes and decide on
+     * the length seen — a check-then-read ladder lets a growing file slip
+     * past, and a filesize() the host cannot express (32-bit over 2 GiB)
+     * used to skip the gate open. Token-pin on the real source: reverting
+     * to the old filesize()/readFile() shapes reddens here even when a
+     * lucky host makes the behavioural arms agree.
+     */
+    public function testTheIntakeGatesOnTheBoundedReadNotOnFilesize(): void
+    {
+        $src = (string) file_get_contents(__DIR__ . '/../src/Cli.php');
+        $start = strpos($src, 'private static function decodeFrames(');
+        $this->assertIsInt($start, 'decodeFrames() moved or renamed — update the pin');
+        $body = substr($src, $start);
+        $braceEnd = strpos($body, "\n    }");
+        $this->assertIsInt($braceEnd);
+        $body = substr($body, 0, $braceEnd);
+
+        $this->assertStringContainsString(
+            'stream_get_contents($handle, self::MAX_INPUT_BYTES + 1)',
+            $body,
+            'the intake lost its bounded read — the cap must ride the read itself',
+        );
+        $this->assertStringContainsString('strlen($bytes) > self::MAX_INPUT_BYTES', $body,
+            'the refusal must decide on the length actually read');
+        $this->assertStringNotContainsString('filesize', $body,
+            'a filesize() pre-check is the fail-open ladder gifview-16 retired');
+        $this->assertStringNotContainsString('Decoder::readFile', $body,
+            'readFile() check-then-reads internally — the bounded read belongs here');
+        $this->assertStringContainsString("Lang::t('decoder.no_file'", $body,
+            'non-regular paths keep the engine is_file() refusal wording');
+    }
+
     public function testAnEmptyFrameListIsRefusedLoudly(): void
     {
         [$stdout, $stderr] = self::pipes();
