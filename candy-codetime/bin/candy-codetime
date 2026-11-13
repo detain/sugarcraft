@@ -472,6 +472,13 @@ if ($cmd === 'milestone') {
             exit(1);
         }
         $description = (string)($positional[3] ?? '');
+        // CT-S08: milestones have no file store, so this add force-creates
+        // candy-codetime.db (+WAL sidecars) even in a file-backend dir. Say
+        // so BEFORE the first write - the user's next bare `export` would
+        // otherwise hit the new sqlite auto-select and read an empty store.
+        if ($backend !== 'sqlite' && !is_file($dbPath) && $fileStoreHasData()) {
+            fwrite(STDERR, Lang::t('cli.milestone_sqlite_notice', ['name' => Sanitize::untrusted($name)]) . "\n");
+        }
         try {
             $sqlite()->insertMilestone($name, time(), $description);
         } catch (\Throwable $e) {

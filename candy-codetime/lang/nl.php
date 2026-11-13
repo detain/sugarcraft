@@ -33,6 +33,8 @@ return [
     'cli.milestone_list_header' => "Mijlpalen:",
     'cli.milestone_list_empty' => "Geen mijlpalen vastgelegd.",
     'cli.milestone_entry' => "  {date}  {name}  {description}",
+    'cli.milestone_sqlite_notice' => 'mijlpaal: {name} opgeslagen in de sqlite-backend - de bestandopslag bevat geen mijlpalen, de databank is hier aangemaakt; het dashboard toont ze met --backend=sqlite',
+
     'cli.export_usage' => "Gebruik: candy-codetime export <csv|json|ics> [days]",
     'cli.export_invalid_format' => "export: ongeldig formaat (gebruik csv, json of ics)",
     'cli.gaps_no_data' => "Geen gaten gevonden.",

@@ -33,6 +33,8 @@ return [
     'cli.milestone_list_header' => "Marcos:",
     'cli.milestone_list_empty' => "Nenhum marco registrado.",
     'cli.milestone_entry' => "  {date}  {name}  {description}",
+    'cli.milestone_sqlite_notice' => 'marco: {name} gravado no backend sqlite - o repositório de ficheiros não suporta marcos, a base de dados foi criada aqui; o painel mostra-os com --backend=sqlite',
+
     'cli.export_usage' => "Uso: candy-codetime export <csv|json|ics> [days]",
     'cli.export_invalid_format' => "export: formato inválido (use csv, json ou ics)",
     'cli.gaps_no_data' => "Nenhum intervalo encontrado.",

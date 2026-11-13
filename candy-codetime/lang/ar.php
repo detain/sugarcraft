@@ -33,6 +33,8 @@ return [
     'cli.milestone_list_header' => "الإنجازات:",
     'cli.milestone_list_empty' => "لا توجد إنجازات مسجلة.",
     'cli.milestone_entry' => "  {date}  {name}  {description}",
+    'cli.milestone_sqlite_notice' => 'علامة: {name} حُفظت في تخزين sqlite - مخزن الملفات لا يحمل علامات وأُنشئت قاعدته هنا؛ تعرض اللوحة العلامات بـ --backend=sqlite',
+
     'cli.export_usage' => "الاستخدام: candy-codetime export <csv|json|ics> [days]",
     'cli.export_invalid_format' => "export: صيغة غير صالحة (استخدم csv أو json أو ics)",
     'cli.gaps_no_data' => "لم يتم العثور على فترات فراغ.",

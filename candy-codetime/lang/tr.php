@@ -33,6 +33,8 @@ return [
     'cli.milestone_list_header' => "Kilometre taşları:",
     'cli.milestone_list_empty' => "Kayıtlı kilometre taşı yok.",
     'cli.milestone_entry' => "  {date}  {name}  {description}",
+    'cli.milestone_sqlite_notice' => 'esen nokta: {name} sqlite arka ucuna kaydedildi - dosya deposu esen nokta tutamaz, veritabanı burada oluşturuldu; panel --backend=sqlite ile gösterir',
+
     'cli.export_usage' => "Kullanım: candy-codetime export <csv|json|ics> [days]",
     'cli.export_invalid_format' => "export: geçersiz biçim (csv, json veya ics kullanın)",
     'cli.gaps_no_data' => "Boşluk bulunamadı.",

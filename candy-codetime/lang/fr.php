@@ -33,6 +33,8 @@ return [
     'cli.milestone_list_header' => "Jalons :",
     'cli.milestone_list_empty' => "Aucun jalon enregistré.",
     'cli.milestone_entry' => "  {date}  {name}  {description}",
+    'cli.milestone_sqlite_notice' => 'repère : {name} enregistré dans le backend sqlite - le dépôt de fichiers ne peut pas contenir de repères, sa base de données a été créée ici ; le tableau de bord les affiche avec --backend=sqlite',
+
     'cli.export_usage' => "Utilisation : candy-codetime export <csv|json|ics> [days]",
     'cli.export_invalid_format' => "export : format invalide (utiliser csv, json ou ics)",
     'cli.gaps_no_data' => "Aucune lacune trouvée.",

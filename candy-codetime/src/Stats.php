@@ -17,16 +17,19 @@ final class Stats
     /**
      * @param list<Heartbeat> $beats
      * @param list<\DateTimeImmutable> $days   chronological
+     * @param list<Milestone> $milestones  CT-S08: markers carried to the view;
+     *     only a sqlite reader can fill this, the file store has no such table
      */
     public function __construct(
         public readonly array $beats,
         public readonly array $days,
+        public readonly array $milestones = [],
     ) {}
 
     /**
      * @param list<Heartbeat> $beats
      */
-    public static function compute(array $beats, \DateTimeImmutable $from, \DateTimeImmutable $to): self
+    public static function compute(array $beats, \DateTimeImmutable $from, \DateTimeImmutable $to, array $milestones = []): self
     {
         $days = [];
         $cur = $from->setTime(0, 0);
@@ -35,7 +38,7 @@ final class Stats
             $days[] = $cur;
             $cur    = $cur->modify('+1 day');
         }
-        return new self($beats, $days);
+        return new self($beats, $days, $milestones);
     }
 
     /** @return array<string,int>  project → seconds (sorted desc) */

@@ -814,4 +814,54 @@ final class CliTest extends TestCase
         $this->assertSame(0o600, fileperms($dayFile) & 0o777, 'a read-only launch must heal plugin-minted modes');
         $this->assertSame(0o700, fileperms($this->dataDir) & 0o777);
     }
+
+    /**
+     * CT-S08: `milestone add` from a file-backend session force-creates the
+     * sqlite database (milestones have no file store). In a dir that already
+     * holds JSONL history that creation must be ANNOUNCED on stderr before it
+     * happens - a later bare command would otherwise auto-select the new,
+     * empty sqlite store and read the file history as if it were gone. Once
+     * the db exists (or the user asked for sqlite) the notice is silent.
+     */
+    public function testMilestoneAddIntoAFileOnlyDirNoticesBeforeCreatingTheDatabase(): void
+    {
+        if (!extension_loaded('sqlite3')) {
+            $this->markTestSkipped('sqlite3 extension not loaded');
+        }
+
+        $push = $this->runCli(['push', 'proj', 'php', 'a.php', '60']);
+        $this->assertSame(0, $push['exit'], $push['stderr']);
+
+        $db = $this->dataDir . '/candy-codetime.db';
+        $add = $this->runCli(['milestone', 'add', 'v1']);
+        $this->assertSame(0, $add['exit'], $add['stderr']);
+        $this->assertStringContainsString('saved in the sqlite backend', $add['stderr']);
+        $this->assertStringContainsString('v1', $add['stderr']);
+        $this->assertFileExists($db);
+
+        // Second add: the db is no longer news, no second notice.
+        $again = $this->runCli(['milestone', 'add', 'v2']);
+        $this->assertSame(0, $again['exit'], $again['stderr']);
+        $this->assertStringNotContainsString('saved in the sqlite backend', $again['stderr']);
+
+        // Explicit opt-in: nothing to announce.
+        $chosen = $this->runCli(['--backend=sqlite', 'milestone', 'add', 'v3']);
+        $this->assertSame(0, $chosen['exit'], $chosen['stderr']);
+        $this->assertStringNotContainsString('saved in the sqlite backend', $chosen['stderr']);
+    }
+
+    /**
+     * CT-S08: an empty dir (no file history) also needs no notice - there is
+     * no other store to lose sight of.
+     */
+    public function testMilestoneAddIntoAnEmptyDirCreatesTheDatabaseQuietly(): void
+    {
+        if (!extension_loaded('sqlite3')) {
+            $this->markTestSkipped('sqlite3 extension not loaded');
+        }
+        $add = $this->runCli(['milestone', 'add', 'v1']);
+        $this->assertSame(0, $add['exit'], $add['stderr']);
+        $this->assertStringNotContainsString('saved in the sqlite backend', $add['stderr']);
+        $this->assertFileExists($this->dataDir . '/candy-codetime.db');
+    }
 }

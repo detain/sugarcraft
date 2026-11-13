@@ -33,6 +33,8 @@ return [
     'cli.milestone_list_header' => 'Milestones:',
     'cli.milestone_list_empty' => 'No milestones recorded.',
     'cli.milestone_entry' => '  {date}  {name}  {description}',
+    'cli.milestone_sqlite_notice' => 'milestone: {name} saved in the sqlite backend - the file store cannot hold milestones, so its database was created here; the dashboard shows them with --backend=sqlite',
+
     'cli.export_usage' => 'Usage: candy-codetime export <csv|json|ics> [days]',
     'cli.export_invalid_format' => 'export: invalid format (use csv, json, or ics)',
     'cli.gaps_no_data' => 'No gaps found.',

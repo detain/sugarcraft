@@ -352,12 +352,47 @@ final class Renderer
             static fn(\DateTimeImmutable $day): string => $day->format(Lang::t('ui.weekday_format')),
             $labels,
         );
-        $marks = self::marks($weekdays, $slotWidths, $d->colorProfile);
+        $rows = [$body, $bars, self::marks($weekdays, $slotWidths, $d->colorProfile)];
+        // CT-S08: a milestone inside the window earns its own row under the
+        // weekday labels so the label/bar grid never changes shape.
+        $marks = self::milestoneMarks($d, $labels, $slotWidths);
+        if ($marks !== null) {
+            $rows[] = $marks;
+        }
 
         return Style::new()
             ->border(Border::rounded())
             ->padding(0, 1)
-            ->render(implode("\n", [$body, $bars, $marks]));
+            ->render(implode("\n", $rows));
+    }
+
+    /**
+     * CT-S08: '*' per slot whose day carries at least one milestone, or null
+     * when the window has none (the row must not exist for a plain frame).
+     * Milestones are bucketed by local calendar date - the same law as the
+     * day files and the timeline buckets.
+     *
+     * @param list<\DateTimeImmutable> $labels
+     * @param list<int> $slots
+     */
+    private static function milestoneMarks(Dashboard $d, array $labels, array $slots): ?string
+    {
+        $days = [];
+        foreach ($d->stats->milestones as $m) {
+            $days[date('Y-m-d', $m->time)] = true;
+        }
+        $line = '';
+        $any = false;
+        foreach ($slots as $index => $width) {
+            $day = $labels[$index] ?? null;
+            $hit = $day !== null && isset($days[$day->format('Y-m-d')]);
+            $any = $any || $hit;
+            $line .= Width::padRight($hit ? '*' : '', $width);
+        }
+        if (!$any) {
+            return null;
+        }
+        return self::tint(Style::new()->bold(), '#ff5f87', $d->colorProfile)->render($line);
     }
 
     /**

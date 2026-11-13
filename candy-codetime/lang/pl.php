@@ -33,6 +33,8 @@ return [
     'cli.milestone_list_header' => "Kamienie milowe:",
     'cli.milestone_list_empty' => "Brak zapisanych kamieni milowych.",
     'cli.milestone_entry' => "  {date}  {name}  {description}",
+    'cli.milestone_sqlite_notice' => 'kamień milowy: {name} zapisany w backendzie sqlite - magazyn plików nie obsługuje kamieni milowych, jego baza danych została tutaj utworzona; panel wyświetla je z --backend=sqlite',
+
     'cli.export_usage' => "Użycie: candy-codetime export <csv|json|ics> [days]",
     'cli.export_invalid_format' => "export: nieprawidłowy format (użyj csv, json lub ics)",
     'cli.gaps_no_data' => "Nie znaleziono przerw.",

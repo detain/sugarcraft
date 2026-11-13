@@ -33,6 +33,8 @@ return [
     'cli.milestone_list_header' => "Meilensteine:",
     'cli.milestone_list_empty' => "Keine Meilensteine erfasst.",
     'cli.milestone_entry' => "  {date}  {name}  {description}",
+    'cli.milestone_sqlite_notice' => 'Meilenstein: {name} im SQLite-Backend gespeichert - das Speicherverzeichnis kann keine Meilensteine halten, seine Datenbank wurde hier angelegt; das Dashboard zeigt sie mit --backend=sqlite',
+
     'cli.export_usage' => "Verwendung: candy-codetime export <csv|json|ics> [days]",
     'cli.export_invalid_format' => "export: ungültiges Format (csv, json oder ics verwenden)",
     'cli.gaps_no_data' => "Keine Lücken gefunden.",

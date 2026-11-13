@@ -33,6 +33,8 @@ return [
     'cli.milestone_list_header' => "Hitos:",
     'cli.milestone_list_empty' => "No hay hitos registrados.",
     'cli.milestone_entry' => "  {date}  {name}  {description}",
+    'cli.milestone_sqlite_notice' => 'hito: {name} guardado en el backend sqlite - el almacén de archivos no admite hitos, su base de datos se creó aquí; el panel los muestra con --backend=sqlite',
+
     'cli.export_usage' => "Uso: candy-codetime export <csv|json|ics> [days]",
     'cli.export_invalid_format' => "export: formato no válido (use csv, json o ics)",
     'cli.gaps_no_data' => "No se encontraron huecos.",

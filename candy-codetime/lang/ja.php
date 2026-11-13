@@ -33,6 +33,8 @@ return [
     'cli.milestone_list_header' => "マイルストーン:",
     'cli.milestone_list_empty' => "記録されたマイルストーンはありません。",
     'cli.milestone_entry' => "  {date}  {name}  {description}",
+    'cli.milestone_sqlite_notice' => 'マイルストーン: {name} は sqlite バックエンドに保存しました - ファイルストアはマイルストーンを保存できないためここにデータベースを作成しました; ダッシュボードでは --backend=sqlite で表示します',
+
     'cli.export_usage' => "使用法: candy-codetime export <csv|json|ics> [days]",
     'cli.export_invalid_format' => "export: 無効な形式 (csv、json または ics を使用)",
     'cli.gaps_no_data' => "ギャップは見つかりませんでした。",

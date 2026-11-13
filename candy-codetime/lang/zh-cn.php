@@ -33,6 +33,8 @@ return [
     'cli.milestone_list_header' => "里程碑:",
     'cli.milestone_list_empty' => "没有已记录的里程碑。",
     'cli.milestone_entry' => "  {date}  {name}  {description}",
+    'cli.milestone_sqlite_notice' => '里程碑: {name} 已存入 sqlite 后端 - 文件存储无法保存里程碑，其数据库已在此创建；仪表盘通过 --backend=sqlite 显示这些里程碑',
+
     'cli.export_usage' => "用法: candy-codetime export <csv|json|ics> [days]",
     'cli.export_invalid_format' => "export: 无效格式 (请使用 csv、json 或 ics)",
     'cli.gaps_no_data' => "未发现空档。",

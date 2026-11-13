@@ -33,6 +33,8 @@ return [
     'cli.milestone_list_header' => "Traguardi:",
     'cli.milestone_list_empty' => "Nessun traguardo registrato.",
     'cli.milestone_entry' => "  {date}  {name}  {description}",
+    'cli.milestone_sqlite_notice' => 'traguardo: {name} salvato nel backend sqlite - lo archivio file non contiene traguardi, il database è stato creato qui; la dashboard li mostra con --backend=sqlite',
+
     'cli.export_usage' => "Uso: candy-codetime export <csv|json|ics> [days]",
     'cli.export_invalid_format' => "export: formato non valido (usare csv, json o ics)",
     'cli.gaps_no_data' => "Nessun intervallo trovato.",

@@ -33,6 +33,8 @@ return [
     'cli.milestone_list_header' => "마일스톤:",
     'cli.milestone_list_empty' => "기록된 마일스톤이 없습니다.",
     'cli.milestone_entry' => "  {date}  {name}  {description}",
+    'cli.milestone_sqlite_notice' => '마일스톤: {name}을(를) sqlite 백엔드에 저장했습니다 - 파일 저장소는 마일스톤을 저장할 수 없어 데이터베이스를 여기에 만들었습니다; 대시보드에서 --backend=sqlite로 표시합니다',
+
     'cli.export_usage' => "사용법: candy-codetime export <csv|json|ics> [days]",
     'cli.export_invalid_format' => "export: 잘못된 형식 (csv, json 또는 ics 사용)",
     'cli.gaps_no_data' => "공백을 찾지 못했습니다.",

@@ -33,6 +33,8 @@ return [
     'cli.milestone_list_header' => "Milníky:",
     'cli.milestone_list_empty' => "Žádné milníky nebyly zapsány.",
     'cli.milestone_entry' => "  {date}  {name}  {description}",
+    'cli.milestone_sqlite_notice' => 'milník: {name} uložen v backendu sqlite - souborový sklad nemůže obsahovat milníky, jeho databáze byla vytvořena zde; dashboard je zobrazí s --backend=sqlite',
+
     'cli.export_usage' => "Použití: candy-codetime export <csv|json|ics> [days]",
     'cli.export_invalid_format' => "export: neplatný formát (použijte csv, json nebo ics)",
     'cli.gaps_no_data' => "Nebyly nalezeny žádné mezery.",

@@ -33,6 +33,8 @@ return [
     'cli.milestone_list_header' => "Вехи:",
     'cli.milestone_list_empty' => "Вехи не записаны.",
     'cli.milestone_entry' => "  {date}  {name}  {description}",
+    'cli.milestone_sqlite_notice' => 'веха: {name} сохранена в sqlite-бэкенде - файловое хранилище не поддерживает вехи, его база данных создана здесь; дашборд показывает их с --backend=sqlite',
+
     'cli.export_usage' => "Использование: candy-codetime export <csv|json|ics> [days]",
     'cli.export_invalid_format' => "export: недопустимый формат (используйте csv, json или ics)",
     'cli.gaps_no_data' => "Промежутки не найдены.",

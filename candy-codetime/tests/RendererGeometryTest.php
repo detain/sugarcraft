@@ -71,6 +71,14 @@ final class RendererGeometryTest extends TestCase
         return Renderer::render(new Dashboard(new Store(sys_get_temp_dir()), $end, $days, $stats, $width));
     }
 
+    /** @param list<Heartbeat> $beats @param list<\SugarCraft\CodeTime\Milestone> $milestones */
+    private static function milestoneFrame(int $width, array $beats, array $milestones, int $days = 7): string
+    {
+        $end = new \DateTimeImmutable(self::END);
+        $stats = Stats::compute($beats, $end->modify('-' . ($days - 1) . ' days'), $end, $milestones);
+        return Renderer::render(new Dashboard(new Store(sys_get_temp_dir()), $end, $days, $stats, $width));
+    }
+
     /** @return list<string> */
     private static function plain(string $frame): array
     {
@@ -444,6 +452,32 @@ final class RendererGeometryTest extends TestCase
      * (German is the longest of the 16 catalogues) still obey the one rule
      * the whole file exists for - no row outgrows the terminal.
      */
+    /**
+     * CT-S08: a milestone inside the window earns a '*' row under the weekday
+     * labels - one day slot wide like the bars it sits under - and a frame
+     * without milestones keeps the old three-row shape byte for byte.
+     */
+    public function testMilestoneInsideTheWindowGainsAMarkRowAndFramesWithoutOneAreUnchanged(): void
+    {
+        $end = new \DateTimeImmutable(self::END);
+        $with = self::milestoneFrame(62, self::busy(), [new \SugarCraft\CodeTime\Milestone('shipped', $end->getTimestamp())]);
+        $without = self::frame(62, self::busy());
+        self::assertStringContainsString('*', $with);
+        self::assertStringNotContainsString('*', $without);
+        self::assertSame(count(explode("\n", rtrim($without, "\n"))) + 1, count(explode("\n", rtrim($with, "\n"))), 'mark row is exactly one row');
+        // The mark lands under its own day (the newest, rightmost slot).
+        $rows = self::plain($with);
+        $markRow = (string) end($rows);
+        // trim trailing padding of the frame border away: find '*' inside the last inner row
+        self::assertMatchesRegularExpression('/\* +│$/m', Ansi::strip($with), 'mark sits at its own day slot, right of newest label');
+        // Milestones outside the window must not add a row at all.
+        $old = self::milestoneFrame(62, self::busy(), [new \SugarCraft\CodeTime\Milestone('ancient', $end->modify('-400 days')->getTimestamp())]);
+        self::assertSame($without, $old, 'out-of-window milestone stays silent');
+        foreach (self::plain($with) as $line) {
+            self::assertLessThanOrEqual(62, Width::string($line));
+        }
+    }
+
     public function testGermanLocalePaintsTranslatedPanesInsideTheFrame(): void
     {
         $previous = T::locale();

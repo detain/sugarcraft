@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\CodeTime;
 
 use SugarCraft\CodeTime\Storage\HeartbeatReader;
+use SugarCraft\CodeTime\Storage\SqliteBackend;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
@@ -129,11 +130,13 @@ final class Dashboard implements Model
     {
         $from = $this->endDay->modify('-' . ($this->days - 1) . ' days');
         $beats = $this->source->loadRange($from, $this->endDay);
+        // CT-S08: the model carries the markers; a file reader has none.
+        $milestones = $this->source instanceof SqliteBackend ? $this->source->milestones() : [];
         return new self(
             $this->source,
             $this->endDay,
             $this->days,
-            Stats::compute($beats, $from, $this->endDay),
+            Stats::compute($beats, $from, $this->endDay, $milestones),
             $this->width,
             $this->colorProfile,
             $this->height,
