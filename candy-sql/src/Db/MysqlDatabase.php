@@ -33,7 +33,7 @@ final class MysqlDatabase implements DatabaseInterface
     {
         if ($config->driver !== 'mysql') {
             throw new \InvalidArgumentException(
-                'Cannot connect to non-MySQL driver using MySQL connector',
+                "The MySQL connector only accepts the mysql driver (got '{$config->driver}')",
             );
         }
 

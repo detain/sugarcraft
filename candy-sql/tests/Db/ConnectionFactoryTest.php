@@ -288,6 +288,21 @@ final class ConnectionFactoryTest extends TestCase
         ConnectionFactory::fromArgv($argv);
     }
 
+    public function testFromArgvNamesTheBogusDriverNotMissingArguments(): void
+    {
+        // client-021: --driver=bogus (with --db present) must name the real
+        // fault — the value — instead of misreporting a missing argument.
+        $argv = ['program', '--driver=bogus', '--db=mydb'];
+
+        try {
+            ConnectionFactory::fromArgv($argv);
+            $this->fail('expected refusal');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('bogus', $e->getMessage());
+            $this->assertStringContainsString('sqlite, mysql, pgsql', $e->getMessage());
+        }
+    }
+
     public function testFromArgvThrowsOnMissingDb(): void
     {
         $argv = ['program', '--driver=sqlite'];

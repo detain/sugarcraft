@@ -650,7 +650,7 @@ final class App implements Model
         }
         if ($context === null) {
             return \React\Promise\resolve(
-                new QueryRowsLoadedMsg($sql, [], 'Async query unsupported for this driver'),
+                new QueryRowsLoadedMsg($sql, [], 'This driver does not support async queries'),
             );
         }
 

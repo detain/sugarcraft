@@ -221,10 +221,21 @@ final class ConnectionFactory
             return self::fromConfig(self::fromDsn($args['dsn']));
         }
 
+        // client-021: validate the driver VALUE before the missing-args
+        // conjunction — --driver=bogus with no --db used to be misreported as
+        // "missing --driver", burying the real fault (an unknown driver name).
+        $driver = $args['driver'] ?? null;
+        if ($driver !== null && !in_array($driver, self::SUPPORTED_DRIVERS, true)) {
+            throw new \InvalidArgumentException(
+                "Unsupported driver: {$driver} — choose one of "
+                . implode(', ', self::SUPPORTED_DRIVERS),
+            );
+        }
+
         // Otherwise build from individual arguments
         if (!isset($args['driver'], $args['db'])) {
             throw new \InvalidArgumentException(
-                'Missing required arguments: --driver and --db are required',
+                'Missing required arguments: pass both --driver and --db (or use --dsn)',
             );
         }
 

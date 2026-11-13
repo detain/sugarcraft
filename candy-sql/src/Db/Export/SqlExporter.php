@@ -60,7 +60,7 @@ final class SqlExporter
     {
         $handle = fopen($path, 'w');
         if ($handle === false) {
-            throw new \RuntimeException("Cannot open file for writing: {$path}");
+            throw new \RuntimeException("The destination '{$path}' cannot be opened for writing: check that the directory exists and is writable");
         }
 
         $complete = false;

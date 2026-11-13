@@ -74,7 +74,7 @@ final class CsvExporter
 
         $handle = fopen($path, 'r');
         if ($handle === false) {
-            throw new \RuntimeException("Cannot open CSV file: " . $path);
+            throw new \RuntimeException("The CSV file '{$path}' cannot be read: check that it exists and is readable");
         }
 
         // A mid-file failure used to leave the already-inserted rows
@@ -147,7 +147,7 @@ final class CsvExporter
     {
         $handle = fopen($path, 'w');
         if ($handle === false) {
-            throw new \RuntimeException("Cannot open file for writing: " . $path);
+            throw new \RuntimeException("The destination '{$path}' cannot be opened for writing: check that the directory exists and is writable");
         }
 
         try {
@@ -171,7 +171,7 @@ final class CsvExporter
     {
         $handle = fopen('php://memory', 'w');
         if ($handle === false) {
-            throw new \RuntimeException("Cannot open memory stream for writing");
+            throw new \RuntimeException("The export buffer could not be created");
         }
 
         try {
@@ -202,7 +202,7 @@ final class CsvExporter
 
         $handle = fopen($path, 'w');
         if ($handle === false) {
-            throw new \RuntimeException("Cannot open file for writing: " . $path);
+            throw new \RuntimeException("The destination '{$path}' cannot be opened for writing: check that the directory exists and is writable");
         }
 
         $complete = false;
@@ -333,7 +333,13 @@ final class CsvExporter
                 return array_keys($result[0]);
             }
         } catch (\PDOException $e) {
-            throw new \RuntimeException("Table not found: " . $table);
+            // client-017: a lost connection used to answer "table not found" —
+            // carry the driver's own fault message and chain the cause.
+            throw new \RuntimeException(
+                "Table not found or unreadable: {$table} ({$e->getMessage()})",
+                0,
+                $e,
+            );
         }
 
         // LIMIT 0 returned empty - try LIMIT 1 to get sample row
@@ -344,7 +350,13 @@ final class CsvExporter
                 return array_keys($sampleResult[0]);
             }
         } catch (\PDOException $e) {
-            throw new \RuntimeException("Table not found: " . $table);
+            // client-017: a lost connection used to answer "table not found" —
+            // carry the driver's own fault message and chain the cause.
+            throw new \RuntimeException(
+                "Table not found or unreadable: {$table} ({$e->getMessage()})",
+                0,
+                $e,
+            );
         }
 
         // Both returned empty - verify table exists
@@ -352,7 +364,13 @@ final class CsvExporter
             $safeTable = Identifier::quote($this->quoteFlavor(), $table);
             $this->db->query("SELECT 1 FROM {$safeTable} LIMIT 1");
         } catch (\PDOException $e) {
-            throw new \RuntimeException("Table not found: " . $table);
+            // client-017: a lost connection used to answer "table not found" —
+            // carry the driver's own fault message and chain the cause.
+            throw new \RuntimeException(
+                "Table not found or unreadable: {$table} ({$e->getMessage()})",
+                0,
+                $e,
+            );
         }
 
         // Table exists but we couldn't get columns (shouldn't happen for non-empty tables)

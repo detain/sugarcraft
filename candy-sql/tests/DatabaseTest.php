@@ -165,10 +165,17 @@ final class DatabaseTest extends TestCase
     {
         $db = $this->memoryDb();
         $csvPath = tempnam(sys_get_temp_dir(), 'csv');
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('Table not found');
-        $db->exportCsv($csvPath, 'nonexistent_table');
-        unlink($csvPath);
+        try {
+            $db->exportCsv($csvPath, 'nonexistent_table');
+            $this->fail('expected refusal');
+        } catch (\RuntimeException $e) {
+            // client-017: the driver's fault rides the message and the chain.
+            $this->assertStringContainsString('Table not found or unreadable', $e->getMessage());
+            $this->assertStringContainsString('no such table', $e->getMessage());
+            $this->assertInstanceOf(\PDOException::class, $e->getPrevious());
+        } finally {
+            unlink($csvPath);
+        }
     }
 
     public function testExportSqlCreatesDumpFile(): void
