@@ -262,15 +262,33 @@ jobs:
         env:
           TAG: ${{ needs.gate.outputs.tag }}
 
+      - name: Checksum
+        # RT-46: ordering mirrors release-app-phar.yml's C-SES-5.c note — this
+        # runs BEFORE signing on purpose, because the headline signature is
+        # over this sidecar's body, so the sidecar has to exist first.
+        run: |
+          set -euo pipefail
+          (cd dist && sha256sum candy-top.phar > candy-top.phar.sha256)
+          cat dist/candy-top.phar.sha256
+
       - name: Sign the archive (pinned-key mode)
         # OPTIONAL step by design: without the SUGARCRAFT_SIGNING_KEY secret it
         # skips green and the release ships unsigned. When the owner has the
         # secret populated AND SelfUpdate::PUBLIC_KEY_BASE64 carries the
         # matching public half (both true as of the sugarcraft-wide key
-        # pinning), this emits candy-top.phar.minisig — the base64 detached
-        # signature `self-update` then REQUIRES, verified against the key
-        # pinned in source rather than against anything the release channel
-        # controls. Same keypair as candy-code; same law.
+        # pinning), this emits — same three legs and same semantics as the
+        # app-phar reference pipeline, verified against the key pinned in
+        # source rather than against anything the release channel controls:
+        #   - candy-top.phar.sha256.sig: base64 detached sodium signature over
+        #     the .sha256 SIDECAR BODY (the leg a pinned-key self-update
+        #     verifies before trusting the sidecar to gate a swap; RT-46 adds
+        #     the leg this workflow used to omit).
+        #   - candy-top.phar.minisig: the legacy raw-byte signature, kept
+        #     additively for older clients.
+        #   - candy-top.phar.minisig.sha256: computed here, not in the (now
+        #     earlier) checksum step, since it can only exist after its file.
+        # In keyless state all three are skipped together: one early-exit
+        # step, and the publish gate below sees no signature files.
         run: |
           set -euo pipefail
           if [ -z "${SUGARCRAFT_SIGNING_KEY:-}" ]; then
@@ -285,19 +303,13 @@ jobs:
             }
             $sig = sodium_crypto_sign_detached(file_get_contents("dist/candy-top.phar"), $key);
             file_put_contents("dist/candy-top.phar.minisig", base64_encode($sig) . "\n");
+            $sidecar_sig = sodium_crypto_sign_detached(file_get_contents("dist/candy-top.phar.sha256"), $key);
+            file_put_contents("dist/candy-top.phar.sha256.sig", base64_encode($sidecar_sig) . "\n");
           '
+          (cd dist && sha256sum candy-top.phar.minisig > candy-top.phar.minisig.sha256)
           cat dist/candy-top.phar.minisig
         env:
           SUGARCRAFT_SIGNING_KEY: ${{ secrets.SUGARCRAFT_SIGNING_KEY }}
-
-      - name: Checksum
-        run: |
-          set -euo pipefail
-          (cd dist && sha256sum candy-top.phar > candy-top.phar.sha256)
-          if [ -f dist/candy-top.phar.minisig ]; then
-            (cd dist && sha256sum candy-top.phar.minisig > candy-top.phar.minisig.sha256)
-          fi
-          cat dist/candy-top.phar.sha256
 
       - name: Provenance sidecars (OD-8)
         # The shipped artifact stays traceable to its tested SHA without
@@ -400,6 +412,9 @@ jobs:
           assets=(dist/candy-top.phar dist/candy-top.phar.sha256 dist/candy-top.phar.commit dist/candy-top.phar.pins.json)
           if [ -f dist/candy-top.phar.minisig ]; then
             assets+=(dist/candy-top.phar.minisig dist/candy-top.phar.minisig.sha256)
+          fi
+          if [ -f dist/candy-top.phar.sha256.sig ]; then
+            assets+=(dist/candy-top.phar.sha256.sig)
           fi
           notes="Self-contained candy-top PHAR built by .github/workflows/release-candy-top-phar.yml at commit $TAG_SHA (CI-gated, siblings pinned).\n\nVerify: sha256sum -c candy-top.phar.sha256\n\nRun: php candy-top.phar --version\n\nAlso attached: candy-top.phar.commit (full build SHA), candy-top.phar.pins.json (sibling pin map)."
           if gh release view "$tag" >/dev/null 2>&1; then
