@@ -13,6 +13,12 @@
  * `config.warn.*` are the load/validation warnings, btop wording where btop
  * has one (`Config::load`, `intValid`, `stringValid`, `presetsValid`).
  *
+ * Counted labels: `Lang::t` is a plain `strtr` — there is no plural
+ * mechanism in the repo (sugar-core rider R4). Copy sidesteps it in the
+ * noun-first `Label: {value}` form, grammatical for every n ("VMs: 1",
+ * "Alarms: 3", never "1 VMs" / "1 alarms"). Locale seeds translate the
+ * same shape; no key ever needs a `.one`/`.other` pair.
+ *
  * @return array<string, string>
  */
 
@@ -643,7 +649,7 @@ return [
     'config.desc.vms_sorting' => 'VM dashboard card order. Possible values: "cpu", "mem", "disk", "net", "psi" and "name". The first five put the busiest guest first; "psi" is the worst cpu/memory/io pressure.',
     'options.desc.vms_sorting' => "(Linux) VM dashboard card order.\n\nThe dashboard (key \"v\") shows every\nlibvirt/KVM guest as a card.\n\n\"cpu\" share of its own vCPUs,\n\"mem\" share of its configured RAM,\n\"disk\" read + write rate,\n\"net\" download + upload rate,\n\"psi\" worst cpu/memory/io pressure,\n\"name\" A to Z.\n\nKeys \"s\" / \"S\" cycle it in the dashboard.",
     'vms.none' => 'No virtual machines found',
-    'vms.count' => '{n} VMs',
+    'vms.count' => 'VMs: {n}',
     'vms.range' => '{from}-{to}/{n}',
     'vms.sort' => 'sort',
     'vms.alloc' => '{vcpus} vCPU on {cores} · {mem} of {host} RAM',
@@ -700,12 +706,12 @@ return [
     'ipmi.psu' => 'PSU{n}',
     'ipmi.absent' => 'absent',
     'ipmi.count' => '{n} ok',
-    'ipmi.alarms' => '{n} alarms',
+    'ipmi.alarms' => 'Alarms: {n}',
     'ipmi.more' => '+{n} more',
-    'ipmi.fans_summary' => '{n} fans {min}–{max}',
+    'ipmi.fans_summary' => 'Fans: {n} · {min}–{max}',
     'ipmi.sel' => 'SEL',
-    'ipmi.sel_fill' => '{pct}% · {n} events',
-    'ipmi.sel_full' => 'full · {n} events',
+    'ipmi.sel_fill' => '{pct}% · Events: {n}',
+    'ipmi.sel_full' => 'full · Events: {n}',
     'ipmi.sel_last' => 'last',
     'ipmi.redundancy.full' => 'redundant',
     'ipmi.redundancy.lost' => 'redundancy lost',

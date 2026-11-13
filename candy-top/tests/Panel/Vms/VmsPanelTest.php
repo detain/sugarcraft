@@ -315,7 +315,7 @@ final class VmsPanelTest extends TestCase
         $panel = PanelPaint::feed(VmsPanel::new(self::scripted(new VmFleetSnapshot([], 8 * 1024 ** 3))), $config, $layout, 1);
         $grid = PanelPaint::grid(PanelPaint::surface($panel, $config, $layout, PanelPaint::host()), $layout->box('vms') ?? Rect::new(0, 0, 0, 0));
         $this->assertStringContainsString('No virtual machines found', $grid);
-        $this->assertStringContainsString('0 VMs', $grid);
+        $this->assertStringContainsString('VMs: 0', $grid);
         PanelPaint::assertGolden($this, 'vms', 'empty-100x30.txt', $grid);
     }
 

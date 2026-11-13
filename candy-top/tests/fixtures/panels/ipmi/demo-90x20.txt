@@ -13,7 +13,7 @@
 ││ power on   cooling ok   drives ok │╰─────────────────────────────────────────────────╯│
 ││ chassis closed   PSU 4/4          │╭─┐voltages┌────────────────────────────┐● 10 ok┌─╮│
 ││ sensors ok                        ││+VCORE0 CPU1     1.146V  +12V             12.34V ││
-││SEL ▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱ 2% · 107 events││+VCORE1 CPU1     1.143V  +5V              5.080V ││
+││SEL ▰▱▱▱▱▱▱▱▱▱▱▱▱▱ 2% · Events: 107││+VCORE1 CPU1     1.143V  +5V              5.080V ││
 ││last 09/20/2026 01:40:17 PM EDT ·  ││+VSOC CPU1       0.998V  +3.3V            3.355V ││
 ││     Power Unit PowerUnit · Power o││+VDDIO CPU1      1.108V  +5VSB            5.087V ││
 │╰───────────────────────────────────╯╰───────────────────────────────────────┘+2 more└─╯│
