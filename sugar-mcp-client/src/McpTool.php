@@ -123,7 +123,19 @@ final class McpTool
         // poisoned definition is counted and announced, never registered,
         // and the rest of the roster boots — instead of minting a roster of
         // invisible landmines.
-        if (preg_match('/[\x00-\x1F\x7F-\x9F]/u', $definition['name']) === 1) {
+        //
+        // Fail-closed law, learned from the `=== 1` polarity trap: under /u,
+        // preg_match() returns FALSE — not 0 — when the SUBJECT fails to
+        // decode, so testing only for `=== 1` reads undecodable bytes as
+        // clean. The encoding check is therefore its own arm, and the class
+        // reaches past C0/C1: the format-control block (\p{Cf} — U+202E RLO
+        // alone can invert how a name reads in any transcript) and the
+        // private-use planes (\p{Co} — glyphs no font renders).
+        if (!mb_check_encoding($definition['name'], 'UTF-8')) {
+            return false;
+        }
+
+        if (preg_match('/[\x00-\x1F\x7F-\x9F\p{Cf}\p{Co}]/u', $definition['name']) === 1) {
             return false;
         }
 

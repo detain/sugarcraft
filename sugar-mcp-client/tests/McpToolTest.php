@@ -82,6 +82,11 @@ final class McpToolTest extends TestCase
             'name is a number (the measured kill-chain)' => [['name' => 5], 'name'],
             'name carries control bytes (N3)' => [['name' => "bad\x00name"], 'name'],
             'name carries escape sequences (N3)' => [['name' => "esc\x1b[31m"], 'name'],
+            // MCPSEC-02: the old `/u` gate returned false (not 0) on an
+            // undecodable subject, and the `=== 1` test read that as clean.
+            'name carries undecodable bytes' => [['name' => "be\xE0\x80st"], 'name'],
+            'name carries a bidi format control (RLO)' => [['name' => "rtl\u{202E}tool"], 'name'],
+            'name carries private-use codepoints' => [['name' => "tool\u{E000}\u{E001}"], 'name'],
             'name is a bool' => [['name' => true], 'name'],
             // Measured: name is REQUIRED, not skip-if-absent. A bare
             // `{}` used to mint a phantom tool named '' through the isset()
@@ -105,6 +110,16 @@ final class McpToolTest extends TestCase
             McpTool::tryFromArray($definition, 'fs'),
             "field {$offendingField} of the wrong type must skip the definition",
         );
+    }
+
+    public function testUndecodableNameBytesNeverReachTheGateOnTheWirePath(): void
+    {
+        // Frame-path parity: the transport's json_decode refuses the same
+        // undecodable bytes the gate now refuses, so the gate's job is the
+        // definition built off-wire — the two doors together leave no path
+        // for an invalid-UTF-8 name to be registered.
+        self::assertNull(json_decode('{"name":"be' . "\xE0\x80" . 'st"}', true));
+        self::assertNull(McpTool::tryFromArray(['name' => "be\xE0\x80st"], 'fs'));
     }
 
     public function testAnnotationsAreCarriedVerbatimAndDefaultToEmpty(): void
