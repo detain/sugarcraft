@@ -7,6 +7,158 @@ found to contradict each other and the actual code during the remediation
 audit described below, so treat *this* file plus `git log` as the source of
 truth going forward.
 
+## Tag anchors
+
+Sections are dated, not versioned; the real tags are the anchors. Dates are the
+tagged commit's author date (`git log -1 --format=%ad <tag>`).
+
+| Tag | Tagged | Sections at or before it | Sections after it |
+|---|---|---|---|
+| `candy-code/v0.1.0` | 2026-10-20 | Original build, Remediation pass, Second audit pass, Feature-parity pass, Review wave (2026-10-14) | everything below it in time |
+| `candy-code/v0.1.1` | 2026-10-20 | (same set as v0.1.0 — a same-day re-tag) | Security and one-shot hardening (2026-10-21) onward |
+| `candy-code/dev` | rolling (last moved 2026-11-04) | everything through the media surface and help screen (2026-10-30 → 2026-11-03) | the 2026-11-05 migration and the 2026-11-12 wave are untagged on master |
+
+## Changed — review remediation wave, 2026-11-12
+
+One day on master closed the candy-code review: about 116 `candy-code: S-*`
+commits, each pinned by a regression test, plus the sibling-library riders they
+depend on. Step ids are the review's (`S-<letter><number>`); grouped by
+subject, not by order.
+
+### Gateway, viewers and tokens
+
+- **Control socket authenticates first.** A wrong token now means zero side
+  effect before any verb runs (S-O02). The gateway enforces scope, viewer pin
+  and owner-only `workspace.*` before the own/forward arms, and viewers never
+  start hosts (S-O01).
+- **Every gateway frame goes through the per-connection `Outbox`** (S-O03),
+  which never enqueues `''` on an encode failure, drains an `SplQueue`, and
+  sheds at a hard mark before flush when congested (S-V03). A global idempotency
+  ceiling plus `forgetPrincipal` is wired to token revoke and rotate (S-V02).
+- **Token lifecycle.** Revoke and grant expiry close viewer sockets (S-O13);
+  rotation prunes push rows of every revoked principal class (S-O14);
+  `TokenStore` fails closed on an unreadable token file instead of rotating
+  (S-V04); `serve token` prints the stored token but warns and exits `1` when no
+  server runs, like `status`/`stop`/`url` (S-H06).
+- **Bounds and deadlines.** A drip-fed request head is cut by a wall deadline
+  (S-O05); the pre-live subscriber buffer is byte-capped at 1 MiB beside the
+  count cap (S-O18); the accept master pauses on accept error and resumes on a
+  timer (S-O17); `sessionRoots` is LRU-bounded and keeps live routing rows
+  (S-O32); host recycle uses a timer-driven async kill ladder (S-O16); a
+  synchronous SIGTERM/SIGINT guard covers the foreground `serve` boot window
+  (S-V01).
+- **Observability.** Internal `-32099` error lines carry correlation ids
+  (S-O28); `RemoteSessionHost` warns once per stream on malformed frames
+  instead of dropping them silently (S-H04); `WorkspaceHostClient` exit
+  listeners log their failures (S-V06); `OtlpEncoder` caps open spans with
+  oldest-first eviction (S-V05); OTLP export failure gives a rate-limited
+  operator diagnostic (S-O27); `serverInfo.version` has no trailing newline
+  (S-O38).
+
+### Permissions, hooks and sandbox
+
+- **Fail-closed matching.** The `fnmatch` 4096 ceiling denies/asks on too-long
+  subjects and lets Allow fall through (S-T01); a 64 KB Bash length door asks
+  naming the size (S-T03); `isInertRedirection` fails closed on a missing op
+  key (S-T04); per-command scoped-write flag tables, and the declaration probe
+  no longer writes keystroke state (S-O43).
+- **Path confinement.** Option-attached paths (`--opt=/abs`, `-f/abs`) face the
+  project jail and `--files0-from` is refused (S-O11); `confine()` refuses a
+  dangling link leaf (S-O49).
+- **Safety classifier.** The package-registry sideload rows deny any
+  non-allowlisted registry override and stop flagging the safe spellings
+  (S-O30).
+- **Hooks.** A throwing `PreToolUse` hook becomes a named DENY and the turn
+  continues (S-O44); an uncompilable matcher is recorded and warned once per
+  pattern (S-O45); the `HOOKS.md` chain-ceiling sentence names which hook kinds
+  are bounded (S-O46).
+- **Settings tiers.** `SettingSource::Managed` ranks above Session and below
+  Env/Flag (S-O10); `SETTINGS.md` documents the launch key audit and full
+  precedence ladder (S-O48).
+
+### Config, files and persistence
+
+- **Atomic writes.** `fsync` the temp before rename on every config door, and
+  refuse-and-announce on zero-length config/pin files (S-O09); the config lock
+  is held across read-merge-write at four doors (S-O20); `mutateUserConfig`
+  sweeps aged orphan `.config.json.XXXXXX` temps (S-O34); in-app config writes
+  refresh the `PolicySnapshot` userConfig hash under the lock (S-H10);
+  mutate-guard restore and editor temp seed publish via `AtomicFileWriter`
+  (S-N03).
+- **Stranded files.** `PrivateRetainedDir::write` heals a stale partial and
+  refuses a fresh one (S-O08); a startup sweep reaps stranded
+  `sc_cc_sysprompt_*` and Codex schema spill files (S-P09).
+- **Read failures surfaced.** `McpTrustPins::readFailure()` (S-P01),
+  `ChannelsStore::readFailure()` (S-P11), the `VoiceConfig` read (S-N08) and an
+  unreadable user tier for `AwayTracker`, which now fails toward inert (S-U14).
+- **Secrets and caps.** `MemoryWriter` redacts secrets before persisting
+  (S-X01); `ExpiringSecrets::import` enforces its cap on bulk restore (S-O33);
+  connect-failure text strips userinfo, query and fragment from the URI (S-P08);
+  OAuth metadata fetch no longer follows redirects (S-N01).
+- **Docs of record.** SQLite ALTER-sweep schema model and WAL backup guidance
+  (S-O57); `session_transcripts` is the transcript owner (S-V11).
+
+### TUI and CLI
+
+- **Palette and pickers.** The palette box is windowed to the viewport so the
+  selected row is always painted (S-U01); query is capped at 192 code points with
+  a visible ellipsis (S-U06); pickers sanitise through `PaneLabel::safe` at the
+  last seam (S-U08, S-U03); orphan continuation bytes are stripped on a
+  single-line tail cut (S-U11).
+- **Layout and status.** Restored dock layout is renormalised at boot (S-O07);
+  `fitStatusBar` budgets per segment and keeps `pane:menu` clickable when
+  crowded (S-O24); status line text and width are computed at write time
+  (S-O37); `/context` labels its Free meters apart (S-O25).
+- **Keys and launch.** Ctrl+C interrupts and a second Ctrl+C quits, with a dirty
+  draft journaled to prompt history (S-U07); Day One teaches `/sessions`
+  (Ctrl+R) rather than a nonexistent `/resume` (S-O12); `-p` consumes
+  `--prompt=<text>` and `-p --version` is refused (S-O39); a stderr notice when
+  `HOME` resolves via passwd (S-H03).
+- **Doctor.** `CapabilityDiscoverer::diagnose` is wired into the doctor tool
+  (S-N06).
+- **Localisation.** `/play`, `/sendto`, `/insights` headers, `background.task.*`,
+  provider launch refusals, OAuth login echo, skill load refusals and agent
+  notices now go through `Lang::t` in all locales (S-N05, S-N04, S-T02, S-P02,
+  S-P10, S-A01).
+
+### Agents, workflows and providers
+
+- `Mailbox` validates teammate and message ids (S-A07); a rejected workflow name
+  is sanitised before echo (S-A09); a zero-stage plan is a lint error (S-A10);
+  `finishAt()` whitelists its column before SQL interpolation (S-A08);
+  transcript and error lines clip by display cells (S-A04); one bounded-poll
+  cadence, `ProcessReaper::POLL_INTERVAL_US` (S-A13).
+- **Naming.** `Theme::default()` became `Theme::dark()` (S-L08); `::create()`
+  became `::new()` on the providers and channel stores (S-P05, `ChannelsStore`
+  keeps a deprecated alias until its callers are gone, then drops it); factory
+  renames pinned by `FactoryNamingDriftTest` (S-A02); 23 `get*` forwarders on
+  Agents/Workflows swept to bare names (S-A06).
+
+### Performance
+
+- Diff-free system-prompt render is memoised on a cwd + HEAD/status +
+  index-mtime fingerprint (S-O06); one stat pass per RepoMap capture (S-O22);
+  `TagCache` statements prepared once per connection and each frame encoded once
+  across subscribers (S-O36); `rankedEntries` tail walks folded (S-O35); web-push
+  host vetting uses non-blocking `react/dns` (S-O15).
+
+### Rulings recorded (no code shipped)
+
+Renderer tokenizer fast-path kept (S-L07); `sugar-shlex` boundary (S-T12);
+`Palette` stays app-local (S-U10); `RepoMap` extraction revisit trigger
+(S-X10); HTTP accept-loop extraction revisit trigger (S-V10); dated rulings on
+per-frame mutable state (S-U12).
+
+### Sibling-library riders
+
+Extracted for candy-code and landed in the same wave: `sugar-core`
+`AtomicJsonFile::mutate`, `AtomicTextFile`, `LockFile`, `SecretStore`,
+`Width::clipBytes`/`clipCells`, `TokenEstimate`; `sugar-style` `ZoneRow` and
+block ops; `sugar-async` `Backoff`/`Retry` and `ChildPump::drain`;
+`sugar-pty` `StreamPump`; `sugar-mcp-client` `JsonLines` and `PendingCalls`;
+`sugar-ansi-parser` `KeySequence::encode`; `sugar-image` `PngMetadata`;
+`sugar-forms` `Spinner::frames()`.
+
 ## Changed — documentation archaeology migration, 2026-11-05
 
 **The live docs now state contracts; their repair histories moved here**
