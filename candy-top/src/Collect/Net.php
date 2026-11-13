@@ -31,6 +31,9 @@ namespace SugarCraft\Top\Collect;
  */
 final class Net
 {
+    /** Link state changes rarely (candy-top-033): probe each iface at most this often. */
+    private const CARRIER_TTL = 5.0;
+
     /**
      * @param \Closure(): float                    $clock monotonic seconds
      * @param array<string, array<string, int|float>> $state per-interface counter memory
@@ -114,7 +117,14 @@ final class Net
         $interfaces = [];
 
         foreach (explode("\n", $raw) as $line) {
-            $colon = strpos($line, ':');
+            // Last colon, not first (candy-top-045): the kernel allows ':'
+            // in interface names and legacy aliases really are named
+            // "eth0:1", so a first-colon split turned the alias row into a
+            // second "eth0" entry that overwrote the parent's banked
+            // rollover state every sample (~2^64 spikes, corrupted
+            // baseline). Counter columns never contain a colon, so the
+            // rightmost one is always the name/counters separator.
+            $colon = strrpos($line, ':');
             if ($colon === false) {
                 continue; // the two header rows
             }
@@ -127,7 +137,8 @@ final class Net
             $s = $this->state[$name] ?? null;
             $fresh = $s === null;
             $s ??= ['rxLast' => 0, 'rxRollover' => 0, 'rxOffset' => 0, 'rxTop' => 0.0,
-                'txLast' => 0, 'txRollover' => 0, 'txOffset' => 0, 'txTop' => 0.0];
+                'txLast' => 0, 'txRollover' => 0, 'txOffset' => 0, 'txTop' => 0.0,
+                'carrier' => -1, 'carrierAt' => 0.0];
 
             $out = [];
             foreach (['rx' => 0, 'tx' => 8] as $dir => $col) {
@@ -147,11 +158,12 @@ final class Net
                 $s[$dir . 'Last'] = $value;
                 $out[$dir] = [$rate, $value + $s[$dir . 'Rollover'] - $s[$dir . 'Offset']];
             }
+            $connected = $this->connectedMemo($name, $s, $now);
             $state[$name] = $s;
 
             $interfaces[$name] = new NetInterface(
                 $name,
-                $this->connected($name),
+                $connected,
                 $out['rx'][0],
                 $out['tx'][0],
                 $out['rx'][1],
@@ -235,13 +247,43 @@ final class Net
         return $out;
     }
 
-    private function connected(string $name): bool
+    /**
+     * Carrier state with a per-iface TTL memo living in the state array
+     * (candy-top-033): on a 100-500 iface K8s node the un-memoized version
+     * opened one or two sysfs files per iface per tick for link-layer
+     * state that changes on the order of seconds.
+     *
+     * @param array<string, int|float> $s per-iface state, carrier cached in
+     */
+    private function connectedMemo(string $name, array &$s, float $now): bool
     {
-        $carrier = Read::line($this->paths->sys("class/net/{$name}/carrier"));
+        if ((int) $s['carrier'] >= 0 && $now - (float) $s['carrierAt'] < self::CARRIER_TTL) {
+            return (int) $s['carrier'] === 1;
+        }
+
+        $connected = $this->probeConnected($name);
+        $s['carrier'] = $connected ? 1 : 0;
+        $s['carrierAt'] = $now;
+
+        return $connected;
+    }
+
+    /**
+     * btop's IFF_RUNNING equivalent from sysfs. A legacy alias ("eth0:1")
+     * has no sysfs directory of its own — it inherits the parent's link.
+     */
+    private function probeConnected(string $name): bool
+    {
+        $dir = $this->paths->sys('class/net/' . $name);
+        if (str_contains($name, ':') && !is_dir($dir)) {
+            $dir = $this->paths->sys('class/net/' . explode(':', $name, 2)[0]);
+        }
+
+        $carrier = Read::line($dir . '/carrier');
         if ($carrier !== null) {
             return $carrier === '1';
         }
 
-        return in_array(Read::line($this->paths->sys("class/net/{$name}/operstate")), ['up', 'unknown'], true);
+        return in_array(Read::line($dir . '/operstate'), ['up', 'unknown'], true);
     }
 }

@@ -85,6 +85,41 @@ final class NetTest extends TestCase
         $this->assertSame('lo', $snap->selectedName);
     }
 
+    public function testColonNamedAliasIsItsOwnRowAndInheritsParentLink(): void
+    {
+        // candy-top-045: the first-colon split turned "eth0:1" into a
+        // second "eth0" that clobbered the parent's rollover bank.
+        $this->tree->write('proc/net/dev', "Inter-| Receive | Transmit\n face |bytes ...\n"
+            . "    lo: 1000 10 0 0 0 0 0 0 1000 10 0 0 0 0 0 0\n"
+            . "  eth0: 5000000 1 0 0 0 0 0 0 1000000 1 0 0 0 0 0 0\n"
+            . "eth0:1: 200 2 0 0 0 0 0 0 100 2 0 0 0 0 0 0\n");
+
+        [$snap] = $this->net()->sample();
+
+        $this->assertArrayHasKey('eth0:1', $snap->interfaces);
+        $this->assertSame(200, $snap->interfaces['eth0:1']->rxTotal);
+        $this->assertSame(5000000, $snap->interfaces['eth0']->rxTotal, 'parent counters unmolested');
+        $this->assertTrue($snap->interfaces['eth0:1']->connected, 'alias has no sysfs dir: the parent link is inherited');
+    }
+
+    public function testCarrierIsMemoizedAcrossTheTtlWindow(): void
+    {
+        // candy-top-033: link state was opened per iface per tick; the memo
+        // must hold across ticks inside the window and re-probe after it.
+        [, $net] = $this->net()->sample();
+
+        $this->tree->write('sys/class/net/eth0/carrier', "0\n");
+        $this->now += 1.0;
+        $this->writeDev(5000001, 1000001);
+        [$snap, $net] = $net->sample();
+        $this->assertTrue($snap->interfaces['eth0']->connected, 'cached inside the TTL');
+
+        $this->now += 6.0;
+        $this->writeDev(5000002, 1000002);
+        [$snap] = $net->sample();
+        $this->assertFalse($snap->interfaces['eth0']->connected, 're-probed after the TTL');
+    }
+
     public function testRatesUseInjectedClockAndTrackTop(): void
     {
         [, $net] = $this->net()->sample();
