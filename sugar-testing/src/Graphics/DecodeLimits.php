@@ -42,6 +42,16 @@ final class DecodeLimits
     /**
      * Maximum pixels (width × height) a materializable image may declare.
      * 4096×4096 bounds GD allocation well below any runner's memory limit.
+     *
+     * Scope, ruled not missed: this cap is sized for the GD raster alone
+     * (truecolour is ~4 bytes per pixel, so the ceiling pins allocation at
+     * tens of MiB). It does not bound a consumer that mirrors the raster
+     * into PHP arrays — nested row structures cost an order of magnitude
+     * more per pixel, and a 16.7M-pixel image decoded all the way to rows
+     * would sit at ~1GB+. A companion MAX_MATERIALIZED_PIXELS (≈4M) is the
+     * named follow-up for that rows path; harness callers today hand the
+     * PNG to GD and stop at the raster, so the larger budget is not yet
+     * needed in force here.
      */
     public const MAX_IMAGE_PIXELS = 16_777_216;
 
