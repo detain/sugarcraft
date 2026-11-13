@@ -142,10 +142,46 @@ final readonly class Viewport
     public function view(): string
     {
         if ($this->stickyHeader === 0 && $this->stickyFooter === 0) {
-            return $this->inner->view();
+            // Width-invariant defence (finding 003): the forms delegate
+            // skips the right clamp whenever the bar is armed and appends
+            // one column rune whatever the body measures, so a 40-cell
+            // line in a 20-wide box emitted 41-cell rows and a 2-cell CJK
+            // thumb a 21-cell row — terminal desync, the exact failure mode
+            // the sticky docblock names. Paint the bar frame through this
+            // wrapper's own clamp-and-pad machinery (the same path the
+            // sticky frame uses, so ONE scrollbar geometry rules both).
+            return $this->inner->showScrollbar
+                ? $this->renderWithScrollbarPlain()
+                : $this->inner->view();
         }
 
         return $this->renderWithSticky();
+    }
+
+    /**
+     * Plain (non-sticky) window with the scrollbar column, width-invariant.
+     *
+     * Mirrors the delegate's window slice and horizontal law, then hands the
+     * rows to paintScrollbar(), which clamps each body to the reserved
+     * budget, appends the column rune, and normalizes every row to exactly
+     * width() cells.
+     */
+    private function renderWithScrollbarPlain(): string
+    {
+        $lines = $this->inner->lines;
+        $total = count($lines);
+        if ($total === 0) {
+            return '';
+        }
+        $window = array_slice($lines, max(0, $this->inner->yOffset), $this->inner->height);
+        if ($this->inner->xOffset > 0) {
+            $xOffset = $this->inner->xOffset;
+            $window = array_map(
+                static fn (string $line): string => Width::dropAnsi($line, $xOffset),
+                $window,
+            );
+        }
+        return $this->paintScrollbar($window, $total);
     }
 
     /**

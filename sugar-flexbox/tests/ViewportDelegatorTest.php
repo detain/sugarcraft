@@ -194,4 +194,80 @@ final class ViewportDelegatorTest extends TestCase
         $this->assertSame($a, $b);
         $this->assertStringContainsString('█', $a, 'the armed plain toggle paints the rune bar');
     }
+
+    // ---- FBX-03: width-invariant clamp on the base path ---------------
+
+    public function testOverlongContentNeverEscapesTheBoxWhenBarIsOn(): void
+    {
+        // QA repro: 92-cell lines in a 40-wide box with the bar armed used
+        // to emit 41+ cell rows because the delegate's clamp is skipped
+        // whenever showScrollbar is true.
+        $content = implode("\n", array_map(
+            static fn (int $n): string => str_repeat('x', 92) . $n,
+            range(1, 10),
+        ));
+        $vp = Viewport::withContent($content, 40, 4)->showScrollbar(true);
+        foreach (explode("\n", $vp->view()) as $i => $line) {
+            $this->assertSame(40, \SugarCraft\Core\Util\Width::string($line), "repro row $i");
+        }
+    }
+
+    public function testWideThumbRuneCannotPushPlainRowsPastWidth(): void
+    {
+        $content = implode("\n", array_map(
+            static fn (int $n): string => 'line ' . $n,
+            range(1, 30),
+        ));
+        $vp = Viewport::withContent($content, 20, 6)
+            ->withScrollbarRunes("\u{6771}", '│')
+            ->showScrollbar(true);
+        foreach (explode("\n", $vp->view()) as $i => $line) {
+            $this->assertSame(20, \SugarCraft\Core\Util\Width::string($line), "wide-rune row $i");
+        }
+        $this->assertStringContainsString("\u{6771}", $vp->view(), 'the wide thumb still paints');
+    }
+
+    public function testWellFormedBarFrameStaysByteIdenticalToTheDelegateLaw(): void
+    {
+        // Short rows + 1-cell runes: the wrapper defence must not move a
+        // single byte of the healthy frame — body padded to width-1, bar
+        // column last, thumb on the first row of a freshly opened doc.
+        $content = implode("\n", array_map(
+            static fn (int $n): string => 'line ' . $n,
+            range(1, 30),
+        ));
+        $view = Viewport::withContent($content, 20, 6)->showScrollbar(true)->view();
+        $expected = "line 1             █\n"
+            . "line 2             │\n"
+            . "line 3             │\n"
+            . "line 4             │\n"
+            . "line 5             │\n"
+            . "line 6             │";
+        $this->assertSame($expected, $view);
+    }
+
+    public function testHorizontalOffsetAndBarTogetherStayInsideTheBox(): void
+    {
+        $content = implode("\n", array_map(
+            static fn (int $n): string => str_repeat('y', 40),
+            range(1, 12),
+        ));
+        $vp = Viewport::withContent($content, 20, 4)->showScrollbar(true)->setXOffset(15);
+        foreach (explode("\n", $vp->view()) as $i => $line) {
+            $this->assertSame(20, \SugarCraft\Core\Util\Width::string($line), "offset+bar row $i");
+        }
+    }
+
+    public function testBarOffKeepsThePlainDelegatePathUntouched(): void
+    {
+        $content = implode("\n", array_map(
+            static fn (int $n): string => 'line ' . $n,
+            range(1, 30),
+        ));
+        $this->assertSame(
+            Viewport::withContent($content, 20, 6)->view(),
+            Viewport::withContent($content, 20, 6)->showScrollbar(false)->view(),
+            'bar off is literally the old path',
+        );
+    }
 }
