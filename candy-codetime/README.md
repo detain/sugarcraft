@@ -108,8 +108,10 @@ Legacy `SUGARTICK_*` environment variables are still imported on every launch
 (each with a deprecation notice on stderr), and the old default data directory
 is migrated once on first launch — the migration is not performed when
 `CANDY_CODETIME_DIR` is set.
-CLI messages follow `LC_ALL`/`LC_MESSAGES`/`LANG` across the 16 shipped
-locales.
+CLI messages and dashboard chrome follow `LC_ALL`/`LC_MESSAGES`/`LANG`
+across the 16 shipped locales. Date and weekday names (`Jun 7`, `Sat`) render
+in English in every locale: the locale catalogue carries the PHP format
+characters, not month tables.
 
 ## Ignoring files
 
@@ -177,39 +179,50 @@ archive them with `backup` (which copies and never trims).
 ### Fixing a bad entry
 
 There is no edit command, and that is deliberate — the store is plain files.
-With the file backend, close the dashboard (or press `r` afterwards), fix or
-drop the offending JSON line in the day file, and reload. With the sqlite
-backend, open the database with `sqlite3` and fix the row in `heartbeats`.
+With the file backend, fix or drop the offending JSON line in the day file,
+then press `r` in the dashboard to reload it (or `q` and reopen). With the
+sqlite backend, open the database with `sqlite3` and fix the row in
+`heartbeats`.
 
 ### Privacy
 
-The data directory and every file in it are owner-private: directories are
-`0700`, day files, the database, and its `-wal`/`-shm` sidecars are `0600`.
-Directories are created under a
-narrowed umask, so they never exist world-readable; regular files are
-created-then-tightened — mode `0600` is settled before any payload is written,
-and until then the file is empty and shielded by the `0700` directory. The WAL
-sidecars are the exception to that timing: SQLite creates them mid-transaction,
-so on a fresh database the first beats can land on a `-wal` microseconds before
-the constructor's sweep tightens it — there, the `0700` directory is the
-protection window. The sweep tightens every sidecar visible at open and
-re-asserts on every subsequent open. The contract is a launch invariant, not
-a write-path favor: a directory or file left loose — by an older version, a
-plugin direct-appending with `>>` (which runs none of this code), or the
-pre-rename migration moving a legacy tree — is tightened on the next CLI run,
-any command, reads included; if that fails, the run aborts rather than
-printing over data that is still out in the open. Until that next run, a
-raw-echoed file sits at the shell's umask, so plugin and cron writers should
-run under `umask 077`. Every `print`/`echo` of a stored project or file name goes through a
-control-byte strip (every C0 byte except TAB, CR and LF included), so a doctored
-store cannot paint escape sequences into your terminal and every name paints as
-a single line.
-The `backup` archive
-under `<dir>-backups/` is held to the same contract: it is created `0700` and
-every copied day file is tightened to `0600`, because an archive of those files
-is the same path map one directory over. Heartbeats carry file paths exactly as
-supplied (editor plugins typically send absolute ones) and project names; treat
-the directory accordingly.
+The data directory and every file in it are owner-private, per surface:
+
+- **Directories** are `0700`, created under a narrowed umask, so they never
+  exist world-readable.
+- **Day files, the database, and its `-wal`/`-shm` sidecars** are `0600`.
+  Regular files are created-then-tightened — mode `0600` is settled before
+  any payload is written, and until then the file is empty and shielded by
+  the `0700` directory. The WAL sidecars are the exception to that timing:
+  SQLite creates them mid-transaction, so on a fresh database the first
+  beats can land on a `-wal` microseconds before the constructor's sweep
+  tightens it — there, the `0700` directory is the protection window. The
+  sweep tightens every sidecar visible at open and re-asserts on every
+  subsequent open.
+- **Legacy and plugin-made files** cannot stay loose: the contract is a
+  launch invariant, not a write-path favor. A directory or file left
+  world-readable — by an older version, a plugin direct-appending with `>>`
+  (which runs none of this code), or the pre-rename migration moving a
+  legacy tree — is swept tight on the next CLI run, any command, reads
+  included; if that fails, the run aborts rather than printing over data
+  that is still out in the open. Until that next run, a raw-echoed file
+  sits at the shell's umask, so plugin and cron writers should run under
+  `umask 077`.
+- **Stored names are swept before they paint**, per surface. The dashboard
+  runs every name through a one-line sweep: escape sequences, C0 and C1
+  control classes, and DEL are dropped, TAB/CR/LF go with them (a name is
+  one row of the frame), and zero-width/bidi "Trojan Source" characters are
+  made visible as `<U+XXXX>` markers instead of painted. CLI echoes use the
+  byte-oriented sweep of the same family — escapes and control classes
+  dropped, line breaks preserved so multi-line output stays readable. A
+  doctored store cannot inject escape sequences into either surface.
+- **The `backup` archive** under `<dir>-backups/` is held to the same
+  contract: it is created `0700` and every copied day file is tightened to
+  `0600`, because an archive of those files is the same path map one
+  directory over.
+
+Heartbeats carry file paths exactly as supplied (editor plugins typically
+send absolute ones) and project names; treat the directory accordingly.
 
 Colour is driven by the detected `ColorProfile` for the terminal: a profile
 below 256-colour (which `NO_COLOR=1`, `CLICOLOR=0` and `TERM=dumb` all land
