@@ -286,7 +286,8 @@ bits 64/128 — which ride only the explicit `:event-type` sub-param form: in
 the legacy form wire bit 32 doubles as the release flag (spec `meta` and the
 legacy release flag collide at `0x20`), so it is masked off there and never
 arrives as `META`. `fromXtermParam()` converts the legacy `1 + bitmask`
-field, `fromSgrMouse()` extracts mouse-report bits. `all()`
+field, `fromSgrMouse()` extracts mouse-report bits. `shiftAltCtrl()`
+(formerly `all()`, alias kept one release)
 covers Shift+Alt+Ctrl only — the bits the legacy CSI forms can express — and
 the named factories (`none()`, `alt()`, `ctrl()`, `shift()`, `altShift()`,
 `ctrlShift()`, `altCtrl()`) exist for producers and tests, not as a public

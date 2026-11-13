@@ -28,69 +28,109 @@ final class KeyModifier
     public const CAPS_LOCK = 1 << 6;
     public const NUM_LOCK = 1 << 7;
 
-    /** Singleton instances for common modifier combinations used in type hints. */
-    private static ?KeyModifier $none = null;
-    private static ?KeyModifier $alt = null;
-    private static ?KeyModifier $ctrl = null;
-    private static ?KeyModifier $shift = null;
-    private static ?KeyModifier $altShift = null;
-    private static ?KeyModifier $ctrlShift = null;
-    private static ?KeyModifier $altCtrl = null;
-    private static ?KeyModifier $all = null;
+    /** Union of every defined storage bit — the range guard for fromMask(). */
+    private const DEFINED_BITS = self::SHIFT | self::ALT | self::CTRL | self::META
+        | self::SUPER | self::HYPER | self::CAPS_LOCK | self::NUM_LOCK;
 
-    private int $mask;
+    /**
+     * Pre-defined instances for the common combinations; the comparison API
+     * is equals(). Every factory routes through cached(), so equal masks are
+     * identical objects — fromKittyInt(0) === fromSgrMouse(0) ===
+     * fromXtermParam(1) === none() holds by the memoization law, and that
+     * law must not be broken by future factories.
+     */
+    private static array $cache = [];
 
-    private function __construct(int $mask)
+    private function __construct(private readonly int $mask)
     {
-        $this->mask = $mask;
+    }
+
+    /** Return the canonical instance for a storage mask (memoization law). */
+    private static function cached(int $mask): self
+    {
+        return self::$cache[$mask] ??= new self($mask);
     }
 
     /** No modifiers held. */
     public static function none(): self
     {
-        return self::$none ??= new self(self::NONE);
+        return self::cached(self::NONE);
     }
 
     /** Alt modifier. */
     public static function alt(): self
     {
-        return self::$alt ??= new self(self::ALT);
+        return self::cached(self::ALT);
     }
 
     /** Ctrl modifier. */
     public static function ctrl(): self
     {
-        return self::$ctrl ??= new self(self::CTRL);
+        return self::cached(self::CTRL);
     }
 
     /** Shift modifier. */
     public static function shift(): self
     {
-        return self::$shift ??= new self(self::SHIFT);
+        return self::cached(self::SHIFT);
     }
 
     /** Alt+Shift modifiers. */
     public static function altShift(): self
     {
-        return self::$altShift ??= new self(self::ALT | self::SHIFT);
+        return self::cached(self::ALT | self::SHIFT);
     }
 
     /** Ctrl+Shift modifiers. */
     public static function ctrlShift(): self
     {
-        return self::$ctrlShift ??= new self(self::CTRL | self::SHIFT);
+        return self::cached(self::CTRL | self::SHIFT);
     }
 
     /** Alt+Ctrl modifiers. */
     public static function altCtrl(): self
     {
-        return self::$altCtrl ??= new self(self::ALT | self::CTRL);
+        return self::cached(self::ALT | self::CTRL);
     }
 
-    /** All modifiers (Shift+Alt+Ctrl). */
+    /**
+     * Shift+Alt+Ctrl — the bits the legacy CSI wire forms can express.
+     *
+     * Extended storage bits (META/SUPER/HYPER/locks) can never arrive on the
+     * legacy `& 0x1f`-masked forms, so no "everything set" variant exists;
+     * the former name `all()` overstated the coverage.
+     */
+    public static function shiftAltCtrl(): self
+    {
+        return self::cached(self::SHIFT | self::ALT | self::CTRL);
+    }
+
+    /**
+     * @deprecated Renamed to {@see shiftAltCtrl()} — the old name promised
+     * every modifier while only the legacy 0x1f trio was ever covered.
+     * Alias retained for one release.
+     */
     public static function all(): self
     {
-        return self::$all ??= new self(self::SHIFT | self::ALT | self::CTRL);
+        return self::shiftAltCtrl();
+    }
+
+    /**
+     * Rebuild an instance from a stored mask value (the IPC/bridge seam for
+     * hosts that persisted `value()`). Refuses anything outside the defined
+     * bit union — a phantom bit fails fast at the boundary instead of
+     * travelling silently through the event stream.
+     */
+    public static function fromMask(int $mask): self
+    {
+        if ($mask < 0 || ($mask & ~self::DEFINED_BITS) !== 0) {
+            throw new \InvalidArgumentException(
+                "modifier mask $mask carries bits outside the defined KeyModifier union (0x00-0x"
+                . dechex(self::DEFINED_BITS) . ')'
+            );
+        }
+
+        return self::cached($mask);
     }
 
     /**
@@ -116,7 +156,7 @@ final class KeyModifier
         if ($raw & 64)  { $mask |= self::CAPS_LOCK; }
         if ($raw & 128) { $mask |= self::NUM_LOCK; }
 
-        return new self($mask);
+        return self::cached($mask);
     }
 
     /**
@@ -130,26 +170,33 @@ final class KeyModifier
         if ($raw & 2) { $mask |= self::ALT; }
         if ($raw & 4) { $mask |= self::CTRL; }
 
-        return new self($mask);
+        return self::cached($mask);
     }
 
     /**
      * Build a modifier mask from an xterm modified-key parameter.
      *
      * Xterm encodes modifiers as 1 + bitmask where bit 0=Shift,
-     * bit 1=Alt, bit 2=Ctrl, bit 3=Meta.
+     * bit 1=Alt, bit 2=Ctrl, bit 3=Meta. A field of 1 (or less) carries no
+     * modifier at all: the public factory refuses to de-base into -1 and
+     * fabricate every bit (the decoder's own callers keep their mods<1
+     * pre-filters; this guard closes the public-entry bypass).
      *
      * Mirrors the xterm modifier key sequence format.
      */
     public static function fromXtermParam(int $xtermParam): self
     {
+        if ($xtermParam <= 0) {
+            return self::none();
+        }
+
         $mask = 0;
         if (($xtermParam - 1) & 1) { $mask |= self::SHIFT; }
         if (($xtermParam - 1) & 2) { $mask |= self::ALT; }
         if (($xtermParam - 1) & 4) { $mask |= self::CTRL; }
         if (($xtermParam - 1) & 8) { $mask |= self::META; }
 
-        return new self($mask);
+        return self::cached($mask);
     }
 
     /**

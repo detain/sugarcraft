@@ -220,4 +220,92 @@ final class KeyModifierTest extends TestCase
         $this->assertFalse($modifier->includes(KeyModifier::META));
         $this->assertFalse($modifier->includes(KeyModifier::SUPER));
     }
+
+    // --- memoization identity law (SI-18) ---
+
+    public function testAllFactoriesAgreeOnIdentityForModifierNone(): void
+    {
+        // Every route to mask 0 yields the ONE none() instance: the cache,
+        // not per-property singletons, is what makes this hold.
+        $this->assertSame(KeyModifier::none(), KeyModifier::fromKittyInt(0));
+        $this->assertSame(KeyModifier::none(), KeyModifier::fromSgrMouse(0));
+        $this->assertSame(KeyModifier::none(), KeyModifier::fromXtermParam(1));
+        $this->assertSame(KeyModifier::none(), KeyModifier::fromMask(0));
+    }
+
+    public function testFactoriesMemoizeByFinalMask(): void
+    {
+        // Different wires, same storage mask -> identical instance.
+        $this->assertSame(KeyModifier::fromKittyInt(1), KeyModifier::shift());
+        $this->assertSame(KeyModifier::fromSgrMouse(3), KeyModifier::fromKittyInt(3));
+        // Repeat calls hand back the same object, never a copy.
+        $this->assertSame(KeyModifier::fromXtermParam(3), KeyModifier::fromXtermParam(3));
+    }
+
+    // --- fromXtermParam() zero/negative guard (SI-18) ---
+
+    public function testFromXtermParamRefusesToFabricateBitsFromNonPositiveField(): void
+    {
+        // Without the guard, (0 - 1) = -1 passes every bit test and the
+        // factory hands back SHIFT|ALT|CTRL|META from a "no modifiers" wire
+        // field. The guard answers none() instead.
+        $this->assertSame(KeyModifier::none(), KeyModifier::fromXtermParam(0));
+        $this->assertTrue(KeyModifier::fromXtermParam(-1)->equals(KeyModifier::none()));
+        $this->assertSame(0, KeyModifier::fromXtermParam(0)->value());
+    }
+
+    // --- shiftAltCtrl() rename + deprecated alias (SI-18) ---
+
+    public function testShiftAltCtrlCarriesExactlyTheLegacyTrio(): void
+    {
+        $modifier = KeyModifier::shiftAltCtrl();
+
+        $this->assertSame(
+            KeyModifier::SHIFT | KeyModifier::ALT | KeyModifier::CTRL,
+            $modifier->value()
+        );
+        // The extended bits can never arrive here: this is the legacy 0x1f
+        // wire set, not "all modifiers".
+        $this->assertFalse($modifier->includes(KeyModifier::META));
+        $this->assertFalse($modifier->includes(KeyModifier::SUPER));
+        $this->assertFalse($modifier->includes(KeyModifier::HYPER));
+    }
+
+    public function testAllAliasResolvesToTheSameInstanceAsShiftAltCtrl(): void
+    {
+        $this->assertSame(KeyModifier::shiftAltCtrl(), KeyModifier::all());
+    }
+
+    // --- fromMask() public IPC/bridge seam (SI-18) ---
+
+    public function testFromMaskRoundTripsAStoredValue(): void
+    {
+        $stored = KeyModifier::altCtrl()->value();
+
+        $this->assertSame(KeyModifier::altCtrl(), KeyModifier::fromMask($stored));
+    }
+
+    public function testFromMaskRejectsUndefinedBitsAndNegatives(): void
+    {
+        // 1 << 8 is outside the defined union; fail fast at the boundary.
+        $this->expectException(\InvalidArgumentException::class);
+        KeyModifier::fromMask(1 << 8);
+    }
+
+    public function testFromMaskRejectsNegativeMask(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        KeyModifier::fromMask(-1);
+    }
+
+    // --- equals() is the comparison API (doc test) ---
+
+    public function testEqualsComparesAcrossFactories(): void
+    {
+        // Hosts compare with equals(): any two instances of the same mask are
+        // equal whether the cache handed back one object or a future shape
+        // handed back two.
+        $this->assertTrue(KeyModifier::fromKittyInt(1)->equals(KeyModifier::shift()));
+        $this->assertFalse(KeyModifier::shift()->equals(KeyModifier::alt()));
+    }
 }
