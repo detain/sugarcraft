@@ -14,3 +14,7 @@ Source: docs-fix-1104 candy-codetime step 15
 ### 2026-11-06 — .sugartrackignore keeps its pre-rename dotname deliberately
 Pattern: the ignore-file name predates the sugar-tick → candy-codetime rename. Renaming it is breaking (user plants already exist) and owner-gated; the code and every doc surface (README Ignore section, SugarTrackIgnore docblock, cli wording) are self-consistent on the old name, so leave it as-is (docs-fix N-18 — recorded, no action).
 Source: docs-fix-1104 candy-codetime step 15
+
+### 2026-11-13 — CLI catalogue house style (CT-S49)
+Pattern: every `lang/*.php` message follows one register — one clause per message (a consequence may ride a semicolon/dash, shout-caps never carry the emphasis), ONE quote glyph (straight `"` around substituted values, inside single-quoted PHP literals so no `\"`/`\$` escape tax is levied on translators), one numeric-door phrasing ("must be a whole number", unit included: "of seconds"). Counters with an inline numeral take the `_one` twin pair (`cli.backup_done_one` / `cli.backup_done`), selector at the call site (`$count === 1 ? ...`), `{count}` kept so the placeholder-faithfulness guard stays meaningful. Success echoes state the confirmation first ("recorded {duration}s of {project} ({language})"), never a `+`-increment shape that reads as a delta on a total.
+Source: review-pipeline-1112 candy-codetime CT-S49 (findings 060+061)

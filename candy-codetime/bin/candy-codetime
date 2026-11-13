@@ -440,7 +440,7 @@ if ($cmd === 'backup') {
         exit(1);
     }
     if ($count > 0) {
-        fwrite(STDOUT, Lang::t('cli.backup_done', ['count' => $count]) . "\n");
+        fwrite(STDOUT, Lang::t($count === 1 ? 'cli.backup_done_one' : 'cli.backup_done', ['count' => $count]) . "\n");
     } else {
         fwrite(STDOUT, Lang::t('cli.backup_none') . "\n");
     }

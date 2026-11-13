@@ -106,7 +106,7 @@ final class CliTest extends TestCase
         // Non-matching file: should be tracked normally.
         $tracked = $this->runCli(['push', 'proj', 'php', 'main.php']);
         $this->assertSame(0, $tracked['exit'], $tracked['stderr']);
-        $this->assertStringContainsString('entry pushed', $tracked['stdout']);
+        $this->assertStringContainsString('recorded', $tracked['stdout']);
 
         // Read the store back via export: only main.php should have landed.
         $export = $this->runCli(['export', 'json', '1']);
@@ -135,7 +135,7 @@ final class CliTest extends TestCase
         $this->assertStringContainsString('.sugartrackignore', $res['stderr'], 'the notice names the file');
         $this->assertStringContainsString($this->workDir, $res['stderr'], 'with its full path');
         $this->assertStringContainsString('victim', $res['stderr'], 'and the affected project');
-        $this->assertStringContainsString('WHOLESALE', $res['stderr'], 'the notice is loud, not a routine skip');
+        $this->assertStringContainsString('records nothing', $res['stderr'], 'the notice is loud, not a routine skip');
         $this->assertStringContainsString('(1 patterns)', $res['stderr'], 'and discloses the pattern count');
         $this->assertSame('', $res['stdout'], 'the wholesale skip leaves nothing in the success stream');
 
@@ -177,7 +177,7 @@ final class CliTest extends TestCase
         $this->assertStringContainsString('.sugartrackignore', $res['stderr'], 'and the offending file');
         $this->assertCount(1, array_filter(explode("\n", $res['stderr'])), 'a one-line diagnosis');
         $this->assertStringNotContainsString('Fatal error', $res['stderr']);
-        $this->assertStringNotContainsString('entry pushed', $res['stdout']);
+        $this->assertStringNotContainsString('recorded', $res['stdout']);
     }
 
     // --- SqliteBackend / --backend=sqlite wiring ----------------------------
@@ -190,7 +190,7 @@ final class CliTest extends TestCase
 
         $push = $this->runCli(['--backend=sqlite', 'push', 'proj', 'php', 'a.php', '120']);
         $this->assertSame(0, $push['exit'], $push['stderr']);
-        $this->assertStringContainsString('entry pushed', $push['stdout']);
+        $this->assertStringContainsString('recorded', $push['stdout']);
 
         // The SQLite db file is created inside the data dir.
         $this->assertFileExists($this->dataDir . '/candy-codetime.db');
@@ -274,7 +274,7 @@ final class CliTest extends TestCase
         $res = $this->runCli(['push', 'proj', 'php', 'a.php', 'abc']);
         $this->assertSame(1, $res['exit']);
         $this->assertStringContainsString('duration', $res['stderr']);
-        $this->assertStringNotContainsString('entry pushed', $res['stdout']);
+        $this->assertStringNotContainsString('recorded', $res['stdout']);
 
         // The numeric path still succeeds.
         $ok = $this->runCli(['push', 'proj', 'php', 'a.php', '120']);
@@ -306,7 +306,7 @@ final class CliTest extends TestCase
         );
         $this->assertSame(1, $res['exit']);
         $this->assertStringContainsString('cannot create data directory', $res['stderr']);
-        $this->assertStringNotContainsString('entry pushed', $res['stdout']);
+        $this->assertStringNotContainsString('recorded', $res['stdout']);
     }
 
     // --- MAJOR-3 routing pin -----------------------------------------------------
@@ -457,6 +457,56 @@ final class CliTest extends TestCase
         $this->assertSame(1, $res['exit']);
         $this->assertStringNotContainsString(chr(27), $res['stderr'], 'unknown-command echo must carry no ESC byte');
         $this->assertStringContainsString('wake', $res['stderr'], 'the swept name must stay legible');
+    }
+
+    /**
+     * CT-S49 (finding candy-codetime-061): the two-key plural. The old single
+     * `backup_done` key printed "archived 1 files" on the common first run;
+     * the selector now walks `cli.backup_done_one` at exactly one file.
+     */
+    public function testBackupArchivalCountIsGrammaticalForOneAndMany(): void
+    {
+        $row = json_encode(['time' => 1714536000, 'project' => 'p', 'language' => 'php', 'file' => '/x/a.php', 'duration' => 60, 'tags' => []]) . "\n";
+        $old = time() - 90 * 86400;
+
+        $single = $this->dataDir . '/plural-one';
+        mkdir($single, 0o700);
+        try {
+            file_put_contents($single . '/2024-05-01.jsonl', $row);
+            touch($single . '/2024-05-01.jsonl', $old);
+            $one = $this->runCli(['backup'], null, ['CANDY_CODETIME_DIR' => $single]);
+            $this->assertSame(0, $one['exit'], $one['stdout'] . $one['stderr']);
+            $this->assertStringContainsString('archived 1 file', $one['stdout']);
+            $this->assertStringNotContainsString('1 files', $one['stdout'], 'the one-file run must take the _one key');
+        } finally {
+            // The archive dir is a sibling of the data dir; the glob-based
+            // tearDown only empties files, so sweep both shapes here.
+            foreach ([$single, $single . '-backups'] as $d) {
+                foreach (glob($d . '/*') ?: [] as $f) {
+                    @unlink($f);
+                }
+                @rmdir($d);
+            }
+        }
+
+        $many = $this->dataDir . '/plural-many';
+        mkdir($many, 0o700);
+        try {
+            file_put_contents($many . '/2024-05-01.jsonl', $row);
+            file_put_contents($many . '/2024-05-02.jsonl', $row);
+            touch($many . '/2024-05-01.jsonl', $old);
+            touch($many . '/2024-05-02.jsonl', $old);
+            $res = $this->runCli(['backup'], null, ['CANDY_CODETIME_DIR' => $many]);
+            $this->assertSame(0, $res['exit'], $res['stdout'] . $res['stderr']);
+            $this->assertStringContainsString('archived 2 files', $res['stdout']);
+        } finally {
+            foreach ([$many, $many . '-backups'] as $d) {
+                foreach (glob($d . '/*') ?: [] as $f) {
+                    @unlink($f);
+                }
+                @rmdir($d);
+            }
+        }
     }
 
     public function testBackupFailureCannotPaintTheTerminal(): void
