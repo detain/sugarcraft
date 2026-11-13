@@ -45,4 +45,40 @@ final class BinPlayPathTest extends TestCase
             'the ack must precede the signal exit leg',
         );
     }
+
+    public function testASignalDeathExitsConventionallyNotCleanly(): void
+    {
+        // flappy-29 (finding -032): pin the m5 leg — a run stopped by a
+        // signal must leave the shell through 128+signo, the conventional
+        // shape, never a bare exit 0 that would hide the death.
+        $src = (string) file_get_contents(self::BIN);
+
+        self::assertStringContainsString('$program->stopSignal()', $src);
+        self::assertStringContainsString('exit(128 + $signal);', $src);
+    }
+
+    public function testTheLegacyMigrationRunsBeforeTheFirstGame(): void
+    {
+        // flappy-29: the rename migration (flappy-02's side leg) must
+        // precede construction, or the first launch on a renamed machine
+        // would write fresh scores where the old dir still stands.
+        $src = (string) file_get_contents(self::BIN);
+
+        self::assertStringContainsString('LegacyPaths::migrate(', $src);
+        self::assertLessThan(
+            (int) strpos($src, 'Game::start()'),
+            (int) strpos($src, 'LegacyPaths::migrate('),
+            'migration must run before the first Game exists',
+        );
+    }
+
+    public function testThePipedStdoutPreflightIsStreamBased(): void
+    {
+        // flappy-29: post-01 the TTY question is answered by stream_isatty
+        // on the actual STDOUT stream (posix_isatty can disagree with the
+        // C runtime on redirected streams); the refusal seam depends on it.
+        $src = (string) file_get_contents(self::BIN);
+
+        self::assertStringContainsString('stream_isatty(STDOUT)', $src);
+    }
 }
