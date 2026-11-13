@@ -125,7 +125,6 @@ final class NotebookPagesTest extends TestCase
 
         $page = (string) NotebookPages::render($this->notebook([$this->code('plot()', [$out], 1)], 4), 1, 1);
 
-        
         self::assertStringContainsString("  - image/png 3 KB", $page);
         self::assertStringNotContainsString($png, $page);
     }
