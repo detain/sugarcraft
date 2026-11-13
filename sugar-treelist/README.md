@@ -29,6 +29,30 @@ sugar-treelist — a tree-list view component for terminal UIs, for PHP 8.3+. Re
 - **Filter state machine** — `withFilterFn()` / `withoutFilter()` with `FilterState` enum tracking (unfiltered / filtering; `filterState()` returns `null` until one of them is called for the first time); a filter is a live view, mutations project through it. `withFuzzyFilter()` / `withoutFuzzyFilter()` are the fuzzy search door over the same machinery
 - **Delta rendering** — `view()` emits a full frame first, then repaints only the rows that changed; `resetPreviousFrame()` forces a repaint (see [Delta rendering](#delta-rendering))
 
+## What this lib does NOT port
+
+`charmbracelet/bubbles/list` (and its ancestor `treilik/bubblelister`) carry
+UI machinery this renderer deliberately leaves to the host:
+
+- **Title / Description / StatusMessage blocks** — the list is a renderer,
+  not a panel; the chrome around it belongs to the host's own `view()`.
+- **The pagination indicator** — scroll state is derivable (`cursorIndex()`
+  over `length()`); per-row decoration is the suffixer's job.
+- **`SetFilterText` and the filter input line** — filtering here is a live
+  view through `withFilterFn()` / `withFuzzyFilter()`; the host owns the text
+  box whose keystrokes feed those doors.
+- **`Reverse()`** — one sort door instead of two mutually-contradicting
+  states: pass your own `LessFunc`, or reverse the array before
+  `withItemsFromArray()`.
+- **`InsertItem` / `CopyItem`** — PHP lists round-trip arrays; rebuild the
+  sequence and hand it to the intake doors (`removeItem()` did port, as a
+  fluent clone-returning leg).
+
+The gaps are correct-by-thesis: `bubbles/list` is a full `tea.Model` with
+input handling baked in, while sugar-treelist is the rendering half — key
+binding stays outside by design (see
+[Cursor & navigation API](#cursor--navigation-api)).
+
 ## Install
 
 ```bash
@@ -132,6 +156,25 @@ itself stays flat: tree structure is yours to encode as leading whitespace in
 the item text, which survives the whitespace-faithful wrapper verbatim.
 `DefaultSuffixer::withCurrentMarker()` (default `<`; its `$currentMarker`
 field stays writable with the same shared-clone caveat) marks the cursor row.
+
+The composed row anatomy, stock knobs (numbers print 1-based ordinals;
+`╭`/`├`/`╰` follow each item's position in the rendered list; a wrapped item
+continues under a separatorWrap `│` with no number and no marker):
+
+```text
+╭ 1 > cursor row content            <   marker '>' and suffix '<' on cursor
+│     wrapped continuation              rows only; continuation rows lead │
+├ 2   a middle item                       
+╰ 3   last item, no suffix                
+
+ ╰─┬─╯ └┬┘ └──────────┬───────────┘ └┬┘
+   │   │              │              └ suffixer currentMarker '<'
+   │   │              └ content padded to the viewport width
+   │   └ marker: currentMarker '>' or a space on other rows
+   └ join glyph (╭ first / ├ middle / ╰ last) + space
+ number column (field width = widest printed ordinal) + space
+```
+
 
 Guide the cursor with text, not colour alone. Keep a marker glyph
 (`$currentMarker`, or your suffixer's) so position survives monochrome
@@ -492,6 +535,13 @@ onto the same terminal region, call `resetPreviousFrame()` on the fork you are
 about to render — otherwise it diffs against its sibling's last frame. Same
 rule after any out-of-band write to the list's screen area.
 
+**Dumb and raw hosts:** frame lines are terminated with bare `\n` and delta
+writes open with absolute CUP, assuming a cooked, cursor-addressable terminal
+(ONLCR on). If your stream is anything else — `TERM=dumb`, or a raw-mode pipe
+where `opost`/`onlcr` are off (this repo's own `tools/ansi-view` staircase
+incident is exactly that class) — render via `lines()` and terminate the rows
+yourself with `\r\n`.
+
 **Assistive hosts:** a delta frame is a fragment — changed rows plus absolute
 cursor jumps — so screen readers, braille displays and text-extraction tools
 see no stable reading order in it; only a host that interprets CUP/EL renders
@@ -499,11 +549,19 @@ it whole. To serve an assistive surface (or to capture frames for later
 reading), render with `lines()` — the row data with no delta bookkeeping — or
 call `resetPreviousFrame()` before every paint so each frame is a full rewrite.
 There is deliberately no configuration-level "always full frame" mode; those
-two routes are the supported ones.
+two routes are the supported ones. When reading via `lines()`, guard with
+`isEmpty()` or catch the `RuntimeException`: `lines()` is the throwing door,
+and an empty list must not crash the reader — catch it and paint your own
+empty state. Developer-facing refusals such as `itemAt()`'s out-of-bounds
+error stay raw English on purpose (a host catch-and-display would show
+English in every locale — prefer the `try*` doors on any localized surface).
 
 ## Cursor & navigation API
 
-Beyond the fluent setters shown above, the navigation surface is:
+Beyond the fluent setters shown above, the navigation surface is (the lib
+binds **no keys** — it is a renderer: the host maps Up/Down/PageUp/PageDown/
+Home/End, and `v`/`v`-style letter chords are `bubbles/list` baggage this
+port leaves outside):
 
 - `withCursor(int $index)` — clamped to `0..count-1` (an out-of-range value lands on the nearest end; the setter always returns a fresh clone).
 - `withCursorUp(int $n = 1)`/`withCursorDown(int $n = 1)` and the page helpers `withCursorPageUp(int $pages = 1)`/`withCursorPageDown(int $pages = 1)` — movement **saturates** at the list ends (`withCursorDown(PHP_INT_MAX)` lands on the last item, never wraps or overflows). A page spans `height` **items**, not displayed lines — a list of multi-line items pages visually faster. `withCursorToStart()`/`withCursorToEnd()` jump to the ends.

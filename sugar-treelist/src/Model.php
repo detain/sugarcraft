@@ -1166,7 +1166,11 @@ final class Model
     /**
      * Return the item value at the given index.
      *
-     * @throws \OutOfBoundsException if $index is out of range
+     * @throws \OutOfBoundsException if $index is out of range — the message
+     *         is raw English by design (developer-error surface, fleet-
+     *         consistent with assertDimension): the render path never calls
+     *         itemAt(), so localized screens reaching this throw mean the
+     *         HOST displayed English — use tryItemAt() on those surfaces.
      */
     public function itemAt(int $index): \Stringable
     {
