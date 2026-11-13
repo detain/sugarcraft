@@ -108,29 +108,15 @@ final class RequestIdSequence
     }
 
     /**
-     * The default liveness probe: a signal-0 that succeeds or fails with
-     * anything but ESRCH means alive; without posix, only Linux's /proc can
-     * say "absent", and every other uncertainty answers alive — the refuse-
-     * only-on-certainty polarity mirrors ExchangeLock's stale-lock sweep.
+     * The default liveness probe: the shared signal-0 contract, so this
+     * seat, the lock's stale-owner sweep, and the transport's forked
+     * observer can never drift apart (the refuse-only-on-certainty polarity
+     * lives in {@see ProcessLiveness}).
      */
     private static function liveOwnerProbe(): \Closure
     {
         return static function (int $pid): bool {
-            if (function_exists('posix_kill') && function_exists('posix_get_last_error')) {
-                if (@posix_kill($pid, 0)) {
-                    return true;
-                }
-
-                // ESRCH (3) alone means "no such process"; EPERM is a live
-                // process of another user, and any other errno is not an answer.
-                return posix_get_last_error() !== 3;
-            }
-
-            if (is_dir('/proc/self')) {
-                return file_exists("/proc/{$pid}");
-            }
-
-            return true;
+            return ProcessLiveness::ownerAlive($pid);
         };
     }
 

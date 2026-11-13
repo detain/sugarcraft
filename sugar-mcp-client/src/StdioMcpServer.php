@@ -860,7 +860,10 @@ final class StdioMcpServer implements McpServer
             return true;
         }
 
-        if (!posix_kill($this->serverPid, 0)) {
+        // The shared refuse-only-on-certainty polarity: EPERM and unreadable
+        // errnos answer alive here exactly as they do for the id-sequence
+        // claim and the stale-lock sweep.
+        if (!ProcessLiveness::ownerAlive($this->serverPid)) {
             return false;
         }
 

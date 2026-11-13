@@ -62,9 +62,6 @@ final class ExchangeLock
     /** Every lock file's name starts with this; {@see sweepStale()} reads no other. */
     public const FILE_PREFIX = 'sugar-mcp-client-lock-';
 
-    /** The errno kill(pid, 0) reports for a pid no process has. */
-    private const ERRNO_ESRCH = 3;
-
     /** @var resource|null this process' own handle, never an inherited one */
     private $handle = null;
 
@@ -247,23 +244,14 @@ final class ExchangeLock
 
     /**
      * Whether no process with this pid exists — the one answer that makes a
-     * lock file safe to remove. Anything uncertain answers false.
+     * lock file safe to remove. Anything uncertain answers false. The
+     * signal-0 polarity is the shared one ({@see ProcessLiveness}), so an
+     * adjustment to the kernel contract reaches this seat, the id-sequence
+     * claim probe, and the transport's forked observer together.
      */
     private static function processIsGone(int $pid): bool
     {
-        if (function_exists('posix_kill') && function_exists('posix_get_last_error')) {
-            if (@posix_kill($pid, 0)) {
-                return false;
-            }
-
-            // ESRCH alone means "no such process"; EPERM is a live process
-            // of another user, and any other errno is not an answer.
-            return posix_get_last_error() === self::ERRNO_ESRCH;
-        }
-
-        // Without posix, /proc can still say "absent" on Linux; elsewhere
-        // nothing can, and the file is kept.
-        return is_dir('/proc/self') && !file_exists("/proc/{$pid}");
+        return !ProcessLiveness::ownerAlive($pid);
     }
 
     /**
