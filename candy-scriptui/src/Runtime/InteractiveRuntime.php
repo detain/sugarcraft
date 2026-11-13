@@ -42,10 +42,14 @@ final class InteractiveRuntime
     {
         // Dumb terminals cannot survive the DEC-private modes the renderer
         // emits for alt-screen and cursor hiding (ColourGate already lowers
-        // COLOUR for TERM=dumb; this is the same posture for the MODES).
-        // Inline mode re-renders in place instead, which every terminal —
-        // including `dumb` — can live with.
-        $dumb = getenv('TERM') === 'dumb';
+        // COLOUR for dumb TERM — unset/''/dumb via the shared predicate,
+        // scriptui-36; this is the same posture for the MODES). Inline mode
+        // re-renders in place instead, which every terminal — dumb included
+        // — can live with. Grapheme-cluster mode (DEC 2027) is a DEC-private
+        // mode too (finding 050): it rides the same posture through
+        // unicodeMode:false. The DEC 2026 frame wrapper lives in
+        // sugar-core's Renderer with no option to disable — rider.
+        $dumb = ColourGate::termIsDumb();
         if ($dumb) {
             $useAltScreen = false;
             $hideCursor   = false;
@@ -58,6 +62,7 @@ final class InteractiveRuntime
                 useAltScreen:    $useAltScreen,
                 hideCursor:      $hideCursor,
                 inlineMode:      $dumb,
+                unicodeMode:     !$dumb,
                 catchInterrupts: true,
                 openTty:         true,
                 loop:            \React\EventLoop\Loop::get(),
@@ -97,6 +102,7 @@ final class InteractiveRuntime
                 useAltScreen:    $useAltScreen,
                 hideCursor:      $hideCursor,
                 inlineMode:      $dumb,
+                unicodeMode:     !$dumb,
                 catchInterrupts: true,
                 input:           $tty[0],
                 output:          $paint,
@@ -113,6 +119,7 @@ final class InteractiveRuntime
                 useAltScreen:    $useAltScreen,
                 hideCursor:      $hideCursor,
                 inlineMode:      $dumb,
+                unicodeMode:     !$dumb,
                 catchInterrupts: true,
                 output:          STDERR,
                 loop:            \React\EventLoop\Loop::get(),

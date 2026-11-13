@@ -77,11 +77,27 @@ final class ColourGate
             return ColorProfile::Ascii;
         }
 
-        if (self::env('TERM') === 'dumb') {
+        if (self::termIsDumb()) {
             return ColorProfile::NoTty;
         }
 
         return ColorProfile::TrueColor;
+    }
+
+    /**
+     * scriptui-36 (finding 111): ONE shared dumb-terminal predicate over
+     * TERM — unset, set-but-empty, or literally `dumb`. termenv treats all
+     * three as dumb-equivalent; the old two sites each eyeballed
+     * `=== 'dumb'`, so a `TERM=''` session skipped both the colour route and
+     * the MODE posture and shipped DEC-private bytes into an environment
+     * that never advertised them. Both the colour ladder above and
+     * {@see InteractiveRuntime::programOptions()} now consume this.
+     */
+    public static function termIsDumb(): bool
+    {
+        $term = self::env('TERM');
+
+        return $term === null || $term === '' || $term === 'dumb';
     }
 
     /**

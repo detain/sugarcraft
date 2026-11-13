@@ -63,11 +63,15 @@ final class ColourGateTest extends TestCase
     public static function ladderProvider(): array
     {
         return [
-            'default unrestricted'    => [[], ColorProfile::TrueColor],
+            // scriptui-36 re-pin (DISCLOSED): unset TERM now belongs to the
+            // dumb-equivalent class, so legs that exercise the COLOUR family
+            // must declare a real terminal to keep their rich-tier baseline.
+            'default unrestricted'    => [['TERM' => 'xterm'], ColorProfile::TrueColor],
             'NO_COLOR truthy'         => [['NO_COLOR' => '1'], ColorProfile::Ascii],
             'NO_COLOR any value'      => [['NO_COLOR' => 'blue'], ColorProfile::Ascii],
-            'NO_COLOR empty keeps'    => [['NO_COLOR' => ''], ColorProfile::TrueColor],
-            'NO_COLOR zero keeps'     => [['NO_COLOR' => '0'], ColorProfile::TrueColor],
+            'NO_COLOR empty keeps'    => [['TERM' => 'xterm', 'NO_COLOR' => ''], ColorProfile::TrueColor],
+            'NO_COLOR zero keeps'     => [['TERM' => 'xterm', 'NO_COLOR' => '0'], ColorProfile::TrueColor],
+            'empty TERM is plain too' => [['TERM' => ''], ColorProfile::NoTty],
             'FORCE_COLOR 16 tier'     => [['FORCE_COLOR' => '1'], ColorProfile::Ansi],
             'FORCE_COLOR 256 tier'    => [['FORCE_COLOR' => '2'], ColorProfile::Ansi256],
             'FORCE_COLOR truecolor'   => [['FORCE_COLOR' => '3'], ColorProfile::TrueColor],
@@ -205,8 +209,13 @@ final class ColourGateTest extends TestCase
         $observe = self::runBinColourProbe(['style', '--foreground', 'red', 'hi'], ['NO_COLOR' => '1']);
         self::assertSame('hi', $observe[0], 'piped child with NO_COLOR=1 must print plain bytes');
 
-        $control = self::runBinColourProbe(['style', '--foreground', 'red', 'hi'], []);
-        self::assertSame("\x1b[31mhi\x1b[0m", $control[0], 'the same child without NO_COLOR stays styled');
+        // scriptui-36: a clean-env child has NO TERM at all — now the
+        // dumbest class — so the styled control must declare a terminal.
+        $control = self::runBinColourProbe(['style', '--foreground', 'red', 'hi'], ['TERM' => 'xterm-256color']);
+        self::assertSame("\x1b[31mhi\x1b[0m", $control[0], 'a declared terminal without NO_COLOR stays styled');
+
+        $noTerm = self::runBinColourProbe(['style', '--foreground', 'red', 'hi'], []);
+        self::assertSame('hi', $noTerm[0], 'unset TERM is dumb-equivalent: plain bytes');
     }
 
     /**

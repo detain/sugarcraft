@@ -239,10 +239,11 @@ re-quantise colours to that depth.
   redirected, winning over `NO_COLOR`.
 - **`FORCE_COLOR=1|2|3`** forces a specific tier (16 / 256 /
   TrueColor) and wins over every other env rule.
-- **`TERM=dumb`** emits plain bytes (the no-escape tier) — but it is the
-  LAST tier checked: `NO_COLOR` or `CLICOLOR=0` resolve earlier to the
-  decoration-kept tier (colour off, bold/underline survive), and
-  `FORCE_COLOR` / `CLICOLOR_FORCE` outrank `TERM=dumb` entirely.
+- **`TERM=dumb`** (or an empty/unset `TERM`) emits plain bytes (the
+  no-escape tier) — but it is the LAST tier checked: `NO_COLOR` or
+  `CLICOLOR=0` resolve earlier to the decoration-kept tier (colour off,
+  bold/underline survive), and `FORCE_COLOR` / `CLICOLOR_FORCE` outrank
+  the dumb ladder entirely.
 
 Being a pipe does not by itself strip colour — styled bytes flow to
 redirected output as always; set `CLICOLOR=0` for pipe-aware muting.
@@ -400,9 +401,13 @@ doc-comments, and those are exercised by the model tests.
   alternate screen (the default) ERASES the rendered frames on exit —
   pass `--no-alt-screen` when you want the interaction to remain in
   scrollback.
-- On `TERM=dumb` the runtime forces inline mode, keeps the cursor
-  visible, and `ColourGate` lowers colour — the DEC-private modes the
-  renderer would emit are exactly what such terminals cannot digest.
+- On a dumb-equivalent `TERM` — `dumb`, empty, or unset — the runtime
+  forces inline mode, keeps the cursor visible, suppresses the DEC 2027
+  grapheme-paste mode negotiation, and `ColourGate` lowers colour: the
+  DEC-private sequences the renderer would emit are exactly what such
+  terminals cannot digest. (The DEC 2026 synchronous-output frame
+  wrapper lives in the renderer core and has no per-terminal opt-out
+  yet — filed upstream.)
 
 ## Untrusted content
 
