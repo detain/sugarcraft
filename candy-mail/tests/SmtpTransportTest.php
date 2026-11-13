@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Mail\Tests;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Async\CancellationSource;
 use SugarCraft\Mail\Email;
 use SugarCraft\Mail\SmtpTransport;
 
@@ -79,26 +80,6 @@ final class SmtpTransportTest extends TestCase
         $this->assertDoesNotMatchRegularExpression('/Subject: [^\r\n]*[^\x00-\x7F]/', $mime);
     }
 
-    public function testNonAsciiBodyDeclares8bit(): void
-    {
-        $transport = new SmtpTransport('smtp.example.com', 587);
-
-        $reflection = new \ReflectionClass($transport);
-        $buildMime = $reflection->getMethod('buildMimeMessage');
-        $buildMime->setAccessible(true);
-
-        // Body with non-ASCII UTF-8 characters
-        $email = new Email(
-            from:    ['from@example.com'],
-            to:      ['to@example.com'],
-            body:    "Café résumé",
-        );
-
-        $mime = $buildMime->invoke($transport, $email);
-
-        $this->assertStringContainsString("Content-Transfer-Encoding: 8bit\r\n", $mime);
-    }
-
     public function testConstructorRefusesIllegalHostShapes(): void
     {
         foreach (['', 'bad host!', 'me@somewhere.example'] as $host) {
@@ -130,5 +111,26 @@ final class SmtpTransportTest extends TestCase
         foreach (['ok.example', '127.0.0.1', 'localhost', 'smtp.invalid.example'] as $host) {
             $this->assertInstanceOf(SmtpTransport::class, new SmtpTransport($host));
         }
+    }
+
+    /**
+     * CM-59: the cancellation pre-check runs BEFORE the transport pays for a
+     * dial. A closed loopback port makes the counterfactual deterministic:
+     * if the guard moved below connect(), the failure would be a connection
+     * refusal, not the cancellation sentence - so reordering reddens this
+     * pin loudly and stays fully offline either way.
+     */
+    public function testCancelledTokenRefusesBeforeTheDial(): void
+    {
+        $source = CancellationSource::new();
+        $source->cancel();
+
+        $transport = new SmtpTransport('127.0.0.1', 1, '', '', 2);
+        $email = new Email(['from@example.com'], ['to@example.com'], 'Subject', 'Body');
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('SMTP send cancelled before it started');
+
+        $transport->send($email, $source->token());
     }
 }

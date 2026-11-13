@@ -29,7 +29,6 @@ final class CoverageBoostTest extends TestCase
 
     public function testMailerThrowsWhenNoFrom(): void
     {
-        $email = Email::new('a@x', 'b@x')->withFrom(''); // empty from
         $email = new Email(from: [], to: ['b@x']);
         $mailer = new Mailer(new StubTransport());
         $this->expectException(\InvalidArgumentException::class);
