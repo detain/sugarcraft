@@ -25,5 +25,6 @@ return [
     'render.file_unreadable' => 'تعذر فتح {path}: الملف غير قابل للقراءة',
     'render.binary_input' => 'رفض عرض {path}: ليس ملفًا نصيًا',
     'render.input_too_large' => 'حجم الإدخال يتجاوز {limit} بايت: {path}',
+    'render.fetch_failed' => 'يتعذر جلب {url}: {reason}',
     'render.width_invalid' => 'قيمة --width غير صالحة: {value} (يُتوقع عدد صحيح بين 0 و9999؛ 0 يعطّل الالتفاف)',
 ];

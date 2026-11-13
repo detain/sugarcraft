@@ -25,5 +25,6 @@ return [
     'render.file_unreadable' => 'kann {path} nicht öffnen: Datei nicht lesbar',
     'render.binary_input' => 'Renderen von {path} verweigert: keine Textdatei',
     'render.input_too_large' => 'Eingabe überschreitet {limit} Bytes: {path}',
+    'render.fetch_failed' => 'Abruf von {url} fehlgeschlagen: {reason}',
     'render.width_invalid' => 'ungültiger --width-Wert: {value} (erwartet eine Ganzzahl zwischen 0 und 9999; 0 deaktiviert den Umbruch)',
 ];

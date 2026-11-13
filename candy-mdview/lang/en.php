@@ -25,5 +25,6 @@ return [
     'render.file_unreadable' => 'open {path}: cannot read file',
     'render.binary_input' => 'refusing to render {path}: not a text file',
     'render.input_too_large' => 'input exceeds {limit} bytes: {path}',
+    'render.fetch_failed' => 'cannot fetch {url}: {reason}',
     'render.width_invalid' => 'invalid --width value: {value} (expected an integer between 0 and 9999; 0 disables wrapping)',
 ];

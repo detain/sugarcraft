@@ -190,9 +190,15 @@ final class RenderCommand extends Command
         // reload frame. Stdin input has nothing to watch and never arms
         // the pump. openTty re-opens /dev/tty when STDIN was a pipe, so
         // the keyboard lives even for `git log | candy-mdview -p`.
-        $size  = (new Tty())->size();
-        $model = self::buildPagerModel($rendered, $size['cols'], $size['rows'], $fileArg === '' ? '' : basename($fileArg));
-        if ($fileArg !== '') {
+        $size    = (new Tty())->size();
+        // A remote document has nothing to watch and no stable name worth a
+        // status header (finding 008): the URL argument never reaches
+        // basename()/armPagerWatch — a "reload" of a fetched URL would
+        // silently re-pay (or fail) a network fetch the user did not ask
+        // to repeat.
+        $isLocal = $fileArg !== '' && HttpFetch::isRemote($fileArg) === false;
+        $model   = self::buildPagerModel($rendered, $size['cols'], $size['rows'], $isLocal ? basename($fileArg) : '');
+        if ($isLocal) {
             $model = self::armPagerWatch($model, $fileArg, $renderer);
         }
         $program = new Program($model, new ProgramOptions(
@@ -271,7 +277,12 @@ final class RenderCommand extends Command
     private static function readDocument(string $fileArg, mixed $pipedStream = null): string
     {
         if ($fileArg !== '') {
-            return self::readDocumentFile($fileArg);
+            // glow's second documented door: an http(s):// argument is
+            // FETCHED (finding 008) and the bytes face the same document
+            // gate as every local door — see HttpFetch.
+            return HttpFetch::isRemote($fileArg)
+                ? HttpFetch::fetch($fileArg)
+                : self::readDocumentFile($fileArg);
         }
 
         if ($pipedStream === null && (self::stdinIsTerminal() === true || defined('STDIN') === false)) {

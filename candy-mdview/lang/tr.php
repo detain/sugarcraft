@@ -25,5 +25,6 @@ return [
     'render.file_unreadable' => '{path} açılamadı: dosya okunamıyor',
     'render.binary_input' => '{path} işlemesi reddedildi: metin dosyası değil',
     'render.input_too_large' => 'girdi {limit} baytı aşıyor: {path}',
+    'render.fetch_failed' => 'alınamadı {url}: {reason}',
     'render.width_invalid' => 'geçersiz --width değeri: {value} (0 ile 9999 arasında tam sayı beklendi; 0 sarmalamayı kapatır)',
 ];

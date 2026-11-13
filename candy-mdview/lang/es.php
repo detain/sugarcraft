@@ -25,5 +25,6 @@ return [
     'render.file_unreadable' => 'no se puede abrir {path}: no se puede leer',
     'render.binary_input' => 'se rechaza renderizar {path}: no es un archivo de texto',
     'render.input_too_large' => 'la entrada supera los {limit} bytes: {path}',
+    'render.fetch_failed' => 'no se puede obtener {url}: {reason}',
     'render.width_invalid' => 'valor de --width no válido: {value} (se esperaba un entero entre 0 y 9999; 0 desactiva el ajuste de línea)',
 ];

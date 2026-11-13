@@ -1195,9 +1195,19 @@ final class RenderCommandTest extends TestCase
             'execute() must hoist the file argument once for both branches'
         );
         $this->assertMatchesRegularExpression(
-            '/if \(\$fileArg !== [\'"]{2}\) \{\s*\$model = self::armPagerWatch\(\$model, \$fileArg, \$renderer\);/',
+            '/\$isLocal\s*=\s*\$fileArg\s*!==\s*[\'"]{2}\s*&&\s*HttpFetch::isRemote\(\$fileArg\)\s*===\s*false;/',
             $body,
-            'the pager branch must arm the watch behind the non-empty-file gate'
+            'the watch door is opened for local files only — a URL argument is never remote-armed'
+        );
+        $this->assertMatchesRegularExpression(
+            '/if \(\$isLocal\) \{\s*\$model = self::armPagerWatch\(\$model, \$fileArg, \$renderer\);/',
+            $body,
+            'the pager branch must arm the watch behind the local-file gate'
+        );
+        $this->assertMatchesRegularExpression(
+            '/self::buildPagerModel\([^)]*\$isLocal \? basename\(\$fileArg\) : [\'"]{2}\)/',
+            $body,
+            'the status header names a document only in local-file mode'
         );
         $this->assertSame(1, substr_count($body, 'self::armPagerWatch('), 'exactly one arming call site');
     }

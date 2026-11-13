@@ -40,7 +40,16 @@ git log -1 --pretty=%B | candy-mdview -p          # pipe stdin (pager keys still
 candy-mdview --theme dracula README.md
 candy-mdview --width 80 --no-hyperlinks README.md
 candy-mdview --theme-config ./my-theme.json README.md
+candy-mdview https://example.com/README.md        # fetch a URL, then render it
 ```
+
+The `file` argument is a path **or** an `http(s)://` URL. A URL is fetched
+with a 10 s transfer deadline, a 5-redirect cap and TLS verification ON; the
+final answer must be 2xx; the body then passes the exact same size cap and
+binary refusal as a local file, and its remote origin earns no special
+trust — every hostile-byte lane the file doors close, HttpFetch closes too.
+Auto-reload and the `file · scroll%` status header are local-file features:
+a pager opened on a URL watches and names nothing.
 
 Flags:
 - `--theme {ansi|ascii|plain|notty|dark|light|dracula|tokyo-night|pink|solarized|monokai|github}`
@@ -155,7 +164,7 @@ the next accepted reload.
 |---|---|
 | 0 | rendered successfully (an empty *file* renders blank) |
 | 1 | runtime failure |
-| 2 | usage error — bad theme, unreadable/oversized theme config, missing or unreadable file, a directory argument, non-text (binary) input, a document over 64 MiB, invalid `--width`, or no input (no file argument with a terminal on stdin, or empty stdin) |
+| 2 | usage error — bad theme, unreadable/oversized theme config, missing or unreadable file, a directory argument, non-text (binary) input, a document over 64 MiB, a refused or failed URL fetch (transport, non-2xx answer, oversize body), invalid `--width`, or no input (no file argument with a terminal on stdin, or empty stdin) |
 
 Usage errors are named and go to **stderr** (`open notes.md: no such file`,
 `open docs/: is a directory`, …); file paths and option values coming from
