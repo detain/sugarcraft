@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Agents\Live;
 
 use SugarCraft\Code\Context\PromptFence;
+use SugarCraft\Core\Util\AtomicTextFile;
 
 /**
  * Cross-session mail (C-AGT-4.e): the disk mailbox a `SendMessage` with a
@@ -149,18 +150,13 @@ final class SessionMailbox
             return sprintf('a message %s is already sitting in that inbox', $message->msgId);
         }
         $bytes = json_encode($signed->toArray(), JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
-        // The 0600 comes from the umask the write runs under, and the rename
-        // is what makes a line appear whole — a reader never sees a half file.
-        $previous = umask(0o077);
-        $tmp = $dir . '/' . $message->msgId . '.json.' . getmypid() . '.tmp';
+        // 0600 lands on the temp inode before the payload, and the rename is
+        // what makes a line appear whole — a reader never sees a half file
+        // (sugar-core AtomicTextFile, rider R1b).
         try {
-            if (@file_put_contents($tmp, $bytes . "\n") === false || !@rename($tmp, $final)) {
-                @unlink($tmp);
-
-                return 'the message could not be written into the inbox';
-            }
-        } finally {
-            umask($previous);
+            AtomicTextFile::at($final)->withPermissions(0o600)->write($bytes . "\n");
+        } catch (\RuntimeException) {
+            return 'the message could not be written into the inbox';
         }
 
         return null;

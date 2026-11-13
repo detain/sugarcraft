@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Support;
 
+use SugarCraft\Core\Util\AtomicTextFile;
+
 /**
  * Write-then-rename publisher for non-JSON payloads.
  *
@@ -22,6 +24,11 @@ namespace SugarCraft\Code\Support;
  * Append-only files (the team inboxes' `FILE_APPEND | LOCK_EX` lines) are NOT
  * this class's territory: a locked single-line append is already the atomic
  * unit there, and rewrite-on-publish would fight concurrent senders.
+ *
+ * {@see write()} is a delegate over sugar-core's `Util\AtomicTextFile`
+ * (rider R1b) — the ordering law lives and is structurally pinned there;
+ * {@see replace()} (user-owned files: mode/owner/symlink/hard-link identity)
+ * stays app-side because that law has no library twin.
  *
  * WHY NOT A METHOD ON AtomicJsonFile: that class owns the JSON contract
  * (its `read()` decodes, its `write()` encodes); widening the core class to
@@ -92,14 +99,14 @@ final class AtomicFileWriter
             ));
         }
 
-        $dir = \dirname($path);
-        if (!is_dir($dir) && !@mkdir($dir, 0700, true) && !is_dir($dir)) {
-            throw new \RuntimeException(sprintf('Failed to create directory "%s" for atomic write.', $dir));
+        // One publish law: sugar-core's AtomicTextFile owns temp-in-target-dir,
+        // mode-before-payload, fsync-before-rename and the orphan sweep (R1b);
+        // this stays the app's stable door for the ~12 callers.
+        $file = AtomicTextFile::at($path);
+        if ($mode !== null) {
+            $file = $file->withPermissions($mode);
         }
-
-        // fsync: a rename that reaches disk before the data does leaves a
-        // zero-length live file after a power cut (delayed allocation).
-        self::publish($path, $contents, $mode, null, true, null, false);
+        $file->write($contents);
     }
 
     /**

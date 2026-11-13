@@ -15,6 +15,7 @@ use SugarCraft\Code\Messages\UserMessage;
 use SugarCraft\Code\Support\HookContextFiles;
 use SugarCraft\Code\Tools\ToolCall;
 use SugarCraft\Code\Usage;
+use SugarCraft\Core\Util\AtomicTextFile;
 
 /**
  * Delegated `Task` runs, kept so they can be RESUMED rather than started over
@@ -165,14 +166,9 @@ final class SuspendedDelegations
             'worktree' => $worktree,
         ]);
 
-        $temp = @tempnam($dir, 'suspending-');
-        if ($temp === false) {
-            throw new \RuntimeException("cannot create a file in {$dir}");
-        }
-        @chmod($temp, 0o600);
-        if (@file_put_contents($temp, $payload) !== \strlen($payload) || !@rename($temp, $this->path($dir, $id))) {
-            @unlink($temp);
-
+        try {
+            AtomicTextFile::at($this->path($dir, $id))->withPermissions(0o600)->write($payload);
+        } catch (\RuntimeException) {
             throw new \RuntimeException("cannot write the suspended run into {$dir}");
         }
 
