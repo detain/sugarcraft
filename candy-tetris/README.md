@@ -69,7 +69,12 @@ drops its help card first, and anything under the floor shows a resize
 notice and freezes play until you widen back). The VS duel wants
 54x29. A launch with no terminal to play on — stdin or stdout a pipe or
 redirect, or `TERM=dumb` — is refused before the game starts: one plain
-line on stderr, zero escape bytes, exit code 1. `NO_COLOR` and
+line on stderr, zero escape bytes, exit code 1. That guarantee covers
+the default environment: the escape hatches `CLICOLOR_FORCE=1` and
+`FORCE_COLOR` vouch for the terminal and skip the stdout-is-not-a-TTY
+rung, so under either one a piped stdout is neither refused nor plain —
+escapes are painted into the redirect as if the terminal were there.
+`NO_COLOR` and
 `CLICOLOR=0` still play: the whole frame re-renders with zero SGR and
 shape carries every fact colour used to carry (pinned by
 `tests/ColourPostureTest.php`). Empty cells
