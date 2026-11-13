@@ -5,7 +5,7 @@ animated), APNG, WebP and BMP decoded via ext-gd plus pure-PHP
 animated-container decoders and rendered via the best
 available protocol:
 
-- **Sixel** — xterm built with sixel support (detection gates the xterm row on <code>XTERM_VERSION</code>), foot, mlterm, contour, rio
+- **Sixel** — xterm built with sixel support (detection gates the xterm row on `XTERM_VERSION`), foot, mlterm, contour, rio
 - **Kitty graphics protocol** — kitty, ghostty, wezterm
 - **iTerm2 inline images** (OSC 1337) — iTerm2, mintty, rio (rio and mintty claim sixel too; detection precedence seats them on iTerm2)
 - **Half-block Unicode** (▀ + 24-bit fg/bg) — text fallback where cell
@@ -27,13 +27,13 @@ consuming manifest.
 
 PHP `^8.3`, `ext-gd`, `ext-mbstring` and `react/promise` — all four are
 `require`d in `composer.json`, not advisory. GD is the decode path for every
-pure-PHP tier; without it each entry point answers with a catalogued refusal
-routed through `Lang::t` (the shipped `lang/en.php` catalog is English-only
-today) rather than an undefined-function error, and
-`src/Support/GdAvailability.php` owns that probe.
+pure-PHP tier; without it each entry point answers with a `Lang::t` refusal —
+the shipped `lang/en.php` catalog is English-only today — rather than an
+undefined-function error, and `src/Support/GdAvailability.php` owns that
+probe.
 The chafa CLI is never required: the chafa tier is opt-in, selected only by
-`Mosaic::chafa()` / `fromModeString('chafa')`, and it is the only place the lib
-runs an external program to produce image output.
+`Mosaic::chafa()` / `fromModeString('chafa')`, and chafa is the only external
+binary the lib ever asks for image bytes.
 
 Why a library rather than the `chafa` viewer: every tier here is a byte string
 your program owns. Graphic tiers emit the terminal's own escape sequences and
@@ -152,12 +152,11 @@ Codec matrix (sugar-image native paths only):
 | JPEG XL (`FF 0A` codestream, `jxl ` brand) | ❌ refused by name | same |
 | TIFF (`II*\0` / `MM\0*`) | ❌ refused as input | output-only: the GD-free iTerm2 payload encoder (`Codec\TiffUncompressed`) |
 
-- PNG, JPEG, static GIF — via ext-gd (`imagecreatefrompng`,
-  `imagecreatefromjpeg`, `imagecreatefromgif`)
-- `ImageSource::fromString()` additionally accepts anything GD's
-  `imagecreatefromstring()` decodes (WebP, BMP, …); `format` carries the real
-  MIME (or `application/octet-stream`), and the Kitty/iTerm2 renderers
-  re-encode any payload that is not PNG by signature.
+The matrix states what decodes where. Three facts it cannot carry:
+
+- `format` on a `fromString()` payload keeps the real MIME GD sniffed (or
+  `application/octet-stream`), and the Kitty/iTerm2 renderers re-encode any
+  payload that is not PNG by signature.
 - Palette PNGs are automatically converted to truecolor before
   processing, through one checked door (`Concerns\ForceTrueColor`): if ext-gd
   ever refuses the conversion, the read fails with a `RuntimeException`
@@ -239,8 +238,9 @@ re-read after write, one retry, then `stty sane` plus a one-line stderr
 notice rather than a silent strand in raw mode. No pure-PHP
 tier ever shells out for pixel data.
 
-`ChafaRenderer::reset()` re-arms both memos for long-running processes
-that install or override the binary mid-session.
+`ChafaRenderer::reset()` clears the whole discovery cache — availability,
+version, the per-config render memo, and the sink and reap probes — for
+long-running processes that install or override the binary mid-session.
 
 When a chafa run fails, the last 8 KiB of the child's stderr rides the
 exception message **sanitized** — escape machinery forged into that stream
@@ -418,8 +418,8 @@ the structured `ProbeReport` behind the decision — sugar-colorprofile's
 `TerminalProbe::run()` — and
 `Detect::probe()->detectSummary()` (instance method on the probed
 `Capability`) names the slots rather than the chosen
-renderer — a terminal that lands on the symbol tier still reports `HalfBlock`,
-because that tier rides the same text slot.
+renderer. The symbol tier rides the same text-availability slot, so a terminal
+that lands on it still reports `HalfBlock` in the summary.
 
 ### Detection inputs
 
@@ -514,8 +514,8 @@ transaction found unset, `-g` re-sets one it found off), flips
 restores the prior value — or unsets with `-u` exactly when it was unset
 before. A process-lifetime restore is registered on first change, and the
 whole thing is **fail-soft**: outside tmux, without the binary, or against
-an unparseable answer it degrades to the manual-configuration silence,
-never a throw. The applied answer rides a re-validation lease
+an unparseable answer it stays quiet — nothing is changed and nothing is
+thrown, leaving passthrough to manual configuration. The applied answer rides a re-validation lease
 (`SUGAR_IMAGE_TMUX_PASSTHROUGH_TTL`, default 30 s): at expiry the next
 frame re-queries the option and, if something else flipped it off, takes
 the transaction over — restoring the flipper's value on shutdown — rather
@@ -530,7 +530,11 @@ tmux half of the family — `TmuxPassthrough` + `TmuxPassthroughDecorator`
 
 ## Animation
 
-Drive a sequence of frames through `AnimationDriver` — a `Model`-implementing class that uses `Cmd::tick()` for per-frame timing and `Renderer::delete()` + `KittyRenderer::renderFrame()` for clean per-frame redraws on Kitty terminals (iTerm2 gets delete + a full re-render, as its payload has no stable per-frame id).
+Drive a sequence of frames through `AnimationDriver`, a `Model`-implementing
+class that uses `Cmd::tick()` for per-frame timing. On Kitty terminals a frame
+change is a `Renderer::delete()` plus `KittyRenderer::renderFrame()` — a clean
+per-frame redraw; iTerm2 gets a delete and a full re-render instead, because
+its payload carries no stable per-frame id.
 
 ```php
 use SugarCraft\Image\Animation;
