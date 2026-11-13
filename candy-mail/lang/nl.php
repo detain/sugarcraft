@@ -44,6 +44,7 @@ return [
     'email.invalid_address' => 'Ongeldig e-mailadres: {addr}',
     'email.crlf_in_header' => 'CRLF-injectie gedetecteerd in {field}-header',
     'email.invalid_mime_type' => 'Ongeldig MIME-type voor bijlage (verwacht type/subtype): {mime}',
+    'email.invalid_header_char' => 'De {field}-header bevat verboden stuurcodes (alleen printbare tekst)',
     'resend.send_cancelled' => 'Resend-verzending geannuleerd voordat deze begon',
     'resend.curl_missing' => 'ext-curl is vereist voor de Resend-transport (SMTP-transport heeft geen extensies nodig voor onbeveiligd SMTP; ext-openssl voor TLS)',
     'resend.no_api_key' => 'Resend-transport heeft geen API-sleutel: geef er een mee in de constructor of stel RESEND_API_KEY in',

@@ -38,6 +38,7 @@ return [
     'email.invalid_address' => 'Invalid email address: {addr}',
     'email.crlf_in_header' => 'CRLF injection detected in {field} header',
     'email.invalid_mime_type' => 'Invalid attachment MIME type (expected type/subtype): {mime}',
+    'email.invalid_header_char' => 'The {field} header contains forbidden control characters (printable text only)',
 
     // ResendTransport.php
     'resend.send_cancelled' => 'Resend send cancelled before it started',

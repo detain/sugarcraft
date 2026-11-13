@@ -44,6 +44,7 @@ return [
     'email.invalid_address' => '无效的电子邮件地址：{addr}',
     'email.crlf_in_header' => '在 {field} 标头中检测到 CRLF 注入',
     'email.invalid_mime_type' => '附件 MIME 类型无效（应为 类型/子类型）：{mime}',
+    'email.invalid_header_char' => '{field} 标头包含禁止的控制字符（仅限可打印文本）',
     'resend.send_cancelled' => 'Resend 发送开始前已取消',
     'resend.curl_missing' => 'Resend 传输需要 ext-curl（SMTP 传输使用普通 SMTP 时无需扩展；使用 TLS 时需要 ext-openssl）',
     'resend.no_api_key' => 'Resend 传输没有 API 密钥：请向构造函数传入密钥或设置 RESEND_API_KEY',

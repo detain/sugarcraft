@@ -186,6 +186,57 @@ final class EmailTest extends TestCase
         );
     }
 
+    /**
+     * candy-mail-003: the subject obeys the same C0/DEL refusal parity as
+     * addresses (loud refusal, never stripping). Exact refused class:
+     * 0x00-0x08, 0x0B-0x0C, 0x0E-0x1F, 0x7F. TAB stays legal (header WSP);
+     * CR/LF are refused separately as the CRLF pair.
+     */
+    public function testRefusesC0ControlByteClassInSubject(): void
+    {
+        $matrix = [
+            'NUL' => "\x00",
+            'BEL' => "\x07",
+            'BS'  => "\x08",
+            'VT'  => "\x0B",
+            'FF'  => "\x0C",
+            'SO'  => "\x0E",
+            'ESC' => "\x1B",
+            'US'  => "\x1F",
+        ];
+        foreach ($matrix as $name => $byte) {
+            try {
+                new Email(
+                    from:    ['me@example.com'],
+                    to:      ['you@example.com'],
+                    subject: "Report {$byte} summary",
+                );
+                $this->fail("subject carrying {$name} (0x" . \dechex(\ord($byte)) . ") must be refused");
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString('control characters', $e->getMessage());
+            }
+        }
+
+        // DEL. And the OSC-forgery shape the finding cited: escape sequences
+        // must refuse, not ride raw into receivers' logs and terminals.
+        $this->expectException(\InvalidArgumentException::class);
+        new Email(from: ['a@b.c'], to: ['d@e.f'], subject: "a\x7Fb");
+
+        $this->expectException(\InvalidArgumentException::class);
+        new Email(from: ['a@b.c'], to: ['d@e.f'], subject: "a\x1B]0;x\x07b");
+    }
+
+    public function testAcceptsTabAndSpaceInSubjectAsHeaderWsp(): void
+    {
+        $email = new Email(
+            from:    ['me@example.com'],
+            to:      ['you@example.com'],
+            subject: "Quarterly\treport",
+        );
+
+        $this->assertSame("Quarterly\treport", $email->subject);
+    }
+
     public function testRejectsCrlfInRecipient(): void
     {
         $this->expectException(\InvalidArgumentException::class);

@@ -183,7 +183,12 @@ final class Email
     }
 
     /**
-     * Reject CRLF in a header field value.
+     * Reject CRLF and the C0/DEL control-byte class in a header field value.
+     *
+     * Refused class (candy-mail-003, parity with sanitizeAddr's C0+DEL
+     * refusal and the stripStrayControl body doctrine — refusal, not
+     * stripping): 0x00-0x08, 0x0B-0x0C, 0x0E-0x1F, 0x7F. TAB stays legal
+     * (header WSP); CR/LF are caught by the dedicated CRLF refusal above.
      */
     private function sanitizeHeader(?string $value, string $field): ?string
     {
@@ -192,6 +197,9 @@ final class Email
         }
         if (\preg_match('/[\r\n]/', $value)) {
             throw new \InvalidArgumentException(Lang::t('email.crlf_in_header', ['field' => $field]));
+        }
+        if (\preg_match('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', $value)) {
+            throw new \InvalidArgumentException(Lang::t('email.invalid_header_char', ['field' => $field]));
         }
         return $value;
     }
