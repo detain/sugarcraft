@@ -431,14 +431,16 @@ final class ModelMetadataTest extends TestCase
         return new CustomProvider('custom', 'https://api.example.com', $model, null, new Client(), true, true, modelMetadata: $db, modelPrices: $prices, contextWindowOverride: $window);
     }
 
-    public function testTheCustomProviderIsSizedSettingThenDatabaseThen128k(): void
+    public function testTheCustomProviderIsSizedSettingThenDatabaseThenUnknown(): void
     {
         $db = ModelMetadata::fromTable(self::litellm());
 
         self::assertSame(200_000, $this->custom('claude-sonnet-4-6', $db)->contextWindow());
         self::assertSame(50_000, $this->custom('claude-sonnet-4-6', $db, window: 50_000)->contextWindow());
-        self::assertSame(128_000, $this->custom('Qwen/Qwen3.8-Flash-Next-FP8', $db)->contextWindow());
-        self::assertSame(128_000, $this->custom('claude-sonnet-4-6', null)->contextWindow(), 'no database is the pre-5.13a answer');
+        // 9e323517b: no setting and no database row is 0 (unknown, shown as an
+        // assumed window), no longer a 128,000 guess that read as the model's own.
+        self::assertSame(0, $this->custom('Qwen/Qwen3.8-Flash-Next-FP8', $db)->contextWindow());
+        self::assertSame(0, $this->custom('claude-sonnet-4-6', null)->contextWindow(), 'no database and no setting is unknown, not a guess');
     }
 
     public function testTheCustomProviderIsPricedSettingThenDatabaseThenFree(): void
