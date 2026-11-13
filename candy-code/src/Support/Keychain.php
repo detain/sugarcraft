@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Support;
 use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Cli\LaunchNotices;
 use SugarCraft\Code\Lang;
+use SugarCraft\Core\Util\SecretStore;
 
 /**
  * `${keychain:<name>}` lookups for provider keys held in the OS keychain.
@@ -18,6 +19,10 @@ use SugarCraft\Code\Lang;
  * secret on stdout, so the secret never appears in the child's process-listing
  * entry the way an argv-borne token would. Entries live under the
  * {@see SERVICE} name.
+ *
+ * The read side is a thin adapter over sugar-core's `Util\SecretStore`
+ * (rider R5); {@see store()} and its stdin-carrying spawn stay here, the
+ * library having no write side.
  *
  * Every lookup is memoised for the process — hits AND misses — so a config
  * that references one entry in several fields pays one spawn per launch. A
@@ -168,6 +173,7 @@ final class Keychain
         }
 
         unset(self::$memo[$name]);
+        SecretStore::forget(self::SERVICE, $name);
 
         return 'ok';
     }
@@ -184,11 +190,7 @@ final class Keychain
      */
     public static function argvFor(string $osFamily, string $name): ?array
     {
-        return match ($osFamily) {
-            'Linux' => ['secret-tool', 'lookup', 'service', self::SERVICE, 'account', $name],
-            'Darwin' => ['security', 'find-generic-password', '-s', self::SERVICE, '-a', $name, '-w'],
-            default => null,
-        };
+        return SecretStore::argvFor($osFamily, self::SERVICE, $name);
     }
 
     /**
@@ -218,7 +220,7 @@ final class Keychain
      */
     public static function osFamily(): string
     {
-        return self::$osOverride ?? \PHP_OS_FAMILY;
+        return self::$osOverride ?? SecretStore::osFamily();
     }
 
     /**
@@ -232,6 +234,7 @@ final class Keychain
     public static function armSpawnSeamForTesting(?\Closure $seam): void
     {
         self::$spawnSeam = $seam;
+        SecretStore::armSpawnSeamForTesting($seam);
     }
 
     /**
@@ -254,6 +257,7 @@ final class Keychain
     public static function armOsForTesting(?string $family): void
     {
         self::$osOverride = $family;
+        SecretStore::armOsForTesting($family);
     }
 
     /**
@@ -262,6 +266,7 @@ final class Keychain
     public static function armTimeoutForTesting(?float $seconds): void
     {
         self::$timeoutOverride = $seconds;
+        SecretStore::armTimeoutForTesting($seconds);
     }
 
     /**
@@ -274,6 +279,7 @@ final class Keychain
         self::$storeSeam = null;
         self::$osOverride = null;
         self::$timeoutOverride = null;
+        SecretStore::resetForTesting();
     }
 
     /**
@@ -287,38 +293,20 @@ final class Keychain
             return null;
         }
 
-        $family = self::$osOverride ?? \PHP_OS_FAMILY;
+        $family = self::osFamily();
 
-        // A name the backends could misread is refused before anything is
-        // spawned: a leading `-` is option-parseable (secret-tool's GLib
-        // parser absorbs `-u`-shaped forms), and a control byte anywhere —
-        // a JSON `\u0000`-poisoned config value — reaches proc_open's argv
-        // as a PHP ValueError mid-launch. Both fold to the ordinary miss
-        // notice, so the entry is named, nothing is spawned, and the
-        // launch still stands.
-        if (\preg_match('/^-|[\x00-\x1f\x7f]/', $name) === 1) {
-            self::announce('cli.keychain.miss', ['entry' => $name, 'os' => $family]);
-
-            return null;
+        // The fetch, the argv-shape refusal (leading `-`, control bytes), the
+        // wall bound and the reaping are sugar-core's SecretStore (rider R5);
+        // what stays here is the app's voice — one localised launch notice per
+        // miss shape, naming the entry.
+        $verdict = SecretStore::lookupDetailed(self::SERVICE, $name);
+        if ($verdict['secret'] !== null) {
+            return $verdict['secret'];
         }
 
-        $argv = self::argvFor($family, $name);
-        if ($argv === null) {
-            self::announce('cli.keychain.no_backend', ['entry' => $name, 'os' => $family]);
-
-            return null;
-        }
-
-        $backend = $argv[0];
-        $result = self::$spawnSeam !== null
-            ? (self::$spawnSeam)($argv)
-            : self::spawn($argv);
-
-        if ($result['status'] === 'hit' && $result['stdout'] !== '') {
-            return $result['stdout'];
-        }
-
-        match ($result['status']) {
+        $backend = (SecretStore::argvFor($family, self::SERVICE, $name) ?? [''])[0];
+        match ($verdict['status']) {
+            'no_backend' => self::announce('cli.keychain.no_backend', ['entry' => $name, 'os' => $family]),
             'missing' => self::announce('cli.keychain.missing_binary', ['entry' => $name, 'backend' => $backend]),
             'timeout' => self::announce('cli.keychain.timeout', [
                 'entry' => $name,

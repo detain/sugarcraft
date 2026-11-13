@@ -69,6 +69,22 @@ final class KeychainTest extends TestCase
         $this->assertSame('k3y-from-the-store', Keychain::lookup('candy-openai'));
     }
 
+    public function testTheReadSideIsTheLibraryStoreUnderTheCandyCodeService(): void
+    {
+        Keychain::armOsForTesting('Linux');
+        Keychain::armSpawnSeamForTesting(
+            static fn (array $argv): array => ['status' => 'hit', 'stdout' => 'via-lib', 'exitCode' => 0],
+        );
+
+        $this->assertSame('via-lib', Keychain::lookup('delegated'));
+        // The library's own memo answers the same entry/service pair.
+        $this->assertSame('via-lib', \SugarCraft\Core\Util\SecretStore::lookup(Keychain::SERVICE, 'delegated'));
+        $this->assertSame(
+            \SugarCraft\Core\Util\SecretStore::argvFor('Linux', Keychain::SERVICE, 'delegated'),
+            Keychain::argvFor('Linux', 'delegated'),
+        );
+    }
+
     public function testTheSecretNeverCrossesArgvOnlyTheEntryNameDoes(): void
     {
         $secret = 'sup3r-s3cr3t-value';
