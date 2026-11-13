@@ -341,9 +341,11 @@ $program = new Program(
     ),
     App::programOptions($config),
 );
-// btop's SIGTERM / SIGHUP handlers run clean_quit (config save included);
-// sugar-core's Program traps only SIGINT, so stop its loop here and let
-// the post-run save below do the write after the terminal is restored.
+// btop's SIGTERM / SIGHUP handlers run clean_quit (config save included).
+// sugar-core's Program::run() installs its own SIGINT/SIGTERM/SIGHUP arms
+// (overriding these), so these cover only the window BEFORE run() — config
+// load, size probe — and the post-run save below does the write after the
+// terminal is restored (pinned end to end by tests/Cli/SignalExitTest.php).
 $trapped = function_exists('pcntl_signal') ? [SIGTERM, SIGHUP] : [];
 if ($trapped !== [] && function_exists('pcntl_async_signals')) {
     pcntl_async_signals(true);

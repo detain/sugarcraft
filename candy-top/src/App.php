@@ -1694,7 +1694,8 @@ final class App implements Model
      * The save btop's clean_quit performs, or null when it would not write:
      * no file, save_config_on_exit off, or nothing changed (btop
      * `write_new`). `bin/candy-top` runs it after the Program returns —
-     * a SIGTERM / SIGHUP (trapped in bin) or a SIGINT stops the loop
+     * a SIGTERM / SIGHUP / SIGINT (all trapped by sugar-core's Program::run())
+     * stops the loop
      * without passing {@see quitCmd()}, and a quit-time save that failed
      * left the flag set — and reports a failure on STDERR.
      */
