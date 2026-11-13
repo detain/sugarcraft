@@ -8,8 +8,8 @@ use SugarCraft\CodeTime\Dashboard;
 use SugarCraft\CodeTime\Heartbeat;
 use SugarCraft\CodeTime\Renderer;
 use SugarCraft\CodeTime\Stats;
-use SugarCraft\CodeTime\Store;
 use PHPUnit\Framework\TestCase;
+use SugarCraft\CodeTime\Tests\Support\NullReader;
 
 final class RendererTest extends TestCase
 {
@@ -18,7 +18,7 @@ final class RendererTest extends TestCase
         $end = new \DateTimeImmutable('2024-06-07');
         $from = $end->modify("-" . ($days - 1) . " days");
         $stats = Stats::compute($beats, $from, $end);
-        return new Dashboard(new Store(sys_get_temp_dir()), $end, $days, $stats);
+        return new Dashboard(new NullReader(), $end, $days, $stats);
     }
 
     public function testRendersHeaderWithTitleAndRange(): void
@@ -116,7 +116,7 @@ final class RendererTest extends TestCase
         )];
         $end = new \DateTimeImmutable('2024-06-07');
         $stats = Stats::compute($beats, $end->modify('-6 days'), $end);
-        $d = new \SugarCraft\CodeTime\Dashboard(new Store(sys_get_temp_dir()), $end, 7, $stats, 2);
+        $d = new \SugarCraft\CodeTime\Dashboard(new NullReader(), $end, 7, $stats, 2);
 
         // Two cells cannot hold words, so what this pin really guards is the
         // promise it was written for: the frame renders, and nothing outgrows
@@ -133,7 +133,7 @@ final class RendererTest extends TestCase
 
         // The heading survives as soon as the frame can hold it.
         $readable = Renderer::render(new Dashboard(
-            new Store(sys_get_temp_dir()), $end, 7, $stats, 24,
+            new NullReader(), $end, 7, $stats, 24,
         ));
         $this->assertStringContainsString('Daily activity', $readable);
     }
@@ -145,9 +145,9 @@ final class RendererTest extends TestCase
             project: 'p', language: 'php', file: 'a.php', duration: 600,
         )]);
         $narrow = Renderer::render(new \SugarCraft\CodeTime\Dashboard(
-            new Store(sys_get_temp_dir()), new \DateTimeImmutable('2024-06-07'), 7, $d->stats, 60));
+            new NullReader(), new \DateTimeImmutable('2024-06-07'), 7, $d->stats, 60));
         $wide = Renderer::render(new \SugarCraft\CodeTime\Dashboard(
-            new Store(sys_get_temp_dir()), new \DateTimeImmutable('2024-06-07'), 7, $d->stats, 120));
+            new NullReader(), new \DateTimeImmutable('2024-06-07'), 7, $d->stats, 120));
         $this->assertNotSame($narrow, $wide, 'timeline must follow the terminal width');
     }
 
@@ -189,7 +189,7 @@ final class RendererTest extends TestCase
     public function testTheDetectedProfileDecidesWhetherTintsArePainted(): void
     {
         $end = new \DateTimeImmutable('2024-06-07');
-        $store = new Store(sys_get_temp_dir());
+        $store = new NullReader();
         $stats = new Stats([], []);
 
         $rich = new Dashboard($store, $end, 7, $stats, null, \SugarCraft\Core\Util\ColorProfile::TrueColor);

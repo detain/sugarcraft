@@ -10,10 +10,10 @@ use SugarCraft\CodeTime\Dashboard;
 use SugarCraft\CodeTime\Heartbeat;
 use SugarCraft\CodeTime\Renderer;
 use SugarCraft\CodeTime\Stats;
-use SugarCraft\CodeTime\Store;
 use SugarCraft\Core\I18n\T;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\CodeTime\Tests\Support\NullReader;
 
 /**
  * The dashboard's only contract with a terminal is that it fits the terminal.
@@ -68,7 +68,7 @@ final class RendererGeometryTest extends TestCase
     {
         $end = new \DateTimeImmutable(self::END);
         $stats = Stats::compute($beats, $end->modify('-' . ($days - 1) . ' days'), $end);
-        return Renderer::render(new Dashboard(new Store(sys_get_temp_dir()), $end, $days, $stats, $width));
+        return Renderer::render(new Dashboard(new NullReader(), $end, $days, $stats, $width));
     }
 
     /** @param list<Heartbeat> $beats @param list<\SugarCraft\CodeTime\Milestone> $milestones */
@@ -76,7 +76,7 @@ final class RendererGeometryTest extends TestCase
     {
         $end = new \DateTimeImmutable(self::END);
         $stats = Stats::compute($beats, $end->modify('-' . ($days - 1) . ' days'), $end, $milestones);
-        return Renderer::render(new Dashboard(new Store(sys_get_temp_dir()), $end, $days, $stats, $width));
+        return Renderer::render(new Dashboard(new NullReader(), $end, $days, $stats, $width));
     }
 
     /** @return list<string> */
@@ -294,7 +294,7 @@ final class RendererGeometryTest extends TestCase
             $end = new \DateTimeImmutable(self::END);
             $stats = Stats::compute($beats, $end->modify('-6 days'), $end);
             return Renderer::render(new Dashboard(
-                new Store(sys_get_temp_dir()), $end, 7, $stats, $width, null, $height
+                new NullReader(), $end, 7, $stats, $width, null, $height
             ));
         };
 
@@ -354,7 +354,7 @@ final class RendererGeometryTest extends TestCase
         $end = new \DateTimeImmutable(self::END);
         $render = static function (?string $label) use ($end): string {
             return Renderer::render(new Dashboard(
-                new Store(sys_get_temp_dir()), $end, 7, new Stats([], []), 62, null, null, $label,
+                new NullReader(), $end, 7, new Stats([], []), 62, null, null, $label,
             ));
         };
         $this->assertStringContainsString('[sqlite]', $render('sqlite'));
@@ -510,7 +510,7 @@ final class RendererGeometryTest extends TestCase
         $end = new \DateTimeImmutable(self::END);
         $stats = Stats::compute($beats, $end->modify('-' . ($days - 1) . ' days'), $end);
         return Renderer::render(new Dashboard(
-            new Store(sys_get_temp_dir()), $end, $days, $stats, $width,
+            new NullReader(), $end, $days, $stats, $width,
             null, null, null, 0, 0, null, $byTags
         ));
     }
@@ -551,7 +551,7 @@ final class RendererGeometryTest extends TestCase
         $endDay = new \DateTimeImmutable($end);
         $stats = Stats::compute($beats, $endDay->modify('-' . ($days - 1) . ' days'), $endDay);
         return Renderer::render(new Dashboard(
-            new Store(sys_get_temp_dir()), $endDay, $days, $stats, $width,
+            new NullReader(), $endDay, $days, $stats, $width,
             null, null, null, 0, 0, null, $byTags, $goal
         ));
     }
@@ -609,7 +609,7 @@ final class RendererGeometryTest extends TestCase
         // Height 6 forces the side-by-side join over a full seven-day
         // timeline; the rebuild must carry the `t` flip (CT-S31 rider).
         $joined = implode("\n", self::plain(Renderer::render(new Dashboard(
-            new Store(sys_get_temp_dir()), $end, 7, $stats, 62, null, 6, null, 0, 0, null, true, null
+            new NullReader(), $end, 7, $stats, 62, null, 6, null, 0, 0, null, true, null
         ))));
         self::assertStringContainsString('By tag', $joined);
         self::assertStringNotContainsString('By language', $joined);
@@ -626,7 +626,7 @@ final class RendererGeometryTest extends TestCase
         $stats = \SugarCraft\CodeTime\Stats::compute(self::busy(), $endDay->modify('-6 days'), $endDay);
         $render = static function (bool $light) use ($endDay, $stats): string {
             return \SugarCraft\CodeTime\Renderer::render(new \SugarCraft\CodeTime\Dashboard(
-                new \SugarCraft\CodeTime\Store(sys_get_temp_dir()), $endDay, 7, $stats, 80,
+                new NullReader(), $endDay, 7, $stats, 80,
                 \SugarCraft\Core\Util\ColorProfile::TrueColor, null, 'file', 0, 0, null, false, null,
                 $light ? \SugarCraft\CodeTime\Theme::named('light') : \SugarCraft\CodeTime\Theme::default(),
             ));

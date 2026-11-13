@@ -274,8 +274,9 @@ final class StoreTest extends TestCase
 
     public function testAppendCreatesDirWhenMissing(): void
     {
-        // Mirrors Store::append() lines 131-133: when dir does not exist,
-        // mkdir is called to create it before writing the file.
+        // Mirrors Store::append() seeding its directory through the same
+        // ensurePrivateDir guard it shares with the other doors: when the
+        // dir does not exist, mkdir creates it before the file is written.
         $nestedDir = $this->tmp . '/nested/deep/path';
         $this->assertFalse(is_dir($nestedDir));
 
@@ -312,12 +313,15 @@ final class StoreTest extends TestCase
     {
         $dir = $this->tmp . '/store';
         mkdir($dir, 0o755);
+        // One clock read: the row and its expected day file derive from the
+        // same instant, so a midnight flip mid-test cannot orphan it (041).
+        $now = time();
         $s = new Store($dir);
-        $s->append(new Heartbeat(time(), 'p', 'php', 'a.php', 60));
+        $s->append(new Heartbeat($now, 'p', 'php', 'a.php', 60));
 
         clearstatcache();
         $this->assertSame(0o700, fileperms($dir) & 0o777, 'data dir must be tightened to 0700');
-        $file = $dir . '/' . date('Y-m-d') . '.jsonl';
+        $file = $dir . '/' . date('Y-m-d', $now) . '.jsonl';
         $this->assertSame(0o600, fileperms($file) & 0o777, 'day file must be owner-private');
     }
 
@@ -325,12 +329,13 @@ final class StoreTest extends TestCase
     {
         $dir = $this->tmp . '/store2';
         mkdir($dir, 0o700);
-        $file = $dir . '/' . date('Y-m-d') . '.jsonl';
+        $now = time();
+        $file = $dir . '/' . date('Y-m-d', $now) . '.jsonl';
         file_put_contents($file, "stale line\n");
         chmod($file, 0o644);
 
         $s = new Store($dir);
-        $s->append(new Heartbeat(time(), 'p', 'php', 'b.php', 60));
+        $s->append(new Heartbeat($now, 'p', 'php', 'b.php', 60));
 
         clearstatcache();
         $this->assertSame(0o600, fileperms($file) & 0o777);
@@ -339,14 +344,15 @@ final class StoreTest extends TestCase
 
     public function testAppendRefusesAnUnencodableHeartbeatInsteadOfWritingGarbage(): void
     {
+        $now = time();
         $s = new Store($this->tmp);
         try {
-            $s->append(new Heartbeat(time(), "pr\xffo", 'php', 'a.php', 60));
+            $s->append(new Heartbeat($now, "pr\xffo", 'php', 'a.php', 60));
             $this->fail('invalid UTF-8 must raise, not write a blank/broken line');
         } catch (\RuntimeException $e) {
             $this->assertStringContainsString('could not be encoded', $e->getMessage());
         }
-        $this->assertFileDoesNotExist($this->tmp . '/' . date('Y-m-d') . '.jsonl');
+        $this->assertFileDoesNotExist($this->tmp . '/' . date('Y-m-d', $now) . '.jsonl');
     }
 
     public function testLoadDayDropsOversizedLinesButKeepsTheirNeighbours(): void
@@ -649,7 +655,8 @@ public function testAppendValidatesTheFullWrittenLineCount(): void
     {
         // Plant the exact shapes a plugin-direct `>>` or a migration move
         // leaves behind: loose dir, loose day file, loose db, loose archive.
-        $dayFile = $this->tmp . '/' . date('Y-m-d') . '.jsonl';
+        // Any dated name qualifies: the sweep globs *.jsonl, never today's.
+        $dayFile = $this->tmp . '/2026-01-02.jsonl';
         file_put_contents($dayFile, '{"time":1,"project":"p","language":"php","file":"f","duration":60,"tags":[]}' . "\n");
         chmod($this->tmp, 0o755);
         chmod($dayFile, 0o644);

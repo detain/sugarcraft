@@ -13,6 +13,7 @@ use SugarCraft\CodeTime\Stats;
 use SugarCraft\CodeTime\Storage\SqliteBackend;
 use SugarCraft\CodeTime\Store;
 use PHPUnit\Framework\TestCase;
+use SugarCraft\CodeTime\Tests\Support\NullReader;
 
 final class DashboardTest extends TestCase
 {
@@ -441,7 +442,7 @@ final class DashboardTest extends TestCase
     }
     public function testAColorProfileMsgLandsOnTheModelAndSurvivesNavigation(): void
     {
-        $store = new Store(sys_get_temp_dir());
+        $store = new NullReader();
         $d = new Dashboard($store, new \DateTimeImmutable('2024-06-07'), 3, new Stats([], []), 80, null, 20);
         $this->assertNull($d->colorProfile);
 

@@ -231,10 +231,13 @@ final class SqliteBackendTest extends TestCase
 
     public function testInvalidateIsCallableNoOp(): void
     {
-        $this->backend->insert(new Heartbeat(time(), 'p', 'php', 'a.php', 60));
+        // One clock read: the row and the window derive from the same
+        // instant, so a midnight flip cannot file it out of the hunt (041).
+        $now = time();
+        $this->backend->insert(new Heartbeat($now, 'p', 'php', 'a.php', 60));
         $this->backend->invalidate();
         $this->assertCount(1, $this->backend->loadRange(
-            new \DateTimeImmutable('today'), new \DateTimeImmutable('today'),
+            new \DateTimeImmutable(date('Y-m-d', $now)), new \DateTimeImmutable(date('Y-m-d', $now)),
         ));
     }
 

@@ -10,8 +10,8 @@ use SugarCraft\CodeTime\Dashboard;
 use SugarCraft\CodeTime\Heartbeat;
 use SugarCraft\CodeTime\Renderer;
 use SugarCraft\CodeTime\Stats;
-use SugarCraft\CodeTime\Store;
 use SugarCraft\CodeTime\Theme;
+use SugarCraft\CodeTime\Tests\Support\NullReader;
 
 /**
  * CT-S33 pins: the extracted palette holds EXACTLY the hexes the Renderer
@@ -75,7 +75,7 @@ final class ThemeTest extends TestCase
         ];
         $stats = Stats::compute($beats, $end->modify('-6 days'), $end);
         $view = Renderer::render(new Dashboard(
-            new Store(sys_get_temp_dir()), $end, 7, $stats, 80,
+            new NullReader(), $end, 7, $stats, 80,
             \SugarCraft\Core\Util\ColorProfile::TrueColor,
             null, 'sqlite', 1, 1, null, false, 3600,
         ));
