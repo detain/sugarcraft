@@ -407,6 +407,42 @@ final class ThemeTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         Theme::dark()->with('documentIndent', Style::new());
     }
+
+    /**
+     * SM-S11: names() is the single roster; every listed name must
+     * resolve through byName(), and the roster must carry no duplicates.
+     */
+    public function testNamesRosterRoundTripsThroughByName(): void
+    {
+        $names = Theme::names();
+        $this->assertSame(array_values($names), array_unique($names), 'roster must be a set');
+        foreach ($names as $name) {
+            $this->assertNotNull(Theme::byName($name), $name . ' must resolve through byName()');
+        }
+        $this->assertSame(
+            ['ansi', 'plain', 'notty', 'ascii', 'dark', 'light', 'dracula', 'tokyo-night', 'pink'],
+            $names
+        );
+    }
+
+    public function testRequireNameResolvesNormalisedAliases(): void
+    {
+        $this->assertInstanceOf(Theme::class, Theme::requireName('Tokyo-Night'));
+        $this->assertInstanceOf(Theme::class, Theme::requireName('tokyonight'));
+        $this->assertInstanceOf(Theme::class, Theme::requireName('no_tty'));
+    }
+
+    public function testRequireNameThrowsWithTheFullRoster(): void
+    {
+        try {
+            Theme::requireName('nope');
+            $this->fail('requireName() must refuse an unknown name');
+        } catch (\InvalidArgumentException $e) {
+            foreach (Theme::names() as $name) {
+                $this->assertStringContainsString($name, $e->getMessage());
+            }
+        }
+    }
 }
 
 /**

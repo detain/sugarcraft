@@ -326,6 +326,39 @@ final class Theme
     }
 
     /**
+     * The canonical stock-theme roster — the single source every name
+     * list in this library derives from ({@see byName()},
+     * {@see requireName()}, `Renderer::withStandardStyle()` errors).
+     * Alias spellings (`tokyonight`, dashed/underscored variants) are
+     * accepted by normalisation in {@see byName()} but not listed here.
+     *
+     * @return list<string>
+     */
+    public static function names(): array
+    {
+        return ['ansi', 'plain', 'notty', 'ascii', 'dark', 'light', 'dracula', 'tokyo-night', 'pink'];
+    }
+
+    /**
+     * Strict sibling of {@see byName()}: the same normalised lookup, but
+     * an unknown name throws instead of returning null. The message
+     * carries the full valid-name list, derived from {@see names()}.
+     *
+     * @throws \InvalidArgumentException when no stock theme answers the name
+     */
+    public static function requireName(string $name): self
+    {
+        $theme = self::byName($name);
+        if ($theme === null) {
+            throw new \InvalidArgumentException(Lang::t('renderer.unknown_style', [
+                'name'   => $name,
+                'styles' => implode(', ', self::names()),
+            ]));
+        }
+        return $theme;
+    }
+
+    /**
      * Look up a built-in theme by glamour-compatible name. Returns
      * null for unknown names so callers can fall back to their own
      * default rather than receiving a surprising one. Names mirror the

@@ -701,20 +701,13 @@ final class Renderer
     /**
      * Pick a stock theme by name. Mirrors glamour's
      * `WithStandardStyle($name)`. Accepts every name {@see Theme::byName()}
-     * recognises (`ansi` / `plain` / `dark` / `light` / `dracula` /
-     * `tokyo-night` / `pink` / `notty` / `ascii`); unknown names
-     * throw `InvalidArgumentException`.
+     * recognises (the roster is {@see Theme::names()}, alias spellings
+     * included); unknown names throw `InvalidArgumentException`
+     * listing the valid ones.
      */
     public function withStandardStyle(string $name): self
     {
-        $theme = Theme::byName($name);
-        if ($theme === null) {
-            throw new \InvalidArgumentException(Lang::t('renderer.unknown_style', [
-                'name'   => $name,
-                'styles' => 'ansi, plain, notty, ascii, dark, light, dracula, tokyonight, pink',
-            ]));
-        }
-        return $this->copy(theme: $theme);
+        return $this->copy(theme: Theme::requireName($name));
     }
 
     /**
