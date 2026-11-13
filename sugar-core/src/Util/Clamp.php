@@ -9,6 +9,12 @@ namespace SugarCraft\Core\Util;
  * Original: clamping is a banal idiom repeated across the upstream; no
  * single mirrorable symbol exists, so the citation is deliberately
  * absent rather than invented (sugar-core-073).
+ *
+ * sc-38 role line: Clamp COERCES — an out-of-range input is totalled into
+ * the nearest legal value and nothing is signalled. Where an out-of-range
+ * input means the CALLER made a mistake that must surface, use
+ * {@see Validation} (refuses at the boundary with a named throw); the two
+ * families are deliberately distinct and neither forwards to the other.
  */
 final class Clamp
 {

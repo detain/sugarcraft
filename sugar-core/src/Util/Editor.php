@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Core\Util;
 
 use SugarCraft\Core\Lang;
+use SugarCraft\Core\Util\Executable\Locator;
 use SugarCraft\Pty\Posix\PosixProcess;
 
 /**
@@ -133,7 +134,7 @@ final class Editor
             if ($argv === []) {
                 continue;
             }
-            $bin = self::which($argv[0]);
+            $bin = Locator::locate($argv[0]);
             if ($bin !== null) {
                 $argv[0] = $bin;
                 return $argv;
@@ -164,30 +165,6 @@ final class Editor
             return [$cmd];
         }
         return array_values(array_filter($parts, static fn (string $p): bool => $p !== ''));
-    }
-
-    private static function which(string $cmd): ?string
-    {
-        if ($cmd === '') {
-            return null;
-        }
-
-        $hasSep = str_contains($cmd, DIRECTORY_SEPARATOR)
-            || (DIRECTORY_SEPARATOR === '\\' && str_contains($cmd, '/'));
-        if ($hasSep) {
-            return is_file($cmd) && is_executable($cmd) ? $cmd : null;
-        }
-
-        $shell = DIRECTORY_SEPARATOR === '\\'
-            ? 'where ' . escapeshellarg($cmd) . ' 2>NUL'
-            : 'command -v ' . escapeshellarg($cmd) . ' 2>/dev/null';
-        $out = @shell_exec($shell);
-        if (!is_string($out)) {
-            return null;
-        }
-        $first = strtok(trim($out), "\r\n");
-        // strtok returns false when string is empty, otherwise a non-empty token
-        return $first !== false ? $first : null;
     }
 
     private static function makeTempFile(string $extension): string

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Core\Util;
 
+use SugarCraft\Core\Util\Executable\Locator;
 use SugarCraft\Pty\Posix\PosixProcess;
 use SugarCraft\Pty\PtyException;
 
@@ -80,7 +81,7 @@ final class Open
     {
         $platform = $platform ?? self::detectPlatform();
         if ($platform === 'WSL') {
-            $hasWslview = $hasWslview ?? self::commandExists('wslview');
+            $hasWslview = $hasWslview ?? Locator::exists('wslview');
             if ($hasWslview) {
                 return ['wslview', [$arg]];
             }
@@ -191,15 +192,5 @@ final class Open
         }
         $v = @file_get_contents('/proc/version');
         return is_string($v) && (stripos($v, 'microsoft') !== false || stripos($v, 'wsl') !== false);
-    }
-
-    private static function commandExists(string $cmd): bool
-    {
-        if (DIRECTORY_SEPARATOR === '\\') {
-            $out = @shell_exec('where ' . escapeshellarg($cmd) . ' 2>NUL');
-        } else {
-            $out = @shell_exec('command -v ' . escapeshellarg($cmd) . ' 2>/dev/null');
-        }
-        return is_string($out) && trim($out) !== '';
     }
 }

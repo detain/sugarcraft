@@ -72,4 +72,5 @@ return [
     'worker.stdin_write_timeout' => 'worker stdin write timed out after {seconds}s: only {written} of {total} bytes handed off (the child never drained the pipe)',
     'worker.queue_full' => 'worker pool at its outstanding-job cap: {pending} pending + {queue} queued against cap {cap} — dispatch refused (backpressure; construct with a larger cap or 0 to disable)',
     'worker.incomplete_result' => 'worker result carries a disallowed class instance (__PHP_Incomplete_Class): task results cross as scalars/arrays or classes named in the response allow-list — see the sc-33 envelope contract',
+    'atomic_json.lock_timeout' => 'timed out after {seconds}s acquiring the atomic-json write lock on {path} (a co-operating writer is wedged; the file is unchanged)',
 ];

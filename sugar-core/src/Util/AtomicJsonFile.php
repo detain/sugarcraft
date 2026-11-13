@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Core\Util;
 
+use SugarCraft\Core\Lang;
+
 /**
  * Atomic lock+tmp+rename JSON store; consolidates the durable-state save
  * pattern hand-rolled across candy-minesweeper, sugar-quickpick, sugar-metrics,
@@ -37,6 +39,17 @@ final class AtomicJsonFile
      * class's vocabulary: a durable JSON file has no business carrying them.
      */
     private const MODE_CEILING = 0777;
+
+    /**
+     * sc-38: how long withWriteLock() polls for the exclusive sidecar lock
+     * before it gives up with the named timeout error. Contentious-but-
+     * healthy writers finish in milliseconds; anything still holding after
+     * five seconds is wedged, and the caller deserves an answer.
+     */
+    private const LOCK_TIMEOUT_SECONDS = 5.0;
+
+    /** Poll granularity while the lock is contended, in microseconds. */
+    private const LOCK_POLL_MICROS = 20_000;
 
     private function __construct(
         private readonly string $path,
@@ -270,6 +283,15 @@ final class AtomicJsonFile
      * it holds no payload, so it is 0600 regardless of the published file's
      * mode (chmod is best-effort: an existing sidecar's bits are not ours to
      * police, and failing here would fail a write over a metadata nicety).
+     *
+     * sc-38: acquisition is BOUNDED. A bare flock(LOCK_EX) waits forever —
+     * a wedged co-operator (a crashed holder is fine, the kernel releases,
+     * but a live process stuck INSIDE its critical section is not) froze
+     * the whole program with it. LOCK_EX|LOCK_NB polled to a deadline turns
+     * that freeze into the named timeout error below. A flock failure that
+     * is NOT contention (would-block false: EBADF/EINTR-class real errors)
+     * is reported immediately with the OS reason instead — a wedged peer
+     * and a broken fd are different diagnoses for the reader.
      */
     private function withWriteLock(\Closure $critical): void
     {
@@ -281,8 +303,29 @@ final class AtomicJsonFile
         @chmod($lockPath, 0600);
 
         try {
-            if (!flock($lockHandle, \LOCK_EX)) {
-                throw new \RuntimeException("Failed to acquire write lock: {$lockPath}");
+            $acquired = false;
+            $deadline = \microtime(true) + self::LOCK_TIMEOUT_SECONDS;
+            do {
+                $wouldBlock = false;
+                if (@flock($lockHandle, \LOCK_EX | \LOCK_NB, $wouldBlock)) {
+                    $acquired = true;
+                    break;
+                }
+                if (!$wouldBlock) {
+                    // Not contention: a real flock error (EBADF/EINTR class).
+                    // Report the OS reason immediately — do not mask a broken
+                    // fd behind a timeout message the reader cannot act on.
+                    $error = \error_get_last();
+                    throw new \RuntimeException("Failed to lock {$lockPath}: " . ($error['message'] ?? 'unknown flock error'));
+                }
+                \usleep(self::LOCK_POLL_MICROS);
+            } while (\microtime(true) < $deadline);
+
+            if (!$acquired) {
+                throw new \RuntimeException(Lang::t('atomic_json.lock_timeout', [
+                    'path'    => $lockPath,
+                    'seconds' => self::LOCK_TIMEOUT_SECONDS,
+                ]));
             }
             $critical();
         } finally {

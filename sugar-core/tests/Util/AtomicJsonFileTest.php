@@ -593,6 +593,79 @@ final class AtomicJsonFileTest extends TestCase
         }
     }
 
+    /**
+     * sc-38: a CO-OPERATING writer that never exits its critical section
+     * must cost the next writer a bounded wait and a named error — not a
+     * freeze of the whole program. (A crashed holder is not this case: the
+     * kernel releases its flock when the fd dies, and the poll loop sails
+     * straight through. The deadline exists for the live-but-stuck peer.)
+     *
+     * The hostile is a real PHP child holding LOCK_EX on the sidecar for
+     * 9s; the writer's 5s deadline must fire inside its own window and
+     * leave the published file byte-untouched.
+     */
+    public function testWriteLockDeadlineRejectsAWedgedCoOperator(): void
+    {
+        $path = $this->tmpDir . '/wedged.json';
+        $store = AtomicJsonFile::new($path);
+        $store->write(['before' => 1]);
+
+        $lockPath = \dirname($path) . '/.' . \basename($path) . '.lock';
+        $holder = \proc_open(
+            [\PHP_BINARY, '-r', '$h = fopen($argv[1], "cb"); flock($h, LOCK_EX); usleep(9000000);', $lockPath],
+            [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes
+        );
+        $this->assertIsResource($holder);
+
+        try {
+            // Handshake on STATE, not elapsed time: poll until the sidecar
+            // is genuinely contended (the holder is inside its section).
+            $handshake = \microtime(true) + 5.0;
+            $contended = false;
+            while (\microtime(true) < $handshake) {
+                $probe = @fopen($lockPath, 'cb');
+                if ($probe === false) {
+                    \usleep(20000);
+                    continue;
+                }
+                $wouldBlock = false;
+                if (!@flock($probe, \LOCK_EX | \LOCK_NB, $wouldBlock)) {
+                    \fclose($probe);
+                    $contended = (bool) $wouldBlock; // flock's by-ref flag is int 1, not bool true
+                    break;
+                }
+                \flock($probe, \LOCK_UN);
+                \fclose($probe);
+                \usleep(20000);
+            }
+            $this->assertTrue($contended, 'the wedged co-operator never took the sidecar lock');
+
+            $start = \microtime(true);
+            $thrown = null;
+            try {
+                $store->write(['after' => 2]);
+            } catch (\RuntimeException $e) {
+                $thrown = $e;
+            }
+            $elapsed = \microtime(true) - $start;
+
+            $this->assertNotNull($thrown, 'a wedged co-operator must not freeze the writer forever');
+            $this->assertStringContainsString('timed out', $thrown->getMessage());
+            $this->assertGreaterThanOrEqual(4.9, $elapsed);
+            $this->assertLessThan(7.5, $elapsed);
+            $this->assertSame(['before' => 1], $store->read(), 'the refused write must never publish');
+        } finally {
+            \proc_terminate($holder);
+            foreach ($pipes as $pipe) {
+                if (\is_resource($pipe)) {
+                    \fclose($pipe);
+                }
+            }
+            \proc_close($holder);
+        }
+    }
+
     private static function rm(string $dir): void
     {
         foreach (glob($dir . '/{,.}*', GLOB_BRACE) ?: [] as $f) {

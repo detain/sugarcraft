@@ -9,6 +9,11 @@ use SugarCraft\Core\Lang;
 /**
  * Shared validation helpers to eliminate repeated InvalidArgumentException patterns.
  * Each method throws with a translatable message when validation fails.
+ *
+ * sc-38 role line: Validation REFUSES — an out-of-range input is the
+ * caller's mistake and surfaces as a named throw. Where a value should be
+ * silently pulled into range instead, use {@see Clamp} (coercion family);
+ * the two are deliberately distinct and neither forwards to the other.
  */
 final class Validation
 {
