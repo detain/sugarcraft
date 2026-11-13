@@ -51,6 +51,8 @@ The board renders in full — there is no scrolling viewport — and the help fo
 | Key                | Action                           |
 |--------------------|----------------------------------|
 | `↑/↓/←/→` or `hjkl`| Move cursor                      |
+| `Home` / `End`   | Jump to the start / end of the row |
+| `PgUp` / `PgDn`  | Jump half a board height up / down |
 | `Space` / `Enter`  | Reveal cell                      |
 | `f`                | Toggle flag                      |
 | Left-click         | Reveal cell (mouse)              |

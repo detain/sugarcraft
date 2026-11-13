@@ -370,6 +370,12 @@ final class Game implements Model
                 => $this->moveCursor(-1, 0),
             $msg->type === KeyType::Right || ($msg->type === KeyType::Char && $char === 'l')
                 => $this->moveCursor(+1, 0),
+            // Large-board navigation aids (msw-27, finding -046): EXPERT
+            // crossing was one cell per keystroke from the 0,0 spawn.
+            $msg->type === KeyType::Home                       => $this->jumpToColumn(0),
+            $msg->type === KeyType::End                        => $this->jumpToColumn($this->board->width - 1),
+            $msg->type === KeyType::PageUp                     => $this->pageRows(-1),
+            $msg->type === KeyType::PageDown                   => $this->pageRows(+1),
             $msg->type === KeyType::Space || $msg->type === KeyType::Enter
                 => $this->reveal(),
             $msg->type === KeyType::Char && $char === 'f'
@@ -750,6 +756,30 @@ final class Game implements Model
             'cursorX' => max(0, min($this->board->width  - 1, $this->cursorX + $dx)),
             'cursorY' => max(0, min($this->board->height - 1, $this->cursorY + $dy)),
         ]);
+    }
+
+    /**
+     * Navigation aids for large boards (msw-27, finding candy-minesweeper-
+     * 046). Home/End snap the cursor to the ends of the current row;
+     * PageUp/PageDown jump by half the board's rows (never less than one),
+     * clamped at the edges exactly like the single-cell moves they ride.
+     * The finding's optional H/M column keys were deliberately skipped:
+     * the lowercase fold above makes H arrive as the vim-left binding — a
+     * direct collision — and M would teach a second single-letter mnemonic
+     * the 80-cell legend has no room for. The wheel stays inert by msw-01's
+     * ruling; these four keys are the keyboard's answer to a 30-wide board.
+     */
+    private function jumpToColumn(int $column): self
+    {
+        return $this->moveCursor(max(0, min($this->board->width - 1, $column)) - $this->cursorX, 0);
+    }
+
+    /**
+     * @param int $direction -1 for PageUp (towards row 0), +1 for PageDown
+     */
+    private function pageRows(int $direction): self
+    {
+        return $this->moveCursor(0, $direction * max(1, intdiv($this->board->height, 2)));
     }
 
     private function reveal(): self

@@ -1284,4 +1284,58 @@ final class GameTest extends TestCase
         $this->assertTrue($kept->restoredGame, 'a picker start cannot launder a restored session');
         $this->assertFalse($kept->picking);
     }
+
+    public function testHomeAndEndSnapTheCursorToTheEndsOfItsRow(): void
+    {
+        $g = Game::start(10, 6, 5, static fn (int $max): int => 0);
+        [$rowed] = $g->update(self::key(KeyType::Char, 'j'));
+        [$end] = $rowed->update(self::key(KeyType::End));
+        $this->assertSame(9, $end->cursorX);
+        $this->assertSame(1, $end->cursorY, 'End jumps within its row, not across rows');
+        [$home] = $end->update(self::key(KeyType::Home));
+        $this->assertSame(0, $home->cursorX);
+        $this->assertSame(1, $home->cursorY);
+
+        // Jumps are movement, not action: they must not arm the clock or
+        // mark the board dirty, exactly like hjkl (the -01 timer law).
+        $this->assertNull($home->startedAt, 'a jump never starts the timer');
+        $this->assertFalse($home->dirty, 'a jump never marks the game dirty');
+
+        // Clamped at the edge: Home from the corner is the same board.
+        [$same] = $g->update(self::key(KeyType::Home));
+        $this->assertSame(0, $same->cursorX);
+    }
+
+    public function testPageKeysJumpHalfABoardAndClampAtBothEnds(): void
+    {
+        $g = Game::start(10, 10, 12, static fn (int $max): int => 0);
+        [$down] = $g->update(self::key(KeyType::PageDown));
+        $this->assertSame(5, $down->cursorY, 'a 10-row page is five rows');
+        $this->assertSame(0, $down->cursorX, 'rows only — the column is untouched');
+        [$floor] = $down->update(self::key(KeyType::PageDown));
+        $this->assertSame(9, $floor->cursorY, 'the second page clamps on the last row');
+        [$up] = $floor->update(self::key(KeyType::PageUp));
+        $this->assertSame(4, $up->cursorY);
+        [$ceil] = $up->update(self::key(KeyType::PageUp));
+        $this->assertSame(0, $ceil->cursorY, 'PageUp from mid-page clamps at the top');
+
+        // Odd heights floor to intdiv; a 1-row page is impossible (min 1).
+        [$tall] = Game::start(10, 5, 6, static fn (int $max): int => 0)->update(self::key(KeyType::PageDown));
+        $this->assertSame(2, $tall->cursorY, '5 rows page 2, not 2.5');
+        [$tiny] = Game::start(5, 3, 2, static fn (int $max): int => 0)->update(self::key(KeyType::PageDown));
+        $this->assertSame(1, $tiny->cursorY, '3 rows still pages at least one row');
+    }
+
+    public function testExpertFarCornerIsThreePressesAway(): void
+    {
+        // Acceptance pin (finding -046): corner-to-corner traversal in <= 4
+        // presses where the arrows need ~44. 30×16 from spawn (0,0):
+        // End + two half-pages of 8 land on (29,15).
+        $g = Game::start(30, 16, 99, static fn (int $max): int => 0);
+        [$a] = $g->update(self::key(KeyType::End));
+        [$b] = $a->update(self::key(KeyType::PageDown));
+        [$c] = $b->update(self::key(KeyType::PageDown));
+        $this->assertSame(29, $c->cursorX);
+        $this->assertSame(15, $c->cursorY, 'the second page must clamp, not overshoot');
+    }
 }
