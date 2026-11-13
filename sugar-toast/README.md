@@ -163,6 +163,20 @@ so hosts with accessibility-critical stacks should cap
 `maxConcurrent` or use `Enqueue` deliberately — its surplus drains only as
 timed alerts expire: with persistent alerts the queue never drains on its own.
 
+Two placement laws ride the same geometry. `view()` bounds the canvas before
+allocating it: each dimension must lie in `1..Toast::MAX_VIEWPORT_DIMENSION`
+(4 096 cells) and the product must fit `Toast::MAX_VIEWPORT_CELLS`
+(1 000 000 cells), or an `InvalidArgumentException` is thrown before any
+allocation — the frame is a real `width × height` cell grid, so bogus
+winsizes fail loud instead of exhausting memory. Boxes that cannot fit
+ellipsize with `…`: on very narrow frames the drop clears the whole styled
+prefix — icon and the accessible severity word (`withAccessibleText()`) go
+together, with the line indent — and message/action content degrades instead
+of vanishing. And `Position::xOffset()` is honest about oversize: its
+right/centre arms go **negative** when a box is wider than the viewport;
+`view()` clamps with `max(0)`, and hosts calling the accessor directly must
+clamp the same way.
+
 ## Persistent Alerts
 
 By default, alerts inherit `withDuration()` for auto-dismiss timing. A `null`
@@ -194,6 +208,15 @@ unset. On a toast that has `withDuration()` armed, a plain `alert()` inherits
 an expiry the moment it queues — the sticky box quietly self-destructs on the
 inherited timer unless you take the sentinel path above or release the
 duration with `withDuration(null)`.
+
+**The queueing doors take two expiry knobs.** `$expiresAt` is an *absolute*
+epoch instant (`microtime(true)` space): a duration-shaped (sub-epoch) value
+is born expired and NAN/INF never expire — both are thrown away rather than
+honoured in silence. `$ttlSeconds` is the *relative* form: the door resolves
+it against the current clock itself, and the two knobs are mutually exclusive
+— passing both throws, naming both parameters. With neither, the door
+inherits `withDuration()`; with one, the alert carries exactly what you gave
+it (`null` duration + no knob = never expires).
 
 The `Alert` constructor itself accepts a `persistent` flag alongside an
 explicit `$expiresAt`: it takes the pair without complaint, but the
@@ -492,43 +515,43 @@ already over the new cap survive until the next push evicts them.
 
 | Method | Description |
 |--------|-------------|
-| `Toast::new(int $maxWidth = 50)` | Factory |
-| `->withPosition(Position)` | Screen position (9 positions) |
-| `->withDuration(?float $seconds)` | Auto-dismiss after N seconds; `null` disables. `null` = never expires, positive seconds = TTL: NAN/INF and `<= 0` throw — a zero/negative timer would birth every queued alert already expired (never rendered, `secondsUntilNextExpiry()` pinned at `0.0`) in silence, so the door refuses it like `withMaxConcurrent` does its below-1 cap |
-| `->withMaxWidth(int)` | Maximum alert width in cells. `<= 0` throws `InvalidArgumentException` — positive cells are the cap, a non-positive width would floor silently to an unreadable 1-cell box (the renderer's old 1-cell floor now only guards the `Toast::new(0)` ctor path and raw internal state) |
-| `->withMinWidth(int)` | Minimum alert width in cells — a master switch: `0` is the FIXED-WIDTH sentinel (box holds its full width cap), any positive value engages fit-content between the floor and `maxWidth`; negative throws (only `0` has a meaning below the positive range) |
-| `->withSymbolSet(SymbolSet)` | Icon glyph set: NerdFont, Unicode, or Ascii — icons only; borders and bar stay box-drawing |
-| `->withAllowEscToClose(bool)` | Preference flag the host reads to decide if Escape dismisses (the renderer does not handle input) |
-| `->withAccessibleText(bool $on = true)` | Opt-in text channel: severity word in the header + numeric percentage on progress rows; default off keeps every frame byte-identical |
-| `->withHostZoneCarry(bool $on = true)` | Carry the host's U+E000..U+E001 zone markers through the composite: on (default) keeps every open marker paired (chrome shows holes where a marker was restored); off restores full chrome at the cost of the zone spans |
-| `->withMaxConcurrent(?int $n)` | Cap concurrent alerts (`null` = unlimited; `< 1` throws `InvalidArgumentException`) |
-| `->withOverflow(Overflow)` | Strategy when cap exceeded: DropOldest, DropNewest, Enqueue |
-| `->withHistoryLimit(?int $n)` | Cap history log, oldest evicted first (default 100; `null` = unbounded; `0` is accepted as a no-history sentinel — negatives alone throw, unlike `withMaxConcurrent`, which refuses anything below 1) |
-| `->alert(ToastType\|string, string, ?float $expiresAt = null, ?array $actions = null, ?string $id = null, ?float $ttlSeconds = null)` | Add alert (string type = case-insensitive; `null` expiry inherits `withDuration()`; `id` updates a live alert in place; `$expiresAt` is an absolute epoch — duration-shaped and non-finite (NAN/INF) values throw; `$ttlSeconds` is the relative lifetime resolved at this door, mutually exclusive with `$expiresAt`) |
-| `->progressToast(ToastType\|string, string, float $progress, ?float $expiresAt = null, ?array $actions = null, ?string $id = null, ?float $ttlSeconds = null)` | Add alert with progress bar (0.0–1.0 — out-of-range clamps on attach, NAN/INF throw); same `id` = same box; wrong-slot `$expiresAt` throws; `$ttlSeconds` as in `alert()` |
+| `Toast::new(int $maxWidth = 50)` | The one construction door — queue with a 50-cell width cap |
+| `->withPosition(Position)` | Anchor the boxes; all nine positions, see Positions |
+| `->withDuration(?float $seconds)` | Default TTL inherited by queueing doors; `null` never expires, non-finite/`<= 0` throw — see Persistent Alerts |
+| `->withMaxWidth(int)` | Width cap in cells; `<= 0` throws (the refusal message names the reason) — see Features |
+| `->withMinWidth(int)` | Fit-content floor — master switch: `0` (default) FIXED-WIDTH full cap, positive engages auto-fit; negative throws — see Features |
+| `->withSymbolSet(SymbolSet)` | Icon glyph set (NerdFont/Unicode/Ascii) — icons only; borders and bar stay box-drawing |
+| `->withAllowEscToClose(bool)` | Preference flag the host reads to decide Escape dismissal (the renderer handles no input) |
+| `->withAccessibleText(bool $on = true)` | Opt-in text channel: severity word in the header + percentage on progress rows; default off keeps frames byte-identical |
+| `->withHostZoneCarry(bool $on = true)` | Carry the host's U+E000..U+E001 zone markers through the composite; `off` blits opaque chrome — see Security & Trust Boundary |
+| `->withMaxConcurrent(?int $n)` | Cap concurrent alerts; `null` = unlimited, `< 1` throws — see Overflow & Concurrency |
+| `->withOverflow(Overflow)` | Strategy when the cap is reached — see Overflow & Concurrency |
+| `->withHistoryLimit(?int $n)` | History cap, oldest evicted first; default 100, `null` unbounded, `0` no-history, negatives throw — see History Log |
+| `->alert(ToastType\|string, string, ?float $expiresAt = null, ?array $actions = null, ?string $id = null, ?float $ttlSeconds = null)` | Queue an alert; string type is case-insensitive — expiry knobs in Persistent Alerts, update-in-place in Progress Toasts |
+| `->progressToast(ToastType\|string, string, float $progress, ?float $expiresAt = null, ?array $actions = null, ?string $id = null, ?float $ttlSeconds = null)` | Queue an alert with a progress bar (clamps on attach, NAN/INF throw) — same id = same box, see Progress Toasts |
 | `->push(Alert $alert): self` | Enqueue a pre-built `Alert` (styled/actioned) |
 | `->cancelAlert(int $index): self` | Make a queued alert persistent (never auto-dismisses) |
 | `->removeAlert(string $id): self` | Retire the queued alert with this id, unrecorded (companion of id updates) |
-| `->extendAlert(int $index, float $additionalSeconds): self` | Re-arm one queued alert's timer to N seconds from NOW (a reset, not a push-back: 30 s left + extend(5) ⇒ 5 s left) |
+| `->extendAlert(int $index, float $additionalSeconds): self` | Re-arm one queued alert's timer to N seconds from NOW (a reset, not a push-back) |
 | `->extendAll(float $additionalSeconds): self` | Re-arm every expiring alert's timer to N seconds from NOW |
-| `->allowEscToClose(): bool` | Read the Escape-dismiss preference flag (host consumes it; the renderer handles no input) |
+| `->allowEscToClose(): bool` | Read the Escape-dismiss preference flag (host consumes it) |
 | `->accessibleText(): bool` | Read the accessible-text preference flag |
-| `->error(string $message, ?float $expiresAt = null, ?array $actions = null, ?string $id = null, ?float $ttlSeconds = null)` | Convenience queue for `ToastType::Error` — full `alert()` tail delegated verbatim (extra args are honoured, never silently dropped; inherits duration/expiry rules of `alert()`) |
-| `->warning(string $message, ?float $expiresAt = null, ?array $actions = null, ?string $id = null, ?float $ttlSeconds = null)` | Convenience queue for `ToastType::Warning` (full `alert()` tail) |
-| `->info(string $message, ?float $expiresAt = null, ?array $actions = null, ?string $id = null, ?float $ttlSeconds = null)` | Convenience queue for `ToastType::Info` (full `alert()` tail) |
-| `->success(string $message, ?float $expiresAt = null, ?array $actions = null, ?string $id = null, ?float $ttlSeconds = null)` | Convenience queue for `ToastType::Success` (full `alert()` tail) |
+| `->error(string $message, ?float $expiresAt = null, ?array $actions = null, ?string $id = null, ?float $ttlSeconds = null)` | Convenience door for `ToastType::Error` — full `alert()` tail delegated verbatim |
+| `->warning(string $message, ?float $expiresAt = null, ?array $actions = null, ?string $id = null, ?float $ttlSeconds = null)` | Convenience door for `ToastType::Warning` — full `alert()` tail delegated verbatim |
+| `->info(string $message, ?float $expiresAt = null, ?array $actions = null, ?string $id = null, ?float $ttlSeconds = null)` | Convenience door for `ToastType::Info` — full `alert()` tail delegated verbatim |
+| `->success(string $message, ?float $expiresAt = null, ?array $actions = null, ?string $id = null, ?float $ttlSeconds = null)` | Convenience door for `ToastType::Success` — full `alert()` tail delegated verbatim |
 | `->hasActiveAlert(): bool` | True if non-expired alerts queued |
-| `->nextExpiry(): ?float` | Soonest expiry instant (epoch seconds, wall clock — an NTP step shifts it) of an auto-dismissing alert, or `null` |
+| `->nextExpiry(): ?float` | Soonest expiry instant (epoch seconds, wall clock) of an auto-dismissing alert, or `null` |
 | `->secondsUntilNextExpiry(): ?float` | Delay until the next expiry, clamped `>= 0.0`, or `null` — schedule one prune tick |
-| `->dismiss() / clear() / pruneExpired()` | Lifecycle: `dismiss()` files EVERY queued alert (expired included) into history and stops rendering until `clear()`, which also resets the flag but files nothing; `pruneExpired()` drops expired alerts silently |
-| `->history(): list<Alert>` | Return all recorded alerts — dismissed, `DropOldest` evictees AND `DropNewest` refusals; cumulative, `clear()` never resets it |
-| `->activeAlerts(): list<Alert>` | The live queue exactly as `view()` sees it — expired filtered, queue order; the index space `cancelAlert()`/`extendAlert()` and `actionRects()`'s `alertIndex` share |
-| `->actionRects(?string $background = null, ?int $viewportWidth = null, ?int $viewportHeight = null): list<array{action:Action,alert:Alert,alertIndex:int,actionIndex:int,row:int,col:int,width:int}>` | Absolute frame cells of every painted `[Label]` button in the frame (omitted args read the last render; args differing from it throw `\LogicException`) — the dim `"+N more"` fold row is prose, not a button — it never appears in the list |
-| `->frame(?string $background = null, ?int $viewportWidth = null, ?int $viewportHeight = null): ?ToastFrame` | The rendered frame as a value: composed `rows`, top-box `x`/`y`, `actionRects()`, `actionAt($col, $row)`, `boxRows()`; null when nothing renders |
-| `->actionAt(int $col, int $row, ?string $background = null, ?int $viewportWidth = null, ?int $viewportHeight = null): ?Action` | The dispatch door: which Action (if any) covers a position of the frame on screen — omitted args read the last render, mismatched args throw; where two boxes share rows, the top-most (newest) one wins |
-| `ToastFrame::boxRows(): list<string>` | The composed frame as lines (no trailing-newline artefact) — over an empty background these are exactly the box rows, so dashboard-style consumers stop splitting rendered ANSI |
-| `Lang::t(string $key, array $params = []): string` | Translate a known key ('dismiss', 'count', 'type.*') — the inherited sugar-core helper behind `ToastType::label()` |
-| `->view(string $background, int $viewportWidth = 80, int $viewportHeight = 24): string` | Render toast layer over background; both dimensions must lie in `1..Toast::MAX_VIEWPORT_DIMENSION` (4 096 per dimension) and fit `Toast::MAX_VIEWPORT_CELLS` (a 1 000 000-cell product cap) or an `InvalidArgumentException` is thrown before any allocation — the frame is a real `width × height` cell grid, so bogus winsizes fail loud instead of exhausting memory. Boxes that cannot fit ellipsize (`…`): on very narrow frames the drop clears the whole styled prefix — icon and the accessible severity word (`withAccessibleText()`) go together, with the line indent — and message/action content degrades instead of vanishing. |
+| `->dismiss() / clear() / pruneExpired()` | Lifecycle: `dismiss()` files every queued alert into history and mutes rendering until `clear()`; `clear()` resets the dismissed state but files nothing into history; `pruneExpired()` drops expired alerts silently — see History Log |
+| `->history(): list<Alert>` | Every recorded alert — dismissed, `DropOldest` evictees, `DropNewest` refusals; cumulative, `clear()` never resets it — see History Log |
+| `->activeAlerts(): list<Alert>` | The live queue exactly as `view()` sees it — the index space `cancelAlert()`/`extendAlert()`/`actionRects()` share |
+| `->actionRects(?string $background = null, ?int $viewportWidth = null, ?int $viewportHeight = null): list<array{action:Action,alert:Alert,alertIndex:int,actionIndex:int,row:int,col:int,width:int}>` | Frame cells of every painted `[Label]` button — omitted args read the last render, mismatched args throw; the `"+N more"` fold is prose, never a rect |
+| `->frame(?string $background = null, ?int $viewportWidth = null, ?int $viewportHeight = null): ?ToastFrame` | The rendered frame as a value object (`boxRows()`/`actionRects()`/`actionAt()`); `null` when nothing renders |
+| `->actionAt(int $col, int $row, ?string $background = null, ?int $viewportWidth = null, ?int $viewportHeight = null): ?Action` | The dispatch door: which Action (if any) covers a frame cell — top-most (newest) box wins where rows overlap |
+| `ToastFrame::boxRows(): list<string>` | The composed frame as lines (no trailing-newline artefact) — over an empty background, exactly the box rows |
+| `Lang::t(string $key, array $params = []): string` | Translate a known key ('dismiss', 'count', 'type.*') — see Internationalization |
+| `->view(string $background, int $viewportWidth = 80, int $viewportHeight = 24): string` | Render the toast layer over the background — frame bounds and ellipsize laws in Stacking & The Frame |
 
 | Class | Method | Description |
 |-------|--------|-------------|
@@ -536,38 +559,38 @@ already over the new cap survive until the next push evicts them.
 | `Alert` | `withActions(list<Action>)` | Attach action buttons |
 | `Alert` | `isExpired(): bool` | Check expiry |
 | `Alert` | `withExpiry(float $duration)` | Set expiry from now |
-| `Alert` | `new(ToastType, ?string, ?float, ?float, array, ?Color, ?Color, ?Color, bool $persistent = false, ?string $id = null)` | Factory (ctor mirror; trailing persistent/id named args) |
+| `Alert` | `new(ToastType, ?string, ?float, ?float, array, ?Color, ?Color, ?Color, bool $persistent = false, ?string $id = null)` | Factory — constructor mirror (`type`/`message` positional, the rest named); the one seed door, see Persistent Alerts |
 | `Alert` | `->type: ToastType` | Severity — drives icon, palette and the accessible label (public readonly) |
 | `Alert` | `->message: ?string` | User-visible message text (`null` renders as empty) |
-| `Alert` | `->expiresAt: ?float` | Absolute seconds-since-epoch instant the alert stops rendering; `null` means INHERIT — the queueing doors arm the configured `withDuration()` timer when one is set. Never-expiring is the `$persistent` sentinel, not `null` alone |
-| `Alert` | `->progress: ?float` | Progress 0.0–1.0 (non-finite throws; the constructor stores the value as given — `withProgress()` clamps on attach and render clamps again); `null` = no progress bar |
+| `Alert` | `->expiresAt: ?float` | Absolute seconds-since-epoch expiry; `null` = INHERIT the toast duration — see Persistent Alerts |
+| `Alert` | `->progress: ?float` | Bar 0.0–1.0 or `null`; the constructor stores as given, `withProgress()` clamps, NAN/INF throw |
 | `Alert` | `->actions: list<Action>` | Clickable action buttons |
-| `Alert` | `->backgroundColor: ?Color` | Box background fill (`null` = no fill, plain render) |
-| `Alert` | `->foregroundColor: ?Color` | Message-text colour (`null` = terminal default) |
-| `Alert` | `->borderColor: ?Color` | Box-glyph (border) colour (`null` = terminal default) |
-| `Alert` | `->persistent: bool` | Explicit never-expire sentinel: the queueing doors skip duration inheritance while it is set, and `isExpired()` short-circuits on it — a companion `$expiresAt` accepted alongside is stored but unread while persistence stands |
-| `Alert` | `->id: ?string` | Stable identity for update-in-place: re-queuing an alert with the same id through `alert()`/`progressToast()`/`push()` REPLACES the live alert at its queue position instead of appending a second box; `null` = anonymous, always appends |
-| `Alert` | `withoutExpiry()` | DEPRECATED forwarder to `withCancelledExpiry()` (kept working until 2.x) — makes the alert persistent (never auto-dismisses) via the explicit sentinel |
-| `Alert` | `withCancelledExpiry()` | Canonical persistence door: set the persistent sentinel + clear the expiry (used by `Toast::cancelAlert()`) |
+| `Alert` | `->backgroundColor: ?Color` | Box background fill (`null` = UNSTYLED, see Styled Alerts) |
+| `Alert` | `->foregroundColor: ?Color` | Message-text colour (`null` = UNSTYLED, see Styled Alerts) |
+| `Alert` | `->borderColor: ?Color` | Box-glyph (border) colour (`null` = UNSTYLED, see Styled Alerts) |
+| `Alert` | `->persistent: bool` | Explicit never-expire sentinel — queueing doors skip duration inheritance while it stands, see Persistent Alerts |
+| `Alert` | `->id: ?string` | Stable identity for update-in-place — see Progress Toasts |
+| `Alert` | `withoutExpiry()` | DEPRECATED forwarder to `withCancelledExpiry()` (kept working until 2.x) |
+| `Alert` | `withCancelledExpiry()` | Canonical persistence door: set the sentinel + clear the expiry (used by `Toast::cancelAlert()`) |
 | `Alert` | `withExtendedExpiry(float)` | Reset the expiry to N seconds from NOW |
 | `Alert` | `withBackgroundColor(?Color)` | Override box background (`null` = no fill, plain render) |
 | `Alert` | `withForegroundColor(?Color)` | Override text colour (`null` = terminal default, not the type colour) |
 | `Alert` | `withBorderColor(?Color)` | Override border colour (`null` = terminal default, not the type colour) |
 | `Action` | `new(string $label, \Closure(): void $callback)` | Factory |
-| `Action` | `->label: non-empty-string` | Button label (readonly; normalised at construction — inline SGR kept, other control/escape constructs stripped, printable-empty refused) |
+| `Action` | `->label: non-empty-string` | Button label (non-empty string; readonly) — inline SGR kept, other control/escape constructs stripped, printable-empty refused |
 | `Action` | `->callback: \Closure(): void` | Callback (readonly) |
-| `HistoryLog` | `new(array $entries = []): self` | Factory mirroring the sibling `::new()`s; seeds a log from a `list<Alert>` (garbage throws, same fail-fast door) |
+| `HistoryLog` | `new(array $entries = []): self` | Factory mirroring the sibling `::new()`s; seeds from a `list<Alert>`, garbage throws |
 | `HistoryLog` | `push(Alert, ?int $limit = null): self` | Append alert, evicting oldest past `$limit`; new log |
 | `HistoryLog` | `all(): list<Alert>` | Return all entries |
 | `HistoryLog` | `count(): int` | Entry count |
-| `Position` | `xOffset(int $alertWidth, int $viewportWidth): int` | X offset of a box in a viewport (left edge 0, center floored, right flush). Right/centre arms go **negative** when the box is wider than the viewport — `view()` clamps via max(0), so hosts calling this accessor directly must clamp the same way (the law lives in the `Position::xOffset()` docblock) |
-| `Position` | `yOffset(int $alertHeight, int $viewportHeight, int $stackedHeightBefore = 0): int` | Y offset; top families stack downward from the top, bottom and middle families stack upward against `$stackedHeightBefore`, clamped to row 0 on short viewports |
-| `ToastType` | `label(): string` | Translated severity word (`Lang::t('type.*')`) — surfaced in the frame by `withAccessibleText()` |
+| `Position` | `xOffset(int $alertWidth, int $viewportWidth): int` | X offset of a box in a viewport (left 0, centre floored, right flush) — **negative** when the box outgrows the viewport, clamp like `view()` — see Stacking & The Frame |
+| `Position` | `yOffset(int $alertHeight, int $viewportHeight, int $stackedHeightBefore = 0): int` | Y offset; top families stack downward, bottom/middle upward against `$stackedHeightBefore`, clamped to row 0 |
+| `ToastType` | `label(): string` | Translated severity word (`Lang::t('type.*')`) — surfaced by `withAccessibleText()` |
 | `ToastType` | `icon(SymbolSet $set): string` | Icon glyph for this type under the given symbol set |
 | `ToastType` | `nerdIcon(): string` | NerdFont icon symbol for the type |
 | `ToastType` | `unicodeIcon(): string` | Unicode symbol (✖ ⚠ ℹ ✔) — fallback when no NerdFont |
 | `ToastType` | `asciiPrefix(): string` | Plain ASCII prefix (`[E]` `[W]` `[I]` `[S]`) |
-| `ToastType` | `color(): string` | ANSI SGR color code for the type's icon (31/33/34/32) |
+| `ToastType` | `color(): string` | ANSI SGR colour code for the type's icon (31/33/34/32 — emitted as packed RGB, see Styled Alerts) |
 
 | Enum | Cases |
 |-------|-------|
