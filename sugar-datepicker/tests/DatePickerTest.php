@@ -941,15 +941,26 @@ final class DatePickerTest extends TestCase
         // Verify we're on May 15
         $this->assertSame('2026-05-15', $dp->dateAtCursor()?->format('Y-m-d'));
 
-        // Select the date
-        $dp = $dp->selectDate();
+        // Select the date, then step OFF it so the cursor style does not
+        // overlay the cell we are pinning (the 15 must show the
+        // selectedToday style alone).
+        $dp = $dp->selectDate()->moveCursorRight();
 
         $this->assertTrue($dp->isSelecting());
         $this->assertSame('2026-05-15', $dp->selectedDate()?->format('Y-m-d'));
 
-        // View must render (the selectedTodayStyle branch applies)
+        // Pin the BYTES of the selected∩today cell: bold yellow (1;33) in
+        // cellbuffer's truecolour serialisation. An adjacent plain-today
+        // cell from the same day WITHOUT the selection renders bold green
+        // (1;32) instead — swapping the two default styles reddens both
+        // needles, which is the mutation proof this pin exists for
+        // (sugar-datepicker-018).
         $view = $dp->view();
-        $this->assertIsString($view);
+        $this->assertStringContainsString("\x1b[0;38;2;205;205;0;1m15\x1b[0m", $view, 'selected∩today must carry the bold-yellow selectedToday style');
+
+        $plainToday = $dp->clearDate()->view();
+        $this->assertStringContainsString("\x1b[0;38;2;0;205;0;1m15\x1b[0m", $plainToday, 'today-only must carry the bold-green today style');
+        $this->assertStringNotContainsString("\x1b[0;38;2;205;205;0;1m15\x1b[0m", $plainToday, 'with the selection gone, no yellow cell may remain');
     }
 
     public function testWithoutTodayDropsThePinnedReference(): void
