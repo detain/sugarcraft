@@ -424,6 +424,16 @@ the accessors yourself if you need a fully mirrored rail.
 
 Beyond the workflow above, the public surface is small and mostly self-evident:
 
+**CardSize** — one size vocabulary: `CardSize::new($width, $height, $hSpacing = 2, $vSpacing = 1)`
+clamps once at ingress (width ≥ 4, height ≥ 1, gutters ≥ 0) and carries bare
+accessors `width()` / `height()` / `hSpacing()` / `vSpacing()` plus `with*()`
+withers. It is accepted wherever the loose ints were — `PosterGrid::new()`,
+`PosterGrid::withCardSize()`, `Rail::render()`, `Rail::perRow()`,
+`Rail::frameHeight()`, `PosterCard::render()` / `renderMemoKey()` — and the
+int signatures are unchanged and byte-identical (an int width still needs its
+poster height). `PosterGrid::cardSize()` reads the effective geometry back as
+one value.
+
 **PosterGrid** — navigation `left()` / `right()` (one cell, crossing row edges,
 clamped at both ends), `up()` / `down()` (one row; `down()` steps onto the last
 item on a partial bottom row), `pageUp()` / `pageDown()` (one viewport:

@@ -408,8 +408,14 @@ final readonly class PosterCard
      * and a progress row when set. Every row is exactly $width visual cells wide
      * so a rail or grid can stitch cards side by side.
      */
-    public function render(bool $focused, int $width, int $posterHeight): string
+    public function render(bool $focused, int|CardSize $width, ?int $posterHeight = null): string
     {
+        if ($width instanceof CardSize) {
+            $posterHeight = $width->height();
+            $width = $width->width();
+        } elseif ($posterHeight === null) {
+            throw new \ArgumentCountError('PosterCard::render(): an int width needs a poster height.');
+        }
         $width = max(4, $width);
         $posterHeight = max(1, $posterHeight);
 
@@ -541,8 +547,11 @@ final readonly class PosterCard
      * keyed every frame with an md5 over the finished block while the card
      * already carried the ingress hash from sugar-gallery-014).
      */
-    public function renderMemoKey(bool $focused, int $width, int $posterHeight): ?string
+    public function renderMemoKey(bool $focused, int|CardSize $width, ?int $posterHeight = null): ?string
     {
+        $size = CardSize::from($width, $posterHeight);
+        $width = $size->width();
+        $posterHeight = $size->height();
         $body = $this->bodyKey(max(4, $width), max(1, $posterHeight));
         if ($body === null) {
             return null;

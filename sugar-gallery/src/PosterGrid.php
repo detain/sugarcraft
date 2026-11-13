@@ -76,9 +76,17 @@ final class PosterGrid
      * A new empty grid laid out with the given card geometry. Feed it a viewport
      * ({@see withViewport()}) and a result set ({@see withReset()} / {@see withItems()}).
      */
-    public static function new(int $cardWidth, int $posterHeight, int $hSpacing = 2, int $vSpacing = 1): self
+    public static function new(int|CardSize $cardWidth, ?int $posterHeight = null, int $hSpacing = 2, int $vSpacing = 1): self
     {
-        return new self(max(4, $cardWidth), max(1, $posterHeight), max(0, $hSpacing), max(0, $vSpacing));
+        $size = CardSize::from($cardWidth, $posterHeight, $hSpacing, $vSpacing);
+
+        return new self($size->width(), $size->height(), $size->hSpacing(), $size->vSpacing());
+    }
+
+    /** The effective card geometry as one {@see CardSize} value. */
+    public function cardSize(): CardSize
+    {
+        return CardSize::new($this->cardWidth, $this->posterHeight, $this->hSpacing, $this->vSpacing);
     }
 
     // ---- geometry ------------------------------------------------------
@@ -120,13 +128,14 @@ final class PosterGrid
      * re-splice every cached card to resize it). Null spacing arguments
      * keep the grid's current gutters.
      */
-    public function withCardSize(int $cardWidth, int $posterHeight, ?int $hSpacing = null, ?int $vSpacing = null): self
+    public function withCardSize(int|CardSize $cardWidth, ?int $posterHeight = null, ?int $hSpacing = null, ?int $vSpacing = null): self
     {
+        $size = CardSize::from($cardWidth, $posterHeight, $hSpacing ?? $this->hSpacing, $vSpacing ?? $this->vSpacing);
         $clone = clone $this;
-        $clone->cardWidth = max(4, $cardWidth);
-        $clone->posterHeight = max(1, $posterHeight);
-        $clone->hSpacing = max(0, $hSpacing ?? $this->hSpacing);
-        $clone->vSpacing = max(0, $vSpacing ?? $this->vSpacing);
+        $clone->cardWidth = $size->width();
+        $clone->posterHeight = $size->height();
+        $clone->hSpacing = $size->hSpacing();
+        $clone->vSpacing = $size->vSpacing();
 
         return $clone->synced($clone->cursor);
     }

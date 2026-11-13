@@ -237,8 +237,13 @@ final readonly class Rail
      * paints at 4 cells minimum no matter what it is asked for — a perRow
      * computed from an unfloored cardWidth promises more slots than fit).
      */
-    public static function perRow(int $railWidth, int $cardWidth, int $spacing = 2): int
+    public static function perRow(int $railWidth, int|CardSize $cardWidth, ?int $spacing = null): int
     {
+        if ($cardWidth instanceof CardSize) {
+            $spacing ??= $cardWidth->hSpacing();
+            $cardWidth = $cardWidth->width();
+        }
+        $spacing ??= 2;
         return max(1, intdiv(max(1, $railWidth) + max(0, $spacing), max(4, $cardWidth) + max(0, $spacing)));
     }
 
@@ -250,8 +255,12 @@ final readonly class Rail
      * (sugar-gallery-033: a forged C1 zone sentinel in un-trusted poster art
      * would otherwise ride the join into the owner's marker scan).
      */
-    public function render(int $railWidth, bool $focused, int $cardWidth, int $posterHeight, int $spacing = 2): string
+    public function render(int $railWidth, bool $focused, int|CardSize $cardWidth, ?int $posterHeight = null, ?int $spacing = null): string
     {
+        $size = CardSize::from($cardWidth, $posterHeight, $spacing);
+        $cardWidth = $size->width();
+        $posterHeight = $size->height();
+        $spacing = $spacing ?? $size->hSpacing();
         // Clamp the degenerate edges ONCE, at the method head, and let every
         // use below ride the clamped values (sugar-gallery-005/-021: the
         // header floored the rail while perRow() ran raw, so railWidth=60 at
@@ -334,8 +343,11 @@ final readonly class Rail
      * Diff-paint owners that size a damage rect from this must clear the
      * spare line rather than trust it to carry ink.
      */
-    public function frameHeight(int $posterHeight): int
+    public function frameHeight(int|CardSize $posterHeight): int
     {
+        if ($posterHeight instanceof CardSize) {
+            $posterHeight = $posterHeight->height();
+        }
         $bar = 0;
         foreach ($this->cards as $card) {
             if ($card->progress !== null) {

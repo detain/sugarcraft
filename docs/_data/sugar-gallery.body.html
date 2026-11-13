@@ -105,7 +105,8 @@ echo $card->render(focused: true, width: 16, posterHeight: 9);</code></pre>
     <h3 style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>PosterGrid</td><td>static new(int $cardWidth, int $posterHeight, int $hSpacing = 2, int $vSpacing = 1): self</td><td>A new empty grid with the given card geometry</td></tr>
+<tr><td>CardSize</td><td>static new(int $width, int $height, int $hSpacing = 2, int $vSpacing = 1): self</td><td>One clamped size value (width ≥ 4, height ≥ 1, gutters ≥ 0) accepted by PosterGrid::new/withCardSize, Rail::render/perRow/frameHeight and PosterCard::render alongside the int signatures</td></tr>
+<tr><td>PosterGrid</td><td>static new(int|CardSize $cardWidth, ?int $posterHeight = null, int $hSpacing = 2, int $vSpacing = 1): self</td><td>A new empty grid with the given card geometry</td></tr>
 <tr><td>PosterGrid</td><td>withReset(int $total): self</td><td>Begin a fresh result set — drop cached cards, return the cursor to the top</td></tr>
 <tr><td>PosterGrid</td><td>withTotal(int $total): self</td><td>Update the known total without dropping cards, clamping the cursor</td></tr>
 <tr><td>PosterGrid</td><td>withItems(array $items): self</td><td>Splice a page of cards in at their absolute indices (new cards win)</td></tr>
