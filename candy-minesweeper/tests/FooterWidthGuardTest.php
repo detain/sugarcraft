@@ -6,6 +6,7 @@ namespace SugarCraft\Minesweeper\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\I18n\T;
+use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Minesweeper\Board;
 use SugarCraft\Minesweeper\Cell;
 use SugarCraft\Minesweeper\Difficulty;
@@ -87,7 +88,10 @@ final class FooterWidthGuardTest extends TestCase
         );
         unset($winRows);
 
-        return [['fresh', $fresh], ['exploded', $exploded], ['won+3digit', $won]];
+        return [['fresh', $fresh], ['exploded', $exploded], ['won+3digit', $won],
+            // EXPERT (30×16) is the widest shipped preset board — 16+8 = 24
+            // rows, the exact boot-fit floor, and the longest footer budget.
+            ['expert', Game::withDifficulty(Difficulty::EXPERT)]];
     }
 
     public function testEveryFrameLineFitsEightyColumnsInEveryLocale(): void
@@ -110,6 +114,43 @@ final class FooterWidthGuardTest extends TestCase
                             self::MAX_LINE,
                             $width,
                             "locale {$locale} fixture {$name}: line wraps at {$width} cells: {$clean}",
+                        );
+                    }
+                }
+            }
+        } finally {
+            T::setLocale($previous);
+        }
+    }
+
+    /**
+     * Terminal fit (candy-minesweeper-001): on a narrow terminal the footer
+     * word-wraps inside the live columns instead of reflowing the screen —
+     * every rendered line of every locale must respect a 40-column budget.
+     */
+    public function testEveryFrameLineFitsFortyColumnsInEveryLocale(): void
+    {
+        $fixtures = [
+            ['fresh', Game::withDifficulty(Difficulty::EASY)],
+            ['expert', Game::withDifficulty(Difficulty::EXPERT)],
+            ['toasted', Game::withDifficulty(Difficulty::STANDARD, notice: 'saved')],
+        ];
+        $locales = array_map('basename', array_combine($glob = glob(__DIR__ . '/../lang/*.php') ?: [], $glob));
+        $this->assertNotEmpty($locales);
+
+        $previous = T::locale();
+        try {
+            foreach ($locales as $locale) {
+                T::setLocale($locale);
+                foreach ($fixtures as [$name, $game]) {
+                    $narrow = $game->update(new WindowSizeMsg(40, 40))[0];
+                    foreach (explode("\n", Renderer::render($narrow)) as $line) {
+                        $clean = rtrim(preg_replace('/\x1b\[[0-9;]*m/', '', $line) ?? $line, ' ');
+                        $width = Width::of($clean);
+                        $this->assertLessThanOrEqual(
+                            40,
+                            $width,
+                            "locale {$locale} narrow fixture {$name}: line overflows at {$width} cells: {$clean}",
                         );
                     }
                 }

@@ -33,4 +33,5 @@ return [
     'ui.save_failed' => 'Falha ao salvar',
     'ui.resume' => 'Há um jogo aguardando — pressione L para carregá-lo',
     'ui.new_best' => 'NOVO RECORDE',
+    'ui.fit_notice' => 'o candy-minesweeper precisa de um terminal com {need} linhas; este tem {have}. Aumente a janela — o jogo retoma assim que couber. q para sair.',
 ];

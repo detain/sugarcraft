@@ -33,4 +33,5 @@ return [
     'ui.save_failed' => '保存失败',
     'ui.resume' => '有存档等待 — 按 L 读取',
     'ui.new_best' => '新纪录',
+    'ui.fit_notice' => 'candy-minesweeper 需要 {need} 行高的终端；当前只有 {have} 行。放大窗口即可继续游戏。按 q 退出。',
 ];

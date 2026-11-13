@@ -257,4 +257,21 @@ if ($preset !== null) {
     $game = Game::start($w, $h, $m, stats: $stats, statsPath: $statsPath, notice: $resumeNotice);
 }
 
+// Terminal fit: measure the real screen (the kernel size ioctl first, env
+// and stty behind it) and refuse BEFORE the Program paints anything if the
+// board cannot be shown whole. A clipped minefield is unplayable and
+// unreadable, so the boot contract is an honest translated refusal with the
+// row budget, not a half-painted frame. The measurement also seeds the
+// Model's viewport; from here the runtime owns it via WindowSizeMsg
+// (startup dispatch + every SIGWINCH).
+$tty = new \SugarCraft\Core\Util\Tty(STDIN);
+$screen = $tty->size();
+if ($screen['rows'] > 0 && $game->requiredRows() > $screen['rows']) {
+    fwrite(STDERR, Lang::t('ui.fit_notice', ['need' => $game->requiredRows(), 'have' => $screen['rows']]) . "\n");
+    exit(1);
+}
+if ($screen['cols'] > 0 && $screen['rows'] > 0) {
+    $game = $game->withFrame($screen['cols'], $screen['rows']);
+}
+
 (new Program($game, new ProgramOptions(useAltScreen: true, mouseMode: MouseMode::CellMotion)))->run();

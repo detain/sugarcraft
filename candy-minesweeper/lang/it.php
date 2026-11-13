@@ -33,4 +33,5 @@ return [
     'ui.save_failed' => 'Salvataggio non riuscito',
     'ui.resume' => 'Una partita ti aspetta — premi L per caricarla',
     'ui.new_best' => 'NUOVO RECORD',
+    'ui.fit_notice' => 'candy-minesweeper richiede un terminale alto {need} righe; questo ne ha {have}. Ingrandisci la finestra: il gioco riprende appena lo spazio basta. q per uscire.',
 ];

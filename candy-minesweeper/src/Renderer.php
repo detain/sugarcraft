@@ -8,6 +8,7 @@ use SugarCraft\CellBuffer\Buffer;
 use SugarCraft\CellBuffer\Style;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Mouse\Mark;
 use SugarCraft\Mouse\Scanner;
 use SugarCraft\Style\Border;
@@ -115,16 +116,22 @@ final class Renderer
 
     /**
      * Wrap the minefield interior in the rounded border + status + help
-     * footer that make up the full view.
+     * footer that make up the full view. While the terminal cannot host
+     * the board whole, nothing of the board is painted at all — the frame
+     * collapses to a plain, wrapped notice screen (terminal fit).
      */
     private static function frame(Game $g, string $interior): string
     {
+        if ($g->tooSmall()) {
+            return self::tooSmallNotice($g);
+        }
+
         $framed = SugarStyle::new()
             ->border(Border::rounded())
             ->padding(0, 1)
             ->render($interior);
 
-        $status = self::status($g);
+        [$statusPlain, $statusStyle] = self::status($g);
         // Indent matches INTERIOR_COL_OFFSET — border cell + horizontal
         // padding cell — so status and footer line up under the first
         // interior column. Each footer line carries it, not just the first.
@@ -139,21 +146,113 @@ final class Renderer
         // The rules line leads the footer so a first-timer reads the
         // win condition before the key legend — TeachToPlayTest pins that
         // this copy reaches every frame via this call site.
-        $help = implode("\n" . $indent, [
+        $helpPlain = [
             Lang::t('ui.help_rules'),
             Lang::t('ui.help_moves'),
             Lang::t('ui.help_board'),
             Lang::t('ui.help_session'),
-        ]);
+        ];
+        $helpStyle = SugarStyle::new()->foreground(Color::hex('#7d6e98'));
         // Toast: save/load/restart outcomes (and the boot resume hint)
         // ride their own line ABOVE the status, so a load that lands on a
         // lost board still shows the boom/cleared banner underneath it.
-        $toast = $g->notice === null
-            ? ''
-            : $indent . SugarStyle::new()->foreground(Color::hex('#fde68a'))->render('» ' . $g->notice) . "\n";
+        $toastPlain = $g->notice === null ? null : '» ' . $g->notice;
+        $toastStyle = SugarStyle::new()->foreground(Color::hex('#fde68a'));
 
-        return $framed . "\n" . $toast . $indent . $status . "\n" . $indent .
-               SugarStyle::new()->foreground(Color::hex('#7d6e98'))->render($help) . "\n";
+        // The column budget is what the live terminal actually offers beside
+        // the board interior. When every footer line fits it (always, on an
+        // 80-column terminal for every shipped locale), the frame renders
+        // byte-identically to the pre-fit contract; on a narrower one the
+        // lines word-wrap inside the budget instead of reflowing the
+        // terminal under the player.
+        $budget = max(20, $g->frameCols - self::INTERIOR_COL_OFFSET);
+        $fits = static fn(array $lines): bool => (bool) array_reduce(
+            $lines,
+            static fn(bool $ok, string $l): bool => $ok && Width::of($l) <= $budget,
+            true,
+        );
+        if ($fits($helpPlain) && Width::of($statusPlain) <= $budget && ($toastPlain === null || Width::of($toastPlain) <= $budget)) {
+            $toast = $toastPlain === null
+                ? ''
+                : $indent . $toastStyle->render($toastPlain) . "\n";
+            $help = implode("\n" . $indent, $helpPlain);
+
+            return $framed . "\n" . $toast . $indent . $statusStyle->render($statusPlain) . "\n" . $indent .
+                   $helpStyle->render($help) . "\n";
+        }
+
+        $renderWrapped = static function (?string $plain, SugarStyle $style) use ($budget, $indent): string {
+            if ($plain === null) {
+                return '';
+            }
+            return $indent . implode("\n" . $indent, array_map(
+                static fn(string $l): string => $style->render($l),
+                self::wrapPlain($plain, $budget),
+            ));
+        };
+
+        $helpLines = [];
+        foreach ($helpPlain as $line) {
+            foreach (self::wrapPlain($line, $budget) as $piece) {
+                $helpLines[] = $piece;
+            }
+        }
+
+        $out = $framed . "\n";
+        $toastBlock = $renderWrapped($toastPlain, $toastStyle);
+        if ($toastBlock !== '') {
+            $out .= $toastBlock . "\n";
+        }
+
+        return $out . $renderWrapped($statusPlain, $statusStyle) . "\n"
+            . implode("\n" . $indent, array_map(
+                static fn(string $l): string => $helpStyle->render($l),
+                $helpLines,
+            )) . "\n";
+    }
+
+    /**
+     * Plain-text notice replacing the whole frame while the terminal is
+     * below the board's row budget — zero board painting, zero spoilers,
+     * wrapped so it stays readable on the very terminal that cannot host
+     * the game. Growing the window re-arms a WindowSizeMsg and the real
+     * frame returns at once.
+     */
+    private static function tooSmallNotice(Game $g): string
+    {
+        $text = Lang::t('ui.fit_notice', [
+            'need' => $g->requiredRows(),
+            'have' => $g->frameRows,
+        ]);
+        return implode("\n", self::wrapPlain($text, max(20, $g->frameCols))) . "\n";
+    }
+
+    /**
+     * Greedy word wrap of plain text honouring existing newlines.
+     *
+     * @return list<string>
+     */
+    private static function wrapPlain(string $text, int $width): array
+    {
+        $out = [];
+        foreach (explode("\n", $text) as $paragraph) {
+            $line = '';
+            foreach (preg_split('/ +/', $paragraph) ?: [] as $word) {
+                if ($word === '') {
+                    continue;
+                }
+                $candidate = $line === '' ? $word : $line . ' ' . $word;
+                if (Width::of($candidate) > $width && $line !== '') {
+                    $out[] = $line;
+                    $line = $word;
+                } else {
+                    $line = $candidate;
+                }
+            }
+            $out[] = $line;
+        }
+
+        return $out;
     }
 
     /**
@@ -298,7 +397,13 @@ final class Renderer
         return null;
     }
 
-    private static function status(Game $g): string
+    /**
+     * The verdict/status line as a (plain text, style) pair — the frame
+     * applies width fitting and styling, so this never renders itself.
+     *
+     * @return array{0:string, 1:SugarStyle}
+     */
+    private static function status(Game $g): array
     {
         $b = $g->board;
         if ($b->exploded || $b->isWon()) {
@@ -315,20 +420,23 @@ final class Renderer
             if ($b->isWon() && $g->newBest) {
                 $suffix .= ' · ' . Lang::t('ui.new_best');
             }
-            return SugarStyle::new()
-                ->foreground(Color::hex($b->exploded ? '#ff5f87' : '#6ee7b7'))->bold()
-                ->render(Lang::t($b->exploded ? 'ui.boom' : 'ui.cleared') . $suffix);
+            return [
+                Lang::t($b->exploded ? 'ui.boom' : 'ui.cleared') . $suffix,
+                SugarStyle::new()->foreground(Color::hex($b->exploded ? '#ff5f87' : '#6ee7b7'))->bold(),
+            ];
         }
         $remaining = max(0, $b->mineCount - $b->flagCount());
         $elapsed = $g->elapsed();
         $time = $elapsed !== null ? self::formatTime((int) $elapsed) : '0:00';
-        return SugarStyle::new()->foreground(Color::hex('#a78bfa'))
-            ->render(Lang::t('ui.status', [
+        return [
+            Lang::t('ui.status', [
                 'mines'     => $b->mineCount,
                 'flags'     => $b->flagCount(),
                 'remaining' => $remaining,
                 'time'      => $time,
-            ]));
+            ]),
+            SugarStyle::new()->foreground(Color::hex('#a78bfa')),
+        ];
     }
 
     private static function formatTime(int $seconds): string

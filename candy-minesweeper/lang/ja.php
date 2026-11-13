@@ -33,4 +33,5 @@ return [
     'ui.save_failed' => '保存に失敗しました',
     'ui.resume' => 'セーブデータがあります — L でロード',
     'ui.new_best' => '新記録',
+    'ui.fit_notice' => 'candy-minesweeper には高さ {need} 行のターミナルが必要です。現在は {have} 行です。ウィンドウを広げると、収まり次第ゲームに復帰します。q で終了。',
 ];

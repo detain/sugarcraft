@@ -33,4 +33,5 @@ return [
     'ui.save_failed' => 'save failed',
     'ui.resume' => 'a savegame is waiting — press L to load it',
     'ui.new_best' => 'NEW BEST',
+    'ui.fit_notice' => 'candy-minesweeper needs a terminal {need} rows tall; this one has {have}. Enlarge the window — the game resumes the moment it fits. Press q to quit.',
 ];

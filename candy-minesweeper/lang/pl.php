@@ -33,4 +33,5 @@ return [
     'ui.save_failed' => 'Zapis nieudany',
     'ui.resume' => 'Czeka zapis gry — naciśnij L, aby go wczytać',
     'ui.new_best' => 'NOWY REKORD',
+    'ui.fit_notice' => 'candy-minesweeper potrzebuje terminala o wysokości {need} wierszy; ten ma {have}. Powiększ okno — gra wznowi się, gdy tylko się zmieści. q kończy.',
 ];

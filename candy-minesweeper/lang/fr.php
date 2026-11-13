@@ -33,4 +33,5 @@ return [
     'ui.save_failed' => 'Échec de la sauvegarde',
     'ui.resume' => 'Une sauvegarde attend — appuyez sur L pour la charger',
     'ui.new_best' => 'NOUVEAU RECORD',
+    'ui.fit_notice' => 'candy-minesweeper nécessite un terminal de {need} lignes ; celui-ci en a {have}. Agrandissez la fenêtre — la partie reprend dès qu’elle tient. q pour quitter.',
 ];

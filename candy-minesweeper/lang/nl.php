@@ -33,4 +33,5 @@ return [
     'ui.save_failed' => 'Opslaan mislukt',
     'ui.resume' => 'Er wacht een opgeslagen spel — druk op L om het te laden',
     'ui.new_best' => 'NIEUW RECORD',
+    'ui.fit_notice' => 'candy-minesweeper heeft een terminal van {need} regels nodig; deze heeft {have}. Vergroot het venster — het spel hervat zodra het past. Druk op q om te stoppen.',
 ];

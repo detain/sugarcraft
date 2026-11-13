@@ -33,4 +33,5 @@ return [
     'ui.save_failed' => 'Error al guardar',
     'ui.resume' => 'Hay una partida esperándote — pulsa L para cargarla',
     'ui.new_best' => 'NUEVO RÉCORD',
+    'ui.fit_notice' => 'candy-minesweeper necesita una terminal de {need} filas; esta tiene {have}. Amplía la ventana: la partida se reanuda en cuanto quepa. Pulsa q para salir.',
 ];

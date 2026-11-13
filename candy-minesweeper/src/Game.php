@@ -13,6 +13,7 @@ use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\MouseClickMsg;
 use SugarCraft\Core\Msg\MouseMsg;
+use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Core\Util\AtomicJsonFile;
 use SugarCraft\Minesweeper\Stats\DifficultyStats;
 
@@ -76,8 +77,43 @@ final class Game implements Model
          * rendered as the banner's trailing badge. Losing can never set it.
          */
         public readonly bool $newBest = false,
+        /**
+         * Live terminal size, seeded at boot and replaced by every
+         * {@see WindowSizeMsg} (startup dispatch + SIGWINCH). The default is
+         * the classic 80×24 so headless fixtures render as they always did;
+         * {@see tooSmall()} is judged against the real board shape.
+         */
+        public readonly int $frameCols = 80,
+        public readonly int $frameRows = 24,
     ) {
         $this->rand = $rand ?? static fn(int $max): int => random_int(0, $max);
+    }
+
+    /**
+     * Terminal rows the current frame consumes: board height, the rounded
+     * border (2), the status line (1), the four-line help footer, and a
+     * spare line — plus one more while a toast rides above the status.
+     * Below this the board cannot be shown whole, and the game refuses
+     * rather than painting a clipped minefield.
+     */
+    public function requiredRows(): int
+    {
+        return $this->board->height + 8 + ($this->notice !== null ? 1 : 0);
+    }
+
+    /** True when the live terminal cannot host the full frame. */
+    public function tooSmall(): bool
+    {
+        return $this->frameRows < $this->requiredRows();
+    }
+
+    /** Seed the live viewport at boot (the runtime then owns updates). */
+    public function withFrame(int $cols, int $rows): self
+    {
+        if ($cols === $this->frameCols && $rows === $this->frameRows) {
+            return $this;
+        }
+        return $this->mutate(['frameCols' => $cols, 'frameRows' => $rows]);
     }
 
     public static function start(int $width = 10, int $height = 10, int $mines = 12, ?\Closure $rand = null, ?Stats $stats = null, ?string $statsPath = null, ?string $notice = null): self
@@ -155,6 +191,17 @@ final class Game implements Model
             // status line advances without a single keypress.
             return [$this, null];
         }
+        // Live viewport (terminal fit): the runtime sends this at startup and
+        // on every SIGWINCH, so the frame the Model renders always matches the
+        // screen the player actually has. It MUST be consumed before the
+        // non-KeyMsg discard below — dropping it is what let a shrunk or
+        // never-fitting terminal repaint a clipped board forever.
+        if ($msg instanceof WindowSizeMsg) {
+            if ($msg->cols === $this->frameCols && $msg->rows === $this->frameRows) {
+                return [$this, null];
+            }
+            return [$this->withFrame($msg->cols, $msg->rows), null];
+        }
         if (!$msg instanceof KeyMsg) {
             return [$this, null];
         }
@@ -198,6 +245,14 @@ final class Game implements Model
         }
         if ($msg->type === KeyType::Char && $msg->rune === 'S') {
             return [$this->saveGame(), null];
+        }
+        if ($this->tooSmall()) {
+            // Board-mutating keys are dead while the board cannot be shown
+            // whole: quit, restart and load above still route. Movement,
+            // reveal, flag and chord against an invisible board would be
+            // blind fire, so the frame stays a notice screen until the
+            // terminal grows back over requiredRows().
+            return [$this, null];
         }
         $next = match (true) {
             $msg->type === KeyType::Up    || ($msg->type === KeyType::Char && $msg->rune === 'k')
@@ -482,6 +537,10 @@ final class Game implements Model
     {
         // Only handle press events to avoid double-firing on release.
         if (!$msg instanceof MouseClickMsg) {
+            return $this;
+        }
+        if ($this->tooSmall()) {
+            // Clicks are blind while the notice screen is up (see update()).
             return $this;
         }
         if ($this->board->exploded || $this->board->isWon()) {

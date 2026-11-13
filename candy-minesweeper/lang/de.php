@@ -33,4 +33,5 @@ return [
     'ui.save_failed' => 'Speichern fehlgeschlagen',
     'ui.resume' => 'Ein Spielstand wartet — mit L laden',
     'ui.new_best' => 'NEUER REKORD',
+    'ui.fit_notice' => 'candy-minesweeper benötigt einen Terminal mit {need} Zeilen; dieser hat {have}. Vergrößern Sie das Fenster — das Spiel setzt ein, sobald es passt. q beendet.',
 ];
