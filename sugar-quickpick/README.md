@@ -301,11 +301,17 @@ public function show(): self
 public function hide(): self
 
 // Append one or more characters to the filter text and re-filter. Resets
-// the cursor to 0. Input is silently refused once the filter holds
-// MAX_FILTER_LENGTH (256) codepoints — compare filterText() to detect.
-// The gate is checked before appending, so a paste accepted while under
-// the threshold lands whole and the filter can end up past 256.
-public function type(string $char): self
+// the cursor to 0. Input is END-ONLY by design — the drawn caret `▏` sits
+// at the end of the filter and there is no motion through it; a mid-filter
+// typo means backspace/clear and retype. The MAX_FILTER_LENGTH (256
+// codepoint) budget is enforced by CLAMPING the appended run: a paste at
+// 255 lands exactly 256, never past it, and at the cap the header edge
+// shows a `⋯` overflow indicator (compare filterAtCap()).
+public function type(string $chars): self
+
+// True once the filter holds MAX_FILTER_LENGTH codepoints: type() then
+// refuses input and the header shows the overflow indicator.
+public function filterAtCap(): bool
 
 // Remove the last codepoint from the filter text — grapheme clusters such
 // as '👍🏽' span several codepoints, so clearing one may take several

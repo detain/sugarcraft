@@ -261,6 +261,58 @@ final class QuickPickTest extends TestCase
         $this->assertStringNotContainsString('● apple', $result, 'default decoration survived a custom formatter');
     }
 
+    public function testPasteIsClampedToTheCapAndNeverOverruns(): void
+    {
+        // S-11/-058: the cap is enforced by clamping the APPENDED RUN, so a
+        // 10-char paste accepted at 255 lands exactly 256 — the old
+        // check-before-append gate let the whole paste in past 256.
+        $h = QuickPick::new([new FilteredItem(1, 'apple')])
+            ->show()
+            ->type('ap'); // multi-codepoint argument appends whole
+        $this->assertSame('ap', $h->filterText(), 'a multi-character type() call appends the whole run');
+
+        $at255 = $h->type(\str_repeat('a', 253)); // 2 + 253 = 255, one under cap
+        $this->assertSame(256 - 1, \mb_strlen($at255->filterText(), 'UTF-8'));
+        $this->assertFalse($at255->filterAtCap());
+
+        $over = $at255->type('0123456789');
+        $this->assertSame(
+            QuickPick::MAX_FILTER_LENGTH,
+            \mb_strlen($over->filterText(), 'UTF-8'),
+            'a paste at the boundary must land exactly on the cap, never past it',
+        );
+        $this->assertTrue($over->filterAtCap());
+
+        $this->assertSame(
+            QuickPick::MAX_FILTER_LENGTH,
+            \mb_strlen($over->type('x')->filterText(), 'UTF-8'),
+            'input while at the cap is refused',
+        );
+
+        $under = $over->backspace();
+        $this->assertSame(QuickPick::MAX_FILTER_LENGTH - 1, \mb_strlen($under->filterText(), 'UTF-8'));
+        $this->assertFalse($under->filterAtCap(), 'the indicator clears when the filter drops below the cap');
+    }
+
+    public function testHeaderCaretAndCapIndicatorStayAtTheFilterEdge(): void
+    {
+        // S-11/-031/-057: the header always draws the caret `▏`, and once the
+        // filter is at the cap the `⋯` overflow indicator follows it. The
+        // chrome cells are reserved BEFORE the clip, so an over-long filter
+        // still shows the indicator at the frame edge instead of clipping it.
+        $bg = \str_repeat("....................\n", 5);
+
+        $rows  = \explode("\n", QuickPick::new([new FilteredItem(1, 'apple')])
+            ->setWindowWidth(40)->show()->type('ap')->view($bg));
+        $this->assertStringContainsString('ap▏', $rows[0], 'the caret sits at the end of the filter');
+        $this->assertStringNotContainsString('⋯', $rows[0]);
+
+        $atCap = QuickPick::new([new FilteredItem(1, 'apple')])
+            ->setWindowWidth(40)->show()->type(\str_repeat('a', QuickPick::MAX_FILTER_LENGTH));
+        $capRows = \explode("\n", $atCap->view($bg));
+        $this->assertStringContainsString('▏⋯', $capRows[0], 'the overflow indicator must survive header clipping');
+    }
+
     public function testImmutability(): void
     {
         $a = $this->makeQuickPick()->show()->type('a');
@@ -963,15 +1015,17 @@ final class QuickPickTest extends TestCase
         // changes must all be output-preserving; any drift flips these asserts.
 
         // Frame 1: ASCII, help+status bars, offset, background padding, substring highlight.
+        // Re-pinned at S-11: the header row now draws the end-of-filter caret
+        // cell ('▏' after 'a'); every other row is byte-identical.
         $frame1 = \base64_decode(
-            'Li4uLi4uLi4uLi4uLi4uLi4uLi4uLi4uLi4uLi4uLi4uLi4uLi4uLgouLj4gYSAgICAgICAg'
-            . 'ICAgICAgICAgICAgICAgICAgIC4uLi4uLi4uCi4u4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA'
-            . '4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA'
-            . '4pSA4pSA4pSA4pSALi4uLi4uLi4KICAgIDEuIBtbMzNtYRtbMG1wcGxlIHBpZSAgICAgICAg'
-            . 'ICAgICAgICAKICDil48gMi4gYhtbMzNtYRtbMG1uG1szM21hG1swbW4bWzMzbWEbWzBtIGJy'
-            . 'ZRtbMzNtYRtbMG1kICAgICAgICAgICAgIAogICAgNC4gZBtbMzNtYRtbMG10ZSB0G1szM21h'
-            . 'G1swbXJ0ICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAg'
-            . 'IAogIEVzYzogY2xvc2Ug4pSCIHg6IG5hdiAgICAgICAgICAg',
+            'Li4uLi4uLi4uLi4uLi4uLi4uLi4uLi4uLi4uLi4uLi4uLi4uLi4uLgouLj4gYeKWjyAgICAg'
+            . 'ICAgICAgICAgICAgICAgICAgICAgLi4uLi4uLi4KLi7ilIDilIDilIDilIDilIDilIDilIDi'
+            . 'lIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDi'
+            . 'lIDilIDilIDilIDilIAuLi4uLi4uLgogICAgMS4gG1szM21hG1swbXBwbGUgcGllICAgICAg'
+            . 'ICAgICAgICAgIAogIOKXjyAyLiBiG1szM21hG1swbW4bWzMzbWEbWzBtbhtbMzNtYRtbMG0g'
+            . 'YnJlG1szM21hG1swbWQgICAgICAgICAgICAgCiAgICA0LiBkG1szM21hG1swbXRlIHQbWzMz'
+            . 'bWEbWzBtcnQgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAg'
+            . 'ICAgCiAgRXNjOiBjbG9zZSDilIIgeDogbmF2ICAgICAgICAgICA=',
         );
         $h1 = QuickPick::new([
             new FilteredItem(1, 'apple pie'),
@@ -996,12 +1050,14 @@ final class QuickPickTest extends TestCase
         // matches now coalesce into ONE styled run ('aaa' gets one open/reset
         // pair instead of three) — visible-identical, fewer escape bytes. The
         // non-adjacent single 'a' runs keep their per-occurrence wrapping.
+        // Re-pinned again at S-11: the header draws the caret cell after 'a';
+        // every other row is byte-identical.
         $frame2 = \base64_decode(
-            'PiBhICAgICAgICAgICAgICAgICAgICAgCuKUgOKUgOKUgOKUgOKUgOKUgOKU'
-            . 'gOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKU'
-            . 'gOKUgOKUgAril48gMS4gYxtbMzFtYRtbMG1mw6kg5pel5pysIBtbMzFtYWFh'
-            . 'G1swbSAgICAgIAogIDIuIGIbWzMxbWEbWzBtbhtbMzFtYRtbMG1uG1szMW1h'
-            . 'G1swbSAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAg',
+            'PiBh4paPICAgICAgICAgICAgICAgICAgICAK4pSA4pSA4pSA4pSA4pSA4pSA4pSA'
+            . '4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA'
+            . '4pSACuKXjyAxLiBjG1szMW1hG1swbWbDqSDml6XmnKwgG1szMW1hYWEbWzBtICAg'
+            . 'ICAgCiAgMi4gYhtbMzFtYRtbMG1uG1szMW1hG1swbW4bWzMxbWEbWzBtICAgICAg'
+            . 'ICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICA=',
         );
         $h2 = QuickPick::new([
             new FilteredItem(1, 'café 日本 aaa'),

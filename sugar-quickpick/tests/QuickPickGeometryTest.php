@@ -310,7 +310,7 @@ final class QuickPickGeometryTest extends TestCase
         $bg = "ab\n\n" . \str_repeat('.', 40);
         $lines = \explode("\n", $h->view($bg));
 
-        $this->assertSame('ab' . \str_repeat(' ', 8) . '> ' . \str_repeat(' ', 10), $lines[0]);
+        $this->assertSame('ab' . \str_repeat(' ', 8) . '> ' . '▏' . \str_repeat(' ', 9), $lines[0]);
         $this->assertSame(\str_repeat(' ', 10) . \str_repeat('─', 12), $lines[1]);
 
         foreach ($lines as $line) {
@@ -339,9 +339,9 @@ final class QuickPickGeometryTest extends TestCase
         }
 
         $this->assertSame(
-            Width::padRight(Width::truncateAnsi('a prompt far longer than twenty cells: ', 20), 20),
+            Width::truncateAnsi('a prompt far longer than twenty cells: ', 20 - Width::of('▏')) . '▏',
             $lines[0],
-            'the header keeps its left-most 20 cells'
+            'the header clips its text one cell short of the frame to keep the caret at the edge (S-11)'
         );
     }
 
@@ -453,11 +453,12 @@ final class QuickPickGeometryTest extends TestCase
 
         // The composed width still follows the CHEAP header term even though
         // no item is re-measured: a 60-rune prompt must widen the frame.
+        // Header term = prompt + filter 'a' (1) + caret '▏' (1) + PAD 5.
         $promptLong = str_repeat('p', 60) . ': ';
         $long       = $typed->setPrompt($promptLong);
         $longRows   = \explode("\n", $long->view($bg));
         $this->assertSame(
-            Width::of($promptLong) + 1 + 5,
+            Width::of($promptLong) + 1 + 1 + 5,
             Width::of($longRows[0]),
             'a longer prompt must widen the auto frame from cached item widths',
         );

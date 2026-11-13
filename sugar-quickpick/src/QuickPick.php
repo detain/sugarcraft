@@ -30,7 +30,17 @@ use SugarCraft\Pty\SignalForwarder;
  */
 final class QuickPick
 {
-    /** Maximum length of filter text before input is rejected. */
+    /**
+     * Maximum filter length in CODEPOINTS (256).
+     *
+     * The cap bounds two things at once: per-frame matcher work (every
+     * keystroke re-filters and re-highlights the whole corpus) and the width
+     * of the header row the filter is echoed into. Input beyond it is not
+     * refused whole — {@see type()} clamps the appended run to the remaining
+     * budget, so a paste at 255 lands exactly 256 and no more; once the
+     * filter is AT the cap, further input is refused and the header edge
+     * shows the overflow indicator (see {@see filterAtCap()}).
+     */
     public const MAX_FILTER_LENGTH = 256;
 
     /**
@@ -553,25 +563,39 @@ final class QuickPick
      * Append one or more characters to the filter text.
      *
      * The parameter is a string, not a single character: paste-shaped input
-     * and multi-codepoint keypresses are appended whole.
+     * and multi-codepoint keypresses are appended whole — up to the cap.
      *
-     * Refusal is silent at the cap: once the filter already holds
-     * {@see MAX_FILTER_LENGTH} (256) codepoints, further input is refused
-     * and $this is returned unchanged — no exception, no notice. Hosts that
-     * must surface the cap compare filterText() before and after.
+     * Editing is END-ONLY by design: there is no caret movement through the
+     * filter string, the rendered `▏` cell always sits at the end of what is
+     * typed. A mid-filter typo means backspace-and-retype (or clear()); full
+     * left/right/home/end motion would be a different API and was
+     * deliberately not shipped (gate G9).
+     *
+     * The {@see MAX_FILTER_LENGTH} budget (256 codepoints) is enforced by
+     * CLAMPING the incoming run: only the first `remaining` codepoints are
+     * appended, so a 10-char paste accepted at 255 lands exactly 256 — the
+     * cap bounds both the per-frame work and the header width, and the
+     * filter can never exceed it (-058: the old check ran BEFORE the append,
+     * so a paste accepted at 255 landed whole past 256). At exactly 256 the
+     * filter shows the overflow indicator and further input is refused;
+     * `filterAtCap()` is the accessor for that state.
      */
-    public function type(string $char): self
+    public function type(string $chars): self
     {
         // Counted in codepoints, not bytes: MAX_FILTER_LENGTH is a limit on the
         // text a user sees and that the matcher indexes, so charging a 4-byte
         // emoji the same 1 as 'a' would silently shrink the budget for non-Latin
         // input to a quarter.
-        if (\mb_strlen($this->filterText, 'UTF-8') >= self::MAX_FILTER_LENGTH) {
-            return $this; // reject input when cap reached
+        $remaining = self::MAX_FILTER_LENGTH - \mb_strlen($this->filterText, 'UTF-8');
+        if ($remaining <= 0) {
+            return $this; // at the cap — nothing to append into
         }
+        $accepted = \mb_strlen($chars, 'UTF-8') > $remaining
+            ? \mb_substr($chars, 0, $remaining, 'UTF-8')
+            : $chars;
         $clone = clone $this;
         $clone->widthMemo->invalidate();
-        $clone->filterText .= $char;
+        $clone->filterText .= $accepted;
         $clone->filteredItems = $clone->applyFilter($clone->filterText);
         $clone->cursor = 0;
         return $clone;
@@ -678,6 +702,30 @@ final class QuickPick
     public function filterText(): string
     {
         return $this->filterText;
+    }
+
+    /**
+     * True once the filter holds MAX_FILTER_LENGTH codepoints: appended
+     * input is then refused and the header edge shows the overflow
+     * indicator ({@see filterChrome()}).
+     */
+    public function filterAtCap(): bool
+    {
+        return \mb_strlen($this->filterText, 'UTF-8') >= self::MAX_FILTER_LENGTH;
+    }
+
+    /**
+     * The chrome cell(s) drawn immediately after the filter text in the
+     * header: `▏` is the end-of-filter caret, and while the filter sits at
+     * the cap a `⋯` overflow indicator follows it.
+     *
+     * These two runes are HARDCODED here on purpose: the S-15 chrome-key
+     * pass wraps every drawn chrome string in the Lang lookup table and
+     * will pick them up at this one seat — until then they ship plain.
+     */
+    private function filterChrome(): string
+    {
+        return $this->filterAtCap() ? '▏⋯' : '▏';
     }
 
     /**
@@ -849,11 +897,19 @@ final class QuickPick
         // The header echoes the filter text typed at runtime and the prompt
         // (which hosts commonly seed from a previously selected history
         // entry). Both are untrusted: guard before they reach the frame.
-        // The header rides the same clip+pad contract as every other frame
-        // row: a prompt+filter longer than the frame must not emit a row
-        // wider than $winWidth (a pad-only header over an empty background
-        // bypassed even the composite's width guarantee).
-        $headerLine = Width::padRight(Width::truncateAnsi(UntrustedText::guard($prompt . $filter), $winWidth), $winWidth);
+        // The caret/overflow chrome is appended AFTER the clip and gets its
+        // cells reserved before it, so an over-long filter still shows the
+        // indicator AT THE FILTER EDGE instead of clipping it away — the
+        // text side keeps the same clip+pad contract as every frame row (a
+        // prompt+filter longer than the frame must not emit an over-wide
+        // row; a pad-only header over an empty background bypassed even the
+        // composite's width guarantee).
+        $chrome     = $this->filterChrome();
+        $headerText = UntrustedText::guard($prompt . $filter);
+        $headerLine = Width::padRight(
+            Width::truncateAnsi($headerText, \max(0, $winWidth - Width::of($chrome))) . $chrome,
+            $winWidth
+        );
 
         $lines = [$headerLine];
 
@@ -1186,7 +1242,7 @@ final class QuickPick
         // value here as on the render path below: guard() first, so a host
         // that echoes or caches the closure argument never sees the unguarded
         // string (review M8).
-        $headerTerm = Width::of($this->prompt) + Width::of($this->filterText) + self::WIDTH_PAD_HEADER;
+        $headerTerm = Width::of($this->prompt) + Width::of($this->filterText) + Width::of($this->filterChrome()) + self::WIDTH_PAD_HEADER;
 
         return \max($headerTerm, $this->measuredItemMaxWidth() + self::WIDTH_PAD_ITEM);
     }

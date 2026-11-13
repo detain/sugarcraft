@@ -237,8 +237,8 @@ final class QuickPickRankerTest extends TestCase
             ->show()
             ->type('本');
 
-        // computeWidth = max(prompt+filter+5, itemMax+2), all in visible cells.
-        $expected = max(Width::of('> ') + Width::of('本') + 5, Width::of('日本語') + 2); // = 9
+        // computeWidth = max(prompt+filter+caret+5, itemMax+2), all in visible cells.
+        $expected = max(Width::of('> ') + Width::of('本') + Width::of('▏') + 5, Width::of('日本語') + 2); // = 10
         // Canvas exactly the auto width so no trailing background cells inflate it.
         $bg = implode("\n", array_fill(0, 4, str_repeat(' ', $expected)));
         $lines = explode("\n", $h->view($bg));
