@@ -13,7 +13,7 @@
 
 ![demo](.vhs/play.gif)
 
-candy-flappy — a Flappy-Bird-style game for the terminal, built on the SugarCraft stack, for PHP 8.3+. The bird's vertical motion is a SugarSpring projectile (gravity + an upward velocity kick on each tap), pipes scroll left at a fixed cell rate, collision is per-cell.
+candy-flappy — a Flappy-Bird-style terminal game on the SugarCraft stack (PHP 8.3+). The bird's vertical motion is a SugarSpring projectile (gravity + an upward velocity kick on each tap), pipes scroll left at a fixed cell rate, collision is per-cell.
 
 *Formerly published as `sugarcraft/honey-flap` (renamed 2026-10; namespace `SugarCraft\Flap\` → `SugarCraft\Flappy\`). The first run of `bin/candy-flappy` migrates a pre-rename `.honey-flap` high-score directory automatically, under the same config base the game itself uses: `$XDG_CONFIG_HOME` first, `$HOME/.config` as fallback (see "High scores, config, and environment").*
 
