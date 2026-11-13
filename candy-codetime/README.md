@@ -149,29 +149,31 @@ directory-level plant, run `push` from a working directory whose own
 
 ```
 $CANDY_CODETIME_DIR/
-  2026-10-23.jsonl      one appendable line per heartbeat
-  candy-codetime.db     created by --backend=sqlite, and by `milestone` (which always uses sqlite)
-  candy-codetime.db-wal WAL sidecar: recent commits live here until checkpointed
-  candy-codetime.db-shm WAL index header (shared memory)
-<dir>-backups/          created by `backup` (day files) and `backup --sqlite` (database snapshots)
+  2026-10-23.jsonl      One appendable line per heartbeat.
+  candy-codetime.db     Created by --backend=sqlite, and by `milestone` (which always uses SQLite).
+  candy-codetime.db-wal WAL sidecar: recent commits live here until checkpointed.
+  candy-codetime.db-shm WAL index header (shared memory).
+
+<dir>-backups/          Created by `backup` (day files) and `backup --sqlite` (database snapshots).
 ```
 
-The SQLite backend tunes the database on every open: `journal_mode=WAL` so
-dashboard reads never block behind a committing appender (the reverse either —
-the stated model is editor plugin + CLI + cron appending to one file), a
-5-second busy timeout so concurrent writers wait each other's locks out
-instead of failing with "database is locked", `synchronous=NORMAL` as WAL's
-companion (a power cut can cost the last transaction of heartbeat telemetry —
-one sample, never the file), and a 64,000 KiB (62.5 MiB) page cache
-(`cache_size=-64000`) that keeps the `idx_heartbeats_time` range scans in
-memory. The schema is declared in SQLite's `user_version` pragma (version
+The SQLite backend tunes the database on every open:
+
+- `journal_mode=WAL` — dashboard reads never block behind a committing
+  appender, nor does the reverse hold: the stated model is editor plugin +
+  CLI + cron appending to one file.
+- `busy_timeout` (5 seconds) — concurrent writers wait out each other's
+  locks instead of failing with "database is locked".
+- `synchronous=NORMAL` — WAL's companion setting: a power cut can cost the
+  last transaction of heartbeat telemetry — one sample, never the file.
+- `cache_size=-64000` — a 64,000 KiB (62.5 MiB) page cache that keeps the
+  `idx_heartbeats_time` range scans in memory. The schema is declared in SQLite's `user_version` pragma (version
 `1`): a file stamped with a version this build does not know is refused on
 open rather than silently no-op'ed against a layout it cannot read, and
 pre-versioning databases are stamped once after their tables are verified.
 The `-wal`/`-shm` sidecars are swept to `0600` with the database
-itself (Privacy below) and carry recent commits until checkpointed — one
-more reason a byte copy cannot cover sqlite; `backup --sqlite` snapshots the
-database crash-safely with `VACUUM INTO`. Nothing is ever pruned: neither the
+itself (Privacy below) — one more reason a byte copy cannot cover SQLite;
+`backup --sqlite` snapshots the database crash-safely with `VACUUM INTO`. Nothing is ever pruned: neither the
 live `.db` nor the archives under `<dir>-backups/` are trimmed — retention is
 yours to manage (delete day files, or archive-and-remove by hand).
 
