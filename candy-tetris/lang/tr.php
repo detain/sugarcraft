@@ -51,11 +51,10 @@ yeniden (sonra)
     'label.computer' => 'BİLGİSAYAR',
     'win.player'     => 'KAZANDIN!',
     'win.computer'   => 'BİLGİSAYAR KAZANDI!',
-    'vs_keys'        => 'iniş
-bekleme
-duraklat
-yeniden
-çık',
+    // The versus frame teaches the live keys through the shared
+    // help_card column (candy-tetris-015 folded the five-verb roster
+    // away); the exchange rule stays a sentence of its own.
+    'vs.garbage_rule' => 'temizlenen satırlar rakibe çöp satırı gönderir — her satırda bir boşluk',
     'vs.record' => 'rekor: {wins} galibiyet, {losses} mağlubiyet',
     'intro.title' => 'candy-tetris oyununa hoş geldin',
     'intro.goal' => 'satırları temizle — tepeye ulaşma',

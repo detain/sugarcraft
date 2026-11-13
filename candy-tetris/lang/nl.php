@@ -51,11 +51,10 @@ afsluiten',
     'label.computer' => 'COMPUTER',
     'win.player'     => 'JIJ WINT!',
     'win.computer'   => 'COMPUTER WINT!',
-    'vs_keys'        => 'laten
-opslag
-pauze
-opnieuw
-afsluiten',
+    // The versus frame teaches the live keys through the shared
+    // help_card column (candy-tetris-015 folded the five-verb roster
+    // away); the exchange rule stays a sentence of its own.
+    'vs.garbage_rule' => 'gewiste regels sturen de tegenstander rommel — één gat per regel',
     'vs.record' => 'balans: {wins} gewonnen, {losses} verloren',
     'intro.title' => 'welkom bij candy-tetris',
     'intro.goal' => 'verwijder regels — bereik de top niet',

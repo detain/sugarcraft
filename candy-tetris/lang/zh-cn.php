@@ -51,11 +51,10 @@ return [
     'label.computer' => '电脑',
     'win.player'     => '你赢了!',
     'win.computer'   => '电脑赢了!',
-    'vs_keys'        => '硬降
-暂存
-暂停
-重开
-退出',
+    // The versus frame teaches the live keys through the shared
+    // help_card column (candy-tetris-015 folded the five-verb roster
+    // away); the exchange rule stays a sentence of its own.
+    'vs.garbage_rule' => '消一行就向对手发送一行垃圾（每行一个洞）',
     'vs.record' => '战绩: {wins} 胜, {losses} 负',
     'intro.title' => '欢迎游玩 candy-tetris',
     'intro.goal' => '消除行 — 别堆到顶部',

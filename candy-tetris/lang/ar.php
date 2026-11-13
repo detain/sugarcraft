@@ -51,11 +51,10 @@ return [
     'label.computer' => 'الحاسوب',
     'win.player'     => 'لقد فزت!',
     'win.computer'   => 'فاز الحاسوب!',
-    'vs_keys'        => 'إنزال
-تخزين
-إيقاف
-إعادة
-خروج',
+    // The versus frame teaches the live keys through the shared
+    // help_card column (candy-tetris-015 folded the five-verb roster
+    // away); the exchange rule stays a sentence of its own.
+    'vs.garbage_rule' => 'مسح الخطوط يرسل صفوف قمامة للخصم — ثقب واحد في كل صف',
     'vs.record' => 'السجل: {wins} فوز، {losses} خسارة',
     'intro.title' => 'مرحبًا بك في candy-tetris',
     'intro.goal' => 'امسح الأسطر — لا تصل إلى القمة',

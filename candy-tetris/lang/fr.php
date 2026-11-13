@@ -51,11 +51,10 @@ quitter',
     'label.computer' => 'ORDINATEUR',
     'win.player'     => 'VOUS GAGNEZ !',
     'win.computer'   => "L'ORDINATEUR GAGNE !",
-    'vs_keys'        => 'chute
-réserve
-pause
-relance
-quitter',
+    // The versus frame teaches the live keys through the shared
+    // help_card column (candy-tetris-015 folded the five-verb roster
+    // away); the exchange rule stays a sentence of its own.
+    'vs.garbage_rule' => 'les lignes effacées envoient des lignes parasites à l\'adversaire, chacune avec un trou',
     'vs.record' => 'bilan : {wins} gagnés, {losses} perdus',
     'intro.title' => 'bienvenue dans candy-tetris',
     'intro.goal' => 'effacez des lignes — ne pas atteindre le sommet',

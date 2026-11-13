@@ -25,5 +25,8 @@ PLAYER                    VS  COMPUTER
 │ you       score: 0       lines: 0   level: 0       │
 │ computer  score: 0       lines: 0   level: 0       │
 │ next: T  S  Z        hold: -                       │
-│ spc hard  c hold  p pause  r restart  q quit       │
+│ ← → move  ↑ x rotate cw  z rotate ccw              │
+│ ↓ soft drop  spc hard drop  c hold                 │
+│ p pause  r restart (over)  q ctrl+c quit           │
+│ clear lines — the opponent gets rows with one hole │
 └────────────────────────────────────────────────────┘

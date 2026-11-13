@@ -6,9 +6,11 @@
  * The user-override half of finding m27: a tiny JSON file — action id to
  * tokens — folded onto the shipped table. The file is deliberately permissive
  * about WHICH ids appear (the registry is context-free; naming an action the
- * game does not dispatch is inert, not an error) and strict about SHAPE,
- * refusing loudly rather than half-applying a malformed map: a typo in a
- * key file must not silently strand a binding mid-session.
+ * game does not dispatch is inert, not an error) and strict about SHAPE and
+ * VOCABULARY, refusing loudly rather than half-applying a malformed map: a
+ * typo in a key file must not silently strand a binding mid-session
+ * (candy-tetris-032: 'spce' for 'space' loaded "valid", bound nothing, and
+ * a stranded begin locks the player behind the first-run card).
  *
  * A missing file is the defaults — byte for byte, no notices. An unreadable
  * one costs the session its overrides, not its game: the binary catches the
@@ -89,6 +91,12 @@ final class KeyMap
                     || \strlen($token) > self::MAX_TOKEN_BYTES
                 ) {
                     throw new \RuntimeException(self::problem($path, "token for \"$id\" is not a printable key name"));
+                }
+                // Vocab door (candy-tetris-032): a printable token that no
+                // decoder can ever emit ('spce') binds nothing — the binding
+                // goes deaf with no on-screen trace. Refuse the name at load.
+                if (Bindings::isKnownToken($token) === false) {
+                    throw new \RuntimeException(self::problem($path, "unknown key name \"$token\" for \"$id\""));
                 }
             }
 

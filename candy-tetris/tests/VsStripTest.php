@@ -54,7 +54,13 @@ final class VsStripTest extends TestCase
     {
         $frame = VsRenderer::render(VsGame::start());
 
-        self::assertStringContainsString('spc hard  c hold  p pause  r restart  q quit', $frame);
+        // candy-tetris-015: the strip teaches the FULL live table (the old
+        // one-liner showed 5 of the 11 bindings and the movement keys were
+        // never named) and one line of the garbage exchange rule.
+        self::assertStringContainsString('← → move  ↑ x rotate cw  z rotate ccw', $frame);
+        self::assertStringContainsString('↓ soft drop  spc hard drop  c hold', $frame);
+        self::assertStringContainsString('p pause  r restart (over)  q ctrl+c quit', $frame);
+        self::assertStringContainsString('clear lines — the opponent gets rows with one hole', $frame);
         self::assertStringContainsString('you       score: 0', $frame);
         self::assertStringContainsString('computer  score: 0', $frame);
 

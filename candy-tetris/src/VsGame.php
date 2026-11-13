@@ -116,7 +116,7 @@ final class VsGame implements Model
      * m27: the live action table for the q/r/p gates this class owns
      * (the pause toggle stays owned here, not delegated — the gate is
      * the release/repeat double-fire guard, m11, a duty now carried by
-     * KeyBindings::matches itself). Null bindings resolve to the
+     * Bindings::actuates itself — including the ctrl-chord discipline of candy-tetris-034). Null bindings resolve to the
      * shipped default table byte-for-byte.
      */
     private function keys(): KeyBindings
@@ -221,7 +221,7 @@ final class VsGame implements Model
         // it: q still quits, the tick chain keeps its heartbeat, and a
         // resize back into fit resumes with nothing double-armed (C-2).
         if ($this->tooSmall() === true) {
-            if ($msg instanceof KeyMsg && $this->keys()->matches($msg, 'quit')) {
+            if ($msg instanceof KeyMsg && Support\Bindings::actuates($this->keys(), $msg, 'quit')) {
                 return [$this, Cmd::quit()];
             }
             if ($msg instanceof GravityMsg) {
@@ -245,10 +245,10 @@ final class VsGame implements Model
         // If game is over, accept only quit or restart (the 'r' arm below
         // mirrors the solo game's post-over restart parity).
         if ($this->over === true) {
-            if ($msg instanceof KeyMsg && $this->keys()->matches($msg, 'quit')) {
+            if ($msg instanceof KeyMsg && Support\Bindings::actuates($this->keys(), $msg, 'quit')) {
                 return [$this, Cmd::quit()];
             }
-            if ($msg instanceof KeyMsg && $this->keys()->matches($msg, 'restart')) {
+            if ($msg instanceof KeyMsg && Support\Bindings::actuates($this->keys(), $msg, 'restart')) {
                 // Restart the pair and arm one fresh tick chain — parity
                 // with the solo game's 'r'. The chain epoch bumps so the
                 // superseded chain's in-flight tick lands inert on the
@@ -278,7 +278,7 @@ final class VsGame implements Model
         }
 
         // Handle quit key for player
-        if ($msg instanceof KeyMsg && $this->keys()->matches($msg, 'quit')) {
+        if ($msg instanceof KeyMsg && Support\Bindings::actuates($this->keys(), $msg, 'quit')) {
             return [$this, Cmd::quit()];
         }
 
@@ -288,7 +288,7 @@ final class VsGame implements Model
         // The toggle is owned here rather than delegated: a release or a
         // stray repeat must not flip the flag a second time on the way
         // (m11 — this gate is load-bearing, not a pass-through).
-        if ($msg instanceof KeyMsg && $this->keys()->matches($msg, 'pause')) {
+        if ($msg instanceof KeyMsg && Support\Bindings::actuates($this->keys(), $msg, 'pause')) {
             $toggled = $this->mutate(['player' => $this->player->mutate(['paused' => !$this->player->paused])]);
             if ($this->player->paused === false) {
                 // This press PAUSES: the in-flight AI tick lands on the

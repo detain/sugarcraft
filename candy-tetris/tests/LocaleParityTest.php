@@ -188,7 +188,7 @@ final class LocaleParityTest extends TestCase
             'hold_used', 'combo_line', 'b2b_line',
             'over.best', 'over.new_best',
             'label.player', 'label.computer', 'win.player', 'win.computer',
-            'vs_keys', 'vs.record',
+            'vs.garbage_rule', 'vs.record',
             'intro.title', 'intro.goal', 'intro.press', 'intro.vs', 'key_or',
             'mode.unknown', 'help_text',
             // Launch/CLI diagnostic frame (candy-tetris-028): the first

@@ -28,5 +28,5 @@
                 │ c    hold            │
                 │ p    pause           │
                 │ r    restart (over)  │
-                │ q    quit            │
+                │ q ctrl+c quit        │
                 └──────────────────────┘

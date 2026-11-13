@@ -67,7 +67,7 @@ final class KeyMapTest extends TestCase
         self::assertSame(['b'], $bindings->tokens('hold'));
         self::assertTrue($bindings->matches(new KeyMsg(KeyType::Char, 'b'), 'hold'));
         self::assertFalse($bindings->matches(new KeyMsg(KeyType::Char, 'c'), 'hold'));
-        self::assertSame(['q'], $bindings->tokens('quit'));
+        self::assertSame(['q', 'ctrl+c'], $bindings->tokens('quit'));
     }
 
     public function testOverrideTokensAreCaseFolded(): void
@@ -134,15 +134,36 @@ final class KeyMapTest extends TestCase
         $this->expectRefusal('{"quit": ["' . str_repeat('x', 33) . '"]}', 'printable key name');
     }
 
-    public function testTokenAtTheLengthCeilingIsAccepted(): void
+    public function testTokenAtTheLengthCeilingStillFailsTheVocabGate(): void
     {
-        // Cap-boundary pair for the refusal above: the registry stays
-        // context-free about whether a token names a REAL key — the door
-        // polices shape (printable, bounded), never vocabulary.
-        $path = $this->write('{"quit": ["' . str_repeat('x', 32) . '"]}');
+        // The shape ceiling and the vocabulary gate are two doors. A 32-byte
+        // run is printable and AT the length limit (so it clears the shape
+        // door that rejects 33), but it names no real key — the vocab gate
+        // added by candy-tetris-032 refuses it by name. This is the whole
+        // point: 'xxt' used to load "valid" and strand the binding deaf.
+        $this->expectRefusal('{"quit": ["' . str_repeat('x', 32) . '"]}', 'unknown key name');
+    }
+
+    public function testInVocabTokensBelowTheCeilingAreAccepted(): void
+    {
+        // The accepted-shape pair: single runes and named keys pass BOTH
+        // doors (printable, bounded, and real), so the vocab gate costs
+        // nothing the decoder can actually emit.
+        $path = $this->write('{"quit": ["q", "enter", "backspace"]}');
         $bindings = KeyMap::load($path, Bindings::table());
 
-        self::assertSame([str_repeat('x', 32)], $bindings->tokens('quit'));
+        self::assertSame(['q', 'enter', 'backspace'], $bindings->tokens('quit'));
+    }
+
+    public function testTheCtrlChordVocabularyIsAcceptedAndFolded(): void
+    {
+        // candy-tetris-034: 'ctrl+c' is a live token in the shipped table,
+        // so the vocab gate must admit it (upper/lower folded the same way
+        // as plain names) — and reject a chord whose base names no key.
+        $path = $this->write('{"quit": ["CTRL+C"]}');
+        self::assertSame(['ctrl+c'], KeyMap::load($path, Bindings::table())->tokens('quit'));
+
+        $this->expectRefusal('{"quit": ["ctrl+spce"]}', 'unknown key name');
     }
 
     public function testWideNamedKeyAndMultibyteRunePassThePrintableGate(): void

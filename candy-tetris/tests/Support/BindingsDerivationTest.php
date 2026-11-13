@@ -5,10 +5,16 @@
  *
  * The load-bearing pin behind the verb-column migration (finding m27): the
  * on-screen help card and versus strip are DERIVED from the live binding
- * table, so with the shipped table they must reproduce — byte for byte, in
- * every one of the sixteen locales — the hand-authored cards that existed
- * before the registry. tests/fixtures/help-cards-pre-m27.json holds those
- * originals verbatim. If derivation drifts even one space, this goes red.
+ * table, so with the shipped table they must reproduce the recorded bytes
+ * exactly. tests/fixtures/help-cards-pre-m27.json holds those recorded
+ * cards verbatim. If derivation drifts even one space, this goes red.
+ *
+ * tetris-08 (candy-tetris-015/-087) re-baselined BOTH columns: the versus
+ * strip now carries the full live map (it used to be a five-binding
+ * subset), the two surfaces share ONE verb column, and the interrupt
+ * (candy-tetris-034) joins the quit row. The help_card legs still pin the
+ * pre-m27 hand-authored card for every row except the newly-widened quit
+ * binding; the vs_strip legs pin the full-map derivation at these bytes.
  *
  * MAJOR-1 (TET-FEATURES review) added the other half of the promise: the
  * override-seeded pins proving ONE folded keys.json lands in dispatch AND
@@ -62,7 +68,7 @@ final class BindingsDerivationTest extends TestCase
     public static function vsStripFixtures(): \Generator
     {
         foreach (self::cards() as $locale => $cards) {
-            yield $locale => [$locale, $cards['vs_keys']];
+            yield $locale => [$locale, $cards['vs_strip']];
         }
     }
 
@@ -79,7 +85,7 @@ final class BindingsDerivationTest extends TestCase
     /**
      * @dataProvider vsStripFixtures
      */
-    public function testTheDerivedVersusStripReproducesTheHandAuthoredOne(string $locale, string $strip): void
+    public function testTheDerivedVersusStripReproducesTheBaselinedOne(string $locale, string $strip): void
     {
         T::setLocale($locale);
 
@@ -88,14 +94,51 @@ final class BindingsDerivationTest extends TestCase
 
     public function testEveryLocaleCarriesTheVerbColumnsTheDerivationZipsAgainst(): void
     {
-        // help_card is now a nine-verb column, vs_keys a five-verb column.
-        // A row-count mismatch would silently blank a label's verb, so the
-        // column shapes are pinned directly, in every locale.
+        // help_card is a nine-verb column shared by BOTH derived surfaces
+        // since candy-tetris-015 (the versus strip used to zip its own
+        // five-verb roster, which drifted). A row-count mismatch would
+        // blank a label's verb — verbColumn() throws instead, so the
+        // column shape is pinned directly, in every locale.
         foreach (self::LOCALES as $locale) {
             T::setLocale($locale);
 
             self::assertCount(9, explode("\n", Lang::t('help_card')), $locale . ' help_card verbs');
-            self::assertCount(5, explode("\n", Lang::t('vs_keys')), $locale . ' vs_keys verbs');
+        }
+    }
+
+    public function testEveryVerbColumnRowIsTaughtOnBothDerivedSurfaces(): void
+    {
+        // candy-tetris-015's completeness contract: the row table covers
+        // every dispatched gameplay id — 'begin' is excluded on purpose,
+        // it belongs to the on-ramp card, whose sentence names the live
+        // label instead (Game::introBeginLabel). A MAP entry nobody
+        // teaches is how the strip drifted to 5-of-11.
+        $taught = array_merge(...Bindings::GAMEPLAY_ROWS);
+        sort($taught);
+        $gameplay = array_values(array_filter(
+            Bindings::mapIds(),
+            static fn(string $id): bool => $id !== 'begin',
+        ));
+        sort($gameplay);
+
+        self::assertSame($gameplay, $taught, 'every gameplay id must reach the teaching surfaces');
+    }
+
+    public function testTheVerbColumnFailsLoudWhenARowIsMissing(): void
+    {
+        // candy-tetris-077: the old `?? ''` legs rendered a silent blank
+        // verb column. The roster is now a hard contract — a catalogue
+        // that lost a line throws, naming both counts.
+        $short = implode("\n", array_slice(explode("\n", Lang::t('help_card')), 0, 8));
+
+        try {
+            Bindings::verbColumnFrom($short);
+            self::fail('a truncated verb column must throw, not blank the card');
+        } catch (\LogicException $problem) {
+            self::assertMatchesRegularExpression(
+                '/help_card carries 8 verb lines but the row table has 9 rows/',
+                $problem->getMessage(),
+            );
         }
     }
 
@@ -132,7 +175,7 @@ final class BindingsDerivationTest extends TestCase
         // player's table, so the versus frame remaps with the same file.
         $frame = VsRenderer::render(VsGame::start(bindings: $this->remappedTable()));
 
-        self::assertStringContainsString('h hard  c hold', $frame, 'the strip moves with the remap');
+        self::assertStringContainsString('h hard drop  c hold', $frame, 'the strip moves with the remap');
         self::assertStringNotContainsString('spc hard', $frame, 'the strip must not keep advertising the old key');
     }
 
@@ -176,7 +219,7 @@ final class BindingsDerivationTest extends TestCase
     }
 
     /**
-     * @return array<string, array{help_card: string, vs_keys: string}>
+     * @return array<string, array{help_card: string, vs_strip: string}>
      */
     private static function cards(): array
     {

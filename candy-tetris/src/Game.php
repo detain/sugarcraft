@@ -368,7 +368,8 @@ final class Game implements Model
      * m27: the live action table. An un-injected game answers with the
      * shipped default table, so dispatch without a registry behaves the
      * way the hardcoded per-arm comparisons did — the press-only rule
-     * (m11) and the case fold (m26) live in KeyBindings::matches, and the
+     * (m11), the case fold (m26) and the ctrl-chord discipline
+     * (candy-tetris-034) live in Support\Bindings::actuates, and the
      * space token now fires on BOTH wire shapes: the legacy decoder
      * delivers KeyType::Space with rune ' ' (the old charKey arm could
      * only ever see the hand-built Char fixture shape, never the wire —
@@ -449,10 +450,10 @@ final class Game implements Model
     private function handleIntro(Msg $msg): array
     {
         if ($msg instanceof KeyMsg) {
-            if ($this->keys()->matches($msg, 'quit')) {
+            if (Support\Bindings::actuates($this->keys(), $msg, 'quit')) {
                 return [$this, Cmd::quit()];
             }
-            if ($this->keys()->matches($msg, 'begin')) {
+            if (Support\Bindings::actuates($this->keys(), $msg, 'begin')) {
                 $closed = $this->mutate(['introPending' => false]);
                 if ($closed->scoresPath !== null) {
                     $next = ($closed->scores ?? new Scores())->withOnboarded();
@@ -524,7 +525,7 @@ final class Game implements Model
             // its heartbeat (consume, re-arm), the lock window stays open
             // for a full delay — so a resize back into fit resumes here
             // with nothing lost and nothing double-armed.
-            if ($msg instanceof KeyMsg && $this->keys()->matches($msg, 'quit')) {
+            if ($msg instanceof KeyMsg && Support\Bindings::actuates($this->keys(), $msg, 'quit')) {
                 return [$this, Cmd::quit()];
             }
             if ($msg instanceof GravityMsg) {
@@ -550,10 +551,10 @@ final class Game implements Model
         }
 
         if ($this->over === true) {
-            if ($msg instanceof KeyMsg && $this->keys()->matches($msg, 'quit')) {
+            if ($msg instanceof KeyMsg && Support\Bindings::actuates($this->keys(), $msg, 'quit')) {
                 return [$this, Cmd::quit()];
             }
-            if ($msg instanceof KeyMsg && $this->keys()->matches($msg, 'restart')) {
+            if ($msg instanceof KeyMsg && Support\Bindings::actuates($this->keys(), $msg, 'restart')) {
                 // 'r' starts a completely fresh game. The score does NOT
                 // carry over: Score embeds the level, so keeping it would
                 // spawn the new board under the old gravity. The fresh state
@@ -646,32 +647,32 @@ final class Game implements Model
      */
     private function handleKey(KeyMsg $msg): array
     {
-        if ($this->keys()->matches($msg, 'quit')) {
+        if (Support\Bindings::actuates($this->keys(), $msg, 'quit')) {
             return [$this, Cmd::quit()];
         }
-        if ($this->keys()->matches($msg, 'pause')) {
+        if (Support\Bindings::actuates($this->keys(), $msg, 'pause')) {
             return [$this->withPaused(!$this->paused), null];
         }
         if ($this->paused) {
             // Nothing mutates game state while paused — hold included.
             return [$this, null];
         }
-        if ($this->keys()->matches($msg, 'hold')) {
+        if (Support\Bindings::actuates($this->keys(), $msg, 'hold')) {
             return $this->tryHold();
         }
 
         return match (true) {
-            $this->keys()->matches($msg, 'move-left')
+            Support\Bindings::actuates($this->keys(), $msg, 'move-left')
                 => $this->tryMove(-1, 0),
-            $this->keys()->matches($msg, 'move-right')
+            Support\Bindings::actuates($this->keys(), $msg, 'move-right')
                 => $this->tryMove(1, 0),
-            $this->keys()->matches($msg, 'soft-drop')
+            Support\Bindings::actuates($this->keys(), $msg, 'soft-drop')
                 => $this->softDrop(),
-            $this->keys()->matches($msg, 'rotate-cw')
+            Support\Bindings::actuates($this->keys(), $msg, 'rotate-cw')
                 => $this->tryRotate(1),
-            $this->keys()->matches($msg, 'rotate-ccw')
+            Support\Bindings::actuates($this->keys(), $msg, 'rotate-ccw')
                 => $this->tryRotate(-1),
-            $this->keys()->matches($msg, 'hard-drop')
+            Support\Bindings::actuates($this->keys(), $msg, 'hard-drop')
                 => $this->hardDrop(),
             default => [$this, null],
         };

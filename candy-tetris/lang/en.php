@@ -56,12 +56,10 @@ return [
     'label.computer' => 'COMPUTER',
     'win.player'     => 'YOU WIN!',
     'win.computer'   => 'COMPUTER WINS!',
-    // MA-9: the VS match strip names the bindings the old frame never showed.
-    'vs_keys'        => 'hard
-hold
-pause
-restart
-quit',
+    // The versus frame teaches the live keys through the shared
+    // help_card column (candy-tetris-015 folded the five-verb roster
+    // away); the exchange rule stays a sentence of its own.
+    'vs.garbage_rule' => 'clear lines — the opponent gets rows with one hole',
     'vs.record' => 'record: {wins} won, {losses} lost',
     'intro.title' => 'welcome to candy-tetris',
     'intro.goal' => 'clear lines — do not reach the top',

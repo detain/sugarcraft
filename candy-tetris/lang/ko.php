@@ -51,11 +51,10 @@ return [
     'label.computer' => '컴퓨터',
     'win.player'     => '당신이 이겼습니다!',
     'win.computer'   => '컴퓨터가 이겼습니다!',
-    'vs_keys'        => '드롭
-홀드
-정지
-재시작
-종료',
+    // The versus frame teaches the live keys through the shared
+    // help_card column (candy-tetris-015 folded the five-verb roster
+    // away); the exchange rule stays a sentence of its own.
+    'vs.garbage_rule' => '줄을 지우면 상대에게 잔해가 내려간다 (구멍 하나)',
     'vs.record' => '전적: {wins}승 {losses}패',
     'intro.title' => 'candy-tetris에 오신 것을 환영합니다',
     'intro.goal' => '줄을 지우세요 — 위에 닿으면 끝',

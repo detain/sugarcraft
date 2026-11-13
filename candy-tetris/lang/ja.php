@@ -51,11 +51,10 @@ return [
     'label.computer' => 'コンピューター',
     'win.player'     => 'あなたの勝ち!',
     'win.computer'   => 'コンピューターの勝ち!',
-    'vs_keys'        => '落とす
-ホールド
-停止
-再開
-終了',
+    // The versus frame teaches the live keys through the shared
+    // help_card column (candy-tetris-015 folded the five-verb roster
+    // away); the exchange rule stays a sentence of its own.
+    'vs.garbage_rule' => 'ライン消去で相手にゴミ行が届く（各行に穴が一つ）',
     'vs.record' => '通算: {wins}勝 {losses}敗',
     'intro.title' => 'candy-tetris へようこそ',
     'intro.goal' => '行を消す — 上まで積んだら終わり',

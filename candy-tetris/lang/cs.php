@@ -51,11 +51,10 @@ konec',
     'label.computer' => 'POČÍTAČ',
     'win.player'     => 'VYHRÁL JSI!',
     'win.computer'   => 'POČÍTAČ VYHRÁL!',
-    'vs_keys'        => 'pád
-hold
-pauza
-restart
-konec',
+    // The versus frame teaches the live keys through the shared
+    // help_card column (candy-tetris-015 folded the five-verb roster
+    // away); the exchange rule stays a sentence of its own.
+    'vs.garbage_rule' => 'vyčištěné řádky pošlou soupeři odpad — každý řádek má jednu díru',
     'vs.record' => 'zápas: {wins} vyhráno, {losses} prohráno',
     'intro.title' => 'vítejte v candy-tetris',
     'intro.goal' => 'maž řádky — nedosáhni na vrchol',

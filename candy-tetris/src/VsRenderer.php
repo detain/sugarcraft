@@ -22,8 +22,8 @@ use SugarCraft\Style\Style;
  *   │   (board)   │    │   (board)   │
  *   │             │    │             │
  *   └─────────────┘    └─────────────┘
- *   ┌ both scores · next · hold · keys ┐   (match strip)
- *   └──────────────────────────────────┘
+ *   ┌ both scores · next · hold · keys · garbage rule ┐  (match strip)
+ *   └──────────────────────────────────────────────────┘
  *
  * Player pieces use the shared `Tetromino::color()` palette; computer pieces
  * use `VsRenderer::COMPUTER_COLORS` — an explicit 256-colour map deliberately
@@ -36,9 +36,12 @@ final class VsRenderer
     /**
      * Natural VS frame (both panels complete) — provisional, validated
      * by the viewport tests; see {@see self::MIN_*} for the floor law.
+     * candy-tetris-015 grew the match strip to the full teaching table
+     * (three key rows + the garbage rule), so 23 board rows + a 9-row
+     * card = 32 — the same height law the solo frame already names.
      */
     public const NATURAL_COLS = 54;
-    public const NATURAL_ROWS = 29;
+    public const NATURAL_ROWS = 32;
 
     /**
      * Hard floor for the split screen: both framed boards with their
@@ -47,7 +50,7 @@ final class VsRenderer
      * frame (C-2).
      */
     public const MIN_COLS = 54;
-    public const MIN_ROWS = 29;
+    public const MIN_ROWS = 32;
 
     public static function render(VsGame $game): string
     {
@@ -249,10 +252,12 @@ final class VsRenderer
      * The match strip: one full-width card under both boards carrying the
      * facts the versus view used to hide — both scores, the player's three-
      * piece next preview, the player's hold state (with the exhausted
-     * cue), and the key list. Deliberately ONE card: per-panel cards under
-     * 23-row boards would overshoot the height budget far worse, and the
-     * computer's queue is kept private on purpose. Plain-text rows (no
-     * SGR) so the card is identical in both colour postures.
+     * cue), the FULL live key table in compact rows, and the garbage
+     * exchange rule (candy-tetris-015). Deliberately ONE card: per-panel
+     * cards under 23-row boards would overshoot the height budget far
+     * worse, and the computer's queue is kept private on purpose.
+     * Plain-text rows (no SGR) so the card is identical in both colour
+     * postures.
      */
     private static function renderStrip(Game $player, Game $computer): string
     {
@@ -275,7 +280,7 @@ final class VsRenderer
         // the score/lines fields give way before the badge does.
         $youAward = $player->lastAward !== null ? '  ' . $player->lastAward : '';
 
-        $body = implode("\n", [
+        $rows = [
             $line($youAward === ''
                 ? sprintf(
                     'you       score: %-7d lines: %-3d level: %d',
@@ -296,8 +301,22 @@ final class VsRenderer
                 $computer->score->level,
             )),
             $line(sprintf('%s %s        %s %s', Lang::t('next_label'), $nextLetters, Lang::t('hold_label'), $holdText)),
-            $line(Support\Bindings::vsStrip($player->bindings ?? Support\Bindings::table())),
-        ]);
+        ];
+
+        // The full gameplay table, chunked three rows to a line by
+        // Bindings::vsStrip (candy-tetris-015: the old one-line strip
+        // taught 5 of the 11 bindings and let movement/rotation go
+        // untaught). Each returned line is its own strip row.
+        foreach (explode("\n", Support\Bindings::vsStrip($player->bindings ?? Support\Bindings::table())) as $keyRow) {
+            $rows[] = $line($keyRow);
+        }
+
+        // One-line garbage rule, always on-frame (candy-tetris-015's
+        // "never explains the rules" half: clearing lines sinks the
+        // opponent's stack — the only way to win besides them topping out).
+        $rows[] = $line(Lang::t('vs.garbage_rule'));
+
+        $body = implode("\n", $rows);
 
         $card = Style::new()
             ->border(Border::normal())

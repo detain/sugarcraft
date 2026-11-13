@@ -51,11 +51,10 @@ wyjście',
     'label.computer' => 'KOMPUTER',
     'win.player'     => 'WYGRAŁEŚ!',
     'win.computer'   => 'KOMPUTER WYGRAŁ!',
-    'vs_keys'        => 'zjazd
-bufor
-pauza
-restart
-wyjście',
+    // The versus frame teaches the live keys through the shared
+    // help_card column (candy-tetris-015 folded the five-verb roster
+    // away); the exchange rule stays a sentence of its own.
+    'vs.garbage_rule' => 'usunięte linie wysyłają przeciwnikowi śmieci — każdy rząd z jedną dziurą',
     'vs.record' => 'bilans: {wins} wygrane, {losses} przegrane',
     'intro.title' => 'witamy w candy-tetris',
     'intro.goal' => 'usuwaj linie — nie dotknij góry',
