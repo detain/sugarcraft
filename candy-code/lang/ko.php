@@ -43,6 +43,7 @@ return [
     'cli.argv.batch.needs_stream_json' => '--batch는 stream-json 사용자 이벤트를 각각 턴으로 실행합니다. --input-format stream-json이 없으면 실행할 이벤트 피드가 없습니다',
     'cli.argv.config.empty' => '--config는 파일 경로를 기대하지만, 값이 비어 있습니다',
     'cli.argv.config.flag' => '--config는 파일 경로를 기대하지만, 다음 인수가 옵션 {option}입니다',
+    'cli.argv.config.is_directory' => '--config {path}: 파일이 아니라 디렉터리입니다',
     'cli.argv.config.missing' => '--config는 파일 경로를 기대하지만, 인수 목록이 끝났습니다',
     'cli.argv.config.no_such_file' => '--config {path}: 파일이 없습니다',
     'cli.argv.config.not_readable' => '--config {path}: 읽을 수 없습니다',
@@ -65,7 +66,7 @@ return [
     'cli.argv.hint.model_value' => '모델 이름이 "-"로 시작하면 --model=<name> 형식으로 작성하세요. 생략할 수 없습니다.',
     'cli.argv.hint.output_format_value' => '형식이 "-"로 시작하면 --output-format=<value> 형식으로 작성하세요. 생략할 수 없습니다.',
     'cli.argv.hint.output_formats' => '유효한 형식: {formats} (소문자).',
-    'cli.argv.hint.prompt_dash' => '"-"로 시작하는 프롬프트를 전달하려면 --prompt=<text>를 사용하세요.',
+    'cli.argv.hint.prompt_dash' => '"-"로 시작하는 프롬프트는 --prompt=<text>를 사용하세요(-p 제외). 옵션은 프롬프트 앞이나 뒤에 두고, -p와 본문 사이에는 두지 마세요.',
     'cli.argv.hint.quote_prompt' => '프롬프트 전체를 하나의 인수로 따옴표 처리하세요: -p "<prompt>".',
     'cli.argv.hint.resume_needs_target' => '--resume <id|name>을 전달하세요 (`candy-code session list` 참조). 또는 -p를 제거하여 대화형으로 세션을 선택하세요.',
     'cli.argv.hint.root_once' => '프로젝트 디렉터리를 한 번만 지정하세요: 맨 인수로 또는 --root <dir>로. 둘 다 사용 불가.',
@@ -101,6 +102,7 @@ return [
     'cli.argv.root.flag' => '--root는 디렉터리를 기대하지만, 다음 인수가 옵션 {option}입니다',
     'cli.argv.root.missing' => '--root는 디렉터리를 기대하지만, 인수 목록이 끝났습니다',
     'cli.argv.root.no_such_directory' => '--root {root}: 디렉터리가 없습니다',
+    'cli.argv.root.not_a_directory' => '--root {root}: 디렉터리가 아닙니다',
     'cli.argv.root_twice' => '프로젝트 루트가 이미 {root}이지만, 인수 {operand}도 루트를 지정합니다',
     'cli.argv.unexpected.many' => '예상치 못한 인수: {operands}',
     'cli.argv.unexpected.one' => '예상치 못한 인수: {operands}',
@@ -1121,7 +1123,7 @@ TXT,
     'cli.noninteractive.session_funnel_failed' => '이 실행에서 세션 저장소를 열 수 없습니다; 저장된 기록 없이 응답하며 아무것도 저장되지 않습니다: {error}',
     'cli.noninteractive.session_save_failed' => '세션 저장소가 이 응답을 저장할 수 없습니다; 응답은 완료되었으며 종료 상태는 변경되지 않습니다: {error}',
     'cli.noninteractive.stdin_silent' => 'stdin이 {seconds}초간 응답이 없어 파이프된 컨텍스트가 없는 것으로 처리되었습니다; fd 0을 닫거나 느린 시작 시 첫 바이트 도착 전에 데이터를 공급하세요',
-    'cli.noninteractive.stdin_truncated' => '파이프된 stdin이 10MB 상한을 초과했습니다; 잘라냅니다.',
+    'cli.noninteractive.stdin_truncated' => '파이프된 stdin이 {cap} 상한을 초과했습니다; 잘라냅니다.',
     'cli.noninteractive.turn_hook_blocked' => '턴 훅이 이 프롬프트를 거부하여 전송되지 않았습니다: {reason}',
     'cli.permission.arguments_truncated' => '… (잘림 — {bytes}바이트 미표시)',
     'cli.permission.confirm' => '실행하시겠습니까? [y/N] ',
@@ -4098,7 +4100,7 @@ TXT,
     // run that named no mode starts refusing — the launch says so once, and names
     // the one-flag fix. No trailing period — STDERR_LINE_FORMAT adds one
     // (LaunchNoticeOwnPeriodTest).
-    'appLaunch.notice.headless_default' => 'ℹ -p는 권한 모드 default로 시작합니다: 무인 실행은 확인이 필요한 모든 도구 호출을 거부합니다. 스크립트 실행 시 --permission-mode (bypass-permissions는 모든 것 실행)를 지정하세요',
+    'appLaunch.notice.headless_default' => 'ℹ -p/--prompt는 권한 모드 default로 시작합니다: 무인 실행은 확인이 필요한 모든 도구 호출을 거부합니다. 스크립트 실행 시 --permission-mode (bypass-permissions는 모든 것 실행)를 지정하세요',
     // C-SEC-7.e (owner ruling t212, option 3): the implicit autoReview default
     // announces once per session the first time it engages — de-duped by message
     // identity in the launch-notices store, like the bypass banner. Names the

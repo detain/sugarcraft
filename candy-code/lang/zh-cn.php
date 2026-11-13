@@ -43,6 +43,7 @@ return [
     'cli.argv.batch.needs_stream_json' => '--batch 将 stream-json 用户事件逐条作为回合执行；没有 --input-format stream-json 就没有可执行的事件流',
     'cli.argv.config.empty' => '--config 需要文件路径，但值为空',
     'cli.argv.config.flag' => '--config 需要文件路径，但下一个参数是选项 {option}',
+    'cli.argv.config.is_directory' => '--config {path}：是目录，不是文件',
     'cli.argv.config.missing' => '--config 需要文件路径，但参数列表已结束',
     'cli.argv.config.no_such_file' => '--config {path}：文件不存在',
     'cli.argv.config.not_readable' => '--config {path}：不可读',
@@ -65,7 +66,7 @@ return [
     'cli.argv.hint.model_value' => '若模型名以 "-" 开头，请写为 --model=<name>；不可省略。',
     'cli.argv.hint.output_format_value' => '若格式以 "-" 开头，请写为 --output-format=<value>；不可省略。',
     'cli.argv.hint.output_formats' => '有效格式为：{formats}（小写）。',
-    'cli.argv.hint.prompt_dash' => '若提示以 "-" 开头，请使用 --prompt=<text>。',
+    'cli.argv.hint.prompt_dash' => '要传入以 "-" 开头的提示，请使用 --prompt=<文本>（去掉 -p）。选项应放在提示之前或之后，不要放在 -p 与其文本之间。',
     'cli.argv.hint.quote_prompt' => '将整个提示用引号包裹为一个参数：-p "<prompt>"。',
     'cli.argv.hint.resume_needs_target' => '传入 --resume <id|name>（参见 `candy-code session list`），或去掉 -p 以交互式选择会话。',
     'cli.argv.hint.root_once' => '项目目录只能指定一次：作为裸参数或用 --root <dir>，不可同时使用。',
@@ -101,6 +102,7 @@ return [
     'cli.argv.root.flag' => '--root 需要目录，但下一个参数是选项 {option}',
     'cli.argv.root.missing' => '--root 需要目录，但参数列表已结束',
     'cli.argv.root.no_such_directory' => '--root {root}：目录不存在',
+    'cli.argv.root.not_a_directory' => '--root {root}：不是目录',
     'cli.argv.root_twice' => '项目根目录已为 {root}，但参数 {operand} 也指定了一个',
     'cli.argv.unexpected.many' => '意外的参数：{operands}',
     'cli.argv.unexpected.one' => '意外的参数：{operands}',
@@ -1119,7 +1121,7 @@ TXT,
     'cli.noninteractive.session_funnel_failed' => '本次运行无法打开会话存储；将在无历史记录的情况下回答且不会保存任何内容：{error}',
     'cli.noninteractive.session_save_failed' => '会话存储无法保存此回答；回答已完成且退出状态未变：{error}',
     'cli.noninteractive.stdin_silent' => 'stdin 静默 {seconds} 秒，视为无管道上下文；在慢启动时请关闭 fd 0 或在首字节到达前向其输入数据',
-    'cli.noninteractive.stdin_truncated' => '管道 stdin 超过 10MB 上限；已截断。',
+    'cli.noninteractive.stdin_truncated' => '管道 stdin 超过 {cap} 上限；已截断。',
     'cli.noninteractive.turn_hook_blocked' => '轮次钩子拒绝了此提示，因此从未发送：{reason}',
     'cli.permission.arguments_truncated' => '…（已截断 — 还有 {bytes} 字节未显示）',
     'cli.permission.confirm' => '是否执行？[y/N] ',
@@ -4096,7 +4098,7 @@ TXT,
     // run that named no mode starts refusing — the launch says so once, and names
     // the one-flag fix. No trailing period — STDERR_LINE_FORMAT adds one
     // (LaunchNoticeOwnPeriodTest).
-    'appLaunch.notice.headless_default' => 'ℹ -p 以默认权限模式启动：无人值守运行会拒绝所有需要确认的工具调用。脚本化运行请传入 --permission-mode（bypass-permissions 可执行全部操作）',
+    'appLaunch.notice.headless_default' => 'ℹ -p/--prompt 以默认权限模式启动：无人值守运行会拒绝所有需要确认的工具调用。脚本化运行请传入 --permission-mode（bypass-permissions 可执行全部操作）',
     // C-SEC-7.e (owner ruling t212, option 3): the implicit autoReview default
     // announces once per session the first time it engages — de-duped by message
     // identity in the launch-notices store, like the bypass banner. Names the

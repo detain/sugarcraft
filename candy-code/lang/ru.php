@@ -43,6 +43,7 @@ return [
     'cli.argv.batch.needs_stream_json' => '--batch выполняет пользовательские события stream-json как ходы; без --input-format stream-json нет потока событий для выполнения',
     'cli.argv.config.empty' => '--config ожидает путь к файлу, но значение пустое',
     'cli.argv.config.flag' => '--config ожидает путь к файлу, но следующий аргумент — опция {option}',
+    'cli.argv.config.is_directory' => '--config {path}: это каталог, а не файл',
     'cli.argv.config.missing' => '--config ожидает путь к файлу, но список аргументов завершился',
     'cli.argv.config.no_such_file' => '--config {path}: файл не найден',
     'cli.argv.config.not_readable' => '--config {path}: не читается',
@@ -65,7 +66,7 @@ return [
     'cli.argv.hint.model_value' => 'Запишите как --model=<name>, если имя модели начинается с "-"; его нельзя опустить.',
     'cli.argv.hint.output_format_value' => 'Запишите как --output-format=<value>, если формат начинается с "-"; его нельзя опустить.',
     'cli.argv.hint.output_formats' => 'Допустимые форматы: {formats} (в нижнем регистре).',
-    'cli.argv.hint.prompt_dash' => 'Чтобы передать промпт, начинающийся с "-", используйте --prompt=<text>.',
+    'cli.argv.hint.prompt_dash' => 'Чтобы передать промпт, начинающийся с "-", используйте --prompt=<текст> (без -p). Ставьте опции до или после промпта, но не между -p и его текстом.',
     'cli.argv.hint.quote_prompt' => 'Заключите весь промпт в кавычки как один аргумент: -p "<prompt>".',
     'cli.argv.hint.resume_needs_target' => 'Передайте --resume <id|name> (см. `candy-code session list`) или уберите -p для интерактивного выбора сессии.',
     'cli.argv.hint.root_once' => 'Укажите каталог проекта один раз: как отдельный аргумент или с --root <dir>, а не оба.',
@@ -101,6 +102,7 @@ return [
     'cli.argv.root.flag' => '--root ожидает каталог, но следующий аргумент — опция {option}',
     'cli.argv.root.missing' => '--root ожидает каталог, но список аргументов завершился',
     'cli.argv.root.no_such_directory' => '--root {root}: каталог не найден',
+    'cli.argv.root.not_a_directory' => '--root {root}: не каталог',
     'cli.argv.root_twice' => 'корень проекта уже {root}, но аргумент {operand} тоже указывает на него',
     'cli.argv.unexpected.many' => 'неожиданные аргументы: {operands}',
     'cli.argv.unexpected.one' => 'неожиданный аргумент: {operands}',
@@ -1123,7 +1125,7 @@ TXT,
     'cli.noninteractive.session_funnel_failed' => 'хранилище сессий не удалось открыть для этого запуска; ответ без сохранённой истории, ничего не будет сохранено: {error}',
     'cli.noninteractive.session_save_failed' => 'хранилище сессий не смогло сохранить этот ответ; ответ завершён, код выхода не изменился: {error}',
     'cli.noninteractive.stdin_silent' => 'stdin молчал {seconds} с и был расценён как отсутствие канального контекста; закройте fd 0 или подайте данные до первого байта при медленном запуске',
-    'cli.noninteractive.stdin_truncated' => 'канальный stdin превышает лимит 10 МБ; усечение.',
+    'cli.noninteractive.stdin_truncated' => 'канальный stdin превышает лимит {cap}; усечение.',
     'cli.noninteractive.turn_hook_blocked' => 'хук хода отклонил этот промпт, он не был отправлен: {reason}',
     'cli.permission.arguments_truncated' => '… (усечено — ещё {bytes} байт НЕ показано)',
     'cli.permission.confirm' => 'Выполнить? [y/N] ',
@@ -4100,7 +4102,7 @@ TXT,
     // run that named no mode starts refusing — the launch says so once, and names
     // the one-flag fix. No trailing period — STDERR_LINE_FORMAT adds one
     // (LaunchNoticeOwnPeriodTest).
-    'appLaunch.notice.headless_default' => 'ℹ -p запускается в режиме разрешений default: автоматический запуск отклоняет каждый вызов инструмента, требующий подтверждения. Передайте --permission-mode (bypass-permissions выполняет всё) для скриптовых запусков',
+    'appLaunch.notice.headless_default' => 'ℹ -p/--prompt запускается в режиме разрешений default: автоматический запуск отклоняет каждый вызов инструмента, требующий подтверждения. Передайте --permission-mode (bypass-permissions выполняет всё) для скриптовых запусков',
     // C-SEC-7.e (owner ruling t212, option 3): the implicit autoReview default
     // announces once per session the first time it engages — de-duped by message
     // identity in the launch-notices store, like the bypass banner. Names the

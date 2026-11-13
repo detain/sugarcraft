@@ -64,8 +64,8 @@ use SugarCraft\Code\Tools\ToolCall;
  * silently, and after the model had already been billed for the turn.
  *
  * "Usually" rather than "always", stated because the difference is measurable:
- * that method reads `MAX_STDIN_BYTES + 1` (10MB) and truncates, so a pipe
- * carrying more than 10MB is left NOT at EOF and an `fgets()` here would
+ * that method reads `MAX_STDIN_BYTES + 1` (10 MiB) and truncates, so a pipe
+ * carrying more than 10 MiB is left NOT at EOF and an `fgets()` here would
  * return a line of leftover prompt text — read as an answer, and swallowed
  * from a stream whose owner is the caller, not this class. That is a strictly
  * worse failure than the silent one, and it is the probe, not the drain, that

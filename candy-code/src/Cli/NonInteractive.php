@@ -194,6 +194,12 @@ final class NonInteractive
     private const MAX_STDIN_BYTES = 10 * 1024 * 1024;
 
     /**
+     * The unit label for {@see MAX_STDIN_BYTES}: 10 * 1024 * 1024 is 10 MiB,
+     * and the help text and the truncation notice both quote this one spelling.
+     */
+    public const STDIN_CAP_LABEL = '10 MiB';
+
+    /**
      * Why a `-p` run puts no question to anyone (roadmap 5.7-2): what the
      * model reads when it calls `AskUser` or `PlanExit` here.
      */
@@ -2387,7 +2393,7 @@ final class NonInteractive
         }
 
         if (\strlen($data) > self::MAX_STDIN_BYTES) {
-            \fwrite(\STDERR, 'candy-code: ' . Lang::t('cli.noninteractive.stdin_truncated') . "\n");
+            \fwrite(\STDERR, 'candy-code: ' . Lang::t('cli.noninteractive.stdin_truncated', ['cap' => self::STDIN_CAP_LABEL]) . "\n");
             $data = \substr($data, 0, self::MAX_STDIN_BYTES);
         }
 

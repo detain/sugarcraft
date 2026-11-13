@@ -43,6 +43,7 @@ return [
     'cli.argv.batch.needs_stream_json' => '--batch executa os eventos de usuário stream-json como turnos; sem --input-format stream-json não há um feed de eventos para executar',
     'cli.argv.config.empty' => '--config espera um caminho de arquivo, mas o valor está vazio',
     'cli.argv.config.flag' => '--config espera um caminho de arquivo, mas o próximo argumento é a opção {option}',
+    'cli.argv.config.is_directory' => '--config {path}: é um diretório, não um arquivo',
     'cli.argv.config.missing' => '--config espera um caminho de arquivo, mas a lista de argumentos terminou',
     'cli.argv.config.no_such_file' => '--config {path}: arquivo não encontrado',
     'cli.argv.config.not_readable' => '--config {path}: não legível',
@@ -65,7 +66,7 @@ return [
     'cli.argv.hint.model_value' => 'Escreva como --model=<name> se o nome do modelo começar com "-"; não pode ser omitido.',
     'cli.argv.hint.output_format_value' => 'Escreva como --output-format=<value> se o formato começar com "-"; não pode ser omitido.',
     'cli.argv.hint.output_formats' => 'Formatos válidos: {formats} (minúsculas).',
-    'cli.argv.hint.prompt_dash' => 'Para passar um prompt que comece com "-", use --prompt=<text>.',
+    'cli.argv.hint.prompt_dash' => 'Para passar um prompt que começa com "-", use --prompt=<texto> (sem -p). Coloque as opções antes ou depois do prompt, nunca entre -p e o texto.',
     'cli.argv.hint.quote_prompt' => 'Cite o prompt inteiro como um argumento: -p "<prompt>".',
     'cli.argv.hint.resume_needs_target' => 'Passe --resume <id|name> (veja `candy-code session list`), ou remova -p para escolher a sessão interativamente.',
     'cli.argv.hint.root_once' => 'Nomeie o diretório do projeto uma vez: como argumento solto ou com --root <dir>, não ambos.',
@@ -101,6 +102,7 @@ return [
     'cli.argv.root.flag' => '--root espera um diretório, mas o próximo argumento é a opção {option}',
     'cli.argv.root.missing' => '--root espera um diretório, mas a lista de argumentos terminou',
     'cli.argv.root.no_such_directory' => '--root {root}: diretório não encontrado',
+    'cli.argv.root.not_a_directory' => '--root {root}: não é um diretório',
     'cli.argv.root_twice' => 'a raiz do projeto já é {root}, mas o argumento {operand} também nomeia uma',
     'cli.argv.unexpected.many' => 'argumentos inesperados: {operands}',
     'cli.argv.unexpected.one' => 'argumento inesperado: {operands}',
@@ -1123,7 +1125,7 @@ TXT,
     'cli.noninteractive.session_funnel_failed' => 'o armazenamento de sessão não pôde ser aberto para esta execução; respondendo sem histórico armazenado e nada será salvo: {error}',
     'cli.noninteractive.session_save_failed' => 'o armazenamento de sessão não pôde salvar esta resposta; a resposta está completa e o status de saída é inalterado: {error}',
     'cli.noninteractive.stdin_silent' => 'stdin ficou silencioso por {seconds} s e foi tratado como sem contexto via pipe; feche fd 0 ou alimente-o antes que o primeiro byte chegue em uma inicialização mais lenta',
-    'cli.noninteractive.stdin_truncated' => 'stdin via pipe excede o limite de 10MB; truncando.',
+    'cli.noninteractive.stdin_truncated' => 'stdin via pipe excede o limite de {cap}; truncando.',
     'cli.noninteractive.turn_hook_blocked' => 'um hook de turno recusou este prompt, então ele nunca foi enviado: {reason}',
     'cli.permission.arguments_truncated' => '… (truncado — {bytes} bytes adicionais NÃO exibidos)',
     'cli.permission.confirm' => 'Executar? [y/N] ',
@@ -4100,7 +4102,7 @@ TXT,
     // run that named no mode starts refusing — the launch says so once, and names
     // the one-flag fix. No trailing period — STDERR_LINE_FORMAT adds one
     // (LaunchNoticeOwnPeriodTest).
-    'appLaunch.notice.headless_default' => 'ℹ -p inicia no modo de permissão default: uma execução desacompanhada recusa toda chamada de ferramenta que pediria confirmação. Passe --permission-mode (bypass-permissions executa tudo) para execuções scriptadas',
+    'appLaunch.notice.headless_default' => 'ℹ -p/--prompt inicia no modo de permissão default: uma execução desacompanhada recusa toda chamada de ferramenta que pediria confirmação. Passe --permission-mode (bypass-permissions executa tudo) para execuções scriptadas',
     // C-SEC-7.e (owner ruling t212, option 3): the implicit autoReview default
     // announces once per session the first time it engages — de-duped by message
     // identity in the launch-notices store, like the bypass banner. Names the

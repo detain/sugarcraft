@@ -43,6 +43,7 @@ return [
     'cli.argv.batch.needs_stream_json' => '--batch esegue gli eventi utente stream-json come turni; senza --input-format stream-json non c\'è un feed di eventi da eseguire',
     'cli.argv.config.empty' => '--config richiede un percorso di file, ma il valore è vuoto',
     'cli.argv.config.flag' => '--config richiede un percorso di file, ma l\'argomento successivo è l\'opzione {option}',
+    'cli.argv.config.is_directory' => '--config {path}: è una directory, non un file',
     'cli.argv.config.missing' => '--config richiede un percorso di file, ma la lista degli argomenti è terminata',
     'cli.argv.config.no_such_file' => '--config {path}: file inesistente',
     'cli.argv.config.not_readable' => '--config {path}: non leggibile',
@@ -65,7 +66,7 @@ return [
     'cli.argv.hint.model_value' => 'Scrivilo come --model=<name> se il nome del modello inizia con "-"; non può essere omesso.',
     'cli.argv.hint.output_format_value' => 'Scrivilo come --output-format=<value> se il formato inizia con "-"; non può essere omesso.',
     'cli.argv.hint.output_formats' => 'Formati validi: {formats} (minuscole).',
-    'cli.argv.hint.prompt_dash' => 'Per passare un prompt che inizia con "-", usa --prompt=<text>.',
+    'cli.argv.hint.prompt_dash' => 'Per passare un prompt che inizia con "-", usa --prompt=<testo> (senza -p). Metti le opzioni prima o dopo il prompt, mai tra -p e il suo testo.',
     'cli.argv.hint.quote_prompt' => 'Quota l\'intero prompt come un singolo argomento: -p "<prompt>".',
     'cli.argv.hint.resume_needs_target' => 'Passa --resume <id|name> (vedi `candy-code session list`), oppure rimuovi -p per scegliere la sessione in modo interattivo.',
     'cli.argv.hint.root_once' => 'Indica la directory del progetto una sola volta: come argomento nudo o con --root <dir>, non entrambi.',
@@ -101,6 +102,7 @@ return [
     'cli.argv.root.flag' => '--root richiede una directory, ma l\'argomento successivo è l\'opzione {option}',
     'cli.argv.root.missing' => '--root richiede una directory, ma la lista degli argomenti è terminata',
     'cli.argv.root.no_such_directory' => '--root {root}: directory inesistente',
+    'cli.argv.root.not_a_directory' => '--root {root}: non è una directory',
     'cli.argv.root_twice' => 'la root del progetto è già {root}, ma l\'argomento {operand} ne indica un\'altra',
     'cli.argv.unexpected.many' => 'argomenti inattesi: {operands}',
     'cli.argv.unexpected.one' => 'argomento inatteso: {operands}',
@@ -1124,7 +1126,7 @@ TXT,
     'cli.noninteractive.session_funnel_failed' => 'l\'archivio sessioni non è stato aperto per questa esecuzione; risposta senza cronologia salvata e nulla verrà salvato: {error}',
     'cli.noninteractive.session_save_failed' => 'l\'archivio sessioni non ha potuto salvare questa risposta; la risposta è completa e lo stato di uscita è invariato: {error}',
     'cli.noninteractive.stdin_silent' => 'stdin è rimasto silenzioso per {seconds} s ed è stato trattato come nessun contesto in pipe; chiudi fd 0 o alimentalo prima che il primo byte arrivi in un avvio più lento',
-    'cli.noninteractive.stdin_truncated' => 'stdin in pipe supera il limite di 10MB; troncamento in corso.',
+    'cli.noninteractive.stdin_truncated' => 'stdin in pipe supera il limite di {cap}; troncamento in corso.',
     'cli.noninteractive.turn_hook_blocked' => 'un hook di turno ha rifiutato questo prompt, quindi non è mai stato inviato: {reason}',
     'cli.permission.arguments_truncated' => '… (troncato — {bytes} byte aggiuntivi NON mostrati)',
     'cli.permission.confirm' => 'Eseguire? [y/N] ',
@@ -4101,7 +4103,7 @@ TXT,
     // run that named no mode starts refusing — the launch says so once, and names
     // the one-flag fix. No trailing period — STDERR_LINE_FORMAT adds one
     // (LaunchNoticeOwnPeriodTest).
-    'appLaunch.notice.headless_default' => 'ℹ -p avvia in modalità permessi default: un\'esecuzione non interattiva rifiuta ogni chiamata di tool che richiederebbe conferma. Passa --permission-mode (bypass-permissions esegue tutto) per esecuzioni scriptate',
+    'appLaunch.notice.headless_default' => 'ℹ -p/--prompt avvia in modalità permessi default: un\'esecuzione non interattiva rifiuta ogni chiamata di tool che richiederebbe conferma. Passa --permission-mode (bypass-permissions esegue tutto) per esecuzioni scriptate',
     // C-SEC-7.e (owner ruling t212, option 3): the implicit autoReview default
     // announces once per session the first time it engages — de-duped by message
     // identity in the launch-notices store, like the bypass banner. Names the

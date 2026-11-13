@@ -298,13 +298,27 @@ final class ArgvParser
             // -p <value>
             if ($arg === '-p') {
                 $next = $argv[$i + 1] ?? null;
+                // `-p --prompt=<text>`: the `=` form is the documented escape for
+                // a dash-leading prompt, so it IS the value; refusing it told the
+                // user to type the very token that was just rejected.
+                if ('-p' === '-p' && $next !== null && \str_starts_with($next, '--prompt=')) {
+                    $duplicateNoticed = self::noticePromptOverride($prompt, $duplicateNoticed);
+                    $prompt = \substr($next, 9);
+                    $promptRequested = true;
+                    $i += 2;
+                    continue;
+                }
                 if (self::looksLikeFlag($next)) {
                     if ($usageError === null) {
                         $usageError = self::flagAsPromptError('-p', (string) $next);
                         $usageHint = self::promptDashHint();
                     }
                     $promptRequested = true;
-                    ++$i;
+                    // The rejected token stays in the stream so `--help` can still
+                    // answer, EXCEPT `--version`/`-v`: bin/candy-code prints the
+                    // version before it looks at the usage error, so `-p --version`
+                    // exited 0 having silently lost its prompt.
+                    $i += ($next === '--version' || $next === '-v') ? 2 : 1;
                     continue;
                 }
                 $duplicateNoticed = self::noticePromptOverride($prompt, $duplicateNoticed); // 1021 INFO-4
@@ -326,13 +340,27 @@ final class ArgvParser
             // --prompt <value>
             if ($arg === '--prompt') {
                 $next = $argv[$i + 1] ?? null;
+                // `-p --prompt=<text>`: the `=` form is the documented escape for
+                // a dash-leading prompt, so it IS the value; refusing it told the
+                // user to type the very token that was just rejected.
+                if ('--prompt' === '-p' && $next !== null && \str_starts_with($next, '--prompt=')) {
+                    $duplicateNoticed = self::noticePromptOverride($prompt, $duplicateNoticed);
+                    $prompt = \substr($next, 9);
+                    $promptRequested = true;
+                    $i += 2;
+                    continue;
+                }
                 if (self::looksLikeFlag($next)) {
                     if ($usageError === null) {
                         $usageError = self::flagAsPromptError('--prompt', (string) $next);
                         $usageHint = self::promptDashHint();
                     }
                     $promptRequested = true;
-                    ++$i;
+                    // The rejected token stays in the stream so `--help` can still
+                    // answer, EXCEPT `--version`/`-v`: bin/candy-code prints the
+                    // version before it looks at the usage error, so `-p --version`
+                    // exited 0 having silently lost its prompt.
+                    $i += ($next === '--version' || $next === '-v') ? 2 : 1;
                     continue;
                 }
                 $duplicateNoticed = self::noticePromptOverride($prompt, $duplicateNoticed); // 1021 INFO-4
@@ -1459,7 +1487,10 @@ final class ArgvParser
             return null;
         }
 
-        return 'candy-code: ' . Lang::t('cli.argv.root.no_such_directory', ['root' => $args->root]);
+        // An existing file is "not a directory", not "no such directory".
+        return 'candy-code: ' . (file_exists($args->root)
+            ? Lang::t('cli.argv.root.not_a_directory', ['root' => $args->root])
+            : Lang::t('cli.argv.root.no_such_directory', ['root' => $args->root]));
     }
 
     /**
@@ -1479,8 +1510,8 @@ final class ArgvParser
      * force -- the same silent downgrade `--root` validation exists to prevent,
      * and worse for being explicitly asked for on the command line.
      *
-     * A directory, a dangling symlink and an absent path all report "no such
-     * file": the caller's mistake is the same in each case, and Bootstrap
+     * A directory reports "is a directory, not a file"; a dangling symlink and
+     * an absent path report "no such file". Bootstrap
      * draws the finer present-but-unusable distinctions for the file it goes
      * on to read.
      */
@@ -1501,6 +1532,10 @@ final class ArgvParser
         // empty policy on a run that asked for a named one.
         if ($args->configPath === '') {
             return 'candy-code: ' . Lang::t('cli.argv.config.empty');
+        }
+
+        if (is_dir($args->configPath)) {
+            return 'candy-code: ' . Lang::t('cli.argv.config.is_directory', ['path' => $args->configPath]);
         }
 
         if (!is_file($args->configPath)) {

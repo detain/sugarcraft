@@ -43,6 +43,7 @@ return [
     'cli.argv.batch.needs_stream_json' => '--batch führt die stream-json-Benutzerereignisse als Züge aus; ohne --input-format stream-json gibt es kein Ereignisfeed, das ausgeführt werden könnte',
     'cli.argv.config.empty' => '--config erwartet einen Dateipfad, aber der Wert ist leer',
     'cli.argv.config.flag' => '--config erwartet einen Dateipfad, aber das nächste Argument ist die Option {option}',
+    'cli.argv.config.is_directory' => '--config {path}: ist ein Verzeichnis, keine Datei',
     'cli.argv.config.missing' => '--config erwartet einen Dateipfad, aber die Argumentliste endete',
     'cli.argv.config.no_such_file' => '--config {path}: Datei nicht gefunden',
     'cli.argv.config.not_readable' => '--config {path}: nicht lesbar',
@@ -65,7 +66,7 @@ return [
     'cli.argv.hint.model_value' => 'Schreiben Sie es als --model=<name>, wenn der Modellname mit "-" beginnt; es darf nicht weggelassen werden.',
     'cli.argv.hint.output_format_value' => 'Schreiben Sie es als --output-format=<value>, wenn das Format mit "-" beginnt; es darf nicht weggelassen werden.',
     'cli.argv.hint.output_formats' => 'Gültige Formate sind: {formats} (kleingeschrieben).',
-    'cli.argv.hint.prompt_dash' => 'Um einen Prompt zu übergeben, der mit "-" beginnt, verwenden Sie --prompt=<text>.',
+    'cli.argv.hint.prompt_dash' => 'Für einen Prompt, der mit "-" beginnt, --prompt=<text> verwenden (-p weglassen). Optionen vor oder nach dem Prompt setzen, nie zwischen -p und seinem Text.',
     'cli.argv.hint.quote_prompt' => 'Stellen Sie den gesamten Prompt als ein Argument in Anführungszeichen: -p "<prompt>".',
     'cli.argv.hint.resume_needs_target' => 'Geben Sie --resume <id|name> an (siehe `candy-code session list`), oder entfernen Sie -p, um die Sitzung interaktiv auszuwählen.',
     'cli.argv.hint.root_once' => 'Nennen Sie das Projektverzeichnis einmal: als direktes Argument oder mit --root <dir>, nicht beides.',
@@ -101,6 +102,7 @@ return [
     'cli.argv.root.flag' => '--root erwartet ein Verzeichnis, aber das nächste Argument ist die Option {option}',
     'cli.argv.root.missing' => '--root erwartet ein Verzeichnis, aber die Argumentliste endete',
     'cli.argv.root.no_such_directory' => '--root {root}: Verzeichnis nicht gefunden',
+    'cli.argv.root.not_a_directory' => '--root {root}: kein Verzeichnis',
     'cli.argv.root_twice' => 'das Projektstammverzeichnis ist bereits {root}, aber das Argument {operand} benennt ebenfalls eines',
     'cli.argv.unexpected.many' => 'unerwartete Argumente: {operands}',
     'cli.argv.unexpected.one' => 'unerwartetes Argument: {operands}',
@@ -1123,7 +1125,7 @@ TXT,
     'cli.noninteractive.session_funnel_failed' => 'der Sitzungsspeicher konnte für diesen Lauf nicht geöffnet werden; Antwort ohne gespeicherte Historie, nichts wird gespeichert: {error}',
     'cli.noninteractive.session_save_failed' => 'der Sitzungsspeicher konnte diese Antwort nicht speichern; die Antwort ist vollständig und der Exit-Status unverändert: {error}',
     'cli.noninteractive.stdin_silent' => 'stdin blieb {seconds} s stumm und wurde als kein Pipe-Kontext behandelt; schließe fd 0 oder füttere es, bevor das erste Byte bei einem langsameren Start eintrifft',
-    'cli.noninteractive.stdin_truncated' => 'gepipeletes stdin überschreitet die 10MB-Grenze; wird gekürzt.',
+    'cli.noninteractive.stdin_truncated' => 'gepipeletes stdin überschreitet die {cap}-Grenze; wird gekürzt.',
     'cli.noninteractive.turn_hook_blocked' => 'ein Turn-Hook hat diesen Prompt abgelehnt, daher wurde er nie gesendet: {reason}',
     'cli.permission.arguments_truncated' => '… (gekürzt — {bytes} weitere Bytes NICHT angezeigt)',
     'cli.permission.confirm' => 'Ausführen? [y/N] ',
@@ -4100,7 +4102,7 @@ TXT,
     // run that named no mode starts refusing — the launch says so once, and names
     // the one-flag fix. No trailing period — STDERR_LINE_FORMAT adds one
     // (LaunchNoticeOwnPeriodTest).
-    'appLaunch.notice.headless_default' => 'ℹ -p startet im Berechtigungsmodus default: ein unbeaufsichtigter Lauf verweigert jeden Tool-Aufruf, der nachfragen würde. --permission-mode übergeben (bypass-permissions führt alles aus) für Skript-Läufe',
+    'appLaunch.notice.headless_default' => 'ℹ -p/--prompt startet im Berechtigungsmodus default: ein unbeaufsichtigter Lauf verweigert jeden Tool-Aufruf, der nachfragen würde. --permission-mode übergeben (bypass-permissions führt alles aus) für Skript-Läufe',
     // C-SEC-7.e (owner ruling t212, option 3): the implicit autoReview default
     // announces once per session the first time it engages — de-duped by message
     // identity in the launch-notices store, like the bypass banner. Names the

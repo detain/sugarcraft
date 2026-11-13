@@ -1045,7 +1045,7 @@ final class ArgvParserTest extends TestCase
         try {
             $error = ArgvParser::configError(ArgvParser::parse(['candy-code', '--config', $dir]));
             $this->assertNotNull($error);
-            $this->assertStringContainsString('no such file', $error);
+            $this->assertStringContainsString('is a directory', $error);
         } finally {
             @\rmdir($dir);
         }

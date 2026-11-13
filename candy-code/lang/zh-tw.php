@@ -43,6 +43,7 @@ return [
     'cli.argv.batch.needs_stream_json' => '--batch 將 stream-json 使用者事件逐則作為回合執行；沒有 --input-format stream-json 就沒有可執行的事件流',
     'cli.argv.config.empty' => '--config 需要檔案路徑，但值為空',
     'cli.argv.config.flag' => '--config 需要檔案路徑，但下一個引數是選項 {option}',
+    'cli.argv.config.is_directory' => '--config {path}：是目錄，不是檔案',
     'cli.argv.config.missing' => '--config 需要檔案路徑，但引數列表已結束',
     'cli.argv.config.no_such_file' => '--config {path}：找不到檔案',
     'cli.argv.config.not_readable' => '--config {path}：無法讀取',
@@ -65,7 +66,7 @@ return [
     'cli.argv.hint.model_value' => '若模型名稱以 "-" 開頭，請寫成 --model=<name>；不可省略。',
     'cli.argv.hint.output_format_value' => '若格式以 "-" 開頭，請寫成 --output-format=<value>；不可省略。',
     'cli.argv.hint.output_formats' => '有效格式：{formats}（小寫）。',
-    'cli.argv.hint.prompt_dash' => '若要傳遞以 "-" 開頭的提示，請使用 --prompt=<text>。',
+    'cli.argv.hint.prompt_dash' => '要傳入以 "-" 開頭的提示，請使用 --prompt=<文字>（拿掉 -p）。選項應放在提示之前或之後，不要放在 -p 與其文字之間。',
     'cli.argv.hint.quote_prompt' => '將整個提示以引號包成單一引數：-p "<prompt>"。',
     'cli.argv.hint.resume_needs_target' => '傳遞 --resume <id|name>（見 `candy-code session list`），或移除 -p 以互動方式選擇會話。',
     'cli.argv.hint.root_once' => '專案目錄只能指定一次：作為裸引數或使用 --root <dir>，不可同時使用。',
@@ -101,6 +102,7 @@ return [
     'cli.argv.root.flag' => '--root 需要目錄，但下一個引數是選項 {option}',
     'cli.argv.root.missing' => '--root 需要目錄，但引數列表已結束',
     'cli.argv.root.no_such_directory' => '--root {root}：找不到目錄',
+    'cli.argv.root.not_a_directory' => '--root {root}：不是目錄',
     'cli.argv.root_twice' => '專案根目錄已是 {root}，但引數 {operand} 也指定了一個',
     'cli.argv.unexpected.many' => '未預期的引數：{operands}',
     'cli.argv.unexpected.one' => '未預期的引數：{operands}',
@@ -1119,7 +1121,7 @@ TXT,
     'cli.noninteractive.session_funnel_failed' => '本次執行無法開啟會話儲存；將無歷史記錄回覆且不會儲存任何內容：{error}',
     'cli.noninteractive.session_save_failed' => '會話儲存無法保存此回覆；回覆已完成且退出狀態未變：{error}',
     'cli.noninteractive.stdin_silent' => 'stdin 靜默 {seconds} 秒，視為無管線內容；請關閉 fd 0 或在較慢啟動前餵入資料',
-    'cli.noninteractive.stdin_truncated' => '管線 stdin 超過 10MB 上限；已截斷。',
+    'cli.noninteractive.stdin_truncated' => '管線 stdin 超過 {cap} 上限；已截斷。',
     'cli.noninteractive.turn_hook_blocked' => '輪次 hook 拒絕了此提示詞，因此從未送出：{reason}',
     'cli.permission.arguments_truncated' => '…（已截斷 — 另有 {bytes} 位元組未顯示）',
     'cli.permission.confirm' => '要執行嗎？[y/N] ',
@@ -4096,7 +4098,7 @@ TXT,
     // run that named no mode starts refusing — the launch says so once, and names
     // the one-flag fix. No trailing period — STDERR_LINE_FORMAT adds one
     // (LaunchNoticeOwnPeriodTest).
-    'appLaunch.notice.headless_default' => 'ℹ -p 以預設權限模式啟動：無人值守執行會拒絕所有需要確認的工具呼叫。腳本執行請使用 --permission-mode（bypass-permissions 可執行全部）',
+    'appLaunch.notice.headless_default' => 'ℹ -p/--prompt 以預設權限模式啟動：無人值守執行會拒絕所有需要確認的工具呼叫。腳本執行請使用 --permission-mode（bypass-permissions 可執行全部）',
     // C-SEC-7.e (owner ruling t212, option 3): the implicit autoReview default
     // announces once per session the first time it engages — de-duped by message
     // identity in the launch-notices store, like the bypass banner. Names the

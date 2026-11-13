@@ -81,6 +81,7 @@ return [
     'cli.argv.batch.needs_stream_json' => '--batch executes the stream-json user events as turns; without --input-format stream-json there is no event feed to run',
     'cli.argv.config.empty' => '--config expects a file path, but the value is empty',
     'cli.argv.config.flag' => '--config expects a file path, but the next argument is the option {option}',
+    'cli.argv.config.is_directory' => '--config {path}: is a directory, not a file',
     'cli.argv.config.missing' => '--config expects a file path, but the argument list ended',
     'cli.argv.config.no_such_file' => '--config {path}: no such file',
     'cli.argv.config.not_readable' => '--config {path}: not readable',
@@ -103,7 +104,7 @@ return [
     'cli.argv.hint.model_value' => 'Write it as --model=<name> if the model name begins with "-"; it may not be omitted.',
     'cli.argv.hint.output_format_value' => 'Write it as --output-format=<value> if the format begins with "-"; it may not be omitted.',
     'cli.argv.hint.output_formats' => 'Valid formats are: {formats} (lowercase).',
-    'cli.argv.hint.prompt_dash' => 'To pass a prompt that begins with "-", use --prompt=<text>.',
+    'cli.argv.hint.prompt_dash' => 'To pass a prompt that begins with "-", use --prompt=<text> (drop -p). Put options before or after the prompt, never between -p and its text.',
     'cli.argv.hint.quote_prompt' => 'Quote the whole prompt as one argument: -p "<prompt>".',
     'cli.argv.hint.resume_needs_target' => 'Pass --resume <id|name> (see `candy-code session list`), or drop -p to pick the session interactively.',
     'cli.argv.hint.root_once' => 'Name the project directory once: as a bare argument or with --root <dir>, not both.',
@@ -139,6 +140,7 @@ return [
     'cli.argv.root.flag' => '--root expects a directory, but the next argument is the option {option}',
     'cli.argv.root.missing' => '--root expects a directory, but the argument list ended',
     'cli.argv.root.no_such_directory' => '--root {root}: no such directory',
+    'cli.argv.root.not_a_directory' => '--root {root}: not a directory',
     'cli.argv.root_twice' => 'the project root is already {root}, but the argument {operand} also names one',
     'cli.argv.unexpected.many' => 'unexpected arguments: {operands}',
     'cli.argv.unexpected.one' => 'unexpected argument: {operands}',
@@ -1198,7 +1200,7 @@ TXT,
     'cli.noninteractive.session_funnel_failed' => 'the session store could not be opened for this run; answering without stored history and nothing will be saved: {error}',
     'cli.noninteractive.session_save_failed' => 'the session store could not save this answer; the answer is complete and the exit status is unchanged: {error}',
     'cli.noninteractive.stdin_silent' => 'stdin stayed silent for {seconds} s and was treated as no piped context. On a slow start, feed the first byte sooner — or close fd 0',
-    'cli.noninteractive.stdin_truncated' => 'piped stdin exceeds 10MB cap; truncating.',
+    'cli.noninteractive.stdin_truncated' => 'piped stdin exceeds {cap} cap; truncating.',
     'cli.noninteractive.turn_hook_blocked' => 'a turn hook refused this prompt, so it was never sent: {reason}',
     'cli.permission.arguments_truncated' => '… (truncated — {bytes} more bytes NOT shown)',
     'cli.permission.confirm' => 'Run it? [y/N] ',
@@ -4177,7 +4179,7 @@ TXT,
     // run that named no mode starts refusing — the launch says so once, and names
     // the one-flag fix. No trailing period — STDERR_LINE_FORMAT adds one
     // (LaunchNoticeOwnPeriodTest).
-    'appLaunch.notice.headless_default' => 'ℹ -p starts in permission mode default: an unattended run refuses every tool call that would ask. Pass --permission-mode (bypass-permissions runs everything) for scripted runs',
+    'appLaunch.notice.headless_default' => 'ℹ -p/--prompt starts in permission mode default: an unattended run refuses every tool call that would ask. Pass --permission-mode (bypass-permissions runs everything) for scripted runs',
     // C-SEC-7.e (owner ruling t212, option 3): the implicit autoReview default
     // announces once per session the first time it engages — de-duped by message
     // identity in the launch-notices store, like the bypass banner. Names the

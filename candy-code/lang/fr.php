@@ -43,6 +43,7 @@ return [
     'cli.argv.batch.needs_stream_json' => '--batch exécute les événements utilisateur stream-json en tours ; sans --input-format stream-json, il n\'y a pas de flux d\'événements à exécuter',
     'cli.argv.config.empty' => '--config attend un chemin de fichier, mais la valeur est vide',
     'cli.argv.config.flag' => '--config attend un chemin de fichier, mais l\'argument suivant est l\'option {option}',
+    'cli.argv.config.is_directory' => '--config {path} : est un répertoire, pas un fichier',
     'cli.argv.config.missing' => '--config attend un chemin de fichier, mais la liste d\'arguments est épuisée',
     'cli.argv.config.no_such_file' => '--config {path} : fichier introuvable',
     'cli.argv.config.not_readable' => '--config {path} : fichier non lisible',
@@ -65,7 +66,7 @@ return [
     'cli.argv.hint.model_value' => 'Écrivez --model=<nom> si le nom du modèle commence par "-" ; il ne peut pas être omis.',
     'cli.argv.hint.output_format_value' => 'Écrivez --output-format=<valeur> si le format commence par "-" ; il ne peut pas être omis.',
     'cli.argv.hint.output_formats' => 'Formats valides : {formats} (en minuscules).',
-    'cli.argv.hint.prompt_dash' => 'Pour passer un prompt commençant par "-", utilisez --prompt=<texte>.',
+    'cli.argv.hint.prompt_dash' => 'Pour passer un prompt commençant par "-", utilisez --prompt=<texte> (sans -p). Placez les options avant ou après le prompt, jamais entre -p et son texte.',
     'cli.argv.hint.quote_prompt' => 'Encadrez tout le prompt comme un seul argument : -p "<prompt>".',
     'cli.argv.hint.resume_needs_target' => 'Passez --resume <id|name> (voir `candy-code session list`), ou retirez -p pour choisir la session de façon interactive.',
     'cli.argv.hint.root_once' => 'Nommez le répertoire du projet une seule fois : comme argument nu ou avec --root <dir>, pas les deux.',
@@ -101,6 +102,7 @@ return [
     'cli.argv.root.flag' => '--root attend un répertoire, mais l\'argument suivant est l\'option {option}',
     'cli.argv.root.missing' => '--root attend un répertoire, mais la liste d\'arguments est épuisée',
     'cli.argv.root.no_such_directory' => '--root {root} : répertoire introuvable',
+    'cli.argv.root.not_a_directory' => '--root {root} : n\'est pas un répertoire',
     'cli.argv.root_twice' => 'la racine du projet est déjà {root}, mais l\'argument {operand} en nomme une autre',
     'cli.argv.unexpected.many' => 'arguments inattendus : {operands}',
     'cli.argv.unexpected.one' => 'argument inattendu : {operands}',
@@ -1124,7 +1126,7 @@ TXT,
     'cli.noninteractive.session_funnel_failed' => 'le magasin de session n\'a pas pu être ouvert pour cette exécution ; réponse sans historique stocké et rien ne sera sauvegardé : {error}',
     'cli.noninteractive.session_save_failed' => 'le magasin de session n\'a pas pu sauvegarder cette réponse ; la réponse est complète et le code de sortie est inchangé : {error}',
     'cli.noninteractive.stdin_silent' => 'stdin est resté silencieux pendant {seconds} s et a été traité comme absence de contexte pipé ; fermez fd 0 ou alimentez-le avant que le premier octet n\'arrive sur un démarrage plus lent',
-    'cli.noninteractive.stdin_truncated' => 'stdin pipé dépasse la limite de 10 Mo ; troncature en cours.',
+    'cli.noninteractive.stdin_truncated' => 'stdin pipé dépasse la limite de {cap} ; troncature en cours.',
     'cli.noninteractive.turn_hook_blocked' => 'un hook de tour a refusé ce prompt, il n\'a donc jamais été envoyé : {reason}',
     'cli.permission.arguments_truncated' => '… (tronqué — {bytes} octets supplémentaires NON affichés)',
     'cli.permission.confirm' => 'Exécuter ? [y/N] ',
@@ -4101,7 +4103,7 @@ TXT,
     // run that named no mode starts refusing — the launch says so once, and names
     // the one-flag fix. No trailing period — STDERR_LINE_FORMAT adds one
     // (LaunchNoticeOwnPeriodTest).
-    'appLaunch.notice.headless_default' => 'ℹ -p démarre en mode de permission default : une exécution non supervisée refuse tout appel d\'outil qui demanderait une confirmation. Passez --permission-mode (bypass-permissions exécute tout) pour les exécutions scriptées',
+    'appLaunch.notice.headless_default' => 'ℹ -p/--prompt démarre en mode de permission default : une exécution non supervisée refuse tout appel d\'outil qui demanderait une confirmation. Passez --permission-mode (bypass-permissions exécute tout) pour les exécutions scriptées',
     // C-SEC-7.e (owner ruling t212, option 3): the implicit autoReview default
     // announces once per session the first time it engages — de-duped by message
     // identity in the launch-notices store, like the bypass banner. Names the

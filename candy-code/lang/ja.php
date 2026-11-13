@@ -43,6 +43,7 @@ return [
     'cli.argv.batch.needs_stream_json' => '--batch は stream-json ユーザーイベントをそれぞれターンとして実行しますが、--input-format stream-json がなければ実行するイベントフィードがありません',
     'cli.argv.config.empty' => '--config はファイルパスを期待するが、値が空',
     'cli.argv.config.flag' => '--config はファイルパスを期待するが、次の引数がオプション {option}',
+    'cli.argv.config.is_directory' => '--config {path}: ディレクトリであり、ファイルではない',
     'cli.argv.config.missing' => '--config はファイルパスを期待するが、引数リストが終了した',
     'cli.argv.config.no_such_file' => '--config {path}: ファイルが見つからない',
     'cli.argv.config.not_readable' => '--config {path}: 読み取り不可',
@@ -65,7 +66,7 @@ return [
     'cli.argv.hint.model_value' => 'モデル名が "-" で始まる場合は --model=<name> の形式で記述。省略不可',
     'cli.argv.hint.output_format_value' => 'フォーマットが "-" で始まる場合は --output-format=<value> の形式で記述。省略不可',
     'cli.argv.hint.output_formats' => '有効なフォーマット: {formats}（小文字）',
-    'cli.argv.hint.prompt_dash' => '"-" で始まるプロンプトを渡すには --prompt=<text> を使用',
+    'cli.argv.hint.prompt_dash' => '"-" で始まるプロンプトは --prompt=<text> を使う（-p は外す）。オプションはプロンプトの前か後に置き、-p とその本文の間には置かない。',
     'cli.argv.hint.quote_prompt' => 'プロンプト全体を1つの引数としてクォート: -p "<prompt>"',
     'cli.argv.hint.resume_needs_target' => '--resume <id|name> を指定（`candy-code session list` 参照）、または -p を外して対話的にセッションを選択',
     'cli.argv.hint.root_once' => 'プロジェクトディレクトリは1回だけ指定: 素の引数または --root <dir> のいずれか。両方は不可',
@@ -101,6 +102,7 @@ return [
     'cli.argv.root.flag' => '--root はディレクトリを期待するが、次の引数がオプション {option}',
     'cli.argv.root.missing' => '--root はディレクトリを期待するが、引数リストが終了した',
     'cli.argv.root.no_such_directory' => '--root {root}: ディレクトリが見つからない',
+    'cli.argv.root.not_a_directory' => '--root {root}: ディレクトリではない',
     'cli.argv.root_twice' => 'プロジェクトルートは既に {root} だが、引数 {operand} もルートを指定している',
     'cli.argv.unexpected.many' => '予期しない引数: {operands}',
     'cli.argv.unexpected.one' => '予期しない引数: {operands}',
@@ -1121,7 +1123,7 @@ TXT,
     'cli.noninteractive.session_funnel_failed' => 'この実行でセッションストアを開けませんでした; 保存された履歴なしで回答し、何も保存されません: {error}',
     'cli.noninteractive.session_save_failed' => 'セッションストアにこの回答を保存できませんでした; 回答は完了しており、終了ステータスは変更されていません: {error}',
     'cli.noninteractive.stdin_silent' => 'stdin が {seconds} 秒間無応答だったため、パイプ経由のコンテキストなしと判断しました; 起動が遅い場合は fd 0 を閉じるか、最初のバイトが届く前にデータを入力してください',
-    'cli.noninteractive.stdin_truncated' => 'パイプされたstdinが10MBの上限を超えています; 切り詰めます。',
+    'cli.noninteractive.stdin_truncated' => 'パイプされたstdinが{cap}の上限を超えています; 切り詰めます。',
     'cli.noninteractive.turn_hook_blocked' => 'ターンフックがこのプロンプトを拒否したため、送信されませんでした: {reason}',
     'cli.permission.arguments_truncated' => '… (切り詰め済み — 残り {bytes} バイトは表示されません)',
     'cli.permission.confirm' => '実行しますか? [y/N] ',
@@ -4098,7 +4100,7 @@ TXT,
     // run that named no mode starts refusing — the launch says so once, and names
     // the one-flag fix. No trailing period — STDERR_LINE_FORMAT adds one
     // (LaunchNoticeOwnPeriodTest).
-    'appLaunch.notice.headless_default' => 'ℹ -p は権限モード default で開始: 無人実行では確認を要するツール呼び出しを全て拒否します。スクリプト実行には --permission-mode を指定してください（bypass-permissions は全実行）',
+    'appLaunch.notice.headless_default' => 'ℹ -p/--prompt は権限モード default で開始: 無人実行では確認を要するツール呼び出しを全て拒否します。スクリプト実行には --permission-mode を指定してください（bypass-permissions は全実行）',
     // C-SEC-7.e (owner ruling t212, option 3): the implicit autoReview default
     // announces once per session the first time it engages — de-duped by message
     // identity in the launch-notices store, like the bypass banner. Names the
