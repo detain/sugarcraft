@@ -123,6 +123,7 @@ header row.
 | `Home` / `g` | top |
 | `End` / `G` | bottom |
 | `←` / `h`, `→` / `l` | scroll horizontally (no-wrap mode) |
+| `r` | force a reload of the watched file (unmodified only) |
 | `q` / `Esc` / `Ctrl+C` | exit (`Shift+q`, `Alt+q` and `Ctrl+q` do not) |
 
 Only an unmodified `q` quits. The scrolling letter keys are the exception to
@@ -130,11 +131,18 @@ that caution: they fire even with modifiers held — `Ctrl+B` pages up and
 `Alt+j` scrolls — while `Ctrl+U` / `Ctrl+D` are the deliberate half-page
 chords.
 
-When the pager is opened on a file (not stdin) it **auto-reloads**: the model
-polls the source with `FileWatcher::pollTuple()` on a 0.5 s idle tick and
-re-renders in place whenever the (mtime, size) tuple changes, so edits to the
-Markdown appear without restarting. A delete-and-recreate keeps the last good
-frame until the file returns.
+When the pager is opened on a file (not stdin) it **auto-reloads**: a fixed
+0.5 s tick runs one non-blocking (mtime, size) probe through
+`FileWatcher::pollTuple()`; a tick that finds a differing tuple consumes the
+baseline and queues the read and re-render for the FOLLOWING tick — save
+bursts coalesce into one render of the newest bytes and the pager never sits
+on a parse while your keystrokes queue. A delete-and-recreate keeps the last
+good frame until the recreated (mtime, size) differs from the baseline. A
+rewrite preserving both second-granularity mtime and byte size stays
+invisible to the tuple; press `r` to force a reload in that case. Refused
+replacements (oversize, device swap, binary) and throwing re-renders never
+blank the screen: the last good frame stays and the header marks `↻!` until
+the next accepted reload.
 
 ## Exit codes & errors
 
@@ -205,9 +213,10 @@ if ($watcher->hasChangedSince($lastMtime)) {
 }
 ```
 
-`FileWatcher::watch()` (a generator) is currently consumed only by tests; the
-pager uses the tuple API directly on its idle tick, whose sweep cadence
-`idlePollDelayMicroseconds()` bounds (exponential backoff with a cap).
+The pager's reload path uses the tuple API directly on the model's fixed
+tick: FileWatcher loops, sleeps and backs off nothing — the old generator
+`watch()` and its unwired idle-backoff ladder were deleted with it, leaving
+one watcher per session (the `ReloadTickMsg` chain in `MdViewModel`).
 
 ### GlamourTheme
 

@@ -109,16 +109,27 @@ final class MdViewModelReloadTest extends TestCase
 
         file_put_contents($path, 'much longer body');
 
-        [$next, $cmd] = $m->update(new ReloadTickMsg());
+        // Tick 1 DETECTS and consumes the tuple; the read+re-render rides the
+        // FOLLOWING tick (finding 017), so the detect pass itself stays a
+        // single stat — keys never queue behind a parse.
+        [$detect, $cmd] = $m->update(new ReloadTickMsg());
+        self::assertSame(0, $detect->reloadCount, 'detection alone must not render');
+        self::assertTrue($detect->pendingReload, 'a changed tuple must queue the deferred apply');
+        self::assertStringNotContainsString('RENDERED<much longer body>', $detect->view());
+        self::assertNotNull($cmd);
+
+        [$next, $cmd] = $detect->update(new ReloadTickMsg());
 
         self::assertStringContainsString('RENDERED<much longer body>', $next->view());
         self::assertStringNotContainsString('RENDERED<short>', $next->view());
         self::assertSame(1, $next->reloadCount);
+        self::assertFalse($next->pendingReload);
         self::assertNotNull($cmd);
 
-        // Second edit, second tick: the chain survives consecutive reloads.
+        // Second edit, second two-tick cadence: the chain survives reloads.
         file_put_contents($path, 'final body text!!');
-        [$next2, $cmd2] = $next->update(new ReloadTickMsg());
+        [$detect2, ] = $next->update(new ReloadTickMsg());
+        [$next2, $cmd2] = $detect2->update(new ReloadTickMsg());
         self::assertStringContainsString('RENDERED<final body text!!>', $next2->view());
         self::assertSame(2, $next2->reloadCount);
         self::assertNotNull($cmd2);
@@ -135,7 +146,10 @@ final class MdViewModelReloadTest extends TestCase
         // edit inside one second) — the tuple law must still fire.
         touch($path, (int) filemtime($path) + 7);
 
-        [$next, ] = $m->update(new ReloadTickMsg());
+        [$detect, ] = $m->update(new ReloadTickMsg());
+        self::assertTrue($detect->pendingReload, 'an mtime-only move is a change under the tuple law');
+
+        [$next, ] = $detect->update(new ReloadTickMsg());
 
         self::assertSame(1, $next->reloadCount);
     }
@@ -151,10 +165,12 @@ final class MdViewModelReloadTest extends TestCase
         self::assertSame($m, $afterDelete, 'a missing file must blank nothing');
         self::assertSame(0, $afterDelete->reloadCount);
 
-        // Recreate with different content: the baseline never advanced, so
-        // the reappearance is detected as a change.
+        // Recreate with different content: the baseline never advanced while
+        // the file was gone, so the reappearance is detected as a change and
+        // applied one tick later.
         file_put_contents($path, 'body is back bigger');
-        [$afterRecreate, ] = $afterDelete->update(new ReloadTickMsg());
+        [$detect, ] = $afterDelete->update(new ReloadTickMsg());
+        [$afterRecreate, ] = $detect->update(new ReloadTickMsg());
 
         self::assertStringContainsString('RENDERED<body is back bigger>', $afterRecreate->view());
         self::assertSame(1, $afterRecreate->reloadCount);
@@ -170,7 +186,8 @@ final class MdViewModelReloadTest extends TestCase
         self::assertSame($m, $idle, 'still-absent file must not fire a reload');
 
         file_put_contents($ghost, 'first save');
-        [$appeared, ] = $idle->update(new ReloadTickMsg());
+        [$detect, ] = $idle->update(new ReloadTickMsg());
+        [$appeared, ] = $detect->update(new ReloadTickMsg());
 
         self::assertStringContainsString('RENDERED<first save>', $appeared->view());
         self::assertSame(1, $appeared->reloadCount);
@@ -187,9 +204,10 @@ final class MdViewModelReloadTest extends TestCase
         self::assertSame(1, $scrolled->viewport->yOffset);
         self::assertTrue($scrolled->isWatching(), 'viewport pass-through must not drop the watch');
 
-        // A reload after scrolling still applies.
+        // A reload after scrolling still applies (over both ticks).
         file_put_contents($path, 'changed contents');
-        [$reloaded, ] = $scrolled->update(new ReloadTickMsg());
+        [$detect, ] = $scrolled->update(new ReloadTickMsg());
+        [$reloaded, ] = $detect->update(new ReloadTickMsg());
         self::assertSame(1, $reloaded->reloadCount);
         self::assertStringContainsString('RENDERED<changed contents>', $reloaded->view());
     }
@@ -280,7 +298,8 @@ final class MdViewModelReloadTest extends TestCase
             ->withWatch($path, $this->markerReRender());
 
         file_put_contents($path, 'v2 edited');
-        [$reloaded, ] = $m->update(new ReloadTickMsg());
+        [$detect, ] = $m->update(new ReloadTickMsg());
+        [$reloaded, ] = $detect->update(new ReloadTickMsg());
 
         $header = \explode("\n", $reloaded->view())[0];
         self::assertStringContainsString('↻1', $header, 'silent swaps must become visible in the header');
@@ -348,5 +367,119 @@ final class MdViewModelReloadTest extends TestCase
         // The [0,0] sentinel baseline: an appearing file IS a change.
         $appeared = FileWatcher::pollTuple($path, 0, 0);
         self::assertIsArray($appeared);
+    }
+
+    public function testFileWatcherIsSingleShotApiWithoutAnyPump(): void
+    {
+        // Finding 080's delete leg, pinned against re-introduction: the
+        // pager has ONE watcher (the model's fixed tick) and FileWatcher
+        // carries no generator, no ladder and no sleeping of its own.
+        $source = (string) file_get_contents(\dirname(__DIR__) . '/src/FileWatcher.php');
+        self::assertStringNotContainsString('usleep(', $source);
+        self::assertStringNotContainsString('function watch(', $source);
+        self::assertStringNotContainsString('idlePollDelay', $source);
+    }
+
+    public function testSaveBurstCoalescesToASingleDeferredRender(): void
+    {
+        // Finding 017's coalesce/drop-if-stale leg: the read+render rides a
+        // follow-up tick, so every edit that lands between two ticks is
+        // paid for exactly once — with the NEWEST bytes.
+        $path    = $this->createSourceFile('one');
+        $renders = 0;
+        $counter = static function (string $raw) use (&$renders): string {
+            $renders++;
+
+            return 'RENDERED<' . $raw . '>';
+        };
+        $m = MdViewModel::fromContent('RENDERED<one>', 40, 5)->withWatch($path, $counter);
+
+        file_put_contents($path, 'edit-A');
+        [$detect, ] = $m->update(new ReloadTickMsg());
+        self::assertSame(0, $renders, 'the detect pass must be a bare stat — no read, no render');
+
+        file_put_contents($path, 'edit-BB');
+        file_put_contents($path, 'edit-CCC');
+        [$applied, ] = $detect->update(new ReloadTickMsg());
+
+        self::assertSame(1, $renders, 'a burst between ticks renders exactly once');
+        self::assertSame(1, $applied->reloadCount);
+        self::assertStringContainsString('RENDERED<edit-CCC>', $applied->view(), 'last save wins');
+
+        [$held, ] = $applied->update(new ReloadTickMsg());
+        self::assertSame($applied, $held, 'the consumed burst must not re-render on a later tick');
+        self::assertSame(1, $renders);
+    }
+
+    public function testThrowingReRenderKeepsLastGoodFrameAndRecoversOnNextSave(): void
+    {
+        // Finding 019: sugar-markdown can throw on hostile-but-readable
+        // input; the blowup used to escape update() and kill the pager mid
+        // save. Contained now: last good frame + ↻!. The tuple is consumed
+        // either way — retrying the SAME bytes would re-run the same
+        // deterministic throw every half second (documented divergence from
+        // the "baseline not consumed" wording).
+        $path = $this->createSourceFile('calm');
+        $hostile = static function (string $raw): string {
+            if (str_contains($raw, 'boom')) {
+                throw new \RuntimeException('hostile nesting blew the renderer');
+            }
+
+            return 'RENDERED<' . $raw . '>';
+        };
+        $m = MdViewModel::fromContent('RENDERED<calm>', 40, 5)
+            ->withDocument('x.md')
+            ->withWatch($path, $hostile);
+
+        file_put_contents($path, 'boom boom'); // size differs: same-size same-second saves are invisible by (mtime, size) law
+        [$detect, ] = $m->update(new ReloadTickMsg());
+        [$blocked, ] = $detect->update(new ReloadTickMsg());
+
+        self::assertStringContainsString('RENDERED<calm>', $blocked->view(), 'a throwing render must not blank the pager');
+        self::assertStringContainsString('↻!', $blocked->view());
+        self::assertSame(0, $blocked->reloadCount);
+
+        [$held, ] = $blocked->update(new ReloadTickMsg());
+        self::assertSame($blocked, $held, 'identical bytes are not re-paid every tick');
+
+        file_put_contents($path, 'fixed text');
+        [$redetect, ] = $held->update(new ReloadTickMsg());
+        [$fixed, ] = $redetect->update(new ReloadTickMsg());
+
+        self::assertSame(1, $fixed->reloadCount);
+        self::assertStringContainsString('RENDERED<fixed text>', $fixed->view());
+        self::assertFalse($fixed->reloadBlocked);
+    }
+
+    public function testForceKeyReloadsTupleInvisibleRewrite(): void
+    {
+        // Finding 044: a rewrite preserving BOTH second-granularity mtime
+        // and byte size is invisible to the tuple forever. `r` (unmodified,
+        // watching) forces the deferred apply over the current bytes.
+        $path = $this->createSourceFile('AAAA');
+        $m = MdViewModel::fromContent('RENDERED<AAAA>', 40, 5)->withWatch($path, $this->markerReRender());
+        $base = (int) filemtime($path);
+
+        file_put_contents($path, 'BBBB');
+        touch($path, $base); // same size, mtime rewound: same fingerprint
+
+        [$idle, ] = $m->update(new ReloadTickMsg());
+        self::assertSame($idle, $m, 'a same-fingerprint rewrite stays invisible to the sweep — documented, and r exists for it');
+
+        [$armed, $cmd] = $idle->update(new KeyMsg(KeyType::Char, 'r'));
+        self::assertNull($cmd, 'r queues onto the live tick chain instead of double-arming it');
+        self::assertTrue($armed->pendingReload);
+
+        [$applied, ] = $armed->update(new ReloadTickMsg());
+        self::assertSame(1, $applied->reloadCount);
+        self::assertStringContainsString('RENDERED<BBBB>', $applied->view());
+
+        // Modified r is not the force key — those chords belong to the
+        // viewport pass-through, same discipline as the q quit gate.
+        file_put_contents($path, 'CCCC');
+        touch($path, $base);
+        [$mod, ] = $applied->update(new KeyMsg(KeyType::Char, 'r', ctrl: true));
+        self::assertFalse($mod->pendingReload);
+        self::assertSame(1, $mod->reloadCount);
     }
 }

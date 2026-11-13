@@ -205,8 +205,13 @@ final class MdViewModelTest extends TestCase
         $this->assertTrue(ftruncate($handle, 67_108_865));
         fclose($handle);
 
-        [$blocked] = $model->update(new ReloadTickMsg());
+        [$detect] = $model->update(new ReloadTickMsg());
+        $this->assertTrue($detect->pendingReload, 'the detect pass queues the read for the next tick');
+        $this->assertFalse($detect->reloadBlocked, 'nothing is refused until the read happens');
+
+        [$blocked] = $detect->update(new ReloadTickMsg());
         $this->assertTrue($blocked->reloadBlocked);
+        $this->assertFalse($blocked->pendingReload);
         $this->assertSame(0, $blocked->reloadCount, 'a refusal is not a reload');
         $frame = $blocked->view();
         $this->assertStringContainsString('↻!', $frame);
@@ -219,7 +224,8 @@ final class MdViewModelTest extends TestCase
         // A later real edit recovers: accepted, counter moves, ↻! clears.
         file_put_contents($path, "# newer\n");
         clearstatcache(true, $path);
-        [$fixed] = $held->update(new ReloadTickMsg());
+        [$redetect] = $held->update(new ReloadTickMsg());
+        [$fixed] = $redetect->update(new ReloadTickMsg());
         $this->assertFalse($fixed->reloadBlocked);
         $this->assertSame(1, $fixed->reloadCount);
         $this->assertStringContainsString('↻1', $fixed->view());
@@ -240,7 +246,8 @@ final class MdViewModelTest extends TestCase
         file_put_contents($path, "# ELF-ish\x00hostile");
         clearstatcache(true, $path);
 
-        [$blocked] = $model->update(new ReloadTickMsg());
+        [$detect] = $model->update(new ReloadTickMsg());
+        [$blocked] = $detect->update(new ReloadTickMsg());
         $this->assertTrue($blocked->reloadBlocked);
         $this->assertSame(0, $blocked->reloadCount);
         $this->assertStringContainsString('↻!', $blocked->view());

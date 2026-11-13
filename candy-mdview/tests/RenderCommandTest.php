@@ -1097,8 +1097,11 @@ final class RenderCommandTest extends TestCase
             file_put_contents($path, "# Bravo Title\n\nsecond body\n");
             clearstatcache();
 
-            [$reloaded, $cmd] = $model->update(new ReloadTickMsg());
+            [$detect, $cmd] = $model->update(new ReloadTickMsg());
             $this->assertNotNull($cmd, 'arming the watch keeps the re-arm chain alive');
+            $this->assertTrue($detect->pendingReload, 'the sweep tick detects; the next tick applies');
+
+            [$reloaded, ] = $detect->update(new ReloadTickMsg());
             $this->assertSame(1, $reloaded->reloadCount);
             // Re-rendered through the live Renderer, not copied verbatim:
             // headings reach the view styled but text intact.

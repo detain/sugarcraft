@@ -30,21 +30,23 @@ use SugarCraft\Core\Util\Width;
  * {@see fromContent()} stays chrome-free so golden frames never move.
  *
  * File-watch auto-reload: when armed with {@see withWatch()}, the model
- * rides a `Cmd::tick()` re-arm chain (the sugar-widgets Stopwatch shape)
- * that sweeps the source file's (mtime, size) tuple once per interval
- * through {@see FileWatcher::pollTuple()} — one non-blocking stat per
- * tick, no Generator, no sleep inside the loop. A changed tuple re-reads
- * the file, runs it through the injected re-render closure, and swaps the
- * Viewport content in place. The tick interval is an idle bound (never a
- * request deadline), and a deleted-then-recreated file reloads when it
- * reappears because the sweep keeps polling the baseline. Refused
- * replacements (oversize, device swap, binary) never blank the pager: the
- * last good frame stays, the tuple is consumed, and the header marks `↻!`
- * until the next accepted reload.
+ * rides a fixed 0.5 s `ReloadTickMsg` chain (MdViewModel::RELOAD_POLL_SECONDS,
+ * re-armed per handled tick — the sugar-widgets Stopwatch shape). Each sweep
+ * is ONE non-blocking (mtime, size) probe through {@see FileWatcher::pollTuple()};
+ * a differing tuple consumes the baseline and queues the read+re-render for
+ * the FOLLOWING tick, so a save burst never parks the loop behind a parse
+ * while keys wait, and rapid edits coalesce to the newest bytes (an interval
+ * bound, never a request deadline). Reload applies when the recreated file's
+ * (mtime, size) differs from the baseline — a restore to the identical
+ * fingerprint stays invisible, and `r` forces a reload of the current bytes
+ * either way. Refused replacements (oversize, device swap, binary) and
+ * throwing re-renders never blank the pager: the last good frame stays, the
+ * tuple is consumed, and the header marks `↻!` until the next accepted
+ * reload.
  */
 final class MdViewModel implements Model
 {
-    /** Pager file-watch sweep interval in seconds (idle poll cadence). */
+    /** Pager file-watch sweep interval in seconds (fixed tick, re-armed per handled ReloadTickMsg). */
     public const RELOAD_POLL_SECONDS = 0.5;
 
     public static function fromContent(string $content, int $width = 80, int $height = 24): self
@@ -70,13 +72,15 @@ final class MdViewModel implements Model
         public readonly ?string $documentName = null,
         /** True when the latest sweep's replacement was refused at the gate. */
         public readonly bool $reloadBlocked = false,
+        /** True between change-detection and the deferred read+re-render tick. */
+        public readonly bool $pendingReload = false,
     ) {}
 
     /**
      * Structural clone with named overrides — the ONE derivation site, so
      * no state field can be silently zeroed by a hand-rolled copy.
      *
-     * @param array{viewport?:Viewport,exited?:bool,watchPath?:?string,reRender?:?\Closure,watchMtime?:int,watchSize?:int,reloadCount?:int,documentName?:?string,reloadBlocked?:bool} $overrides
+     * @param array{viewport?:Viewport,exited?:bool,watchPath?:?string,reRender?:?\Closure,watchMtime?:int,watchSize?:int,reloadCount?:int,documentName?:?string,reloadBlocked?:bool,pendingReload?:bool} $overrides
      */
     private function copy(array $overrides = []): self
     {
@@ -95,6 +99,7 @@ final class MdViewModel implements Model
             $pick('reloadCount', $this->reloadCount),
             $pick('documentName', $this->documentName),
             $pick('reloadBlocked', $this->reloadBlocked),
+            $pick('pendingReload', $this->pendingReload),
         );
     }
 
@@ -177,20 +182,31 @@ final class MdViewModel implements Model
                     'watchSize'  => 0,
                 ]), Cmd::quit()];
             }
+            if ($msg->type === KeyType::Char && $msg->rune === 'r' && $unmodified && $this->watchPath !== null) {
+                // Force-reload (finding 044): a rewrite preserving BOTH
+                // second-granularity mtime and byte size is invisible to the
+                // tuple forever, so `r` re-snapshots the baseline against the
+                // current bytes and queues the deferred apply — the same
+                // no-park shape the sweep uses. The quit gate stays q/Esc/Ctrl+C.
+                $now = FileWatcher::snapshot($this->watchPath) ?? [$this->watchMtime, $this->watchSize];
+
+                return [$this->copy([
+                    'watchMtime'    => $now[0],
+                    'watchSize'     => $now[1],
+                    'pendingReload' => true,
+                ]), null];
+            }
         }
         [$next, $cmd] = $this->viewport->update($msg);
         return [$this->copy(['viewport' => $next]), $cmd];
     }
 
     /**
-     * One non-blocking (mtime, size) sweep; returns a content-refreshed
-     * copy when the file moved, `$this` (identical instance) when it did
-     * not. A replacement refused at the document gate (grown over cap,
-     * swapped to a device, binary payload) keeps the last good frame,
-     * consumes the tuple, and marks the header `↻!` — re-reading refused
-     * bytes every tick would re-pay the slurp forever, and the next real
-     * edit presents a fresh tuple. Render failures likewise keep the last
-     * good frame: the pager never blanks on a transient half-written save.
+     * One non-blocking (mtime, size) sweep. Returns `$this` (identical
+     * instance) when nothing moved, a baseline-consuming copy when the file
+     * changed (the apply rides the FOLLOWING tick — finding 017), the
+     * applied copy when a queued reload comes due, and a refused copy when
+     * the queued bytes fail the document gate or the re-render throws.
      */
     private function sweepForReload(): self
     {
@@ -198,34 +214,79 @@ final class MdViewModel implements Model
             return $this;
         }
 
+        if ($this->pendingReload === true) {
+            return $this->applyPendingReload($this->watchPath, $this->reRender);
+        }
+
         $changed = FileWatcher::pollTuple($this->watchPath, $this->watchMtime, $this->watchSize);
         if ($changed === null) {
             return $this;
         }
 
+        // Detecting a change and applying it live on different ticks so the
+        // loop never parks behind a parse while keys queue (finding 017).
+        // The tuple is consumed NOW; further edits before the apply tick
+        // only rewrite the baseline — the apply reads whatever bytes are
+        // current, which coalesces a burst to its last save (drop-if-stale,
+        // the (mtime, size) law already means last-write-wins).
+        return $this->copy([
+            'watchMtime'    => $changed[0],
+            'watchSize'     => $changed[1],
+            'pendingReload' => true,
+        ]);
+    }
+
+    /**
+     * The follow-up tick's apply pass: read through the shared document
+     * gate and swap the frame. A refused read (oversize, device swap,
+     * binary — finding 003) or a throwing re-render (finding 019) keeps the
+     * last good frame and marks the header `↻!`. Both consume the baseline
+     * the detection tick snapshotted: refused or blowing-up bytes are never
+     * re-read every 0.5 s, and the next real edit (or `r`) gets a fresh
+     * attempt.
+     *
+     * @param \Closure(string):string $reRender
+     */
+    private function applyPendingReload(string $path, \Closure $reRender): self
+    {
+        // The baseline tracks whatever bytes THIS pass observed, newest
+        // wins — including a rewrite that landed between detection and read.
+        $seen = FileWatcher::snapshot($path) ?? [$this->watchMtime, $this->watchSize];
+
         try {
-            // The same door every launch lane uses — no cap-free back
-            // entrance for the sweep that runs for the whole session.
-            $raw = DocumentGate::readFile($this->watchPath);
+            $raw     = DocumentGate::readFile($path);
+            $content = $reRender($raw);
         } catch (\InvalidArgumentException) {
-            // Refused replacement: keep the frame, consume the tuple, flag
-            // the header. "Stat said there, the read said gone" collapses
-            // here too — FileWatcher::pollTuple answers null once the path
-            // is truly absent, so delete-then-recreate recovery keeps its
-            // baseline through the sweep that finds nothing.
-            return $this->copy([
-                'watchMtime'    => $changed[0],
-                'watchSize'     => $changed[1],
-                'reloadBlocked' => true,
-            ]);
+            return $this->refusedReload($seen);
+        } catch (\Throwable) {
+            // sugar-markdown can throw on hostile-but-readable input. One
+            // bad save must not kill the live pager mid-read; retrying the
+            // SAME bytes would re-run the same deterministic throw, so the
+            // tuple is consumed here too — a deliberate divergence from the
+            // old "keep the baseline" wording, stated in this docblock.
+            return $this->refusedReload($seen);
         }
 
         return $this->copy([
-            'viewport'      => $this->viewport->setContent(($this->reRender)($raw)),
-            'watchMtime'    => $changed[0],
-            'watchSize'     => $changed[1],
+            'viewport'      => $this->viewport->setContent($content),
+            'watchMtime'    => $seen[0],
+            'watchSize'     => $seen[1],
             'reloadCount'   => $this->reloadCount + 1,
             'reloadBlocked' => false,
+            'pendingReload' => false,
+        ]);
+    }
+
+    /**
+     * @param array{0:int, 1:int} $seen
+     */
+    private function refusedReload(array $seen): self
+    {
+        return $this->copy([
+            'watchMtime'    => $seen[0],
+            'watchSize'     => $seen[1],
+            'pendingReload' => false,
+            'reloadBlocked' => true,
         ]);
     }
 

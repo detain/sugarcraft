@@ -113,6 +113,7 @@ final class RenderCommand extends Command
                   Ctrl+U / Ctrl+D         half page up / down
                   mouse wheel             3 lines per notch, either direction
                   h / Left, l / Right     scroll long lines sideways
+                  r                       force a reload of the watched file
                   q, Esc, Ctrl+C          quit (q only unmodified)
 
                 Exit codes:
