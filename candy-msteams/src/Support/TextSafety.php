@@ -24,8 +24,11 @@ use SugarCraft\Code\Context\PromptFence;
  */
 final class TextSafety
 {
-    /** @var list<string> */
-    private array $secrets = [];
+    /** @param list<string> $secrets */
+    public function __construct(
+        private array $secrets = [],
+    ) {
+    }
 
     public function withSecrets(array $secrets): self
     {
@@ -33,10 +36,22 @@ final class TextSafety
             $secrets,
             static fn (mixed $s): bool => \is_string($s) && \strlen($s) >= 6,
         ));
-        $clone = clone $this;
-        $clone->secrets = $clean;
 
-        return $clone;
+        return $this->mutate(['secrets' => $clean]);
+    }
+
+    /**
+     * msteams-24: the single immutability funnel, mirroring sugar-core's
+     * Concerns/Mutable shape (new instance from current state + changes —
+     * no scattered ad-hoc cloning). addSecret below is the ONE declared
+     * in-place exception (§7.3's mint-time roster); every other state
+     * transition of this value object goes through here.
+     *
+     * @param array<string,mixed> $changes
+     */
+    private function mutate(array $changes): self
+    {
+        return new self(...\array_merge(\get_object_vars($this), $changes));
     }
 
     /** Untrusted channel text → prompt-safe text, byte-for-byte inert against the roster. */
