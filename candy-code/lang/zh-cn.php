@@ -5415,4 +5415,5 @@ TXT,
     'host.workflows.lint_verdict' => '结论：{verdict}',
     'hooks.subagent_grant.denied' => '权限模式 \'{mode}\'（智能体 "{agent}"）不允许 {tool}。',
     'hooks.subagent_grant.ask' => '允许运行 {tool} 吗？（智能体 "{agent}" 处于权限模式：{mode}）',
+    'media.ingress.decode_failed' => 'GD 无法加载图像',
 ];

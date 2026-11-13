@@ -5422,4 +5422,5 @@ Generierungsformular-Entwurf. Bereits im Entwurf vorhandene Werte werden nie
     'host.workflows.lint_verdict' => 'Urteil: {verdict}',
     'hooks.subagent_grant.denied' => 'Der Berechtigungsmodus \'{mode}\' des Agenten "{agent}" erlaubt {tool} nicht.',
     'hooks.subagent_grant.ask' => '{tool} ausführen lassen? (Agent "{agent}" läuft im Berechtigungsmodus: {mode})',
+    'media.ingress.decode_failed' => 'GD konnte das Bild nicht laden',
 ];

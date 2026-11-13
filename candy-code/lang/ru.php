@@ -5422,4 +5422,5 @@ TXT,
     'host.workflows.lint_verdict' => 'Вердикт: {verdict}',
     'hooks.subagent_grant.denied' => 'Режим разрешений \'{mode}\' агента "{agent}" не допускает {tool}.',
     'hooks.subagent_grant.ask' => 'Разрешить запуск {tool}? (агент "{agent}" работает в режиме разрешений: {mode})',
+    'media.ingress.decode_failed' => 'GD не удалось загрузить изображение',
 ];

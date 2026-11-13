@@ -5423,4 +5423,5 @@ sobrescriben (la ley onlyUnset).',
     'host.workflows.lint_verdict' => 'Veredicto: {verdict}',
     'hooks.subagent_grant.denied' => 'El modo de permisos \'{mode}\' del agente "{agent}" no permite {tool}.',
     'hooks.subagent_grant.ask' => '¿Permitir que {tool} se ejecute? (el agente "{agent}" se ejecuta en modo de permisos: {mode})',
+    'media.ingress.decode_failed' => 'GD no pudo cargar la imagen',
 ];

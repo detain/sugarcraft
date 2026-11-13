@@ -5418,4 +5418,5 @@ TXT,
     'host.workflows.lint_verdict' => '判定: {verdict}',
     'hooks.subagent_grant.denied' => '権限モード \'{mode}\' (エージェント "{agent}") では {tool} は許可されていません。',
     'hooks.subagent_grant.ask' => '{tool} の実行を許可しますか？ (エージェント "{agent}" は権限モード {mode} で動作中)',
+    'media.ingress.decode_failed' => 'GD が画像を読み込めませんでした',
 ];

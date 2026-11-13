@@ -5423,4 +5423,5 @@ brouillon du formulaire de génération. Les valeurs déjà présentes dans le b
     'host.workflows.lint_verdict' => 'Verdict : {verdict}',
     'hooks.subagent_grant.denied' => 'Le mode de permission \'{mode}\' de l\'agent "{agent}" n\'autorise pas {tool}.',
     'hooks.subagent_grant.ask' => 'Autoriser l\'exécution de {tool} ? (l\'agent "{agent}" s\'exécute en mode de permission : {mode})',
+    'media.ingress.decode_failed' => 'GD n\'a pas pu charger l\'image',
 ];

@@ -5418,4 +5418,5 @@ TXT,
     'host.workflows.lint_verdict' => '판정: {verdict}',
     'hooks.subagent_grant.denied' => '권한 모드 \'{mode}\' (에이전트 "{agent}")에서는 {tool}을(를) 허용하지 않습니다.',
     'hooks.subagent_grant.ask' => '{tool} 실행을 허용할까요? (에이전트 "{agent}"는 권한 모드 {mode}로 실행 중)',
+    'media.ingress.decode_failed' => 'GD가 이미지를 불러오지 못했습니다',
 ];

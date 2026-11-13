@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Media;
 
+use SugarCraft\Code\Lang;
 use SugarCraft\Image\ImageSource;
 
 /**
@@ -127,7 +128,7 @@ final readonly class ImageIngress
             // Exception classes keep the pre-SI-32 split: the in-memory door
             // refused with InvalidArgumentException, the file door with
             // RuntimeException.
-            $message = \SugarCraft\Image\Lang::t('renderer.gd_load_failed');
+            $message = Lang::t('media.ingress.decode_failed');
             throw $fromBytes ? new \InvalidArgumentException($message) : new \RuntimeException($message);
         }
 

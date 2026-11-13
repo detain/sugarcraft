@@ -5423,4 +5423,5 @@ sovrascritti (la legge onlyUnset).',
     'host.workflows.lint_verdict' => 'Verdetto: {verdict}',
     'hooks.subagent_grant.denied' => 'La modalità di permesso \'{mode}\' dell\'agente "{agent}" non consente {tool}.',
     'hooks.subagent_grant.ask' => 'Consentire l\'esecuzione di {tool}? (l\'agente "{agent}" è in modalità di permesso: {mode})',
+    'media.ingress.decode_failed' => 'GD non è riuscito a caricare l\'immagine',
 ];

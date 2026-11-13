@@ -5497,4 +5497,5 @@ overwritten (the onlyUnset law).',
     'host.workflows.lint_verdict' => 'Verdict: {verdict}',
     'hooks.subagent_grant.denied' => 'Permission mode \'{mode}\' of agent "{agent}" does not allow {tool}.',
     'hooks.subagent_grant.ask' => 'Allow {tool} to run? (agent "{agent}" runs in permission mode: {mode})',
+    'media.ingress.decode_failed' => 'GD failed to load image',
 ];
