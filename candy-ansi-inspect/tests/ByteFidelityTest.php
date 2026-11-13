@@ -726,19 +726,20 @@ final class ByteFidelityTest extends TestCase
 
     // --- documented limit: sugar-ansi-parser's 32-parameter cap --------------------
 
-    public function testParameterCapIsReportedAsTheParserSawIt(): void
+    public function testParameterCapIsInvisibleInTheVerbatimCsiReplay(): void
     {
         // `Parser::MAX_PARAMS` is 32: past the cap the separator is dropped and
         // further digits keep accumulating into the last slot, so `32;33`
-        // reaches the handler as the single parameter `3233`. The inspector
-        // reports what the parser saw — pinning the loss rather than leaving it
-        // a silent hole in the byte account.
+        // reaches the dispatch fields as the single parameter `3233`. Since the
+        // window-tail rebuild (finding 016) the report reads the wire bytes
+        // instead: the raw column replays all 33 parameters exactly as sent —
+        // the parser's internal merge is no longer observable in a CSI at all.
         $input = "\x1b[" . implode(';', range(1, 33)) . 'm';
         $segments = Inspector::parse($input);
 
         $this->assertCount(1, $segments);
-        $this->assertSame("\x1b[1;2;3;4;5;6;7;8;9;10;11;12;13;14;15;16;17;18;19;20;21;22;23;24;25;26;27;28;29;30;31;3233m", $segments[0]->raw());
-        $this->assertSame(strlen($input) - 1, strlen($segments[0]->raw()), 'one separator is consumed by the cap');
+        $this->assertSame($input, $segments[0]->raw(), 'the window replays the sender\'s bytes verbatim');
+        $this->assertSame(strlen($input), strlen($segments[0]->raw()));
 
         // At the cap itself the round-trip is still exact.
         $within = "\x1b[" . implode(';', range(1, 32)) . 'm';
@@ -1004,20 +1005,22 @@ final class ByteFidelityTest extends TestCase
 
     public function testIgnoredControlBytesAndParserCapsArriveAsTheParserRewroteThem(): void
     {
-        // Three more ways the re-emitted bytes can differ from the input, all of
-        // them sugar-ansi-parser policies rather than this inspector's doing, pinned so a
-        // future change to the shared parser must pass through this contract:
-        //  - a parameter accumulates only up to Parser::MAX_PARAM_VALUE (65535), so
-        //    an oversized value arrives clamped instead of mid-digit truncated;
-        //  - Parser::put() refuses payload past MAX_STRING_BUFFER (64 KiB), so a long
-        //    OSC arrives cut at exactly that length with its terminator intact;
-        //  - OscString maps C0 (0x00-0x06, 0x08-0x17, 0x19, 0x1C-0x1F) to `None`, so
-        //    an ignored control byte vanishes from an OSC payload - while the very
-        //    same byte survives in a DCS, SOS, PM or APC payload.
-        // Byte-identical to `master`: guards on the byte account, not fixes.
-        $this->assertSame("\x1b[65535m", Inspector::parse("\x1b[99999m")[0]->raw());
+        // Remaining parser-policy shapes pinned so a future change to the
+        // shared parser must pass through this contract:
+        //  - Parser::put() refuses payload past MAX_STRING_BUFFER (64 KiB), so a
+        //    long OSC arrives cut at exactly that length with its terminator
+        //    intact (string payloads are re-emitted from the dispatch fields,
+        //    not the window);
+        //  - OscString maps C0 (0x00-0x06, 0x08-0x17, 0x19, 0x1C-0x1F) to `None`,
+        //    so an ignored control byte vanishes from an OSC payload - while the
+        //    very same byte survives in a DCS, SOS, PM or APC payload.
+        // The two parameter caps (32 params, 65535 value) used to live here:
+        // the window-tail rebuild (finding 016) makes them invisible in a CSI —
+        // the wire bytes arrive verbatim — while a DCS prelude still rebuilds
+        // through the parser fields (deviation 2's family).
+        $this->assertSame("\x1b[99999m", Inspector::parse("\x1b[99999m")[0]->raw());
         $this->assertSame(
-            "\x1b[38;2;65535;0;0m",
+            "\x1b[38;2;99999;0;0m",
             Inspector::parse("\x1b[38;2;99999;0;0m")[0]->raw(),
         );
 
@@ -1102,15 +1105,16 @@ final class ByteFidelityTest extends TestCase
         $this->assertStringContainsString("\r", implode('', array_map(static fn($s): string => $s->raw(), $segments)));
     }
 
-    public function testEightBitCsiIntroducerIsReplayedInSevenBitForm(): void
+    public function testEightBitCsiIntroducerReplaysItsVerbatimByte(): void
     {
-        // Deviation #9: sugar-ansi-parser opens the CSI family directly on 0x9B, but
-        // the dispatch callback hands the handler only (final, params, …) and
-        // the handler rebuilds the sequence from the `ESC [` template — so the
-        // re-emitted stream carries bytes the sender did not use. The handler
-        // cannot see the difference, and neither can this pin let anyone forget.
+        // Formerly deviation #9's CSI leg: the dispatch callback hands the
+        // handler only (final, params, …) and folds the introducer choice
+        // away, so the old ESC [ template replayed `\x9b31m` as `ESC [ 31 m`
+        // — bytes the sender did not use. The window-tail rebuild (finding
+        // 016) reads the feed window instead: the 0x9B byte arrives verbatim
+        // in raw(), and only the DISPLAY column tokenises it (AIP-02).
         $this->assertSame(
-            [SequenceSegment::class . "|\x1b[31m|ESC[31m  SGR foreground red"],
+            [SequenceSegment::class . "|\x9b31m|CSI31m  SGR foreground red"],
             self::fingerprint(Inspector::parse("\x9b31m")),
         );
     }
@@ -1143,5 +1147,86 @@ final class ByteFidelityTest extends TestCase
             [SequenceSegment::class . "|\x90|DCS  truncated DCS (unterminated)"],
             self::fingerprint(Inspector::parse("\x90")),
         );
+    }
+
+    public function testCollapsedParserSlotsReplayTheWireBytesVerbatim(): void
+    {
+        // Finding 016 in all four CSI shapes: sugar-ansi-parser keeps one
+        // prefix byte in its `cmd` slot, one intermediate in another, and the
+        // CsiParam rows drop 0x3C-0x3F after the first marker — the old
+        // `ESC [` template rebuild then reported sequences the sender never
+        // wrote (`ESC[1<2m` came back as `ESC[12m`, a fabricated parameter
+        // merge). The window tail IS the sequence: stacked markers, mid-body
+        // DEL bytes and extra intermediates survive verbatim, and the label
+        // reads the interior bytes too — an honest `SGR-marker` name beats a
+        // tidy fabrication.
+        $shapes = [
+            "\x1b[1<2m",
+            "\x1b[1\x7f2m",
+            "\x1b[=?5m",
+            "\x1b[1/!m",
+        ];
+        foreach ($shapes as $wire) {
+            $segments = Inspector::parse($wire);
+            $this->assertCount(1, $segments, bin2hex($wire));
+            $this->assertSame($wire, $segments[0]->raw(), bin2hex($wire));
+            $this->assertStringContainsString('SGR-marker', $segments[0]->describe(), bin2hex($wire));
+        }
+    }
+
+    public function testEscIntermediateBeforeOIsNotBufferedAsSs3(): void
+    {
+        // Finding 018: `ESC <intermediate> O` used to store the intermediate
+        // INSTEAD of the `O` and arm an SS3 — `ESC / O P` came back as a
+        // fabricated `ESC/P` labelled F1, an SS3 shape never sent and a lost
+        // byte. Only the bare `ESC O` (ECMA-48 SS3) arms now; the
+        // intermediate-bearing shape reports its verbatim window bytes under
+        // its honest 2-byte-ESC name and the following bytes stay text.
+        $segments = Inspector::parse("\x1b/OP");
+
+        $this->assertCount(2, $segments);
+        $this->assertSame("\x1b/O", $segments[0]->raw());
+        $this->assertStringContainsString('ESC / O', $segments[0]->describe());
+        $this->assertSame('P', $segments[1]->raw());
+        $report = Inspector::report("\x1b/OP");
+        $this->assertStringNotContainsString('F1', $report, 'no phantom SS3 function key');
+        // Polarity: the real SS3 still arms.
+        $this->assertSame("\x1bOP", Inspector::parse("\x1bOP")[0]->raw());
+    }
+
+    public function testCrossTypeC1JumpCancelsTheOpenStringWithAReport(): void
+    {
+        // Finding 017: opening a second string family mid-string
+        // (here OSC 0x9D inside a live SOS) makes the parser discard the
+        // in-flight payload with NO dispatch — the account law says a
+        // discarded sequence must at least be reported. The OSC's 0x9D twin
+        // candidate now anchors the window tail, so the 9 abandoned SOS bytes
+        // surface ahead of the OSC as a cancelled segment; the OSC itself is
+        // re-emitted from its fields (the string-family template, README
+        // deviations 1 and 9).
+        $segments = Inspector::parse("\x1bXhello\x9d1;t\x1b\\");
+
+        $this->assertCount(2, $segments);
+        $this->assertSame("\x1bXhello", $segments[0]->raw());
+        $this->assertStringContainsString('truncated SOS (unterminated) — cancelled', $segments[0]->describe());
+        $this->assertSame("\x1b]1;t\x07", $segments[1]->raw());
+        $this->assertStringContainsString('set icon name', $segments[1]->describe());
+    }
+
+    public function testBelTerminatedDcsReplaysVerbatimWhileItsStSpellingKeepsTheTemplate(): void
+    {
+        // The DCS half of finding 016 splits on the terminator the sender
+        // used. A BEL-terminated body has fully arrived when the dispatch
+        // fires, so the window replays the true prelude — dropped `=` marker
+        // and the BEL itself included. An ST-terminated body dispatches on
+        // the ESC of `ESC \` with the backslash still unseen, so that family
+        // keeps the disclosed template re-emission (README deviation 2:
+        // hoisted intermediate, dropped prelude final) — pinned, not hidden.
+        $this->assertSame(
+            "\x1bP<=q\x07",
+            Inspector::parse("\x1bP<=q\x07")[0]->raw(),
+        );
+        $stTemplate = Inspector::parse("\x1bP<=q\x1b\\")[0]->raw();
+        $this->assertSame("\x1bP<\x1b\\", $stTemplate, 'documented re-emission: = lost, ST appended');
     }
 }

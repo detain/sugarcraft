@@ -112,6 +112,9 @@ final class AnsiHandler implements Handler
 
     private string $x10Payload = '';
 
+    /** Introducer bytes of the live X10 arm, verbatim from the feed window (AIP-15). */
+    private string $x10ArmRaw = "\x1b[M";
+
     /**
      * Parse a complete input in one shot: feed every byte, then finalise.
      *
@@ -188,6 +191,7 @@ final class AnsiHandler implements Handler
         $this->ss3Intermediate = 0;
         $this->x10Armed = false;
         $this->x10Payload = '';
+        $this->x10ArmRaw = "\x1b[M";
     }
 
     /**
@@ -314,7 +318,7 @@ final class AnsiHandler implements Handler
             $overflow = substr($this->x10Payload, 3);
             $this->x10Armed = false;
             $this->x10Payload = '';
-            $this->segments[] = new SequenceSegment("\x1b[M" . $payload, Inspector::describeMouseX10($payload));
+            $this->segments[] = new SequenceSegment($this->x10ArmRaw . $payload, Inspector::describeMouseX10($payload));
             $this->inFlightBytes = $overflow;
             if ($overflow !== '') {
                 $this->textBuf .= $overflow;
@@ -422,6 +426,35 @@ final class AnsiHandler implements Handler
         return $tail;
     }
 
+    /**
+     * Verbatim window bytes of the sequence currently dispatching.
+     *
+     * The feed window holds every byte since the last dispatch, so the
+     * tail starting at the LAST appearance of one of $introducers is the
+     * sequence's own prelude — the sender's real bytes, including the
+     * marker, intermediate and DEL bytes sugar-ansi-parser's single slots
+     * collapse away, and the 8-bit introducer the dispatch callback drops.
+     * Returns the tail with its introducer length, or null when the window
+     * carries no introducer (a residue-only window, defensive).
+     *
+     * @param list<string> $introducers possible introducer spellings, 7-bit and 8-bit
+     * @return ?array{0:string,1:int} verbatim tail + introducer length
+     */
+    private function windowTail(array $introducers): ?array
+    {
+        $bestPos = null;
+        $bestLen = null;
+        foreach ($introducers as $needle) {
+            $pos = strrpos($this->inFlightBytes, $needle);
+            if ($pos !== false && ($bestPos === null || $pos > $bestPos)) {
+                $bestPos = $pos;
+                $bestLen = strlen($needle);
+            }
+        }
+
+        return $bestPos === null ? null : [substr($this->inFlightBytes, $bestPos), $bestLen];
+    }
+
     public function csiDispatch(int $final, array $params, int $prefix, int $intermediate): void
     {
         $this->awaitingStringTerminator = false;
@@ -435,7 +468,20 @@ final class AnsiHandler implements Handler
             $paramsStr = $prefixStr . $paramsStr;
         }
 
-        $rawBytes = "\x1b[{$paramsStr}{$intermediateStr}" . $finalChar;
+        // Verbatim rebuild (finding 016): the window tail from its introducer
+        // IS the sequence the sender wrote — markers arriving after the first,
+        // extra intermediates, dropped DEL bytes and the 8-bit spelling all
+        // survive in the window even though sugar-ansi-parser's single slots
+        // collapse them out of the callback fields. The `ESC [` template only
+        // re-emits what the parser could not carry, and its use here would
+        // report bytes the sender never sent.
+        $windowHit = $this->windowTail(["\x1b[", "\x9b"]);
+        $verbatim = $windowHit !== null && str_ends_with($windowHit[0], $finalChar);
+        $rawBytes = $verbatim ? $windowHit[0] : "\x1b[{$paramsStr}{$intermediateStr}" . $finalChar;
+        // With a verbatim tail the label reads the sequence's own interior
+        // bytes (marker + params + intermediates in wire order); the collapsed
+        // fields would label a sequence that was never on the wire.
+        $describeInput = $verbatim ? substr($windowHit[0], $windowHit[1], -1) : $paramsStr . $intermediateStr;
         $this->abortX10Arm();
         if ($finalChar === 'M' && $prefixStr === '' && $intermediateStr === '' && $paramsStr === '') {
             // X10 mouse introducer (finding 006 / AIP-07): do not emit "delete
@@ -446,6 +492,7 @@ final class AnsiHandler implements Handler
             $this->flushText();
             $this->x10Armed = true;
             $this->x10Payload = '';
+            $this->x10ArmRaw = $rawBytes;
             $this->inFlightBytes = '';
             return;
         }
@@ -455,7 +502,7 @@ final class AnsiHandler implements Handler
         // One `describeCsi` input: params (marker-prefixed) plus any
         // intermediate byte — the SGR guard (finding 007) must see the
         // intermediate to refuse `ESC[!5m`-style shapes.
-        $label = Inspector::describeCsi($paramsStr . $intermediateStr, $finalChar);
+        $label = Inspector::describeCsi($describeInput, $finalChar);
 
         $this->segments[] = new SequenceSegment($rawBytes, $label);
         $this->inFlightBytes = '';
@@ -493,14 +540,12 @@ final class AnsiHandler implements Handler
     public function escDispatch(int $final, int $intermediate): void
     {
         $this->abortX10Arm();
-        if ($final === ord('O')) {
-            $this->recoverCancelledResidue(
-                "\x1b" . ($intermediate !== 0 ? chr($intermediate) . 'O' : 'O'),
-            );
+        if ($final === ord('O') && $intermediate === 0) {
+            $this->recoverCancelledResidue("\x1bO");
             $this->flushPendingSs3();
             $this->flushText();
             $this->ss3Buffered = true;
-            $this->ss3Intermediate = $intermediate !== 0 ? $intermediate : ord('O');
+            $this->ss3Intermediate = ord('O');
             $this->inFlightBytes = '';
             return;
         }
@@ -519,7 +564,13 @@ final class AnsiHandler implements Handler
         $this->awaitingStringTerminator = false;
 
         $intermediateStr = $intermediate !== 0 ? chr($intermediate) : '';
-        $rawBytes = "\x1b{$intermediateStr}" . chr($final);
+        // `ESC <intermediate> O` is not an SS3 (ECMA-48 §15.3): buffering it
+        // as one lost the `O` and asserted an SS3 shape never sent (finding
+        // 018). It falls through to a plain 2-byte-ESC segment reporting the
+        // window's verbatim bytes with its real name.
+        $windowHit = $this->windowTail(["\x1b"]);
+        $verbatim = $windowHit !== null && str_ends_with($windowHit[0], chr($final));
+        $rawBytes = $verbatim ? $windowHit[0] : "\x1b{$intermediateStr}" . chr($final);
         // The residue check runs BEFORE the flushes on purpose: it has to see
         // the still-pending text buffer to know which window bytes are already
         // accounted for by the segments the flushes are about to create.
@@ -537,8 +588,16 @@ final class AnsiHandler implements Handler
         // Residue check before the flushes: it must see the still-pending
         // text/SS3 buffers to attribute window bytes. The ST-pending spelling
         // is a second candidate because sugar-ansi-parser dispatches the OSC on
-        // the ESC of `ESC \` and delivers the backslash next.
-        $this->recoverCancelledResidue("\x1b]{$data}\x07", "\x1b]{$data}\x1b");
+        // the ESC of `ESC \` and delivers the backslash next. The 0x9D twins
+        // anchor an OSC opened by the 8-bit introducer: a cross-type jump
+        // abandons the previous string payload (finding 017) and the residue
+        // seam must still recognise THIS sequence's own bytes.
+        $this->recoverCancelledResidue(
+            "\x1b]{$data}\x07",
+            "\x1b]{$data}\x1b",
+            "\x9d{$data}\x07",
+            "\x9d{$data}\x1b",
+        );
         $this->flushPendingSs3();
         $this->flushText();
         // OSC terminator normalized to BEL; original ST (\x1b\\) is not
@@ -565,11 +624,28 @@ final class AnsiHandler implements Handler
         $paramsStr = $this->joinParams($params);
 
         $fullPayload = $intermediateStr . $prefixStr . $paramsStr . $data;
-        $rawBytes = "\x1bP{$fullPayload}\x1b\\";
+        // Verbatim for a BEL-terminated body (finding 016's DCS leg): the
+        // window tail from the introducer carries the sender's real prelude
+        // and terminator. An ST-terminated DCS dispatches on the ESC of
+        // `ESC \` — the backslash has not been fed yet — so that spelling
+        // keeps the disclosed template re-emission (README deviation 2); the
+        // window tail is still offered to the residue seam so bytes abandoned
+        // BEFORE this DCS surface instead of vanishing with the clear.
+        $windowHit = $this->windowTail(["\x1bP", "\x90"]);
+        $template = "\x1bP{$fullPayload}\x1b\\";
+        $rawBytes = $template;
+        if ($windowHit !== null && str_ends_with($windowHit[0], "\x07")) {
+            $rawBytes = $windowHit[0];
+        }
         // The DCS dispatches on the ESC of its ST, so the window tail carries
         // only `…ESC` when the backslash has not been fed yet — the second
         // candidate.
-        $this->recoverCancelledResidue($rawBytes, substr($rawBytes, 0, -1));
+        $this->recoverCancelledResidue(
+            $rawBytes,
+            $windowHit[0] ?? '',
+            $template,
+            substr($template, 0, -1),
+        );
         $this->flushPendingSs3();
         $this->flushText();
         // 2026-10-23 (r1024/inspect): classify from the parser's true dispatch
@@ -597,13 +673,29 @@ final class AnsiHandler implements Handler
             'apc' => "\x1b_",
             default => '',
         };
+        // 8-bit twins of the introducers: candidates for the residue seam so a
+        // string opened by 0x98/0x9E/0x9F still anchors its own window tail
+        // (finding 017's cross-type jump — the abandoned payload must surface
+        // as a cancelled segment instead of vanishing with the window clear).
+        $c1 = match ($kind) {
+            'sos' => "\x98",
+            'pm'  => "\x9e",
+            'apc' => "\x9f",
+            default => '',
+        };
         if ($introducer === '') {
             $this->recoverCancelledResidue();
         } elseif ($data === '') {
-            $this->recoverCancelledResidue($introducer, $introducer);
+            $this->recoverCancelledResidue($introducer, $introducer, $c1);
         } else {
             $full = "{$introducer}{$data}\x1b\\\\";
-            $this->recoverCancelledResidue($full, substr($full, 0, -1));
+            $fullC1 = "{$c1}{$data}\x1b\\\\";
+            $this->recoverCancelledResidue(
+                $full,
+                substr($full, 0, -1),
+                $fullC1,
+                substr($fullC1, 0, -1),
+            );
         }
         $this->flushPendingSs3();
 
@@ -655,10 +747,13 @@ final class AnsiHandler implements Handler
      *
      * Over-report, never under-report (the house philosophy of README
      * deviation 7): the prelude surfaces as a `truncated … — cancelled`
-     * segment ordered ahead of the dispatch that revealed it. When a match
-     * cannot be anchored at the window tail — the fabricated-bytes deviations
-     * README lists (`ESC[1<2m`-class, 8-bit replays) — no residue is invented
-     * and the existing pinned deviation stands untouched.
+     * segment ordered ahead of the dispatch that revealed it. Since the
+     * window-tail rebuild (finding 016) a CSI/DCS dispatch's own bytes ARE
+     * the window tail, so the anchor holds even when the parser slots
+     * collapsed markers, intermediates or DEL bytes out of the callback
+     * fields; the remaining no-anchor shapes are the string families'
+     * disclosed template re-emissions, where no residue is invented and the
+     * pinned deviation stands untouched.
      *
      * @param string ...$candidates possible window-tail spellings of the dispatch's own bytes
      */
@@ -743,7 +838,7 @@ final class AnsiHandler implements Handler
             return;
         }
         $this->x10Armed = false;
-        $raw = "\x1b[M" . $this->x10Payload;
+        $raw = $this->x10ArmRaw . $this->x10Payload;
         // The payload bytes live in the shared byte window too (they arrived
         // after the arm cleared it); peel them out so no later residue check
         // reports the same byte twice.

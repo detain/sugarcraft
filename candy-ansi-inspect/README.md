@@ -168,7 +168,10 @@ unrecognised sequence is never silently swallowed.
 Reported bytes are the bytes that were sent: parameters keep the separator the
 sender used (`ESC[4;3m` never comes back as `ESC[4:3m`, and an omitted
 parameter keeps its empty slot) — in a CSI **and** in a DCS prelude, which travel
-through the same parameter arrays; a string's `ESC \` terminator is reported once,
+through the same parameter arrays; a dispatched CSI replays its own window tail
+verbatim, so stacked private markers, mid-body DEL bytes and the 8-bit `0x9B`
+spelling survive even though the parser's single slots collapse them out of the
+callback fields; a string's `ESC \` terminator is reported once,
 inside the sequence it closed; an abandoned `ESC O` leaves the text behind it
 alone; and a sequence the stream cut short still arrives, as a `truncated …`
 segment carrying its raw bytes.
@@ -187,13 +190,21 @@ named test rather than hidden — anything *else* that loses a byte is a bug:
 2. A re-emitted DCS prelude is lossy: its final byte is dropped and an
    intermediate byte comes back ahead of the parameters, so `ESC P 1 $ r ST`
    arrives as `ESC P $ 1 ST`. The parameters themselves keep their own
-   separators. (`testDcsParametersKeepTheirOwnSeparators`,
-   `testDcsPreludeRebuildHoistsTheIntermediateAheadOfTheParameters`)
-3. A sequence is capped at 32 parameters; past that the separator is dropped and
-   digits keep accumulating into the last slot, so `ESC[1;…;32;33m` arrives as the
-   single parameter `3233`. (`testParameterCapIsReportedAsTheParserSawIt`)
-4. A parameter value accumulates only up to 65535, so an oversized value arrives
-   clamped rather than truncated mid-digit: `ESC[99999m` is `ESC[65535m`.
+   separators. A BEL-terminated DCS dispatches only after its body has fully
+   arrived, so that spelling replays the window verbatim instead (finding
+   016's cured leg — pinned both ways).
+   (`testDcsParametersKeepTheirOwnSeparators`,
+   `testDcsPreludeRebuildHoistsTheIntermediateAheadOfTheParameters`,
+   `testBelTerminatedDcsReplaysVerbatimWhileItsStSpellingKeepsTheTemplate`)
+3. A sequence is capped at 32 parameters *inside the parser*: past the cap the
+   separator is dropped and digits keep accumulating into the last slot. The
+   window-tail rebuild (finding 016) makes this invisible in a dispatched CSI —
+   the wire bytes arrive verbatim — but a DCS prelude still rebuilds through the
+   parser fields, so the merged value survives there.
+   (`testParameterCapIsInvisibleInTheVerbatimCsiReplay`)
+4. A parameter value accumulates only up to 65535 inside the parser; like item 3
+   this is no longer observable in a CSI's verbatim replay (`ESC[99999m` arrives
+   as sent) and survives only through the DCS-prelude template.
 5. A string payload stops at 64 KiB, so a longer OSC arrives cut at exactly that
    length with its terminator still attached.
 6. Inside an **OSC** payload only, the C0 bytes sugar-ansi-parser maps to `None`
@@ -227,14 +238,14 @@ named test rather than hidden — anything *else* that loses a byte is a bug:
 8. A truncated UTF-8 rune at end of stream is dropped, because that is not an
    escape-sequence state for `Parser::flush()` to report.
    (`testTruncatedUtf8TailIsDroppedExactlyAsTheParserDropsIt`)
-9. A sequence opened by an **8-bit C1 introducer** (`0x90` DCS, `0x98` SOS,
-   `0x9B` CSI, `0x9D` OSC, `0x9E` PM, `0x9F` APC) is re-emitted in its 7-bit
-   `ESC` spelling: sugar-ansi-parser folds the introducer choice away before the
-   dispatch callback, leaving this inspector only the parsed pieces and a
-   7-bit template to rebuild from — so `\x9b31m` arrives as `ESC [ 31 m`.
-   An *unterminated* tail is the exception: it replays the bytes in flight
-   verbatim, keeping the raw C1 introducer.
-   (`testEightBitCsiIntroducerIsReplayedInSevenBitForm`,
+9. A **string family** opened by an 8-bit C1 introducer (`0x9D` OSC, `0x98`
+   SOS, `0x9E` PM, `0x9F` APC) is re-emitted in its 7-bit `ESC` spelling with a
+   normalised terminator: the dispatch callback hands the handler only the
+   payload, and string segments rebuild from that template. A CSI opened by
+   `0x9B` — and a DCS by `0x90` whose body ends on BEL — is the exception since
+   the window-tail rebuild (finding 016): the verbatim C1 bytes arrive, and an
+   unterminated tail always did.
+   (`testEightBitCsiIntroducerReplaysItsVerbatimByte`,
    `testEightBitSosAndPmCarryTheirPayloadThroughTheSevenBitReplay`)
 10. An **invalid UTF-8 byte mid-stream** is dropped along with its position:
     a stray lead (`a\xffb` → text `ab`), a lead interrupted by a non-continuation
