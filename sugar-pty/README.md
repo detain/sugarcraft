@@ -5,9 +5,10 @@
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 sugar-pty — pseudo-terminal primitives for PHP 8.3+, the building blocks for
-driving child processes inside terminal UIs. Open a master/slave PTY pair, spawn a child with
-its stdio wired to the slave, pump bytes between the host and the
-child, and forward host resizes into the child via `TIOCSWINSZ`.
+driving child processes inside terminal UIs. It opens a master/slave PTY pair
+and spawns a child with its stdio wired to the slave. Bytes are pumped between
+the host and the child in both directions. Host resizes are forwarded into the
+child via `TIOCSWINSZ`.
 
 **Status**: Linux + macOS, and Windows ConPTY through `Windows\ConPtySystem`
 (FFI — Windows 10 1809 or newer, PHP 8.4 or newer; see Backend selection).
@@ -125,7 +126,7 @@ exceptions at the package root.
 
 | Call | What it does |
 |---|---|
-| `$system->open(int $cols=80, int $rows=24): PtyPair` (`PtySystemFactory::new()`) | The canonical path: on Darwin `openpty()` first (single call), falling back to the quartet on -1; on Linux `posix_openpt + grantpt + unlockpt + ptsname_r`. The master fd is `FD_CLOEXEC` (children never inherit it, so closing it delivers the hangup) and the requested winsize is applied at open best-effort — a refused ioctl surfaces as 0×0 until the next resize rather than failing the open. Returns a `PtyPair` exposing `master()` and `slave()`: on the contract path `master()` is a `PosixMasterPty` (`fd()` / `isClosed()`; the slave path lives on the pair — `slavePath()` / `slave()` — the master object carries none), while the legacy `Master` value object (readonly fd + slavePath) belongs to the deprecated `Pty` facade. A `0 x 0` request is kernel-legal and yields an actual 0x0 geometry until something resizes it — children that query the size then see zeros, so pass real dimensions (or `resize()` once known). The deprecated `Pty::open($cols, $rows)` facade delegates here, so both paths share exactly this implementation. |
+| `$system->open(int $cols=80, int $rows=24): PtyPair` (`PtySystemFactory::new()`) | The canonical path: on Darwin `openpty()` first (single call), falling back to the quartet — `posix_openpt + grantpt + unlockpt + ptsname_r` — on -1; on Linux the same quartet is used directly. The master fd is `FD_CLOEXEC` (children never inherit it, so closing it delivers the hangup) and the requested winsize is applied at open best-effort — a refused ioctl surfaces as 0×0 until the next resize rather than failing the open. Returns a `PtyPair` exposing `master()` and `slave()`: on the contract path `master()` is a `PosixMasterPty` (`fd()` / `isClosed()`; the slave path lives on the pair — `slavePath()` / `slave()` — the master object carries none), while the legacy `Master` value object (readonly fd + slavePath) belongs to the deprecated `Pty` facade. A `0 x 0` request is kernel-legal and yields an actual 0x0 geometry until something resizes it — children that query the size then see zeros, so pass real dimensions (or `resize()` once known). The deprecated `Pty::open($cols, $rows)` facade delegates here, so both paths share exactly this implementation. |
 | `$pty->spawn(array $cmd, ?array $env = null, ?int $cols = null, ?int $rows = null, bool $controllingTerminal = false): Child` *(facade)* | `proc_open` with slave-path descriptors, same geometry rule as `$pair->slave()->spawn(...)` — omit `$cols`/`$rows` to keep the current winsize (the facade no longer stomps it with 80×24 defaults). `$env` follows proc_open semantics: `null` inherits the full parent environment, a non-null array REPLACES it entirely (merge explicitly — see Quickstart; an EMPTY array means an EMPTY environment on every backend, Windows included). TIOCSWINSZ is applied before the spawn (throws, no child, on failure) and re-asserted best-effort after it, because macOS zeroes the winsize when the child's slave descriptors open. Pass `controllingTerminal: true` to route through `bin/pty-shim.php` so the child claims the slave PTY as its ctty (Ctrl+C → SIGINT, job control); requires ext-pcntl. |
 | `$pair->slave()->spawn(array $cmd, ?array $env, ?int $cols=null, ?int $rows=null, bool $controllingTerminal=false): Child` | Same `$env` replace-vs-null semantics. Window size is a property of the pty, not of the controlling-terminal relationship, so an explicit `$cols`/`$rows` is applied on every spawn (before it, throwing with no child on failure, then re-asserted best-effort after it for macOS) — like `creack/pty.StartWithSize()`. Omit both to keep the size the pair was opened or last resized with (`creack/pty.Start()`, portable-pty `spawn_command()`); pass one to keep the other half. The parent's slave handle is opened `O_CLOEXEC`, so the child holds the slave only at fds 0-2. |
 | `$master->read(int $len=8192, ?float $timeout=0.05): ?string` | `null` on timeout (idle), `''` on confirmed EOF, bytes otherwise. EINTR-safe. The default is finite on purpose — pass `null` explicitly for a mode-governed blocking read that parks until data or EOF arrives. |
@@ -219,7 +220,7 @@ the first, so attach once per process.
 ## Wire rules (child output is not what the child wrote)
 
 The master stream you read is the **cooked slave line discipline's
-output**, not the child's raw `write(2)` bytes. Four rules fall out of
+output**, not the child's raw `write(2)` bytes. Five rules fall out of
 that, and each one has cost someone an afternoon:
 
 - **Echo comes back.** In cooked mode the slave echoes every keystroke
@@ -238,10 +239,14 @@ that, and each one has cost someone an afternoon:
   child flushes); a child printing without a trailing newline can
   hold those bytes in its stdio buffer indefinitely.
 - **Geometry is delivered, not polled.** The child learns the window size
-  from the winsize struct plus the SIGWINCH the kernel fires on
-  `TIOCSWINSZ`; a caching TUI that never re-reads its size will drift.
-  Forward host resizes with `SignalForwarder::attachSigwinch($master, ...)`
-  (see the resize recipe) and make the child handle SIGWINCH.
+  from the winsize struct plus the SIGWINCH the kernel fires when a
+  `TIOCSWINSZ` lands on its controlling terminal; a caching TUI that
+  never re-reads its size will drift. The host's own SIGWINCH is not
+  relayed to the child — a pump never receives signals (PTY-17/18 law),
+  so you install the handler yourself: `SignalForwarder::attachSigwinch($master, ...)`
+  reads the host size and applies it to the master, which is what fires
+  the child's SIGWINCH (see the resize recipe), and the child must
+  handle SIGWINCH.
 
 Accessibility note: assistive tooling consuming PTY output sees this
 cooked stream — echo on, CRLFs present. Decide and document which
@@ -773,7 +778,7 @@ implementation), `src/Input/` (`PtyInputDecoder`), `src/Output/`
 (`AnsiOutputParser` / `SgrHandler`), `src/Concerns/` (`LibcAccess`),
 `src/Exception/`, plus the top-level factory, facade, pump-options and
 support classes. The contract/implementation split is the organising
-principle:
+principle.
 
 ### Contract interfaces (`src/Contract/`) — pure signatures, no logic
 
