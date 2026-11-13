@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Async\Tests;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Async\Tests\Support\BoundedRun;
 
 /**
  * Standing guard for the documentation surface: every ```php fence in README.md
@@ -47,15 +48,18 @@ final class ReadmeSnippetsTest extends TestCase
                     . $fence . "\n";
                 self::assertNotFalse(file_put_contents($file, $source));
 
-                exec('php -l ' . escapeshellarg($file) . ' 2>&1', $lintOut, $lintCode);
-                self::assertSame(0, $lintCode, "fence $index must lint: " . implode(' ', $lintOut));
-                $lintOut = [];
+                $lint = BoundedRun::run([PHP_BINARY, '-l', $file], 10.0);
+                self::assertSame(0, $lint['code'], "fence $index must lint: " . $lint['output']);
 
-                exec('timeout -s KILL 10 php ' . escapeshellarg($file) . ' 2>&1', $runOut, $runCode);
+                $run = BoundedRun::run([PHP_BINARY, $file], 10.0);
+                self::assertFalse(
+                    $run['killed'],
+                    "fence $index must finish inside the bound — a hang is a fence bug",
+                );
                 self::assertSame(
                     0,
-                    $runCode,
-                    "fence $index must run cleanly (code $runCode): " . implode("\n", $runOut),
+                    $run['code'],
+                    "fence $index must run cleanly (code {$run['code']}): " . $run['output'],
                 );
             }
         } finally {
@@ -95,9 +99,10 @@ final class ReadmeSnippetsTest extends TestCase
                 . $candidates[0] . "\n";
             self::assertNotFalse(file_put_contents($file, $source));
 
-            exec('timeout -s KILL 10 php ' . escapeshellarg($file) . ' 2>&1', $out, $code);
-            self::assertSame(0, $code, 'cancellation fence must run cleanly (code ' . $code . ')');
-            $stdout = implode("\n", $out);
+            $run = BoundedRun::run([PHP_BINARY, $file], 10.0);
+            self::assertFalse($run['killed'], 'cancellation fence must finish inside the bound');
+            self::assertSame(0, $run['code'], 'cancellation fence must run cleanly (code ' . $run['code'] . ')');
+            $stdout = $run['output'];
             self::assertStringContainsString(
                 'cancelled cleanly',
                 $stdout,
