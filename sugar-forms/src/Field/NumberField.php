@@ -244,7 +244,7 @@ final class NumberField implements Field
             $lines[] = $this->themedTitle($title, $theme) . $this->readonlyTitleSuffix();
         }
         if ($desc !== '') {
-            $lines[] = $desc;
+            $lines[] = RenderSafe::clean($desc);
         }
         $lines[] = $this->text->view();
         if ($showErrors && $this->error !== null) {

@@ -662,7 +662,7 @@ final class Input implements \SugarCraft\Forms\Field, \SugarCraft\Forms\AsyncVal
             $lines[] = $this->themedTitle($title, $theme) . $this->readonlyTitleSuffix();
         }
         if ($desc !== '') {
-            $lines[] = $desc;
+            $lines[] = RenderSafe::clean($desc);
         }
         $lines[] = $this->input->view();
         if ($this->error !== null) {

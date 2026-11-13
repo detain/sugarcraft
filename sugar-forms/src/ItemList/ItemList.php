@@ -244,7 +244,7 @@ final class ItemList implements Model
             $lines[] = RenderSafe::clean($this->title);
         }
         if ($this->showFilter && ($this->filtering || $this->filterText !== '')) {
-            $lines[] = '/' . $this->filterText;
+            $lines[] = '/' . RenderSafe::clean($this->filterText);
         }
         if ($count === 0) {
             $lines[] = $this->filterText !== '' ? 'No matches.' : 'No items.';
@@ -707,10 +707,10 @@ final class ItemList implements Model
             $parts[] = ($this->cursor + 1) . '/' . $count;
         }
         if ($this->filterText !== '') {
-            $parts[] = '"' . $this->filterText . '"';
+            $parts[] = '"' . RenderSafe::clean($this->filterText) . '"';
         }
         if ($this->statusMessage !== '' && microtime(true) < $this->statusMessageExpiresAt) {
-            $parts[] = $this->statusMessage;
+            $parts[] = RenderSafe::clean($this->statusMessage);
         }
         return implode(' • ', $parts);
     }

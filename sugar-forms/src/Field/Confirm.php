@@ -166,7 +166,7 @@ final class Confirm implements \SugarCraft\Forms\Field
         $title = $this->resolveTitle($this->title);
         $desc  = $this->resolveDescription($this->description);
         if ($title !== '') { $lines[] = $this->themedTitle($title, $theme) . $this->readonlyTitleSuffix(); }
-        if ($desc  !== '') { $lines[] = $desc; }
+        if ($desc  !== '') { $lines[] = RenderSafe::clean($desc); }
 
         $yesPill = ' ' . RenderSafe::clean($this->affirmative) . ' ';
         $noPill  = ' ' . RenderSafe::clean($this->negative) . ' ';

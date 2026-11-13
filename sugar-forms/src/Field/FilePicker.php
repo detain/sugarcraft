@@ -97,7 +97,7 @@ final class FilePicker implements \SugarCraft\Forms\Field
         $title = $this->resolveTitle($this->title);
         $desc  = $this->resolveDescription($this->description);
         if ($title !== '') { $lines[] = $this->themedTitle($title, $theme) . $this->readonlyTitleSuffix(); }
-        if ($desc  !== '') { $lines[] = $desc; }
+        if ($desc  !== '') { $lines[] = RenderSafe::clean($desc); }
         $lines[] = $this->picker->view($theme);
         if ($this->picker->selected() !== null) {
             // The selected path is attacker-influenceable display text (a

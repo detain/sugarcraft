@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Forms;
 
 use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Forms\Util\RenderSafe;
 use SugarCraft\Forms\Theme;
 
 /**
@@ -34,6 +35,12 @@ trait HasThemeChrome
      */
     private function themedTitle(string $title, ?Theme $theme): string
     {
+        // Clean FIRST, style LAST (sugar-forms-023): resolved titles echo
+        // program data through HasDynamicLabels closures, so hostile bytes
+        // must be gone before any theme SGR wraps the run — a cleaned value
+        // can carry no escape of its own, and the theme's styling is the
+        // only sequence on the row.
+        $title = RenderSafe::clean($title);
         if ($theme === null || $title === '') {
             return $title;
         }

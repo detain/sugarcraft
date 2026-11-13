@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Forms\Field;
 
+use SugarCraft\Forms\Util\RenderSafe;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg;
 use SugarCraft\Forms\HasThemeChrome;
@@ -193,7 +194,7 @@ final class Color implements \SugarCraft\Forms\Field
         $title = $this->resolveTitle($this->title);
         $desc  = $this->resolveDescription($this->description);
         if ($title !== '') { $lines[] = $this->themedTitle($title, $theme) . $this->readonlyTitleSuffix(); }
-        if ($desc  !== '') { $lines[] = $desc; }
+        if ($desc  !== '') { $lines[] = RenderSafe::clean($desc); }
 
         for ($b = 0; $b <= 5; $b++) {
             $cells = [];

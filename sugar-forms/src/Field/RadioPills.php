@@ -283,7 +283,7 @@ final class RadioPills implements Field
         $title = $this->resolveTitle($this->title);
         $desc  = $this->resolveDescription($this->description);
         if ($title !== '') { $lines[] = $this->themedTitle($title, $theme) . $this->readonlyTitleSuffix(); }
-        if ($desc  !== '') { $lines[] = $desc; }
+        if ($desc  !== '') { $lines[] = RenderSafe::clean($desc); }
 
         $lines[] = $this->buildPillRow($theme);
         return implode("\n", $lines);

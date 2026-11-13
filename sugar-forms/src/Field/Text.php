@@ -167,7 +167,7 @@ final class Text implements \SugarCraft\Forms\Field, \SugarCraft\Forms\AsyncVali
         $title = $this->resolveTitle($this->title);
         $desc  = $this->resolveDescription($this->description);
         if ($title !== '') { $lines[] = $this->themedTitle($title, $theme) . $this->readonlyTitleSuffix(); }
-        if ($desc  !== '') { $lines[] = $desc; }
+        if ($desc  !== '') { $lines[] = RenderSafe::clean($desc); }
         $lines[] = $this->area->view();
         // Validator messages can echo user input — clean at the display site.
         if ($showErrors && $this->error !== null) { $lines[] = self::themedErrorRow(RenderSafe::clean($this->error), $theme); }

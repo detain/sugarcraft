@@ -123,7 +123,7 @@ final class Note implements \SugarCraft\Forms\Field
         $title = $this->resolveTitle($this->title);
         $desc  = $this->resolveDescription($this->description);
         if ($title !== '') { $parts[] = $this->themedTitle($title, $theme) . $this->readonlyTitleSuffix(); }
-        if ($desc  !== '') { $parts[] = $desc; }
+        if ($desc  !== '') { $parts[] = RenderSafe::clean($desc); }
         if ($this->next) {
             $marker = $this->focused ? '> ' : '  ';
             // Clean at the DISPLAY site — an attacker-influenced button

@@ -10,6 +10,7 @@ use React\Promise\PromiseInterface;
 use SugarCraft\Async\AsyncOps;
 use SugarCraft\Async\CancellationSource;
 use SugarCraft\Async\TimeoutException;
+use SugarCraft\Forms\Util\RenderSafe;
 use SugarCraft\Core\AsyncCmd;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\KeyType;
@@ -462,7 +463,7 @@ final class Select implements \SugarCraft\Forms\Field
         // legacy plain bytes.
         $caret = ($theme !== null && $this->list->focused) ? $theme->prompt->render('❯ ') : '';
         if ($title !== '') { $lines[] = $caret . $this->themedTitle($title, $theme) . $this->readonlyTitleSuffix(); }
-        if ($desc  !== '') { $lines[] = $desc; }
+        if ($desc  !== '') { $lines[] = RenderSafe::clean($desc); }
         $lines[] = $this->list->view($theme);
         return implode("\n", $lines);
     }

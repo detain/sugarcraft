@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Forms\Field;
 
+use SugarCraft\Forms\Util\RenderSafe;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\MouseButton;
 use SugarCraft\Core\Msg;
@@ -295,7 +296,7 @@ final class Slider implements \SugarCraft\Forms\Field
         $title = $this->resolveTitle($this->title);
         $desc  = $this->resolveDescription($this->description);
         if ($title !== '') { $lines[] = $this->themedTitle($title, $theme) . $this->readonlyTitleSuffix(); }
-        if ($desc  !== '') { $lines[] = $desc; }
+        if ($desc  !== '') { $lines[] = RenderSafe::clean($desc); }
 
         $cells  = $this->width - 1;
         $ratio  = ($this->value - $this->min) / ($this->max - $this->min);

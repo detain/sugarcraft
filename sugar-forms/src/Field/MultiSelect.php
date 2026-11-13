@@ -198,7 +198,7 @@ final class MultiSelect implements \SugarCraft\Forms\Field
         $title = $this->resolveTitle($this->title);
         $desc  = $this->resolveDescription($this->description);
         if ($title !== '') { $lines[] = $this->themedTitle($title, $theme) . $this->readonlyTitleSuffix(); }
-        if ($desc  !== '') { $lines[] = $desc; }
+        if ($desc  !== '') { $lines[] = RenderSafe::clean($desc); }
         foreach ($this->options as $i => $opt) {
             $checked = !empty($this->selected[$i]);
             // SF-9 (sugar-forms-007): the checked box rides the theme's
