@@ -10,19 +10,18 @@ declare(strict_types=1);
 
 require __DIR__ . '/../vendor/autoload.php';
 
-use SugarCraft\TreeList\{Model, StringItem, DefaultPrefixer, DefaultSuffixer};
+use SugarCraft\TreeList\Model;
 
-$model = Model::new()
-    ->withViewport(80, 25)
-    ->withCursorOffset(5)
-    ->withPrefixer(new DefaultPrefixer())
-    ->withSuffixer(new DefaultSuffixer());
+// Model::tree() = new() + the Default prefixer/suffixer pair (line-number
+// join column and a visible cursor marker). Plain new() stays undecorated
+// for custom-gutter consumers.
+$model = Model::tree()->withViewport(80, 25);
 
 $fruits = ['Apple', 'Banana', 'Cherry', 'Dragonfruit', 'Elderberry'];
-foreach ($fruits as $f) {
-    // Fluent setters return NEW models — rebind or the item is lost.
-    $model = $model->withItem(new StringItem($f));
-}
+// Every with*() returns a NEW Model — rebind or the step is lost.
+// withItemsFromArray() is the batch door (one clone, one filter re-apply)
+// and plain strings are first-class item values.
+$model = $model->withItemsFromArray($fruits);
 
 echo "=== SugarTreelist Demo (cursor on: Apple) ===\n";
 echo $model->view();

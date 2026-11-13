@@ -38,17 +38,20 @@ composer require sugarcraft/sugar-treelist
 ## Quick Start
 
 ```php
-use SugarCraft\TreeList\{Model, StringItem, DefaultPrefixer, DefaultSuffixer};
+use SugarCraft\TreeList\Model;
 
-// Fluent setters RETURN NEW Models — rebind (or chain); instances are immutable
-// as far as data goes — but view()/resetPreviousFrame() mutate the delta-render
-// row memo in place (see Delta rendering).
-$model = Model::new()->withWidth(80)->withHeight(24);
-$model = $model->withItem(new StringItem('First item'));
-$model = $model->withItem(new StringItem('Second item'));
-$model = $model->withItem(new StringItem('Third item'));
-$model = $model->withPrefixer(new DefaultPrefixer());
-$model = $model->withSuffixer(new DefaultSuffixer());
+// Model::tree() = new() + the Default prefixer/suffixer pair: a ╭ ├ ╰
+// join column, 0-based line numbers and a visible > cursor marker. Plain
+// new() stays deliberately undecorated for custom-gutter consumers, and
+// withTreeDefaults() picks the pair up mid-chain.
+//
+// Fluent setters RETURN NEW Models — rebind (or chain); instances are
+// immutable as far as data goes — but view()/resetPreviousFrame() mutate
+// the delta-render row memo in place (see Delta rendering).
+$model = Model::tree()
+    ->withWidth(80)
+    ->withHeight(24)
+    ->withItemsFromArray(['First item', 'Second item', 'Third item']);
 
 echo $model->view();
 // Renders the list with a ╭ ├ ╰ box-drawing gutter, 0-based line numbers, and > cursor marker
@@ -89,8 +92,9 @@ empty style strings to emit no colour (sugar-treelist neither reads nor acts on
 the `NO_COLOR` variable).
 
 ```php
-// Plain string adapter
-$model = $model->withItem(new StringItem('Plain string item'));
+// Plain strings are first-class item values — the intake doors normalize
+// them to StringItem internally (see Plain-string intake above).
+$model = $model->withItem('Plain string item');
 
 // Any Stringable object
 class MyItem implements \Stringable {
@@ -219,15 +223,14 @@ inside it — short lists simply show everything.
 Attach a filter function to narrow the visible items. The model tracks filter state via the `FilterState` enum; `filterState()` is `null` on a fresh model and only becomes an explicit state after the first `withFilterFn()` / `withoutFilter()` call (semantically a never-filtered list is unfiltered, it just carries no recorded state yet):
 
 ```php
-use SugarCraft\TreeList\{Model, StringItem, FilterState};
+use SugarCraft\TreeList\{Model, FilterState};
 
-// Start with a list (rebind each step — setters return new Models;
-// only the delta-render frame memo is mutated in place, by view() and
-// resetPreviousFrame())
-$model = Model::new()->withWidth(80)->withHeight(24);
-foreach (['apple', 'banana', 'cherry', 'apricot', 'blueberry'] as $f) {
-    $model = $model->withItem(new StringItem($f));
-}
+// Start with a list — the batch door is one clone for the whole set, and
+// plain strings are first-class item values.
+$model = Model::tree()
+    ->withWidth(80)
+    ->withHeight(24)
+    ->withItemsFromArray(['apple', 'banana', 'cherry', 'apricot', 'blueberry']);
 
 // Filter to items starting with "a"
 $filtered = $model->withFilterFn(
@@ -262,7 +265,10 @@ when that item was itself removed). Narrowing or lifting the filter does the
 same — `withFilterFn()` and `withoutFilter()` keep the selection on the item
 it was resting on whenever that item survives (stays visible, or comes back);
 the cursor only falls back to position-clamping when the selected item itself
-is filtered out.
+is filtered out. Appending into a live filter with one `withItem()` call per
+item re-derives the whole projection every time (quadratic for a streaming
+result set) — batch with `withItemsFromArray()`/`withItems()`, which re-apply
+once per call.
 
 ## Fuzzy Matching
 

@@ -34,10 +34,11 @@ use SugarCraft\Core\Util\Width;
  *
  * Usage:
  * ```php
- * $model = Model::new()->withWidth(80)->withHeight(24);
- * foreach (['apple', 'banana', 'cherry'] as $f) {
- *     $model = $model->withItem(new StringItem($f));
- * }
+ * // one rebinding rule for everything below: every with*() returns a NEW
+ * // Model — chain or rebind, the receiver is never touched.
+ * $model = Model::tree() // Default gutters: join column + visible cursor marker
+ *     ->withViewport(80, 24)
+ *     ->withItemsFromArray(['apple', 'banana', 'cherry']);
  * echo $model->view();
  * ```
  *
@@ -188,6 +189,36 @@ final class Model
     public static function new(): self
     {
         return new self();
+    }
+
+    /**
+     * The decorated happy path: {@see self::new()} plus the Default
+     * prefixer/suffixer pair that nearly every real list wants (join
+     * column + cursor marker, so the selection is actually visible).
+     *
+     * Plain new() stays deliberately undecorated — custom-gutter
+     * consumers must not get gutters they then remove — but repeating
+     * `setPrefixer(new DefaultPrefixer())->setSuffixer(new DefaultSuffixer())`
+     * at every call site while an unconfigured list renders cursor-less
+     * and silent was the lib's biggest friction (sugar-treelist-021).
+     */
+    public static function tree(): self
+    {
+        return (new self())->withTreeDefaults();
+    }
+
+    /**
+     * Install the Default prefixer/suffixer pair in one clone — the
+     * instance-side spelling of {@see self::tree()}, so configuration
+     * already in flight can pick the defaults up mid-chain. An explicit
+     * withPrefixer()/withSuffixer() still overrides afterwards.
+     */
+    public function withTreeDefaults(): self
+    {
+        return $this->mutate(function ($m): void {
+            $m->prefixer = new DefaultPrefixer();
+            $m->suffixer = new DefaultSuffixer();
+        });
     }
 
     // -------------------------------------------------------------------------
@@ -628,6 +659,12 @@ final class Model
      * projected through the predicate: an item that does not match stays
      * invisible but is never lost — withoutFilter() (or a widened predicate)
      * reveals it.
+     *
+     * COST NOTE (sugar-treelist-014): under an active filter each withItem()
+     * call re-derives the whole projection, so streaming results in one at a
+     * time is quadratic — measured 2000→4000 appends at 697→2801 ms (ratio
+     * 4.0). Batch with withItemsFromArray()/withItems(): they append many
+     * items in one clone and re-apply the filter ONCE per call.
      *
      * @param string|\Stringable $value
      * @throws \InvalidArgumentException if the value is neither string nor \Stringable

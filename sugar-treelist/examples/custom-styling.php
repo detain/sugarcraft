@@ -21,7 +21,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/../vendor/autoload.php';
 
-use SugarCraft\TreeList\{Model, StringItem, Prefixer, Suffixer};
+use SugarCraft\TreeList\{Model, Prefixer, Suffixer};
 use SugarCraft\Core\Util\Width;
 
 class StarsPrefixer implements Prefixer {
@@ -60,6 +60,8 @@ class CursorMarker implements Suffixer {
     }
 }
 
+// Custom-gutter demo: plain new() — Model::tree() would install the Default
+// pair this example replaces. (withTreeDefaults() exists for mid-chain use.)
 $model = Model::new()
     ->withViewport(80, 25)
     ->withPrefixer(new StarsPrefixer())
@@ -73,9 +75,9 @@ $items = [
     'Directory: tests/',
 ];
 
-foreach ($items as $item) {
-    $model = $model->withItem(new StringItem($item)); // rebind — immutable model
-}
+// Every with*() returns a NEW Model — rebind or the step is lost.
+// The batch array door takes plain strings; one clone for the whole set.
+$model = $model->withItemsFromArray($items);
 
 echo "=== Custom Prefixer (★) + Suffixer (◉) ===\n";
 echo $model->view();

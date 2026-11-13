@@ -2410,6 +2410,66 @@ final class ModelTest extends TestCase
         $this->assertSame(['a', 'b', 'later'], \array_map('strval', $this->valuesOf($fork)));
     }
 
+    // -- happy-path ergonomics: Model::tree() (sugar-treelist-021/030/050) --
+
+    public function testTreeInstallsTheDefaultPairWhileNewStaysPure(): void
+    {
+        $t = Model::tree();
+        $this->assertInstanceOf(DefaultPrefixer::class, $t->prefixer());
+        $this->assertInstanceOf(DefaultSuffixer::class, $t->suffixer());
+
+        $plain = Model::new();
+        $this->assertNull($plain->prefixer());
+        $this->assertNull($plain->suffixer());
+
+        // tree() must equal the explicit boilerplate it replaces, byte for byte.
+        $explicit = Model::new()
+            ->withPrefixer(new DefaultPrefixer())
+            ->withSuffixer(new DefaultSuffixer());
+        $this->assertSame($explicit->width(), $t->width());
+        $this->assertSame($explicit->height(), $t->height());
+        $this->assertSame(
+            $explicit->withItemsFromArray(['a', 'b'])->lines(),
+            $t->withItemsFromArray(['a', 'b'])->lines(),
+        );
+    }
+
+    public function testWithTreeDefaultsKeepsInFlightConfigurationAndStaysOverridable(): void
+    {
+        $base = Model::new()->withViewport(40, 10)->withItem('x');
+        $t = $base->withTreeDefaults();
+        $this->assertSame(40, $t->width());
+        $this->assertSame(10, $t->height());
+        $this->assertSame(['x'], \array_map('strval', $this->valuesOf($t)));
+        $this->assertInstanceOf(DefaultSuffixer::class, $t->suffixer());
+        // base untouched (immutability) — still an undecorated list
+        $this->assertNull($base->prefixer());
+
+        $override = $t->withPrefixer(new class implements Prefixer {
+            public function initPrefixer(
+                \Stringable $value, int $currentIndex, int $cursorIndex,
+                int $lineOffset, int $width, int $height, int $totalItems
+            ): int { return 0; }
+            public function prefix(int $currentLine, int $totalLines): string { return ''; }
+        });
+        $this->assertNotInstanceOf(DefaultPrefixer::class, $override->prefixer());
+    }
+
+    public function testDocumentedQuickStartCarriesAVisibleCursorCue(): void
+    {
+        // The class docblock/README quick start is the first surface readers
+        // copy — it must show the cursor (DOC-A11Y-050), which only a marker
+        // or a style can do, so the example now goes through Model::tree().
+        $model = Model::tree()
+            ->withViewport(80, 24)
+            ->withItemsFromArray(['apple', 'banana', 'cherry']);
+        $frame = $model->view();
+
+        $this->assertStringContainsString('╭ 0 > apple', $frame);
+        $this->assertStringContainsString('banana', $frame);
+        $this->assertStringContainsString('<', $frame); // suffix closes the row
+    }
+
     // -- malformed UTF-8 repair at the render choke (sugar-treelist-012) ----
 
     /** @return list<string> */
