@@ -981,6 +981,10 @@ final class Player implements Model
     /**
      * Render the current frame to a full ANSI string.
      *
+     * view() always emits the COMPLETE current frame, plus overlay rows
+     * RESERVED out of the pane height (never appended below it — see the
+     * SV-H5/005 budget in the body): the pane is exactly cellsH rows.
+     *
      * view() always emits the COMPLETE current frame. sugar-core's Renderer
      * diffs it against the previously rendered frame and re-sends only the
      * rows that changed (row granularity by default; cell-granularity
@@ -1007,6 +1011,22 @@ final class Player implements Model
             return $this->renderPlaceholder();
         }
 
+        // SV-H5/005: overlay budget. The pane is exactly cellsH rows; the
+        // caption and the terminal status row are APPENDED rows, so a naive
+        // append makes the frame over-tall and sugar-core's Renderer (which
+        // has no height clamp) scrolls the alt screen on every repaint.
+        // Overlays therefore RESERVE rows out of the frame block instead of
+        // overlaying it: the picture loses bottom rows, the pane never gains
+        // rows. Caption and status never collide — the [error]/[ended] row
+        // prints only in the ended state and the caption row keeps its own
+        // single slot — so at most two rows are ever withheld.
+        $caption = $this->subtitles !== null
+            ? WebVtt::sanitizeForTerminal((string) ($this->subtitles->cueAt($this->videoTime) ?? ''))
+            : '';
+        $hasCaption = $this->subtitles !== null && $caption !== '';
+        $hasStatus = $this->ended;
+        $reserve = ($hasCaption ? 1 : 0) + ($hasStatus ? 1 : 0);
+
         // Ansi256 (38;5;N) and the image protocols render directly — they are
         // not expressible through the truecolor-only Buffer cell grid.
         if ($this->mode === Mode::Sixel || $this->mode === Mode::Kitty || $this->mode === Mode::Iterm2 || $this->mode === Mode::Ansi256) {
@@ -1015,21 +1035,20 @@ final class Player implements Model
             $out = $this->frameToBuffer($frame, $this->mode)->toAnsi();
         }
 
-        // Subtitle overlay: append a left-aligned caption line (padded to the
-        // cell width) below the frame when a cue is active for videoTime.
-        if ($this->subtitles !== null) {
-            $caption = $this->subtitles->cueAt($this->videoTime);
-            if ($caption !== null) {
-                // Egress re-assert of the WebVtt trust contract (idempotent on
-                // text the parser already swept) plus a CELL-aware clip: the
-                // old mb_strcut byte cut counted neither CJK/emoji double
-                // widths nor pad columns, so wide-glyph captions overflowed
-                // the row and broke the one-row-per-pane invariant below.
-                $caption = WebVtt::sanitizeForTerminal($caption);
-                $caption = self::clipToCells($caption, $this->cellsW);
-                $caption .= str_repeat(' ', max(0, $this->cellsW - Width::of($caption)));
-                $out .= "\r\n" . $caption;
-            }
+        // Text-rung rows clip at \r\n boundaries; the three graphics protocols
+        // are excluded above, so a cut never splits escape data mid-sequence.
+        if ($reserve > 0) {
+            $out = self::clipToRows($out, max(1, $this->cellsH - $reserve));
+        }
+
+        // Subtitle overlay: the caption rides a reserved row at the pane's
+        // bottom (left-aligned, padded to the cell width).
+        if ($hasCaption) {
+            // Egress re-assert of the WebVtt trust contract (idempotent on
+            // text the parser already swept — done above).
+            $caption = self::clipToCells($caption, $this->cellsW);
+            $caption .= str_repeat(' ', max(0, $this->cellsW - Width::of($caption)));
+            $out .= "\r\n" . $caption;
         }
 
         // At end-of-stream (non-loop) append a status line so the user can see
@@ -1435,14 +1454,38 @@ final class Player implements Model
 
     private function renderPlaceholder(): string
     {
+        // SV-H5/005: the start screen's own status row rides inside the pane
+        // budget, not below it — cellsH blank rows PLUS the row made the very
+        // first paint over-tall by one, exactly the scroll the invariant
+        // forbids. Body gets cellsH-1, status takes the last row.
         $lines = [];
-        for ($i = 0; $i < $this->cellsH; $i++) {
+        for ($i = 0; $i < max(1, $this->cellsH - 1); $i++) {
             $lines[] = str_repeat(' ', $this->cellsW);
         }
         $body = implode("\r\n", $lines);
         // M22: the start screen announces the active render mode by its human label.
         $status = "[" . $this->mode->label() . "] loading...  space play  q quit";
         return $body . "\r\n" . $status;
+    }
+
+    /**
+     * Keep a rendered text-rung block inside a row budget.
+     *
+     * The Buffer/direct text paths emit one pane row per "\r\n"-separated
+     * line, so bottom rows are dropped whole — a cut never splits an SGR
+     * sequence because each line carries its own complete styling. Only ever
+     * called for text modes (graphics protocols place their own pixels and
+     * never overflow the pane by line count).
+     */
+    private static function clipToRows(string $block, int $rows): string
+    {
+        // The Buffer/direct text paths join rows with "\n" (appended overlay
+        // rows use "\r\n"); splitting on either keeps whole lines whole.
+        $lines = preg_split("/\r\n|\n/", $block) ?: [];
+        if (count($lines) <= $rows) {
+            return $block;
+        }
+        return implode("\n", array_slice($lines, 0, $rows));
     }
 
     /**

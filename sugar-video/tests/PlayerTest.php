@@ -15,6 +15,7 @@ use SugarCraft\Video\Msg\ResizeRebuildMsg;
 use SugarCraft\Video\Msg\TickMsg;
 use SugarCraft\Video\Player;
 use SugarCraft\Video\Source\Probe;
+use SugarCraft\Video\Subtitle\WebVtt;
 use SugarCraft\Video\Tests\FakeDecoder;
 use SugarCraft\Video\Render\HalfBlockRenderer;
 use SugarCraft\Video\Render\LumaRamp;
@@ -1466,8 +1467,9 @@ final class PlayerTest extends TestCase
     /**
      * C1 egress leg: a hostile .vtt (ESC payload, entity-newline, forged zone
      * sentinels, CJK + emoji) must produce a caption row that is printable-
-     * only AND stays exactly one row — the frame + caption total must be
-     * cellsH + 1 rows, never shifted by smuggled LFs.
+     * only AND stays exactly one row — the pane must remain cellsH rows, the
+     * caption riding its reserved bottom row (SV-H5/005; the old law was
+     * cellsH+1 — over-tall by design), never shifted by smuggled LFs.
      */
     public function testHostileCaptionKeepsOneRowAndCarriesNoControlBytes(): void
     {
@@ -1498,8 +1500,8 @@ final class PlayerTest extends TestCase
         $out = $player->view();
         $rows = preg_split("/\r\n|\n/", $out) ?: [];
 
-        // 6 frame rows + exactly one caption row; no LF smuggled from the cue.
-        $this->assertCount(7, $rows, 'caption occupies exactly one additional row');
+        // 5 frame rows + the reserved caption row = exactly cellsH (SV-H5);
+        $this->assertCount(6, $rows, 'the caption rides the reserved bottom row — the pane stays cellsH');
         $caption = end($rows);
         $this->assertStringNotContainsString("\x1b", $caption);
         $this->assertStringNotContainsString("\xEE\x80\x80", $caption, 'zone sentinel gone at egress');
@@ -2417,13 +2419,15 @@ final class PlayerTest extends TestCase
     }
 
     /**
-     * @testdox view() with currentFrame === null renders exactly cellsH+1 lines:
-     *           cellsH blank rows + a status line (the placeholder)
+     * @testdox view() with currentFrame === null renders exactly cellsH lines:
+     *           cellsH-1 blank rows + the status row (the SV-H5 pane budget)
      *
      * Player::openForTest starts with currentFrame = null (paused, before any
-     * tick). The placeholder must not crash and must produce exactly cellsH+1
-     * CRLF-separated lines: the first cellsH lines are all spaces (one line
-     * per cell row), and the last line is the fixed status text.
+     * tick). The placeholder must not crash and must fit the pane: the OLD
+     * contract was cellsH+1 lines (blank grid PLUS status appended below),
+     * which is exactly the over-tall repaint SV-H5/005 outlaws — sugar-core's
+     * Renderer has no height clamp, so one row past cellsH scrolls the alt
+     * screen. The status row now rides the last row INSIDE the budget.
      */
     public function testPlaceholderViewIsBlankGridPlusStatusLine(): void
     {
@@ -2437,13 +2441,13 @@ final class PlayerTest extends TestCase
         $lines = explode("\r\n", $view);
 
         $this->assertSame(
-            $cellsH + 1,
+            $cellsH,
             count($lines),
-            'Placeholder must produce exactly cellsH+1 lines (cellsH blank + status)'
+            'the placeholder must fit the pane exactly (cellsH-1 blank rows + status)'
         );
 
-        // First cellsH lines must be exactly cellsW spaces.
-        for ($i = 0; $i < $cellsH; $i++) {
+        // First cellsH-1 lines must be exactly cellsW spaces.
+        for ($i = 0; $i < $cellsH - 1; $i++) {
             $this->assertSame(
                 $cellsW,
                 strlen($lines[$i]),
@@ -2458,8 +2462,42 @@ final class PlayerTest extends TestCase
 
         // Last line is the status text.
         // In-step flip: the start screen now carries the active mode label (M22).
-        $this->assertStringStartsWith('[', $lines[$cellsH]);
-        $this->assertStringContainsString('] loading...  space play  q quit', $lines[$cellsH]);
+        $this->assertStringStartsWith('[', $lines[$cellsH - 1]);
+        $this->assertStringContainsString('] loading...  space play  q quit', $lines[$cellsH - 1]);
+    }
+
+    /**
+     * @testdox SV-H5: caption and status rows are RESERVED out of the pane — the view never exceeds cellsH lines
+     */
+    public function testTheOverlayRowsRideInsideThePaneBudget(): void
+    {
+        $frames = [];
+        for ($i = 0; $i < 3; $i++) {
+            $frames[] = new RgbFrame(str_repeat("\x10\x20\x30", 80 * 24), 80, 24);
+        }
+        $decoder = new FakeDecoder($frames);
+        $subs = WebVtt::parse("WEBVTT\n\n00:00.000 --> 00:59.000\nhello world\n");
+        $rowsOf = static fn (string $v): array => preg_split("/\r\n|\n/", $v) ?: [];
+
+        // Plain pane (no subtitles): the frame owns all 24 rows.
+        $plain = Player::fromDecoder(decoder: new FakeDecoder($frames), cellsW: 80, cellsH: 24, fps: 10.0, mode: Mode::Ascii, totalFrames: 3);
+        $plainPainted = $plain->withSeek(1);
+        $this->assertSame(24, count($rowsOf($plainPainted->view())), 'no overlays: the frame owns all 24 rows');
+
+        // Caption active: 23 frame rows + the caption row = exactly 24.
+        $seeked = Player::fromDecoder(decoder: $decoder, cellsW: 80, cellsH: 24, fps: 10.0, mode: Mode::Ascii, totalFrames: 3, subtitles: $subs)->withSeek(2);
+        $this->assertSame(24, count($rowsOf($seeked->view())));
+        $captionRows = $rowsOf($seeked->view());
+        $this->assertStringContainsString('hello world', end($captionRows), 'the caption owns the reserved bottom row');
+
+        // Ended (no caption cue): 23 frame rows + the [ended] row = exactly 24.
+        $noSubs = Player::fromDecoder(decoder: new FakeDecoder([new RgbFrame(str_repeat("\x10\x20\x30", 80 * 24), 80, 24)]), cellsW: 80, cellsH: 24, fps: 10.0, mode: Mode::Ascii, paused: false);
+        $armed = $this->backdateLastTick($noSubs, 1.0);
+        [$ended] = $armed->update(new TickMsg());
+        $this->assertTrue($ended->ended);
+        $this->assertSame(24, count($rowsOf($ended->view())), 'the pane never grows past cellsH');
+        $endedRows = $rowsOf($ended->view());
+        $this->assertStringContainsString('[ended]', end($endedRows));
     }
     /**
      * @testdox M11: a budgeted forward seek yields to the frame budget and records the landed playhead
