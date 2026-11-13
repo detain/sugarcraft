@@ -45,9 +45,11 @@ Source: findings/plan_candy-mail.md Item 4.7
 ## 2026-10-24 — Accessor-deprecation era (bare twins, ruling 3b)
 - **[pattern:accessor-deprecation-era]** `Attachment::getContent()` was renamed to its bare twin `content()`, kept as a one-line `@deprecated` BC forwarder marked `REMOVED-IN: 2.0.0` until candy-mail v2.0.0. The brief's "withContent exists as setter" premise was FALSE on disk — no `withContent` anywhere in the lib; the real near-collision is the public readonly `$content` property, which PHP keeps in a distinct namespace from the method. The two spellings are NOT synonyms and the era pinned it as its own leg: `$att->content` is the raw nullable backing field, `$att->content()` resolves bytes (eager set + defense-in-depth path re-read). `tests/AccessorDeprecationTest.php` owns the census + inverse leg + README table; a sixth get* without those rows goes red.
 
-### 2026-11-12 — pop-parity scope ruling (CM-33, shared with CM-11 under owner ruling 6a)
-Decision: the upstream TUI parity leg is descoped with reason (2026-11-12) — candy-mail
-commits to the send path (compose + dispatch via CLI/library), not an interactive
-terminal client. The Mailgun transport leg is descoped by the same ruling: relays ride
-SMTP or Resend. Record divergences here and in README, never silently.
-Source: reviews/annotations/candy-mail.md CM-11/CM-33 · prompt_review.md ruling 6a
+### 2026-11-13 — Mailgun transport + compose TUI + zh-tw landed (CM-11/33/65)
+The 2026-11-12 descope was reversed by the build-out policy: `MailgunTransport`
+(hand-built multipart, `endpoint()`/`baseUrl` test seam, forked-fake tests like Resend),
+`candy-mail tui` (`Tui\ComposeModel` + `Tui\TextBuffer`, sugar-core only - no
+sugar-forms/sugar-testing dependency; tests drive `update()`/`view()` directly) and the
+`zh-tw` catalog (17 locales; `LangLocaleParityTest` pins the roster by name).
+Mailgun inline images: the part filename IS the Content-ID (`cid:<filename>`).
+Transport ladder: Resend key > Mailgun key > SMTP; `--transport=` overrides.

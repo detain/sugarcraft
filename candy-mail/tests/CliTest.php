@@ -732,11 +732,12 @@ final class CliTest extends TestCase
             }
 
             try {
-                \SugarCraft\Mail\buildTransport(['transport' => 'mailgun']);
+                \SugarCraft\Mail\buildTransport(['transport' => 'sendgrid']);
                 $this->fail('an unknown transport value must refuse');
             } catch (\InvalidArgumentException $e) {
                 $this->assertStringContainsString('smtp', $e->getMessage());
                 $this->assertStringContainsString('resend', $e->getMessage());
+                $this->assertStringContainsString('mailgun', $e->getMessage());
             }
         } finally {
             unset($_ENV['RESEND_API_KEY'], $_ENV['CANDY_MAIL_SMTP_HOST']);

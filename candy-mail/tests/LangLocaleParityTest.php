@@ -209,14 +209,32 @@ final class LangLocaleParityTest extends TestCase
     }
 
     /**
-     * CM-66: the "16 locales" figure in help() and the README is a claim
+     * CM-65: Traditional Chinese ships alongside zh-cn - the shelf is 17
+     * codes, and the roster is pinned by name so a dropped catalog cannot
+     * hide behind a replacement of the same count.
+     */
+    public function testTheShelfCarriesBothChineseCatalogsAndSeventeenCodes(): void
+    {
+        $codes = \array_map(
+            static fn (string $f): string => \basename($f, '.php'),
+            \glob(\dirname(__DIR__) . '/lang/*.php') ?: []
+        );
+        \sort($codes);
+        $this->assertSame(
+            ['ar', 'cs', 'de', 'en', 'es', 'fr', 'it', 'ja', 'ko', 'nl', 'pl', 'pt', 'pt-br', 'ru', 'tr', 'zh-cn', 'zh-tw'],
+            $codes
+        );
+    }
+
+    /**
+     * CM-66: the "17 locales" figure in help() and the README is a claim
      * about the catalog shelf, not decoration. Adding or dropping a catalog
      * reddens the prose here until claim and shelf move together.
      */
     public function testTheLocaleFigureInTheProseMatchesTheCatalogShelf(): void
     {
         $count = \count(\glob(\dirname(__DIR__) . '/lang/*.php') ?: []);
-        $this->assertSame(16, $count, 'the catalog shelf moved - update the prose claims in the same change');
+        $this->assertSame(17, $count, 'the catalog shelf moved - update the prose claims in the same change');
 
         $patterns = [
             'bin/candy-mail' => '/\((\d+) locales\)/',

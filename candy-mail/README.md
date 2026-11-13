@@ -11,7 +11,7 @@
 # CandyMail
 
 candy-mail — an email **sender** for PHP 8.3+, a native PHP port of Charmbracelet's
-**pop** mail tool, delivering via the Resend HTTP API or direct SMTP.
+**pop** mail tool, delivering via the Resend HTTP API, the Mailgun HTTP API, or direct SMTP.
 Send-only by design: candy-mail composes and dispatches mail; it does not read,
 store, or manage an inbox.
 
@@ -22,15 +22,13 @@ store, or manage an inbox.
 
 ## Features
 
-- **Dual transport** — send via the Resend HTTP API (Resend is a hosted email API:
-  sign up at [resend.com](https://resend.com) and create an API key) or raw SMTP
-- **Send-path scope** — the upstream TUI parity leg was deliberately descoped
-  on 2026-11-12 (owner ruling 6a) because the pop-parity surface this app commits to is
-  composing and dispatching mail (CLI + library), not an interactive client; a TUI
-  would duplicate the sugar-widgets surface instead of deepening the send path.
-  Likewise the Mailgun leg was deliberately descoped on 2026-11-12 (same ruling): the
-  transport roster stays SMTP + Resend, and Mailgun accounts relay through their
-  documented SMTP endpoints rather than a second API transport.
+- **Three transports** — send via the Resend HTTP API (Resend is a hosted email API:
+  sign up at [resend.com](https://resend.com) and create an API key), the Mailgun HTTP
+  API (`MailgunTransport`, US and EU regions, multipart with attachments and inline
+  images), or raw SMTP
+- **Compose TUI** — `candy-mail tui` (or a bare `candy-mail` on a terminal) opens an
+  interactive compose form: From/To/Cc/Bcc/Subject/Body/Attachments, Ctrl+S sends
+  through the same transport ladder as the CLI, Ctrl+P previews the MIME offline
 - **Email value object** — from, to, cc, bcc, subject, body, HTML body, reply-to, attachments,
   signature (the signature joins the plain-text body only — an HTML-only mail silently drops it)
 - **Custom headers** — `withHeader()` accumulates arbitrary extension headers (List-Unsubscribe,
@@ -65,7 +63,7 @@ store, or manage an inbox.
   translated error messages (the CLI translates at startup; library errors route through
   the same facade — see [Internationalisation](#internationalisation))
 - **PHP 8.3+** — pure PHP. The composer `suggest` entries are honestly scoped:
-  `ext-curl` is needed only for the Resend transport, `ext-fileinfo` improves
+  `ext-curl` is needed only for the Resend and Mailgun transports, `ext-fileinfo` improves
   automatic MIME detection for path attachments, and `ext-openssl` is required for
   TLS — without it the SMTP transport refuses every encrypted connection (STARTTLS
   and port-465 alike); only plain, unencrypted SMTP works without it.
@@ -138,6 +136,7 @@ composer global require sugarcraft/candy-mail
 |------|-----------|------------|
 | Any TLS — STARTTLS or port-465 implicit | `ext-openssl` | named refusal (`smtp.openssl_missing`) before dialling; only plain SMTP works |
 | The Resend transport | `ext-curl` | named refusal (`resend.curl_missing`) at send time; SMTP is unaffected |
+| The Mailgun transport | `ext-curl` | named refusal (`mailgun.curl_missing`) at send time; SMTP is unaffected |
 | MIME types for path attachments | `ext-fileinfo` | sniffing degrades to the extension-suffix table (`Attachment::EXT_TO_MIME`), unknown suffixes become `application/octet-stream` — sends still work |
 | The forked fake-server test legs | `pcntl` (dev only) | dialogue suites skip (or fail loudly under `CANDY_MAIL_REQUIRE_DIALOGUE_TESTS=1`) |
 
@@ -169,6 +168,38 @@ $email = new Email(
 
 $mailer->send($email);
 ```
+
+### Mailgun API
+
+```php
+use SugarCraft\Mail\{Email, Mailer, MailgunTransport};
+
+// key + sending domain; region 'eu' for accounts on api.eu.mailgun.net
+$transport = new MailgunTransport('key-xxxxxxxx', 'mg.example.com', MailgunTransport::REGION_US);
+(new Mailer($transport))->send(Email::new('you@example.com', 'them@example.com', 'Hello', 'Sent via Mailgun.'));
+```
+
+The request is a hand-assembled `multipart/form-data` POST to
+`https://api.mailgun.net/v3/<domain>/messages` with Basic auth (`api:<key>`).
+Attachments ride `attachment`, inline (cid) images ride `inline` with the Content-ID
+as the part filename, and extension headers ride `h:<Name>`. The hardening matches
+the Resend transport (TLS peer verification, TLS 1.2 floor, no ambient proxy, key
+masked in `__debugInfo()`, serialisation refused).
+
+### Compose TUI
+
+```bash
+candy-mail tui --from me@example.com --to you@example.com
+```
+
+Tab/Shift+Tab (or Up/Down) change field, Enter advances (newline in the body),
+Ctrl+S sends, Ctrl+P toggles an offline MIME preview, Ctrl+U clears the field, Ctrl+Q
+or Esc quits (pressed twice when there are unsent edits). Address fields are
+comma-separated; the Attachments field takes comma-separated file paths. Flags and
+`CANDY_MAIL_*` env prefill the form; the transport is resolved at send time, so a
+missing credential shows in the status line rather than blocking the form. A bare
+`candy-mail` with piped stdin/stdout keeps the classic usage refusal. `--html` and
+`--reply-to` are not editable in the form (use the one-shot CLI).
 
 ### SMTP
 
@@ -312,13 +343,15 @@ near miss.
 Value switches: `--from/--subject/--body/--reply-to/--html/--helo/--ca-file/--timeout`
 (the last three override their `CANDY_MAIL_SMTP_*` env rows, and the flags win over the
 environment; `--timeout` is range-checked at parse time on every path). Transport
-selection is a ladder, not a merge: a non-blank `RESEND_API_KEY` wins outright, the
-Resend leg reads none of `--timeout/--helo/--ca-file` (each one supplied prints a
+selection is a ladder, not a merge: a non-blank `RESEND_API_KEY` wins outright, then
+`CANDY_MAIL_MAILGUN_API_KEY` (with `CANDY_MAIL_MAILGUN_DOMAIN`, optional
+`CANDY_MAIL_MAILGUN_REGION=us|eu`), then SMTP; the
+Resend and Mailgun legs read none of `--timeout/--helo/--ca-file` (each one supplied prints a
 stderr note naming it), and the API transport keeps its own fixed 10 s connect /
 30 s transfer budget — the CLI's timeout knob is SMTP-only. When both transports are
 configured the ladder can silently spend the WRONG domain's identity (SPF/DKIM
-alignment rides whichever transport answers), so `--transport=smtp|resend` forces the
-choice: `smtp` ignores a present key outright, `resend` refuses without one. The
+alignment rides whichever transport answers), so `--transport=smtp|resend|mailgun` forces the
+choice: `smtp` ignores a present key outright, `resend`/`mailgun` refuse without their credentials. The
 zero-flag recipe for a one-off is `env -u RESEND_API_KEY candy-mail …`. A value that begins with a
 dash needs the inline form, shell-quoted so the rest of the value stays one argv token
 (`--subject="-50% off"`) — a switch is never stolen as another switch's value. The CLI
@@ -337,6 +370,9 @@ Environment variables:
 ```bash
 export RESEND_API_KEY=re_xxxxx                # Resend API key — sign up at resend.com and
                                               # create one (enables the Resend transport)
+export CANDY_MAIL_MAILGUN_API_KEY=key-xxxxx   # Mailgun API key (used when no RESEND_API_KEY)
+export CANDY_MAIL_MAILGUN_DOMAIN=mg.example.com  # Mailgun sending domain (required with the key)
+export CANDY_MAIL_MAILGUN_REGION=us           # us (default) or eu
 export CANDY_MAIL_SMTP_HOST=smtp.gmail.com    # SMTP host (Resend key wins if both set —
                                               # force SMTP with --transport=smtp)
 export CANDY_MAIL_SMTP_PORT=587               # SMTP port (default: 587)
@@ -436,11 +472,11 @@ swallows farewell errors — by then the message is already queued, and a
 protocol blip during the goodbye must not latch a false failure over a
 successful accept. For CI, `--render` is the pre-flight wire check: it prints
 the exact MIME document without dialling anything. (The success banner's
-literal value stays "Email sent" in all 16 catalogs — renaming it churns
+literal value stays "Email sent" in all 17 catalogs — renaming it churns
 every translation for a wording win the README now carries honestly; decision
 recorded here per CM-18.)
 
-Error **messages** follow the standard `LC_ALL`/`LC_MESSAGES`/`LANG` environment (16
+Error **messages** follow the standard `LC_ALL`/`LC_MESSAGES`/`LANG` environment (17
 locales ship); the usage/help text is English by design. Examples under `examples/`
 are offline-safe: without real credentials they print the composed message instead of
 dialling any API.
@@ -458,10 +494,7 @@ a host application opts in process-wide:
 The CLI performs this at startup; library embedders decide. Missing keys in an active
 locale fall back to English; the en catalog is the last stop before the raw key.
 
-16 catalogs ship (`ar` through `zh-cn`). Traditional Chinese (`zh-tw`) is a dated
-exception, recorded per the owner ruling of 2026-11-12: this lib's i18n wave stays
-at the 16-code set the parity guard enumerates, even though a few fleet apps carry
-a `zh-tw` catalog of their own.
+17 catalogs ship (`ar` through `zh-tw`, Traditional Chinese included alongside `zh-cn`).
 
 ## Architecture
 
@@ -472,6 +505,8 @@ a `zh-tw` catalog of their own.
   KeepAlive/Close counterpart — batch senders that want session reuse pool
   at their own layer, above one connection per `Transport`
 - `ResendTransport` — sends via Resend REST API (HTTPS)
+- `MailgunTransport` — sends via the Mailgun REST API (HTTPS, multipart, US/EU regions)
+- `Tui\ComposeModel` — the interactive compose form behind `candy-mail tui`
 - `SmtpTransport` — sends via direct SMTP (TCP/TLS)
 - `Mailer` — high-level API wrapping a Transport
 - `MissingTransportConfig` — the typed `RuntimeException` for "no transport is

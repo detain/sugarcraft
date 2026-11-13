@@ -13,7 +13,7 @@ use PHPUnit\Framework\TestCase;
  * verified out-of-suite against a real monorepo-mode build, evidence in the
  * lane report). What IS pinned is the law the shipped artifact depends on:
  *
- *  - tools/build-phar.php exists, packages lang/ (the 16-locale error-message
+ *  - tools/build-phar.php exists, packages lang/ (the 17-locale error-message
  *    catalog) alongside bin/src/lang/vendor, and keeps the candy-code guards;
  *  - bin/candy-mail carries the phar:// autoload guard in the measured shape,
  *    with the composer-mode require byte-untouched in the else arm;

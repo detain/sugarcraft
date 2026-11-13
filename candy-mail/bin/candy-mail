@@ -17,7 +17,7 @@ declare(strict_types=1);
  * --render prints the SMTP MIME message without any network I/O;
  * --version prints the package version.
  *
- * Env: RESEND_API_KEY, CANDY_MAIL_FROM, CANDY_MAIL_SMTP_HOST/PORT/USERNAME/PASSWORD,
+ * Env: RESEND_API_KEY, CANDY_MAIL_MAILGUN_API_KEY/DOMAIN/REGION, CANDY_MAIL_FROM, CANDY_MAIL_SMTP_HOST/PORT/USERNAME/PASSWORD,
  *      CANDY_MAIL_SMTP_REQUIRE_TLS (default on), CANDY_MAIL_SMTP_IMPLICIT_TLS (default off),
  *      CANDY_MAIL_SMTP_HELO, CANDY_MAIL_SMTP_CA_FILE, CANDY_MAIL_SMTP_TIMEOUT,
  *      CANDY_MAIL_SIGNATURE
@@ -78,7 +78,9 @@ if ($archive !== '') {
 }
 
 use SugarCraft\Core\Util\Sanitize;
-use SugarCraft\Mail\{Email, Lang, Mailer, MissingTransportConfig, ResendTransport, SmtpTransport};
+use SugarCraft\Core\{Program, ProgramOptions};
+use SugarCraft\Mail\Tui\ComposeModel;
+use SugarCraft\Mail\{Email, Lang, Mailer, MailgunTransport, MissingTransportConfig, ResendTransport, SmtpTransport};
 
 // Guard: only auto-dispatch when this file IS the entry script. Embedded or
 // proxied launches must call main($argv) and exit with its status —
@@ -98,7 +100,7 @@ if (PHP_SAPI === 'cli' && isset($argv[0]) && realpath($argv[0]) === __FILE__) {
  */
 function main(array $argv): int
 {
-    // Error MESSAGES follow the user's locale (Lang catalog, 16 locales);
+    // Error MESSAGES follow the user's locale (Lang catalog, 17 locales);
     // the CLI's own usage/help text stays English by design, like every
     // SugarCraft bin. T::detect() reads LC_ALL/LC_MESSAGES/LANG, falling
     // back to 'en'.
@@ -164,6 +166,17 @@ function main(array $argv): int
         fwrite(STDERR, Sanitize::untrusted('candy-mail: ' . Lang::t('cli.deprecated_env', ['old' => $legacyVar, 'new' => 'CANDY_MAIL_' . $suffix]) . "\n")); // @rename-keep
     }
 
+    // `candy-mail tui` (or a bare invocation on a terminal) opens the compose
+    // form. A bare invocation with a piped stdin/stdout keeps the classic
+    // usage refusal, so scripts never hang on an interactive screen.
+    $tui = false;
+    if (($argv[1] ?? '') === 'tui') {
+        $tui = true;
+        \array_splice($argv, 1, 1);
+    } elseif (\count($argv) === 1 && \stream_isatty(\STDIN) && \stream_isatty(\STDOUT)) {
+        $tui = true;
+    }
+
     try {
         $args = parseArgs($argv);
     } catch (\Throwable $e) {
@@ -182,6 +195,12 @@ function main(array $argv): int
     if ($args['version']) {
         fwrite(STDOUT, cliVersion() . "\n");
         return 0;
+    }
+
+    // --help wins over tui; a bare `tui` (argv trimmed to the program name)
+    // must not be mistaken for the no-arguments help case below.
+    if ($tui && !$args['help']) {
+        return runTui($args['opts']);
     }
 
     if (cliWantsHelp($args)) {
@@ -262,6 +281,9 @@ function main(array $argv): int
         if ($configured instanceof ResendTransport) {
             fwrite(STDERR, Lang::t('cli.render_resend_divergence') . "\n");
         }
+        if ($configured instanceof MailgunTransport) {
+            fwrite(STDERR, Lang::t('cli.render_mailgun_divergence') . "\n");
+        }
         // CM-30: the fallback renderer must carry the same identity the
         // configured transport would. Threading --helo/CANDY_MAIL_SMTP_HELO
         // through here keeps the docblock promise ("Message-ID identity is
@@ -325,6 +347,46 @@ function main(array $argv): int
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * Open the compose form, prefilled from the same flags/env the one-shot path
+ * reads. The transport is built at send time, so a missing credential shows
+ * in the form's status line instead of refusing before the user can type.
+ *
+ * @param array<string, mixed> $opts parsed --option values
+ */
+function runTui(array $opts): int
+{
+    if (!\stream_isatty(\STDIN) || !\stream_isatty(\STDOUT)) {
+        \fwrite(\STDERR, Lang::t('tui.not_a_terminal') . "\n");
+        return 1;
+    }
+    $from = (string) ($opts['from'] ?? senderFromEnvironment());
+    $send = static function (Email $email) use ($opts): string {
+        $signature = $_ENV['CANDY_MAIL_SIGNATURE'] ?? \getenv('CANDY_MAIL_SIGNATURE', true);
+        if (\is_string($signature) && $signature !== '') {
+            $email = $email->withSignature($signature);
+        }
+        $mailer = new Mailer(buildTransport($opts));
+        $mailer->send($email);
+
+        return $mailer->transportName();
+    };
+    $render = static fn (Email $email): string => (new SmtpTransport(host: 'localhost'))->buildMimeMessage($email);
+
+    $model = ComposeModel::new($send, $render, [
+        'from'    => $from,
+        'to'      => \implode(', ', $opts['to'] ?? []),
+        'cc'      => \implode(', ', $opts['cc'] ?? []),
+        'bcc'     => \implode(', ', $opts['bcc'] ?? []),
+        'subject' => (string) ($opts['subject'] ?? ''),
+        'body'    => (string) ($opts['body'] ?? ''),
+        'attach'  => \implode(', ', $opts['attachments'] ?? []),
+    ]);
+    (new Program($model, new ProgramOptions(useAltScreen: true)))->run();
+
+    return 0;
+}
 
 /**
  * Parse CLI arguments.
@@ -476,7 +538,7 @@ function shortFlagAliases(): array
  * template supplies the `--` of its own hint slot (`use --{option}=VALUE`),
  * so the old caller passed the raw token and every hint forged a quadruple
  * dash — `--to` rendered `use ----to=VALUE`. Substituting the bare name
- * keeps the advice true in all 16 locales without touching a template, and
+ * keeps the advice true in all 17 locales without touching a template, and
  * resolves aliases so `-f` is named as `--from=VALUE` — advising `-f=VALUE`
  * would lie, since the glued `=` form is long-option only.
  */
@@ -651,7 +713,7 @@ function buildTransport(array $flags = []): Transport
     // explicit override: smtp ignores a present RESEND_API_KEY outright;
     // resend requires the key instead of falling through to SMTP.
     $forced = \strtolower(\trim((string) ($flags['transport'] ?? '')));
-    if ($forced !== '' && !\in_array($forced, ['smtp', 'resend'], true)) {
+    if ($forced !== '' && !\in_array($forced, ['smtp', 'resend', 'mailgun'], true)) {
         throw new \InvalidArgumentException(Lang::t('cli.invalid_transport', ['transport' => $forced]));
     }
 
@@ -659,6 +721,31 @@ function buildTransport(array $flags = []): Transport
     // to hijack transport selection (resolving truthy while ignoring the
     // full SMTP config). An absent or blank key means "not configured".
     $apiKey = \trim(envString('RESEND_API_KEY'));
+    $mgKey  = \trim(envString('CANDY_MAIL_MAILGUN_API_KEY'));
+    if ($forced === 'mailgun' || ($forced === '' && $apiKey === '' && $mgKey !== '')) {
+        // Mailgun: reached by the override, or by the ladder when Resend is
+        // not configured but a Mailgun key is. Like Resend it ignores the
+        // SMTP-scoped inputs, and says so once.
+        if ($mgKey === '') {
+            throw new \InvalidArgumentException(Lang::t('cli.mailgun_key_required'));
+        }
+        $mgDomain = \trim(envString('CANDY_MAIL_MAILGUN_DOMAIN'));
+        if ($mgDomain === '') {
+            throw new \InvalidArgumentException(Lang::t('cli.mailgun_domain_required'));
+        }
+        $ignored = [];
+        foreach (['timeout' => '--timeout', 'helo' => '--helo', 'ca_file' => '--ca-file'] as $key => $label) {
+            if ((string) ($flags[$key] ?? '') !== '') {
+                $ignored[] = $label;
+            }
+        }
+        if ($ignored !== []) {
+            \fwrite(\STDERR, Sanitize::untrusted(Lang::t('cli.mailgun_ignored_inputs', ['inputs' => \implode(', ', $ignored)])) . "\n");
+        }
+        $region = \trim(envString('CANDY_MAIL_MAILGUN_REGION'));
+
+        return new MailgunTransport($mgKey, $mgDomain, $region !== '' ? $region : MailgunTransport::REGION_US);
+    }
     if ($forced === 'resend' && $apiKey === '') {
         // The override names the API transport; there is no key to dial it
         // with. Refuse loudly rather than quietly sending SMTP instead —
@@ -840,10 +927,12 @@ Usage:
   cat message.txt | {$bin} --from <addr> --to <addr>
   {$bin} --from <addr> --to <addr> --render        (print MIME, send nothing)
   {$bin} --from <addr> -- a@b.com c@d.com          (a bare -- ends option parsing)
+  {$bin} tui [--from <addr>] [--to <addr>] ...     (interactive compose form;
+                                          a bare {$bin} on a terminal opens it too)
 
   Flags accept --name value and --name=value. Body is read from STDIN if no
   --body flag is given. Unknown options are rejected, not ignored. Error
-  messages follow the LC_ALL/LC_MESSAGES/LANG locale (16 locales); this
+  messages follow the LC_ALL/LC_MESSAGES/LANG locale (17 locales); this
   help is English.
 
   Arguments after a bare -- are positional recipients, used only when no
@@ -868,9 +957,10 @@ Options:
                        also sets the Message-ID host
   --ca-file <path>     PEM bundle for TLS verification (private CAs)
   --timeout <secs>     Wire timeout, 1-3600 (default 30)
-  --transport <smtp|resend>
+  --transport <smtp|resend|mailgun>
                      Force the transport: 'smtp' ignores a present
-                     RESEND_API_KEY; 'resend' requires one
+                     RESEND_API_KEY; 'resend' requires one; 'mailgun'
+                     requires CANDY_MAIL_MAILGUN_API_KEY and _DOMAIN
   --render             Print the SMTP MIME message and exit (no network;
                        broken transport config is still an error, and a
                        Resend-configured send is stamped as a divergence)
@@ -884,6 +974,9 @@ Options:
 
 Environment variables:
   RESEND_API_KEY                   Resend API key (preferred transport)
+  CANDY_MAIL_MAILGUN_API_KEY       Mailgun API key (used when no RESEND_API_KEY)
+  CANDY_MAIL_MAILGUN_DOMAIN        Mailgun sending domain (required with the key)
+  CANDY_MAIL_MAILGUN_REGION        us (default) or eu
   CANDY_MAIL_SMTP_HOST             SMTP server host (when no API key is set)
   CANDY_MAIL_SMTP_PORT             SMTP port (default 587, STARTTLS submission)
   CANDY_MAIL_SMTP_USERNAME         SMTP AUTH user (needs a TLS channel)
