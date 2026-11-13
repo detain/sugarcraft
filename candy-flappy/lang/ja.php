@@ -29,6 +29,8 @@ return [
     'ui.plain_live_full'     => 'スペース/Enter/^/w はばたく . r 再起動 . q 終了',
     'ui.plain_live_short'    => 'スペースではばたく . q 終了',
     'ui.quit_hint' => 'q キーで終了します。',
+    'ui.quarantine'           => '⚠ 前回のリーダーボードを読み取れませんでした — {file} としてアーカイブしました',
+    'ui.plain_quarantine'     => 'x 前回のリーダーボードを読み取れませんでした - {file} としてアーカイブしました',
     'notty.line1'            => 'candy-flappy は出力を描画できるターミナルが必要です。',
     'notty.line2'            => 'stdout が対話型ターミナルでないか、TERM=dumb が検出されました。',
     'size.notice'            => 'candy-flappy には {need} のターミナルが必要です。現在は {have} です。',

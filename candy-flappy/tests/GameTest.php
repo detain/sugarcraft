@@ -452,6 +452,34 @@ final class GameTest extends TestCase
         @rmdir($tmp);
     }
 
+    public function testStartAnnouncesTheQuarantinedSaveName(): void
+    {
+        // flappy-18 (finding -018): the quarantine deliberately keeps a
+        // forensic copy — invisible until now. start() carries the archived
+        // basename so the ready board can name it.
+        $tmp = sys_get_temp_dir() . '/candy-flappy-announce-' . getmypid();
+        mkdir($tmp . '/.candy-flappy', 0755, true);
+        file_put_contents($tmp . '/.candy-flappy/scores.json', '{not json');
+        $g = Game::start(static fn(int $_max): int => 0, $tmp);
+        try {
+            $this->assertSame([], $g->highScores, 'a poisoned save starts the board empty');
+            $this->assertMatchesRegularExpression(
+                '/^scores\.json\.corrupt-\d{8}-\d{6}(-\d{6})?$/',
+                (string) $g->quarantinedSave,
+                'the archived artifact name must ride the model',
+            );
+            $this->assertFileExists($tmp . '/.candy-flappy/' . $g->quarantinedSave);
+            $quiet = Game::start(static fn(int $_max): int => 0, $tmp);
+            $this->assertNull($quiet->quarantinedSave, 'a launch with nothing to report stays quiet');
+        } finally {
+            foreach (glob($tmp . '/.candy-flappy/*') ?: [] as $artifact) {
+                @unlink($artifact);
+            }
+            @rmdir($tmp . '/.candy-flappy');
+            @rmdir($tmp);
+        }
+    }
+
     public function testForgedAndOversizedScoresAreClampedOnRead(): void
     {
         // m7/m8: read is the legality gate, not just is_int. Negatives,

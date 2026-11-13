@@ -29,6 +29,8 @@ return [
     'ui.plain_live_full'     => 'espace/Enter/^/w battement . r rejouer . q quitter',
     'ui.plain_live_short'    => 'espace bat l\'aile . q quitter',
     'ui.quit_hint' => 'appuyez sur q pour quitter.',
+    'ui.quarantine'           => '⚠ L’ancien classement était illisible — archivé sous {file}',
+    'ui.plain_quarantine'     => 'x L’ancien classement était illisible - archivé sous {file}',
     'notty.line1'            => 'candy-flappy a besoin d’un terminal capable de restituer sa sortie.',
     'notty.line2'            => 'stdout n’est pas un terminal interactif ou TERM=dumb a été détecté.',
     'size.notice'            => 'candy-flappy exige un terminal {need} ; celui-ci fait {have}.',

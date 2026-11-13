@@ -184,7 +184,18 @@ final class Renderer
         $hint = Style::new()->foreground(Color::hex(self::HINT))
             ->render($hintPlain);
 
-        return self::fit($g, $framed . "\n " . $score . $bestLine . '    ' . $hint . "\n");
+        // flappy-18 (finding -018): the launch that archived a poisoned
+        // leaderboard says so once, on the ready board — a folded line
+        // naming the forensic copy (notice-sweep discipline from flappy-11:
+        // segments stay under 38 cells so nothing reflows at 40 columns).
+        $warn = '';
+        if ($g->started === false && $g->quarantinedSave !== null) {
+            $warn = implode("\n ", self::foldNoticeLine(Lang::t('ui.quarantine', [
+                'file' => $g->quarantinedSave,
+            ]))) . "\n ";
+        }
+
+        return self::fit($g, $framed . "\n " . $warn . $score . $bestLine . '    ' . $hint . "\n");
     }
 
     /**
@@ -262,7 +273,15 @@ final class Renderer
                 Lang::t('ui.plain_live_short'),
             );
         }
-        return implode("\n", $rows) . "\n " . $scoreText . $bestPlain . '    ' . $hint . "\n";
+        // flappy-18: the plain posture carries the same one-time quarantine
+        // announcement (ASCII marker from the plain key family).
+        $warn = '';
+        if ($g->started === false && $g->quarantinedSave !== null) {
+            $warn = implode("\n ", self::foldNoticeLine(Lang::t('ui.plain_quarantine', [
+                'file' => $g->quarantinedSave,
+            ]))) . "\n ";
+        }
+        return implode("\n", $rows) . "\n " . $warn . $scoreText . $bestPlain . '    ' . $hint . "\n";
     }
 
     private static function refusal(): string

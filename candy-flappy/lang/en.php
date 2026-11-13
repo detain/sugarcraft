@@ -38,6 +38,8 @@ return [
     'ui.plain_live_full'     => 'space/Enter/^/w flap . r restart . q quit',
     'ui.plain_live_short'    => 'space flap . q quit',
     'ui.quit_hint' => 'press q to quit.',
+    'ui.quarantine'           => '⚠ previous leaderboard unreadable — archived as {file}',
+    'ui.plain_quarantine'     => 'x previous leaderboard unreadable - archived as {file}',
     'notty.line1'            => 'candy-flappy needs a terminal that can render its output.',
     'notty.line2'            => 'stdout is not an interactive terminal, or TERM=dumb was detected.',
     'size.notice'            => 'candy-flappy needs a {need} terminal; this one is {have}.',

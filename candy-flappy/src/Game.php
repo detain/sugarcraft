@@ -141,6 +141,15 @@ final class Game implements Model
         public readonly int $frameRows = self::MIN_ROWS,
         /** Null until the Program reports the detected profile (M7/M8). */
         public readonly ?ColorProfile $colorProfile = null,
+        /**
+         * flappy-18 (finding -018): basename of the forensic copy made when
+         * launch found the leaderboard unreadable, or null when the save was
+         * fine. The READY board says it out loud once; the first flap ends
+         * its shift (the renderer only asks while unstarted), and a restart
+         * does not carry it — the announcement belongs to the launch, not
+         * to every board after it.
+         */
+        public readonly ?string $quarantinedSave = null,
     ) {
         $this->rand = $rand ?? static fn(int $maxInclusive): int => random_int(0, $maxInclusive);
         $this->configDir = $configDir;
@@ -180,12 +189,13 @@ final class Game implements Model
      * SSOT underneath). Entries are legality-clamped on the way in (m7) and
      * the raw size is capped pre-parse (m8).
      *
-     * @return list<int>
+     * @return array{0: list<int>, 1: ?string} the board plus, when a poisoned
+     *         save was moved aside, the basename of the forensic artifact
      */
     private static function readScores(string $path): array
     {
         if (is_file($path) === false) {
-            return [];
+            return [[], null];
         }
         // n7 (accepted, deliberate): the filesize-then-read pair is a TOCTOU
         // window — a local writer could grow the file past the cap between
@@ -196,14 +206,12 @@ final class Game implements Model
         // ordinary-size guard, not a security boundary. Accepted as-is.
         $size = @filesize($path);
         if ($size === false || $size > self::MAX_SCORE_FILE_BYTES) {
-            self::quarantine($path);
-            return [];
+            return [[], self::quarantine($path)];
         }
         try {
             $decoded = AtomicJsonFile::new($path)->read();
         } catch (\JsonException | \RuntimeException) {
-            self::quarantine($path);
-            return [];
+            return [[], self::quarantine($path)];
         }
         $scores = array_values(array_filter(
             $decoded,
@@ -214,7 +222,7 @@ final class Game implements Model
             $scores = array_values(array_slice($scores, -self::MAX_HIGH_SCORES));
         }
         /** @var list<int> */
-        return $scores;
+        return [$scores, null];
     }
 
     /**
@@ -232,29 +240,36 @@ final class Game implements Model
      * its own name; any non-collision failure (filesystem without hard links,
      * vanished source) gets the plain rename fallback — same fail-soft
      * posture as before, never an exception.
+     *
+     * flappy-18 (finding -018): the move now reports what it archived, so
+     * the first ready frame can say it out loud instead of letting the
+     * forensic copy sit invisible on disk.
+     *
+     * @return ?string basename of the archived artifact, null when nothing
+     *                was actually moved aside
      */
-    private static function quarantine(string $path): void
+    private static function quarantine(string $path): ?string
     {
         $base = $path . '.corrupt-' . date('Ymd-His');
         $target = $base;
         for ($attempt = 1; $attempt <= 100; $attempt++) {
             if (@link($path, $target) === true) {
                 @unlink($path);
-                return;
+                return \basename($target);
             }
             if (is_file($target) === false) {
-                @rename($path, $target);
-                return;
+                return @rename($path, $target) === true ? \basename($target) : null;
             }
             $target = sprintf('%s-%06d', $base, $attempt);
         }
         // 100 artifacts sharing one timestamp second is pathological; leave
         // the file in place (ignored by every read) rather than loop harder.
+        return null;
     }
 
     public static function start(?\Closure $rand = null, ?string $configDir = null): self
     {
-        $scores = self::readScores(self::scoreFilePath($configDir));
+        [$scores, $archived] = self::readScores(self::scoreFilePath($configDir));
 
         return new self(
             bird:  Bird::spawn(self::BIRD_COL, self::HEIGHT / 2.0),
@@ -262,6 +277,7 @@ final class Game implements Model
             highScores: $scores,
             rand:  $rand,
             configDir: $configDir,
+            quarantinedSave: $archived,
         );
     }
 
@@ -330,6 +346,10 @@ final class Game implements Model
             frameCols: $changes['frameCols'] ?? $this->frameCols,
             frameRows: $changes['frameRows'] ?? $this->frameRows,
             colorProfile: array_key_exists('colorProfile', $changes) ? $changes['colorProfile'] : $this->colorProfile,
+            // A resize on the ready board must not swallow the launch
+            // announcement (flappy-18); the flap that clears the ready
+            // phase ends its shift in the renderer, not here.
+            quarantinedSave: $changes['quarantinedSave'] ?? $this->quarantinedSave,
         );
     }
 

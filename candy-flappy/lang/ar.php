@@ -29,6 +29,8 @@ return [
     'ui.plain_live_full'     => 'مسافة/Enter/^/w رفرفة . r إعادة . q خروج',
     'ui.plain_live_short'    => 'المسافة ترفرف . q خروج',
     'ui.quit_hint' => 'اضغط على q للخروج.',
+    'ui.quarantine'           => '⚠ تعذرت قراءة لوحة الصدارة السابقة — حُفظت نسخة أرشيفية باسم {file}',
+    'ui.plain_quarantine'     => 'x تعذرت قراءة لوحة الصدارة السابقة - حُفظت نسخة أرشيفية باسم {file}',
     'notty.line1'            => 'يحتاج candy-flappy إلى طرفية قادرة على عرض مخرجاته.',
     'notty.line2'            => 'stdout ليست طرفية تفاعلية، أو تم اكتشاف TERM=dumb.',
     'size.notice'            => 'يحتاج candy-flappy إلى طرفية بمقاس {need}؛ هذه بمقاس {have}.',

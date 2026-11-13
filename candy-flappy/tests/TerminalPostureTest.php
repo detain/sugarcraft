@@ -204,6 +204,31 @@ final class TerminalPostureTest extends TestCase
         $this->assertStringContainsString('needs a 62x21 terminal', $re->view());
     }
 
+    public function testQuarantineAnnouncementFoldsOnTheReadyBoard(): void
+    {
+        // flappy-18 (finding -018): a poisoned save moved aside at launch is
+        // now NAMED on the ready board — the announcement obeys the
+        // notice-sweep law (no line exceeds the frame; segments stay under
+        // 38 cells) and is said once: the first flap retires it.
+        $artifact = 'scores.json.corrupt-20261113-014500';
+        $g = new Game(
+            bird: $this->sized(62, 24)->bird,
+            pipes: [],
+            configDir: $this->hermeticConfigDir(),
+            quarantinedSave: $artifact,
+        );
+        $view = $g->view();
+        $this->assertStringContainsString($artifact, $view, 'the forensic copy must be named by basename');
+        foreach (range(62, 82) as $cols) {
+            [$sized,] = $g->update(new WindowSizeMsg($cols, 24));
+            foreach (explode("\n", rtrim($sized->view(), "\n")) as $line) {
+                $this->assertLessThanOrEqual($cols, Width::of($line), "ready-board line too wide at $cols: '$line'");
+            }
+        }
+        [$flapped,] = $g->update(new KeyMsg(KeyType::Space, ''));
+        $this->assertStringNotContainsString('corrupt-', $flapped->view(), 'the announcement must not ride the live board');
+    }
+
     public function testCrashRecordHintStaysWholeDownToTheFloor(): void
     {
         // flappy-14 (finding -021): with the 🏆 banner on the crash card the

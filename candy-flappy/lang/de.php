@@ -29,6 +29,8 @@ return [
     'ui.plain_live_full'     => 'Leertaste/Enter/^/w Fluegelschlag . r neu . q quit',
     'ui.plain_live_short'    => 'Leertaste schlaegt . q quit',
     'ui.quit_hint' => 'q drücken zum Beenden.',
+    'ui.quarantine'           => '⚠ Vorherige Bestenliste war unlesbar — als {file} archiviert',
+    'ui.plain_quarantine'     => 'x Vorherige Bestenliste war unlesbar - als {file} archiviert',
     'notty.line1'            => 'candy-flappy braucht ein Terminal, das seine Ausgabe darstellen kann.',
     'notty.line2'            => 'stdout ist kein interaktives Terminal oder TERM=dumb wurde erkannt.',
     'size.notice'            => 'candy-flappy braucht ein {need}-Terminal; dieses hier ist {have}.',

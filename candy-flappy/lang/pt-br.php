@@ -30,6 +30,8 @@ return [
     'ui.plain_live_full'     => 'espaco/Enter/^/w bate . r reiniciar . q sair',
     'ui.plain_live_short'    => 'espaco bate . q sair',
     'ui.quit_hint' => 'pressione q para sair.',
+    'ui.quarantine'           => '⚠ A tabela de recordes anterior estava ilegível — arquivada como {file}',
+    'ui.plain_quarantine'     => 'x A tabela de recordes anterior estava ilegível - arquivada como {file}',
     'notty.line1'            => 'o candy-flappy precisa de um terminal capaz de mostrar sua saída.',
     'notty.line2'            => 'o stdout não é um terminal interativo ou TERM=dumb foi detectado.',
     'size.notice'            => 'o candy-flappy precisa de um terminal {need}; este aqui é {have}.',

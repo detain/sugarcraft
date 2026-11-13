@@ -29,6 +29,8 @@ return [
     'ui.plain_live_full'     => 'spazio/Enter/^/w batte . r ripartire . q uscire',
     'ui.plain_live_short'    => 'spazio batte . q uscire',
     'ui.quit_hint' => 'premi q per uscire.',
+    'ui.quarantine'           => '⚠ La classifica precedente non era leggibile — archiviata come {file}',
+    'ui.plain_quarantine'     => 'x La classifica precedente non era leggibile - archiviata come {file}',
     'notty.line1'            => 'candy-flappy richiede un terminale in grado di rendere la sua uscita.',
     'notty.line2'            => 'stdout non è un terminale interattivo oppure è stato rilevato TERM=dumb.',
     'size.notice'            => 'candy-flappy richiede un terminale {need}; questo è {have}.',

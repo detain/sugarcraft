@@ -29,6 +29,8 @@ return [
     'ui.plain_live_full'     => 'espacio/Enter/^/w aletea . r reiniciar . q salir',
     'ui.plain_live_short'    => 'espacio aletea . q salir',
     'ui.quit_hint' => 'pulsa q para salir.',
+    'ui.quarantine'           => '⚠ La tabla de récords anterior no se pudo leer — archivada como {file}',
+    'ui.plain_quarantine'     => 'x La tabla de récords anterior no se pudo leer - archivada como {file}',
     'notty.line1'            => 'candy-flappy necesita una terminal que pueda mostrar su salida.',
     'notty.line2'            => 'stdout no es una terminal interactiva o se detectó TERM=dumb.',
     'size.notice'            => 'candy-flappy necesita una terminal de {need}; esta es de {have}.',

@@ -29,6 +29,8 @@ return [
     'ui.plain_live_full'     => 'mezernik/Enter/^/w mava . r znovu . q konec',
     'ui.plain_live_short'    => 'mezernik mava . q konec',
     'ui.quit_hint' => 'stiskněte q pro ukončení.',
+    'ui.quarantine'           => '⚠ Předchozí tabulku nejlepších výsledků se nepodařilo přečíst — archivováno jako {file}',
+    'ui.plain_quarantine'     => 'x Předchozí tabulku nejlepších výsledků se nepodařilo přečíst - archivováno jako {file}',
     'notty.line1'            => 'candy-flappy potřebuje terminál, který umí vykreslit jeho výstup.',
     'notty.line2'            => 'stdout není interaktivní terminál nebo byl zjištěn TERM=dumb.',
     'size.notice'            => 'candy-flappy potřebuje terminál {need}; tento má {have}.',

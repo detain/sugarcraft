@@ -29,6 +29,8 @@ return [
     'ui.plain_live_full'     => 'spacja/Enter/^/w macha . r ponow . q wyjdz',
     'ui.plain_live_short'    => 'spacja macha . q wyjdz',
     'ui.quit_hint' => 'naciśnij q, aby zakończyć.',
+    'ui.quarantine'           => '⚠ Poprzednia tabela wyników była nieczytelna — zarchiwizowano jako {file}',
+    'ui.plain_quarantine'     => 'x Poprzednia tabela wyników była nieczytelna - zarchiwizowano jako {file}',
     'notty.line1'            => 'candy-flappy potrzebuje terminala, który potrafi wyświetlić jego wyjście.',
     'notty.line2'            => 'stdout nie jest interaktywnym terminalem albo wykryto TERM=dumb.',
     'size.notice'            => 'candy-flappy potrzebuje terminala {need}; ten ma {have}.',
