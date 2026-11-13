@@ -11,6 +11,11 @@ declare(strict_types=1);
 return [
     'render.unknown_theme' => '알 수 없는 테마: {name} — JSON 스타일 파일은 --theme-config를 사용하세요',
     'render.style_overrides_theme' => '참고: --style "{style}"이(가) --theme "{theme}"보다 우선합니다',
+    'render.config_unreadable' => '설정 파일을 읽을 수 없습니다: {path}',
+    'render.config_too_large' => '설정 파일이 {limit}바이트를 초과합니다: {path}',
+    'render.config_invalid' => '설정 파일이 유효한 JSON 객체가 아닙니다: {path} ({error})',
+    'render.config_unknown_key' => '설정 파일에 알 수 없는 키가 있습니다: {path} ({keys})',
+    'render.config_bad_value' => '{path}의 {key} 값이 올바르지 않습니다: {expected} 필요',
     'render.theme_config_unreadable' => '테마 설정을 읽을 수 없습니다: {path}',
     'render.theme_config_too_large' => '테마 설정이 {limit}바이트를 초과합니다: {path}',
     'render.theme_config_unrecognized' => '테마 구성이 플랫 스키마와 글래머 스키마 모두에 일치하지 않습니다: {path}',

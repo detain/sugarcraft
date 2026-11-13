@@ -145,16 +145,23 @@ final class RenderCommand extends Command
         $dirNotice   = '';
         $themeNote   = '';
         try {
-            $width      = self::resolveWidth($input);
+            // Persisted preferences load first: every later resolution sees
+            // flag > environment > file > default (finding 036). A broken
+            // file refuses by name in the same usage lane as every other
+            // ambiguous input — a silently ignored preference file is the
+            // exact failure this door exists to close.
+            $config     = Config::load();
+            $width      = self::resolveWidth($input, $config);
             $onTerminal = self::decoratedOutput($input, $output);
-            $theme      = self::resolveTheme($input, $onTerminal, $themeNote);
+            $theme      = self::resolveTheme($input, $onTerminal, $themeNote, $config);
+            $pager      = self::resolvePagerFlag($input, $config);
             // glow's second invocation form (finding 037): a directory
             // argument renders its README instead of refusing. Resolution
             // runs BEFORE the read so every later door (header name, watch
             // arming, exit contract) sees a plain file path.
             $fileArg    = self::resolveDirectoryArgument($fileArg, $dirNotice);
             $raw        = self::readDocument($fileArg);
-            if ($input->getOption('pager') === true) {
+            if ($pager === true) {
                 // Refuse before any painting: the escape-soup capture and
                 // the no-terminal hang both happen INSIDE the Program, so
                 // the surface question is answered up front like every
@@ -198,7 +205,7 @@ final class RenderCommand extends Command
         $docWidth = $width;
         if ($width === null) {
             $ttySize  = (new Tty())->size();
-            $docWidth = $input->getOption('pager') === true
+            $docWidth = $pager === true
                 ? $ttySize['cols']
                 : max(1, min($ttySize['cols'] - 2, self::AUTO_WIDTH_MAX));
         }
@@ -220,7 +227,7 @@ final class RenderCommand extends Command
             ->withHyperlinks($onTerminal && $input->getOption('no-hyperlinks') === false);
         $rendered = $renderer->render($raw);
 
-        if ($input->getOption('pager') === false) {
+        if ($pager === false) {
             // OUTPUT_RAW: the rendered document is DATA, never markup. Passing
             // it through the formatter would EAT <info>/<href=…> tags —
             // corrupting the displayed text and letting hostile inline HTML in
@@ -252,6 +259,12 @@ final class RenderCommand extends Command
             ? static fn (int $cols): string => $renderer->withWordWrap(max(1, $cols))->render($raw)
             : null;
         $model   = self::buildPagerModel($rendered, $size['cols'], $size['rows'], $isLocal ? basename($fileArg) : '', $reflowAt);
+        if ($config->keymap !== []) {
+            // The persisted keymap replaces this model's own chords only;
+            // navigation keys belong to the Viewport and Esc/Ctrl+C are
+            // structural — never remappable.
+            $model = $model->withKeymap($config->keymap);
+        }
         if ($isLocal) {
             $model = self::armPagerWatch($model, $fileArg, $renderer);
         }
@@ -277,17 +290,68 @@ final class RenderCommand extends Command
      * (finding 013). The Symfony default is null precisely to keep the
      * unset case distinguishable from an explicit zero.
      */
-    private static function resolveWidth(InputInterface $input): ?int
+    private static function resolveWidth(InputInterface $input, Config $config): ?int
     {
         $raw = $input->getOption('width');
         if ($raw === null) {
-            return null;
+            $env = self::settingFromEnvironment('MDVIEW_WIDTH');
+            if ($env !== null && $env !== '') {
+                if (preg_match('/^\d{1,4}$/', $env) !== 1) {
+                    throw new \InvalidArgumentException(Lang::t('render.config_bad_value', [
+                        'key'      => 'width',
+                        'expected' => 'an integer 0-9999',
+                        'path'     => 'MDVIEW_WIDTH',
+                    ]));
+                }
+                return (int) $env;
+            }
+            // Config width keeps the flag's three-state contract: 0 is the
+            // explicit no-wrap opt-out, a positive value pins, absence (or
+            // no file) is auto.
+            return $config->width;
         }
         $value = (string) $raw;
         if (preg_match('/^\d{1,4}$/', $value) !== 1) {
             throw new \InvalidArgumentException(Lang::t('render.width_invalid', ['value' => $value]));
         }
         return (int) $value;
+    }
+
+    /**
+     * A setting contributed by the environment layer. `$_SERVER` first, then
+     * the process environment — the same chain T::charset() walks.
+     */
+    private static function settingFromEnvironment(string $var): ?string
+    {
+        $value = $_SERVER[$var] ?? getenv($var);
+        return is_string($value) ? $value : null;
+    }
+
+    /**
+     * Pager mode is on when the flag says so, else when MDVIEW_PAGER does,
+     * else when the config file does — default off. The flag can only
+     * assert (there is no --no-pager); turning a file-configured pager OFF
+     * for one run means editing nothing and piping the output... which
+     * `-p` refuses without a terminal anyway.
+     */
+    private static function resolvePagerFlag(InputInterface $input, Config $config): bool
+    {
+        if ($input->getOption('pager') === true) {
+            return true;
+        }
+        $env = self::settingFromEnvironment('MDVIEW_PAGER');
+        if ($env !== null && $env !== '') {
+            return match (strtolower($env)) {
+                '1', 'true', 'yes'   => true,
+                '0', 'false', 'no'   => false,
+                default              => throw new \InvalidArgumentException(Lang::t('render.config_bad_value', [
+                    'key'      => 'pager',
+                    'expected' => '1/0, true/false or yes/no',
+                    'path'     => 'MDVIEW_PAGER',
+                ])),
+            };
+        }
+        return $config->pager === true;
     }
 
     /**
@@ -298,7 +362,7 @@ final class RenderCommand extends Command
      * names a real theme and must render its SGR even where the implicit
      * default would downgrade.
      */
-    private static function resolveTheme(InputInterface $input, bool $onTerminal, string &$themeNote): Theme
+    private static function resolveTheme(InputInterface $input, bool $onTerminal, string &$themeNote, Config $config): Theme
     {
         $configPath = (string) $input->getOption('theme-config');
         $style      = $input->getOption('style');
@@ -313,16 +377,24 @@ final class RenderCommand extends Command
 
         $explicitTheme = $style !== null || $theme !== null;
         if ($explicitTheme === false) {
+            // Layers below the flags: MDVIEW_THEME first, then the file's
+            // style/theme pair (style wins inside the file exactly as it
+            // wins between flags — one rule, every layer).
+            $fromEnv = self::settingFromEnvironment('MDVIEW_THEME');
+            if ($fromEnv !== null && $fromEnv !== '') {
+                return self::themeNamed($fromEnv, $onTerminal);
+            }
+            if ($config->theme !== null || $config->style !== null) {
+                if ($config->style !== null && $config->theme !== null
+                    && strtolower(str_replace('_', '-', $config->style)) !== strtolower(str_replace('_', '-', $config->theme))) {
+                    $themeNote = Lang::t('render.style_overrides_theme', ['style' => $config->style, 'theme' => $config->theme]);
+                }
+                return self::themeNamed((string) ($config->style ?? $config->theme), $onTerminal);
+            }
             return self::implicitTheme($onTerminal);
         }
 
-        $name      = (string) ($style ?? $theme);
-        $canonical = strtolower(str_replace('_', '-', $name));
-        if ($canonical === 'auto') {
-            // glow parity: `auto` promotes the implicit ladder to an explicit
-            // choice, so tier behavior can be pinned without omitting flags.
-            return self::implicitTheme($onTerminal);
-        }
+        $name = (string) ($style ?? $theme);
         if ($style !== null && $theme !== null
             && strtolower(str_replace('_', '-', $style)) !== strtolower(str_replace('_', '-', $theme))) {
             // The override is real (--style wins), but silent victory over an
@@ -331,6 +403,18 @@ final class RenderCommand extends Command
             $themeNote = Lang::t('render.style_overrides_theme', ['style' => $style, 'theme' => $theme]);
         }
 
+        return self::themeNamed($name, $onTerminal);
+    }
+
+    /** Resolve one theme NAME (any layer) — `auto` promotes the implicit ladder. */
+    private static function themeNamed(string $name, bool $onTerminal): Theme
+    {
+        $canonical = strtolower(str_replace('_', '-', $name));
+        if ($canonical === 'auto') {
+            // glow parity: `auto` promotes the implicit ladder to an explicit
+            // choice, so tier behavior can be pinned without omitting flags.
+            return self::implicitTheme($onTerminal);
+        }
         return self::pickTheme($name);
     }
 

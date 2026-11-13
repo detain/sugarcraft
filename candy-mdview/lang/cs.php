@@ -11,6 +11,11 @@ declare(strict_types=1);
 return [
     'render.unknown_theme' => 'neznámé téma: {name} — JSON soubory stylů se načítají přes --theme-config',
     'render.style_overrides_theme' => 'poznámka: --style "{style}" přepisuje --theme "{theme}"',
+    'render.config_unreadable' => 'konfigurační soubor nelze číst: {path}',
+    'render.config_too_large' => 'konfigurační soubor překračuje {limit} bajtů: {path}',
+    'render.config_invalid' => 'konfigurační soubor není platný objekt JSON: {path} ({error})',
+    'render.config_unknown_key' => 'neznámé klíče v konfiguračním souboru {path}: {keys}',
+    'render.config_bad_value' => 'neplatná hodnota {key} v {path}: očekáváno {expected}',
     'render.theme_config_unreadable' => 'konfigurace motivu nečitelná: {path}',
     'render.theme_config_too_large' => 'konfigurace motivu překračuje {limit} bajtů: {path}',
     'render.theme_config_unrecognized' => 'konfigurace motivu neodpovídá ani plochému, ani glamour schématu: {path}',

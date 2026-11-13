@@ -11,6 +11,11 @@ declare(strict_types=1);
 return [
     'render.unknown_theme' => 'onbekend thema: {name} — JSON-stijlbestanden horen in --theme-config',
     'render.style_overrides_theme' => 'let op: --style "{style}" gaat voor --theme "{theme}"',
+    'render.config_unreadable' => 'configuratiebestand niet leesbaar: {path}',
+    'render.config_too_large' => 'configuratiebestand overschrijdt {limit} bytes: {path}',
+    'render.config_invalid' => 'configuratiebestand is geen geldig JSON-object: {path} ({error})',
+    'render.config_unknown_key' => 'onbekende sleutels in configuratiebestand {path}: {keys}',
+    'render.config_bad_value' => 'ongeldige waarde voor {key} in {path}: {expected} verwacht',
     'render.theme_config_unreadable' => 'thema-configuratie niet leesbaar: {path}',
     'render.theme_config_too_large' => 'thema-configuratie overschrijdt {limit} bytes: {path}',
     'render.theme_config_unrecognized' => 'themaconfiguratie voldoet niet aan het platte of het glamour-schema: {path}',

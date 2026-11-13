@@ -11,6 +11,11 @@ declare(strict_types=1);
 return [
     'render.unknown_theme' => 'tema desconocido: {name} — los archivos de estilo JSON usan --theme-config',
     'render.style_overrides_theme' => 'nota: --style "{style}" anula a --theme "{theme}"',
+    'render.config_unreadable' => 'archivo de configuración no legible: {path}',
+    'render.config_too_large' => 'el archivo de configuración supera los {limit} bytes: {path}',
+    'render.config_invalid' => 'el archivo de configuración no es un objeto JSON válido: {path} ({error})',
+    'render.config_unknown_key' => 'claves desconocidas en el archivo de configuración {path}: {keys}',
+    'render.config_bad_value' => 'valor no válido de {key} en {path}: se esperaba {expected}',
     'render.theme_config_unreadable' => 'configuración del tema no legible: {path}',
     'render.theme_config_too_large' => 'la configuración del tema supera los {limit} bytes: {path}',
     'render.theme_config_unrecognized' => 'la configuración del tema no coincide con el esquema plano ni con el de glamour: {path}',

@@ -212,6 +212,35 @@ a basic terminal that cannot answer either loses nothing usable — with
 `TERM=dumb` (or no mouse support) prefer the plain stdout mode and drop `-p`
 if you would rather keep your own scrollback.
 
+## Configuration
+
+Persistent preferences live in `mdview.json` under `$XDG_CONFIG_HOME/mdview/`
+(without that variable, `~/.config/mdview/mdview.json`). `MDVIEW_CONFIG`
+overrides the path outright — and an explicitly empty `MDVIEW_CONFIG=`
+skips file lookup entirely. Every setting resolves flag > environment >
+file > built-in default, independently: `MDVIEW_THEME`, `MDVIEW_WIDTH`
+(0–9999, where 0 is the explicit no-wrap opt-out), and `MDVIEW_PAGER`
+(1/0, true/false, yes/no). A worked file:
+
+```json
+{
+  "theme": "dracula",
+  "width": 100,
+  "pager": true,
+  "keymap": { "quit": "x", "reload": "ctrl-r" }
+}
+```
+
+`style` is accepted as the file's twin of `--style` (inside the file, as
+between the flags, style wins over theme — and says so on stderr). The
+`keymap` block may remap the two chords the pager itself owns — `quit` and
+`reload` — as a bare rune (`"x"`, unmodified key) or an explicit `ctrl-` /
+`alt-` chord; navigation keys belong to the Viewport and always answer to
+the table above, and `Esc` / `Ctrl+C` quit regardless of any map. A file
+that exists must be honest: a non-file, an over-cap payload (64 KiB),
+malformed JSON, an unknown key, or a mistyped value refuses with exit
+code 2 naming the path — nothing you wrote is ever silently ignored.
+
 ## Accessibility
 
 Color is an environment fact before it is anything else, so reduced-color

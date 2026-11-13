@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\MdView\Tests;
 
+use SugarCraft\MdView\Config;
 use SugarCraft\MdView\MdViewModel;
 use SugarCraft\MdView\ReloadTickMsg;
 use SugarCraft\MdView\RenderCommand;
@@ -17,6 +18,7 @@ use SugarCraft\Core\Util\Width;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
 use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 
@@ -28,6 +30,12 @@ final class RenderCommandTest extends TestCase
      * a developer box exporting NO_COLOR must not flip these answers.
      */
     private const COLOR_ENV_KEYS = ['NO_COLOR', 'CLICOLOR', 'CLICOLOR_FORCE', 'FORCE_COLOR', 'TERM', 'COLORTERM'];
+
+    /** preference layers the suite must never inherit from the developer */
+    private const CONFIG_ENV_KEYS = ['MDVIEW_THEME', 'MDVIEW_WIDTH', 'MDVIEW_PAGER'];
+
+    /** original $_SERVER entries for the config layers, restored in tearDown */
+    private array $savedServerConfig = [];
 
     /** @var array<string,string|false> values as found before setUp cleared them */
     private array $savedColorEnv = [];
@@ -47,6 +55,19 @@ final class RenderCommandTest extends TestCase
         // the developer has exported elsewhere.
         $this->savedLocale = T::locale();
         T::setLocale('en');
+        // Config-door hermeticity: no layer of the preference chain may
+        // reach the developer's real environment during the suite. The
+        // empty seam disables file lookup; the setting vars are cleared.
+        foreach (self::CONFIG_ENV_KEYS as $key) {
+            $this->savedColorEnv[$key] = getenv($key);
+            $this->savedServerConfig[$key] = $_SERVER[$key] ?? null;
+            putenv($key);
+            unset($_SERVER[$key]);
+        }
+        $this->savedColorEnv['MDVIEW_CONFIG'] = getenv('MDVIEW_CONFIG');
+        $this->savedServerConfig['MDVIEW_CONFIG'] = $_SERVER['MDVIEW_CONFIG'] ?? null;
+        putenv('MDVIEW_CONFIG=');
+        $_SERVER['MDVIEW_CONFIG'] = '';
     }
 
     /**
@@ -130,8 +151,7 @@ final class RenderCommandTest extends TestCase
         $this->assertInstanceOf(Theme::class, RenderCommand::pickTheme('tokyo_night'));
     }
 
-    public function testThemeGlossaryInReadmeResolvesForEveryDocumentedName(): void
-    {
+    public function testThemeGlossaryInReadmeResolvesForEveryDocumentedName(): void    {
         // The flags bullet advertises the set as a brace list; every name it
         // prints must actually resolve (finding 028's single-source rule).
         $readme = (string) file_get_contents(__DIR__ . '/../README.md');
@@ -196,6 +216,199 @@ final class RenderCommandTest extends TestCase
         // 087 half of the same door: the refusal now points a style-JSON
         // migrant at the right flag.
         $this->assertStringContainsString('--theme-config', $msg);
+    }
+
+    /**
+     * Write a preferences fixture and pin MDVIEW_CONFIG (both reader
+     * layers) at it for the duration of the observation.
+     */
+    private function withConfigFile(string $json, \Closure $observe): void
+    {
+        $path = $this->workspaceFile('pref-' . md5($json) . '.json');
+        $this->assertNotFalse(file_put_contents($path, $json));
+        $savedEnv    = [getenv('MDVIEW_CONFIG'), $_SERVER['MDVIEW_CONFIG'] ?? null];
+        putenv('MDVIEW_CONFIG=' . $path);
+        $_SERVER['MDVIEW_CONFIG'] = $path;
+        try {
+            $observe($path);
+        } finally {
+            if ($savedEnv[0] === false) {
+                putenv('MDVIEW_CONFIG');
+            } else {
+                putenv('MDVIEW_CONFIG=' . $savedEnv[0]);
+            }
+            if ($savedEnv[1] === null) {
+                unset($_SERVER['MDVIEW_CONFIG']);
+            } else {
+                $_SERVER['MDVIEW_CONFIG'] = $savedEnv[1];
+            }
+        }
+    }
+
+    /** @param array<string,string|null> $vars */
+    private function withSettingEnv(array $vars, \Closure $observe): void
+    {
+        $restore = [];
+        foreach ($vars as $key => $value) {
+            $restore[$key] = [getenv($key), $_SERVER[$key] ?? null];
+            if ($value === null) {
+                putenv($key);
+                unset($_SERVER[$key]);
+            } else {
+                putenv($key . '=' . $value);
+                $_SERVER[$key] = $value;
+            }
+        }
+        try {
+            $observe();
+        } finally {
+            foreach ($restore as $key => [$envValue, $serverValue]) {
+                if ($envValue === false) {
+                    putenv($key);
+                } else {
+                    putenv($key . '=' . $envValue);
+                }
+                if ($serverValue === null) {
+                    unset($_SERVER[$key]);
+                } else {
+                    $_SERVER[$key] = $serverValue;
+                }
+            }
+        }
+    }
+
+    private function workspaceFile(string $name): string
+    {
+        $dir = sys_get_temp_dir() . '/mdview-prefs-' . getmypid();
+        if (!is_dir($dir)) {
+            $this->assertTrue(mkdir($dir, 0o777, true));
+        }
+        return $dir . '/' . $name;
+    }
+
+    public function testThemePrecedenceIsFlagThenEnvThenFileThenImplicit(): void
+    {
+        $definition = (new RenderCommand())->getDefinition();
+        // getClosure (not invoke): the note is an out-param and reference
+        // propagation through ReflectionMethod::invoke is not guaranteed.
+        $resolve    = (new \ReflectionMethod(RenderCommand::class, 'resolveTheme'))->getClosure();
+
+        $this->withConfigFile('{"theme":"pink","style":"dark"}', function (string $path) use ($resolve, $definition): void {
+            $config = Config::load($path);
+
+            // 1. The flag outranks every persisted layer.
+            $this->withSettingEnv(['MDVIEW_THEME' => 'tokyo-night'], function () use ($resolve, $definition, $config): void {
+                $note = '';
+                $theme = $resolve(new ArrayInput(['--theme' => 'dracula'], $definition), false, $note, $config);
+                $this->assertSame(RenderCommand::pickTheme('dracula'), $theme);
+                $this->assertSame('', $note, 'a single flag carries no override ambiguity');
+            });
+
+            // 2. The environment outranks the file.
+            $this->withSettingEnv(['MDVIEW_THEME' => 'tokyo-night'], function () use ($resolve, $definition, $config): void {
+                $note = '';
+                $theme = $resolve(new ArrayInput([], $definition), false, $note, $config);
+                $this->assertSame(RenderCommand::pickTheme('tokyo-night'), $theme);
+            });
+
+            // 3. The file: style wins inside it, and says so — the same
+            //    loud rule the flag layer practises.
+            $this->withSettingEnv(['MDVIEW_THEME' => null], function () use ($resolve, $definition, $config): void {
+                $note = '';
+                $theme = $resolve(new ArrayInput([], $definition), false, $note, $config);
+                $this->assertSame(RenderCommand::pickTheme('dark'), $theme);
+                $this->assertStringContainsString('dark', $note);
+                $this->assertStringContainsString('pink', $note);
+            });
+
+            // 4. Nothing anywhere: the implicit ladder answers.
+            $this->withSettingEnv(['MDVIEW_THEME' => null], function () use ($resolve, $definition): void {
+                $note = '';
+                $theme = $resolve(new ArrayInput([], $definition), false, $note, Config::empty());
+                $this->assertSame(RenderCommand::pickTheme('plain'), $theme, 'onTerminal=false lands on plain');
+            });
+
+            // `auto` is honoured from the environment layer too.
+            $this->withSettingEnv(['MDVIEW_THEME' => 'auto'], function () use ($resolve, $definition): void {
+                $note = '';
+                $theme = $resolve(new ArrayInput([], $definition), false, $note, Config::empty());
+                $this->assertSame(RenderCommand::pickTheme('plain'), $theme);
+            });
+        });
+    }
+
+    public function testPagerPrecedenceIsFlagThenEnvThenFileThenDefault(): void
+    {
+        $definition = (new RenderCommand())->getDefinition();
+        $resolve    = new \ReflectionMethod(RenderCommand::class, 'resolvePagerFlag');
+
+        $on  = Config::load($this->writePagerConfig('{"pager":true}'));
+        $off = Config::load($this->writePagerConfig('{"pager":false}'));
+
+        // Flag asserts and outranks a dissenting environment.
+        $this->withSettingEnv(['MDVIEW_PAGER' => '0'], function () use ($resolve, $definition): void {
+            $this->assertTrue($resolve->invoke(null, new ArrayInput(['--pager' => true], $definition), Config::empty()));
+        });
+        // Env outranks the file in both directions.
+        $this->withSettingEnv(['MDVIEW_PAGER' => 'no'], function () use ($resolve, $definition, $on): void {
+            $this->assertFalse($resolve->invoke(null, new ArrayInput([], $definition), $on));
+        });
+        $this->withSettingEnv(['MDVIEW_PAGER' => '1'], function () use ($resolve, $definition, $off): void {
+            $this->assertTrue($resolve->invoke(null, new ArrayInput([], $definition), $off));
+        });
+        // File, then default.
+        $this->withSettingEnv(['MDVIEW_PAGER' => null], function () use ($resolve, $definition, $on, $off): void {
+            $this->assertTrue($resolve->invoke(null, new ArrayInput([], $definition), $on));
+            $this->assertFalse($resolve->invoke(null, new ArrayInput([], $definition), $off));
+            $this->assertFalse($resolve->invoke(null, new ArrayInput([], $definition), Config::empty()));
+        });
+        // A non-verdict value refuses by name instead of guessing.
+        $this->withSettingEnv(['MDVIEW_PAGER' => 'banana'], function () use ($resolve, $definition): void {
+            $this->expectException(\InvalidArgumentException::class);
+            $resolve->invoke(null, new ArrayInput([], $definition), Config::empty());
+        });
+    }
+
+    private function writePagerConfig(string $json): string
+    {
+        $path = $this->workspaceFile('pager-' . md5($json) . '.json');
+        $this->assertNotFalse(file_put_contents($path, $json));
+        return $path;
+    }
+
+    public function testFileConfiguredPagerTrueStillRefusesWithoutASurface(): void
+    {
+        // The resolution $pager gates the surface check — a file that
+        // switches the pager on for every run must answer with the same
+        // named refusal the -p flag gets, before any painting.
+        $this->withConfigFile('{"pager":true}', function (string $path): void {
+            RenderCommand::setPagerDevTtyCallback(static fn (): bool => false);
+            [$rc, $msg] = $this->runUsageRun("# Hi\n", $this->optionMap(['pager' => false]));
+            $this->assertSame(Command::INVALID, $rc);
+            $this->assertStringContainsString('pager needs a terminal', $msg);
+            $this->assertFileExists($path);
+        });
+    }
+
+    public function testBrokenPreferencesFileRefusesOnTheUsageLaneNamingItsPath(): void
+    {
+        $this->withConfigFile('{"them":"dark"}', function (string $path): void {
+            [$rc, $msg] = $this->runUsageRun("# Hi\n", $this->optionMap());
+            $this->assertSame(Command::INVALID, $rc);
+            $this->assertStringContainsString($path, $msg, 'the named-refusal law: the bad file is the message');
+            $this->assertStringContainsString('them', $msg);
+        });
+    }
+
+    public function testTheFileAndKeymapWiringIsStructuralNotIncidental(): void
+    {
+        $src = (string) file_get_contents(__DIR__ . '/../src/RenderCommand.php');
+        $this->assertStringContainsString('$config     = Config::load();', $src);
+        $this->assertStringContainsString('$model = $model->withKeymap($config->keymap);', $src);
+        // The pager decision is made ONCE and rides $pager from resolution
+        // to the surface gate to the output split — one readable grep: the
+        // raw flag may be consulted only inside its own resolver.
+        $this->assertSame(1, substr_count($src, "getOption('pager')"));
     }
 
     public function testUnknownThemeRefusalNamesTheThemeConfigDoor(): void
@@ -903,6 +1116,13 @@ final class RenderCommandTest extends TestCase
                 putenv($key);
             } else {
                 putenv($key . '=' . $value);
+            }
+        }
+        foreach ($this->savedServerConfig as $key => $value) {
+            if ($value === null) {
+                unset($_SERVER[$key]);
+            } else {
+                $_SERVER[$key] = $value;
             }
         }
         parent::tearDown();

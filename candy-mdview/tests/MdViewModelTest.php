@@ -50,6 +50,71 @@ final class MdViewModelTest extends TestCase
         $this->assertTrue($m->isExited());
     }
 
+    public function testKeymapRemapMovesQuitAwayFromPlainQ(): void
+    {
+        // The config file's keymap door (finding 036): `q` -> `x` means x
+        // quits and plain q belongs to the reader again.
+        $m = MdViewModel::fromContent($this->content(3))->withKeymap(['quit' => 'x']);
+        [($still), ] = $m->update(new KeyMsg(KeyType::Char, 'q'));
+        $this->assertFalse($still->isExited(), 'remapped away: plain q must NOT quit');
+
+        [$x, $cmd] = $m->update(new KeyMsg(KeyType::Char, 'x'));
+        $this->assertTrue($x->isExited());
+        $this->assertNotNull($cmd);
+
+        // Structural legs survive any remap: Esc and Ctrl+C still quit.
+        [$esc, ] = $m->update(new KeyMsg(KeyType::Escape));
+        $this->assertTrue($esc->isExited());
+        [$ctrlC, ] = $m->update(new KeyMsg(KeyType::Char, 'c', ctrl: true));
+        $this->assertTrue($ctrlC->isExited());
+    }
+
+    public function testKeymapChordsAndPartialRemaps(): void
+    {
+        $base = MdViewModel::fromContent($this->content(3));
+
+        // ctrl-/alt- chords name deliberate modifier pairs and nothing else.
+        [$altQ, ] = $base->withKeymap(['quit' => 'alt-q'])->update(new KeyMsg(KeyType::Char, 'q', alt: true));
+        $this->assertTrue($altQ->isExited());
+        [$plainQ, ] = $base->withKeymap(['quit' => 'alt-q'])->update(new KeyMsg(KeyType::Char, 'q'));
+        $this->assertFalse($plainQ->isExited(), 'an alt-q map must not answer to unmodified q');
+        [$shiftX, ] = $base->withKeymap(['quit' => 'x'])->update(new KeyMsg(KeyType::Char, 'x', shift: true));
+        $this->assertFalse($shiftX->isExited(), 'a bare-rune map stays an UNMODIFIED-key map');
+
+        // Partial remaps keep every untouched binding (merge, not replace).
+        [$qStill, ] = $base->withKeymap(['reload' => 'ctrl-r'])->update(new KeyMsg(KeyType::Char, 'q'));
+        $this->assertTrue($qStill->isExited());
+    }
+
+    public function testKeymapMovesTheForceReloadChord(): void
+    {
+        // The reload arm is keymap-driven too: with `reload` on ctrl-r, an
+        // unmodified `r` no longer queues anything while ctrl-r does.
+        $path = sys_get_temp_dir() . '/mdview-keymap-reload-' . uniqid('', true) . '.md';
+        file_put_contents($path, "# live\n");
+
+        $model = MdViewModel::fromContent('RENDERED', 40, 6)
+            ->withWatch($path, static fn (string $raw): string => 'RENDERED:' . $raw)
+            ->withKeymap(['reload' => 'ctrl-r']);
+        [$withR, ] = $model->update(new KeyMsg(KeyType::Char, 'r'));
+        $this->assertFalse($withR->pendingReload, 'plain r is no longer the reload chord');
+        [$withCtrl, ] = $model->update(new KeyMsg(KeyType::Char, 'r', ctrl: true));
+        $this->assertTrue($withCtrl->pendingReload, 'ctrl-r took the chord over');
+        // The map must SURVIVE derived states: after an unrelated scroll
+        // copy, plain r still answers to nothing (a keymap dropped by the
+        // clone would silently resurrect the default chord here).
+        [$afterNav, ] = $model->update(new KeyMsg(KeyType::Down));
+        [$stillSafe, ] = $afterNav->update(new KeyMsg(KeyType::Char, 'r'));
+        $this->assertFalse($stillSafe->pendingReload, 'the remap rode the copy');
+
+        // Default map: plain r still forces the reload.
+        [$defaultR, ] = MdViewModel::fromContent('RENDERED', 40, 6)
+            ->withWatch($path, static fn (string $raw): string => 'RENDERED:' . $raw)
+            ->update(new KeyMsg(KeyType::Char, 'r'));
+        $this->assertTrue($defaultR->pendingReload);
+        unlink($path);
+    }
+
     public function testDownScrollsViewport(): void
     {
         $m = MdViewModel::fromContent($this->content(20), 80, 3);

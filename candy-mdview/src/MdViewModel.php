@@ -50,6 +50,13 @@ final class MdViewModel implements Model
     /** Pager file-watch sweep interval in seconds (fixed tick, re-armed per handled ReloadTickMsg). */
     public const RELOAD_POLL_SECONDS = 0.5;
 
+    /**
+     * The chords this model owns (the Viewport takes every navigation key).
+     * Config's keymap block may replace either rune; the Escape and Ctrl+C
+     * quit legs are structural and never remap.
+     */
+    public const DEFAULT_KEYMAP = ['quit' => 'q', 'reload' => 'r'];
+
     public static function fromContent(string $content, int $width = 80, int $height = 24): self
     {
         $vp = Viewport::new($width, max(1, $height))->setContent($content);
@@ -77,13 +84,15 @@ final class MdViewModel implements Model
         public readonly bool $pendingReload = false,
         /** fn(liveCols): renderedText — set ONLY when the width was not pinned (finding 014). */
         private readonly ?\Closure $reflowAt = null,
+        /** action => chord for this model's own keys; starts at DEFAULT_KEYMAP. */
+        public readonly array $keymap = self::DEFAULT_KEYMAP,
     ) {}
 
     /**
      * Structural clone with named overrides — the ONE derivation site, so
      * no state field can be silently zeroed by a hand-rolled copy.
      *
-     * @param array{viewport?:Viewport,exited?:bool,watchPath?:?string,reRender?:?\Closure,watchMtime?:int,watchSize?:int,reloadCount?:int,documentName?:?string,reloadBlocked?:bool,pendingReload?:bool,reflowAt?:?\Closure} $overrides
+     * @param array{viewport?:Viewport,exited?:bool,watchPath?:?string,reRender?:?\Closure,watchMtime?:int,watchSize?:int,reloadCount?:int,documentName?:?string,reloadBlocked?:bool,pendingReload?:bool,reflowAt?:?\Closure,keymap?:array<string,string>} $overrides
      */
     private function copy(array $overrides = []): self
     {
@@ -104,6 +113,7 @@ final class MdViewModel implements Model
             $pick('reloadBlocked', $this->reloadBlocked),
             $pick('pendingReload', $this->pendingReload),
             $pick('reflowAt', $this->reflowAt),
+            $pick('keymap', $this->keymap),
         );
     }
 
@@ -176,6 +186,42 @@ final class MdViewModel implements Model
         return $this->copy(['reflowAt' => $reflowAt]);
     }
 
+    /**
+     * Replace the default chords for this model's own keys (the config
+     * file's keymap door, finding 036). Overrides merge onto the current
+     * map, so a partial keymap keeps every untouched binding; the Escape
+     * and Ctrl+C quit legs are structural and stay whatever the map says.
+     *
+     * @param array<string,string> $overrides action => chord ("x", "ctrl-x", "alt-x")
+     */
+    public function withKeymap(array $overrides): self
+    {
+        $map = $this->keymap;
+        foreach ($overrides as $action => $chord) {
+            $map[$action] = $chord;
+        }
+        return $this->copy(['keymap' => $map]);
+    }
+
+    /**
+     * Does this keystroke play the configured chord? A bare rune means the
+     * UNMODIFIED key (today's `q` law); `ctrl-`/`alt-` prefixes name the
+     * deliberate modifier chords.
+     */
+    private static function chordMatches(KeyMsg $msg, string $chord): bool
+    {
+        if ($msg->type !== KeyType::Char) {
+            return false;
+        }
+        if (str_starts_with($chord, 'ctrl-')) {
+            return $msg->ctrl === true && $msg->alt === false && $msg->rune === substr($chord, 5);
+        }
+        if (str_starts_with($chord, 'alt-')) {
+            return $msg->alt === true && $msg->ctrl === false && $msg->rune === substr($chord, 4);
+        }
+        return $msg->ctrl === false && $msg->alt === false && $msg->shift === false && $msg->rune === $chord;
+    }
+
     public function init(): ?\Closure
     {
         return $this->watchPath === null ? null : $this->armReloadTick();
@@ -220,10 +266,9 @@ final class MdViewModel implements Model
             return [$next, $next->armReloadTick()];
         }
         if ($msg instanceof KeyMsg) {
-            $unmodified = $msg->ctrl === false && $msg->alt === false && $msg->shift === false;
             if ($msg->type === KeyType::Escape
                 || ($msg->ctrl && $msg->rune === 'c')
-                || ($msg->type === KeyType::Char && $msg->rune === 'q' && $unmodified)) {
+                || self::chordMatches($msg, $this->keymap['quit'])) {
                 // Quitting ends the watch chain too: nothing may keep
                 // sweeping a file the user has stopped reading.
                 return [$this->copy([
@@ -234,7 +279,7 @@ final class MdViewModel implements Model
                     'watchSize'  => 0,
                 ]), Cmd::quit()];
             }
-            if ($msg->type === KeyType::Char && $msg->rune === 'r' && $unmodified && $this->watchPath !== null) {
+            if (self::chordMatches($msg, $this->keymap['reload']) && $this->watchPath !== null) {
                 // Force-reload (finding 044): a rewrite preserving BOTH
                 // second-granularity mtime and byte size is invisible to the
                 // tuple forever, so `r` re-snapshots the baseline against the

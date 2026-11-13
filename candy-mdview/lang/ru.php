@@ -11,6 +11,11 @@ declare(strict_types=1);
 return [
     'render.unknown_theme' => 'неизвестная тема: {name} — JSON-файлы стилей передавайте через --theme-config',
     'render.style_overrides_theme' => 'примечание: --style "{style}" перекрывает --theme "{theme}"',
+    'render.config_unreadable' => 'файл конфигурации не читается: {path}',
+    'render.config_too_large' => 'файл конфигурации превышает {limit} байт: {path}',
+    'render.config_invalid' => 'файл конфигурации не является допустимым объектом JSON: {path} ({error})',
+    'render.config_unknown_key' => 'неизвестные ключи в файле конфигурации {path}: {keys}',
+    'render.config_bad_value' => 'недопустимое значение {key} в {path}: ожидалось {expected}',
     'render.theme_config_unreadable' => 'конфигурация темы нечитабельна: {path}',
     'render.theme_config_too_large' => 'конфигурация темы превышает {limit} байт: {path}',
     'render.theme_config_unrecognized' => 'конфигурация темы не соответствует ни плоской, ни glamour-схеме: {path}',

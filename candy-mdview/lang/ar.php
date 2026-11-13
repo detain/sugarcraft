@@ -11,6 +11,11 @@ declare(strict_types=1);
 return [
     'render.unknown_theme' => 'سمة غير معروفة: {name} — ملفات الأنماط JSON تُحمَّل عبر --theme-config',
     'render.style_overrides_theme' => 'ملاحظة: --style "{style}" يتجاوز --theme "{theme}"',
+    'render.config_unreadable' => 'ملف الإعدادات غير قابل للقراءة: {path}',
+    'render.config_too_large' => 'ملف الإعدادات يتجاوز {limit} بايت: {path}',
+    'render.config_invalid' => 'ملف الإعدادات ليس كائن JSON صالحًا: {path} ({error})',
+    'render.config_unknown_key' => 'مفاتيح غير معروفة في ملف الإعدادات {path}: {keys}',
+    'render.config_bad_value' => 'قيمة غير صالحة لـ {key} في {path}: المطلوب {expected}',
     'render.theme_config_unreadable' => 'إعدادات السمة غير قابلة للقراءة: {path}',
     'render.theme_config_too_large' => 'إعدادات السمة تتجاوز {limit} بايت: {path}',
     'render.theme_config_unrecognized' => 'تكوين السمة لا يطابق المخطط المسطح ولا مخطط غلامور: {path}',

@@ -11,6 +11,11 @@ declare(strict_types=1);
 return [
     'render.unknown_theme' => '不明なテーマ：{name} — JSONスタイルファイルは --theme-config を使用してください',
     'render.style_overrides_theme' => 'ノート: --style "{style}" は --theme "{theme}" より優先されます',
+    'render.config_unreadable' => '設定ファイルが読み取れません：{path}',
+    'render.config_too_large' => '設定ファイルが{limit}バイトを超えています：{path}',
+    'render.config_invalid' => '設定ファイルは有効なJSONオブジェクトではありません：{path}（{error}）',
+    'render.config_unknown_key' => '設定ファイルに不明なキーがあります：{path}（{keys}）',
+    'render.config_bad_value' => '{path} 内の {key} の値が不正です：{expected} が必要',
     'render.theme_config_unreadable' => 'テーマ設定が読み取れません：{path}',
     'render.theme_config_too_large' => 'テーマ設定が{limit}バイトを超えています：{path}',
     'render.theme_config_unrecognized' => 'テーマ設定はフラットスキーマにもglamourスキーマにも一致しません: {path}',

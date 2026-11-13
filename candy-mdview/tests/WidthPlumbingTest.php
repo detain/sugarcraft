@@ -118,10 +118,11 @@ final class WidthPlumbingTest extends TestCase
         // one meaning, which is exactly what made auto impossible.
         $definition = (new RenderCommand())->getDefinition();
         $resolve    = new \ReflectionMethod(RenderCommand::class, 'resolveWidth');
+        $empty      = \SugarCraft\MdView\Config::empty();
 
-        self::assertNull($resolve->invoke(null, new ArrayInput([], $definition)), 'omitted --width must read as auto');
-        self::assertSame(0, $resolve->invoke(null, new ArrayInput(['--width' => '0'], $definition)), 'explicit 0 must stay 0');
-        self::assertSame(42, $resolve->invoke(null, new ArrayInput(['--width' => '42'], $definition)));
+        self::assertNull($resolve->invoke(null, new ArrayInput([], $definition), $empty), 'omitted --width must read as auto');
+        self::assertSame(0, $resolve->invoke(null, new ArrayInput(['--width' => '0'], $definition), $empty), 'explicit 0 must stay 0');
+        self::assertSame(42, $resolve->invoke(null, new ArrayInput(['--width' => '42'], $definition), $empty));
     }
 
     public function testWindowSizeReflowRendersAtTheLiveColumnCount(): void

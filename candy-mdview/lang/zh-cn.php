@@ -11,6 +11,11 @@ declare(strict_types=1);
 return [
     'render.unknown_theme' => '未知主题：{name} —— JSON 样式文件请使用 --theme-config',
     'render.style_overrides_theme' => '注意：--style "{style}" 覆盖 --theme "{theme}"',
+    'render.config_unreadable' => '配置文件不可读：{path}',
+    'render.config_too_large' => '配置文件超过 {limit} 字节：{path}',
+    'render.config_invalid' => '配置文件不是有效的 JSON 对象：{path}（{error}）',
+    'render.config_unknown_key' => '配置文件中的未知键：{path}（{keys}）',
+    'render.config_bad_value' => '{path} 中的 {key} 无效：应为 {expected}',
     'render.theme_config_unreadable' => '主题配置不可读：{path}',
     'render.theme_config_too_large' => '主题配置超过 {limit} 字节：{path}',
     'render.theme_config_unrecognized' => '主题配置既不匹配扁平 schema 也不匹配 glamour schema：{path}',

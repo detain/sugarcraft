@@ -11,6 +11,11 @@ declare(strict_types=1);
 return [
     'render.unknown_theme' => 'bilinmeyen tema: {name} — JSON stil dosyaları --theme-config ile yüklenir',
     'render.style_overrides_theme' => 'not: --style "{style}", --theme "{theme}" seçeneğini geçersiz kılıyor',
+    'render.config_unreadable' => 'yapılandırma dosyası okunamıyor: {path}',
+    'render.config_too_large' => 'yapılandırma dosyası {limit} baytı aşıyor: {path}',
+    'render.config_invalid' => 'yapılandırma dosyası geçerli bir JSON nesnesi değil: {path} ({error})',
+    'render.config_unknown_key' => 'yapılandırma dosyasında bilinmeyen anahtarlar: {path}: {keys}',
+    'render.config_bad_value' => '{path} içinde geçersiz {key} değeri: beklenen {expected}',
     'render.theme_config_unreadable' => 'tema yapılandırması okunamıyor: {path}',
     'render.theme_config_too_large' => 'tema yapılandırması {limit} baytı aşıyor: {path}',
     'render.theme_config_unrecognized' => 'tema yapılandırması düz şemayla da glamour şemasıyla da eşleşmiyor: {path}',

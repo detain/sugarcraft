@@ -11,6 +11,11 @@ declare(strict_types=1);
 return [
     'render.unknown_theme' => 'unbekanntes Theme: {name} — JSON-Style-Dateien gehören in --theme-config',
     'render.style_overrides_theme' => 'Hinweis: --style "{style}" überschreibt --theme "{theme}"',
+    'render.config_unreadable' => 'Konfigurationsdatei nicht lesbar: {path}',
+    'render.config_too_large' => 'Konfigurationsdatei überschreitet {limit} Bytes: {path}',
+    'render.config_invalid' => 'Konfigurationsdatei ist kein gültiges JSON-Objekt: {path} ({error})',
+    'render.config_unknown_key' => 'Unbekannte Schlüssel in Konfigurationsdatei {path}: {keys}',
+    'render.config_bad_value' => 'Ungültiger Wert für {key} in {path}: {expected} erwartet',
     'render.theme_config_unreadable' => 'Themenkonfiguration nicht lesbar: {path}',
     'render.theme_config_too_large' => 'Themenkonfiguration überschreitet {limit} Bytes: {path}',
     'render.theme_config_unrecognized' => 'Theme-Konfiguration entspricht weder dem flachen noch dem Glamour-Schema: {path}',

@@ -11,6 +11,11 @@ declare(strict_types=1);
 return [
     'render.unknown_theme' => 'unknown theme: {name} — JSON style files belong in --theme-config',
     'render.style_overrides_theme' => 'note: --style "{style}" overrides --theme "{theme}"',
+    'render.config_unreadable' => 'config file not readable: {path}',
+    'render.config_too_large' => 'config file exceeds {limit} bytes: {path}',
+    'render.config_invalid' => 'config file is not a valid JSON object: {path} ({error})',
+    'render.config_unknown_key' => 'unknown keys in config file {path}: {keys}',
+    'render.config_bad_value' => 'invalid {key} in {path}: expected {expected}',
     'render.theme_config_unreadable' => 'theme config not readable: {path}',
     'render.theme_config_too_large' => 'theme config exceeds {limit} bytes: {path}',
     'render.theme_config_unrecognized' => 'theme config matches neither the flat nor the glamour schema: {path}',

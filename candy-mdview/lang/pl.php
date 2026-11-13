@@ -11,6 +11,11 @@ declare(strict_types=1);
 return [
     'render.unknown_theme' => 'nieznany motyw: {name} — pliki stylów JSON wczytuj przez --theme-config',
     'render.style_overrides_theme' => 'uwaga: --style "{style}" ma pierwszeństwo nad --theme "{theme}"',
+    'render.config_unreadable' => 'plik konfiguracji nieczytelny: {path}',
+    'render.config_too_large' => 'plik konfiguracji przekracza {limit} bajtów: {path}',
+    'render.config_invalid' => 'plik konfiguracji nie jest prawidłowym obiektem JSON: {path} ({error})',
+    'render.config_unknown_key' => 'nieznane klucze w pliku konfiguracji {path}: {keys}',
+    'render.config_bad_value' => 'nieprawidłowa wartość {key} w {path}: oczekiwano {expected}',
     'render.theme_config_unreadable' => 'konfiguracja motywu nieczytelna: {path}',
     'render.theme_config_too_large' => 'konfiguracja motywu przekracza {limit} bajtów: {path}',
     'render.theme_config_unrecognized' => 'konfiguracja motywu nie pasuje ani do płaskiego schematu, ani do schematu glamour: {path}',
