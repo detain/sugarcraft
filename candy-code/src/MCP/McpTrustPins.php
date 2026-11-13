@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\MCP;
 
 use SugarCraft\Code\Support\AtomicFileWriter;
+use SugarCraft\Code\Support\TimedFileLock;
 
 /**
  * What the user consented to when they trusted a project's `.mcp.json`: one
@@ -60,10 +61,12 @@ final class McpTrustPins
 
     /**
      * @param array<string, array<string, array{fingerprint: string, summary: string}>> $roots
+     * @param array<string, true> $replaced roots this instance set via {@see withRoot()} — the only ones save() overlays
      */
     private function __construct(
         private readonly string $path,
         private readonly array $roots,
+        private readonly array $replaced = [],
     ) {}
 
     /** The record at $path, or an empty one when it is absent or unusable. */
@@ -120,7 +123,7 @@ final class McpTrustPins
         $roots[$root] = $servers;
         ksort($roots, \SORT_STRING);
 
-        return new self($this->path, $roots);
+        return new self($this->path, $roots, [...$this->replaced, $root => true]);
     }
 
     /**
@@ -130,11 +133,35 @@ final class McpTrustPins
      */
     public function save(): void
     {
-        $json = json_encode(
-            ['version' => self::VERSION, 'roots' => $this->roots],
-            \JSON_PRETTY_PRINT | \JSON_UNESCAPED_SLASHES | \JSON_THROW_ON_ERROR,
-        );
-        AtomicFileWriter::write($this->path, $json . "\n", 0600);
+        // Load, overlay and write under ONE lock: this instance was loaded
+        // earlier, and writing its whole `roots` back would erase a root a
+        // concurrent launch recorded in between. Only the roots this
+        // instance replaced are overlaid on a fresh read.
+        // @see R1a sugar-core AtomicJsonFile::mutate is the canonical shape.
+        $lockPath = $this->path . '.lock';
+        if (!is_dir(\dirname($this->path))) {
+            @mkdir(\dirname($this->path), 0700, true);
+        }
+        $lock = @fopen($lockPath, 'c');
+        if ($lock === false) {
+            throw new \RuntimeException("{$lockPath} could not be opened for locking");
+        }
+        try {
+            TimedFileLock::acquire($lock, \LOCK_EX, $lockPath);
+            $roots = self::load($this->path)->roots;
+            foreach ($this->replaced as $root => $_) {
+                $roots[$root] = $this->roots[$root];
+            }
+            ksort($roots, \SORT_STRING);
+            $json = json_encode(
+                ['version' => self::VERSION, 'roots' => $roots],
+                \JSON_PRETTY_PRINT | \JSON_UNESCAPED_SLASHES | \JSON_THROW_ON_ERROR,
+            );
+            AtomicFileWriter::write($this->path, $json . "\n", 0600);
+        } finally {
+            TimedFileLock::release($lock);
+            fclose($lock);
+        }
     }
 
     /**

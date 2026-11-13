@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Config\Settings;
 
+use SugarCraft\Code\Support\TimedFileLock;
 use SugarCraft\Core\Util\AtomicJsonFile;
 use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Config\LayeredSettings;
@@ -98,16 +99,20 @@ final class SettingsWriter
         private readonly \Closure $userConfigDoor,
         private readonly ?string $projectRoot,
         private readonly bool $projectTrusted,
+        private readonly ?\Closure $userConfigMutate = null,
     ) {
     }
 
     /**
      * @param string $userConfigPath the file `$userConfigDoor` writes (`config.json`, or `--config`'s)
      * @param \Closure(array<string, mixed> $set, list<string> $unset): void $userConfigDoor
+     * @param \Closure(\Closure): void|null $userConfigMutate Bootstrap::mutateUserConfig's shape: runs
+     *        its argument under the config's cross-process lock; without it {@see mutate()} falls back
+     *        to read-then-door (unlocked across the read)
      */
-    public static function new(string $userConfigPath, \Closure $userConfigDoor): self
+    public static function new(string $userConfigPath, \Closure $userConfigDoor, ?\Closure $userConfigMutate = null): self
     {
-        return new self($userConfigPath, $userConfigDoor, null, false);
+        return new self($userConfigPath, $userConfigDoor, null, false, $userConfigMutate);
     }
 
     /** The project the project-local tier writes for, and whether it is trusted. */
@@ -115,7 +120,7 @@ final class SettingsWriter
     {
         $root = $root === null || trim($root) === '' ? null : $root;
 
-        return new self($this->userConfigPath, $this->userConfigDoor, $root, $trusted);
+        return new self($this->userConfigPath, $this->userConfigDoor, $root, $trusted, $this->userConfigMutate);
     }
 
     /**
@@ -394,6 +399,102 @@ final class SettingsWriter
     }
 
     /**
+     * Read `$tier`'s file, let `$change` decide, and write — all under ONE
+     * cross-process lock, so a read-modify-write (append a rule, grant a trust
+     * root) cannot lose a concurrent writer's edit the way
+     * `current()` + `write()` can.
+     *
+     * @see R1a sugar-core AtomicJsonFile::mutate is the canonical shape; this is
+     *      the local mutate-closure-under-lock until that rider lands.
+     *
+     * @param \Closure(array<string, mixed>): (array{0: array<string, mixed>, 1: list<string>}|null) $change
+     *        answers `[set, unset]`, or null to write nothing
+     * @return string|null the path written, null when `$change` declined
+     *
+     * @throws \InvalidArgumentException when the change is refused ({@see refusals()})
+     * @throws \RuntimeException when the file could not be read or written
+     */
+    public function mutate(SettingsTier $tier, \Closure $change): ?string
+    {
+        return $this->mutateTier($tier, $change, true);
+    }
+
+    /**
+     * @param bool $validate false only for the confirmed trust action, which is
+     *        the one door allowed to change a trust key ({@see editTrust()})
+     */
+    private function mutateTier(SettingsTier $tier, \Closure $change, bool $validate): ?string
+    {
+        $landed = null;
+        $run = function (array $existing) use ($tier, $change, $validate, &$landed): ?array {
+            $decided = $change($existing);
+            if ($decided === null) {
+                return null;
+            }
+            [$set, $unset] = $decided;
+            $unset = array_values(array_unique($unset));
+            $refusals = $validate ? $this->refusals($tier, $set, $unset) : [];
+            if ($refusals !== []) {
+                throw new \InvalidArgumentException(implode('; ', $refusals));
+            }
+            $landed = [$set, $unset];
+
+            return [$set, $unset];
+        };
+
+        if ($tier === SettingsTier::Session) {
+            $decided = $run(SessionSettings::all());
+            if ($decided === null) {
+                return null;
+            }
+            SessionSettings::apply($decided[0], $decided[1]);
+
+            return self::SESSION_TARGET;
+        }
+
+        $path = (string) $this->targetPath($tier);
+
+        if ($tier === SettingsTier::You) {
+            if ($this->userConfigMutate !== null) {
+                ($this->userConfigMutate)($run);
+            } else {
+                $decided = $run($this->current($tier));
+                if ($decided !== null) {
+                    ($this->userConfigDoor)($decided[0], $decided[1]);
+                }
+            }
+            if ($landed === null) {
+                return null;
+            }
+            $this->assertLanded($path, $landed[0], $landed[1]);
+
+            return $path;
+        }
+
+        $lock = @fopen($path . '.mutate.lock', 'c');
+        if ($lock === false) {
+            throw new \RuntimeException("{$path} could not be locked for writing");
+        }
+        try {
+            TimedFileLock::acquire($lock, \LOCK_EX, $path);
+            $decided = $run($this->current($tier));
+            if ($decided === null) {
+                return null;
+            }
+            try {
+                AtomicJsonFile::new($path)->write(self::patched($this->current($tier), $decided[0], $decided[1]));
+            } catch (\Throwable $e) {
+                throw new \RuntimeException("{$path} could not be written (" . $e->getMessage() . ')', 0, $e);
+            }
+
+            return $path;
+        } finally {
+            TimedFileLock::release($lock);
+            fclose($lock);
+        }
+    }
+
+    /**
      * Add the project at `$root` to the `$trustKey` list in the user's
      * `config.json` — the confirmed trust action. User tier only, by
      * construction: a project file cannot carry a trust key at all. Like every
@@ -462,18 +563,15 @@ final class SettingsWriter
             throw new \InvalidArgumentException("{$root} is not a directory");
         }
 
-        $listed = $this->current(SettingsTier::You)[$trustKey] ?? [];
-        $listed = \is_array($listed) ? array_values(array_filter($listed, 'is_string')) : [];
-        $next = $grant
-            ? array_values(array_unique([...$listed, $canonical]))
-            : array_values(array_filter($listed, static fn (string $r): bool => $r !== $canonical));
+        $this->mutateTier(SettingsTier::You, static function (array $current) use ($trustKey, $canonical, $grant): ?array {
+            $listed = $current[$trustKey] ?? [];
+            $listed = \is_array($listed) ? array_values(array_filter($listed, 'is_string')) : [];
+            $next = $grant
+                ? array_values(array_unique([...$listed, $canonical]))
+                : array_values(array_filter($listed, static fn (string $r): bool => $r !== $canonical));
 
-        if ($next === $listed) {
-            return $this->userConfigPath;
-        }
-
-        ($this->userConfigDoor)([$trustKey => $next], []);
-        $this->assertLanded($this->userConfigPath, [$trustKey => $next], []);
+            return $next === $listed ? null : [[$trustKey => $next], []];
+        }, false);
 
         return $this->userConfigPath;
     }

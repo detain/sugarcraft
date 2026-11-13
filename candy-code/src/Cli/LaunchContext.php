@@ -2939,6 +2939,7 @@ final class LaunchContext
         return \SugarCraft\Code\Config\Settings\SettingsWriter::new(
             Bootstrap::userConfigPath(),
             static fn (array $set, array $unset) => Bootstrap::writeUserConfig($set, $unset),
+            static fn (\Closure $change) => Bootstrap::mutateUserConfig($change),
         )->withProject($root, $root !== null && Bootstrap::projectSettingsTrusted($root));
     }
 

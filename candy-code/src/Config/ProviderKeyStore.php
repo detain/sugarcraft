@@ -64,30 +64,36 @@ final class ProviderKeyStore
             return Lang::t('cli.sub.login.control_chars');
         }
 
-        $providers = [];
+        // Advisory pre-read, only so a corrupt file keeps its own refusal
+        // message; the merge base is re-read INSIDE the lock below.
         if (\is_file($path)) {
             $raw = \file_get_contents($path);
-            if ($raw !== false && $raw !== '') {
-                $decoded = \json_decode($raw, true);
-                if (!\is_array($decoded)) {
-                    return Lang::t('cli.sub.login.corrupt_config', ['path' => $path]);
-                }
-
-                if (\is_array($decoded['providers'] ?? null)) {
-                    $providers = $decoded['providers'];
-                }
+            if ($raw !== false && $raw !== '' && !\is_array(\json_decode($raw, true))) {
+                return Lang::t('cli.sub.login.corrupt_config', ['path' => $path]);
             }
         }
 
-        $block = $providers[$type] ?? null;
-        if (\is_array($block) && \array_key_exists('type', $block) && $block['type'] !== $type) {
-            $actual = \is_string($block['type']) ? $block['type'] : \get_debug_type($block['type']);
+        // The read of `providers`, the merge and the write all happen under
+        // the one cross-process lock: a base read before the lock lost a
+        // concurrent login's key (two parallel `login` runs, one survived).
+        $refusal = null;
+        Bootstrap::mutateUserConfig(static function (array $existing) use ($type, $key, $path, &$refusal): ?array {
+            $providers = \is_array($existing['providers'] ?? null) ? $existing['providers'] : [];
+            $block = $providers[$type] ?? null;
+            if (\is_array($block) && \array_key_exists('type', $block) && $block['type'] !== $type) {
+                $actual = \is_string($block['type']) ? $block['type'] : \get_debug_type($block['type']);
+                $refusal = Lang::t('cli.sub.login.type_mismatch', ['path' => $path, 'provider' => $type, 'actual' => $actual]);
 
-            return Lang::t('cli.sub.login.type_mismatch', ['path' => $path, 'provider' => $type, 'actual' => $actual]);
+                return null;
+            }
+
+            $providers[$type] = [...(\is_array($block) ? $block : []), 'type' => $type, 'apiKey' => $key];
+
+            return [['providers' => $providers], []];
+        });
+        if ($refusal !== null) {
+            return $refusal;
         }
-
-        $providers[$type] = [...(\is_array($block) ? $block : []), 'type' => $type, 'apiKey' => $key];
-        Bootstrap::writeUserConfig(['providers' => $providers]);
 
         // writeUserConfig() can bail without writing (lock contention, an
         // unresolvable symlink); a success nobody verified is exactly the

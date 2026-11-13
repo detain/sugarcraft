@@ -71,10 +71,8 @@ final class SettingsWriterCensusTest extends TestCase
         // instead of persisting a dead `[]`, and the disable arm's append.
         // A glob-shaped name is refused before any of the three is reached.
         'Commands/McpAuthCommand.php::persistSessionToggle' => 3,
-        // C-TUI-5.d: the first-run wizard's persist door, extracted from
-        // loginStoreKey's write half — its own door until a wiring step
-        // re-points `login` itself here (both are credited meanwhile).
-        'Config/ProviderKeyStore.php::store' => 1,
+        // S-O20: ProviderKeyStore::store no longer calls writeUserConfig; it
+        // merges inside Bootstrap::mutateUserConfig so the read is under the lock.
     ];
 
     public function testConfigJsonIsWrittenOnlyThroughItsKnownDoors(): void
@@ -220,8 +218,8 @@ final class SettingsWriterCensusTest extends TestCase
             // `/permissions forget` write-back, which refuses loudly rather
             // than report a half-landed removal). PermissionPrompt now only
             // opens the door and delegates, so it holds no write site.
-            'Permissions/SavedRules.php::append->write' => 1,
-            'Permissions/SavedRules.php::remove->write' => 1,
+            // S-O20: append() and remove() now go through SettingsWriter::mutate()
+            // (read -> merge -> write under one lock), not write().
             'Protocol/Methods/SettingsMethods.php::set->write' => 1,
             // N-P5: a settings PROFILE, not a settings file — its write is
             // AtomicJsonFile's, it names SettingsWriter only to ask which keys

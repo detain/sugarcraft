@@ -2343,7 +2343,7 @@ final class Bootstrap
         $workspace = $workspace->withService(
             \SugarCraft\Code\Channels\ChannelToolPolicyService::class,
             \SugarCraft\Code\Channels\ChannelToolPolicyService::forStore(
-                \SugarCraft\Code\Channels\ChannelsStore::create(),
+                \SugarCraft\Code\Channels\ChannelsStore::new(),
                 self::trustedBundleChannelNames(),
             ),
         );
@@ -5254,6 +5254,24 @@ public static function useMaxCost(?string $maxCost): void
      */
     public static function writeUserConfig(array $patch, array $unset = []): void
     {
+        self::mutateUserConfig(static fn (array $existing): array => [$patch, $unset]);
+    }
+
+    /**
+     * The read-merge-write of {@see writeUserConfig()} with the caller's
+     * decision INSIDE the lock: $change receives the strict-read config as it
+     * stands once the cross-process lock is held and answers `[patch, unset]`
+     * (or null to write nothing). A caller that derived its patch from a read
+     * taken BEFORE the lock (login merging one provider into `providers`) lost
+     * a concurrent writer's sibling entry; deriving it here cannot.
+     *
+     * @see R1a sugar-core AtomicJsonFile::mutate is the canonical shape; this is
+     *      the local mutate-closure-under-lock until that rider lands.
+     *
+     * @param \Closure(array<string, mixed>): (array{0: array<string, mixed>, 1: list<string>}|null) $change
+     */
+    public static function mutateUserConfig(\Closure $change): void
+    {
         $path = self::userConfigPath();
 
         // The write, not the read, is what earns the directory — see
@@ -5295,6 +5313,12 @@ public static function useMaxCost(?string $maxCost): void
             if ($existing === null) {
                 return;
             }
+
+            $decided = $change($existing);
+            if ($decided === null) {
+                return;
+            }
+            [$patch, $unset] = $decided;
 
             $merged = array_merge($existing, $patch);
             foreach ($unset as $key) {

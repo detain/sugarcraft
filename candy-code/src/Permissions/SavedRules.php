@@ -125,27 +125,29 @@ final class SavedRules
         $scope = implode(', ', $patterns);
         try {
             $writer = $this->door();
-            $config = $writer->current(SettingsTier::You);
-            $existing = $config['permissionRules'] ?? [];
-            $existing = \is_array($existing)
-                ? array_values(array_filter($existing, static fn (mixed $rule): bool => \is_array($rule)))
-                : [];
-            $have = [];
-            foreach ($existing as $rule) {
-                if (($rule['action'] ?? null) === 'allow' && \is_string($rule['pattern'] ?? null)) {
-                    $have[$rule['pattern']] = true;
+            // Read, dedupe and write under the one cross-process lock: two
+            // sessions pressing `p` at once each kept only their own rule.
+            $path = $writer->mutate(SettingsTier::You, static function (array $config) use ($patterns): ?array {
+                $existing = $config['permissionRules'] ?? [];
+                $existing = \is_array($existing)
+                    ? array_values(array_filter($existing, static fn (mixed $rule): bool => \is_array($rule)))
+                    : [];
+                $have = [];
+                foreach ($existing as $rule) {
+                    if (($rule['action'] ?? null) === 'allow' && \is_string($rule['pattern'] ?? null)) {
+                        $have[$rule['pattern']] = true;
+                    }
                 }
-            }
 
-            $next = $existing;
-            foreach ($patterns as $pattern) {
-                if (!isset($have[$pattern])) {
-                    $next[] = ['pattern' => $pattern, 'action' => 'allow', 'saved' => true];
+                $next = $existing;
+                foreach ($patterns as $pattern) {
+                    if (!isset($have[$pattern])) {
+                        $next[] = ['pattern' => $pattern, 'action' => 'allow', 'saved' => true];
+                    }
                 }
-            }
-            $path = $next === $existing
-                ? (string) $writer->targetPath(SettingsTier::You)
-                : $writer->write(SettingsTier::You, ['permissionRules' => $next]);
+
+                return $next === $existing ? null : [['permissionRules' => $next], []];
+            }) ?? (string) $writer->targetPath(SettingsTier::You);
 
             return Lang::t('chat.permission.persisted', [
                 'scope' => $scope,
@@ -183,36 +185,36 @@ final class SavedRules
     public function remove(int|string $which): array
     {
         $writer = $this->door();
-        $config = $writer->current(SettingsTier::You);
-        $stored = $config['permissionRules'] ?? [];
-        $stored = \is_array($stored) ? array_values($stored) : [];
-
-        $keep = [];
         $gone = [];
-        $number = 0;
-        foreach ($stored as $rule) {
-            $row = self::loadableRow($rule);
-            if ($row === null) {
-                // Unnumberable, and it cannot ride the rewrite anyway:
-                // the settings schema REFUSES any permissionRules array
-                // still containing these rows, so a forget that lands
-                // normalizes them out beside what was actually taken.
-                continue;
-            }
-            $number++;
-            $hit = \is_int($which)
-                ? $number === $which
-                : $row['pattern'] === $which;
-            if ($hit) {
-                $gone[] = $rule;
-            } else {
-                $keep[] = $rule;
-            }
-        }
+        $writer->mutate(SettingsTier::You, static function (array $config) use ($which, &$gone): ?array {
+            $gone = [];
+            $stored = $config['permissionRules'] ?? [];
+            $stored = \is_array($stored) ? array_values($stored) : [];
 
-        if ($gone !== []) {
-            $writer->write(SettingsTier::You, ['permissionRules' => $keep]);
-        }
+            $keep = [];
+            $number = 0;
+            foreach ($stored as $rule) {
+                $row = self::loadableRow($rule);
+                if ($row === null) {
+                    // Unnumberable, and it cannot ride the rewrite anyway:
+                    // the settings schema REFUSES any permissionRules array
+                    // still containing these rows, so a forget that lands
+                    // normalizes them out beside what was actually taken.
+                    continue;
+                }
+                $number++;
+                $hit = \is_int($which)
+                    ? $number === $which
+                    : $row['pattern'] === $which;
+                if ($hit) {
+                    $gone[] = $rule;
+                } else {
+                    $keep[] = $rule;
+                }
+            }
+
+            return $gone === [] ? null : [['permissionRules' => $keep], []];
+        });
 
         return $gone;
     }
