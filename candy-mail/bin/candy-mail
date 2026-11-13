@@ -543,6 +543,8 @@ function senderFromEnvironment(): string
 /**
  * Boolean env switch: unset/empty keeps the default; '1'/'true'/'yes'/'on'
  * turn it on and '0'/'false'/'no'/'off' turn it off. Anything else throws
+ * cli.invalid_env_flag.
+ *
  * A typo like 'ture' once silently disabled REQUIRE_TLS — the safe
  * reading of an unrecognised switch is a loud refusal, never a guess.
  */

@@ -113,7 +113,7 @@ final class Email
      * RFC 5321 treats the domain part as case-insensitive while the local part
      * is (technically) case-sensitive, so the dedupe key lowercases only the
      * domain — and the FIRST occurrence keeps its exact casing. Returns a
-     * proper list (array_merge of two lists already does; re-indexing is
+     * proper list (the list spread re-indexes by construction; listness is
      * asserted, not assumed).
      *
      * @param list<string> $existing
@@ -361,7 +361,9 @@ final class Email
     /**
      * Add an attachment from a file path.
      *
-     * @throws \InvalidArgumentException if path is null (use Attachment::fromContent for empty content)
+     * @throws \InvalidArgumentException if $path is null — to attach literal
+     *     bytes, build the object with Attachment::fromContent() and pass it
+     *     through the constructor's $attachments list instead
      */
     public function withAttachment(string $filename, ?string $path = null): self
     {

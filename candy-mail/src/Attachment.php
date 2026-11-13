@@ -101,7 +101,7 @@ final class Attachment
 
         // The ctor gate below is the choke for every path, but inline()
         // additionally checks BEFORE reading the file so a forged cid is
-        // diagnosed even when the path would fail first (the earlier order is kept).
+        // diagnosed even when the path would fail first.
         self::refuseMalformedCid($cid);
 
         $mime = self::detectMimeType($path);

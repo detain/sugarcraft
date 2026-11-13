@@ -93,9 +93,9 @@ final class SmtpTransport implements Transport
      *
      * The heloHost grammar is the precedent: a value the conversation cannot
      * legally carry is refused at construction, not garbled later by the
-     * connect layer. The host class admits RFC 1123 hostnames AND IPv4/IPv6
-     * literals by character set; the CLI range arms are thin wrappers over
-     * these validators so the bounds cannot drift apart.
+     * connect layer. The host grammar accepts RFC 1123 hostnames and IPv4
+     * literals alike, each judged by character set; the CLI range arms are
+     * thin wrappers over these validators so the bounds cannot drift apart.
      */
     public static function isValidHost(string $host): bool
     {
@@ -1070,22 +1070,7 @@ final class SmtpTransport implements Transport
         }
     }
 
-    /**
-     * Read a (possibly multi-line) SMTP reply and validate its status code.
-     *
-     * RFC 5321 §4.2.1: continuation lines use "<code>-text", the final line
-     * "<code> text". All lines are captured into {@see $lastResponse} (joined by
-     * "\n") so {@see hasExtension()} can inspect the full EHLO keyword list —
-     * reading only the first line would hide advertised extensions like STARTTLS.
-     *
-     * Every reply is bounded — one line cannot exceed
-     * RESPONSE_LINE_MAX bytes, one reply cannot exceed RESPONSE_MAX_LINES
-     * continuation lines, and the whole exchange must finish inside the
-     * configured timeout. The bare fgets() this replaces grew an arbitrarily
-     * long "line" in memory, and a slow 250- drip never tripped the per-read
-     * stream timeout, so a hostile server could hold a send() open forever.
-     * Each breach fails loud.
-     */
+    /** Reply-size caps enforced by the read loop below (CM-67: constants get their own line). */
     private const RESPONSE_LINE_MAX = 4096;
     private const RESPONSE_MAX_LINES = 100;
 
@@ -1098,6 +1083,18 @@ final class SmtpTransport implements Transport
     /**
      * Loop core: read a (possibly multi-line) reply and demand one of the
      * accepted status codes.
+     *
+     * RFC 5321 §4.2.1: continuation lines use "<code>-text", the final line
+     * "<code> text". All lines are captured into {@see $lastResponse} (joined
+     * by "\n") so {@see hasExtension()} can inspect the full EHLO keyword
+     * list — reading only the first line would hide advertised extensions
+     * like STARTTLS. Every reply is bounded by the RESPONSE_* constants: no
+     * line over RESPONSE_LINE_MAX bytes, no reply over RESPONSE_MAX_LINES
+     * continuation lines, and the exchange must finish inside the configured
+     * timeout. The bare fgets() this replaces grew an arbitrarily long
+     * "line" in memory, and a slow 250- drip never tripped the per-read
+     * stream timeout, so a hostile server could hold a send() open forever.
+     * Each breach fails loud.
      *
      * RFC 5321 §4.1.2.5 makes RCPT the one command in this conversation
      * where a second success code is legal - 251 (user not local; the relay
@@ -1326,8 +1323,9 @@ final class SmtpTransport implements Transport
      *
      * Tokens split on spaces; any token whose encoded-word would exceed the
      * RFC 2047 §2 75-character limit is emitted as several encoded-words
-     * joined by a space (each carries <= 45 raw bytes: 12 chars of "=?UTF-8?
-     * B??=" overhead + 60 base64 chars = 72 <= 75). Long CJK subjects used to
+     * joined by a space (each carries <= 45 raw bytes, because the
+     * "=?UTF-8?B??=" wrapper costs 12 chars and their base64 costs 60:
+     * 12 + 60 = 72 <= 75). Long CJK subjects used to
      * ride as one 400-character word that RFC-compliant receivers reject.
      * ASCII values pass through untouched; folding is foldHeader()'s job.
      */
