@@ -96,10 +96,13 @@ class TerminalProbe
      * Run the full probe pipeline with optional environment overrides.
      *
      * $overrides are merged OVER the instance environment — name-only
-     * overrides, ambient keys survive — for THIS run only; the instance state
-     * is restored afterwards, so a probe reused across runs cannot have run
-     * N's suppression leak into run N+1 (the old code merged overrides into
-     * $this->env permanently). The opposite grammar to the constructor's
+     * overrides, ambient keys survive — for THIS run only; the instance
+     * state (environment map AND the interactivity decision) is restored
+     * in the finally, so a probe reused across runs cannot have run N's
+     * suppression or run N's interactive grant leak into run N+1 (the old
+     * code merged overrides into $this->env permanently, and until this
+     * commit even restored it alone — an interactive:true call re-marked
+     * the instance forever). The opposite grammar to the constructor's
      * $environment, which replaces the world wholesale.
      *
      * @param array<string, string|null> $overrides        Name-only overrides merged OVER the instance environment (ambient keys survive)
@@ -112,6 +115,7 @@ class TerminalProbe
     public function runProbe(array $overrides = [], ?bool $interactive = null): ProbeReport
     {
         $baseEnv = $this->env;
+        $baseInteractive = $this->interactive;
         if ($overrides !== []) {
             $this->env = array_merge($this->env, $overrides);
         }
@@ -151,6 +155,7 @@ class TerminalProbe
             return new ProbeReport($caps);
         } finally {
             $this->env = $baseEnv;
+            $this->interactive = $baseInteractive;
         }
     }
 

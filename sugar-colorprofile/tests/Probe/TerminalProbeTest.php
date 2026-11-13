@@ -788,4 +788,35 @@ final class TerminalProbeTest extends TestCase
             $names(new \ReflectionMethod(TerminalProbe::class, 'runProbe')),
         );
     }
+
+    /**
+     * CP-52 leak pin: runProbe(interactive: …) is a per-run grant, not a
+     * permanent re-mark. A probe constructed non-interactive (the ctor's
+     * AND with isInteractive() is false even though the seam answers true)
+     * may see the Phase-3-only Hyperlinks cap while an interactive:true
+     * call is in flight — but the next DEFAULT call must answer like the
+     * construction again. Before the finally restored the interactivity
+     * snapshot alongside env, the grant leaked: run N's interactive:true
+     * silently re-enabled Phase 3 for every later run of the instance.
+     */
+    public function testRunProbeRestoresTheInteractivityDecisionLikeEnv(): void
+    {
+        $mk = static fn (): TerminalProbe => new class(['TERM_PROGRAM' => 'Hyper', 'TERM' => 'xterm'], interactive: false) extends TerminalProbe {
+            protected function isInteractive(): bool
+            {
+                return true;
+            }
+        };
+
+        $probe = $mk();
+        $granted = $probe->runProbe([], true);
+        $afterGrant = $probe->runProbe();
+
+        $this->assertTrue($granted->has(Capability::Hyperlinks), 'the interactive:true call sees the Phase-3 grant');
+        $this->assertFalse($afterGrant->has(Capability::Hyperlinks), 'the grant must not leak into the next default call');
+        // Byte-equal against a fresh construction on the capabilities map —
+        // the full answer, not just the one capability the grant carries.
+        // (detectedAt is a per-run timestamp and is deliberately excluded.)
+        $this->assertSame($mk()->runProbe()->capabilities, $afterGrant->capabilities, 'post-grant default answers like a fresh construction');
+    }
 }
