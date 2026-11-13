@@ -5,7 +5,7 @@ declare(strict_types=1);
 /**
  * Timer-backed helpers on a private loop: debounce and throttle return
  * invokable Subscription handles whose calls answer as promises, plus the
- * all()/race()/onPending() fan-in combinators.
+ * all()/race() fan-in combinators and the boundWait() slowness watcher.
  */
 
 namespace SugarCraft\Async\Examples;
@@ -41,8 +41,8 @@ $debounced('b')->then(static function (mixed $v): void {
     print('call b answered: ' . var_export($v, true) . "\n");
 });
 
-// Throttle with a trailing edge: leading fires, one suppressed answers null,
-// the last suppressed call runs at window end.
+// Throttle with a trailing edge: the leading call fires. A suppressed call
+// answers null. The last suppressed call runs at window end.
 $throttled = AsyncOps::throttle(
     static function (string $input) use (&$seen): string {
         $seen[] = "throttled:$input";
