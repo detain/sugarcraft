@@ -18,7 +18,7 @@ use SugarCraft\Style\Style;
  *
  * Output deviation: unlike charmbracelet/log (which writes everything to
  * os.Stderr), this logger writes EVERY level to its main stream — STDOUT by
- * default — because existing consumers treat that as the contract. Route
+ * default — chosen for pipe-and-file ergonomics: all levels land on one stream, severe records optionally split. Packagist-era consumers outside this tree may treat it as the contract. Route
  * severe records elsewhere with the `errorStream` knob: levels at or above
  * `errorStreamAt` (default {@see Level::Error}) go to the error stream,
  * everything else to the main stream.

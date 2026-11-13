@@ -355,7 +355,8 @@ $log->setStyles($styles);
 
 By default **every level is written to `STDOUT`**. This deliberately deviates
 from charmbracelet/log, which writes to `os.Stderr`; the single-stream default
-is kept because existing consumers rely on it. Under a web SAPI (php-fpm)
+is chosen for pipe-and-file ergonomics (all levels on one stream, severe
+records optionally split). Under a web SAPI (php-fpm)
 those constants are not defined at all: every STDIO touch resolves lazily to
 `php://stdout` / `php://stderr` (never `php://output` — output buffering would
 capture the notice channel) and degrades to silence when the stream cannot be
