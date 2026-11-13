@@ -7,6 +7,7 @@ namespace SugarCraft\Flexbox;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Forms\Scrollbar\ScrollbarState;
+use SugarCraft\Core\Concerns\Mutable;
 use SugarCraft\Forms\Viewport\Viewport as FormsViewport;
 use SugarCraft\Flexbox\Support\CellPad;
 
@@ -24,6 +25,8 @@ use SugarCraft\Flexbox\Support\CellPad;
  */
 final readonly class Viewport
 {
+    use Mutable;
+
     private FormsViewport $inner;
     private int $stickyHeader;
     private int $stickyFooter;
@@ -139,12 +142,7 @@ final readonly class Viewport
                 "Viewport::withStickyHeader() needs a row count >= 0; got {$rows}. Use 0 to disable the sticky region."
             );
         }
-        return new self(
-            $this->inner,
-            $rows,
-            $this->stickyFooter,
-            $this->syncedViewport,
-        );
+        return $this->mutate(['stickyHeader' => $rows]);
     }
 
     /**
@@ -167,12 +165,7 @@ final readonly class Viewport
                 "Viewport::withStickyFooter() needs a row count >= 0; got {$rows}. Use 0 to disable the sticky region."
             );
         }
-        return new self(
-            $this->inner,
-            $this->stickyHeader,
-            $rows,
-            $this->syncedViewport,
-        );
+        return $this->mutate(['stickyFooter' => $rows]);
     }
 
     /**
@@ -188,12 +181,7 @@ final readonly class Viewport
      */
     public function withLinkedViewport(Viewport $other): self
     {
-        return new self(
-            $this->inner,
-            $this->stickyHeader,
-            $this->stickyFooter,
-            $other,
-        );
+        return $this->mutate(['syncedViewport' => $other]);
     }
 
     /** True when a {@see self::withLinkedViewport()} partner is attached. */
@@ -237,7 +225,7 @@ final readonly class Viewport
     public function update(Msg $msg): array
     {
         [$inner, $cmd] = $this->inner->update($msg);
-        return [new self($inner, $this->stickyHeader, $this->stickyFooter, $this->syncedViewport), $cmd];
+        return [$this->mutate(['inner' => $inner]), $cmd];
     }
 
     public function view(): string
@@ -511,7 +499,7 @@ final readonly class Viewport
     /** Returns a new Viewport; the receiver is unchanged (fluent house law). */
     public function setContent(string $content): self
     {
-        return new self($this->inner->setContent($content), $this->stickyHeader, $this->stickyFooter, $this->syncedViewport);
+        return $this->mutate(['inner' => $this->inner->setContent($content)]);
     }
 
     /**
@@ -523,7 +511,7 @@ final readonly class Viewport
      */
     public function withSize(int $width, int $height): self
     {
-        return new self($this->inner->withSize($width, $height), $this->stickyHeader, $this->stickyFooter, $this->syncedViewport);
+        return $this->mutate(['inner' => $this->inner->withSize($width, $height)]);
     }
 
     /**
@@ -570,7 +558,7 @@ final readonly class Viewport
     /** Returns a new Viewport; the receiver is unchanged (fluent house law). */
     public function setYOffset(int $offset): self
     {
-        return new self($this->inner->setYOffset($offset), $this->stickyHeader, $this->stickyFooter, $this->syncedViewport);
+        return $this->mutate(['inner' => $this->inner->setYOffset($offset)]);
     }
 
     public function yOffset(): int { return $this->inner->yOffset(); }
@@ -578,24 +566,24 @@ final readonly class Viewport
     /** Returns a new Viewport; the receiver is unchanged (fluent house law). */
     public function setXOffset(int $offset): self
     {
-        return new self($this->inner->setXOffset($offset), $this->stickyHeader, $this->stickyFooter, $this->syncedViewport);
+        return $this->mutate(['inner' => $this->inner->setXOffset($offset)]);
     }
 
     public function xOffset(): int { return $this->inner->xOffset(); }
 
     public function withHorizontalStep(int $step): self
     {
-        return new self($this->inner->withHorizontalStep($step), $this->stickyHeader, $this->stickyFooter, $this->syncedViewport);
+        return $this->mutate(['inner' => $this->inner->withHorizontalStep($step)]);
     }
 
     public function withMouseWheelEnabled(bool $on): self
     {
-        return new self($this->inner->withMouseWheelEnabled($on), $this->stickyHeader, $this->stickyFooter, $this->syncedViewport);
+        return $this->mutate(['inner' => $this->inner->withMouseWheelEnabled($on)]);
     }
 
     public function withMouseWheelDelta(int $delta): self
     {
-        return new self($this->inner->withMouseWheelDelta($delta), $this->stickyHeader, $this->stickyFooter, $this->syncedViewport);
+        return $this->mutate(['inner' => $this->inner->withMouseWheelDelta($delta)]);
     }
 
     /**
@@ -609,7 +597,7 @@ final readonly class Viewport
      */
     public function showScrollbar(bool $on = true): self
     {
-        return new self($this->inner->withScrollbar($on), $this->stickyHeader, $this->stickyFooter, $this->syncedViewport);
+        return $this->mutate(['inner' => $this->inner->withScrollbar($on)]);
     }
 
     /**
@@ -624,7 +612,7 @@ final readonly class Viewport
 
     public function withScrollbarRunes(string $thumb, string $track): self
     {
-        return new self($this->inner->withScrollbarRunes($thumb, $track), $this->stickyHeader, $this->stickyFooter, $this->syncedViewport);
+        return $this->mutate(['inner' => $this->inner->withScrollbarRunes($thumb, $track)]);
     }
 
     /**
@@ -651,44 +639,44 @@ final readonly class Viewport
             ->withVerticalScrollbar($widget)
             ->withScrollbar(true)
             ->withScrollbarRunes($widget->thumbChar, $widget->trackChar);
-        return new self($inner, $this->stickyHeader, $this->stickyFooter, $this->syncedViewport);
+        return $this->mutate(['inner' => $inner]);
     }
 
     public function withSmoothScroll(bool $enable = true): self
     {
-        return new self($this->inner->withSmoothScroll($enable), $this->stickyHeader, $this->stickyFooter, $this->syncedViewport);
+        return $this->mutate(['inner' => $this->inner->withSmoothScroll($enable)]);
     }
 
     // ---- navigation ---------------------------------------------------
 
     public function lineUp(int $n = 1): self
     {
-        return new self($this->inner->lineUp($n), $this->stickyHeader, $this->stickyFooter, $this->syncedViewport);
+        return $this->mutate(['inner' => $this->inner->lineUp($n)]);
     }
 
     public function lineDown(int $n = 1): self
     {
-        return new self($this->inner->lineDown($n), $this->stickyHeader, $this->stickyFooter, $this->syncedViewport);
+        return $this->mutate(['inner' => $this->inner->lineDown($n)]);
     }
 
-    public function halfPageUp(): self   { return new self($this->inner->halfPageUp(), $this->stickyHeader, $this->stickyFooter, $this->syncedViewport); }
-    public function halfPageDown(): self { return new self($this->inner->halfPageDown(), $this->stickyHeader, $this->stickyFooter, $this->syncedViewport); }
+    public function halfPageUp(): self   { return $this->mutate(['inner' => $this->inner->halfPageUp()]); }
+    public function halfPageDown(): self { return $this->mutate(['inner' => $this->inner->halfPageDown()]); }
 
-    public function pageUp(): self   { return new self($this->inner->pageUp(), $this->stickyHeader, $this->stickyFooter, $this->syncedViewport); }
-    public function pageDown(): self { return new self($this->inner->pageDown(), $this->stickyHeader, $this->stickyFooter, $this->syncedViewport); }
+    public function pageUp(): self   { return $this->mutate(['inner' => $this->inner->pageUp()]); }
+    public function pageDown(): self { return $this->mutate(['inner' => $this->inner->pageDown()]); }
 
     public function scrollLeft(int $n = 1): self
     {
-        return new self($this->inner->scrollLeft($n), $this->stickyHeader, $this->stickyFooter, $this->syncedViewport);
+        return $this->mutate(['inner' => $this->inner->scrollLeft($n)]);
     }
 
     public function scrollRight(int $n = 1): self
     {
-        return new self($this->inner->scrollRight($n), $this->stickyHeader, $this->stickyFooter, $this->syncedViewport);
+        return $this->mutate(['inner' => $this->inner->scrollRight($n)]);
     }
 
-    public function gotoTop(): self    { return new self($this->inner->gotoTop(), $this->stickyHeader, $this->stickyFooter, $this->syncedViewport); }
-    public function gotoBottom(): self { return new self($this->inner->gotoBottom(), $this->stickyHeader, $this->stickyFooter, $this->syncedViewport); }
+    public function gotoTop(): self    { return $this->mutate(['inner' => $this->inner->gotoTop()]); }
+    public function gotoBottom(): self { return $this->mutate(['inner' => $this->inner->gotoBottom()]); }
 
     // ---- queries ------------------------------------------------------
 
