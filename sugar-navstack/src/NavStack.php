@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\NavStack;
 
+use SugarCraft\Core\Util\Sanitize;
+
 // @rename-keep
 /**
  * Navigation stack — last-in, first-out navigation state.
@@ -39,7 +41,11 @@ namespace SugarCraft\NavStack;
  */
 final class NavStack
 {
-    /** Default separator used in view() and viewHtml() output. */
+    /**
+     * The gutter {@see view()} uses by default. viewHtml() deliberately
+     * emits no text separator at all (CSS styles the gutter), so this
+     * const serves exactly one consumer (NS-30).
+     */
     /**
      * The shipped default separator — THE single source for the glyph
      * (NS-13). {@see Breadcrumb}'s default and {@see Escape}'s
@@ -318,14 +324,26 @@ final class NavStack
      *
      * Titles are untrusted and run through {@see TitleSanitizer} (terminal
      * controls, zone sentinels, invisible formatting, CR/LF/tab), so the
-     * rendered TITLES are display-safe. The `$separator` itself is NOT
-     * sanitized — it is interpolated raw (control bytes survive), so pass a
-     * host-chosen constant, never user data.
+     * rendered TITLES are display-safe. The `$separator` is gated to the
+     * SAME display-safe-by-construction standard (NS-30): zone sentinels
+     * are stripped, and CR/LF or any other C0/DEL control byte throws —
+     * unlike a {@see Breadcrumb::setSeparator()} gutter, which lives
+     * inside width accounting, a `view()` separator meets the consumer
+     * raw, so no un-balanced styling escape can ride it into the output.
+     * An EMPTY separator is legal here (crumbs butt together — a host
+     * whose titles carry their own spacing asks for exactly this); the
+     * widget refuses empty because it must render *something* between
+     * crumbs. `view("\e[31m")` therefore throws where the old raw
+     * channel leaked an unbalanced red.
      */
     public function view(string $separator = self::SEPARATOR): string
     {
         if ($this->items === []) {
             return '';
+        }
+        $separator = Sanitize::stripZoneSentinels($separator);
+        if (\preg_match('/[\x00-\x1F\x7F]/', $separator) === 1) {
+            throw new \InvalidArgumentException('view() separator must be control-free (CR/LF and terminal escapes throw; zone sentinels are stripped; empty is legal — unlike Breadcrumb::setSeparator(), which must render a gutter)');
         }
         return \implode($separator, \array_map(
             static fn(NavigationItem $item): string => TitleSanitizer::sanitize($item->title),

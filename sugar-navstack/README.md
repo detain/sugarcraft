@@ -104,7 +104,7 @@ deprecated forwarder to it).
 | `updateTop(mixed $data): self` | Replace the top item's payload (no-op when empty) |
 | `setItems(array $items): self` | Replace the whole list (used by `Shell` for its immutable ops) |
 | `clear(): self` | Remove everything |
-| `view(string $separator = ' › '): string` | Plain-text crumb trail; titles sanitized for terminal safety |
+| `view(string $separator = ' › '): string` | Plain-text crumb trail; titles sanitized and the separator control-gated (empty legal) |
 | `viewHtml(?callable $href = null, string $label = 'Breadcrumb', ?list<string> $allowSchemes = null): string` | Semantic `<nav>` HTML; last crumb gets `aria-current="page"`, titles HTML-escaped; `$href` receives (item, stack index); `$allowSchemes` gates callback-returned URLs (null = trusted legacy bytes) |
 | `filtered(string $term): self` | New stack of items whose title **or** payload matches a case-insensitive (Unicode-folded, `mb_stripos`) substring (array payloads match when any nested scalar/Stringable value does); payloads nested deeper than 64 levels throw. `filter()` is a deprecated forwarder to it |
 | `static safeTitle(string $title): string` | The published display-sweep facade — byte-identical to what every library render path applies to titles; use it when echoing an untrusted title outside those surfaces |
@@ -388,9 +388,11 @@ design — they are yours to feed safely:
   list of scheme tokens (case-insensitive) plus `'/'` to admit scheme-less
   paths; a rejected URL renders its crumb as plain text (title kept, anchor
   dropped). `null` (default) keeps the trusted legacy bytes.
-- `view($separator)`: the separator string is interpolated RAW (control
-  bytes and newlines survive into the output) — treat it as a host-chosen
-  constant, never a carrier for user data.
+- `view($separator)`: the separator is now control-gated (NS-30) — zone
+  sentinels are stripped and CR/LF or any other C0/DEL control byte
+  throws, so no unbalanced escape rides the gutter into the output. An
+  empty separator is legal (crumbs butt together); styled gutters belong
+  to `Breadcrumb::setSeparator()`, which width-accounts them.
 - `Breadcrumb::renderTitles()`: bare title strings skip the
   `NavigationItem` constructor, so blank titles are NOT refused (a
   whitespace-only title renders a whitespace crumb that still consumes

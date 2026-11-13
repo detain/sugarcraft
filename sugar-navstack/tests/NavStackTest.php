@@ -601,4 +601,39 @@ final class NavStackTest extends TestCase
         $this->assertTrue($method->isPublic());
         $this->assertTrue($method->isStatic());
     }
+
+    // ---- NS-30: view($separator) control gate ----
+
+    public function testViewRefusesControlSeparator(): void
+    {
+        $stack = new NavStack();
+        $stack->push('Home');
+        $stack->push('Settings');
+
+        $this->expectException(\InvalidArgumentException::class);
+        $stack->view("\r\n");
+    }
+
+    public function testViewRefusesUnbalancedStylingSeparator(): void
+    {
+        $stack = new NavStack();
+        $stack->push('Home');
+        $stack->push('Settings');
+
+        $this->expectException(\InvalidArgumentException::class);
+        $stack->view("\x1b[31m");
+    }
+
+    public function testViewStripsZoneSentinelsAndJoinsFlatOnEmpty(): void
+    {
+        $stack = new NavStack();
+        $stack->push('Home');
+        $stack->push('Settings');
+
+        // Sentinels are stripped, not refused: the residue is what joins.
+        self::assertSame('HomeSettings', $stack->view("\u{E000}\u{E001}"));
+        self::assertSame('Home | Settings', $stack->view(" \u{E000}|\u{E001} "));
+        self::assertSame('HomeSettings', $stack->view(''));
+        self::assertSame('Home › Settings', $stack->view());
+    }
 }
