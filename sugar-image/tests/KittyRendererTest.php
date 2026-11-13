@@ -188,6 +188,37 @@ final class KittyRendererTest extends TestCase
         $this->renderer->render($source, 8, 0);
     }
 
+    public function testWithOptionsDoorSharesTheWidthHeightLaw(): void
+    {
+        // SI-24 (finding 018): renderWithOptions() predated the validation
+        // trait and re-derived the cell geometry by itself — without the
+        // guards — so width=0 emitted a spec-invalid c=0 transmit frame and
+        // a bogus height rode the r=1 rescue into an c/r-mismatched payload
+        // where render() simply refused. One law, both doors, identical
+        // throw grammar.
+        $source = ImageSource::fromFile(__DIR__ . '/fixtures/8x4_red.png');
+
+        foreach ([[0, null], [-1, null], [8, 0], [8, -1]] as [$w, $h]) {
+            $plain = $this->captureThrow(fn (): string => $this->renderer->render($source, $w, $h));
+            $typed = $this->captureThrow(fn (): string => $this->renderer->renderWithOptions($source, $w, $h, \SugarCraft\Image\KittyOptions::transmit()));
+
+            $this->assertInstanceOf(\InvalidArgumentException::class, $plain, "render() must refuse width={$w} height=" . var_export($h, true));
+            $this->assertInstanceOf(\InvalidArgumentException::class, $typed, "renderWithOptions() must refuse width={$w} height=" . var_export($h, true));
+            $this->assertSame($plain->getMessage(), $typed->getMessage(), 'the two doors share one error grammar');
+        }
+    }
+
+    private function captureThrow(callable $fn): ?\Throwable
+    {
+        try {
+            $fn();
+        } catch (\Throwable $e) {
+            return $e;
+        }
+
+        $this->fail('expected the geometry law to bite');
+    }
+
     public function testChunkedTransmissionForLargeImage(): void
     {
         // 500×400 noise PNG produces > 4092 bytes of base64 data, exercising chunking.

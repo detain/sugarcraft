@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace SugarCraft\Image\Renderer;
 
 use SugarCraft\Core\Util\Ansi;
-use SugarCraft\Image\CellGeometry;
 use SugarCraft\Image\ImageSource;
 use SugarCraft\Image\KittyOptions;
 use SugarCraft\Image\Lang;
@@ -174,9 +173,13 @@ final class KittyRenderer implements Renderer, IncrementalRenderer
         // sizing the raw bytes bounds every frame before encoding.
         $chunks    = $this->chunkPayload($payload, $opts->chunkBytes() ?? KittyOptions::DEFAULT_CHUNK_BYTES);
         $total     = count($chunks);
-        // Same cell-geometry law as prepareRender(); this path predates the
-        // trait and re-implemented it, so the fix lands in both places.
-        $effectiveHeight = $height ?? CellGeometry::heightCells($width, $image->aspectRatio());
+        // One width/height law for every transmitting door: the trait's
+        // prepareRender() validates (width<=0 and explicit height<=0 throw
+        // the renderer.invalid_* grammar) and derives the auto cell height.
+        // This path predated the trait and carried a private copy of the
+        // derivation without the guards, so a width<=0 call here transmitted
+        // a spec-invalid c=0 frame instead of refusing.
+        $effectiveHeight = $this->prepareRender($image, $width, $height);
 
         // Transmission is always a=T. Virtual mode keeps that and
         // flags the stored image U=1 (composited UNDER the text), then
@@ -197,7 +200,7 @@ final class KittyRenderer implements Renderer, IncrementalRenderer
             'o' => $optsArr['o'],
             'q' => 2,
             'c' => $width,
-            'r' => $effectiveHeight > 0 ? $effectiveHeight : 1,
+            'r' => $effectiveHeight,
             's' => $optsArr['s'],
             'v' => $optsArr['v'],
         ]);
