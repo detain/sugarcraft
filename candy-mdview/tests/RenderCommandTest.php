@@ -216,6 +216,69 @@ final class RenderCommandTest extends TestCase
         }
     }
 
+    /**
+     * Print-mode run capturing EVERY raw write() in order — with
+     * --show-front-matter the front matter and the document are two
+     * separate writes, so the one-write helpers no longer fit.
+     *
+     * @param array<string,mixed> $optionMap
+     *
+     * @return array{0:int,1:list<string>} exit code + ordered write payloads
+     */
+    private function runPrintWrites(string $content, array $optionMap = []): array
+    {
+        $tmp = tempnam(sys_get_temp_dir(), 'mdview-');
+        $this->assertNotFalse($tmp);
+        file_put_contents($tmp, $content);
+        try {
+            $input = $this->createMock(InputInterface::class);
+            $input->method('getArgument')->willReturnCallback(
+                static fn (string $name): mixed => $name === 'file' ? $tmp : null
+            );
+            $input->method('getOption')->willReturnMap($this->optionMap($optionMap));
+
+            $output = $this->createMock(OutputInterface::class);
+            $writes = [];
+            $output->method('write')->willReturnCallback(
+                static function ($messages) use (&$writes): void {
+                    $writes[] = (string) $messages;
+                }
+            );
+
+            return [$this->invokeExecute(new RenderCommand(), $input, $output), $writes];
+        } finally {
+            unlink($tmp);
+        }
+    }
+
+    /**
+     * Drive the real binary with $stdin piped in (finding 007's exact
+     * acceptance repro). Children are always reaped; streams drained to
+     * EOF before judging (pipe-EOF law).
+     *
+     * @param list<string> $args CLI flags for the binary
+     *
+     * @return array{0:int,1:string,2:string} rc + stdout + stderr
+     */
+    private function runBinWithStdin(string $stdin, array $args): array
+    {
+        $proc = proc_open(
+            [PHP_BINARY, '-d', 'display_errors=0', dirname(__DIR__) . '/bin/candy-mdview', ...$args],
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+            dirname(__DIR__),
+        );
+        self::assertIsResource($proc);
+        fwrite($pipes[0], $stdin);
+        fclose($pipes[0]);
+        $out = (string) stream_get_contents($pipes[1]);
+        $err = (string) stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+
+        return [proc_close($proc), $out, $err];
+    }
+
     public function testExecuteWithNoInputOnTerminalIsUsageError(): void
     {
         // KM5: a tty-stdin run used to print the one-word "no input" to
@@ -1262,6 +1325,7 @@ final class RenderCommandTest extends TestCase
             'width'         => 0,
             'pager'         => false,
             'no-hyperlinks' => false,
+            'show-front-matter' => false,
         ];
         $merged = array_merge($base, $overrides);
         return array_map(
@@ -1588,5 +1652,89 @@ final class RenderCommandTest extends TestCase
         $this->assertNotFalse($guard);
         $this->assertNotFalse($use);
         $this->assertLessThan($use, $guard, 'STDIN must be checked defined() before it is read');
+    }
+
+    /**
+     * Finding 007: the fence is metadata, not prose — rendered as Markdown
+     * the closing `---` turns `title: My Doc` into a setext heading. The
+     * block never reaches the renderer on the file door.
+     */
+    public function testFrontMatterNeverReachesTheRenderedDocument(): void
+    {
+        [$rc, $writes] = $this->runPrintWrites(
+            "---\ntitle: My Doc\ntags: [a, b]\n---\n\n# Head\nbody\n",
+            ['theme' => 'plain', 'width' => 40]
+        );
+
+        self::assertSame(0, $rc);
+        self::assertCount(1, $writes, 'without the flag the document is the only write');
+        self::assertStringNotContainsString('title: My Doc', $writes[0]);
+        self::assertStringNotContainsString('tags:', $writes[0]);
+        self::assertStringContainsString('Head', $writes[0]);
+        self::assertStringContainsString('body', $writes[0]);
+    }
+
+    public function testShowFrontMatterPrintsTheRawBlockAsFirstWrite(): void
+    {
+        [$rc, $writes] = $this->runPrintWrites(
+            "---\ntitle: My Doc\ntags: [a, b]\n---\n\n# Head\nbody\n",
+            ['theme' => 'plain', 'width' => 40, 'show-front-matter' => true]
+        );
+
+        self::assertSame(0, $rc);
+        self::assertCount(2, $writes);
+        self::assertSame("---\ntitle: My Doc\ntags: [a, b]\n---\n", $writes[0]);
+        self::assertStringNotContainsString('title: My Doc', $writes[1]);
+        self::assertStringContainsString('Head', $writes[1]);
+    }
+
+    public function testShowFrontMatterWithNoBlockWritesOnlyTheDocument(): void
+    {
+        [$rc, $writes] = $this->runPrintWrites(
+            "# Head\nbody\n",
+            ['theme' => 'plain', 'width' => 40, 'show-front-matter' => true]
+        );
+
+        self::assertSame(0, $rc);
+        self::assertCount(1, $writes, 'the flag must not fabricate a block that is not there');
+    }
+
+    public function testSetextUnderlineDocumentSurvivesTheFrontMatterDoor(): void
+    {
+        // `---\ntext\n---` is thematic break + setext heading: every byte
+        // must still reach the renderer.
+        [$rc, $writes] = $this->runPrintWrites("---\ntext\n---", ['theme' => 'plain', 'width' => 40]);
+
+        self::assertSame(0, $rc);
+        self::assertCount(1, $writes);
+        self::assertStringContainsString('text', $writes[0]);
+        self::assertStringContainsString('────', $writes[0], 'the fence survives as a rendered rule, not deleted metadata');
+    }
+
+    public function testCliStdinReproPrintsOnlyHeadAndBody(): void
+    {
+        // P2's exact acceptance repro: piped front matter over the real
+        // binary exits 0 and prints only Head+body.
+        [$rc, $out, $err] = $this->runBinWithStdin(
+            "---\ntitle: My Doc\ntags: [a, b]\n---\n\n# Head\nbody\n",
+            ['--width', '40']
+        );
+
+        self::assertSame(0, $rc, 'stderr was: ' . $err);
+        self::assertStringNotContainsString('title: My Doc', $out);
+        self::assertStringContainsString('Head', $out);
+        self::assertStringContainsString('body', $out);
+    }
+
+    public function testCliStdinShowFrontMatterFlagPrintsRawBlock(): void
+    {
+        [$rc, $out] = $this->runBinWithStdin(
+            "---\ntitle: My Doc\ntags: [a, b]\n---\n\n# Head\nbody\n",
+            ['--width', '40', '--show-front-matter']
+        );
+
+        self::assertSame(0, $rc);
+        self::assertStringStartsWith("---\ntitle: My Doc\ntags: [a, b]\n---\n", $out);
+        self::assertStringContainsString('Head', $out);
     }
 }

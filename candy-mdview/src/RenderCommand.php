@@ -105,6 +105,7 @@ final class RenderCommand extends Command
             ->addOption('theme-config',  null, InputOption::VALUE_REQUIRED, 'Load a custom JSON theme file (overrides --theme).', '')
             ->addOption('width',         'w',  InputOption::VALUE_REQUIRED, 'Wrap text at this column count (1-9999). 0 = no wrap: longer lines are truncated by the pager, not wrapped.', 0)
             ->addOption('no-hyperlinks', null, InputOption::VALUE_NONE,    'Disable OSC 8 hyperlinks; render links as text + (url) instead.')
+            ->addOption('show-front-matter', null, InputOption::VALUE_NONE, 'Print the leading YAML front-matter block (--- fenced) verbatim before the rendered document; it is stripped from rendering either way.')
             ->setHelp(<<<'TXT'
                 Pager keys (-p / --pager):
                   j / Down, k / Up        scroll one line
@@ -166,6 +167,17 @@ final class RenderCommand extends Command
             // a redirected document channel, and WHICH file was chosen is
             // metadata about the run, not the document.
             self::writeNote($output, $dirNotice);
+        }
+
+        // glow parity (finding 007): a leading YAML front-matter fence is
+        // metadata, not prose — rendered as Markdown the closing `---` turns
+        // the last metadata line into a setext heading, so the block never
+        // reaches the renderer, on any door. --show-front-matter prints the
+        // verbatim fenced block first (raw bytes, same discipline as the
+        // document output below).
+        [$raw, $frontMatter] = FrontMatter::split($raw);
+        if ($frontMatter !== null && $input->getOption('show-front-matter') === true) {
+            $output->write($frontMatter, false, OutputInterface::OUTPUT_RAW);
         }
 
         $renderer = (new Renderer($theme))

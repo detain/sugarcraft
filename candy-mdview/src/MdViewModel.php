@@ -254,7 +254,7 @@ final class MdViewModel implements Model
         $seen = FileWatcher::snapshot($path) ?? [$this->watchMtime, $this->watchSize];
 
         try {
-            $raw     = DocumentGate::readFile($path);
+            $raw     = FrontMatter::strip(DocumentGate::readFile($path));
             $content = $reRender($raw);
         } catch (\InvalidArgumentException) {
             return $this->refusedReload($seen);

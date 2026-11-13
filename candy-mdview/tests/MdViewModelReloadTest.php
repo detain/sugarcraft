@@ -482,4 +482,24 @@ final class MdViewModelReloadTest extends TestCase
         self::assertFalse($mod->pendingReload);
         self::assertSame(1, $mod->reloadCount);
     }
+
+    /**
+     * Finding 007's lifecycle leg: the front-matter rule must hold on a
+     * reload too, or an autosaved Jekyll document would flash its fence as
+     * a setext heading the moment the watcher fires.
+     */
+    public function testReloadAppliesTheSameFrontMatterStrip(): void
+    {
+        $path = $this->createSourceFile('short');
+        $m = MdViewModel::fromContent('RENDERED<short>', 40, 5)->withWatch($path, $this->markerReRender());
+
+        file_put_contents($path, "---\ntitle: My Doc\ntags: [a, b]\n---\nBODY\n");
+
+        [$detect, ] = $m->update(new ReloadTickMsg());
+        [$next, ]   = $detect->update(new ReloadTickMsg());
+
+        self::assertStringContainsString('RENDERED<BODY', $next->view());
+        self::assertStringNotContainsString('title: My Doc', $next->view(), 'reload must strip through the same rule');
+        self::assertSame(1, $next->reloadCount);
+    }
 }

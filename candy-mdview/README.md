@@ -97,6 +97,15 @@ Flags:
   means full decoration. Labelled links always show their visible `text (url)`
   tail; plain autolinks and `mailto:` targets render the URL itself as the
   text, so the address stays visible either way.
+- `--show-front-matter` — print a leading YAML front-matter block verbatim
+  before the rendered document. The block is never rendered either way: a
+  document that opens with a `---` (or `...`) fenced metadata block loses the
+  fence before Markdown parsing, because the closing rule would otherwise turn
+  the last metadata line into a setext heading (`title: My Doc` first-block
+  garbage on the Jekyll/Hugo/GitHub slice of the corpus). The rule applies to
+  every door — file, directory-resolved README, stdin, fetched URL — and to
+  every pager reload, so the metadata stays metadata for the whole life of the
+  frame.
 - `--pager` / `-p` — open in a fullscreen pager. Requires a real terminal:
   when neither stdout is a terminal nor `/dev/tty` can be opened, the run
   refuses with exit code 2 naming stdout rendering as the replacement
