@@ -21,6 +21,24 @@ final class ColumnTest extends TestCase
         $this->assertSame('Alice', $col->format('Alice', 0));
     }
 
+    public function testFormatterArrayAnswerRefusesByNameNotBySilentArrayCast(): void
+    {
+        $col = Column::make('Data', 8)->withFormatter(static fn (string $v): array => [$v]);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("Formatter for column 'Data' must return a string or null; array given.");
+        $col->format('x', 0);
+    }
+
+    public function testFormatterObjectWithoutStringCastingRefusesWithItsClassName(): void
+    {
+        $col = Column::new('Data', 8)->withFormatter(static fn (string $v): \stdClass => new \stdClass());
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('stdClass given');
+        $col->format('x', 0);
+    }
+
     public function testFormatAppliesFormatter(): void
     {
         $col = Column::make('Name', 10)->withFormatter(fn($v, $i) => strtoupper($v));

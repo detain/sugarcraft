@@ -127,6 +127,14 @@ final class Column
     }
 
 
+    /**
+     * Attach a cell formatter: `fn(string $storedValue, int $rowIndex)`
+     * answering string or null (null keeps the raw value). The answer
+     * is checked at format time and a non-string return refuses with
+     * this column's title (FBX-35): an array would have silently
+     * became 'Array' under the old cast and a plain object died a
+     * stack-trace away from the offending formatter.
+     */
     public function withFormatter(callable $fn): self
     {
         $clone = clone $this;
@@ -172,10 +180,20 @@ final class Column
 
         if ($result === null) {
             $result = $value;
+        } elseif (!\is_string($result)) {
+            // Parse, don't coerce: the contract answers string-or-null,
+            // and every other shape is the CALLER'S bug. The old (string)
+            // cast turned arrays into the literal 'Array' with nothing
+            // but a log warning, and killed __toString-less objects deep
+            // inside render() — far from the formatter that lied (FBX-35).
+            $type = \is_object($result) ? \get_class($result) : \gettype($result);
+            throw new \InvalidArgumentException(
+                "Formatter for column '{$this->title}' must return a string or null; {$type} given."
+            );
         }
 
         // Sanitize data-origin content. Width clamping is done in padded().
-        return $this->sanitize((string) $result);
+        return $this->sanitize($result);
     }
 
     /**
