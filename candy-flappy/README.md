@@ -28,11 +28,23 @@ composer install
 # As a library dependency (pre-1.0: the package publishes a dev branch only):
 #   composer require sugarcraft/candy-flappy:@dev
 
-# Standalone executable (rebuilt per push to master only when flappy is in
-# the affected closure, else on force_all/workflow dispatch):
+# Standalone executable (the published channel is currently FROZEN — see below):
 wget https://github.com/detain/sugarcraft/releases/download/candy-flappy/dev/candy-flappy.phar
 php candy-flappy.phar
 ```
+
+A rolling development phar is published on the host repository
+[`detain/sugarcraft`](https://github.com/detain/sugarcraft) under the GitHub
+Releases tag [`candy-flappy/dev`](https://github.com/detain/sugarcraft/releases/tag/candy-flappy/dev)
+as `candy-flappy.phar`. **That channel is FROZEN at the 2026-11-04 build
+(commit `f1c90bb34`)** — the 2026-11-05 sibling-pin CI wave has blocked phar
+rebuilds fleet-wide, so the per-push rebuild (when flappy is in the affected
+closure, else a forced dispatch) is not running; builds resume with the fleet
+phar-workflow cure. Until the release page shows an artifact newer than
+2026-11-04, prefer the composer/path installs above — the download there is
+a stale build, not the fresh one the wording once promised. Local rebuilds
+are unaffected: `php -d phar.readonly=0 tools/build-phar.php` still works,
+and its clean-published-vendor door fails CLOSED by design.
 
 ### Command line
 
