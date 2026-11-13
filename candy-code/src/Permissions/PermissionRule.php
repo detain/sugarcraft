@@ -282,6 +282,9 @@ final class PermissionRule
      */
     private const MAX_SYMLINK_HOPS = 40;
 
+    /** PHP's hard limit on a string handed to fnmatch(). */
+    private const FNMATCH_CEILING = 4096;
+
     /**
      * `$source` and `$file` say where the rule was written, for the prompt and
      * `/permissions explain`. They never affect matching: two rules that differ
@@ -392,6 +395,22 @@ final class PermissionRule
     }
 
     /**
+     * `fnmatch()` with PHP's 4096-character ceiling made explicit: past it the
+     * native call emits a warning and answers false, which on a Deny/Ask rule
+     * would be a silent escape. A too-long text never matches here (so an Allow
+     * falls through to a redundant ask, the safe direction); the restrictive
+     * actions are failed CLOSED up front in {@see matchesSubject()}.
+     */
+    private static function glob(string $pattern, string $text): bool
+    {
+        if (strlen($pattern) > self::FNMATCH_CEILING || strlen($text) > self::FNMATCH_CEILING) {
+            return false;
+        }
+
+        return fnmatch($pattern, $text);
+    }
+
+    /**
      * Glob a tool NAME against a name-half pattern.
      *
      * Static and public because {@see \SugarCraft\Code\Cli\Bootstrap::tools()}
@@ -401,7 +420,7 @@ final class PermissionRule
      */
     public static function matchesToolName(string $namePattern, string $toolName): bool
     {
-        return fnmatch($namePattern, $toolName);
+        return self::glob($namePattern, $toolName);
     }
 
     /**
@@ -661,6 +680,25 @@ final class PermissionRule
     }
 
     /**
+     * @param array<string,mixed> $arguments
+     */
+    private static function exceedsCeiling(string $subject, string $toolName, array $arguments): bool
+    {
+        if (strlen($subject) > self::FNMATCH_CEILING) {
+            return true;
+        }
+        if (in_array($toolName, self::SHELL_SUBJECT_TOOLS, true)) {
+            foreach (ShellSubjectTools::stepTexts($toolName, $arguments) as $step) {
+                if (strlen($step) > self::FNMATCH_CEILING) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Match one subject string against the argument glob.
      *
      * THREE SUBJECT KINDS, dispatched on the tool name rather than on a bool,
@@ -688,6 +726,14 @@ final class PermissionRule
         ?string $projectRoot,
         array $arguments = [],
     ): bool {
+        // A subject past fnmatch()'s ceiling cannot be consulted, and "a guard
+        // that cannot be consulted has not allowed anything": Deny/Ask match
+        // (a 5 KB `rm -rf ...` must not slip a `Deny Bash(rm *)`), Allow falls
+        // through to the ask. Step texts (PtyRun keystrokes) count too.
+        if ($this->action !== PermissionAction::Allow && self::exceedsCeiling($subject, $toolName, $arguments)) {
+            return true;
+        }
+
         if (in_array($toolName, self::SHELL_SUBJECT_TOOLS, true)) {
             // ISS-001 (crush-review-1014): a `PtyRun` step is a keystroke typed
             // INTO the terminal this rule's subject just started — `vim` under
@@ -728,7 +774,7 @@ final class PermissionRule
             return $this->matchesFetchDomain($subject, substr($argumentPattern, strlen(self::DOMAIN_PREFIX)));
         }
 
-        return fnmatch($argumentPattern, self::collapseWhitespace($subject));
+        return self::glob($argumentPattern, self::collapseWhitespace($subject));
     }
 
     /**
@@ -820,7 +866,7 @@ final class PermissionRule
         }
 
         foreach (array_unique($readings) as $reading) {
-            if ($reading !== '' && fnmatch($argumentPattern, $reading)) {
+            if ($reading !== '' && self::glob($argumentPattern, $reading)) {
                 return true;
             }
         }
@@ -906,11 +952,11 @@ final class PermissionRule
 
         foreach ($parsed->commands as $index => $words) {
             $source = self::collapseWhitespace($parsed->sources[$index] ?? '');
-            if ($source !== '' && fnmatch($argumentPattern, $source)) {
+            if ($source !== '' && self::glob($argumentPattern, $source)) {
                 continue;
             }
             $dequoted = self::collapseWhitespace(implode(' ', $words));
-            if (!$rawOnly && $dequoted !== '' && fnmatch($argumentPattern, $dequoted)) {
+            if (!$rawOnly && $dequoted !== '' && self::glob($argumentPattern, $dequoted)) {
                 continue;
             }
 
@@ -1025,7 +1071,7 @@ final class PermissionRule
             if ($reading === '') {
                 continue;
             }
-            if (fnmatch($segment, $reading) || ($bare !== null && $bare !== '' && fnmatch($bare, $reading))) {
+            if (self::glob($segment, $reading) || ($bare !== null && $bare !== '' && self::glob($bare, $reading))) {
                 return true;
             }
         }
@@ -1136,14 +1182,14 @@ final class PermissionRule
         $depth = $this->action !== PermissionAction::Allow && !str_starts_with($pattern, '/');
 
         foreach (array_unique($spellings) as $spelling) {
-            if (fnmatch($pattern, $spelling)) {
+            if (self::glob($pattern, $spelling)) {
                 return true;
             }
             if (!$depth) {
                 continue;
             }
             foreach (self::trailingPathSuffixes($spelling) as $suffix) {
-                if (fnmatch($pattern, $suffix)) {
+                if (self::glob($pattern, $suffix)) {
                     return true;
                 }
             }
