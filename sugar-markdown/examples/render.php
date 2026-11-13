@@ -17,7 +17,7 @@ require __DIR__ . '/../vendor/autoload.php';
 use SugarCraft\Markdown\Renderer;
 use SugarCraft\Markdown\Theme;
 
-$markdown = <<<MD
+$markdown = <<<'MD'
 # Heading
 
 A paragraph with **bold**, _italic_, ~~strike~~, and `inline code`.
