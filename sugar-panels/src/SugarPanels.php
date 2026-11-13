@@ -226,7 +226,10 @@ final class SugarPanels
      * Because a delta only carries changed cells, the sequence is opaque to text
      * extraction: capture a full frame (first render, after {@see
      * resetPreviousFrame()}, or after any resize) when a screen reader, clipboard
-     * or log needs readable text rather than a cell patch.
+     * or log needs readable text rather than a cell patch. One instance therefore
+     * owns one output region: its frames are deltas against what it last painted
+     * there, so interleaving two renderers into one stream — or writing other
+     * output between frames — merges the renderings on screen.
      *
      * @param Node $root   Layout node tree
      * @param int  $width  Viewport width in cells (0 allowed → empty rows; negative rejected)

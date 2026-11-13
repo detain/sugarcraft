@@ -302,9 +302,12 @@ otherwise sit on screen as ghosts. The first frame, a delta, and a zero-area fra
 erase nothing, and a manual `resetPreviousFrame()` does not erase either — a host
 that owns a region did not ask to wipe it.
 
-**Stateful contract:** the diff cache lives on the `SugarPanels` instance. The
-first render (and every render after a size change) emits the full frame;
-subsequent same-size renders emit only diff ops. If the terminal may have been
+**Stateful contract:** the diff cache lives on the `SugarPanels` instance, and one
+instance owns one output region. The first render (and every render after a size
+change) emits the full frame; subsequent same-size renders emit only diff ops —
+ops that make sense only against the screen still showing what *this* renderer
+last painted there. Interleaving two renderers into one stream, or writing other
+output between frames, merges the renderings. If the terminal may have been
 touched outside this renderer — a clear, an alt-screen switch, another program —
 call `resetPreviousFrame()` so the next render repaints fully.
 

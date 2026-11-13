@@ -19,7 +19,10 @@ use SugarCraft\Style\Border;
 
 foreach (Border::catalog() as $name) {
     // A fresh renderer per preset. Reusing one instance at the same viewport
-    // would take the diff path against the previous frame and paint nothing.
+    // would still work — different content, so the diff path paints real
+    // changes — but it couples the frames: each echo or preset swap lands as
+    // a delta on top of the previous border, and the two renderings visually
+    // merge on screen.
     $panels = SugarPanels::new();
 
     echo "=== Border::{$name}() ===\n";
