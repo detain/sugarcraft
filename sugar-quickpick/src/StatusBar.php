@@ -41,6 +41,16 @@ final class StatusBar
     }
 
     /**
+     * House factory (`::new()`), mirroring {@see QuickPick::new()}: same
+     * signature as the constructor, which stays public (the docs promise a
+     * bare construction site).
+     */
+    public static function new(string $message = '', bool $visible = true): self
+    {
+        return new self($message, $visible);
+    }
+
+    /**
      * Set the primary status message.
      */
     public function withMessage(string $message): self

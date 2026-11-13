@@ -407,4 +407,21 @@ final class FileHistoryTest extends TestCase
 
         new FileHistory($this->tmpPath, null, 0);
     }
+
+    /**
+     * S-29/-051: house factory forwards all THREE seeds — the cap pin here
+     * is what proves the third argument actually rides through (an
+     * args-dropping forwarder is otherwise invisible).
+     */
+    public function testNewFactoryMatchesConstructor(): void
+    {
+        $history = FileHistory::new($this->tmpPath, null, 2);
+        $this->assertSame($this->tmpPath, $history->path());
+
+        $history->appendDistinct(FilteredItem::new(1, 'a'));
+        $history->appendDistinct(FilteredItem::new(2, 'b'));
+        $history->appendDistinct(FilteredItem::new(3, 'c'));
+
+        $this->assertSame(['b', 'c'], array_map(static fn($i) => $i->value(), $history->all()));
+    }
 }

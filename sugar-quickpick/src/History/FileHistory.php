@@ -125,6 +125,16 @@ class FileHistory
     }
 
     /**
+     * House factory (`::new()`), mirroring {@see \SugarCraft\QuickPick\QuickPick::new()}:
+     * same signature as the constructor, which stays public (the docs
+     * promise a bare construction site).
+     */
+    public static function new(string $path, ?string $baseDir = null, ?int $maxEntries = null): self
+    {
+        return new self($path, $baseDir, $maxEntries);
+    }
+
+    /**
      * Confine $path beneath $baseDir, rejecting any path that escapes it.
      *
      * The base directory must already exist so it can be resolved with realpath()

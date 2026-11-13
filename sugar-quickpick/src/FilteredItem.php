@@ -18,6 +18,16 @@ final readonly class FilteredItem implements Item
     ) {
     }
 
+    /**
+     * House factory (`::new()`), mirroring {@see QuickPick::new()}: same
+     * signature as the constructor, which stays public (the docs promise a
+     * bare construction site).
+     */
+    public static function new(int $number, string $value): self
+    {
+        return new self($number, $value);
+    }
+
     public function number(): int
     {
         return $this->number;

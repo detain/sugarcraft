@@ -168,4 +168,12 @@ final class HelpBarTest extends TestCase
         $distinct = new HelpBar(['a' => 'first', 'b' => 'second']);
         self::assertSame(['a' => 'first', 'b' => 'second'], $distinct->shortcuts());
     }
+
+    /** S-29/-051: house factory forwards shortcuts AND the visibility seed. */
+    public function testNewFactoryMatchesConstructor(): void
+    {
+        $bar = HelpBar::new(['x' => 'why'], false);
+        self::assertSame(['x' => 'why'], $bar->shortcuts());
+        self::assertFalse($bar->isVisible());
+    }
 }

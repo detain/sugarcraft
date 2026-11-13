@@ -53,4 +53,12 @@ final class FilteredItemTest extends TestCase
         $item = new FilteredItem(1, 'first');
         $this->assertSame(1, $item->number());
     }
+
+    /** S-29/-051: house factory forwards BOTH seed arguments. */
+    public function testNewFactoryMatchesConstructor(): void
+    {
+        $item = FilteredItem::new(3, 'via-factory');
+        $this->assertSame(3, $item->number());
+        $this->assertSame('via-factory', $item->value());
+    }
 }

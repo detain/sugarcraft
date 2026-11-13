@@ -188,4 +188,12 @@ final class StatusBarTest extends TestCase
         // Original unchanged
         self::assertArrayNotHasKey('new', $bar->segments());
     }
+
+    /** S-29/-051: house factory forwards message AND the visibility seed. */
+    public function testNewFactoryMatchesConstructor(): void
+    {
+        $bar = StatusBar::new('7 files', false);
+        self::assertSame('7 files', $bar->message());
+        self::assertFalse($bar->isVisible());
+    }
 }

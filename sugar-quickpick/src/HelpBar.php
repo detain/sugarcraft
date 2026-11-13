@@ -66,6 +66,16 @@ final class HelpBar
     }
 
     /**
+     * House factory (`::new()`), mirroring {@see QuickPick::new()}: same
+     * signature as the constructor, which stays public (the docs promise a
+     * bare construction site).
+     */
+    public static function new(array $shortcuts = [], bool $visible = true): self
+    {
+        return new self($shortcuts, $visible);
+    }
+
+    /**
      * Add a keyboard shortcut entry.
      */
     public function withShortcut(string $key, string $description): self
