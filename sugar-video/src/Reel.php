@@ -58,6 +58,20 @@ final class Reel
     private const DEFAULT_RAMP = 'standard';
 
     /**
+     * Test seam (SV-L70): when set, play() hands the built Player and options
+     * to this closure instead of constructing and running a real Program.
+     * The guarantee worth pinning is the finally-block reap — a door
+     * that can make "run()" throw is the only way to observe it headlessly,
+     * without a TTY and without child processes.
+     */
+    private static ?\Closure $programRunForTesting = null;
+
+    public static function setProgramRunForTesting(?\Closure $run): void
+    {
+        self::$programRunForTesting = $run;
+    }
+
+    /**
      * @param string      $path  Video file path ('' for synthetic/unbound)
      * @param Mode|null   $mode  Rendering mode (null = auto-detect)
      * @param int          $cols  Terminal cell width
@@ -746,12 +760,25 @@ final class Reel
             windowSize: $windowSeed,
         );
 
-        (new Program($player, $options))->run();
-
         // n5: run() returns on every exit path (q, Esc, SIGINT teardown); the
         // Player owns the ffmpeg and audio children, so tearing it down here
         // is what keeps `Reel::play()` free of orphaned subprocesses.
-        $player->stop();
+        //
+        // SV-L70: run() can also THROW — a msg handler blowing up mid-loop
+        // would skip a sequential teardown and leave the children orphaned
+        // until destructors (if any) bound the damage. The reap cannot depend
+        // on a clean return, so it rides finally: the exception keeps
+        // propagating, the children still die.
+        $run = self::$programRunForTesting
+            ?? static function (Player $player, ProgramOptions $options): void {
+                (new Program($player, $options))->run();
+            };
+
+        try {
+            $run($player, $options);
+        } finally {
+            $player->stop();
+        }
     }
 
     /**

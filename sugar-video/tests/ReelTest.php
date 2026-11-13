@@ -898,4 +898,68 @@ final class ReelTest extends TestCase
     {
         return (new \ReflectionProperty(Reel::class, $field))->getValue($reel);
     }
+
+    /**
+     * @testdox A throwing Program still reaps the Player — stop() rides finally (SV-L70)
+     */
+    public function testAThrowingRunStillStopsThePlayer(): void
+    {
+        if (!function_exists('imagecreatetruecolor')) {
+            self::markTestSkipped('synthetic GIF playback needs ext-gd');
+        }
+
+        $captured = null;
+        Reel::setProgramRunForTesting(static function (Player $player) use (&$captured): void {
+            $captured = $player;
+            throw new \RuntimeException('boom mid-loop');
+        });
+
+        try {
+            Reel::open('')->withMode(Mode::Ascii)->play();
+            self::fail('the throwing runner must propagate through play()');
+        } catch (\RuntimeException $boom) {
+            self::assertSame('boom mid-loop', $boom->getMessage());
+        } finally {
+            Reel::setProgramRunForTesting(null);
+        }
+
+        self::assertNotNull($captured);
+        self::assertTrue($captured->isStopped(), 'play() skipped the teardown after a throwing run()');
+    }
+
+    /**
+     * @testdox A clean return still reaps (the n5 contract survives the finally move)
+     */
+    public function testACleanRunStopsThePlayerToo(): void
+    {
+        if (!function_exists('imagecreatetruecolor')) {
+            self::markTestSkipped('synthetic GIF playback needs ext-gd');
+        }
+
+        $captured = null;
+        Reel::setProgramRunForTesting(static function (Player $player) use (&$captured): void {
+            $captured = $player;
+        });
+
+        try {
+            Reel::open('')->withMode(Mode::Ascii)->play();
+        } finally {
+            Reel::setProgramRunForTesting(null);
+        }
+
+        self::assertNotNull($captured);
+        self::assertTrue($captured->isStopped());
+    }
+
+    /**
+     * @testdox the Program is constructed in exactly one place — the seam default (SV-L70 structural)
+     */
+    public function testTheProgramRunsThroughOneDoor(): void
+    {
+        $src = (string) file_get_contents(dirname(__DIR__) . '/src/Reel.php');
+
+        self::assertSame(1, substr_count($src, '->run();'), 'a second, unguarded run() call survived');
+        self::assertSame(1, substr_count($src, '$player->stop();'), 'the finally stop() must be the only reap');
+        self::assertStringContainsString('} finally {', $src);
+    }
 }
