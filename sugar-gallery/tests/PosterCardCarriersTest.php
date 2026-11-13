@@ -49,23 +49,44 @@ final class PosterCardCarriersTest extends TestCase
             (new ReflectionClass(PosterCard::class))->getConstructor()->getParameters(),
         );
 
+        // posterHash (sugar-gallery-014) is the one PRIVATE constructor
+        // parameter: read it reflectively, and treat the poster<->hash
+        // coupling as the pinned behaviour instead of "preserve".
+        $read = static function (PosterCard $c, string $name) use ($card): mixed {
+            $prop = new \ReflectionProperty($card, $name);
+
+            return $prop->isPrivate() ? $prop->getValue($c) : $c->$name;
+        };
+
         foreach ($params as $name) {
             $result = $carrying->invoke($card, [$name => self::sentinelFor($name)]);
 
-            self::assertSame(
-                self::sentinelFor($name),
-                $result->$name,
-                "carrying() must apply the override for \$$name",
-            );
+            if ($name === 'poster') {
+                self::assertSame(
+                    md5(self::sentinelFor('poster')),
+                    $read($result, 'posterHash'),
+                    'carrying() recomputes the stored hash exactly when the poster moves',
+                );
+            } else {
+                self::assertSame(
+                    self::sentinelFor($name),
+                    $read($result, $name),
+                    "carrying() must apply the override for \$$name",
+                );
+            }
 
             foreach ($params as $other) {
-                if ($other !== $name) {
-                    self::assertSame(
-                        $card->$other,
-                        $result->$other,
-                        "carrying(['$name' => …]) must preserve \$$other",
-                    );
+                if ($other === $name) {
+                    continue;
                 }
+                if (($name === 'poster' && $other === 'posterHash') || ($name === 'posterHash' && $other === 'poster')) {
+                    continue; // the coupled pair has its own arm above
+                }
+                self::assertSame(
+                    $read($card, $other),
+                    $read($result, $other),
+                    "carrying(['$name' => …]) must preserve \$$other",
+                );
             }
         }
     }

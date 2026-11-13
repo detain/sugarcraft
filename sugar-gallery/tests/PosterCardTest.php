@@ -708,6 +708,43 @@ final class PosterCardTest extends TestCase
         self::assertNotSame($card, $renamed);
     }
 
+    public function testFitMemoKeysRideTheIngressHashAndBranchesStayDisjoint(): void
+    {
+        // sugar-gallery-014: the fit memo hashed the WHOLE poster payload on
+        // every bodyRows() call. The hash now rides the card from ingress —
+        // the memo branches ('s|', 'i|', 'p|') must stay disjoint and
+        // path-stable across that key change.
+        $ref = new \ReflectionMethod(PosterCard::class, 'fitCacheRef');
+
+        $skel = new PosterCard('sk', 'S');
+        $artA = (new PosterCard('ar', 'A'))->withPoster('ZZZZ');
+        $artB = (new PosterCard('ar', 'A'))->withPoster('AAAA');
+        $img = (new PosterCard('im', 'I'))->withImage('bytes', 3);
+
+        $skel->render(false, 8, 2);
+        $artA->render(false, 8, 2);
+        $artB->render(false, 8, 2);
+        $img->render(false, 8, 2);
+
+        $keys = array_keys($ref->invoke(null));
+
+        self::assertContains('p|8|2|4|' . md5('ZZZZ'), $keys, 'poster branch key carries the ingress hash');
+        self::assertContains('p|8|2|4|' . md5('AAAA'), $keys, 'different bytes miss each other — no stale art');
+        self::assertContains('s|8|2', $keys, 'skeleton branch is dimension-only');
+        self::assertContains('i|3|8|2', $keys, 'overlay branch keys the id, not the payload');
+
+        // Same bytes through the plain constructor must hit the SAME memo
+        // entry the carrier produced — the hash is path-stable, so ingress
+        // never forks the cache.
+        $countBefore = count($ref->invoke(null));
+        (new PosterCard('zz', 'Z', poster: 'ZZZZ'))->render(false, 8, 2);
+        self::assertCount($countBefore, $ref->invoke(null), 'ctor-built same-content card rides the p| key');
+
+        $prop = new \ReflectionProperty(PosterCard::class, 'posterHash');
+        self::assertSame(md5('ZZZZ'), $prop->getValue($artA), 'withPoster() recomputed the stored hash once');
+        self::assertSame(md5('ZZZZ'), $prop->getValue($artA->withProgress(0.5)), 'a non-poster carrier rides it unchanged');
+    }
+
     public function testWithProgressRefusesNonFiniteRatios(): void
     {
         // sugar-gallery-035: ±INF silently read as "100 %" downstream and NAN

@@ -26,6 +26,17 @@ use SugarCraft\Core\Util\Width;
 final readonly class PosterCard
 {
     /**
+     * md5 of the raw {@see $poster} bytes, computed ONCE at construction
+     * (sugar-gallery-014: the fit-memo key used to hash the whole poster — a
+     * 24 KB art payload — on every bodyRows() call, i.e. per rendered cell
+     * per frame). A readonly instance makes that stored hash content-stable;
+     * {@see carrying()} recomputes it exactly when a carrier moves the poster
+     * under it, so every ingress (constructor, new(), withPoster(),
+     * withSafePoster()) ends up with the same hash for the same bytes.
+     */
+    private readonly string $posterHash;
+
+    /**
      * @param string|null $styledTitle  Optional ANSI-styled title rendered in place
      *                                   of the plain {@see $title}.
      * @param string|null $posterImage  Raw pixel-graphics bytes (sixel/kitty/iTerm2)
@@ -55,6 +66,9 @@ final readonly class PosterCard
      *                                   {@see hasPoster()} reports the
      *                                   cell unfilled, keeping it inside the
      *                                   re-queue policy for a retry.
+     * @param string      $posterHash    Internal: md5 of $poster, computed by
+     *                                   the constructor when a carrier does not
+     *                                   supply it — hosts never need to pass it.
      */
     public function __construct(
         public string $id,
@@ -66,7 +80,9 @@ final readonly class PosterCard
         public ?string $posterImage = null,
         public ?int $imageId = null,
         public bool $failed = false,
+        string $posterHash = '',
     ) {
+        $this->posterHash = $posterHash !== '' ? $posterHash : md5($poster ?? '');
     }
 
     /** Canonical factory — mirrors the public constructor. */
@@ -271,7 +287,14 @@ final readonly class PosterCard
             }
         }
 
-        return new self(...array_merge(get_object_vars($this), $overrides));
+        return new self(...array_merge(
+            get_object_vars($this),
+            // A carrier that moves the poster moves its stored hash with it
+            // (sugar-gallery-014) — md5 runs once per ingress, never per frame.
+            array_key_exists('poster', $overrides)
+                ? $overrides + ['posterHash' => md5((string) $overrides['poster'])]
+                : $overrides,
+        ));
     }
 
     /**
@@ -454,7 +477,9 @@ final readonly class PosterCard
         if ($paintableOverlay !== null) {
             $key = 'i|' . $this->imageId . '|' . $width . '|' . $posterHeight;
         } elseif ($posterFilled !== null) {
-            $key = 'p|' . $width . '|' . $posterHeight . '|' . strlen($posterFilled) . '|' . md5($posterFilled);
+            // The hash rides the card from ingress (sugar-gallery-014): same
+            // bytes, same key — no per-frame md5 of the whole payload.
+            $key = 'p|' . $width . '|' . $posterHeight . '|' . strlen($posterFilled) . '|' . $this->posterHash;
         } else {
             $key = 's|' . $width . '|' . $posterHeight;
         }
