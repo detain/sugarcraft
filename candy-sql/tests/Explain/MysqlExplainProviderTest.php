@@ -61,6 +61,17 @@ final class MysqlExplainProviderTest extends TestCase
         $this->assertSame([], $result);
     }
 
+    public function testExplainTreatsNullQueryResultAsEmptyList(): void
+    {
+        // client-008: query() is nullable (handled reconnect answers null);
+        // the fold must reach the empty-list path, never TypeError.
+        $this->db->expects($this->once())
+            ->method('query')
+            ->willReturn(null);
+
+        $this->assertSame([], $this->provider->explain('SELECT 1'));
+    }
+
     public function testExplainParsesJsonFormatCorrectly(): void
     {
         $sql = 'SELECT u.name FROM users u JOIN orders o ON u.id = o.user_id';

@@ -31,7 +31,9 @@ final class SqliteExplainProvider implements ExplainProviderInterface
             return [];
         }
 
-        $stmt = $this->db->query("EXPLAIN QUERY PLAN {$sql}");
+        // query() is nullable by contract (a handled mid-session reconnect
+        // answers null); array_filter(null) would TypeError under strict_types.
+        $stmt = $this->db->query("EXPLAIN QUERY PLAN {$sql}") ?? [];
 
         /** @var list<array{detail:string}> */
         return array_filter($stmt, static fn(array $row): bool =>

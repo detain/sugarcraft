@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Sql\Tests\Schema;
 
 use SugarCraft\Sql\Db\Flavor;
+use SugarCraft\Sql\Db\DatabaseInterface;
 use SugarCraft\Sql\Db\SqliteDatabase;
 use SugarCraft\Sql\Schema\SchemaColumn;
 use SugarCraft\Sql\Schema\SchemaForeignKey;
@@ -151,6 +152,20 @@ final class SqliteSchemaProviderTest extends TestCase
         $fks = $provider->foreignKeys('simple');
 
         $this->assertSame([], $fks);
+    }
+
+    public function testNullQueryResultsFoldToEmptyLists(): void
+    {
+        // client-008: query() is nullable; every provider leg takes the
+        // empty-list path instead of warning-degrading over null.
+        $db = $this->createMock(DatabaseInterface::class);
+        $db->method('query')->willReturn(null);
+        $provider = new SqliteSchemaProvider($db);
+
+        $this->assertSame([], $provider->tables());
+        $this->assertSame([], $provider->columns('users'));
+        $this->assertSame([], $provider->indexes('users'));
+        $this->assertSame([], $provider->foreignKeys('users'));
     }
 
     public function testDropTableRemovesTable(): void

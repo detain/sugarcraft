@@ -30,7 +30,7 @@ final class SqliteSchemaProvider implements SchemaProviderInterface
             "SELECT name FROM sqlite_master "
             . "WHERE type = 'table' AND name NOT LIKE 'sqlite_%' "
             . "ORDER BY name",
-        );
+        ) ?? [];
 
         $names = [];
         foreach ($result as $row) {
@@ -47,7 +47,7 @@ final class SqliteSchemaProvider implements SchemaProviderInterface
     public function columns(string $table): array
     {
         $safeTable = $this->safeIdent($table);
-        $result = $this->db->query("PRAGMA table_info(\"{$safeTable}\")");
+        $result = $this->db->query("PRAGMA table_info(\"{$safeTable}\")") ?? [];
 
         $columns = [];
         foreach ($result as $row) {
@@ -69,13 +69,13 @@ final class SqliteSchemaProvider implements SchemaProviderInterface
     public function indexes(string $table): array
     {
         $safeTable = $this->safeIdent($table);
-        $result = $this->db->query("PRAGMA index_list(\"{$safeTable}\")");
+        $result = $this->db->query("PRAGMA index_list(\"{$safeTable}\")") ?? [];
 
         $indexes = [];
         foreach ($result as $row) {
             $idxName = (string) ($row['name'] ?? '');
             $safeIdx = $this->safeIdent($idxName);
-            $idxInfo = $this->db->query("PRAGMA index_info(\"{$safeIdx}\")");
+            $idxInfo = $this->db->query("PRAGMA index_info(\"{$safeIdx}\")") ?? [];
 
             $columns = [];
             foreach ($idxInfo as $info) {
@@ -97,7 +97,7 @@ final class SqliteSchemaProvider implements SchemaProviderInterface
     public function foreignKeys(string $table): array
     {
         $safeTable = $this->safeIdent($table);
-        $result = $this->db->query("PRAGMA foreign_key_list(\"{$safeTable}\")");
+        $result = $this->db->query("PRAGMA foreign_key_list(\"{$safeTable}\")") ?? [];
 
         $fks = [];
         foreach ($result as $row) {

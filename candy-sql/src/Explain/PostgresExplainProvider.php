@@ -31,7 +31,9 @@ final class PostgresExplainProvider implements ExplainProviderInterface
             return [];
         }
 
-        $result = $this->db->query("EXPLAIN (FORMAT JSON) {$sql}");
+        // query() is nullable by contract (a handled mid-session reconnect
+        // answers null); fold to the empty list like the sibling providers.
+        $result = $this->db->query("EXPLAIN (FORMAT JSON) {$sql}") ?? [];
 
         if ($result === []) {
             return [];

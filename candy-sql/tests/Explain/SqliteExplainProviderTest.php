@@ -75,6 +75,17 @@ final class SqliteExplainProviderTest extends TestCase
         $this->assertSame([], $result);
     }
 
+    public function testExplainTreatsNullQueryResultAsEmptyList(): void
+    {
+        // client-008: query() is nullable (handled reconnect answers null);
+        // the fold must reach the empty-list path, never TypeError/array_filter(null).
+        $this->db->expects($this->once())
+            ->method('query')
+            ->willReturn(null);
+
+        $this->assertSame([], $this->provider->explain('SELECT 1'));
+    }
+
     public function testGetDriverNameReturnsSqlite(): void
     {
         $this->assertSame('sqlite', $this->provider->getDriverName());
