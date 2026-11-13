@@ -83,6 +83,11 @@ new Renderer(Theme::tokyoNight());  // #1a1b26 / #7aa2f7
 new Renderer(Theme::pink());        // playful sweet palette
 ```
 
+A dated divergence to know (2026-11, sugar-markdown-028): glamour's
+`NewTermRenderer` defaults to its `dark` style, while `new Renderer()`
+with no theme lands on `ansi()`. One-line parity path:
+`new Renderer(Theme::dark())`.
+
 Custom JSON theme (`Theme::fromFile($path)` reads the same JSON from a
 file, optionally under a byte ceiling; `fromJsonString()` takes it inline):
 

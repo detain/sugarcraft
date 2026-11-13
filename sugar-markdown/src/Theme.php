@@ -245,7 +245,14 @@ final class Theme
         $this->rule       = $rule       ?? $noop;
     }
 
-    /** Default ANSI theme: bright accents on each heading, coloured code, etc. */
+    /** Default ANSI theme: bright accents on each heading, coloured code, etc.
+     *
+     * Dated divergence (2026-11, sugar-markdown-028): glamour's
+     * `NewTermRenderer` defaults to the `dark` style, while this port's
+     * `new Renderer()` lands here (`ansi()`) — adopting `dark` as the
+     * default is owner-gated (behaviour break for current consumers).
+     * One-line parity path: `new Renderer(Theme::dark())`.
+     */
     public static function ansi(): self
     {
         if (isset(self::$stockInstances['ansi'])) {
