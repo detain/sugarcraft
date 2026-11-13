@@ -755,6 +755,14 @@ final class Server
      * The handleRequest() contract returns the body as one string, so
      * the object is buffered here; readAll() drains the backend stream
      * in a single C-level copy rather than PHP-level chunk loops.
+     *
+     * Downloads do not re-hash (041): the oid is a storage key, not a
+     * per-read checksum, and hashing every byte would put digest-level
+     * CPU on the hot read path for a fault the write path already
+     * prevents — publish fsyncs before rename, and the verify route
+     * re-hashes the stored object at the client's own request (the
+     * protocol's re-entry point), so a poisoned oid is caught and
+     * replaced rather than silently served forever.
      */
     private function handleLfsDownload(Repo $repo, LFSHandler $handler, ?User $user, string $oid): array
     {
@@ -845,8 +853,14 @@ final class Server
 
     /**
      * POST /{repo}/info/lfs/objects/{oid}/verify — post-upload check
-     * that the object landed intact (exists and has the size the client
-     * claims). Uses upload auth, matching the batch `verify` action.
+     * that the object landed intact. The client's size claim is only
+     * weak evidence (041): a poisoned object can wear the right length,
+     * so the stored bytes are RE-HASHED and compared to the
+     * content-addressed name. A mismatch answers 422 — the LFS protocol's
+     * "upload again", which is exactly the recovery a content-addressed
+     * store needs, because an oid is immutable and a bad one would
+     * otherwise serve forever. Uses upload auth, matching the batch
+     * `verify` action.
      */
     private function handleLfsVerify(Repo $repo, LFSHandler $handler, ?User $user, string $oid, string $body): array
     {
@@ -868,13 +882,42 @@ final class Server
             return $this->errorResponse(404, 'Object not found');
         }
 
+        // 101: bind the stat once — the old shape probed size() twice per
+        // verified object (gate, then response body).
+        $size = $backend->size($oid);
         $expectedSize = (int) ($request['size'] ?? -1);
-        if ($expectedSize >= 0 && $backend->size($oid) !== $expectedSize) {
+        if ($expectedSize >= 0 && $size !== $expectedSize) {
             return $this->errorResponse(422, 'Object size does not match');
         }
 
+        // 041: the digest is the real verification. Streamed through the
+        // backend handle — no full materialization, the hash runs in
+        // fixed memory whatever the object size (the upload path holds
+        // the payload in RAM anyway; this path must not).
+        try {
+            $resource = $backend->read($oid);
+            try {
+                $context = \hash_init('sha256');
+                if (\hash_update_stream($context, $resource) === false) {
+                    return $this->errorResponse(422, 'Object cannot be read for verification');
+                }
+                $digest = \hash_final($context);
+            } finally {
+                \fclose($resource);
+            }
+        } catch (\RuntimeException) {
+            // Opened, then went unreadable — or vanished between the stat
+            // and the read. Either way the client's remedy is the same
+            // re-upload as any other failed verification.
+            return $this->errorResponse(422, 'Object cannot be read for verification');
+        }
+
+        if ($digest !== $oid) {
+            return $this->errorResponse(422, 'Object hash does not match OID');
+        }
+
         $this->responseHeaders['Content-Type'] = LFSHandler::MEDIA_TYPE;
-        $this->body = \json_encode(['oid' => $oid, 'size' => $backend->size($oid)], \JSON_UNESCAPED_SLASHES) ?: '{}';
+        $this->body = \json_encode(['oid' => $oid, 'size' => $size], \JSON_UNESCAPED_SLASHES) ?: '{}';
 
         return $this->finalizeResponse();
     }

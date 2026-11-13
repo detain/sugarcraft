@@ -333,6 +333,53 @@ final class LfsRoutesTest extends TestCase
         $this->assertSame(422, $result['status']);
     }
 
+    public function testVerifyHashMismatchReturns422EvenWhenTheSizeClaimMatches(): void
+    {
+        // 041: the old verify checked SIZE only — an object whose bytes
+        // never reached the media (power loss between rename and flush)
+        // could wear the right length and pass forever. Poison the
+        // stored object in place at identical length: a size-only check
+        // stays green here; only re-hashing catches it.
+        $content = 'intact payload bytes';
+        $oid = $this->storeObject($content);
+
+        $backend = new LocalStorageBackend($this->config->lfsPath());
+        $path = $backend->path($oid);
+        $this->assertIsString($path);
+        \file_put_contents($path, \str_repeat('X', \strlen($content)));
+
+        $result = $this->request(
+            'POST',
+            "/testrepo.git/info/lfs/objects/{$oid}/verify",
+            \json_encode(['oid' => $oid, 'size' => \strlen($content)]),
+            $this->adminHeaders(),
+        );
+
+        $this->assertSame(422, $result['status'], 'a same-length poisoned object must not verify');
+    }
+
+    public function testVerifyAcceptsAZeroByteObjectWhoseHashIsTruthful(): void
+    {
+        // 041's decoy note: the pre-fix pass-on-claim shape let even a
+        // 0-byte object with a 0 claim through without evidence. The
+        // digest answer keeps the protocol honest in BOTH directions —
+        // an empty file is a legitimate LFS object (sha256 of ""), so
+        // the fix is hashing, not a blanket size refusal.
+        $oid = $this->storeObject('');
+
+        $result = $this->request(
+            'POST',
+            "/testrepo.git/info/lfs/objects/{$oid}/verify",
+            \json_encode(['oid' => $oid, 'size' => 0]),
+            $this->adminHeaders(),
+        );
+
+        $this->assertSame(200, $result['status']);
+        $decoded = \json_decode($result['body'], true);
+        $this->assertSame($oid, $decoded['oid']);
+        $this->assertSame(0, $decoded['size']);
+    }
+
     // -------------------------------------------------------------------------
     // Guard rails
     // -------------------------------------------------------------------------

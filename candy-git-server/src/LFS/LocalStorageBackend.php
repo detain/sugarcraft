@@ -20,25 +20,50 @@ final class LocalStorageBackend implements LFSStorageBackendInterface
     }
 
     /**
-     * Get the full path for an LFS object.
+     * Storage-side self-validation (097): the route gate and the batch
+     * validator already refuse off-shape oids, but this class derives
+     * filesystem paths straight from the caller's string — containment
+     * must not rest entirely on upstream gates for embedders. The shape
+     * is the protocol's own (SHA-256 lowercase hex — twin of
+     * LFSHandler::isValidOid; the import would cycle handler→backend→
+     * handler, so the pattern is stated once here and pinned in tests).
+     */
+    private const OID_PATTERN = '/^[0-9a-f]{64}$/';
+
+    public static function isValidOid(string $oid): bool
+    {
+        return \preg_match(self::OID_PATTERN, $oid) === 1;
+    }
+
+    /**
+     * Get the full path for an LFS object. THE single choke point every
+     * oid-addressed method derives through, so one guard covers the lot
+     * (097): slashes, dots, and any other traversal bait die here with a
+     * throw rather than escaping the bucket.
+     *
+     * @throws \InvalidArgumentException on an off-shape oid
      */
     private function objectPath(string $oid): string
     {
+        if (!self::isValidOid($oid)) {
+            throw new \InvalidArgumentException("Invalid LFS object id: {$oid}");
+        }
+
         return $this->lfsPath . '/' . \substr($oid, 0, 2) . '/' . \substr($oid, 2, 2) . '/' . $oid;
     }
 
     public function exists(string $oid): bool
     {
-        return \file_exists($this->objectPath($oid));
+        // 101: one stat is the whole question — no file_exists warm-up.
+        return @\stat($this->objectPath($oid)) !== false;
     }
 
     public function size(string $oid): int
     {
-        $path = $this->objectPath($oid);
-        if (!\file_exists($path)) {
-            return 0;
-        }
-        $stat = @\stat($path);
+        // 101: the old shape paid file_exists + stat; the @stat answer IS
+        // the existence answer, so trust its ordering and probe once.
+        $stat = @\stat($this->objectPath($oid));
+
         return $stat !== false ? (int) $stat['size'] : 0;
     }
 
@@ -47,14 +72,20 @@ final class LocalStorageBackend implements LFSStorageBackendInterface
      */
     public function read(string $oid)
     {
+        // 101: fopen is the optimistic oracle — the success path never
+        // probes first; only a failure pays a second, diagnostic stat to
+        // tell "missing" (the not-found contract callers catch) from
+        // "there but unopenable" (a server-side fault callers surface).
         $path = $this->objectPath($oid);
-        if (!\file_exists($path)) {
-            throw new \RuntimeException("LFS object {$oid} not found");
-        }
         $handle = @\fopen($path, 'rb');
         if ($handle === false) {
-            throw new \RuntimeException("Cannot open LFS object {$oid}");
+            if (@\stat($path) !== false) {
+                throw new \RuntimeException("Cannot open LFS object {$oid}");
+            }
+
+            throw new \RuntimeException("LFS object {$oid} not found");
         }
+
         return $handle;
     }
 
@@ -133,9 +164,10 @@ final class LocalStorageBackend implements LFSStorageBackendInterface
 
     /**
      * The shared atomic publish: shard dir 0750, private temp inode
-     * before a payload byte lands, rename onto the target, and removal
-     * of both handle and temp on any failure — no half-written object,
-     * no orphaned temp. One shape for both write paths (049).
+     * before a payload byte lands, fsync, rename onto the target, and
+     * removal of both handle and temp on any failure — no half-written
+     * object, no orphaned temp, and (041) no name that outruns its
+     * bytes. One shape for both write paths (049).
      *
      * @param callable(resource): void $sink
      */
@@ -172,6 +204,18 @@ final class LocalStorageBackend implements LFSStorageBackendInterface
             }
             $sink($handle);
             \fflush($handle);
+            // 041: the payload must be on stable storage BEFORE the name
+            // is. rename only guarantees the directory entry — after a
+            // power loss between rename and the deferred data flush the
+            // object would exist with content that never hit the media,
+            // and a content-addressed store serves that poisoned oid
+            // forever. Same fsync-before-rename discipline as
+            // AtomicWriter::write and the UserStore exchange. A failed
+            // fsync lands in the catch below: temp swept, nothing
+            // published, the client simply retries the upload.
+            if (!@\fsync($handle)) {
+                throw new \RuntimeException("Cannot fsync LFS object {$oid}");
+            }
             if (@\rename($temp, $path) === false) {
                 throw new \RuntimeException("Cannot publish LFS object {$oid}");
             }
@@ -190,10 +234,9 @@ final class LocalStorageBackend implements LFSStorageBackendInterface
      */
     public function delete(string $oid): void
     {
-        $path = $this->objectPath($oid);
-        if (\file_exists($path)) {
-            @\unlink($path);
-        }
+        // 101: unlink on a missing path is a silent false — the
+        // file_exists pre-probe bought nothing but a second stat.
+        @\unlink($this->objectPath($oid));
     }
 
     public function path(string $oid): ?string

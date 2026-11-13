@@ -330,7 +330,7 @@ final class GitServerTest extends TestCase
         mkdir($tmpDir, 0755, true);
 
         $backend = new \SugarCraft\GitServer\LFS\LocalStorageBackend($tmpDir);
-        $this->assertFalse($backend->exists('abc123'));
+        $this->assertFalse($backend->exists('65acc4da954246fe4d887e4510f96d1042689034531f3b0c03d94bb7bff9abf6'));
 
         // Clean up
         @rmdir($tmpDir);
@@ -342,7 +342,7 @@ final class GitServerTest extends TestCase
         mkdir($tmpDir, 0755, true);
 
         $backend = new \SugarCraft\GitServer\LFS\LocalStorageBackend($tmpDir);
-        $oid = 'abc123def456789';
+        $oid = '24f9b272395018cab5fadab4ff408ecc3263d01c642f3b8c4c93c59886859dc9';
 
         // Write content
         $stream = fopen('data://text/plain;base64,' . base64_encode('Hello World'), 'r');
@@ -364,7 +364,7 @@ final class GitServerTest extends TestCase
         mkdir($tmpDir, 0755, true);
 
         $backend = new \SugarCraft\GitServer\LFS\LocalStorageBackend($tmpDir);
-        $oid = 'abc123def456789';
+        $oid = '24f9b272395018cab5fadab4ff408ecc3263d01c642f3b8c4c93c59886859dc9';
 
         // Write then delete
         $stream = fopen('data://text/plain;base64,' . base64_encode('Content'), 'r');

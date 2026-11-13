@@ -49,7 +49,7 @@ final class LocalStorageBackendTest extends TestCase
     public function testObjectPathGeneration(): void
     {
         $backend = new LocalStorageBackend($this->tmpDir);
-        $oid = 'abcd1234efgh5678';
+        $oid = '904cbdbe7979166aadb98c9c00d60736d71ad995c61f34a409d1c568f35e7ce4';
 
         // Use reflection to test private method
         $reflection = new \ReflectionClass($backend);
@@ -59,14 +59,14 @@ final class LocalStorageBackendTest extends TestCase
         $path = $method->invoke($backend, $oid);
 
         // Path should follow LFS convention: {lfsPath}/{first 2 chars}/{next 2 chars}/{oid}
-        $this->assertSame($this->tmpDir . '/ab/cd/abcd1234efgh5678', $path);
+        $this->assertSame($this->tmpDir . '/90/4c/904cbdbe7979166aadb98c9c00d60736d71ad995c61f34a409d1c568f35e7ce4', $path);
     }
 
     public function testSizeReturnsZeroForNonexistentObject(): void
     {
         $backend = new LocalStorageBackend($this->tmpDir);
 
-        $size = $backend->size('nonexistent-oid-12345');
+        $size = $backend->size('ded3622590016d80baa0af802c34321a98f36c0b0ef4d0af7d0d227072b37a3c');
 
         $this->assertSame(0, $size);
     }
@@ -74,7 +74,7 @@ final class LocalStorageBackendTest extends TestCase
     public function testSizeReturnsActualSize(): void
     {
         $backend = new LocalStorageBackend($this->tmpDir);
-        $oid = 'size-test-oid12345';
+        $oid = '5e11e02e1dc2f7367c963fdc37c264004751d3a795dd3558e7d5af7b2b7b87ac';
 
         // Write content of known size
         $content = 'Hello World';
@@ -94,13 +94,13 @@ final class LocalStorageBackendTest extends TestCase
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('not found');
 
-        $backend->read('nonexistent-oid-read');
+        $backend->read('65acc4da954246fe4d887e4510f96d1042689034531f3b0c03d94bb7bff9abf6');
     }
 
     public function testReadReturnsResourceForExistingObject(): void
     {
         $backend = new LocalStorageBackend($this->tmpDir);
-        $oid = 'read-test-oid12345';
+        $oid = '24f9b272395018cab5fadab4ff408ecc3263d01c642f3b8c4c93c59886859dc9';
 
         // Write content
         $content = 'Read Test Content';
@@ -119,7 +119,7 @@ final class LocalStorageBackendTest extends TestCase
     public function testReadAllReturnsFullContent(): void
     {
         $backend = new LocalStorageBackend($this->tmpDir);
-        $oid = 'readall-test-oid1234';
+        $oid = '75c4ec55302e56f2ffdfa582e6e0c3655ed576d768b1fe8f03d7854a1e4bf179';
 
         $content = 'Read All Content';
         $stream = fopen('data://text/plain;base64,' . base64_encode($content), 'r');
@@ -136,13 +136,13 @@ final class LocalStorageBackendTest extends TestCase
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('not found');
 
-        $backend->readAll('nonexistent-oid-readall');
+        $backend->readAll('65acc4da954246fe4d887e4510f96d1042689034531f3b0c03d94bb7bff9abf6');
     }
 
     public function testWriteCreatesNestedDirectories(): void
     {
         $backend = new LocalStorageBackend($this->tmpDir);
-        $oid = 'ab1234567890abcdef';
+        $oid = '8370faf2339871a44f17b0d579c8b26b74aa896fc79e5f8897f29170ffb8019d';
 
         // LFS path should create directories like: ab/cd/oid
         $stream = fopen('data://text/plain;base64,' . base64_encode('Nested'), 'r');
@@ -150,14 +150,14 @@ final class LocalStorageBackendTest extends TestCase
         fclose($stream);
 
         $this->assertTrue($backend->exists($oid));
-        $this->assertDirectoryExists($this->tmpDir . '/ab');
-        $this->assertDirectoryExists($this->tmpDir . '/ab/12');
+        $this->assertDirectoryExists($this->tmpDir . '/83');
+        $this->assertDirectoryExists($this->tmpDir . '/83/70');
     }
 
     public function testPathReturnsFullPath(): void
     {
         $backend = new LocalStorageBackend($this->tmpDir);
-        $oid = 'path-test-oid12345';
+        $oid = '4e0c10a56289e8c0fc6858af026e8e342bbfda615636a6c51356afc81d3db322';
 
         $stream = fopen('data://text/plain;base64,' . base64_encode('Path Test'), 'r');
         $backend->write($oid, $stream);
@@ -166,7 +166,7 @@ final class LocalStorageBackendTest extends TestCase
         $path = $backend->path($oid);
 
         $this->assertNotNull($path);
-        $this->assertSame($this->tmpDir . '/pa/th/path-test-oid12345', $path);
+        $this->assertSame($this->tmpDir . '/4e/0c/4e0c10a56289e8c0fc6858af026e8e342bbfda615636a6c51356afc81d3db322', $path);
     }
 
     public function testPathReturnsNullForNonexistent(): void
@@ -174,16 +174,16 @@ final class LocalStorageBackendTest extends TestCase
         $backend = new LocalStorageBackend($this->tmpDir);
 
         // Actually path() returns the path regardless of existence
-        $path = $backend->path('nonexistent-oid');
+        $path = $backend->path('65acc4da954246fe4d887e4510f96d1042689034531f3b0c03d94bb7bff9abf6');
 
         $this->assertNotNull($path);
-        $this->assertStringContainsString('nonexistent-oid', $path);
+        $this->assertStringContainsString('65acc4da954246fe4d887e4510f96d1042689034531f3b0c03d94bb7bff9abf6', $path);
     }
 
     public function testWriteAndOverwrite(): void
     {
         $backend = new LocalStorageBackend($this->tmpDir);
-        $oid = 'overwrite-test-oid12';
+        $oid = '6ac66fb734a10d5465f242d268a7baa0c2f686824514197bdb8b813bd1577d9a';
 
         // Write initial content
         $stream1 = fopen('data://text/plain;base64,' . base64_encode('Original'), 'r');
@@ -209,7 +209,7 @@ final class LocalStorageBackendTest extends TestCase
 
         // Honest shape: nothing existed, nothing may appear — the old arm
         // asserted only that no exception flew out.
-        $backend->delete('nonexistent-delete-oid');
+        $backend->delete('777babe0292c639d0d4cb2c03f8e80f6c68ba8023bf51e1476f1049bfcf3a29a');
 
         $this->assertSame([], \array_diff(\scandir($this->tmpDir), ['.', '..']));
     }
@@ -294,6 +294,23 @@ final class LocalStorageBackendTest extends TestCase
         );
         $this->assertStringNotContainsString('fopen($path', $body[0], 'direct write to the final path is back');
 
+        // 041: the durability barrier sits between the sink and the
+        // publish — bytes flush, fsync, THEN the name moves. Dropping the
+        // fsync revives the power-loss window where a renamed object
+        // exists with content that never reached the media, and a
+        // content-addressed store serves that poisoned oid forever.
+        $this->assertStringContainsString('fsync($handle)', $body[0], 'fsync-before-rename discipline lost');
+        $this->assertLessThan(
+            \strpos($body[0], 'rename($temp, $path)'),
+            \strpos($body[0], 'fsync($handle)'),
+            'the rename must not outrun the durability barrier'
+        );
+        $this->assertLessThan(
+            \strpos($body[0], 'fsync($handle)'),
+            \strpos($body[0], '$sink($handle)'),
+            'every payload byte must be in the handle before it is fsynced'
+        );
+
         \preg_match('/public function write\(.*?\n    \}/s', $source, $writeDoor);
         \preg_match('/public function writeBytes\(.*?\n    \}/s', $source, $bytesDoor);
         $this->assertNotEmpty($writeDoor, 'the stream door vanished');
@@ -371,5 +388,81 @@ final class LocalStorageBackendTest extends TestCase
             \array_values(\array_diff(\scandir($bucket), ['.', '..'])),
             'the temp must be swept when publication fails'
         );
+    }
+
+    public function testOidGuardRefusesOffShapeIdsAtEveryOidAddressedDoor(): void
+    {
+        // 097: containment is storage-side truth, not an upstream favor.
+        // objectPath() is the single choke point every door derives
+        // through, so one guard must answer for all eight doors — and
+        // the octet every one of them historically waved through.
+        $backend = new LocalStorageBackend($this->tmpDir);
+
+        $offShape = [
+            'traversal' => '../../etc/passwd',
+            'empty' => '',
+            'short' => 'abc123',
+            'upper' => \strtoupper(\hash('sha256', 'x')),
+            'odd-chars' => 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbee-',
+            'nul-byte' => \str_repeat('a', 61) . "\0xy",
+            'one-too-long' => \str_repeat('0', 65),
+        ];
+
+        /** @var array<string, callable(LocalStorageBackend, string): mixed> $doors */
+        $doors = [
+            'exists' => static fn (LocalStorageBackend $b, string $o): bool => $b->exists($o),
+            'size' => static fn (LocalStorageBackend $b, string $o): int => $b->size($o),
+            'read' => static fn (LocalStorageBackend $b, string $o) => $b->read($o),
+            'readAll' => static fn (LocalStorageBackend $b, string $o): string => $b->readAll($o),
+            'path' => static fn (LocalStorageBackend $b, string $o): ?string => $b->path($o),
+            'delete' => static function (LocalStorageBackend $b, string $o): void {
+                $b->delete($o);
+            },
+            'write' => static function (LocalStorageBackend $b, string $o): void {
+                $stream = \fopen('php://memory', 'rb');
+                try {
+                    $b->write($o, $stream);
+                } finally {
+                    \fclose($stream);
+                }
+            },
+            'writeBytes' => static function (LocalStorageBackend $b, string $o): void {
+                $b->writeBytes($o, 'x');
+            },
+        ];
+
+        foreach ($offShape as $shape => $oid) {
+            foreach ($doors as $door => $call) {
+                try {
+                    $call($backend, $oid);
+                    $this->fail("the {$door} door accepted an off-shape oid ({$shape})");
+                } catch (\InvalidArgumentException) {
+                    // The prescribed refusal: containment never depends
+                    // on what the caller's path resolves to.
+                }
+            }
+        }
+
+        $this->assertSame([], \array_values(\array_diff(\scandir($this->tmpDir), ['.', '..'])),
+            'a refused oid may not leave so much as a shard directory behind');
+    }
+
+    public function testOidGuardIsTheTwinOfTheHandlerValidator(): void
+    {
+        // The backend docblock names LFSHandler::isValidOid as the twin
+        // this pattern must not drift from (the import would cycle
+        // handler→backend→handler) — pin the parity instead.
+        $samples = ['', 'a', 'ABCDEF', \str_repeat('0', 63), \str_repeat('0', 65),
+            \strtoupper(\hash('sha256', 'twin')), \hash('sha256', 'twin'), '../../x'];
+
+        foreach ($samples as $oid) {
+            $this->assertSame(
+                \SugarCraft\GitServer\LFS\LFSHandler::isValidOid($oid),
+                LocalStorageBackend::isValidOid($oid),
+                "backend and handler disagree on oid shape: {$oid}"
+            );
+        }
+
+        $this->assertTrue(LocalStorageBackend::isValidOid(\hash('sha256', 'twin')));
     }
 }
