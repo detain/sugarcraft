@@ -90,7 +90,7 @@ final class PaginatorReviewPinsTest extends TestCase
             ->withType(Type::Arabic)->withArabicFormat('Page %d of %d');
         $this->assertSame('Page 1 of 3', $p->view());
 
-        foreach (['%z', '%d/%d/%d', '%d%'] as $bad) {
+        foreach (['%z', '%d/%d/%d', '%d%', '%s/%s'] as $bad) {
             try {
                 $p->withArabicFormat($bad);
                 $this->fail("format {$bad} must be refused");

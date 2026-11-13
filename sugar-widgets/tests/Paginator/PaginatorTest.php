@@ -177,4 +177,26 @@ final class PaginatorTest extends TestCase
         [$next, ] = $p->update(new KeyMsg(KeyType::End));
         $this->assertSame(2, $next->page);
     }
+
+    public function testArabicFormatGrammarAcceptsFamilyRejectsPayloads(): void
+    {
+        // W-38/sugar-widgets-060: the M21 arity trial alone admitted
+        // '%c/%c' (raw control bytes at page 27) and '%.999d' (runaway
+        // width); the digit-family grammar now refuses both AT INGRESS.
+        foreach (['%c/%c', '%.999d/%d', '%s/%s', '%x/%x', '%1$d/%2$d'] as $bad) {
+            try {
+                Paginator::new()->withArabicFormat($bad);
+                $this->fail("grammar must refuse {$bad} at the setter");
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString('sprintf', $e->getMessage());
+            }
+        }
+        $legal = Paginator::new()->withPerPage(10)->withTotalItems(270)
+            ->withType(Type::Arabic)->withPage(26)
+            ->withArabicFormat('%d / %d');
+        $view = $legal->view();
+        $this->assertSame('27 / 27', $view);
+        $this->assertSame(0, preg_match('/\x1b|[\x00-\x08]/', $view), 'page-27 render carries zero control bytes');
+        $this->assertSame('Page 27 of 27', $legal->withArabicFormat('Page %d of %d')->view());
+    }
 }

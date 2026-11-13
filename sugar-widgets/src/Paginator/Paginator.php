@@ -195,10 +195,12 @@ final class Paginator implements Model
      * `'%d/%d'` for ASCII contexts but lets callers swap it for e.g.
      * `'Page %d of %d'`. Mirrors charmbracelet/bubbles `ArabicFormat`.
      *
-     * The format is parsed at the boundary: it must be a valid sprintf
-     * template consuming at most two integer arguments, so view() can
-     * trust it later (an unchecked `'%s/%s'` would throw a ValueError
-     * mid-frame at render time — M21).
+     * The format is parsed at the boundary: exactly two digit-family
+     * `%d`-style specs (optional -,+,' ',0,# flags, width/precision up to
+     * two digits) and no other percent-anything, so view() can trust it
+     * later — an unchecked `'%s/%s'` throws a ValueError mid-frame (M21),
+     * and the trial alone would still admit `'%c/%c'` (raw control bytes
+     * at page 27) or `'%.999d'` (runaway width) (W-38).
      */
     public function withArabicFormat(string $fmt): self
     {
@@ -208,6 +210,22 @@ final class Paginator implements Model
         try {
             sprintf($fmt, 1, 1);
         } catch (\ValueError | \ArgumentCountError) {
+            throw new \InvalidArgumentException(Lang::t('paginator.arabic_format_invalid'));
+        }
+        // Grammar law (W-38/sugar-widgets-060): exactly TWO digit-family
+        // specs (%d with the -,+,' ',0,# flags and at most 2 digits of
+        // width/precision — '%.999d' class rejected as runaway width),
+        // and NO other percent-anything: mask the two legal specs, then
+        // refuse any surviving '%' (kills %c/%s/%x payloads, %% tricks,
+        // and positional %(arg)$n reordering in one sweep).
+        $masked = \preg_replace(
+            '/%[-+ 0#]*(?:\d+(?:\.\d{1,2})?)?d/',
+            "\0",
+            $fmt,
+            2,
+            $count,
+        );
+        if ($count !== 2 || $masked === null || \str_contains($masked, '%')) {
             throw new \InvalidArgumentException(Lang::t('paginator.arabic_format_invalid'));
         }
         return $this->mutate(arabicFormat: $fmt);
