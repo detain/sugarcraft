@@ -27,24 +27,22 @@ $parsed   = Color::parse('#6b50ff');
 
 echo "Original color: {$original->toHex()} (RGBA: {$original->r}, {$original->g}, {$original->b}, {$original->a})\n\n";
 
-// Each profile level has its OWN encoder — printing toAnsiForeground() for all
-// of them would show 38;2 everywhere and erase the whole degradation story:
-// TrueColor keeps the full RGB triple, ANSI 256 re-indexes it into the 256
-// palette, the 16-colour rungs collapse to SGR 30-37/90-97, and a NoTTY
-// writer emits no escape at all (degrade() strips every sequence).
-$encode = static fn (Color $converted, ColorProfile $profile): string => match (true) {
-    $profile === ColorProfile::TrueColor => $converted->toAnsiForeground(),
-    $profile === ColorProfile::Ansi256 => $converted->toAnsi256Foreground(),
-    $profile === ColorProfile::Ansi, $profile === ColorProfile::Ascii => $converted->toAnsi16Foreground(),
-    default => '',
-};
+// One door, eight rungs: Color::toAnsiFor() (CP-18) owns the per-profile
+// encoder, so nothing here can silently drop a rung the way a hand-rolled
+// match used to — printing toAnsiForeground() for all of them would show
+// 38;2 everywhere and erase the whole degradation story: TrueColor keeps the
+// full RGB triple, the 256-color rungs re-index it, the 16/8-colour rungs
+// collapse to SGR 30-37/90-97, Fgbg answers black-or-white, and the two
+// "no color" rungs emit nothing at all (degrade()/stripAnsi removes every
+// sequence).
+$allRungs = ColorProfile::cases();
 
 echo "| Profile    | Result  | ANSI escape               |\n";
 echo "|------------|---------|---------------------------|\n";
 
-foreach ([ColorProfile::TrueColor, ColorProfile::Ansi256, ColorProfile::Ansi, ColorProfile::Ascii, ColorProfile::NoTTY] as $profile) {
+foreach ($allRungs as $profile) {
     $converted = $original->convert($profile);
-    $fg = $encode($converted, $profile);
+    $fg = $original->toAnsiFor($profile);
     // Show the escape readably: the real 0x1B byte becomes the two-character
     // '\e' so the table stays aligned and the bytes stay copyable.
     $display = $fg === '' ? '— none (stripped)' : \str_replace("\x1b", '\e', $fg);
@@ -53,10 +51,10 @@ foreach ([ColorProfile::TrueColor, ColorProfile::Ansi256, ColorProfile::Ansi, Co
 
 echo "\n--- Rendered (your terminal may not show all correctly) ---\n";
 echo "The escape bytes differ per rung — this is the degradation, live:\n";
-foreach ([ColorProfile::TrueColor, ColorProfile::Ansi256, ColorProfile::Ansi, ColorProfile::Ascii, ColorProfile::NoTTY] as $profile) {
+foreach ($allRungs as $profile) {
     $converted = $original->convert($profile);
-    $fg = $encode($converted, $profile);
-    echo $fg . "[{$profile->label()}] This is #6b50ff converted to {$profile->label()} " . ($fg !== '' ? "\x1b[0m" : '') . "\n";
+    $fg = $original->toAnsiFor($profile);
+    echo $fg . "[{$profile->label()}] This is #6b50ff converted to {$converted->toHex()} " . ($fg !== '' ? "\x1b[0m" : '') . "\n";
 }
 
 echo "\n--- ANSI256 216-cube sample ---\n";

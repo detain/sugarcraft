@@ -382,6 +382,60 @@ final class Color
     }
 
     /**
+     * Emit the SGR escape that renders this color on a given profile rung —
+     * the value-object sibling of {@see Palette::emitColor()} (CP-18).
+     *
+     * Palette::emitColor() degrades wire bytes it is rewriting; this door
+     * degrades a Color it owns. The indexed rungs agree with the pipeline
+     * byte-for-byte (one leg each, one answer); the single disclosed
+     * divergence is spelled out on the Fgbg leg below:
+     * - TrueColor: 24-bit 38;2/48;2 reference RGB (the honest writers).
+     * - Ansi256/Ansi240: 38;5/48;5 nearest index — toAnsi256Index() lands
+     *   exclusively in 16-255, mirroring emitColor's Ansi240 re-quantise leg
+     *   (a fresh Color has no wire slot to pass through).
+     * - Ansi: 4-bit ansi16Sgr(toAnsi16Index()) — the terminal's theme paints
+     *   the slot.
+     * - Ansi8: 4-bit ansi16Sgr(toAnsi8Index()) — idx<=7, so plain 30-37/40-47.
+     * - Fgbg: black-or-white only, decided by the SAME shared threshold
+     *   toAscii()/isDark() read (perceivedBrightness vs 127.5): dark renders
+     *   as 30/40, light as 37/47. Documented divergence from emitColor for
+     *   the light half: the wire path quantises pure white to brightWhite
+     *   slot 15 (SGR 97/107); this door answers the rung's own basic pair —
+     *   a Fgbg terminal has no bright slots to theme, so claiming one would
+     *   lean on an attribute the rung does not have.
+     * - Ascii: '' — the colorless rung strips color, decoration survives
+     *   (CP-05), so the honest emission for the color itself is nothing.
+     * - NoTTY: '' — the full-strip rung (Palette::stripAnsi) deletes every SGR.
+     *
+     * The match is exhaustive over the eight live cases (the deprecated
+     * spellings resolve to the same case objects), so a future rung cannot
+     * silently fall off this list the way the example's hand-rolled closure
+     * did — that is the whole point of the door existing.
+     */
+    public function toAnsiFor(ColorProfile $profile, bool $background = false): string
+    {
+        return match (true) {
+            $profile === ColorProfile::TrueColor => $background
+                ? $this->toTrueColorBackground()
+                : $this->toTrueColorForeground(),
+            $profile === ColorProfile::Ansi256,
+            $profile === ColorProfile::Ansi240 => $background
+                ? $this->toAnsi256Background()
+                : $this->toAnsi256Foreground(),
+            $profile === ColorProfile::Ansi,
+            $profile === ColorProfile::Ansi8 => "\x1b[" . self::ansi16Sgr(
+                $profile === ColorProfile::Ansi ? $this->toAnsi16Index() : $this->toAnsi8Index(),
+                $background,
+            ) . "m",
+            $profile === ColorProfile::Fgbg => "\x1b[" . ($background
+                ? ($this->isDark() ? 40 : 47)
+                : ($this->isDark() ? 30 : 37)) . "m",
+            $profile === ColorProfile::Ascii,
+            $profile === ColorProfile::NoTTY => '',
+        };
+    }
+
+    /**
      * Map an ANSI 16-color index (0–15) to a 4-bit SGR code.
      *
      * Foreground: 0–7 → 30–37, 8–15 → 90–97

@@ -324,6 +324,18 @@ echo $color->toTrueColorForeground(); // "\x1b[38;2;…m" — honest name; the o
 $auto = (new Palette())->convert($color);
 ```
 
+**One door per rung (CP-18).** `Color::toAnsiFor()` emits the SGR that renders
+the color on a given profile — the value-object sibling of `Palette`'s wire
+degradation, exhaustive over all eight cases so a rung cannot silently fall
+off a hand-rolled match:
+
+```php
+$color->toAnsiFor(ColorProfile::TrueColor);             // "\x1b[38;2;…m"
+$color->toAnsiFor(ColorProfile::Ansi256, background: true); // "\x1b[48;5;…m"
+$color->toAnsiFor(ColorProfile::Fgbg);                  // black-or-white SGR
+$color->toAnsiFor(ColorProfile::Ascii);                 // "" — colorless rung
+```
+
 **Constructors from the indexed rungs.** The writers that turn a `Color` into
 SGR now have exact inverse doors (CP-17):
 

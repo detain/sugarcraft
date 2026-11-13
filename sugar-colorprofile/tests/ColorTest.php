@@ -543,4 +543,77 @@ final class ColorTest extends TestCase
         $this->assertSame("\x1b[48;5;{$idx}m", $c->toAnsi256Background());
         $this->assertSame("\x1b[38;5;{$idx}m", $c->toAnsi256Foreground());
     }
+
+    // -------------------------------------------------------------------------
+    // CP-18 — toAnsiFor: one door, eight rungs
+    // -------------------------------------------------------------------------
+
+    public function testToAnsiForTrueColorUsesTheHonestOwners(): void
+    {
+        $c = new Color(10, 20, 30);
+        $this->assertSame($c->toTrueColorForeground(), $c->toAnsiFor(ColorProfile::TrueColor));
+        $this->assertSame($c->toTrueColorBackground(), $c->toAnsiFor(ColorProfile::TrueColor, true));
+    }
+
+    public function testToAnsiForIndexedRungsMatchTheDedicatedEmitters(): void
+    {
+        $c = Color::fromHex(0x6b50ff);
+        foreach ([ColorProfile::Ansi256, ColorProfile::Ansi240] as $rung) {
+            $this->assertSame($c->toAnsi256Foreground(), $c->toAnsiFor($rung), $rung->name);
+            $this->assertSame($c->toAnsi256Background(), $c->toAnsiFor($rung, true), $rung->name);
+        }
+        $this->assertSame($c->toAnsi16Foreground(), $c->toAnsiFor(ColorProfile::Ansi));
+        $this->assertSame($c->toAnsi16Background(), $c->toAnsiFor(ColorProfile::Ansi, true));
+        $this->assertSame(
+            "\x1b[" . Color::ansi16Sgr($c->toAnsi8Index(), false) . "m",
+            $c->toAnsiFor(ColorProfile::Ansi8),
+        );
+        $this->assertSame(
+            "\x1b[" . Color::ansi16Sgr($c->toAnsi8Index(), true) . "m",
+            $c->toAnsiFor(ColorProfile::Ansi8, true),
+        );
+    }
+
+    public function testToAnsiForAnsi8StaysOnTheBaseRungs(): void
+    {
+        // toAnsi8Index() lands 0-7, so every emission is a plain 30-37/40-47 —
+        // never a bright offset, which a 4-bit-only terminal cannot theme.
+        foreach ([new Color(255, 0, 0), new Color(0, 200, 0), Color::fromHex(0x6b50ff)] as $c) {
+            $sgr = (int) preg_replace('/\D/', '', $c->toAnsiFor(ColorProfile::Ansi8));
+            $this->assertGreaterThanOrEqual(30, $sgr);
+            $this->assertLessThanOrEqual(37, $sgr);
+        }
+    }
+
+    public function testToAnsiForColorlessRungsEmitNothing(): void
+    {
+        $c = new Color(100, 50, 255);
+        foreach ([ColorProfile::Ascii, ColorProfile::NoTTY] as $rung) {
+            $this->assertSame('', $c->toAnsiFor($rung), $rung->name . ' fg');
+            $this->assertSame('', $c->toAnsiFor($rung, true), $rung->name . ' bg');
+        }
+    }
+
+    public function testToAnsiForFgbgAnswersTheBasicBlackWhitePair(): void
+    {
+        $dark = new Color(10, 10, 10);
+        $light = new Color(250, 250, 250);
+        $this->assertTrue($dark->isDark());
+        $this->assertFalse($light->isDark());
+        $this->assertSame("\x1b[30m", $dark->toAnsiFor(ColorProfile::Fgbg));
+        $this->assertSame("\x1b[40m", $dark->toAnsiFor(ColorProfile::Fgbg, true));
+        $this->assertSame("\x1b[37m", $light->toAnsiFor(ColorProfile::Fgbg));
+        $this->assertSame("\x1b[47m", $light->toAnsiFor(ColorProfile::Fgbg, true));
+    }
+
+    public function testToAnsiForCoversEveryLiveCase(): void
+    {
+        // A rung added to the enum without a leg here is exactly the silent
+        // drop CP-18 exists to prevent; the exhaustive match keeps that red
+        // at compile time, and this pin keeps the CASE LIST honest (count).
+        $this->assertCount(8, ColorProfile::cases());
+        foreach (ColorProfile::cases() as $rung) {
+            $this->assertIsString((new Color(1, 2, 3))->toAnsiFor($rung), $rung->name);
+        }
+    }
 }
