@@ -112,6 +112,68 @@ final class ServerStatusGtidDialogTest extends TestCase
         $this->assertStringNotContainsString('Error: GTID_MODE', $rendered);
     }
 
+    public function testCycleVisitsExactlyTheFourWhitelistedModes(): void
+    {
+        // SQL-O06: the 'c' ring must be OFF → OFF_PERMISSIVE → ON_PERMISSIVE
+        // → ON. The earlier five-slot ring included OFF_SECURE, which real
+        // servers refuse with ERROR 1231.
+        [$open,] = $this->page->update($this->char('g'));
+        $this->assertIsServerStatusPage($open);
+
+        $seen = [];
+        $current = $open;
+        for ($i = 0; $i < 4; $i++) {
+            [$next,] = $current->update($this->char('c'));
+            $this->assertIsServerStatusPage($next);
+            $this->assertMatchesRegularExpression(
+                '/GTID_MODE \[(OFF|OFF_PERMISSIVE|ON_PERMISSIVE|ON)\]/',
+                self::plain($next->view()),
+            );
+            $seen[] = self::plain($next->view());
+            $current = $next;
+        }
+
+        foreach ($seen as $rendered) {
+            $this->assertStringNotContainsString('OFF_SECURE', $rendered);
+        }
+        // A full ring from ON lands back on ON.
+        $this->assertStringContainsString('GTID_MODE [ON]', $seen[3]);
+    }
+
+    public function testMariaDBNamesTheRefusalInsteadOfOpeningADeadDialog(): void
+    {
+        // SQL-O06: MariaDB normalises past the 5.7.6 version gate (11.x >
+        // 5.7.6) but has no gtid_mode variable — opening the dialog there
+        // was an ERROR 1193 factory. The refusal must name the reason.
+        $db = new FakeDatabase();
+        $db->setQueryResult([['Variable_name' => 'Uptime', 'Value' => '3600']]);
+        $db->setServerVersion('5.5.5-11.4.4-MariaDB-1:11.4.4+maria~ubu2404');
+        $page = new ServerStatusPage(new ServerContext($db));
+
+        [$refused,] = $page->update($this->char('g'));
+        $this->assertIsServerStatusPage($refused);
+        $this->assertFalse($refused->isModal());
+
+        $rendered = self::plain($refused->view());
+        $this->assertStringContainsString('MariaDB has no gtid_mode', $rendered);
+        $this->assertStringNotContainsString('GTID_MODE [', $rendered);
+    }
+
+    public function testOldMysqlNamesTheVersionFloorRefusal(): void
+    {
+        $db = new FakeDatabase();
+        $db->setQueryResult([['Variable_name' => 'Uptime', 'Value' => '3600']]);
+        $db->setServerVersion('MySQL version 5.6.51');
+        $page = new ServerStatusPage(new ServerContext($db));
+
+        [$refused,] = $page->update($this->char('g'));
+        $this->assertIsServerStatusPage($refused);
+        $this->assertFalse($refused->isModal());
+
+        $rendered = self::plain($refused->view());
+        $this->assertStringContainsString('requires MySQL 5.7.6 or newer', $rendered);
+    }
+
     private function char(string $rune): KeyMsg
     {
         return new KeyMsg(KeyType::Char, $rune, false, false, false);

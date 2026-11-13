@@ -16,6 +16,7 @@ use SugarCraft\Sql\Admin\PageBase;
 use SugarCraft\Sql\Admin\Sampler;
 use SugarCraft\Sql\Admin\ServerContextInterface;
 use SugarCraft\Sql\Core\Msg\ReloadReportMsg;
+use SugarCraft\Sql\Db\Flavor;
 use SugarCraft\Sql\Renderer;
 use SugarCraft\Style\Layout;
 use SugarCraft\Style\Position;
@@ -61,6 +62,13 @@ final class ServerStatusPage extends PageBase
      * dialog line. Empty means no pending error.
      */
     private string $gtidError = '';
+    /**
+     * Named refusal when 'g' is pressed but the dialog cannot open (old
+     * MySQL below 5.7.6, or MariaDB which has no gtid_mode at all — SQL-O06).
+     * One visible line, cleared when the dialog opens successfully; a silent
+     * no-op keystroke left the user guessing which gate they hit.
+     */
+    private string $gtidRefusal = '';
 
     /** The GTID dialog is open — it owns every keystroke. */
     public function isModal(): bool
@@ -226,6 +234,12 @@ final class ServerStatusPage extends PageBase
         if ($this->gtidDialog) {
             $lines[] = '';
             $lines[] = $this->renderGtidDialogPanel();
+        } elseif ($this->gtidRefusal !== '') {
+            // Named refusal for the 'g' keystroke the gates rejected (SQL-O06).
+            $lines[] = '';
+            $lines[] = Style::new()->foreground(Color::hex('#f38ba8'))->render(
+                'Error: ' . $this->gtidRefusal,
+            );
         }
 
         $lines[] = '';
@@ -722,19 +736,32 @@ final class ServerStatusPage extends PageBase
     /**
      * Open the GTID mode selector dialog.
      *
-     * Only meaningful on MySQL ≥ 5.7.6 where GTIDs are available.
-     * Initializes the edit value from the current server GTID_MODE setting.
+     * Two gates, each with a named visible refusal (SQL-O06): the feature
+     * needs MySQL ≥ 5.7.6 where GTIDs are available, AND it is MySQL-family
+     * only — MariaDB has no gtid_mode variable, yet its normalised version
+     * (10.x/11.x) sails through the version gate, so an earlier shape let
+     * the dialog open and every apply died ERROR 1193. Initializes the edit
+     * value from the current server GTID_MODE setting.
      */
     private function withGtidDialog(): array
     {
+        if ($this->context->flavor() === Flavor::MariaDB) {
+            $refused = clone $this;
+            $refused->gtidRefusal = 'GTID_MODE is not available: MariaDB has no gtid_mode variable.';
+            return [$refused, null];
+        }
+
         $version = $this->context->version();
         if (!$version->isAtLeast(5, 7, 6)) {
-            return [$this, null]; // GTID not available
+            $refused = clone $this;
+            $refused->gtidRefusal = 'GTID_MODE requires MySQL 5.7.6 or newer (server is ' . $version->raw . ').';
+            return [$refused, null];
         }
 
         $clone = clone $this;
         $clone->gtidDialog = true;
         $clone->gtidError = ''; // a reopened dialog starts clean, not on last failure's error
+        $clone->gtidRefusal = ''; // a successful open supersedes any earlier refusal
         // Initialize edit value from current server GTID_MODE
         $current = $this->context->serverVariables()['gtid_mode'] ?? 'OFF';
         $clone->gtidModeCurrent = $current;

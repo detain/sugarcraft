@@ -439,9 +439,9 @@ echo $page->render();
 |-----|--------|
 | `[r]` | Refresh data |
 | `[q]` | Return to the Tables browser |
-| `[g]` | Open GTID mode selector dialog (MySQL ≥ 5.7.6 only) |
+| `[g]` | Open GTID mode selector dialog (MySQL-family ≥ 5.7.6 only — MariaDB has no `gtid_mode`) |
 
-GTID dialog: press `[c]` to cycle through `OFF → OFF_PERMISSIVE → OFF_SECURE → ON_PERMISSIVE → ON`, then `[Enter]` to execute `SET @@GLOBAL.GTID_MODE = <mode>` or `[Esc]` to cancel. The dialog is only active when the server version is at least MySQL 5.7.6.
+GTID dialog: press `[c]` to cycle through `OFF → OFF_PERMISSIVE → ON_PERMISSIVE → ON` — the four values the server accepts (`OFF_SECURE` is not a `gtid_mode` value; the server refuses it with ERROR 1231) — then `[Enter]` to execute `SET @@GLOBAL.GTID_MODE = <mode>` or `[Esc]` to cancel. The dialog is only active when the server is MySQL-family at version 5.7.6 or newer: MariaDB has no `gtid_mode` variable at all, and pressing `[g]` there names the refusal instead of opening a dialog whose applies would all die with ERROR 1193.
 
 **Sidebar gauges:** The right-hand gauge panel displays five metrics — Connections (`threads_connected/max_connections`), Traffic (per-second bytes rate via Sampler delta), Key Efficiency (`Key_reads / (Key_reads + Key_read_requests)`), QPS (`Questions/Uptime`), and InnoDB Buffer Pool utilization. The Traffic gauge uses sampled per-second deltas from `ServerStatusSnapshotAdapter` bridging `ServerContextInterface` to `StatusSnapshotProviderInterface`, so the displayed ratio reflects actual throughput changes between poll cycles (baseline-corrected) rather than cumulative byte counts. Key-efficiency ratio of 0.0 means all key reads were served from memory; higher values indicate cache misses requiring disk I/O. There is no CPU gauge — MySQL exposes no CPU status variable; the former "CPU" gauge was a mislabeled connections ratio and has been removed.
 
