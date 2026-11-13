@@ -191,6 +191,10 @@ glossary</a> covers the agent-app vocabulary
 <td>Pseudo-Terminal — the kernel master/slave pair that gives a child process a fake tty. Used to run programs under a terminal (<code>sugar-pty</code>, candy-code's PtyRun tool).</td>
 </tr>
 <tr>
+<td><strong>ConPTY</strong></td>
+<td>Windows Pseudo Console — Microsoft's <code>CreatePseudoConsole</code> API, the Windows equivalent of a PTY (Convert-IO, no signals/controlling terminal). Implemented by sugar-pty's Windows backend (<a href="https://github.com/detain/sugarcraft/blob/master/sugar-pty/src/Windows/"><code>sugar-pty/src/Windows/</code></a>).</td>
+</tr>
+<tr>
 <td><strong>cell-diff</strong></td>
 <td>The renderer keeps the previous frame as a grid of cells and writes only the characters that changed. <code>sugar-cellbuffer</code>'s <code>Buffer::diff()</code> is the shared engine.</td>
 </tr>
@@ -213,6 +217,14 @@ glossary</a> covers the agent-app vocabulary
 <tr>
 <td><strong>half block</strong></td>
 <td>The <code>▄</code>/<code>▀</code> glyphs; sugar-image's always-available ANSI tier paints one image row per two such half-cells.</td>
+</tr>
+<tr>
+<td><strong>Sixel</strong></td>
+<td>DEC's bitmap-in-escape-stream image format (<code>ESC P … q … ESC \</code>); one of the three image protocols sugar-image negotiates alongside Kitty and iTerm2 (<a href="https://github.com/detain/sugarcraft/blob/master/sugar-image/src/Renderer/SixelRenderer.php"><code>SixelRenderer</code></a>).</td>
+</tr>
+<tr>
+<td><strong>OHLC</strong></td>
+<td>Open–High–Low–Close — the four-price sample behind candlestick/bar financial charts; the data shape <a href="https://github.com/detain/sugarcraft/blob/master/sugar-charts/src/OHLC/"><code>sugar-charts/src/OHLC/</code></a> renders as terminal candlesticks.</td>
 </tr>
 </tbody>
 </table>
@@ -316,7 +328,7 @@ Tea). The words, per <a href="https://github.com/detain/sugarcraft/blob/master/s
 <tbody>
 <tr>
 <td><strong>Style</strong></td>
-<td>An immutable set-and-render description — bold, colors, underline — as a <code>SugarCraft\Style\Style</code> value object (<a href="https://github.com/detain/sugarcraft/blob/master/sugar-style/src/Style.php"><code>sugar-style/src/Style.php</code></a>); its setters keep lipgloss's bare names (<code>bold()</code>, <code>fg()</code>) and still return a new instance via a private <code>with()</code> — sugar-style is the documented naming exception, so the <code>with*()</code> spelling belongs to the other value-object families. Never &quot;the Sprinkles Style&quot; — that package no longer exists.</td>
+<td>An immutable set-and-render description — bold, colors, underline — as a <code>SugarCraft\Style\Style</code> value object (<a href="https://github.com/detain/sugarcraft/blob/master/sugar-style/src/Style.php"><code>sugar-style/src/Style.php</code></a>); its setters keep lipgloss's bare names (<code>bold()</code>, <code>fg()</code>) and still return a new instance via a private <code>with()</code> — sugar-style is the documented naming exception, so the <code>with*()</code> spelling belongs to the other value-object families. Never &quot;the Sprinkles Style&quot; — Sprinkles was sugar-style's pre-rename codename in the original confectionery naming family (<a href="https://github.com/detain/sugarcraft/blob/master/PROJECT_NAMES.md">PROJECT_NAMES.md</a>); the package has shipped as <code>sugar-style</code> since the 2026-10 rename.</td>
 </tr>
 <tr>
 <td><strong>theme</strong></td>
@@ -328,7 +340,7 @@ Tea). The words, per <a href="https://github.com/detain/sugarcraft/blob/master/s
 </tr>
 <tr>
 <td><strong>ColorProfile</strong></td>
-<td>The terminal's color <em>depth</em> — Ansi16/Ansi256/TrueColor — detected once at startup from TERM/<code>COLORTERM</code>/<code>NO_COLOR</code>/CI env by <a href="https://github.com/detain/sugarcraft/blob/master/sugar-core/src/Util/ColorProfile.php"><code>sugar-core</code>'s <code>Util\ColorProfile::detect()</code></a> and dispatched as a <a href="https://github.com/detain/sugarcraft/blob/master/sugar-core/src/Msg/ColorProfileMsg.php"><code>ColorProfileMsg</code></a>; apps may then pick different palettes per tier.</td>
+<td>The terminal's color <em>depth</em> — the five enum cases <code>NoTty</code>/<code>Ascii</code>/<code>Ansi</code>/<code>Ansi256</code>/<code>TrueColor</code> (<a href="https://github.com/detain/sugarcraft/blob/master/sugar-core/src/Util/ColorProfile.php"><code>sugar-core/src/Util/ColorProfile.php:12-16</code></a>) — detected once at startup from TERM/<code>COLORTERM</code>/<code>NO_COLOR</code>/CI env by <code>Util\ColorProfile::detect()</code> and dispatched as a <a href="https://github.com/detain/sugarcraft/blob/master/sugar-core/src/Msg/ColorProfileMsg.php"><code>ColorProfileMsg</code></a>; apps may then pick different palettes per tier. sugar-colorprofile resolves colors down the longer eight-rung degradation ladder (TrueColor→Ansi256→Ansi240→Ansi→Ansi8→Fgbg→Ascii→NoTTY; see its row in <a href="https://github.com/detain/sugarcraft/blob/master/docs/MATCHUPS.md">docs/MATCHUPS.md</a>).</td>
 </tr>
 <tr>
 <td><strong>NO_COLOR</strong></td>
@@ -408,7 +420,7 @@ Tea). The words, per <a href="https://github.com/detain/sugarcraft/blob/master/s
 <tbody>
 <tr>
 <td><strong>upstream / antecedent</strong></td>
-<td>The original project a SugarCraft package models. &quot;<strong>Port of</strong> charmbracelet/x&quot; or &quot;<strong>Design antecedent:</strong> treilik/bubbleboxer&quot; means the API and semantics follow that project deliberately (see the <code>Mirrors …</code> docblock law in <a href="https://github.com/detain/sugarcraft/blob/master/AGENTS.md">AGENTS.md</a>); a bare &quot;inspired by&quot; would overstate nothing but also promise nothing — the docs use port/antecedent consistently, and README phrases like &quot;bubblezone-style&quot; name a specific antecedent project the same way.</td>
+<td>The original project a SugarCraft package models. &quot;<strong>Port of</strong> charmbracelet/x&quot; or &quot;<strong>Design antecedent:</strong> treilik/bubbleboxer&quot; means the API and semantics follow that project deliberately (see the <code>Mirrors …</code> docblock law in <a href="https://github.com/detain/sugarcraft/blob/master/AGENTS.md">AGENTS.md</a>); a bare &quot;inspired by&quot; makes little promise either way — the docs therefore use port/antecedent consistently, and README phrases like &quot;bubblezone-style&quot; name a specific antecedent project the same way.</td>
 </tr>
 <tr>
 <td><strong>façade</strong></td>
@@ -422,10 +434,23 @@ Tea). The words, per <a href="https://github.com/detain/sugarcraft/blob/master/s
 <td><strong>phar</strong></td>
 <td>PHP Archive — a single self-contained executable file (<code>php candy-top.phar</code>), built and signed for <code>candy-code/v*</code> and <code>candy-top/v*</code> tags (<a href="https://github.com/detain/sugarcraft/blob/master/SECURITY.md">SECURITY.md</a>).</td>
 </tr>
+<tr>
+<td><strong>umbrella</strong></td>
+<td>The <code>sugarcraft/sugarcraft</code> metapackage — installs every library in one <code>composer require</code> (<a href="https://github.com/detain/sugarcraft/blob/master/composer.json">root composer.json</a>). A dependency convenience, not a namespace: packages never require it.</td>
+</tr>
+<tr>
+<td><strong>LFS</strong></td>
+<td>Git Large File Storage — the git extension that replaces big binaries with pointer files and fetches them from a separate store; <code>candy-git-server</code> implements optional LFS on its push/pull surface.</td>
+</tr>
+<tr>
+<td><strong>ReactPHP</strong></td>
+<td>The PHP event-loop library (<code>react/event-loop</code>) SugarCraft builds its async + runtime on: the shared <code>Loop::get()</code> drives input, signals and repaint ticks; <code>sugar-async</code> layers the cancellables/timeouts vocabulary on top of it.</td>
+</tr>
 </tbody>
 </table>
 <h2><a id="legacy-campaign-ids" href="#legacy-campaign-ids" class="heading-permalink" aria-hidden="true" tabindex="-1" title="Permalink">#</a>Legacy campaign IDs</h2>
-<p>You will occasionally see labels like <strong>F-18</strong> (README's candy-image row),
+<p>You will occasionally see labels like <strong>F-18</strong> (the namespace-collision
+ruling in <a href="https://github.com/detain/sugarcraft/blob/master/PROJECT_NAMES.md">PROJECT_NAMES.md</a> — <code>candy-image</code>),
 <strong>E-nnn</strong>, <strong>ISS-nnn</strong>, <strong>wave-N</strong>, or <strong>tranche-N</strong> inside prose. These are
 <strong>internal audit/campaign finding IDs</strong> — each was the handle for one line of
 a dated review ledger (F-nn: the chafa study findings; E-nnn: the candy-code

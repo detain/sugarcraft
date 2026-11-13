@@ -21,12 +21,15 @@ glossary](../candy-code/docs/GLOSSARY.md) covers the agent-app vocabulary
 | **alternate screen** | The second full-screen buffer many terminals keep (`ESC[?1049h`) — enter it and the user's scrollback survives you. `sugar-core`'s `Program` owns this lifecycle. |
 | **raw mode** | TTY setting that turns off line buffering and echo, so the app reads each keystroke immediately. Set up by `sugar-core`'s input stack; required for arrow keys to arrive as bytes at all. |
 | **PTY** | Pseudo-Terminal — the kernel master/slave pair that gives a child process a fake tty. Used to run programs under a terminal (`sugar-pty`, candy-code's PtyRun tool). |
+| **ConPTY** | Windows Pseudo Console — Microsoft's `CreatePseudoConsole` API, the Windows equivalent of a PTY (Convert-IO, no signals/controlling terminal). Implemented by sugar-pty's Windows backend ([`sugar-pty/src/Windows/`](../sugar-pty/src/Windows/)). |
 | **cell-diff** | The renderer keeps the previous frame as a grid of cells and writes only the characters that changed. `sugar-cellbuffer`'s `Buffer::diff()` is the shared engine. |
 | **"cursed" cell-diff mode** | sugar-core's opt-in raw-line diffing mode — the historic lipgloss term for byte-level (not cell-level) frame differencing: cheaper, but only correct when every row is rewritten exactly. See the sugar-core README row ("opt-in cursed cell-diff mode"). |
 | **rune** | One user-perceived character in one grid cell (may be several bytes / codepoints: an emoji, a combining sequence). [`sugar-cellbuffer/src/Cell.php`](../sugar-cellbuffer/src/Cell.php) stores `rune`/style/link/width. |
 | **braille chart** | An 8-dot Braille cell (`⣀`-shaped glyphs, U+2800 block) used as a 2×4-pixel plotting cell — line graphs in text. Produced by the charts [`Canvas`](../sugar-charts/src/Canvas/Canvas.php)/[`BrailleGrid`](../sugar-charts/src/Canvas/BrailleGrid.php) and sugar-dashboard's [`Plot/Braille/`](../sugar-dashboard/src/Plot/Braille/); candy-top's CPU graphs are these, hence "braille graphs, btop-compatible". (Sparklines are the block-element family `▁▂▃▄▅▆▇█`, not braille.) |
 | **luminance ramp** | Grayscale block glyphs (`░▒▓█`) chosen by pixel brightness — the fallback way to show an image or GIF where truecolor or graphics protocols are unavailable (`sugar-animation`, `candy-gifview`, sugar-image's ANSI tier). |
 | **half block** | The `▄`/`▀` glyphs; sugar-image's always-available ANSI tier paints one image row per two such half-cells. |
+| **Sixel** | DEC's bitmap-in-escape-stream image format (`ESC P … q … ESC \`); one of the three image protocols sugar-image negotiates alongside Kitty and iTerm2 ([`SixelRenderer`](../sugar-image/src/Renderer/SixelRenderer.php)). |
+| **OHLC** | Open–High–Low–Close — the four-price sample behind candlestick/bar financial charts; the data shape [`sugar-charts/src/OHLC/`](../sugar-charts/src/OHLC/) renders as terminal candlesticks. |
 
 ## Keyboard and mouse protocols
 
@@ -62,10 +65,10 @@ Tea). The words, per [`sugar-core`](../sugar-core/src/Model.php):
 
 | Term | Meaning |
 |---|---|
-| **Style** | An immutable set-and-render description — bold, colors, underline — as a `SugarCraft\Style\Style` value object ([`sugar-style/src/Style.php`](../sugar-style/src/Style.php)); its setters keep lipgloss's bare names (`bold()`, `fg()`) and still return a new instance via a private `with()` — sugar-style is the documented naming exception, so the `with*()` spelling belongs to the other value-object families. Never "the Sprinkles Style" — that package no longer exists. |
+| **Style** | An immutable set-and-render description — bold, colors, underline — as a `SugarCraft\Style\Style` value object ([`sugar-style/src/Style.php`](../sugar-style/src/Style.php)); its setters keep lipgloss's bare names (`bold()`, `fg()`) and still return a new instance via a private `with()` — sugar-style is the documented naming exception, so the `with*()` spelling belongs to the other value-object families. Never "the Sprinkles Style" — Sprinkles was sugar-style's pre-rename codename in the original confectionery naming family ([PROJECT_NAMES.md](../PROJECT_NAMES.md)); the package has shipped as `sugar-style` since the 2026-10 rename. |
 | **theme** | A *named, loadable collection* of style choices — a file on disk you select (candy-top ships btop-compatible theme files; sugar-style's [`Theme.php`](../sugar-style/src/Theme.php) is the programmatic kind: `Theme::ansi()`). |
 | **palette** | The *in-memory set* of colors resolved for one render — [`sugar-style/src/Palette.php`](../sugar-style/src/Palette.php) (and `sugar-colorprofile`'s tiered palettes). A theme selects a palette; the palette is what styles index into. |
-| **ColorProfile** | The terminal's color *depth* — Ansi16/Ansi256/TrueColor — detected once at startup from TERM/`COLORTERM`/`NO_COLOR`/CI env by [`sugar-core`'s `Util\ColorProfile::detect()`](../sugar-core/src/Util/ColorProfile.php) and dispatched as a [`ColorProfileMsg`](../sugar-core/src/Msg/ColorProfileMsg.php); apps may then pick different palettes per tier. |
+| **ColorProfile** | The terminal's color *depth* — the five enum cases `NoTty`/`Ascii`/`Ansi`/`Ansi256`/`TrueColor` ([`sugar-core/src/Util/ColorProfile.php:12-16`](../sugar-core/src/Util/ColorProfile.php)) — detected once at startup from TERM/`COLORTERM`/`NO_COLOR`/CI env by `Util\ColorProfile::detect()` and dispatched as a [`ColorProfileMsg`](../sugar-core/src/Msg/ColorProfileMsg.php); apps may then pick different palettes per tier. sugar-colorprofile resolves colors down the longer eight-rung degradation ladder (TrueColor→Ansi256→Ansi240→Ansi→Ansi8→Fgbg→Ascii→NoTTY; see its row in [docs/MATCHUPS.md](MATCHUPS.md)). |
 | **NO_COLOR** | The community convention: set `NO_COLOR` to any non-empty value and programs drop color. Honored fleet-wide via core detection plus per-app config; see [KEYMAPS.md](KEYMAPS.md#color-and-reduced-motion-env) for the app-by-app caveat. |
 
 ## Layout words: pane vs panel vs box
@@ -94,14 +97,18 @@ Tea). The words, per [`sugar-core`](../sugar-core/src/Model.php):
 
 | Term | Meaning |
 |---|---|
-| **upstream / antecedent** | The original project a SugarCraft package models. "**Port of** charmbracelet/x" or "**Design antecedent:** treilik/bubbleboxer" means the API and semantics follow that project deliberately (see the `Mirrors …` docblock law in [AGENTS.md](../AGENTS.md)); a bare "inspired by" would overstate nothing but also promise nothing — the docs use port/antecedent consistently, and README phrases like "bubblezone-style" name a specific antecedent project the same way. |
+| **upstream / antecedent** | The original project a SugarCraft package models. "**Port of** charmbracelet/x" or "**Design antecedent:** treilik/bubbleboxer" means the API and semantics follow that project deliberately (see the `Mirrors …` docblock law in [AGENTS.md](../AGENTS.md)); a bare "inspired by" makes little promise either way — the docs therefore use port/antecedent consistently, and README phrases like "bubblezone-style" name a specific antecedent project the same way. |
 | **façade** | A package that re-exports another's classes via `class_alias` (e.g. `sugar-widgets` → sugar-forms symbols). Ships only an alias smoke-test, never a copied suite ([AGENTS.md](../AGENTS.md) façade law). |
 | **path repository** | A composer `repositories[]` entry pointing at a sibling checkout. Never committed to a published lib manifest (it is a fatal for split-repo clones); CI injects the closure at build time — [tools/check-path-repos.php](../tools/check-path-repos.php). |
 | **phar** | PHP Archive — a single self-contained executable file (`php candy-top.phar`), built and signed for `candy-code/v*` and `candy-top/v*` tags ([SECURITY.md](../SECURITY.md)). |
+| **umbrella** | The `sugarcraft/sugarcraft` metapackage — installs every library in one `composer require` ([root composer.json](../composer.json)). A dependency convenience, not a namespace: packages never require it. |
+| **LFS** | Git Large File Storage — the git extension that replaces big binaries with pointer files and fetches them from a separate store; `candy-git-server` implements optional LFS on its push/pull surface. |
+| **ReactPHP** | The PHP event-loop library (`react/event-loop`) SugarCraft builds its async + runtime on: the shared `Loop::get()` drives input, signals and repaint ticks; `sugar-async` layers the cancellables/timeouts vocabulary on top of it. |
 
 ## Legacy campaign IDs
 
-You will occasionally see labels like **F-18** (README's candy-image row),
+You will occasionally see labels like **F-18** (the namespace-collision
+ruling in [PROJECT_NAMES.md](../PROJECT_NAMES.md) — `candy-image`),
 **E-nnn**, **ISS-nnn**, **wave-N**, or **tranche-N** inside prose. These are
 **internal audit/campaign finding IDs** — each was the handle for one line of
 a dated review ledger (F-nn: the chafa study findings; E-nnn: the candy-code
