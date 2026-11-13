@@ -79,7 +79,7 @@ ToastType::Info
 ToastType::Success
 ```
 
-Each type also provides a localized label via `ToastType::label()` (e.g.
+Each type also provides a localised label via `ToastType::label()` (e.g.
 `ToastType::Success->label()` → `"Success"` in English).
 
 `alert()` accepts either a `ToastType` enum case or a case-insensitive string
@@ -128,7 +128,7 @@ only: the full message text and the complete action list still ride the
 `Alert` into history and `activeAlerts()`, so nothing is silently lost to a
 host that reads the data instead of the pixels.
 
-## Stacking & the frame
+## Stacking & The Frame
 
 The frame is NOT pinned to `viewportHeight`: `view()` composites a canvas
 whose height is `max(background rows, viewportHeight, total stack height)`.
@@ -363,7 +363,7 @@ $toast = $toast->alert(ToastType::Error, 'Connection lost', actions: [$action]);
 The library renders the `[Label]` buttons; dispatching them is the host's
 job — and it ships the geometry to do it with. `Action` is a value object
 with `readonly string $label` (normalised at construction: only inline SGR
-survives, see "Security & trust boundary") and `readonly \Closure(): void
+survives, see "Security & Trust Boundary") and `readonly \Closure(): void
 $callback`. `actionRects()` returns a hit-test rectangle for every rendered
 button — `{action, alert, alertIndex, actionIndex, row, col, width}` in the
 same absolute frame coordinates `view()` composites in — and `actionAt()`
@@ -564,7 +564,7 @@ already over the new cap survive until the next push evicts them.
 | `Overflow` | DropOldest, DropNewest, Enqueue |
 | `SymbolSet` | NerdFont, Unicode, Ascii |
 
-## Shared foundations
+## Shared Foundations
 
 - **[sugar-cellbuffer](https://github.com/sugarcraft/sugar-cellbuffer)** — alert queue
   composited via `Buffer`; each toast is a sub-`Buffer` composited into the
@@ -573,7 +573,7 @@ already over the new cap survive until the next push evicts them.
 - **[sugar-testing](https://github.com/sugarcraft/sugar-testing)** — golden-file
   snapshot tests via `assertGoldenAnsi()` pin canonical queue layouts.
 
-## Security & trust boundary
+## Security & Trust Boundary
 
 Toast content is app-supplied — and in a TUI the terminal is a sink. `view()`
 renders alert text through the sugar-cellbuffer grid and re-encodes it, so the
@@ -630,6 +630,6 @@ The full fleet-wide contract lives in
 
 MIT
 
-## Credits & inspiration
+## Credits & Inspiration
 
 Design antecedent: [DaltonSW/bubbleup](https://github.com/DaltonSW/bubbleup); SugarCraft is developed as a native PHP project.

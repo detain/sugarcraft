@@ -376,7 +376,7 @@ final class Toast
      * as styling (re-encoded through the cell grid), but raw control bytes can
      * never reach the output — action labels obey the same law, normalised at
      * Action construction (only inline SGR survives there) — see README
-     * "Security & trust boundary" and docs/TRUST-BOUNDARY.md §1 for the
+     * "Security & Trust Boundary" and docs/TRUST-BOUNDARY.md §1 for the
      * host-side Sanitize contract.
      *
      * When maxConcurrent is set and the queue would exceed it, applies

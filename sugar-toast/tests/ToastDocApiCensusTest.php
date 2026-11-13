@@ -300,7 +300,7 @@ final class ToastDocApiCensusTest extends TestCase
     {
         $readme = (string) file_get_contents(\dirname(__DIR__) . '/README.md');
         $start = strpos($readme, '## API Summary');
-        $end = strpos($readme, '## Shared foundations');
+        $end = strpos($readme, '## Shared Foundations');
         $this->assertIsInt($start);
         $this->assertIsInt($end);
         $section = substr($readme, $start, $end - $start);

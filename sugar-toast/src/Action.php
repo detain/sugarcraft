@@ -25,7 +25,7 @@ namespace SugarCraft\Toast;
  * non-styling escapes onto the wire. sugar-mouse
  * zone sentinels U+E000/U+E001 are ordinary printable PUA glyphs here and
  * pass through by the same documented law as the message channel
- * (README "Security & trust boundary").
+ * (README "Security & Trust Boundary").
  */
 final class Action
 {
