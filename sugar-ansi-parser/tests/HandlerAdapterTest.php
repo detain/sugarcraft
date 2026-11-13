@@ -8,7 +8,7 @@ use SugarCraft\AnsiParser\Parser\CsiHandler;
 use SugarCraft\AnsiParser\Parser\HandlerAdapter;
 use SugarCraft\AnsiParser\Parser\NullHandler;
 use SugarCraft\AnsiParser\Parser\OscHandler;
-use SugarCraft\AnsiParser\Parser\OscHandlerImpl;
+use SugarCraft\AnsiParser\Parser\RecordingOscHandler;
 use SugarCraft\AnsiParser\Parser\Parser;
 use SugarCraft\AnsiParser\Support\RecordingCsiHandler;
 use PHPUnit\Framework\TestCase;
@@ -598,7 +598,7 @@ final class HandlerAdapterTest extends TestCase
     public function testUnknownCsiFinalReachesNoTypedMethodAndOnlyTheWiredFallbackOnce(): void
     {
         $recorder = new RecordingCsiHandler();
-        $parser = new Parser(new HandlerAdapter($recorder, new OscHandlerImpl()));
+        $parser = new Parser(new HandlerAdapter($recorder, new RecordingOscHandler()));
 
         $parser->feed("\x1b[1;2q");
 
@@ -606,7 +606,7 @@ final class HandlerAdapterTest extends TestCase
 
         $recorder2 = new RecordingCsiHandler();
         $fallback = new NullHandler();
-        $parser = new Parser(HandlerAdapter::wired($recorder2, new OscHandlerImpl(), $fallback));
+        $parser = new Parser(HandlerAdapter::wired($recorder2, new RecordingOscHandler(), $fallback));
 
         $parser->feed("\x1b[1;2q");
 

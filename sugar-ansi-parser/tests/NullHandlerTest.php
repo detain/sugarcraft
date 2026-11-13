@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\AnsiParser\Parser\BulkPrintHandler;
 use SugarCraft\AnsiParser\Parser\HandlerAdapter;
 use SugarCraft\AnsiParser\Parser\NullHandler;
-use SugarCraft\AnsiParser\Parser\OscHandlerImpl;
+use SugarCraft\AnsiParser\Parser\RecordingOscHandler;
 use SugarCraft\AnsiParser\Parser\Parser;
 use SugarCraft\AnsiParser\Support\RecordingCsiHandler;
 
@@ -61,7 +61,7 @@ final class NullHandlerTest extends TestCase
         // the dropped leg counts, and neither double sees the other's events.
         $rec = new RecordingCsiHandler();
         $null = new NullHandler();
-        $parser = new Parser(new HandlerAdapter($rec, new OscHandlerImpl(), $null));
+        $parser = new Parser(new HandlerAdapter($rec, new RecordingOscHandler(), $null));
 
         $parser->feed("\x09ab\x07\x1bM");
 

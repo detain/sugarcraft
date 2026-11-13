@@ -40,7 +40,7 @@ The lib stops at abstract events: it recognizes bytes and hands them over. Cell 
 
 **Sieve & `$fallback` escape hatch** — the `HandlerAdapter` that bridges `Handler` events onto `CsiHandler`/`OscHandler` is a deliberate **sieve**: beyond those unmapped finals it also drops the whole ESC family, DCS, SOS/PM/APC payloads, and every execute except HT/LF/CR/BS (BEL, VT, FF, and the C1 band stop there too). Pass the optional third constructor argument — `new HandlerAdapter($csi, $osc, $fallback)` — and a fallback `Handler` recovers everything the sieve did not consume (the SCO-gated `CSI ? s` / `CSI ? u` discard is considered consumed and stays dropped on purpose). For code that must not accidentally build the silent-drop shape, `HandlerAdapter::wired($csi, $osc, $fallback)` is the named constructor with the fallback as a **required** argument, and `withFallback($fallback)` returns a *new* adapter with recovery wired in — the original is untouched.
 
-**OSC 8** — the adapter accepts both the canonical `8;params;uri` form and the backtick-terminated OSC 8 form `8;uri` + `` ` ``; a malformed `8;…` payload closes the current link rather than being dropped. `OscHandlerImpl` ships here as a ready-made `OscHandler` — it stores the window title and tracks the current hyperlink pair — wired as `new HandlerAdapter($csi, new OscHandlerImpl())`.
+**OSC 8** — the adapter accepts both the canonical `8;params;uri` form and the backtick-terminated OSC 8 form `8;uri` + `` ` ``; a malformed `8;…` payload closes the current link rather than being dropped. `RecordingOscHandler` ships here as a ready-made `OscHandler` — it stores the window title and tracks the current hyperlink pair — wired as `new HandlerAdapter($csi, new RecordingOscHandler())`.
 
 **Known drift surface** — `sugar-vterm` keeps near-copies of two sink classes (`Vterm\Parser\DebugHandler`, `Vterm\Parser\OscHandlerImpl`); the shared truth here is the state machine and the interfaces, and those copies are a known drift surface.
 
@@ -329,7 +329,7 @@ generators, plain-text exports):
   backtick terminator) closes the current link rather than being dropped; reading
   the raw `oscDispatch()` stream instead, treat every `8;`-prefixed payload
   as link-state and end the span on empty/malformed payloads yourself.
-  `OscHandlerImpl` exposes the current `hyperlinkUri()`/`hyperlinkId()` (raw, unvalidated).
+  `RecordingOscHandler` exposes the current `hyperlinkUri()`/`hyperlinkId()` (raw, unvalidated).
 - Lone BEL, SO/SI and C1 bytes (0x80-0x9F) never reach `printable()`/
   `printChar()` through `HandlerAdapter` — consume the raw `Handler` (or wire
   it as the adapter's `$fallback`) if those signals matter to your bridge.

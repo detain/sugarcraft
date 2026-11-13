@@ -8,7 +8,7 @@ use SugarCraft\AnsiParser\Parser\CsiHandler;
 use SugarCraft\AnsiParser\Parser\DebugHandler;
 use SugarCraft\AnsiParser\Parser\HandlerAdapter;
 use SugarCraft\AnsiParser\Parser\OscHandler;
-use SugarCraft\AnsiParser\Parser\OscHandlerImpl;
+use SugarCraft\AnsiParser\Parser\RecordingOscHandler;
 use SugarCraft\AnsiParser\Parser\Parser;
 use PHPUnit\Framework\TestCase;
 
@@ -27,7 +27,7 @@ final class HyperlinkParsingTest extends TestCase
 
     public function testHyperlinkIdExtractedFromIdPair(): void
     {
-        $oscImpl = new OscHandlerImpl();
+        $oscImpl = new RecordingOscHandler();
         $adapter = new HandlerAdapter($this->createStub(CsiHandler::class), $oscImpl);
         $parser  = new Parser($adapter);
 
@@ -39,7 +39,7 @@ final class HyperlinkParsingTest extends TestCase
 
     public function testHyperlinkIdWithColonInValue(): void
     {
-        $oscImpl = new OscHandlerImpl();
+        $oscImpl = new RecordingOscHandler();
         $adapter = new HandlerAdapter($this->createStub(CsiHandler::class), $oscImpl);
         $parser  = new Parser($adapter);
 
@@ -52,7 +52,7 @@ final class HyperlinkParsingTest extends TestCase
 
     public function testHyperlinkIdTakesFirstIdWhenMultiplePresent(): void
     {
-        $oscImpl = new OscHandlerImpl();
+        $oscImpl = new RecordingOscHandler();
         $adapter = new HandlerAdapter($this->createStub(CsiHandler::class), $oscImpl);
         $parser  = new Parser($adapter);
 
@@ -67,7 +67,7 @@ final class HyperlinkParsingTest extends TestCase
 
     public function testHyperlinkIdIsEmptyWhenNoIdParam(): void
     {
-        $oscImpl = new OscHandlerImpl();
+        $oscImpl = new RecordingOscHandler();
         $adapter = new HandlerAdapter($this->createStub(CsiHandler::class), $oscImpl);
         $parser  = new Parser($adapter);
 
@@ -79,7 +79,7 @@ final class HyperlinkParsingTest extends TestCase
 
     public function testHyperlinkIdWithEmptyParamsField(): void
     {
-        $oscImpl = new OscHandlerImpl();
+        $oscImpl = new RecordingOscHandler();
         $adapter = new HandlerAdapter($this->createStub(CsiHandler::class), $oscImpl);
         $parser  = new Parser($adapter);
 
@@ -91,7 +91,7 @@ final class HyperlinkParsingTest extends TestCase
 
     public function testHyperlinkIdWithOnlyIdNoUri(): void
     {
-        $oscImpl = new OscHandlerImpl();
+        $oscImpl = new RecordingOscHandler();
         $adapter = new HandlerAdapter($this->createStub(CsiHandler::class), $oscImpl);
         $parser  = new Parser($adapter);
 
@@ -104,7 +104,7 @@ final class HyperlinkParsingTest extends TestCase
 
     public function testHyperlinkCloseWithEmptyUriAndId(): void
     {
-        $oscImpl = new OscHandlerImpl();
+        $oscImpl = new RecordingOscHandler();
         $adapter = new HandlerAdapter($this->createStub(CsiHandler::class), $oscImpl);
         $parser  = new Parser($adapter);
 
@@ -117,7 +117,7 @@ final class HyperlinkParsingTest extends TestCase
 
     public function testHyperlinkIdWithSpecialCharacters(): void
     {
-        $oscImpl = new OscHandlerImpl();
+        $oscImpl = new RecordingOscHandler();
         $adapter = new HandlerAdapter($this->createStub(CsiHandler::class), $oscImpl);
         $parser  = new Parser($adapter);
 
@@ -129,7 +129,7 @@ final class HyperlinkParsingTest extends TestCase
 
     public function testOscTitleStripsCommandPrefix(): void
     {
-        $oscImpl = new OscHandlerImpl();
+        $oscImpl = new RecordingOscHandler();
         $adapter = new HandlerAdapter($this->createStub(CsiHandler::class), $oscImpl);
         $parser  = new Parser($adapter);
 
@@ -141,7 +141,7 @@ final class HyperlinkParsingTest extends TestCase
 
     public function testOscTitleClearWithEmptyPayload(): void
     {
-        $oscImpl = new OscHandlerImpl();
+        $oscImpl = new RecordingOscHandler();
         $adapter = new HandlerAdapter($this->createStub(CsiHandler::class), $oscImpl);
         $parser  = new Parser($adapter);
 
@@ -152,13 +152,13 @@ final class HyperlinkParsingTest extends TestCase
 
     public function testDebugHandlerLogsOscForHyperlink(): void
     {
-        $oscImpl = new OscHandlerImpl();
+        $oscImpl = new RecordingOscHandler();
         $adapter = new HandlerAdapter($this->createStub(CsiHandler::class), $oscImpl);
         $parser  = new Parser($adapter);
 
         $parser->feed("\x1b]8;id=anchor;https://example.com\x07");
 
-        // OscHandlerImpl stores the hyperlink; use a DebugHandler to log the raw OSC
+        // RecordingOscHandler stores the hyperlink; use a DebugHandler to log the raw OSC
         $debugAdapter = new HandlerAdapter(
             $this->createStub(CsiHandler::class),
             new class ($this->debug) implements OscHandler {
@@ -177,7 +177,7 @@ final class HyperlinkParsingTest extends TestCase
 
     public function testFullSequencePrintsThenHyperlink(): void
     {
-        $oscImpl = new OscHandlerImpl();
+        $oscImpl = new RecordingOscHandler();
         $csiImpl = new class implements CsiHandler {
             public function printable(string $rune): void {}
             public function cuu(int $count): void {}
@@ -233,7 +233,7 @@ final class HyperlinkParsingTest extends TestCase
         // End-to-end: open with an id, close with a param-
         // carrying terminator ('ESC]8;id=x;ST'); both accessors must be
         // empty afterwards, matching the class doc.
-        $oscImpl = new OscHandlerImpl();
+        $oscImpl = new RecordingOscHandler();
         $adapter = new HandlerAdapter($this->createStub(CsiHandler::class), $oscImpl);
         $parser  = new Parser($adapter);
 
@@ -254,7 +254,7 @@ final class HyperlinkParsingTest extends TestCase
      */
     public function testHyperlinkIdFoundAfterForeignPairInParams(): void
     {
-        $oscImpl = new OscHandlerImpl();
+        $oscImpl = new RecordingOscHandler();
         $adapter = new HandlerAdapter($this->createStub(CsiHandler::class), $oscImpl);
         $parser  = new Parser($adapter);
 
@@ -270,7 +270,7 @@ final class HyperlinkParsingTest extends TestCase
      */
     public function testHyperlinkIdWithEmptyIdValue(): void
     {
-        $oscImpl = new OscHandlerImpl();
+        $oscImpl = new RecordingOscHandler();
         $adapter = new HandlerAdapter($this->createStub(CsiHandler::class), $oscImpl);
         $parser  = new Parser($adapter);
 
@@ -286,7 +286,7 @@ final class HyperlinkParsingTest extends TestCase
      */
     public function testHyperlinkUriMayContainEqualsSigns(): void
     {
-        $oscImpl = new OscHandlerImpl();
+        $oscImpl = new RecordingOscHandler();
         $adapter = new HandlerAdapter($this->createStub(CsiHandler::class), $oscImpl);
         $parser  = new Parser($adapter);
 

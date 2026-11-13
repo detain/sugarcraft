@@ -10,7 +10,7 @@ namespace SugarCraft\AnsiParser\Parser;
  * OSC sequences are terminated by BEL (0x07) or ST (ESC \). This is NOT a
  * stub: the bridge is live in both directions. {@see HandlerAdapter} parses
  * OSC 8 (hyperlink, `id=` included) and OSC 0/1/2 (title) out of the raw
- * dispatch payload and calls these two methods, and {@see OscHandlerImpl}
+ * dispatch payload and calls these two methods, and {@see RecordingOscHandler}
  * — shipping in this library — implements them with real storage,
  * including the empty-URI close path that resets both fields. sugar-vterm
  * carries its own implementer on the emulator side.

@@ -9,7 +9,7 @@ use SugarCraft\AnsiParser\Parser\CsiHandler;
 use SugarCraft\AnsiParser\Parser\Handler;
 use SugarCraft\AnsiParser\Parser\HandlerAdapter;
 use SugarCraft\AnsiParser\Parser\OscHandler;
-use SugarCraft\AnsiParser\Parser\OscHandlerImpl;
+use SugarCraft\AnsiParser\Parser\RecordingOscHandler;
 use SugarCraft\AnsiParser\Parser\Parser;
 
 /**
@@ -155,7 +155,7 @@ final class HandlerAdapterFallbackTest extends TestCase
     {
         // `8;foo` has neither the second `;` nor the HVP backtick: it used to
         // be silently dropped, leaving any open link open. It now closes.
-        $oscImpl = new OscHandlerImpl();
+        $oscImpl = new RecordingOscHandler();
         $adapter = new HandlerAdapter($this->createStub(CsiHandler::class), $oscImpl, $this->fallback);
         $parser = new Parser($adapter);
 
