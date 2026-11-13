@@ -21,7 +21,7 @@ $panels = SugarPanels::new();
 // Neither the header, the sidebar, nor the footer declares a size: each claims
 // the space its own content needs, and the middle row is the one that grows.
 $sidebar = Node::leaf("nav\nhome\nabout\nhelp\nquit")->withBorder(false);
-$main = Node::leaf("main content area\n\nfills whatever the sidebar did not need")->withBorder(false);
+$main = Node::leaf("main content area\n\nfills whatever the sidebar did not need")->withBorder(false)->withGrow();
 
 echo $panels->render(
     Node::vertical(

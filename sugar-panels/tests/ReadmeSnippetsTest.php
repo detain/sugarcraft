@@ -6,6 +6,7 @@ namespace SugarCraft\Panels\Tests;
 
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Panels\SugarPanels;
 
 /**
@@ -211,6 +212,41 @@ final class ReadmeSnippetsTest extends TestCase
             'README must state the real cell budget (SugarPanels::MAX_VIEWPORT_CELLS)',
         );
         $this->assertStringContainsString('MAX_VIEWPORT_CELLS', $readme);
+    }
+
+    /**
+     * The *Flex and natural sizes* recipe is the flagship geometry claim: the
+     * content-sized sidebar consumes exactly five columns plus the one column
+     * of spacing, and the grown pane starts on column seven of the documented
+     * 40x3 viewport with nothing wrapped mid-example. Running the fence and
+     * measuring its rows is what keeps prose and pixels from parting ways.
+     */
+    public function testTheFlexRecipePlacesTheGrowingPaneOnColumnSeven(): void
+    {
+        $readme = \file_get_contents(\dirname(__DIR__) . '/README.md');
+        $this->assertIsString($readme);
+
+        $count = \preg_match_all('/^```php[ \t]*\n(.*?)\n```/ms', $readme, $matches);
+        $this->assertGreaterThan(0, $count, 'README must still carry php fences');
+
+        $body = null;
+        foreach ((array) $matches[1] as $captured) {
+            if (\str_contains((string) $captured, '$panels->leaf("main content area")')) {
+                $this->assertNull($body, 'the flex recipe must appear exactly once in README.md');
+                $body = (string) $captured;
+            }
+        }
+        $this->assertNotNull($body, 'the README flex recipe fence is gone — this arm would run vacuously');
+
+        $file = $this->materialise('snippet', $body);
+        $raw = (string) \shell_exec(\escapeshellarg(PHP_BINARY) . ' ' . \escapeshellarg($file) . ' 2>/dev/null');
+
+        $this->assertStringStartsWith("\x1b[H", $raw, 'a first render opens with the cursor home');
+        $rows = \explode("\n", \substr($raw, 3));
+        $this->assertCount(3, $rows, 'the frame is exactly the viewport height — no row wrapped mid-example');
+        $this->assertSame('nav   main content area', Ansi::strip(\rtrim($rows[0])), 'six columns are consumed before main starts on column seven');
+        $this->assertSame('home', Ansi::strip(\rtrim($rows[1])));
+        $this->assertSame('about', Ansi::strip(\rtrim($rows[2])));
     }
 
     /**
