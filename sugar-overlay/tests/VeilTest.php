@@ -586,6 +586,68 @@ final class VeilTest extends TestCase
         $this->assertFalse($v2->clickOutsideDismiss());
     }
 
+    /**
+     * SO-14 (sugar-overlay-015, pin 1): disabling zone markers keeps the
+     * documented byte-verbatim mark() promise — and does NOT bypass the
+     * id validation that feeds measurement passes.
+     */
+    public function testZoneMarkersDisabledMarkIsVerbatimButValidationStillRuns(): void
+    {
+        $v = Veil::new()->withoutZoneMarkers();
+
+        $this->assertSame('OK', $v->mark('z', 'OK'));
+        $this->expectException(\InvalidArgumentException::class);
+        $v->mark('bad id!', 'x');
+    }
+
+    /**
+     * SO-14 (sugar-overlay-015, pin 2): the declared always-dismiss
+     * hazard — a markerless, dismiss-enabled veil answers TRUE for every
+     * click, including one squarely inside the overlay's footprint. The
+     * marker-enabled control at identical geometry answers FALSE, so the
+     * hazard cannot be waved away as "no such click exists".
+     */
+    public function testMarkerlessDismissEnabledVeilDismissesEveryClickEvenInItsFootprint(): void
+    {
+        $mouse = new MouseMsg(1, 1, MouseButton::Left, MouseAction::Press);
+
+        $markerless = Veil::new()->withoutZoneMarkers()->withClickOutsideDismiss(true);
+        $frame = $markerless->composite($markerless->mark('z', 'X'), '..........\n..........', Position::TOP, Position::LEFT);
+        $this->assertTrue(
+            $markerless->scan($frame)->isClickOutside($mouse),
+            'a markerless veil registers no zones, so its own footprint counts as outside',
+        );
+
+        $enabled = Veil::new()->withClickOutsideDismiss(true);
+        $markedFrame = $enabled->composite($enabled->mark('z', 'X'), '..........\n..........', Position::TOP, Position::LEFT);
+        $this->assertFalse(
+            $enabled->scan($markedFrame)->isClickOutside($mouse),
+            'same geometry WITH markers: the click lands inside the zone',
+        );
+    }
+
+    /**
+     * SO-14 (sugar-overlay-015, pin 3): the flag acts on FUTURE
+     * envelopes only — flipping withoutZoneMarkers() on a clone that
+     * already carries a scanned frame does not erase the scanner it
+     * inherited (the scan() docblock's carry-forward law), and the next
+     * frame it composes registers no new zones. Pinned as truth: zones
+     * never resurrect; they simply were never dropped.
+     */
+    public function testFlippingZoneMarkersOffKeepsThePriorScanAndEmitsNoNewZones(): void
+    {
+        $v = Veil::new();
+        $scanned = $v->scan($v->mark('z', 'X'));
+        $this->assertNotNull($scanned->hit(1, 1));
+
+        $flipped = $scanned->withoutZoneMarkers();
+        $this->assertNotNull($flipped->hit(1, 1), 'the inherited scanner stays authoritative');
+
+        $next = $flipped->composite($flipped->mark('z2', 'Y'), '..........\n..........', Position::BOTTOM, Position::LEFT);
+        $rescanned = $flipped->withoutSession()->scan($next);
+        $this->assertNull($rescanned->hit(1, 2), 'the markerless frame registers nothing — scan replaces wholesale');
+    }
+
     public function testIsClickOutsideReturnsFalseWhenDismissDisabled(): void
     {
         // Mark content covering coordinate (1,1) and scan it so click at (1,1) is inside the zone

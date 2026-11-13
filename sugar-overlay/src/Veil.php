@@ -405,7 +405,12 @@ final class Veil
      * vacuously: scan() finds no zones, hit() always returns null, and a
      * dismiss-enabled markerless veil's isClickOutside() therefore
      * returns TRUE for EVERY click — a silent always-dismiss hazard, not
-     * an error.
+     * an error. The state is invisible to this lib from that end —
+     * nothing throws at click time — so the pairing of
+     * {@see withClickOutsideDismiss()} with this call is a review
+     * contract, not a type contract.
+     *
+     * @see isClickOutside()
      */
     public function withoutZoneMarkers(): self
     {
@@ -498,6 +503,11 @@ final class Veil
      * The mouse coordinates are passed straight to {@see hit()}, which is
      * 1-based like every sugar-mouse zone — a host whose MouseMsg carries
      * 0-based cells must add 1 to each axis before calling.
+     *
+     * On a {@see withoutZoneMarkers()} veil every lookup misses, so with
+     * the dismiss flag enabled this answers TRUE for every click —
+     * including one inside the overlay's own footprint. Declared hazard,
+     * pinned by test; not an error.
      *
      * @throws \RuntimeException if click-outside dismissal is ENABLED and
      *         no scan() has run yet (with the flag off this answers false
