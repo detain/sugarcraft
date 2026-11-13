@@ -16,9 +16,10 @@ use SugarCraft\Core\Util\Width;
  * Immutable styled-text builder. Each setter returns a new Style.
  *
  * Render pipeline (innermost to outermost):
- *   content → fixed width + horizontal alignment → padding (styled)
+ *   content → transform (optional, on the caller's raw text, before any
+ *             measurement) → fixed width + horizontal alignment
+ *           → padding (styled)
  *           → fixed height (vertical fill, anchored by alignV)
- *           → transform (optional, on the undecorated body)
  *           → border (styled separately) → margin (unstyled)
  *
  * Each public setter records the prop it touched in {@see $propsSet}, which
@@ -598,11 +599,13 @@ final class Style
     }
 
     /**
-     * Apply `$fn` to the body just before its border / margin layer, so the
-     * callback sees the caller's text rather than the box drawn around it.
-     * Useful for last-mile rewrites (e.g. capitalise, mask sensitive values).
-     * Mirrors lipgloss's `Transform`, which is likewise applied ahead of
-     * `applyBorder`/`applyMargins` at the top of its `Render()`.
+     * Apply `$fn` at the top of the decoration pipeline, before any width
+     * measurement, padding, height fit or border, so the callback sees the
+     * caller's text (after tab-expansion and inline-fold) and its result is
+     * measured and framed like any other content — case folds and
+     * width-changing rewrites (e.g. capitalise, mask sensitive values)
+     * cannot corrupt the SGR bytes or desync the frame. Mirrors lipgloss's
+     * `Transform`, likewise applied at the top of its `Render()`.
      *
      * @param ?\Closure(string):string $fn pass null to clear.
      */
@@ -1253,6 +1256,22 @@ final class Style
         $sgr = $this->buildContentSgr();
         $reset = $sgr === '' ? '' : Ansi::reset();
 
+        // 0. Transform: first of the decoration pipeline (crush_libs
+        //    finding 002). Mirrors lipgloss, which runs `transform(str)`
+        //    at the top of Render() — the callback sees the caller's
+        //    text (post tab-expansion and inline-fold, but before any
+        //    width measurement, SGR wrap, padding, height fit or
+        //    border), so a case-folding callback can no longer mangle
+        //    the escape bytes it never sees (the `m`→`M` corruption of
+        //    strtoupper on styled bodies), and a width-changing one can
+        //    no longer desync the measured frame from the bordered
+        //    rows. Running it after the padding instead (the previous
+        //    shape) handed the callback finished lines, where either
+        //    rewrite clipped against the decoration.
+        if ($this->transform !== null) {
+            $content = ($this->transform)($content);
+        }
+
         // 1. Lines from content.
         $lines = $content === '' ? [''] : explode("\n", $content);
 
@@ -1336,23 +1355,11 @@ final class Style
             $body = array_slice($body, 0, $this->maxHeight);
         }
 
-        // 6. Transform: callback rewrite of the content, applied before the
-        //    frame is drawn around it. Mirrors lipgloss, which runs
-        //    `transform(str)` at the top of Render() — ahead of padding,
-        //    border and margin — so a callback sees the caller's text and not
-        //    the decoration. Running it after the border instead (the previous
-        //    shape) handed the callback the box-drawing runes too, meaning a
-        //    whole-string rewrite such as strtoupper() or a value mask could
-        //    clip against or mangle the frame.
-        if ($this->transform !== null) {
-            $body = explode("\n", ($this->transform)(implode("\n", $body)));
-        }
-
-        // 7. Border.
+        // 6. Border.
         $rows = $this->applyBorder($body, $contentWidth, $bSides);
         $borderedWidth = $contentWidth + ($bSides[1] ? 1 : 0) + ($bSides[3] ? 1 : 0);
 
-        // 8. Margin (optionally backgrounded).
+        // 7. Margin (optionally backgrounded).
         $marginSgr = '';
         $marginReset = '';
         if ($this->marginBg !== null) {

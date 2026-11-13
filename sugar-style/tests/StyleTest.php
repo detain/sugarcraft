@@ -629,9 +629,10 @@ final class StyleTest extends TestCase
     }
 
     /**
-     * The transform runs on the undecorated body, before the border is drawn
-     * (crush_libs finding #1, harmonized with lipgloss, whose Render() applies
-     * `transform(str)` at its top, ahead of applyBorder/applyMargins).
+     * The transform runs at the top of the decoration pipeline, before any
+     * padding or border is applied (crush_libs finding #1, harmonized with
+     * lipgloss, whose Render() applies `transform(str)` at its top, ahead of
+     * the width measurement, applyBorder and applyMargins).
      *
      * Ordered the other way round the callback would receive "│hi│" and
      * strtoupper would be handed the box-drawing runes — the name of this test
@@ -653,6 +654,39 @@ final class StyleTest extends TestCase
         $this->assertStringNotContainsString('│', $seen ?? '');
         // The border is still added afterwards, around the transformed body.
         $this->assertStringContainsString('│HI│', $out);
+    }
+
+    /**
+     * Finding 002 pin (fails under the old step-6 placement): the
+     * case-folding callback must never meet SGR bytes, so the colour
+     * envelope survives a case fold intact — `m` terminators included.
+     */
+    public function testCaseFoldTransformPreservesSgrTerminators(): void
+    {
+        $out = Style::new()
+            ->colorProfile(ColorProfile::TrueColor)
+            ->foreground(Color::hex('#ff0000'))
+            ->transform(static fn(string $s): string => strtoupper($s))
+            ->render('hi');
+
+        $this->assertSame("\x1b[38;2;255;0;0mHI\x1b[0m", $out);
+    }
+
+    /**
+     * Finding 002 pin (fails under the old step-6 placement): a transform
+     * that changes width is measured BEFORE the frame is drawn, so every
+     * bordered row keeps one shared width.
+     */
+    public function testWidthChangingTransformKeepsBorderFrameAligned(): void
+    {
+        $out = Style::new()
+            ->border(Border::normal())
+            ->transform(static fn(string $s): string => $s . '!!')
+            ->render('hi');
+
+        $rows = explode("\n", $out);
+        $widths = array_unique(array_map(static fn(string $r): int => Width::string($r), $rows));
+        $this->assertCount(1, $widths, 'bordered rows must share one width: ' . json_encode($rows));
     }
 
     public function testTabWidthExpands(): void
