@@ -1116,4 +1116,36 @@ final class ParserTest extends TestCase
             $this->assertArrayHasKey($name, $seen, "corpus must traverse State::{$name}");
         }
     }
+
+    /**
+     * flush() dispatches an in-flight SOS/PM/APC payload exactly as the
+     * terminator would — the end-of-stream leg of every ignored-group string
+     * state, with the byte-exact accumulated payload. (Folded from the
+     * retired CoverageMaximizerTest; DcsString's flush leg lives with the
+     * sixel truncation pins in DcsTruncationTest, OscString's at
+     * testFlushInOscStringDispatches.)
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('flushableIgnoredGroups')]
+    public function testFlushDispatchesInFlightPayloadOfEveryIgnoredGroup(string $opener, string $payload, string $filterType): void
+    {
+        $handler = new DebugHandler();
+        $parser = new Parser($handler);
+
+        $parser->feed($opener . $payload);
+        $parser->flush();
+
+        $events = $handler->filter($filterType);
+        $this->assertCount(1, $events, $filterType . ' should be dispatched on flush');
+        $this->assertSame($payload, $events[0]['detail'], 'flushed payload is byte-exact');
+    }
+
+    /** @return array<string, array{string, string, string}> */
+    public static function flushableIgnoredGroups(): array
+    {
+        return [
+            'SOS' => ["\x1bX", 'sos data', 'sos'],
+            'PM' => ["\x1b^", 'pm data', 'pm'],
+            'APC' => ["\x1b_", 'apc data', 'apc'],
+        ];
+    }
 }

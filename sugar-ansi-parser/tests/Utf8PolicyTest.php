@@ -189,4 +189,61 @@ final class Utf8PolicyTest extends TestCase
 
         $this->assertCount(0, $handler->filter('print'), 'C1 bytes must not print or replace');
     }
+
+    /**
+     * A non-continuation byte mid-rune abandons the partial rune and is
+     * REPROCESSED as if the rune never started — for every lead length, in
+     * both replacement modes. Folded in from the retired CoverageMaximizerTest
+     * (legs unique to lead length: the dedicated file only interrupted the
+     * 2-byte lead, and only asserted the drop side when the flag was off).
+     *
+     * @param list<string> $expected
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('interruptedLeads')]
+    public function testInterruptedLeadsOfEveryLengthReprocessTheInterrupter(bool $flag, string $feed, array $expected): void
+    {
+        $handler = new DebugHandler();
+        $parser = new Parser($handler, $flag);
+
+        $parser->feed($feed);
+
+        $prints = $handler->filter('print');
+        $this->assertSame(
+            $expected,
+            array_map(static fn ($e) => $e['detail'], $prints),
+            'feed=' . bin2hex($feed) . ' flag=' . var_export($flag, true),
+        );
+    }
+
+    /** @return array<string, array{bool, string, list<string>}> */
+    public static function interruptedLeads(): array
+    {
+        $FFFD = "\xEF\xBF\xBD";
+
+        return [
+            '2-byte lead, replace' => [true, "\xc3A", [$FFFD, 'A']],
+            '3-byte lead, replace' => [true, "\xe2B", [$FFFD, 'B']],
+            '4-byte lead, replace' => [true, "\xf0C", [$FFFD, 'C']],
+            '2-byte lead, drop mode' => [false, "\xc3A", ['A']],
+        ];
+    }
+
+    /**
+     * Truncation at end-of-stream is the interruption branch at the other
+     * exit: a 3-byte lead with one continuation, closed off by parseComplete
+     * under replaceMalformed, yields exactly one U+FFFD and no ghost rune.
+     * (Folded from the retired maximizer; the dedicated flush leg there was
+     * the 2-byte lead only.)
+     */
+    public function testTruncatedThreeByteLeadAtEndEmitsReplacementOnParseCompleteWhenFlagOn(): void
+    {
+        $handler = new DebugHandler();
+        $parser = new Parser($handler, true);
+
+        $parser->parseComplete("\xe2\x82");
+
+        $prints = $handler->filter('print');
+        $this->assertCount(1, $prints);
+        $this->assertSame("\xEF\xBF\xBD", $prints[0]['detail']);
+    }
 }

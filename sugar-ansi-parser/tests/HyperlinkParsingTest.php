@@ -247,4 +247,52 @@ final class HyperlinkParsingTest extends TestCase
         $this->assertSame('', $oscImpl->hyperlinkId(), 'the id resets with the link');
     }
 
+    /**
+     * The params field may carry other key=value pairs before id=; the hunt
+     * must skip them and take the id pair wherever it sits. (Folded from the
+     * retired CoverageMaximizerTest.)
+     */
+    public function testHyperlinkIdFoundAfterForeignPairInParams(): void
+    {
+        $oscImpl = new OscHandlerImpl();
+        $adapter = new HandlerAdapter($this->createStub(CsiHandler::class), $oscImpl);
+        $parser  = new Parser($adapter);
+
+        $parser->feed("\x1b]8;foo=bar:id=myid;https://example.com\x07");
+
+        $this->assertSame('myid', $oscImpl->hyperlinkId(), 'id pair found after a non-id pair');
+    }
+
+    /**
+     * An id= pair with an empty value is still an id pair: the accessor reads
+     * '' (not null-fallback, not the untouched default). (Folded from the
+     * retired maximizer.)
+     */
+    public function testHyperlinkIdWithEmptyIdValue(): void
+    {
+        $oscImpl = new OscHandlerImpl();
+        $adapter = new HandlerAdapter($this->createStub(CsiHandler::class), $oscImpl);
+        $parser  = new Parser($adapter);
+
+        $parser->feed("\x1b]8;id=;https://example.com\x07");
+
+        $this->assertSame('', $oscImpl->hyperlinkId());
+    }
+
+    /**
+     * '=' inside the URI field is data, never a pair separator: the id hunt
+     * must not consume the URI, and the URI must stay byte-exact. (Folded
+     * from the retired maximizer.)
+     */
+    public function testHyperlinkUriMayContainEqualsSigns(): void
+    {
+        $oscImpl = new OscHandlerImpl();
+        $adapter = new HandlerAdapter($this->createStub(CsiHandler::class), $oscImpl);
+        $parser  = new Parser($adapter);
+
+        $parser->feed("\x1b]8;id=link;https://example.com/path?foo=bar\x07");
+
+        $this->assertSame('https://example.com/path?foo=bar', $oscImpl->hyperlinkUri());
+        $this->assertSame('link', $oscImpl->hyperlinkId());
+    }
 }

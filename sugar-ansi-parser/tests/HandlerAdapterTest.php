@@ -6,8 +6,11 @@ namespace SugarCraft\AnsiParser\Tests;
 
 use SugarCraft\AnsiParser\Parser\CsiHandler;
 use SugarCraft\AnsiParser\Parser\HandlerAdapter;
+use SugarCraft\AnsiParser\Parser\NullHandler;
 use SugarCraft\AnsiParser\Parser\OscHandler;
+use SugarCraft\AnsiParser\Parser\OscHandlerImpl;
 use SugarCraft\AnsiParser\Parser\Parser;
+use SugarCraft\AnsiParser\Support\RecordingCsiHandler;
 use PHPUnit\Framework\TestCase;
 
 final class HandlerAdapterTest extends TestCase
@@ -580,5 +583,49 @@ final class HandlerAdapterTest extends TestCase
         $dcsEvents = $debugHandler->filter('dcs');
         $this->assertNotEmpty($dcsEvents);
         $this->assertSame([1, 2, 3], $dcsEvents[0]['detail']['params']);
+    }
+
+    /**
+     * An unknown CSI final reaches NO typed CsiHandler method — total silence
+     * there, not just the absence of a hand-picked never() list.
+     * RecordingCsiHandler logs every CsiHandler call (its roster grows with
+     * the interface at compile time), so `log === []` is the complete shape.
+     * With a fallback wired, the documented sieve contract additionally shows
+     * the unconsumed final once on the fallback and nowhere else. Rewritten
+     * from the retired CoverageMaximizerTest's 23-never()/assertTrue(true)
+     * host, which missed 6 interface methods and asserted nothing.
+     */
+    public function testUnknownCsiFinalReachesNoTypedMethodAndOnlyTheWiredFallbackOnce(): void
+    {
+        $recorder = new RecordingCsiHandler();
+        $parser = new Parser(new HandlerAdapter($recorder, new OscHandlerImpl()));
+
+        $parser->feed("\x1b[1;2q");
+
+        $this->assertSame([], $recorder->log, 'unknown final must not reach any CsiHandler method');
+
+        $recorder2 = new RecordingCsiHandler();
+        $fallback = new NullHandler();
+        $parser = new Parser(HandlerAdapter::wired($recorder2, new OscHandlerImpl(), $fallback));
+
+        $parser->feed("\x1b[1;2q");
+
+        $this->assertSame([], $recorder2->log, 'still nothing on the typed side with a fallback');
+        $this->assertSame(1, $fallback->csiCount(), 'the sieve forwards exactly the unconsumed final to the fallback');
+        $this->assertSame(0, $fallback->executeCount());
+        $this->assertSame(0, $fallback->printCount());
+    }
+
+    /**
+     * DECSTBM with only the top param defaults the bottom to the handler's
+     * grid rows (moved from the retired maximizer; the dedicated case covers
+     * the explicit 5;20 form only).
+     */
+    public function testCsiDispatchDECSTBMDefaultsBottomToGridRows(): void
+    {
+        $this->csi->expects($this->once())->method('gridRows')->willReturn(24);
+        $this->csi->expects($this->once())->method('decstbm')->with(5, 24);
+
+        $this->parser->feed("\x1b[5r");
     }
 }
