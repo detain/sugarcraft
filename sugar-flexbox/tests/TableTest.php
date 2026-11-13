@@ -722,6 +722,65 @@ final class TableTest extends TestCase
         $this->assertSame('100', $t->withCursor(0)->currentCell(0), 'the settled view still heads with 100');
     }
 
+    // ---- no-match vs no-data (FBX-41) -----------------------------------
+
+    public function testFilteredEmptyStaysBareUntilEmptyTextIsOptedIn(): void
+    {
+        $base = Table::new()
+            ->addColumn(Column::new('A', 5))
+            ->addColumn(Column::new('B', 5))
+            ->withRow(['x', 'y'])
+            ->withFilter('zzz');
+
+        // Zero-default-change law: the historical bare header+ruler.
+        $this->assertSame(['A     │ B    ', '──────┬──────'], $base->buildLines());
+
+        $t = $base->withEmptyText('no match');
+        $this->assertSame(
+            ['A     │ B    ', '──────┬──────', 'no match     '],
+            $t->buildLines(),
+            'the message spans computeTotalWidth(), padded right'
+        );
+    }
+
+    public function testNoDataIsNotNoMatch(): void
+    {
+        // Nothing was ever added: the opt-in message must NOT paint —
+        // the app owns its empty canvas.
+        $u = Table::new()
+            ->addColumn(Column::new('A', 5))
+            ->withEmptyText('nope')
+            ->withFilter('anything');
+        $this->assertCount(2, $u->buildLines());
+        $this->assertSame(0, $u->totalRowCount());
+    }
+
+    public function testTheRowCountPairNamesTheState(): void
+    {
+        $t = Table::new()
+            ->addColumn(Column::new('A', 5))
+            ->withRow(['x'])
+            ->withFilter('zzz');
+
+        $this->assertSame(1, $t->totalRowCount(), 'supplied rows');
+        $this->assertSame(0, $t->rowCount(), 'settled view');
+        $this->assertSame('zzz', $t->filterText());
+        $this->assertSame('', $t->clearFilter()->filterText());
+    }
+
+    public function testEmptyTextSanitizesAtIngressAndTruncatesToTheSpan(): void
+    {
+        $t = Table::new()
+            ->addColumn(Column::new('A', 3))
+            ->withRow(['x'])
+            ->withFilter('zzz')
+            ->withEmptyText("escape \x1b[2J " . str_repeat('wide', 10));
+
+        $row = $t->buildLines()[2] ?? '';
+        $this->assertStringNotContainsString("\x1b", $row);
+        $this->assertSame(3, Width::string($row), 'the message never outgrows the frame');
+    }
+
     // ---- themable ruler runes (FBX-42) ----------------------------------
 
     public function testAnAsciiThemeRendersAnAllAsciiFrame(): void

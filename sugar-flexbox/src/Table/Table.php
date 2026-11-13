@@ -70,6 +70,9 @@ final class Table
     /** Non-colour focus marker prepended to the cursor row's first cell. */
     private string $cursorMarker = '';
 
+    /** Opt-in no-match row text (FBX-41); null means the feature is off. */
+    private ?string $emptyText = null;
+
     /** Style for header row (ANSI string). */
     private string $headerStyle = '';
 
@@ -440,6 +443,27 @@ final class Table
      * renders fewer rows; $from < 0 or a closed range that does not
      * advance throws at this door (house fail-fast).
      */
+    /**
+     * Paint a spanning row when a filter ate every row (FBX-41).
+     *
+     * The row appears ONLY in the 'no match' state — data exists
+     * (totalRowCount() > 0) but the settled view is empty. The 'no
+     * data' case (nothing was ever added) deliberately stays bare: the
+     * app owns its own empty canvas, and the library guessing here
+     * would move bytes on first paint of an empty table. Pass null to
+     * switch the feature off; the string is sanitized at ingress like
+     * the cursor marker and may be any Lang::t()-produced copy the app
+     * maintains.
+     */
+    public function withEmptyText(?string $text): self
+    {
+        $clone = clone $this;
+        $clone->emptyText = $text === null
+            ? null
+            : \SugarCraft\Core\Util\Sanitize::untrusted($text);
+        return $clone;
+    }
+
     public function withVisibleRange(int $from, ?int $to = null): self
     {
         if ($from < 0) {
@@ -471,6 +495,23 @@ final class Table
     public function colCount(): int
     {
         return \count($this->columns);
+    }
+
+    /**
+     * Rows SUPPLIED, before any filter or window: totalRowCount() > 0
+     * with rowCount() === 0 is the 'no match' state; totalRowCount()
+     * being 0 is plain 'no data'. The pair is what lets an app paint
+     * its own empty-state row with different copy (FBX-41).
+     */
+    public function totalRowCount(): int
+    {
+        return \count($this->allRows);
+    }
+
+    /** The active filter text ('' when unfiltered). */
+    public function filterText(): string
+    {
+        return $this->filterText;
     }
 
     /**
@@ -640,6 +681,20 @@ final class Table
         }
 
         $this->rowMemo = $memo;
+
+        // 'No match' (FBX-41): rows were supplied, the settled view is
+        // empty (the filter ate them all), and the app opted into a
+        // message. A window scrolled past the end is NOT this state —
+        // $this->rows answers about the settled view, not the slice.
+        if ($this->emptyText !== null && $this->rows === [] && $this->allRows !== []) {
+            $span = $this->computeTotalWidth();
+            if ($span > 0) {
+                $lines[] = Width::padRight(
+                    Width::truncateAnsi($this->emptyText, $span),
+                    $span
+                );
+            }
+        }
 
         return $lines;
     }
