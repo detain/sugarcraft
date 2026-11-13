@@ -1148,4 +1148,74 @@ final class AsyncOps
 
         return Throttled::new($fn, $seconds, $loop, $trailing);
     }
+
+    /**
+     * Synchronous poll-until-final under a wall-clock budget. Forwards to
+     * {@see Retry::bounded()} so callers that already import AsyncOps need no
+     * second entry point; unlike {@see retry()} this blocks and keys off the
+     * result (not a rejection).
+     *
+     * @template T
+     * @param callable(): T $operation
+     * @param callable(T): bool $shouldRetry
+     * @return T
+     */
+    public static function retryBounded(
+        callable $operation,
+        callable $shouldRetry,
+        int $budgetMs,
+        Backoff $backoff,
+        ?callable $now = null,
+        ?callable $sleep = null,
+    ): mixed {
+        return Retry::bounded($operation, $shouldRetry, $budgetMs, $backoff, $now, $sleep);
+    }
+
+    /**
+     * Pay a sleep debt that survives signal interruption. Forwards to
+     * {@see Retry::nap()}.
+     */
+    public static function nap(
+        int $owedMicros,
+        ?callable $sleeper = null,
+        ?callable $now = null,
+        ?callable $onBeat = null,
+    ): void {
+        Retry::nap($owedMicros, $sleeper, $now, $onBeat);
+    }
+
+    /**
+     * Redial until a connection succeeds or the token fires. Forwards to
+     * {@see Retry::reconnect()}.
+     *
+     * @param callable(): PromiseInterface $dial
+     * @param null|callable(int, int, \Throwable): void $onRetry
+     */
+    public static function reconnect(
+        callable $dial,
+        Backoff $backoff,
+        ?CancellationToken $token = null,
+        ?LoopInterface $loop = null,
+        ?callable $onRetry = null,
+    ): PromiseInterface {
+        return Retry::reconnect($dial, $backoff, $token, $loop, $onRetry);
+    }
+
+    /**
+     * Drain several child pipes against one deadline. Forwards to
+     * {@see ChildPump::drain()}.
+     *
+     * @param array<int|string, resource> $pipes
+     * @param array<int, int|string> $discard
+     */
+    public static function drain(
+        array $pipes,
+        float $deadline,
+        int $maxBytes,
+        ?callable $clock = null,
+        bool $stopAtCap = false,
+        array $discard = [],
+    ): DrainResult {
+        return ChildPump::drain($pipes, $deadline, $maxBytes, $clock, $stopAtCap, $discard);
+    }
 }

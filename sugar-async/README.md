@@ -11,7 +11,7 @@ Shared async utilities for SugarCraft — cancellation tokens, subscriptions, di
 - **Cancellation tokens** — `CancellationSource` / `CancellationToken` / `Cancellable` for coordinated cancellation across async operations
 - **Subscriptions** — `Subscription` handles from `onCancel()` / `debounce()` / `throttle()` and `Subscriptions::compose()` for managing lifecycles in Model–Update–View apps
 - **Suspension** — `Suspended` value-object for commands paused across update cycles
-- **AsyncOps** — static helpers: `withTimeout`, `withDeadline`, `cancellable`, `singleFlight`, `retry`, `all`, `race`, `pendingNotice`, `boundWait`, `debounce`, `throttle`
+- **AsyncOps** — static helpers: `withTimeout`, `withDeadline`, `cancellable`, `singleFlight`, `retry`, `retryBounded`, `nap`, `reconnect`, `drain`, `all`, `race`, `pendingNotice`, `boundWait`, `debounce`, `throttle`
 - **AsyncCache** — promise-library-only async cache-aside: monotonic TTL, in-flight loader coalescing, optional serve-stale-on-error, optional entry bound with introspection
 
 ### Why async in a terminal app
@@ -352,6 +352,33 @@ The resulting message is trusted data only — never paint it into a frame,
 terminal title, or log line an attacker-controlled input could reach without
 passing it through your display sanitizer first (`Sanitize::untrusted()` in
 `sugar-core`, or an equivalent for your surface).
+
+### Backoff, bounded retry, reconnect and pipe draining
+
+`Backoff::new($baseMs, $factor, $capMs)` is an immutable wait schedule (ceiling,
+optional full jitter via `withJitter()`, `serverHint()`, `withAttempts()`).
+`AsyncOps` forwards to the engines behind it:
+
+- `retryBounded(operation, shouldRetry, budgetMs, backoff)` → `Retry::bounded()`;
+  blocking, result-driven, every wait clamped to the remaining budget.
+- `nap(owedMicros)` → `Retry::nap()`; a sleep that is re-armed after EINTR.
+- `reconnect(dial, backoff, token:, loop:, onRetry:)` → `Retry::reconnect()`;
+  redials until success or cancellation; success ends the cycle.
+- `drain(pipes, deadline, maxBytes)` → `ChildPump::drain()`; one select loop over
+  all pipes, returning a `DrainResult`.
+
+```php
+use SugarCraft\Async\{AsyncOps, Backoff};
+
+$tries = 0;
+$result = AsyncOps::retryBounded(
+    static function () use (&$tries): int { return ++$tries; },
+    static fn (int $n): bool => $n < 3,
+    budgetMs: 1000,
+    backoff: Backoff::new(1.0, 1.0)->withoutJitter(),
+);
+echo $result, "\n";
+```
 
 ### Argument guards
 
