@@ -145,6 +145,57 @@ final class PanicFormatter
     }
 
     /**
+     * Style surface: each banner role is replaceable without subclassing.
+     *
+     * The class holds four readonly {@see Style} slots: title (the PANIC
+     * label), exception (class name and message rows), backtrace (the
+     * primary header and frame rows) and muted (footer, collapsed-frame
+     * counters and dumped locals). {@see pretty()} picks the colored
+     * defaults, {@see plain()} bare styles, and the withers below re-set a
+     * single slot while carrying everything else (showLocals, the
+     * normalized redaction list, the platform path-fold setting) forward.
+     * The readonly properties rule out clone-and-assign, so each wither
+     * routes through {@see restyle()}, the one definition that touches the
+     * private constructor.
+     */
+    private function restyle(Style $title, Style $exception, Style $backtrace, Style $muted): self
+    {
+        return new self($title, $exception, $backtrace, $muted, $this->showLocals, $this->redactPaths, $this->caseFoldPaths);
+    }
+
+    /**
+     * Replace the style of the PANIC banner label.
+     */
+    public function withTitleStyle(Style $style): self
+    {
+        return $this->restyle($style, $this->exceptionStyle, $this->backtraceStyle, $this->mutedStyle);
+    }
+
+    /**
+     * Replace the style of the exception class name and message rows.
+     */
+    public function withExceptionStyle(Style $style): self
+    {
+        return $this->restyle($this->titleStyle, $style, $this->backtraceStyle, $this->mutedStyle);
+    }
+
+    /**
+     * Replace the style of the primary file header and the frame rows.
+     */
+    public function withBacktraceStyle(Style $style): self
+    {
+        return $this->restyle($this->titleStyle, $this->exceptionStyle, $style, $this->mutedStyle);
+    }
+
+    /**
+     * Replace the style of the footer, collapsed-frame counters and locals.
+     */
+    public function withMutedStyle(Style $style): self
+    {
+        return $this->restyle($this->titleStyle, $this->exceptionStyle, $this->backtraceStyle, $style);
+    }
+
+    /**
      * Format an exception into a panic report string.
      */
     public function format(\Throwable $e): string

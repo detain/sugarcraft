@@ -522,4 +522,48 @@ final class PanicFormatterTest extends TestCase
         $this->assertStringContainsString('[redacted]', $out);
         $this->assertStringNotContainsString('ty/file', $out);
     }
+
+    public function testStyleSurfaceOverridesRenderTheirBannerSlot(): void
+    {
+        $e = new \RuntimeException('something went wrong');
+        $f = PanicFormatter::pretty()
+            ->withTitleStyle(Style::new()->foreground(\SugarCraft\Core\Util\Color::ansi(5)))
+            ->withExceptionStyle(Style::new()->foreground(\SugarCraft\Core\Util\Color::ansi(2)))
+            ->withBacktraceStyle(Style::new()->foreground(\SugarCraft\Core\Util\Color::ansi(4)))
+            ->withMutedStyle(Style::new()->foreground(\SugarCraft\Core\Util\Color::ansi(6)));
+        $out = $f->format($e);
+        // Slot map: title carries the label, exception the class name AND
+        // the message row, backtrace the primary header, muted the footer.
+        $this->assertStringContainsString("\x1b[35m  PANIC  \x1b[0m", $out);
+        $this->assertStringContainsString("\x1b[32mRuntimeException\x1b[0m", $out);
+        $this->assertStringContainsString("\x1b[32msomething went wrong\x1b[0m", $out);
+        $this->assertStringContainsString("\x1b[34m  {$e->getFile()}:{$e->getLine()}\x1b[0m", $out);
+        $this->assertStringContainsString("\x1b[36m  report rendered by sugar-log", $out);
+    }
+
+    public function testDefaultPrettyBannerBytesAreUnchangedAndWithersAreImmutable(): void
+    {
+        $e = new \RuntimeException('cap once');
+        $f = PanicFormatter::pretty();
+        $before = $f->format($e);
+        // Zero-golden pin: the pretty() default title bytes, rebuilt from
+        // the same expression the factory uses.
+        $title = Style::new()->bold()->foreground(\SugarCraft\Core\Util\Color::ansi(1));
+        $this->assertStringContainsString($title->render('  PANIC  '), $before);
+        $g = $f->withTitleStyle(Style::new());
+        $this->assertNotSame($f, $g);
+        $this->assertSame($before, $f->format($e));
+        $this->assertStringNotContainsString($title->render('  PANIC  '), $g->format($e));
+    }
+
+    public function testStyleWithersCarryLocalsAndRedactionKnobsForward(): void
+    {
+        $e = new \ErrorException('leak-proof', 0, E_USER_ERROR, '/etc/secrets/primary.php', 12);
+        $f = PanicFormatter::pretty(showLocals: true, redactPaths: ['/etc/secrets'])
+            ->withTitleStyle(Style::new()->foreground(\SugarCraft\Core\Util\Color::ansi(5)));
+        $out = $f->format($e);
+        $this->assertStringContainsString('[redacted]/primary.php', $out);
+        $this->assertStringNotContainsString('/etc/secrets', $out);
+        $this->assertStringContainsString("\x1b[35m  PANIC  \x1b[0m", $out);
+    }
 }
