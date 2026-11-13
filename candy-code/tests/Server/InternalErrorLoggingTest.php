@@ -404,4 +404,13 @@ final class InternalErrorLoggingTest extends TestCase
 
         return [(int) \unpack('n', \substr($wire, 2, 2))[1], \substr($wire, 4, $payloadLength - 2)];
     }
+
+    public function testFlattenNeverSplitsAMultibyteCharacterAtTheCap(): void
+    {
+        // 199 ASCII bytes then a 3-byte char straddles the 200-byte cap.
+        $out = ErrorLog::flatten(\str_repeat('a', 199) . "\u{20AC}tail");
+
+        $this->assertSame(\str_repeat('a', 199), $out);
+        $this->assertTrue(\mb_check_encoding($out, 'UTF-8'));
+    }
 }

@@ -44,6 +44,8 @@ final class ErrorLog
     {
         $flat = \preg_replace('/[\x00-\x1f\x7f]+/', ' ', $text) ?? '';
 
-        return \substr($flat, 0, self::MAX_MESSAGE_BYTES);
+        // mb_strcut counts bytes but backs up to a character boundary, so a
+        // multibyte char straddling the cap is dropped whole, never split.
+        return \mb_strcut($flat, 0, self::MAX_MESSAGE_BYTES, 'UTF-8');
     }
 }
