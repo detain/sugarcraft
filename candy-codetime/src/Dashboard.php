@@ -40,6 +40,13 @@ final class Dashboard implements Model
      */
     public readonly int $days;
 
+    /**
+     * CT-S34: the palette choice travels with the model, so resize, shift,
+     * window steps and the `t` flip all keep painting the theme the user
+     * asked for — a rebuild that forgot it would silently repaint default.
+     */
+    public readonly Theme $theme;
+
     public function __construct(
         public readonly HeartbeatReader $source,
         public readonly \DateTimeImmutable $endDay,
@@ -81,7 +88,10 @@ final class Dashboard implements Model
          * existing buckets, no schema change anywhere.
          */
         public readonly ?int $goalSeconds = null,
+        /** CT-S33/34: the palette this frame paints with. */
+        ?Theme $theme = null,
     ) {
+        $this->theme = $theme ?? Theme::default();
         // CT-S16 parse-at-boundary honesty: before this door, days=0 silently
         // widened into a two-day window, days=-5 sign-flipped the composed
         // modify() string, and PHP_INT_MAX wrapped around to zero (all
@@ -96,10 +106,10 @@ final class Dashboard implements Model
         }
     }
 
-    public static function start(HeartbeatReader $source, ?\DateTimeImmutable $endDay = null, int $days = 7, ?string $backendLabel = null, ?int $goalSeconds = null): self
+    public static function start(HeartbeatReader $source, ?\DateTimeImmutable $endDay = null, int $days = 7, ?string $backendLabel = null, ?int $goalSeconds = null, ?Theme $theme = null): self
     {
         $end = ($endDay ?? new \DateTimeImmutable('today'))->setTime(0, 0);
-        return (new self($source, $end, $days, backendLabel: $backendLabel, goalSeconds: $goalSeconds))->reload();
+        return (new self($source, $end, $days, backendLabel: $backendLabel, goalSeconds: $goalSeconds, theme: $theme))->reload();
     }
 
     public function init(): ?\Closure
@@ -124,6 +134,7 @@ final class Dashboard implements Model
                 $this->loadError,
                 $this->byTags,
                 $this->goalSeconds,
+                $this->theme,
             ), null];
         }
         if ($msg instanceof ColorProfileMsg) {
@@ -144,6 +155,7 @@ final class Dashboard implements Model
                 $this->loadError,
                 $this->byTags,
                 $this->goalSeconds,
+                $this->theme,
             ), null];
         }
         if (!$msg instanceof KeyMsg) {
@@ -184,7 +196,7 @@ final class Dashboard implements Model
                 $this->loadError,
                 !$this->byTags,
                 $this->goalSeconds,
-                $this->goalSeconds,
+                $this->theme,
             ), null];
         }
         return [$this, null];
@@ -230,6 +242,7 @@ final class Dashboard implements Model
                 null,
                 $this->byTags,
                 $this->goalSeconds,
+                $this->theme,
             );
         } catch (\Throwable $error) {
             if ($this->source instanceof Store) {
@@ -249,6 +262,7 @@ final class Dashboard implements Model
                 $error->getMessage(),
                 $this->byTags,
                 $this->goalSeconds,
+                $this->theme,
             );
         }
     }
@@ -270,7 +284,7 @@ final class Dashboard implements Model
         // The width has to ride the shift: without it the next frame is laid
         // out for an unknown terminal and the rows we sized to the window
         // (panes, timeline) silently stop being clipped.
-        return (new self($this->source, $next, $this->days, $this->stats, $this->width, $this->colorProfile, $this->height, $this->backendLabel, byTags: $this->byTags, goalSeconds: $this->goalSeconds))->recompute();
+        return (new self($this->source, $next, $this->days, $this->stats, $this->width, $this->colorProfile, $this->height, $this->backendLabel, byTags: $this->byTags, goalSeconds: $this->goalSeconds, theme: $this->theme))->recompute();
     }
 
     /**
@@ -296,6 +310,7 @@ final class Dashboard implements Model
             $this->backendLabel,
             byTags: $this->byTags,
             goalSeconds: $this->goalSeconds,
+            theme: $this->theme,
         ))->recompute();
     }
 

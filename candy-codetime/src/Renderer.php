@@ -85,6 +85,7 @@ final class Renderer
             // snap back to languages mid-join) and carries the goal through.
             $d->byTags,
             $d->goalSeconds,
+            $d->theme,
         ), 0);
         $lines = array_slice(explode("\n", rtrim($joined, "\n")), 0, max(1, $d->height));
         return self::clipRows(implode("\n", $lines), $d->width) . "\n";
@@ -105,12 +106,12 @@ final class Renderer
         $stats = $d->stats;
 
         $header = self::clip(self::header($d), $d->width);
-        $projects = self::ranking(Lang::t('ui.top_projects'), $stats->perProject(), self::palette()->projects, $d->width, $d->colorProfile, $entries);
+        $projects = self::ranking(Lang::t('ui.top_projects'), $stats->perProject(), self::palette($d)->projects, $d->width, $d->colorProfile, $entries, $d->theme);
         // CT-S30: the lower pane answers the `t` toggle — By tag folds the
         // labels the store has always carried; By language remains the default.
         $languages = $d->byTags
-            ? self::ranking(Lang::t('ui.by_tags'), $stats->perTag(), self::palette()->ranking, $d->width, $d->colorProfile, $entries)
-            : self::ranking(Lang::t('ui.by_language'), $stats->perLanguage(), self::palette()->ranking, $d->width, $d->colorProfile, $entries);
+            ? self::ranking(Lang::t('ui.by_tags'), $stats->perTag(), self::palette($d)->ranking, $d->width, $d->colorProfile, $entries, $d->theme)
+            : self::ranking(Lang::t('ui.by_language'), $stats->perLanguage(), self::palette($d)->ranking, $d->width, $d->colorProfile, $entries, $d->theme);
 
         // Side by side only once two frames plus the gutter actually fit. The
         // threshold is derived from the numbers above, because the old literal
@@ -132,16 +133,16 @@ final class Renderer
         // or exception text cannot inject frame bytes.
         $banner = $d->loadError === null ? '' : self::clip(self::tint(
             Style::new(),
-            self::palette()->error,
+            self::palette($d)->error,
             $d->colorProfile,
         )->render(' ' . self::clean($d->loadError)), $d->width) . "\n";
         $notes = '';
         if ($d->droppedLines > 0) {
-            $notes .= self::clip(self::tint(Style::new(), self::palette()->note, $d->colorProfile)
+            $notes .= self::clip(self::tint(Style::new(), self::palette($d)->note, $d->colorProfile)
                 ->render(' ' . Lang::t('ui.diagnostics_dropped', ['count' => $d->droppedLines])), $d->width) . "\n";
         }
         if ($d->unreadableFiles > 0) {
-            $notes .= self::clip(self::tint(Style::new(), self::palette()->note, $d->colorProfile)
+            $notes .= self::clip(self::tint(Style::new(), self::palette($d)->note, $d->colorProfile)
                 ->render(' ' . Lang::t('ui.diagnostics_unreadable', ['count' => $d->unreadableFiles])), $d->width) . "\n";
         }
 
@@ -154,7 +155,7 @@ final class Renderer
         if ($d->width !== null && Width::string($helpText) > $d->width) {
             $helpText = Lang::t('ui.help_row_compact');
         }
-        $help = self::clip(self::tint(Style::new(), self::palette()->muted, $d->colorProfile)
+        $help = self::clip(self::tint(Style::new(), self::palette($d)->muted, $d->colorProfile)
             ->render($helpText), $d->width);
 
         return self::clipRows($header . "\n" . $banner . $top . "\n" . $timeline . "\n" . $notes . $help, $d->width) . "\n";
@@ -220,18 +221,18 @@ final class Renderer
         $end = $d->endDay->format(Lang::t('ui.range_format'));
         $start = $d->endDay->modify('-' . ($d->days - 1) . ' days')->format(Lang::t('ui.range_format'));
         $total = Stats::formatHours($d->stats->totalSeconds());
-        $title = self::tint(Style::new()->bold(), self::palette()->title, $d->colorProfile)
+        $title = self::tint(Style::new()->bold(), self::palette($d)->title, $d->colorProfile)
             ->render(' CandyCodetime ');
-        $range = self::tint(Style::new(), self::palette()->range, $d->colorProfile)
+        $range = self::tint(Style::new(), self::palette($d)->range, $d->colorProfile)
             ->render("[{$start} – {$end}]");
-        $tot = self::tint(Style::new()->bold(), self::palette()->total, $d->colorProfile)
+        $tot = self::tint(Style::new()->bold(), self::palette($d)->total, $d->colorProfile)
             ->render($total);
         // CT-S07: the provenance of every number on this screen, painted
         // next to the name. clean()-routed even though the CLI only ever
         // passes its own two words - the property is public and settable.
         $badge = '';
         if ($d->backendLabel !== null) {
-            $badge = self::tint(Style::new(), self::palette()->muted, $d->colorProfile)
+            $badge = self::tint(Style::new(), self::palette($d)->muted, $d->colorProfile)
                     ->render('[' . self::clean($d->backendLabel) . ']') . ' ';
         }
         // CT-S31: the daily goal, when one is set, is a first-class header
@@ -249,7 +250,7 @@ final class Renderer
             }
             $shownToday = $seconds === null ? '—' : self::formatCompact($seconds);
             $goal = '   ' . Lang::t('ui.goal_today') . ' '
-                . self::tint(Style::new()->bold(), self::palette()->total, $d->colorProfile)->render($shownToday)
+                . self::tint(Style::new()->bold(), self::palette($d)->total, $d->colorProfile)->render($shownToday)
                 . ' / ' . self::formatCompact($d->goalSeconds);
         }
         return $title . '  ' . $badge . $range . '   ' . Lang::t('ui.total') . ' ' . $tot . $goal;
@@ -276,7 +277,7 @@ final class Renderer
      *
      * @param array<string,int> $rows
      */
-    private static function ranking(string $title, array $rows, string $colour, ?int $terminal, ?ColorProfile $profile, int $entries = 6): string
+    private static function ranking(string $title, array $rows, string $colour, ?int $terminal, ?ColorProfile $profile, int $entries, Theme $theme): string
     {
         // The frame is 4 cells wider than the text box, so shrinking the text
         // is what keeps a narrow terminal inside itself.
@@ -297,11 +298,11 @@ final class Renderer
 
         $lines = [Width::truncate($title, $text)];
         if ($rows === []) {
-            $lines[] = self::tint(Style::new(), self::palette()->muted, $profile)->render(Width::truncate('  ' . Lang::t('ui.no_activity'), $text));
+            $lines[] = self::tint(Style::new(), $theme->muted, $profile)->render(Width::truncate('  ' . Lang::t('ui.no_activity'), $text));
         } elseif ($shown === []) {
             // A cap of zero entries is not "no activity" — a screen short
             // enough to starve the pane must name how much it hides.
-            $lines[] = self::tint(Style::new(), self::palette()->muted, $profile)
+            $lines[] = self::tint(Style::new(), $theme->muted, $profile)
                 ->render(Width::truncate('  ' . Lang::t('ui.more_suffix', ['count' => count($rows)]), $text));
         } else {
             $durationWidth = 4;
@@ -321,7 +322,7 @@ final class Renderer
             }
             if (count($rows) > $entries) {
                 // The hard cap used to hide projects silently; say how many are missing.
-                $lines[] = self::tint(Style::new(), self::palette()->muted, $profile)
+                $lines[] = self::tint(Style::new(), $theme->muted, $profile)
                     ->render(Width::truncate('  ' . Lang::t('ui.more_suffix', ['count' => count($rows) - $entries]), $text));
             }
         }
@@ -416,7 +417,7 @@ final class Renderer
             static fn(\DateTimeImmutable $day): string => $day->format(Lang::t('ui.weekday_format')),
             $labels,
         );
-        $rows = [$body, $bars, self::marks($weekdays, $slotWidths, $d->colorProfile)];
+        $rows = [$body, $bars, self::marks($weekdays, $slotWidths, $d->colorProfile, $d->theme)];
         // CT-S08: a milestone inside the window earns its own row under the
         // weekday labels so the label/bar grid never changes shape.
         $marks = self::milestoneMarks($d, $labels, $slotWidths);
@@ -456,7 +457,7 @@ final class Renderer
         if (!$any) {
             return null;
         }
-        return self::tint(Style::new()->bold(), self::palette()->title, $d->colorProfile)->render($line);
+        return self::tint(Style::new()->bold(), self::palette($d)->title, $d->colorProfile)->render($line);
     }
 
     /**
@@ -537,7 +538,7 @@ final class Renderer
      * @param list<string> $weekdays
      * @param list<int> $slots
      */
-    private static function marks(array $weekdays, array $slots, ?ColorProfile $profile): string
+    private static function marks(array $weekdays, array $slots, ?ColorProfile $profile, Theme $theme): string
     {
         $narrow = $slots !== [] && min($slots) < 4;
         $line = '';
@@ -548,7 +549,7 @@ final class Renderer
                 $width,
             );
         }
-        return self::tint(Style::new(), self::palette()->muted, $profile)->render($line);
+        return self::tint(Style::new(), $theme->muted, $profile)->render($line);
     }
 
     /**
@@ -556,8 +557,8 @@ final class Renderer
      * here without moving a byte; CT-S34 turns it into a choice the CLI
      * and the Dashboard carry.
      */
-    private static function palette(): Theme
+    private static function palette(Dashboard $d): Theme
     {
-        return Theme::default();
+        return $d->theme;
     }
 }

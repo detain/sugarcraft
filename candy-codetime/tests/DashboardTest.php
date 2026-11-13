@@ -619,4 +619,24 @@ final class DashboardTest extends TestCase
             $this->assertStringContainsString('at least one second', $error->getMessage());
         }
     }
+
+    /**
+     * CT-S34: the palette is model state — resize, the `t` flip and a shift
+     * all rebuild the Dashboard, and none of them may repaint default.
+     */
+    public function testTheThemeTravelsThroughEveryRebuild(): void
+    {
+        $dashboard = new \SugarCraft\CodeTime\Dashboard(
+            new \SugarCraft\CodeTime\Store($this->storeDir), new \DateTimeImmutable('2024-06-07'), 7,
+            new \SugarCraft\CodeTime\Stats([], []), 80, null, 24, null, 0, 0, null, false, null,
+            \SugarCraft\CodeTime\Theme::named('dracula'),
+        );
+
+        [$resized] = $dashboard->update(new \SugarCraft\Core\Msg\WindowSizeMsg(100, 30));
+        $this->assertSame('#ff79c6', $resized->theme->title);
+        [$flipped] = $resized->update(new \SugarCraft\Core\Msg\KeyMsg(\SugarCraft\Core\KeyType::Char, 't'));
+        $this->assertSame('#ff79c6', $flipped->theme->title);
+        [$moved] = $flipped->update(new \SugarCraft\Core\Msg\KeyMsg(\SugarCraft\Core\KeyType::Right, ''));
+        $this->assertSame('#ff79c6', $moved->theme->title);
+    }
 }

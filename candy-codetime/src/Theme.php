@@ -33,4 +33,26 @@ final class Theme
     {
         return new self();
     }
+
+    /** @var list<string> the names the CLI door accepts, listing order fixed */
+    public const NAMES = ['default', 'light', 'dracula', 'solarized', 'gruvbox', 'high-contrast'];
+
+    /**
+     * The named palettes: default keeps every documented byte, light answers
+     * the pastel-on-white complaint (the shipped candy tones wash out on a
+     * white terminal), and the rest ride the well-known scheme families.
+     * Unknown names answer null — the CLI refuses them, never guesses.
+     */
+    public static function named(string $name): ?self
+    {
+        return match ($name) {
+            'default' => self::default(),
+            'light' => new self('#c2185b', '#5e35b1', '#00695c', '#7a5901', '#0277bd', '#616161', '#b91c1c', '#be185d'),
+            'dracula' => new self('#ff79c6', '#bd93f9', '#50fa7b', '#f1fa8c', '#8be9fd', '#6272a4', '#ff5555', '#ffb86c'),
+            'solarized' => new self('#d33682', '#6c71c4', '#859900', '#b58900', '#2aa198', '#93a1a1', '#dc322f', '#cb4b16'),
+            'gruvbox' => new self('#d3869b', '#83a598', '#b8bb26', '#fabd2f', '#8ec07c', '#928374', '#fb4934', '#fe8019'),
+            'high-contrast' => new self('#ffffff', '#00ffff', '#00ff00', '#ffff00', '#5fd7ff', '#a8a8a8', '#ff0000', '#ffaf00'),
+            default => null,
+        };
+    }
 }

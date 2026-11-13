@@ -1146,4 +1146,24 @@ final class CliTest extends TestCase
         $this->assertStringContainsString('candy-codetime push', $res['stderr']);
         $this->assertStringContainsString('[<project> <language>] <file>', $res['stderr']);
     }
+
+    /**
+     * CT-S34 doors: junk theme names are refused everywhere (equals and env
+     * forms), the refusal names every acceptable choice, and a valid theme
+     * rides the global scanner without disturbing headless commands.
+     */
+    public function testTheThemeDoorRefusesJunkAndAcceptsNamesThroughTheGlobalScanner(): void
+    {
+        $res = $this->runCli(['--theme=poster', 'export', 'csv'], null, ['CANDY_CODETIME_DIR' => $this->dataDir]);
+        $this->assertSame(1, $res['exit']);
+        $this->assertStringContainsString('theme must be one of', $res['stderr']);
+        $this->assertStringContainsString('high-contrast', $res['stderr']);
+        $this->assertSame('', $res['stdout']);
+
+        $res = $this->runCli(['export', 'csv'], null, ['CANDY_CODETIME_DIR' => $this->dataDir, 'CANDY_CODETIME_THEME' => 'poster']);
+        $this->assertSame(1, $res['exit']);
+
+        $res = $this->runCli(['--theme', 'light', 'export', 'csv'], null, ['CANDY_CODETIME_DIR' => $this->dataDir]);
+        $this->assertSame(0, $res['exit']);
+    }
 }

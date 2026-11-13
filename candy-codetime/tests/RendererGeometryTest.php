@@ -614,4 +614,31 @@ final class RendererGeometryTest extends TestCase
         self::assertStringContainsString('By tag', $joined);
         self::assertStringNotContainsString('By language', $joined);
     }
+
+    /**
+     * CT-S34 acceptance: a named palette repaints the SAME frame. Colour
+     * sequences move; geometry does not — strip every SGR and the light and
+     * default renders are byte-identical.
+     */
+    public function testANamedPaletteRepaintsWithoutMovingAFrameByte(): void
+    {
+        $endDay = new \DateTimeImmutable(self::END);
+        $stats = \SugarCraft\CodeTime\Stats::compute(self::busy(), $endDay->modify('-6 days'), $endDay);
+        $render = static function (bool $light) use ($endDay, $stats): string {
+            return \SugarCraft\CodeTime\Renderer::render(new \SugarCraft\CodeTime\Dashboard(
+                new \SugarCraft\CodeTime\Store(sys_get_temp_dir()), $endDay, 7, $stats, 80,
+                \SugarCraft\Core\Util\ColorProfile::TrueColor, null, 'file', 0, 0, null, false, null,
+                $light ? \SugarCraft\CodeTime\Theme::named('light') : \SugarCraft\CodeTime\Theme::default(),
+            ));
+        };
+
+        $default = $render(false);
+        $light = $render(true);
+
+        // #c2185b title belongs to light alone.
+        $this->assertStringContainsString("\x1b[38;2;194;24;91m", $light);
+        $this->assertStringNotContainsString("\x1b[38;2;194;24;91m", $default);
+        $strip = static fn (string $view): string => (string) preg_replace('/\x1b\[[0-9;]*m/', '', $view);
+        $this->assertSame($strip($default), $strip($light));
+    }
 }

@@ -10,7 +10,8 @@ declare(strict_types=1);
 
 return [
     'cli.entry_pushed' => '{duration}s 기록됨: {project} ({language})',
-    'cli.usage' => "사용법: candy-codetime [--backend=file|sqlite] <command> [args]\n\n명령:\n  dashboard              TUI 대시보드를 시작합니다 (선택한 백엔드 사용)\n  push                   [<project> <language>] <file> [duration] [tags] | --  하트비트 기록\n  milestone              add [name] [description] | list  마일스톤 관리 (sqlite 전용)\n  export                 <csv|json|ics> [days]  하트비트 내보내기 (기본 7일)\n  gaps                   [days]  300초 이상의 추적되지 않은 공백 표시 (기본 7일)\n  backup                 30일보다 오래된 데이터 파일 보관 (복사만 하며 삭제하지 않음)\n  help, --help, -h       이 사용법 표시\n  --version, -v          버전 출력\n\n옵션:\n  --backend=file|sqlite  push/export/gaps/dashboard 의 저장 백엔드 (기본값: file)\n  --time=<unix>          push: 지금 대신 지정 unix 초에 하트비트 기록\n  --sqlite               backup: SQLite 데이터베이스를 VACUUM INTO로 보관 (충격에 안전한 스냅샷)\n  CANDY_CODETIME_DIR     데이터 디렉터리 (기본값: \$XDG_DATA_HOME/candy-codetime, 미설정 시 \$HOME/.local/share/candy-codetime, HOME도 미설정 시 ./.local/share/candy-codetime)",
+    'cli.usage' => "사용법: candy-codetime [--backend=file|sqlite] <command> [args]\n\n명령:\n  dashboard              TUI 대시보드를 시작합니다 (선택한 백엔드 사용)\n  push                   [<project> <language>] <file> [duration] [tags] | --  하트비트 기록\n  milestone              add [name] [description] | list  마일스톤 관리 (sqlite 전용)\n  export                 <csv|json|ics> [days]  하트비트 내보내기 (기본 7일)\n  gaps                   [days]  300초 이상의 추적되지 않은 공백 표시 (기본 7일)\n  backup                 30일보다 오래된 데이터 파일 보관 (복사만 하며 삭제하지 않음)\n  help, --help, -h       이 사용법 표시\n  --version, -v          버전 출력\n\n옵션:\n  --backend=file|sqlite  push/export/gaps/dashboard 의 저장 백엔드 (기본값: file)\n  --time=<unix>          push: 지금 대신 지정 unix 초에 하트비트 기록\n  --sqlite               backup: SQLite 데이터베이스를 VACUUM INTO로 보관 (충격에 안전한 스냅샷)\n  --theme=<name>         대시보드: 이름이 지정된 팔레트로 칠하기 (default, light, dracula, solarized, gruvbox, high-contrast)
+  CANDY_CODETIME_THEME   동일한 선택을 환경 변수로 (플래그가 우선)\n  CANDY_CODETIME_DIR     데이터 디렉터리 (기본값: \$XDG_DATA_HOME/candy-codetime, 미설정 시 \$HOME/.local/share/candy-codetime, HOME도 미설정 시 ./.local/share/candy-codetime)",
     'cli.push_usage' => '사용법: candy-codetime push [<project> <language>] <file> [duration] [tags] [--time=<unix>] | candy-codetime push -- (stdin 일괄 JSON 줄)',
     'cli.push_missing_args' => "push: 필수 인자가 없습니다 (project, language, file)",
     'cli.push_ignored' => "push: {file} 이 .sugartrackignore 와 일치하여 건너뛰었습니다",
@@ -24,6 +25,7 @@ return [
     'cli.push_stdin_done_one' => 'push: 하트비트 {count} 개 기록',
     'cli.invalid_days' => '일수는 정수여야 합니다. 입력값: "{value}"',
     'cli.invalid_goal' => 'CANDY_CODETIME_GOAL은 초의 정수이거나 6h와 같은 시간의 정수여야 합니다. 입력값 "{value}"',
+    'cli.invalid_theme' => '테마는 {names} 중 하나여야 합니다 - 입력값: "{value}"',
     'cli.backend_invalid' => "잘못된 백엔드 (file 또는 sqlite 사용)",
     'cli.backend_unavailable' => "sqlite 백엔드를 사용할 수 없습니다: PHP 확장 sqlite3 이 로드되지 않았습니다",
     'cli.backend_other_hint' => '참고: {other} 백엔드에도 기록이 있습니다. --backend={other}(으)로 선택하세요',

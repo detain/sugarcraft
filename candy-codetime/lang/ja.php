@@ -10,7 +10,8 @@ declare(strict_types=1);
 
 return [
     'cli.entry_pushed' => '{duration}s を記録: {project} ({language})',
-    'cli.usage' => "使用法: candy-codetime [--backend=file|sqlite] <command> [args]\n\nコマンド:\n  dashboard              TUI ダッシュボードを開始 (選択中のバックエンドを読み取ります)\n  push                   [<project> <language>] <file> [duration] [tags] | --  ハートビートを記録\n  milestone              add [name] [description] | list  マイルストーン管理 (sqlite のみ)\n  export                 <csv|json|ics> [days]  ハートビートをエクスポート (既定 7 日)\n  gaps                   [days]  300 秒以上の未追跡ギャップを表示 (既定 7 日)\n  backup                 30 日より古いデータファイルをアーカイブ (コピーのみ。削除しません)\n  help, --help, -h       この使用法を表示\n  --version, -v          バージョンを表示\n\nオプション:\n  --backend=file|sqlite  push/export/gaps/dashboard のストレージバックエンド (既定: file)\n  --time=<unix>          push: 現在ではなく指定の Unix 秒でハートビートを記録\n  --sqlite               backup: SQLite データベースを VACUUM INTO でアーカイブ (クラッシュセーフなスナップショット)\n  CANDY_CODETIME_DIR     データディレクトリ (既定: \$XDG_DATA_HOME/candy-codetime、未設定なら \$HOME/.local/share/candy-codetime、HOME も未設定なら ./.local/share/candy-codetime)",
+    'cli.usage' => "使用法: candy-codetime [--backend=file|sqlite] <command> [args]\n\nコマンド:\n  dashboard              TUI ダッシュボードを開始 (選択中のバックエンドを読み取ります)\n  push                   [<project> <language>] <file> [duration] [tags] | --  ハートビートを記録\n  milestone              add [name] [description] | list  マイルストーン管理 (sqlite のみ)\n  export                 <csv|json|ics> [days]  ハートビートをエクスポート (既定 7 日)\n  gaps                   [days]  300 秒以上の未追跡ギャップを表示 (既定 7 日)\n  backup                 30 日より古いデータファイルをアーカイブ (コピーのみ。削除しません)\n  help, --help, -h       この使用法を表示\n  --version, -v          バージョンを表示\n\nオプション:\n  --backend=file|sqlite  push/export/gaps/dashboard のストレージバックエンド (既定: file)\n  --time=<unix>          push: 現在ではなく指定の Unix 秒でハートビートを記録\n  --sqlite               backup: SQLite データベースを VACUUM INTO でアーカイブ (クラッシュセーフなスナップショット)\n  --theme=<name>         ダッシュボード: 名前付きパレットで描画 (default, light, dracula, solarized, gruvbox, high-contrast)
+  CANDY_CODETIME_THEME   同じ選択を環境変数で (フラグが優先)\n  CANDY_CODETIME_DIR     データディレクトリ (既定: \$XDG_DATA_HOME/candy-codetime、未設定なら \$HOME/.local/share/candy-codetime、HOME も未設定なら ./.local/share/candy-codetime)",
     'cli.push_usage' => '使用法: candy-codetime push [<project> <language>] <file> [duration] [tags] [--time=<unix>] | candy-codetime push -- (stdin からの JSON 一括)',
     'cli.push_missing_args' => "push: 必須引数が不足しています (project, language, file)",
     'cli.push_ignored' => "push: {file} は .sugartrackignore に一致したためスキップしました",
@@ -24,6 +25,7 @@ return [
     'cli.push_stdin_done_one' => 'push: {count} 件のハートビートを記録しました',
     'cli.invalid_days' => '日数は整数である必要があります。受け取った値: "{value}"',
     'cli.invalid_goal' => 'CANDY_CODETIME_GOAL は秒数の整数、または 6h のような時間数の整数である必要があります。指定値 "{value}"',
+    'cli.invalid_theme' => 'テーマは {names} のいずれかである必要があります - 指定された値: "{value}"',
     'cli.backend_invalid' => "無効なバックエンド (file または sqlite を使用)",
     'cli.backend_unavailable' => "sqlite バックエンドは利用できません: PHP 拡張機能 sqlite3 が読み込まれていません",
     'cli.backend_other_hint' => '注意: {other} バックエンドにも記録があります。--backend={other} で選択してください',

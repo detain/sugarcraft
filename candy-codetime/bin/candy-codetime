@@ -54,6 +54,7 @@ use SugarCraft\CodeTime\Lang;
 use SugarCraft\CodeTime\Report\GapsReport;
 use SugarCraft\CodeTime\Storage\SqliteBackend;
 use SugarCraft\CodeTime\Store;
+use SugarCraft\CodeTime\Theme;
 use SugarCraft\CodeTime\Support\Detect;
 use SugarCraft\CodeTime\Support\Version;
 
@@ -142,6 +143,15 @@ if (is_string($envBackend) && $envBackend !== '') {
 // timestamp supplied once instead of the wall clock inventing one at read time.
 $timeOpt = null;
 $timeNext = false;
+// CT-S34: `--theme=<name>` (equals or space form) rides the same global
+// scanner; CANDY_CODETIME_THEME carries it across invocations and an
+// explicit flag outranks it, exactly like --backend.
+$themeOpt = null;
+$themeNext = false;
+$envTheme = getenv('CANDY_CODETIME_THEME');
+if (is_string($envTheme) && $envTheme !== '') {
+    $themeOpt = $envTheme;
+}
 $positional = [];
 foreach (array_slice($argv, 1) as $arg) {
     if ($backendNext) {
@@ -163,6 +173,11 @@ foreach (array_slice($argv, 1) as $arg) {
         $timeNext = true;
         continue;
     }
+    if ($themeNext) {
+        $themeOpt = $arg;
+        $themeNext = false;
+        continue;
+    }
     if (str_starts_with($arg, '--backend=')) {
         $backend = substr($arg, strlen('--backend='));
         $backendChosen = true;
@@ -170,6 +185,14 @@ foreach (array_slice($argv, 1) as $arg) {
     }
     if (str_starts_with($arg, '--time=')) {
         $timeOpt = substr($arg, strlen('--time='));
+        continue;
+    }
+    if ($arg === '--theme') {
+        $themeNext = true;
+        continue;
+    }
+    if (str_starts_with($arg, '--theme=')) {
+        $themeOpt = substr($arg, strlen('--theme='));
         continue;
     }
     $positional[] = $arg;
@@ -182,6 +205,19 @@ if ($backendNext) {
 if ($timeNext) {
     fwrite(STDERR, Lang::t('cli.push_invalid_time', ['value' => '']) . "\n");
     exit(1);
+}
+if ($themeNext) {
+    $themeOpt = '';
+}
+if ($themeOpt !== null) {
+    $themeOpt = trim($themeOpt);
+    if (Theme::named($themeOpt) === null) {
+        fwrite(STDERR, Lang::t('cli.invalid_theme', [
+            'names' => implode(', ', Theme::NAMES),
+            'value' => Sanitize::untrusted($themeOpt),
+        ]) . "\n");
+        exit(1);
+    }
 }
 if (!in_array($backend, ['file', 'sqlite'], true)) {
     fwrite(STDERR, Lang::t('cli.backend_invalid') . "\n");
@@ -765,7 +801,7 @@ if (!TtyDetect::isAtty(STDIN) || !TtyDetect::isAtty(STDOUT)) {
 }
 try {
     $reader = $backend === 'sqlite' ? $sqlite() : $store;
-    $dashboard = Dashboard::start($reader, null, $dashDays, $backend, goalSeconds: $goalSeconds);
+    $dashboard = Dashboard::start($reader, null, $dashDays, $backend, goalSeconds: $goalSeconds, theme: $themeOpt === null ? null : Theme::named($themeOpt));
 } catch (\Throwable $e) {
     $storageError($e);
 }

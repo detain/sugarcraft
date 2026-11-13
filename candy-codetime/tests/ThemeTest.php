@@ -94,4 +94,21 @@ final class ThemeTest extends TestCase
             $this->assertStringContainsString($sequence, $view);
         }
     }
+
+    /**
+     * CT-S34: the door's vocabulary. Every name in NAMES resolves, unknown
+     * names answer null (the CLI refuses them; the model never guesses), and
+     * 'default' is exactly the shipped palette the goldens were born with.
+     */
+    public function testEveryNamedPaletteResolvesAndDefaultKeepsTheShippedBytes(): void
+    {
+        foreach (Theme::NAMES as $name) {
+            $this->assertNotNull(Theme::named($name), $name);
+        }
+
+        $this->assertSame('#c2185b', Theme::named('light')?->title);
+        $this->assertNull(Theme::named('poster'));
+        $this->assertNull(Theme::named(''));
+        $this->assertEquals(Theme::default(), Theme::named('default'));
+    }
 }
