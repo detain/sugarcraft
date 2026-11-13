@@ -40,6 +40,25 @@ final class RestStatusTest extends TestCase
         $this->api->stop();
     }
 
+    public function testAnErrorBodyEchoingTheBotTokenIsLoggedRedacted(): void
+    {
+        $this->api->failNextWith = 400;
+        $this->api->failBody = '{"message":"bad auth Bot SECRET-TOKEN-VALUE"}';
+        $lines = [];
+        $rest = new Rest('SECRET-TOKEN-VALUE', new Log(static function (string $line) use (&$lines): void {
+            $lines[] = $line;
+        }), 'http://127.0.0.1:' . $this->port);
+
+        $rest->application()->then(null, static function (): void {
+        });
+        $this->settle();
+
+        $logged = \implode("\n", $lines);
+        self::assertStringContainsString('discord_rest_error', $logged);
+        self::assertStringNotContainsString('SECRET-TOKEN-VALUE', $logged, 'the bot token must never reach a log line');
+        self::assertStringContainsString('[redacted]', $logged);
+    }
+
     public function testAFortyTwoNineSurfacesAsALiveRateLimitAndNeverLoops(): void
     {
         $this->api->failNextWith = 429;

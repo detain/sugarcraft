@@ -182,7 +182,9 @@ final class PairingCodes
         $live = [];
         $pruned = false;
         foreach ($raw as $code => $entry) {
-            if (!is_array($entry) || !is_string($code) || (int) ($entry['expiresAt'] ?? 0) <= $now) {
+            // A code made only of digits comes back from JSON as an int key;
+            // rejecting non-strings here would prune a live code on every read.
+            if (!is_array($entry) || !(is_string($code) || is_int($code)) || (int) ($entry['expiresAt'] ?? 0) <= $now) {
                 $pruned = true;
                 continue;
             }

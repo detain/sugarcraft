@@ -129,6 +129,16 @@ final class ConversationRouter
     }
 
     /**
+     * First-delivery claim for a platform message id. Faces call this before
+     * dispatching anything that is not idempotent (commands), since inbound()
+     * only claims prompts.
+     */
+    public function claimInbound(string $platform, string $inboundId): bool
+    {
+        return $this->map->claimInbound($platform, $inboundId);
+    }
+
+    /**
      * One inbound human message.
      *
      * @param array<string,mixed> $ref the adapter's reply address
@@ -472,6 +482,14 @@ final class ConversationRouter
 
             return;
         }
+        if ($approvers === [] && $verdict === 'always') {
+            // A persistent grant needs a named approver; an open roster may
+            // still answer once or deny, and the ask stays open otherwise.
+            $this->log->warn('approval_always_without_approver', ['ask' => $askId, 'actor' => $userId]);
+            $this->refuseAlways($askId);
+
+            return;
+        }
         if (!$this->answerIsBound($sessionId, $askId, $nonce, $conversationKey, $face)) {
             $this->refuseUnbound($askId, $userId, $face);
 
@@ -567,6 +585,24 @@ final class ConversationRouter
         }
 
         return true;
+    }
+
+    /**
+     * `always` without an approver roster: the ask is NOT answered on the
+     * permission wire (it stays open for a once/deny answer or a roster); the
+     * refusal is said in the ask's own presentation conversation.
+     */
+    private function refuseAlways(string $askId): void
+    {
+        $key = $this->askConversation[$askId] ?? null;
+        $ref = $this->askRef[$askId] ?? null;
+        if ($key === null || !\is_array($ref)) {
+            return;
+        }
+        $channel = $this->channelFor($key);
+        if ($channel !== null) {
+            $this->deliver($channel, $ref, '⛔ "always" needs a configured approver (approvals.approvers). Answer once or deny, or ask an approver.');
+        }
     }
 
     /**

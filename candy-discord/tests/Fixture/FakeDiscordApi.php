@@ -30,6 +30,9 @@ final class FakeDiscordApi
      */
     public ?int $failNextWith = null;
 
+    /** Body served with the next failNextWith status (default '{}'). */
+    public ?string $failBody = null;
+
     /**
      * Persistent sibling of the one-shot knob: while set, EVERY request is
      * answered with that live status. A single test can therefore drive the
@@ -104,7 +107,7 @@ final class FakeDiscordApi
             if ($this->failNextWith !== null) {
                 $status = $this->failNextWith;
                 $this->failNextWith = null;
-                $connection->end($this->frame($status, '{}'));
+                $connection->end($this->frame($status, $this->failBody ?? '{}'));
 
                 return;
             }

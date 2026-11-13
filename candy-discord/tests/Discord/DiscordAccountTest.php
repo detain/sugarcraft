@@ -259,15 +259,51 @@ final class DiscordAccountTest extends TestCase
 
     public function testPairApproveAndListSpeakThroughTheChannelSurface(): void
     {
-        $this->buildFace(['dmPolicy' => 'pairing']);
+        $this->buildFace(['dmPolicy' => 'pairing', 'approvalRoster' => ['boss']]);
         $mint = $this->pairing->request('default', 'u2');
         $code = (string) $mint['code'];
-        $this->face->pairCommand(['channelId' => 'c1', 'messageId' => ''], ['approve', $code]);
+        $this->face->pairCommand(['channelId' => 'c1', 'messageId' => ''], ['approve', $code], 'boss', true);
         $this->settle();
         self::assertStringContainsString('Paired u2.', (string) $this->api->lastCallFor('/messages')['body']['content']);
-        $this->face->pairCommand(['channelId' => 'c1', 'messageId' => ''], ['list']);
+        $this->face->pairCommand(['channelId' => 'c1', 'messageId' => ''], ['list'], 'boss', true);
         $this->settle();
         self::assertStringContainsString('No pending pairings.', (string) $this->api->lastCallFor('/messages')['body']['content']);
+    }
+
+    public function testPairingIsAnApproversActAndCodesListOnlyInADirectMessage(): void
+    {
+        // Mirrors candy-msteams: an empty roster answers nobody, and a non-approver
+        // (even one who passed the channel floor) can neither redeem nor list codes.
+        $this->buildFace(['dmPolicy' => 'pairing', 'approvalRoster' => ['boss']]);
+        $code = (string) $this->pairing->request('default', 'u2')['code'];
+        $this->face->pairCommand(['channelId' => 'c1', 'messageId' => ''], ['approve', $code], 'u3', true);
+        $this->settle();
+        self::assertStringContainsString('Only an approver can manage pairings', (string) $this->api->lastCallFor('/messages')['body']['content']);
+        self::assertCount(1, $this->pairing->pending('default'), 'a refused approve must leave the code pending');
+
+        $this->face->pairCommand(['channelId' => 'c1', 'messageId' => ''], ['list'], 'boss', false);
+        $this->settle();
+        self::assertStringContainsString('Use a direct message to list pairing codes', (string) $this->api->lastCallFor('/messages')['body']['content']);
+        self::assertStringNotContainsString($code, (string) $this->api->lastCallFor('/messages')['body']['content']);
+
+        $this->buildFace(['dmPolicy' => 'pairing']);
+        $this->face->pairCommand(['channelId' => 'c1', 'messageId' => ''], ['approve', $code], 'boss', true);
+        $this->settle();
+        self::assertStringContainsString('Only an approver can manage pairings', (string) $this->api->lastCallFor('/messages')['body']['content'], 'an empty roster answers nobody');
+        self::assertCount(1, $this->pairing->pending('default'));
+    }
+
+    public function testARepliedCommandIsAppliedOnceEvenWhenDiscordReplaysIt(): void
+    {
+        // A RESUME replays MESSAGE_CREATE; a command must not run twice.
+        $this->store->writeDiscordPairing('default', [], ['u1']);
+        $this->buildFace(['dmPolicy' => 'pairing']);
+        $stop = self::dmMessage('u1', '/stop');
+        $this->intake($stop);
+        $this->intake($stop);
+        $this->settle();
+        $answers = \array_filter($this->api->calls, static fn (array $c): bool => \str_contains((string) ($c['body']['content'] ?? ''), 'Nothing is running here.'));
+        self::assertCount(1, $answers, 'the replayed /stop must not answer twice');
     }
 
     public function testAnOversizedAttachmentIsDisclosedByNameNeverFetched(): void

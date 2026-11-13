@@ -345,7 +345,8 @@ final class DiscordAccount implements PlatformFace
         $key = $isDm
             ? Keys::dmKey('discord', $this->account, $authorId, $channelId, $this->strCfg('dmScope', Keys::DM_PER_PEER))
             : Keys::channelKey('discord', $this->account, $channelId);
-        $ref = ['channelId' => $channelId, 'messageId' => (string) ($message['id'] ?? '')];
+        $inboundId = (string) ($message['id'] ?? '');
+        $ref = ['channelId' => $channelId, 'messageId' => $inboundId];
         if (!$isDm) {
             // §7.5 idle sweep material: every served guild conversation gets
             // an activity stamp; archiveThread then proves thread-ness over
@@ -357,8 +358,15 @@ final class DiscordAccount implements PlatformFace
         // slash-word is disclosed as skipped, never silently fetched.
         $command = Commands::parseText($content);
         if ($command !== null) {
+            // A RESUME replays MESSAGE_CREATE and a command is not idempotent
+            // (/new mints a session). Prompts are deduped by the router's inbound().
+            if ($inboundId !== '' && !$this->router->claimInbound('discord', $inboundId)) {
+                $this->log->debug('discord_command_duplicate');
+
+                return;
+            }
             if ($command['name'] === 'pair') {
-                $this->handlePairCommand($ref, (array) $command['args'], null);
+                $this->handlePairCommand($ref, (array) $command['args'], $authorId, $isDm, null);
 
                 return;
             }
@@ -378,7 +386,6 @@ final class DiscordAccount implements PlatformFace
             return;
         }
 
-        $inboundId = (string) ($message['id'] ?? '');
         if ($rawAttachments === []) {
             $this->router->inbound('discord', $key, $ref, $text, $isMention, $inboundId);
 
@@ -674,7 +681,7 @@ final class DiscordAccount implements PlatformFace
         if ($command['name'] === 'pair') {
             // §7.3: the pairing surface is account-local — codes answer
             // ephemerally and never ride the model or the transcript.
-            $this->handlePairCommand(['channelId' => $channelId, 'messageId' => ''], (array) $command['args'], $answer);
+            $this->handlePairCommand(['channelId' => $channelId, 'messageId' => ''], (array) $command['args'], $userId, $isDm, $answer);
 
             return;
         }
@@ -728,60 +735,75 @@ final class DiscordAccount implements PlatformFace
         return $channels === [] || \in_array($channelId, \array_map('strval', $channels), true);
     }
 
-    /**
-     * §7.3 approval surface: `/pair approve <code>` and `/pair list`.
-     * The slash path answers through $reply (ephemeral); the text-spelling
-     * answers in-channel — the REDACTION law (§9.5) still holds: the
-     * confirmation never repeats a code the notice channel doesn't already
-     * own, and `approve` consumes the code as it fires.
-     *
-     * @param list<mixed>        $args
-     * @param null|\Closure(string):PromiseInterface $reply
-     */
     /** Public door for the router's /pair text fallback (§7.3). */
-    public function pairCommand(array $ref, array $args): void
+    public function pairCommand(array $ref, array $args, string $actorId, bool $isDm): void
     {
-        $this->handlePairCommand($ref, $args, null);
+        $this->handlePairCommand($ref, $args, $actorId, $isDm, null);
     }
 
-    private function handlePairCommand(array $ref, array $args, ?\Closure $reply): void
+    /**
+     * §7.3 approval surface: `/pair approve <code>` and `/pair list`.
+     * Pairing is an approver's act (mirrors candy-msteams): the roster that
+     * answers tool asks answers pairings too, and an EMPTY roster answers
+     * nobody — the gate that admits a peer must not default open. Codes are
+     * listed only in a direct message. The slash path answers through $reply
+     * (ephemeral); the text spelling answers in-channel — the REDACTION law
+     * (§9.5) still holds: the confirmation never repeats a code the notice
+     * channel doesn't already own, and `approve` consumes the code as it fires.
+     *
+     * @param list<mixed>                             $args
+     * @param null|\Closure(string):PromiseInterface $reply
+     */
+    private function handlePairCommand(array $ref, array $args, string $actorId, bool $isDm, ?\Closure $reply): void
     {
-        $action = \strtolower(\trim((string) ($args[0] ?? 'list')));
-        if ($action === 'approve') {
-            $code = \strtoupper(\trim((string) ($args[1] ?? '')));
-            $paired = $code === '' ? null : $this->pairing->approve($this->account, $code);
-            $text = $paired === null ? 'No pending pairing matches that code.' : "Paired {$paired}.";
+        $channelId = (string) ($ref['channelId'] ?? '');
+        $say = function (string $text) use ($reply, $channelId): void {
             if ($reply !== null) {
                 $reply($text);
 
                 return;
             }
-            $channelId = (string) ($ref['channelId'] ?? '');
             if ($channelId !== '') {
                 $this->rest->send($channelId, $text, ['allowed_mentions' => ['parse' => []]])
                     ->then(null, fn (\Throwable $e) => $this->log->warn('pair_answer_failed', ['error' => $e->getMessage()]));
             }
+        };
+
+        if (!$this->isApprover($actorId)) {
+            $say('⛔ Only an approver can manage pairings.');
 
             return;
         }
 
+        $action = \strtolower(\trim((string) ($args[0] ?? 'list')));
+        if ($action === 'approve') {
+            $code = \strtoupper(\trim((string) ($args[1] ?? '')));
+            $paired = $code === '' ? null : $this->pairing->approve($this->account, $code);
+            $say($paired === null ? 'No pending pairing matches that code.' : "Paired {$paired}.");
+
+            return;
+        }
+
+        if (!$isDm) {
+            $say('Use a direct message to list pairing codes.');
+
+            return;
+        }
         $rows = $this->pairing->pending($this->account);
-        $text = $rows === []
+        $say($rows === []
             ? 'No pending pairings.'
             : \implode("\n", \array_map(
                 static fn (array $row): string => (string) $row['code'] . ' — user ' . (string) $row['userId'],
                 $rows,
-            ));
-        if ($reply !== null) {
-            $reply($text);
+            )));
+    }
 
-            return;
-        }
-        $channelId = (string) ($ref['channelId'] ?? '');
-        if ($channelId !== '') {
-            $this->rest->send($channelId, $text, ['allowed_mentions' => ['parse' => []]])
-                ->then(null, fn (\Throwable $e) => $this->log->warn('pair_answer_failed', ['error' => $e->getMessage()]));
-        }
+    /** The approver roster (the list that answers tool asks). An empty roster answers nobody. */
+    private function isApprover(string $actorId): bool
+    {
+        $roster = \array_map('strval', $this->listCfg('approvalRoster'));
+
+        return $actorId !== '' && $roster !== [] && \in_array($actorId, $roster, true);
     }
 
     private static function ackFor(string $name): string

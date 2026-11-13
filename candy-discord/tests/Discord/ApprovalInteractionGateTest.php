@@ -189,13 +189,26 @@ final class ApprovalInteractionGateTest extends TestCase
     public function testAPairedSlashPairStillAnswers(): void
     {
         $this->store->writeDiscordPairing('default', [], ['u1']);
-        $this->buildAccountFace(['dmPolicy' => 'pairing']);
+        $this->buildAccountFace(['dmPolicy' => 'pairing', 'approvalRoster' => ['u1']]);
         $this->drive($this->slashInteraction('u1', 'pair', ['list']));
         $this->settle();
 
         $content = (string) ($this->callbackCall()['body']['data']['content'] ?? '');
         self::assertStringNotContainsString('not permitted', $content);
         self::assertStringContainsString('No pending pairings.', $content);
+    }
+
+    public function testAPairedNonApproverIsRefusedTheSlashPairSurface(): void
+    {
+        // Passing the floor is not enough: pairing is an approver's act.
+        $this->store->writeDiscordPairing('default', [], ['u1']);
+        $this->buildAccountFace(['dmPolicy' => 'pairing', 'approvalRoster' => ['boss']]);
+        $this->drive($this->slashInteraction('u1', 'pair', ['list']));
+        $this->settle();
+
+        $content = (string) ($this->callbackCall()['body']['data']['content'] ?? '');
+        self::assertStringContainsString('Only an approver can manage pairings', $content);
+        self::assertStringNotContainsString('pending pairings', $content);
     }
 
     public function testThePairingCodeNoticeIsNotReemittedOnApprovalRefusal(): void

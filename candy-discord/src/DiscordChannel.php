@@ -333,10 +333,12 @@ final class DiscordChannel implements ChannelInterface
         );
         $this->router->setQueueGate($this->queueGate);
         $this->router->setPairHandler(function (string $key, array $ref, array $args): void {
-            $account = Keys::parse($key)['account'];
+            $parsed = Keys::parse($key);
+            $actor = (string) ($ref['__actor']['userId'] ?? '');
+            $isDm = \str_starts_with($parsed['rest'], 'dm:');
             foreach ($this->faces as $face) {
-                if ($face->accountName() === $account) {
-                    $face->pairCommand($ref, $args);
+                if ($face->accountName() === $parsed['account']) {
+                    $face->pairCommand($ref, $args, $actor, $isDm);
 
                     return;
                 }

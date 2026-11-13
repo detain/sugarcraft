@@ -183,11 +183,23 @@ final class ApprovalGateTest extends TestCase
     {
         $this->presentAsk();
 
-        $this->router->answerByAskId('ask_9', 'always', ['userId' => 'peer-1', 'name' => 'P'], 'cafebabe01', self::DM_KEY, 'button');
+        $this->router->answerByAskId('ask_9', 'once', ['userId' => 'peer-1', 'name' => 'P'], 'cafebabe01', self::DM_KEY, 'button');
         self::runFor($this->loop, 300);
 
         self::assertSame(0, $this->serve->respondSeen, 'a guessed nonce must never reach the permission wire');
         self::assertContainsRefusal();
+    }
+
+    public function testAlwaysWithoutAConfiguredApproverIsRefusedAndTheAskStaysOpen(): void
+    {
+        $nonce = $this->presentAsk();
+
+        $this->router->answerByAskId('ask_9', 'always', ['userId' => 'peer-1', 'name' => 'P'], $nonce, self::DM_KEY, 'button');
+        self::runFor($this->loop, 300);
+
+        self::assertSame(0, $this->serve->respondSeen, 'a persistent grant with no named approver must not reach the wire');
+        $said = \implode("\n", $this->face->delivered);
+        self::assertStringContainsString('"always" needs a configured approver', $said);
     }
 
     public function testAButtonAnswerWithoutANonceIsRefused(): void
@@ -278,7 +290,7 @@ final class ApprovalGateTest extends TestCase
         // answerApproval (the askSession row is gone post-retirement, so
         // answerByAskId would stop at 'unknown ask' — this spelling pins
         // that the NONCE itself was cleared, and the deny line is visible).
-        $this->router->answerApproval('sess_fixture_1', 'ask_9', 'always', ['userId' => 'peer-1', 'name' => 'P'], $nonce, self::DM_KEY, 'button');
+        $this->router->answerApproval('sess_fixture_1', 'ask_9', 'once', ['userId' => 'peer-1', 'name' => 'P'], $nonce, self::DM_KEY, 'button');
         self::runFor($this->loop, 300);
 
         self::assertSame(1, $this->serve->respondSeen, 'retirement must clear the binding — the old card is dead');

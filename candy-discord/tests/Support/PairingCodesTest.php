@@ -44,6 +44,21 @@ final class PairingCodesTest extends TestCase
         }
     }
 
+    public function testAllDigitCodesSurviveAReloadAsIntKeys(): void
+    {
+        // json decode turns a digits-only code into an int array key; the
+        // live-row filter must keep it rather than prune it as malformed.
+        $now = \time();
+        $this->store->writeDiscordPairing('default', [
+            '23456789' => ['userId' => 'peer-9', 'createdAt' => $now, 'expiresAt' => $now + 3600, 'lastReminderAt' => $now],
+        ], []);
+
+        $rows = $this->codes->pending('default', $now);
+        self::assertCount(1, $rows, 'a live all-digit code must not be pruned');
+        self::assertSame('23456789', $rows[0]['code']);
+        self::assertNotNull($this->codes->approve('default', '23456789', $now));
+    }
+
     public function testFreshPeersReceiveAnEightCharacterCodeFromTheSafeAlphabet(): void
     {
         $answer = $this->codes->request('default', 'peer-1');

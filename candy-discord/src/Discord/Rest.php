@@ -13,10 +13,10 @@ use React\Http\Message\Response;
  * Discord REST v10 (https://discord.com/developers/docs/reference#api-versioning
  * — the version lives in the URL root). Bearer bot-token auth.
  *
- * Rate limits (§7.7): Discord 429s carry `retry_after`; we obey the header
- * ONCE and surface the failure if it recurs — a bridge that silently
- * retries forever turns a flood guard into a queue. Per-route pre-throttle
- * is P4 hardening; nothing here loops.
+ * Rate limits (§7.7): a Discord 429 surfaces as a RestException(429) with
+ * its Retry-After logged — nothing here sleeps or retries, because a bridge
+ * that silently retries forever turns a flood guard into a queue. Per-route
+ * pre-throttle is P4 hardening.
  */
 final class Rest
 {
@@ -198,12 +198,14 @@ final class Rest
                 $status = $response->getStatusCode();
                 $raw = (string) $response->getBody();
                 if ($status === 429) {
-                    $retryAfter = (float) ($response->getHeaderLine('retry_after') ?: '1');
+                    $retryAfter = (float) ($response->getHeaderLine('Retry-After') ?: '1');
                     $this->log->warn('discord_429', ['path' => $path, 'retryAfter' => $retryAfter]);
                     throw new RestException("discord 429 rate limited on {$method} {$path}", 429);
                 }
                 if ($status >= 400) {
-                    $this->log->warn('discord_rest_error', ['path' => $path, 'status' => $status, 'body' => \substr($raw, 0, 200)]);
+                    // The bot token must never reach a log line, even if an error body echoes it back.
+                    $body = \str_replace($this->token, '[redacted]', \substr($raw, 0, 200));
+                    $this->log->warn('discord_rest_error', ['path' => $path, 'status' => $status, 'body' => $body]);
                     throw new RestException("discord {$status} on {$method} {$path}", $status);
                 }
                 if ($raw === '' || $status === 204) {
