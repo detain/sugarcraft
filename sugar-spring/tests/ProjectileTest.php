@@ -101,71 +101,30 @@ final class ProjectileTest extends TestCase
         $this->assertEqualsWithDelta(0.19, $p->velocity->y, 0.05);
     }
 
-    public function testVectorMath3D(): void
+    /**
+     * SPR-27 (findings 061/065): the Vector/Point arithmetic re-pins that
+     * used to squat in this file (add/sub/scale/dot/cross/3-4-5/two-arg-z)
+     * are DELETED — VectorTest and PointTest are their canonical homes and
+     * already cover every leg; duplicates here tested nothing about
+     * Projectile. What Projectile owns and had NO test for is the dt = 0
+     * ACCEPTED-FREEZE ruling (finding 049, mirrored at the ctor door):
+     * the polarity leg below reddens if anyone "tidies up" the guard to
+     * dt <= 0 (which would also make it a Spring-style refusal, silently
+     * reversing the ruling).
+     */
+    public function testZeroDeltaTimeIsAcceptedAndFreezesTheIntegrator(): void
     {
-        $a = new Vector(1.0, 2.0, 3.0);
-        $b = new Vector(4.0, 5.0, 6.0);
-        $sum = $a->add($b);
-        $this->assertSame(5.0, $sum->x);
-        $this->assertSame(7.0, $sum->y);
-        $this->assertSame(9.0, $sum->z);
-        $diff = $b->sub($a);
-        $this->assertSame(3.0, $diff->x);
-        $this->assertSame(3.0, $diff->y);
-        $this->assertSame(3.0, $diff->z);
-        $scaled = $a->scale(2.0);
-        $this->assertSame(2.0, $scaled->x);
-        $this->assertSame(4.0, $scaled->y);
-        $this->assertSame(6.0, $scaled->z);
-        // |(1,2,3)| = sqrt(14)
-        $this->assertEqualsWithDelta(sqrt(14.0), $a->length(), 1e-9);
-    }
+        $p = Projectile::new(0.0, new Point(1.0, 2.0, 0.0), new Vector(3.0, 4.0, 0.0), Projectile::gravity());
 
-    public function testVectorDotProduct(): void
-    {
-        $a = new Vector(1.0, 2.0, 3.0);
-        $b = new Vector(4.0, 5.0, 6.0);
-        $this->assertSame(1.0 * 4.0 + 2.0 * 5.0 + 3.0 * 6.0, $a->dot($b));
-    }
+        $after = $p->update();
+        $this->assertSame(1.0, $after->position()->x, 'dt=0 must not move the position');
+        $this->assertSame(2.0, $after->position()->y);
+        $this->assertSame(3.0, $after->velocity()->x, 'dt=0 must not change velocity either — every Euler term carries dt');
+        $this->assertSame(4.0, $after->velocity()->y);
 
-    public function testVectorCrossProductFollowsRightHandRule(): void
-    {
-        // i × j = k
-        $i = new Vector(1.0, 0.0, 0.0);
-        $j = new Vector(0.0, 1.0, 0.0);
-        $k = $i->cross($j);
-        $this->assertSame(0.0, $k->x);
-        $this->assertSame(0.0, $k->y);
-        $this->assertSame(1.0, $k->z);
-    }
-
-    public function testVectorTwoArgConstructorDefaultsZToZero(): void
-    {
-        $v = new Vector(1.0, 2.0);
-        $this->assertSame(0.0, $v->z);
-    }
-
-    public function testPointAddVector3D(): void
-    {
-        $p = new Point(10.0, 20.0, 30.0);
-        $v = new Vector(1.0, 2.0, 3.0);
-        $result = $p->add($v);
-        $this->assertSame(11.0, $result->x);
-        $this->assertSame(22.0, $result->y);
-        $this->assertSame(33.0, $result->z);
-    }
-
-    public function testPointDistance(): void
-    {
-        $a = new Point(0.0, 0.0, 0.0);
-        $b = new Point(3.0, 4.0, 0.0);
-        $this->assertEqualsWithDelta(5.0, $a->distance($b), 1e-9);
-    }
-
-    public function testPointTwoArgConstructorDefaultsZToZero(): void
-    {
-        $p = new Point(1.0, 2.0);
-        $this->assertSame(0.0, $p->z);
+        $twice = $after->update();
+        $this->assertSame(1.0, $twice->position()->x, 'the freeze is stable across frames, not a one-frame fluke');
+        $this->assertSame(3.0, $twice->velocity()->x);
     }
 
     public function testGravityConstants(): void
