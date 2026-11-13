@@ -11,10 +11,16 @@ use PHPUnit\Framework\TestCase;
  * Pins the frame protocol: every frame is self-positioning, and the erase that
  * a resize needs is the ONLY thing that ever wipes the screen.
  *
- * Diff ops address cells absolutely but the encoder omits a leading CUP for a
- * change at (0,0), so a delta used to paint wherever the previous frame left
- * the cursor — rendering 'A' then 'B' into a 1x1 cell produced 'AB' on screen.
+ * Diff ops address cells absolutely but carried no positioning before their
+ * first change, so a delta used to paint wherever the previous frame left the
+ * cursor — rendering 'A' then 'B' into a 1x1 cell produced 'AB' on screen.
  * Full frames were cursor-relative for the same reason.
+ *
+ * The frames pin the exact bytes sugar-cellbuffer's encoder emits plus panels'
+ * own home: the encoder opens every stream with an unconditional home CUP
+ * (sugar-cellbuffer 216b32c12), which the renderer peels on the diff path so a
+ * frame carries exactly one home token — these pins are what turn a drift in
+ * that prologue into a loud red instead of a silently double-homed frame.
  */
 final class FrameProtocolTest extends TestCase
 {
@@ -37,6 +43,20 @@ final class FrameProtocolTest extends TestCase
 
         $this->assertSame(self::HOME . 'A', $first);
         $this->assertSame(self::HOME . 'B', $second, 'the changed cell is painted at the origin, not after the previous frame');
+    }
+
+    public function testADeltaCarriesExactlyOneHomeToken(): void
+    {
+        $panels = SugarPanels::new();
+        $panels->render(Node::leaf('ABC')->withBorder(false), 3, 1);
+        $delta = $panels->render(Node::leaf('A C')->withBorder(false), 3, 1);
+
+        // The encoder's own home prologue (ESC [ 1;1H) is peeled by the
+        // renderer — the frame above already homes — but a mid-stream CUP to
+        // the changed cell must survive: strip the prologue here and this reads
+        // as a bare space painted at the origin.
+        $this->assertSame(self::HOME . "\x1b[1;2H ", $delta);
+        $this->assertStringNotContainsString("\x1b[1;1H", $delta, 'one home token per frame');
     }
 
     public function testBothFramePathsOpenWithTheSameBytes(): void

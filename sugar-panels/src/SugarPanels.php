@@ -59,13 +59,22 @@ final class SugarPanels
      * in EdgeCaseTest and FrameProtocolTest).
      *
      * A frame is only replayable if the terminal knows where it starts. Diff
-     * ops address cells absolutely, but the encoder skips a leading CUP when
-     * the first change is at (0,0) — it then paints wherever the previous
-     * frame happened to leave the cursor, which is how one 'A' plus one 'B'
-     * came to read 'AB'. Homing each frame makes full repaints and deltas land
-     * on the same origin regardless of cursor history.
+     * ops address cells absolutely but carry no positioning before their first
+     * change — a delta then painted wherever the previous frame happened to
+     * leave the cursor, which is how one 'A' plus one 'B' came to read 'AB'.
+     * Homing each frame makes full repaints and deltas land on the same origin
+     * regardless of cursor history.
      */
     private const HOME = "\x1b[H";
+
+    /**
+     * Fixed home anchor {@see DiffEncoder::encode()} opens every encoded stream
+     * with (sugar-cellbuffer guarantees it as the documented prologue). A
+     * panels delta homes once with {@see self::HOME}; the encoder prologue is a
+     * second anchor over the same origin, so the diff path peels it (see
+     * {@see render()}) and the wire carries one home token per frame.
+     */
+    private const ENCODER_HOME = "\x1b[1;1H";
 
     /**
      * Erase-in-display, prefixed to a full frame only when the viewport
@@ -189,9 +198,10 @@ final class SugarPanels
      * it opens with
      * an absolute cursor home (ESC [ H), so a full frame and a delta both paint
      * from row 1 column 1 of the viewport no matter where the previous frame
-     * left the cursor. Diff ops address cells absolutely but the encoder omits a
-     * leading CUP for a change at (0, 0), so without the home a delta lands
-     * wherever the last frame happened to stop. A full frame that follows a
+     * left the cursor. Diff ops address cells absolutely, and the encoder's own
+     * home prologue is peeled on the diff path (see {@see self::ENCODER_HOME})
+     * so a frame carries exactly one home token. Without the home a delta would
+     * land wherever the last frame happened to stop. A full frame that follows a
      * RESIZE additionally opens with erase-in-display (ESC [ 2J): cells that the
      * new viewport cannot reach are never visited by the new frame, and would
      * otherwise keep the old frame's glyphs on screen. The erase is emitted only
@@ -307,7 +317,17 @@ final class SugarPanels
         $this->previousCells = $cells;
 
         $encoder = new DiffEncoder();
-        return self::HOME . $encoder->encode($ops);
+        $delta = $encoder->encode($ops);
+
+        // The encoder opens every stream with its own home anchor; this frame
+        // already homes with HOME (above). Peel the redundant prologue so a
+        // delta carries exactly one positioning token — the diff path exists to
+        // save bytes, and double-homing taxes every frame.
+        if (\str_starts_with($delta, self::ENCODER_HOME)) {
+            $delta = \substr($delta, \strlen(self::ENCODER_HOME));
+        }
+
+        return self::HOME . $delta;
     }
 
     /**
