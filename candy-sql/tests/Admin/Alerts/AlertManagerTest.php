@@ -224,6 +224,17 @@ final class AlertManagerTest extends TestCase
         $this->assertArrayHasKey('connection_errors', $alerts);
         $alert = $alerts['connection_errors'];
         $this->assertSame('connection_errors', $alert->metric);
+        // SQL-P17 (adminpages-019): grammar follows the count — no "1 errors".
+        $this->assertSame('150 connection errors detected', $alert->message);
+    }
+
+    public function testConnectionErrorsMessageIsSingularForOneError(): void
+    {
+        $manager = AlertManager::new()->withThresholds(AlertThresholds::standard()->withConnectionErrorsThreshold(1));
+        $alerts = $manager->checkAllMetrics(['Connection_errors_total' => '1'], ['max_connections' => '151']);
+
+        $this->assertArrayHasKey('connection_errors', $alerts);
+        $this->assertSame('1 connection error detected', $alerts['connection_errors']->message);
     }
 
     public function testCheckAllMetricsWithMaxConnectionsUsage(): void

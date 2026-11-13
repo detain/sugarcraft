@@ -167,7 +167,7 @@ final class AlertTest extends TestCase
         $alert = new Alert(
             Severity::Warning,
             'connection_errors',
-            'Connection errors detected: 150 total',
+            '150 connection errors detected',
             150.0,
             100.0,
             new \DateTimeImmutable(),
@@ -177,7 +177,7 @@ final class AlertTest extends TestCase
         $msg = $alert->toToastMessage();
 
         $this->assertStringContainsString('connection_errors', $msg);
-        $this->assertStringContainsString('Connection errors detected: 150 total', $msg);
+        $this->assertStringContainsString('150 connection errors detected', $msg);
         $this->assertStringContainsString('150 > 100', $msg);
         $this->assertStringNotContainsString('%', $msg);
         $this->assertStringNotContainsString('s', \substr(\rtrim($msg), -2));

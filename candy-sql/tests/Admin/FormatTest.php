@@ -140,4 +140,29 @@ final class FormatTest extends TestCase
     {
         $this->assertSame('0s', Format::duration(0));
     }
+
+    // ─── SQL-P17 (adminpages-019): shared count-plural convention ────────────
+
+    public function testPluralSingularForOne(): void
+    {
+        $this->assertSame('1 instrument', Format::plural(1, 'instrument'));
+    }
+
+    public function testPluralAddsSForOtherCounts(): void
+    {
+        $this->assertSame('2 instruments', Format::plural(2, 'instrument'));
+        $this->assertSame('0 instruments', Format::plural(0, 'instrument'));
+    }
+
+    public function testPluralAcceptsIrregularOverride(): void
+    {
+        $this->assertSame('2 children', Format::plural(2, 'child', 'children'));
+        $this->assertSame('1 child', Format::plural(1, 'child', 'children'));
+    }
+
+    public function testPluralHandlesMultiWordNouns(): void
+    {
+        $this->assertSame('1 object rule', Format::plural(1, 'object rule'));
+        $this->assertSame('3 object rules', Format::plural(3, 'object rule'));
+    }
 }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Sql\Admin\Alerts;
 
 use SugarCraft\Sql\Admin\Connections\ConnectionCounters;
+use SugarCraft\Sql\Admin\Format;
 
 /**
  * Stateless alert checker — evaluates metrics against thresholds.
@@ -184,7 +185,7 @@ final class AlertManager
             if ($connectionErrorsTotal >= $errorThreshold) {
                 $alerts['connection_errors'] = Alert::warning(
                     'connection_errors',
-                    sprintf('Connection errors detected: %d total', $connectionErrorsTotal),
+                    sprintf('%s detected', Format::plural($connectionErrorsTotal, 'connection error')),
                     (float) $connectionErrorsTotal,
                     (float) $errorThreshold,
                     MetricKind::Count,

@@ -14,6 +14,7 @@ use SugarCraft\Dashboard\Components\Card\Badge;
 use SugarCraft\Dashboard\Components\Card\Divider;
 use SugarCraft\Forms\ItemList\ItemList;
 use SugarCraft\Forms\ItemList\StringItem;
+use SugarCraft\Sql\Admin\Format;
 use SugarCraft\Sql\Admin\PageBase;
 use SugarCraft\Sql\Admin\Resilience\StatementTimeout;
 use SugarCraft\Sql\Admin\Resilience\StatementTimeoutException;
@@ -1335,7 +1336,7 @@ final class PerfSchemaPage extends PageBase implements RowNavigable
             'Instruments',
             $rows,
             '(no instruments available)',
-            sprintf('Total: %d instruments', count($this->instruments)),
+            sprintf('Total: %s', Format::plural(count($this->instruments), 'instrument')),
             $start,
         );
     }
@@ -1351,7 +1352,7 @@ final class PerfSchemaPage extends PageBase implements RowNavigable
             'Consumers',
             $rows,
             '(no consumers available)',
-            sprintf('Total: %d consumers', count($this->consumers)),
+            sprintf('Total: %s', Format::plural(count($this->consumers), 'consumer')),
         );
     }
 
@@ -1367,7 +1368,7 @@ final class PerfSchemaPage extends PageBase implements RowNavigable
             'Actors',
             $rows,
             '(no actors configured)',
-            sprintf('Total: %d actors', count($this->actors)),
+            sprintf('Total: %s', Format::plural(count($this->actors), 'actor')),
         );
     }
 
@@ -1383,7 +1384,7 @@ final class PerfSchemaPage extends PageBase implements RowNavigable
             'Objects',
             $rows,
             '(no object rules configured)',
-            sprintf('Total: %d object rules', count($this->objects)),
+            sprintf('Total: %s', Format::plural(count($this->objects), 'object rule')),
         );
     }
 
@@ -1428,7 +1429,7 @@ final class PerfSchemaPage extends PageBase implements RowNavigable
             Divider::h()->render(),
             $table,
             '',
-            Style::new()->foreground(Color::hex('#6b7280'))->render(sprintf('Total: %d threads', count($this->threads))),
+            Style::new()->foreground(Color::hex('#6b7280'))->render(sprintf('Total: %s', Format::plural(count($this->threads), 'thread'))),
         ]);
     }
 

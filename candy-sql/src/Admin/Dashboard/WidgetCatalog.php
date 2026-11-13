@@ -80,7 +80,7 @@ final class WidgetCatalog
                 new RatePerSecond('Bytes_received'),
                 '%s/s',
                 ['r' => 60, 'g' => 178, 'b' => 191],
-                'Incoming traffic: %(Bytes_received)s bytes total',
+                'Incoming traffic: {Bytes_received} bytes total',
                 null,
             ],
             [
@@ -98,7 +98,7 @@ final class WidgetCatalog
                 new RatePerSecond('Bytes_sent'),
                 '%s/s',
                 ['r' => 253, 'g' => 138, 'b' => 39],
-                'Outgoing traffic: %(Bytes_sent)s bytes total',
+                'Outgoing traffic: {Bytes_sent} bytes total',
                 null,
             ],
             [
@@ -116,7 +116,7 @@ final class WidgetCatalog
                 new StatusVar('Threads_connected'),
                 '%d',
                 ['r' => 124, 'g' => 193, 'b' => 80],
-                'Client connections: %(Threads_connected)s',
+                'Client connections: {Threads_connected}',
                 null,
             ],
             [

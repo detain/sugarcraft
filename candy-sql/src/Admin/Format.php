@@ -43,4 +43,21 @@ final class Format
     {
         return CoreFormat::duration($seconds);
     }
+
+    /**
+     * Count with a correctly pluralised noun: "1 instrument", "2 instruments".
+     *
+     * SQL-P17 (adminpages-019): one shared count-plural convention for admin
+     * copy, replacing the per-site `count === 1 ? '' : 's'` drift. Library
+     * local on purpose — English pluralisation is copy concern of this lib,
+     * not ecosystem-wide formatting, so it does not delegate to core.
+     *
+     * @param string $plural Optional irregular plural (defaults to singular + "s")
+     */
+    public static function plural(int $count, string $singular, ?string $plural = null): string
+    {
+        $noun = $count === 1 ? $singular : ($plural ?? $singular . 's');
+
+        return sprintf('%d %s', $count, $noun);
+    }
 }

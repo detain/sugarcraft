@@ -786,8 +786,9 @@ final class ReportsPage extends PageBase implements RowNavigable
         // errorMessage embeds raw driver/server text — neutralize at egress.
         $lines[] = CellValue::sanitize($this->errorMessage);
         $lines[] = '';
-        $lines[] = $muted->render('Ensure MySQL 5.6.6+ with performance_schema=enabled');
-        $lines[] = $muted->render('and the sys schema installed.');
+        // SQL-P17 (adminpages-022): one grammatical sentence, not a two-line
+        // verbless fragment split mid-thought.
+        $lines[] = $muted->render('Ensure MySQL 5.6.6+ with performance_schema=enabled and the sys schema installed.');
         $lines[] = '';
         $lines[] = $muted->render('[q] back');
 

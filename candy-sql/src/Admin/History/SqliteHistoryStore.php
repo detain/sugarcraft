@@ -169,7 +169,7 @@ final class SqliteHistoryStore implements HistoryStoreInterface
         if ($cut !== false && $cut !== null && $cut > 0) {
             $stmt = $this->db->prepare('DELETE FROM history WHERE id <= :cut');
             if ($stmt === false) {
-                throw new \RuntimeException('History store is unusable: ' . $this->db->lastErrorMsg());
+                throw $this->unusable();
             }
             $stmt->bindValue(':cut', (int) $cut, \SQLITE3_INTEGER);
             $stmt->execute();
@@ -188,7 +188,7 @@ final class SqliteHistoryStore implements HistoryStoreInterface
         // bindValue() on null, and an un-rejected promise in the admin poll
         // bricked live refresh for the whole session. Fail with a sentence.
         if ($stmt === false) {
-            throw new \RuntimeException('History store is unusable: ' . $this->db->lastErrorMsg());
+            throw $this->unusable();
         }
         $stmt->bindValue(':ts', $snapshot->ts, \SQLITE3_FLOAT);
         $stmt->bindValue(':recorded_at', (new \DateTimeImmutable())->format(\DATE_ATOM), \SQLITE3_TEXT);
@@ -220,7 +220,7 @@ final class SqliteHistoryStore implements HistoryStoreInterface
                  ORDER BY ts ' . $dir . ' LIMIT 1'
             );
             if ($stmt === false) {
-                throw new \RuntimeException('History store is unusable: ' . $this->db->lastErrorMsg());
+                throw $this->unusable();
             }
             $stmt->bindValue(':since', $sinceEpoch, \SQLITE3_TEXT);
             $stmt->bindValue(':until', $untilEpoch, \SQLITE3_TEXT);
@@ -259,7 +259,7 @@ final class SqliteHistoryStore implements HistoryStoreInterface
              ORDER BY ts ASC'
         );
         if ($stmt === false) {
-            throw new \RuntimeException('History store is unusable: ' . $this->db->lastErrorMsg());
+            throw $this->unusable();
         }
         $stmt->bindValue(':since', $sinceEpoch, \SQLITE3_TEXT);
         $stmt->bindValue(':until', $untilEpoch, \SQLITE3_TEXT);
@@ -282,7 +282,7 @@ final class SqliteHistoryStore implements HistoryStoreInterface
     {
         $r = $this->db->query('SELECT COUNT(*) FROM history');
         if ($r === false) {
-            throw new \RuntimeException('History store is unusable: ' . $this->db->lastErrorMsg());
+            throw $this->unusable();
         }
         $row = $r->fetchArray();
         return (int) ($row[0] ?? 0);
@@ -294,7 +294,7 @@ final class SqliteHistoryStore implements HistoryStoreInterface
             'DELETE FROM history WHERE ts < :before'
         );
         if ($stmt === false) {
-            throw new \RuntimeException('History store is unusable: ' . $this->db->lastErrorMsg());
+            throw $this->unusable();
         }
         $stmt->bindValue(':before', $before->format('U.u'), \SQLITE3_TEXT);
         $stmt->execute();
@@ -307,5 +307,18 @@ final class SqliteHistoryStore implements HistoryStoreInterface
     public function close(): void
     {
         $this->db->close();
+    }
+
+    /**
+     * One actionable sentence for every store failure (SQL-P17,
+     * adminpages-035): the raw SQLite chatter used to surface with no next
+     * step — the recovery is file-level, so name it.
+     */
+    private function unusable(): \RuntimeException
+    {
+        return new \RuntimeException(sprintf(
+            'History store is unusable: %s — delete the history file or fix its permissions to recover.',
+            $this->db->lastErrorMsg(),
+        ));
     }
 }

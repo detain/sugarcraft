@@ -57,6 +57,26 @@ final readonly class Widget
     }
 
     /**
+     * Fill the tooltip template with values (SQL-P17, adminpages-018).
+     *
+     * The catalog tooltips used to carry Python-style %(name)s placeholders
+     * — unrenderable by PHP sprintf, a latent failure the day tooltips were
+     * wired. {Brace} tokens name the same status/server variable keys the
+     * collectors snapshot; unknown tokens are left visible (a missing value
+     * should read as missing, not vanish).
+     *
+     * @param array<string,string|int|float> $vars Token name → display value
+     */
+    public function renderTooltip(array $vars): string
+    {
+        return (string) preg_replace_callback(
+            '/\{(\w+)\}/',
+            static fn (array $m): string => isset($vars[$m[1]]) ? (string) $vars[$m[1]] : $m[0],
+            $this->tooltip,
+        );
+    }
+
+    /**
      * Format a value using the widget's format string.
      *
      * @param float|array<string,float> $value

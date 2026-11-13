@@ -49,7 +49,7 @@ final class PostgresWidgetCatalog
                 new RatePerSecond('pg_stat_database.tup_fetched'),
                 '%s/s',
                 ['r' => 60, 'g' => 178, 'b' => 191],
-                'Rows fetched from DB: %(pg_stat_database.tup_fetched)s total',
+                'Rows fetched from DB: {tup_fetched} total',
                 null,
             ],
             [
@@ -67,7 +67,7 @@ final class PostgresWidgetCatalog
                 new RatePerSecond('pg_stat_database.tup_returned'),
                 '%s/s',
                 ['r' => 253, 'g' => 138, 'b' => 39],
-                'Rows returned to client: %(pg_stat_database.tup_returned)s total',
+                'Rows returned to client: {tup_returned} total',
                 null,
             ],
             [
@@ -85,7 +85,7 @@ final class PostgresWidgetCatalog
                 new RatePerSecond('pg_stat_database.blks_read'),
                 '%s/s',
                 ['r' => 60, 'g' => 178, 'b' => 191],
-                'Disk blocks read: %(pg_stat_database.blks_read)s total',
+                'Disk blocks read: {blks_read} total',
                 null,
             ],
             [
@@ -103,7 +103,7 @@ final class PostgresWidgetCatalog
                 new RatePerSecond('pg_stat_database.blks_hit'),
                 '%s/s',
                 ['r' => 253, 'g' => 138, 'b' => 39],
-                'Buffer cache hits: %(pg_stat_database.blks_hit)s total',
+                'Buffer cache hits: {blks_hit} total',
                 null,
             ],
             [
@@ -121,7 +121,7 @@ final class PostgresWidgetCatalog
                 new StatusVar('pg_stat_database.numbackends'),
                 '%d',
                 ['r' => 124, 'g' => 193, 'b' => 80],
-                'Active backends: %(pg_stat_database.numbackends)s',
+                'Active backends: {numbackends}',
                 null,
             ],
             [

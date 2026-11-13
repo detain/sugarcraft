@@ -122,4 +122,41 @@ final class SqliteHistoryStoreModesTest extends TestCase
             $store->close();
         }
     }
+
+    /**
+     * SQL-P17 (adminpages-035): the refusal must name the recovery, not just
+     * the condition — the old copy pasted raw SQLite chatter with no next step.
+     */
+    public function testUnusableSentenceCarriesAnActionHint(): void
+    {
+        $path = $this->dir . '/garbage2.db';
+        \mkdir($this->dir, 0700);
+        \file_put_contents($path, \str_repeat('NOT-A-DATABASE ', 40));
+
+        @$store = new SqliteHistoryStore($path, null, 3.1536e9);
+        try {
+            try {
+                @$store->save(new StatusSnapshot(['a' => 'b'], 1.0));
+                $this->fail('expected a RuntimeException refusal');
+            } catch (\RuntimeException $e) {
+                $this->assertStringContainsString('History store is unusable', $e->getMessage());
+                $this->assertStringContainsString('delete the history file or fix its permissions', $e->getMessage());
+            }
+        } finally {
+            $store->close();
+        }
+    }
+
+    /**
+     * Census (SQL-P17): the unusable sentence lives in exactly one factory,
+     * every throw site routes through it — no drifted copies.
+     */
+    public function testUnusableMessageHasASingleSourceInTheStore(): void
+    {
+        $source = (string) \file_get_contents(__DIR__ . '/../../../src/Admin/History/SqliteHistoryStore.php');
+
+        $this->assertSame(0, \substr_count($source, "'History store is unusable: ' . \$this->db->lastErrorMsg()")); // inline copies gone
+        $this->assertSame(1, \substr_count($source, 'History store is unusable: %s'));
+        $this->assertSame(6, \substr_count($source, 'throw $this->unusable();'));
+    }
 }
