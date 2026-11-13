@@ -17,11 +17,42 @@ use PHPUnit\Framework\TestCase;
  */
 final class PostgresSchemaProviderTest extends TestCase
 {
+    /**
+     * PDO-loyal substitute for `PDO::quote()` on pdo_pgsql — PQescapeString
+     * style: single quotes DOUBLE ('' not \'), backslashes stay literal
+     * under standard_conforming_strings=on (PG server default since 9.1).
+     * addslashes is the wrong grammar here: it backslash-escapes quotes the
+     * way the MySQL driver does and would green a hostile-name case that a
+     * live PG server rejects. SQL-C10.
+     */
+    private static function pdoQuote(string $value): string
+    {
+        return "'" . str_replace("'", "''", $value) . "'";
+    }
+
+    /**
+     * Mock whose `query()` records the exact emitted statement and whose
+     * `quote()` mirrors pdo_pgsql, so golden-SQL pins exercise the same
+     * string the provider would ship to a live server. SQL-C10.
+     */
+    private function capturingDb(string &$captured): DatabaseInterface
+    {
+        $mock = $this->createMock(DatabaseInterface::class);
+        $mock->method('quote')->willReturnCallback(self::pdoQuote(...));
+        $mock->method('query')->willReturnCallback(function (string $sql) use (&$captured): array {
+            $captured = $sql;
+
+            return [];
+        });
+
+        return $mock;
+    }
+
     private function createMockDb(array $tablesResult, array $columnsResult, array $indexesResult, array $fksResult): DatabaseInterface
     {
         $mock = $this->createMock(DatabaseInterface::class);
 
-        $mock->method('quote')->willReturnCallback(fn($v) => "'" . addslashes((string)$v) . "'");
+        $mock->method('quote')->willReturnCallback(self::pdoQuote(...));
 
         $mock->method('query')->willReturnCallback(function (string $sql) use ($tablesResult, $columnsResult, $indexesResult, $fksResult) {
             if (str_contains($sql, 'information_schema.tables')) {
@@ -176,7 +207,7 @@ final class PostgresSchemaProviderTest extends TestCase
         // a revert to bare unnest(conkey) projection turns this red.
         $captured = '';
         $mock = $this->createMock(DatabaseInterface::class);
-        $mock->method('quote')->willReturnCallback(fn($v) => "'" . addslashes((string) $v) . "'");
+        $mock->method('quote')->willReturnCallback(self::pdoQuote(...));
         $mock->method('query')->willReturnCallback(function (string $sql) use (&$captured): array {
             $captured = $sql;
             return [];
@@ -228,5 +259,91 @@ final class PostgresSchemaProviderTest extends TestCase
         $this->assertInstanceOf(PostgresSchemaProvider::class, $result);
         // Note: Postgres returns $this (same object) since flavor doesn't affect queries
         $this->assertIsObject($result);
+    }
+
+    /**
+     * SQL-C10 golden pins — kill the self-consistent mock universe. The
+     * `str_contains` routers in createMockDb() replay canned rows for ANY
+     * statement that mentions the catalog, so alias typos, dropped columns,
+     * and lost qualifiers sailed through green. Each provider method now
+     * has its exact emitted SQL pinned, one per manual page.
+     *
+     * PostgreSQL docs info-schema-tables: information_schema.TABLES is
+     * session-visible-only, so the query pins schema 'public' explicitly
+     * (not current_schema(), matching the provider contract elsewhere).
+     */
+    public function testTablesEmitsGoldenSql(): void
+    {
+        $captured = '';
+        $provider = new PostgresSchemaProvider($this->capturingDb($captured));
+        $provider->tables();
+
+        $this->assertSame(<<<'SQL'
+            SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE' ORDER BY table_name
+            SQL, $captured);
+    }
+
+    /**
+     * PostgreSQL docs info-schema-columns: DATA_TYPE (no display widths —
+     * PG reports 'character varying', unlike MySQL's COLUMN_TYPE), plus
+     * ORDINAL_POSITION which the VO re-bases to a zero-indexed cid.
+     */
+    public function testColumnsEmitsGoldenSql(): void
+    {
+        $captured = '';
+        $provider = new PostgresSchemaProvider($this->capturingDb($captured));
+        $provider->columns('users');
+
+        $this->assertSame(<<<'SQL'
+            SELECT column_name, data_type, is_nullable, column_default, ordinal_position FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'users' ORDER BY ordinal_position
+            SQL, $captured);
+    }
+
+    /**
+     * PostgreSQL docs pg-indexes view: pg_indexes exposes indexname/indexdef
+     * per pg_class row; the VO unique flag is parsed from the definition
+     * text, so INDEXDEF must ride the projection (dropping it greens the
+     * mock and breaks production parse).
+     */
+    public function testIndexesEmitsGoldenSql(): void
+    {
+        $captured = '';
+        $provider = new PostgresSchemaProvider($this->capturingDb($captured));
+        $provider->indexes('users');
+
+        $this->assertSame(<<<'SQL'
+            SELECT indexname, indexdef FROM pg_indexes WHERE schemaname = 'public' AND tablename = 'users' ORDER BY indexname
+            SQL, $captured);
+    }
+
+    /**
+     * PostgreSQL docs catalog-pg-constraint: conkey/confkey are attnum
+     * vectors resolved through pg_attribute (WITH ORDINALITY keeps composite
+     * legs aligned — SQL-C09's cure); confupdtype/confdeltype map to SQL
+     * keyword display values; conrelid::regclass is regclass-cast from the
+     * quoted table name.
+     */
+    public function testForeignKeysEmitsGoldenSql(): void
+    {
+        $captured = '';
+        $provider = new PostgresSchemaProvider($this->capturingDb($captured));
+        $provider->foreignKeys('posts');
+
+        $this->assertSame(<<<'SQL'
+            SELECT con.conname AS constraint_name, con.confrelid::regclass AS foreign_table_name, a.attname AS column_name, fa.attname AS foreign_column_name, CASE con.confupdtype WHEN 'a' THEN 'NO ACTION' WHEN 'r' THEN 'RESTRICT' WHEN 'c' THEN 'CASCADE' WHEN 'n' THEN 'SET NULL' WHEN 'd' THEN 'SET DEFAULT' END AS on_update, CASE con.confdeltype WHEN 'a' THEN 'NO ACTION' WHEN 'r' THEN 'RESTRICT' WHEN 'c' THEN 'CASCADE' WHEN 'n' THEN 'SET NULL' WHEN 'd' THEN 'SET DEFAULT' END AS on_delete FROM pg_constraint con JOIN unnest(con.conkey, con.confkey) WITH ORDINALITY AS cols(local_attnum, ref_attnum, ord) ON true JOIN pg_attribute a ON a.attrelid = con.conrelid AND a.attnum = cols.local_attnum JOIN pg_attribute fa ON fa.attrelid = con.confrelid AND fa.attnum = cols.ref_attnum WHERE con.contype = 'f' AND con.conrelid = 'posts'::regclass
+            SQL, $captured);
+    }
+
+    /**
+     * The mock's quote must match pdo_pgsql semantics, not addslashes: a
+     * single quote DOUBLES, a backslash stays literal (standard_conforming_
+     * strings=on), and the old MySQL-grammar stub is observably different.
+     */
+    public function testQuoteStubMirrorsPdoPgsqlNotAddslashes(): void
+    {
+        $this->assertSame("'o''b'", self::pdoQuote("o'b"));
+        $this->assertSame("'a\\b'", self::pdoQuote('a\\b'));
+        // Divergence proof — addslashes would backslash-escape the quote:
+        $this->assertNotSame("'" . addslashes("o'b") . "'", self::pdoQuote("o'b"));
     }
 }
