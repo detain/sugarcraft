@@ -15,7 +15,8 @@ use SugarCraft\Input\Event;
  * house law the paste cap follows).
  *
  * Mirrors charmbracelet/bubbletea's input handling.
- * @readonly
+ *
+ * Instances are immutable value objects: every field is fixed at construction.
  */
 final readonly class ResizeEvent implements Event
 {

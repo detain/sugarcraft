@@ -20,7 +20,8 @@ use SugarCraft\Input\Lang;
  * 'paste.truncated' one-liner suitable for display.
  *
  * Mirrors charmbracelet/bubbletea's input handling.
- * @readonly
+ *
+ * Instances are immutable value objects: every field is fixed at construction.
  */
 final readonly class PasteEvent implements Event
 {

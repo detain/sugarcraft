@@ -13,7 +13,8 @@ use SugarCraft\Input\Event;
  * CSI O  = focus lost    (DECSET 1004 report)
  *
  * Mirrors charmbracelet/bubbletea's input handling.
- * @readonly
+ *
+ * Instances are immutable value objects: every field is fixed at construction.
  */
 final readonly class FocusEvent implements Event
 {

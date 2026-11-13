@@ -11,7 +11,8 @@ use SugarCraft\Input\KeyModifier;
  * A keyboard event — plain key or escape sequence decoded key.
  *
  * Mirrors charmbracelet/bubbletea's input handling.
- * @readonly
+ *
+ * Instances are immutable value objects: every field is fixed at construction.
  */
 final readonly class KeyEvent implements Event
 {
@@ -21,7 +22,8 @@ final readonly class KeyEvent implements Event
     /**
      * @param string         $key       Symbolic key name (e.g. "ArrowUp", "Enter", "a", "F1");
      *                                  releases carry the "Release" prefix ("ReleaseA")
-     * @param KeyModifier    $modifiers  Bitmask of held modifier keys
+     * @param KeyModifier    $modifiers  The modifier state held at the event (a value object,
+     *                                  not a raw bitmask — see {@see KeyModifier})
      * @param string         $raw       Raw bytes that produced this event (for debugging / echoing)
      * @param bool           $isRepeat  True when the wire marked the press as an auto-repeat
      *                                  (Kitty event type 2); a repeat IS a keystroke, the

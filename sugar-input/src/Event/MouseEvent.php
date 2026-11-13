@@ -11,7 +11,8 @@ use SugarCraft\Input\KeyModifier;
  * A mouse event (SGR 1006/1016, urxvt 1015, X10 1000).
  *
  * Mirrors charmbracelet/bubbletea's input handling.
- * @readonly
+ *
+ * Instances are immutable value objects: every field is fixed at construction.
  */
 final readonly class MouseEvent implements Event
 {

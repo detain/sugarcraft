@@ -34,11 +34,12 @@ use SugarCraft\Input\Event;
  * that makes input-stream poisoning observable (bubbletea silently discards
  * replies; here they surface as a typed Event with an exact raw byte record).
  *
+ * Instances are immutable value objects: every field is fixed at construction.
+ *
  * @see xterm control sequences — Device Attributes, CSI 6 n, CSI ... t:
  *      https://invisible-island.net/xterm/ctlseqs/ctlseqs.html
  * @see Kitty keyboard protocol — flag query/reply `CSI ? flags u`:
  *      https://sw.kovidgoyal.net/kitty/keyboard-protocol/
- * @readonly
  */
 final readonly class TerminalReplyEvent implements Event
 {
