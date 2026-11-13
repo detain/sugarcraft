@@ -10,12 +10,12 @@ New here? Read [Quickstart](#quickstart), then [Terminal replies](#terminal-repl
 
 `sugar-input` is the missing input layer for SugarCraft — it decodes raw TTY bytes into structured `Event` objects that programs can switch on. It handles:
 
-- **Plain ASCII keys** — letters, digits, punctuation, control codes (the 0x7F byte names `Backspace` — one raw code, no escape sequence)
+- **Plain ASCII keys** — letters, digits, punctuation, control codes (the 0x7F byte IS `Backspace` — one raw code, no escape sequence)
 - **Legacy escape sequences** — F1–F24, arrow keys, Home/End/PgUp/PgDn, Insert, Delete, Tab, Enter, Escape, Backtab (`CSI Z`) — including the MODIFIED numbered-key family `CSI number ; modifier ~` that terminals really emit: modified forms like `3;2~` (Shift+Delete) and `21;5~` (Ctrl+F10) ship in common terminfo entries, so `3;5~` decodes as Ctrl+Delete rather than vanishing
 - **Kitty keyboard protocol** — event frames `CSI code ; mods u` (the `mods` field is the spec's `1 + bitmask`, so a bare press carries `;1` — release via the legacy `0x20` flag or the spec `:event-type` sub-param; event type 2, auto-repeat, deliberately decodes as an ordinary press with `isRepeat` set). Codepoints follow the spec's private-use layout: `57344`–`57454` carry the functional keys (arrows at `57350`–`57353`, the keypad block from `57399`), and codes below `57344` in `u` frames are TEXT codepoints — legacy tilde numbers like `11u` are counted drops, not F1. On release the key name gains the `Release` prefix (see [Key names](#key-names-the-complete-vocabulary))
 - **xterm modifyOtherKeys** — wrapped keys `CSI 27 ; mods ; keysym ~`, so a modified key with no dedicated sequence is told apart from a plain press
-- **Application keypad (DECKPAM)** — SS3 `ESC O p..y` (digits), `Ol` (decimal), `Om` (minus), `OM` (enter)
-- **SGR mouse 1006 / 1016** — press, release, drag, and scroll (incl. horizontal wheel) with modifier support (`CSI < b ; x ; y M|m`); 1016 (pixels) frames carry colon sub-parameters and arrive byte-compatible with 1006 — the decoder keeps the first integer of each field, which for 1016 is a PIXEL coordinate. A stateless decoder cannot convert, so `x`/`y` are whatever the reporting mode measures; a host that enabled 1016 knows its own units. Non-numeric mouse parameters are refused, never cast to phantom origin clicks
+- **Application keypad (DECKPAM)** — SS3 `ESC O p..y` (digits), `Ol` (decimal), `Om` (minus), `OM` (`Enter`)
+- **SGR mouse 1006 / 1016** — press, release, drag, and scroll (including horizontal wheel) with modifier support (`CSI < b ; x ; y M|m`); 1016 (pixels) frames carry colon sub-parameters and arrive byte-compatible with 1006 — the decoder keeps the first integer of each field, which for 1016 is a PIXEL coordinate. A stateless decoder cannot convert, so `x`/`y` are whatever the reporting mode measures; a host that enabled 1016 knows its own units. Non-numeric mouse parameters are refused, never cast to phantom origin clicks
 - **urxvt mouse 1015** — `CSI b ; x ; y M` decimal reports (no `<` introducer, so it never collides with 1006)
 - **X10 mouse** — `CSI M` three-byte compressed reports (mode 1000), not printable-key spam; payload bytes outside the printable 7-bit range are refused with one counted drop — including the UTF-8 mode-1005 coordinate extension (`≥ 0x80`), which is deliberately not modelled and would otherwise surface forged high-button clicks
 - **Focus events** — DECSET 1004 via `CSI I` / `CSI O`
@@ -88,7 +88,8 @@ tag exists.
 - The decoder itself is pure — no tty, no environment reads — with one
   extension it cannot dodge: Kitty text codepoints materialize through
   `mb_chr()`, so `ext-mbstring` is a hard require (declared). It models
-  bytes; everything about the terminal is the host's (below).
+  bytes; everything about the terminal is the host's job — see [Terminal
+  setup is the host's duty](#terminal-setup-is-the-hosts-duty).
 - `ext-pcntl` (+ `ext-posix` to self-signal in tests) for
   `SignalResizeDriver`; without pcntl, `arm()` returns `false` and detection
   stays off — never a silent half-start.
@@ -128,7 +129,7 @@ code-side truth until it does.
 $decoder = new EscapeDecoder();                                // pure decoder
 $decoder = new EscapeDecoder(new EscapeDecoderOptions(...));   // filtered
 
-// Decode a byte buffer — returns 0+ Events, buffers partial sequences
+// Decode a byte buffer — returns zero or more Events, buffers partial sequences
 $events = $decoder->decode($bytes);
 
 // Get unconsumed remainder after decode()
@@ -146,8 +147,8 @@ $decoder->discardedPasteBytes();  // bytes dropped past the paste cap
 $decoder->reset();
 ```
 
-Feed whole reads; do NOT feed the decoder one byte per `decode()` call as a
-policy. A byte-at-a-time stream makes every bare `ESC` resolve eagerly to the
+Feed whole reads; do NOT make a policy of feeding the decoder one byte per
+`decode()` call. A byte-at-a-time stream makes every bare `ESC` resolve eagerly to the
 `Escape` key under the default options (the deferred mode just holds it
 forever until flushed). Real reads deliver whole frames; if your reader can
 legitimately return 1 byte at a time, enable `deferTrailingEscape` and bound
@@ -264,10 +265,10 @@ the same byte). One vocabulary, stated and enforced: a bare 0x00–0x1F press
 never surfaces as a raw control byte in `$key`, so a
 `match ($event->key)` arm tests names, never `"\0"`; the wire bytes stay
 intact in `raw`. Alt-modified presses of the symbolic control keys share it:
-`ESC` + `0x09`/`0x0A`/`0x0D`/`0x7F`/`0x08` name
+`ESC` + `0x09`/`0x0A`/`0x0D`/`0x7F`/`0x08` decode as
 `Tab`/`Enter`/`Enter`/`Backspace`/`Backspace`
-(with Alt), not raw bytes (a decoder quirk fixed long ago — if you matched
-on `"\r"`, match on `'Enter'` plus Alt now). Under Alt a key name is the byte
+(with Alt), never raw bytes — if your code matched on `"\r"`, match on
+`'Enter'` with Alt instead. Under Alt a key name is the byte
 itself — letters keep their character (uppercase arrives lower-cased), and
 every other byte stays raw: Alt + `0x01` is the raw `"\x01"` with Alt, not the
 `a` a Ctrl press produces.
@@ -287,7 +288,7 @@ prefix.
 | Text | every printable character (`a`… `Z`, digits, punctuation, Unicode runes as the character itself), `Space` (Kitty `32u` only — legacy 0x20 and modifyOtherKeys keysym 32 surface as the literal space character (U+0020)) |
 | Editing/whitespace | `Tab`, `Enter`, `Backspace`, `Escape`, `Backtab`, `Insert`, `Delete`, `Home`, `End`, `PageUp`, `PageDown` |
 | Arrows | `ArrowUp`, `ArrowDown`, `ArrowLeft`, `ArrowRight` |
-| Function | `F1`–`F24` (legacy families), up to `F35` via Kitty — one legacy hole: modified `F3` is structurally unreachable, because `CSI 1;<mods> R` is indistinguishable from a cursor position report and always drains as one (unmodified `F3` still decodes; bubbletea faces the same ambiguity) |
+| Function | `F1`–`F24` (legacy tilde range), up to `F35` via Kitty — one legacy hole: modified `F3` is structurally unreachable, because `CSI 1;<mods> R` is indistinguishable from a cursor position report and always drains as one (unmodified `F3` still decodes; bubbletea faces the same ambiguity) |
 | Keypad | `KP0`–`KP9`, `KPDecimal`, `KPDivide`, `KPMultiply`, `KPSubtract`, `KPAdd`, `KPEnter`, `KPEqual`, `KPSeparator`, `KPBegin`, `KPLeft`, `KPRight`, `KPUp`, `KPDown`, `KPPageUp`, `KPPageDown`, `KPHome`, `KPEnd`, `KPInsert`, `KPDelete` (keypad Enter is the one-name law's exception: legacy DECKPAM `ESC O M` predates the KP vocabulary and surfaces as `Enter`, so match both names) |
 | Locks/navigation state | `CapsLock`, `ScrollLock`, `NumLock`, `PrintScreen`, `Pause`, `Menu` |
 | Media (Kitty) | `MediaPlay`, `MediaPause`, `MediaPlayPause`, `MediaReverse`, `MediaStop`, `MediaFastForward`, `MediaRewind`, `MediaNext`, `MediaPrev`, `MediaRecord`, `LowerVolume`, `RaiseVolume`, `MuteVolume` |
@@ -297,12 +298,14 @@ prefix.
 
 Shift+letter is protocol-dependent — code accordingly: legacy terminals send
 the capital directly (`Shift+a` → key `"A"`, NO `SHIFT` bit), the Kitty
-protocol sends key `"a"` WITH the `SHIFT` bit; a match arm on `"A"` silently
-stops matching the moment Kitty negotiation turns on — match
-`mb_strtolower($key)` plus `$modifiers->includes(KeyModifier::SHIFT)` if you
-need case-independent handling of both worlds.
+protocol sends key `"a"` WITH the `SHIFT` bit; a match arm on that
+legacy-capital `"A"` silently stops matching the moment Kitty negotiation
+turns on — to handle Shift+letter in both worlds, match
+`mb_strtolower($key)` plus `$modifiers->includes(KeyModifier::SHIFT)` for
+case-independent comparison.
 
-Modifier state arrives **on events** — you read them; you do not build masks
+Modifier state arrives **on events** — read it from
+`$event->modifiers->includes(...)`; you do not build masks
 (the `KeyModifier` constructor is private):
 
 ```php
@@ -331,9 +334,9 @@ library's mapping (the spec calls that bit "meta"; ctlseqs reserves "super"
 for different reporting) — treat legacy `;9A` as Meta+ArrowUp and rely on the
 Kitty path for true Super.
 
-Modifier-field strictness is protocol-split. The Kitty path de-bases
-leniently: an empty or `;0` field lands as modifier-none via
-`max(0, mods − 1)`. The tilde `number ; 0 ~` and modifyOtherKeys
+Modifier-field strictness differs by protocol. The Kitty path de-bases its
+1-based field leniently — subtracting the offset under a floor: an empty or
+`;0` field lands as modifier-none via `max(0, mods − 1)`. The tilde `number ; 0 ~` and modifyOtherKeys
 `27 ; 0 ; keysym ~` forms refuse a `0` field as a counted drop —
 `fromXtermParam()` is 1-based, and a 0 there would compute `-1` and fabricate
 every bit.
@@ -358,11 +361,11 @@ surfaces it as a `TerminalReplyEvent`:
 
 | `family` | Sequence | Meaning |
 |---|---|---|
-| `device-attributes` | `CSI ? Pm c` / `CSI > Pm c` (bare `CSI Pm c` drains too) | DA1 / DA2 reply |
+| `device-attributes` | `CSI ? params c` / `CSI > params c` (`Pm` = the parameter field; bare `CSI params c` drains too) | DA1 / DA2 reply |
 | `cursor-position` | `CSI row ; col R` | DSR/CPR report (never a phantom `F3`) |
 | `dsr-status` | `CSI 0 n` / `CSI 3 n` (any `CSI … n` final drains) | DSR ok / not-ok reply — every `n`-final frame is drained so an echoed query can never be mis-parsed as a key |
-| `window-report` | `CSI Pm t` | XTWINOPS geometry/resize report |
-| `kitty-flags` | `CSI ? flags u` (incl. bare `CSI ? u`) | Kitty keyboard flags query/reply |
+| `window-report` | `CSI params t` (`Pm` = the parameter field) | XTWINOPS geometry/resize report |
+| `kitty-flags` | `CSI ? flags u` (including bare `CSI ? u`) | Kitty keyboard flags query/reply |
 | `mode-report` | `CSI ? mode ; status $ y` (public `CSI mode ; status $ y` too) | DECRPM mode report |
 | `csi-private` | any other complete `CSI ? …` / `CSI > …` | private-mode sequence, drained |
 | `string` | `OSC / DCS / APC / PM … ST/BEL` | string replies (color reports, termcap, tmux echo); `body` + `truncated` carry the payload |
@@ -402,7 +405,7 @@ Three counters on `EscapeDecoder` tell the silent paths apart:
 
 ```php
 $decoder->drainedReplyCount();    // replies recognized and surfaced as TerminalReplyEvent
-$decoder->droppedUnknownCount();  // complete sequences consumed with no event (incl. overflowed CSI)
+$decoder->droppedUnknownCount();  // complete sequences consumed with no event (including overflowed CSI)
 $decoder->discardedPasteBytes();  // paste body bytes dropped past the 1 MiB cap
 ```
 
@@ -425,7 +428,7 @@ counters along with the buffers.
 By default a chunk that ends on a bare `ESC` resolves to an `Escape` key
 immediately — the historical contract. Slow TTY reads that split a sequence
 right after the escape byte then decode its remainder as literal keystrokes
-(observe `ESC`+`[1;20R` as `Escape`, `[`, `1`… — and on a real terminal a
+(a split `ESC`+`[1;20R` decodes as `Escape`, `[`, `1`… — and on a real terminal a
 cursor-position report can absolutely arrive that way). Apps that bound reads
 with their own idle timer can opt into the deferred-escape behaviour:
 
@@ -445,12 +448,13 @@ and `[]` otherwise — call it from an input-idle timer. (A paste body that ends
 on a lone `ESC` leaves the same one-byte remainder as its held-back split end
 marker; flushing there would invent an Escape and strand the paste, so the
 guard is load-bearing.) Caveat: with the option on, a deferred `ESC` followed
-by a plain byte in the *next* chunk still merges into `Alt+char`; flush before
+by a plain byte in the *next* chunk still decodes as `Alt+char`; flush before
 resolving an Escape-only keystroke.
 
 ## Documented gaps
 
-Complete-by-design omissions, pinned by tests so they stay known:
+Complete-by-design gaps, pinned so the omissions stay deliberate — if one
+turns accidental, the matching test fails:
 
 - Parameterized focus forms (`CSI 1;3I`) are dropped, not decoded — matches
   xterm, which never sends them.
@@ -498,8 +502,9 @@ field as hostile bytes:
   through `Sanitize::untrustedForMarkedFrames()` when its paste sanitization
   is on.)
 
-The decoder's own caps (partial sequence, 1 MiB paste, 1 KiB/64 KiB string
-replies) contain parser resource use; they do not make the content trustworthy.
+The decoder's own caps (128-byte partial sequences, 1 MiB paste, 1 KiB/64 KiB
+string replies) contain parser resource use; they do not make the content
+trustworthy.
 The fleet-wide contract lives in
 [`docs/TRUST-BOUNDARY.md`](https://github.com/detain/sugarcraft/blob/master/docs/TRUST-BOUNDARY.md).
 
