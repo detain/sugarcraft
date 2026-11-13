@@ -90,7 +90,7 @@ final class PerfSchemaPage extends PageBase implements RowNavigable
         self::TAB_OPTIONS,
     ];
 
-    /** @var list<string> Tab display labels */
+    /** @var array<string, string> Tab display labels (TAB_* key => label) */
     private const TAB_LABELS = [
         self::TAB_EASY_SETUP => 'Easy Setup',
         self::TAB_INSTRUMENTS => 'Instruments',
@@ -246,7 +246,7 @@ final class PerfSchemaPage extends PageBase implements RowNavigable
             $this->loadData();
         }
 
-        $ch = $msg->rune ?? '';
+        $ch = $msg->rune;
         $type = $msg->type;
 
         // While a commit awaits confirmation, only an explicit y/Y fires it;
@@ -1285,7 +1285,13 @@ final class PerfSchemaPage extends PageBase implements RowNavigable
             $rows[] = Row::new(RowData::from([
                 'name' => $timer->name,
                 'impl' => $timer->timerName,
-                'scale' => number_format($timer->scaleFactor, 2),
+                'scale' => match ($timer->timerName) {
+                    'NANOSECOND' => '1 ns',
+                    'MICROSECOND' => '1 µs',
+                    'MILLISECOND' => '1 ms',
+                    'SECOND' => '1 s',
+                    default => $timer->timerName,
+                },
             ]));
         }
 

@@ -202,7 +202,7 @@ final class VariablesPage extends PageBase implements RowNavigable
             return [$this, null];
         }
 
-        $ch = $msg->rune ?? '';
+        $ch = $msg->rune;
         $type = $msg->type;
 
         // Tab key toggles between Status/System tabs
@@ -306,7 +306,7 @@ final class VariablesPage extends PageBase implements RowNavigable
         }
 
         $type = $msg->type;
-        $ch = $msg->rune ?? '';
+        $ch = $msg->rune;
         $varName = $this->editVarName ?? '';
         $currentValue = $this->editCurrentValue ?? '';
         $persistMode = $this->editPersistMode;
@@ -322,6 +322,7 @@ final class VariablesPage extends PageBase implements RowNavigable
                 self::MODE_GLOBAL => self::MODE_PERSIST,
                 self::MODE_PERSIST => self::MODE_PERSIST_ONLY,
                 self::MODE_PERSIST_ONLY => self::MODE_GLOBAL,
+                default => self::MODE_GLOBAL,
             };
             return [$this->withEditDialog(
                 self::DLG_INPUT,
@@ -702,26 +703,6 @@ final class VariablesPage extends PageBase implements RowNavigable
         return $names;
     }
 
-    /**
-     * Check if a variable is editable per its metadata catalog.
-     *
-     * Distinct from isDynamic(): isEditable() reflects the [rw] metadata flag,
-     * while isDynamic() reflects whether SET GLOBAL actually works at runtime.
-     * handleEdit() gates on isDynamic() so that static variables reach the
-     * confirm phase and get a clear error 1238 message rather than silently
-     * declining at the entry point.
-     *
-     * @return bool True if the variable is in the catalog with editable=true
-     */
-    private function isEditable(string $varName): bool
-    {
-        if ($this->metadataMap === null) {
-            return false;
-        }
-
-        $metadata = $this->metadataMap[$varName] ?? null;
-        return $metadata !== null && $metadata->editable;
-    }
 
     // ─── Rendering ───────────────────────────────────────────────────────────
 

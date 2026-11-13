@@ -269,7 +269,7 @@ final class DashboardPage extends PageBase
             return [$this, null];
         }
 
-        $ch = $msg->rune ?? '';
+        $ch = $msg->rune;
 
         return match (true) {
             $ch === 'p' => [$this->withTogglePause(), null],
@@ -354,7 +354,7 @@ final class DashboardPage extends PageBase
 
         // Compute keys that are newly breached (not in last-breached set).
         // Use array_diff_key+array_flip to compare by key name, not value.
-        $currentKeys = array_flip(array_keys($alerts));
+        $currentKeys = array_fill_keys(array_keys($alerts), true);
         $previousKeys = $this->breachedAlertKeys;
         $newKeys = array_diff_key($currentKeys, $previousKeys);
 

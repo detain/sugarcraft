@@ -83,9 +83,9 @@ final class ServerInfoCard
     private function resolveHost(): ?string
     {
         try {
-            $connection = $this->context->connection();
-            // Use the database name as a fallback identifier
-            $dbName = $connection->database();
+            // Use the database name as a fallback identifier (DatabaseInterface
+            // exposes dsn(), not a database() accessor — parse the name from it).
+            $dbName = $this->databaseNameFromDsn($this->context->connection()->dsn());
             if ($dbName !== '') {
                 return $dbName;
             }
@@ -94,5 +94,23 @@ final class ServerInfoCard
         }
 
         return null;
+    }
+
+    private function databaseNameFromDsn(string $dsn): string
+    {
+        if (preg_match('/(?:^|;)dbname=([^;]+)/', $dsn, $m) === 1) {
+            return $m[1];
+        }
+
+        if (str_starts_with($dsn, 'sqlite:')) {
+            $path = substr($dsn, strlen('sqlite:'));
+            $path = preg_replace('#^/*/#', '/', $path) ?? $path;
+            if ($path === '' || str_contains($path, ':memory:')) {
+                return '';
+            }
+            return basename($path);
+        }
+
+        return '';
     }
 }

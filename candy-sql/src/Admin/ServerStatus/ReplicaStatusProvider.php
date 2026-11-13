@@ -112,8 +112,6 @@ final class ReplicaStatusProvider
 
     /**
      * Execute the appropriate SHOW command for the server version.
-     *
-     * @return list<array<string, scalar>>
      */
     private function doFetch(): void
     {
@@ -129,7 +127,6 @@ final class ReplicaStatusProvider
                 return;
             }
 
-            /** @var list<array<string, scalar>> $rows */
             $this->cachedRows = $rows;
             $this->cachedKind = ReplicaStatusKind::Configured;
         } catch (\PDOException $e) {

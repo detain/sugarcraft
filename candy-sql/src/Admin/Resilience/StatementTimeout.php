@@ -10,7 +10,7 @@ namespace SugarCraft\Sql\Admin\Resilience;
  * Uses pcntl_alarm() for timeout enforcement when available; when pcntl
  * is missing the wrapper is transparent — the statement runs uncapped and
  * nothing is logged (callers cannot distinguish degraded mode by return value).
- * If the timeout fires, cancels the query and throws
+ * If the timeout fires, throws
  * StatementTimeoutException.
  *
  * @see StatementTimeoutException
@@ -77,7 +77,6 @@ final class StatementTimeout
         } catch (StatementTimeoutException $e) {
             \pcntl_alarm(0);
             $this->timeoutOccurred = true;
-            $this->cancelQuery($stmt);
             throw $e;
         } catch (\Throwable $e) {
             \pcntl_alarm(0);
@@ -97,21 +96,4 @@ final class StatementTimeout
         return $this->timeoutOccurred;
     }
 
-    /**
-     * Cancel an in-progress query.
-     *
-     * Attempts to cancel the running query via KILL statement.
-     * Gracefully ignores errors if cancellation fails.
-     */
-    private function cancelQuery(\PDOStatement $stmt): void
-    {
-        try {
-            $pdo = $stmt->getPdo();
-            if ($pdo !== null) {
-                $pdo->query('KILL CONNECTION_ID()');
-            }
-        } catch (\Throwable) {
-            // Ignore cancellation errors - we're already in error recovery
-        }
-    }
 }

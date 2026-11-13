@@ -17,11 +17,6 @@ final class ConnectionFilters
     public const MIN_REFRESH_RATE = 0.5;
     public const MAX_REFRESH_RATE = 30.0;
 
-    private bool $hideSleepingSet = false;
-    private bool $hideBackgroundSet = false;
-    private bool $skipFullInfoSet = false;
-    private ?float $refreshRateSet = null;
-
     private function __construct(
         public readonly bool $hideSleeping,
         public readonly bool $hideBackground,
@@ -47,8 +42,6 @@ final class ConnectionFilters
      */
     public function withHideSleeping(bool $hide): self
     {
-        $clone = clone $this;
-        $clone->hideSleepingSet = true;
         return new self(
             hideSleeping: $hide,
             hideBackground: $this->hideBackground,

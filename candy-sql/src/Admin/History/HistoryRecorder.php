@@ -84,7 +84,7 @@ final class HistoryRecorder implements StatusSnapshotProviderInterface
 
     public function currentSnapshot(): ?array
     {
-        return $this->lastSnapshot?->variables ?? null;
+        return $this->lastSnapshot === null ? null : $this->lastSnapshot->variables;
     }
 
     public function statusVariablesTs(): float

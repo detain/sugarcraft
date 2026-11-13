@@ -55,11 +55,11 @@ SQL;
         try {
             $connection = $this->context->connection();
             $stmt = $connection->prepare($sql);
-            if ($stmt === false) {
+            if ($stmt === null) {
                 return null;
             }
             $stmt->execute([(string) $processId]);
-            $rows = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+            $rows = $stmt->fetchAll();
             return $rows[0] ?? null;
         } catch (\PDOException $e) {
             if ($this->isAccessDenied($e)) {
@@ -81,7 +81,8 @@ SQL;
     /**
      * Tab: session connect attributes for a processlist ID.
      *
-     * @return array<string, scalar>|null Attributes or null if not accessible
+     * @return array{id: int|string, attributes: array<string, string>}|null
+     *     Attribute frame for the process, or null when not accessible
      */
     public function attributes(int|string $processId): ?array
     {
@@ -101,11 +102,11 @@ SQL;
         try {
             $connection = $this->context->connection();
             $stmt = $connection->prepare($sql);
-            if ($stmt === false) {
+            if ($stmt === null) {
                 return null;
             }
             $stmt->execute([(string) $processId]);
-            $rows = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+            $rows = $stmt->fetchAll();
 
             if ($rows === []) {
                 return null;
@@ -173,11 +174,11 @@ SQL;
         try {
             $connection = $this->context->connection();
             $stmt = $connection->prepare($sql);
-            if ($stmt === false) {
+            if ($stmt === null) {
                 return null;
             }
             $stmt->execute([(string) $processId]);
-            $rows = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+            $rows = $stmt->fetchAll();
             $stack = $rows[0]['stack'] ?? null;
             return \is_string($stack) && $stack !== '' ? $stack : null;
         } catch (\PDOException $e) {
@@ -225,11 +226,11 @@ SQL;
         try {
             $connection = $this->context->connection();
             $stmt = $connection->prepare("EXPLAIN {$query}");
-            if ($stmt === false) {
+            if ($stmt === null) {
                 return null;
             }
             $stmt->execute([]);
-            return $stmt->fetchAll(\PDO::FETCH_ASSOC);
+            return $stmt->fetchAll();
         } catch (\PDOException $e) {
             return null;
         }
@@ -290,11 +291,11 @@ SQL;
         try {
             $connection = $this->context->connection();
             $stmt = $connection->prepare($sql);
-            if ($stmt === false) {
+            if ($stmt === null) {
                 return null;
             }
             $stmt->execute([(string) $processId]);
-            return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: null;
+            return $stmt->fetchAll() ?: null;
         } catch (\PDOException $e) {
             if ($this->isAccessDenied($e)) {
                 return null;
@@ -322,11 +323,11 @@ SQL;
         try {
             $connection = $this->context->connection();
             $stmt = $connection->prepare($sql);
-            if ($stmt === false) {
+            if ($stmt === null) {
                 return null;
             }
             $stmt->execute([(string) $processId]);
-            return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: null;
+            return $stmt->fetchAll() ?: null;
         } catch (\PDOException $e) {
             return null;
         }

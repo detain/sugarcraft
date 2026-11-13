@@ -77,9 +77,6 @@ final class MetricsColumn
         $this->cells = self::buildCells();
     }
 
-    /**
-     * @param array<string, string>|null $serverVars
-     */
     public static function forContext(
         ServerContextInterface $context,
         ?Sampler $sampler,

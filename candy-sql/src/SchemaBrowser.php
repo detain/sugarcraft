@@ -54,23 +54,27 @@ final class SchemaBrowser
      */
     public function refresh(): self
     {
-        $names = $this->provider->tables();
+        // Re-derive the provider from the stored (db, flavor): the browser's
+        // identity is its configuration, so a refresh must never depend on a
+        // provider instance that arrived through some other constructor call.
+        $provider = self::createProvider($this->db, $this->flavor);
+        $names = $provider->tables();
 
         $tables = [];
         foreach ($names as $name) {
-            $tables[] = $this->loadTable($name);
+            $tables[] = $this->loadTable($provider, $name);
         }
 
-        return new self($this->db, $this->flavor, $this->provider, $tables);
+        return new self($this->db, $this->flavor, $provider, $tables);
     }
 
-    private function loadTable(string $name): SchemaTable
+    private function loadTable(SchemaProviderInterface $provider, string $name): SchemaTable
     {
         return new SchemaTable(
             name: $name,
-            columns: $this->provider->columns($name),
-            indexes: $this->provider->indexes($name),
-            foreignKeys: $this->provider->foreignKeys($name),
+            columns: $provider->columns($name),
+            indexes: $provider->indexes($name),
+            foreignKeys: $provider->foreignKeys($name),
         );
     }
 

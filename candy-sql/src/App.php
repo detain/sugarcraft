@@ -189,6 +189,7 @@ final class App implements Model
             $page = $newApp->admin->page ?? $newApp->adminPage();
             try {
                 [$newPage,] = $page->update(new ReloadReportMsg());
+                assert($newPage instanceof PageBase);
                 $newApp = $newApp->withAdminPage($newPage);
             } catch (\Throwable) {
                 // SQL-C01 fold seam: a page-level reload failure must never
@@ -214,6 +215,7 @@ final class App implements Model
             if ($this->admin->page !== null) {
                 try {
                     [$newPage,] = $this->admin->page->update(new ReloadReportMsg());
+                    assert($newPage instanceof PageBase);
                     return [$this->withAdminPage($newPage), null];
                 } catch (\Throwable) {
                     // SQL-C01 fold seam: see AdminDataLoadedMsg above.
@@ -229,6 +231,7 @@ final class App implements Model
             // embedded ESC bytes decode as keys. Route it to the editor the
             // same way ordinary character keys reach it below.
             [$editor,] = $this->editor()->update($msg);
+            assert($editor instanceof TextArea);
             return [$this->mutate(['query' => $this->query->withEditor($editor)]), null];
         }
         if ($msg instanceof ColorProfileMsg) {
@@ -257,6 +260,7 @@ final class App implements Model
             $page = $this->admin->page;
             if ($page !== null && ($msg->type === KeyType::Escape || $page->isModal())) {
                 [$newPage, $cmd] = $page->update($msg);
+                assert($newPage instanceof PageBase);
                 return [$this->withAdminPage($newPage), $cmd];
             }
         }
@@ -446,6 +450,7 @@ final class App implements Model
             $page = $this->adminPage();
             try {
                 [$newPage, ] = $page->update($msg);
+                assert($newPage instanceof PageBase);
             } catch (\Throwable) {
                 // SQL-C01 fold seam: a page reacting to reset must not kill the TUI.
                 return [$this, null];
@@ -466,6 +471,7 @@ final class App implements Model
         $page = $this->adminPage();
         try {
             [$newPage, $cmd] = $page->update($msg);
+            assert($newPage instanceof PageBase);
         } catch (\Throwable) {
             // SQL-C01 fold seam: page-level key handling failures degrade to
             // "key ignored", never to a dead TUI.
@@ -487,6 +493,7 @@ final class App implements Model
         // Everything else drives the editor: chars, backspace, space,
         // Enter→newline, and Up/Down move the cursor between lines.
         [$editor, ] = $this->editor()->update($msg);
+        assert($editor instanceof TextArea);
         return $this->mutate(['query' => $this->query->withEditor($editor)]);
     }
 

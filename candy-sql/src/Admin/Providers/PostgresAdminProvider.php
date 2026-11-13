@@ -29,7 +29,6 @@ final class PostgresAdminProvider implements AdminProviderInterface
     private ?float $statusVariablesTsCache = null;
     private ?array $serverVariablesCache = null;
     private ?int $maxConnectionsCache = null;
-    private bool $wasResetCache = false;
 
     /** @var array<string, string>|null */
     private ?array $previousStatusVariables = null;
@@ -69,10 +68,6 @@ final class PostgresAdminProvider implements AdminProviderInterface
 
         try {
             $currentDb = $this->getCurrentDatabaseName();
-            if ($currentDb === null) {
-                $this->statusVariablesCache = [];
-                return [];
-            }
 
             $sql = <<<SQL
                 SELECT
@@ -96,7 +91,7 @@ final class PostgresAdminProvider implements AdminProviderInterface
             SQL;
 
             $stmt = $this->connection->prepare($sql);
-            if ($stmt === false) {
+            if ($stmt === null) {
                 $this->statusVariablesCache = [];
                 return [];
             }
@@ -206,7 +201,7 @@ final class PostgresAdminProvider implements AdminProviderInterface
             SQL;
 
             $stmt = $this->connection->prepare($sql);
-            if ($stmt === false) {
+            if ($stmt === null) {
                 return [];
             }
 

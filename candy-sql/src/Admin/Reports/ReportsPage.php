@@ -216,7 +216,7 @@ final class ReportsPage extends PageBase implements RowNavigable
             return [$this, null];
         }
 
-        $ch = $msg->rune ?? '';
+        $ch = $msg->rune;
         $type = $msg->type;
 
         if ($ch === 'j' || $type === KeyType::Down) {
@@ -313,6 +313,11 @@ final class ReportsPage extends PageBase implements RowNavigable
         $clone->loadCurrentReport();
 
         return $clone;
+    }
+
+    public function withQuit(): self
+    {
+        return clone $this;
     }
 
     public function withToggleUnitDisplay(): self

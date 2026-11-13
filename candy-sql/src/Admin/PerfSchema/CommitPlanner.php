@@ -116,9 +116,6 @@ final class CommitPlanner
 
         // Generate one UPDATE per (enabled, timed) bucket
         foreach ($buckets as $bucket) {
-            if ($bucket['names'] === []) {
-                continue;
-            }
 
             // Build pattern: ^name$ for single instrument, ^(name1|name2)$ for multiple
             // Each name is regex-escaped to handle metacharacters like . ( ) etc.
@@ -347,12 +344,4 @@ final class CommitPlanner
         return false;
     }
 
-    /**
-     * Get the instrument bucket (prefix category) for grouping.
-     */
-    private function getInstrumentBucket(string $name): string
-    {
-        $parts = explode('/', $name);
-        return $parts[0] ?? '';
-    }
 }

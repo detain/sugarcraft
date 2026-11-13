@@ -85,7 +85,7 @@ final class CsvExporter
         $imported = false;
         try {
             $headers = fgetcsv($handle);
-            if ($headers === false || $headers === null) {
+            if ($headers === false) {
                 throw new \RuntimeException("Cannot read CSV headers from: " . $path);
             }
 
@@ -101,7 +101,7 @@ final class CsvExporter
                 $headers
             ));
 
-            while (($row = fgetcsv($handle)) !== false && $row !== null) {
+            while (($row = fgetcsv($handle)) !== false) {
                 // Skip rows with wrong column count
                 if (count($row) !== $columnCount) {
                     continue;

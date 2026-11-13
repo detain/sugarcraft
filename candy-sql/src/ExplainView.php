@@ -38,23 +38,11 @@ final class ExplainView
      */
     public readonly array $rows;
 
-    /** Raw PDO fetch-all result from EXPLAIN. */
-    private readonly array $raw;
-
-    /** @var Flavor Database flavor for driver detection */
-    private readonly Flavor $flavor;
-
-    /** @var ExplainProviderInterface The active explain provider */
-    private readonly ExplainProviderInterface $provider;
-
     /**
-     * @param list<array{.detail:string}> $raw
+     * @param list<array{detail:string}> $raw Raw PDO fetch-all result from EXPLAIN
      */
-    public function __construct(array $raw, Flavor $flavor, ExplainProviderInterface $provider)
+    public function __construct(array $raw)
     {
-        $this->raw = $raw;
-        $this->flavor = $flavor;
-        $this->provider = $provider;
         $this->rows = $this->parse($raw);
     }
 
@@ -69,7 +57,7 @@ final class ExplainView
         $provider = self::createProvider($db, $flavor);
         $raw = $provider->explain($sql);
 
-        return new self($raw, $flavor, $provider);
+        return new self($raw);
     }
 
     /**

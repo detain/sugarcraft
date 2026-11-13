@@ -204,10 +204,7 @@ final class AsyncCachingServerContext implements ServerContextInterface
 
     public function password(): string
     {
-        if (\method_exists($this->inner, 'password')) {
-            return $this->inner->password();
-        }
-        return '';
+        return $this->inner->password();
     }
 
     public function wasReset(): bool

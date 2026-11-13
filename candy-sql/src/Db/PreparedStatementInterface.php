@@ -16,7 +16,7 @@ interface PreparedStatementInterface
     /**
      * Execute the prepared statement with optional parameters.
      *
-     * @param array<string, mixed>|null $params Parameters to bind
+     * @param array<int|string, mixed>|null $params Named or positional binds
      * @return bool True on success, false on failure
      */
     public function execute(?array $params = null): bool;

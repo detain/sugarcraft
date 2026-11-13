@@ -288,7 +288,7 @@ final class InstrumentTree
         $node = $this;
 
         foreach ($parts as $part) {
-            if ($node === null || !isset($node->children[$part])) {
+            if (!isset($node->children[$part])) {
                 return null;
             }
             $node = $node->children[$part];

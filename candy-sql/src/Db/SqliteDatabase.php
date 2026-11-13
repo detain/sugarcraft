@@ -171,7 +171,11 @@ final class SqliteDatabase implements DatabaseInterface
             return 'SQLite version unknown';
         }
 
-        return 'SQLite version ' . ($this->pdo->query('SELECT sqlite_version()')?->fetchColumn() ?? 'unknown');
+        // query() answers PDOStatement|false — nullsafe alone would fatal on fetchColumn() of false.
+        $res = $this->pdo->query('SELECT sqlite_version()');
+        $version = $res instanceof \PDOStatement ? $res->fetchColumn() : false;
+
+        return 'SQLite version ' . (\is_scalar($version) ? (string) $version : 'unknown');
     }
 
     public function driverName(): string

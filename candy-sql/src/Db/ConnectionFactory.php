@@ -62,8 +62,8 @@ final class ConnectionFactory
             // sqlite://:memory: -> host=:memory, path=/
             // sqlite:///path -> host empty, path=/path
             if (preg_match('#^sqlite://([^/]*)?(.*)$#', $dsn, $m)) {
-                $hostPart = $m[1] ?? '';
-                $remainder = $m[2] ?? '';
+                $hostPart = $m[1];
+                $remainder = $m[2];
 
                 // :memory: or :memory (parse_url normalizes this way)
                 if ($hostPart === ':memory:' || $hostPart === ':memory') {

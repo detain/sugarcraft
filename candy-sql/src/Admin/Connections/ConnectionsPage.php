@@ -222,7 +222,7 @@ final class ConnectionsPage extends PageBase implements RowNavigable
             return [$this, null];
         }
 
-        $ch = $msg->rune ?? '';
+        $ch = $msg->rune;
         $type = $msg->type;
 
         // While a kill awaits confirmation, only an explicit y/Y fires it; ANY

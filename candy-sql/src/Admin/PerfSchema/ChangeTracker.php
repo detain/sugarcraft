@@ -29,7 +29,7 @@ final class ChangeTracker
     private array $current = [];
 
     /**
-     * @param array<string, SetupInstruments|SetupConsumers|SetupActors|SetupObjects> $items Initial items
+     * @param array<array-key, SetupInstruments|SetupConsumers|SetupActors|SetupObjects> $items Initial items (keys ignored; values drive the tracker)
      */
     public function __construct(array $items = []) {
         foreach ($items as $item) {

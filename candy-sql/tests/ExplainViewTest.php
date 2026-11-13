@@ -5,10 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Sql\Tests;
 
 use SugarCraft\Sql\Database;
-use SugarCraft\Sql\Db\Flavor;
 use SugarCraft\Sql\Db\MysqlDatabase;
-use SugarCraft\Sql\Explain\ExplainProviderInterface;
-use SugarCraft\Sql\Explain\MysqlExplainProvider;
 use SugarCraft\Sql\ExplainRow;
 use SugarCraft\Sql\ExplainView;
 use SugarCraft\Sql\Tests\Support\ScriptablePdo;
@@ -43,11 +40,9 @@ final class ExplainViewTest extends TestCase
 
         $view = ExplainView::run($db, 'SELECT * FROM users');
 
-        $flavor = (new \ReflectionProperty(ExplainView::class, 'flavor'))->getValue($view);
-        $provider = (new \ReflectionProperty(ExplainView::class, 'provider'))->getValue($view);
-        $this->assertNotSame(Flavor::Sqlite, $flavor);
-        $this->assertSame(Flavor::MySQL, $flavor);
-        $this->assertInstanceOf(MysqlExplainProvider::class, $provider);
+        // Driver selection is pinned by the wire log below: `EXPLAIN
+        // FORMAT=JSON` is MySQL-family-only and `EXPLAIN QUERY PLAN` never
+        // appears — no need to reach into ExplainView internals for that.
         $sent = array_column(
             array_filter($pdo->log, static fn (array $e): bool => $e['op'] === 'query' || $e['op'] === 'prepare'),
             'sql',
@@ -131,8 +126,7 @@ final class ExplainViewTest extends TestCase
     public function testEmptyResultSetShowsPlaceholder(): void
     {
         // Construct with empty raw data to test placeholder rendering.
-        $provider = $this->createMock(ExplainProviderInterface::class);
-        $view = new ExplainView([], Flavor::Sqlite, $provider);
+        $view = new ExplainView([]);
         $out = $view->render();
         $this->assertStringContainsString('no query plan', $out);
     }
@@ -143,9 +137,8 @@ final class ExplainViewTest extends TestCase
         // client-024: a hostile schema name riding the EXPLAIN detail line
         // must render as visible sanitized bytes — no smuggled escape on the
         // wire (the render() output is advertised as embeddable).
-        $provider = $this->createMock(ExplainProviderInterface::class);
         $hostile = "SEARCH TABLE \x1b[31m\x07evil\x1b]0;pwn\x07";
-        $view = new ExplainView([['detail' => $hostile]], Flavor::Sqlite, $provider);
+        $view = new ExplainView([['detail' => $hostile]]);
 
         $out = $view->render();
 
@@ -161,8 +154,7 @@ final class ExplainViewTest extends TestCase
             ['detail' => 'SEARCH t USING INDEX idx_a'],
             ['detail' => '  |--SEARCH t USING COVERING INDEX idx_a'],
         ];
-        $provider = $this->createMock(ExplainProviderInterface::class);
-        $view = new ExplainView($raw, Flavor::Sqlite, $provider);
+        $view = new ExplainView($raw);
         $this->assertCount(2, $view->rows);
         // "  |--" should give depth >= 1 for the second row.
         $this->assertGreaterThanOrEqual(1, $view->rows[1]->depth);
@@ -171,40 +163,35 @@ final class ExplainViewTest extends TestCase
     public function testTagSearchForUsingIndex(): void
     {
         $raw = [['detail' => 'SEARCH t USING INDEX idx_a (a=?)']];
-        $provider = $this->createMock(ExplainProviderInterface::class);
-        $view = new ExplainView($raw, Flavor::Sqlite, $provider);
+        $view = new ExplainView($raw);
         $this->assertSame('SEARCH', $view->rows[0]->tag);
     }
 
     public function testTagScanForTableScan(): void
     {
         $raw = [['detail' => 'SCAN t FULL TABLE SCAN']];
-        $provider = $this->createMock(ExplainProviderInterface::class);
-        $view = new ExplainView($raw, Flavor::Sqlite, $provider);
+        $view = new ExplainView($raw);
         $this->assertSame('SCAN', $view->rows[0]->tag);
     }
 
     public function testTagJoinForJoinOperation(): void
     {
         $raw = [['detail' => 'SEARCH u BY PRIMARY KEY QUERY PLAN JOIN']];
-        $provider = $this->createMock(ExplainProviderInterface::class);
-        $view = new ExplainView($raw, Flavor::Sqlite, $provider);
+        $view = new ExplainView($raw);
         $this->assertSame('JOIN', $view->rows[0]->tag);
     }
 
     public function testTagSubqueryForCorrelated(): void
     {
         $raw = [['detail' => 'SCAN (subquery) CORRELATED SUBQUERY']];
-        $provider = $this->createMock(ExplainProviderInterface::class);
-        $view = new ExplainView($raw, Flavor::Sqlite, $provider);
+        $view = new ExplainView($raw);
         $this->assertSame('SUBQUERY', $view->rows[0]->tag);
     }
 
     public function testTagCompoundForUnion(): void
     {
         $raw = [['detail' => 'COMPOUND QUERY USING TEMP B-TREE FOR UNION']];
-        $provider = $this->createMock(ExplainProviderInterface::class);
-        $view = new ExplainView($raw, Flavor::Sqlite, $provider);
+        $view = new ExplainView($raw);
         $this->assertSame('COMPOUND', $view->rows[0]->tag);
     }
 }

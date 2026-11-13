@@ -345,8 +345,8 @@ final class MultiSeriesCell
     /**
      * Set one dot in the mutable raster (bounds-checked early exit).
      *
-     * @param list<list<int>> $bits
-     * @param list<list<Color|null>> $tint
+     * @param array<int, array<int, int>> $bits
+     * @param array<int, array<int, Color|null>> $tint
      */
     private function poke(array &$bits, array &$tint, int $x, int $y, int $pxW, int $pxH, Color $color): void
     {

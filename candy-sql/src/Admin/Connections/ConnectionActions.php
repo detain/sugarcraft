@@ -82,7 +82,7 @@ final class ConnectionActions
         try {
             $connection = $this->context->connection();
             $stmt = $connection->prepare($sql);
-            if ($stmt === false) {
+            if ($stmt === null) {
                 return false;
             }
             $stmt->execute([$value, (int) $threadId]);

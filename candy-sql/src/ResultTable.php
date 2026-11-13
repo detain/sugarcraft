@@ -16,9 +16,12 @@ use SugarCraft\Style\Style;
  *   - NULL values shown as a styled `NULL` token (not the literal string)
  *   - column auto-sizing to the widest value in the set
  *
- * Immutable — all configuration via constructor or `with*()` builders.
- *
- * @readonly
+ * Value semantics — all configuration via constructor or clone-based
+ * `with*()` builders. The paging window (`rowOffset`, `viewportRows`,
+ * `cursorRow`) are private fields assigned inside the constructor and
+ * inside those builders' fresh clones, so external callers still only
+ * ever observe immutable transitions (no class-level @readonly: that
+ * would lie about those three).
  */
 final class ResultTable
 {
@@ -72,7 +75,7 @@ final class ResultTable
 
     /**
      * @param list<array<string,mixed>> $rows
-     * @param list<string,int>|null $precomputedColWidths Optional pre-computed column
+     * @param array<string,int>|null $precomputedColWidths Optional pre-computed column
      *        widths from an existing instance (used by with* builders that don't change
      *        rows to avoid recomputation). When provided, bypasses computeColWidths().
      */
@@ -113,7 +116,7 @@ final class ResultTable
      */
     public static function fromRows(array $rows): self
     {
-        return new self(rows: $rows ?? []);
+        return new self(rows: $rows);
     }
 
     // ── Fluents ───────────────────────────────────────────────────────────────

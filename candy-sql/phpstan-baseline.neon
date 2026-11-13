@@ -1,0 +1,213 @@
+# SQL-C18 (2026-11-12): the deliberate silences for candy-sql phpstan level 5.
+# Every group below is an accepted tool/code disagreement, NOT an unfixed bug:
+#  - return.type on App/update() family: sugar-core Model::update()'s @return
+#    claims Closure|null for the command slot while the house convention (and
+#    sugar-core's own Cmd class) is ?Cmd; the contract file is untouchable
+#    from this lib, so the mismatch rides here (NIT #886 lineage).
+#  - AdminQueryCache pseudo-slot group: the 'status'/'server' slots hold the
+#    name=>Value map produced by App's Variable_name fold, the SQL-keyed slots
+#    hold list<rows>; one array<string,mixed> property type cannot express both.
+#  - property.onlyWritten group: clone-propagated state awaiting its SQL-P*
+#    wiring rows (pagination/sort quartet, commit planner, detail tabs); kept
+#    so those rows' landing diffs stay local.
+#  - nullsafe.neverNull on Db/*Database dsn()/username()/password()/sslMode():
+#    PHPStan proves every construction assigns the config, but these accessors
+#    answer '' pre-connect by design and password() carries the documented
+#    audit scar (c22d8d31f) against deleting dynamic-call seams. InstrumentTree
+#    :337 is the same defensive shape.
+#  - NullDatabase/ServerStatusSnapshotAdapter unusedType + MysqlExplainProvider
+#    is_array hedges: NullObject/interface mimicry and server-JSON variance
+#    guards; widening the mimic returns would break the interfaces they copy.
+parameters:
+	ignoreErrors:
+		-
+			message: '#^Method SugarCraft\\Sql\\Admin\\AdminQueryCache\:\:serverVariables\(\) never returns array\<string, string\> so it can be removed from the return type\.$#'
+			identifier: return.unusedType
+			count: 1
+			path: src/Admin/AdminQueryCache.php
+
+		-
+			message: '#^Method SugarCraft\\Sql\\Admin\\AdminQueryCache\:\:serverVariables\(\) should return array\<string, string\>\|null but returns list\<array\<string, mixed\>\>\.$#'
+			identifier: return.type
+			count: 1
+			path: src/Admin/AdminQueryCache.php
+
+		-
+			message: '#^Method SugarCraft\\Sql\\Admin\\AdminQueryCache\:\:statusVariables\(\) never returns array\<string, string\> so it can be removed from the return type\.$#'
+			identifier: return.unusedType
+			count: 1
+			path: src/Admin/AdminQueryCache.php
+
+		-
+			message: '#^Method SugarCraft\\Sql\\Admin\\AdminQueryCache\:\:statusVariables\(\) should return array\<string, string\>\|null but returns list\<array\<string, mixed\>\>\.$#'
+			identifier: return.type
+			count: 1
+			path: src/Admin/AdminQueryCache.php
+
+		-
+			message: '#^Property SugarCraft\\Sql\\Admin\\Connections\\ConnectionCounters\:\:\$snapshot is never read, only written\.$#'
+			identifier: property.onlyWritten
+			count: 1
+			path: src/Admin/Connections/ConnectionCounters.php
+
+		-
+			message: '#^Property SugarCraft\\Sql\\Admin\\Connections\\ConnectionsPage\:\:\$detailTabs is never read, only written\.$#'
+			identifier: property.onlyWritten
+			count: 1
+			path: src/Admin/Connections/ConnectionsPage.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: src/Admin/PerfSchema/InstrumentTree.php
+
+		-
+			message: '#^Method SugarCraft\\Sql\\Admin\\PerfSchema\\PerfSchemaPage\:\:update\(\) should return array\{SugarCraft\\Sql\\Admin\\PerfSchema\\PerfSchemaPage, SugarCraft\\Core\\Cmd\|null\} but returns array\{SugarCraft\\Sql\\Admin\\PerfSchema\\PerfSchemaPage, Closure\|null\}\.$#'
+			identifier: return.type
+			count: 1
+			path: src/Admin/PerfSchema/PerfSchemaPage.php
+
+		-
+			message: '#^Property SugarCraft\\Sql\\Admin\\PerfSchema\\PerfSchemaPage\:\:\$commitPlanner is never read, only written\.$#'
+			identifier: property.onlyWritten
+			count: 1
+			path: src/Admin/PerfSchema/PerfSchemaPage.php
+
+		-
+			message: '#^Property SugarCraft\\Sql\\Admin\\Reports\\ReportsPage\:\:\$page is never read, only written\.$#'
+			identifier: property.onlyWritten
+			count: 1
+			path: src/Admin/Reports/ReportsPage.php
+
+		-
+			message: '#^Property SugarCraft\\Sql\\Admin\\Reports\\ReportsPage\:\:\$pageSize is never read, only written\.$#'
+			identifier: property.onlyWritten
+			count: 1
+			path: src/Admin/Reports/ReportsPage.php
+
+		-
+			message: '#^Property SugarCraft\\Sql\\Admin\\Reports\\ReportsPage\:\:\$sortAsc is never read, only written\.$#'
+			identifier: property.onlyWritten
+			count: 1
+			path: src/Admin/Reports/ReportsPage.php
+
+		-
+			message: '#^Property SugarCraft\\Sql\\Admin\\Reports\\ReportsPage\:\:\$sortColumn is never read, only written\.$#'
+			identifier: property.onlyWritten
+			count: 1
+			path: src/Admin/Reports/ReportsPage.php
+
+		-
+			message: '#^Property SugarCraft\\Sql\\Admin\\ServerStatus\\ServerStatusPage\:\:\$gtidModeCurrent is never read, only written\.$#'
+			identifier: property.onlyWritten
+			count: 1
+			path: src/Admin/ServerStatus/ServerStatusPage.php
+
+		-
+			message: '#^Property SugarCraft\\Sql\\Admin\\ServerStatus\\SidebarGaugeSet\:\:\$previousTs is never read, only written\.$#'
+			identifier: property.onlyWritten
+			count: 1
+			path: src/Admin/ServerStatus/SidebarGaugeSet.php
+
+		-
+			message: '#^Method SugarCraft\\Sql\\Admin\\ServerStatusSnapshotAdapter\:\:currentSnapshot\(\) never returns null so it can be removed from the return type\.$#'
+			identifier: return.unusedType
+			count: 1
+			path: src/Admin/ServerStatusSnapshotAdapter.php
+
+		-
+			message: '#^Method SugarCraft\\Sql\\App\:\:beginLoadTable\(\) should return array\{SugarCraft\\Sql\\App, SugarCraft\\Core\\Cmd\|null\} but returns array\{SugarCraft\\Sql\\App, Closure\(\)\: SugarCraft\\Core\\AsyncCmd\}\.$#'
+			identifier: return.type
+			count: 1
+			path: src/App.php
+
+		-
+			message: '#^Method SugarCraft\\Sql\\App\:\:dispatchRunQuery\(\) should return array\{SugarCraft\\Sql\\App, SugarCraft\\Core\\Cmd\|null\} but returns array\{SugarCraft\\Sql\\App, Closure\(\)\: SugarCraft\\Core\\AsyncCmd\}\.$#'
+			identifier: return.type
+			count: 1
+			path: src/App.php
+
+		-
+			message: '#^Method SugarCraft\\Sql\\App\:\:handleAdminKey\(\) should return array\{SugarCraft\\Sql\\App, SugarCraft\\Core\\Cmd\|null\} but returns array\{SugarCraft\\Sql\\App, Closure\(\)\: SugarCraft\\Core\\AsyncCmd\}\.$#'
+			identifier: return.type
+			count: 3
+			path: src/App.php
+
+		-
+			message: '#^Method SugarCraft\\Sql\\App\:\:handleAdminKey\(\) should return array\{SugarCraft\\Sql\\App, SugarCraft\\Core\\Cmd\|null\} but returns array\{SugarCraft\\Sql\\App, Closure\|null\}\.$#'
+			identifier: return.type
+			count: 1
+			path: src/App.php
+
+		-
+			message: '#^Method SugarCraft\\Sql\\App\:\:update\(\) should return array\{SugarCraft\\Core\\Model, Closure\|null\} but returns array\{SugarCraft\\Sql\\App, SugarCraft\\Core\\Cmd\|null\}\.$#'
+			identifier: return.type
+			count: 3
+			path: src/App.php
+
+		-
+			message: '#^Parameter \#2 \$rows of method SugarCraft\\Sql\\Admin\\AdminQueryCache\:\:store\(\) expects list\<array\<string, mixed\>\>, array\<string, string\>\|void given\.$#'
+			identifier: argument.type
+			count: 2
+			path: src/App.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>dsn" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: src/Db/MysqlDatabase.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>pass" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: src/Db/MysqlDatabase.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>sslMode" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: src/Db/MysqlDatabase.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>user" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: src/Db/MysqlDatabase.php
+
+		-
+			message: '#^Method SugarCraft\\Sql\\Db\\NullDatabase\:\:lastInsertId\(\) never returns string so it can be removed from the return type\.$#'
+			identifier: return.unusedType
+			count: 1
+			path: src/Db/NullDatabase.php
+
+		-
+			message: '#^Method SugarCraft\\Sql\\Db\\NullDatabase\:\:query\(\) never returns null so it can be removed from the return type\.$#'
+			identifier: return.unusedType
+			count: 1
+			path: src/Db/NullDatabase.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>dsn" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: src/Db/PostgresDatabase.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>pass" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: src/Db/PostgresDatabase.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>user" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: src/Db/PostgresDatabase.php
+
+		-
+			message: '#^Call to function is_array\(\) with array\<mixed, mixed\> will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 2
+			path: src/Explain/MysqlExplainProvider.php

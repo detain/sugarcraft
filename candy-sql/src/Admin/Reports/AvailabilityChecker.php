@@ -44,8 +44,10 @@ final class AvailabilityChecker
      * Runs `SHOW FULL TABLES FROM sys WHERE Table_type='VIEW'` and returns
      * the list of view names that exist on this server.
      *
+     * Returns an empty list when the query fails (e.g., no sys schema);
+     * failures are swallowed so callers can degrade gracefully.
+     *
      * @return list<string> Available view names
-     * @throws \RuntimeException If the query fails (e.g., sys schema doesn't exist)
      */
     public function discoverViews(): array
     {
@@ -104,7 +106,7 @@ final class AvailabilityChecker
      * on this server.
      *
      * @param Catalog $catalog The report catalog to filter
-     * @return list<string> View names that are both in the catalog and available on the server
+     * @return list<ReportDefinition> Catalog definitions whose view exists on the server
      */
     public function availableFromCatalog(Catalog $catalog): array
     {

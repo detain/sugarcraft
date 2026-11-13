@@ -50,7 +50,7 @@ final class ServerStatusPage extends PageBase
     private ?Sampler $sampler = null;
     private ?MetricsColumn $column = null;
 
-    /** @var ReplicaStatusKind::*|null */
+    /** GTID_MODE string captured when the dialog opened (server variable). */
     private string|null $gtidModeCurrent = null;
     private bool $gtidDialog = false;
     private string $gtidModeEdit = '';
@@ -255,7 +255,7 @@ final class ServerStatusPage extends PageBase
             return [$this, null];
         }
 
-        $ch = $msg->rune ?? '';
+        $ch = $msg->rune;
 
         // GTID dialog takes priority when active
         if ($this->gtidDialog) {
@@ -456,7 +456,7 @@ final class ServerStatusPage extends PageBase
     /**
      * Convert a server variable value to tristate format.
      */
-    private function tristateValue(?string $value): bool|string|null
+    private function tristateValue(?string $value): bool|null
     {
         if ($value === null) {
             return null;
@@ -752,7 +752,7 @@ final class ServerStatusPage extends PageBase
      */
     private function updateGtidDialog(\SugarCraft\Core\Msg\KeyMsg $msg): array
     {
-        $ch = $msg->rune ?? '';
+        $ch = $msg->rune;
 
         if ($msg->type === \SugarCraft\Core\KeyType::Escape) {
             $clone = clone $this;

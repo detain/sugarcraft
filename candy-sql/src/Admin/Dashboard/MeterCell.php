@@ -7,7 +7,7 @@ namespace SugarCraft\Sql\Admin\Dashboard;
 use SugarCraft\Dashboard\Plot\Chart\Donut;
 use SugarCraft\Dashboard\Plot\Chart\Gauge;
 use SugarCraft\Dashboard\Plot\Chart\Meter;
-use SugarCraft\Dashboard\Foundation\Color;
+use SugarCraft\Core\Util\Color;
 
 /**
  * Renders round and level meter widgets using sugar-dashboard chart components.

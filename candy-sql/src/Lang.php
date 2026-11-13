@@ -14,7 +14,6 @@ use SugarCraft\Core\I18n\Lang as BaseLang;
  * named a namespace this class never registered). Translated strings live in
  * {@see ../lang/en.php}.
  *
- * @extends BaseLang
  */
 final class Lang extends BaseLang
 {
