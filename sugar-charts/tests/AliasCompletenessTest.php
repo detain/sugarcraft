@@ -125,10 +125,13 @@ final class AliasCompletenessTest extends TestCase
         // lib-reviews-1103 fix wave + Chart::withLegendItems /
         // LineChart::withLegendItems / BarChart::withAxes added by CH-02
         // chrome convergence + Chart::withBraille / LineChart::withBraille
-        // added by CH-04 canvas bridge), including every documented
-        // deviation. A count collapse here would mean the reflection silently
-        // stopped seeing withers.
-        $this->assertSame(135, $checked, 'wither census count drifted from the documented 135');
+        // added by CH-04 canvas bridge + the 14 TimeSeries chrome forwarders
+        // (withSize/withTitle/withLegend/withLegendPosition/withLegendItems/
+        // withTheme/withLineStyle/withSeriesColorFn/withYLabels/withMin/
+        // withMax/withYRange/withPoint/withAxes) added by CH-05, including
+        // every documented deviation. A count collapse here would mean the
+        // reflection silently stopped seeing withers.
+        $this->assertSame(149, $checked, 'wither census count drifted from the documented 149');
         $this->assertGreaterThanOrEqual(5, $exception, 'documented alias deviations must all be present');
     }
 
