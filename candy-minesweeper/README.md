@@ -2,9 +2,7 @@
 
 # CandyMinesweeper
 
-> Formerly published as `sugarcraft/candy-mines` (renamed 2026-10). <!-- @rename-keep -->
-> Namespace changed: `SugarCraft\Mines\` → `SugarCraft\Minesweeper\`. <!-- @rename-keep -->
-> The pre-rename `dev-legacy/candy-mines` branch is deprecated and unreferenced; nothing under the old name ships updates. <!-- @rename-keep -->
+Minesweeper on the [SugarCraft stack](https://sugarcraft.github.io) — the PHP port family of the Charm ecosystem — for PHP 8.3+. Customisable board, iterative flood-fill, win / lose detection, vim-style movement, mouse support, mid-game save / resume, and a 16-locale interface.
 
 <!-- BADGES:BEGIN -->
 [![CI](https://github.com/detain/sugarcraft/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/detain/sugarcraft/actions/workflows/ci.yml)
@@ -17,9 +15,16 @@
 
 ![demo](.vhs/play.gif)
 
-Minesweeper on the SugarCraft stack for PHP 8.3+. Customisable board, iterative flood-fill, win / lose detection, vim-style movement, mouse support, mid-game save / resume, and a 16-locale interface.
+## How to play
 
-Difficulty presets are available via `Game::withDifficulty()`, passing a `Difficulty` case — `Difficulty::Easy` (9×9, 10 mines), `Difficulty::Standard` (10×10, 12 mines — the shape the CLI defaults to), `Difficulty::Medium` (16×16, 40 mines), `Difficulty::Expert` (30×16, 99 mines).
+**Numbers are the clue**: a revealed cell shows how many of its eight neighbours hide mines — the same rule the in-game help footer teaches on the first line, so a first-timer never has to guess what the digits mean.
+
+**Win**: reveal every cell that is not a mine. Flags are survival notes — the win check counts revealed safe cells only, so a board can be won with zero flags and flagging every mine is neither required nor sufficient on its own.
+
+Difficulty presets are available via `Game::withDifficulty()`, passing a `Difficulty` case — `Difficulty::Easy` (9×9, 10 mines), `Difficulty::Standard` (10×10, 12 mines — the shape the CLI defaults to), `Difficulty::Medium` (16×16, 40 mines), `Difficulty::Expert` (30×16, 99 mines). This package is `candy-minesweeper/` inside the [detain/sugarcraft](https://github.com/detain/sugarcraft) monorepo — the badges above and every issue link point at that canonical copy.
+
+> Formerly published as `sugarcraft/candy-mines` (renamed 2026-10); namespace `SugarCraft\Mines\` → `SugarCraft\Minesweeper\`. <!-- @rename-keep -->
+> Nothing under the old name ships updates. <!-- @rename-keep -->
 
 ## Requirements
 
@@ -27,18 +32,42 @@ PHP 8.3+ with **ext-mbstring** and **ext-intl**. Both are load-bearing: the cell
 
 ## Run it
 
+**Global install** — the player's path; one command, then play from anywhere on `PATH`:
+
 ```bash
-composer install
-./bin/candy-minesweeper                            # default 10×10, 12 mines
-./bin/candy-minesweeper [width] [height] [mines]   # custom board (validated — see CustomDifficulty below)
-./bin/candy-minesweeper --easy | --standard | --medium | --expert
-./bin/candy-minesweeper --version                  # print the version and exit
-./bin/candy-minesweeper --help                     # usage (also `-h`)
+composer global require sugarcraft/candy-minesweeper
+candy-minesweeper                                # default 10×10, 12 mines
 ```
 
-The two shapes are mutually exclusive: a preset flag together with positional dimensions is refused with exit 1 rather than silently dropping one of them, and passing two preset flags is likewise refused instead of last-wins. Any unknown option is refused with exit 1 and the usage on stderr rather than being ignored. After a global install (`composer global require sugarcraft/candy-minesweeper`) the same commands are available as `candy-minesweeper` on your `PATH` from the vendor bin directory.
+**Standalone phar** — zero Composer; one self-contained file:
 
-You can also run a self-contained phar without Composer at all, published under the `candy-minesweeper/dev` release tag: `wget https://github.com/detain/sugarcraft/releases/download/candy-minesweeper/dev/candy-minesweeper.phar`. The real sidecar set is `candy-minesweeper.phar.sha256`, `candy-minesweeper.phar.sha256.sig`, `candy-minesweeper.phar.minisig` and `candy-minesweeper.phar.minisig.sha256` — the command that works today is `sha256sum -c candy-minesweeper.phar.sha256` (minisig verification ships wired for the self-updating apps only; this app carries no pinned key). **The phar channels are currently FROZEN:** the live `candy-minesweeper/dev` artifact is the build at `f1c90bb34` (2026-11-04), and the 2026-11-05 sibling-pin wave blocks new publish builds fleet-wide; the versioned `v*` release train shares the same wall. Until the fleet cure lands, the Composer paths above are the only fresh channel. After the cure, builds additionally carry `…phar.commit` and `…phar.pins.json` provenance sidecars, and note that the dev matrix publishes push-AFFECTED apps — not literally every push.
+```bash
+wget https://github.com/detain/sugarcraft/releases/download/candy-minesweeper/dev/candy-minesweeper.phar
+php candy-minesweeper.phar
+```
+
+**From a checkout** — the contributor path; per-lib vendor inside the monorepo directory:
+
+```bash
+composer install
+./bin/candy-minesweeper                          # default 10×10, 12 mines
+```
+
+Every block accepts the same options:
+
+```bash
+candy-minesweeper 16 10                          # 16 wide by 10 tall — positional order is COLUMNS then ROWS
+candy-minesweeper [width] [height] [mines]       # custom board (validated — the rules are just below)
+candy-minesweeper --easy | --standard | --medium | --expert
+candy-minesweeper --version                      # print the version and exit (also `-v`)
+candy-minesweeper --help                         # usage (also `-h`)
+```
+
+Library use and worked wiring ship as a runnable example: `php examples/play.php`.
+
+The two shapes are mutually exclusive: a preset flag together with positional dimensions is refused with exit 1 rather than silently dropping one of them, and passing two preset flags is likewise refused instead of last-wins. Any unknown option is refused with exit 1 and the usage on stderr rather than being ignored.
+
+The phar is published under the `candy-minesweeper/dev` release tag; its real sidecar set is `candy-minesweeper.phar.sha256`, `candy-minesweeper.phar.sha256.sig`, `candy-minesweeper.phar.minisig` and `candy-minesweeper.phar.minisig.sha256` — the command that works today is `sha256sum -c candy-minesweeper.phar.sha256` (minisig verification ships wired for the self-updating apps only; this app carries no pinned key). **The phar channels are currently FROZEN:** the live `candy-minesweeper/dev` artifact is the build at `f1c90bb34` (2026-11-04), and the 2026-11-05 sibling-pin wave blocks new publish builds fleet-wide; the versioned `v*` release train shares the same wall. Until the fleet cure lands, the Composer paths above are the only fresh channel. After the cure, builds additionally carry `…phar.commit` and `…phar.pins.json` provenance sidecars, and note that the dev matrix publishes push-AFFECTED apps — not literally every push.
 
 Custom board arguments are validated through `CustomDifficulty::fromInput()`: each side must be 2–50 and the mine count must leave a safe 3×3 first-click area (`1 ≤ mines ≤ width × height − 9`). Boards of fewer than 10 cells in total (2×2 … 3×3) are refused by a dedicated minimum-area message naming the floor — they pass the side checks but can never satisfy the safe-area cap, and the mine-count blame would name a number the player never typed. Out-of-range values exit with an error rather than starting a broken game. Give only width and (optionally) height and the mine count defaults to `max(1, intdiv(width × height, 8))` — an eighth of the board; the shipped 10×10 default's "12 mines" is that formula's result for 100 cells, not a hand-picked constant.
 
@@ -69,10 +98,6 @@ A plain launch plays the classic 10×10/12 board without a pre-launch picker
 (owner ruling G5-b): the first frame stays one keypress away on any working
 terminal, while every other shape — presets and a custom digit form — is one
 `n` away, live or after the banner, with no shell round-trip.
-
-**Win**: reveal every cell that is not a mine. Flags are survival notes — the
-win check counts revealed safe cells only, so a board can be won with zero
-flags and flagging every mine is neither required nor sufficient on its own.
 
 **Question marks** (the third marker): `f` walks a cycle — flag → `?` → clear —
 and the right-click walks it with the keyboard. `?` is your own memo that "I
@@ -135,8 +160,6 @@ Pure-state classes plus the runtime Model, renderer, UI helper, and persistence:
 | `DifficultyStats`       | Atomic JSON persistence wrapper — delegates to sugar-core `AtomicJsonFile` (flock sidecar, temp + `fsync` + rename) |
 | `Ui/CustomDifficulty`   | Validated custom board dimensions — rows (2–50), cols (2–50), mines (1 to rows×cols−9), and a minimum 10-cell area rule that refuses sub-10 boards (2×2 … 3×3) by name before any mine logic. Error messages name the violated bound. Throws i18n-aware `InvalidArgumentException` on constraint violation. |
 | `Renderer`              | Pure view function. SugarStyle `Style` + `Border::rounded()`                                   |
-
-**Numbers are the clue**: a revealed cell shows how many of its eight neighbours hide mines — the same rule the in-game help footer teaches on the first line, so a first-timer never has to guess what the digits mean.
 
 The first reveal is always safe — mines are placed only after click 1. The normal rule excludes the clicked cell and its whole 3×3 neighbourhood, so the player gets a non-trivial flood-fill on every game; at edges and corners the zone truncates to the cells that exist on the board — 6 or 4 guaranteed-safe cells instead of 9. The fallback rule covers dense boards that cannot afford the full exclusion: only the clicked cell itself is kept mine-free (its neighbours may hold mines), and every requested mine is still placed so win detection stays reachable. Falling into the fallback takes more mines than any CLI or picker game can carry — the −9 cap on custom mine counts always leaves room for the full safe zone — so this is a library-only regime for hand-built boards.
 
