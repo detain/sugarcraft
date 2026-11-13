@@ -263,6 +263,9 @@ final class SqliteBackendTest extends TestCase
             $this->markTestSkipped('pcntl_fork is required to hold a lock concurrently');
         }
 
+        $sentinel = $this->dbPath . '.lock-sentinel';
+        @unlink($sentinel);
+
         $pid = pcntl_fork();
         if ($pid === -1) {
             $this->fail('pcntl_fork failed');
@@ -274,6 +277,11 @@ final class SqliteBackendTest extends TestCase
                 $holder = new \SQLite3($this->dbPath);
                 $holder->exec('BEGIN EXCLUSIVE');
                 $holder->exec("INSERT INTO heartbeats (time, project, language, file, duration, tags) VALUES (1718900002, 'holder', 'php', 'h.php', 60, '[]')");
+                // Announce only once the lock is demonstrably held, so the
+                // parent waits on a fact instead of a fixed sleep (finding
+                // 076: a loaded runner could let the parent insert BEFORE
+                // the child reached BEGIN, inverting what this test pins).
+                file_put_contents($sentinel, 'locked');
                 usleep(400000);
                 $holder->exec('COMMIT');
             } catch (\Throwable) {
@@ -282,7 +290,16 @@ final class SqliteBackendTest extends TestCase
             exit(0);
         }
 
-        usleep(100000); // let the child settle onto its lock
+        $deadline = microtime(true) + 5.0;
+        while (!is_file($sentinel)) {
+            if (microtime(true) > $deadline) {
+                pcntl_waitpid($pid, $status);
+                @unlink($sentinel);
+                $this->fail('the lock-holder child never announced its lock (status ' . $status . ')');
+            }
+            usleep(10000);
+        }
+        @unlink($sentinel);
         $status = 0;
         try {
             $this->backend->insert(new Heartbeat(1718900001, 'waiter', 'php', 'w.php', 60));
