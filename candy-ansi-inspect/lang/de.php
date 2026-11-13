@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 return [
     'cli.usage' => "Aufruf: candy-ansi-inspect [Datei]\n  oder:  cmd | candy-ansi-inspect",
-    'cli.not_a_file' => "candy-ansi-inspect: kann nicht gelesen werden: {path}\n  (Stream-Wrapper wie php:// oder data:// werden nicht akzeptiert)",
+    'cli.not_a_file' => "candy-ansi-inspect: kann nicht gelesen werden: {path}",
+    'cli.wrapper_note' => "  (Stream-Wrapper wie php:// oder data:// werden nicht akzeptiert)",
     'cli.pty_unavailable' => "candy-ansi-inspect: ein Pseudoterminal kann nicht gestartet werden: {reason}",
 ];

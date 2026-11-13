@@ -28,6 +28,18 @@ foreach ($autoloadCandidates as $autoload) {
 // Inspector regardless of locale.
 \SugarCraft\Core\I18n\T::setLocale(\SugarCraft\Core\I18n\T::detect());
 
+// Source-gate refusal composition: the generic `cannot read: {path}` line,
+// plus the wrapper parenthetical ONLY when the named path actually carries
+// a scheme-like `://` — the hint is noise for a typo'd or directory path
+// (finding 031).
+$refusal = static function (string $rawPath): string {
+    $message = (string) Lang::t('cli.not_a_file', ['path' => Inspector::sanitizeLabelBytes($rawPath)]);
+    if (str_contains($rawPath, '://')) {
+        $message .= "\n" . (string) Lang::t('cli.wrapper_note');
+    }
+    return $message;
+};
+
 $input = '';
 // Did the caller actually hand us a source (file argument or a piped stdin)?
 // "No source at all" (interactive TTY, no argument) is misuse and answers with
@@ -101,7 +113,7 @@ if ($operandSeen && $operand !== '') {
     // with the same refusal + exit 1 instead of letting the bare read below
     // emit a PHP warning and exit 0 over empty content.
     if (!is_file($operand) || !is_readable($operand)) {
-        fwrite(STDERR, Lang::t('cli.not_a_file', ['path' => Inspector::sanitizeLabelBytes((string) $operand)]) . "\n");
+        fwrite(STDERR, $refusal((string) $operand) . "\n");
         exit(1);
     }
     $sawSource = true;
@@ -110,7 +122,7 @@ if ($operandSeen && $operand !== '') {
     // `candy-ansi-inspect ""` — a present-but-empty argument names the source
     // as the empty string, which is never a file: refuse it (exit 1) rather
     // than quietly demoting to a stdin the caller never asked to read.
-    fwrite(STDERR, Lang::t('cli.not_a_file', ['path' => '']) . "\n");
+    fwrite(STDERR, $refusal('') . "\n");
     exit(1);
 } elseif (!stream_isatty(STDIN)) {
     $sawSource = true;

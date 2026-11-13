@@ -62,6 +62,7 @@ final class CliTest extends TestCase
         [$code, $stdout, $stderr] = self::runCli('data://text/plain,injected');
         $this->assertSame(1, $code);
         $this->assertStringContainsString('cannot read', $stderr);
+        $this->assertStringContainsString('stream wrappers', $stderr);
         $this->assertStringNotContainsString('injected', $stdout);
     }
 
@@ -70,6 +71,9 @@ final class CliTest extends TestCase
         [$code, , $stderr] = self::runCli('/no/such/candy-ansi-inspect/input/file');
         $this->assertSame(1, $code);
         $this->assertStringContainsString('cannot read', $stderr);
+        // Finding 031: the wrapper parenthetical is for wrapper-shaped names
+        // only — a typo'd path must not send the caller hunting for schemes.
+        $this->assertStringNotContainsString('wrapper', $stderr);
     }
 
     public function testFileLiterallyNamedZeroIsInspectedNotDemotedToStdin(): void
@@ -99,6 +103,7 @@ final class CliTest extends TestCase
         [$code, $stdout, $stderr] = self::runCliWithStdin("piped \x1b[31m text", ['']);
         $this->assertSame(1, $code, $stderr);
         $this->assertStringContainsString('cannot read', $stderr);
+        $this->assertStringNotContainsString('wrapper', $stderr);
         $this->assertSame('', $stdout);
     }
 
