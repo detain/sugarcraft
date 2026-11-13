@@ -44,6 +44,19 @@ final class RealProcess implements Process
     /** Safety valve: at most this many bytes leave ONE pipe per drain() call. */
     public const DRAIN_MAX_BYTES_PER_CALL = 4_194_304;
 
+    /**
+     * setsid-helper arm for hosts without a usable setsid(1) (stock macOS
+     * ships none): the helper session-leads itself, then REPLACES its image
+     * with the real command, so the tracked pid stays the group leader and
+     * `-w`-style status forwarding is free (mirrors candy-code's proven
+     * ProcessContainment design, kept as a local copy per scriptui-01's
+     * one-copy rule).
+     */
+    public const SETSID_STUB = 'if (posix_setsid() < 0) { exit(127); } pcntl_exec("/usr/bin/env", array_slice($argv, 1)); exit(127);';
+
+    /** @var ?array<int,string> memoised detach-wrapper prefix ([] = plain spawn) */
+    private static ?array $detachPrefix = null;
+
     /** @var resource|null live `proc_open()` handle (null once reaped) */
     private $process = null;
 
@@ -70,15 +83,20 @@ final class RealProcess implements Process
     /** @var array{0: bool, 1: bool} per-slot "read stream registered on pumpLoop" flags */
     private array $pumped = [false, false];
 
+    /** True when the tracked pid LEADS the child's process group (detach wrapper armed). */
+    private bool $groupManaged = false;
+
     private function __construct(
         private readonly int $pid,
         $process,
         $stdoutPipe = null,
         $stderrPipe = null,
+        bool $groupManaged = false,
     ) {
         $this->process = $process;
         $this->pipes[0] = \is_resource($stdoutPipe) ? $stdoutPipe : null;
         $this->pipes[1] = \is_resource($stderrPipe) ? $stderrPipe : null;
+        $this->groupManaged = $groupManaged;
     }
 
     /**
@@ -97,6 +115,15 @@ final class RealProcess implements Process
         if ($command === []) {
             throw new \InvalidArgumentException('RealProcess::spawn requires a non-empty command');
         }
+
+        // scriptui-04 (candy-scriptui-006): plain proc_open leaves the
+        // child in OUR process group, so a timeout/Esc cancel could only
+        // ever signal the direct child — grandchildren (`sh -c 'sleep 27 &
+        // sleep 27'`) survived the reap as orphans. When the host offers a
+        // detach wrapper we give the child its own group by construction;
+        // kill() then reaches -pid, the whole tree.
+        $prefix     = self::detachSpawnPrefix();
+        $command    = $prefix === [] ? $command : [...$prefix, ...\array_values($command)];
 
         $descriptors = [
             0 => ['file', '/dev/null', 'r'],
@@ -130,7 +157,63 @@ final class RealProcess implements Process
             \stream_set_blocking($stderrPipe, false);
         }
 
-        return new self($pid, $process, $stdoutPipe, $stderrPipe);
+        return new self($pid, $process, $stdoutPipe, $stderrPipe, $prefix !== []);
+    }
+
+    /**
+     * Whether the tracked pid leads the child's process group (the detach
+     * wrapper was armed). True ⇒ signals go to the whole tree; false ⇒
+     * direct-child only (the pre-scriptui-04 shape, still correct when no
+     * wrapper exists — signalling our own group would be self-harm).
+     */
+    public function groupManaged(): bool
+    {
+        return $this->groupManaged;
+    }
+
+    /**
+     * The proven detach wrapper for this host, memoised: util-linux
+     * `setsid -w --` first (the cheap native arm — `-w` waits and forwards
+     * the command's exit status, so proc_get_status still reports THE
+     * command), else the PHP setsid+exec helper arm when ext-posix and
+     * ext-pcntl are present, else [] (plain spawn, direct-child signalling).
+     * Located by a PATH stat walk — never by executing the candidate.
+     *
+     * @return array<int,string>
+     */
+    private static function detachSpawnPrefix(): array
+    {
+        if (self::$detachPrefix !== null) {
+            return self::$detachPrefix;
+        }
+        if (DIRECTORY_SEPARATOR === '\\') {
+            // Windows arms the refusal path (scriptui-08), not a group wrapper.
+            return self::$detachPrefix = [];
+        }
+
+        $setsid = self::locateOnPath('setsid');
+        if ($setsid !== '') {
+            return self::$detachPrefix = [$setsid, '-w', '--'];
+        }
+
+        if (\PHP_BINARY !== '' && \function_exists('posix_setsid') && \function_exists('pcntl_exec')) {
+            return self::$detachPrefix = [\PHP_BINARY, '-r', self::SETSID_STUB, '--'];
+        }
+
+        return self::$detachPrefix = [];
+    }
+
+    /** PATH-walk an executable, returning '' when absent (no spawn, no shell). */
+    private static function locateOnPath(string $binary): string
+    {
+        $path = (string) (\getenv('PATH') ?: '/usr/bin:/bin:/usr/sbin:/sbin');
+        foreach (\explode(PATH_SEPARATOR, $path) as $dir) {
+            $candidate = \rtrim($dir, '/') . '/' . $binary;
+            if (\is_executable($candidate) && !\is_dir($candidate)) {
+                return $candidate;
+            }
+        }
+        return '';
     }
 
     public function pid(): int
@@ -252,18 +335,36 @@ final class RealProcess implements Process
     }
 
     /**
-     * Signal the child. Libc::kill() (sugar-pty's FFI route), not bare
-     * posix_kill(): ext-posix is optional on this fleet. The exited()
-     * guard before AND after the failed call is the pid-reuse guard —
-     * signalling a reaped (possibly recycled) PID risks an unrelated
-     * process, so a post-exit kill is silently dropped instead.
+     * Signal the child — its whole process GROUP when the detach wrapper
+     * armed the tree (scriptui-04), the bare pid otherwise. Libc::kill()
+     * (sugar-pty's FFI route), not bare posix_kill(): ext-posix is
+     * optional on this fleet. The exited() guard before AND after the
+     * failed call is the pid-reuse guard — signalling a reaped (possibly
+     * recycled) PID risks an unrelated process, so a post-exit kill is
+     * silently dropped instead. While the group leader (our tracked pid)
+     * lives, the group exists, so a running handle never ESRCHs.
      */
     public function kill(int $signal): void
     {
         if ($this->exited()) {
             return;
         }
-        if (!Libc::kill($this->pid, $signal) && !$this->exited()) {
+
+        // (1) the group, best-effort: the kernel-exact rung once the
+        //     wrapper has exec'd; a plain miss just means the exec window
+        //     hasn't opened yet (pre-establishment ESRCH).
+        // (2) every currently observable descendant, by pid: independent
+        //     of group establishment, so the launch window between fork
+        //     and setsid(2) can never shield the tree.
+        if ($this->groupManaged) {
+            Libc::kill(-$this->pid, $signal);
+            foreach ($this->descendantPids() as $kid) {
+                Libc::kill($kid, $signal);
+            }
+        }
+
+        $ok = Libc::kill($this->pid, $signal);
+        if (!$ok && !$this->exited()) {
             throw new PtyException("kill(signal {$signal}) failed for pid {$this->pid}");
         }
     }
@@ -310,6 +411,23 @@ final class RealProcess implements Process
         $code               = $this->wait();
         $this->closed       = true;
         $this->cachedExit   = $code;
+
+        // Reap-completeness sweep (scriptui-04): the tree can fork new
+        // members while it dies; keep SIGKILLing observable descendants
+        // until the walk comes back empty (bounded), so close() returning
+        // means NOTHING of the child's tree survives — the promise the
+        // timeout/Esc cancels make to the terminal.
+        if ($this->groupManaged) {
+            $sweepDeadline = \microtime(true) + self::TERM_GRACE_SECONDS;
+            $sigkill       = \defined('SIGKILL') ? \SIGKILL : 9;
+            while (($kids = $this->descendantPids()) !== [] && \microtime(true) < $sweepDeadline) {
+                foreach ($kids as $kid) {
+                    Libc::kill($kid, $sigkill);
+                }
+                \usleep(10_000);
+            }
+        }
+
         return $code;
     }
 
@@ -387,6 +505,93 @@ final class RealProcess implements Process
     {
         $this->drain();
         return $this->bufferedStderr;
+    }
+
+    /**
+     * The process tree rooted at the tracked pid (direct+transient
+     * children, breadth-first), EXCLUDING the tracked pid itself and this
+     * runner. Linux reads /proc/<pid>/task/<pid>/children per level;
+     * elsewhere one `ps -A -o ppid=,pid=` helper per level does the job.
+     * A process that raced away between levels simply contributes no
+     * children — the walk must never signal pids it did not verify.
+     *
+     * @return list<int>
+     */
+    public function descendantPids(): array
+    {
+        if (DIRECTORY_SEPARATOR === '\\' || $this->pid <= 0) {
+            return [];
+        }
+
+        $tree       = [];
+        $frontier   = [$this->pid];
+        $seen       = [$this->pid => true];
+        $myPid      = \getmypid();
+        $rounds     = 0;
+        while ($frontier !== [] && $rounds++ < 16) {
+            $next = [];
+            foreach ($frontier as $parent) {
+                foreach ($this->directChildren((int) $parent) as $kid) {
+                    if ($kid <= 0 || $kid === $myPid || isset($seen[$kid])) {
+                        continue;
+                    }
+                    $seen[$kid]  = true;
+                    $tree[]      = $kid;
+                    $next[]      = $kid;
+                }
+            }
+            $frontier = $next;
+        }
+
+        return $tree;
+    }
+
+    /** @return list<int> */
+    private function directChildren(int $parent): array
+    {
+        if (\is_dir('/proc')) {
+            $raw = @\file_get_contents("/proc/{$parent}/task/{$parent}/children");
+            if ($raw !== false) {
+                $ids = \preg_split('/\s+/', \trim($raw));
+                return \is_array($ids) && $ids !== [''] ? \array_map('intval', $ids) : [];
+            }
+            // /proc without the children file (pre-3.5 kernels): ppid walk.
+            $out = [];
+            foreach ((array) \glob('/proc/[0-9]*/stat') as $stat) {
+                $raw = @\file_get_contents($stat);
+                if ($raw === false) {
+                    continue;
+                }
+                $close = \strrpos($raw, ')');
+                if ($close === false) {
+                    continue;
+                }
+                $open  = \strpos($raw, '(');
+                $rest  = \preg_split('/\s+/', \trim(\substr($raw, $close + 1)));
+                if ($open === false || !\is_array($rest) || \count($rest) < 2) {
+                    continue;
+                }
+                if ((int) $rest[1] === $parent) {
+                    $out[] = (int) \substr($raw, 0, $open);
+                }
+            }
+            return $out;
+        }
+
+        // ps-walk fallback (macOS): one bounded helper per level, reaped inline.
+        $out = @\popen('ps -A -o ppid=,pid= 2>/dev/null', 'r');
+        if (!\is_resource($out)) {
+            return [];
+        }
+        $kids = [];
+        while (($line = \fgets($out)) !== false) {
+            $parts = \preg_split('/\s+/', \trim($line));
+            if (\is_array($parts) && \count($parts) === 2 && (int) $parts[0] === $parent) {
+                $kids[] = (int) $parts[1];
+            }
+        }
+        \pclose($out);
+        return $kids;
     }
 
     private function closeCapturePipes(): void
