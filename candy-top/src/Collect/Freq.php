@@ -130,18 +130,25 @@ final class Freq implements TunableFreq
         return $mhz <= 0.0 || !is_finite($mhz) ? '' : self::normalize($mhz);
     }
 
-    /** btop normalize_frequency, input in MHz. */
+    /**
+     * btop normalize_frequency, input in MHz.
+     *
+     * number_format with explicit separators rather than sprintf('%.1f'):
+     * a sprintf decimal point follows LC_NUMERIC, so a future setlocale call
+     * anywhere in the process would flip these labels to '2,4 GHz' mid-frame
+     * (candy-top-055).
+     */
     public static function normalize(float $mhz): string
     {
         foreach ([[999999.0, 1e6, 'THz'], [999.0, 1e3, 'GHz']] as [$above, $div, $unit]) {
             if ($mhz > $above) {
-                $text = substr(sprintf('%.1f', $mhz / $div), 0, 3);
+                $text = substr(number_format($mhz / $div, 1, '.', ''), 0, 3);
 
                 return rtrim($text, '.') . ' ' . $unit;
             }
         }
 
-        return sprintf('%.0f MHz', $mhz);
+        return number_format($mhz, 0, '.', '') . ' MHz';
     }
 
     /**
