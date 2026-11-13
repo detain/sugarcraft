@@ -327,6 +327,13 @@ final class Game implements Model
         );
     }
 
+    /**
+     * @internal Test seam only (flappy-45, finding -045): lets the suite pin
+     * PRNG identity through start()/mutate()/resize carry-through (GameTest).
+     * Publishing the game's RNG as API would advertise "re-draw with the
+     * game's PRNG" — it is not: the injected closure is a private detail of
+     * deterministic pipe placement.
+     */
     public function rand(): \Closure
     {
         return $this->rand;
