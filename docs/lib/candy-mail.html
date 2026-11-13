@@ -188,7 +188,7 @@ $transport-&gt;send($email);
     <p>TLS is required by default on the SMTP transport — credentials never travel over a plaintext
     channel. Keep real passwords and API keys in the environment (the <code>candy-mail</code> CLI reads
     the same <code>CANDY_MAIL_SMTP_*</code> names); see the TLS &amp; security section of the
-    <a href="https://github.com/detain/sugarcraft/blob/master/candy-mail/README.md">README</a>.</p>
+    <a href="https://github.com/sugarcraft/candy-mail/blob/master/candy-mail/README.md">README</a>.</p>
 
     <p>Attachment paths are read eagerly at build time — the file on disk must exist when <code>withAttachment()</code> is called, or the builder throws a <code>RuntimeException</code>.</p>
 

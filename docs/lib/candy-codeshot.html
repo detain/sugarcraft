@@ -164,7 +164,7 @@
 <p class="lede" style="margin-top: 28px;">Turn code or terminal output into an SVG or PNG screenshot. The one base requirement is <code>ext-mbstring</code>; the SVG path needs no raster extension (no <code>ext-gd</code>, no Imagick) — plain text output suitable for git diffs and CI artifacts; PNG renders through <code>ext-gd</code>. ANSI SGR (16 / 256 / 24-bit truecolor + bold / italic / underline) becomes per-segment <code>&lt;text&gt;</code> colour and font attributes plus <code>&lt;rect&gt;</code> background bands in the SVG; the PNG canvas paints the same foreground colours and background bands.</p>
 
     <h3 id="install" style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-codeshot:dev-master</code></pre>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-codeshot</code></pre>
 
     <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-php">use SugarCraft\CodeShot\SvgRenderer;

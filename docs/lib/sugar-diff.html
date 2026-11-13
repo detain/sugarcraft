@@ -161,7 +161,7 @@
 <p class="lede" style="margin-top: 28px;">A unified-diff engine the whole ecosystem can share: <strong>LCS line diffing, numbered context hunks, a GNU <code>diff -u</code> writer, and a scanner that numbers the rows of any patch</strong>. Extracted from candy-code's <code>BuildsUnifiedDiff</code> trait (now a delegating consumer) and the <code>DiffGutter</code> region model (D1a fold landed: the gutter's scan half delegates to <code>UnifiedScan::lines()</code>, <code>fileHeaders()</code> and <code>isHunkHeader()</code>; only the fixed-width gutter formatting stays app-side). First-party — there is no 1:1 Go counterpart.</p>
 
     <h3 id="install" style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-diff:@dev</code></pre>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-diff</code></pre>
 
     <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Diff\Diff;

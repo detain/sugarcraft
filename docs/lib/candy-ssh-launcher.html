@@ -164,9 +164,8 @@
 <p class="lede" style="margin-top: 28px;">Launch <code>candy-ssh-launcher</code>, pick a host, hit Enter — the current process is replaced with <code>ssh</code> connecting to it. Reads YAML or JSON; supports identity files, ssh options, ProxyJump.</p>
 
     <h3 id="install" style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-ssh-launcher:@dev   # today: dev-only until the first release tag
-composer require sugarcraft/candy-ssh-launcher        # bare, once a release tag exists</code></pre>
-    <p>The package publishes its dev branch until the first <code>candy-ssh-launcher/v*</code> tag is cut, so projects on Composer's default <code>minimum-stability</code> need the <code>:@dev</code> suffix. A single-file <code>.phar</code> is built from <code>tools/build-phar.php</code> (see the README); release download URLs appear with the tags.</p>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-ssh-launcher</code></pre>
+    <p>The package publishes its dev branch until the first <code>candy-ssh-launcher/v*</code> tag is cut, so projects on Composer's default <code>minimum-stability</code> need the root <code>"minimum-stability": "dev", "prefer-stable": true</code> pair. A single-file <code>.phar</code> is built from <code>tools/build-phar.php</code> (see the README); release download URLs appear with the tags.</p>
 
     <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-yaml"># ~/.config/wishlist.yml
