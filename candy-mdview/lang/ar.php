@@ -9,7 +9,8 @@
 declare(strict_types=1);
 
 return [
-    'render.unknown_theme' => 'سمة غير معروفة: {name}',
+    'render.unknown_theme' => 'سمة غير معروفة: {name} — ملفات الأنماط JSON تُحمَّل عبر --theme-config',
+    'render.style_overrides_theme' => 'ملاحظة: --style "{style}" يتجاوز --theme "{theme}"',
     'render.theme_config_unreadable' => 'إعدادات السمة غير قابلة للقراءة: {path}',
     'render.theme_config_too_large' => 'إعدادات السمة تتجاوز {limit} بايت: {path}',
     'render.theme_config_unrecognized' => 'تكوين السمة لا يطابق المخطط المسطح ولا مخطط غلامور: {path}',

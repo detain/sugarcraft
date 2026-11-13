@@ -9,7 +9,8 @@
 declare(strict_types=1);
 
 return [
-    'render.unknown_theme' => 'thème inconnu : {name}',
+    'render.unknown_theme' => 'thème inconnu : {name} — les fichiers de style JSON utilisent --theme-config',
+    'render.style_overrides_theme' => 'note : --style "{style}" remplace --theme "{theme}"',
     'render.theme_config_unreadable' => 'configuration du thème illisible : {path}',
     'render.theme_config_too_large' => 'la configuration du thème dépasse {limit} octets : {path}',
     'render.theme_config_unrecognized' => 'la configuration de thème ne correspond ni au schéma plat ni au schéma glamour : {path}',

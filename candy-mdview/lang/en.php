@@ -9,7 +9,8 @@
 declare(strict_types=1);
 
 return [
-    'render.unknown_theme' => 'unknown theme: {name}',
+    'render.unknown_theme' => 'unknown theme: {name} — JSON style files belong in --theme-config',
+    'render.style_overrides_theme' => 'note: --style "{style}" overrides --theme "{theme}"',
     'render.theme_config_unreadable' => 'theme config not readable: {path}',
     'render.theme_config_too_large' => 'theme config exceeds {limit} bytes: {path}',
     'render.theme_config_unrecognized' => 'theme config matches neither the flat nor the glamour schema: {path}',

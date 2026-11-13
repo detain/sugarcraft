@@ -9,7 +9,8 @@
 declare(strict_types=1);
 
 return [
-    'render.unknown_theme' => 'neznámé téma: {name}',
+    'render.unknown_theme' => 'neznámé téma: {name} — JSON soubory stylů se načítají přes --theme-config',
+    'render.style_overrides_theme' => 'poznámka: --style "{style}" přepisuje --theme "{theme}"',
     'render.theme_config_unreadable' => 'konfigurace motivu nečitelná: {path}',
     'render.theme_config_too_large' => 'konfigurace motivu překračuje {limit} bajtů: {path}',
     'render.theme_config_unrecognized' => 'konfigurace motivu neodpovídá ani plochému, ani glamour schématu: {path}',

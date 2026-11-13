@@ -30,7 +30,7 @@ final class LangTest extends TestCase
     public function testTTranslatesRenderUnknownThemeKey(): void
     {
         $result = Lang::t('render.unknown_theme', ['name' => 'mystery']);
-        $this->assertSame('unknown theme: mystery', $result);
+        $this->assertSame('unknown theme: mystery — JSON style files belong in --theme-config', $result);
     }
 
     public function testTTranslatesRenderThemeConfigUnreadableKey(): void
@@ -49,7 +49,13 @@ final class LangTest extends TestCase
     public function testTInterpolatesNameParameterInUnknownTheme(): void
     {
         $result = Lang::t('render.unknown_theme', ['name' => 'tokyo-night']);
-        $this->assertSame('unknown theme: tokyo-night', $result);
+        $this->assertSame('unknown theme: tokyo-night — JSON style files belong in --theme-config', $result);
+    }
+
+    public function testTTranslatesRenderStyleOverridesThemeKey(): void
+    {
+        $result = Lang::t('render.style_overrides_theme', ['style' => 'dark', 'theme' => 'light']);
+        $this->assertSame('note: --style "dark" overrides --theme "light"', $result);
     }
 
     public function testTInterpolatesPathParameterInThemeConfigUnreadable(): void

@@ -9,7 +9,8 @@
 declare(strict_types=1);
 
 return [
-    'render.unknown_theme' => 'bilinmeyen tema: {name}',
+    'render.unknown_theme' => 'bilinmeyen tema: {name} — JSON stil dosyaları --theme-config ile yüklenir',
+    'render.style_overrides_theme' => 'not: --style "{style}", --theme "{theme}" seçeneğini geçersiz kılıyor',
     'render.theme_config_unreadable' => 'tema yapılandırması okunamıyor: {path}',
     'render.theme_config_too_large' => 'tema yapılandırması {limit} baytı aşıyor: {path}',
     'render.theme_config_unrecognized' => 'tema yapılandırması düz şemayla da glamour şemasıyla da eşleşmiyor: {path}',

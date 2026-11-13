@@ -9,7 +9,8 @@
 declare(strict_types=1);
 
 return [
-    'render.unknown_theme' => 'onbekend thema: {name}',
+    'render.unknown_theme' => 'onbekend thema: {name} — JSON-stijlbestanden horen in --theme-config',
+    'render.style_overrides_theme' => 'let op: --style "{style}" gaat voor --theme "{theme}"',
     'render.theme_config_unreadable' => 'thema-configuratie niet leesbaar: {path}',
     'render.theme_config_too_large' => 'thema-configuratie overschrijdt {limit} bytes: {path}',
     'render.theme_config_unrecognized' => 'themaconfiguratie voldoet niet aan het platte of het glamour-schema: {path}',

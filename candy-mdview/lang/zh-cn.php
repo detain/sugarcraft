@@ -9,7 +9,8 @@
 declare(strict_types=1);
 
 return [
-    'render.unknown_theme' => '未知主题：{name}',
+    'render.unknown_theme' => '未知主题：{name} —— JSON 样式文件请使用 --theme-config',
+    'render.style_overrides_theme' => '注意：--style "{style}" 覆盖 --theme "{theme}"',
     'render.theme_config_unreadable' => '主题配置不可读：{path}',
     'render.theme_config_too_large' => '主题配置超过 {limit} 字节：{path}',
     'render.theme_config_unrecognized' => '主题配置既不匹配扁平 schema 也不匹配 glamour schema：{path}',

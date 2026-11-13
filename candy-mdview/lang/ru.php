@@ -9,7 +9,8 @@
 declare(strict_types=1);
 
 return [
-    'render.unknown_theme' => 'неизвестная тема: {name}',
+    'render.unknown_theme' => 'неизвестная тема: {name} — JSON-файлы стилей передавайте через --theme-config',
+    'render.style_overrides_theme' => 'примечание: --style "{style}" перекрывает --theme "{theme}"',
     'render.theme_config_unreadable' => 'конфигурация темы нечитабельна: {path}',
     'render.theme_config_too_large' => 'конфигурация темы превышает {limit} байт: {path}',
     'render.theme_config_unrecognized' => 'конфигурация темы не соответствует ни плоской, ни glamour-схеме: {path}',

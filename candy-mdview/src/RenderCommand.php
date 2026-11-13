@@ -100,8 +100,8 @@ final class RenderCommand extends Command
         $this
             ->addArgument('file',     InputArgument::OPTIONAL, 'Markdown file, a directory containing one (README.md > README.markdown > index.md > a single *.md), or an http(s):// URL. Default: stdin.')
             ->addOption('pager',         'p', InputOption::VALUE_NONE,     'Open the rendered output in a fullscreen pager.')
-            ->addOption('theme',         null, InputOption::VALUE_REQUIRED, 'ansi | ascii | plain | dark | light | notty | dracula | tokyo-night | pink | solarized | monokai | github. Aliases: no, auto-no, tokyonight. Default (omitted): ansi on a color-capable terminal, ascii when color is off, plain when the stream is undecorated (--no-ansi, or a non-terminal without forced decoration).', null)
-            ->addOption('style',         's',  InputOption::VALUE_REQUIRED, 'Alias for --theme (glamour-compat).', null)
+            ->addOption('theme',         null, InputOption::VALUE_REQUIRED, 'ansi | ascii | plain | dark | light | notty | dracula | tokyo-night | pink | solarized | monokai | github | auto. Aliases: no, auto-no, tokyonight. Names match case-insensitively and _ is accepted in place of -; auto reruns the implicit ladder. Default (omitted): ansi on a color-capable terminal, ascii when color is off, plain when the stream is undecorated (--no-ansi, or a non-terminal without forced decoration).', null)
+            ->addOption('style',         's',  InputOption::VALUE_REQUIRED, 'Glamour-compatible alias for --theme: a theme NAME, not a style file (JSON themes load through --theme-config). Overrides --theme when both are given, and a note on stderr names the override.', null)
             ->addOption('theme-config',  null, InputOption::VALUE_REQUIRED, 'Load a custom JSON theme file (overrides --theme).', '')
             ->addOption('width',         'w',  InputOption::VALUE_REQUIRED, 'Wrap text at this column count (1-9999). 0 = no wrap: longer lines are truncated by the pager, not wrapped.', 0)
             ->addOption('no-hyperlinks', null, InputOption::VALUE_NONE,    'Disable OSC 8 hyperlinks; render links as text + (url) instead.')
@@ -139,11 +139,12 @@ final class RenderCommand extends Command
         // STDERR with Command::INVALID: `--theme=ZORG missingfile.md` names
         // the theme (the flag was the first thing wrong), and an error never
         // lands inside a redirected document stream.
-        $dirNotice = '';
+        $dirNotice   = '';
+        $themeNote   = '';
         try {
             $width      = self::resolveWidth($input);
             $onTerminal = self::decoratedOutput($input, $output);
-            $theme      = self::resolveTheme($input, $onTerminal);
+            $theme      = self::resolveTheme($input, $onTerminal, $themeNote);
             // glow's second invocation form (finding 037): a directory
             // argument renders its README instead of refusing. Resolution
             // runs BEFORE the read so every later door (header name, watch
@@ -160,6 +161,12 @@ final class RenderCommand extends Command
         } catch (\InvalidArgumentException $usage) {
             self::writeError($output, $usage->getMessage());
             return Command::INVALID;
+        }
+
+        if ($themeNote !== '') {
+            // Like the directory announce, this rides the error stream:
+            // stdout may be a redirected document channel.
+            self::writeNote($output, $themeNote);
         }
 
         if ($dirNotice !== '') {
@@ -259,7 +266,7 @@ final class RenderCommand extends Command
      * names a real theme and must render its SGR even where the implicit
      * default would downgrade.
      */
-    private static function resolveTheme(InputInterface $input, bool $onTerminal): Theme
+    private static function resolveTheme(InputInterface $input, bool $onTerminal, string &$themeNote): Theme
     {
         $configPath = (string) $input->getOption('theme-config');
         $style      = $input->getOption('style');
@@ -274,18 +281,42 @@ final class RenderCommand extends Command
 
         $explicitTheme = $style !== null || $theme !== null;
         if ($explicitTheme === false) {
-            // Implicit choice, three tiers: a pipe/--no-ansi stream gets raw
-            // bytes (plain); a real terminal that cannot color gets the ASCII
-            // theme (bold/underline survive, hue does not — fleet convention
-            // maps color-off to the ASCII tier); otherwise ansi.
-            return match (true) {
-                $onTerminal === false => Theme::plain(),
-                self::terminalSupportsColor() => Theme::ansi(),
-                default => Theme::ascii(),
-            };
+            return self::implicitTheme($onTerminal);
         }
 
-        return self::pickTheme((string) ($style ?? $theme));
+        $name      = (string) ($style ?? $theme);
+        $canonical = strtolower(str_replace('_', '-', $name));
+        if ($canonical === 'auto') {
+            // glow parity: `auto` promotes the implicit ladder to an explicit
+            // choice, so tier behavior can be pinned without omitting flags.
+            return self::implicitTheme($onTerminal);
+        }
+        if ($style !== null && $theme !== null
+            && strtolower(str_replace('_', '-', $style)) !== strtolower(str_replace('_', '-', $theme))) {
+            // The override is real (--style wins), but silent victory over an
+            // explicit --theme is the one ambiguity this CLI used to hide; the
+            // house answers every other one loudly on stderr.
+            $themeNote = Lang::t('render.style_overrides_theme', ['style' => $style, 'theme' => $theme]);
+        }
+
+        return self::pickTheme($name);
+    }
+
+    /**
+     * The three-tier color ladder used when no theme name is given — and,
+     * by request, behind the explicit `auto` name (finding 084).
+     */
+    private static function implicitTheme(bool $onTerminal): Theme
+    {
+        // Implicit choice, three tiers: a pipe/--no-ansi stream gets raw
+        // bytes (plain); a real terminal that cannot color gets the ASCII
+        // theme (bold/underline survive, hue does not — fleet convention
+        // maps color-off to the ASCII tier); otherwise ansi.
+        return match (true) {
+            $onTerminal === false => Theme::plain(),
+            self::terminalSupportsColor() => Theme::ansi(),
+            default => Theme::ascii(),
+        };
     }
 
     /**
@@ -448,7 +479,7 @@ final class RenderCommand extends Command
     public static function pickTheme(string $name): Theme
     {
         return match (strtolower(str_replace('_', '-', $name))) {
-            '', 'ansi'         => Theme::ansi(),
+            'ansi'            => Theme::ansi(),
             'ascii'            => Theme::ascii(),
             'plain', 'no'      => Theme::plain(),
             'dark'             => Theme::dark(),
@@ -536,12 +567,40 @@ final class RenderCommand extends Command
     }
 
     /**
+     * Cheap color-capability facts the terminal declares through its name
+     * (092, CALIBER rule-10 env→cheap-facts→probe order): dumb stays
+     * colorless, truecolor/24bit and the *-color TERM family are color
+     * capable. NULL means "the environment is not answering — ask the
+     * terminfo probe".
+     */
+    private static function colorCapableFromEnvironment(): ?bool
+    {
+        $term = strtolower((string) getenv('TERM'));
+        if ($term === 'dumb') {
+            return false;
+        }
+        $colorterm = strtolower((string) getenv('COLORTERM'));
+        if ($colorterm === 'truecolor' || $colorterm === '24bit') {
+            return true;
+        }
+        if ($term !== '' && str_contains($term, 'color') === true) {
+            return true;
+        }
+
+        return null;
+    }
+
+    /**
      * Probe the terminal for ANSI color capability.
      *
      * Order: test seam, then the environment verdict (NO_COLOR / CLICOLOR=0 /
-     * *FORCE), then the sugar-colorprofile terminfo probe. TERM=dumb reaches
-     * the probe and reports NoColor there. Falls back to true (assume color
-     * capable) on any probe error so we never lose output to a broken probe.
+     * *FORCE), then cheap color-capability facts from TERM/COLORTERM (092:
+     * TERM=dumb answers colorless here, truecolor/24bit and *color* TERM
+     * answer colored here — a COLORTERM-answering startup never forks
+     * infocmp), then the sugar-colorprofile terminfo probe as the fallback
+     * for terminals the env facts do not classify. Falls back to true
+     * (assume color capable) on any probe error so we never lose output to
+     * a broken probe.
      */
     private static function terminalSupportsColor(): bool
     {
@@ -552,6 +611,10 @@ final class RenderCommand extends Command
             $verdict = self::colorDecisionFromEnvironment();
             if ($verdict !== null) {
                 return $verdict;
+            }
+            $capable = self::colorCapableFromEnvironment();
+            if ($capable !== null) {
+                return $capable;
             }
             // An EMPTY NO_COLOR takes no position (no-color.org: "if present
             // and not empty"), but sugar-colorprofile's probe disables on ANY

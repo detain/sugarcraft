@@ -63,14 +63,18 @@ a pager opened on a URL watches and names nothing.
 Flags:
 - `--theme {ansi|ascii|plain|notty|dark|light|dracula|tokyo-night|pink|solarized|monokai|github}`
   — picks a SugarMarkdown preset; aliases `no`, `auto-no`, `tokyonight` are
-  accepted. `solarized`, `monokai`, and `github` load JSON theme files from
+  accepted, and names match case-insensitively with `_` accepted in place of
+  `-` (`DRACULA` and `Tokyo_Night` work). Pass `auto` to run the implicit
+  ladder explicitly. `solarized`, `monokai`, and `github` load JSON theme files from
   `themes/`. With `--theme` omitted: **ansi** on a color-capable terminal,
   **ascii** when color is off (bold/italic survive, color does not), **plain**
   when stdout is not a terminal or `--no-ansi` vetoes the stream. The mirror
   edge: forcing decoration (`--ansi` / `CLICOLOR_FORCE` / `FORCE_COLOR`) yields
   a decorated tier even on a pipe.
-- `--style` / `-s` — alias for `--theme` (glamour-compat). When both are given,
-  `--style` silently wins; there is no warning.
+- `--style` / `-s` — glamour-compat alias for `--theme`: it takes theme
+  *names*, not style files (JSON goes through `--theme-config`). When both
+  flags are given and name different themes, `--style` wins and a
+  `note: --style … overrides --theme …` line lands on stderr.
 - `--version` — handled by the Symfony Console application (no row in the
   command's own flags). Inside a phar the build stamp wins; outside an archive
   it reports the composer/dev fallback — the only documented way to tell

@@ -9,7 +9,8 @@
 declare(strict_types=1);
 
 return [
-    'render.unknown_theme' => 'nieznany motyw: {name}',
+    'render.unknown_theme' => 'nieznany motyw: {name} — pliki stylów JSON wczytuj przez --theme-config',
+    'render.style_overrides_theme' => 'uwaga: --style "{style}" ma pierwszeństwo nad --theme "{theme}"',
     'render.theme_config_unreadable' => 'konfiguracja motywu nieczytelna: {path}',
     'render.theme_config_too_large' => 'konfiguracja motywu przekracza {limit} bajtów: {path}',
     'render.theme_config_unrecognized' => 'konfiguracja motywu nie pasuje ani do płaskiego schematu, ani do schematu glamour: {path}',

@@ -23,7 +23,7 @@ final class RenderCommandTest extends TestCase
      * theme is decided from globals, so the suite pins them class-wide:
      * a developer box exporting NO_COLOR must not flip these answers.
      */
-    private const COLOR_ENV_KEYS = ['NO_COLOR', 'CLICOLOR', 'CLICOLOR_FORCE', 'FORCE_COLOR', 'TERM'];
+    private const COLOR_ENV_KEYS = ['NO_COLOR', 'CLICOLOR', 'CLICOLOR_FORCE', 'FORCE_COLOR', 'TERM', 'COLORTERM'];
 
     /** @var array<string,string|false> values as found before setUp cleared them */
     private array $savedColorEnv = [];
@@ -133,11 +133,89 @@ final class RenderCommandTest extends TestCase
         $this->assertSame('plain', $theme->paragraph->render('plain'));
     }
 
-    public function testPickThemeEmptyDefaultsToAnsi(): void
+    public function testPickThemeEmptyNameRefuses(): void
     {
-        // The CLI passes the --theme default of 'ansi', but a direct
-        // empty-string call should still produce a usable Theme.
-        $this->assertInstanceOf(Theme::class, RenderCommand::pickTheme(''));
+        // 040: an empty --theme= used to land in the ansi arm and stamp SGR
+        // into a pipe — the ladder silently defeated. An explicit empty name
+        // is a usage fault like every other unknown name.
+        $this->expectException(\InvalidArgumentException::class);
+        RenderCommand::pickTheme('');
+    }
+
+    public function testEmptyThemeFlagRefusesAsUsageError(): void
+    {
+        [$rc, $msg] = $this->runUsageRun("# Hi\n", $this->optionMap(['theme' => '']));
+        $this->assertSame(Command::INVALID, $rc);
+        $this->assertStringContainsString('unknown theme:', $msg);
+        // 087 half of the same door: the refusal now points a style-JSON
+        // migrant at the right flag.
+        $this->assertStringContainsString('--theme-config', $msg);
+    }
+
+    public function testUnknownThemeRefusalNamesTheThemeConfigDoor(): void
+    {
+        // `--style style.json` is the glamour migrant's most likely typo for
+        // the JSON door; the refusal must name where the file actually goes.
+        try {
+            RenderCommand::pickTheme('style.json');
+            $this->fail('a .json name must not resolve to a built-in theme');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('style.json', $e->getMessage());
+            $this->assertStringContainsString('--theme-config', $e->getMessage());
+        }
+    }
+
+    public function testAutoThemeFollowsTheLadderBothWays(): void
+    {
+        // 084: `auto` is the implicit ladder spelled out — same bytes as the
+        // omission on both tiers, and NOT the same bytes as a named tier.
+        $doc = "# Hello\n\n- one\n- **two**\n";
+        [$rc, $auto] = $this->runPrint($doc, $this->optionMap(['theme' => 'auto']));
+        $this->assertSame(Command::SUCCESS, $rc);
+        [, $plain] = $this->runPrint($doc, $this->optionMap(['theme' => 'plain']));
+        [, $ansi] = $this->runPrint($doc, $this->optionMap(['theme' => 'ansi']));
+        $this->assertSame($plain, $auto, 'auto on an undecorated stream is plain (the ladder answer)');
+        $this->assertNotSame($ansi, $auto, 'auto must not collapse to a single named tier');
+
+        RenderCommand::setTerminalCheckCallback(fn () => true);
+        RenderCommand::setColorProbeCallback(fn () => true);
+        [, $autoTty] = $this->runPrint($doc, $this->optionMap(['theme' => 'auto']));
+        [, $ansiTty] = $this->runPrint($doc, $this->optionMap(['theme' => 'ansi']));
+        $this->assertSame($ansiTty, $autoTty, 'auto on a color-capable terminal is ansi');
+    }
+
+    public function testStyleThemeConflictIsAnnounced(): void
+    {
+        // 081: --style keeps winning, but no longer silently.
+        [$rc, $msg] = $this->runUsageRun("# Hi\n", $this->optionMap(['style' => 'dark', 'theme' => 'light']));
+        $this->assertSame(Command::SUCCESS, $rc);
+        $this->assertStringContainsString('note: --style "dark" overrides --theme "light"', $msg);
+    }
+
+    public function testSameThemeSpelledDifferentlyIsNotAConflict(): void
+    {
+        // 041 matching rules apply to the conflict test too: DRACULA and
+        // dracula are one theme, and no note is noise.
+        [$rc, $msg] = $this->runUsageRun("# Hi\n", $this->optionMap(['style' => 'DRACULA', 'theme' => 'dracula']));
+        $this->assertSame(Command::SUCCESS, $rc);
+        $this->assertSame('', $msg);
+    }
+
+    public function testSingleThemeFlagIsSilent(): void
+    {
+        [$rc, $msg] = $this->runUsageRun("# Hi\n", $this->optionMap(['style' => 'dark']));
+        $this->assertSame(Command::SUCCESS, $rc);
+        $this->assertSame('', $msg);
+    }
+
+    public function testUnresolvableStyleStillRefusesWithoutNote(): void
+    {
+        // A theme that never resolves must not leave an override note behind
+        // as a half-sentence about a run that failed.
+        [$rc, $msg] = $this->runUsageRun("# Hi\n", $this->optionMap(['style' => 'ZORG', 'theme' => 'light']));
+        $this->assertSame(Command::INVALID, $rc);
+        $this->assertStringContainsString('unknown theme: ZORG', $msg);
+        $this->assertStringNotContainsString('overrides', $msg);
     }
 
     // --- execute() tests ---
@@ -911,8 +989,10 @@ final class RenderCommandTest extends TestCase
         $this->assertStringContainsString("\x1b[38;2;", $payload, 'default on a color terminal must be the ansi theme');
     }
 
-    public function testProbeAnswersNoColorForDumbTerminal(): void
+    public function testDumbTerminalIsColorlessBeforeTheProbe(): void
     {
+        // 092: TERM=dumb is answered by the cheap env facts now (it used to
+        // pay an infocmp fork for the same verdict).
         putenv('TERM=dumb');
         $this->assertFalse($this->invokeStatic('terminalSupportsColor'));
     }
@@ -922,19 +1002,51 @@ final class RenderCommandTest extends TestCase
         // Structural anti-regression: the environment verdict must be read
         // BEFORE TerminalProbe::run() inside terminalSupportsColor(), and the
         // probe must remain reachable (a verdict of null falls through).
+        // 092 adds a middle leg: the cheap color-capability env facts answer
+        // between the verdict and the fork (CALIBER rule-10 order).
         $src = implode('', array_slice(
             file((string) (new ReflectionMethod(RenderCommand::class, 'terminalSupportsColor'))->getFileName()),
             (new ReflectionMethod(RenderCommand::class, 'terminalSupportsColor'))->getStartLine() - 1,
             (new ReflectionMethod(RenderCommand::class, 'terminalSupportsColor'))->getEndLine()
                 - (new ReflectionMethod(RenderCommand::class, 'terminalSupportsColor'))->getStartLine() + 1
         ));
-        $verdict = strpos($src, 'colorDecisionFromEnvironment()');
-        $probe   = strpos($src, 'TerminalProbe::run()');
+        $verdict    = strpos($src, 'colorDecisionFromEnvironment()');
+        $capability = strpos($src, 'colorCapableFromEnvironment()');
+        $probe      = strpos($src, 'TerminalProbe::run()');
         $this->assertNotFalse($verdict);
+        $this->assertNotFalse($capability);
         $this->assertNotFalse($probe);
-        $this->assertLessThan($probe, $verdict, 'env verdict must short-circuit before the probe');
+        $this->assertLessThan($capability, $verdict, 'env verdict must short-circuit before the capability facts');
+        $this->assertLessThan($probe, $capability, 'cheap capability facts must short-circuit before the probe fork');
         // And the whole `!== ''` inversion shape must never reappear.
         $this->assertStringNotContainsString("getenv('NO_COLOR') !== ''", $src);
+    }
+
+    public function testColorCapableEnvFactsMatrix(): void
+    {
+        // 092 unit face: TERM/COLORTERM answers, with dumb outranking the
+        // truecolor fast-path and no-answer falling through to the probe.
+        putenv('TERM=dumb');
+        putenv('COLORTERM=truecolor');
+        $this->assertFalse($this->invokeStatic('colorCapableFromEnvironment'), 'dumb stays colorless even beside COLORTERM');
+
+        putenv('TERM=xterm');
+        $this->assertTrue($this->invokeStatic('colorCapableFromEnvironment'), 'COLORTERM=truecolor answers before any fork');
+
+        putenv('COLORTERM=24Bit');
+        $this->assertTrue($this->invokeStatic('colorCapableFromEnvironment'), '24bit is the same answer, case-insensitively');
+
+        putenv('COLORTERM=');
+        putenv('TERM=Xterm-256COLOR');
+        $this->assertTrue($this->invokeStatic('colorCapableFromEnvironment'), 'the *-color TERM family is color capable');
+
+        putenv('COLORTERM=banana');
+        putenv('TERM=xterm');
+        $this->assertNull($this->invokeStatic('colorCapableFromEnvironment'), 'a junk COLORTERM takes no position');
+
+        putenv('COLORTERM');
+        putenv('TERM');
+        $this->assertNull($this->invokeStatic('colorCapableFromEnvironment'), 'no env answer falls through to the probe');
     }
 
     public function testNoColorSpecHonorsZeroAndIgnoresEmpty(): void
