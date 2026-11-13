@@ -632,6 +632,55 @@ final class VideoSourceTest extends TestCase
     }
 
     /**
+     * @testdox L88: a print-then-stall ffprobe is escalated inside the lowered exit grace
+     *
+     * The finding's exact shape: the probe drains the JSON, the child prints
+     * it and then lingers on exit — the grace loop used to busy-poll a FULL
+     * second of tail latency inside the serial open path. 250 ms is the
+     * scheduling quantum a flushing process actually needs; the escalation
+     * still fail-closes the result (non-zero close), so nothing is trusted
+     * more loosely, only waited on less impatiently.
+     */
+    public function testALateExitingFfprobeIsEscalatedWithinTheLoweredGrace(): void
+    {
+        $dir = sys_get_temp_dir() . '/video-source-late-exit-' . uniqid('', true);
+        mkdir($dir);
+        $stub = $dir . '/ffprobe';
+        // The stall shape, precisely: output COMPLETE (fd closed by the shell
+        // itself, so EOF is real), the process still alive - the print-then-
+        // linger pattern the grace exists for. No grandchild inherits the
+        // stdout pipe, so only the grace loop can cut this leg. /bin/sleep by
+        // ABSOLUTE path: this fixture's PATH holds only the ffprobe stub, and
+        // dash rides past a not-found command straight to its `exit 0`.
+        file_put_contents($stub, "#!/bin/sh\nprintf '%s' '{\"streams\":[{\"codec_type\":\"video\",\"width\":640,\"height\":480,\"r_frame_rate\":\"30/1\"}]}'\nexec 1>&-\n/bin/sleep 1.5\nexit 0\n");
+        chmod($stub, 0755);
+        $subject = $dir . '/linger.mp4';
+        file_put_contents($subject, 'x');
+
+        $previous = (string) getenv('PATH');
+        putenv('PATH=' . $dir);
+        \SugarCraft\Video\Source\Probe::clearBinaryCacheForTesting();
+
+        try {
+            $t0 = microtime(true);
+            $source = VideoSource::probe($subject);
+            $elapsed = microtime(true) - $t0;
+
+            $this->assertLessThan(0.75, $elapsed, "the late-exit leg must cost the grace, not the linger — measured {$elapsed}s (SV-L88/088)");
+            $this->assertSame(0, $source->width, 'an escalation-killed probe keeps the fail-closed zeroed shape');
+
+            // The pinned budget itself, so a silent widen cannot drift back.
+            $this->assertSame(0.25, (new \ReflectionClass(VideoSource::class))->getConstant('PROBE_EXIT_GRACE_SECONDS'));
+        } finally {
+            putenv('PATH=' . $previous);
+            \SugarCraft\Video\Source\Probe::clearBinaryCacheForTesting();
+            @unlink($stub);
+            @unlink($subject);
+            @rmdir($dir);
+        }
+    }
+
+    /**
      * @testdox m4: credential redaction masks URL userinfo for every log and message surface
      */
     public function testRedactingMasksUrlCredentials(): void

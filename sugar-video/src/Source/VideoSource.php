@@ -45,8 +45,15 @@ final class VideoSource
      * How long a drained-but-still-running ffprobe gets to exit on its own
      * before the reaper escalates — bounds proc_close() the way
      * {@see self::PROBE_TIMEOUT_SECONDS} bounds the stdout read.
+     *
+     * SV-L88/088 lowered this from a full second to 250 ms: the grace exists
+     * only for a child that has ALREADY printed — one that flushed its JSON
+     * and is on its way out needs a scheduling quantum, not a second. The
+     * old budget was pure tail latency in the already-serial open path (the
+     * cost SV-M39 trimmed elsewhere). Polling stays: an async reap would be
+     * overkill for a print-then-exit child.
      */
-    private const PROBE_EXIT_GRACE_SECONDS = 1.0;
+    private const PROBE_EXIT_GRACE_SECONDS = 0.25;
 
     /**
      * Hard ceiling on drained ffprobe stdout — a pathological or hostile
