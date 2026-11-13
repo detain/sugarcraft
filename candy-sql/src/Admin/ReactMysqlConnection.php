@@ -56,6 +56,9 @@ final class ReactMysqlConnection implements AsyncConnection
     /** @var callable(string, LoopInterface): MysqlClient */
     private $killClientFactory;
 
+    /** @var callable(string, LoopInterface): MysqlClient */
+    private $clientFactory;
+
     /**
      * @param float $queryTimeout Per-query deadline in seconds; <= 0 disables
      *                            it (see {@see QueryTimeout} for why a default
@@ -64,6 +67,14 @@ final class ReactMysqlConnection implements AsyncConnection
      *                            Factory for the short-lived KILL side-channel
      *                            connection; injectable so tests can spy on the
      *                            KILL path without a live server
+     * @param float $killTimeout  Deadline for the KILL leg itself: the same
+     *                            black-holed route QueryTimeout exists for can
+     *                            swallow the KILL too, and an untimed killer
+     *                            would leak its fd + watchers per abort
+     * @param callable(string, LoopInterface): MysqlClient|null $clientFactory
+     *                            Factory for the main client, so the
+     *                            post-deadline re-mint is testable without a
+     *                            socket (admindata-015)
      */
     public function __construct(
         string $dsn,
@@ -72,13 +83,24 @@ final class ReactMysqlConnection implements AsyncConnection
         ?LoopInterface $loop = null,
         private readonly float $queryTimeout = QueryTimeout::DEFAULT_SECONDS,
         ?callable $killClientFactory = null,
+        private readonly float $killTimeout = self::KILL_TIMEOUT_SECONDS,
+        ?callable $clientFactory = null,
     ) {
         $this->loop = $loop ?? ReactLoop::get();
         $this->uri = $this->dsnToUri($dsn, $username, $password);
-        $this->client = new MysqlClient($this->uri, null, $this->loop);
+        $this->clientFactory = $clientFactory
+            ?? static fn (string $uri, LoopInterface $loop): MysqlClient => new MysqlClient($uri, null, $loop);
+        $this->client = ($this->clientFactory)($this->uri, $this->loop);
         $this->killClientFactory = $killClientFactory
             ?? static fn (string $uri, LoopInterface $loop): MysqlClient => new MysqlClient($uri, null, $loop);
     }
+
+    /**
+     * Deadline for the KILL side-channel leg. The user's statement is already
+     * being abandoned at this point; the killer only needs enough time for a
+     * healthy server to accept `KILL QUERY`, so this stays short.
+     */
+    private const KILL_TIMEOUT_SECONDS = 5.0;
 
     /**
      * Execute a query asynchronously.
@@ -103,6 +125,13 @@ final class ReactMysqlConnection implements AsyncConnection
 
         $timed = QueryTimeout::wrap($promise, $this->queryTimeout, $this->loop, function (): void {
             $this->killQueryOnServer();
+            // admindata-015: the deadline fired precisely because the leg is
+            // not settling — react/mysql keeps the queued command and its
+            // buffered rows pending on this client forever (one wedged leg per
+            // timeout across a days-long session). The vendor rejects queued
+            // commands on close, so close and re-mint: later queries dial a
+            // fresh connection instead of queueing behind the ghost.
+            $this->invalidateClient();
         });
 
         return CancellableQuery::wrap($timed, $cancellation, function (): void {
@@ -130,11 +159,21 @@ final class ReactMysqlConnection implements AsyncConnection
                 $id = $result->resultRows[0]['id'] ?? null;
                 if (is_numeric($id)) {
                     $this->threadId = (int) $id;
+
+                    return;
                 }
+                // A malformed answer is a miss, not an answer: re-arm so the
+                // next probe round can win (admindata-014).
+                $this->threadIdRequested = false;
             },
-            static function (): void {
+            function (): void {
                 // Connect/permission failure — the user's own query will
-                // surface the real error; cancellation degrades to client-side.
+                // surface the real error; cancellation degrades to client-side
+                // for now, but the latch must not freeze: a cold-race failure
+                // once must not mean the wrapper's whole life answers
+                // client-side-only (admindata-014). Re-arm and let the next
+                // query() or cancel re-probe.
+                $this->threadIdRequested = false;
             },
         );
     }
@@ -148,19 +187,63 @@ final class ReactMysqlConnection implements AsyncConnection
      * CONNECTION`). MySQL's KILL accepts no placeholders; the int-typed
      * thread id makes direct interpolation injection-safe. Fire-and-forget:
      * a failed kill (no privilege, id gone) is deliberately swallowed — the
-     * caller's promise has already rejected.
+     * caller's promise has already rejected. The killer leg itself runs under
+     * its own short deadline: the black-holed route that made the original
+     * query time out can swallow the KILL too, and an UNTIMED killer would
+     * leak its fd + loop watchers on every abort (admindata-003) — so the
+     * client is force-closed on the never-settling arm as well as the error arm.
      */
     private function killQueryOnServer(): void
     {
         if ($this->threadId === null) {
+            // Client-side cancellation only for THIS abort: the KILL would
+            // queue on the side-channel without an id to name. Re-arm the
+            // probe so a later cancel can go server-side once the id arrives
+            // (admindata-014 — the fetch is FIFO on the main connection, so it
+            // settles when the busy statement finishes).
+            $this->requestThreadId();
+
             return; // Thread id unknown — client-side cancellation only.
         }
 
         $killer = ($this->killClientFactory)($this->uri, $this->loop);
-        $killer->query('KILL QUERY ' . $this->threadId)->then(
-            static fn () => $killer->quit(),
-            static fn () => $killer->close(),
+        QueryTimeout::wrap(
+            $killer->query('KILL QUERY ' . $this->threadId),
+            $this->killTimeout,
+            $this->loop,
+        )->then(
+            static function () use ($killer): void {
+                // Server answered: graceful QUIT (the socket is provably live).
+                $killer->quit();
+            },
+            static function () use ($killer): void {
+                // Rejected (no privilege) OR never settled (deadline) — tear
+                // the side-channel down now; nothing is owed to a deaf server.
+                $killer->close();
+            },
         );
+    }
+
+    /**
+     * Retire the current main client and dial a fresh one.
+     *
+     * The react/mysql Client cannot reconnect after close (its stream is
+     * gone), so the post-deadline path replaces the instance outright and
+     * drops the thread-id state: the new session is a new connection with a
+     * new id, re-probed on the next query (admindata-015).
+     */
+    private function invalidateClient(): void
+    {
+        try {
+            $this->client->close();
+        } catch (\Throwable) {
+            // A client that cannot even close is already dead; re-minting is
+            // the whole point of this path.
+        }
+
+        $this->client = ($this->clientFactory)($this->uri, $this->loop);
+        $this->threadId = null;
+        $this->threadIdRequested = false;
     }
 
     /**
