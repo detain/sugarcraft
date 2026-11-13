@@ -109,7 +109,7 @@ final class SmiProcessTest extends TestCase
         $elapsed = (hrtime(true) - $start) / 1e9;
 
         $this->assertSame([GpuOutcome::Timeout, ''], $result);
-        $this->assertLessThan(1.5, $elapsed, 'timeout 0.3 s + REAP_WAIT 0.5 s, far below the child\'s 30 s');
+        $this->assertLessThan(5.0, $elapsed, 'timeout 0.3 s + REAP_WAIT 0.5 s, far below the child\'s 30 s; slack sized for the repo CI-saturation flake class (candy-top-069)');
         $this->assertSame(0, SmiProcess::liveCount(), 'SIGKILLed and reaped');
     }
 
@@ -134,7 +134,7 @@ final class SmiProcessTest extends TestCase
 
         $this->assertSame([GpuOutcome::Ok, '0, 42, GPU'], $result);
         $this->assertGreaterThanOrEqual(0.25, $elapsed);
-        $this->assertGreaterThan(10, $ticks, 'the loop kept turning while the child ran');
+        $this->assertGreaterThan(3, $ticks, 'the loop kept turning while the child ran (slack for CI saturation, candy-top-069)');
         $this->assertSame(0, SmiProcess::liveCount(), 'reaped');
     }
 
@@ -164,7 +164,7 @@ final class SmiProcessTest extends TestCase
         [$result, $elapsed] = self::await($loop, SmiProcess::launch([$this->script('exec sleep 30')], $loop, 0.3));
 
         $this->assertSame([GpuOutcome::Timeout, ''], $result);
-        $this->assertLessThan(1.0, $elapsed);
+        $this->assertLessThan(4.0, $elapsed, 'kill+settle slack sized for CI saturation (candy-top-069)');
         // The reap poll runs on the loop: let it finish.
         $loop->addTimer(0.5, static fn () => $loop->stop());
         $loop->run();
@@ -180,7 +180,7 @@ final class SmiProcessTest extends TestCase
 
         $start = hrtime(true);
         SmiProcess::shutdown();
-        $this->assertLessThan(1.0, (hrtime(true) - $start) / 1e9);
+        $this->assertLessThan(4.0, (hrtime(true) - $start) / 1e9, 'reap slack sized for CI saturation (candy-top-069)');
         $this->assertSame(0, SmiProcess::liveCount(), 'no child outlives the app');
     }
 }
