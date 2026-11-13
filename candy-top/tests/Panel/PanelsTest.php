@@ -16,7 +16,11 @@ use SugarCraft\Top\Panel\PlaceholderPanel;
 use SugarCraft\Top\Panel\Gpu\GpuFeed;
 use SugarCraft\Top\Panel\ProcPanel;
 use SugarCraft\Top\Source\Fake\FakeGpu;
+use SugarCraft\Top\Collect\ProcSnapshot;
+use SugarCraftTopCollectProcess;
+use SugarCraft\Top\Source\Fake\FakeProcList;
 use SugarCraft\Top\Collect\PosixProcessControl;
+use SugarCraft\Top\Collect\Process;
 use SugarCraft\Top\Source\Fake\FakeProcessControl;
 use SugarCraft\Top\Source\Fake\FakeCpu;
 use SugarCraft\Top\Source\Fake\FakeMemory;
@@ -93,6 +97,25 @@ final class PanelsTest extends TestCase
 
         // The next collect samples the advanced source.
         $this->assertNotEquals($msg->snapshot, ($next->collect(new PanelContext(Config::new())))()->snapshot);
+    }
+
+    public function testTheProcLegOrdersAtSampleTime(): void
+    {
+        // S-N18: update() is the sort seat; paint() only slices. Feed the
+        // leg a reversed snapshot and the stored one must come back ordered.
+        $panel = PlaceholderPanel::new('proc', FakeProcList::demo(8, 30));
+        $ctx = new PanelContext(Config::new());
+        /** @var SampledMsg $msg */
+        $msg = ($panel->collect($ctx))();
+        $this->assertInstanceOf(ProcSnapshot::class, $msg->snapshot);
+        $raw = $msg->snapshot;
+        $reversed = new ProcSnapshot(array_reverse($raw->processes), $raw->coreCount, $raw->memTotal, $raw->detail);
+        $stored = $panel->update(new SampledMsg('proc', $reversed, $msg->next), $ctx)->panel->snapshot();
+        $this->assertInstanceOf(ProcSnapshot::class, $stored);
+        $cpu = array_map(static fn (Process $p): float => $p->cpu, $stored->processes);
+        $sorted = $cpu;
+        rsort($sorted);
+        $this->assertSame($sorted, $cpu, 'cpu descending, ordered once at sample time');
     }
 
     public function testForeignSamplesAndOtherMsgsAreIgnored(): void

@@ -79,7 +79,17 @@ final class PlaceholderPanel implements Panel
     public function update(Msg $msg, PanelContext $context): PanelResult
     {
         if ($msg instanceof SampledMsg && $msg->box === $this->box) {
-            return new PanelResult(new self($this->box, $msg->next, $msg->snapshot));
+            $snapshot = $msg->snapshot;
+            if ($snapshot instanceof ProcSnapshot) {
+                // S-N18: order once per sample, never per repaint — this box is
+                // the template every new box starts from, and an O(n log n)
+                // usort in paint() would re-run at every frame tick.
+                $procs = $snapshot->processes;
+                usort($procs, static fn ($a, $b): int => $b->cpu <=> $a->cpu ?: $a->pid <=> $b->pid);
+                $snapshot = new ProcSnapshot($procs, $snapshot->coreCount, $snapshot->memTotal, $snapshot->detail);
+            }
+
+            return new PanelResult(new self($this->box, $msg->next, $snapshot));
         }
 
         return new PanelResult($this);
@@ -182,8 +192,7 @@ final class PlaceholderPanel implements Panel
         $ink = $f->ink;
         $w = $inner->width();
         $inner->put(0, 0, self::procRow($w, Lang::t('proc.col.pid'), Lang::t('proc.col.program'), Lang::t('proc.col.user'), Lang::t('proc.col.mem'), Lang::t('proc.col.cpu')), $ink->fg('title') . "\x1b[1m");
-        $procs = $s->processes;
-        usort($procs, static fn ($a, $b): int => $b->cpu <=> $a->cpu ?: $a->pid <=> $b->pid);
+        $procs = $s->processes; // ordered at sample time — see update() (S-N18).
         foreach (array_slice($procs, 0, max(0, $inner->height() - 1)) as $i => $p) {
             $inner->put(0, 1 + $i, self::procRow($w, (string) $p->pid, $p->name, $p->user, self::bytes($p->mem), number_format($p->cpu, 1, '.', '')), $ink->fg('main_fg'));
         }
