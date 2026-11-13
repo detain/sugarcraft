@@ -121,9 +121,14 @@ $outArg = $package . '/dist/candy-code.phar';
 $gz = false;
 $version = null;
 $vendorMode = 'published';
+$listOnly = false;
 $manifestOut = null;
 
 foreach (array_slice($argv, 1) as $arg) {
+    if ($arg === '--list-files') {
+        $listOnly = true;
+        continue;
+    }
     if ($arg === '--gz') {
         $gz = true;
         continue;
@@ -198,6 +203,36 @@ const INCLUDE_ROOTS = ['bin', 'src', 'lang', 'builtin-commands', 'vendor', '.can
 const INCLUDE_FILES = ['LICENSE'];
 /** Never shipped, at any depth. */
 const EXCLUDE_SEGMENTS = ['.git', '.phpunit.cache', 'node_modules'];
+/**
+ * Dev-only directory names pruned from INSIDE a vendored package
+ * (vendor/<vendor>/<package>/...), never from src/ or the app's own roots:
+ * a published install still ships each dependency's own tests, examples and
+ * docs, which are dead weight in a frozen archive (CG-43).
+ */
+const PRUNE_VENDOR_SEGMENTS = ['tests', 'Tests', 'test', 'examples', '.vhs', 'docs', 'doc'];
+
+/**
+ * True when $path is vendor dev-weight: a PRUNE_VENDOR_SEGMENTS directory,
+ * a phpunit.xml* file, or a top-level *.md file, at depth >= 2 under vendor/
+ * (i.e. inside a package). A package's own `src/` subtree is never touched,
+ * so a namespaced `Test`/`Tests` source directory survives.
+ */
+function pruneVendorEntry(string $package, string $path, string $name, bool $isDir): bool
+{
+    $relative = substr($path, strlen($package) + 1);
+    $segments = explode('/', $relative);
+    if ($segments[0] !== 'vendor' || count($segments) < 4) {
+        return false;
+    }
+    if (in_array('src', array_slice($segments, 3, -1), true) || ($isDir && $segments[3] === 'src')) {
+        return false;
+    }
+    if ($isDir) {
+        return in_array($name, PRUNE_VENDOR_SEGMENTS, true);
+    }
+
+    return str_starts_with($name, 'phpunit.xml') || (count($segments) === 4 && str_ends_with($name, '.md'));
+}
 
 /**
  * Guard 4 (the poisoning guard): no symlink anywhere in a packaged tree,
@@ -230,6 +265,9 @@ $walk = static function (string $dir) use (&$walk, &$files, $package): void {
         if (in_array($name, EXCLUDE_SEGMENTS, true)) {
             continue;
         }
+        if (pruneVendorEntry($package, $path, $name, is_dir($path))) {
+            continue;
+        }
         if (is_dir($path)) {
             $walk($path);
             continue;
@@ -246,6 +284,14 @@ foreach (INCLUDE_FILES as $loose) {
     }
 }
 sort($files);
+if ($listOnly) {
+    // Packaging-set inspection for PharBuildScriptTest: the exact walk the
+    // archive would contain, without touching git, vendor mode or the disk.
+    foreach ($files as $listed) {
+        fwrite(STDOUT, ltrim(substr($listed, strlen($package)), '/') . "\n");
+    }
+    exit(0);
+}
 fwrite(STDERR, sprintf("build-phar: walk found %d files\n", count($files)));
 
 // Bloat report (not a refusal): dev packages in vendor/ mean the build ran

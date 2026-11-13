@@ -49,7 +49,9 @@ final class PharBuildScriptTest extends TestCase
             "/const INCLUDE_FILES = \['LICENSE'\];/",
             $script,
         );
-        self::assertStringNotContainsString("'examples'", $script);
+        // 'examples' legitimately appears in PRUNE_VENDOR_SEGMENTS (CG-43); what
+        // must never happen is packaging it as an include root or file.
+        self::assertDoesNotMatchRegularExpression("/const INCLUDE_(ROOTS|FILES) = [^;]*'examples'/", $script);
         self::assertStringNotContainsString("'composer.json'", $script);
     }
 
