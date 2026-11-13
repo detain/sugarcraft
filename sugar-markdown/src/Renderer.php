@@ -118,6 +118,15 @@ final class Renderer
     private ?MarkdownParser $parser = null;
 
     /**
+     * Per-stock-theme render bundles for {@see renderMarkdown()}
+     * (SM-S53), keyed by the stock Theme instance's object id — the ids
+     * can never be recycled because Theme's stock memo holds the objects.
+     *
+     * @var array<int, self>
+     */
+    private static array $stockRenderers = [];
+
+    /**
      * Link reference definitions {@see parseSection()} seeds into the parse
      * in flight, null outside one. Only the stream family sets it, and only
      * after narrowing to the labels the section could look up
@@ -274,10 +283,22 @@ final class Renderer
      * Pass a Theme to pick a stock or custom theme; default ansi.
      * For repeated rendering with the same theme, build a Renderer
      * directly and reuse it (the parser is cached per instance).
+     * Stock themes are memoised instances ({@see Theme::isStock()}), so
+     * their render bundle — Environment, extension set, parsed
+     * references — is built once and reused by every call (SM-S53);
+     * custom themes get the historic one-shot instance.
      */
     public static function renderMarkdown(string $markdown, ?Theme $theme = null): string
     {
-        return (new self($theme ?? Theme::ansi()))->render($markdown);
+        $theme ??= Theme::ansi();
+        if (!Theme::isStock($theme)) {
+            return (new self($theme))->render($markdown);
+        }
+        // Safe id key: the stock memo in Theme pins a strong reference to
+        // this object for the process lifetime, so its id is never recycled
+        // behind our back.
+        $renderer = self::$stockRenderers[spl_object_id($theme)] ??= new self($theme);
+        return $renderer->render($markdown);
     }
 
     /**

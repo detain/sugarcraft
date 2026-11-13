@@ -6,6 +6,7 @@ namespace SugarCraft\Markdown\Tests;
 
 use SugarCraft\Markdown\Renderer;
 use SugarCraft\Markdown\Theme;
+use SugarCraft\Style\Style;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -84,5 +85,64 @@ final class ParserCacheTest extends TestCase
 
         $this->assertSame($direct, $chained);
         $this->assertNotSame('', $direct);
+    }
+
+    public function testDefaultThemeIsMemoised(): void
+    {
+        // SM-S53: the stock factories hand back one shared readonly instance,
+        // so per-frame callers stop rebuilding ~23 Style/Color objects each
+        // call. Two no-arg renderMarkdown() calls resolve to the same Theme.
+        $this->assertSame(Theme::ansi(), Theme::ansi());
+        $this->assertTrue(Theme::isStock(Theme::ansi()));
+    }
+
+    public function testRenderMarkdownReusesTheStockBundle(): void
+    {
+        // The stock render bundle (Renderer + its lazily-built parser) is
+        // cached per stock theme, so repeated renderMarkdown() calls share
+        // one parsed-environment object rather than rebuilding 3×.
+        $prop = new \ReflectionProperty(Renderer::class, 'stockRenderers');
+        $prop->setAccessible(true);
+
+        Renderer::renderMarkdown('# one', Theme::dark());
+        $after1 = $prop->getValue();
+        Renderer::renderMarkdown('# two', Theme::dark());
+        $after2 = $prop->getValue();
+
+        $this->assertSame($after1, $after2, 'the dark bundle must be reused, not rebuilt');
+
+        $held = $after2[spl_object_id(Theme::dark())] ?? null;
+        $this->assertInstanceOf(Renderer::class, $held);
+
+        // The parser object is the identity that proves the Environment
+        // was assembled once and survived the second call.
+        $parserProp = new \ReflectionProperty(Renderer::class, 'parser');
+        $parserProp->setAccessible(true);
+        $this->assertNotNull($parserProp->getValue($held));
+    }
+
+    public function testCustomThemeDoesNotPolluteTheStockCache(): void
+    {
+        $prop = new \ReflectionProperty(Renderer::class, 'stockRenderers');
+        $prop->setAccessible(true);
+        $before = $prop->getValue();
+
+        $custom = Theme::dark()->with('code', Style::new()->bold());
+        Renderer::renderMarkdown('# custom', $custom);
+
+        $this->assertFalse(Theme::isStock($custom));
+        $this->assertSame($before, $prop->getValue(), 'a custom theme must not enter the stock cache');
+    }
+
+    public function testDefaultRenderMarkdownOutputByteIdenticalToFresh(): void
+    {
+        // SM-S53 must not alter output: the memoised default path renders
+        // byte-for-byte like a fresh per-call Renderer.
+        $md = "# Hi\n\ntext with a [link](https://e.com) and `code`\n";
+        $this->assertSame(
+            (new Renderer(Theme::ansi()))->render($md),
+            Renderer::renderMarkdown($md),
+            'the default memoised path must match a fresh instance byte-for-byte',
+        );
     }
 }

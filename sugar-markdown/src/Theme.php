@@ -15,6 +15,26 @@ use SugarCraft\Style\Style;
  */
 final class Theme
 {
+    /**
+     * Stock-theme instance memo (SM-S53): every stock factory returns the
+     * same fully-readonly value object. Themes are immutable, so sharing is
+     * invisible to callers and lets Renderer::renderMarkdown() bundle-cache
+     * its per-theme parse environment by object identity.
+     *
+     * @var array<string, self>
+     */
+    private static array $stockInstances = [];
+
+    /**
+     * Whether $theme is one of the memoised stock instances (identity, not
+     * value equality — a custom theme that happens to match a stock theme's
+     * bytes deliberately stays outside the render-bundle cache).
+     */
+    public static function isStock(self $theme): bool
+    {
+        return \in_array($theme, self::$stockInstances, true);
+    }
+
     // ---- element slots (read the constructor for the canonical roster) ----
     // PHP forbids `new` in promoted-property defaults, so the fifteen
     // element styles are de-promoted and normalised to a no-op Style in
@@ -226,6 +246,10 @@ final class Theme
     /** Default ANSI theme: bright accents on each heading, coloured code, etc. */
     public static function ansi(): self
     {
+        if (isset(self::$stockInstances['ansi'])) {
+            return self::$stockInstances['ansi'];
+        }
+
         $accent  = Color::hex('#ff5f87'); // pink
         $cyan    = Color::ansi(14);
         $yellow  = Color::ansi(11);
@@ -234,7 +258,7 @@ final class Theme
         $green   = Color::ansi(10);
         $grey    = Color::ansi(8);
 
-        return new self(
+        return self::$stockInstances['ansi'] = new self(
             heading1:   Style::new()->bold()->foreground($accent),
             heading2:   Style::new()->bold()->foreground($cyan),
             heading3:   Style::new()->bold()->foreground($yellow),
@@ -260,8 +284,12 @@ final class Theme
     /** Plain-text theme: every Style is a no-op. Useful for snapshot tests. */
     public static function plain(): self
     {
+        if (isset(self::$stockInstances['plain'])) {
+            return self::$stockInstances['plain'];
+        }
+
         $s = Style::new();
-        return new self(
+        return self::$stockInstances['plain'] = new self(
             heading1: $s, heading2: $s, heading3: $s,
             heading4: $s, heading5: $s, heading6: $s,
             paragraph: $s, bold: $s, italic: $s,
@@ -300,11 +328,15 @@ final class Theme
      */
     public static function ascii(): self
     {
+        if (isset(self::$stockInstances['ascii'])) {
+            return self::$stockInstances['ascii'];
+        }
+
         $bold   = Style::new()->bold();
         $italic = Style::new()->italic();
         $under  = Style::new()->underline();
         $plain  = Style::new();
-        return new self(
+        return self::$stockInstances['ascii'] = new self(
             heading1: $bold, heading2: $bold, heading3: $bold,
             heading4: $bold, heading5: $bold, heading6: $bold,
             paragraph:  $plain,
@@ -433,6 +465,10 @@ final class Theme
      */
     public static function dark(): self
     {
+        if (isset(self::$stockInstances['dark'])) {
+            return self::$stockInstances['dark'];
+        }
+
         $h = Color::hex('#ff5fd2');     // bright magenta
         $cyan   = Color::ansi(14);
         $yellow = Color::ansi(11);
@@ -440,7 +476,7 @@ final class Theme
         $green  = Color::ansi(10);
         $grey   = Color::hex('#8a8a8a');
 
-        return new self(
+        return self::$stockInstances['dark'] = new self(
             heading1:   Style::new()->bold()->foreground($h),
             heading2:   Style::new()->bold()->foreground($cyan),
             heading3:   Style::new()->bold()->foreground($yellow),
@@ -475,6 +511,10 @@ final class Theme
      */
     public static function light(): self
     {
+        if (isset(self::$stockInstances['light'])) {
+            return self::$stockInstances['light'];
+        }
+
         $h = Color::hex('#9c4dff');      // deep purple
         $cyan   = Color::hex('#005f87');
         $yellow = Color::hex('#875f00');
@@ -482,7 +522,7 @@ final class Theme
         $green  = Color::hex('#005f00');
         $grey   = Color::hex('#5f5f5f');
 
-        return new self(
+        return self::$stockInstances['light'] = new self(
             heading1:   Style::new()->bold()->foreground($h),
             heading2:   Style::new()->bold()->foreground($cyan),
             heading3:   Style::new()->bold()->foreground($yellow),
@@ -516,6 +556,10 @@ final class Theme
      */
     public static function dracula(): self
     {
+        if (isset(self::$stockInstances['dracula'])) {
+            return self::$stockInstances['dracula'];
+        }
+
         // Named hex sourced from sugar-core Palettes SSOT (byte-identical to
         // the former inline literals; see ThemeTest drift guard).
         $bg   = Color::hex(Palettes::DRACULA['background']);
@@ -528,7 +572,7 @@ final class Theme
         $yel  = Color::hex(Palettes::DRACULA['yellow']);
         $com  = Color::hex(Palettes::DRACULA['comment']);
 
-        return new self(
+        return self::$stockInstances['dracula'] = new self(
             heading1:   Style::new()->bold()->foreground($pink),
             heading2:   Style::new()->bold()->foreground($purp),
             heading3:   Style::new()->bold()->foreground($cyan),
@@ -562,6 +606,10 @@ final class Theme
      */
     public static function tokyoNight(): self
     {
+        if (isset(self::$stockInstances['tokyoNight'])) {
+            return self::$stockInstances['tokyoNight'];
+        }
+
         $bg     = Color::hex('#1a1b26');
         $fg     = Color::hex('#a9b1d6');
         $blue   = Color::hex('#7aa2f7');
@@ -572,7 +620,7 @@ final class Theme
         $red    = Color::hex('#f7768e');
         $com    = Color::hex('#565f89');
 
-        return new self(
+        return self::$stockInstances['tokyoNight'] = new self(
             heading1:   Style::new()->bold()->foreground($red),
             heading2:   Style::new()->bold()->foreground($org),
             heading3:   Style::new()->bold()->foreground($green),
@@ -606,13 +654,17 @@ final class Theme
      */
     public static function pink(): self
     {
+        if (isset(self::$stockInstances['pink'])) {
+            return self::$stockInstances['pink'];
+        }
+
         $hot = Color::hex('#ff5fd2');
         $rose = Color::hex('#ff87d7');
         $lav  = Color::hex('#d7afff');
         $cream= Color::hex('#ffd7af');
         $green= Color::hex('#afff87');
 
-        return new self(
+        return self::$stockInstances['pink'] = new self(
             heading1:   Style::new()->bold()->foreground($hot),
             heading2:   Style::new()->bold()->foreground($rose),
             heading3:   Style::new()->bold()->foreground($lav),
