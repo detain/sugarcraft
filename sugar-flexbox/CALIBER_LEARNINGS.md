@@ -32,7 +32,10 @@ is advertised without a working implementation.
 ## Buffer diffing
 
 - Table renderer holds a `?Buffer $previousFrame`; on each render it diffs against the prior frame and emits only delta ops via `DiffEncoder`.
-- Reset `previousFrame` on window resize, cursor-position-lost, or first paint — diffing across these boundaries produces visual corruption.
+- Reset or re-emit in full on first paint, explicit `reset()`, and any change
+  to the emitted width or height; on a shrink the diff runs against the
+  previous frame on a union canvas so out-of-range cells erase rather than
+  ghost. Diffing across these boundaries bare produces visual corruption.
 - **Source:** step-27 ai/buffer-diff-consumers
 
 ## Performance characteristics

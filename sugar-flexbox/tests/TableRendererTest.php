@@ -64,11 +64,9 @@ final class TableRendererTest extends TestCase
         $renderer = new TableRenderer();
         $output = $renderer->render($t);
 
-        // First frame should be the full table output, not a delta.
-        $this->assertStringContainsString('Name', $output);
-        $this->assertStringContainsString('Alice', $output);
-        $this->assertStringContainsString('Bob', $output);
-        $this->assertStringContainsString('Carol', $output);
+        // First frame is the full table output BYTE-EXACT, not a
+        // contains-only proxy for it.
+        $this->assertSame($t->render(), $output, 'first frame equals the full frame');
     }
 
     /**
@@ -142,9 +140,151 @@ final class TableRendererTest extends TestCase
         // Reset.
         $renderer->reset();
 
-        // Frame 3: should be full again.
+        // Frame 3: full again after reset — identity, not a length proxy.
         $frame3 = $renderer->render($t2);
-        $this->assertGreaterThan(50, \strlen($frame3), 'After reset, should emit full frame');
+        $this->assertSame($t2->render(), $frame3, 'after reset the frame is the full table');
+
+        $fresh = new TableRenderer();
+        $this->assertSame($t2->render(), $fresh->render($t2), 'a fresh renderer emits the full table');
+    }
+
+        /**
+     * Cells a delta frame clears (ECH coverage and blank writes), as
+     * [col, row] 0-based pairs. Parses the encoder's own grammar: CUP sets
+     * the cursor, ECH blanks from it without advancing, plain characters
+     * write and step right.
+     *
+     * @return list<array{int,int}>
+     */
+    private static function clearedCells(string $frame, int $width, int $height): array
+    {
+        $cleared = [];
+        $pattern = '/\x1b\[(?<r>\d+);(?<c>\d+)H|\x1b\[(?<n>\d+)X|(?<lit>[^\x1b]+)/';
+        if (preg_match_all($pattern, $frame, $tokens, PREG_SET_ORDER)) {
+            $col = 0;
+            $row = 0;
+            foreach ($tokens as $tok) {
+                if (isset($tok['lit'])) {
+                    foreach (mb_str_split($tok['lit'], 1, 'UTF-8') as $ch) {
+                        if ($ch === ' ' && $col < $width && $row < $height) {
+                            $cleared[] = [$col, $row];
+                        }
+                        $col++;
+                    }
+                } elseif (isset($tok['n'])) {
+                    for ($i = 0; $i < (int) $tok['n']; $i++) {
+                        if ($col < $width && $row < $height) {
+                            $cleared[] = [$col, $row];
+                        }
+                        $col++;
+                    }
+                } else {
+                    $row = (int) $tok['r'] - 1;
+                    $col = (int) $tok['c'] - 1;
+                }
+            }
+        }
+        return $cleared;
+    }
+
+    /**
+/**
+     * FBX-04: a SHRINK must clear the cells the new frame no longer paints
+     * (finding 004 — dropping the previous frame bare left every ghost).
+     */
+    public function testRendererShrinkInWidthAndHeightClearsGhosts(): void
+    {
+        $wide = (new Table())
+            ->addColumn(Column::make('Name', 10))
+            ->addColumn(Column::make('City', 10))
+            ->addRow(['Alice', 'NYC'])
+            ->addRow(['Bob', 'LA'])
+            ->addRow(['Carol', 'SF']);
+        $renderer = new TableRenderer();
+        $renderer->render($wide); // full frame: 23 cells x 5 rows
+
+        $narrow = (new Table())
+            ->addColumn(Column::make('Name', 10))
+            ->addRow(['Alice']); // 10 cells x 3 rows
+
+        $delta = $renderer->render($narrow);
+
+        // Every non-blank cell the wide frame painted OUTSIDE the narrow
+        // box must be covered by a clear (ECH run or blank write) in the
+        // delta — that is the ghost law, regardless of how the encoder
+        // groups the runs.
+        $cleared = self::clearedCells($delta, 23, 5);
+        foreach (explode("\n", $wide->render()) as $r => $line) {
+            foreach (mb_str_split($line, 1, 'UTF-8') as $c => $ch) {
+                if ($ch === ' ' || ($c < 10 && $r < 3)) {
+                    continue; // blank paints nothing; in-box survivors are not ghosts
+                }
+                $this->assertContains([$c, $r], $cleared, "ghost cell ({$c},{$r}) '{$ch}' must be cleared");
+            }
+        }
+        // Surviving in-box cells are NOT re-painted (no full-frame proxy):
+        // the header row is unchanged, so its text must not ride the delta.
+        $this->assertStringNotContainsString('Name', $delta, 'survivors stay painted');
+        $this->assertStringNotContainsString('Carol', $delta);
+    }
+
+    public function testRendererShrinkInWidthOnlyClearsPerRow(): void
+    {
+        $three = (new Table())
+            ->addColumn(Column::make('A', 5))
+            ->addColumn(Column::make('B', 5))
+            ->addColumn(Column::make('C', 5));
+        $three = $three->addRow(['1', '2', '3']);
+        $renderer = new TableRenderer();
+        $renderer->render($three);
+
+        $two = (new Table())
+            ->addColumn(Column::make('A', 5))
+            ->addColumn(Column::make('B', 5));
+        $delta = $renderer->render($two->addRow(['1', '2']));
+
+        $narrowW = \SugarCraft\Core\Util\Width::string(explode("\n", $two->render())[0]);
+        $cleared = self::clearedCells($delta, 21, 3);
+        foreach (explode("\n", $three->render()) as $r => $line) {
+            foreach (mb_str_split($line, 1, 'UTF-8') as $c => $ch) {
+                if ($ch === ' ' || $c < $narrowW) {
+                    continue;
+                }
+                $this->assertContains([$c, $r], $cleared, "ghost cell ({$c},{$r}) '{$ch}' must be cleared");
+            }
+        }
+    }
+
+    public function testRendererGrowthStillEmitsFullFrame(): void
+    {
+        // Growth has nothing outside the box to clear — the plain full
+        // re-emit law (and the pinned resize behaviour) stays.
+        $t = (new Table())->addColumn(Column::make('Name', 10))->addRow(['Alice']);
+        $renderer = new TableRenderer();
+        $renderer->render($t);
+        $t2 = $t->addRow(['Bob'])->addRow(['Carol']);
+        $this->assertSame($t2->render(), $renderer->render($t2), 'growth re-emits the full frame');
+    }
+
+    public function testRendererShrinkThenSameSizeKeepsStreamingDeltas(): void
+    {
+        $wide = (new Table())
+            ->addColumn(Column::make('Name', 10))
+            ->addColumn(Column::make('City', 10))
+            ->addRow(['Alice', 'NYC'])
+            ->addRow(['Bob', 'LA']);
+        $renderer = new TableRenderer();
+        $renderer->render($wide);
+
+        $narrow = (new Table())
+            ->addColumn(Column::make('Name', 10))
+            ->addRow(['Alice']);
+        $renderer->render($narrow); // shrink frame (delta + clears)
+
+        $second = $narrow->addRow(['Bob']); // same dims as narrow: content delta
+        $frame = $renderer->render($second);
+        $this->assertStringContainsString('Bob', $frame, 'the new row rides a delta');
+        $this->assertStringNotContainsString('NYC', $frame, 'untouched cells are not re-painted');
     }
 
     /**

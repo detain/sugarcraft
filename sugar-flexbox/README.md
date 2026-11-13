@@ -251,9 +251,12 @@ was cleared externally).
 the affected cells instead of a full repaint — on an 80×24 screen the
 full-frame ceiling is 1,920 cell ops (one per cell), so a delta that touches a
 handful of cells sends orders of magnitude less per-frame data on the wire, and
-it avoids the flicker of rewrite-based terminals. The first render
-after startup or a resize still emits a full Buffer (no diff possible), so
-behaviour is always correct.
+it avoids the flicker of rewrite-based terminals. A full frame is re-emitted on
+the first render after startup or an explicit `reset()`; when the table's
+dimensions change, the next frame diffs against the previous one on a union
+canvas so cells the new size no longer paints arrive as erases (a SHRINK does
+not ghost) — callers that clear the terminal out-of-band must still call
+`reset()`.
 
 ## Accessor deprecation (2026-10-24)
 

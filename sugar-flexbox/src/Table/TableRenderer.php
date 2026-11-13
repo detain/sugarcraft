@@ -63,10 +63,17 @@ final class TableRenderer
             }
         }
 
-        // Detect dimension change: reset diff state so we emit a full frame.
-        if ($this->prevWidth !== null && ($this->prevWidth !== $width || $this->prevHeight !== $height)) {
-            $this->previousFrame = null;
-        }
+        // A changed size still re-emits, but NEVER drop the old frame bare
+        // on a SHRINK (finding 004): cells right of the narrower box and
+        // below the shorter one sat outside every new full frame, so stale
+        // ghosts painted on screen forever. Diff on a blank canvas sized
+        // max(previous, current) instead — cellbuffer turns the out-of-range
+        // region into erase runs that actually clear them. Growth has
+        // nothing outside the box to clear, so it keeps the plain full frame.
+        $previousWidth = $this->prevWidth;
+        $previousHeight = $this->prevHeight;
+        $dimensionChanged = $previousWidth !== null && ($previousWidth !== $width || $previousHeight !== $height);
+        $shrank = $dimensionChanged && ($previousWidth > $width || $previousHeight > $height);
         $this->prevWidth = $width;
         $this->prevHeight = $height;
 
@@ -77,19 +84,41 @@ final class TableRenderer
             return '';
         }
 
-        // First frame or resize: emit full output and store as previousFrame.
-        if ($this->previousFrame === null) {
+        // First frame — and any frame that only grew: emit full output.
+        if ($this->previousFrame === null || ($dimensionChanged && !$shrank)) {
             $this->previousFrame = $this->bufferFromOutput($fullOutput, $width, $height);
             return $fullOutput;
         }
 
-        // Subsequent frames with same dimensions: compute diff and emit delta.
+        // Subsequent frames: compute the delta. A shrink diffs both operands
+        // padded to the union canvas so erased regions emit; the stored
+        // frame returns to logical size because the canvas margin has by
+        // now been cleared on screen.
         $currentFrame = $this->bufferFromOutput($fullOutput, $width, $height);
-        $ops = $currentFrame->diff($this->previousFrame);
+        $ops = $dimensionChanged
+            ? $this->paintOnCanvas($currentFrame, max($previousWidth, $width), max($previousHeight, $height))
+                ->diff($this->paintOnCanvas($this->previousFrame, max($previousWidth, $width), max($previousHeight, $height)))
+            : $currentFrame->diff($this->previousFrame);
         $this->previousFrame = $currentFrame;
 
         $encoder = new DiffEncoder();
         return $encoder->encode($ops);
+    }
+
+    /**
+     * Grow a frame to the canvas both diff operands need.
+     *
+     * Buffer::diff demands equal dimensions; the union canvas is blank by
+     * construction, so anything the new frame does not paint reads as an
+     * erase against the grown previous frame.
+     */
+    private function paintOnCanvas(\SugarCraft\CellBuffer\Buffer $frame, int $canvasWidth, int $canvasHeight): \SugarCraft\CellBuffer\Buffer
+    {
+        if ($frame->width() === $canvasWidth && $frame->height() === $canvasHeight) {
+            return $frame;
+        }
+        return \SugarCraft\CellBuffer\Buffer::new($canvasWidth, $canvasHeight)
+            ->withRegion($frame->region(), $frame);
     }
 
     /**
