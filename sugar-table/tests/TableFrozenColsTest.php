@@ -633,4 +633,74 @@ final class TableFrozenColsTest extends TestCase
 
         return $property->getValue($t);
     }
+    // ---- ST-24: key-addressed companions ----------------------------------
+
+    private function albumTable(): Table
+    {
+        return Table::fromColumns([
+            Column::new('album', 'Album', 10),
+            Column::new('artist', 'Artist', 10),
+            Column::new('year', 'Year', 6),
+        ])->withRows([
+            Row::new(RowData::from(['album' => 'A', 'artist' => 'B', 'year' => '2020'])),
+            Row::new(RowData::from(['album' => 'C', 'artist' => 'D', 'year' => '2021'])),
+        ]);
+    }
+
+    public function testWithFrozenKeysEquivalenceAndRoundTrip(): void
+    {
+        $t = $this->albumTable();
+
+        $this->assertSame(
+            $t->withFrozenCols([0, 1])->View(),
+            $t->withFrozenKeys(['album', 'artist'])->View(),
+            'key addresses resolve to the identical index law'
+        );
+    }
+
+    public function testWithHiddenKeysEquivalenceAndRoundTrip(): void
+    {
+        $t = $this->albumTable();
+
+        $this->assertSame(
+            $t->withHiddenCols([2])->View(),
+            $t->withHiddenKeys(['year'])->View()
+        );
+    }
+
+    public function testUnknownKeyThrowsNamingTheKey(): void
+    {
+        $t = $this->albumTable();
+
+        try {
+            $t->withHiddenKeys(['nope']);
+            $this->fail('expected InvalidArgumentException');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString("withHiddenKeys(): no column with key 'nope'", $e->getMessage());
+        }
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("withFrozenKeys(): no column with key 'nope'");
+        $t->withFrozenKeys(['nope']);
+    }
+
+    public function testDuplicateKeysCollapseToLeftmostIndex(): void
+    {
+        $dupes = Table::fromColumns([
+            Column::new('k', 'First', 6),
+            Column::new('k', 'Second', 6),
+        ])->withRows([Row::new(RowData::from(['k' => 'x']))]);
+
+        $this->assertSame($dupes->withHiddenCols([0])->View(), $dupes->withHiddenKeys(['k', 'k'])->View());
+    }
+
+    public function testFrozenKeySetStillHonoursThePrefixLaw(): void
+    {
+        $t = $this->albumTable();
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('contiguous prefix');
+        $t->withFrozenKeys(['artist']); // index 1 alone is not a prefix
+    }
+
 }

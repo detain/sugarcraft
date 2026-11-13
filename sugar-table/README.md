@@ -521,7 +521,7 @@ echo $t->View();                       // ID and Name always visible
 
 ### How It Works
 
-- **Frozen columns** (specified by index) are always rendered, regardless of scroll position
+- **Frozen columns** (specified by index — or by key with `withFrozenKeys()`, the audit-ST-24 companion) are always rendered, regardless of scroll position
 - **The frozen set must be a contiguous prefix starting at index 0** — `withFrozenCols([1])` or `[0, 2]` throws `InvalidArgumentException` (and frozen indices must stay disjoint from hidden ones); to freeze non-adjacent columns, re-order them first or hide the columns in between
 - **Non-frozen columns** scroll horizontally: they become visible starting at index `count(frozenCols) + scrollX`
 - Use `withScrollX($offset)` to scroll the non-frozen columns
@@ -552,6 +552,12 @@ A column is visible when:
 
 1. Its index is in the `frozenCols` array (always visible), OR
 2. Its index >= `count(frozenCols) + scrollX` (in the scrollable region)
+
+Visibility matching is a strict integer comparison against the ORIGINAL
+column index (hidden/frozen sets and scroll never renumber columns). The
+frozen/hidden DISJOINTNESS guards use loose `array_intersect` by design —
+both sides are int-normalized before they meet, so loose and strict agree
+there; the strictness above is about matching, not the guards (audit 070).
 
 ```php
 // Given: frozenCols = [0, 1], scrollX = 1
@@ -636,10 +642,19 @@ echo $t->View();
 ### How It Works
 
 - **Hidden columns are excluded from rendering** but still exist in the table
-- **Out-of-range and non-numeric indices are silently ignored** — matching is a strict integer comparison against the original column index, so `withHiddenCols([99, '2'])` on a four-column table hides nothing and raises nothing
+- **Indices are validated loudly** — `withHiddenCols()` throws on a non-int entry (`Hidden column index must be int, got string`) and on an out-of-range index (`out of range (table has N columns)`); the silent-ignore behavior this bullet used to describe died with ST-13's unified validation
 - **Data, filters, and sorting still work** on hidden columns — you can filter by a hidden column's data
 - **Useful for optional columns** that can be toggled visible/invisible via UI
 - **Column indices refer to the original column order** — not affected by scroll position
+
+Key-addressed companions (audit ST-24) resolve column keys to their original
+indices at the door — an unknown key throws naming the key — then run the
+identical index validation:
+
+```php
+$t = $t->withHiddenKeys(['city', 'note']);   // same as the int set for those columns
+$t = $t->withFrozenKeys(['id']);             // the contiguous prefix, spelled by key
+```
 
 ```php
 // Hide multiple columns

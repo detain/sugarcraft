@@ -527,6 +527,11 @@ final class Table
             );
         }
 
+        // Disjointness compares with loose array_intersect on purpose
+        // (audit ST-24/070, default arm): both sides are int lists by the
+        // time they meet — hiddenCols is normalizeHiddenIndexes'd and a
+        // non-int frozen entry dies at the prefix check above — so loose
+        // and strict agree here and the guard stays behaviour-identical.
         $overlap = \array_intersect($sorted, $this->hiddenCols);
         if ($overlap !== []) {
             throw new \InvalidArgumentException(
@@ -536,6 +541,18 @@ final class Table
         $clone = clone $this;
         $clone->frozenCols = $sorted;
         return $clone;
+    }
+
+    /**
+     * Key-addressed companion of {@see self::withFrozenCols()} (audit ST-24):
+     * resolves each key to its original column index — unknown keys throw
+     * naming the key — then applies the identical contiguous-prefix law.
+     *
+     * @param list<string> $keys
+     */
+    public function withFrozenKeys(array $keys): self
+    {
+        return $this->withFrozenCols($this->indexesForKeys($keys, 'withFrozenKeys'));
     }
 
     /**
@@ -764,6 +781,7 @@ final class Table
      */
     public function withHiddenCols(array $indices): self
     {
+        // Same loose-intersect law as the frozen guard (ST-24/070 note).
         $overlap = \array_intersect($indices, $this->frozenCols);
         if ($overlap !== []) {
             throw new \InvalidArgumentException(
@@ -777,6 +795,18 @@ final class Table
         // same way replacing rows does (ST-11 cache-bust leg).
         $clone->invalidateRenderCaches();
         return $clone;
+    }
+
+    /**
+     * Key-addressed companion of {@see self::withHiddenCols()} (audit ST-24):
+     * resolves each key to its original column index — unknown keys throw
+     * naming the key — then applies the identical validation.
+     *
+     * @param list<string> $keys
+     */
+    public function withHiddenKeys(array $keys): self
+    {
+        return $this->withHiddenCols($this->indexesForKeys($keys, 'withHiddenKeys'));
     }
 
     /**
@@ -1303,6 +1333,37 @@ final class Table
     /**
      * Check if a column with the given key exists.
      */
+    /**
+     * Resolve column KEYS to original column indices for the key-addressed
+     * companions (audit ST-24, finding 024). Unknown keys throw naming the
+     * key; duplicate keys collapse to the leftmost matching column — key
+     * uniqueness stays the caller's contract (see README Columns).
+     *
+     * @param list<string> $keys
+     * @return list<int>
+     */
+    private function indexesForKeys(array $keys, string $method): array
+    {
+        $byKey = [];
+        foreach ($this->columns as $i => $column) {
+            if (!isset($byKey[$column->key])) {
+                $byKey[$column->key] = $i;
+            }
+        }
+
+        $indices = [];
+        foreach ($keys as $key) {
+            if (!\is_string($key) || !isset($byKey[$key])) {
+                throw new \InvalidArgumentException(
+                    "{$method}(): no column with key " . (\is_string($key) ? "'{$key}'" : \get_debug_type($key))
+                );
+            }
+            $indices[] = $byKey[$key];
+        }
+
+        return $indices;
+    }
+
     private function columnExists(string $key): bool
     {
         foreach ($this->columns as $col) {
