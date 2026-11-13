@@ -15,10 +15,22 @@ final class ResendTransportErrorTest extends TestCase
 {
     public function testSendWithEmptyApiKeyFallsBackToEnvVar(): void
     {
-        // When no API key is provided, it should try RESEND_API_KEY env var
-        // We just verify construction doesn't throw
-        $transport = new ResendTransport('');
-        $this->assertSame('resend', $transport->name());
+        // The old arm only proved construction (name() is a constant). The
+        // fallback is observable: an env-fed key lands in the property and
+        // masks as '****' through __debugInfo, while an unseeded empty key
+        // stays the unmasked '' — so the masked shape after seeding proves
+        // the environment value actually stored.
+        \putenv('RESEND_API_KEY=re_env_fall_back_key');
+        $_ENV['RESEND_API_KEY'] = 're_env_fall_back_key';
+        try {
+            $transport = new ResendTransport('');
+            $this->assertSame('****', $transport->__debugInfo()['apiKey']);
+        } finally {
+            \putenv('RESEND_API_KEY');
+            unset($_ENV['RESEND_API_KEY']);
+        }
+
+        $this->assertSame('', (new ResendTransport(''))->__debugInfo()['apiKey']);
     }
 
     public function testNameReturnsResend(): void

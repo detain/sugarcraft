@@ -88,10 +88,29 @@ final class AttachmentEdgeTest extends TestCase
 
     public function testFromPathWithUnknownExtensionFallsBackToOctetStream(): void
     {
-        // When mime_content_type returns application/octet-stream or false,
-        // the extension-based detection kicks in for unknown extensions
-        $att = Attachment::fromContent('data', 'file.unknown', 'application/octet-stream');
-        $this->assertSame('application/octet-stream', $att->mimeType);
+        // The old arm fed fromContent its own expected type — a tautology.
+        // Exercise the real detector: an unmapped extension must land
+        // octet-stream through both roads of the sniff-then-map precedence
+        // law, and a mapped one must resolve to its recorded type.
+        $unknown = (string) \tempnam(sys_get_temp_dir(), 'candy-mail-unknown-');
+        \rename($unknown, $unknown . '.qqz-unknown-ext');
+        $unknown .= '.qqz-unknown-ext';
+        \file_put_contents($unknown, 'x' . \random_bytes(64));
+
+        $known = (string) \tempnam(sys_get_temp_dir(), 'candy-mail-known-');
+        \rename($known, $known . '.txt');
+        $known .= '.txt';
+        \file_put_contents($known, 'hello');
+
+        $detect = new \ReflectionMethod(Attachment::class, 'detectMimeType');
+        $detect->setAccessible(true);
+        try {
+            $this->assertSame('application/octet-stream', $detect->invoke(null, $unknown));
+            $this->assertMatchesRegularExpression('/^text\/plain(;|$)/', $detect->invoke(null, $known));
+        } finally {
+            @\unlink($unknown);
+            @\unlink($known);
+        }
     }
 
     public function testFromContentWithExplicitMimeType(): void

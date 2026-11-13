@@ -185,27 +185,61 @@ final class SmtpMimeEdgeTest extends TestCase
         $this->assertStringContainsString('multipart/alternative', $mime);
     }
 
-    public function testReadResponseWithEmptyLineThrows(): void
+    public function testReadResponseRefusesAnEmptyReplyLine(): void
     {
-        // This tests the readResponse error path when fgets returns empty string
-        // We can't easily simulate this without mocking the socket,
-        // so we test that the method exists and has proper structure
+        // Behavioural pin: a reply stream whose first line is empty trips
+        // the named empty_response refusal — not a reflection-shape assert.
+        // (A bare LF answers '' from stream_get_line; a CRLF line lands in
+        // the unexpected-code guard after the CR is trimmed.)
         $transport = new SmtpTransport('smtp.example.com', 587);
 
-        $reflection = new \ReflectionClass($transport);
-        $method = $reflection->getMethod('readResponse');
-        $this->assertTrue($method->isPrivate());
+        $stream = \fopen('php://memory', 'r+');
+        \fwrite($stream, "\n");
+        \rewind($stream);
+
+        $socketProp = new \ReflectionProperty($transport, 'socket');
+        $socketProp->setAccessible(true);
+        $socketProp->setValue($transport, $stream);
+
+        $read = new \ReflectionMethod($transport, 'readResponseAny');
+        $read->setAccessible(true);
+
+        try {
+            $read->invoke($transport, [250]);
+            $this->fail('an empty reply line must refuse');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('Server sent empty response', $e->getMessage());
+        } finally {
+            \fclose($stream);
+        }
     }
 
-    public function testSendRawWithPartialWriteThrows(): void
+    public function testSendRawRefusesAFailedWrite(): void
     {
-        // This tests sendRaw error path for incomplete writes
-        // We can't easily simulate partial writes without socket mocking
+        // Behavioural pin: fwrite on a read-only memory stream returns false
+        // without warning — sendRaw must surface it as the named write_error
+        // refusal rather than continue as if the bytes had shipped. (A
+        // short-count write answers the incomplete_write arm instead; both
+        // refusals are reachable only through the real I/O path.)
         $transport = new SmtpTransport('smtp.example.com', 587);
 
-        $reflection = new \ReflectionClass($transport);
-        $method = $reflection->getMethod('sendRaw');
-        $this->assertTrue($method->isPrivate());
+        $stream = \fopen('php://memory', 'r');
+
+        $socketProp = new \ReflectionProperty($transport, 'socket');
+        $socketProp->setAccessible(true);
+        $socketProp->setValue($transport, $stream);
+
+        $send = new \ReflectionMethod($transport, 'sendRaw');
+        $send->setAccessible(true);
+
+        try {
+            $send->invoke($transport, "MAIL FROM:<a@b.c>\r\n");
+            $this->fail('a failed write must refuse');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('Failed to write to SMTP server', $e->getMessage());
+        } finally {
+            \fclose($stream);
+        }
     }
 
     /**

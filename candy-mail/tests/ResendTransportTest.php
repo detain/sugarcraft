@@ -19,20 +19,47 @@ final class ResendTransportTest extends TestCase
         $this->assertSame('resend', $transport->name());
     }
 
-    public function testConstructorStoresApiKey(): void
+    public function testConstructorStoredKeyRidesTheWire(): void
     {
-        $transport = new ResendTransport('my-secret-key');
-        $this->assertSame('resend', $transport->name());
+        if (!\function_exists('curl_init') || !\function_exists('pcntl_fork')) {
+            $this->markTestSkipped('ext-curl or ext-pcntl unavailable');
+        }
+
+        // The old arm asserted name() — a constant. The constructor-stored
+        // key is only proven when it reaches the endpoint: the forked fake
+        // API logs the Authorization header it received.
+        [$port, $pid, $log] = $this->forkFakeApi(200, 'OK', '{"id":"pin-1"}');
+        try {
+            $transport = new ResendTransport(
+                're_constructor_pin_key',
+                "http://127.0.0.1:$port/emails"
+            );
+            $transport->send(new Email(
+                from:    ['sender@example.com'],
+                to:      ['them@example.com'],
+                subject: 'Pin',
+            ));
+            $request = $this->pollText($log, 're_constructor_pin_key');
+            $this->assertStringContainsString(
+                'Authorization: Bearer re_constructor_pin_key',
+                $request
+            );
+        } finally {
+            $this->reap($pid);
+            @\unlink($log);
+        }
     }
 
     public function testSendWithEmptyRecipientsThrows(): void
     {
-        // Empty to/cc/bcc should still send - ResendTransport doesn't validate
-        // This test just verifies the transport accepts the email structure
-        $transport = new ResendTransport('re_test_key_123');
-        // ResendTransport::send() doesn't validate recipients, it just builds payload
-        // We can't test actual send without mocking curl, but we test name() above
-        $this->assertSame('resend', $transport->name());
+        // The old comment claimed send() does not validate recipients — it
+        // guards the envelope BEFORE any HTTP work. Assert the refusal
+        // directly; the unreachable URL proves nothing was ever dialled.
+        $transport = new ResendTransport('re_test_key_123', 'http://127.0.0.1:1/emails');
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('at least one recipient');
+        $transport->send(new Email(from: ['sender@example.com'], to: []));
     }
 
     public function testCurlOptionsSetConnectTimeoutAndExplicitTlsVerification(): void
