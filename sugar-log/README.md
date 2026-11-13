@@ -42,7 +42,7 @@ composer require sugarcraft/sugar-log
 > to the consuming root (or pin the released `sugarcraft/*` tags once cut). The
 > monorepo publishes all libs together, so sibling versions always line up.
 
-## Quick Start
+## Quick start
 
 ```php
 use SugarCraft\Log\Logger;
