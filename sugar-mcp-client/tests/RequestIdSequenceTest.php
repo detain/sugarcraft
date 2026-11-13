@@ -137,4 +137,46 @@ final class RequestIdSequenceTest extends TestCase
         self::assertTrue($ids->claim());
         self::assertSame(0, $probes, 'a same-pid claim probed the owner it already is');
     }
+
+    /**
+     * The fork-claim safety spine driven through its DEFAULT probe: every
+     * cross-pid test above injects the liveness answer, so the real kernel
+     * contract — signal-0 with the ESRCH-alone polarity, /proc fallback —
+     * was never executed. (The fail-open arm, true when neither posix nor
+     * /proc can speak, is structurally untestable in-process: no suite
+     * strips posix from its own runtime. The death-phase pin below exercises
+     * the posix-kill or /proc arm, whichever the platform has.)
+     */
+    public function testTheDefaultLivenessProbeDrivesRealCrossPidClaims(): void
+    {
+        if (!function_exists('posix_kill') && !is_dir('/proc/self')) {
+            self::markTestSkipped('the default probe has no real arm to exercise without posix or /proc');
+        }
+
+        $proc = proc_open([PHP_BINARY, '-r', 'usleep(400_000);'], [], $pipes);
+        self::assertIsResource($proc);
+        $childPid = (int) proc_get_status($proc)['pid'];
+
+        $pid = $childPid; // the child "opened" the connection
+        $ids = new RequestIdSequence(static function () use (&$pid): int {
+            return $pid;
+        });
+        self::assertSame(0, $ids->next());
+
+        $pid = (int) getmypid(); // now WE ask for it, while the owner lives
+        self::assertFalse($ids->claim(), 'the default probe let a live child be displaced');
+        self::assertSame($childPid, $ids->ownerPid(), 'the refused claim moved ownership anyway');
+
+        // proc_close REAPS: a zombie would keep answering signal-0, and the
+        // death below must be a real ESRCH, not a half-dead pid table entry.
+        proc_close($proc);
+
+        self::assertTrue($ids->claim(), 'the default probe never granted the dead child succession');
+        self::assertSame((int) getmypid(), $ids->ownerPid());
+        self::assertGreaterThanOrEqual(
+            1_000_001,
+            $ids->next(),
+            'succession from a dead owner must resume far ahead of its plain-id window',
+        );
+    }
 }
