@@ -490,10 +490,15 @@ bubblezone, Go names camelCased into PHP statics over a single shared
 `anyInBounds()` / `anyInBoundsAndUpdate()`:
 
 ```php
+use SugarCraft\Core\MouseAction;
+use SugarCraft\Core\MouseButton;
+use SugarCraft\Core\Msg\MouseMsg;
 use SugarCraft\Mouse\Zones\Zones;
 
+$header = 'Dashboard';            // the content to make clickable
 $marked = Zones::mark('header', $header);
-$cleaned = Zones::scan($marked);
+$cleaned = Zones::scan($marked);  // registers 'header', returns the echo frame
+$mouse = new MouseMsg(4, 1, MouseButton::None, MouseAction::Motion);
 if (Zones::get('header')?->inBounds($mouse)) { /* … */ }
 ```
 
@@ -520,13 +525,19 @@ motion (mode `1003`, see
 [Mouse-tracking modes](#mouse-tracking-modes)):
 
 ```php
+use SugarCraft\Core\MouseAction;
+use SugarCraft\Core\MouseButton;
+use SugarCraft\Core\Msg\MouseMsg;
 use SugarCraft\Mouse\Zones\Manager;
 use SugarCraft\Mouse\Zones\ZoneHoverTracker;
 use SugarCraft\Mouse\Zones\Msg\ZoneEnterMsg;
 use SugarCraft\Mouse\Zones\Msg\ZoneExitMsg;
 
+$manager = new Manager();
+$manager->scan($manager->mark('btn', 'OK'));  // registry knows 'btn' (row 1, cols 1-2)
+$mouseMsg = new MouseMsg(1, 1, MouseButton::None, MouseAction::Motion);
+
 $tracker = new ZoneHoverTracker($manager);
-// $manager must already have run scan() to populate zone registry.
 
 [$tracker, $msg] = $tracker->update($mouseMsg);
 if ($msg instanceof ZoneEnterMsg) {
@@ -572,14 +583,20 @@ motion (mode `1002` / `1003`, see
 [Mouse-tracking modes](#mouse-tracking-modes)):
 
 ```php
+use SugarCraft\Core\MouseAction;
+use SugarCraft\Core\MouseButton;
+use SugarCraft\Core\Msg\MouseMsg;
 use SugarCraft\Mouse\Zones\Manager;
 use SugarCraft\Mouse\Zones\DragTracker;
 use SugarCraft\Mouse\Zones\Msg\ZoneDragStartMsg;
 use SugarCraft\Mouse\Zones\Msg\ZoneDragMoveMsg;
 use SugarCraft\Mouse\Zones\Msg\ZoneDragEndMsg;
 
+$manager = new Manager();
+$manager->scan($manager->mark('btn', 'OK'));  // registry knows 'btn' (row 1, cols 1-2)
+$mouseMsg = new MouseMsg(1, 1, MouseButton::Left, MouseAction::Press);
+
 $tracker = new DragTracker($manager);
-// $manager must already have run scan() to populate zone registry.
 
 [$tracker, $msg] = $tracker->update($mouseMsg);
 if ($msg instanceof ZoneDragStartMsg) {
@@ -650,13 +667,19 @@ with plain mode-`1000` reporting (see
 [Mouse-tracking modes](#mouse-tracking-modes)):
 
 ```php
+use SugarCraft\Core\MouseAction;
+use SugarCraft\Core\MouseButton;
+use SugarCraft\Core\Msg\MouseMsg;
 use SugarCraft\Mouse\Zones\Manager;
 use SugarCraft\Mouse\Zones\MultiClickTracker;
 use SugarCraft\Mouse\Zones\Msg\DoubleClickMsg;
 use SugarCraft\Mouse\Zones\Msg\TripleClickMsg;
 
+$manager = new Manager();
+$manager->scan($manager->mark('btn', 'OK'));  // registry knows 'btn' (row 1, cols 1-2)
+$mouseMsg = new MouseMsg(1, 1, MouseButton::Left, MouseAction::Press);
+
 $counter = new MultiClickTracker($manager);
-// $manager must already have run scan() to populate zone registry.
 
 [$counter, $msg] = $counter->update($mouseMsg);
 if ($msg instanceof DoubleClickMsg) {
