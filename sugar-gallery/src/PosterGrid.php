@@ -215,11 +215,12 @@ final class PosterGrid
      * Splice a page of cards in at their ABSOLUTE indices, merging with whatever
      * is already loaded (new cards win). This is how a range fetch lands.
      *
-     * Non-integer keys and wrong-typed values are refused loudly at this
+     * Non-numeric keys and wrong-typed values are refused loudly at this
      * ingress via the shared {@see assertCardList()} law: `'abc' >= 0`
      * evaluates TRUE in PHP 8, so a string key used to slip into the sparse
      * map and detonate later as a frame-wide TypeError deep inside render() —
-     * fail-fast, not silent-drop.
+     * fail-fast, not silent-drop. (Keys PHP casts to int — `'2'`, `2.7`,
+     * `true` — arrive already cast, so they splice at the int index.)
      * Intentionally-negative indices are skipped quietly (a pinned contract for
      * hosts that splice whole API pages without pre-filtering).
      *

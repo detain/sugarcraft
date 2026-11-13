@@ -94,7 +94,8 @@ if ($grid->needsFetch($lastFetched, overscanRows: 1)) {
 ```
 
 Async poster arrived for one cell? `->withItem($index, $card->withPoster($ansi))`.
-Splice contract: a non-int key or a non-card value in `withItems()` throws `InvalidArgumentException`
+Splice contract: a non-numeric key (PHP casts `'2'`/`2.7`/`true` to int before they ever reach
+the guard) or a non-card value in `withItems()` throws `InvalidArgumentException`
 and nothing lands (the partial merge is discarded), while a *negative* index is accepted and
 quietly dropped by both setters (`withItem()` returns unchanged) — deliberate, so a host can splice
 a whole API page without pre-filtering it.
