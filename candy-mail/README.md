@@ -189,7 +189,7 @@ $email2 = new Email(
 
 | Port | Mode | What happens |
 |------|------|--------------|
-| 465 | Implicit TLS (auto-detected on 465; `withImplicitTls()` to override) | Socket is TLS-wrapped at connect; STARTTLS never sent. |
+| 465 | Implicit TLS (auto-detected on 465; `CANDY_MAIL_SMTP_IMPLICIT_TLS` or `withImplicitTls()` override either way) | Socket is TLS-wrapped at connect; STARTTLS never sent. |
 | 587 | STARTTLS (**default**) | Plaintext connect, then `STARTTLS`; **required** — if the server does not advertise it or the upgrade fails, the send throws instead of downgrading. |
 | 25 | STARTTLS upgraded opportunistically, enforced by default | Same default policy applies: a server that refuses STARTTLS fails the send as long as `requireTls` is on. |
 
@@ -282,7 +282,7 @@ export CANDY_MAIL_SMTP_PASSWORD=pass          # SMTP password (app password for 
 export CANDY_MAIL_SMTP_REQUIRE_TLS=1          # default ON; ON words 1/true/yes/on, OFF words 0/false/no/off —
                                               # anything else is REFUSED, never guessed (a typo'd security
                                               # switch must not silently downgrade)
-export CANDY_MAIL_SMTP_IMPLICIT_TLS=0         # set 1 for port-465 style direct TLS (same word vocabulary)
+export CANDY_MAIL_SMTP_IMPLICIT_TLS=0         # leave unset for port-465 auto-detect; set 1 to force on, 0 to force off (same word vocabulary)
 export CANDY_MAIL_SMTP_HELO=mail.example.com  # EHLO/HELO identity (letters, digits, dots, hyphens only)
 export CANDY_MAIL_SMTP_CA_FILE=/path/ca.pem   # custom CA bundle for TLS verification
 export CANDY_MAIL_SMTP_TIMEOUT=30             # connect + per-response seconds budget, 1..3600 (default 30);

@@ -654,8 +654,18 @@ function buildTransport(array $flags = []): Transport
             timeout:   $timeout,
             heloHost:  $helo,
         ))
-            ->withRequireTls(envFlag('CANDY_MAIL_SMTP_REQUIRE_TLS', true))
-            ->withImplicitTls(envFlag('CANDY_MAIL_SMTP_IMPLICIT_TLS', false));
+            ->withRequireTls(envFlag('CANDY_MAIL_SMTP_REQUIRE_TLS', true));
+
+        // Tri-state: the constructor infers implicit TLS from port 465, so an
+        // ABSENT CANDY_MAIL_SMTP_IMPLICIT_TLS must leave that inference alone.
+        // An unconditional ->withImplicitTls(envFlag(..., false)) used to call
+        // the override with the default, silently cancelling the auto-detect
+        // the README TLS table sells. Only a value actually set may override,
+        // in either direction (envFlag still refuses unknown words).
+        $implicitRaw = $_ENV['CANDY_MAIL_SMTP_IMPLICIT_TLS'] ?? \getenv('CANDY_MAIL_SMTP_IMPLICIT_TLS', true);
+        if (\is_string($implicitRaw) && $implicitRaw !== '') {
+            $transport = $transport->withImplicitTls(envFlag('CANDY_MAIL_SMTP_IMPLICIT_TLS', false));
+        }
 
         $caFile = (string) ($flags['ca_file'] ?? envString('CANDY_MAIL_SMTP_CA_FILE'));
         if ($caFile !== '') {
@@ -829,7 +839,8 @@ Environment variables:
   CANDY_MAIL_SMTP_REQUIRE_TLS      TLS floor (default: on). Words 1/true/yes/on
                                    turn it on, 0/false/no/off turn it off;
                                    anything else is refused, never guessed.
-  CANDY_MAIL_SMTP_IMPLICIT_TLS     Port-465 implicit TLS (default: off; same words)
+  CANDY_MAIL_SMTP_IMPLICIT_TLS     Port-465 implicit TLS (unset: auto-detected
+                                   on port 465; same words either way)
   CANDY_MAIL_SMTP_HELO             HELO/EHLO identity (same grammar as --helo)
   CANDY_MAIL_SMTP_CA_FILE          PEM bundle path (same checks as --ca-file)
   CANDY_MAIL_SMTP_TIMEOUT          Wire timeout seconds (same bounds as --timeout)

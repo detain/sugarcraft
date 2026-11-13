@@ -594,6 +594,38 @@ final class CliTest extends TestCase
     }
 
     /**
+     * CM-31: an unset CANDY_MAIL_SMTP_IMPLICIT_TLS must not cancel the
+     * constructor's port-465 auto-detect. buildTransport() used to call
+     * ->withImplicitTls(envFlag(..., false)) unconditionally, so the absent
+     * env var overrode the inferred posture and the README TLS table's
+     * "auto-detected on 465" never applied through the CLI. Tri-state now:
+     * unset leaves the constructor in charge, set words (both directions)
+     * still override.
+     */
+    public function testImplicitTlsAutoDetectSurvivesUnsetEnv(): void
+    {
+        $this->setEnv('CANDY_MAIL_SMTP_HOST', 'smtp.invalid.example');
+        $this->setEnv('CANDY_MAIL_SMTP_PORT', '465');
+
+        $auto = \SugarCraft\Mail\buildTransport();
+        $this->assertTrue(
+            $this->readProperty($auto, 'implicitTls'),
+            'port 465 with the env var unset must keep the implicit-TLS auto-detect',
+        );
+
+        $this->setEnv('CANDY_MAIL_SMTP_IMPLICIT_TLS', '0');
+        $forcedOff = \SugarCraft\Mail\buildTransport();
+        $this->assertFalse(
+            $this->readProperty($forcedOff, 'implicitTls'),
+            'an explicit 0 must still override the auto-detect (opt-out words stand)',
+        );
+
+        unset($_ENV['CANDY_MAIL_SMTP_PORT'], $_ENV['CANDY_MAIL_SMTP_IMPLICIT_TLS']);
+        \putenv('CANDY_MAIL_SMTP_PORT');
+        \putenv('CANDY_MAIL_SMTP_IMPLICIT_TLS');
+    }
+
+    /**
      * CM-07: the missing-value hint must name the inline form the caller can
      * actually run. The template supplies the dashes of its hint slot, so the
      * old raw-token substitution forged 'use ----to=VALUE', and a short -f
