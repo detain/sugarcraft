@@ -140,6 +140,14 @@ across the 16 shipped locales. Date and weekday names (`Jun 7`, `Sat`) render
 in English in every locale: the locale catalogue carries the PHP format
 characters, not month tables.
 
+### Export formats
+
+| Format | Shape |
+|--------|-------|
+| `csv` | Six columns — `time,project,language,file,duration,tags` — one row per heartbeat; `tags` is a comma-joined cell (empty when a beat has none), and every free-text cell passes the formula-injection guard. |
+| `json` | An array of objects mirroring the JSONL day-file rows: the same six keys, `time` and `duration` in whole seconds. |
+| `ics` | One `VEVENT` per heartbeat. `SUMMARY` carries the full stored file path, `DTSTART`/`DTEND` are UTC (`Z`) stamps whose difference is the beat's duration, and the `UID` mixes duration and row order so retried beats do not collapse into a single event on import (see *Privacy* below for what the paths imply). |
+
 ## Ignoring files
 
 A `.sugartrackignore` in the current directory — or, failing that, in the
@@ -281,6 +289,10 @@ The data directory and every file in it are owner-private, per surface:
   contract: it is created `0700` and every copied day file is tightened to
   `0600`, because an archive of those files is the same path map one
   directory over.
+- **The `csv`, `json` and `ics` exports carry every stored path verbatim.**
+  Redirecting an export somewhere shared — or importing an `ics` into a
+  hosted calendar — hands the whole directory map to whoever receives it.
+  Export only where you would leave the data directory itself.
 
 Heartbeats carry file paths exactly as supplied (editor plugins typically
 send absolute ones) and project names; treat the directory accordingly.
