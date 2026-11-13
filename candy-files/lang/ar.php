@@ -79,4 +79,22 @@ return [
     'status.no_editor' => 'لم يتم العثور على محرر لـ {name}',
     'status.no_viewer' => 'لا يوجد عارض لـ {name}',
     'status.not_executable' => '{name} غير قابل للتنفيذ',
+
+    // CF-16 (closes 025, 056, 060): rendered chrome through Lang.
+    'search.prompt' => 'ابحث: ',
+    'size.dir' => 'مجلد',
+    'size.link' => 'رابط',
+    'sort.name' => 'الاسم',
+    'sort.mtime' => 'التاريخ',
+    'sort.size' => 'الحجم',
+    'cli.usage' => 'candy-files — مدير ملفات ثنائي اللوحة
+
+الاستخدام:
+  candy-files [left] [right]   يفتح اللوحتين في الدلائل المحددة
+                               (افتراضي: cwd في اليسار، HOME في اليمين)
+  candy-files --version        يطبع الإصدار
+  candy-files --help           يعرض هذه المساعدة',
+    'cli.dir_missing' => 'الدليل ({side}) {reason}: {dir}',
+    'cli.reason_missing' => 'غير موجود',
+    'cli.reason_unreadable' => 'غير قابل للقراءة',
 ];

@@ -33,11 +33,21 @@ declare(strict_types=1);
     exit(1);
 })();
 
+use SugarCraft\Core\I18n\T;
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
+use SugarCraft\Files\Lang;
 use SugarCraft\Files\Manager;
 use SugarCraft\Files\Support\Home;
 use SugarCraft\Files\Support\Version;
+
+// UI language from $LANG / $LC_ALL (M-6, detection hoisted by CF-16/closes
+// 060): the 16 catalogues under lang/ must be live BEFORE the first bytes
+// this process can ever print — the old leg sat below the usage block and
+// the directory refusal, so a German user was refused in English (observed
+// live). English is the fallback (house idiom), candy-codetime's
+// right-after-autoload shape.
+T::setLocale(T::detect());
 
 // Answered before the positional directory scan: a packaging script or a
 // bug report runs these first, possibly from a directory that is not meant
@@ -48,12 +58,7 @@ if (in_array('--version', $flags, true)) {
     exit(0);
 }
 if (in_array('--help', $flags, true) || in_array('-h', $flags, true)) {
-    fwrite(STDOUT, "candy-files — dual-pane file manager\n\n"
-        . "Usage:\n"
-        . "  candy-files [left] [right]   Open panes on the given directories\n"
-        . "                               (default: cwd on the left, HOME on the right)\n"
-        . "  candy-files --version        Print the version\n"
-        . "  candy-files --help           Show this help\n");
+    fwrite(STDOUT, Lang::t('cli.usage') . "\n");
     exit(0);
 }
 
@@ -82,18 +87,15 @@ $rightCwd = $argv[2] ?? $home;
 // otherwise read as a mysterious "no entries" rather than "you passed a
 // bogus or unreadable path"). is_readable joins is_dir (CF-22, audit 031):
 // the bin's own comment already refused this exact class at argv — the
-// in-app navigation re-admitted it.
+// in-app navigation re-admitted it. CF-16 (closes 060): both halves —
+// side and reason — ride the catalogue now that detection sits above.
 foreach (['left' => $leftCwd, 'right' => $rightCwd] as $side => $dir) {
     $refusal = \SugarCraft\Files\Support\LaunchDir::refusal($dir);
     if ($refusal !== null) {
-        fwrite(STDERR, "candy-files: {$side} directory {$refusal}: {$dir}\n");
+        $sideLabel = $side === 'left' ? Lang::t('side.left') : Lang::t('side.right');
+        fwrite(STDERR, 'candy-files: ' . Lang::t('cli.dir_missing', ['side' => $sideLabel, 'reason' => $refusal, 'dir' => $dir]) . "\n");
         exit(1);
     }
 }
-
-// UI language from $LANG / $LC_ALL (M-6): the 16 catalogues under lang/
-// only come alive once the shared registry leaves its 'en' default —
-// detection is env-driven, English is the fallback (house idiom).
-\SugarCraft\Core\I18n\T::setLocale(\SugarCraft\Core\I18n\T::detect());
 
 (new Program(Manager::start($leftCwd, $rightCwd), new ProgramOptions(useAltScreen: true)))->run();

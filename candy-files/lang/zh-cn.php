@@ -79,4 +79,22 @@ return [
     'status.no_editor' => '未找到 {name} 的编辑器',
     'status.no_viewer' => '没有可用于 {name} 的查看器',
     'status.not_executable' => '{name} 不可执行',
+
+    // CF-16 (closes 025, 056, 060): rendered chrome through Lang.
+    'search.prompt' => '搜索: ',
+    'size.dir' => '目录',
+    'size.link' => '链接',
+    'sort.name' => '名称',
+    'sort.mtime' => '日期',
+    'sort.size' => '大小',
+    'cli.usage' => 'candy-files — 双栏文件管理器
+
+用法:
+  candy-files [left] [right]   在给定目录上打开面板
+                               (默认：左为当前目录，右为主目录)
+  candy-files --version        打印版本
+  candy-files --help           显示此帮助',
+    'cli.dir_missing' => '{side}目录 {reason}：{dir}',
+    'cli.reason_missing' => '不存在',
+    'cli.reason_unreadable' => '不可读',
 ];

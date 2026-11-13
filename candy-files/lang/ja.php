@@ -79,4 +79,22 @@ return [
     'status.no_editor' => '{name} を開くエディタが見つかりません',
     'status.no_viewer' => '{name} を表示するビューアがありません',
     'status.not_executable' => '{name} は実行可能ではありません',
+
+    // CF-16 (closes 025, 056, 060): rendered chrome through Lang.
+    'search.prompt' => '検索: ',
+    'size.dir' => 'DIR',
+    'size.link' => 'LINK',
+    'sort.name' => '名前',
+    'sort.mtime' => '日時',
+    'sort.size' => 'サイズ',
+    'cli.usage' => 'candy-files — デュアルペイン・ファイルマネージャー
+
+使い方:
+  candy-files [left] [right]   指定したディレクトリでペインを開きます
+                               (既定: 左=現在の作業ディレクトリ、右=HOME)
+  candy-files --version        バージョンを表示します
+  candy-files --help           このヘルプを表示します',
+    'cli.dir_missing' => '{side}のディレクトリ {dir} {reason}',
+    'cli.reason_missing' => 'が存在しません',
+    'cli.reason_unreadable' => 'を読み取れません',
 ];

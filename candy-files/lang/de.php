@@ -79,4 +79,22 @@ return [
     'status.no_editor' => 'kein Editor für {name} gefunden',
     'status.no_viewer' => 'kein Betrachter für {name}',
     'status.not_executable' => '{name} ist nicht ausführbar',
+
+    // CF-16 (closes 025, 056, 060): rendered chrome through Lang.
+    'search.prompt' => 'Suchen: ',
+    'size.dir' => 'VERZ',
+    'size.link' => 'VERK',
+    'sort.name' => 'Name',
+    'sort.mtime' => 'Datum',
+    'sort.size' => 'Größe',
+    'cli.usage' => 'candy-files — Zwei-Fenster-Dateimanager
+
+Verwendung:
+  candy-files [left] [right]   öffnet die Panele mit den angegebenen Verzeichnissen
+                               (Standard: links das aktuelle Verzeichnis, rechts das HOME)
+  candy-files --version        gibt die Version aus
+  candy-files --help           zeigt diese Hilfe',
+    'cli.dir_missing' => 'Verzeichnis ({side}) {reason}: {dir}',
+    'cli.reason_missing' => 'existiert nicht',
+    'cli.reason_unreadable' => 'ist nicht lesbar',
 ];

@@ -74,6 +74,31 @@ enum Sort: string
     }
 
     /**
+     * CF-16 (closes 060): the localized field label the pane header
+     * shows in place of the raw enum notation ('name-asc' is a wire
+     * value, not user chrome). Every arm spells its literal key —
+     * tests/LangCoverageTest greps literals, so a built key would
+     * look used to the forward scan and unused to the reverse one.
+     */
+    public function label(): string
+    {
+        return match ($this) {
+            self::NameAsc, self::NameDesc  => Lang::t('sort.name'),
+            self::MtimeAsc, self::MtimeDesc => Lang::t('sort.mtime'),
+            self::SizeAsc, self::SizeDesc  => Lang::t('sort.size'),
+        };
+    }
+
+    /** Direction of the order; rendered as the language-neutral ↑/↓. */
+    public function isAscending(): bool
+    {
+        return match ($this) {
+            self::NameAsc, self::MtimeAsc, self::SizeAsc => true,
+            self::NameDesc, self::MtimeDesc, self::SizeDesc => false,
+        };
+    }
+
+    /**
      * Cycle the active sort: every tap of `s` alternates the
      * direction, and the field advances on the following tap —
      * from NameAsc the order is NameDesc, MtimeAsc, MtimeDesc,

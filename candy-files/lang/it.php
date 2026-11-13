@@ -79,4 +79,22 @@ return [
     'status.no_editor' => 'nessun editor trovato per {name}',
     'status.no_viewer' => 'nessun visualizzatore per {name}',
     'status.not_executable' => '{name} non eseguibile',
+
+    // CF-16 (closes 025, 056, 060): rendered chrome through Lang.
+    'search.prompt' => 'Cerca: ',
+    'size.dir' => 'DIR',
+    'size.link' => 'COLL',
+    'sort.name' => 'Nome',
+    'sort.mtime' => 'Data',
+    'sort.size' => 'Dimensione',
+    'cli.usage' => 'candy-files — file manager a doppio pannello
+
+Uso:
+  candy-files [left] [right]   Apre i pannelli nelle directory indicate
+                               (predefinito: cwd a sinistra, HOME a destra)
+  candy-files --version        Stampa la versione
+  candy-files --help           Mostra questa guida',
+    'cli.dir_missing' => 'directory ({side}) {reason}: {dir}',
+    'cli.reason_missing' => 'non esiste',
+    'cli.reason_unreadable' => 'non è leggibile',
 ];

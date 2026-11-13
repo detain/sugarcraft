@@ -90,4 +90,22 @@ return [
     'status.no_editor' => 'no editor found for {name}',
     'status.no_viewer' => 'no viewer for {name}',
     'status.not_executable' => '{name} is not executable',
+
+    // CF-16 (closes 025, 056, 060): rendered chrome through Lang.
+    'search.prompt' => 'Search: ',
+    'size.dir' => 'DIR',
+    'size.link' => 'LINK',
+    'sort.name' => 'Name',
+    'sort.mtime' => 'Date',
+    'sort.size' => 'Size',
+    'cli.usage' => 'candy-files — dual-pane file manager
+
+Usage:
+  candy-files [left] [right]   Open panes on the given directories
+                               (default: cwd on the left, HOME on the right)
+  candy-files --version        Print the version
+  candy-files --help           Show this help',
+    'cli.dir_missing' => '{side} directory {reason}: {dir}',
+    'cli.reason_missing' => 'does not exist',
+    'cli.reason_unreadable' => 'is not readable',
 ];

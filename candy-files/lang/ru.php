@@ -79,4 +79,22 @@ return [
     'status.no_editor' => 'редактор не найден для {name}',
     'status.no_viewer' => 'нет просмотрщика для {name}',
     'status.not_executable' => '{name} не является исполняемым',
+
+    // CF-16 (closes 025, 056, 060): rendered chrome through Lang.
+    'search.prompt' => 'Поиск: ',
+    'size.dir' => 'КАТ',
+    'size.link' => 'ССЫЛ',
+    'sort.name' => 'Имя',
+    'sort.mtime' => 'Дата',
+    'sort.size' => 'Размер',
+    'cli.usage' => 'candy-files — двухпанельный файловый менеджер
+
+Использование:
+  candy-files [left] [right]   Открывает панели в указанных каталогах
+                               (по умолчанию: слева текущий каталог, справа HOME)
+  candy-files --version        Показывает версию
+  candy-files --help           Показывает эту справку',
+    'cli.dir_missing' => 'каталог ({side}) {reason}: {dir}',
+    'cli.reason_missing' => 'не существует',
+    'cli.reason_unreadable' => 'не читается',
 ];

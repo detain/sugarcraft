@@ -60,15 +60,35 @@ final class BinGuardTest extends TestCase
     }
 
     /**
+     * CF-16 (closes 060): a German terminal must be refused AND served in
+     * German — locale detection hoisted to right-after-autoload means the
+     * usage block rides the catalogue. --help stays piped-safe, so the
+     * whole CLI leg is observable from a headless subprocess.
+     */
+    public function testHelpAnswersInGermanWhenTheEnvironmentIsGerman(): void
+    {
+        // detect() walks LC_ALL → LC_MESSAGES → LANG; the developer shell
+        // exports an en_US LC_MESSAGES, so the child's whole chain is
+        // pinned — otherwise LANG alone is correctly outranked.
+        [$exit, $out] = self::spawn(['--help'], ['LC_ALL' => '', 'LC_MESSAGES' => '', 'LANG' => 'de_DE.UTF-8']);
+
+        self::assertSame(0, $exit);
+        self::assertStringContainsString('Verwendung:', $out);
+        self::assertStringNotContainsString('Usage:', $out);
+    }
+
+    /**
      * @param list<string> $args
+     * @param list<string> $extraEnv appended to the inherited environment
      * @return array{0:int, 1:string, 2:string} exit, stdout, stderr
      */
-    private static function spawn(array $args): array
+    private static function spawn(array $args, array $extraEnv = []): array
     {
         $bin  = realpath(__DIR__ . '/../bin/candy-files');
         self::assertIsString($bin, 'the launcher must exist to be tested');
         $spec = [0 => ['file', '/dev/null', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
-        $proc = proc_open(array_merge([PHP_BINARY, $bin], $args), $spec, $pipes, sys_get_temp_dir());
+        $env  = $extraEnv === [] ? null : array_merge(getenv(), $extraEnv);
+        $proc = proc_open(array_merge([PHP_BINARY, $bin], $args), $spec, $pipes, sys_get_temp_dir(), $env);
         self::assertIsResource($proc);
         $out = (string) stream_get_contents($pipes[1]);
         $err = (string) stream_get_contents($pipes[2]);

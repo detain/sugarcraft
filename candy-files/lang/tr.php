@@ -79,4 +79,22 @@ return [
     'status.no_editor' => '{name} için editör bulunamadı',
     'status.no_viewer' => '{name} için görüntüleyici yok',
     'status.not_executable' => '{name} çalıştırılabilir değil',
+
+    // CF-16 (closes 025, 056, 060): rendered chrome through Lang.
+    'search.prompt' => 'Ara: ',
+    'size.dir' => 'DİZİN',
+    'size.link' => 'BAĞ',
+    'sort.name' => 'Ad',
+    'sort.mtime' => 'Tarih',
+    'sort.size' => 'Boyut',
+    'cli.usage' => 'candy-files — çift panelli dosya yöneticisi
+
+Kullanım:
+  candy-files [left] [right]   Panelleri verilen dizinlerde açar
+                               (varsayılan: solda cwd, sağda HOME)
+  candy-files --version        Sürümü yazar
+  candy-files --help           Bu yardımı gösterir',
+    'cli.dir_missing' => '{side} dizini {reason}: {dir}',
+    'cli.reason_missing' => 'mevcut değil',
+    'cli.reason_unreadable' => 'okunamıyor',
 ];

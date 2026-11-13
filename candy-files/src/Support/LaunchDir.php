@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace SugarCraft\Files\Support;
 
+use SugarCraft\Files\Lang;
+
 /**
  * CF-22 (closes audit 031, bin leg): the launcher's door check on each
- * argv directory. Prose is deliberately raw English — the check runs
- * BEFORE locale detection (`T::detect()` lives below it in the bin), the
- * same headless-stderr shape as the CF-19 TTY gate.
+ * argv directory. CF-16 (closes 060) moved locale detection to
+ * right-after-autoload in the bin, so the reason prose is translated
+ * here — under the default 'en' registry the strings are byte-identical
+ * to the old raw English the LaunchDirTest pins.
  *
  * Extracted from `bin/candy-files` because the TTY guard fires first
  * there: a piped test process can never reach the inline probes, so the
@@ -20,10 +23,10 @@ final class LaunchDir
     public static function refusal(string $dir): ?string
     {
         if (!\is_dir($dir)) {
-            return 'does not exist';
+            return Lang::t('cli.reason_missing');
         }
         if (!\is_readable($dir)) {
-            return 'is not readable';
+            return Lang::t('cli.reason_unreadable');
         }
         return null;
     }

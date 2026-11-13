@@ -258,7 +258,11 @@ final class RendererTest extends TestCase
     {
         $m = Manager::start('/', '/', $this->fakeFs());
         $out = Renderer::render($m);
-        $this->assertStringContainsString(Sort::NameAsc->value, $out);
+        // CF-16 (closes 060): the header carries the localized field
+        // label plus a language-neutral arrow; the raw wire value
+        // ('name-asc') must never reach user chrome again.
+        $this->assertStringContainsString('[' . Sort::NameAsc->label() . ' ↑', $out);
+        $this->assertStringNotContainsString(Sort::NameAsc->value, $out);
     }
 
     /**

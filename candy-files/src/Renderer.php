@@ -127,7 +127,13 @@ final class Renderer
     {
         $outer = $termCols > 0 ? intdiv($termCols - 2, 2) : 40;
         $inner = max(6, $outer - 4);             // content cells: border(2) + padding(2)
-        $nameCol = max(10, $inner - 11);         // arrow+marker+space+name+space+size(7)
+        // CF-16 (closes 056): the size column carries localized tokens
+        // (VERZ/КАТ/目录…), so its width follows the widest thing it must
+        // hold — 7 legacy cells at en, wider for longer catalogues. The
+        // name column absorbs the difference: row overhead is 4 cells
+        // (arrow, marker, two gaps) plus this size field.
+        $sizeCol = max(7, Width::of(Lang::t('size.dir')), Width::of(Lang::t('size.link')));
+        $nameCol = max(10, $inner - 4 - $sizeCol);
         $headCap = max(6, $inner - 6);           // '  [sort]' tail keeps 6 cells
 
         $style = Style::new()
@@ -141,10 +147,14 @@ final class Renderer
         if (!$pane->readable) {
             $dirLabel .= ' ' . Lang::t('pane.unreadable');
         }
+        // CF-16 (closes 060): the header shows the localized field label
+        // plus a language-neutral ↑/↓ — the raw enum value ('name-asc')
+        // used to sit in user chrome untranslated in all 16 locales.
         $header = sprintf(
-            "%s  [%s%s]",
+            "%s  [%s %s%s]",
             self::truncate($dirLabel, $headCap),
-            $pane->sort->value,
+            $pane->sort->label(),
+            $pane->sort->isAscending() ? '↑' : '↓',
             $pane->showHidden ? ' ' . Lang::t('pane.hidden_suffix') : '',
         );
 
@@ -162,9 +172,12 @@ final class Renderer
             $name    = $entry->isDir ? $entry->name . '/' : $entry->name;
             $name    = Entry::sanitizeName($name);
             $size    = $entry->displaySize();
-            // Cell-accurate column: `%-26s` pads bytes, which drifts the
-            // size column for every double-width (CJK/emoji) name.
-            $rows[] = sprintf("%s%s %s %7s", $arrow, $marker, Width::padRight(self::truncate($name, $nameCol), $nameCol), $size);
+            // Cell-accurate columns: `%-26s`/`%7s` padded bytes, which
+            // drifts for every double-width (CJK/emoji) name and for the
+            // localized size tokens CF-16 introduces.
+            $rows[] = $arrow . $marker . ' '
+                . Width::padRight(self::truncate($name, $nameCol), $nameCol) . ' '
+                . Width::padRight($size, $sizeCol);
         }
         if ($below > 0) {
             $rows[] = '  ↓ ' . Lang::t('pane.more_below', ['count' => $below]);
@@ -239,7 +252,9 @@ final class Renderer
         // The query is typed at the keyboard today, but it reaches view()
         // through the same Model field any injected string would — sanitize
         // it like every other untrusted render.
-        $lines[] = Ansi::sgr(Ansi::BOLD) . 'Search: ' . Entry::sanitizeName($m->searchQuery) . Ansi::reset();
+        // CF-16 (closes 025): the prompt went through Lang like every
+        // neighbour; only the query itself stays data (sanitize first).
+        $lines[] = Ansi::sgr(Ansi::BOLD) . Lang::t('search.prompt') . Entry::sanitizeName($m->searchQuery) . Ansi::reset();
         $lines[] = '';
         $total = count($m->searchResults);
         foreach ($m->searchResults as $i => $entry) {

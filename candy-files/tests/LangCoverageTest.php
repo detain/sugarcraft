@@ -62,6 +62,21 @@ final class LangCoverageTest extends TestCase
         $this->assertArrayHasKey('search.counter', $translations);
         $this->assertArrayHasKey('search.type_dir', $translations);
         $this->assertArrayHasKey('search.type_file', $translations);
+        $this->assertArrayHasKey('search.prompt', $translations);
+    }
+
+    /**
+     * CF-16 (closes 025/056/060): the chrome wave — size tokens, sort
+     * labels, and the bin CLI prose — must exist in the source-of-truth
+     * catalogue (LocaleParityTest carries them across the other fifteen).
+     */
+    public function testAllChromeAndCliKeysPresent(): void
+    {
+        $translations = require __DIR__ . '/../lang/en.php';
+        foreach (['size.dir', 'size.link', 'sort.name', 'sort.mtime', 'sort.size',
+            'cli.usage', 'cli.dir_missing', 'cli.reason_missing', 'cli.reason_unreadable'] as $key) {
+            $this->assertArrayHasKey($key, $translations);
+        }
     }
 
     public function testAllPaneKeysPresent(): void

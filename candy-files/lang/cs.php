@@ -79,4 +79,22 @@ return [
     'status.no_editor' => 'pro {name} nebyl nalezen žádný editor',
     'status.no_viewer' => 'žádný prohlížeč pro {name}',
     'status.not_executable' => '{name} není spustitelný',
+
+    // CF-16 (closes 025, 056, 060): rendered chrome through Lang.
+    'search.prompt' => 'Hledat: ',
+    'size.dir' => 'ADRES',
+    'size.link' => 'ODKAZ',
+    'sort.name' => 'Název',
+    'sort.mtime' => 'Datum',
+    'sort.size' => 'Velikost',
+    'cli.usage' => 'candy-files — dvoupanelový správce souborů
+
+Použití:
+  candy-files [left] [right]   Otevírá panely ve zadaných adresářích
+                               (výchozí: cwd vlevo, HOME vpravo)
+  candy-files --version        Vytiskne verzi
+  candy-files --help           Zobrazí tuto nápovědu',
+    'cli.dir_missing' => 'adresář ({side}) {reason}: {dir}',
+    'cli.reason_missing' => 'neexistuje',
+    'cli.reason_unreadable' => 'nelze číst',
 ];

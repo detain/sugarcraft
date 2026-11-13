@@ -79,4 +79,22 @@ return [
     'status.no_editor' => 'geen editor gevonden voor {name}',
     'status.no_viewer' => 'geen viewer voor {name}',
     'status.not_executable' => '{name} is niet uitvoerbaar',
+
+    // CF-16 (closes 025, 056, 060): rendered chrome through Lang.
+    'search.prompt' => 'Zoeken: ',
+    'size.dir' => 'MAP',
+    'size.link' => 'KOP',
+    'sort.name' => 'Naam',
+    'sort.mtime' => 'Datum',
+    'sort.size' => 'Grootte',
+    'cli.usage' => 'candy-files — dubbel-pane bestandsbeheerder
+
+Gebruik:
+  candy-files [left] [right]   Opent panelen met de gegeven mappen
+                               (standaard: cwd links, HOME rechts)
+  candy-files --version        Toont de versie
+  candy-files --help           Toont deze hulp',
+    'cli.dir_missing' => 'map ({side}) {reason}: {dir}',
+    'cli.reason_missing' => 'bestaat niet',
+    'cli.reason_unreadable' => 'is niet leesbaar',
 ];

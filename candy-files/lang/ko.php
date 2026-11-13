@@ -79,4 +79,22 @@ return [
     'status.no_editor' => '{name}용 편집기를 찾을 수 없습니다',
     'status.no_viewer' => '{name}용 뷰어가 없습니다',
     'status.not_executable' => '{name}은(는) 실행 불가능',
+
+    // CF-16 (closes 025, 056, 060): rendered chrome through Lang.
+    'search.prompt' => '검색: ',
+    'size.dir' => '폴더',
+    'size.link' => '링크',
+    'sort.name' => '이름',
+    'sort.mtime' => '날짜',
+    'sort.size' => '크기',
+    'cli.usage' => 'candy-files — 이중 패널 파일 관리자
+
+사용법:
+  candy-files [left] [right]   지정된 디렉터리에서 패널을 엽니다
+                               (기본: 왼쪽은 현재 디렉터리, 오른쪽은 HOME)
+  candy-files --version        버전을 출력합니다
+  candy-files --help           이 도움말을 표시합니다',
+    'cli.dir_missing' => '{side} 디렉터리 {dir} {reason}',
+    'cli.reason_missing' => '존재하지 않음',
+    'cli.reason_unreadable' => '읽을 수 없음',
 ];

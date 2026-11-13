@@ -154,10 +154,14 @@ final class ConfirmLocaleTest extends TestCase
     public function testBinActivatesTheDetectedLocale(): void
     {
         $bin = (string) file_get_contents(dirname(__DIR__) . '/bin/candy-files');
-        $this->assertStringContainsString(
-            'T::setLocale(\SugarCraft\Core\I18n\T::detect())',
-            $bin,
-            'bin must wire locale detection before constructing the program',
-        );
+        $activation = strpos($bin, 'T::setLocale(T::detect())');
+        $this->assertNotFalse($activation, 'bin must wire locale detection before constructing the program');
+        // CF-16 (closes 060): existence alone was the old hole — the call
+        // sat BELOW the usage block and the directory refusal, so a German
+        // user was refused in English (demonstrated live). Activation must
+        // precede the first chrome byte the process can print.
+        $usageOut = strpos($bin, "fwrite(STDOUT, Lang::t('cli.usage')");
+        $this->assertNotFalse($usageOut, 'the usage leg must exist to be ordered against');
+        $this->assertLessThan($usageOut, $activation, 'locale must be live before the usage block prints');
     }
 }

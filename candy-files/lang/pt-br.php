@@ -79,4 +79,22 @@ return [
     'status.no_editor' => 'nenhum editor encontrado para {name}',
     'status.no_viewer' => 'sem visualizador para {name}',
     'status.not_executable' => '{name} não é executável',
+
+    // CF-16 (closes 025, 056, 060): rendered chrome through Lang.
+    'search.prompt' => 'Pesquisar: ',
+    'size.dir' => 'DIR',
+    'size.link' => 'LINK',
+    'sort.name' => 'Nome',
+    'sort.mtime' => 'Data',
+    'sort.size' => 'Tamanho',
+    'cli.usage' => 'candy-files — gerenciador de arquivos de dois painéis
+
+Uso:
+  candy-files [left] [right]   Abre os painéis nos diretórios indicados
+                               (padrão: cwd à esquerda, HOME à direita)
+  candy-files --version        Mostra a versão
+  candy-files --help           Mostra esta ajuda',
+    'cli.dir_missing' => 'diretório ({side}) {reason}: {dir}',
+    'cli.reason_missing' => 'não existe',
+    'cli.reason_unreadable' => 'não pode ser lido',
 ];

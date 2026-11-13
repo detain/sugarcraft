@@ -79,4 +79,22 @@ return [
     'status.no_editor' => 'aucun éditeur trouvé pour {name}',
     'status.no_viewer' => 'aucun visualiseur pour {name}',
     'status.not_executable' => '{name} non exécutable',
+
+    // CF-16 (closes 025, 056, 060): rendered chrome through Lang.
+    'search.prompt' => 'Rechercher : ',
+    'size.dir' => 'RÉP',
+    'size.link' => 'LIEN',
+    'sort.name' => 'Nom',
+    'sort.mtime' => 'Date',
+    'sort.size' => 'Taille',
+    'cli.usage' => 'candy-files — gestionnaire de fichiers à deux volets
+
+Utilisation :
+  candy-files [left] [right]   Ouvre les volets sur les répertoires donnés
+                               (par défaut : cwd à gauche, HOME à droite)
+  candy-files --version        Affiche la version
+  candy-files --help           Affiche cette aide',
+    'cli.dir_missing' => 'répertoire ({side}) {reason} : {dir}',
+    'cli.reason_missing' => 'n\'existe pas',
+    'cli.reason_unreadable' => 'n\'est pas lisible',
 ];

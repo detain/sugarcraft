@@ -35,17 +35,20 @@ final class Entry
     }
 
     /**
-     * Display string for the size column. Directories render
-     * "DIR", links render "LINK", regular files render their byte
-     * size compacted to KB/MB/GB/TB.
+     * Display string for the size column. Directories render the
+     * localized DIR token, links the localized LINK token (CF-16,
+     * closes 056 — 'DIR'/'LINK' stood raw in all 16 locales while
+     * the neighbouring search.type_dir was translated), regular
+     * files their byte size compacted to KB/MB/GB/TB (units stay
+     * language-neutral per the finding).
      */
     public function displaySize(): string
     {
         if ($this->isDir) {
-            return 'DIR';
+            return Lang::t('size.dir');
         }
         if ($this->isLink) {
-            return 'LINK';
+            return Lang::t('size.link');
         }
         $units = ['B', 'KB', 'MB', 'GB', 'TB'];
         $i = 0;
