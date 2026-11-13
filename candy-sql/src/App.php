@@ -1228,24 +1228,45 @@ final class App implements Model
 
     private function favoriteQuery(): self
     {
+        // SQL-O01b: every Ctrl+F chord answers on the status line. The
+        // favorites list has no pane yet (the drawer rides a later leg),
+        // so without a readout save/duplicate/remove were byte-identical
+        // UI — state mutation with zero observability (once-001).
         $trimmed = trim($this->editor()->value());
-        // No-op on an empty editor or an already-saved query.
-        if ($trimmed === '' || in_array($trimmed, $this->query->favorites, true)) {
-            return $this;
+        if ($trimmed === '') {
+            return $this->mutate(['ui' => $this->ui->withStatus('nothing to save')->withError(null)]);
+        }
+        if (in_array($trimmed, $this->query->favorites, true)) {
+            return $this->mutate(['ui' => $this->ui->withStatus(
+                'already saved (' . count($this->query->favorites) . ')'
+            )->withError(null)]);
         }
         $favorites = $this->query->favorites;
         array_unshift($favorites, $trimmed);
-        return $this->mutate(['query' => $this->query->withFavorites($favorites)]);
+        return $this->mutate([
+            'query' => $this->query->withFavorites($favorites),
+            'ui' => $this->ui->withStatus('saved (' . count($favorites) . ')')->withError(null),
+        ]);
     }
 
     private function unfavoriteQuery(): self
     {
+        // SQL-O01b: the unfavorite chord reports too — removals and
+        // misses are distinguishable without the drawer.
         $trimmed = trim($this->editor()->value());
+        if (!in_array($trimmed, $this->query->favorites, true)) {
+            return $this->mutate(['ui' => $this->ui->withStatus(
+                'not in favorites (' . count($this->query->favorites) . ')'
+            )->withError(null)]);
+        }
         $favorites = array_values(array_filter(
             $this->query->favorites,
             fn(string $f) => $f !== $trimmed
         ));
-        return $this->mutate(['query' => $this->query->withFavorites($favorites)]);
+        return $this->mutate([
+            'query' => $this->query->withFavorites($favorites),
+            'ui' => $this->ui->withStatus('removed (' . count($favorites) . ')')->withError(null),
+        ]);
     }
 
     public function subscriptions(): ?\SugarCraft\Core\Subscriptions

@@ -108,8 +108,10 @@ above); the explicit string exists as a test seam because `MysqlDatabase` is fin
 | `1` – `8`          | Switch admin page (see digit map below)         |
 
 **Session-state-only surfaces (disclosed):** `Ctrl+F`/`Ctrl+Shift+F` add and remove
-the current editor text in a session-scoped favorites list inside `QueryState`, but no
-pane renders that list yet — closing the app drops them. `↑`/`↓` in the Query pane
+the current editor text in a session-scoped favorites list inside `QueryState`; each
+chord reports its outcome on the status line (`saved (N)`, `already saved (N)`,
+`removed (N)`, `not in favorites (N)`, `nothing to save`), but no pane renders the
+list yet — closing the app drops them. `↑`/`↓` in the Query pane
 recall executed statements from the capped history into an empty editor with a
 `history N/M` status readout; a drafted query is never overwritten, and a recall
 walk ends as soon as you edit. Likewise `[x]` on the Reports page regenerates
