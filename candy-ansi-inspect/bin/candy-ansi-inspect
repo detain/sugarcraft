@@ -32,49 +32,80 @@ $input = '';
 // "No source at all" (interactive TTY, no argument) is misuse and answers with
 // usage; a source that happens to be empty is a legitimate report of nothing.
 $sawSource = false;
-// The gate is PRESENCE, not truthiness (finding 012): empty() treats the
+// Flags are scanned before any source is opened: `--help`/`-h` is a request
+// for usage, not a path (m2-fresh ruling (a)); `--json` reports a JSON array
+// instead of one line per segment (finding 005); `--` enters exec mode
+// (finding 003). Operands: the first non-flag word names the file, and
+// PRESENCE — not truthiness — is the gate (finding 012: empty() treats the
 // string "0" as empty, so `candy-ansi-inspect 0` demoted a file literally
-// named `0` to a stdin read. Any present argument names the source; a
-// present-but-empty one is a refusal, never a silent demotion to stdin.
-if (isset($argv[1]) && $argv[1] !== '') {
-    // m2-fresh ruling (a): `--help` / `-h` is a request for usage, not a path.
-    // Same Lang::t('cli.usage') string the empty-source misuse arm prints; the
-    // stream differs by intent — asked-for usage rides stdout with exit 0,
-    // misusage stays a stderr refusal with exit 1.
-    if ($argv[1] === '--help' || $argv[1] === '-h') {
-        fwrite(STDOUT, Lang::t('cli.usage') . "\n");
-        exit(0);
+// named `0` to a stdin read).
+$asJson = false;
+$wantHelp = false;
+$operand = null;
+$operandSeen = false;
+$execCmd = null;
+for ($i = 1; $i < $argc; $i++) {
+    if ($argv[$i] === '--') {
+        $execCmd = array_slice($argv, $i + 1);
+        break;
     }
-    // Exec mode (finding 003): `-- cmd [args…]` runs the command on a fresh
-    // pseudo-terminal (spawned by sugar-pty — this lib never reimplements a
-    // PTY primitive) and reports the raw bytes it prints segment by segment
-    // as they dispatch, sharing the streaming reader with the stdin arm.
-    // Everything after `--` belongs to the child: this tool's own flags do
-    // not apply there, and the child's exit status is the tool's exit status.
-    if ($argv[1] === '--') {
-        $cmd = array_slice($argv, 2);
-        if ($cmd === []) {
-            fwrite(STDERR, Lang::t('cli.usage') . "\n");
-            exit(1);
-        }
-        stream_set_write_buffer(STDOUT, 0);
-        exit(ExecRunner::run($cmd, static function (string $line): void {
-            fwrite(STDOUT, $line . "\n");
-        }));
+    if ($argv[$i] === '--json') {
+        $asJson = true;
+        continue;
     }
+    if ($argv[$i] === '--help' || $argv[$i] === '-h') {
+        $wantHelp = true;
+        continue;
+    }
+    if (!$operandSeen) {
+        $operand = $argv[$i];
+        $operandSeen = true;
+    }
+}
+
+// The stream differs by intent — asked-for usage rides stdout with exit 0,
+// misusage stays a stderr refusal with exit 1.
+if ($wantHelp) {
+    fwrite(STDOUT, Lang::t('cli.usage') . "\n");
+    exit(0);
+}
+
+// Exec mode: `-- cmd [args…]` runs the command on a fresh pseudo-terminal
+// (spawned by sugar-pty — this lib never reimplements a PTY primitive) and
+// reports the raw bytes it prints segment by segment as they dispatch,
+// sharing the streaming reader with the stdin arm. Everything after `--`
+// belongs to the child: this tool's own flags do not apply there (the report
+// stays line-mode), and the child's exit status is the tool's exit status.
+if ($execCmd !== null) {
+    if ($execCmd === []) {
+        fwrite(STDERR, Lang::t('cli.usage') . "\n");
+        exit(1);
+    }
+    stream_set_write_buffer(STDOUT, 0);
+    exit(ExecRunner::run($execCmd, static function (string $line): void {
+        fwrite(STDOUT, $line . "\n");
+    }));
+}
+
+$input = '';
+// Did the caller actually hand us a source (file argument or a piped stdin)?
+// "No source at all" (interactive TTY, no argument) is misuse and answers with
+// usage; a source that happens to be empty is a legitimate report of nothing.
+$sawSource = false;
+if ($operandSeen && $operand !== '') {
     // Reject stream wrappers (php://, data://, http://, …) — a file-path argument
     // must not be coerced into fetching a URL or evaluating a wrapper. is_file()
     // is false for every wrapper scheme and for non-existent paths, and the
     // readability half of the gate (M2) answers an existing-but-unreadable file
     // with the same refusal + exit 1 instead of letting the bare read below
     // emit a PHP warning and exit 0 over empty content.
-    if (!is_file($argv[1]) || !is_readable($argv[1])) {
-        fwrite(STDERR, Lang::t('cli.not_a_file', ['path' => Inspector::sanitizeLabelBytes((string) $argv[1])]) . "\n");
+    if (!is_file($operand) || !is_readable($operand)) {
+        fwrite(STDERR, Lang::t('cli.not_a_file', ['path' => Inspector::sanitizeLabelBytes((string) $operand)]) . "\n");
         exit(1);
     }
     $sawSource = true;
-    $input = (string) file_get_contents($argv[1]);
-} elseif (($argv[1] ?? null) === '') {
+    $input = (string) file_get_contents($operand);
+} elseif ($operandSeen) {
     // `candy-ansi-inspect ""` — a present-but-empty argument names the source
     // as the empty string, which is never a file: refuse it (exit 1) rather
     // than quietly demoting to a stdin the caller never asked to read.
@@ -87,10 +118,16 @@ if (isset($argv[1]) && $argv[1] !== '') {
     // the writer closes — the old `stream_get_contents()` waited for EOF and
     // then rendered everything at once. Output is byte-identical to the
     // file-argument path: one `describe()` line per segment, newline-joined.
+    // Under `--json` there is no live form: a partial JSON array is not
+    // parseable, so segments are collected and one array is emitted at EOF
+    // (a sequin-style NDJSON mode is an open question, parked with finding
+    // 022's OG list — not decided here).
     stream_set_write_buffer(STDOUT, 0);
     $streaming = new StreamingInspector();
     $gotBytes = false;
     $printed = false;
+    /** @var list<\SugarCraft\AnsiInspect\Segment> $segments */
+    $segments = [];
     while (!feof(STDIN)) {
         $chunk = fread(STDIN, 8192);
         if ($chunk === false) {
@@ -104,13 +141,25 @@ if (isset($argv[1]) && $argv[1] !== '') {
         }
         $gotBytes = true;
         foreach ($streaming->feed($chunk) as $segment) {
+            if ($asJson) {
+                $segments[] = $segment;
+            } else {
+                $printed = true;
+                fwrite(STDOUT, $segment->describe() . "\n");
+            }
+        }
+    }
+    foreach ($streaming->finish() as $segment) {
+        if ($asJson) {
+            $segments[] = $segment;
+        } else {
             $printed = true;
             fwrite(STDOUT, $segment->describe() . "\n");
         }
     }
-    foreach ($streaming->finish() as $segment) {
-        $printed = true;
-        fwrite(STDOUT, $segment->describe() . "\n");
+    if ($asJson) {
+        echo Inspector::encodeSegmentsJson($segments), PHP_EOL;
+        exit(0);
     }
     if ($gotBytes && !$printed) {
         // Non-empty stream that dispatched nothing (a lone invalid byte — README
@@ -130,8 +179,12 @@ if ($input === '') {
     // A source WAS given and it is empty (empty file, `printf '' | candy-ansi-inspect`):
     // the report of an empty stream is an empty report, and inspecting nothing
     // successfully is success. Exiting 1 here used to break scripts that pipe
-    // possibly-empty command output into the inspector.
+    // possibly-empty command output into the inspector. Under `--json` the
+    // parseable shape of "nothing reported" is the empty array.
+    if ($asJson) {
+        echo Inspector::encodeSegmentsJson([]), PHP_EOL;
+    }
     exit(0);
 }
 
-echo Inspector::report($input), PHP_EOL;
+echo ($asJson ? Inspector::reportAsJson($input) : Inspector::report($input)), PHP_EOL;

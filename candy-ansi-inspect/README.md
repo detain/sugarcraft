@@ -68,6 +68,13 @@ PTY work) and reports every sequence it prints the instant it completes, then
 exits with the child's status. Everything after `--` belongs to the command —
 including its own flags.
 
+`--json` renders the same report as a parseable JSON array — one object per
+segment with `type` (`text` or `sequence`), raw `content` bytes, and the human
+`description`. JSON is never live-streamed: a partial array is not parseable,
+so `--json` on a pipe collects the segments and prints the array when the
+source ends; the flag works before or after the file operand, and `--` ends
+flag parsing — the exec report stays line-mode.
+
 An empty source is a valid report of nothing: an empty file, or a command that
 printed nothing, yields an empty report and exit status **0**, so
 `cmd | candy-ansi-inspect` stays chainable when `cmd` has no output. Usage is printed on

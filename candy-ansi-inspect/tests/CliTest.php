@@ -99,6 +99,67 @@ final class CliTest extends TestCase
         $this->assertSame('', $stdout);
     }
 
+    public function testJsonFlagOnStdinEmitsAParseableArray(): void
+    {
+        // Finding 005: `--json` — the report machine-readable, with raw bytes
+        // in `content` and the human label in `description`.
+        [$code, $stdout, $stderr] = self::runCliWithStdin("hi\x1b[31mred\x1b[0m", ['--json']);
+        $this->assertSame(0, $code, $stderr);
+        $decoded = json_decode($stdout, true, 512, JSON_THROW_ON_ERROR);
+        $this->assertSame(
+            [
+                ['type' => 'text', 'content' => 'hi', 'description' => 'hi'],
+                ['type' => 'sequence', 'content' => "\x1b[31m", 'description' => 'ESC[31m  SGR foreground red'],
+                ['type' => 'text', 'content' => 'red', 'description' => 'red'],
+                ['type' => 'sequence', 'content' => "\x1b[0m", 'description' => 'ESC[0m  SGR reset'],
+            ],
+            $decoded,
+        );
+    }
+
+    public function testJsonFlagWorksBeforeAndAfterTheFileOperand(): void
+    {
+        $dir = sys_get_temp_dir() . '/aip06-' . bin2hex(random_bytes(4));
+        mkdir($dir);
+        $path = $dir . '/capture.bin';
+        file_put_contents($path, "\x1b[31mred\x1b[0m");
+        try {
+            [$codeA, $stdoutA, $stderrA] = self::runCliWithStdin('', ['--json', $path]);
+            [$codeB, $stdoutB, $stderrB] = self::runCliWithStdin('', [$path, '--json']);
+            $this->assertSame(0, $codeA, $stderrA);
+            $this->assertSame(0, $codeB, $stderrB);
+            $this->assertSame($stdoutA, $stdoutB, 'flag position must not change the report');
+            $decoded = json_decode($stdoutA, true, 512, JSON_THROW_ON_ERROR);
+            $this->assertCount(3, $decoded);
+            $this->assertSame("\x1b[31m", $decoded[0]['content'], 'raw bytes ride in content');
+        } finally {
+            unlink($path);
+            rmdir($dir);
+        }
+    }
+
+    public function testJsonOfAnEmptyStreamIsTheEmptyArray(): void
+    {
+        [$code, $stdout, $stderr] = self::runCliWithStdin('', ['--json']);
+        $this->assertSame(0, $code, $stderr);
+        $this->assertSame([], json_decode($stdout, true, 512, JSON_THROW_ON_ERROR));
+    }
+
+    public function testJsonFlagNeverCrossesTheExecBoundary(): void
+    {
+        // Everything after `--` belongs to the child (AIP-03 contract); the
+        // exec report stays line-mode, so a stray --json before the boundary
+        // must not turn the live report into a collected array.
+        [$code, $stdout, $stderr] = self::runCliWithStdin('', ['--json', '--', 'printf', 'plain']);
+        if ($code === 1 && str_contains($stderr, 'pseudo-terminal')) {
+            $this->markTestSkipped('no pseudo-terminal on this runner: ' . trim($stderr));
+        }
+        $this->assertSame(0, $code, $stderr);
+        $this->assertStringNotContainsString('{', $stdout);
+        $this->assertStringNotContainsString('[', $stdout);
+        $this->assertStringContainsString('plain', $stdout);
+    }
+
     public function testRefusalTokenizesControlBytesInThePathArgument(): void
     {
         // M1-fresh: the refusal echoes the path argument. Without the

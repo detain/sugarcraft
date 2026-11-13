@@ -55,7 +55,18 @@ final class Inspector
      */
     public static function reportAsJson(string $input): string
     {
-        $segments = self::parse($input);
+        return self::encodeSegmentsJson(self::parse($input));
+    }
+
+    /**
+     * JSON projection of an already-parsed segment list — the shared body of
+     * reportAsJson() and the bin's `--json` streaming arm (finding 005: a
+     * pipe under --json collects segments and encodes the same array shape).
+     *
+     * @param iterable<Segment> $segments
+     */
+    public static function encodeSegmentsJson(iterable $segments): string
+    {
         $result = [];
         foreach ($segments as $seg) {
             $result[] = [
