@@ -37,10 +37,42 @@ final class ManagerDeleteTest extends TestCase
     protected function tearDown(): void
     {
         $this->removeDir($this->tmpDir);
-        // Sweep any leftover trash roots this process may have created.
-        foreach (glob(sys_get_temp_dir() . '/candyfiles-trash-*') ?: [] as $trash) {
+        // CF-41 (audit 074): this sweep used to glob EVERY
+        // candyfiles-trash-* root under the temp dir. The trash root name
+        // carries the creating PID (Manager's candyfiles-trash-<pid>-<uid>
+        // seam), so under the mandated K=24 parallel test run the old
+        // pattern deleted OTHER SESSIONS' live trash out from under their
+        // own tests — verified concurrent damage, not a theory. Only this
+        // process's roots may ever be swept here.
+        foreach (glob(sys_get_temp_dir() . '/candyfiles-trash-' . getmypid() . '-*') ?: [] as $trash) {
             $this->removeDir($trash);
         }
+    }
+
+    /**
+     * CF-41 (audit 074) fixture for the law above: two trash roots exist,
+     * one wearing this PID and one wearing a stranger's; the sweep (run
+     * manually here — tearDown repeats it for real after every test)
+     * removes ONLY ours.
+     */
+    public function testTheTrashSweepNeverTouchesAnotherSessionsRoot(): void
+    {
+        $ours = sys_get_temp_dir() . '/candyfiles-trash-' . getmypid() . '-sweep-ours';
+        $foreignPid = getmypid() === 999999 ? 888888 : 999999;
+        $theirs = sys_get_temp_dir() . '/candyfiles-trash-' . $foreignPid . '-sweep-theirs';
+        mkdir($ours, 0755, true);
+        mkdir($theirs, 0755, true);
+        file_put_contents($ours . '/mine', 'x');
+        file_put_contents($theirs . '/theirs', 'x');
+
+        foreach (glob(sys_get_temp_dir() . '/candyfiles-trash-' . getmypid() . '-*') ?: [] as $trash) {
+            $this->removeDir($trash);
+        }
+
+        $this->assertDirectoryDoesNotExist($ours, 'our session root must be swept');
+        $this->assertDirectoryExists($theirs, 'a stranger PID root is not ours to delete');
+        @unlink($theirs . '/theirs');
+        @rmdir($theirs);
     }
 
     private function removeDir(string $path): void
@@ -71,7 +103,7 @@ final class ManagerDeleteTest extends TestCase
         $m = Manager::start($this->tmpDir, $this->tmpDir, $this->lister);
         // Cursor 0 is the '..' parent sentinel; move down to keep-me.txt.
         [$m] = $m->update(new KeyMsg(KeyType::Char, 'j'));
-        [$m] = $m->update(new KeyMsg(KeyType::Char, ' ')); // select
+        [$m] = $m->update(new KeyMsg(KeyType::Space, ' ')); // select
         $this->assertNotEmpty($m->activePane()->selected, 'file should be selected');
 
         // Arm + confirm the delete.
@@ -106,7 +138,7 @@ final class ManagerDeleteTest extends TestCase
 
         $m = Manager::start($this->tmpDir, $this->tmpDir, $this->lister);
         [$m] = $m->update(new KeyMsg(KeyType::Char, 'j'));
-        [$m] = $m->update(new KeyMsg(KeyType::Char, ' '));
+        [$m] = $m->update(new KeyMsg(KeyType::Space, ' '));
         [$m] = $m->update(new KeyMsg(KeyType::Char, 'd'));
         [$deleted] = $m->update(new KeyMsg(KeyType::Char, 'y'));
 
@@ -135,7 +167,7 @@ final class ManagerDeleteTest extends TestCase
 
         $m = Manager::start($this->tmpDir, $this->tmpDir, $this->lister);
         [$m] = $m->update(new KeyMsg(KeyType::Char, 'j'));
-        [$m] = $m->update(new KeyMsg(KeyType::Char, ' '));
+        [$m] = $m->update(new KeyMsg(KeyType::Space, ' '));
         [$m] = $m->update(new KeyMsg(KeyType::Char, 'd'));
         [$deleted] = $m->update(new KeyMsg(KeyType::Char, 'y'));
         $this->assertFileDoesNotExist($file);
@@ -174,7 +206,7 @@ final class ManagerDeleteTest extends TestCase
 
         $m = Manager::start($this->tmpDir, $this->tmpDir, $this->lister);
         [$m] = $m->update(new KeyMsg(KeyType::Char, 'j'));
-        [$m] = $m->update(new KeyMsg(KeyType::Char, ' '));
+        [$m] = $m->update(new KeyMsg(KeyType::Space, ' '));
         [$m] = $m->update(new KeyMsg(KeyType::Char, 'd'));
         [$deleted] = $m->update(new KeyMsg(KeyType::Char, 'y'));
         [$undone] = $deleted->update(new KeyMsg(KeyType::Char, 'u'));
@@ -256,7 +288,7 @@ final class ManagerDeleteTest extends TestCase
         file_put_contents($this->tmpDir . '/same-dev.txt', 'x');
         $m = Manager::start($this->tmpDir, $this->tmpDir, $this->lister);
         [$m] = $m->update(new KeyMsg(KeyType::Char, 'j'));
-        [$m] = $m->update(new KeyMsg(KeyType::Char, ' '));
+        [$m] = $m->update(new KeyMsg(KeyType::Space, ' '));
         [$armed] = $m->update(new KeyMsg(KeyType::Char, 'd'));
         $this->assertSame(ConfirmState::DeleteSelected, $armed->confirm);
         $this->assertStringNotContainsString('PERMANENT', $armed->status,
@@ -419,7 +451,7 @@ final class ManagerDeleteTest extends TestCase
             'fixture cursor must land on the long-named file',
         );
 
-        [$m] = $m->update(new KeyMsg(KeyType::Char, ' '));
+        [$m] = $m->update(new KeyMsg(KeyType::Space, ' '));
         [$m] = $m->update(new KeyMsg(KeyType::Char, 'd'));
         [$deleted] = $m->update(new KeyMsg(KeyType::Char, 'y'));
 
@@ -449,7 +481,7 @@ final class ManagerDeleteTest extends TestCase
 
         $m = Manager::start($dir, $dir, $this->lister);
         [$m] = $m->update(new KeyMsg(KeyType::Char, 'j'));   // onto gone.txt
-        [$m] = $m->update(new KeyMsg(KeyType::Char, ' '));   // select
+        [$m] = $m->update(new KeyMsg(KeyType::Space, ' '));   // select
         [$armed] = $m->update(new KeyMsg(KeyType::Char, 'd'));
         $this->assertSame(ConfirmState::DeleteSelected, $armed->confirm);
         [$done] = $armed->update(new KeyMsg(KeyType::Char, 'y'));

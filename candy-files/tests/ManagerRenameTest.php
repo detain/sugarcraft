@@ -465,4 +465,49 @@ final class ManagerRenameTest extends TestCase
         $this->assertFileDoesNotExist($this->tmpDir . '/source.txt');
         $this->assertSame('payload', file_get_contents($this->tmpDir . '/victim.txt'));
     }
+
+    /**
+     * CF-41 (audit 009): the rename full cycle — perform, undo, redo — on
+     * real bytes, asserted by NAME AND CONTENT at every step. This is the
+     * pin the missing cycle tests allowed a live bug to stay green: the old
+     * redoRename replayed the REVERSE rename, so after a real undo its
+     * file_exists($newPath) guard was false by construction and the whole
+     * redo was a silent no-op that still announced itself as "redone".
+     * Against that source the "$newName exists after Ctrl+Y" line fails.
+     */
+    public function testRenameFullCycleReplaysTheForwardRename(): void
+    {
+        file_put_contents($this->tmpDir . '/oldname.txt', 'RENAME-CYCLE');
+        $m = Manager::start($this->tmpDir, $this->tmpDir, $this->lister);
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'j')); // off the '..' sentinel
+
+        [$armed] = $m->update(new KeyMsg(KeyType::Char, 'R'));
+        foreach (['n', 'e', 'w'] as $ch) {
+            [$armed] = $armed->update(new KeyMsg(KeyType::Char, $ch));
+        }
+        [$done] = $armed->update(new KeyMsg(KeyType::Enter, ''));
+        $this->assertFileExists($this->tmpDir . '/new');
+        $this->assertFileDoesNotExist($this->tmpDir . '/oldname.txt');
+
+        [$undone] = $done->update(new KeyMsg(KeyType::Char, 'u'));
+        $this->assertFileExists($this->tmpDir . '/oldname.txt');
+        $this->assertFileDoesNotExist($this->tmpDir . '/new');
+        $this->assertSame('RENAME-CYCLE', file_get_contents($this->tmpDir . '/oldname.txt'));
+
+        [$redone] = $undone->update(self::decode("\x19")); // Ctrl+Y from the real wire
+        $this->assertFileExists($this->tmpDir . '/new', 'redo must replay the FORWARD rename');
+        $this->assertFileDoesNotExist($this->tmpDir . '/oldname.txt');
+        $this->assertSame('RENAME-CYCLE', file_get_contents($this->tmpDir . '/new'));
+        $this->assertFalse($redone->canRedo());
+    }
+
+    private static function decode(string $bytes): KeyMsg
+    {
+        foreach ((new \SugarCraft\Core\InputReader())->parse($bytes) as $msg) {
+            if ($msg instanceof KeyMsg) {
+                return $msg;
+            }
+        }
+        self::fail('the parser produced no KeyMsg for ' . bin2hex($bytes));
+    }
 }

@@ -41,6 +41,23 @@ final class ManagerTest extends TestCase
         return Manager::start('/', '/home', $this->fakeFs());
     }
 
+    /** Remove a recursively-built tmp tree (cap-test hygiene). */
+    private function removeDir(string $path): void
+    {
+        foreach (@scandir($path) ?: [] as $item) {
+            if ($item === '.' || $item === '..') {
+                continue;
+            }
+            $full = $path . '/' . $item;
+            if (is_dir($full)) {
+                $this->removeDir($full);
+            } else {
+                @unlink($full);
+            }
+        }
+        @rmdir($path);
+    }
+
     public function testStartOpensBothPanes(): void
     {
         $m = $this->start();
@@ -352,6 +369,75 @@ final class ManagerTest extends TestCase
         [$next] = $m->update($key);
         $this->assertSame([$cursorName], $next->left->selectedNames());
         $this->assertSame(1, $next->left->cursor, 'cursor advances after toggle');
+    }
+
+    /**
+     * CF-41 (audit 055): dispatch keeps the `$plain && rune === ' '` leg
+     * as declared belt-braces for a future parser revision that surfaces
+     * space on the printable side. The belt must stay wired — pin it as
+     * its OWN unit so a production arm removal reads as what it is
+     * (deliberate) rather than silently draining nine fabrications that
+     * pretended to be wire tests. The REAL wire is the test above.
+     */
+    public function testCharSpaceStillTogglesAsDeclaredBeltBraces(): void
+    {
+        $m = $this->start();
+        $cursorName = $m->left->entries[0]->name;
+        [$next] = $m->update(new KeyMsg(KeyType::Char, ' '));
+        $this->assertSame([$cursorName], $next->left->selectedNames(), 'the declared belt arm still answers');
+    }
+
+    /**
+     * CF-41 (audit 072): the undo ceiling is a DROP-AT-HEAD policy and
+     * nothing pinned it. Fifty-one real moves through real dispatch: the
+     * stack must hold exactly the 50 most recent actions (cap pin — fails
+     * if the array_slice is removed), the evicted record must be the
+     * OLDEST (order pin — fails if the slice drops from the tail), and the
+     * redo side must swallow all 50 undos without its own cap (asymmetry
+     * by design: the ceiling bounds memory of past actions, while replay
+     * of what was just undone may never silently forget an entry — fails
+     * if a cap is ever mirrored onto redoStack).
+     */
+    public function testUndoStackDropsTheOldestAtTheCapAndRedoStaysUnbounded(): void
+    {
+        $left = sys_get_temp_dir() . '/sugarcraft-cap-test-' . uniqid('', true);
+        $right = $left . '-dst';
+        mkdir($left, 0755, true);
+        mkdir($right, 0755, true);
+        $names = [];
+        for ($i = 0; $i < 51; ++$i) {
+            $name = sprintf('f%02d', $i);
+            file_put_contents($left . '/' . $name, 'p' . $i);
+            $names[] = $name;
+        }
+
+        $m = Manager::start($left, $right, \SugarCraft\Files\FsLister::lister());
+        $moveCount = 0;
+        for ($i = 0; $i < 51; ++$i) {
+            [$m] = $m->update(new KeyMsg(KeyType::Char, 'j'));      // onto the next file
+            [$armed] = $m->update(new KeyMsg(KeyType::Char, 'm'));   // arm move -> right dir
+            $this->assertSame(ConfirmState::MoveSelected, $armed->confirm);
+            [$m] = $armed->update(new KeyMsg(KeyType::Char, 'y'));   // commit
+            $moveCount++;
+        }
+
+        $this->assertCount(50, $m->undoStack, 'the ceiling is UNDO_LIMIT and nothing else');
+        $oldestKeys = array_keys($m->undoStack[0]->items);
+        $this->assertSame($left . '/f01', $oldestKeys[0], 'the FIRST record must be the second move — the oldest left the head, not the tail');
+        $this->assertFileExists($right . '/f00', 'eviction forgets the record, it never unwinds the already-applied bytes');
+
+        $undos = 0;
+        while ($m->canUndo()) {
+            [$m] = $m->update(new KeyMsg(KeyType::Char, 'u'));
+            $undos++;
+            $this->assertLessThan(60, $undos, 'safety net against a runaway loop');
+        }
+        $this->assertSame(50, $undos);
+        $this->assertCount(50, $m->redoStack, 'the redo side carries no cap (documented asymmetry)');
+        $this->assertFalse($m->canUndo());
+
+        $this->removeDir($left);
+        $this->removeDir($right);
     }
 
     public function testSCyclesSortOnActivePane(): void
@@ -804,12 +890,45 @@ final class ManagerTest extends TestCase
         $this->assertStringContainsString('nothing to undo', $next->status);
     }
 
-    public function testCtrlZTriggersUndo(): void
+    /**
+     * CF-41 (audit 054): the old pin sent a fabricated plain `Char 'u'`
+     * — a DIFFERENT binding (bare u is its own arm) — while the test
+     * name promised Ctrl+Z. The chord is now driven from real wire bytes
+     * through the production parser, in both shapes the terminal can
+     * report it in, and the premise (Char, ctrl, rune 'z') is asserted
+     * before dispatch. The bare-z sibling below pins the distinction.
+     */
+    public static function ctrlZWireBytes(): iterable
     {
+        yield 'plain 0x1a'   => ["\x1a"];
+        yield 'kitty code'   => ["\x1b[122;5u"];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('ctrlZWireBytes')]
+    public function testCtrlZTriggersUndo(string $bytes): void
+    {
+        $key = $this->decode($bytes);
+        $this->assertSame(KeyType::Char, $key->type);
+        $this->assertTrue($key->ctrl, 'fixture premise: the chord decodes ctrl-modified');
+        $this->assertSame('z', $key->rune, 'fixture premise: rune is the letter, not the raw control byte');
+
         $m = $this->start();
         $this->assertFalse($m->canUndo());
-        [$next] = $m->update(new KeyMsg(KeyType::Char, 'u'));
+        [$next] = $m->update($key);
         $this->assertStringContainsString('nothing to undo', $next->status);
+    }
+
+    /**
+     * CF-41 (audit 054) distinguisher: plain 'z' is not the undo binding.
+     * (Bare 'u' legitimately IS an undo alias — mc lineage — so the
+     * premise pins only that the UNMODIFIED letter never reaches the
+     * chord's behavior through some widened ctrl check.)
+     */
+    public function testBareZIsNotTheUndoChord(): void
+    {
+        $m = $this->start();
+        [$next] = $m->update($this->decode('z'));
+        $this->assertStringNotContainsString('nothing to undo', $next->status, 'plain z must not consume the undo arm');
     }
 
     public function testCanUndoAfterDelete(): void
@@ -832,16 +951,15 @@ final class ManagerTest extends TestCase
         $m = Manager::start($tmpDir, $tmpDir, $lister);
 
         // At tmpDir, first entry is '..' (parent), second is 'file.txt'
-        // Move down once to get past '..' then select
+        // Move down once to get past '..' then select.
+        // CF-41 (audit 055): the selection is HARD-asserted now. The old
+        // body quietly skipped when the mark came back empty — exactly the
+        // shape that turns a real Space-binding regression into a green
+        // run. The bytes are created by this test in its own tmp dir;
+        // there is no environmental escape from checking them.
         [$m] = $m->update(new KeyMsg(KeyType::Char, 'j')); // Move to file.txt
-        [$m] = $m->update(new KeyMsg(KeyType::Char, ' ')); // Select
-
-        // If selection is empty (because file.txt doesn't exist on real fs for some reason), skip
-        if (empty($m->left->selected)) {
-            @unlink($tmpDir . '/file.txt');
-            @rmdir($tmpDir);
-            $this->markTestSkipped('Cannot test undo without working filesystem selection');
-        }
+        [$m] = $m->update(new KeyMsg(KeyType::Space, ' ')); // Select — the real wire shape
+        $this->assertArrayHasKey('file.txt', $m->left->selected, 'Space must mark the file under cursor');
 
         // Arm delete
         [$m] = $m->update(new KeyMsg(KeyType::Char, 'd'));

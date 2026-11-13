@@ -280,4 +280,81 @@ final class ManagerMoveTest extends TestCase
         $this->assertContains('a.txt', $leftNames, 'undo re-homed the bytes, the source pane shows them');
         $this->assertFileExists($left . '/a.txt');
     }
+
+    /**
+     * CF-41 (audit 009): the move leg of the delete/undo-safety story had
+     * no full-cycle pin — perform, undo, redo driven through real dispatch
+     * with the BYTES asserted on exactly one side of the pair at every
+     * transition. Content-identity is what makes the pin bite: a swapped
+     * old/new in redoMove could no longer pass as the silent no-op that
+     * redoRename's reverse polarity actually was (fixed in this same wave).
+     */
+    public function testMoveFullCyclePutsTheBytesOnTheRightSideEverywhere(): void
+    {
+        $left = $this->tmpDir . '/left';
+        $right = $this->tmpDir . '/right';
+        mkdir($left, 0755, true);
+        mkdir($right, 0755, true);
+        file_put_contents($left . '/a.txt', 'MOVE-CYCLE');
+
+        $m = Manager::start($left, $right, $this->lister);
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'j'));
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'm'));
+        [$moved] = $m->update(new KeyMsg(KeyType::Char, 'y'));
+        $this->assertFileExists($right . '/a.txt');
+        $this->assertFileDoesNotExist($left . '/a.txt');
+
+        [$undone] = $moved->update(new KeyMsg(KeyType::Char, 'u'));
+        $this->assertFileExists($left . '/a.txt');
+        $this->assertFileDoesNotExist($right . '/a.txt');
+        $this->assertSame('MOVE-CYCLE', file_get_contents($left . '/a.txt'));
+
+        [$redone] = $undone->update(self::decode("\x19")); // Ctrl+Y from the real wire
+        $this->assertFileExists($right . '/a.txt');
+        $this->assertFileDoesNotExist($left . '/a.txt');
+        $this->assertSame('MOVE-CYCLE', file_get_contents($right . '/a.txt'), 'redo replays the FORWARD move');
+        $this->assertFalse($redone->canRedo(), 'the cycle consumed the redo stack');
+
+        [$again] = $redone->update(new KeyMsg(KeyType::Char, 'u'));
+        $this->assertFileExists($left . '/a.txt', 'a redone action is undoable once more');
+    }
+
+    /**
+     * CF-41 (audit 009): copy-undo is an informational no-op BY DESIGN —
+     * pinned here with the words, the stack transfer, and (the leg that
+     * matters) redo touching no bytes: replaying a Copy must neither
+     * conjure a second duplicate nor delete the original.
+     */
+    public function testCopyUndoReportsNoopAndRedoTouchesNoBytes(): void
+    {
+        file_put_contents($this->tmpDir . '/src.txt', 'ORIGINAL');
+        $pane = \SugarCraft\Files\Pane::open($this->tmpDir, $this->lister);
+        $m = Manager::builder()
+            ->withLeft($pane)
+            ->withRight($pane)
+            ->withLister($this->lister)
+            ->withUndoStack([\SugarCraft\Files\UndoAction::copy([$this->tmpDir . '/src.txt' => $this->tmpDir . '/copy.txt'])])
+            ->build();
+
+        [$undone] = $m->update(new KeyMsg(KeyType::Char, 'u'));
+        $this->assertStringContainsString('copy left in place', $undone->status);
+        $this->assertFalse($undone->canUndo());
+        $this->assertTrue($undone->canRedo(), 'the informational undo still hands the action to redo');
+
+        [$redone] = $undone->update(self::decode("\x19"));
+        $this->assertStringContainsString('redone', $redone->status);
+        $this->assertFalse($redone->canRedo());
+        $this->assertFileExists($this->tmpDir . '/src.txt');
+        $this->assertFileDoesNotExist($this->tmpDir . '/copy.txt', 'copy-redo must not conjure a duplicate');
+    }
+
+    private static function decode(string $bytes): KeyMsg
+    {
+        foreach ((new \SugarCraft\Core\InputReader())->parse($bytes) as $msg) {
+            if ($msg instanceof KeyMsg) {
+                return $msg;
+            }
+        }
+        self::fail('the parser produced no KeyMsg for ' . bin2hex($bytes));
+    }
 }

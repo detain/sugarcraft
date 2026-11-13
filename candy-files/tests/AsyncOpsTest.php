@@ -159,8 +159,15 @@ final class AsyncOpsTest extends TestCase
             $this->tmpDir . '/a.txt' => $this->tmpDir . '/copy_a.txt',
             $this->tmpDir . '/b.txt' => $this->tmpDir . '/copy_b.txt',
         ];
-        file_put_contents($map[$this->tmpDir . '/a.txt'], 'file a');
-        file_put_contents($map[$this->tmpDir . '/b.txt'], 'file b');
+        // CF-41 (audit 073, the fixture IS the finding): the original
+        // legs here read file_put_contents($map[$tmpDir.'/a.txt'], ...) —
+        // the map VALUE is the DESTINATION, so the sources never existed
+        // and no copy ever ran. The vacuous self-equality asserts passed
+        // on the destination file the fixture itself had just written.
+        // Sources belong at the map KEYS; the copy is now the only thing
+        // that can create the destinations.
+        file_put_contents($this->tmpDir . '/a.txt', 'file a');
+        file_put_contents($this->tmpDir . '/b.txt', 'file b');
 
         $promise = $this->ops->copyManyAsync($map);
 
@@ -173,10 +180,17 @@ final class AsyncOpsTest extends TestCase
         Loop::run();
 
         $this->assertNotNull($resolved);
-        $this->assertSame($map[$this->tmpDir . '/a.txt'], $this->tmpDir . '/copy_a.txt');
-        $this->assertSame($map[$this->tmpDir . '/b.txt'], $this->tmpDir . '/copy_b.txt');
-        $this->assertFileExists($this->tmpDir . '/copy_a.txt');
-        $this->assertFileExists($this->tmpDir . '/copy_b.txt');
+        // CF-41 (audit 073): the old pair here was self-equality —
+        // assertSame($map[$src], $dstLiteral) reads the map back against
+        // its own value and PASSES ON AN ALL-FAILURE RESULT MAP (it never
+        // even looked at $resolved). Assert the contract instead: every
+        // source resolved true, and the bytes actually landed on disk.
+        $this->assertSame([true, true], [
+            $resolved[$this->tmpDir . '/a.txt'] ?? null,
+            $resolved[$this->tmpDir . '/b.txt'] ?? null,
+        ], 'copyManyAsync answers source => true per CF-21 contract');
+        $this->assertSame('file a', file_get_contents($this->tmpDir . '/copy_a.txt'));
+        $this->assertSame('file b', file_get_contents($this->tmpDir . '/copy_b.txt'));
     }
 
     public function testMoveManyAsyncReturnsPromise(): void

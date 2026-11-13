@@ -2479,11 +2479,15 @@ final class Manager implements Model
             if (!is_string($oldPath) || !is_string($newPath)) {
                 continue;
             }
-            // Re-do the rename: newPath -> oldName in newDir (reverse of undo's rename)
-            $oldName = basename($oldPath);
-            $newDir = dirname($newPath);
-            $targetPath = Pane::join($newDir, $oldName);
-            if (file_exists($newPath) && !@rename($newPath, $targetPath)) {
+            // CF-41 (audit 009, mutation-proven fix): replay the FORWARD
+            // rename — the stored map is original => new, exactly what
+            // performRename() pushed. The old body replayed the REVERSE
+            // (newPath => oldName in newPath's dir) under a comment that
+            // misread its own polarity: after a real undo the new name no
+            // longer exists, so file_exists($newPath) was false by
+            // construction and the whole leg was a silent no-op that still
+            // reported "redone". redoMove's forward shape is the sibling.
+            if (file_exists($oldPath) && !@rename($oldPath, $newPath)) {
                 $errors++;
             }
         }

@@ -10,10 +10,18 @@ use PHPUnit\Framework\TestCase;
 
 final class UndoActionTest extends TestCase
 {
+    /**
+     * CF-41 (audit 053): every delete fixture here used to carry the
+     * pre-trash schema {path,isDir,content,stat} — keys production has not
+     * written since the CF-04 trash move made undo a byte-rename, not a
+     * content replay. The record is a LOCATION ({'trash'} = where the
+     * bytes live now, '' = permanently gone), so that is what these
+     * fixtures, and the engine round-trip at the bottom, pin.
+     */
     public function testDeleteCreatesDeleteAction(): void
     {
         $items = [
-            ['path' => '/tmp/test.txt', 'isDir' => false, 'content' => 'hello', 'stat' => []],
+            ['path' => '/tmp/test.txt', 'isDir' => false, 'trash' => '/tmp/trash/test.txt'],
         ];
         $action = UndoAction::delete($items);
 
@@ -25,9 +33,9 @@ final class UndoActionTest extends TestCase
     public function testDeleteMultipleItems(): void
     {
         $items = [
-            ['path' => '/tmp/a.txt', 'isDir' => false, 'content' => 'a', 'stat' => []],
-            ['path' => '/tmp/b.txt', 'isDir' => false, 'content' => 'b', 'stat' => []],
-            ['path' => '/tmp/c.txt', 'isDir' => false, 'content' => 'c', 'stat' => []],
+            ['path' => '/tmp/a.txt', 'isDir' => false, 'trash' => '/tmp/trash/a.txt'],
+            ['path' => '/tmp/b.txt', 'isDir' => false, 'trash' => '/tmp/trash/b.txt'],
+            ['path' => '/tmp/c.txt', 'isDir' => false, 'trash' => ''],   // EXDEV-permanent leg
         ];
         $action = UndoAction::delete($items);
 
@@ -39,7 +47,7 @@ final class UndoActionTest extends TestCase
     public function testDeleteWithDirectories(): void
     {
         $items = [
-            ['path' => '/tmp/mydir', 'isDir' => true, 'content' => null, 'stat' => []],
+            ['path' => '/tmp/mydir', 'isDir' => true, 'trash' => '/tmp/trash/mydir'],
         ];
         $action = UndoAction::delete($items);
 
@@ -161,7 +169,7 @@ final class UndoActionTest extends TestCase
 
     public function testDescriptionIsReadonly(): void
     {
-        $action = UndoAction::delete([['path' => '/tmp/x', 'isDir' => false, 'content' => null, 'stat' => []]]);
+        $action = UndoAction::delete([['path' => '/tmp/x', 'isDir' => false, 'trash' => '/tmp/trash/x']]);
 
         $this->assertSame('items deleted: 1', $action->description);
         $this->assertSame('items deleted: 1', $action->description); // Ensure it's consistent
@@ -171,13 +179,64 @@ final class UndoActionTest extends TestCase
     public function testItemsPreservesOriginalStructure(): void
     {
         $originalItems = [
-            ['path' => '/tmp/test.txt', 'isDir' => false, 'content' => 'content here', 'stat' => ['size' => 12]],
+            ['path' => '/tmp/test.txt', 'isDir' => false, 'trash' => '/tmp/trash/test.txt'],
         ];
         $action = UndoAction::delete($originalItems);
 
         $this->assertSame($originalItems, $action->items);
         $this->assertSame('/tmp/test.txt', $action->items[0]['path']);
-        $this->assertSame('content here', $action->items[0]['content']);
-        $this->assertSame(['size' => 12], $action->items[0]['stat']);
+        $this->assertSame('/tmp/trash/test.txt', $action->items[0]['trash']);
+    }
+
+    /**
+     * CF-41 (audit 053): the fixtures above describe the record; this one
+     * PROVES production writes it. Delete a real file through the real
+     * dispatch (j, d, y) and read the action back off the stack: the keys
+     * must be exactly the live {path,isDir,trash} schema — the record's
+     * trash leg must point at bytes that actually exist — and undo must
+     * resurrect them by LOCATION rename, not by replaying stored content
+     * (a stored content string would be the dead schema sneaking back).
+     */
+    public function testProductionDeleteWritesTheLiveSchemaAndRestoresByLocation(): void
+    {
+        $dir = sys_get_temp_dir() . '/sugarcraft-uaschema-' . uniqid('', true);
+        mkdir($dir, 0755, true);
+        file_put_contents($dir . '/victim.txt', 'LOCATION-RESTORED');
+
+        $m = \SugarCraft\Files\Manager::start($dir, $dir, \SugarCraft\Files\FsLister::lister());
+        [$m] = $m->update(new \SugarCraft\Core\Msg\KeyMsg(\SugarCraft\Core\KeyType::Char, 'j'));
+        [$armed] = $m->update(new \SugarCraft\Core\Msg\KeyMsg(\SugarCraft\Core\KeyType::Char, 'd'));
+        [$deleted] = $armed->update(new \SugarCraft\Core\Msg\KeyMsg(\SugarCraft\Core\KeyType::Char, 'y'));
+
+        $this->assertCount(1, $deleted->undoStack);
+        $record = $deleted->undoStack[0];
+        $this->assertSame(UndoActionType::Delete, $record->type);
+        $this->assertSame(['path', 'isDir', 'trash'], array_keys($record->items[0]), 'the production schema is path/isDir/trash — nothing else');
+        $this->assertSame($dir . '/victim.txt', $record->items[0]['path']);
+        $this->assertFalse($record->items[0]['isDir']);
+        $trash = $record->items[0]['trash'];
+        // No conditional escape (the pattern CF-41/055 just executed): a
+        // same-device tmp root trash-renames, always — ManagerDeleteTest's
+        // CF-04 guard pins that premise from the other side.
+        $this->assertNotSame('', $trash, 'a temp-dir delete trashes; an empty location here means the trash engine regressed');
+        $this->assertFileExists($trash, 'the record names where the bytes actually live');
+        $this->assertStringContainsString('LOCATION-RESTORED', (string) file_get_contents($trash));
+
+        [$undone] = $deleted->update(new \SugarCraft\Core\Msg\KeyMsg(\SugarCraft\Core\KeyType::Char, 'u'));
+        $this->assertFileExists($dir . '/victim.txt');
+        $this->assertSame('LOCATION-RESTORED', file_get_contents($dir . '/victim.txt'));
+        $this->assertStringContainsString('undone', $undone->status);
+
+        // Sweep the trash root this test created (own-PID prefix only, CF-41/074 law).
+        foreach (glob(sys_get_temp_dir() . '/candyfiles-trash-' . getmypid() . '-*') ?: [] as $root) {
+            foreach (@scandir($root) ?: [] as $name) {
+                if ($name !== '.' && $name !== '..') {
+                    @unlink($root . '/' . $name);
+                }
+            }
+            @rmdir($root);
+        }
+        @unlink($dir . '/victim.txt');
+        @rmdir($dir);
     }
 }

@@ -102,7 +102,7 @@ final class ManagerCopyTest extends TestCase
         [$m] = $m->update(new KeyMsg(KeyType::Char, 'j'));
         [$m] = $m->update(new KeyMsg(KeyType::Char, 'j'));
         [$m] = $m->update(new KeyMsg(KeyType::Char, 'j'));
-        [$m] = $m->update(new KeyMsg(KeyType::Char, ' '));  // select subdir
+        [$m] = $m->update(new KeyMsg(KeyType::Space, ' '));  // select subdir
         [$armed] = $m->update(new KeyMsg(KeyType::Char, 'c'));
         $this->assertSame(ConfirmState::CopySelected, $armed->confirm);
 
@@ -329,7 +329,7 @@ final class ManagerCopyTest extends TestCase
 
         $m = Manager::start($srcDir, $dstDir, $this->lister);
         [$m] = $m->update(new KeyMsg(KeyType::Char, 'j'));
-        [$m] = $m->update(new KeyMsg(KeyType::Char, ' '));
+        [$m] = $m->update(new KeyMsg(KeyType::Space, ' '));
         [$armed] = $m->update(new KeyMsg(KeyType::Char, 'c'));
         [$pending, $cmd] = $armed->update(new KeyMsg(KeyType::Char, 'y'));
 
@@ -385,7 +385,7 @@ final class ManagerCopyTest extends TestCase
 
         $m = Manager::start($srcDir, $dstDir, $this->lister);
         [$m] = $m->update(new KeyMsg(KeyType::Char, 'j'));
-        [$m] = $m->update(new KeyMsg(KeyType::Char, ' '));
+        [$m] = $m->update(new KeyMsg(KeyType::Space, ' '));
         [$armed] = $m->update(new KeyMsg(KeyType::Char, 'c'));
         [$pending, $cmd] = $armed->update(new KeyMsg(KeyType::Char, 'y'));
 
@@ -411,8 +411,8 @@ final class ManagerCopyTest extends TestCase
 
         $m = Manager::start($srcDir, $dstDir, $this->lister);
         [$m] = $m->update(new KeyMsg(KeyType::Char, 'j'));
-        [$m] = $m->update(new KeyMsg(KeyType::Char, ' '));   // select a.txt, cursor advances
-        [$m] = $m->update(new KeyMsg(KeyType::Char, ' '));   // select b.txt
+        [$m] = $m->update(new KeyMsg(KeyType::Space, ' '));   // select a.txt, cursor advances
+        [$m] = $m->update(new KeyMsg(KeyType::Space, ' '));   // select b.txt
         $this->assertCount(2, $m->activePane()->selectedNames());
         [$armed] = $m->update(new KeyMsg(KeyType::Char, 'c'));
         [$pending, $cmd] = $armed->update(new KeyMsg(KeyType::Char, 'y'));

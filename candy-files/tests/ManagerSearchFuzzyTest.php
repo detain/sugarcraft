@@ -298,4 +298,62 @@ final class ManagerSearchFuzzyTest extends TestCase
         $this->assertCount(3, $short->search('')->searchResults,
             'cap must follow termRows-6 with a floor of 3');
     }
+
+    /**
+     * CF-41 (audit 052): exitSearch / moveSearchCursor / openSearchResult
+     * are public methods with, until now, zero direct pins — the wire arms
+     * exercised them only as far as their dispatch test went. The seams
+     * here hold the state contracts the dispatch relies on: exitSearch
+     * clears the ENTIRE mode (query, results, cursor, and the CF-17 dirs
+     * alignment), moveSearchCursor clamps instead of escaping, and
+     * openSearchResult routes dir vs file the way the CF-09 landing law
+     * demands.
+     */
+    public function testExitSearchClearsEveryTraceOfTheMode(): void
+    {
+        $m = $this->start()->search('e');
+        $this->assertNotSame([], $m->searchResults, 'premise: results exist to clear');
+
+        $out = $m->exitSearch();
+        $this->assertNull($out->searchQuery);
+        $this->assertSame([], $out->searchResults);
+        $this->assertSame(0, $out->searchCursor);
+        $this->assertSame([], $out->searchResultDirs, 'the alignment array must not outlive the rows');
+    }
+
+    public function testMoveSearchCursorClampsAtBothEndsAndIsInertWithoutResults(): void
+    {
+        $m = $this->start()->search('e');
+        $count = count($m->searchResults);
+        $this->assertGreaterThan(1, $count, 'premise: several hits to walk');
+
+        $this->assertSame(0, $m->moveSearchCursor(-$count)->searchCursor, 'the head clamps, never wraps or goes negative');
+        $this->assertSame($count - 1, $m->moveSearchCursor($count)->searchCursor, 'the tail clamps at the last row');
+
+        $idle = $this->start()->moveSearchCursor(1);
+        $this->assertNull($idle->searchQuery);
+        $this->assertSame([], $idle->searchResults, 'no mode: the seam is inert, not broken');
+    }
+
+    public function testOpenSearchResultRoutesDirectoryHitsThroughNavigation(): void
+    {
+        $m = $this->start()->search('models');
+        $this->assertSame('models', $m->searchResults[0]->name, 'premise: the dir hit ranks first for its own name');
+
+        $after = $m->openSearchResult();
+        $this->assertSame('/models', $after->activePane()->cwd, 'a dir result NAVIGATES');
+        $this->assertNull($after->searchQuery, 'opening also exits the mode (CF-09 landing law)');
+    }
+
+    public function testOpenSearchResultLandsTheCursorOnFileHits(): void
+    {
+        $m = $this->start()->search('README');
+        $this->assertSame('README.md', $m->searchResults[0]->name);
+
+        $after = $m->openSearchResult();
+        $this->assertNull($after->searchQuery);
+        $this->assertSame('/', $after->activePane()->cwd);
+        $this->assertSame('README.md', $after->activePane()->currentEntry()?->name,
+            'the pane cursor parks ON the file the operator chose');
+    }
 }
