@@ -55,10 +55,16 @@ The board renders in full — there is no scrolling viewport — and the help fo
 | `S`                | Save the live game to the slot   |
 | `L`                | Load the saved game              |
 | `r`                | Restart with new mines           |
-| `q` / `Esc` / `Ctrl+C` | Quit                         |
+| `q` / `Esc`  | Quit (asks once on a live, unsaved board — see below)  |
+| `Ctrl+C`     | Quit — always immediate (the terminal contract)        |
 
 Ctrl- and Alt-modified letters are inert (only Ctrl+C quits), so editor
 muscle-memory cannot restart or save the game by accident.
+
+Quitting is never silently lossy: the first `q`/`Esc` on a live board whose
+mines are not yet in the savegame slot arms a confirm toast — a second press
+quits, any other move disarms. Finished boards and unspoiled ones exit on the
+first press, and `Ctrl+C` keeps its instant terminal exit (candy-minesweeper-019).
 
 Flag placement follows the classic rulebook: once the flags equal the mine
 count, another flag is refused (un-flagging stays free, and the room an

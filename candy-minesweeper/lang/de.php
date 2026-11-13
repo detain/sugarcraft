@@ -39,6 +39,7 @@ return [
     'ui.load_refused' => 'Spielstand abgelehnt (unlesbar oder manipuliert)',
     'ui.save_failed' => 'Speichern fehlgeschlagen',
     'ui.chord_not_ready' => 'Chord braucht Flaggen passend zur Zahl',
+    'ui.confirm_quit' => 'q erneut drücken zum Beenden — das Spiel ist ungesichert',
     'ui.resume' => 'Ein Spielstand wartet — mit L laden',
     'ui.new_best' => 'NEUER REKORD',
     'ui.beat_best' => '{prev} → NEUER REKORD',

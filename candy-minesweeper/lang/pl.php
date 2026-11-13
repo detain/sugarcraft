@@ -39,6 +39,7 @@ return [
     'ui.load_refused' => 'Zapis odrzucony (nieczytelny lub sfałszowany)',
     'ui.save_failed' => 'Nie udało się zapisać',
     'ui.chord_not_ready' => 'akord wymaga flag równych liczbie',
+    'ui.confirm_quit' => 'naciśnij q ponownie, aby wyjść — gra nie jest zapisana',
     'ui.resume' => 'Czeka zapis gry — naciśnij L, aby go wczytać',
     'ui.new_best' => 'NOWY REKORD',
     'ui.beat_best' => '{prev} → NOWY REKORD',

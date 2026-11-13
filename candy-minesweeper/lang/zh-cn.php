@@ -39,6 +39,7 @@ return [
     'ui.load_refused' => '已拒绝存档(不可读或被篡改)',
     'ui.save_failed' => '保存失败',
     'ui.chord_not_ready' => '开周围需插旗数与数字一致',
+    'ui.confirm_quit' => '再按一次 q 退出 — 游戏尚未保存',
     'ui.resume' => '有存档等待 — 按 L 读取',
     'ui.new_best' => '新纪录',
     'ui.beat_best' => '{prev} → 新纪录',

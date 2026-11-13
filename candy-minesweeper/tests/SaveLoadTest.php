@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Minesweeper\Tests;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Core\Cmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Minesweeper\Board;
@@ -88,6 +89,59 @@ final class SaveLoadTest extends TestCase
         [$g, ] = $g->update(self::press(KeyType::Right));
         [$g, ] = $g->update(self::press(KeyType::Char, 'f'));   // a flag to carry along
         return $g;
+    }
+
+    /**
+     * msw-15 (candy-minesweeper-019): the dirty flag is defined against the
+     * slot — saving or loading equals the board to it, which retires the
+     * quit confirm; diverging from it arms the confirm again.
+     */
+    public function testSaveAndLoadRetireTheQuitConfirm(): void
+    {
+        $g = self::liveGame();
+        $this->assertTrue($g->dirty, 'sanity: reveal + flag diverge from the slot');
+        [$armed, $cmd] = $g->update(self::press(KeyType::Char, 'q'));
+        $this->assertNull($cmd, 'sanity: unsaved ground asks first');
+
+        [$saved, ] = $armed->update(self::press(KeyType::Char, 'S'));
+        $this->assertFalse($saved->dirty, 'the slot now holds this exact board');
+        $this->assertFalse($saved->confirmQuit, 'saving answers the confirm by declination');
+        [, $quit] = $saved->update(self::press(KeyType::Char, 'q'));
+        $this->assertEquals(Cmd::quit(), $quit, 'post-save q is lossless — immediate again');
+
+        // Diverge again with a real flag on an unrevealed cell — the
+        // liveGame() 'f' sits on cascade-opened ground (identity no-op per
+        // msw-14), so the cursor must first walk to the frontier.
+        $target = null;
+        $rowsB = $saved->board;
+        for ($y = 0; $y < 6 && $target === null; $y++) {
+            for ($x = 0; $x < 6; $x++) {
+                $cell = $rowsB->cell($x, $y);
+                if ($cell !== null && !$cell->revealed && !$cell->flagged) {
+                    $target = [$x, $y];
+                    break 2;
+                }
+            }
+        }
+        $this->assertNotNull($target, 'sanity: a 6x6/4 save keeps unrevealed cells');
+        $walker = $saved;
+        while ($walker->cursorX !== $target[0]) {
+            [$walker, ] = $walker->update(self::press($walker->cursorX < $target[0] ? KeyType::Right : KeyType::Left));
+        }
+        while ($walker->cursorY !== $target[1]) {
+            [$walker, ] = $walker->update(self::press($walker->cursorY < $target[1] ? KeyType::Down : KeyType::Up));
+        }
+        $this->assertFalse($walker->dirty, 'sanity: cursor-only walking never dirties');
+        [$dirtyAgain, ] = $walker->update(self::press(KeyType::Char, 'f'));
+        $this->assertTrue($dirtyAgain->dirty, 'a fresh divergence re-arms the guard');
+        [$armed2, ] = $dirtyAgain->update(self::press(KeyType::Escape));
+        $this->assertTrue($armed2->confirmQuit);
+
+        [$loaded, ] = $armed2->update(self::press(KeyType::Char, 'L'));
+        $this->assertFalse($loaded->dirty, 'a load equals the slot');
+        $this->assertFalse($loaded->confirmQuit, 'and the stale arming with it');
+        [, $quit2] = $loaded->update(self::press(KeyType::Escape));
+        $this->assertEquals(Cmd::quit(), $quit2, 'quit after a load discards nothing');
     }
 
     public function testSaveWritesTheSingleSlotUnderConfig(): void

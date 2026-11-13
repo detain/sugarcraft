@@ -39,6 +39,7 @@ return [
     'ui.load_refused' => 'Partida rechazada (ilegible o manipulada)',
     'ui.save_failed' => 'Error al guardar',
     'ui.chord_not_ready' => 'el acorde necesita banderas que coincidan con el número',
+    'ui.confirm_quit' => 'pulsa q de nuevo para salir — la partida no está guardada',
     'ui.resume' => 'Hay una partida esperándote — pulsa L para cargarla',
     'ui.new_best' => 'NUEVO RÉCORD',
     'ui.beat_best' => '{prev} → NUEVO RÉCORD',

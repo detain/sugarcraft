@@ -39,6 +39,7 @@ return [
     'ui.load_refused' => 'Sauvegarde refusée (illisible ou altérée)',
     'ui.save_failed' => 'Échec de la sauvegarde',
     'ui.chord_not_ready' => 'le groupement exige des drapeaux égalant le chiffre',
+    'ui.confirm_quit' => 'appuyez encore sur q pour quitter — la partie est non sauvegardée',
     'ui.resume' => 'Une sauvegarde attend — appuyez sur L pour la charger',
     'ui.new_best' => 'NOUVEAU RECORD',
     'ui.beat_best' => '{prev} → NOUVEAU RECORD',

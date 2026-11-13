@@ -29,7 +29,7 @@ use SugarCraft\Minesweeper\Stats\DifficultyStats;
  *   - L                    → load that save — works even after game over,
  *                            so a lost board can step back to the saved one
  *   - r                    → restart
- *   - q / esc / Ctrl+C     → quit
+ *   - q / esc / Ctrl+C     → quit (q/Esc ask twice on a live unsaved board)
  * Mouse: left-click reveals, right-click flags, middle-click chords.
  *
  * The PRNG is injected as a `Closure(int $maxInclusive): int` so
@@ -101,6 +101,23 @@ final class Game implements Model
          * per session) so loading cannot be "laundered" into a record run.
          */
         public readonly bool $restoredGame = false,
+        /**
+         * True while the board has diverged from the savegame slot (or from
+         * nothing, when nothing was saved yet). This is the msw-15/-019
+         * trigger for the two-stroke quit: q/Esc on a live, dirty board arms
+         * {@see $confirmQuit} instead of discarding silently. Reveals, flags
+         * and chords dirty the board; a cursor-only move does not (quitting
+         * then discards no progress), and a save, a load or a fresh restart
+         * cleans it again.
+         */
+        public readonly bool $dirty = false,
+        /**
+         * Armed between the first q/Esc on a dirty live board and the press
+         * that acts on it. Any real action disarms it; Ctrl+C never arms —
+         * the terminal interrupt contract outranks the in-app confirm
+         * (ruling G3(a)).
+         */
+        public readonly bool $confirmQuit = false,
     ) {
         $this->rand = $rand ?? static fn(int $max): int => random_int(0, $max);
     }
@@ -249,7 +266,21 @@ final class Game implements Model
         if ($msg->type === KeyType::Escape
             || ($msg->type === KeyType::Char && $char === 'q')
             || ($msg->ctrl && $msg->rune === 'c')) {
-            return [$this, Cmd::quit()];
+            // msw-15/-019 (ruling G3(a)): the first q/Esc on a live, dirty
+            // board arms a confirm instead of discarding silently — the
+            // antecedent classic prompted mid-play, and the Meta-sends-ESC
+            // browser chord (GAMEUX-003) could quit a running game under a
+            // laggy link. Finished or unspoiled boards keep the one-press
+            // exit (there is nothing to lose), and Ctrl+C keeps the
+            // immediate terminal contract by design.
+            $dirtyLive = $this->dirty && !($this->board->exploded || $this->board->isWon());
+            if (!$dirtyLive || $this->confirmQuit || ($msg->ctrl && $msg->rune === 'c')) {
+                return [$this, Cmd::quit()];
+            }
+            return [$this->mutate([
+                'confirmQuit' => true,
+                'notice'      => Lang::t('ui.confirm_quit'),
+            ]), null];
         }
         if ($msg->type === KeyType::Char && $char === 'r') {
             // Restart carries the accumulated stats + persistence path forward so
@@ -262,6 +293,10 @@ final class Game implements Model
                 'elapsedSeconds' => null,
                 'newBest'        => false,
                 'beatenRecord'   => null,
+                // A fresh board has no progress to lose: the quit confirm
+                // neither needs the old game nor this blank one (msw-15).
+                'dirty'          => false,
+                'confirmQuit'    => false,
                 'notice'         => Lang::t('ui.restarted'),
             ]), null];
         }
@@ -330,6 +365,15 @@ final class Game implements Model
             || $next->cursorY !== $this->cursorY;
         if ($changed && $next->notice !== null) {
             $next = $next->mutate(['notice' => null]);
+        }
+        if ($changed && $next->confirmQuit) {
+            // Any real action answers the quit confirm by declining it.
+            $next = $next->mutate(['confirmQuit' => false]);
+        }
+        if ($next->board !== $this->board && !$next->dirty) {
+            // Board state the savegame slot does not hold — the quit
+            // confirm's trigger condition (msw-15).
+            $next = $next->mutate(['dirty' => true]);
         }
         if ($wasOver) {
             return $next;
@@ -442,7 +486,13 @@ final class Game implements Model
             // and must surface, not be painted over with save_failed.
             return $this->withNotice(Lang::t('ui.save_failed'));
         }
-        return $this->withNotice(Lang::t('ui.saved'));
+        return $this->mutate([
+            'notice'      => Lang::t('ui.saved'),
+            // The slot now holds this exact board: quitting at this point
+            // discards nothing the confirm would protect (msw-15).
+            'dirty'       => false,
+            'confirmQuit' => false,
+        ]);
     }
 
     /**
@@ -519,8 +569,7 @@ final class Game implements Model
         return $this->mutate([
             'board'   => $board,
             'cursorX' => max(0, min($board->width  - 1, $cursorX)),
-            'cursorY' => max(0, min($board->height - 1, $cursorY)),
-            // Re-anchor the wall clock so elapsed() continues from the
+            'cursorY' => max(0, min($board->height - 1, $cursorY)),            // Re-anchor the wall clock so elapsed() continues from the
             // saved reading; a save taken before the first reveal carries
             // elapsed null and stays a clock-not-started game. A board
             // that loads already OVER (a crafted finished save) keeps the
@@ -530,6 +579,10 @@ final class Game implements Model
             'elapsedSeconds' => $over && $elapsed !== null ? (int) $elapsed : null,
             'newBest'        => false,
             'restoredGame'   => true,
+            // The board now equals the slot — clean slate for the quit
+            // confirm, and any pending arming is stale (msw-15).
+            'dirty'          => false,
+            'confirmQuit'    => false,
             'notice'         => Lang::t('ui.loaded'),
         ]);
     }

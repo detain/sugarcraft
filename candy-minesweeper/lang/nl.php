@@ -39,6 +39,7 @@ return [
     'ui.load_refused' => 'Opslag geweigerd (onleesbaar of gemanipuleerd)',
     'ui.save_failed' => 'Opslaan mislukt',
     'ui.chord_not_ready' => 'midden-klik vraagt vlaggen gelijk aan het getal',
+    'ui.confirm_quit' => 'druk opnieuw op q om te stoppen — het spel is niet opgeslagen',
     'ui.resume' => 'Er wacht een opgeslagen spel — druk op L om het te laden',
     'ui.new_best' => 'NIEUW RECORD',
     'ui.beat_best' => '{prev} → NIEUW RECORD',

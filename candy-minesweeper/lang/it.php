@@ -39,6 +39,7 @@ return [
     'ui.load_refused' => 'Partita rifiutata (illeggibile o manomessa)',
     'ui.save_failed' => 'Salvataggio non riuscito',
     'ui.chord_not_ready' => 'il chord richiede bandiere pari al numero',
+    'ui.confirm_quit' => 'premi di nuovo q per uscire — la partita non è salvata',
     'ui.resume' => 'Una partita ti aspetta — premi L per caricarla',
     'ui.new_best' => 'NUOVO RECORD',
     'ui.beat_best' => '{prev} → NUOVO RECORD',

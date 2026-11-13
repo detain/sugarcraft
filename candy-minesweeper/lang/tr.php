@@ -39,6 +39,7 @@ return [
     'ui.load_refused' => 'Kayıt reddedildi (okunamıyor veya değiştirilmiş)',
     'ui.save_failed' => 'Kaydetme başarısız',
     'ui.chord_not_ready' => 'çevre açma için bayraklar sayıyla eşit olmalı',
+    'ui.confirm_quit' => 'çıkmak için tekrar q tuşuna basın — oyun kaydedilmedi',
     'ui.resume' => 'Bir kayıt bekliyor — yüklemek için L tuşuna bas',
     'ui.new_best' => 'YENİ REKOR',
     'ui.beat_best' => '{prev} → YENİ REKOR',

@@ -39,6 +39,7 @@ return [
     'ui.load_refused' => 'Jogo recusado (ilegível ou adulterado)',
     'ui.save_failed' => 'Falha ao guardar',
     'ui.chord_not_ready' => 'o acorde exige bandeiras iguais ao número',
+    'ui.confirm_quit' => 'pressione q novamente para sair — o jogo não foi salvo',
     'ui.resume' => 'Há um jogo à espera — prima L para o carregar',
     'ui.new_best' => 'NOVO RECORDE',
     'ui.beat_best' => '{prev} → NOVO RECORDE',

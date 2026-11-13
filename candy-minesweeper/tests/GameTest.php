@@ -137,8 +137,8 @@ final class GameTest extends TestCase
         // Positive controls: the plain keys still work.
         [$afterR, ] = $g->update(self::key(KeyType::Char, 'r'));
         $this->assertTrue(!$afterR->board->minesPlaced, 'plain r still restarts');
-        [$afterQ, $quitCmd] = $g->update(self::key(KeyType::Char, 'q'));
-        $this->assertNotNull($quitCmd, 'plain q still quits');
+        [$afterQ, $quitCmd] = $afterR->update(self::key(KeyType::Char, 'q'));
+        $this->assertNotNull($quitCmd, 'plain q still quits — from the restarted (unspoiled) board, first press (msw-15)');
     }
 
     public function testCtrlCStillQuits(): void
@@ -146,6 +146,136 @@ final class GameTest extends TestCase
         $g = Game::start(3, 3, 1, static fn(int $_max): int => 0);
         [, $cmd] = $g->update(new KeyMsg(KeyType::Char, 'c', ctrl: true));
         $this->assertNotNull($cmd, 'Ctrl+C remains the quit chord');
+    }
+
+    /**
+     * msw-15 (candy-minesweeper-019, ruling G3(a)): the first q/Esc on a
+     * live board whose state the savegame slot does not hold arms
+     * ui.confirm_quit instead of discarding silently; the second press
+     * exits; anything real disarms; unspoiled/finished boards and Ctrl+C
+     * keep the one-press exit.
+     */
+    public function testFirstQuitOnDirtyLiveBoardArmsTheConfirm(): void
+    {
+        $g = Game::start(3, 3, 1, static fn(int $_max): int => 0);
+        [$g, ] = $g->update(self::key(KeyType::Space)); // reveals — the board now differs from any slot
+        $this->assertTrue($g->dirty, 'a reveal dirties the game');
+
+        [$armed, $cmd] = $g->update(self::key(KeyType::Char, 'q'));
+        $this->assertNull($cmd, 'the first q on unsaved ground must not exit');
+        $this->assertTrue($armed->confirmQuit, 'q arms the confirm');
+        $this->assertSame(Lang::t('ui.confirm_quit'), $armed->notice);
+
+        [$second, $quit] = $armed->update(self::key(KeyType::Char, 'q'));
+        $this->assertEquals(Cmd::quit(), $quit, 'the second q exits');
+    }
+
+    public function testEscapeArmsAndExitsLikePlainQ(): void
+    {
+        $g = Game::start(3, 3, 1, static fn(int $_max): int => 0);
+        [$g, ] = $g->update(self::key(KeyType::Char, 'f')); // a flag dirties the board
+        [$armed, $cmd] = $g->update(self::key(KeyType::Escape));
+        $this->assertNull($cmd, 'Esc on dirty ground asks first — the browser-chord quit (GAMEUX-003) dies here');
+        [, $quit] = $armed->update(self::key(KeyType::Escape));
+        $this->assertEquals(Cmd::quit(), $quit, 'the second Esc exits');
+    }
+
+    public function testDeadKeysNeitherQuitNorEraseTheArmedConfirm(): void
+    {
+        // The -14 notice law and the -15 arming must coexist: an unmapped
+        // key is inert for state AND keeps the toast readable.
+        $g = Game::start(3, 3, 1, static fn(int $_max): int => 0);
+        [$g, ] = $g->update(self::key(KeyType::Space));
+        [$armed, ] = $g->update(self::key(KeyType::Char, 'q'));
+        $this->assertTrue($armed->confirmQuit);
+
+        [$kept, $cmd] = $armed->update(self::key(KeyType::Char, 'x'));
+        $this->assertNull($cmd);
+        $this->assertTrue($kept->confirmQuit, 'an unmapped key must not silently disarm');
+        $this->assertSame(Lang::t('ui.confirm_quit'), $kept->notice, 'nor wipe the confirm toast');
+    }
+
+    public function testARealActionDisarmsTheConfirm(): void
+    {
+        $g = Game::start(3, 3, 1, static fn(int $_max): int => 0);
+        [$g, ] = $g->update(self::key(KeyType::Space));
+        [$armed, ] = $g->update(self::key(KeyType::Char, 'q'));
+
+        [$moved, $cmd] = $armed->update(self::key(KeyType::Right));
+        $this->assertNull($cmd);
+        $this->assertFalse($moved->confirmQuit, 'keeping play answers the confirm by declining it');
+        $this->assertTrue($moved->dirty, 'declining keeps the unsaved state protected');
+
+        // And the next q asks again — arming is never sticky after declining.
+        [$rearmed, $cmd2] = $moved->update(self::key(KeyType::Escape));
+        $this->assertNull($cmd2, 'Esc after a decline arms fresh, not exits');
+        $this->assertTrue($rearmed->confirmQuit);
+    }
+
+    public function testQuitIsImmediateOnUnspoiledAndFinishedBoards(): void
+    {
+        $fresh = Game::start(3, 3, 1, static fn(int $_max): int => 0);
+        [, $cmd] = $fresh->update(self::key(KeyType::Char, 'q'));
+        $this->assertEquals(Cmd::quit(), $cmd, 'a board nothing was ever revealed on has nothing to lose');
+
+        // Cursor-only movement is not progress: still immediate.
+        [$moved, ] = $fresh->update(self::key(KeyType::Right));
+        $this->assertFalse($moved->dirty, 'a cursor move does not dirty the game');
+        [, $cmd2] = $moved->update(self::key(KeyType::Escape));
+        $this->assertEquals(Cmd::quit(), $cmd2, 'Esc after a bare cursor move exits at once');
+
+        // A lost board is over — the confirm would protect a corpse. Built
+        // dirty ON PURPOSE: the finished board outranks the dirty flag.
+        $mines = [[false, false, false], [false, true, false], [true, false, false]];
+        $rows = [];
+        for ($y = 0; $y < 3; $y++) {
+            $row = [];
+            for ($x = 0; $x < 3; $x++) {
+                $row[] = new Cell(mine: $mines[$y][$x], revealed: $y === 1 && $x === 1);
+            }
+            $rows[] = $row;
+        }
+        $lost = new Game(
+            board: Board::fromRows(3, 3, 2, $rows, minesPlaced: true, exploded: true, revealedCount: 1, flaggedCount: 0),
+            cursorX: 0,
+            cursorY: 0,
+            dirty: true,
+        );
+        [, $cmd3] = $lost->update(self::key(KeyType::Char, 'q'));
+        $this->assertEquals(Cmd::quit(), $cmd3, 'q on a lost board exits without asking');
+    }
+
+    public function testCtrlCIgnoresTheArmedConfirm(): void
+    {
+        $g = Game::start(3, 3, 1, static fn(int $_max): int => 0);
+        [$g, ] = $g->update(self::key(KeyType::Space));
+        [$armed, $cmd] = $g->update(self::key(KeyType::Char, 'q'));
+        $this->assertNull($cmd);
+        [, $interrupt] = $armed->update(new KeyMsg(KeyType::Char, 'c', ctrl: true));
+        $this->assertEquals(Cmd::quit(), $interrupt, 'the terminal contract outranks the in-app confirm');
+    }
+
+    public function testRestartCleansTheQuitConfirmAndDirtyFlag(): void
+    {
+        $g = Game::start(3, 3, 1, static fn(int $_max): int => 0);
+        [$g, ] = $g->update(self::key(KeyType::Space));
+        [$armed, ] = $g->update(self::key(KeyType::Char, 'q'));
+        [$restarted, $cmd] = $armed->update(self::key(KeyType::Char, 'r'));
+        $this->assertFalse($restarted->dirty, 'a fresh board is nothing to lose');
+        $this->assertFalse($restarted->confirmQuit, 'restart answers the confirm');
+        [, $quit] = $restarted->update(self::key(KeyType::Char, 'q'));
+        $this->assertEquals(Cmd::quit(), $quit, 'so the very next q exits at once');
+    }
+
+    public function testConfirmQuitReachesTheFrameToastLine(): void
+    {
+        // The armed notice must actually render — i18n law: no raw key.
+        $g = Game::start(3, 3, 1, static fn(int $_max): int => 0);
+        [$g, ] = $g->update(self::key(KeyType::Space));
+        [$armed, ] = $g->update(self::key(KeyType::Char, 'q'));
+        $frame = $armed->view();
+        $this->assertStringContainsString(Lang::t('ui.confirm_quit'), $frame, 'the confirm toast is painted');
+        $this->assertStringNotContainsString('ui.confirm_quit', $frame, 'never the raw key');
     }
 
     public function testViewIncludesStatusLine(): void

@@ -39,6 +39,7 @@ return [
     'ui.load_refused' => 'セーブデータを拒否しました（読込不能または改ざん）',
     'ui.save_failed' => '保存に失敗しました',
     'ui.chord_not_ready' => '周囲を開くには旗数が数字と一致する必要がある',
+    'ui.confirm_quit' => 'もう一度 q で終了 — このゲームは未保存',
     'ui.resume' => 'セーブデータがあります — L でロード',
     'ui.new_best' => '新記録',
     'ui.beat_best' => '{prev} → 新記録',

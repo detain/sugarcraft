@@ -39,6 +39,7 @@ return [
     'ui.load_refused' => 'savegame refused (unreadable or tampered)',
     'ui.save_failed' => 'save failed',
     'ui.chord_not_ready' => 'chord needs the flags to match the number',
+    'ui.confirm_quit' => 'press q again to quit — this game is unsaved',
     'ui.resume' => 'a savegame is waiting — press L to load it',
     'ui.new_best' => 'NEW BEST',
     'ui.beat_best' => '{prev} → NEW BEST',
