@@ -50,28 +50,31 @@ composer require sugarcraft/sugar-video
 Requires:
 - PHP 8.3+
 - `ffmpeg` and `ffprobe` in `$PATH` for `mp4`/`avi`/`webm` playback.
-  Effective version floor: **ffmpeg ≥ 4.0** for plain and network playback —
-  the reconnect option block deliberately carries only options that old
-  (`-reconnect`/`-reconnect_streamed` since 3.3, `-reconnect_delay_max` since
-  4.0); the 5.1-only `-reconnect_on_network_error` was dropped precisely
-  because unknown input options abort the open on older builds. Binding a host
-  allowlist (`openUrl(..., allowedHosts:)`/`withAllowedHosts()`) raises the
-  floor to **4.4**, where the `max_redirects` no-redirect transport pin was
-  introduced.
+  The effective version floor for plain and network playback is
+  **ffmpeg ≥ 4.0**. Three facts fix it in place:
+  - The reconnect option block carries only options that old builds know —
+    `-reconnect`/`-reconnect_streamed` since 3.3, `-reconnect_delay_max`
+    since 4.0.
+  - The 5.1-only `-reconnect_on_network_error` was deliberately dropped,
+    because unknown input options abort the open on older builds.
+  - Binding a host allowlist (`openUrl(..., allowedHosts:)`/`withAllowedHosts()`)
+    raises the floor to **4.4**, where the `max_redirects` no-redirect
+    transport pin was introduced.
 - `ext-gd` for `.gif` playback (pure-PHP fallback, no ffmpeg needed — for
   *local* files; a remote `.gif` URL routes through `ffmpeg` because the pure-PHP
   decoder has no network transport)
-- `ext-gd` built with WebP for animated `.webp` playback (pure-PHP container
-  walk + per-frame GD decode — no ffmpeg needed). This is a design choice, not
-  a capability gap: current ffmpeg builds decode animated WebP fine, but the
-  in-process route needs no external toolchain, spawns no child, and decodes
-  deterministically. The same local-only caveat applies to remote `.webp`:
-  animated sniffing never touches the network, so those sources go through
-  `ffmpeg` too, and on an ffmpeg-less host both remote routes fail loudly with
-  the `decoder.ffmpeg_missing` message.
+- `ext-gd` built with WebP for animated `.webp` playback, via a pure-PHP
+  container walk plus per-frame GD decode — no ffmpeg needed. Choosing the
+  in-process route is deliberate, not a capability gap: current ffmpeg builds
+  decode animated WebP fine, but the pure-PHP path needs no external
+  toolchain, spawns no child, and decodes deterministically.
+  The same local-only caveat applies to remote `.webp`: animated sniffing
+  never touches the network, so those sources go through `ffmpeg` too. On an
+  ffmpeg-less host both remote routes fail loudly with the
+  `decoder.ffmpeg_missing` message.
 - `ffplay` or `mpv` in `$PATH` for audio output. With neither, playback is
   silent but not secretly so: `AudioPlayer::start()` announces the missing
-  binary once on `error_log` and stays off (video playback is unaffected) —
+  binary once on `error_log` and stays off. Video playback is unaffected —
   audio is optional by contract.
 - A terminal with at least 256-color support for ANSI modes
 
@@ -174,38 +177,56 @@ Reel::openUrl(
 )->play();
 ```
 
-Headers are validated at the boundary: a name or value containing any C0
-control except HTAB, or DEL — which covers the classic CR, LF and NUL
-injection bytes (HPP / request-splitting) — an empty name, a colon in the
-name, or a malformed field line all throw `InvalidArgumentException` before
-`ffmpeg` is ever spawned. **Migration note:** the second parameter used to be
-`$allowedHosts`; it is now `$headers` (prefer named arguments). The old
-positional shape fails loudly — any list-shaped array is rejected outright as
-the legacy `allowedHosts` shape (its own migration message), even a list
-carrying otherwise-valid header field lines, and `null` fails as a
-`TypeError`. A `User-Agent` value is passed to
-`ffmpeg -user_agent`; every other header rides
-in a single `-headers` block. Both flags are emitted only for network sources —
-for a local file they are dropped and a reason is logged. Non-`http(s)` URL
-schemes (`rtsp://`, `rtmp://`, …) are not opened by `openUrl()`. Calling
-`openUrl()` without `allowedHosts:` also logs a one-line SSRF advisory
-(`ssrf.no_allowlist`, host only — never the path or query): ffmpeg resolves DNS
-and follows redirects, so an unbounded remote URL can reach internal hosts.
-With an allowlist bound the policy is "first-hop string + no-redirect transport":
-parser-divergent raw authorities (a backslash, `;`, `@`, or `%` in the host
-region) are refused outright, and every network child — `ffprobe`, the `ffmpeg`
-decoder, and the audio companion — is pinned to `max_redirects=0`
-(`FfmpegCommandBuilder::ALLOWED_MAX_REDIRECTS`), so a listed host cannot answer
-with a 302 into the internal range. A legitimate redirecting CDN must have its
-redirect TARGET allowlisted too.
+#### Header validation
+
+Three rules, checked at the boundary — each one throws
+`InvalidArgumentException` before `ffmpeg` is ever spawned:
+
+1. A name or value must not contain any C0 control except HTAB, or DEL.
+   That set covers the classic CR, LF and NUL injection bytes
+   (HPP / request-splitting).
+2. A name must not be empty, and a name must not contain a colon.
+3. An entry that is not a well-formed field line is rejected as malformed.
+
+A `User-Agent` value is passed to `ffmpeg -user_agent`; every other header
+rides in a single `-headers` block. Both flags are emitted only for network
+sources — for a local file they are dropped and a reason is logged.
+
+#### openUrl() positional migration
+
+**Migration note:** the second parameter used to be `$allowedHosts`; it is
+now `$headers` (prefer named arguments). The old positional shape fails
+loudly: any list-shaped array is rejected outright as the legacy
+`allowedHosts` shape (it gets its own migration message) — even a list
+carrying otherwise-valid header field lines — and `null` fails as a
+`TypeError`.
+
+#### Host allowlist and SSRF
+
+Non-`http(s)` URL schemes (`rtsp://`, `rtmp://`, …) are not opened by
+`openUrl()`. Calling `openUrl()` without `allowedHosts:` also logs a
+one-line SSRF advisory (`ssrf.no_allowlist`, host only — never the path or
+query): ffmpeg resolves DNS and follows redirects, so an unbounded remote URL
+can reach internal hosts.
+
+With an allowlist bound, the policy is "first-hop string + no-redirect
+transport". Parser-divergent raw authorities (a backslash, `;`, `@`, or `%`
+in the host region) are refused outright. Every network child — `ffprobe`,
+the `ffmpeg` decoder, and the audio companion — is pinned to
+`max_redirects=0` (`FfmpegCommandBuilder::ALLOWED_MAX_REDIRECTS`), so a
+listed host cannot answer with a 302 into the internal range. A legitimate
+redirecting CDN must have its redirect TARGET allowlisted too.
+
+#### Environment scrubbing — which variables are stripped
+
 Every child the library spawns — the transient `ffprobe` probe, the `ffmpeg`
 decoder, and the `ffplay`/`mpv` audio companion — starts with a scrubbed copy
-of the parent environment: any variable whose *name* contains
-`PROXY`, `SECRET`, `TOKEN`, `KEY`, `CREDENTIAL`, or `PASSWORD`
-(case-insensitive, `FfmpegCommandBuilder::scrubbedEnv()`) is removed, because
-those binaries run external code against your sources and have no need for
-credentials, while a missing or empty `PATH` is restored to
-`/usr/local/bin:/usr/bin:/bin` so discovery still works.
+of the parent environment. Any variable whose *name* contains `PROXY`,
+`SECRET`, `TOKEN`, `KEY`, `CREDENTIAL`, or `PASSWORD` (case-insensitive,
+`FfmpegCommandBuilder::scrubbedEnv()`) is removed: those binaries run external
+code against your sources and have no need for credentials. A missing or
+empty `PATH` is restored to `/usr/local/bin:/usr/bin:/bin` so discovery
+still works.
 
 ```php
 // Mutate headers fluently on an existing Reel (validated the same way):
@@ -217,11 +238,11 @@ $reel = $reel->withHeaders(['Cookie' => 'session=…']);
 `Reel::play()` builds its own sugar-core `Program` and blocks. To drive playback
 from a host that already owns a `Program`/event loop, use `Reel::toPlayer()` to
 get the `Player` model **paused** and mount it yourself. Building the model
-opens the source: probing spawns a short-lived `ffprobe` child that is reaped
-at once (pinning the frame rate — `withFps`/`$fpsOverride` — skips the probe
-child entirely, and with it the duration timeline and the audio companion:
-those are probe answers), and sources routed through ffmpeg (`mp4`/`avi`/
-`webm`, plus remote
+opens the source. The probe spawns a short-lived `ffprobe` child that is
+reaped at once. Pinning the frame rate — `withFps`/`$fpsOverride` — skips the
+probe child entirely, and with it the duration timeline and the audio
+companion: those are probe answers. Sources routed through ffmpeg
+(`mp4`/`avi`/`webm`, plus remote
 `.gif`/`.webp`) spawn their `ffmpeg` decoder child immediately — a host that
 mounts and never starts must still call `stop()` to release it. Locally
 decoded GIFs and animated WebP ride pure PHP/GD in-process and cost no child.
@@ -319,12 +340,13 @@ if ($cell !== null) {
 $player = $reel->toPlayer();
 ```
 
-`Reel` deliberately does **not** probe the terminal itself: a query issued from
-inside a Model builder would block and would contend with whatever the embedding
-program already owns, so the measurement is injected. Callers that never
-`withCellPx()` keep the long-standing 10×20 assumption unchanged (it is
-`Player::open()`'s own default), and `cellPx()` returns `null` until one is
-supplied — a non-positive dimension throws `InvalidArgumentException`.
+`Reel` deliberately does **not** probe the terminal itself. A query issued
+from inside a Model builder would block, and it would contend with whatever
+the embedding program already owns — so the measurement is injected.
+Callers that never `withCellPx()` keep the long-standing 10×20 assumption
+unchanged (it is `Player::open()`'s own default), and `cellPx()` returns
+`null` until one is supplied. A non-positive dimension throws
+`InvalidArgumentException`.
 
 ## Subtitles
 
@@ -492,11 +514,25 @@ three terminal-video projects, credited here:
 - [joelibaceta/video-to-ascii](https://github.com/joelibaceta/video-to-ascii) — Python video-to-ASCII player.
 
 The rendering stack is reused from the SugarCraft ecosystem rather than
-reinvented: [sugar-image](../sugar-image) (image → cell renderers),
-[sugar-animation](../sugar-animation) (downsampling / dithering), [sugar-colorprofile](../sugar-colorprofile)
-(color mapping), [sugar-core](../sugar-core) (Model–Update–View runtime + frame pacing + the row-diffing renderer), and [sugar-cellbuffer](../sugar-cellbuffer) (the cell grid the text-mode renderer assembles each frame onto).
+reinvented:
 
-**Sixel encoding is pure PHP (no external accelerator).** `sixel` mode encodes through sugar-image's `SixelRenderer`; the former preference for an external `chafa` binary on PATH was retired once `candy-image` shipped as the chafa frontend, leaving sugar-image as the single sixel encoder in the ecosystem. Frames are decoded at the pixel grid each mode asks for (graphics modes at cells·cellPx, text modes at the mode cell grid), so the pure-PHP encoder needs no upscaling, and the DCS stream it emits is protocol-conformant output of exactly the shape a sixel-capable terminal expects.
+- [sugar-image](../sugar-image) — image → cell renderers
+- [sugar-animation](../sugar-animation) — downsampling / dithering
+- [sugar-colorprofile](../sugar-colorprofile) — color mapping
+- [sugar-core](../sugar-core) — Model–Update–View runtime, frame pacing, and
+  the row-diffing renderer
+- [sugar-cellbuffer](../sugar-cellbuffer) — the cell grid the text-mode
+  renderer assembles each frame onto
+
+**Sixel encoding is pure PHP (no external accelerator).** `sixel` mode
+encodes through sugar-image's `SixelRenderer`. The former preference for an
+external `chafa` binary on PATH was retired once `candy-image` shipped as the
+chafa frontend — sugar-image is now the single sixel encoder in the
+ecosystem. Each mode decodes its frames at the pixel grid it renders:
+graphics modes at cells·cellPx, text modes at the mode cell grid. The
+pure-PHP encoder therefore needs no upscaling, and the DCS stream it emits is
+protocol-conformant output — exactly the shape a sixel-capable terminal
+expects.
 
 ## Known limitations
 
