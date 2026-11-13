@@ -8,6 +8,7 @@ use SugarCraft\Code\Agents\Isolation;
 use SugarCraft\Code\Support\ContainedPath;
 use SugarCraft\Code\Support\HomeDirectory;
 use SugarCraft\Code\Support\JsonSchemaArgument;
+use SugarCraft\Core\Util\Sanitize;
 use Symfony\Component\Yaml\Exception\ParseException;
 use Symfony\Component\Yaml\Yaml;
 
@@ -1332,7 +1333,7 @@ final class WorkflowRegistry
         // on, so accepting it only defers the error.
         if (!$this->nameIsValid($data['name'])) {
             throw new WorkflowLoadException(
-                "Workflow file {$yamlPath} has an unusable \"name\" ('{$data['name']}'). "
+                "Workflow file {$yamlPath} has an unusable \"name\" ('" . Sanitize::untrusted($data['name']) . "'). "
                 . 'Use only alphanumeric characters, underscores, and hyphens.'
             );
         }

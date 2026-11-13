@@ -2294,4 +2294,23 @@ PHP);
         $this->assertStringContainsString('counter=1', $output);
         $this->assertStringContainsString('SURVIVED', $output);
     }
+
+    /** A rejected YAML `name` is attacker-controlled text; the refusal must echo it control-free. */
+    public function testRejectedYamlNameIsSanitizedBeforeEcho(): void
+    {
+        $workflowsDir = $this->tempDir . '/workflows';
+        mkdir($workflowsDir, 0755);
+        file_put_contents(
+            $workflowsDir . '/evil.yaml',
+            "name: \"bad\\e[31m\\e]0;pwn\\x07name\"\nstages: []\n"
+        );
+
+        try {
+            (new WorkflowRegistry($workflowsDir))->load('evil');
+            $this->fail('expected WorkflowLoadException');
+        } catch (WorkflowLoadException $e) {
+            $this->assertStringContainsString('unusable "name"', $e->getMessage());
+            $this->assertSame(0, preg_match('/[\x00-\x08\x0b-\x1f\x7f]/', $e->getMessage()), 'no control bytes in the message');
+        }
+    }
 }
