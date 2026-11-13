@@ -148,6 +148,25 @@ final class ArtLoopTest extends TestCase
         ArtLoop::new(4, 0.0, 0.0);
     }
 
+    /**
+     * SA-X3 (-033): the per-value non-finite guards pass while the PRODUCT
+     * overflows — frameSeconds is finite, 2 × it is not. The cycle guard must
+     * see the composed value.
+     */
+    public function testRejectsCycleOverflowingToInfinite(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('cycle overflows to a non-finite duration');
+        ArtLoop::new(2, PHP_FLOAT_MAX);
+    }
+
+    public function testNearOverflowCycleStillConstructs(): void
+    {
+        $halfMax = PHP_FLOAT_MAX / 4;
+        $loop = ArtLoop::new(2, $halfMax);
+        self::assertSame($halfMax * 2 + 2.5, $loop->cycleSeconds());
+    }
+
     public function testWithPauseIsFluentAndLeavesOriginalIntact(): void
     {
         $loop = ArtLoop::new(self::FRAMES, self::FRAME_SECONDS, self::PAUSE_SECONDS);

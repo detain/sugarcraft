@@ -16,6 +16,13 @@ use InvalidArgumentException;
  * Kept free of any clock or timer: `frameAt(elapsedSeconds)` is a total
  * function of wall-clock offset, which makes it directly testable and lets
  * hosts drive it from whatever tick source they already own.
+ *
+ * Deliberate exception to the fleet `Concerns\Mutable` law: `withPause()`
+ * re-mints through {@see self::new()} instead of a blind copy, so every
+ * variant re-passes the full construction door (negative durations, the
+ * never-advancing cycle, the product-overflow guard). For a total value
+ * object like this one, re-validation on every derivative is the cheaper
+ * contract to keep than a second set of guards inside the mutate path.
  */
 final class ArtLoop
 {
@@ -37,7 +44,15 @@ final class ArtLoop
         }
         self::guardDuration($frameSeconds, 'frameSeconds');
         self::guardDuration($pauseSeconds, 'pauseSeconds');
-        if ($frameCount * $frameSeconds + $pauseSeconds <= 0.0) {
+        // Per-value guards pass while the PRODUCT overflows to INF (a near
+        // PHP_FLOAT_MAX frameSeconds times any frameCount >= 2), so the cycle
+        // is checked as composed — same refuse tone as the non-finite gate
+        // in frameAt().
+        $cycle = $frameCount * $frameSeconds + $pauseSeconds;
+        if (!is_finite($cycle)) {
+            throw new InvalidArgumentException("ArtLoop: cycle overflows to a non-finite duration (frameCount × frameSeconds + pauseSeconds = {$cycle})");
+        }
+        if ($cycle <= 0.0) {
             throw new InvalidArgumentException('ArtLoop: cycle would never advance (frameSeconds and pauseSeconds both zero)');
         }
 
