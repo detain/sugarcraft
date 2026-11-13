@@ -97,8 +97,15 @@ final class LocalStorageBackend implements LFSStorageBackendInterface
         $dir = \dirname($path);
 
         if (!\is_dir($dir)) {
-            if (!@\mkdir($dir, 0755, true) && !\is_dir($dir)) {
-                throw new \RuntimeException("Cannot create LFS directory: {$dir}");
+            // 038: shard directories land 0750 with an explicit chmod,
+            // not a umask-roll — LFS objects are repo content and the
+            // world must not be able to `cp` them off a shared box.
+            try {
+                \SugarCraft\GitServer\Support\AtomicWriter::ensureDir($dir, 0750);
+            } catch (\RuntimeException) {
+                if (!\is_dir($dir)) {
+                    throw new \RuntimeException("Cannot create LFS directory: {$dir}");
+                }
             }
         }
 

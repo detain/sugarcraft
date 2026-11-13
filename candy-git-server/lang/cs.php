@@ -78,6 +78,9 @@ return [
 // bin/candy-git-server — Step 17: remaining CLI refusals
     'cli.init_temp_open_failed' => 'init: nelze otevřít dočasnou konfiguraci v {tmp}',
     'cli.init_publish_failed' => 'init: nelze zveřejnit konfiguraci v {data}/config.yaml',
+    'cli.warn_tmp_data_path' => 'varování: cesta k datům {path} leží v dočasné složce systému; lokální uživatelé ji mohou vypsat a čističe temp ji mohou smazat — pro reálné nasazení nastavte CANDY_GIT_SERVER_DATA_PATH',
+    'cli.init_foreign_owner' => 'init: odmítáme převmout {path} vlastněné uid {uid}; spusťte jako tento uživatel nebo zvolte vlastní cestu',
+    'cli.repo_root_unreadable' => 'serve: kořen repozitářů {path} nelze číst',
     'cli.token_no_config' => 'token: není čitelná konfigurace v {data}/config.yaml — spusťte init nebo zadejte cestu k datům',
     'cli.token_no_secret' => 'token: http.auth_secret není pro tuto datovou cestu nastaven; nastavte ji v sekci http: souboru config.yaml před vydáváním tokenů',
     'cli.password_flag_needs_value' => 'candy-git-server: --password vyžaduje hodnotu (\'-\' čte ze stdin)',

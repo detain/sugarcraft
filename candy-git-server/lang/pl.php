@@ -78,6 +78,9 @@ return [
 // bin/candy-git-server — Step 17: remaining CLI refusals
     'cli.init_temp_open_failed' => 'init: nie można otworzyć tymczasowej konfiguracji w {tmp}',
     'cli.init_publish_failed' => 'init: nie można opublikować konfiguracji w {data}/config.yaml',
+    'cli.warn_tmp_data_path' => 'ostrzeżenie: ścieżka danych {path} znajduje się w katalogu tymczasowym systemu; lokalni użytkownicy mogą ją wyliczyć, a czyścicze tmp mogą ją usunąć — ustaw CANDY_GIT_SERVER_DATA_PATH dla realnych wdrożeń',
+    'cli.init_foreign_owner' => 'init: odmowa przejęcia {path} należącego do uid {uid}; uruchom jako ten użytkownik lub wybierz własną ścieżkę danych',
+    'cli.repo_root_unreadable' => 'serve: nie można odczytać katalogu głównego repozytoriów {path}',
     'cli.token_no_config' => 'token: brak czytelnej konfiguracji w {data}/config.yaml — uruchom init lub podaj ścieżkę danych',
     'cli.token_no_secret' => 'token: http.auth_secret nie jest skonfigurowany dla tej ścieżki danych; ustaw go w sekcji http: pliku config.yaml przed wydawaniem tokenów',
     'cli.password_flag_needs_value' => 'candy-git-server: --password wymaga wartości (\'-\' czyta ze stdin)',

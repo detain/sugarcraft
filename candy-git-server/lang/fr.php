@@ -87,6 +87,9 @@ return [
 // bin/candy-git-server — Step 17: remaining CLI refusals
     'cli.init_temp_open_failed' => 'init : impossible d\'ouvrir la configuration temporaire dans {tmp}',
     'cli.init_publish_failed' => 'init : impossible de publier la configuration dans {data}/config.yaml',
+    'cli.warn_tmp_data_path' => 'avertissement : le chemin de données {path} se trouve dans le répertoire temporaire du système ; les utilisateurs locaux peuvent le lister et les nettoyeurs temporaires peuvent le supprimer — définir CANDY_GIT_SERVER_DATA_PATH pour les déploiements réels',
+    'cli.init_foreign_owner' => 'init : adoption de {path} refusée — propriétaire : UID {uid} ; exécuter en tant que cet utilisateur ou choisir un chemin de données possédé',
+    'cli.repo_root_unreadable' => 'serve : impossible de lire la racine de dépôt {path}',
     'cli.token_no_config' => 'token : aucune configuration lisible dans {data}/config.yaml — exécutez init ou passez un chemin de données',
     'cli.token_no_secret' => 'token : http.auth_secret n\'est pas configuré pour ce chemin de données ; définissez-le dans la section http: de config.yaml avant de créer des jetons',
     'cli.password_flag_needs_value' => 'candy-git-server : --password nécessite une valeur (\'-\' lit depuis stdin)',

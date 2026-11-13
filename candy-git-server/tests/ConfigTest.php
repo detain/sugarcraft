@@ -500,16 +500,29 @@ YAML;
         $this->assertSame(':23231', $c->sshListenAddr);
     }
 
-    public function testLfsPathCreatesDirectory(): void
+    public function testLfsPathIsPureAndEnsureCarriesTheMode(): void
     {
-        $configPath = $this->tmpDir . '/lfs-path.yaml';
-        file_put_contents($configPath, "name: LfsPathTest\n");
+        // 091: the accessor-shaped getters used to mkdir on EVERY read —
+        // a network mount point or read-only scanner could mint dirs as
+        // a lookup side effect. The accessor is now pure; servers and
+        // writers call the ensure* twin, which ALSO fixes the mode
+        // explicitly (038: mkdir's mode argument is umask-eroded).
+        $configPath = $this->tmpDir . '/lfs.yaml';
+        \file_put_contents($configPath, "name: lfs\n");
 
         $c = Config::load($configPath);
-        $lfsPath = $c->lfsPath();
+        $path = $c->lfsPath();
+        $this->assertStringContainsString('lfs', $path);
+        $this->assertFalse(\is_dir($path), 'the pure accessor must not create');
 
-        $this->assertStringContainsString('lfs', $lfsPath);
-        $this->assertDirectoryExists($lfsPath);
+        $ensured = $c->ensureLfsPath();
+        $this->assertSame($path, $ensured);
+        $this->assertDirectoryExists($path);
+        $this->assertSame(
+            0750,
+            \fileperms($path) & 0777,
+            'ensure sets the mode explicitly, not a umask-roll'
+        );
     }
 
     public function testParseYamlWithEmptyValues(): void
@@ -576,28 +589,54 @@ YAML;
     // Path helper tests
     // -------------------------------------------------------------------------
 
-    public function testSshPathCreatesDirectory(): void
+    public function testSshPathIsPureAndEnsureCarriesTheMode(): void
     {
-        $configPath = $this->tmpDir . '/paths.yaml';
-        file_put_contents($configPath, "name: PathTest\n");
+        // 091: the accessor-shaped getters used to mkdir on EVERY read —
+        // a network mount point or read-only scanner could mint dirs as
+        // a lookup side effect. The accessor is now pure; servers and
+        // writers call the ensure* twin, which ALSO fixes the mode
+        // explicitly (038: mkdir's mode argument is umask-eroded).
+        $configPath = $this->tmpDir . '/ssh.yaml';
+        \file_put_contents($configPath, "name: ssh\n");
 
         $c = Config::load($configPath);
-        $sshPath = $c->sshPath();
+        $path = $c->sshPath();
+        $this->assertStringContainsString('ssh', $path);
+        $this->assertFalse(\is_dir($path), 'the pure accessor must not create');
 
-        $this->assertStringContainsString('ssh', $sshPath);
-        $this->assertDirectoryExists($sshPath);
+        $ensured = $c->ensureSshPath();
+        $this->assertSame($path, $ensured);
+        $this->assertDirectoryExists($path);
+        $this->assertSame(
+            0700,
+            \fileperms($path) & 0777,
+            'ensure sets the mode explicitly, not a umask-roll'
+        );
     }
 
-    public function testReposPathCreatesDirectory(): void
+    public function testReposPathIsPureAndEnsureCarriesTheMode(): void
     {
-        $configPath = $this->tmpDir . '/repos.yaml';
-        file_put_contents($configPath, "name: ReposTest\n");
+        // 091: the accessor-shaped getters used to mkdir on EVERY read —
+        // a network mount point or read-only scanner could mint dirs as
+        // a lookup side effect. The accessor is now pure; servers and
+        // writers call the ensure* twin, which ALSO fixes the mode
+        // explicitly (038: mkdir's mode argument is umask-eroded).
+        $configPath = $this->tmpDir . '/repositories.yaml';
+        \file_put_contents($configPath, "name: repositories\n");
 
         $c = Config::load($configPath);
-        $reposPath = $c->reposPath();
+        $path = $c->reposPath();
+        $this->assertStringContainsString('repositories', $path);
+        $this->assertFalse(\is_dir($path), 'the pure accessor must not create');
 
-        $this->assertStringContainsString('repositories', $reposPath);
-        $this->assertDirectoryExists($reposPath);
+        $ensured = $c->ensureReposPath();
+        $this->assertSame($path, $ensured);
+        $this->assertDirectoryExists($path);
+        $this->assertSame(
+            0750,
+            \fileperms($path) & 0777,
+            'ensure sets the mode explicitly, not a umask-roll'
+        );
     }
 
     // -------------------------------------------------------------------------

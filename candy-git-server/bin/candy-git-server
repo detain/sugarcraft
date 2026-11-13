@@ -55,6 +55,7 @@ namespace SugarCraft\GitServer\Bin;
 })();
 
 use SugarCraft\GitServer\{Config, Lang, Repo, User, UserStore, Visibility};
+use SugarCraft\GitServer\Support\AtomicWriter;
 
 // Pre-rename env compatibility (plan_rename.md R4.5): CANDY_SERVE_DATA_PATH was // @rename-keep
 // this app's data-dir var before the 2026-10 rename. Import any old-prefix
@@ -263,6 +264,14 @@ function cmdServeHttp(array $args): int
         return 1;
     }
 
+    // 038: a serve-time data plane parked in the system temp directory
+    // is enumerable by local users and deletable by tmp cleaners — the
+    // serve command says so even when the path came from a config file.
+    $serveTemp = \sys_get_temp_dir();
+    if (\str_starts_with($config->dataPath, $serveTemp . '/') || $config->dataPath === $serveTemp) {
+        \fwrite(\STDERR, 'candy-git-server: ' . Lang::t('cli.warn_tmp_data_path', ['path' => $config->dataPath]) . "\n");
+    }
+
     // Authz wiring: the anonymous-read lever comes from config (default
     // OFF); accounts come from the persisted store so `user add` and
     // `user key` actually reach the wire. A corrupt store refuses the
@@ -285,6 +294,18 @@ function cmdServeHttp(array $args): int
         return 1;
     }
 
+    // 107 boot sweep: temps minted by a SIGKILLed earlier run (user-store
+    // exchanges, LFS object writes, init config) must not fossilise in
+    // the plane — cleanup was in-process only. Age-gated (an in-flight
+    // exchange of a sibling worker stays >1 h untouched), signature-gated
+    // (operator scratch is never a candidate), owner-gated.
+    AtomicWriter::sweepStaleTemps($config->dataPath);
+    AtomicWriter::sweepStaleTemps($config->dataPath . '/tmp');
+    AtomicWriter::sweepStaleTemps($config->sshPath());
+    if ($config->lfsEnabled) {
+        AtomicWriter::sweepStaleTemps($config->lfsPath(), AtomicWriter::STALE_TEMP_AGE_SECONDS, 3);
+    }
+
     $server = new \SugarCraft\GitServer\HttpSmartProtocol\Server($config);
     $storedUserCount = \count($storedUsers);
     foreach ($storedUsers as $storedUser) {
@@ -292,7 +313,17 @@ function cmdServeHttp(array $args): int
     }
     $served = 0;
     $published = 0;
-    foreach ((array) \scandir($repoRoot) as $entry) {
+    // 089: scandir returns FALSE for an unreadable-but-existing root, and
+    // (array)false is [false] — the old shape walked a literal false entry
+    // toward Repo::new and died with a TypeError instead of a clean error
+    // line. Guard the result, name the path, exit 1.
+    $rootEntries = @\scandir($repoRoot);
+    if ($rootEntries === false) {
+        \fwrite(\STDERR, 'candy-git-server: ' . Lang::t('cli.repo_root_unreadable', ['path' => $repoRoot]) . "\n");
+
+        return 1;
+    }
+    foreach ($rootEntries as $entry) {
         if ($entry === '.' || $entry === '..') {
             continue;
         }
@@ -381,21 +412,35 @@ function cmdServeHttp(array $args): int
 
 function cmdInit(array $args): int
 {
-    $dataPath = $args[0] ?? \getenv('CANDY_GIT_SERVER_DATA_PATH') ?: \sys_get_temp_dir() . '/candy-git-server';
+    $dataPath = bin_data_path($args[0] ?? null);
 
     if (\is_dir($dataPath) && \is_file($dataPath . '/config.yaml')) {
         echo Lang::t('cli.already_initialized', ['path' => $dataPath]) . "\n";
         return 0;
     }
 
+    // 038: refuse an existing tree another uid created before we layer
+    // credentials onto it.
+    $foreign = bin_refuse_foreign_owner($dataPath);
+    if ($foreign !== null) {
+        return error(Lang::t('cli.init_foreign_owner', [
+            'path' => $foreign,
+            'uid'  => (string) @\fileowner($foreign),
+        ]) . "\n");
+    }
+
     echo Lang::t('cli.initializing', ['path' => $dataPath]) . "\n";
 
-    // Create directories
-    foreach (['repositories', 'ssh', 'hooks', 'tmp'] as $dir) {
-        $path = "{$dataPath}/{$dir}";
-        if (!\is_dir($path)) {
-            \mkdir($path, 0755, true);
-        }
+    // Create directories (038: explicit modes, never a umask-roll — the
+    // data plane goes private, the jail group-readable at most).
+    AtomicWriter::ensureDir($dataPath, 0700);
+    foreach ([
+        'repositories' => 0750,
+        'ssh'          => 0700,
+        'hooks'        => 0750,
+        'tmp'          => 0700,
+    ] as $dir => $mode) {
+        AtomicWriter::ensureDir("{$dataPath}/{$dir}", $mode);
     }
 
     // Create config
@@ -421,24 +466,16 @@ YAML;
     // 0600 on the temp inode before the payload lands — a bare
     // file_put_contents would inherit the process umask, and deployers
     // routinely run the init step with a 0022 or looser umask where the
-    // secret would sit world-readable from first byte.
-    $tmp = "{$dataPath}/config.yaml." . \bin2hex(\random_bytes(6)) . '.tmp';
-    $handle = @\fopen($tmp, 'xb');
-    if ($handle === false) {
-        return error(Lang::t('cli.init_temp_open_failed', ['tmp' => $tmp]) . "\n");
-    }
-    $written = false;
+    // secret would sit world-readable from first byte. (042: the shape
+    // is now the shared Support\AtomicWriter discipline, so init, the
+    // visibility marker and the description can no longer drift apart.)
     try {
-        \chmod($tmp, 0600);
-        if (\fwrite($handle, $configYaml) !== false) {
-            \fflush($handle);
-            $written = true;
+        AtomicWriter::write("{$dataPath}/config.yaml", $configYaml, 0600);
+    } catch (\RuntimeException $e) {
+        if (\preg_match('/cannot open temp (\S+)$/', $e->getMessage(), $m) === 1) {
+            return error(Lang::t('cli.init_temp_open_failed', ['tmp' => $m[1]]) . "\n");
         }
-    } finally {
-        \fclose($handle);
-    }
-    if (!$written || !@\rename($tmp, "{$dataPath}/config.yaml")) {
-        @\unlink($tmp);
+
         return error(Lang::t('cli.init_publish_failed', ['data' => $dataPath]) . "\n");
     }
 
@@ -510,7 +547,41 @@ function cmdUserToken(array $args): int
  */
 function bin_data_path(?string $explicit): string
 {
-    return $explicit ?? (\getenv('CANDY_GIT_SERVER_DATA_PATH') ?: \sys_get_temp_dir() . '/candy-git-server');
+    $path = $explicit ?? (\getenv('CANDY_GIT_SERVER_DATA_PATH') ?: \sys_get_temp_dir() . '/candy-git-server');
+    // 038 admission: the /tmp default is tmpfiles-hostile AND locally
+    // disclosure-prone. The README always said tmpfiles; it never said
+    // 'local users can see your jail'. Any explicit choice (arg or env)
+    // silences this; only the bare default talks.
+    $temp = \sys_get_temp_dir();
+    if (\str_starts_with($path, $temp . '/') || $path === $temp) {
+        \fwrite(\STDERR, 'candy-git-server: ' . Lang::t('cli.warn_tmp_data_path', ['path' => $path]) . "\n");
+    }
+
+    return $path;
+}
+
+/**
+ * Refuse to adopt a data plane owned by a different uid (038): the old
+ * init happily layered config + jail onto a FIRST-CREATOR-SQUATTED
+ * directory, handing the squatter (or being handed to them) every
+ * later-created repo and user store underneath.
+ */
+function bin_refuse_foreign_owner(string $dataPath): ?string
+{
+    if (!\function_exists('fileowner')) {
+        return null;
+    }
+    foreach ([$dataPath, $dataPath . '/repositories', $dataPath . '/ssh'] as $probe) {
+        if (!\is_dir($probe)) {
+            continue;
+        }
+        $owner = @\fileowner($probe);
+        if ($owner !== false && $owner !== \getmyuid()) {
+            return $probe;
+        }
+    }
+
+    return null;
 }
 
 /**

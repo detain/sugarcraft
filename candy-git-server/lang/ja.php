@@ -78,6 +78,9 @@ return [
 // bin/candy-git-server — Step 17: remaining CLI refusals
     'cli.init_temp_open_failed' => 'init: 一時設定ファイルを開けません: {tmp}',
     'cli.init_publish_failed' => 'init: 設定ファイルを公開できません: {data}/config.yaml',
+    'cli.warn_tmp_data_path' => '警告: データパス {path} はシステムの一時ディレクトリにあります。ローカルユーザーは列挙でき、クリーンアップにより削除される可能性があります — 実運用では CANDY_GIT_SERVER_DATA_PATH を設定してください',
+    'cli.init_foreign_owner' => 'init: uid {uid} が所有する {path} の引き受けを拒否しました。そのユーザーとして実行するか、所有するデータパスを選んでください',
+    'cli.repo_root_unreadable' => 'serve: リポジトリルート {path} を読み込めません',
     'cli.token_no_config' => 'token: 読み取り可能な設定がありません {data}/config.yaml — init を実行するかデータパスを指定してください',
     'cli.token_no_secret' => 'token: このデータパスに http.auth_secret が設定されていません。トークンを発行する前に config.yaml の http: セクションに設定してください',
     'cli.password_flag_needs_value' => 'candy-git-server: --password には値が必要です (\'-\' は標準入力から読み込み)',

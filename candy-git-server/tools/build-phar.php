@@ -188,7 +188,12 @@ $walk = static function (string $dir) use (&$walk, &$files, $package): void {
             continue;
         }
         $path = $dir . '/' . $name;
-        if (is_link($path)) {
+        // 116: the fingerprint that actually means a LINKED install is a
+        // symlinked SIBLING under vendor/sugarcraft/ (the path-repo
+        // closure). vendor/bin/ is symlinks even in the cleanest published
+        // install, so the old any-link walk aborted `composer install`
+        // builds with a false accusation. Scope the refusal.
+        if (is_link($path) && preg_match('#(^|/)vendor/sugarcraft(/|$)#', $path) === 1) {
             fwrite(STDERR, "build-phar: refusing to package symlinked tree {$path} — this vendor/ is a LINKED monorepo install; the phar would freeze working-tree code. Rebuild from `composer install --no-dev --prefer-dist` (or `php scripts/refresh-deps.php --mode=published`).\n");
             exit(2);
         }

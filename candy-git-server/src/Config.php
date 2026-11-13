@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\GitServer;
 
 use SugarCraft\GitServer\Lang;
+use SugarCraft\GitServer\Support\AtomicWriter;
 use Symfony\Component\Yaml\Exception\ParseException;
 use Symfony\Component\Yaml\Yaml;
 
@@ -346,31 +347,58 @@ final class Config
         return \get_debug_type($value) . ' ' . \var_export($value, true);
     }
 
+    /**
+     * Repository jail path — PURE (091): returns the location without
+     * creating it. Read-side lookups (daemon/SSH repo resolution) run
+     * this on every request, and an accessor that mkdirs let a network
+     * mount point or a read-only scanner mint 0755 directories as a
+     * lookup side effect. Servers and writers call the ensure* twin.
+     */
     public function reposPath(): string
     {
-        $p = $this->dataPath . '/repositories';
-        if (!\is_dir($p)) {
-            \mkdir($p, 0755, true);
-        }
-        return $p;
+        return $this->dataPath . '/repositories';
     }
 
+    /** SSH host-key + user-store directory — PURE (091), see reposPath(). */
     public function sshPath(): string
     {
-        $p = $this->dataPath . '/ssh';
-        if (!\is_dir($p)) {
-            \mkdir($p, 0700, true);
-        }
+        return $this->dataPath . '/ssh';
+    }
+
+    /** LFS object root — PURE (091), see reposPath(). */
+    public function lfsPath(): string
+    {
+        return $this->dataPath . '/lfs';
+    }
+
+    /**
+     * Create the repository jail with an explicit mode (038: 0750, not a
+     * umask-roll — a world-readable jail lets local users clone private
+     * repos straight off the disk, bypassing every access check).
+     */
+    public function ensureReposPath(): string
+    {
+        $p = $this->reposPath();
+        AtomicWriter::ensureDir($p, 0750);
+
         return $p;
     }
 
-    /** Directory holding LFS objects (created on first use). */
-    public function lfsPath(): string
+    /** Create the ssh/user-store directory, owner-only (0700). */
+    public function ensureSshPath(): string
     {
-        $p = $this->dataPath . '/lfs';
-        if (!\is_dir($p)) {
-            \mkdir($p, 0755, true);
-        }
+        $p = $this->sshPath();
+        AtomicWriter::ensureDir($p, 0700);
+
+        return $p;
+    }
+
+    /** Create the LFS object root with an explicit mode (038: 0750). */
+    public function ensureLfsPath(): string
+    {
+        $p = $this->lfsPath();
+        AtomicWriter::ensureDir($p, 0750);
+
         return $p;
     }
 

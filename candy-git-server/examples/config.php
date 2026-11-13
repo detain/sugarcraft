@@ -29,7 +29,10 @@ echo "Log format  : {$config->logFormat}\n";
 // --- Demo 2: YAML config file ---
 echo "\n=== YAML Config File ===\n\n";
 
-$tmpFile = \sys_get_temp_dir() . '/candy-git-server-test-config.yaml';
+// 136: a fixed predictable /tmp name is a symlink-squat target (attacker
+// pre-creates the path, the example's write lands through their link).
+// tempnam() creates exclusively (0600) and never reuses.
+$tmpFile = \tempnam(\sys_get_temp_dir(), 'candy-git-cfg-');
 $yaml = <<<'YAML'
 name: "My CandyGitServer"
 log_format: "json"      # parsed, but no shipped code path reads it yet

@@ -78,6 +78,9 @@ return [
 // bin/candy-git-server — Step 17: remaining CLI refusals
     'cli.init_temp_open_failed' => 'init: 임시 구성 파일을 열 수 없음: {tmp}',
     'cli.init_publish_failed' => 'init: 구성 파일을 게시할 수 없음: {data}/config.yaml',
+    'cli.warn_tmp_data_path' => '경고: 데이터 경로 {path}가 시스템 임시 디렉터리에 있습니다. 로컬 사용자가 나열할 수 있고 임시 파일 정리 도구 삭제 대상이 될 수 있습니다 — 실제 배포에서는 CANDY_GIT_SERVER_DATA_PATH를 설정하세요',
+    'cli.init_foreign_owner' => 'init: uid {uid}이 소유한 {path}를 상속하는 것을 거부합니다. 해당 사용자로 실행하거나 직접 소유한 데이터 경로를 선택하세요',
+    'cli.repo_root_unreadable' => 'serve: 저장소 루트 {path}를 읽을 수 없습니다',
     'cli.token_no_config' => 'token: 읽을 수 있는 구성이 없습니다 {data}/config.yaml — init을 실행하거나 데이터 경로를 지정하세요',
     'cli.token_no_secret' => 'token: 이 데이터 경로에 http.auth_secret이 구성되어 있지 않습니다. 토큰을 발행하기 전에 config.yaml의 http: 섹션에 설정하세요',
     'cli.password_flag_needs_value' => 'candy-git-server: --password에는 값이 필요합니다 (\'-\'는 표준 입력에서 읽음)',

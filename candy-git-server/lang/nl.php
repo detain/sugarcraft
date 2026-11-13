@@ -78,6 +78,9 @@ return [
 // bin/candy-git-server — Step 17: remaining CLI refusals
     'cli.init_temp_open_failed' => 'init: kan tijdelijke configuratie niet openen in {tmp}',
     'cli.init_publish_failed' => 'init: kan configuratie niet publiceren in {data}/config.yaml',
+    'cli.warn_tmp_data_path' => 'waarschuwing: datapad {path} staat in de tijdelijke systeemmap; lokale gebruikers kunnen het opsommen en tmp-cleaners kunnen het verwijderen — stel CANDY_GIT_SERVER_DATA_PATH in voor echte deployments',
+    'cli.init_foreign_owner' => 'init: weigeren {path} over te nemen dat eigendom is van uid {uid}; voer uit als die gebruiker of kies een eigen datapad',
+    'cli.repo_root_unreadable' => 'serve: repository-root {path} kan niet gelezen worden',
     'cli.token_no_config' => 'token: geen leesbare configuratie in {data}/config.yaml — voer init uit of geef een datapad op',
     'cli.token_no_secret' => 'token: http.auth_secret is niet geconfigureerd voor dit datapad; stel het in onder het http:-deel van config.yaml voordat u tokens aanmaakt',
     'cli.password_flag_needs_value' => 'candy-git-server: --password vereist een waarde (\'-\' leest van stdin)',

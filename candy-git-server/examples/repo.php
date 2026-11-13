@@ -16,9 +16,11 @@ use SugarCraft\GitServer\Config;
 use SugarCraft\GitServer\Repo;
 use SugarCraft\GitServer\User;
 
-// Steer Config at a temp data dir.
-$tmpDir = \sys_get_temp_dir() . '/candy-git-server-test-' . \uniqid();
-\mkdir($tmpDir, 0755, true);
+// Steer Config at a temp data dir. (136: the old name came from the clock —
+// predictable /tmp paths plus the example's own rm -rf cleanup is a local
+// symlink-race recipe; entropy in the name, private mode on the directory.)
+$tmpDir = \sys_get_temp_dir() . '/candy-git-server-repo-' . \bin2hex(\random_bytes(8));
+\mkdir($tmpDir, 0700, true);
 \putenv("CANDY_GIT_SERVER_DATA_PATH={$tmpDir}");
 $config = Config::fromDefaults();
 

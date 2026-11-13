@@ -78,6 +78,9 @@ return [
 // bin/candy-git-server — Step 17: remaining CLI refusals
     'cli.init_temp_open_failed' => 'init: 无法打开临时配置 {tmp}',
     'cli.init_publish_failed' => 'init: 无法发布配置 {data}/config.yaml',
+    'cli.warn_tmp_data_path' => '警告：数据路径 {path} 位于系统临时目录；本地用户可以枚举它，临时清理程序也可能删除它 — 正式部署请设置 CANDY_GIT_SERVER_DATA_PATH',
+    'cli.init_foreign_owner' => 'init：拒绝接管属于 uid {uid} 的 {path}；请以该用户身份运行，或选择您自己拥有的数据路径',
+    'cli.repo_root_unreadable' => 'serve：无法读取仓库根目录 {path}',
     'cli.token_no_config' => 'token: {data}/config.yaml 没有可读配置 — 请运行 init 或指定数据路径',
     'cli.token_no_secret' => 'token: 此数据路径未配置 http.auth_secret；请在 config.yaml 的 http: 段中设置后再签发令牌',
     'cli.password_flag_needs_value' => 'candy-git-server: --password 需要一个值（\'-\' 从标准输入读取）',

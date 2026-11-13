@@ -64,6 +64,9 @@ final class GitDaemon
     /** PID file path */
     private string $pidFile = '';
 
+    /** @var resource|null Live flock handle on the pidfile (090 lock role). */
+    private $pidLockHandle = null;
+
     /** Whether daemon is running */
     private bool $running = false;
 
@@ -259,16 +262,29 @@ final class GitDaemon
         // Register signal handlers
         $this->registerSignalHandlers();
 
+        // Write (and claim) the PID file BEFORE binding: a refusal must
+        // not leave a listening socket behind on the fail path.
+        if ($this->pidFile !== '') {
+            try {
+                $this->writePidFile();
+            } catch (\RuntimeException $e) {
+                $this->running = false;
+                $this->restoreSignalHandlers();
+                \fwrite(\STDERR, $e->getMessage() . "\n");
+
+                return 1;
+            }
+        }
+
         // Create server socket
         $this->serverSocket = $this->createServerSocket();
         if ($this->serverSocket === false) {
+            $this->running = false;
+            $this->restoreSignalHandlers();
             \fwrite(\STDERR, "Failed to create server socket on {$this->config->gitListenAddr}\n");
-            return 1;
-        }
+            $this->removePidFile();
 
-        // Write PID file
-        if ($this->pidFile !== '') {
-            $this->writePidFile();
+            return 1;
         }
 
         \fwrite(\STDERR, "Git daemon listening on {$this->config->gitListenAddr}\n");
@@ -322,12 +338,25 @@ final class GitDaemon
         $this->pidFile = $pidFile;
         $this->shutdownRequested = false;
 
+        // Claim the PID file BEFORE binding (fail-fast parity with
+        // serve(); a throw here must not leak a loop or a socket).
+        if ($this->pidFile !== '') {
+            try {
+                $this->writePidFile();
+            } catch (\RuntimeException $e) {
+                $this->loop = null;
+
+                throw $e;
+            }
+        }
+
         [$host, $port] = $this->listenHostPort();
         $errno = 0;
         $errstr = '';
         $stream = @\stream_socket_server("tcp://{$host}:{$port}", $errno, $errstr);
         if ($stream === false) {
             $this->loop = null;
+            $this->removePidFile(); // release the claim taken before the bind
             throw new \RuntimeException(
                 "Failed to create server socket on {$this->config->gitListenAddr}: {$errstr}"
             );
@@ -337,10 +366,6 @@ final class GitDaemon
         $this->serverStream = $stream;
         $this->running = true;
         $this->asyncActive = true;
-
-        if ($this->pidFile !== '') {
-            $this->writePidFile();
-        }
 
         $this->registerSignalHandlers();
 
@@ -1214,17 +1239,71 @@ final class GitDaemon
     // PID file
     // -------------------------------------------------------------------------
 
+    /**
+     * Write — and TAKE — the pidfile (090). The file keeps a live
+     * flock(LOCK_EX) for the whole daemon lifetime, which turns it into
+     * a truth-bearing single-instance marker: a second daemon cannot
+     * claim it, and a crash releases the lock with the process, so a
+     * leftover file is always STALE and the next start overwrites it.
+     * The old shape ignored mkdir/file_put_contents results (a daemon
+     * "succeeded" with an empty or missing pidfile) and had neither
+     * staleness check nor lock role.
+     *
+     * Deliberately NOT routed through Support\AtomicWriter (042): the
+     * lock's authority lives on the target INODE — a rename would
+     * publish fresh bytes but hand the next opener an unlocked inode,
+     * trading the pidfile's whole 090 purpose for a neatness it never
+     * needed. In-place truncate+write with checked results and fsync is
+     * the correct shape for a lock-bearing file.
+     *
+     * @throws \RuntimeException When the directory cannot be created,
+     *                           the file cannot be opened, a live
+     *                           daemon holds the lock, or the bytes
+     *                           cannot be committed.
+     */
     private function writePidFile(): void
     {
         $dir = \dirname($this->pidFile);
-        if (!\is_dir($dir)) {
-            \mkdir($dir, 0755, true);
+        // 038 discipline for the plane we own: a pidfile directory must
+        // not be world-writable-by-roll; content is public-safe (0644).
+        if (!\is_dir($dir) && !@\mkdir($dir, 0750, true) && !\is_dir($dir)) {
+            throw new \RuntimeException("pidfile: cannot create directory {$dir}");
         }
-        \file_put_contents($this->pidFile, (string) \getmypid());
+        $handle = @\fopen($this->pidFile, 'c');
+        if ($handle === false) {
+            throw new \RuntimeException("pidfile: cannot open {$this->pidFile}");
+        }
+        if (@\flock($handle, \LOCK_EX | \LOCK_NB) === false) {
+            $holder = \trim((string) @\file_get_contents($this->pidFile));
+            \fclose($handle);
+            throw new \RuntimeException(
+                "pidfile: {$this->pidFile} is locked by a running daemon"
+                . ($holder !== '' ? " (pid {$holder})" : '')
+            );
+        }
+        if (@\ftruncate($handle, 0) === false
+            || @\fwrite($handle, (string) \getmypid()) === false
+            || !@\fflush($handle)
+            || !@\fsync($handle)
+        ) {
+            @\flock($handle, \LOCK_UN);
+            \fclose($handle);
+            throw new \RuntimeException("pidfile: cannot write {$this->pidFile}");
+        }
+        @\chmod($this->pidFile, 0644);
+        $this->pidLockHandle = $handle; // the lock lives for the process lifetime
     }
 
     private function removePidFile(): void
     {
+        // Release the lock before the unlink: a racing next-starter
+        // must never flock a stale inode that still carries the old
+        // daemon's claim.
+        if ($this->pidLockHandle !== null) {
+            @\flock($this->pidLockHandle, \LOCK_UN);
+            @\fclose($this->pidLockHandle);
+            $this->pidLockHandle = null;
+        }
         if ($this->pidFile !== '' && \file_exists($this->pidFile)) {
             @\unlink($this->pidFile);
         }

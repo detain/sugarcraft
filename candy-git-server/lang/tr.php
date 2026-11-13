@@ -78,6 +78,9 @@ return [
 // bin/candy-git-server — Step 17: remaining CLI refusals
     'cli.init_temp_open_failed' => 'init: geçici yapılandırma açılamadı: {tmp}',
     'cli.init_publish_failed' => 'init: yapılandırma yayınlanamadı: {data}/config.yaml',
+    'cli.warn_tmp_data_path' => 'uyarı: veri yolu {path} sistem geçici dizininde yer alıyor; yerel kullanıcılar listeyebilir ve tmp temizleyicileri silebilir — gerçek dağıtımlar için CANDY_GIT_SERVER_DATA_PATH ayarlayın',
+    'cli.init_foreign_owner' => 'init: uid {uid} kullanıcısına ait {path} devralınması reddediliyor; o kullanıcı olarak çalıştırın veya kendi veri yolunu seçin',
+    'cli.repo_root_unreadable' => 'serve: depo kökü {path} okunamıyor',
     'cli.token_no_config' => 'token: okunabilir yapılandırma yok: {data}/config.yaml — init çalıştırın veya bir veri yolu geçin',
     'cli.token_no_secret' => 'token: bu veri yolu için http.auth_secret yapılandırılmamış; token basmadan önce config.yaml içindeki http: bölümünde ayarlayın',
     'cli.password_flag_needs_value' => 'candy-git-server: --password bir değer gerektirir (\'-\' stdin\'den okur)',

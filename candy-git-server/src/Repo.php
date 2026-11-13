@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\GitServer;
 
 use SugarCraft\GitServer\Lang;
+use SugarCraft\GitServer\Support\AtomicWriter;
 use SugarCraft\GitServer\Support\BoundedCommand;
 
 /**
@@ -160,8 +161,22 @@ final class Repo
             throw new \RuntimeException(Lang::t('repo.visibility_marker_unwritable', ['file' => $gitDir]));
         }
         $file = $gitDir . '/' . self::VISIBILITY_MARKER;
-        if (@\file_put_contents($file, $this->visibility->value . "\n") === false) {
-            throw new \RuntimeException(Lang::t('repo.visibility_marker_unwritable', ['file' => $file]));
+        // 042: the marker used to be a bare file_put_contents — a
+        // truncation mid-write silently UN-PUBLISHES (an empty marker
+        // reads fail-closed private, dropping the operator's declared
+        // public state). The atomic exchange only ever leaves the old
+        // bytes or the new ones. Mode stays 0644: group readers are the
+        // sharedRepository=umask push shape, and the marker is posture,
+        // not a secret.
+        try {
+            AtomicWriter::write($file, $this->visibility->value . "\n", 0644);
+        } catch (\RuntimeException $e) {
+            // The pinned failure contract is the lang-keyed line; the
+            // helper's why is appended so the operator sees the actual
+            // syscall failure underneath.
+            throw new \RuntimeException(
+                Lang::t('repo.visibility_marker_unwritable', ['file' => $file]) . ' (' . $e->getMessage() . ')'
+            );
         }
     }
 
@@ -258,8 +273,14 @@ final class Repo
     public function init(): self
     {
         if (!\is_dir($this->path)) {
-            $ok = \mkdir($this->path, 0755, true);
-            if (!$ok) {
+            // 038: the jail's per-repo directory used to land 0755 under a
+            // permissive umask — world-readable straight off disk, which
+            // bypasses every access check with a plain `cp -r`. 0750 with
+            // an explicit chmod: owner full, group read-only, no world.
+            try {
+                AtomicWriter::ensureDir($this->path, 0750);
+            } catch (\RuntimeException $e) {
+                // The pinned failure contract is the lang-keyed line.
                 throw new \RuntimeException(Lang::t('repo.create_dir_failed', ['path' => $this->path]));
             }
         }
@@ -276,8 +297,10 @@ final class Repo
             BoundedCommand::run(['git', '-C', $gitDir, 'config', 'core.sharedRepository', 'umask']);
         }
 
-        // Set description
-        \file_put_contents($gitDir . '/description', $this->description ?: 'Unnamed repository');
+        // Set description (042: routed through the atomic writer — a
+        // truncated description from the old bare write was cosmetic-but-
+        // permanent; now the field is either the old bytes or the new).
+        AtomicWriter::write($gitDir . '/description', (string) ($this->description ?: 'Unnamed repository'), 0644);
 
         // Deliberately NO 'git-daemon-export-ok' marker: that file ENABLES
         // anonymous read-export of this repo to any co-hosted stock

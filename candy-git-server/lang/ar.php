@@ -78,6 +78,9 @@ return [
 // bin/candy-git-server — Step 17: remaining CLI refusals
     'cli.init_temp_open_failed' => 'init: تعذر فتح الإعداد المؤقت في {tmp}',
     'cli.init_publish_failed' => 'init: تعذر نشر الإعداد في {data}/config.yaml',
+    'cli.warn_tmp_data_path' => 'تحذير: مسار البيانات {path} يقع في المجلد المؤقت للنظام؛ يمكن للمستخدمين المحليين سرده ويمكن لأدوات التنظيف حذفه — عيّن CANDY_GIT_SERVER_DATA_PATH للنشر الفعلي',
+    'cli.init_foreign_owner' => 'init: رفض تبنّي {path} المملوك للمعرّف {uid}; نفّذ بصفته ذلك المستخدم أو اختر مسار بيانات تملكه',
+    'cli.repo_root_unreadable' => 'serve: تعذّرت قراءة جذر المستودعات {path}',
     'cli.token_no_config' => 'token: لا يوجد إعداد قابل للقراءة في {data}/config.yaml — شغّل init أو مرّر مسار بيانات',
     'cli.token_no_secret' => 'token: http.auth_secret غير مُهيأ لمسار البيانات هذا؛ اضبطه تحت قسم http: في config.yaml قبل إصدار الرموز',
     'cli.password_flag_needs_value' => 'candy-git-server: --password يتطلب قيمة (\'-\' تقرأ من stdin)',

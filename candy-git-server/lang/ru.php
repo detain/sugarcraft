@@ -78,6 +78,9 @@ return [
 // bin/candy-git-server — Step 17: remaining CLI refusals
     'cli.init_temp_open_failed' => 'init: не удалось открыть временный конфиг в {tmp}',
     'cli.init_publish_failed' => 'init: не удалось опубликовать конфиг в {data}/config.yaml',
+    'cli.warn_tmp_data_path' => 'предупреждение: путь данных {path} находится во временном каталоге системы; локальные пользователи могут его перечислить, а очистка temp — удалить; для реальных установок задайте CANDY_GIT_SERVER_DATA_PATH',
+    'cli.init_foreign_owner' => 'init: отказ принимать {path}, принадлежащий uid {uid}; запустите от этого пользователя или выберите собственный путь данных',
+    'cli.repo_root_unreadable' => 'serve: не удается прочитать корень репозиториев {path}',
     'cli.token_no_config' => 'token: нет читаемого конфига в {data}/config.yaml — выполните init или укажите путь к данным',
     'cli.token_no_secret' => 'token: http.auth_secret не настроен для этого пути к данным; задайте его в секции http: файла config.yaml перед выпуском токенов',
     'cli.password_flag_needs_value' => 'candy-git-server: --password требует значение (\'-\' читает из stdin)',

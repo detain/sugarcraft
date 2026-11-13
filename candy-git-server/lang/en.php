@@ -87,6 +87,9 @@ return [
 // bin/candy-git-server — Step 17: remaining CLI refusals
     'cli.init_temp_open_failed' => 'init: cannot open temp config at {tmp}',
     'cli.init_publish_failed' => 'init: cannot publish config at {data}/config.yaml',
+    'cli.warn_tmp_data_path' => 'warning: data path {path} sits in the system temp directory; local users can enumerate it and tmp cleaners can delete it — set CANDY_GIT_SERVER_DATA_PATH for real deployments',
+    'cli.init_foreign_owner' => 'init: refusing to adopt {path} owned by uid {uid}; run as that user or choose a data path you own',
+    'cli.repo_root_unreadable' => 'serve: cannot read repository root {path}',
     'cli.token_no_config' => 'token: no readable config at {data}/config.yaml — run init or pass a data-path',
     'cli.token_no_secret' => 'token: http.auth_secret is not configured for this data path; set it under the http: section of config.yaml before minting tokens',
     'cli.password_flag_needs_value' => 'candy-git-server: --password requires a value (\'-\' reads from stdin)',
