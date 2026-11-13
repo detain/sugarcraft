@@ -143,7 +143,7 @@ rows are simply unused.
   TrueColor SGR: there is no 16/256-colour degradation step (flappy never
   calls `Style::setDefaultProfile()`), so a 16- or 256-colour terminal shows
   whatever the emulator decides to do with the TrueColor bytes. The status
-  hint collapses to a short form before any line could wrap past the window
+  hint collapses to a short form so no status line can exceed the window
   width.
 
 The palette is hardcoded light-on-dark, and every ratio below is derived
