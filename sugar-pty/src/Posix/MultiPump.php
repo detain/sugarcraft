@@ -303,7 +303,7 @@ final class MultiPump
             foreach ($live as $session) {
                 // The idle arm delivers the same hook pair, in the same
                 // order, as the single-session pumps: onIdle first, the
-                // legacy keepalive alias second. (It used to be keepalive
+                // legacy keepalive hook second. (It used to be keepalive
                 // only — options carrying onIdle silently no-op'd here
                 // while every other pump fired them.)
                 if ($session->opts->onIdle !== null) {

@@ -533,7 +533,7 @@ leaving the child and PTY for the caller to reap:
 
 | Callback | Fires when | Use for |
 |---|---|---|
-| `keepalive` | idle tick (stream_select → 0) | Legacy heartbeat alias; prefer `onIdle` |
+| `keepalive` | idle tick (stream_select → 0), immediately after `onIdle` | Deprecated legacy heartbeat — a separate hook delivered second, NOT an alias of `onIdle`; new code uses `onIdle` |
 | `onIdle` | idle tick — every `stream_select` timeout | Keepalive pings, polling housekeeping, any periodic task |
 | `onResize` | the pump *observes* `MasterPty::size()` differing from the last-known size on an idle tick — polled between reads, never signalled | React to a resize the consumer's `SignalForwarder` already applied; the pump itself never writes TIOCSWINSZ |
 | `onChildExit` | child process exits | Resource cleanup, notification |

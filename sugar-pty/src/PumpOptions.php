@@ -95,9 +95,14 @@ final class PumpOptions
     public readonly ?int $pumpDeadlineUs;
 
     /**
-     * Called each pump loop iteration when idle (stream_select timed out).
-     * Null when no callback is registered.
+     * Legacy heartbeat: a SEPARATE hook, not an alias of
+     * {@see onIdle} — it has its own field and both are delivered on
+     * every idle tick, this one second (order: onIdle, keepalive), on
+     * all three pumps. Kept two-field on purpose: merging would
+     * silently double-fire or drop a callback for callers mid-way
+     * through migration. New code registers only `onIdle`.
      *
+     * @deprecated Prefer {@see onIdle}.
      * @var (\Closure(): void)|null
      */
     public readonly \Closure|null $keepalive;
@@ -259,6 +264,11 @@ final class PumpOptions
         return $this->mutate(['veof' => $v]);
     }
 
+    /**
+     * Set the legacy heartbeat hook. It stays a separate callback
+     * delivered after `onIdle` on every idle tick — see the property
+     * docblock; new code should prefer withOnIdle().
+     */
     public function withKeepalive(?\Closure $v): self
     {
         return $this->mutate(['keepalive' => $v]);
