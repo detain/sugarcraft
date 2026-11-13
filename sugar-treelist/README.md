@@ -160,9 +160,13 @@ $model = $model->withSuffixer(new class implements Suffixer {
 
 Returning `''` from `suffix()` means *no suffix and no padding* on that line —
 the reserved width is still subtracted from the content budget on every line,
-but only a non-empty return is right-aligned into the column. Reserve the
-width your widest real suffix needs (an over-wide return is not clamped; it
-follows the line past the reservation).
+but only a non-empty return is right-aligned, measured from the actual widths
+of that row's prefix, content, and suffix, so the marker lands flush at the
+viewport edge. Reserve the width your widest real suffix needs: a return
+wider than the reservation can no longer overrun the viewport — every
+assembled row is clamped to it, with the suffix giving cells first, then the
+prefix, and only a spent gutter making the item content fall (a hostile
+gutter degrades its own leg instead of corrupting sibling panes).
 
 ## Viewport
 

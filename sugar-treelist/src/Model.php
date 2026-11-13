@@ -1286,6 +1286,60 @@ final class Model
     }
 
     /**
+     * Viewport guarantee for an assembled row (sugar-treelist-006): the
+     * reservation a Prefixer/Suffixer DECLARED at init time is what wrap and
+     * suffix padding are charged against; whatever the extension actually
+     * returned may be narrower, but it must never push the row past the
+     * viewport — a component embedded in a multi-pane TUI cannot be allowed
+     * to corrupt its siblings. The SUFFIX falls first (it is the outermost
+     * decoration), then the PREFIX, and only after both gutters are spent
+     * does the item CONTENT give cells; the loop always terminates with a
+     * row that fits. Grapheme-safe: no codepoint is cut at its seam.
+     */
+    private function clampRowToViewport(string $prefix, string $content, string $suffix): string
+    {
+        $line = $prefix . $content . $suffix;
+        $over = $this->ansiWidth($line) - $this->width;
+        if ($over <= 0) {
+            return $line;
+        }
+        // Fall order: suffix, prefix, content — the earlier legs only pay
+        // while cells remain in that leg.
+        [$suffix, $dropped] = $this->dropRightCells($suffix, $over);
+        $over -= $dropped;
+        if ($over > 0) {
+            [$prefix, $dropped] = $this->dropRightCells($prefix, $over);
+            $over -= $dropped;
+        }
+        if ($over > 0) {
+            [$content, ] = $this->dropRightCells($content, $over);
+        }
+        return $prefix . $content . $suffix;
+    }
+
+    /**
+     * Drop whole graphemes off the RIGHT of $s until at least $cells display
+     * cells are released (never past the start of the string). Returns
+     * [remainder, cellsReleased].
+     *
+     * @return array{0: string, 1: int}
+     */
+    private function dropRightCells(string $s, int $cells): array
+    {
+        if ($s === '' || $cells <= 0) {
+            return [$s, 0];
+        }
+        $length = \grapheme_strlen($s);
+        $keep   = $length;
+        $released = 0;
+        while ($keep > 0 && $released < $cells) {
+            $released += \max(1, Width::string(\grapheme_substr($s, $keep - 1, 1)));
+            $keep--;
+        }
+        return [\grapheme_substr($s, 0, $keep), $released];
+    }
+
+    /**
      * Render styled lines for a single item — applies prefix, optional padded
      * suffix, and per-item style. Mirrors Go upstream's getItemLines.
      *
@@ -1381,16 +1435,30 @@ final class Model
 
             // Suffix is only emitted (and content right-padded) when the suffixer
             // actually produces a non-empty marker for this line. Matches Go upstream.
+            // Padding is measured against the ACTUAL swept gutter widths so the
+            // marker lands flush at the viewport edge and an extension that
+            // returns more cells than it declared cannot push the row past the
+            // viewport through the padding leg either (sugar-treelist-006).
             $lineSuffix = '';
             if ($this->suffixer !== null) {
                 $rawSuffix = self::sweepForInline($this->suffixer->suffix($lineIdx, $total));
                 if ($rawSuffix !== '') {
-                    $free = $contentWidth - $this->ansiWidth($lineContent);
+                    $free = $this->width
+                        - $this->ansiWidth($linePrefix)
+                        - $this->ansiWidth($lineContent)
+                        - $this->ansiWidth($rawSuffix);
                     $lineSuffix = \str_repeat(' ', \max(0, $free)) . $rawSuffix;
                 }
             }
 
             $line  = $linePrefix . $lineContent . $lineSuffix;
+            // Viewport guarantee (sugar-treelist-006): a custom gutter that
+            // returns more cells than its declared reservation used to flow
+            // through verbatim — one hostile prefixer corrupted sibling panes
+            // of a multi-pane TUI. The assembled row is clamped to the
+            // viewport: the suffix gives cells first, then the prefix, and
+            // only a spent gutter makes the value itself fall.
+            $line = $this->clampRowToViewport($linePrefix, $lineContent, $lineSuffix);
             $style = ($itemIndex === $this->cursorIndex) ? $this->currentStyle : $this->lineStyle;
             if ($style !== '') {
                 $line = $this->applyStyle($line, $style);

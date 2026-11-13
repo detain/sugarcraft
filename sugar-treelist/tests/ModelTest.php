@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\TreeList\Tests;
 
+use SugarCraft\Core\Util\Width;
 use SugarCraft\TreeList\{DefaultPrefixer, DefaultSuffixer, FilterState, Model, Prefixer, StringItem, Suffixer};
 use SugarCraft\TreeList\Tests\Support\RowDeltaAssertions;
 use PHPUnit\Framework\TestCase;
@@ -1860,6 +1861,88 @@ final class ModelTest extends TestCase
         // trailing-terminator convention is what makes the explode honest.
         $this->assertCount(2, $frameRows, 'extension returns must never fragment a frame row');
         $this->assertSame('', $frameRows[1], 'a full frame terminates with a trailing "\n"');
+    }
+
+    public function testOverrunningGuttersNeverPushARowPastTheViewport(): void
+    {
+        // sugar-treelist-006 contract: whatever the gutters declare, the
+        // emitted row fits the viewport. Both liars reserve 0 cells; the
+        // prefixer emits 30 against a 20-wide viewport, the suffixer 6.
+        // Fall order is suffix, prefix, content — so the VALUE survives and
+        // the lying gutters degrade instead of corrupting sibling panes.
+        $liarPrefixer = new class implements Prefixer {
+            public function initPrefixer(
+                \Stringable $value, int $currentIndex, int $cursorIndex,
+                int $lineOffset, int $width, int $height, int $totalItems,
+            ): int {
+                return 0;
+            }
+
+            public function prefix(int $currentLine, int $totalLines): string
+            {
+                return \str_repeat('P', 30);
+            }
+        };
+        $liarSuffixer = new class implements Suffixer {
+            public function initSuffixer(
+                \Stringable $value, int $currentIndex, int $cursorIndex,
+                int $lineOffset, int $width, int $height,
+            ): int {
+                return 0;
+            }
+
+            public function suffix(int $currentLine, int $totalLines): string
+            {
+                return $currentLine === 0 ? 'SUFFIX' : '';
+            }
+        };
+        $m = Model::new()->withViewport(20, 4)
+            ->withItem(new StringItem('some content here'))
+            ->withPrefixer($liarPrefixer)
+            ->withSuffixer($liarSuffixer);
+
+        $rows = $m->withCursor(0)->lines();
+        $this->assertNotSame([], $rows);
+        foreach ($rows as $i => $row) {
+            $this->assertLessThanOrEqual(
+                20,
+                Width::string($row),
+                "row {$i} escaped the viewport under an overrunning gutter: {$row}",
+            );
+        }
+        // Exact leg: suffix falls (6), prefix pays the rest (27 → 3 cells),
+        // the content stands untouched.
+        $this->assertSame('PPPsome content here', $rows[0]);
+    }
+
+    public function testEmptySuffixStillChargesTheWrapReservation(): void
+    {
+        // The documented quirk, pinned (sugar-treelist-006): the reserved
+        // width is subtracted from the content budget on EVERY line — even
+        // lines whose suffix() returns '' — so the item wraps at the narrow
+        // budget and the empty lines carry no padding.
+        $silentSuffixer = new class implements Suffixer {
+            public function initSuffixer(
+                \Stringable $value, int $currentIndex, int $cursorIndex,
+                int $lineOffset, int $width, int $height,
+            ): int {
+                return 10;
+            }
+
+            public function suffix(int $currentLine, int $totalLines): string
+            {
+                return '';
+            }
+        };
+        $m = Model::new()->withViewport(20, 4)
+            ->withItem(new StringItem(str_repeat('x', 40)))
+            ->withSuffixer($silentSuffixer);
+
+        $rows = $m->withCursor(0)->lines();
+        $this->assertSame(str_repeat('x', 10), $rows[0], 'wrap paid the 10-cell reservation');
+        foreach ($rows as $i => $row) {
+            $this->assertSame(rtrim($row, ' '), $row, "row {$i} padded toward an absent suffix");
+        }
     }
 
     public function testRowBudgetCapsLayoutWorkForPathologicalValues(): void

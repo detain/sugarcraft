@@ -14,8 +14,11 @@ namespace SugarCraft\TreeList;
  * every line. On lines where `suffix()` returns a non-empty string the
  * content is right-padded with spaces toward the suffix, so the marker lands
  * right-aligned at the reserved column; an empty return adds no padding.
- * A return wider than the reservation is not guarded - that line overruns
- * past the reserved column.
+ * A return wider than the reservation cannot overrun the viewport: the
+ * Model clamps every assembled row to it (sugar-treelist-006) — the suffix
+ * gives cells first, then the prefix, and only a spent gutter makes the
+ * item content fall — so a hostile gutter degrades its own leg instead of
+ * corrupting sibling panes of a multi-pane TUI.
  *
  * `suffix()` returns are swept to plain inline text by the Model before they
  * enter the row frame (control/ANSI bytes and zone sentinels stripped, line

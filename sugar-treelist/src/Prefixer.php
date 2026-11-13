@@ -13,6 +13,15 @@ namespace SugarCraft\TreeList;
  * prefix string. Because every item's returned width feeds its own layout,
  * implementations must derive any padding from a pass-invariant value —
  * e.g. `$totalItems`, not `$currentIndex` — or columns render ragged.
+ * The reservation is charged against the content wrap budget on EVERY line
+ * of the item — also on lines where `prefix()` returns something narrower
+ * than the declared width (the wrap budget stays the declared one; padding
+ * is measured from the actual row). A return wider than the reservation
+ * cannot overrun the viewport: the Model clamps every assembled row to it
+ * (sugar-treelist-006) — the suffix gives cells first, then the prefix, and
+ * only a spent gutter makes the item content fall — so a hostile gutter
+ * degrades its own leg instead of corrupting sibling panes of a multi-pane
+ * TUI.
  *
  * `prefix()` returns are swept to plain inline text by the Model before they
  * enter the row frame (control/ANSI bytes and zone sentinels stripped, line
