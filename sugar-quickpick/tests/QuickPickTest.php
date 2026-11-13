@@ -824,6 +824,10 @@ final class QuickPickTest extends TestCase
         $ranker = $this->createMock(FuzzyMatcher::class);
         $ranker->method('match')
             ->willReturn(new MatchResult('bn', 'banana', 10, [0, 2]));
+        // -037: a supported batch answer is final — this double must answer
+        // the batch half too (it used to ride the empty-answer rescore).
+        $ranker->method('matchAll')
+            ->willReturn([new MatchResult('bn', 'banana', 10, [0, 2])]);
 
         $h = QuickPick::new([new FilteredItem(1, 'banana')])
             ->setWindowWidth(40)
@@ -1001,26 +1005,96 @@ final class QuickPickTest extends TestCase
         $this->assertGreaterThan(0, $result['rows']);
     }
 
-    public function testApplyRankedFilterFallbackWhenMatchAllReturnsEmpty(): void
+    public function testUnsupportedBatchFallsBackPerItemAndIsProbedOnce(): void
     {
-        // When ranker->matchAll() returns an empty array, applyRankedFilter
-        // falls back to per-item match() calls (lines 695-706).
-        $h = $this->makeQuickPick()->show();
+        // -037: matchAll THROWING marks that ranker identity batch-
+        // unsupported; the per-item half carries the filtering, and the
+        // batch half is never probed again for its identity.
+        $ranker = new class implements \SugarCraft\Fuzzy\FuzzyMatcher {
+            public int $matchAllCalls = 0;
+            public int $matchCalls = 0;
 
-        $reflection = new \ReflectionClass($h);
-        $method = $reflection->getMethod('applyRankedFilter');
-        $method->setAccessible(true);
+            public function match(string $query, string $candidate): ?\SugarCraft\Fuzzy\MatchResult
+            {
+                $this->matchCalls++;
+                return str_contains($candidate, $query)
+                    ? new \SugarCraft\Fuzzy\MatchResult($query, $candidate, 5, [0])
+                    : null;
+            }
 
-        // Create a mock ranker where matchAll returns empty but match returns valid results.
-        $matchResult = new MatchResult('a', 'apple', 1, [0]);
-        $mockRanker = $this->createMock(FuzzyMatcher::class);
-        $mockRanker->method('matchAll')->willReturn([]);  // Empty!
-        $mockRanker->method('match')->willReturn($matchResult);
+            public function matchAll(string $query, iterable $candidates, ?int $limit = null, int $minScore = 1): array
+            {
+                $this->matchAllCalls++;
+                throw new \LogicException('batch half unsupported');
+            }
 
-        $result = $method->invoke($h, $mockRanker, 'a');
+            public function matchAllGenerator(string $query, iterable $candidates, ?int $limit = null, int $minScore = 1): \Generator
+            {
+                yield from $this->matchAll($query, $candidates, $limit, $minScore);
+            }
+        };
 
-        // Should still find 'apple' via the fallback per-item loop.
-        $this->assertNotEmpty($result);
-        $this->assertSame('apple', $result[0]->value());
+        $h = $this->makeQuickPick()->setRanker($ranker);
+        $first = $h->show()->type('an');
+        $this->assertSame(['banana'], array_map(static fn($i) => $i->value(), $first->items()));
+        $this->assertSame(1, $ranker->matchAllCalls, 'batch support probed once per ranker identity');
+
+        $second = $first->type('ana');
+        $this->assertSame(['banana'], array_map(static fn($i) => $i->value(), $second->items()));
+        $this->assertSame(1, $ranker->matchAllCalls, 'unsupported ranker is not re-probed');
+        $this->assertGreaterThan(0, $ranker->matchCalls, 'the per-item half carried the filtering');
+    }
+
+    public function testEmptyBatchAnswerDoesNotRescorePerItem(): void
+    {
+        // -037: mirror rule — a SUPPORTED empty answer must not consult the
+        // per-item half at all (old code re-scored the entire corpus).
+        $ranker = new class implements \SugarCraft\Fuzzy\FuzzyMatcher {
+            public int $matchCalls = 0;
+
+            public function match(string $query, string $candidate): ?\SugarCraft\Fuzzy\MatchResult
+            {
+                $this->matchCalls++;
+                return new \SugarCraft\Fuzzy\MatchResult($query, $candidate, 5, [0]);
+            }
+
+            public function matchAll(string $query, iterable $candidates, ?int $limit = null, int $minScore = 1): array
+            {
+                return [];
+            }
+
+            public function matchAllGenerator(string $query, iterable $candidates, ?int $limit = null, int $minScore = 1): \Generator
+            {
+                yield from $this->matchAll($query, $candidates, $limit, $minScore);
+            }
+        };
+
+        $h = $this->makeQuickPick()->setRanker($ranker)->show()->type('zz');
+
+        $this->assertSame([], $h->items());
+        $this->assertSame(0, $ranker->matchCalls, 'an empty batch answer is final');
+    }
+
+    public function testFilterFoldMemoIsBuiltAtInstallAndNeverRebuiltPerKeystroke(): void
+    {
+        // -009: the corpus fold (mb_strtolower + mb_strlen per item) moved
+        // from the keystroke path to corpus install. Observable pin: the
+        // memo is complete right after install and byte-identical across
+        // keystrokes.
+        $h = QuickPick::new(['Apple', 'BANANA', 'chérry']);
+        $ref = new \ReflectionClass($h);
+        $memo = $ref->getProperty('foldedMemo');
+        $memo->setAccessible(true);
+
+        $installed = $memo->getValue($h);
+        $this->assertCount(3, $installed, 'fold memo built at corpus install');
+        $this->assertSame('apple', $installed[0]['folded']);
+        $this->assertSame('banana', $installed[1]['folded']);
+        $this->assertSame('chérry', $installed[2]['folded']);
+        $this->assertSame(6, $installed[2]['length'], 'length measured in codepoints');
+
+        $typed = $h->show()->type('an');
+        $this->assertSame($installed, $memo->getValue($typed), 'keystrokes must not rebuild the memo');
+        $this->assertSame(['BANANA'], array_map(static fn($i) => $i->value(), $typed->items()));
     }
 }

@@ -249,21 +249,27 @@ final class QuickPickRankerTest extends TestCase
         self::assertStringContainsString("\e[33m", $lines[2], 'the CJK highlight survives');
     }
 
-    public function testFuzzyHighlightFallsBackWhenTheRankerReportsNoMatch(): void
+    public function testEmptyBatchAnswerIsFinalNoPerItemRescore(): void
     {
-        // A ranker whose match() returns null for the displayed string: the item
-        // is shown (it was selected for the list) but no highlight is applied.
+        // -037 re-pin: a supported ranker answering "nothing scored" gets an
+        // empty list, not a corpus-wide per-item rescore. (The old behavior
+        // ALSO listed items when the per-item half disagreed with the batch
+        // half; the contract now treats matchAll as authoritative.)
         $noMatch = new class implements FuzzyMatcher {
+            public int $matchCalls = 0;
+
             public function match(string $query, string $candidate): ?MatchResult
             {
-                // Match the raw value (so it is listed) but not the formatted "* value".
+                $this->matchCalls++;
+                // Match the raw value (so it WOULD be listed per-item) but
+                // not the formatted "* value".
                 return str_starts_with($candidate, '*') ? null : new MatchResult($query, $candidate, 5, [0]);
             }
 
             public function matchAll(string $query, iterable $candidates, ?int $limit = null, int $minScore = 1): array
             {
-                // Simulate the formatted string not matching: matchAll returns empty
-                // so the item appears in the list but without highlight
+                // A supported batch answer of "nothing scored" — under -037
+                // this is FINAL, not a trigger to re-score the corpus.
                 return [];
             }
 
@@ -285,7 +291,11 @@ final class QuickPickRankerTest extends TestCase
 
         $out = $h->view($bg = implode("\n", array_fill(0, 5, str_repeat(' ', 40))));
 
-        self::assertStringNotContainsString("\e[1m", $out, 'no highlight when the formatted string does not match');
-        self::assertStringContainsString('apple', $out, 'the item is still listed');
+        // -037: the empty batch answer stands. The old code treated it as
+        // "unsupported" and re-scored every item through match() — that
+        // rescore cost the whole corpus on each empty keystroke.
+        self::assertSame(0, $noMatch->matchCalls, 'an empty batch answer must not trigger per-item match()');
+        self::assertStringContainsString('no matches', $out, 'the batch answer is final: nothing to list');
+        self::assertStringNotContainsString('apple', $out);
     }
 }

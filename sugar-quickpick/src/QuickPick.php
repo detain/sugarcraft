@@ -62,6 +62,35 @@ final class QuickPick
     /** @var list<Item> */
     private array $allItems = [];
 
+    /**
+     * -009/-037 corpus memos, rebuilt ONLY where $allItems is replaced
+     * (ctor, withItems) — never on a keystroke path:
+     *  - folded: per-item lowercase spelling + codepoint length (anchor pass)
+     *  - valueSlots: distinct-value slots with the orders that carry each
+     *  - valueToSlot / orderToSlot: the hash maps feeding both.
+     *
+     * @var list<array{folded: string, length: int}>
+     */
+    private array $foldedMemo = [];
+
+    /** @var list<array{value: string, orders: list<int>}> */
+    private array $valueSlots = [];
+
+    /** @var array<string, int> candidate value => slot index */
+    private array $valueToSlot = [];
+
+    /** @var list<int> item order => slot index */
+    private array $orderToSlot = [];
+
+    /**
+     * Batch-SUPPORT probe cache (-037), keyed by ranker identity; a WeakMap
+     * survives the fluent clones (object properties copy by handle) and
+     * releases entries with the ranker itself.
+     *
+     * @var \WeakMap<FuzzyMatcher, bool>|null
+     */
+    private ?\WeakMap $batchSupport = null;
+
     /** @var list<Item> */
     private array $filteredItems = [];
 
@@ -143,6 +172,7 @@ final class QuickPick
     ) {
         $this->itemFactory   = new ItemFactory();
         $this->allItems      = $this->coerceItems($items);
+        $this->installCorpusMemos();
         $this->filteredItems = $this->allItems;
         $this->itemFormatter = $itemFormatter
             ?? fn(string $item, bool $selected, int $number = 0): string =>
@@ -176,6 +206,7 @@ final class QuickPick
         $clone = clone $this;
         $clone->cachedComputedWidth = null;
         $clone->allItems = $clone->coerceItems($items);
+        $clone->installCorpusMemos();
         // Early exit when no filter active — avoid applyFilter() overhead for the common empty-text case.
         $clone->filteredItems = $clone->filterText === ''
             ? $clone->allItems
@@ -900,6 +931,37 @@ final class QuickPick
     }
 
     /**
+     * Build the fold/slot memos for the current $allItems. Called wherever
+     * the corpus is installed — the fold was previously recomputed for the
+     * entire corpus on EVERY keystroke (-009).
+     */
+    private function installCorpusMemos(): void
+    {
+        $folded      = [];
+        $slots       = [];
+        $valueToSlot = [];
+        $orderToSlot = [];
+
+        foreach ($this->allItems as $order => $item) {
+            $value = $item->value();
+            // The anchor rule measures the FOLDED spelling (fold can change
+            // codepoint count for special cases like 'İ'), so memoize that.
+            $fold            = \mb_strtolower($value, 'UTF-8');
+            $folded[$order]  = ['folded' => $fold, 'length' => \mb_strlen($fold, 'UTF-8')];
+
+            $slot            = $valueToSlot[$value] ?? ($valueToSlot[$value] = \count($slots));
+            $slots[$slot]  ??= ['value' => $value, 'orders' => []];
+            $slots[$slot]['orders'][] = $order;
+            $orderToSlot[$order]      = $slot;
+        }
+
+        $this->foldedMemo  = $folded;
+        $this->valueSlots  = $slots;
+        $this->valueToSlot = $valueToSlot;
+        $this->orderToSlot = $orderToSlot;
+    }
+
+    /**
      * Filter allItems using the configured filter function.
      * When filterText is empty, returns all items.
      * Otherwise applies both the filterText (contiguous substring match whose
@@ -932,14 +994,16 @@ final class QuickPick
         // haystack's folded spelling is measured in the same units as the
         // needle position (mb_* with an explicit UTF-8 encoding argument —
         // the ASCII fast path would leave 'ecl' unable to reach 'Éclair').
-        $lower = \mb_strtolower($text, 'UTF-8');
+        $lower    = \mb_strtolower($text, 'UTF-8');
         $filtered = [];
-        foreach ($this->allItems as $item) {
-            $folded  = \mb_strtolower($item->value(), 'UTF-8');
-            $pos     = \mb_strpos($folded, $lower, 0, 'UTF-8');
-            $anchorOk = $pos !== false && $pos * 2 < \mb_strlen($folded, 'UTF-8');
-            if ($anchorOk && $fn($item)) {
-                $filtered[] = $item;
+        // -009: the folded spelling and codepoint length are the corpus
+        // memo built at install; a keystroke now pays only one mb_strpos
+        // per item plus the host predicate — no per-keystroke fold of the
+        // whole corpus.
+        foreach ($this->foldedMemo as $order => $memo) {
+            $pos = \mb_strpos($memo['folded'], $lower, 0, 'UTF-8');
+            if ($pos !== false && $pos * 2 < $memo['length'] && $fn($this->allItems[$order])) {
+                $filtered[] = $this->allItems[$order];
             }
         }
         return $filtered;
@@ -956,25 +1020,51 @@ final class QuickPick
     {
         $fn = $this->filterFn;
 
+        // -037: an empty batch answer is a REAL answer — "nothing scored".
+        // The per-item fallback is reserved for rankers that CANNOT batch:
+        // probed once per ranker identity (the WeakMap rides the fluent
+        // clones) instead of re-scoring the whole corpus on every empty
+        // keystroke.
+        if ($this->batchSupport !== null && $this->batchSupport->offsetExists($ranker) && $this->batchSupport[$ranker] === false) {
+            return $this->applyRankedFilterPerItem($ranker, $text, $fn);
+        }
+
         // Duplicate values must keep duplicate items: a value-keyed lookup
         // would alias every repeat of a value onto ONE Item, so the cursor,
         // selected() and the rendered numbers could all land on the wrong
         // object. Score each DISTINCT value once (the ranker's work stays
         // proportional to unique text), then re-expand the hits across every
-        // order that carries that value.
-        $valueOrders = [];
+        // SURVIVING order that carries that value. -009: the dedup groups
+        // are the install-time slot memos — a keystroke never hashes the
+        // corpus again, only reads ints.
+        $survivors = [];
         foreach ($this->allItems as $order => $item) {
             if ($fn($item) === false) {
                 continue;
             }
-            $valueOrders[$item->value()][] = $order;
+            $survivors[$this->orderToSlot[$order]][] = $order;
         }
 
-        if ($valueOrders === []) {
+        if ($survivors === []) {
             return [];
         }
 
-        $results = $ranker->matchAll($text, \array_keys($valueOrders));
+        $candidates = [];
+        foreach (\array_keys($survivors) as $slot) {
+            $candidates[] = $this->valueSlots[$slot]['value'];
+        }
+
+        try {
+            $results = $ranker->matchAll($text, $candidates);
+            $this->batchSupport ??= new \WeakMap();
+            $this->batchSupport[$ranker] = true;
+        } catch (\Throwable) {
+            // Batch half unsupported on this ranker: fall back per-item now,
+            // and skip the batch probe for its identity forever after.
+            $this->batchSupport ??= new \WeakMap();
+            $this->batchSupport[$ranker] = false;
+            return $this->applyRankedFilterPerItem($ranker, $text, $fn);
+        }
 
         /** @var list<array{item: Item, score: int, order: int}> $scored */
         $scored = [];
@@ -982,7 +1072,13 @@ final class QuickPick
             if ($result === null || $result->isMatched() === false) {
                 continue;
             }
-            foreach ($valueOrders[$result->haystack] ?? [] as $order) {
+            $slot = $this->valueToSlot[$result->haystack] ?? null;
+            if ($slot === null || !isset($survivors[$slot])) {
+                // A result naming a candidate we never offered is contract
+                // noise — same drop the old `?? []` applied to it.
+                continue;
+            }
+            foreach ($survivors[$slot] as $order) {
                 $scored[] = [
                     'item'  => $this->allItems[$order],
                     'score' => $result->score,
@@ -991,25 +1087,39 @@ final class QuickPick
             }
         }
 
-        // Batch-capable rankers return a result per candidate; a ranker whose
-        // matchAll() yields nothing usable still gets filtered through its
-        // per-item match(), which is the only half of the contract that can
-        // answer for every candidate on its own.
-        if ($scored === []) {
-            foreach ($this->allItems as $order => $item) {
-                if ($fn($item) === false) {
-                    continue;
-                }
-                $result = $ranker->match($text, $item->value());
-                if ($result === null || $result->isMatched() === false) {
-                    continue;
-                }
-                $scored[] = ['item' => $item, 'score' => $result->score, 'order' => $order];
-            }
-        }
-
         // Re-sort by score desc, then original order asc for stable tie-breaking
         // (matchAll may use alphabetical tie-break which differs from original order)
+        \usort(
+            $scored,
+            static fn(array $a, array $b): int => ($b['score'] <=> $a['score']) ?: ($a['order'] <=> $b['order']),
+        );
+
+        return \array_map(static fn(array $s): Item => $s['item'], $scored);
+    }
+
+    /**
+     * Per-item fallback for rankers whose matchAll() half is unsupported
+     * (-037) — the only half of the contract that can answer for every
+     * candidate on its own. NOT consulted when a supported batch answer is
+     * merely empty.
+     *
+     * @return list<Item>
+     */
+    private function applyRankedFilterPerItem(FuzzyMatcher $ranker, string $text, \Closure $fn): array
+    {
+        /** @var list<array{item: Item, score: int, order: int}> $scored */
+        $scored = [];
+        foreach ($this->allItems as $order => $item) {
+            if ($fn($item) === false) {
+                continue;
+            }
+            $result = $ranker->match($text, $item->value());
+            if ($result === null || $result->isMatched() === false) {
+                continue;
+            }
+            $scored[] = ['item' => $item, 'score' => $result->score, 'order' => $order];
+        }
+
         \usort(
             $scored,
             static fn(array $a, array $b): int => ($b['score'] <=> $a['score']) ?: ($a['order'] <=> $b['order']),
@@ -1042,9 +1152,10 @@ final class QuickPick
      * bound — a single 300-character history entry produced a 300-cell
      * frame that wrapped the terminal and smeared the composite. The
      * clamp keeps the frame inside the live column count (falling back
-     * to the 80-column default geometry); a floor of 20 keeps the header
-     * legible on absurdly narrow terminals, where Width::truncateAnsi()
-     * already guards the rows.
+     * to the 80-column default geometry); -059 removed the 20-cell
+     * comfort ceiling, which on a real sub-20-column terminal exceeded
+     * the screen itself and wrapped — Width::truncateAnsi() already
+     * guards the rows at any width.
      */
     private function autoWidth(): int
     {
