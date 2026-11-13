@@ -75,7 +75,14 @@ final class HistoryQuery
      */
     public function rate(string $variable, float $sinceTs, float $untilTs): ?float
     {
-        $snapshots = $this->query($sinceTs, $untilTs);
+        // SQL-P02: read the two boundaries only. The old leg materialized
+        // and json-decoded EVERY row in the window (24 h ≈ 86k arrays) just
+        // to use the first and last — now the class docblock's promise of
+        // "reading two boundary snapshots" is what the code actually does.
+        $snapshots = $this->store->queryBoundaries(
+            self::floatToDateTimeImmutable($sinceTs),
+            self::floatToDateTimeImmutable($untilTs),
+        );
 
         if (\count($snapshots) < 2) {
             return null;

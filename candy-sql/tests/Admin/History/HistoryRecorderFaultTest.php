@@ -31,6 +31,11 @@ final class HistoryRecorderFaultTest extends TestCase
                 return [];
             }
 
+            public function queryBoundaries(\DateTimeImmutable $since, \DateTimeImmutable $until): array
+            {
+                return [];
+            }
+
             public function count(): int
             {
                 return 0;
@@ -62,6 +67,11 @@ final class HistoryRecorderFaultTest extends TestCase
             }
 
             public function query(\DateTimeImmutable $since, \DateTimeImmutable $until): array
+            {
+                return [];
+            }
+
+            public function queryBoundaries(\DateTimeImmutable $since, \DateTimeImmutable $until): array
             {
                 return [];
             }
@@ -100,6 +110,11 @@ final class HistoryRecorderFaultTest extends TestCase
             }
 
             public function query(\DateTimeImmutable $since, \DateTimeImmutable $until): array
+            {
+                return [];
+            }
+
+            public function queryBoundaries(\DateTimeImmutable $since, \DateTimeImmutable $until): array
             {
                 return [];
             }

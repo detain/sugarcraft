@@ -19,13 +19,35 @@ use SugarCraft\Sql\Admin\StatusSnapshot;
  *   CREATE INDEX IF NOT EXISTS idx_history_ts ON history(ts);
  *
  * Uses WAL mode and a busy timeout for safe concurrent access.
+ *
+ * SQL-P02 (adminpages-002): the store is bounded by two caps — the newest
+ * {@see self::RETENTION_MAX_ROWS} rows and the last
+ * {@see self::RETENTION_HOURS} hours, whichever discards more. Prune runs
+ * at open and after every insert. Before this, {@see self::prune()} had
+ * ZERO production callers and a pane-open session grew ~1 row/3 s of
+ * 10-20 KB JSON at the default location — unbounded disk fill by default.
  */
 final class SqliteHistoryStore implements HistoryStoreInterface
 {
+    /** Newest-N cap (rows). */
+    public const RETENTION_MAX_ROWS = 10_000;
+
+    /** Age cap in hours. */
+    public const RETENTION_HOURS = 72.0;
+
     private \SQLite3 $db;
 
-    public function __construct(private readonly string $dbPath)
-    {
+    private readonly int $maxRows;
+
+    private readonly float $maxAgeSeconds;
+
+    public function __construct(
+        private readonly string $dbPath,
+        ?int $maxRows = null,
+        ?float $maxAgeSeconds = null,
+    ) {
+        $this->maxRows = $maxRows ?? self::RETENTION_MAX_ROWS;
+        $this->maxAgeSeconds = $maxAgeSeconds ?? self::RETENTION_HOURS * 3600.0;
         $dir = \dirname($dbPath);
         $dirCreated = false;
         if (!\is_dir($dir)) {
@@ -120,6 +142,39 @@ final class SqliteHistoryStore implements HistoryStoreInterface
             CREATE INDEX IF NOT EXISTS idx_history_ts
             ON history(ts)
         ');
+
+        // SQL-P02: settle retention on open so a store that grew unbounded
+        // before the caps existed (or was written by a longer-dead session)
+        // is trimmed the moment it is reopened. Corrupt-store defense
+        // (D-M11) stays intact: an unreadable file must still fail at the
+        // WRITE site with a sentence, so the boot-time sweep is lenient.
+        try {
+            $this->enforceRetention();
+        } catch (\RuntimeException) {
+            // store is corrupt — save()/query() will surface it, as before
+        }
+    }
+
+    /**
+     * SQL-P02: enforce the two documented caps (age, then newest-N rows).
+     *
+     * Both legs ride indexes: the age DELETE uses idx_history_ts, the
+     * count DELETE compares INTEGER PRIMARY KEYs (the rowid) — no scans.
+     */
+    private function enforceRetention(): void
+    {
+        $this->prune(new \DateTimeImmutable('@' . (int) (microtime(true) - $this->maxAgeSeconds)));
+
+        $cut = $this->db->querySingle('SELECT MAX(id) - ' . $this->maxRows . ' FROM history');
+        if ($cut !== false && $cut !== null && $cut > 0) {
+            $stmt = $this->db->prepare('DELETE FROM history WHERE id <= :cut');
+            if ($stmt === false) {
+                throw new \RuntimeException('History store is unusable: ' . $this->db->lastErrorMsg());
+            }
+            $stmt->bindValue(':cut', (int) $cut, \SQLITE3_INTEGER);
+            $stmt->execute();
+            $stmt->close();
+        }
     }
 
     public function save(StatusSnapshot $snapshot): void
@@ -140,6 +195,52 @@ final class SqliteHistoryStore implements HistoryStoreInterface
         $stmt->bindValue(':variables', \json_encode($snapshot->variables), \SQLITE3_TEXT);
         $stmt->execute();
         $stmt->close();
+
+        // SQL-P02: the write cadence IS the retention clock — one indexed
+        // age DELETE + one rowid-bounded count DELETE per insert keeps the
+        // file inside the documented caps without a separate sweeper.
+        $this->enforceRetention();
+    }
+
+    /**
+     * SQL-P02: the two boundary rows of a window (oldest, newest) instead
+     * of materializing the whole range — rate() only ever reads these two.
+     *
+     * @return list<StatusSnapshot> zero, one, or two snapshots, ascending
+     */
+    public function queryBoundaries(\DateTimeImmutable $since, \DateTimeImmutable $until): array
+    {
+        $sinceEpoch = $since->format('U.u');
+        $untilEpoch = $until->format('U.u');
+        $out = [];
+        foreach (['ASC', 'DESC'] as $dir) {
+            $stmt = $this->db->prepare(
+                'SELECT ts, variables FROM history
+                 WHERE ts >= :since AND ts <= :until
+                 ORDER BY ts ' . $dir . ' LIMIT 1'
+            );
+            if ($stmt === false) {
+                throw new \RuntimeException('History store is unusable: ' . $this->db->lastErrorMsg());
+            }
+            $stmt->bindValue(':since', $sinceEpoch, \SQLITE3_TEXT);
+            $stmt->bindValue(':until', $untilEpoch, \SQLITE3_TEXT);
+            $result = $stmt->execute();
+            $row = $result->fetchArray(\SQLITE3_ASSOC);
+            $stmt->close();
+            if ($row !== false) {
+                $variables = \json_decode((string) $row['variables'], true);
+                if (\is_array($variables)) {
+                    $out[] = new StatusSnapshot($variables, (float) $row['ts']);
+                }
+            }
+        }
+        // ASC leg is the oldest, DESC leg the newest: ascending by
+        // construction. A one-row window returns both legs pointing at the
+        // same row — collapse it so callers see a genuine boundary count.
+        if (count($out) === 2 && $out[1]->ts === $out[0]->ts) {
+            $out = [$out[0]];
+        }
+        return $out;
     }
 
     /**

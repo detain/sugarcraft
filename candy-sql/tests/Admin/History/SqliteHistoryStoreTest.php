@@ -19,7 +19,7 @@ final class SqliteHistoryStoreTest extends TestCase
     protected function setUp(): void
     {
         $this->dbPath = \sys_get_temp_dir() . '/candy_query_history_' . \uniqid() . '.db';
-        $this->store = new SqliteHistoryStore($this->dbPath);
+        $this->store = new SqliteHistoryStore($this->dbPath, null, 3.1536e9);
     }
 
     protected function tearDown(): void
@@ -136,7 +136,7 @@ final class SqliteHistoryStoreTest extends TestCase
 
     public function testCloseDoesNotThrow(): void
     {
-        $store = new SqliteHistoryStore(\sys_get_temp_dir() . '/candy_query_close_test_' . \uniqid() . '.db');
+        $store = new SqliteHistoryStore(\sys_get_temp_dir() . '/candy_query_close_test_' . \uniqid() . '.db', null, 3.1536e9);
         $store->save(new StatusSnapshot(['X' => '1'], 1.0));
         $store->close();
 
@@ -198,7 +198,7 @@ final class SqliteHistoryStoreTest extends TestCase
         $dir = \sys_get_temp_dir() . '/candy_sql_perms_' . \uniqid() . '/deep';
         $path = $dir . '/history.db';
 
-        $store = new SqliteHistoryStore($path);
+        $store = new SqliteHistoryStore($path, null, 3.1536e9);
         $store->close();
 
         $this->assertSame(0700, \fileperms($dir) & 0777, 'history directory must be 0700');

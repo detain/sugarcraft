@@ -36,7 +36,7 @@ final class SqliteHistoryStoreModesTest extends TestCase
     public function testFreshlyCreatedDatabaseIsOwnerOnly(): void
     {
         $path = $this->dir . '/deep/history.db';
-        $store = new SqliteHistoryStore($path);
+        $store = new SqliteHistoryStore($path, null, 3.1536e9);
         try {
             \clearstatcache(true, $path);
             $this->assertSame(0600, \fileperms($path) & 0777);
@@ -50,7 +50,7 @@ final class SqliteHistoryStoreModesTest extends TestCase
     public function testWalSidecarsArePrivateWhileTheJournalExists(): void
     {
         $path = $this->dir . '/sidecar.db';
-        $store = new SqliteHistoryStore($path);
+        $store = new SqliteHistoryStore($path, null, 3.1536e9);
         try {
             // A write forces the -wal sidecar into existence.
             $store->save(new StatusSnapshot(['threads_running' => '1'], 1.0));
@@ -78,7 +78,7 @@ final class SqliteHistoryStoreModesTest extends TestCase
         \clearstatcache(true, $path);
         $this->assertSame(0644, \fileperms($path) & 0777, 'precondition: world-readable before the store opens it');
 
-        $store = new SqliteHistoryStore($path);
+        $store = new SqliteHistoryStore($path, null, 3.1536e9);
         $store->close();
 
         \clearstatcache(true, $path);
@@ -94,7 +94,7 @@ final class SqliteHistoryStoreModesTest extends TestCase
         $seed->close();
         \chmod($path, 0600);
 
-        $store = new SqliteHistoryStore($path);
+        $store = new SqliteHistoryStore($path, null, 3.1536e9);
         $store->close();
 
         \clearstatcache(true, $path);
@@ -113,7 +113,7 @@ final class SqliteHistoryStoreModesTest extends TestCase
         \mkdir($this->dir, 0700);
         \file_put_contents($path, \str_repeat('NOT-A-DATABASE ', 40));
 
-        @$store = new SqliteHistoryStore($path); // the failed PRAGMA warns; suppression keeps the gate at 0W
+        @$store = new SqliteHistoryStore($path, null, 3.1536e9); // the failed PRAGMA warns; suppression keeps the gate at 0W
         try {
             $this->expectException(\RuntimeException::class);
             $this->expectExceptionMessage('History store is unusable');

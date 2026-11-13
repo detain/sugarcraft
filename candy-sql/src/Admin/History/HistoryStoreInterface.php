@@ -27,6 +27,15 @@ interface HistoryStoreInterface
     public function query(\DateTimeImmutable $since, \DateTimeImmutable $until): array;
 
     /**
+     * Boundary-only read (SQL-P02): the oldest and newest snapshots in the
+     * range, ascending, without materializing the window. One row when the
+     * window holds a single snapshot; empty when none.
+     *
+     * @return list<StatusSnapshot>
+     */
+    public function queryBoundaries(\DateTimeImmutable $since, \DateTimeImmutable $until): array;
+
+    /**
      * Total number of stored snapshots.
      */
     public function count(): int;

@@ -212,6 +212,20 @@ final class MockStore implements HistoryStoreInterface
         return $this->snapshots;
     }
 
+    public function queryBoundaries(\DateTimeImmutable $since, \DateTimeImmutable $until): array
+    {
+        $this->lastSince = $since;
+        $this->lastUntil = $until;
+        if ($this->snapshots === []) {
+            return [];
+        }
+        $rows = $this->snapshots;
+        usort($rows, fn (StatusSnapshot $a, StatusSnapshot $b): int => $a->ts <=> $b->ts);
+        $first = $rows[0];
+        $last = $rows[count($rows) - 1];
+        return $first->ts === $last->ts ? [$first] : [$first, $last];
+    }
+
     public function count(): int
     {
         return \count($this->snapshots);

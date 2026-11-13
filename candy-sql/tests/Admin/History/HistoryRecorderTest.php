@@ -147,6 +147,11 @@ final class FakeHistoryStore implements HistoryStoreInterface
         return [];
     }
 
+    public function queryBoundaries(\DateTimeImmutable $since, \DateTimeImmutable $until): array
+    {
+        return [];
+    }
+
     public function count(): int
     {
         return \count($this->saved);
