@@ -43,6 +43,24 @@ final class AsyncOpsFanInTest extends TestCase
         );
     }
 
+    public function test_all_preserves_string_keys(): void
+    {
+        // The documented contract ('keys preserved', README): associative
+        // input comes out associative. Every other fixture in the suite
+        // passes a sequential list, so an array_map-style reindex would
+        // never be caught without this pin.
+        $result = $this->outcome(AsyncOps::all(['alpha' => resolve(1), 'beta' => resolve(2)]));
+        $this->assertSame(['alpha' => 1, 'beta' => 2], $result);
+    }
+
+    public function test_all_resolves_non_promise_items(): void
+    {
+        // Raw values ride the coercion leg: mixed fields of promises and
+        // plain values settle together.
+        $result = $this->outcome(AsyncOps::all([resolve(1), 'raw', 42]));
+        $this->assertSame([1, 'raw', 42], $result);
+    }
+
     public function test_race_resolves_the_first_settler(): void
     {
         $loop = new StreamSelectLoop();
