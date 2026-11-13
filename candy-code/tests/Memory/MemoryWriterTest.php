@@ -186,4 +186,27 @@ final class MemoryWriterTest extends TestCase
 
         self::assertSame([$id], array_map(static fn ($e): string => $e->id(), $this->store->list(MemoryScope::User)));
     }
+
+    public function testSecretsAreRedactedBeforeAnyStorePersistsThem(): void
+    {
+        $writer = MemoryWriter::new($this->store, $this->root);
+        $probes = [
+            'key sk-ant-api03-abcdefghijklmnopqrstuv',
+            'gh ghp_abcdefghijklmnopqrstuvwxyz0123',
+            'db postgres://user:hunter2pass@host/db',
+        ];
+        foreach (['project', 'user'] as $scope) {
+            foreach ($probes as $probe) {
+                $saved = $writer->save($probe, $scope);
+                $entry = $writer->locate($saved->id)[0] ?? null;
+                self::assertNotNull($entry);
+                self::assertStringContainsString('[REDACTED]', $entry->content());
+                self::assertDoesNotMatchRegularExpression('/sk-ant|ghp_abc|hunter2pass/', $entry->content());
+            }
+        }
+
+        $saved = $writer->save('plain note', 'user');
+        $updated = $writer->replace($saved->id, 'plain', 'token ghp_abcdefghijklmnopqrstuvwxyz0123');
+        self::assertStringNotContainsString('ghp_abc', $updated->content());
+    }
 }

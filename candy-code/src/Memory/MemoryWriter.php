@@ -23,6 +23,10 @@ use SugarCraft\Code\Context\ProjectMemoryWriter;
  * of a shared id, so the note the prompt's index shows is the note an edit or
  * delete reaches.
  *
+ * Secrets: `save()` and `replace()` pass the text through {@see SecretRedactor}
+ * before it reaches any store, so a credential typed into `/memory add` or
+ * the `Memory` tool never lands on disk or in a later prompt.
+ *
  * The home store is resolved lazily: building the writer (and the tool that
  * holds it) touches nothing on disk; the first operation does.
  */
@@ -138,6 +142,11 @@ final class MemoryWriter
             throw new \InvalidArgumentException("a when: trigger only applies to type 'intent'");
         }
 
+        // Notes are re-injected into every later prompt and a project note is
+        // git-visible, so a pasted credential is blanked before it persists
+        // (same on-write policy as the compaction journal).
+        $content = SecretRedactor::new()->redact($content);
+
         $repoWriter = $scope === 'project' ? ProjectMemoryWriter::createForRoot($this->root) : null;
         if ($repoWriter !== null) {
             $id = $repoWriter->write($content, $tags);
@@ -193,7 +202,7 @@ final class MemoryWriter
             );
         }
 
-        $content = str_replace($old, $new, $entry->content());
+        $content = str_replace($old, SecretRedactor::new()->redact($new), $entry->content());
         if (trim($content) === '') {
             throw new \InvalidArgumentException('the edit would leave the note empty; delete it instead');
         }

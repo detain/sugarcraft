@@ -732,7 +732,9 @@ changes at most 16 notes, and a note over 1,024 bytes is refused as
 before the request leaves (well-known key prefixes, JWTs, `Bearer` tokens,
 private-key blocks, a URL's password, and `password=` / `api_key:` style
 assignments whose value looks random), and a proposed note that still matches
-one is discarded rather than redacted (`secret`).
+one is discarded rather than redacted (`secret`). Notes you write yourself
+(`/memory add`, the `Memory` tool's save and replace) are redacted the same
+way on write: a pasted token is stored as `[REDACTED]`, never raw.
 
 **Where the work happens.** Scheduling is the only part that runs while the
 turn settles. The request runs in the summary backend's forked child, and the
