@@ -446,26 +446,45 @@ final class ScanTest extends TestCase
     // ─── [PERF] O(n) close-sentinel lookup ──────────────────────────────────
 
     /**
-     * Regression for the O(n^2) forward-strpos rescan at Scan.php:74 — each of
-     * N unmatched open sentinels used to rescan to end-of-string.  With the
-     * precomputed close-sentinel index the whole parse is O(n log n).  A
-     * many-unmatched-open buffer must therefore both yield no zones and stay
-     * well within a generous wall-clock bound (pre-fix this ran in seconds;
-     * post-fix in milliseconds).
+     * Regression for the O(n^2) forward-strpos rescan at Scan.php's
+     * close-sentinel lookup — each of N unmatched open sentinels used to
+     * rescan to end-of-string.  With the precomputed close-sentinel index the
+     * whole parse is near-linear, so a many-unmatched-open buffer must yield
+     * no zones AND cost ~linear in scale.  The bound is a SCALE RATIO, not a
+     * wall-clock figure: the old absolute 2.0s cap was the lib's only
+     * timing-sensitive assertion and a loaded CI shard could break it.  A
+     * near-linear parse measures ~3.7x here (4x the bytes); the quadratic
+     * rescan is 16x or worse; 8x separates the classes with room for noise.
+     * The larger parse runs second so the smaller one's warm-up can only help
+     * it (biasing the ratio toward passing), and a floor on the small-input
+     * time keeps the ratio out of the noise band.
      */
     public function testManyUnmatchedOpenSentinelsStayBounded(): void
     {
-        $rendered = str_repeat(Sentinel::OPEN, 40000);
+        $n    = str_repeat(Sentinel::OPEN, 25000);
+        $four = str_repeat(Sentinel::OPEN, 100000);
 
-        $start = microtime(true);
-        $zones = (new Scan())->parse($rendered);
-        $elapsed = microtime(true) - $start;
+        $start  = microtime(true);
+        $zonesN = (new Scan())->parse($n);
+        $timeN  = microtime(true) - $start;
 
-        self::assertSame([], $zones, 'unmatched open sentinels must yield no zones');
+        $start   = microtime(true);
+        $zones4N = (new Scan())->parse($four);
+        $time4N  = microtime(true) - $start;
+
+        self::assertSame([], $zonesN, 'unmatched open sentinels must yield no zones');
+        self::assertSame([], $zones4N, 'unmatched open sentinels must yield no zones');
+
+        self::assertGreaterThan(
+            0.005,
+            $timeN,
+            'the 25k parse must stay well off the timer-noise band for the ratio to mean anything'
+        );
+
         self::assertLessThan(
-            2.0,
-            $elapsed,
-            'parse of many unmatched open sentinels must stay near-linear, not O(n^2)'
+            8.0 * $timeN,
+            $time4N,
+            'a 4x input must cost ~4x time, not ~16x: the rescan regression is quadratic, the index is near-linear'
         );
     }
 
