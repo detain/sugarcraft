@@ -37,4 +37,7 @@ return [
     'key.bad_binding' => 'combinación de teclas no válida {key}: use un nombre de tecla en minúsculas (ctrl+c, shift+tab, pageup, f5) o un carácter imprimible',
     'key.bad_binding_type' => 'las teclas de la combinación deben ser cadenas, se obtuvo {key}',
     'tree.use_branch_for_children' => 'utilice el constructor branch() cuando un nodo tiene hijos',
+    'button.pressed' => '{label} activado',
+    'rule.length_nonneg' => 'la longitud de la regla debe ser >= 0',
+    'rule.bad_rune' => 'el carácter de la regla debe ocupar exactamente una celda',
 ];

@@ -37,4 +37,7 @@ return [
     'key.bad_binding' => 'combinação de teclas inválida {key}: use um nome de tecla em minúsculas (ctrl+c, shift+tab, pageup, f5) ou um carácter imprimível',
     'key.bad_binding_type' => 'as teclas da combinação devem ser cadeias de caracteres, recebido {key}',
     'tree.use_branch_for_children' => 'use a fábrica branch() quando um nó tiver filhos',
+    'button.pressed' => '{label} ativado',
+    'rule.length_nonneg' => 'o comprimento da régua tem de ser >= 0',
+    'rule.bad_rune' => 'o carácter da régua tem de ocupar exatamente uma célula',
 ];

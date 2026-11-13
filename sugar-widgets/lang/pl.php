@@ -37,4 +37,7 @@ return [
     'key.bad_binding' => 'nieprawidłowe powiązanie klawiszy {key}: użyj małej nazwy klawisza (ctrl+c, shift+tab, pageup, f5) albo jednego znakowi drukowalnego',
     'key.bad_binding_type' => 'klawisze powiązania muszą być łańcuchami, otrzymano {key}',
     'tree.use_branch_for_children' => 'użyj fabryki branch(), gdy węzeł ma dzieci',
+    'button.pressed' => '{label} aktywowano',
+    'rule.length_nonneg' => 'długość linii musi być >= 0',
+    'rule.bad_rune' => 'znak linii musi zajmować dokładnie jedną komórkę',
 ];

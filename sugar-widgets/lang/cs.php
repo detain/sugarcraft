@@ -37,4 +37,7 @@ return [
     'key.bad_binding' => 'neplatná vazba klávesu {key}: použijte malý název klávesy (ctrl+c, shift+tab, pageup, f5) nebo jeden tisknutelný znak',
     'key.bad_binding_type' => 'klávesy vazby musí být řetězce, obdrženo {key}',
     'tree.use_branch_for_children' => 'pro uzel s dětmi použijte továrnu branch()',
+    'button.pressed' => '{label} aktivováno',
+    'rule.length_nonneg' => 'délka oddělovače musí být >= 0',
+    'rule.bad_rune' => 'znak oddělovače musí zabírat právě jednu buňku',
 ];

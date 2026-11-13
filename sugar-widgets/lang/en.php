@@ -37,4 +37,7 @@ return [
     'key.bad_binding' => 'invalid key binding "{key}": use a lowercase key name (ctrl+c, shift+tab, pageup, f5) or a single printable character',
     'key.bad_binding_type' => 'binding keys must be strings, got {key}',
     'tree.use_branch_for_children' => 'use the branch() factory when a node has children',
+    'button.pressed' => '{label} activated',
+    'rule.length_nonneg' => 'rule length must be >= 0',
+    'rule.bad_rune' => 'rule rune must occupy exactly one cell',
 ];

@@ -37,4 +37,7 @@ return [
     'key.bad_binding' => 'ongeldige toetsenbinding {key}: gebruik een kleine sleutelnaam (ctrl+c, shift+tab, pageup, f5) of één afdrukbaar teken',
     'key.bad_binding_type' => 'bindingsleutels moeten tekenreeksen zijn, ontvangen: {key}',
     'tree.use_branch_for_children' => 'gebruik de factory branch() wanneer een knooppunt kinderen heeft',
+    'button.pressed' => '{label} geactiveerd',
+    'rule.length_nonneg' => 'lijnlengte moet >= 0 zijn',
+    'rule.bad_rune' => 'lijnteken moet precies één cel innemen',
 ];

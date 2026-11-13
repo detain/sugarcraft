@@ -37,4 +37,7 @@ return [
     'key.bad_binding' => 'liaison de touches invalide {key} : utilisez un nom de touche en minuscules (ctrl+c, shift+tab, pageup, f5) ou un caractère imprimable',
     'key.bad_binding_type' => 'les touches de la liaison doivent être des chaînes, reçu : {key}',
     'tree.use_branch_for_children' => 'utiliser la fabrique branch() pour un nœud avec des enfants',
+    'button.pressed' => '{label} activé',
+    'rule.length_nonneg' => 'la longueur de la règle doit être >= 0',
+    'rule.bad_rune' => 'le caractère de la règle doit occuper exactement une cellule',
 ];

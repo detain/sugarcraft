@@ -37,4 +37,7 @@ return [
     'key.bad_binding' => 'ربط المفاتيح غير صالح "{key}": استخدم اسم مفتاح بأحرف صغيرة (ctrl+c، shift+tab، pageup، f5) أو حرفاً واحداً قابلاً للطباعة',
     'key.bad_binding_type' => 'يجب أن تكون مفاتيح الربط سلاسل نصية، والنوع المستلم هو {key}',
     'tree.use_branch_for_children' => 'عندما يحتوي العقدة على أبناء استخدم المصنع branch()',
+    'button.pressed' => 'تم تفعيل {label}',
+    'rule.length_nonneg' => 'يجب أن يكون طول الفاصل >= 0',
+    'rule.bad_rune' => 'يجب أن يشغل رمز الفاصل خلية واحدة بالضبط',
 ];

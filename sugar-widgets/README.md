@@ -16,7 +16,7 @@
 
 ![spinners](.vhs/spinners.gif)
 
-sugar-widgets — TUI components for PHP 8.3+: 9 first-party components (Table, Tabs, Tree, Progress, Paginator, Help, Key, Timer, Stopwatch), 8 deprecated alias re-exports from `sugarcraft/sugar-forms` (TextInput, TextArea, Viewport, Cursor, ItemList, FilePicker, Scrollbar, Spinner), and two btop-derived render helpers (`Input\TextEdit`, `Menu\OptionRow`) — including the interactive `Tree` and per-cell `Table::styleFunc(...)`.
+sugar-widgets — TUI components for PHP 8.3+: 11 first-party components (Table, Tabs, Tree, Progress, Paginator, Help, Key, Timer, Stopwatch, Button, Rule), 8 deprecated alias re-exports from `sugarcraft/sugar-forms` (TextInput, TextArea, Viewport, Cursor, ItemList, FilePicker, Scrollbar, Spinner), and two btop-derived render helpers (`Input\TextEdit`, `Menu\OptionRow`) — including the interactive `Tree` and per-cell `Table::styleFunc(...)`.
 
 ```sh
 composer require sugarcraft/sugar-widgets
@@ -70,6 +70,8 @@ The counted inventory lives once, in the intro at the top of this file.
 | `TextInput\TextInput` | Single-line input with autocomplete + validators + `ValidateOn` timing + restrict pattern + vim mode + placeholder styling + prefix/suffix + `Styles` _(deprecated alias — re-exported from `SugarCraft\Forms\TextInput`)_ | — |
 | `TextArea\TextArea` | Multi-line editor with line numbers / set-prompt-func / `focused()` / `cursor()` / `line()` / `column()`; `Ctrl+O` opens the buffer in `$EDITOR` (`withEditorExtension('.md')` to control the syntax-highlight suffix) _(deprecated alias — re-exported from `SugarCraft\Forms\TextArea`)_ | `TextArea\TextAreaEditedMsg` |
 | `Viewport\Viewport` | Scrollable text region with mouse-wheel, scrollbar, horizontal scroll, `setWidth(int)` / `setHeight(int)` _(deprecated alias — re-exported from `SugarCraft\Forms\Viewport`)_ | `ViewportTickMsg` |
+| `Button\Button` | One-line `[ Label ]` push button — a SugarCraft original (upstream bubbles has no Button; antecedent: tview `AddButton`). `Button::new($label)`, `withFocused()` / `withDisabled()` / `withStyles()` / `withZoneManager()`; Enter or Space while focused, or a click on its sugar-mouse zone, makes `update()` return a Cmd yielding a `ButtonPressedMsg` (its `announcement()` is localised); a disabled button is inert and registers no zone | `ButtonPressedMsg` |
+| `Rule\Rule` | Horizontal / vertical divider — a SugarCraft original (no bubbles Ruler; antecedent: tview separators). `Rule::new($length)` / `Rule::vertical($length)`, `withTitle()` (horizontal only, clips to the budget), `withRune()` (exactly one cell), `withStyle()`; length `0` = auto (`Rule::AUTO_LENGTH`, 40 cells); unstyled output carries no SGR, so it is `NO_COLOR`-safe | — |
 | `Paginator\Paginator` | Dot / arabic page indicator; nav gated on focus — `focus()` / `blur()` like the family; BLURRED by default (call `focus()` for key routing, as with Table/Tabs/Tree) | — |
 | `ItemList\ItemList` | Selectable / scrollable / filterable list with status messages; items are `ItemList\Item` / `ItemList\StringItem` values — `list<Item>` is a phpdoc contract, there is no runtime element guard _(deprecated alias — re-exported from `SugarCraft\Forms\ItemList` — depend on `sugarcraft/sugar-forms` directly)_ | — |
 | `Tree\Tree` | Interactive tree — cursor, expand/collapse, viewport scroll. Roots are `Tree\Node` values: `Node::branch($label, ...$children)` / `Node::leaf($label)`. Mind the raw constructor — its second parameter is `$value`, not children, so a 2-arg `new Node(...)` parks the child list in the value slot and renders flat; prefer the factories. Chrome glyphs and prefixes are immutable via `withStyle(...)`, checked at ingress; node labels are sanitised at RENDER (control characters stripped, `Sanitize::untrustedForMarkedFrames()` applied). | — |
@@ -212,6 +214,7 @@ surface below applies it next to its setter and is pinned by
 | `Table::withPageSize()` | pagination disabled — all rows are one page |
 | `Tree::withSize()` either axis | unbounded — all rows, no truncation |
 | `Tabs` `width:` / `withWidth()` | no clip — the full bar renders (`::new()` defaults to 0, like Table) |
+| `Rule::withLength()` | auto — `Rule::AUTO_LENGTH` (40) cells |
 | `TextEdit::view(limit)` | `<= 0` = unlimited cells |
 | `Progress::withWidth()` | bar collapses to its label text only |
 | `Help::withWidth()` | no cap on either view (the W-17 clamp idles) |
