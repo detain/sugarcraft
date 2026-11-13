@@ -329,6 +329,125 @@ final class BinSizeQueryPolarityTest extends TestCase
     }
 
     /**
+     * gifview-008: the rows-2 viewport reserve, observable through a LIVE
+     * kernel size query — not just "greater than 0". The child answers
+     * json_encode(viewportCells()) with fd 1 wired to the resized slave and
+     * COLUMNS/LINES unset in its environment, so the probe leg (Tty facade)
+     * must run; the exit code is read this time, because a belt-swallowed
+     * probe failure would answer the 60x24 fallback and we must not pass
+     * vacuously. A 137x43 terminal yields [137, 41]: the two status rows the
+     * renderer reserves are the whole difference. Second arm: rows 2 and 1 —
+     * the max(1, …) floor must survive a stooopid-small terminal (mutation
+     * check: `- 2` → `- 1` reddens arm one; deleting the floor reddens arm two).
+     *
+     * @return array{0: list<int>, 1: int} [cells, exit code]
+     */
+    private function probeThroughPty(PosixPtyPair $pair): array
+    {
+        $autoload = realpath(__DIR__ . '/../vendor/autoload.php');
+        $this->assertIsString($autoload, 'the lib vendor autoload must exist to probe in a child');
+
+        $process = proc_open(
+            ['timeout', '6', \PHP_BINARY, '-r',
+                'require ' . var_export($autoload, true) . ';'
+                . ' echo json_encode(\SugarCraft\GifView\Cli::viewportCells()), "\n";'],
+            [
+                0 => ['file', '/dev/null', 'r'],
+                1 => ['file', $this->slavePath($pair), 'w'],
+                2 => ['pipe', 'w'],
+            ],
+            $pipes,
+            null,
+            // The escape hatch must stay shut: an inherited COLUMNS/LINES
+            // would satisfy viewportCells() before the probe leg and the
+            // pty would prove nothing. null unsets for the child.
+            ['COLUMNS' => null, 'LINES' => null],
+        );
+        $this->assertIsResource($process, 'could not start the probe child');
+        if (\is_resource($pipes[0] ?? null)) {
+            fclose($pipes[0]);
+        }
+
+        $deadline = \microtime(true) + 5.0;
+        $out = '';
+        while (\microtime(true) < $deadline) {
+            $chunk = $pair->master()->read(4096, 0.1);
+            if ($chunk !== null && $chunk !== '') {
+                $out .= $chunk;
+                if (\str_contains($out, "\n")) {
+                    break;
+                }
+            }
+        }
+        $stderr = (string) stream_get_contents($pipes[2]);
+        if (\is_resource($pipes[2])) {
+            fclose($pipes[2]);
+        }
+
+        // timeout(1) bounds a wedged child; proc_close blocks until the
+        // child is dead and — the measured fact here, PHP 8.3.6 — carries
+        // its exit code (proc_get_status loses the key once the internal
+        // SIGCHLD reaper has waited the child).
+        $exit = proc_close($process);
+
+        $this->assertNotSame(
+            '',
+            $out,
+            'the probe child answered nothing on the pty; child stderr: ' . $stderr,
+        );
+        $this->assertSame(0, $exit, 'the probe child must exit cleanly, saw stderr: ' . $stderr);
+
+        $line = \str_replace("\r", '', \explode("\n", $out)[0]);
+        $cells = json_decode($line, true);
+        $this->assertIsArray($cells, 'the probe child answered non-JSON: ' . $line);
+
+        /** @var list<int> $cells */
+        return [$cells, $exit];
+    }
+
+    public function testViewportCellsReservesTwoStatusRowsOnALivePty(): void
+    {
+        if (\PHP_OS_FAMILY === 'Windows' || \DIRECTORY_SEPARATOR !== '/') {
+            $this->markTestSkipped('POSIX pseudo-terminals are required.');
+        }
+        if (!\extension_loaded('ffi') || !\function_exists('posix_isatty')) {
+            $this->markTestSkipped('ext-ffi and ext-posix are required to build a pty.');
+        }
+        if (!\function_exists('proc_open') || !is_executable('/usr/bin/timeout')) {
+            $this->markTestSkipped('proc_open() or the timeout(1) wrapper is unavailable.');
+        }
+
+        $pair = (new PosixPtySystem())->open();
+        $this->ptys[] = $pair;
+
+        $pair->master()->resize(self::PTY_COLS, self::PTY_ROWS);
+        // Vacuity guard, same measured fact as the bin test: an unresized pty
+        // reports 0x0, so the resize pin below failing must stop the test.
+        $this->assertSame(
+            ['rows' => self::PTY_ROWS, 'cols' => self::PTY_COLS, 'xpix' => 0, 'ypix' => 0],
+            $pair->master()->size(),
+            'the pty did not take the size the fixture asked for',
+        );
+
+        [$cells] = $this->probeThroughPty($pair);
+        $this->assertSame(
+            [self::PTY_COLS, self::PTY_ROWS - 2],
+            $cells,
+            'a 137x43 terminal must answer [137, 41] — the reserve is two rows, observed live',
+        );
+
+        foreach ([2, 1] as $rows) {
+            $pair->master()->resize(self::PTY_COLS, $rows);
+            [$cells] = $this->probeThroughPty($pair);
+            $this->assertSame(
+                [self::PTY_COLS, 1],
+                $cells,
+                "max(1, rows - 2) floors an {$rows}-row terminal to a one-row viewport",
+            );
+        }
+    }
+
+    /**
      * A decodable-if-GD-exists GIF on disk. Whether the child can actually
      * decode it is beside the point: the size query happens BEFORE any decode,
      * so even the ext-gd refusal proves the guard's half that matters — the
