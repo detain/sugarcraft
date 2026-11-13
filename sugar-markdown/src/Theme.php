@@ -714,17 +714,36 @@ final class Theme
     }
 
     /**
-     * Load a theme from a JSON file. The JSON shape is one object per
-     * element, each carrying a subset of `foreground` / `background`
-     * (hex `#rrggbb` or `ansi:N` or `ansi256:N`) and the standard
-     * boolean attribute flags (`bold`, `italic`, `underline`, `strike`,
-     * `faint`, `blink`, `reverse`). Missing elements default to the
-     * plain Style.
+     * Load a theme from a JSON file, optionally bounded by $maxBytes.
+     * The JSON shape is one object per element, each carrying a subset of
+     * `foreground` / `background` (hex `#rrggbb` or `ansi:N` or
+     * `ansi256:N`) and the standard boolean attribute flags (`bold`,
+     * `italic`, `underline`, `strike`, `faint`, `blink`, `reverse`).
+     * Missing elements default to the plain Style.
+     *
+     * $maxBytes is the hostile-workspace guard: a stat probe refuses an
+     * over-cap file before its bytes are materialised, and the read byte
+     * count is checked again after (a swap or race between the two must
+     * not smuggle a bigger payload). The refusal names the cap.
+     *
+     * The read failure contract mirrors {@see StyleGuide::fromFile()}: a
+     * non-file path, or a read that warned, raises `RuntimeException`
+     * before any decode; contents that are not a JSON object raise
+     * `InvalidArgumentException`.
+     *
+     * @throws \RuntimeException when the file cannot be read or exceeds $maxBytes
+     * @throws \InvalidArgumentException when its contents are not a JSON object
      */
-    public static function fromJson(string $path): self
+    public static function fromFile(string $path, ?int $maxBytes = null): self
     {
         if (!is_file($path)) {
             throw new \RuntimeException(Lang::t('theme.read_failed', ['path' => $path]));
+        }
+        if ($maxBytes !== null) {
+            $size = filesize($path);
+            if ($size !== false && $size > $maxBytes) {
+                throw new \RuntimeException(Lang::t('theme.file_too_large', ['path' => $path, 'bytes' => $maxBytes]));
+            }
         }
         // The read failure is reported by the exception below, so the
         // warning file_get_contents() raises (an unreadable file, a
@@ -744,7 +763,19 @@ final class Theme
             $msg = $warning ?? 'unknown error';
             throw new \RuntimeException(Lang::t('theme.read_failed', ['path' => $path]) . ": {$msg}");
         }
+        if ($maxBytes !== null && strlen($raw) > $maxBytes) {
+            throw new \RuntimeException(Lang::t('theme.file_too_large', ['path' => $path, 'bytes' => $maxBytes]));
+        }
         return self::fromJsonString($raw);
+    }
+
+    /**
+     * @deprecated Prefer {@see fromFile()} — it names the file contract and
+     *     carries the optional byte ceiling. This alias forwards unchanged.
+     */
+    public static function fromJson(string $path): self
+    {
+        return self::fromFile($path);
     }
 
     /**

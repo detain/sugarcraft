@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 return [
     'theme.read_failed'            => 'nie można odczytać pliku motywu: {path}',
+    'theme.file_too_large'         => 'plik motywu przekracza limit {bytes} bajtów: {path}',
     'theme.json_invalid'           => 'nieprawidłowy JSON w pliku motywu',
     'theme.json_object'            => 'JSON motywu musi dekodować się do obiektu',
     'theme.bad_color'              => 'nieprawidłowa specyfikacja koloru: {spec}',

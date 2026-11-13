@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 return [
     'theme.read_failed'            => '테마 파일을 읽을 수 없음: {path}',
+    'theme.file_too_large'         => '테마 파일이 {bytes}바이트 상한을 초과함: {path}',
     'theme.json_invalid'           => '테마 파일에 잘못된 JSON입니다',
     'theme.json_object'            => '테마 JSON은 객체로 디코딩되어야 합니다',
     'theme.bad_color'              => '잘못된 색상 지정: {spec}',

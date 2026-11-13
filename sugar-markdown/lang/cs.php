@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 return [
     'theme.read_failed'            => 'nelze číst soubor tématu: {path}',
+    'theme.file_too_large'         => 'soubor tématu překračuje strop {bytes} bajtů: {path}',
     'theme.json_invalid'           => 'neplatný JSON v souboru motivu',
     'theme.json_object'            => 'téma JSON musí dekódovat do objektu',
     'theme.bad_color'              => 'neplatné zadání barvy: {spec}',

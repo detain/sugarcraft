@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 return [
     'theme.read_failed'            => '无法读取主题文件：{path}',
+    'theme.file_too_large'         => '主题文件超过 {bytes} 字节上限：{path}',
     'theme.json_invalid'           => '主题文件中的 JSON 无效',
     'theme.json_object'            => '主题 JSON 必须解码为对象',
     'theme.bad_color'              => '无效的颜色指定: {spec}',

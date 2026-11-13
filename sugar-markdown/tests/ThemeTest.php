@@ -443,6 +443,42 @@ final class ThemeTest extends TestCase
             }
         }
     }
+
+    /**
+     * SM-S13: fromFile carries an optional byte ceiling. The stat probe
+     * refuses before materialising; the post-read recount guards the
+     * stat/read race. The refusal names the cap.
+     */
+    public function testFromFileHonoursTheByteCeiling(): void
+    {
+        $path = tempnam(sys_get_temp_dir(), 'smcap');
+        $this->assertIsString($path);
+        try {
+            file_put_contents($path, '{"bold":{"bold":true}}');
+            $theme = Theme::fromFile($path, 4096);
+            $this->assertInstanceOf(Theme::class, $theme);
+            try {
+                Theme::fromFile($path, 4);
+                $this->fail('an over-cap read must throw');
+            } catch (\RuntimeException $e) {
+                $this->assertStringContainsString('4', $e->getMessage());
+            }
+        } finally {
+            @unlink($path);
+        }
+    }
+
+    public function testFromJsonAliasForwardsToFromFile(): void
+    {
+        $path = tempnam(sys_get_temp_dir(), 'smalias');
+        $this->assertIsString($path);
+        try {
+            file_put_contents($path, '{"bold":{"bold":true,"italic":true}}');
+            $this->assertEquals(Theme::fromFile($path)->bold, Theme::fromJson($path)->bold);
+        } finally {
+            @unlink($path);
+        }
+    }
 }
 
 /**

@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 return [
     'theme.read_failed'            => 'تعذر قراءة ملف السمة: {path}',
+    'theme.file_too_large'         => 'ملف السمة يتجاوز الحد الأقصى {bytes} بايت: {path}',
     'theme.json_invalid'           => 'JSON غير صالح في ملف السمة',
     'theme.json_object'            => 'يجب أن يتم فك ترميز JSON للسمة إلى كائن',
     'theme.bad_color'              => 'تحديد لون غير صالح: {spec}',

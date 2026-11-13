@@ -82,8 +82,8 @@ new Renderer(Theme::tokyoNight());  // #1a1b26 / #7aa2f7
 new Renderer(Theme::pink());        // playful sweet palette
 ```
 
-Custom JSON theme (`Theme::fromJson($path)` reads the same JSON from a
-file; `fromJsonString()` takes it inline):
+Custom JSON theme (`Theme::fromFile($path)` reads the same JSON from a
+file, optionally under a byte ceiling; `fromJsonString()` takes it inline):
 
 ```php
 use SugarCraft\Markdown\{Renderer, Theme};
@@ -105,8 +105,8 @@ vocabulary — `new StyleGuide` helpers `fromJsonString()` / `fromFile()`
 `block_quote`, `list`, `hr`, `strikethrough`) plus four chroma slots
 (keyword, string, number, comment); everything else stays addressable
 through `element()` / `chroma()`, nothing is silently lost.
-`Theme::fromJson($path)` throws `RuntimeException` on an unreadable
-file; `Theme::fromJsonString($json)` throws `InvalidArgumentException`
+`Theme::fromFile($path, ?int $maxBytes = null)` throws `RuntimeException`
+on an unreadable file or one exceeding the ceiling; `Theme::fromJsonString($json)` throws `InvalidArgumentException`
 on malformed JSON or a non-object payload. Within a well-formed object
 the flat reader is lenient about what it does not understand: unknown
 keys are ignored, slots the document omits keep their plain defaults,
@@ -440,8 +440,9 @@ object.
   `Theme::byName()` returns `?Theme` — null on an unknown name, which
   then lands silently on `ansi()` through `new Renderer($theme)`; for
   name-based construction prefer `withStandardStyle()` (throws on
-  unknown) or `Theme::fromEnvironment($fallback)`. `Theme::fromJson()`
-  and `Theme::fromJsonString()` complete the theme file/inline pair,
+  unknown) or `Theme::fromEnvironment($fallback)`. `Theme::fromFile()`
+  and `Theme::fromJsonString()` complete the theme file/inline pair
+  (`fromJson()` remains as a deprecated alias),
   and `Theme::mapStyles(callable)` rewrites every `Style` slot through
   one callback — the projection candy-code feeds through its
   `Theme::pair` colour bridge.

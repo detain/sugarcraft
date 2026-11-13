@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 return [
     'theme.read_failed'            => 'tema dosyası okunamadı: {path}',
+    'theme.file_too_large'         => 'tema dosyası {bytes} bayt üst sınırını aşıyor: {path}',
     'theme.json_invalid'           => 'tema dosyasında geçersiz JSON',
     'theme.json_object'            => 'tema JSON\'u bir nesneye dönüştürülmelidir',
     'theme.bad_color'              => 'geçersiz renk tanımı: {spec}',

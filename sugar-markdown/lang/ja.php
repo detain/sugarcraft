@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 return [
     'theme.read_failed'            => 'テーマファイルを読み取れません：{path}',
+    'theme.file_too_large'         => 'テーマファイルが{bytes}バイトの上限を超過しています: {path}',
     'theme.json_invalid'           => 'テーマファイルの JSON が無効です',
     'theme.json_object'            => 'テーマ JSON はオブジェクトにデコードされる必要があります',
     'theme.bad_color'              => '無効な色の指定: {spec}',

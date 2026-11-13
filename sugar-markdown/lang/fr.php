@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 return [
     'theme.read_failed'            => 'impossible de lire le fichier de thème : {path}',
+    'theme.file_too_large'         => 'le fichier de thème dépasse le plafond de {bytes} octets : {path}',
     'theme.json_invalid'           => 'JSON invalide dans le fichier de thème',
     'theme.json_object'            => 'le thème JSON doit décoder vers un objet',
     'theme.bad_color'              => 'spécification de couleur invalide : {spec}',
