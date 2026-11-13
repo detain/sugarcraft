@@ -7,6 +7,7 @@ namespace SugarCraft\Style\Tests;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Palettes;
+use SugarCraft\Style\Style;
 use SugarCraft\Style\Theme;
 
 final class ThemeTest extends TestCase
@@ -571,7 +572,7 @@ final class ThemeTest extends TestCase
             $matches,
             PREG_SET_ORDER,
         );
-        $this->assertCount(13, $matches, 'expected all 13 public withers');
+        $this->assertCount(14, $matches, 'expected all 14 public withers (13 colour slots + the role registry)');
         foreach ($matches as [, $name, $body]) {
             $this->assertStringContainsString(
                 '$this->with([',
@@ -584,5 +585,62 @@ final class ThemeTest extends TestCase
                 "with{$name} constructs directly — field drops would go unnoticed again",
             );
         }
+    }
+
+    // ─── Role registry + injectable darkness (finding 003) ────────────────
+
+    public function testStyleRegistryIsDefaultEmpty(): void
+    {
+        $this->assertNull(Theme::dark()->style('title'));
+        $this->assertSame([], Theme::dark()->styles);
+    }
+
+    public function testWithStyleBindsAndIsolates(): void
+    {
+        $base = Theme::dark();
+        $title = Style::new()->bold(true);
+        $bound = $base->withStyle('title', $title);
+
+        $this->assertNull($base->style('title'), 'the source theme must not see the binding');
+        $this->assertSame($title, $bound->style('title'));
+        $this->assertSame($base->foreground->toHex(), $bound->foreground->toHex());
+    }
+
+    public function testWithStyleNullRemovesTheRole(): void
+    {
+        $bound = Theme::dark()->withStyle('title', Style::new());
+        $removed = $bound->withStyle('title', null);
+        $this->assertNull($removed->style('title'));
+        $this->assertNotNull($bound->style('title'), 'removal is copy-on-write');
+    }
+
+    public function testRegistrySurvivesTheColourWithers(): void
+    {
+        // The registry is the 14th field — the copy door keeps it alive
+        // through every wither (finding 037's trap applied to itself).
+        $theme = Theme::dark()->withStyle('title', Style::new()->bold(true));
+        $retouched = $theme->withPrimary(Color::hex('#ff0000'))->withBorder(Color::hex('#00ff00'));
+        $this->assertNotNull($retouched->style('title'));
+    }
+
+    public function testForSelectsTheMatchingPolarityMember(): void
+    {
+        $this->assertSame(Theme::dark()->background->toHex(), Theme::for(true)->background->toHex());
+        $this->assertSame(Theme::light()->background->toHex(), Theme::for(false)->background->toHex());
+    }
+
+    public function testAdaptiveFallbackKnobDecidesNoSignal(): void
+    {
+        putenv('COLORFGBG'); // absent — the old silent-dark door, now caller-chosen
+        $this->assertTrue(Theme::adaptive()->background->isDark(), 'default stays dark (existing behaviour)');
+        $this->assertFalse(Theme::adaptive(fallbackDark: false)->background->isDark());
+
+        putenv('COLORFGBG=not-a-number'); // malformed routes through the same door
+        $this->assertFalse(Theme::adaptive(fallbackDark: false)->background->isDark());
+
+        // A real signal outranks the knob: a dark background stays dark.
+        putenv('COLORFGBG=15;0');
+        $this->assertTrue(Theme::adaptive(fallbackDark: false)->background->isDark());
+        putenv('COLORFGBG');
     }
 }

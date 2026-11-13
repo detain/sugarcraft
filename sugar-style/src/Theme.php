@@ -29,6 +29,7 @@ final class Theme
      * @param Color $border     Border / divider colour
      * @param Color $separator  Row / column separator (lighter than border)
      * @param Color $cursor     Caret / pointer colour
+     * @param array<string,Style> $styles Role name → Style bindings (semantic roles, lipgloss Theme.StyleFunc family; default empty)
      * @return self
      */
     public function __construct(
@@ -45,6 +46,7 @@ final class Theme
         public readonly Color $border,
         public readonly Color $separator,
         public readonly Color $cursor,
+        public readonly array $styles = [],
     ) {}
 
     // ─── Named constructors ─────────────────────────────────────────────
@@ -239,6 +241,18 @@ final class Theme
     }
 
     /**
+     * Pick the matching member of the built-in dark/light pair from a
+     * known polarity. The injectable seam {@see adaptive()} cannot accept
+     * — callers that already know the background (an OSC-11 probe, a host
+     * setting, a stored user preference) resolve the theme without
+     * re-reading the environment.
+     */
+    public static function for(bool $isDark): self
+    {
+        return $isDark ? self::dark() : self::light();
+    }
+
+    /**
      * Auto-detect theme from the `COLORFGBG` environment variable.
      * Falls back to dark when the variable is absent or unparseable.
      *
@@ -254,27 +268,34 @@ final class Theme
      *
      * Mirrors muesli/termenv's COLORFGBG read (last field) and its
      * `HasDarkBackground()` luminance test, which lipgloss uses.
+     *
+     * @param bool $fallbackDark Polarity used when no usable signal is
+     *                           present; default dark (finding 058's knob —
+     *                           hosts that ship no COLORFGBG but run light
+     *                           consoles pass false).
      */
-    public static function adaptive(): self
+    public static function adaptive(bool $fallbackDark = true): self
     {
+        $fallback = $fallbackDark ? self::dark() : self::light();
+
         $raw = getenv('COLORFGBG');
         if ($raw === false || trim($raw) === '') {
-            return self::dark();
+            return $fallback;
         }
 
         $fields = explode(';', trim($raw));
         if (count($fields) < 2) {
             // A lone number names no background — termenv requires the `;`.
-            return self::dark();
+            return $fallback;
         }
         $background = trim((string) end($fields));
         if (!ctype_digit($background)) {
-            return self::dark();
+            return $fallback;
         }
 
         $index = (int) $background;
         if ($index > 255) {
-            return self::dark();
+            return $fallback;
         }
 
         return Color::ansi256($index)->isDark() ? self::dark() : self::light();
@@ -283,8 +304,9 @@ final class Theme
     /**
      * Enumerate the names of all built-in theme factories.
      *
-     * Each entry maps to a same-named zero-arg static factory on this class
-     * (e.g. `'dracula'` → {@see Theme::dracula()}). The trailing `'adaptive'`
+     * Each entry maps to a same-named static factory on this class
+     * (e.g. `'dracula'` → {@see Theme::dracula()}; the factories take no
+     * required arguments). The trailing `'adaptive'`
      * is environment-derived (resolves to `dark`/`light` via `COLORFGBG`)
      * rather than a fixed palette. Listed in declaration order. Enables
      * programmatic discovery (e.g. a `--list-themes` command).
@@ -294,6 +316,31 @@ final class Theme
     public static function catalog(): array
     {
         return ['dark', 'light', 'dracula', 'tokyoNight', 'oneDark', 'githubDark', 'solarizedDark', 'solarizedLight', 'ansi', 'adaptive'];
+    }
+
+    /**
+     * The Style bound to a semantic role, or null when the theme defines
+     * no binding for it. Mirrors charmbracelet/lipgloss's Theme.StyleFunc
+     * (whose (Style, bool) tuple collapses to the nullable read here).
+     */
+    public function style(string $role): ?Style
+    {
+        return $this->styles[$role] ?? null;
+    }
+
+    /**
+     * Returns a new Theme with one role binding replaced — or removed when
+     * $style is null. The registry rides the private copy door, so no
+     * wither can drop it: the lesson of finding 037 applied to the 14th
+     * field itself (finding 003).
+     */
+    public function withStyle(string $role, ?Style $style): self
+    {
+        $styles = $style === null
+            ? array_diff_key($this->styles, [$role => true])
+            : array_merge($this->styles, [$role => $style]);
+
+        return $this->with(['styles' => $styles]);
     }
 
     // ─── Fluent withers ──────────────────────────────────────────────────
@@ -327,6 +374,7 @@ final class Theme
             border:     $overrides['border'] ?? $this->border,
             separator:  $overrides['separator'] ?? $this->separator,
             cursor:     $overrides['cursor'] ?? $this->cursor,
+            styles:     $overrides['styles'] ?? $this->styles,
         );
     }
 
