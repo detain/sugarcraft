@@ -1741,6 +1741,100 @@ final class EscapeDecoderTest extends TestCase
         $this->assertSame('', $this->decoder->remainder());
     }
 
+    // ─── Overlong / out-of-range UTF-8 second-byte audits (SI-19) ────────────
+
+    public function testThreeByteOverlongNeverSurfacesAsOneCodepoint(): void
+    {
+        // E0 80 80 re-spells U+0000 with three bytes — overlong, rejected by
+        // every downstream codec. The classifier refuses the lead once the
+        // 80-9F second byte is visible, so the walker resyncs byte-by-byte
+        // (the m12 surrogate shape) instead of minting the 3-byte key.
+        $events = $this->decoder->decode("\xe0\x80\x80");
+        $this->assertCount(3, $events);
+        $this->assertSame("\xe0", $events[0]->key);
+        $this->assertSame("\x80", $events[1]->key);
+        $this->assertSame("\x80", $events[2]->key);
+        $this->assertSame('', $this->decoder->remainder());
+    }
+
+    public function testFourByteOverlongAndBeyondMaxNeverSurfaceAsOneCodepoint(): void
+    {
+        // F0 80 80 80 re-spells U+0000 in four bytes; F4 90 80 80 passes
+        // U+10FFFF. Both refuse at the second byte and resync per byte.
+        foreach (["\xf0\x80\x80\x80" => 4, "\xf4\x90\x80\x80" => 4] as $bytes => $count) {
+            $decoder = new \SugarCraft\Input\EscapeDecoder();
+            $events = $decoder->decode($bytes);
+            $this->assertCount($count, $events);
+            foreach ($events as $event) {
+                $this->assertSame(1, strlen($event->key), 'no multi-byte artifact may survive the audit');
+            }
+            $this->assertSame('', $decoder->remainder());
+        }
+    }
+
+    public function testLegalBoundaryFormsAroundTheAuditsStillCollapseToOneCodepoint(): void
+    {
+        // E0 A0 80 (U+A000, first legal E0 form), F0 90 80 80 (U+10000) and
+        // F4 8F BF BF (U+10FFFF, the last legal rune) must NOT be over-refused.
+        foreach (["\xe0\xa0\x80" => 'U+A000', "\xf0\x90\x80\x80" => 'U+10000', "\xf4\x8f\xbf\xbf" => 'U+10FFFF'] as $bytes => $label) {
+            $decoder = new \SugarCraft\Input\EscapeDecoder();
+            $events = $decoder->decode($bytes);
+            $this->assertCount(1, $events, $label . ' must decode as one codepoint');
+            $this->assertSame($bytes, $events[0]->key);
+        }
+    }
+
+    public function testOverlongSplitAcrossChunksRefusesOnReveal(): void
+    {
+        // The audit re-checks when the chunk boundary hides the second byte:
+        // E0 alone parks as a plausible lead; revealing 80 refuses it there.
+        $this->assertCount(0, $this->decoder->decode("\xe0"));
+        $events = $this->decoder->decode("\x8f\x80");
+        $this->assertCount(3, $events);
+        $this->assertSame("\xe0", $events[0]->key);
+        $this->assertSame("\x8f", $events[1]->key);
+        $this->assertSame("\x80", $events[2]->key);
+    }
+
+    /**
+     * @dataProvider hostileUtf8LeadProvider
+     */
+    public function testNoRefusedFamilyEverEmitsAMalformedMultiByteKey(string $bytes): void
+    {
+        // Meta-law over every refused shape: what the walker may surface as a
+        // MULTI-BYTE key is only ever well-formed UTF-8 (json-encodable).
+        // Refused families resync as single raw bytes — the documented
+        // byte-wise shape the m12 surrogate pins already sell.
+        $events = $this->decoder->decode($bytes);
+        $this->assertNotEmpty($events, 'every refused shape still resyncs to something countable');
+        foreach ($events as $event) {
+            if (strlen($event->key) > 1) {
+                $this->assertNotFalse(json_encode($event->key), 'multi-byte key must be valid UTF-8');
+            } else {
+                // The resync shape: refused bytes surface alone, byte-wise.
+                $this->assertSame(1, strlen($event->key));
+            }
+        }
+    }
+
+    public static function hostileUtf8LeadProvider(): array
+    {
+        return [
+            'overlong 2-byte' => ["\xc0\x80"],
+            'overlong 2-byte z' => ["\xc1\xbf"],
+            'overlong 3-byte' => ["\xe0\x9f\xbf"],
+            'surrogate' => ["\xed\xa0\x80"],
+            'surrogate high' => ["\xed\xbf\xbf"],
+            'overlong 4-byte' => ["\xf0\x8f\xbf\xbf"],
+            'beyond max' => ["\xf4\x90\x80\x80"],
+            'bad lead f5' => ["\xf5\x80\x80\x80"],
+            'bad lead ff' => ["\xff"],
+            'lone continuation' => ["\x80\xbf"],
+            'alt overlong' => ["\x1b\xe0\x80\x80"],
+            'alt surrogate' => ["\x1b\xed\xa0\x80"],
+        ];
+    }
+
     // ─── MAX_SEQUENCE_LENGTH cap on $remainder ────────────────────────────────
 
     public function testOversizedIncompleteCsiIsDiscarded(): void

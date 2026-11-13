@@ -460,10 +460,12 @@ final class EscapeDecoder
      * walkers (decodeClean and the ESC+lead leg). Returns 2/3/4 for a valid
      * lead byte, 0 for anything that cannot start a well-formed codepoint:
      * 0x80-0xBF lone continuations, 0xC0-0xC1/0xF5-0xFF overlong/out-of-range
-     * leads — and ED A0-BF, the surrogate-encoded range: U+D800-DFFF cannot
-     * exist in well-formed UTF-8 (mbstring/json/MySQL reject it), so a stream
-     * carrying it must resync byte-by-byte instead of producing a key that
-     * every downstream codec chokes on (m12).
+     * leads — and the second-byte audits: ED A0-BF (surrogate halves, m12),
+     * E0 80-9F and F0 80-8F (overlong re-spellings of shorter codepoints),
+     * F4 90-BF (past U+10FFFF). None of these can exist in well-formed UTF-8
+     * (mbstring/json/MySQL reject them), so a stream carrying one must resync
+     * byte-by-byte instead of surfacing a multi-byte key that every
+     * downstream codec chokes on.
      */
     private function utf8SeqLength(string $stream, int $leadPos): int
     {
@@ -475,8 +477,26 @@ final class EscapeDecoder
             default => 0,
         };
 
-        if ($seqLen === 3 && $ord === 0xed && $leadPos + 1 < strlen($stream)) {
-            if ((ord($stream[$leadPos + 1]) & 0xE0) === 0xA0) {
+        // Second-byte audit: four lead families have restricted continuation
+        // ranges because the rest of their space is illegal — ED A0-BF encodes
+        // U+D800-DFFF surrogate halves (cannot exist in well-formed UTF-8),
+        // E0 80-9F and F0 80-8F are overlong encodings (they re-spell
+        // codepoints shorter sequences already own), and F4 90+ passes
+        // U+10FFFF. mbstring/json/MySQL reject all of them, so a stream
+        // carrying one must resync byte-by-byte instead of producing a
+        // multi-byte key every downstream codec chokes on (m12). A not-yet
+        // -visible second byte stays a hold-partial; the law re-checks when
+        // the completion arrives.
+        if ($leadPos + 1 < strlen($stream)) {
+            $second = ord($stream[$leadPos + 1]);
+            $refused = match (true) {
+                $ord === 0xed => $second >= 0xa0 && $second <= 0xbf,
+                $ord === 0xe0 => $second >= 0x80 && $second <= 0x9f,
+                $ord === 0xf0 => $second >= 0x80 && $second <= 0x8f,
+                $ord === 0xf4 => $second >= 0x90 && $second <= 0xbf,
+                default => false,
+            };
+            if ($refused) {
                 return 0;
             }
         }
