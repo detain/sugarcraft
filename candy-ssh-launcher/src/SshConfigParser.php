@@ -27,15 +27,24 @@ use SugarCraft\SshLauncher\Support\CommentStrip;
  * matching blocks in file order (ssh tries them in that order).
  *
  * This is a DELIBERATE SUBSET of ssh_config(5), not the full grammar:
- * - Pattern matching is literal-or-bare-`*` only. OpenSSH's `?`, character
- *   classes, and negated `!patterns` are not interpreted — a `Host web*`
- *   block never cross-applies to the host `web1`; only the exact string
- *   `web*` (or the universal bare `*`) matches. Negated `!patterns` are
- *   moreover never MINTED as endpoints (F-24): they are exclusion tokens,
- *   not hostnames, and a row dispatching the literal '!internal' is a bug
- *   surface, not a feature.
- * - Quoted arguments, `Match` blocks, and multi-line continuations are
- *   unimplemented.
+ * - Pattern matching is literal-or-bare-`*` only, and only literal-or-bare
+ *   patterns MINT rows. OpenSSH's `?`, character classes, and negated
+ *   `!patterns` are not interpreted — a `Host web*` block never
+ *   cross-applies to the host `web1`, and since -021 it does not mint a
+ *   row named `web*` either: a glob is not a hostname, exactly the reason
+ *   `!patterns` were excluded (F-24). The block still carries its options
+ *   for an exact-string match; only the mint is skipped.
+ * - Argument values that sit entirely inside one matched pair of quotes
+ *   (`IdentityFile "~/.ssh/id_ed25519"`) have that pair peeled before the
+ *   value is stored, mirroring ssh_config(5) QUOTING. Embedded or
+ *   unbalanced quotes stay literal bytes — this reader peels a pair or
+ *   nothing, never re-lexes a line.
+ * - `%h`, `%r`, `%u` and `%%` expand at import time inside HostName, User
+ *   and IdentityFile values (ssh_config(5) TOKENS, resolved locally since
+ *   no command-line destination exists yet: %h = the HostName or pattern,
+ *   %r = the resolved user, falling back to the local login when the file
+ *   sets none, %u = the local login name). Other `%` pairs stay literal.
+ * - `Match` blocks and multi-line continuations are unimplemented.
  */
 final class SshConfigParser
 {
@@ -157,10 +166,69 @@ final class SshConfigParser
     }
 
     /**
+     * Peel one matched pair of surrounding quotes from an argument value
+     * (ssh_config(5) QUOTING, -021). A value that merely CONTAINS quotes
+     * is left byte-exact; only a complete `"…"` / `'…'` wrapper peels.
+     */
+    private static function unwrapQuoted(string $value): string
+    {
+        if (strlen($value) >= 2) {
+            $first = $value[0];
+            if (($first === '"' || $first === "'") && substr($value, -1) === $first) {
+                return substr($value, 1, -1);
+            }
+        }
+        return $value;
+    }
+
+    /**
+     * Expand the ssh_config(5) TOKENS this importer can resolve locally
+     * (-021): %h = the host the entry points at, %r = its remote user
+     * (the local login when the file sets none — the deliberate
+     * simplification of a self-referential `%r` inside `User`), %u = the
+     * local login, %% = a literal percent. Every other `%` pair stays
+     * untouched, matching OpenSSH's behavior for unknown tokens.
+     */
+    private static function expandTokens(string $value, string $host, ?string $user): string
+    {
+        if (!str_contains($value, '%')) {
+            return $value;
+        }
+        $local = self::localUserName();
+        return (string) preg_replace_callback(
+            '/%([hrump%])/',
+            static fn(array $m): string => match ($m[1]) {
+                '%' => '%',
+                'h' => $host,
+                'r' => $user ?? $local,
+                'u' => $local,
+                default => $m[0],
+            },
+            $value
+        );
+    }
+
+    /** Login name of the user running the import (posix, USER/USERNAME env fallback). */
+    private static function localUserName(): string
+    {
+        if (function_exists('posix_geteuid') && function_exists('posix_getpwuid')) {
+            $pw = posix_getpwuid(posix_geteuid());
+            if (is_array($pw) && isset($pw['name']) && $pw['name'] !== '') {
+                return (string) $pw['name'];
+            }
+        }
+        return (string) (getenv('USER') ?: getenv('USERNAME') ?: '');
+    }
+
+    /**
      * @param array<string,string|list<string>> $options
      */
     private function applyKeyword(array &$options, string $key, string $value): void
     {
+        // -021: a value wrapped entirely in one matched quote pair loses the
+        // pair BEFORE anything else interprets it — `IdentityFile "~/.ssh/…"
+        // must reach IdentityPath::expand as a tilde path, not a quoted one.
+        $value = self::unwrapQuoted($value);
         match ($key) {
             // First-obtained-wins within the block too (ssh_config.5):
             // a repeated scalar keyword keeps its first value.
@@ -193,6 +261,15 @@ final class SshConfigParser
                     // that dispatched the literal '!internal'. The token stays
                     // in the block's pattern list, so resolveOptions matching
                     // is unaffected — only the mint is skipped.
+                    continue;
+                }
+                if (strpbrk($pattern, '*?[') !== false) {
+                    // -021: a glob pattern (`*.internal`, `web?`, `[ab]host`)
+                    // is a matcher, not a hostname — minting it offered a row
+                    // that dispatches the literal glob. Same reasoning (and
+                    // same placement) as the '!'-exclusion skip above: the
+                    // token stays in the pattern list for exact matching,
+                    // only the mint is skipped.
                     continue;
                 }
                 if (isset($minted[$pattern])) {
@@ -262,10 +339,22 @@ final class SshConfigParser
             : 22;
         $user = $options['user'] ?? null;
 
+        // -021: tokens resolve once host+user are known, before the tilde
+        // leg of the identity path runs (`IdentityFile /home/%r/.ssh/%h`
+        // must reach IdentityPath::expand as concrete bytes).
+        $host = self::expandTokens((string) $host, (string) $host, $user !== null ? (string) $user : null);
+        if ($user !== null) {
+            // A self-referential %r inside User has no file-set answer, so
+            // it resolves through the local-login fallback (null user).
+            $user = self::expandTokens((string) $user, $host, null);
+        }
+
         $identityFiles = [];
         if (isset($options['identityfile']) && is_array($options['identityfile'])) {
             foreach ($options['identityfile'] as $f) {
-                $identityFiles[] = IdentityPath::expand((string) $f);
+                $identityFiles[] = IdentityPath::expand(
+                    self::expandTokens((string) $f, $host, $user !== null ? (string) $user : null)
+                );
             }
         }
 

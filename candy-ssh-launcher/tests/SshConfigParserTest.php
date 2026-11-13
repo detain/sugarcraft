@@ -433,9 +433,10 @@ CONF;
         // of the (now shared, -065) comment scanner, through BOTH public
         // parse entries on identical payload bytes. A future regression on
         // either carrier goes red here — the drift guard -065's doctrine.
-        // The parser hands quoted arguments through verbatim (ssh_config
-        // quoting is an unimplemented subset leg), so the equality below is
-        // the comment-strip behaviour, not the scalar grammar.
+        // Since -021 the import side PEELS one matched outer quote pair
+        // (never re-lexing the rest), so the equality below is the
+        // comment-strip behaviour — the hash survives inside the value —
+        // not the scalar grammar (Config unescapes; the importer does not).
         $dq = chr(34);
         $sq = chr(39);
         $bs = chr(92);
@@ -444,11 +445,11 @@ CONF;
 
         $imported = $this->parse("Host e1\n  HostName " . $dq . $double . $dq . "\n");
         $this->assertCount(1, $imported);
-        $this->assertSame($dq . $double . $dq, $imported[0]->host, 'import side keeps the hash');
+        $this->assertSame($double, $imported[0]->host, 'import side peels the pair and keeps the hash');
 
         $imported = $this->parse("Host e2\n  HostName " . $sq . $single . $sq . "\n");
         $this->assertCount(1, $imported);
-        $this->assertSame($sq . $single . $sq, $imported[0]->host, 'import side keeps the doubled-quote value');
+        $this->assertSame($single, $imported[0]->host, 'import side peels and keeps the doubled-quote value');
 
         $declared = Config::parse("- name: e1\n  host: h.test\n  description: " . $dq . $double . $dq . "\n", 'wishlist.yml');
         // Config resolves the escape pairs (-069); the scanner-level equality

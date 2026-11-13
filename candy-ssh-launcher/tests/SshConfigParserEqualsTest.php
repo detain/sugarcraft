@@ -207,9 +207,11 @@ final class SshConfigParserEqualsTest extends TestCase
 
     public function testPatternMatchingIsLiteralNotGlobLike(): void
     {
-        // Honest-subset documentation (M3/C3): OpenSSH would cross-apply a
-        // `Host web*` block to web1; this parser matches patterns LITERALLY
-        // (or universally for a bare `*`), so the options must NOT bleed.
+        // Honest-subset documentation (M3/C3, extended by -021): OpenSSH
+        // would cross-apply a `Host web*` block to web1; this parser
+        // matches patterns LITERALLY (or universally for a bare `*`).
+        // And since -021 the glob pattern no longer MINTS its own row —
+        // a row named `web*` would dispatch the literal glob.
         $raw = implode("\n", [
             'Host web*',
             '  User globbed',
@@ -218,8 +220,8 @@ final class SshConfigParserEqualsTest extends TestCase
 
         $byName = self::byName((new SshConfigParser())->parse($raw));
 
-        self::assertSame('globbed', $byName['web*']->user);
-        self::assertNull($byName['web1']->user);
+        self::assertSame(['web1'], array_keys($byName), 'the glob block contributes no row');
+        self::assertNull($byName['web1']->user, 'its options must not bleed onto web1 either');
     }
 
     public function testExpandPathFallsBackToPasswdHomeWithoutHomeEnv(): void

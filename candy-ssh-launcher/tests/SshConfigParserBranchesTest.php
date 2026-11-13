@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\SshLauncher\Tests;
 
+use SugarCraft\SshLauncher\IdentityPath;
 use SugarCraft\SshLauncher\SshConfigParser;
 use PHPUnit\Framework\TestCase;
 
@@ -327,5 +328,99 @@ CONF;
             $this->parse($raw),
         );
         $this->assertSame(['a', 'b'], $names);
+    }
+
+    // -----------------------------------------------------------------
+    // -021: quoted argument peeling and %token expansion
+    // -----------------------------------------------------------------
+
+    public function testQuotedIdentityFilePeelsBeforeTildeExpansion(): void
+    {
+        // The 'IdentityFile "~/.ssh/…"' bug class: the wrapper used to ride
+        // through expansion, minting an identity path that opens with a
+        // quote byte and can never exist. Peel first, then expand.
+        $raw = "Host q\n  IdentityFile \"~/.ssh/id_ed25519\"\n  IdentityFile '~/.ssh/id_rsa'\n";
+        $endpoints = $this->parse($raw);
+        $this->assertSame(
+            [IdentityPath::expand('~/.ssh/id_ed25519'), IdentityPath::expand('~/.ssh/id_rsa')],
+            $endpoints[0]->identityFiles,
+            'a peeled quoted tilde path lands on the exact bytes the unquoted spelling yields'
+        );
+    }
+
+    public function testUnbalancedQuoteStaysLiteral(): void
+    {
+        // Only a complete matched pair peels; a leading quote is data.
+        $endpoints = $this->parse("Host u\n  User \"bob\n");
+        $this->assertSame('"bob', $endpoints[0]->user);
+    }
+
+    public function testEmbeddedQuotesStayLiteral(): void
+    {
+        $endpoints = $this->parse("Host e\n  User bo\"b\n");
+        $this->assertSame('bo"b', $endpoints[0]->user);
+    }
+
+    public function testTokensExpandAgainstTheImportedRow(): void
+    {
+        // %h = the effective host, %r = the row's user — resolved locally
+        // at import, since the importer knows both by then.
+        $raw = "Host t\n  User dev\n  HostName t.example.com\n  IdentityFile /keys/%r@%h\n";
+        $endpoints = $this->parse($raw);
+        $this->assertSame('/keys/dev@t.example.com', $endpoints[0]->identityFiles[0]);
+    }
+
+    public function testTokenResolvesForPatternHostWithoutHostName(): void
+    {
+        $raw = "Host box23\n  IdentityFile /k/%h.pub\n";
+        $endpoints = $this->parse($raw);
+        $this->assertSame('/k/box23.pub', $endpoints[0]->identityFiles[0]);
+    }
+
+    public function testPercentUAndSelfReferentialPercentRUseTheLocalLogin(): void
+    {
+        // The documented simplification: %u is the local login everywhere;
+        // %r inside a User value (self-reference) falls back to it too.
+        $login = $this->localLogin();
+        $byName = [];
+        foreach ($this->parse("Host lu\n  User %u\n  IdentityFile /k/%u.key\n") as $e) {
+            $byName[$e->name] = $e;
+        }
+        $this->assertSame($login, $byName['lu']->user);
+        $this->assertSame('/k/' . $login . '.key', $byName['lu']->identityFiles[0]);
+
+        // %r with no user set on the row resolves to the local login too.
+        $bare = $this->parse("Host lr\n  IdentityFile /k/%r\n");
+        $this->assertSame('/k/' . $login, $bare[0]->identityFiles[0]);
+    }
+
+    public function testDoublePercentIsOnePercentAndUnknownTokensSurvive(): void
+    {
+        $raw = "Host pc\n  IdentityFile /k/a%%b\n  User keep%ping\n";
+        $endpoints = $this->parse($raw);
+        $this->assertSame('/k/a%b', $endpoints[0]->identityFiles[0]);
+        $this->assertSame('keep%ping', $endpoints[0]->user, '%p is outside this reader vocabulary');
+    }
+
+    public function testGlobPatternsAreNeverMinted(): void
+    {
+        // -021 mirrors the F-24 '!'-skip for ?, [ and embedded * — a glob
+        // is a matcher, not a hostname.
+        $names = array_map(
+            static fn(\SugarCraft\SshLauncher\Endpoint $e): string => $e->name,
+            $this->parse("Host web? db[1x] app1 star*keep\n  User u\n"),
+        );
+        $this->assertSame(['app1'], $names);
+    }
+
+    private function localLogin(): string
+    {
+        if (function_exists('posix_geteuid') && function_exists('posix_getpwuid')) {
+            $pw = posix_getpwuid(posix_geteuid());
+            if (is_array($pw) && ($pw['name'] ?? '') !== '') {
+                return (string) $pw['name'];
+            }
+        }
+        return (string) (getenv('USER') ?: getenv('USERNAME') ?: '');
     }
 }
