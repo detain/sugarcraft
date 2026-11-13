@@ -25,4 +25,7 @@ return [
     'sink.open_failed'             => '打开输出路径失败: {path}',
     'sink.flush_failed'            => '刷新输出流失败',
     'writer.feed_after_close'      => '在 close() 之后调用了 feed() — 写入器已完成',
+    'blockstack.pop_empty' => '块栈为空',
+    'theme.mapper_not_style' => 'Theme::mapStyles() 期望映射器返回 Style，实际收到 {type}',
+    'theme.with_slot_not_style' => 'Theme::with(): "{slot}" 不是 Style 槽位；有效槽位: {slots}',
 ];

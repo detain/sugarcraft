@@ -25,4 +25,7 @@ return [
     'sink.open_failed'             => 'impossibile aprire il percorso di output: {path}',
     'sink.flush_failed'            => 'flush del flusso di output non riuscito',
     'writer.feed_after_close'      => 'feed() chiamato dopo close() — il writer è terminato',
+    'blockstack.pop_empty' => 'lo stack di blocchi è vuoto',
+    'theme.mapper_not_style' => 'Theme::mapStyles() prevede che il mapper restituisca un Style, ottenuto: {type}',
+    'theme.with_slot_not_style' => 'Theme::with(): "{slot}" non è uno slot Style; slot validi: {slots}',
 ];

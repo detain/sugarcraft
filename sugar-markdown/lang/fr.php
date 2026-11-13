@@ -25,4 +25,7 @@ return [
     'sink.open_failed'             => 'échec de l\'ouverture du chemin de sortie : {path}',
     'sink.flush_failed'            => 'échec de la vidange du flux de sortie',
     'writer.feed_after_close'      => 'feed() appelé après close() — le writer est terminé',
+    'blockstack.pop_empty' => 'la pile de blocs est vide',
+    'theme.mapper_not_style' => 'Theme::mapStyles() attend que le mapper retourne un Style, reçu : {type}',
+    'theme.with_slot_not_style' => 'Theme::with(): « {slot} » n\'est pas un emplacement Style ; emplacements valides : {slots}',
 ];

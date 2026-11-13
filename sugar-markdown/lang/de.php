@@ -25,4 +25,7 @@ return [
     'sink.open_failed'             => 'der Ausgabepfad konnte nicht geöffnet werden: {path}',
     'sink.flush_failed'            => 'das Leeren des Ausgabestreams ist fehlgeschlagen',
     'writer.feed_after_close'      => 'feed() nach close() aufgerufen — der Writer ist beendet',
+    'blockstack.pop_empty' => 'der Block-Stapel ist leer',
+    'theme.mapper_not_style' => 'Theme::mapStyles() erwartet, dass der Mapper ein Style zurückgibt, erhalten: {type}',
+    'theme.with_slot_not_style' => 'Theme::with(): »{slot}« ist kein Style-Slot; gültige Slots: {slots}',
 ];

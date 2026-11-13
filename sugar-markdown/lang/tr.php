@@ -25,4 +25,7 @@ return [
     'sink.open_failed'             => 'çıkış yolu açılamadı: {path}',
     'sink.flush_failed'            => 'çıkış akışı boşaltılamadı',
     'writer.feed_after_close'      => 'close() sonrasında feed() çağrıldı — yazıcı tamamlandı',
+    'blockstack.pop_empty' => 'blok yığını boş',
+    'theme.mapper_not_style' => 'Theme::mapStyles(), eşleyicinin bir Style döndürmesini bekliyor, alınan: {type}',
+    'theme.with_slot_not_style' => 'Theme::with(): "{slot}" bir Style yuvası değil; geçerli yuvalar: {slots}',
 ];

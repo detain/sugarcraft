@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Markdown\Render;
 
+use SugarCraft\Markdown\Lang;
+
 /**
  * Stack of block contexts that tracks accumulated indent and margins
  * for computing available width at any nesting depth.
@@ -40,7 +42,7 @@ final class BlockStack
     public function pop(): BlockContext
     {
         if ($this->stack === []) {
-            throw new \UnderflowException('BlockStack is empty');
+            throw new \UnderflowException(Lang::t('blockstack.pop_empty'));
         }
         $ctx = array_pop($this->stack);
         $this->indentTotal -= $ctx->accumulatedIndent;

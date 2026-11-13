@@ -53,7 +53,7 @@ final class RegressionCoverageTest extends TestCase
     {
         $stack = new BlockStack();
         $this->expectException(\UnderflowException::class);
-        $this->expectExceptionMessage('BlockStack is empty');
+        $this->expectExceptionMessage('the block stack is empty');
         $stack->pop();
     }
 

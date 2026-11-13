@@ -25,4 +25,7 @@ return [
     'sink.open_failed'             => 'не удалось открыть путь вывода: {path}',
     'sink.flush_failed'            => 'не удалось сбросить (flush) выходной поток',
     'writer.feed_after_close'      => 'feed() вызван после close() — запись завершена',
+    'blockstack.pop_empty' => 'стек блоков пуст',
+    'theme.mapper_not_style' => 'Theme::mapStyles() ожидает, что маппер вернёт Style, получено: {type}',
+    'theme.with_slot_not_style' => 'Theme::with(): «{slot}» — не слот Style; допустимые слоты: {slots}',
 ];

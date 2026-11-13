@@ -25,4 +25,7 @@ return [
     'sink.open_failed'             => 'kan het uitvoerpad niet openen: {path}',
     'sink.flush_failed'            => 'flushen van de outputstream mislukt',
     'writer.feed_after_close'      => 'feed() aangeroepen na close() — de writer is voltooid',
+    'blockstack.pop_empty' => 'de blokstack is leeg',
+    'theme.mapper_not_style' => 'Theme::mapStyles() verwacht dat de mapper een Style teruggeeft, ontvangen: {type}',
+    'theme.with_slot_not_style' => 'Theme::with(): "{slot}" is geen Style-slot; geldige slots: {slots}',
 ];

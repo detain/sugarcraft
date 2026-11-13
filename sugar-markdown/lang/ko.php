@@ -25,4 +25,7 @@ return [
     'sink.open_failed'             => '출력 경로를 열 수 없습니다: {path}',
     'sink.flush_failed'            => '출력 스트림 플러시 실패',
     'writer.feed_after_close'      => 'close() 이후에 feed()가 호출되었습니다 — 기록기가 완료되었습니다',
+    'blockstack.pop_empty' => '블록 스택이 비어 있습니다',
+    'theme.mapper_not_style' => 'Theme::mapStyles()는 매퍼가 Style을 반환해야 합니다. 받은 타입: {type}',
+    'theme.with_slot_not_style' => 'Theme::with(): "{slot}"은(는) Style 슬롯이 아닙니다. 유효한 슬롯: {slots}',
 ];

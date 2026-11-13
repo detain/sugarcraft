@@ -676,7 +676,7 @@ final class Theme
             if ($value instanceof Style) {
                 $mapped = $map($value);
                 if (!$mapped instanceof Style) {
-                    throw new \InvalidArgumentException('Theme::mapStyles() expects the mapper to return a Style, got ' . get_debug_type($mapped));
+                    throw new \InvalidArgumentException(Lang::t('theme.mapper_not_style', ['type' => get_debug_type($mapped)]));
                 }
                 $value = $mapped;
             }
@@ -711,9 +711,10 @@ final class Theme
         }
 
         if (!\in_array($slot, $styleSlots, true)) {
-            throw new \InvalidArgumentException(
-                'Theme::with(): "' . $slot . '" is not a Style slot; valid slots: ' . implode(', ', $styleSlots)
-            );
+            throw new \InvalidArgumentException(Lang::t('theme.with_slot_not_style', [
+                'slot'  => $slot,
+                'slots' => implode(', ', $styleSlots),
+            ]));
         }
 
         $args[$slot] = $style;

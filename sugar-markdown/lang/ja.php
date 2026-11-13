@@ -25,4 +25,7 @@ return [
     'sink.open_failed'             => '出力パスを開けませんでした: {path}',
     'sink.flush_failed'            => '出力ストリームのフラッシュに失敗しました',
     'writer.feed_after_close'      => 'close() の後に feed() が呼び出されました — ライターは完了済みです',
+    'blockstack.pop_empty' => 'ブロックスタックが空です',
+    'theme.mapper_not_style' => 'Theme::mapStyles() はマッパーが Style を返すことを期待していますが、{type} を受け取りました',
+    'theme.with_slot_not_style' => 'Theme::with(): "{slot}" は Style スロットではありません。有効なスロット: {slots}',
 ];

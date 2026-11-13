@@ -25,4 +25,7 @@ return [
     'sink.open_failed'             => 'nelze otevřít výstupní cestu: {path}',
     'sink.flush_failed'            => 'vyprázdnění výstupního proudu selhalo',
     'writer.feed_after_close'      => 'feed() volán po close() — writer je dokončen',
+    'blockstack.pop_empty' => 'zásobník bloků je prázdný',
+    'theme.mapper_not_style' => 'Theme::mapStyles() očekává, že mapper vrátí Style, obdrželi jsme {type}',
+    'theme.with_slot_not_style' => 'Theme::with(): „{slot}“ není pole Style; platná pole: {slots}',
 ];
