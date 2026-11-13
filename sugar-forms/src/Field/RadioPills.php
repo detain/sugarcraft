@@ -44,8 +44,9 @@ use SugarCraft\Forms\Util\RenderSafe;
  * under the cursor; the three-cell gaps between pills are deliberate dead
  * zones and wheel is refused (crush's Viewport maps it to Up/Down today).
  *
- * Cell widths are codepoint counts of the clean labels plus one pad cell on
- * each side — single-width labels assumed, exactly like Confirm's pills.
+ * Cell widths are terminal CELL counts (Width::of on the cleaned labels)
+ * plus one pad cell on each side — wide and emoji labels cost exactly what
+ * they paint, the same money the renderer spends.
  *
  * Horizontal window (opt-in via {@see withWidth()}): when the roster is
  * wider than the budget the row becomes a tab strip — a window of pills
@@ -221,7 +222,9 @@ final class RadioPills implements Field
             $cells[] = [1, null];
         }
         for ($index = $first; $index <= $last; ++$index) {
-            $cells[] = [mb_strlen($this->options[$index], 'UTF-8') + 2, $index];
+            // Cell cost == painted cost (sugar-forms-032): terminal CELLS of
+            // the same cleaned label buildPillRow paints, not codepoints.
+            $cells[] = [Width::of(RenderSafe::clean($this->options[$index])) + 2, $index];
         }
         if ($tail) {
             $cells[] = [1, null];
@@ -385,7 +388,8 @@ final class RadioPills implements Field
         }
         $cost = [];
         foreach ($this->options as $label) {
-            $cost[] = mb_strlen($label, 'UTF-8') + 2;
+            // Same cells-not-codepoints rule as the click band above.
+            $cost[] = Width::of(RenderSafe::clean($label)) + 2;
         }
         $marker = self::GAP + 1; // the ellipsis cell plus its joining gap
         $budget = $this->width;
