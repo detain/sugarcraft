@@ -411,11 +411,15 @@ final class Breadcrumb
      * Render a custom list of titles (not from a NavStack).
      *
      * Inputs are treated like stack titles: untrusted, sanitized at this
-     * boundary before width math and zone wrapping. Note these bare
-     * strings bypass {@see NavigationItem}'s constructor guards entirely —
-     * the MAX_TITLE_BYTES ingest bound exists to keep oversized text out
-     * of Mark::wrap on the STACK path and does not hold here; a host that
-     * forwards attacker-controlled lists must bound them itself.
+     * boundary before width math and zone wrapping. The MAX_TITLE_BYTES
+     * ingest bound IS enforced here (NS-11) — an oversized title throws
+     * exactly as {@see NavigationItem}'s constructor would. The remaining
+     * host duty is list LENGTH: render N huge-but-capped titles and you
+     * still pay for N crumbs of width math. Whitespace-only titles are
+     * deliberately NOT refused here (asymmetry vs the constructor, which
+     * rejects blank titles at ingest): this is the raw-list channel, and
+     * a whitespace crumb renders as its sanitized spaces — consuming
+     * cells like any other crumb. Pinned both ways below.
      *
      * @param list<string> $titles
      */
@@ -427,6 +431,15 @@ final class Breadcrumb
             $this->clearStamp();
             return '';
         }
+
+        foreach ($titles as $index => $title) {
+            if (\strlen($title) > NavigationItem::MAX_TITLE_BYTES) {
+                throw new \InvalidArgumentException(
+                    'renderTitles() title ' . $index . ' exceeds ' . NavigationItem::MAX_TITLE_BYTES . ' bytes'
+                );
+            }
+        }
+
         $out = $this->doRender(\array_map([TitleSanitizer::class, 'sanitize'], $titles));
         // No stack was consumed: nothing to validate future dispatches
         // against — clear any previous render stamp (NS-08).

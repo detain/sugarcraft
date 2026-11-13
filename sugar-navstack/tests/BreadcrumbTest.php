@@ -565,4 +565,40 @@ final class BreadcrumbTest extends TestCase
         $this->assertSame(4, Width::string($out));
         $this->assertSame('abc…', $out);
     }
+
+    /**
+     * NS-11: renderTitles() enforces the ingest size bound now — the one
+     * asymmetry vs the constructor that REMAINS (and is documented) is
+     * blank refusal: this is the raw-list channel, and a whitespace
+     * crumb still pays its cells.
+     */
+    public function testRenderTitlesRefusesOversizedTitleLikeTheConstructor(): void
+    {
+        $bc = new Breadcrumb();
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('renderTitles() title 1 exceeds 65536 bytes');
+        $bc->renderTitles(['ok', str_repeat('x', 65537)]);
+    }
+
+    public function testRenderTitlesAcceptsTitleAtTheBound(): void
+    {
+        $bc  = new Breadcrumb();
+        $out = $bc->renderTitles([str_repeat('y', 65536)]);
+
+        $this->assertStringContainsString(str_repeat('y', 65536), $out);
+        $this->assertSame([0], $bc->visibleIndices());
+    }
+
+    public function testRenderTitlesRendersWhitespaceCrumbPayingItsCells(): void
+    {
+        $bc = new Breadcrumb();
+        // Tab collapses to a space by the title sweep; the blank crumb is
+        // NOT refused (deliberate asymmetry vs NavigationItem's blank
+        // refusal) and it consumes its 4 cells between the separators.
+        $out = $bc->renderTitles(['Alpha', "  \t ", 'Beta']);
+
+        $this->assertSame('Alpha ›      › Beta', $out);
+        $this->assertSame([0, 1, 2], $bc->visibleIndices());
+    }
 }

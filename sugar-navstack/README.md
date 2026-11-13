@@ -154,9 +154,11 @@ default `0` DISABLES the cap entirely (negatives throw). If even the single
 newest crumb overflows, it is ellipsis-truncated — and when the truncated
 crumb alone fills the width, the marker itself is dropped. Above zero,
 `setMaxWidth()` is a hard cap.
-`renderTitles(list<string>)` renders a bare title list without a stack — titles
-handed to it skip the stack's size and emptiness guards, so bound hostile lists
-yourself (the trust notes under `Url` spell out why).
+`renderTitles(list<string>)` renders a bare title list without a stack — each
+title is bound by `MAX_TITLE_BYTES` here as well (an oversized one throws just
+as on the stack path), but the list LENGTH stays the host's duty: N capped
+titles still cost N crumbs of width math (the trust notes under `Url` spell
+out why).
 `setItemRenderer(fn(NavigationItem, int): ?string)` customizes each crumb
 (`null` falls back to the SANITIZED title, not the raw one) — width math runs
 on VISIBLE CELLS, so SGR escape bytes are excluded and a styled trail elides
@@ -341,8 +343,11 @@ design — they are yours to feed safely:
   bytes and newlines survive into the output) — treat it as a host-chosen
   constant, never a carrier for user data.
 - `Breadcrumb::renderTitles()`: bare title strings skip the
-  `NavigationItem` constructor entirely — no size or emptiness guards — so
-  sanitize and bound the values before handing them in.
+  `NavigationItem` constructor, so blank titles are NOT refused (a
+  whitespace-only title renders a whitespace crumb that still consumes
+  cells); the size bound IS enforced per title (`MAX_TITLE_BYTES` —
+  oversized throws). Sanitize and mind the list LENGTH before handing
+  hostile data in.
 
 ## Escape
 
