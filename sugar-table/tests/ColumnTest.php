@@ -519,4 +519,86 @@ final class ColumnTest extends TestCase
             'no implicit-nullable parameter declaration may return (8.4 E_DEPRECATED)'
         );
     }
+
+    /**
+     * @dataProvider validClusterTexts
+     */
+    public function testSplitClustersPreservesAndLists(string $text): void
+    {
+        $clusters = Column::splitClusters($text);
+
+        $this->assertIsArray($clusters);
+        $this->assertTrue(array_is_list($clusters));
+        foreach ($clusters as $cluster) {
+            $this->assertIsString($cluster);
+            $this->assertNotSame('', $cluster);
+        }
+        $this->assertSame($text, implode('', $clusters));
+    }
+
+    /**
+     * @dataProvider malformedClusterTexts
+     */
+    public function testSplitClustersSurvivesMalformedUtf8(string $text): void
+    {
+        // The old Column arm crashed (foreach over a false return) and the old
+        // Table arm hid it under @; the merged cascade must return a usable
+        // list on every host, grapheme or mb arm, warning-free.
+        $clusters = Column::splitClusters($text);
+
+        $this->assertIsArray($clusters);
+        $this->assertTrue(array_is_list($clusters));
+        foreach ($clusters as $cluster) {
+            $this->assertIsString($cluster);
+            $this->assertNotSame('', $cluster);
+        }
+    }
+
+    /**
+     * @dataProvider allClusterTexts
+     */
+    public function testSplitterTwinsAreOneImplementation(string $text): void
+    {
+        // ST-12 drift trap: Table's width-fit splitter must stay byte-identical
+        // to Column's character-wrap splitter — re-forking them is the bug class.
+        $table = \SugarCraft\Table\Table::fromColumns([Column::new('id', 'ID', 10)]);
+        $method = new \ReflectionMethod($table, 'graphemeClusters');
+
+        $this->assertSame(Column::splitClusters($text), $method->invoke($table, $text));
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function validClusterTexts(): array
+    {
+        return [
+            'empty' => [''],
+            'ascii' => ['abc'],
+            'combining-marks' => ["e\u{0301}t\u{0301}"],
+            'zwj-family' => ["\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}"],
+            'box-drawing' => ["\u{250C}\u{2510}\u{2514}\u{2518}"],
+            'mixed-emoji-latin' => ["a\u{1F600}b"],
+        ];
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function malformedClusterTexts(): array
+    {
+        return [
+            'trailing-invalid-bytes' => ["abc\u{FFFD}\xFF\xFE"],
+            'truncated-lead-byte' => ["caf\xC3"],
+            'truncated-three-byte' => ["a\xE2\x82"],
+        ];
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function allClusterTexts(): array
+    {
+        return [...self::validClusterTexts(), ...self::malformedClusterTexts()];
+    }
 }

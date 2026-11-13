@@ -2670,22 +2670,7 @@ final class Table
      */
     private function graphemeClusters(string $text): array
     {
-        if ($text === '') {
-            return [];
-        }
-        // grapheme_str_split is PHP 8.4+; cascade to codepoint-level splitters on
-        // 8.3 so multi-byte text (box-drawing chars, etc.) renders identically
-        // across PHP versions. Mirrors sugar-core Util\Width::graphemes().
-        if (\function_exists('grapheme_str_split')) {
-            $result = @grapheme_str_split($text);
-            if (\is_array($result)) {
-                return $result;
-            }
-        }
-        if (\function_exists('mb_str_split')) {
-            return \mb_str_split($text, 1, 'UTF-8');
-        }
-        return \preg_split('//u', $text, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        return Column::splitClusters($text);
     }
 
     // -------------------------------------------------------------------------

@@ -271,6 +271,38 @@ final class Column
      *
      * @return list<string>
      */
+    /**
+     * Split text into clusters for character-level wrapping and width fitting.
+     *
+     * Single implementation shared by Column's character wrap and Table's
+     * width-fit pass so the two cannot drift apart (ST-12). grapheme_str_split
+     * exists only on PHP 8.4+/ext-intl; the @ is load-bearing there (it warns
+     * and returns false on malformed UTF-8, and we deliberately fall through
+     * to a codepoint splitter rather than surface a warning under failOnWarning).
+     * Mirrors sugar-core Util\Width::graphemes().
+     *
+     * @return list<string>
+     */
+    public static function splitClusters(string $text): array
+    {
+        if ($text === '') {
+            return [];
+        }
+        if (\function_exists('grapheme_str_split')) {
+            $clusters = @\grapheme_str_split($text);
+            if (\is_array($clusters)) {
+                return $clusters;
+            }
+        }
+        if (\function_exists('mb_str_split')) {
+            $clusters = \mb_str_split($text, 1, 'UTF-8');
+            if (\is_array($clusters)) {
+                return $clusters;
+            }
+        }
+        return \preg_split('//u', $text, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+    }
+
     private function wrapCharacter(string $text, int $width): array
     {
         if ($width <= 0) {
