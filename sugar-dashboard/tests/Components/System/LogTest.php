@@ -651,4 +651,59 @@ final class LogTest extends TestCase
         // Should only show 2 entries due to height constraint
         $this->assertLessThanOrEqual(2, substr_count($rendered, 'Message'));
     }
-}
+
+    // ═══════════════════════════════════════════════════════════════
+    // D-72 (finding 065): cap trims history by newest timestamp
+    // ═══════════════════════════════════════════════════════════════
+
+    public function testCapKeepsTheNewestWindowInStateNotOnlyOnScreen(): void
+    {
+        $entries = [];
+        for ($i = 0; $i < 2000; $i++) {
+            $entries[] = LogEntry::new(
+                'Message ' . $i,
+                LogLevel::Info,
+                sprintf('2024-01-15 %02d:%02d:%02d', intdiv($i, 3600) % 24, intdiv($i, 60) % 60, $i % 60)
+            );
+        }
+        $log = (new Log(entries: $entries, maxEntries: 50))->setSize(80, 60);
+        [, $h] = $log->innerSize();
+        $this->assertSame(50, $h);
+
+        // Newest by timestamp survived, oldest were forgotten from history:
+        $rendered = $log->render();
+        $this->assertStringContainsString('Message 1999', $rendered);
+        [, $grown] = $log->withMaxEntries(100)->innerSize();
+        $this->assertSame(50, $grown, 'a retention window cannot resurrect forgotten entries');
+    }
+
+    public function testBoundedAppendStaysInsideTheWindow(): void
+    {
+        $log = Log::new()->withMaxEntries(5);
+        for ($i = 0; $i < 50; $i++) {
+            $log = $log->withEntry(LogEntry::new('late ' . $i, LogLevel::Info, sprintf('2024-01-16 10:%02d:00', $i % 60)));
+        }
+        [, $h] = $log->innerSize();
+        $this->assertSame(5, $h);
+        $this->assertStringContainsString('late 49', $log->setSize(80, 10)->render());
+    }
+
+    public function testLogRosterGuardRejectsForeignEntriesAtTheBoundary(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        Log::new()->withEntries([['message' => 'nope']]);
+    }
+
+    public function testLevelFilterNeverResurrectsForgottenEntries(): void
+    {
+        $entries = [];
+        for ($i = 0; $i < 100; $i++) {
+            // Old entries are Error-severity, the retained newest window is Info.
+            $entries[] = $i < 90
+                ? LogEntry::new('old-error ' . $i, LogLevel::Error, sprintf('2024-01-15 09:%02d:00', $i % 60))
+                : LogEntry::new('new-info ' . $i, LogLevel::Info, sprintf('2024-01-15 10:%02d:00', $i % 60));
+        }
+        $log = (new Log(entries: $entries, maxEntries: 5))->withMinLevel(LogLevel::Error);
+        [, $h] = $log->innerSize();
+        $this->assertSame(0, $h, 'the cap trims retention BEFORE the level filter, so errors outside the window stay forgotten');
+    }}

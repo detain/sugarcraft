@@ -40,8 +40,37 @@ final class Log implements \SugarCraft\Dashboard\Foundation\SizedItem
         private readonly ?int $timestampWidth = null,
         private readonly ?Color $timestampColor = null,
     ) {
+        if ($maxEntries !== null) {
+            // The cap is a RETENTION rule on state, not a display clip: keep
+            // the newest maxEntries by timestamp in the history itself, so
+            // every later level change re-filters a bounded roster instead of
+            // re-sorting 10k entries per append (finding sugar-dashboard-065).
+            // Trimming happens BEFORE the level filter: raising minLevel must
+            // never resurrect entries the cap already forgot.
+            usort($entries, fn(LogEntry $a, LogEntry $b) => $b->timestamp <=> $a->timestamp);
+            $entries = $maxEntries < 1 ? [] : array_slice($entries, 0, $maxEntries);
+        }
+        self::validateRoster($entries, 'Log');
         $this->originalEntries = $entries;
         $this->entries = $this->filterAndSortEntries($entries);
+    }
+
+    /**
+     * Fail at the boundary: the roster holds LogEntry, nothing else.
+     *
+     * @param list<mixed> $entries
+     * @return list<LogEntry>
+     */
+    private static function validateRoster(array $entries, string $origin): array
+    {
+        foreach ($entries as $i => $entry) {
+            if (!$entry instanceof LogEntry) {
+                throw new \InvalidArgumentException(
+                    "{$origin}: roster entry #{$i} must be a LogEntry, " . get_debug_type($entry) . ' given'
+                );
+            }
+        }
+        return $entries;
     }
 
     /**
@@ -272,10 +301,18 @@ final class Log implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withEntries(array $entries): self
     {
-        $clone = clone $this;
-        $clone->originalEntries = $entries;
-        $clone->entries = $this->filterAndSortEntries($entries);
-        return $clone;
+        // Route through the constructor so the retention cap trims STATE;
+        // a raw swap used to let an unbounded history back in behind a
+        // display-only cap (finding sugar-dashboard-065).
+        return new self(
+            entries: $entries,
+            maxEntries: $this->maxEntries,
+            minLevel: $this->minLevel,
+            showTimestamps: $this->showTimestamps,
+            wordWrap: $this->wordWrap,
+            timestampWidth: $this->timestampWidth,
+            timestampColor: $this->timestampColor,
+        );
     }
 
     /**
@@ -284,21 +321,36 @@ final class Log implements \SugarCraft\Dashboard\Foundation\SizedItem
     public function withEntry(LogEntry $entry): self
     {
         $clone = clone $this;
-        $clone->originalEntries = array_merge($clone->originalEntries, [$entry]);
-        $clone->entries = $this->filterAndSortEntries($clone->originalEntries);
+        $clone->originalEntries[] = $entry;
+        if ($clone->maxEntries !== null) {
+            // Keep the retention rule on STATE: newest N by timestamp survive,
+            // so the display re-sort below is O(cap log cap) per append, never
+            // a whole-history usort (finding sugar-dashboard-065).
+            if (count($clone->originalEntries) > $clone->maxEntries) {
+                usort($clone->originalEntries, fn(LogEntry $a, LogEntry $b) => $b->timestamp <=> $a->timestamp);
+                $clone->originalEntries = $clone->maxEntries < 1
+                    ? []
+                    : array_slice($clone->originalEntries, 0, $clone->maxEntries);
+            }
+        }
+        $clone->entries = $clone->filterAndSortEntries($clone->originalEntries);
         return $clone;
     }
 
     /**
      * Set the maximum number of entries to display.
      */
+    /**
+     * Set the maximum number of entries to keep.
+     *
+     * The cap is a RETENTION rule: shrinking it forgets the oldest entries
+     * beyond the new window (the constructor trim runs over the retained
+     * history), and growing it later can only reveal what the window still
+     * holds — the point of the cap is bounded state, so forgotten entries
+     * are gone, not hidden (finding sugar-dashboard-065 contract).
+     */
     public function withMaxEntries(?int $max): self
     {
-        // Re-apply filtering from original entries before limiting
-        $filteredEntries = $this->filterAndSortEntries($this->originalEntries);
-        if ($max !== null && count($filteredEntries) > $max) {
-            $filteredEntries = array_slice($filteredEntries, 0, $max);
-        }
         return new self(
             entries: $this->originalEntries,
             maxEntries: $max,

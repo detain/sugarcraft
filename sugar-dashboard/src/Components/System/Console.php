@@ -17,6 +17,9 @@ use SugarCraft\Dashboard\Foundation\ColorMode;
  * - Multiple stream types (stdout, stderr, info, success, warning, error, debug)
  * - Timestamp display (optional)
  * - Stream filtering
+ * - Retention cap: maxEntries trims the OLDEST entries from the roster
+ *   itself, not just from the render, so a streaming console bounds its
+ *   state (finding sugar-dashboard-065)
  * - Word-wrap support
  * - ANSI color codes
  *
@@ -45,8 +48,37 @@ final class Console implements \SugarCraft\Dashboard\Foundation\SizedItem
         private readonly ?Color $timestampColor = null,
         private readonly ?Color $prefixColor = null,
     ) {
-        $this->originalEntries = $entries;
-        $this->entries = $this->filterEntries($entries);
+        if ($maxEntries === null) {
+            $history = $entries;
+        } elseif ($maxEntries < 1) {
+            $history = [];
+        } else {
+            // Console history is insertion-ordered, so the newest entries are
+            // the tail: the cap trims OLDEST entries out of STATE, which is
+            // what keeps 10k streamed appends bounded (finding 065).
+            $history = array_slice($entries, -$maxEntries);
+        }
+        self::validateRoster($history, 'Console');
+        $this->originalEntries = $history;
+        $this->entries = $this->filterEntries($history);
+    }
+
+    /**
+     * Fail at the boundary: the roster holds ConsoleEntry, nothing else.
+     *
+     * @param list<mixed> $entries
+     * @return list<ConsoleEntry>
+     */
+    private static function validateRoster(array $entries, string $origin): array
+    {
+        foreach ($entries as $i => $entry) {
+            if (!$entry instanceof ConsoleEntry) {
+                throw new \InvalidArgumentException(
+                    "{$origin}: roster entry #{$i} must be a ConsoleEntry, " . get_debug_type($entry) . ' given'
+                );
+            }
+        }
+        return $entries;
     }
 
     /**
@@ -283,10 +315,20 @@ final class Console implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withEntries(array $entries): self
     {
-        $clone = clone $this;
-        $clone->originalEntries = $entries;
-        $clone->entries = $this->filterEntries($entries);
-        return $clone;
+        // Route through the constructor so the retention cap trims STATE —
+        // a raw roster swap let 10k entries back in past a maxEntries of 10
+        // (finding sugar-dashboard-065: the cap was enforced nowhere).
+        return new self(
+            entries: $entries,
+            maxEntries: $this->maxEntries,
+            showTimestamps: $this->showTimestamps,
+            wordWrap: $this->wordWrap,
+            minStream: $this->minStream,
+            showPrefix: $this->showPrefix,
+            timestampWidth: $this->timestampWidth,
+            timestampColor: $this->timestampColor,
+            prefixColor: $this->prefixColor,
+        );
     }
 
     /**
@@ -294,10 +336,28 @@ final class Console implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withEntry(ConsoleEntry $entry): self
     {
-        $clone = clone $this;
-        $clone->originalEntries = array_merge($clone->originalEntries, [$entry]);
-        $clone->entries = $this->filterEntries($clone->originalEntries);
-        return $clone;
+        // Bounded push (finding 065): append, then trim the OLDEST beyond the
+        // retention cap — O(cap) work per append, not a whole-history
+        // array_merge plus re-filter.
+        $history = $this->originalEntries;
+        $history[] = $entry;
+        if ($this->maxEntries !== null) {
+            $excess = count($history) - max(0, $this->maxEntries);
+            if ($excess > 0) {
+                $history = array_slice($history, $excess);
+            }
+        }
+        return new self(
+            entries: $history,
+            maxEntries: $this->maxEntries,
+            showTimestamps: $this->showTimestamps,
+            wordWrap: $this->wordWrap,
+            minStream: $this->minStream,
+            showPrefix: $this->showPrefix,
+            timestampWidth: $this->timestampWidth,
+            timestampColor: $this->timestampColor,
+            prefixColor: $this->prefixColor,
+        );
     }
 
     /**

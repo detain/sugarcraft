@@ -368,4 +368,41 @@ final class LogViewerTest extends TestCase
         $prop->setAccessible(true);
         return $prop->getValue($viewer);
     }
-}
+
+    // ═══════════════════════════════════════════════════════════════
+    // D-72 (finding 169): roster shape proven at the boundary
+    // ═══════════════════════════════════════════════════════════════
+
+    public function testScalarRosterEntryThrowsAtTheBoundary(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        LogViewer::new(['message' => 'ok'])->withEntry('just a string');
+    }
+
+    public function testMissingMessageThrowsAtTheBoundary(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        LogViewer::new([['severity' => 'info']]);
+    }
+
+    public function testUnknownKeysThrowAtTheBoundary(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        LogViewer::new([['message' => 'ok', 'extraneous' => 'red']]);
+    }
+
+    public function testBadTimestampTypeThrowsAtTheBoundary(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        LogViewer::new([['message' => 'ok', 'timestamp' => 12345]]);
+    }
+
+    public function testCanonicalShapesStillPass(): void
+    {
+        $viewer = LogViewer::new([
+            ['message' => 'plain'],
+            ['message' => 'stamp', 'severity' => 'error', 'timestamp' => '10:00'],
+            ['message' => 'nullstamp', 'timestamp' => null],
+        ]);
+        $this->assertSame(3, $viewer->entryCount());
+    }}

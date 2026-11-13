@@ -188,7 +188,7 @@ final class AccessorDeprecationTest extends TestCase
             Sort::class => new Sort('a'),
             Video::class => new Video(),
             StatusIndicator::class => new StatusIndicator(),
-            LogViewer::class => new LogViewer(['hello']),
+            LogViewer::class => new LogViewer([['message' => 'hello']]),
             Stopwatch::class => new Stopwatch(),
             Terminal::class => new Terminal(),
             Timer::class => new Timer(60),

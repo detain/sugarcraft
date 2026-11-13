@@ -482,4 +482,67 @@ final class ConsoleTest extends TestCase
         $this->assertStringContainsString('Warning', $rendered);
         $this->assertStringContainsString('Error', $rendered);
     }
-}
+
+    // ═══════════════════════════════════════════════════════════════
+    // D-72 (finding 065): retention cap lives on STATE, guard at boundary
+    // ═══════════════════════════════════════════════════════════════
+
+    public function testRetentionCapTrimsStateNotJustDisplay(): void
+    {
+        $console = Console::new()->withMaxEntries(100);
+        for ($i = 0; $i < 10000; $i++) {
+            $console = $console->withEntry(new ConsoleEntry('msg ' . $i, ConsoleStream::Info));
+        }
+
+        [, $h] = $console->setSize(80, 5)->innerSize();
+        $this->assertSame(100, $h, '10k streamed appends must leave exactly maxEntries in state');
+
+        $rendered = $console->setSize(80, 200)->render();
+        $this->assertStringContainsString('msg 9999', $rendered);
+        $this->assertStringNotContainsString('msg 0 ', $rendered);
+    }
+
+    public function testWithEntriesReappliesTheCapInsteadOfBypassingIt(): void
+    {
+        $entries = [];
+        for ($i = 0; $i < 500; $i++) {
+            $entries[] = new ConsoleEntry('bulk ' . $i, ConsoleStream::Info);
+        }
+        $console = Console::new()->withMaxEntries(10)->withEntries($entries);
+        [, $h] = $console->innerSize();
+        $this->assertSame(10, $h);
+    }
+
+    public function testRaisingTheCapCannotResurrectForgottenEntries(): void
+    {
+        // Disclosed contract of a STATE cap: the window forgets. Growing the
+        // cap later reveals only what the retention window still holds.
+        $console = Console::new()->withMaxEntries(10);
+        for ($i = 0; $i < 100; $i++) {
+            $console = $console->withEntry(new ConsoleEntry('m' . $i, ConsoleStream::Info));
+        }
+        [, $before] = $console->innerSize();
+        $this->assertSame(10, $before);
+        [, $after] = $console->withMaxEntries(50)->innerSize();
+        $this->assertSame(10, $after);
+    }
+
+    public function testRosterGuardRejectsForeignEntriesAtTheBoundary(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        Console::new()->withEntries([['not', 'an', 'entry']]);
+    }
+
+    public function testRenderLeavesTheRosterUntouched(): void
+    {
+        $console = Console::new()->withMaxEntries(5);
+        for ($i = 0; $i < 5; $i++) {
+            $console = $console->withEntry(new ConsoleEntry('r' . $i, ConsoleStream::Info));
+        }
+        $sized = $console->setSize(80, 3);
+        $first = $sized->render();
+        $second = $sized->render();
+        $this->assertSame($first, $second, 'two renders must be identical bytes and cost');
+        [, $h] = $sized->innerSize();
+        $this->assertSame(5, $h, 'rendering must not consume the roster');
+    }}

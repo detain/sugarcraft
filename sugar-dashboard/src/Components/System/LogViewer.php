@@ -33,16 +33,63 @@ final class LogViewer implements \SugarCraft\Dashboard\Foundation\SizedItem
     public const Warning = 'warning';
     public const Error = 'error';
 
+    /** @var list<array{message: string, severity?: string, timestamp?: string|null}> */
+    private readonly array $entries;
+
     /**
-     * @param list<array{message: string, severity: string, timestamp?: string|null}> $entries
+     * @param list<array{message: string, severity?: string, timestamp?: string|null}> $entries
      */
     public function __construct(
-        private readonly array $entries,
+        array $entries,
         private readonly bool $showTimestamps = false,
         private readonly bool $showSeverityPrefix = true,
         private readonly bool $scrollToBottom = true,
         private readonly int $visibleLines = 10,
-    ) {}
+    ) {
+        // The roster is a list of array-shapes, and this class is the ONLY
+        // place that knows it: junk used to sail through every boundary and
+        // die (or render garbage) deep inside render (finding 169) - now the
+        // shape is proven at the door.
+        $this->entries = self::validatedRoster($entries, 'LogViewer');
+    }
+
+    /**
+     * @param list<mixed> $entries
+     * @return list<array{message: string, severity?: string, timestamp?: string|null}>
+     */
+    private static function validatedRoster(array $entries, string $origin): array
+    {
+        foreach ($entries as $i => $entry) {
+            if (!is_array($entry)) {
+                throw new \InvalidArgumentException(
+                    "{$origin}: roster entry #{$i} must be an array shape (message, severity?, timestamp?), "
+                    . get_debug_type($entry) . ' given'
+                );
+            }
+            if (!isset($entry['message']) || !is_string($entry['message'])) {
+                throw new \InvalidArgumentException(
+                    "{$origin}: roster entry #{$i} needs a string 'message' key"
+                );
+            }
+            if (isset($entry['severity']) && !is_string($entry['severity'])) {
+                throw new \InvalidArgumentException(
+                    "{$origin}: roster entry #{$i} 'severity' must be a string when present"
+                );
+            }
+            if (array_key_exists('timestamp', $entry) && $entry['timestamp'] !== null && !is_string($entry['timestamp'])) {
+                throw new \InvalidArgumentException(
+                    "{$origin}: roster entry #{$i} 'timestamp' must be a string or null when present"
+                );
+            }
+            if (array_diff_key($entry, array_flip(['message', 'severity', 'timestamp'])) !== []) {
+                $extra = implode(', ', array_diff_key($entry, array_flip(['message', 'severity', 'timestamp'])));
+                throw new \InvalidArgumentException(
+                    "{$origin}: roster entry #{$i} carries unknown keys ({$extra})"
+                );
+            }
+        }
+        return array_values($entries);
+    }
 
     /**
      * Create a new log viewer with the given entries.
