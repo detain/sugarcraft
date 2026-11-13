@@ -513,10 +513,33 @@ final class ByteFidelityTest extends TestCase
             'truncated csi tail'    => "text\x1b[38;5",
             'abandoned ss3'         => "\x1bOtext",
             'decscusr intermediate' => "\x1b[6 q",
+            'c1 csi introducer'     => "\x9b31mred\x9b0m",
         ];
 
         foreach ($corpus as $name => $input) {
             $this->assertSame($input, self::reemit(Inspector::parse($input)), $name);
+        }
+    }
+
+    public function testStringFamilyC1IntroducersReEmitInSevenBitNormalisedForm(): void
+    {
+        // Deviation 9's enumerated half of finding 058: the OSC/SOS/PM/APC
+        // dispatchers normalise their 8-bit introducer (and C1 ST) to the
+        // 7-bit spelling, so those inputs are NOT byte-for-byte corpora —
+        // they are pinned here to the exact normalised shape the docs
+        // promise, keeping the whole fidelity sweep C1-covered.
+        $normalisations = [
+            "\x9d0;title\x07" => "\x1b]0;title\x07",
+            // ST-pending DCS keeps the template rebuild (deviation 9): the
+            // 'q' intermediate's slot is not carried into the 7-bit form,
+            // which is exactly the documented non-verbatim territory.
+            "\x90q abc\x9c"   => "\x1bP abc\x1b\\",
+            "\x98ab\x9c"      => "\x1bXab\x1b\\",
+            "\x9fcd\x1b\\"    => "\x1b_cd\x1b\\",
+        ];
+
+        foreach ($normalisations as $input => $expected) {
+            $this->assertSame($expected, self::reemit(Inspector::parse($input)), strtoupper(bin2hex($input)));
         }
     }
 
@@ -527,6 +550,9 @@ final class ByteFidelityTest extends TestCase
             "\x1bP q data\x1b\\after",
             "abc\x1b[31",
             "\x1bO\x1b[31mX",
+            "\x9b31mred\x9b0m",
+            "\x9d1;t\x07",
+            "\x90q data\x1b\\",
         ];
 
         foreach ($inputs as $input) {

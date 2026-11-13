@@ -30,13 +30,12 @@ ESC[31m  SGR foreground red
 hello
 ESC[0m  SGR reset
  world
-
-  C0 LF (line feed)
+LF  C0 LF (line feed)
 ```
 
 ```sh
 $ printf '\e]0;new title\e\\' | candy-ansi-inspect
-ESC]0;new title  set window title to "new title"
+ESC]0;new titleBEL  set window title to "new title"
 ```
 
 ```sh
@@ -50,8 +49,7 @@ $ candy-ansi-inspect capture.ansi
 ESC[31m  SGR foreground red
 error: disk full
 ESC[0m  SGR reset
-
-  C0 LF (line feed)
+LF  C0 LF (line feed)
 ```
 
 A saved capture works exactly like a pipe: pass the file as the argument and the

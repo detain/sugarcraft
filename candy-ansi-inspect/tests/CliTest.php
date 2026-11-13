@@ -22,7 +22,9 @@ final class CliTest extends TestCase
 
     /**
      * @param array<string, string>|null $env Full replacement environment for the
-     *                                        child (null = inherit the parent's)
+     *                                        child (null = a minimal PATH-only
+     *                                        environment, so the runner's
+     *                                        LANG/LC_ALL can never flip pins)
      * @param string|null                $cwd Working directory for the child
      *                                        (null = inherit the parent's)
      *
@@ -30,6 +32,7 @@ final class CliTest extends TestCase
      */
     private static function runCli(string $arg, ?array $env = null, ?string $cwd = null): array
     {
+        $env ??= ['PATH' => '/usr/bin:/bin'];
         $cmd = escapeshellarg(PHP_BINARY) . ' '
             . escapeshellarg(self::bin()) . ' '
             . escapeshellarg($arg);
@@ -288,8 +291,11 @@ final class CliTest extends TestCase
      *
      * @return array{0: int, 1: string, 2: string} [exitCode, stdout, stderr]
      */
-    private static function runCliWithStdin(string $stdin, array $args = []): array
+    private static function runCliWithStdin(string $stdin, array $args = [], ?array $env = null): array
     {
+        // Same isolation as runCli(): a dev shell exporting LANG must not
+        // be able to flip the English-string pins through this driver.
+        $env ??= ['PATH' => '/usr/bin:/bin'];
         $cmd = escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg(self::bin());
         foreach ($args as $arg) {
             $cmd .= ' ' . escapeshellarg($arg);
@@ -299,6 +305,8 @@ final class CliTest extends TestCase
             $cmd,
             [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
             $pipes,
+            null,
+            $env,
         );
         self::assertIsResource($proc);
         fwrite($pipes[0], $stdin);
@@ -345,6 +353,36 @@ final class CliTest extends TestCase
         $this->assertSame(0, $code);
         $this->assertStringContainsString('SGR foreground red', $stdout);
         $this->assertStringContainsString('red', $stdout);
+    }
+
+    public function testNoSourceWithATtyStdinIsUsageMisuseNotAStdinWait(): void
+    {
+        // The "no source named" arm (no operand, STDIN is a terminal) is the
+        // only gate branch an interactive caller hits, and pipes can never
+        // reach it: stream_isatty() is false for the harness pipes. script(1)
+        // allocates a real pty so the child sees a terminal STDIN. House
+        // env-gate precedent: skip when the tool is absent.
+        $script = trim((string) shell_exec('command -v script 2>/dev/null'));
+        if ($script === '' || !is_executable($script)) {
+            $this->markTestSkipped('script(1) is not available on this host');
+        }
+
+        $proc = proc_open(
+            [$script, '-qec', escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg(self::bin()), '/dev/null'],
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+            null,
+            ['PATH' => '/usr/bin:/bin'],
+        );
+        self::assertIsResource($proc);
+        fclose($pipes[0]);
+        $stdout = str_replace("\r\n", "\n", (string) stream_get_contents($pipes[1]));
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $code = proc_close($proc);
+
+        $this->assertSame(1, $code, $stdout);
+        $this->assertStringContainsString('usage: candy-ansi-inspect', $stdout);
     }
 
     public function testStreamedStdinBytesEqualTheFileArgumentReport(): void
