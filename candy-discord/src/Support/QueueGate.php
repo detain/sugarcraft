@@ -8,16 +8,16 @@ use React\EventLoop\LoopInterface;
 use React\EventLoop\Timer\TimerInterface;
 
 /**
- * The "collect" queue mode from the §9.2 vocabulary: prompts that arrive
+ * The "collect" queue mode from the docs/SPEC.md §9.2 vocabulary: prompts that arrive
  * while a turn is running are coalesced into ONE follow-up instead of
  * N separate queued sends.
  *
- * Debounce semantics (§9.2: 500 ms window, cap 20): the window opens when
+ * Debounce semantics (docs/SPEC.md §9.2: 500 ms window, cap 20): the window opens when
  * the first item lands and does NOT extend on later pushes — a burst that
  * keeps talking must still reach the model eventually. Over-cap pushes
  * drop the OLDEST text and report the drop count so the caller can tell
  * the user loudly which pieces are gone (disclosed-drop law, same posture
- * as the §7.8 media down-select).
+ * as the docs/SPEC.md §7.8 media down-select).
  *
  * The one timer here rides the caller's loop and cancelAll() unwires it —
  * the P1 dispose law, and E646-clean by construction: this is prompt

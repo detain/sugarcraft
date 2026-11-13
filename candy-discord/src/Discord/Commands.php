@@ -7,7 +7,7 @@ namespace CandyCode\Bundles\Discord\Discord;
 use SugarCraft\Code\Lang;
 
 /**
- * The command vocabulary (§7.6): NATIVE slash commands deployed with a
+ * The command vocabulary (docs/SPEC.md §7.6): NATIVE slash commands deployed with a
  * global PUT on boot (owner ruling D7=7a) AND the text fallback that works
  * from the first message — mention-prefixed or `/name` lines in a channel
  * the bot can read.
@@ -71,7 +71,7 @@ final class Commands
                 ]],
             ],
             [
-                // §7.10: the /model leg of the §2.3 surface rides command.exec.
+                // docs/SPEC.md §7.10: the /model leg of the docs/SPEC.md §2.3 surface rides command.exec.
                 'name' => 'model',
                 'description' => Lang::t('channels.discord.slash.model.desc'),
                 'type' => 1,
@@ -83,7 +83,7 @@ final class Commands
                 ]],
             ],
             [
-                // §7.3: pairing approval is a command on the approver roster.
+                // docs/SPEC.md §7.3: pairing approval is a command on the approver roster.
                 'name' => 'pair',
                 'description' => Lang::t('channels.discord.slash.pair.desc'),
                 'type' => 1,

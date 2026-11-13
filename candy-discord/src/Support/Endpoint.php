@@ -8,7 +8,7 @@ use RuntimeException;
 use SugarCraft\Code\Lang;
 
 /**
- * Resolves the Discord API root and gateway websocket URL (§7.1).
+ * Resolves the Discord API root and gateway websocket URL (docs/SPEC.md §7.1).
  *
  * The override settings exist so a self-hosted mirror or a local test
  * proxy can front Discord. That same knob is a token-leak shape: a bot
@@ -27,7 +27,7 @@ final class Endpoint
     public const DEFAULT_GATEWAY = 'wss://gateway.discord.gg/?v=10&encoding=json';
 
     /**
-     * The versioned REST root (§7.1): override wins, empty means default.
+     * The versioned REST root (docs/SPEC.md §7.1): override wins, empty means default.
      *
      * @throws RuntimeException when the override is not an allowed endpoint
      */

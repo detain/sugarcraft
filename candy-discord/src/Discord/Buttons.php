@@ -7,7 +7,7 @@ namespace CandyCode\Bundles\Discord\Discord;
 use SugarCraft\Code\Lang;
 
 /**
- * Approval UI (§7.5). A `permission.requested` becomes a message whose
+ * Approval UI (docs/SPEC.md §7.5). A `permission.requested` becomes a message whose
  * components-v2 buttons answer the ask: **Approve once**, **Always** (the
  * `alwaysScope` is what the server cascades), **Deny**.
  *
@@ -17,9 +17,9 @@ use SugarCraft\Code\Lang;
  * the "already answered" edit that retires the components). The approver
  * identity is bound by the INTERACTION itself (Discord authenticates who
  * pressed); the bridge filters that id against the configured approver
- * roster (§9.6's binding law) before answering at all.
+ * roster (docs/SPEC.md §9.6's binding law) before answering at all.
  *
- * TTL (§7.5): the ask lives 30 min server-side (`permission.pending` after
+ * TTL (docs/SPEC.md §7.5): the ask lives 30 min server-side (`permission.pending` after
  * a restart re-presents the open ones); a stale button answers nothing —
  * the reply lands as `already_resolved` or a not-found — and the edit
  * retires it with a "question expired" line.
@@ -61,7 +61,7 @@ final class Buttons
     /**
      * The message payload that asks for an approval.
      *
-     * §7.9 posture: when an approver roster is configured, each button
+     * docs/SPEC.md §7.9 posture: when an approver roster is configured, each button
      * carries a components-v2 `allowed_users` list so Discord itself
      * greys the buttons for everyone else (the bridge-side answer gate in
      * {@see ConversationRouter::answerApproval()} — configured roster,
@@ -159,7 +159,7 @@ final class Buttons
         return ['askId' => $parts[1], 'verdict' => $verdict, 'nonce' => $parts[3] ?? ''];
     }
 
-    /** Same-chat text fallback (§7.5): `/approve <askId> [once|always|deny]`. */
+    /** Same-chat text fallback (docs/SPEC.md §7.5): `/approve <askId> [once|always|deny]`. */
     public static function parseTextApprove(string $text): ?array
     {
         if (\preg_match('#^/approve\s+(\S+)(?:\s+(once|always|deny))?$#i', \trim($text), $m) !== 1) {

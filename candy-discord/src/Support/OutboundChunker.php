@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace CandyCode\Bundles\Discord\Support;
 
 /**
- * Model output → platform messages. Composition is shared (§9.4); the
- * limits are per-platform (§7.7: Discord 2000 UTF-16 units / 17 lines;
+ * Model output → platform messages. Composition is shared (docs/SPEC.md §9.4); the
+ * limits are per-platform (docs/SPEC.md §7.7: Discord 2000 UTF-16 units / 17 lines;
  * Teams takes its own cap from config). Chunking happens here, never in
  * the model loop.
  *

@@ -17,26 +17,26 @@ use React\Promise\PromiseInterface;
 use SugarCraft\Code\Backend\PendingAsk;
 
 /**
- * One Discord account's face: gateway dispatches in, REST out (§7).
+ * One Discord account's face: gateway dispatches in, REST out (docs/SPEC.md §7).
  *
  * Inbound discipline, in order: ignore our own author id (bot-loop guard);
- * apply the `allowBots` three-state floor (§7.4 — "mentions" lets a bot
+ * apply the `allowBots` three-state floor (docs/SPEC.md §7.4 — "mentions" lets a bot
  * through only when it addressed us); drop webhook/integration posts;
- * DMs follow the `dmPolicy` ladder (pairing is §7.3: an unpaired peer gets
+ * DMs follow the `dmPolicy` ladder (pairing is docs/SPEC.md §7.3: an unpaired peer gets
  * a pairing code, never the model); guilds follow the `groupPolicy`
  * allowlist with per-guild `requireMention` (the degraded messageContent
- * posture forces mention-only EVERYWHERE, §7.1) and `ignoreOtherMentions`.
- * The §9.1 key is resolved next — a thread's channel id IS the key, which
+ * posture forces mention-only EVERYWHERE, docs/SPEC.md §7.1) and `ignoreOtherMentions`.
+ * The docs/SPEC.md §9.1 key is resolved next — a thread's channel id IS the key, which
  * is how "one thread, one session" falls out for free; DMs ride the
  * `dmScope` ladder. Commands ride BOTH spellings: a deployed slash
- * interaction (§7.10, ruling D7=7a) or the `/word` text fallback;
+ * interaction (docs/SPEC.md §7.10, ruling D7=7a) or the `/word` text fallback;
  * everything else is a prompt, with attachments down-selected to ≤4 images
- * + ≤2 PDFs under the size cap (§7.8) and every skip DISCLOSED.
+ * + ≤2 PDFs under the size cap (docs/SPEC.md §7.8) and every skip DISCLOSED.
  *
  * Outbound: plain content, `allowed_mentions.parse = []` so model output
  * cannot ping humans, chunked by the Bridge under OUR declared 2000/17
- * (§7.7) before it gets here, `message_reference` keeping replies inside
- * the thread that asked, embeds suppressed when configured (§7.7).
+ * (docs/SPEC.md §7.7) before it gets here, `message_reference` keeping replies inside
+ * the thread that asked, embeds suppressed when configured (docs/SPEC.md §7.7).
  */
 final class DiscordAccount implements PlatformFace
 {
@@ -45,15 +45,15 @@ final class DiscordAccount implements PlatformFace
     /** @var array<string, array{channel: string, message: string}> askId → the prompt to retire */
     private array $approvalMessages = [];
 
-    /** @var array<string, TimerInterface> askId → the expiry timer (§7.9 ttlMs posture) */
+    /** @var array<string, TimerInterface> askId → the expiry timer (docs/SPEC.md §7.9 ttlMs posture) */
     private array $approvalTimers = [];
 
-    /** @var array<string, int> thread-ish channel id → last activity stamp (idle sweep, §7.5) */
+    /** @var array<string, int> thread-ish channel id → last activity stamp (idle sweep, docs/SPEC.md §7.5) */
     private array $threadSeen = [];
 
     /**
      * Declared bytes promised by media downloads still outstanding on this
-     * account (§7.8 batch budget). Concurrent messages each reserve here at
+     * account (docs/SPEC.md §7.8 batch budget). Concurrent messages each reserve here at
      * down-select and release once their batch settles, so simultaneous
      * attachments stack BOUNDED by the shared budget, not multiplicatively.
      */
@@ -178,14 +178,14 @@ final class DiscordAccount implements PlatformFace
     }
 
     /**
-     * §7.9: render-once (the Bridge's presentedAsks gate is upstream), with
+     * docs/SPEC.md §7.9: render-once (the Bridge's presentedAsks gate is upstream), with
      * the approver roster stamped per button (`allowed_users` is the
      * platform-side courtesy filter; the roster check in the Bridge's
      * answerApproval is one wall, the C-1 nonce + conversation binding
      * carried from here is the other), and an expiry timer that RETIRES
      * the prompt when nobody answers — the same disable-on-resolve PATCH,
      * clock-triggered. The window self-clamps to the core expiry ceiling
-     * (see approvalTtlSeconds(), co-TTL code-chat §11.6) so the card can
+     * (see approvalTtlSeconds(), co-TTL docs/SPEC.md §11.6) so the card can
      * never advertise an answer window the core will not honor.
      */
     public function promptApproval(array $ref, string $sessionId, array $ask, string $nonce = ''): void
@@ -228,7 +228,7 @@ final class DiscordAccount implements PlatformFace
     }
 
     /**
-     * The card-side window of the co-TTL pair (code-chat §11.6): the core
+     * The card-side window of the co-TTL pair (docs/SPEC.md §11.6): the core
      * refuses the ask at PendingAsk::EXPIRY_SECONDS no matter what this
      * card promises, so the advertised window self-clamps to that ceiling
      * and says so LOUDLY — a longer configured ttlMinutes must never leave
@@ -307,7 +307,7 @@ final class DiscordAccount implements PlatformFace
         $this->approvalTimers = [];
     }
 
-    /** The resolved messageContent posture (§7.1) for tests/telemetry. */
+    /** The resolved messageContent posture (docs/SPEC.md §7.1) for tests/telemetry. */
     public function degraded(): bool
     {
         return !$this->gateway->messageContentEnabled();
@@ -343,7 +343,7 @@ final class DiscordAccount implements PlatformFace
         $isMention = ($this->ownUserId !== '' && \in_array($this->ownUserId, \array_map(static fn (mixed $m): string => (string) (\is_array($m) ? $m['id'] ?? '' : ''), $mentions), true))
             || ($this->ownUserId !== '' && (\str_contains($content, '<@' . $this->ownUserId . '>') || \str_contains($content, '<@!' . $this->ownUserId . '>')));
 
-        // Bot-loop floor (§7.4), three states: own messages ALWAYS ignored;
+        // Bot-loop floor (docs/SPEC.md §7.4), three states: own messages ALWAYS ignored;
         // 'true' admits bots; 'false' refuses; 'mentions' admits a bot only
         // when it addressed us.
         $botsMode = $this->strCfg('allowBots', 'mentions');
@@ -352,10 +352,10 @@ final class DiscordAccount implements PlatformFace
             return;
         }
         if (isset($message['webhook_id'])) {
-            return; // a webhook/integration post is not a human (§7.3 loop floor)
+            return; // a webhook/integration post is not a human (docs/SPEC.md §7.3 loop floor)
         }
 
-        // §7.1 degraded posture: with the messageContent intent DECLINED or
+        // docs/SPEC.md §7.1 degraded posture: with the messageContent intent DECLINED or
         // DISCOVERED-refused, mention-only is forced everywhere, no override.
         $degraded = !$this->gateway->messageContentEnabled();
 
@@ -368,7 +368,7 @@ final class DiscordAccount implements PlatformFace
         }
 
         // The own-mention is stripped; OTHER mention tokens are dropped so
-        // the transcript carries no addressing noise (§7.4).
+        // the transcript carries no addressing noise (docs/SPEC.md §7.4).
         $text = $content;
         if ($this->ownUserId !== '') {
             $text = (string) \preg_replace('/<@!?' . \preg_quote($this->ownUserId, '/') . '>\s*/', '', $text);
@@ -381,7 +381,7 @@ final class DiscordAccount implements PlatformFace
         $inboundId = (string) ($message['id'] ?? '');
         $ref = ['channelId' => $channelId, 'messageId' => $inboundId];
         if (!$isDm) {
-            // §7.5 idle sweep material: every served guild conversation gets
+            // docs/SPEC.md §7.5 idle sweep material: every served guild conversation gets
             // an activity stamp; archiveThread then proves thread-ness over
             // REST before touching it, so a regular channel is never archived.
             $this->threadSeen[$channelId] = time();
@@ -428,14 +428,14 @@ final class DiscordAccount implements PlatformFace
 
             return;
         }
-        // §7.8: media rides the settled batch — nothing is fetched before
+        // docs/SPEC.md §7.8: media rides the settled batch — nothing is fetched before
         // the policy doors have said yes, and the ONE inbound carries
         // whatever the down-select kept.
         $this->collectMediaAndDispatch($rawAttachments, $key, $ref, $text, $isMention, $inboundId);
     }
 
     /**
-     * The §7.3 DM ladder. Returns true when the message may proceed.
+     * The docs/SPEC.md §7.3 DM ladder. Returns true when the message may proceed.
      * Pairing is a GATE, not a prompt: an unpaired peer gets its code
      * notice (one per reminder window) and never reaches the model.
      */
@@ -469,7 +469,7 @@ final class DiscordAccount implements PlatformFace
             default => '', // 'silent' / 'paired': inside the reminder window, or raced onto the roster
         };
         if ($notice !== '') {
-            // @allow-raw-send: the notice IS the code's one legitimate surface (§7.3): it
+            // @allow-raw-send: the notice IS the code's one legitimate surface (docs/SPEC.md §7.3): it
             // rides raw REST, NOT safety->outbound — everywhere else
             // (transcripts, logs, channel chatter) the code is redacted,
             // because PairingCodes registered it as a secret.
@@ -482,10 +482,10 @@ final class DiscordAccount implements PlatformFace
     }
 
     /**
-     * §7.4 guild door: allowlist default — a guild is served only when
+     * docs/SPEC.md §7.4 guild door: allowlist default — a guild is served only when
      * `groupPolicy` says open OR the guild has a policy row (an empty
      * `allowChannels` = every channel in that guild). `requireMention`
-     * defaults true per guild; the degraded floor (§7.1) forces mention-
+     * defaults true per guild; the degraded floor (docs/SPEC.md §7.1) forces mention-
      * only everywhere. With `ignoreOtherMentions` (the default), a post
      * that addresses somebody else is not for us.
      *
@@ -526,14 +526,14 @@ final class DiscordAccount implements PlatformFace
     }
 
     /**
-     * §7.8 down-select: ≤4 images + ≤2 PDFs, each declared AND actually
+     * docs/SPEC.md §7.8 down-select: ≤4 images + ≤2 PDFs, each declared AND actually
      * within `media.maxMb`, and the whole batch inside `media.maxTotalMb`
      * (default 50) — reserved against a shared per-account in-flight
      * budget at down-select, then re-checked on settled bytes BEFORE the
      * base64 doubling. Anything else is skipped with a disclosed,
      * names-only notice. Fetches run concurrently (each streamed under
      * the per-file cap); the settled batch becomes ONE prompt. Wire shape
-     * per entry: {name, mime, data: strict-base64} (§9 media contract).
+     * per entry: {name, mime, data: strict-base64} (docs/SPEC.md §9 media contract).
      *
      * @param list<mixed> $raw
      */
@@ -584,7 +584,7 @@ final class DiscordAccount implements PlatformFace
                 continue;
             }
             // Declared size gets a second chance after the download: the
-            // ACTUAL bytes are the truth (§7.8 caps bind the payload).
+            // ACTUAL bytes are the truth (docs/SPEC.md §7.8 caps bind the payload).
             ++$accepted[$slot];
             $this->mediaInFlightBytes += $declared;
             $jobs[] = ['slot' => $slot, 'name' => $name, 'mime' => $mime, 'url' => $url, 'declared' => $declared];
@@ -644,7 +644,7 @@ final class DiscordAccount implements PlatformFace
     /**
      * One settled batch = one prompt. A caption-less post still asks
      * something of the model, so it carries a disclosed placeholder; every
-     * skip rides a separate, names-only notice (§7.8).
+     * skip rides a separate, names-only notice (docs/SPEC.md §7.8).
      *
      * @param list<array<string,string>> $images
      * @param list<array<string,string>> $documents
@@ -743,7 +743,7 @@ final class DiscordAccount implements PlatformFace
         }
 
         if ($command['name'] === 'pair') {
-            // §7.3: the pairing surface is account-local — codes answer
+            // docs/SPEC.md §7.3: the pairing surface is account-local — codes answer
             // ephemerally and never ride the model or the transcript.
             $this->handlePairCommand(['channelId' => $channelId, 'messageId' => ''], (array) $command['args'], $userId, $isDm, $answer);
 
@@ -799,20 +799,20 @@ final class DiscordAccount implements PlatformFace
         return $channels === [] || \in_array($channelId, \array_map('strval', $channels), true);
     }
 
-    /** Public door for the router's /pair text fallback (§7.3). */
+    /** Public door for the router's /pair text fallback (docs/SPEC.md §7.3). */
     public function pairCommand(array $ref, array $args, string $actorId, bool $isDm): void
     {
         $this->handlePairCommand($ref, $args, $actorId, $isDm, null);
     }
 
     /**
-     * §7.3 approval surface: `/pair grant <code>` (`approve` kept as a deprecated alias) and `/pair list`.
+     * docs/SPEC.md §7.3 approval surface: `/pair grant <code>` (`approve` kept as a deprecated alias) and `/pair list`.
      * Pairing is an approver's act (mirrors candy-msteams): the roster that
      * answers tool asks answers pairings too, and an EMPTY roster answers
      * nobody — the gate that admits a peer must not default open. Codes are
      * listed only in a direct message. The slash path answers through $reply
      * (ephemeral); the text spelling answers in-channel — the REDACTION law
-     * (§9.5) still holds: the confirmation never repeats a code the notice
+     * (docs/SPEC.md §9.5) still holds: the confirmation never repeats a code the notice
      * channel doesn't already own, and `approve` consumes the code as it fires.
      *
      * @param list<mixed>                             $args
@@ -829,7 +829,7 @@ final class DiscordAccount implements PlatformFace
             }
             if ($channelId !== '') {
                 // @allow-raw-send: every $say argument is a fixed Lang::t
-                // operator string (§9.5: the pair surface never repeats a
+                // operator string (docs/SPEC.md §9.5: the pair surface never repeats a
                 // code this channel does not already own).
                 $this->rest->send($channelId, $text, ['allowed_mentions' => ['parse' => []]])
                     ->then(null, fn (\Throwable $e) => $this->log->warn('pair_answer_failed', ['error' => $e->getMessage()]));
@@ -891,7 +891,7 @@ final class DiscordAccount implements PlatformFace
         };
     }
 
-    /** §7.10 (ruling D7=7a): deploy the slash roster on lifecycle. */
+    /** docs/SPEC.md §7.10 (ruling D7=7a): deploy the slash roster on lifecycle. */
     private function deployCommands(): void
     {
         if (!$this->boolCfg('appCommands', true)) {
@@ -926,7 +926,7 @@ final class DiscordAccount implements PlatformFace
     }
 
     /**
-     * §7.10 (ruling D7=7a, N5): disabling or removing a face walks back the
+     * docs/SPEC.md §7.10 (ruling D7=7a, N5): disabling or removing a face walks back the
      * deploy — every slash command the face pushed is deleted again, scoped
      * exactly as the deploy was (listed guilds => per-guild, otherwise
      * global). This is a courtesy on the way out: it never throws, announces
@@ -1010,7 +1010,7 @@ final class DiscordAccount implements PlatformFace
     }
 
     /**
-     * §7.5 idle-hours archive. MESSAGE_CREATE carries no channel TYPE, so
+     * docs/SPEC.md §7.5 idle-hours archive. MESSAGE_CREATE carries no channel TYPE, so
      * thread-ness is proven with one GET before the PATCH: channels 10/11/12
      * (public/announcement/private thread) get archived, a regular channel
      * just loses its stamp. The PATCH shape follows Discord's

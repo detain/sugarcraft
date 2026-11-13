@@ -38,7 +38,7 @@ final class CredentialStore
     public const CURRENT_VERSION = 1;
 
     /**
-     * Environment fallback for the default account's token only (§7.2): a
+     * Environment fallback for the default account's token only (docs/SPEC.md §7.2): a
      * bundle-side read, deliberately outside the candy-code src env roster —
      * the settings tree carries policy, the store carries credentials.
      */
@@ -106,7 +106,7 @@ final class CredentialStore
     }
 
     /**
-     * Every Discord account the store names (multi-account §7.11 discovery —
+     * Every Discord account the store names (multi-account docs/SPEC.md §7.11 discovery —
      * a row with only pairing data still counts: its owner configured it).
      *
      * @return list<string>
@@ -130,7 +130,7 @@ final class CredentialStore
 
     /**
      * Peer ids paired (approved) for one account — the pairing tier of
-     * §7.3's dmPolicy, stored in the user-tier file, never in config.json.
+     * docs/SPEC.md §7.3's dmPolicy, stored in the user-tier file, never in config.json.
      *
      * @return list<string>
      */

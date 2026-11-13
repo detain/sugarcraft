@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace CandyCode\Bundles\Discord\Support;
 
 /**
- * DM pairing codes (§7.3): the default gate for who may talk to the bot
+ * DM pairing codes (docs/SPEC.md §7.3): the default gate for who may talk to the bot
  * in a direct message.
  *
  * A stranger DMs the bot → they get an 8-character code valid for one
@@ -161,7 +161,7 @@ final class PairingCodes
     }
 
     /**
-     * The approved roster (§7.3's user-tier allowlist) — the DM policy door
+     * The approved roster (docs/SPEC.md §7.3's user-tier allowlist) — the DM policy door
      * unions this with the settings' allowFrom names.
      *
      * @return list<string>

@@ -35,7 +35,7 @@ use SugarCraft\Code\Server\StateDir;
 require_once __DIR__ . '/autoload.php';
 
 /**
- * The sugarcraft/candy-discord bundle's channel (§11 P2, spec §7): Discord accounts
+ * The sugarcraft/candy-discord bundle's channel (docs/SPEC.md §11 P2 + docs/SPEC.md §7): Discord accounts
  * in, served candy-code sessions out, all inside the candy-code process.
  *
  * Shape law: the bundle dials the LOCAL serve over the same WebSocket the
@@ -132,7 +132,7 @@ final class DiscordChannel implements ChannelInterface
         }
 
         $transport = (array) ($cfg['transport'] ?? []);
-        // §7.1/§7.2: the DISCORD_API_URL / DISCORD_GATEWAY_URL environment overrides
+        // docs/SPEC.md §7.1/§7.2: the DISCORD_API_URL / DISCORD_GATEWAY_URL environment overrides
         // win over the settings tree. Both are read HERE, inside the bundle: the
         // candy-code env roster scans candy-code/src only, so a bundle-side getenv
         // costs zero documentation churn by design.
@@ -225,7 +225,7 @@ final class DiscordChannel implements ChannelInterface
         }
 
         // The dedupe ledger stays bounded without a platform-side sweep — the
-        // same contract the Teams face meets (msteams §9.5). claimInbound()
+        // same contract the Teams face meets (docs/SPEC.md §9.5). claimInbound()
         // wrote a seen_inbound row per delivery while pruneSeen() had no
         // caller here, so the ledger grew forever; 6 h is amply frequent for
         // the 7-day keep. (m09)
@@ -385,7 +385,7 @@ final class DiscordChannel implements ChannelInterface
         });
     }
 
-    // ── threads (§7.5) ──────────────────────────────────────────────────
+    // ── threads (docs/SPEC.md §7.5) ──────────────────────────────────────────────────
 
     /**
      * threadBindings idle sweep: a bound guild conversation that has been
@@ -423,7 +423,7 @@ final class DiscordChannel implements ChannelInterface
 
     /**
      * Flatten the settings tree into the face's config, then lay the
-     * account's override rows on top (§7.11: accounts.<id>.* overrides
+     * account's override rows on top (docs/SPEC.md §7.11: accounts.<id>.* overrides
      * EVERYTHING else). Unknown/misspelled keys fall through to the
      * face's own defaults — a bad row costs a setting, never a launch.
      *
@@ -483,7 +483,7 @@ final class DiscordChannel implements ChannelInterface
         return $this->queueGate;
     }
 
-    /** Run the §7.5 idle sweep now (test seam; the timer calls the same body). */
+    /** Run the docs/SPEC.md §7.5 idle sweep now (test seam; the timer calls the same body). */
     public function sweepNow(int $idleHours): void
     {
         $this->sweepIdleThreads($idleHours);

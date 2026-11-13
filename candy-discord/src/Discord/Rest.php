@@ -15,7 +15,7 @@ use SugarCraft\Code\Protocol\JsonRpc;
  * Discord REST v10 (https://discord.com/developers/docs/reference#api-versioning
  * — the version lives in the URL root). Bearer bot-token auth.
  *
- * Rate limits (§7.7): a Discord 429 surfaces as a RestException(429) with
+ * Rate limits (docs/SPEC.md §7.7): a Discord 429 surfaces as a RestException(429) with
  * its Retry-After logged — nothing here sleeps or retries, because a bridge
  * that silently retries forever turns a flood guard into a queue. Per-route
  * pre-throttle is P4 hardening.
@@ -104,7 +104,7 @@ final class Rest
     }
 
     /**
-     * Fetch an attachment's raw bytes (§7.8 media intake). Attachment URLs
+     * Fetch an attachment's raw bytes (docs/SPEC.md §7.8 media intake). Attachment URLs
      * arrive from the GATEWAY message, carry a pre-signed query, and need
      * no bot header — but they must live on a Discord media host: a
      * non-Discord host here would mean a doctored payload, and dialing it
@@ -156,7 +156,7 @@ final class Rest
 
     /**
      * An interaction answer. Type 4 = CHANNEL_MESSAGE_WITH_SOURCE, type 7 =
-     * deferred update; flags 64 = ephemeral (§7.5: approvals are single-use
+     * deferred update; flags 64 = ephemeral (docs/SPEC.md §7.5: approvals are single-use
      * and answered in the channel that asked).
      */
     public function respondInteraction(string $id, string $token, int $type, array $data, int $flags = 0): \React\Promise\PromiseInterface
@@ -172,7 +172,7 @@ final class Rest
 
     /**
      * Native slash deployment (owner ruling D7=7a): a global PUT on boot.
-     * A guild-scoped PUT is the dev-loop alternative; §7.6's mention
+     * A guild-scoped PUT is the dev-loop alternative; docs/SPEC.md §7.6's mention
      * fallback covers the window before deploy lands either way.
      *
      * @param list<array<string,mixed>> $commands

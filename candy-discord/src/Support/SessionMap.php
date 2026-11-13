@@ -10,7 +10,7 @@ namespace CandyCode\Bundles\Discord\Support;
  * inbound dedupe ledger. SQLite over PDO, opened 0600 in the bridge state
  * directory.
  *
- * Key grammar (§9.1): `<platform>:<account>:<channel-or-thread-id>` —
+ * Key grammar (docs/SPEC.md §9.1): `<platform>:<account>:<channel-or-thread-id>` —
  *   discord:<account>:<channelId>            (a channel, or its thread id)
  *   msteams:<account>:<conversationId>       (personal | groupChat | channel)
  *

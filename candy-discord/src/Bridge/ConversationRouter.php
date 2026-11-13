@@ -20,10 +20,10 @@ use React\Promise\PromiseInterface;
 /**
  * The bridge's middle: channel inbounds become session prompts, serve
  * events become channel output, and an approval ask is presented on
- * whichever platform its conversation belongs to (§9.3's one rule:
+ * whichever platform its conversation belongs to (docs/SPEC.md §9.3's one rule:
  * "an incoming message is a prompt, an outgoing event is a reply").
  *
- * Delivery choice (§9.3's queue/debounce mapping): idle → `queue` (the
+ * Delivery choice (docs/SPEC.md §9.3's queue/debounce mapping): idle → `queue` (the
  * server admits it as a fresh turn); busy + mention → `steer` (hand it to
  * the running turn, the protocol's own vocabulary); busy without a
  * mention → `queue` (park it after the turn).
@@ -38,7 +38,7 @@ use React\Promise\PromiseInterface;
  * answered elsewhere is harmless by `permission.respond`'s first-valid-
  * answer-wins law.
  *
- * APPROVAL POSTURE (§7.9): `policy['approvals']` shapes presentation —
+ * APPROVAL POSTURE (docs/SPEC.md §7.9): `policy['approvals']` shapes presentation —
  * `enabled: false` falls back to the same-chat `/approve` text (the ask
  * stays answerable, only the buttons go away), `target` restricts buttons
  * to dm/channel conversations, `sessionFilter`/`agentFilter` are regex
@@ -110,7 +110,7 @@ final class ConversationRouter
 
     /**
      * Register a platform face. Multi-account bundles register one face per
-     * account under the same platform (§7.11): conversation keys carry the
+     * account under the same platform (docs/SPEC.md §7.11): conversation keys carry the
      * account segment, so routing is by "<platform>:<account>" with the
      * FIRST face registered for a platform kept as the fallback for keys
      * whose account no longer has a face (history stays readable).
@@ -127,7 +127,7 @@ final class ConversationRouter
         return $this->channels[$name] ?? null;
     }
 
-    /** The face that owns a §9.1 conversation key. */
+    /** The face that owns a docs/SPEC.md §9.1 conversation key. */
     public function channelFor(string $conversationKey): ?PlatformFace
     {
         $parts = Keys::parse($conversationKey);
@@ -197,7 +197,7 @@ final class ConversationRouter
     }
 
     /**
-     * Route one admitted inbound: the §9.2 queue vocabulary decides arrival.
+     * Route one admitted inbound: the docs/SPEC.md §9.2 queue vocabulary decides arrival.
      *
      * steer  — a mention while the turn runs piggybacks on it;
      * interrupt — a mention while busy cancels the turn, then sends;
@@ -228,7 +228,7 @@ final class ConversationRouter
 
         if ($delivery === 'queue' && $mode === 'collect' && $this->queueGate !== null && $images === [] && $documents === [] && $text !== '') {
             //  collect coalesces plain queued text; media always rides its own
-            //  prompt — the serve media caps (§9.4) forbid surprise merges.
+            //  prompt — the serve media caps (docs/SPEC.md §9.4) forbid surprise merges.
             $dropped = $this->queueGate->push($key, $fenced, function (array $items) use ($channel, $ref, $sessionId): void {
                 $this->sendPrompt($channel, $ref, $sessionId, \implode("\n\n", $items), 'queue');
                 $channel->typing($ref);
@@ -425,7 +425,7 @@ final class ConversationRouter
     }
 
     /**
-     * exec-approval posture (§7.9): target/session/agent doors first, then
+     * exec-approval posture (docs/SPEC.md §7.9): target/session/agent doors first, then
      * either the button payload or the same-chat text fallback. Approver
      * identity is enforced at answer time in answerApproval() — the
      * configured roster is one wall; the per-ask nonce minted below and
@@ -713,7 +713,7 @@ final class ConversationRouter
     }
 
     /**
-     * Stamp the §2.3 session grammar onto the existing `session.create` name
+     * Stamp the docs/SPEC.md §2.3 session grammar onto the existing `session.create` name
      * field (zero protocol change) so the core's ChannelToolPolicyService can
      * resolve this conversation's tool policy AT ADMISSION, openclaw grade.
      * The local key already knows everything the grammar names: a guild (or
@@ -853,7 +853,7 @@ final class ConversationRouter
     }
 
     /**
-     * The collect-mode coalescing gate (§9.2). Swapped in by the channel
+     * The collect-mode coalescing gate (docs/SPEC.md §9.2). Swapped in by the channel
      * owner whenever the serve connection (and so the router) is rebuilt.
      */
     public function setQueueGate(QueueGate $gate): void

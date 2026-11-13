@@ -7,7 +7,7 @@ namespace CandyCode\Bundles\Discord\Support;
 use SugarCraft\Code\Context\PromptFence;
 
 /**
- * The trust floor for inbound platform text (§6.4 trust law, §9.5):
+ * The trust floor for inbound platform text (docs/SPEC.md §6.4 trust law, docs/SPEC.md §9.5):
  * channel bytes are UNTRUSTED input spliced into a prompt, and the repo's
  * own authority on that splice is {@see PromptFence} — the same escape the
  * inbound-webhook door applies before splicing `{{payload}}`
@@ -16,7 +16,7 @@ use SugarCraft\Code\Context\PromptFence;
  * pipes, and Unicode tag characters deleted). The bridge REUSES the class
  * rather than copying the pattern: one roster, one head.
  *
- * Redaction (§2.3, §9.4) rides the same door: configured secrets (the serve
+ * Redaction (docs/SPEC.md §2.3, docs/SPEC.md §9.4) rides the same door: configured secrets (the serve
  * token, bot tokens, app passwords — anything the operator named) never
  * echo back into a transcript or channel, in either direction.
  */
@@ -44,7 +44,7 @@ final class TextSafety
     }
 
     /**
-     * Runtime-issued secrets (pairing codes, §7.3) join the roster as they
+     * Runtime-issued secrets (pairing codes, docs/SPEC.md §7.3) join the roster as they
      * are minted. This is the ONE deliberate mutation on this value object
      * — a pairing code cannot be pre-registered at boot, and the additive
      * rule keeps the floor monotonic: secrets only ever enter, never leave,

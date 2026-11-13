@@ -12,7 +12,7 @@ use React\EventLoop\LoopInterface;
 
 /**
  * Discord Gateway v10 over WSS: hello → identify → heartbeat → dispatch,
- * with resume (§7.2). The `?v=10&encoding=json` pair is a CONTRACT — the
+ * with resume (docs/SPEC.md §7.2). The `?v=10&encoding=json` pair is a CONTRACT — the
  * docs warn against trusting the READY `v`; a gateway that speaks another
  * major must not be decoded blind.
  *
@@ -89,7 +89,7 @@ final class Gateway
         private readonly Log $log,
         private readonly LoopInterface $loop,
         private readonly ?string $gatewayUrl = null,
-        // §7.1: `intents.messageContent` false starts in the mention-only
+        // docs/SPEC.md §7.1: `intents.messageContent` false starts in the mention-only
         // degraded posture directly; the 4013/4014 ladder below is the
         // SAME degrade, just discovered by Discord instead of declared.
         bool $wantMessageContent = true,
