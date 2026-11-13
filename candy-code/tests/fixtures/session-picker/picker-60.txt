@@ -1,7 +1,7 @@
  session picker · 7 shown                                       
 ────────────────────────────────────────────────────────────────
  ↑↓ browse · ↵ open · esc close · / filter · r rename · d delet…
-╭ sessions ────────────────────────────────────────────────────╮
+╭ Sessions ────────────────────────────────────────────────────╮
 │ Pinned                                                       │
 │ ▶ ★ Auth refactor                  2m  41 turns ⠋ live ✎ ★ ✕ │
 │ Today                                                        │

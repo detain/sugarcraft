@@ -1,7 +1,7 @@
  session picker · 7 shown                   
 ────────────────────────────────────────────
  ↑↓ browse · ↵ open · esc close · / filter …
-╭ sessions ────────────────────────────────╮
+╭ Sessions ────────────────────────────────╮
 │ Pinned                                   │
 │ ▶ ★ Auth refactor                        │
 │ Today                                    │
