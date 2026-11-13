@@ -267,24 +267,22 @@ final class SuiteSkipRoster
     /**
      * The tests this suite is allowed to skip, `Class::method` => why.
      *
-     * The first is UNCONDITIONAL -- no environment gate, no platform check, no
-     * `#[Requires…]` attribute. It is a placeholder for a test that was never
-     * written, which is why it skips identically on every runner and why the
-     * Linux figure and the "would be nice to delete this one day" figure are
-     * the same number.
+     * Every entry is conditional on a layout, environment or platform gate -- the
+     * former unconditional placeholder (McpClient::loadConfig()'s read-failure arm)
+     * was replaced by a real test and deleted, so no entry skips on every runner.
      *
-     * The second is LAYOUT-CONDITIONAL, and the condition is implemented, not
+     * The first is LAYOUT-CONDITIONAL, and the condition is implemented, not
      * merely described: {@see expectedForLayout()} lifts it out of the roster
      * a run is actually judged against exactly when {@see hasPathRepoSymlinks()}
      * finds symlinks under `vendor/sugarcraft` -- CI's injected path-repo
      * layout, where the test runs and asserts instead of skipping. Where the
      * siblings resolved from packagist the farm holds only real directories,
      * the test skips itself, and the entry is rostered. The const itself keeps
-     * BOTH entries so the name-existence loop in `SuiteSkipRosterTest` still
+     * every entry so the name-existence loop in `SuiteSkipRosterTest` still
      * polices both names; it is {@see install()} that hands the constructor
      * the layout-computed subset.
      *
-     * The third is ENV-CONDITIONAL on the same mechanism: the W7.7 live smoke
+     * The second is ENV-CONDITIONAL on the same mechanism: the W7.7 live smoke
      * skips while `CANDY_CODE_LIVE_SGLANG` differs from `1` (every normal run,
      * so the local and CI floors count it as a skip) and runs against the live
      * server once the operator arms it, at which point
@@ -312,10 +310,6 @@ final class SuiteSkipRoster
      * judge the child for real.
      */
     public const EXPECTED = [
-        'SugarCraft\Code\Tests\MCP\McpClientTest::testLoadConfigReturnsEmptyArrayWhenFileGetContentsFails'
-            => 'unconditional placeholder: the failure arm of McpClient::loadConfig() needs a '
-                . 'read that fails after file_exists() passes, and the test was left unwritten '
-                . 'rather than faking a built-in',
         self::CONDITIONAL
             => 'conditional layout gate: rostered only while vendor/sugarcraft holds no path-repo '
                 . 'symlinks -- the packagist-resolved checkout, where the test skips itself. '

@@ -103,13 +103,6 @@ final class McpClientTest extends TestCase
         $this->assertSame([], $result);
     }
 
-    public function testLoadConfigReturnsEmptyArrayWhenFileGetContentsFails(): void
-    {
-        // This would require mocking file_get_contents, which is complex
-        // The method already handles file_exists check
-        $this->markTestSkipped('Would require mocking built-in functions');
-    }
-
     public function testLoadConfigThrowsWhenAnExistingPathCannotBeRead(): void
     {
         // The arm the placeholder above never got to write, with no built-in

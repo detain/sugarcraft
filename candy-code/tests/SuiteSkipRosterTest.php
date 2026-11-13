@@ -59,9 +59,6 @@ final class SuiteSkipRosterTest extends TestCase
      * `SuiteSkipRoster::EXPECTED` reddens the layout tests below (via an
      * undefined index) rather than quietly aiming them at a stale key.
      */
-    private const MCP_ENTRY =
-        'SugarCraft\\Code\\Tests\\MCP\\McpClientTest::testLoadConfigReturnsEmptyArrayWhenFileGetContentsFails';
-
     /** The layout-conditional key -- the private `SuiteSkipRoster::CONDITIONAL`, by literal. */
     private const GITIGNORE_ENTRY =
         'SugarCraft\\Code\\Tests\\Tools\\BuiltIn\\GitignoreAwarenessTest::testTheMonorepoPathRepoSymlinksAreNotFollowed';
@@ -269,7 +266,7 @@ final class SuiteSkipRosterTest extends TestCase
 
     /**
      * Over a symlink farm with the live gate unarmed the effective roster is
-     * EXACTLY the unconditional entry plus the dormant smokes -- and the jail
+     * EXACTLY the dormant smokes -- and the jail
      * arm wherever this host cannot start bubblewrap, mirrored from the same
      * predicate the lift consults, and likewise the three C-TUI-6.d Windows
      * smoke arms wherever this host is not Windows --
@@ -291,7 +288,6 @@ final class SuiteSkipRosterTest extends TestCase
                     ),
                 ),
                 [
-                    self::MCP_ENTRY => SuiteSkipRoster::EXPECTED[self::MCP_ENTRY],
                     self::LIVE_SGLANG_ENTRY => SuiteSkipRoster::EXPECTED[self::LIVE_SGLANG_ENTRY],
                 ] + self::pharEntriesUnarmed() + (SuiteSkipRoster::scriptJailRuns()
                     ? []
@@ -366,7 +362,7 @@ final class SuiteSkipRosterTest extends TestCase
     /**
      * The live gate's BOTH polarities, each dropping exactly its own key and no
      * other's. The armed arm over a symlink farm is the operator's W7.7 shape:
-     * the roster collapses to the lone canary while both real tests run.
+     * the roster collapses to the remaining dormant keys while both real tests run.
      */
     public function testTheLiveSmokeGateDropsOnlyItsOwnEntryAndOnlyWhenArmed(): void
     {
@@ -499,7 +495,7 @@ final class SuiteSkipRosterTest extends TestCase
 
     /**
      * CI-shape at the constructor seam with the live gate unarmed: the
-     * layout-computed roster (canary + dormant smoke + dormant phar smoke, plus
+     * layout-computed roster (dormant smoke + dormant phar smoke, plus
      * the premise only where phar writing is impossible), all roster names
      * prepared, the layout-conditional one running -- the run is CLEAN.
      *
@@ -522,8 +518,6 @@ final class SuiteSkipRosterTest extends TestCase
                     static fn () => new SuiteSkipRoster(SuiteSkipRoster::expectedForLayout($farm), 'Linux'),
                 ),
             );
-            $roster->recordPrepared(self::MCP_ENTRY);
-            $roster->recordSkip(self::MCP_ENTRY, self::MCP_ENTRY, 'placeholder');
             $roster->recordPrepared(self::LIVE_SGLANG_ENTRY);
             $roster->recordSkip(self::LIVE_SGLANG_ENTRY, self::LIVE_SGLANG_ENTRY, 'dormant live smoke');
             $roster->recordPrepared(self::PHAR_SMOKE_ENTRY);
@@ -575,8 +569,6 @@ final class SuiteSkipRosterTest extends TestCase
                     static fn () => new SuiteSkipRoster(SuiteSkipRoster::expectedForLayout($farm), 'Linux'),
                 ),
             );
-            $roster->recordPrepared(self::MCP_ENTRY);
-            $roster->recordSkip(self::MCP_ENTRY, self::MCP_ENTRY, 'placeholder');
             $roster->recordPrepared(self::GITIGNORE_ENTRY);
             $roster->recordSkip(
                 self::GITIGNORE_ENTRY,
@@ -588,7 +580,7 @@ final class SuiteSkipRosterTest extends TestCase
             $roster->recordPrepared(self::PHAR_SMOKE_ENTRY);
             $roster->recordSkip(self::PHAR_SMOKE_ENTRY, self::PHAR_SMOKE_ENTRY, 'no built phar');
 
-            $skips = 4;
+            $skips = 3;
             if (!SuiteSkipRoster::pharWritingPossible()) {
                 $roster->recordPrepared(self::PHAR_PREMISE_ENTRY);
                 $roster->recordSkip(self::PHAR_PREMISE_ENTRY, self::PHAR_PREMISE_ENTRY, 'phar.readonly armed');
@@ -610,7 +602,7 @@ final class SuiteSkipRosterTest extends TestCase
 
     /**
      * The CI shape does not disarm the guard: with the conditional key
-     * legitimately lifted, the UNCONDITIONAL key prepared-but-not-skipped must
+     * legitimately lifted, a still-rostered key prepared-but-not-skipped must
      * still fire check 3. Dropping an entry from the effective roster may not
      * take the bite out of the ones that remain.
      */
@@ -623,17 +615,19 @@ final class SuiteSkipRosterTest extends TestCase
         symlink($dir . '/sugar-core-real', $farm . '/sugar-core');
 
         try {
-            $roster = new SuiteSkipRoster(SuiteSkipRoster::expectedForLayout($farm), 'Linux');
-            $roster->recordPrepared(self::MCP_ENTRY);
+            $roster = self::withLiveGateUnarmed(
+                static fn () => new SuiteSkipRoster(SuiteSkipRoster::expectedForLayout($farm), 'Linux'),
+            );
+            $roster->recordPrepared(self::LIVE_SGLANG_ENTRY);
             $roster->recordPrepared(self::GITIGNORE_ENTRY);
 
             self::assertSame(
-                [self::MCP_ENTRY],
+                [self::LIVE_SGLANG_ENTRY],
                 $roster->rosterEntriesThatStoppedSkipping(),
                 'check 3 lost its bite on the one key that stayed rostered',
             );
             self::assertStringContainsString(
-                'ON THE ROSTER BUT RAN WITHOUT SKIPPING: ' . self::MCP_ENTRY,
+                'ON THE ROSTER BUT RAN WITHOUT SKIPPING: ' . self::LIVE_SGLANG_ENTRY,
                 (string) $roster->report(),
             );
         } finally {
