@@ -542,4 +542,42 @@ final class TableColumnWidthTest extends TestCase
         $this->assertSame(21, \array_sum($widths), 'percent columns absorb the rounding remainder');
         $this->assertSame([11, 10], $widths);
     }
+
+    /**
+     * ST-66 (finding 082): the width solve is view-INDEPENDENT by design —
+     * Content/Dynamic columns measure ALL rows, so filter and search never
+     * jitter the frame. A future "perf win" that solved visible rows only
+     * must go red here, not silently re-layout under typing.
+     */
+    public function testWidthSolveIgnoresTheFilterAndSearchView(): void
+    {
+        $needle = 'short';
+        $long = 'a very long value that dominates the content solve';
+        $t = Table::fromColumns([
+            Column::new('k', 'K', 0)->withColumnWidth(ColumnWidth::Content)->withFilterable(),
+        ])->withRows([
+            Row::new(RowData::from(['k' => $needle])),
+            Row::new(RowData::from(['k' => $long])),
+        ]);
+
+        $before = $t->computeColumnWidths(60);
+        $filtered = $t->Filter('k', $needle);   // view keeps only the short row
+        $searched = $t->search($needle);         // same, via global search
+
+        $this->assertSame($before, $filtered->computeColumnWidths(60), 'Filter() must not move widths');
+        $this->assertSame($before, $searched->computeColumnWidths(60), 'search() must not move widths');
+        $this->assertGreaterThan(
+            \mb_strlen($needle, 'UTF-8'),
+            $before[0],
+            'the hidden-by-filter long row must own the content width',
+        );
+
+        // And the memoized content measure itself agrees with the raw rows.
+        $measure = new \ReflectionMethod(Table::class, 'contentWidthForColumn');
+        $this->assertSame(
+            \SugarCraft\Core\Util\Width::of($long),
+            $measure->invoke($filtered, 0),
+            'contentWidthForColumn scans ALL rows regardless of the rendered view',
+        );
+    }
 }

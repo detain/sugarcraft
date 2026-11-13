@@ -170,7 +170,13 @@ final class Table
     /** Cached computed column widths from the last render pass. @var array<int, int>|null */
     private ?array $computedColumnWidths = null;
 
-    /** Cached result of filteredSortedRows(). Cleared on any filter/sort/row change. @var list<Row>|null */
+    /**
+     * Cached result of filteredSortedRows(). Cleared on any filter/sort/row
+     * change. The width solve never reads this view — Content/Dynamic columns
+     * measure ALL rows by design (audit ST-66, see contentWidthCache).
+     *
+     * @var list<Row>|null
+     */
     private ?array $filteredSortedCache = null;
 
     /**
@@ -190,6 +196,13 @@ final class Table
      * number — yet each of the (up to WIDTH_CONVERGE_MAX) diverging solve
      * iterations used to re-scan the entire row set. Keyed by column index,
      * cleared by invalidateRenderCaches() exactly like widthSolveCache.
+     *
+     * contentWidthForColumn() scans ALL rows regardless of the rendered
+     * view — widths are view-INDEPENDENT by design (audit ST-66, finding
+     * 082): filter and search never re-solve columns, so the frame cannot
+     * jitter under typing. A "perf win" that solved visible rows only would
+     * change both semantics and layout; the behavior pin in
+     * TableColumnWidthTest keeps that red on arrival.
      *
      * @var array<int, int>
      */
