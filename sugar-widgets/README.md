@@ -248,7 +248,7 @@ $bar = AnimatedProgress::new()
 ## Quickstart — TextInput with placeholder styling and prefix/suffix
 
 ```php
-use SugarCraft\Widgets\TextInput\TextInput;
+use SugarCraft\Forms\TextInput\TextInput;
 use SugarCraft\Style\Style;
 use SugarCraft\Core\Util\Color;
 
@@ -270,7 +270,7 @@ echo $ti->view();
 ### ValidateOn timing control
 
 ```php
-use SugarCraft\Widgets\TextInput\{TextInput, ValidateOn};
+use SugarCraft\Forms\TextInput\{TextInput, ValidateOn};
 
 $ti = TextInput::new()
     ->withValidateOn(ValidateOn::Blur);   // validate when focus leaves
@@ -286,7 +286,7 @@ $ti = TextInput::new()
 ### Keystroke filter (restrict)
 
 ```php
-use SugarCraft\Widgets\TextInput\TextInput;
+use SugarCraft\Forms\TextInput\TextInput;
 
 // Accept only digits
 $numeric = TextInput::new()->withRestrict('[0-9]');
