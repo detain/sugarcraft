@@ -12,6 +12,7 @@ use SugarCraft\Video\Decode\GifDecoder;
 use SugarCraft\Video\Decode\RgbFrame;
 use SugarCraft\Video\Render\Mode;
 use SugarCraft\Video\Source\Probe;
+use SugarCraft\Video\Synthetic;
 use SugarCraft\Video\Tests\Concerns\CapturesErrorLog;
 
 /**
@@ -30,6 +31,7 @@ final class GifDecoderTest extends TestCase
 
     protected function tearDown(): void
     {
+        GifDecoder::setEmitCacheCeilingForTesting(null);
         if ($this->tempGifPath !== null && file_exists($this->tempGifPath)) {
             unlink($this->tempGifPath);
             $this->tempGifPath = null;
@@ -534,6 +536,207 @@ final class GifDecoderTest extends TestCase
             self::assertStringNotContainsString('user:pass', $e->getMessage());
             self::assertStringContainsString('gif://***@example.invalid/missing.gif', $e->getMessage());
         }
+    }
+
+    // -------------------------------------------------------------------------
+    // M40 — the converted-frame cache
+    // -------------------------------------------------------------------------
+
+    /**
+     * @testdox M40: a same-shape re-pass converts nothing and serves the cached instances
+     *
+     * The convert-once contract: once every frame of a capture has been
+     * walked, close()+reopen() of the SAME source at the SAME shape must
+     * replay from the emit cache — the per-pixel PHP walk runs exactly once
+     * per (frame, shape), which is what makes the loop restart cheap.
+     */
+    public function testTheConvertedFramesAreServedFromCacheOnASecondPass(): void
+    {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('GD extension required to build the animated fixture');
+        }
+
+        $this->tempGifPath = Synthetic::generate(
+            sys_get_temp_dir() . '/sugar-video-m40-' . uniqid('', true) . '.gif',
+            12, 8, 6, 4
+        );
+
+        $decoder = new GifDecoder();
+        $decoder->open($this->tempGifPath, 12, 4, 10.0, Mode::HalfBlock);
+
+        $first = $this->drain($decoder);
+        $this->assertGreaterThanOrEqual(2, count($first), 'the fixture must animate, or the spy proves nothing');
+        $this->assertCount($decoder->conversionCount(), $first, 'first pass: one conversion per served frame');
+
+        $decoder->close();
+        $decoder->reopen($this->tempGifPath, 12, 4, 10.0, Mode::HalfBlock);
+
+        $second = $this->drain($decoder);
+        $this->assertCount(count($first), $second);
+        $this->assertSame($decoder->conversionCount(), count($first), 'second pass must not re-convert a single frame');
+        foreach ($first as $i => $frame) {
+            $this->assertSame($frame, $second[$i], "frame $i replays as the cached instance");
+        }
+
+        $decoder->close();
+    }
+
+    /**
+     * @testdox M40: re-hydrating at a different shape drops the index-keyed cache
+     *
+     * A frame index identifies a frame only WITHIN one decode shape, so a
+     * resized re-hydrate of the same bytes must re-derive (the stale cache
+     * would hand back the old grid's pixels at the wrong size) — the stamp
+     * is the whole map's guard, not a per-entry optimisation.
+     */
+    public function testAReShapeHydrateDropsTheIndexKeyedCache(): void
+    {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('GD extension required to build the animated fixture');
+        }
+
+        $this->tempGifPath = Synthetic::generate(
+            sys_get_temp_dir() . '/sugar-video-m40-shape-' . uniqid('', true) . '.gif',
+            12, 8, 6, 4
+        );
+
+        $decoder = new GifDecoder();
+        $decoder->open($this->tempGifPath, 12, 4, 10.0, Mode::HalfBlock);
+        $first = $this->drain($decoder);
+        $walked = count($first);
+        $this->assertSame(8, $first[0]->h, 'cellsH 4 at HalfBlock decodes 8 rows');
+
+        $decoder->close();
+        $decoder->reopen($this->tempGifPath, 12, 8, 10.0, Mode::HalfBlock);
+        $second = $this->drain($decoder);
+
+        $this->assertSame(16, $second[0]->h, 'the taller pane decodes a taller grid — old pixels must not serve');
+        $this->assertSame($walked * 2, $decoder->conversionCount(), 'the shape change invalidated every entry');
+
+        $decoder->close();
+    }
+
+    /**
+     * @testdox M40: the byte ceiling evicts oldest-first and never the newest frame
+     */
+    public function testTheEmitCacheHonoursItsByteCeiling(): void
+    {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('GD extension required to build the animated fixture');
+        }
+
+        $this->tempGifPath = Synthetic::generate(
+            sys_get_temp_dir() . '/sugar-video-m40-cap-' . uniqid('', true) . '.gif',
+            12, 8, 6, 4
+        );
+
+        $probe = new GifDecoder();
+        $probe->open($this->tempGifPath, 12, 4, 10.0, Mode::HalfBlock);
+        $walked = $this->drain($probe);
+        $frameBytes = strlen($walked[0]->bytes);
+        $count = count($walked);
+        $probe->close();
+
+        // Just-under arm: the full roster fits, so a re-pass serves from cache.
+        GifDecoder::setEmitCacheCeilingForTesting($frameBytes * $count);
+        $fitting = new GifDecoder();
+        $fitting->open($this->tempGifPath, 12, 4, 10.0, Mode::HalfBlock);
+        $this->drain($fitting);
+        $this->assertSame($frameBytes * $count, $fitting->emitCacheBytes());
+        $fitting->reopen($this->tempGifPath, 12, 4, 10.0, Mode::HalfBlock);
+        $this->drain($fitting);
+        $this->assertSame($count, $fitting->conversionCount(), 'the ceiling-exact roster still serves its second pass');
+
+        // Starved arm: one frame's worth of room can hold only the newest —
+        // every older entry is forfeit, so re-passes re-convert (the walk
+        // stays correct; the cache just declines to remember).
+        GifDecoder::setEmitCacheCeilingForTesting(1);
+        $starved = new GifDecoder();
+        $starved->open($this->tempGifPath, 12, 4, 10.0, Mode::HalfBlock);
+        $this->drain($starved);
+        $this->assertSame($frameBytes, $starved->emitCacheBytes(), 'exactly the newest frame stays resident');
+        $starved->reopen($this->tempGifPath, 12, 4, 10.0, Mode::HalfBlock);
+        $again = $this->drain($starved);
+        $this->assertSame($count * 2, $starved->conversionCount(), 'the starved cache holds only the newest frame, which the next insert evicts before a re-pass can ever reach it');
+        $this->assertSame($walked[0]->bytes, $again[0]->bytes, 'eviction is a memory decision, never a correctness one');
+
+        $fitting->close();
+        $starved->close();
+    }
+
+    /**
+     * @testdox M40: the documented ceiling constant is pinned against silent drift
+     */
+    public function testTheEmitCacheCeilingIsTheDocumentedContract(): void
+    {
+        $this->assertSame(24_000_000, GifDecoder::MAX_EMIT_CACHE_BYTES);
+    }
+
+    /**
+     * @testdox M40: the row-block upscale paints real pixels into the presentation box
+     *
+     * The run-length import claims byte-identity with the old per-pixel
+     * imagesetpixel walk (proven against the graphics pins pre-change). This
+     * is the committed floor of that claim: the PNG that arrives is the full
+     * cell box, decodes, and its opposite corners differ — an all-black
+     * canvas (a fill that never ran) or a one-pixel smear could not pass.
+     */
+    public function testTheRunLengthUpscalePaintsRealPixels(): void
+    {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('GD extension required to build the animated fixture');
+        }
+
+        $this->tempGifPath = $this->createTempColorGif(8, 6);
+
+        $decoder = new GifDecoder(10, 20);
+        $decoder->open($this->tempGifPath, 8, 6, 10.0, Mode::Sixel);
+        $frame = $decoder->next();
+        $decoder->close();
+
+        $this->assertNotNull($frame->png);
+        $img = imagecreatefromstring($frame->png);
+        $this->assertNotFalse($img);
+        $this->assertSame(80, imagesx($img));
+        $this->assertSame(120, imagesy($img));
+
+        $corner = imagecolorat($img, 0, 0);
+        $opposite = imagecolorat($img, 79, 119);
+        $this->assertNotSame($corner, $opposite, 'a gradient must survive the resample');
+        imagedestroy($img);
+    }
+
+    /**
+     * @testdox M40: next() consults the cache before converting, and conversion is counted once
+     *
+     * Structural tripwire (M16 idiom): the whole row is “serve cached frames”
+     * — a refactor that quietly re-converts on every next() would keep these
+     * behaviour tests green by accident if it were also cache-write-omitting,
+     * so the wiring itself is grepped: one cache read, one counter bump, and
+     * the per-pixel imagesetpixel loop is gone from the upscale.
+     */
+    public function testTheCacheWiringIsSingleSourcedInSource(): void
+    {
+        $source = (string) file_get_contents(\dirname(__DIR__) . '/src/Decode/GifDecoder.php');
+
+        $this->assertSame(1, substr_count($source, '$this->emitCache[$index] ?? null'));
+        $this->assertSame(1, substr_count($source, '$this->conversions++;'));
+        $this->assertSame(0, substr_count($source, 'imagesetpixel('), 'the run-block import retired the per-pixel GD call');
+    }
+
+
+    /**
+     * Walk a decoder to exhaustion (M40 fixtures). GifDecoder satisfies the
+     * Decoder contract's getIterator() without being Traversable, so drains
+     * go through next() — the exact path the emit cache guards.
+     */
+    private function drain(Decoder $decoder): array
+    {
+        $frames = [];
+        while (($frame = $decoder->next()) !== null) {
+            $frames[] = $frame;
+        }
+        return $frames;
     }
 
 }

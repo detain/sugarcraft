@@ -55,6 +55,40 @@ final class GifDecoder implements Decoder
     private const STAT_TYPE_MASK = 0170000;
     private const STAT_REGULAR_BIT = 0100000;
 
+    /**
+     * Byte ceiling on the converted-frame emit cache (M40).
+     *
+     * The resident canonical form stays the indexed cell grid — that is what
+     * {@see MAX_TOTAL_FRAME_PIXELS} budgets. This ceiling budgets the DERIVED
+     * products (upscaled PNGs mostly, raw grids where no resample ran) so the
+     * convert-once cache is honest about what it adds on top: measured against
+     * the dominant cost, an ordinary 80x24 graphics clip keeps PNG-compressed
+     * frames well inside 23 MiB, and an adversarial one evicts instead of
+     * growing. Oldest entries are forfeit past the ceiling, never the newest.
+     */
+    public const MAX_EMIT_CACHE_BYTES = 24_000_000;
+
+    /**
+     * Frames already converted to pixels, keyed by frame index, for the
+     * CURRENT decode shape (M40).
+     *
+     * A conversion is a pure function of (frame index, grid size, presentation
+     * box) — the index alone only identifies a frame within one shape, so
+     * {@see self::$emitStamp} guards the whole map and any shape change drops
+     * it. The cache survives close() and same-shape reopen() exactly like
+     * $bytes does, which is what makes a loop restart cost zero re-conversion;
+     * it dies with a NEW capture (different source = different truth) or when
+     * the byte ceiling evicts the oldest entries.
+     *
+     * @var array<int,RgbFrame>
+     */
+    private array $emitCache = [];
+
+    private int $emitCacheBytes = 0;
+    private string $emitStamp = '';
+    private int $conversions = 0;
+    private static ?int $emitCacheCeilingOverride = null;
+
     /** @var list<AnimationFrame> */
     private array $frames = [];
 
@@ -147,6 +181,14 @@ final class GifDecoder implements Decoder
         $this->bytes = self::readBoundedBytes($source);
         $this->bytesSource = $source;
 
+        // A NEW capture invalidates everything the old bytes produced: an
+        // index-keyed cache would serve a dead source's pixels (M40). The
+        // conversion spy resets here too, so one open() owns one history.
+        $this->emitCache = [];
+        $this->emitCacheBytes = 0;
+        $this->emitStamp = '';
+        $this->conversions = 0;
+
         // Pure-PHP GIF decoding takes no request headers: whatever arrived was
         // logged-and-dropped above, so nothing downstream can forget to.
         $this->hydrate($cellsW, $cellsH, $fps, $mode, $startSec);
@@ -192,6 +234,18 @@ final class GifDecoder implements Decoder
             $this->targetW = 0;
             $this->targetH = 0;
             [$decodeW, $decodeH] = [$cellsW * ($mode?->colsPerCell() ?? 1), $cellsH * ($mode?->rowsPerCell() ?? 2)];
+        }
+
+        // Index only identifies a frame WITHIN one decode shape: the same GIF
+        // re-hydrated at a different grid or presentation box must not serve
+        // the old geometry's cached pixels (M40). A same-shape re-hydrate —
+        // the loop-restart reopen — is exactly the case worth serving from
+        // cache, so the stamp keeps it and any shape change drops it.
+        $stamp = $decodeW . 'x' . $decodeH . '@' . $this->targetW . 'x' . $this->targetH;
+        if ($stamp !== $this->emitStamp) {
+            $this->emitCache = [];
+            $this->emitCacheBytes = 0;
+            $this->emitStamp = $stamp;
         }
 
         // Defensive guard: sugar-animation documents RuntimeException, but an older vendored
@@ -279,8 +333,84 @@ final class GifDecoder implements Decoder
             return null;
         }
 
-        $animationFrame = $this->frames[$this->frameIndex++];
-        return $this->animationFrameToRgbFrame($animationFrame);
+        $index = $this->frameIndex++;
+
+        // CONVERT-ONCE (M40): the cell→pixel walk (and, on graphics rungs,
+        // the resample + PNG encode) is pure work per (frame, shape) — a
+        // second pass over the same capture (loop restart, frameAt seek walk)
+        // must never pay it again. Served frames are the same instances;
+        // RgbFrame is readonly, so sharing is safe.
+        $cached = $this->emitCache[$index] ?? null;
+        if ($cached !== null) {
+            return $cached;
+        }
+
+        $frame = $this->animationFrameToRgbFrame($this->frames[$index]);
+        $this->conversions++;
+        $this->rememberEmitted($index, $frame);
+
+        return $frame;
+    }
+
+    /**
+     * Keep one converted frame, evicting oldest-first past the byte ceiling.
+     *
+     * The newest frame is never evicted by itself: a single oversized
+     * presentation box (a 4K PNG leg, like a giant single frame under the
+     * source cap) may sit alone above the ceiling — every OLDER entry is
+     * forfeit while the total is over, so the cache can only be as stale as
+     * one frame and playback always keeps its current byte.
+     */
+    private function rememberEmitted(int $index, RgbFrame $frame): void
+    {
+        $this->emitCache[$index] = $frame;
+        $this->emitCacheBytes += self::emittedSize($frame);
+
+        $ceiling = self::$emitCacheCeilingOverride ?? self::MAX_EMIT_CACHE_BYTES;
+        while ($this->emitCacheBytes > $ceiling && count($this->emitCache) > 1) {
+            $oldest = array_key_first($this->emitCache);
+            $this->emitCacheBytes -= self::emittedSize($this->emitCache[$oldest]);
+            unset($this->emitCache[$oldest]);
+        }
+    }
+
+    /**
+     * The bytes one emitted frame really costs the cache: its PNG when the
+     * graphics path encoded, its raw grid otherwise — never both, and never
+     * an estimate (the ceiling is meant to be honoured, not admired).
+     */
+    private static function emittedSize(RgbFrame $frame): int
+    {
+        return strlen($frame->png ?? $frame->bytes);
+    }
+
+    /**
+     * Conversions this decoder has actually performed (M40).
+     *
+     * The spy the cache contract is pinned with: a full walk costs one
+     * conversion per served frame, and a same-shape re-walk must not move
+     * the counter at all.
+     */
+    public function conversionCount(): int
+    {
+        return $this->conversions;
+    }
+
+    /** Resident bytes currently held by the converted-frame cache (M40). */
+    public function emitCacheBytes(): int
+    {
+        return $this->emitCacheBytes;
+    }
+
+    /**
+     * Test seam for the emit-cache byte ceiling; null restores
+     * {@see MAX_EMIT_CACHE_BYTES}. The ceiling is eviction policy, and
+     * policy is only honest if its trip point is unit-testable without
+     * shipping a 23 MiB fixture — the project's budget-seam idiom.
+     */
+    public static function setEmitCacheCeilingForTesting(?int $bytes): void
+    {
+        self::$emitCacheCeilingOverride = $bytes;
     }
 
     /**
@@ -591,11 +721,25 @@ final class GifDecoder implements Decoder
         }
 
         try {
+            // Row-block import (M40): coalesced GIF cells arrive as long
+            // horizontal runs of ONE colour, and every per-pixel GD call is
+            // a PHP↔C crossing — the exact tax the resident-grid ban exists
+            // to keep small. Scanning runs and painting each with one
+            // imagefilledrectangle (GD clips inclusive x1, and a 1-tall rect
+            // is the same pixels imagesetpixel would have touched) leaves the
+            // canvas byte-identical at a fraction of the call count.
             $offset = 0;
             for ($y = 0; $y < $h; $y++) {
-                for ($x = 0; $x < $w; $x++) {
-                    \imagesetpixel($src, $x, $y, (\ord($bytes[$offset]) << 16) | (\ord($bytes[$offset + 1]) << 8) | \ord($bytes[$offset + 2]));
-                    $offset += 3;
+                $x = 0;
+                while ($x < $w) {
+                    $color = (\ord($bytes[$offset]) << 16) | (\ord($bytes[$offset + 1]) << 8) | \ord($bytes[$offset + 2]);
+                    $runStart = $x;
+                    do {
+                        $x++;
+                        $offset += 3;
+                    } while ($x < $w
+                        && ((\ord($bytes[$offset]) << 16) | (\ord($bytes[$offset + 1]) << 8) | \ord($bytes[$offset + 2])) === $color);
+                    \imagefilledrectangle($src, $runStart, $y, $x - 1, $y, $color);
                 }
             }
 
@@ -684,6 +828,12 @@ final class GifDecoder implements Decoder
      * re-hydrate without re-reading the path, and the buffer is already
      * bounded by {@see MAX_SOURCE_BYTES} — it is released when this object
      * dies, or replaced when a DIFFERENT source is opened.
+     *
+     * The converted-frame cache (M40) survives with them for the same
+     * reason and the same discipline: it is bounded by
+     * {@see MAX_EMIT_CACHE_BYTES}, it describes the bytes still in hand, and
+     * a loop restart that has to re-convert frames it already painted is
+     * exactly the per-pixel PHP cost this row exists to retire.
      */
     public function close(): void
     {
