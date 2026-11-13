@@ -27,7 +27,7 @@ final class TableTest extends TestCase
             0,
             2,
         );
-        [$t, ] = $t->focus();
+        $t = $t->focus();
         return $t;
     }
 
@@ -89,7 +89,7 @@ final class TableTest extends TestCase
     public function testJaggedRowsPad(): void
     {
         $t = Table::new(['A', 'B'], [['x', 'y'], ['z']], 0, 5);
-        [$t, ] = $t->focus();
+        $t = $t->focus();
         $this->assertSame(['z'], $t->setRows([['z']])->selectedRow());
     }
 
@@ -168,7 +168,7 @@ final class TableTest extends TestCase
         $t = Table::new(['x'], [['a']]);
         $this->assertFalse($t->focused);
 
-        [$t, ] = $t->focus();
+        $t = $t->focus();
         $this->assertTrue($t->focused);
 
         $t = $t->blur();

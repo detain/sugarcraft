@@ -144,7 +144,7 @@ final class TableStyleFuncTest extends TestCase
         // focused and unfocused frames must DIFFER, the selected cells must
         // carry both properties, and the text must be SGR-invariant.
         $unfocused = $view;
-        [$focused, ] = $t->focus();
+        $focused = $t->focus();
         $focusedView = $focused->view();
 
         // The selection is now VISIBLE through the styleFunc: the cursor

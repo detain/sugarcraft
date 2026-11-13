@@ -208,7 +208,7 @@ final class SortTest extends TestCase
             0,
             10,
         );
-        [$t, ] = $t->focus();
+        $t = $t->focus();
 
         $t2 = $t->withSort('Name', SortDirection::Asc);
         $view = $t2->view();
@@ -252,7 +252,7 @@ final class SortTest extends TestCase
         )
             ->withFilterable(true)
             ->withFilter('Alice')
-            ->focus()[0];
+            ->focus();
 
         // Only Alice matches the filter — one visible row.
         // setCursor(PHP_INT_MAX) should clamp to the single visible row.

@@ -126,7 +126,7 @@ final class TableReviewPinsTest extends TestCase
     public function testPartialStylesKeepsTheSelectionCursor(): void
     {
         $table = $this->table()->withStyles(new Styles(header: Style::new()->bold()));
-        [$focused, ] = $table->focus();
+        $focused = $table->focus();
 
         $view = $focused->view();
         $this->assertStringContainsString("\x1b[7mAlice", $view, 'selection must stay visible');
