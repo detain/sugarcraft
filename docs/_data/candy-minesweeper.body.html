@@ -75,7 +75,7 @@ use SugarCraft\Minesweeper\Game;
 <tr><td>Board</td><td>flagCount()</td><td>Live flag total (tracked incrementally)</td></tr>
 <tr><td>Board</td><td>serialize()</td><td>Emit versioned JSON string ({v:1, w, h, m, p, e, r, c}) — the save slot's board payload</td></tr>
 <tr><td>Board</td><td>unserialize(data)</td><td>Reconstruct a Board from a serialize() payload, re-validating shapes and recomputing counts</td></tr>
-<tr><td>Difficulty</td><td>enum (EASY/STANDARD/MEDIUM/EXPERT)</td><td>The four shipped presets; <code>fromDimensions(w, h, m)</code> maps a board shape back to its preset (or null)</td></tr>
+<tr><td>Difficulty</td><td>enum (Easy/Standard/Medium/Expert)</td><td>The four shipped presets; <code>fromDimensions(w, h, m)</code> maps a board shape back to its preset (or null)</td></tr>
 <tr><td>Stats</td><td>pure value object</td><td>In-memory games/wins/best time per difficulty — <code>withGame(d, won, time)</code>, <code>gamesPlayed(d)</code>, <code>wins(d)</code>, <code>winRate(d)</code>, <code>bestTime(d)</code></td></tr>
 <tr><td>Ui\CustomDifficulty</td><td>fromInput(rows, cols, mines)</td><td>Validate custom board dimensions; throws the translated string via <code>Lang::t</code> on violation</td></tr>
 <tr><td>Ui\CustomDifficulty</td><td>defaults()</td><td>Factory — 9×9, 10 mines</td></tr>
