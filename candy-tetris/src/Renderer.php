@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Tetris;
 
+use LogicException;
 use SugarCraft\CellBuffer\Buffer;
 use SugarCraft\CellBuffer\Cell;
 use SugarCraft\CellBuffer\Style;
@@ -28,7 +29,8 @@ use SugarCraft\Style\Style as SugarStyle;
  *
  * The sidebar is a stack of cards in that order (see `renderSidebar()`):
  * level and lines ride inside the score card, and the help card is the
- * first thing dropped in compact posture.
+ * first casualty of the row budget — dropped for a short terminal (the
+ * C-2 compact posture) or an expanded score card (candy-tetris-004).
  *
  * The board is painted from the visible 20 rows of {@see Board},
  * with the falling {@see Piece} composited over locked cells. A
@@ -95,7 +97,7 @@ final class Renderer
         $plain = $game->colorProfile === ColorProfile::Ascii;
 
         $playfield = self::renderBoard($game, $plain);
-        $sidebar  = self::renderSidebar($game, $game->frameRows < self::NATURAL_ROWS, $plain);
+        $sidebar  = self::renderSidebar($game, $plain);
         $body = Layout::joinHorizontal(0.0, $playfield, '  ', $sidebar);
 
         if ($game->introPending === true) {
@@ -296,15 +298,25 @@ final class Renderer
     /**
      * Sidebar cards, top to bottom: hold, next, score, help.
      *
-     * In compact posture (terminal shorter than the natural frame but at
-     * or above the floor — C-2 reflow) the help card is dropped first: it
-     * is the only card the board itself cannot substitute for the loss of
-     * gameplay information; score, next and hold are never dropped. The
-     * frame's height becomes max(board 22, remaining sidebar) and still
-     * fits a MIN_ROWS terminal.
+     * The column is BUDGETED (candy-tetris-004): it may never stand
+     * taller than min(frameRows, NATURAL_ROWS) — a taller sidebar pushes
+     * the frame's bottom border past the terminal, the same below-the-fold
+     * defect C-2 cured for banners, reached now by content instead of by
+     * window size. When the column would overflow, casualties drop in a
+     * fixed order:
+     *
+     *  1. the help card — the C-2 compact-reflow casualty, now also the
+     *     victim of an armed-badge or --seed expansion at full height;
+     *  2. the SEED stamp — developer replay data, sacrificed only at the
+     *     MIN_ROWS floor where even the stripped column runs out of room.
+     *
+     * Score, next, hold and the earned MA-13 badges are never dropped:
+     * hold/next/score are the facts play is decided on, and a badge that
+     * cannot paint is a moment the player earned and never saw.
      */
-    private static function renderSidebar(Game $game, bool $compact = false, bool $plain = false): string
+    private static function renderSidebar(Game $game, bool $plain = false): string
     {
+        $budget = min($game->frameRows, self::NATURAL_ROWS);
         $next = $game->bag->peek(3);
         $previews = [];
         foreach ($next as $kind) {
@@ -316,8 +328,11 @@ final class Renderer
             'level' => (string) $game->score->level,
         ]);
         // MA-13: badge the earned moments INSIDE the score card — rows are
-        // added only while something is armed, so a fresh game keeps the
-        // natural-height frame the goldens and ViewportTest pin.
+        // added only while something is armed, and the candy-tetris-004
+        // budget below never sacrifices an armed row: when the expanded
+        // card will not fit, the help card (and finally the seed stamp)
+        // gives way instead, so a fresh game keeps the exact frame the
+        // goldens and ViewportTest pin and an armed one stays on-screen.
         if ($game->lastAward !== null) {
             $score .= "\n" . $game->lastAward;
         }
@@ -333,9 +348,10 @@ final class Renderer
         // and golden stays byte-identical. 'SEED <n>' is developer-facing
         // replay data (a number to retype), kept raw English on purpose:
         // translating the token would make it unsearchable in help text.
-        if ($game->reproducible === true) {
-            $score .= "\nSEED " . $game->seed;
-        }
+        // Under the candy-tetris-004 budget this is the LAST casualty (it
+        // is dropped only at the MIN_ROWS floor), so the stamp is built
+        // apart from the card body to keep that rung addressable.
+        $seedStamp = $game->reproducible === true ? "\nSEED " . $game->seed : '';
         // m27: the key column is DERIVED from the live table, so a remap
         // moves the card text with it — the card can no longer lie.
         $help = Support\Bindings::helpCard($game->bindings ?? Support\Bindings::table());
@@ -367,12 +383,36 @@ final class Renderer
             ->width(20)
             ->render($body);
 
-        $cards = [$card($hold), $card($nextStr), $card($score)];
-        if ($compact === false) {
-            $cards[] = $card($help);
+        $column = [$card($hold), $card($nextStr), $card($score . $seedStamp)];
+
+        $full = Layout::joinVertical(0.0, ...[...$column, $card($help)]);
+        if (self::height($full) <= $budget) {
+            return $full;
         }
 
-        return Layout::joinVertical(0.0, ...$cards);
+        $untaught = Layout::joinVertical(0.0, ...$column);
+        if (self::height($untaught) <= $budget) {
+            return $untaught;
+        }
+
+        // Reaching this rung means a floor-sized terminal fully armed AND
+        // stamped: the seed stamp — developer data — is the casualty, so
+        // not one earned badge goes unpainted.
+        $stripped = Layout::joinVertical(0.0, $card($hold), $card($nextStr), $card($score));
+        if (self::height($stripped) <= $budget) {
+            return $stripped;
+        }
+
+        // Unreachable while tooSmall() refuses below MIN_ROWS and the
+        // stripped column measures 24 rows even with all three badges
+        // armed; kept loud per Fail Fast in case a future card grows.
+        throw new LogicException('sidebar cannot fit a ' . $budget . '-row budget even fully stripped');
+    }
+
+    /** Row count of a rendered block — the sidebar's budget measure. */
+    private static function height(string $block): int
+    {
+        return \count(\explode("\n", $block));
     }
 
     private static function renderMini(Tetromino $kind, bool $plain = false): string

@@ -79,15 +79,22 @@ final class EarnedMomentsTest extends TestCase
             'lastAward'  => 'T-SPIN',
             'combo'      => 3,
             'backToBack' => true,
+            'frameRows'  => 24,
         ]);
 
         $frame = $armed->view();
         self::assertStringContainsString('T-SPIN', $frame);
         self::assertStringContainsString('combo x3', $frame);
         self::assertStringContainsString('B2B armed', $frame);
+        // candy-tetris-004: measured in a posture both games share (below
+        // natural height, where the help card is already budgeted out), so
+        // the difference is exactly the badge rows the score card grew by —
+        // at full height the armed frame instead SHRINKS, the help card
+        // paying for the expansion (ViewportTest pins that law).
+        $quiet = $this->fresh()->mutate(['frameRows' => 24]);
         self::assertGreaterThan(
-            count(explode("\n", $this->fresh()->view())),
-            count(explode("\n", $frame)),
+            count(explode("\n", $quiet->view())),
+            count(explode("\n", $armed->view())),
             'badges add rows only while armed',
         );
     }

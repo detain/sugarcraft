@@ -149,6 +149,75 @@ final class ViewportTest extends TestCase
         self::assertLessThanOrEqual(24, count(explode("\n", $frame)), 'reflowed frame fits a MIN_ROWS terminal');
     }
 
+    public function testArmedBadgesStayBudgetedInsideTheNaturalFrame(): void
+    {
+        // candy-tetris-004: an award moment used to add up to three badge
+        // rows to the score card while the sidebar kept its full height —
+        // a 35-36 row census inside a 32-row contract, scrolling the
+        // bottom border off. The help card is the designated casualty:
+        // the frame must stay ≤ NATURAL_ROWS in EVERY state, badges ride.
+        $armed = self::fresh()->mutate([
+            'lastAward'  => 'TETRIS!',
+            'combo'      => 2,
+            'backToBack' => true,
+        ]);
+
+        $rows = self::frameRows($armed);
+        self::assertLessThanOrEqual(
+            Renderer::NATURAL_ROWS,
+            count($rows),
+            'the fully armed sidebar must not exceed the natural frame',
+        );
+        $frame = implode("\n", $rows);
+        self::assertStringContainsString('TETRIS!', $frame, 'an earned badge is never the casualty');
+        self::assertStringContainsString('combo x2', $frame);
+        self::assertStringContainsString('B2B armed', $frame);
+        self::assertStringNotContainsString('p    pause', $frame, 'the help card pays for the expansion');
+    }
+
+    public function testSeededAwardStateAtNaturalHeightKeepsEveryBadgeAndTheStamp(): void
+    {
+        // The --seed stamp on top of all three badges is the worst-case
+        // sidebar: 36 rows un-budgeted. At natural height it must still
+        // fit the frame AND keep every score-card line (the stamp is only
+        // ever sacrificed at the MIN_ROWS floor, see the floor test).
+        $armed = self::fresh()->mutate([
+            'lastAward'    => 'TETRIS!',
+            'combo'        => 2,
+            'backToBack'   => true,
+            'reproducible' => true,
+            'seed'         => 4242,
+        ]);
+
+        $rows = self::frameRows($armed);
+        self::assertLessThanOrEqual(Renderer::NATURAL_ROWS, count($rows));
+        $frame = implode("\n", $rows);
+        self::assertStringContainsString('SEED 4242', $frame);
+        self::assertStringContainsString('B2B armed', $frame);
+    }
+
+    public function testFloorTerminalArmedAndStampedSacrificesTheStampNotABadge(): void
+    {
+        // 24 rows, every badge armed, --seed stamped: even without the
+        // help card the column overflows by one. The seed stamp — the
+        // only developer-facing line in the card — is the casualty;
+        // gameplay facts and earned moments all stay on frame.
+        $armed = self::fresh()->update(new WindowSizeMsg(40, 24))[0]->mutate([
+            'lastAward'    => 'TETRIS!',
+            'combo'        => 2,
+            'backToBack'   => true,
+            'reproducible' => true,
+            'seed'         => 4242,
+        ]);
+
+        $rows = self::frameRows($armed);
+        self::assertLessThanOrEqual(24, count($rows), 'the floor terminal keeps its honest contract');
+        $frame = implode("\n", $rows);
+        self::assertStringContainsString('TETRIS!', $frame);
+        self::assertStringContainsString('B2B armed', $frame);
+        self::assertStringNotContainsString('SEED', $frame, 'the stamp yields before any badge goes unpainted');
+    }
+
     public function testRestartKeepsTheLiveTerminalSize(): void
     {
         $over = self::fresh()->update(new WindowSizeMsg(40, 28))[0]->mutate(['over' => true]);
