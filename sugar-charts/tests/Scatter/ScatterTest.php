@@ -25,8 +25,10 @@ final class ScatterTest extends TestCase
     public function testEndpointsLandAtCornerCells(): void
     {
         // Two points covering the full range: (0,0) bottom-left,
-        // (10,10) top-right.
-        $out = Scatter::new([[0, 0], [10, 10]], 5, 3)->view();
+        // (10,10) top-right. CH-09: gutter axes are on by default; this
+        // pin is about plot geometry, so opt out (disclosed migration —
+        // the default-axes posture gets its own AxesDefaultTest).
+        $out = Scatter::new([[0, 0], [10, 10]], 5, 3)->withAxes(false)->view();
         $rows = explode("\n", $out);
         // Top-right cell carries one '*'.
         $this->assertSame('*', substr($rows[0], -1));
@@ -52,9 +54,14 @@ final class ScatterTest extends TestCase
     public function testExplicitRangePinsAxes(): void
     {
         // Force the range so the single point lands at the midpoint.
+        // CH-09 disclosed: pinned at the full default-axes width math —
+        // the gutter rides in front of the same plot cell, so the probe
+        // column shifts by gutter+1. Opt out to keep this pin about the
+        // range→column mapping it names.
         $out  = Scatter::new([[5.0, 5.0]], 5, 3)
             ->withXRange(0.0, 10.0)
             ->withYRange(0.0, 10.0)
+            ->withAxes(false)
             ->view();
         $rows = explode("\n", $out);
         $this->assertSame('*', $rows[1][2] ?? '');

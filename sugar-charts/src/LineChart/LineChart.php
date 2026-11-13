@@ -38,6 +38,10 @@ use SugarCraft\Style\Theme;
  * point; otherwise the theme palette slot (per series); the built-in
  * dataset palette colours only the legend in unthemed cell mode, where
  * series separate by glyph instead.
+ * The frame policy is deliberate: LineChart draws its own `│`/`└` axis
+ * frame with scaled auto ticks (sugar-charts-033), so unlike Scatter and
+ * OHLC — which gained endpoint-value gutters at construction defaults —
+ * it needs no extra numeric gutter; the axis labels already speak them.
  *
  * ```php
  * $chart = LineChart::new([1, 4, 2, 8, 6, 3, 7], 30, 6)

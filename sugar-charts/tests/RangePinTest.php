@@ -80,11 +80,18 @@ final class RangePinTest extends TestCase
                 )->withMin(500.0)->view(),
                 'Y',
             ],
-            // Scatter is immune to lone-end isolation: its scan fold widens
-            // any pinned seed toward the data (withXRange(10, null) folds the
-            // min down to the samples), and full-end inversions die at the
-            // constructor door. Both arms are pinned in
-            // testScatterFoldAbsorbsLonePinAndCtorDoorRefusesInversion.
+            // CH-09 (sugar-charts-018): Scatter used to fold lone pins
+            // toward the data (unobservable); now the pin is honored and
+            // a lone end that excludes the data refuses the domain at
+            // render, same family as the rest.
+            'Scatter minX above points' => [
+                static fn(): string => Scatter::new([[1.0, 2.0], [3.0, 4.0]], 20, 5)->withXRange(10.0, null)->view(),
+                'X',
+            ],
+            'Scatter minY above points' => [
+                static fn(): string => Scatter::new([[1.0, 2.0], [3.0, 4.0]], 20, 5)->withYRange(10.0, null)->view(),
+                'Y',
+            ],
             'Heatmap min above grid' => [
                 static fn(): string => Heatmap::new([[1.0, 2.0]], 4, 4)->withAutoValueRange(false)->withMin(10.0)->view(),
                 'value',
@@ -136,12 +143,33 @@ final class RangePinTest extends TestCase
         $this->assertNotSame('', $out);
     }
 
-    public function testScatterFoldAbsorbsLonePinAndCtorDoorRefusesInversion(): void
+    public function testScatterHonorsLonePinInsideData(): void
     {
-        $out = Scatter::new([[1.0, 2.0], [3.0, 4.0]], 20, 5)->withXRange(10.0, null)->view();
-        $this->assertNotSame('', $out, 'the fold must still plot the points');
+        // CH-09 (sugar-charts-018): a lone pinned min below the data is
+        // HONORED — the point shifts right compared to the auto domain.
+        $points = [[6.0, 1.0], [8.0, 2.0]];
+        $auto   = Scatter::new($points, 20, 5)->withAxes(false)->view();
+        $pinned = Scatter::new($points, 20, 5)->withAxes(false)->withXRange(5.0, null)->view();
+        $this->assertNotSame($auto, $pinned, 'the honored pin must move the plot');
+        $strip = static fn (string $s): string => (string) preg_replace('/\e\[[0-9;]*m/', '', $s);
+        $autoFirst   = [];
+        $pinFirst    = [];
+        foreach (explode("\n", $strip($auto)) as $r) {
+            $at = strpos($r, '*');
+            if ($at !== false) { $autoFirst[] = $at; }
+        }
+        foreach (explode("\n", $strip($pinned)) as $r) {
+            $at = strpos($r, '*');
+            if ($at !== false) { $pinFirst[] = $at; }
+        }
+        $this->assertNotEmpty($autoFirst);
+        $this->assertSame(min($autoFirst), 0, 'auto domain hugs the left edge');
+        $this->assertGreaterThan(min($autoFirst), min($pinFirst), 'pinned domain pushes the first point inward');
+    }
 
+    public function testScatterCtorDoorRefusesFullInversion(): void
+    {
         $this->expectException(\InvalidArgumentException::class);
-        Scatter::new([[1.0, 2.0], [3.0, 4.0]], 20, 5)->withXRange(10.0, 2.0);
+        Scatter::new([[1.0, 1.0]], 20, 5)->withXRange(10.0, 2.0);
     }
 }

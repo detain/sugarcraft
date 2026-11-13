@@ -10,9 +10,11 @@ use SugarCraft\Charts\Chart\Position;
 use SugarCraft\Charts\Lang;
 use SugarCraft\Charts\Support\Range;
 use SugarCraft\Charts\Support\Rune;
+use SugarCraft\Charts\Support\NumberLabel;
 use SugarCraft\Charts\Support\UntrustedText;
 use SugarCraft\Charts\Canvas\Canvas;
 use SugarCraft\Core\Util\Color;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Style\Style;
 use SugarCraft\Charts\Legend\Legend;
 
@@ -80,6 +82,7 @@ final class OHLCChart implements ChromeAccessors
         public readonly ?string $xLabel = null,
         public readonly ?string $yLabel = null,
         private readonly array $legendItems = [],
+        public readonly bool $showAxes = true,
     ) {
         if ($width < 0 || $height < 0) {
             throw new \InvalidArgumentException(Lang::t('ohlc.dim_nonneg'));
@@ -203,11 +206,21 @@ final class OHLCChart implements ChromeAccessors
         return $this->copy(legendItems: UntrustedText::guardItems($items));
     }
 
+    /**
+     * Show the price-range endpoint gutter (sugar-charts-033). ON by
+     * default; withAxes(false) restores the bare candle frame.
+     */
+    public function withAxes(bool $on = true): self
+    {
+        return $this->copy(showAxes: $on);
+    }
+
     // ─── Short-form Aliases ─────────────────────────────────────────────
 
     /** @param list<Bar> $bars */
     public function bars(array $bars): self                    { return $this->withBars($bars); }
     public function size(int $w, int $h): self                 { return $this->withSize($w, $h); }
+    public function axes(bool $on = true): self                 { return $this->withAxes($on); }
     public function min(?float $m): self                       { return $this->withMin($m); }
     public function max(?float $m): self                       { return $this->withMax($m); }
     public function bodyRunes(string $bull, string $bear): self { return $this->withBodyRunes($bull, $bear); }
@@ -278,7 +291,14 @@ final class OHLCChart implements ChromeAccessors
         [$min, $max] = Range::resolve($this->min, $this->max, min($values), max($values), 'Y');
         if ($max == $min) { $max = $min + 1.0; }
 
-        $canvas = new Canvas($this->width, $this->height);
+        // sugar-charts-033: price-range endpoints on a left gutter by
+        // default; withAxes(false) restores the bare frame.
+        $gW = 0;
+        if ($this->showAxes) {
+            $gW = max(Width::string(NumberLabel::format($min)), Width::string(NumberLabel::format($max)));
+        }
+        $plotW  = $gW > 0 ? max(1, $this->width - $gW - 1) : $this->width;
+        $canvas = new Canvas($plotW, $this->height);
 
         $rowFor = function (float $v) use ($min, $max): int {
             $norm = ((float) $v - $min) / ($max - $min);
@@ -289,7 +309,7 @@ final class OHLCChart implements ChromeAccessors
         foreach ($bars as $i => $bar) {
             $col = $count <= 1
                 ? 0
-                : (int) round($i * ($this->width - 1) / ($count - 1));
+                : (int) round($i * ($plotW - 1) / ($count - 1));
             $highRow  = $rowFor($bar->high);
             $lowRow   = $rowFor($bar->low);
             $bodyTop  = $rowFor($bar->bodyTop());
@@ -306,7 +326,19 @@ final class OHLCChart implements ChromeAccessors
                 $canvas->setCell($col, $r, $rune, $style);
             }
         }
-        return $canvas->view();
+        if ($gW === 0) {
+            return $canvas->view();
+        }
+        $rows  = explode("\n", $canvas->view());
+        $top   = str_pad(NumberLabel::format($max), $gW, ' ', STR_PAD_LEFT);
+        $bot   = str_pad(NumberLabel::format($min), $gW, ' ', STR_PAD_LEFT);
+        $blank = str_repeat(' ', $gW);
+        $last  = count($rows) - 1;
+        foreach ($rows as $i => $line) {
+            $prefix   = $i === 0 ? $top : ($i === $last ? $bot : $blank);
+            $rows[$i] = $prefix . '│' . $line;
+        }
+        return implode("\n", $rows);
     }
 
     public function __toString(): string { return $this->view(); }
@@ -344,6 +376,7 @@ final class OHLCChart implements ChromeAccessors
         ?string $yLabel = null,
         bool $yLabelSet = false,
         ?array $legendItems = null,
+        ?bool $showAxes = null,
     ): self {
         return new self(
             bars:               $bars               ?? $this->bars,
@@ -364,6 +397,7 @@ final class OHLCChart implements ChromeAccessors
             xLabel:             ($xLabelSet || $xLabel !== null) ? $xLabel : $this->xLabel,
             yLabel:             ($yLabelSet || $yLabel !== null) ? $yLabel : $this->yLabel,
             legendItems:        $legendItems        ?? $this->legendItems,
+            showAxes:           $showAxes           ?? $this->showAxes,
         );
     }
 }

@@ -14,6 +14,8 @@ use SugarCraft\Charts\Support\Range;
 use SugarCraft\Charts\Support\Rune;
 use SugarCraft\Charts\Canvas\Canvas;
 use SugarCraft\Charts\Legend\Legend;
+use SugarCraft\Charts\Support\NumberLabel;
+use SugarCraft\Core\Util\Width;
 
 /**
  * Scatter plot — like {@see \SugarCraft\Charts\LineChart\LineChart} but
@@ -66,6 +68,7 @@ final class Scatter implements ChromeAccessors
         public readonly ?string $xLabel = null,
         public readonly ?string $yLabel = null,
         private readonly array $legendItems = [],
+        public readonly bool $showAxes = true,
     ) {
         if ($width < 0 || $height < 0) {
             throw new \InvalidArgumentException(Lang::t('scatter.dim_nonneg'));
@@ -181,6 +184,16 @@ final class Scatter implements ChromeAccessors
         return $this->copy(legendItems: UntrustedText::guardItems($items));
     }
 
+    /**
+     * Show the value-range endpoint gutter (sugar-charts-033). ON by
+     * default for Scatter — a bare rune cloud without scale is the
+     * defect this opt-out guards against, not the desired posture.
+     */
+    public function withAxes(bool $on = true): self
+    {
+        return $this->copy(showAxes: $on);
+    }
+
     // ─── Short-form Aliases ─────────────────────────────────────────────
 
     /** @param list<array{0:int|float,1:int|float}> $points */
@@ -189,6 +202,7 @@ final class Scatter implements ChromeAccessors
     public function xRange(?float $min, ?float $max): self   { return $this->withXRange($min, $max); }
     public function yRange(?float $min, ?float $max): self   { return $this->withYRange($min, $max); }
     public function rune(string $rune): self                 { return $this->withRune($rune); }
+    public function axes(bool $on = true): self              { return $this->withAxes($on); }
     public function legend(bool $on = true): self            { return $this->withLegend($on); }
     public function legendPos(Position $pos): self           { return $this->withLegendPosition($pos); }
     public function legendStyle(?string $char): self         { return $this->withLegendStyle($char); }
@@ -240,40 +254,65 @@ final class Scatter implements ChromeAccessors
      */
     private function renderChart(): string
     {
-        $minX = $this->minX;
-        $maxX = $this->maxX;
-        $minY = $this->minY;
-        $maxY = $this->maxY;
-        if ($minX === null || $maxX === null || $minY === null || $maxY === null) {
-            foreach ($this->points as $p) {
-                $x = (float) $p[0];
-                $y = (float) $p[1];
-                $minX = $minX === null ? $x : min($minX, $x);
-                $maxX = $maxX === null ? $x : max($maxX, $x);
-                $minY = $minY === null ? $y : min($minY, $y);
-                $maxY = $maxY === null ? $y : max($maxY, $y);
-            }
+        // sugar-charts-018: scan ONLY the null ends. A pinned bound is
+        // honored even when the data sits inside it — the fold that used
+        // to widen pinned seeds toward the data made pins unobservable.
+        $sMinX = $sMaxX = $sMinY = $sMaxY = null;
+        foreach ($this->points as $p) {
+            $x = (float) $p[0];
+            $y = (float) $p[1];
+            $sMinX = $sMinX === null ? $x : min($sMinX, $x);
+            $sMaxX = $sMaxX === null ? $x : max($sMaxX, $x);
+            $sMinY = $sMinY === null ? $y : min($sMinY, $y);
+            $sMaxY = $sMaxY === null ? $y : max($sMaxY, $y);
         }
-        // sugar-charts-056: immune by construction — the fold above widens
-        // any lone pinned seed toward the data, and full-end inversions
-        // are refused at the constructor door (Range::pin in the ctor and
-        // every copy() rebuild). Nothing here can be inverted by render.
+        $minX = $this->minX ?? $sMinX;
+        $maxX = $this->maxX ?? $sMaxX;
+        $minY = $this->minY ?? $sMinY;
+        $maxY = $this->maxY ?? $sMaxY;
+        // A lone pinned end that excludes the whole data set yields an
+        // inverted effective domain — refuse it here (sugar-charts-056
+        // now reaches Scatter's live path; the ctor only sees pins).
+        Range::pin($minX, $maxX, 'X');
+        Range::pin($minY, $maxY, 'Y');
         if ($maxX == $minX) { $maxX = $minX + 1.0; }
         if ($maxY == $minY) { $maxY = $minY + 1.0; }
 
-        $canvas = new Canvas($this->width, $this->height);
+        // sugar-charts-033: quantitative context by default — the Y-range
+        // endpoints ride a left gutter so a bare cloud of runes is never
+        // scale-less. Opt out with withAxes(false).
+        $gW = 0;
+        if ($this->showAxes) {
+            $gW = max(
+                Width::string(NumberLabel::format((float) $minY)),
+                Width::string(NumberLabel::format((float) $maxY)),
+            );
+        }
+        $canvas = new Canvas($gW > 0 ? max(1, $this->width - $gW - 1) : $this->width, $this->height);
         foreach ($this->points as $p) {
             $x = (float) $p[0];
             $y = (float) $p[1];
             // Clamped to the plot like LineChart::rowForValue — a point
             // outside a manually pinned range lands on the edge column/row
             // instead of being silently dropped off-canvas.
-            $col = (int) round(self::norm($x, $minX, $maxX) * ($this->width - 1));
+            $col = (int) round(self::norm($x, $minX, $maxX) * ($canvas->width() - 1));
             // Y is inverted so larger values sit at the top.
             $row = (int) round((1.0 - self::norm($y, $minY, $maxY)) * ($this->height - 1));
             $canvas->setCell($col, $row, $this->rune);
         }
-        return $canvas->view();
+        if ($gW === 0) {
+            return $canvas->view();
+        }
+        $rows  = explode("\n", $canvas->view());
+        $top   = str_pad(NumberLabel::format((float) $maxY), $gW, ' ', STR_PAD_LEFT);
+        $bot   = str_pad(NumberLabel::format((float) $minY), $gW, ' ', STR_PAD_LEFT);
+        $blank = str_repeat(' ', $gW);
+        $last  = count($rows) - 1;
+        foreach ($rows as $i => $line) {
+            $prefix   = $i === 0 ? $top : ($i === $last ? $bot : $blank);
+            $rows[$i] = $prefix . '│' . $line;
+        }
+        return implode("\n", $rows);
     }
 
     /**
@@ -321,6 +360,7 @@ final class Scatter implements ChromeAccessors
         ?string $yLabel = null,
         bool $yLabelSet = false,
         ?array $legendItems = null,
+        ?bool $showAxes = null,
     ): self {
         return new self(
             points:             $points             ?? $this->points,
@@ -339,6 +379,7 @@ final class Scatter implements ChromeAccessors
             xLabel:             ($xLabelSet || $xLabel !== null) ? $xLabel : $this->xLabel,
             yLabel:             ($yLabelSet || $yLabel !== null) ? $yLabel : $this->yLabel,
             legendItems:        $legendItems        ?? $this->legendItems,
+            showAxes:           $showAxes           ?? $this->showAxes,
         );
     }
 }
