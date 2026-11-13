@@ -172,6 +172,41 @@ final class HelpTest extends TestCase
         $this->assertStringContainsString('c gamma', $out);
     }
 
+    public function testFullViewClampsToMaxWidth(): void
+    {
+        $cols = [
+            [$this->b('ctrl+x', 'a very long description that no terminal sidebar wants')],
+            [$this->b('q', 'quit')],
+        ];
+        $help = (new Help())->withWidth(100);
+        $wide = $help->fullHelpView($cols);
+        // Generous cap: side-by-side layout survives, nothing truncated.
+        $this->assertStringNotContainsString('…', $wide);
+
+        $narrow = (new Help())->withWidth(30)->fullHelpView($cols);
+        foreach (explode("\n", $narrow) as $line) {
+            $this->assertLessThanOrEqual(30, \SugarCraft\Core\Util\Width::string($line), 'no full-view row overruns maxWidth');
+        }
+        // 30 < 40: the matrix stacked to one column, so the long row got
+        // the balanced ellipsis cut rather than a second squeezed column.
+        $this->assertStringContainsString('…', $narrow);
+        $this->assertStringContainsString('ctrl+x a very', $narrow);
+        // The stacking discriminator: with one squeezed row per line the
+        // second column's entry would be truncated away entirely; in the
+        // single-column stack 'q quit' keeps its own row.
+        $this->assertStringContainsString('q quit', $narrow);
+        // SGR balance: every emitted line is self-closed (rowClose before
+        // the ellipsis) — strip round-trip proves nothing was left open.
+        foreach (explode("\n", $narrow) as $line) {
+            $state = \SugarCraft\Core\SgrState::initial();
+            $parser = new \SugarCraft\Core\Util\Parser();
+            foreach ($parser->parse($line) as $token) {
+                $state->apply($token);
+            }
+            $this->assertSame('', $state->rowClose(), 'line leaves no SGR state open: ' . $line);
+        }
+    }
+
     public function testCustomFullSeparator(): void
     {
         // Two-row column → fullSeparator joins the rows.

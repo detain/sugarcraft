@@ -124,10 +124,12 @@ final class Help
     }
 
     /**
-     * Cap the rendered width (cells). When the short view would exceed
-     * `$cells`, trailing entries get dropped and the {@see $ellipsis}
-     * glyph is appended. Pass `0` (default) to disable truncation.
-     * Mirrors Bubbles' `Help.SetWidth` / `Help.Width`.
+     * Cap the rendered width (cells) of BOTH views. Short: entries past
+     * the budget are cut and the {@see $ellipsis} glyph is appended.
+     * Full (W-17): below ~40 cells the column matrix stacks into a single
+     * column, and every row is clamped to the same SGR-balanced
+     * truncation, so no row overruns the cap. Pass `0` (default) to
+     * disable truncation. Mirrors Bubbles' `Help.SetWidth` / `Help.Width`.
      */
     public function withWidth(int $cells): self
     {
@@ -170,7 +172,7 @@ final class Help
      */
     public function getWidth(): int { return $this->maxWidth; }
 
-    /** Truncation glyph appended when the short row exceeds {@see $maxWidth}. */
+    /** Truncation glyph appended when a rendered row exceeds {@see $maxWidth}. */
     public function withEllipsis(string $glyph): self
     {
         return $this->copy(ellipsis: $glyph);
@@ -296,6 +298,17 @@ final class Help
         if ($columns === []) {
             return '';
         }
+        // W-17: the full block used to ignore `maxWidth` entirely — padding,
+        // column gaps and all rows could overrun any host budget. Below the
+        // two-column practical minimum (~40 cells) the matrix stacks into a
+        // single column (side-by-side cannot carry useful key/description
+        // pairs there); every row additionally runs through the same
+        // SGR-balanced truncate() the short path uses, so no row exceeds the
+        // cap and no styled row is left open.
+        if ($this->maxWidth > 0 && count($columns) > 1 && $this->maxWidth < 40) {
+            /** @var list<list<Binding>> $columns */
+            $columns = [array_merge(...$columns)];
+        }
         /** @var list<list<string>> $colLines */
         $colLines = [];
         $maxRows = 0;
@@ -331,7 +344,11 @@ final class Help
             foreach ($colLines as $col) {
                 $row[] = $col[$i];
             }
-            $out[] = rtrim(implode($this->columnGap, $row));
+            $line = rtrim(implode($this->columnGap, $row));
+            if ($this->maxWidth > 0 && Width::string($line) > $this->maxWidth) {
+                $line = $this->truncate($line);
+            }
+            $out[] = $line;
         }
         return implode($this->fullSeparator, $out);
     }
