@@ -104,7 +104,8 @@ return [
     'cli.argv.hint.model_value' => 'Write it as --model=<name> if the model name begins with "-"; it may not be omitted.',
     'cli.argv.hint.output_format_value' => 'Write it as --output-format=<value> if the format begins with "-"; it may not be omitted.',
     'cli.argv.hint.output_formats' => 'Valid formats are: {formats} (lowercase).',
-    'cli.argv.hint.prompt_dash' => 'To pass a prompt that begins with "-", use --prompt=<text> (drop -p). Put options before or after the prompt, never between -p and its text.',
+    'cli.argv.hint.prompt_dash' => 'To pass a prompt that begins with "-", use --prompt=<text> (drop -p).',
+    'cli.argv.hint.prompt_separator' => 'Put the prompt before --, or write it as --prompt=<text>.',
     'cli.argv.hint.quote_prompt' => 'Quote the whole prompt as one argument: -p "<prompt>".',
     'cli.argv.hint.resume_needs_target' => 'Pass --resume <id|name> (see `candy-code session list`), or drop -p to pick the session interactively.',
     'cli.argv.hint.root_once' => 'Name the project directory once: as a bare argument or with --root <dir>, not both.',
@@ -134,6 +135,7 @@ return [
     'cli.argv.output_format.unsupported' => '--output-format {format}: unsupported output format',
     'cli.argv.prompt.duplicate' => 'more than one -p/--prompt given; using the last value.',
     'cli.argv.prompt_is_flag' => '{option} expects a prompt, but the next argument is the option {value}',
+    'cli.argv.prompt_is_separator' => '{option} expects a prompt, but the next argument is the end-of-options marker --',
     'cli.argv.resume.not_found' => '--resume: no stored session has the id or name `{target}`',
     'cli.argv.resume.store_unavailable' => '--resume: cannot open the session store: {error}',
     'cli.argv.resume_picker_with_prompt' => 'a bare --resume opens the interactive session picker and cannot be combined with -p/run',
@@ -141,6 +143,8 @@ return [
     'cli.argv.root.missing' => '--root expects a directory, but the argument list ended',
     'cli.argv.root.no_such_directory' => '--root {root}: no such directory',
     'cli.argv.root.not_a_directory' => '--root {root}: not a directory',
+    'cli.argv.root.operand_no_such_directory' => '{root}: no such directory',
+    'cli.argv.root.operand_not_a_directory' => '{root}: not a directory',
     'cli.argv.root_twice' => 'the project root is already {root}, but the argument {operand} also names one',
     'cli.argv.unexpected.many' => 'unexpected arguments: {operands}',
     'cli.argv.unexpected.one' => 'unexpected argument: {operands}',
@@ -759,7 +763,7 @@ Options:
                          error (exit 2) naming the offending line number;
                          non-user types and events without usable text
                          content are counted, named once on stderr, and
-                         skipped. The 10 MiB stdin cap counts raw bytes
+                         skipped. The {stdin-cap} stdin cap counts raw bytes
                          before parsing, and a run with nothing to read
                          refuses with exit 2. Requires -p or the run verb,
                          and refuses beside a subcommand.

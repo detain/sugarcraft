@@ -184,7 +184,7 @@ final class Help
     public static function screen(): string
     {
         return HelpPageReflow::reflow(
-            HelpText::renderPage(Lang::t('cli.help.screen')),
+            HelpText::renderPage(Lang::t('cli.help.screen', ['stdin-cap' => NonInteractive::STDIN_CAP_LABEL])),
             self::helpRenderWidth(),
         );
     }

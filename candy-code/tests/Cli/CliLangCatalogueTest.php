@@ -204,7 +204,10 @@ final class CliLangCatalogueTest extends TestCase
     public function testTheHelpScreenIsItsOneCatalogueEntry(): void
     {
         $english = self::english();
-        self::assertSame($english['cli.help.screen'], Help::screen());
+        self::assertSame(
+            \strtr($english['cli.help.screen'], ['{stdin-cap}' => \SugarCraft\Code\Cli\NonInteractive::STDIN_CAP_LABEL]),
+            Help::screen(),
+        );
         self::assertStringStartsWith("CandyCode — AI coding assistant for the terminal.\n\nUsage:\n", Help::screen());
         self::assertStringEndsWith("  https://github.com/detain/sugarcraft/tree/master/candy-code\n", Help::screen());
     }

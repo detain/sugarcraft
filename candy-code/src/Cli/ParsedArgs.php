@@ -432,6 +432,10 @@ final readonly class ParsedArgs
          *  are strictly sequential — this mints no parallelism, which the
          *  probe says the N-process fan-out already covers. */
         public bool $batch = false,
+        /** True when {@see $root} came from a bare path-shaped operand rather
+         *  than `--root`, so {@see ArgvParser::rootError()} can echo the form
+         *  the user actually typed instead of naming a flag they never wrote. */
+        public bool $rootIsOperand = false,
     ) {
     }
 
@@ -527,7 +531,8 @@ final readonly class ParsedArgs
         string $inputFormat = ParsedArgs::DEFAULT_INPUT_FORMAT,
         ?string $agent = null,
         bool $batch = false,
+        bool $rootIsOperand = false,
     ): self {
-        return new self($help, $prompt, $root, $outputFormat, $unknownFlags, $promptRequested, $version, $usageError, $usageHint, $configPath, $subcommand, $subcommandArgs, $model, $permissionMode, $continueSession, $resumeSession, $resumeRequested, $positionals, null, $subcommandFlags, $maxCost, $maxTurns, $jsonSchema, $worktreeRequested, $worktreeName, $appendSystemPrompt, $incognito, $restricted, $safeMode, $sessionId, $inputFormat, $agent, $batch);
+        return new self($help, $prompt, $root, $outputFormat, $unknownFlags, $promptRequested, $version, $usageError, $usageHint, $configPath, $subcommand, $subcommandArgs, $model, $permissionMode, $continueSession, $resumeSession, $resumeRequested, $positionals, null, $subcommandFlags, $maxCost, $maxTurns, $jsonSchema, $worktreeRequested, $worktreeName, $appendSystemPrompt, $incognito, $restricted, $safeMode, $sessionId, $inputFormat, $agent, $batch, $rootIsOperand);
     }
 }

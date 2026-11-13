@@ -146,6 +146,8 @@ final class ArgvParser
         $jsonSchema = null;
         $appendSystemPrompt = null;
         $endOfOptions = false;
+        // [option, rejected token] while -p/--prompt waits for a bare word past an option.
+        $pendingPrompt = null;
         $subcommand = null;
         $subcommandArgs = [];
         $subcommandFlags = [];
@@ -295,35 +297,55 @@ final class ArgvParser
                 continue;
             }
 
-            // -p <value>
-            if ($arg === '-p') {
+            // -p <value> / --prompt <value>
+            if ($arg === '-p' || $arg === '--prompt') {
                 $next = $argv[$i + 1] ?? null;
                 // `-p --prompt=<text>`: the `=` form is the documented escape for
                 // a dash-leading prompt, so it IS the value; refusing it told the
                 // user to type the very token that was just rejected.
-                if ('-p' === '-p' && $next !== null && \str_starts_with($next, '--prompt=')) {
+                if ($next !== null && \str_starts_with($next, '--prompt=')) {
                     $duplicateNoticed = self::noticePromptOverride($prompt, $duplicateNoticed);
                     $prompt = \substr($next, 9);
                     $promptRequested = true;
+                    $pendingPrompt = null;
                     $i += 2;
                     continue;
                 }
                 if (self::looksLikeFlag($next)) {
-                    if ($usageError === null) {
-                        $usageError = self::flagAsPromptError('-p', (string) $next);
-                        $usageHint = self::promptDashHint();
-                    }
                     $promptRequested = true;
-                    // The rejected token stays in the stream so `--help` can still
-                    // answer, EXCEPT `--version`/`-v`: bin/candy-code prints the
-                    // version before it looks at the usage error, so `-p --version`
-                    // exited 0 having silently lost its prompt.
-                    $i += ($next === '--version' || $next === '-v') ? 2 : 1;
+                    if ($next === '--') {
+                        // The end-of-options marker is not a prompt and not an
+                        // option either; say so instead of calling it "the option --".
+                        if ($usageError === null) {
+                            $usageError = 'candy-code: ' . Lang::t('cli.argv.prompt_is_separator', ['option' => $arg]);
+                            $usageHint = Lang::t('cli.argv.hint.prompt_separator');
+                        }
+                        ++$i;
+                        continue;
+                    }
+                    if ($next === '--version' || $next === '-v') {
+                        // bin/candy-code prints the version before it looks at the
+                        // usage error, so `-p --version` exited 0 having silently
+                        // lost its prompt: refuse and swallow the token.
+                        if ($usageError === null) {
+                            $usageError = self::flagAsPromptError($arg, (string) $next);
+                            $usageHint = self::promptDashHint();
+                        }
+                        $i += 2;
+                        continue;
+                    }
+                    // getopt-style: options may sit between -p and its text
+                    // (`-p --output-format json "text"`). The flag stays in the
+                    // stream; the next bare word becomes the prompt, and only a
+                    // line that never supplies one is refused (at the loop tail).
+                    $pendingPrompt ??= [$arg, (string) $next];
+                    ++$i;
                     continue;
                 }
                 $duplicateNoticed = self::noticePromptOverride($prompt, $duplicateNoticed); // 1021 INFO-4
                 $prompt = $next;
                 $promptRequested = true;
+                $pendingPrompt = null;
                 $i += 2;
                 continue;
             }
@@ -334,39 +356,6 @@ final class ArgvParser
                 $prompt = \substr($arg, 9); // length of "--prompt="
                 $promptRequested = true;
                 ++$i;
-                continue;
-            }
-
-            // --prompt <value>
-            if ($arg === '--prompt') {
-                $next = $argv[$i + 1] ?? null;
-                // `-p --prompt=<text>`: the `=` form is the documented escape for
-                // a dash-leading prompt, so it IS the value; refusing it told the
-                // user to type the very token that was just rejected.
-                if ('--prompt' === '-p' && $next !== null && \str_starts_with($next, '--prompt=')) {
-                    $duplicateNoticed = self::noticePromptOverride($prompt, $duplicateNoticed);
-                    $prompt = \substr($next, 9);
-                    $promptRequested = true;
-                    $i += 2;
-                    continue;
-                }
-                if (self::looksLikeFlag($next)) {
-                    if ($usageError === null) {
-                        $usageError = self::flagAsPromptError('--prompt', (string) $next);
-                        $usageHint = self::promptDashHint();
-                    }
-                    $promptRequested = true;
-                    // The rejected token stays in the stream so `--help` can still
-                    // answer, EXCEPT `--version`/`-v`: bin/candy-code prints the
-                    // version before it looks at the usage error, so `-p --version`
-                    // exited 0 having silently lost its prompt.
-                    $i += ($next === '--version' || $next === '-v') ? 2 : 1;
-                    continue;
-                }
-                $duplicateNoticed = self::noticePromptOverride($prompt, $duplicateNoticed); // 1021 INFO-4
-                $prompt = $next;
-                $promptRequested = true;
-                $i += 2;
                 continue;
             }
 
@@ -1146,8 +1135,21 @@ final class ArgvParser
                 continue;
             }
 
+            if ($pendingPrompt !== null) {
+                $duplicateNoticed = self::noticePromptOverride($prompt, $duplicateNoticed);
+                $prompt = $arg;
+                $pendingPrompt = null;
+                ++$i;
+                continue;
+            }
+
             $positional[] = $arg;
             ++$i;
+        }
+
+        if ($pendingPrompt !== null && $usageError === null) {
+            $usageError = self::flagAsPromptError($pendingPrompt[0], $pendingPrompt[1]);
+            $usageHint = self::promptDashHint();
         }
 
         // An --output-format nobody implements is a usage error, decided HERE
@@ -1369,11 +1371,13 @@ final class ArgvParser
         // The FIRST positional, when it looks like a path, is the root (see
         // the doc-block for why only the first). It leaves the list; the rest
         // stay for resolveOperands().
+        $rootIsOperand = false;
         if ($root === null && $positional !== [] && self::looksLikePath($positional[0])) {
             $root = \array_shift($positional);
+            $rootIsOperand = true;
         }
 
-        return ParsedArgs::from($help, $prompt, $root, $outputFormat, $unknownFlags, $promptRequested, $version, $usageError, $usageHint, $configPath, $subcommand, $subcommandArgs, $model, $permissionMode, $continueSession, $resumeSession, $resumeRequested, \array_values($positional), $subcommandFlags, $maxCost, $maxTurns, $jsonSchema, $worktreeRequested, $worktreeName, $appendSystemPrompt, $incognito, $restricted, $safeMode, $sessionId, $inputFormat, $agent, $batch);
+        return ParsedArgs::from($help, $prompt, $root, $outputFormat, $unknownFlags, $promptRequested, $version, $usageError, $usageHint, $configPath, $subcommand, $subcommandArgs, $model, $permissionMode, $continueSession, $resumeSession, $resumeRequested, \array_values($positional), $subcommandFlags, $maxCost, $maxTurns, $jsonSchema, $worktreeRequested, $worktreeName, $appendSystemPrompt, $incognito, $restricted, $safeMode, $sessionId, $inputFormat, $agent, $batch, $rootIsOperand);
     }
 
     /**
@@ -1487,10 +1491,17 @@ final class ArgvParser
             return null;
         }
 
-        // An existing file is "not a directory", not "no such directory".
-        return 'candy-code: ' . (file_exists($args->root)
-            ? Lang::t('cli.argv.root.not_a_directory', ['root' => $args->root])
-            : Lang::t('cli.argv.root.no_such_directory', ['root' => $args->root]));
+        // An existing file is "not a directory", not "no such directory"; a
+        // bare operand is echoed as typed, not as a `--root` the user never wrote.
+        $exists = \file_exists($args->root);
+        $key = match (true) {
+            $args->rootIsOperand && $exists => 'cli.argv.root.operand_not_a_directory',
+            $args->rootIsOperand => 'cli.argv.root.operand_no_such_directory',
+            $exists => 'cli.argv.root.not_a_directory',
+            default => 'cli.argv.root.no_such_directory',
+        };
+
+        return 'candy-code: ' . Lang::t($key, ['root' => $args->root]);
     }
 
     /**

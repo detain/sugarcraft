@@ -166,7 +166,7 @@ final class LangLaunchLocaleTest extends TestCase
             \fclose($pipes[2]);
 
             self::assertSame(0, \proc_close($process));
-            self::assertSame(Lang::inLocale('en', static fn (): string => Lang::t('cli.help.screen')), $stdout);
+            self::assertSame(Lang::inLocale('en', static fn (): string => Lang::t('cli.help.screen', ['stdin-cap' => \SugarCraft\Code\Cli\NonInteractive::STDIN_CAP_LABEL])), $stdout);
         } finally {
             $this->sweepChildHome($childHome);
         }
