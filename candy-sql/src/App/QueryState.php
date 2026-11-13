@@ -35,6 +35,7 @@ final class QueryState
         public readonly ?TextArea $editor = null,
         public readonly array $history = [],
         public readonly array $favorites = [],
+        public readonly int $queryGen = 0,
     ) {}
 
     public static function new(): self
@@ -74,5 +75,18 @@ final class QueryState
     public function withFavorites(array $favorites): self
     {
         return $this->mutate(['favorites' => $favorites]);
+    }
+
+    /**
+     * Advance the async query generation (client-012). The old staleness arm
+     * compared SQL TEXT (`history[0] === $msg->sql`), so SELECT → write →
+     * re-SELECT admitted the older in-flight answer back over the newer one
+     * (pre-write data settled on screen). Bumped at each async dispatch, the
+     * generation rides the reply Msg and the fold only accepts its own —
+     * any superseded leg drops regardless of how the statements read.
+     */
+    public function withIncrementedQueryGen(): self
+    {
+        return $this->mutate(['queryGen' => $this->queryGen + 1]);
     }
 }

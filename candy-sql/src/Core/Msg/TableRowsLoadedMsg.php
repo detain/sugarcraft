@@ -18,10 +18,14 @@ final readonly class TableRowsLoadedMsg implements Msg
 {
     /**
      * @param list<array<string,mixed>> $rows
+     * @param int $loadGen The BrowseState generation this dispatch was issued
+     *        under (client-012); re-selecting the SAME table cannot be seen by
+     *        the name guard, the generation can — superseded legs drop.
      */
     public function __construct(
         public string $table,
         public array $rows,
-        public ?string $error = null,
+        public ?string $error,
+        public int $loadGen,
     ) {}
 }

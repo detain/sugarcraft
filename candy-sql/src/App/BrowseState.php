@@ -28,6 +28,7 @@ final class BrowseState
         public readonly int $rowCursor = 0,
         public readonly ?ResultTable $resultTable = null,
         public readonly bool $rowsLoading = false,
+        public readonly int $loadGen = 0,
     ) {}
 
     public static function new(): self
@@ -70,5 +71,16 @@ final class BrowseState
     public function withRowsLoading(bool $rowsLoading): self
     {
         return $this->mutate(['rowsLoading' => $rowsLoading]);
+    }
+
+    /**
+     * Advance the async browse generation (client-012 companion of
+     * QueryState::withIncrementedQueryGen). A re-selection of the SAME table
+     * leaves selectedTable unchanged, so the table-name guard in the fold
+     * cannot see that the older leg is now superseded; the generation can.
+     */
+    public function withIncrementedLoadGen(): self
+    {
+        return $this->mutate(['loadGen' => $this->loadGen + 1]);
     }
 }

@@ -554,7 +554,7 @@ final class AppTest extends TestCase
             ConnectionState::new(new FakeDatabase(), Flavor::MySQL),
             BrowseState::new()->withTables(['posts', 'users'])->withSelectedTable('users')->withRowsLoading(true),
         );
-        [$next, $cmd] = $app->update(new TableRowsLoadedMsg('users', [['id' => 1], ['id' => 2]]));
+        [$next, $cmd] = $app->update(new TableRowsLoadedMsg('users', [['id' => 1], ['id' => 2]], null, 0));
 
         $this->assertNull($cmd);
         $this->assertFalse($next->browse->rowsLoading);
@@ -569,10 +569,28 @@ final class AppTest extends TestCase
             BrowseState::new()->withTables(['posts', 'users'])->withSelectedTable('users')->withRowsLoading(true),
         );
         // A result for 'posts' arrives after the user already moved on to 'users'.
-        [$next, ] = $app->update(new TableRowsLoadedMsg('posts', [['id' => 99]]));
+        [$next, ] = $app->update(new TableRowsLoadedMsg('posts', [['id' => 99]], null, 0));
 
         $this->assertSame([], $next->browse->rows, 'stale result for a different table is dropped');
         $this->assertTrue($next->browse->rowsLoading, 'the in-flight load keeps its spinner');
+    }
+
+    public function testStaleSameTableGenerationIsIgnored(): void
+    {
+        // SQL-C12/client-012: re-selecting the SAME table bumps loadGen but
+        // leaves selectedTable unchanged — the name guard cannot see that the
+        // older leg is superseded. The fold's generation equality can.
+        $browse = BrowseState::new()
+            ->withTables(['users'])
+            ->withSelectedTable('users')
+            ->withRowsLoading(true)
+            ->withIncrementedLoadGen();
+        $app = new App(ConnectionState::new(new FakeDatabase(), Flavor::MySQL), $browse);
+
+        [$next, ] = $app->update(new TableRowsLoadedMsg('users', [['id' => 99]], null, $browse->loadGen - 1));
+
+        $this->assertSame([], $next->browse->rows, 'a superseded same-table leg stays dropped');
+        $this->assertTrue($next->browse->rowsLoading, 'the current load keeps its spinner');
     }
 
     public function testTableRowsLoadedMsgErrorStashesError(): void
@@ -581,7 +599,7 @@ final class AppTest extends TestCase
             ConnectionState::new(new FakeDatabase(), Flavor::MySQL),
             BrowseState::new()->withTables(['users'])->withSelectedTable('users')->withRowsLoading(true),
         );
-        [$next, ] = $app->update(new TableRowsLoadedMsg('users', [], 'Table dropped'));
+        [$next, ] = $app->update(new TableRowsLoadedMsg('users', [], 'Table dropped', 0));
 
         $this->assertFalse($next->browse->rowsLoading);
         $this->assertSame('Table dropped', $next->ui->error);

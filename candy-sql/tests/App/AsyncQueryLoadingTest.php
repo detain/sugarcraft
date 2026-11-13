@@ -56,7 +56,7 @@ final class AsyncQueryLoadingTest extends TestCase
     {
         [$model] = $this->asyncApp()->update(new KeyMsg(KeyType::Char, 'r', ctrl: true));
 
-        $folded = $model->update(new QueryRowsLoadedMsg(self::SQL, [['a' => 1]], null))[0];
+        $folded = $model->update(new QueryRowsLoadedMsg(self::SQL, [['a' => 1]], null, $model->query->queryGen))[0];
 
         self::assertFalse($folded->browse->rowsLoading);
         self::assertCount(1, $folded->browse->rows);
@@ -67,22 +67,27 @@ final class AsyncQueryLoadingTest extends TestCase
     {
         [$model] = $this->asyncApp()->update(new KeyMsg(KeyType::Char, 'r', ctrl: true));
 
-        $folded = $model->update(new QueryRowsLoadedMsg(self::SQL, [], 'boom'))[0];
+        $folded = $model->update(new QueryRowsLoadedMsg(self::SQL, [], 'boom', $model->query->queryGen))[0];
 
         self::assertFalse($folded->browse->rowsLoading, 'a failed run must not leave the spinner armed');
         self::assertSame('boom', $folded->ui->error);
     }
 
-    public function testAStaleFoldLeavesTheInFlightSpinnerAlone(): void
+    public function testAStaleGenerationFoldLeavesTheInFlightSpinnerAlone(): void
     {
-        [$model] = $this->asyncApp()->update(new KeyMsg(KeyType::Char, 'r', ctrl: true));
+        // SQL-C12/client-012: the dispatch stamp is the staleness authority.
+        // Run the SAME statement twice (the SELECT → write → re-SELECT shape
+        // the old SQL-text compare could not tell apart) and let the FIRST
+        // leg settle late: it carries a superseded generation and must drop,
+        // leaving the current run's spinner armed for its own fold.
+        [$model, ] = $this->asyncApp()->update(new KeyMsg(KeyType::Char, 'r', ctrl: true));
+        $staleGen = $model->query->queryGen;
+        [$model, ] = $model->update(new KeyMsg(KeyType::Char, 'r', ctrl: true));
 
-        // A late reply for a DIFFERENT statement is dropped; the current run's
-        // spinner stays armed until its own fold arrives.
-        $folded = $model->update(new QueryRowsLoadedMsg('SELECT 999', [['a' => 1]], null))[0];
+        $folded = $model->update(new QueryRowsLoadedMsg(self::SQL, [['a' => 1]], null, $staleGen))[0];
 
-        self::assertTrue($folded->browse->rowsLoading);
-        self::assertSame([], $folded->browse->rows);
+        self::assertTrue($folded->browse->rowsLoading, 'the superseded leg must not settle the live spinner');
+        self::assertSame([], $folded->browse->rows, 'pre-run rows from the stale leg stay dropped');
     }
 
     public function testTheSyncPathNeverArmsTheSpinner(): void

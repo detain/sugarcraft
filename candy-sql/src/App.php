@@ -10,6 +10,7 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\ColorProfileMsg;
+use SugarCraft\Core\Msg\ExceptionMsg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\PasteMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
@@ -170,12 +171,14 @@ final class App implements Model
             return [$this, null];
         }
         if ($msg instanceof AdminFetchStartedMsg) {
-            if (!$this->admin->loading) {
-                return [$this->mutate([
-                    'admin' => $this->admin->withLoading(true)->withLastFetchAt(microtime(true)),
-                ]), null];
-            }
-            return [$this, null];
+            // client-027: the throttle stamp belongs to DISPATCH, not to the
+            // !loading edge it used to sit behind. Any start dispatched while
+            // a fetch was already in flight (Admin entry's batch arms included)
+            // left lastFetchAt stale, so the next due tick re-pulled the full
+            // STATUS/VARIABLES pair that very window had already paid for.
+            return [$this->mutate([
+                'admin' => $this->admin->withLoading(true)->withLastFetchAt(microtime(true)),
+            ]), null];
         }
         if ($msg instanceof AdminDataLoadedMsg) {
             // After status/server vars are cached, trigger report reload for
@@ -243,6 +246,21 @@ final class App implements Model
             Style::setDefaultProfile($msg->profile);
             return [$this, null];
         }
+        if ($msg instanceof ExceptionMsg) {
+            // client-026: sugar-core's Program surfaces every command-handler
+            // failure here (rejected promises AND factory throws). The arm was
+            // absent, so the failure fell into the non-KeyMsg silence — the
+            // admin tick then retried on its 1 s cadence with zero tell. Fold
+            // the named cause to the error line; the TUI survives the fault.
+            try {
+                QueryLogger::log('error', 'command', 0, $msg->exception->getMessage());
+            } catch (\Throwable) {
+                // Logging must never turn a surfaced fault back into silence-loss.
+            }
+            return [$this->mutate([
+                'ui' => $this->ui->withError('Async command failed: ' . $msg->exception->getMessage()),
+            ]), null];
+        }
         if (!$msg instanceof KeyMsg) {
             return [$this, null];
         }
@@ -272,10 +290,18 @@ final class App implements Model
         if ($msg->type === KeyType::Tab) {
             $nextPane = $this->ui->pane->next();
             if ($nextPane === Pane::Admin) {
-                // First time entering admin - set loading immediately and trigger fetch
+                // client-027: enter through the same batch the tick uses — its
+                // first Msg (AdminFetchStartedMsg) now folds the loading flag
+                // AND stamps lastFetchAt at dispatch. The old direct
+                // withAdminLoading(true) set the flag but never stamped, so the
+                // first due tick re-pulled the full STATUS/VARIABLES pair the
+                // entry fetch had just paid for (duplicate pull every entry).
                 return [
-                    $this->withPane($nextPane)->withAdminLoading(true),
-                    Cmd::promise(fn() => $this->createAdminFetchPromise($this->admin->historyRecorder)),
+                    $this->withPane($nextPane),
+                    Cmd::batch(
+                        static fn (): Msg => new AdminFetchStartedMsg(),
+                        Cmd::promise(fn () => $this->createAdminFetchPromise($this->admin->historyRecorder)),
+                    ),
                 ];
             }
             return [$this->withPane($nextPane), null];
@@ -626,6 +652,13 @@ final class App implements Model
         // pane renders 'loading…' from it; a false here painted "(empty)" over
         // a still-running query (review C3), indistinguishable from a real
         // zero-row result.
+        //
+        // client-012: bump the query generation BEFORE dispatch so the in-flight
+        // reply carries a number the fold can compare. The old staleness arm
+        // matched SQL TEXT (history[0] === $msg->sql), so SELECT → write →
+        // re-SELECT re-admitted the FIRST leg's pre-write rows over the fresh
+        // run. A monotonic gen makes superseded legs unconditionally droppable.
+        $query = $query->withIncrementedQueryGen();
         $loading = $this->mutate([
             'browse' => $this->browse
                 ->withSelectedTable('(query)')
@@ -636,7 +669,7 @@ final class App implements Model
             'query' => $query,
             'ui' => $this->ui->withError(null)->withStatus('running query…'),
         ]);
-        return [$loading, Cmd::promise(fn () => $this->createQueryPromise($trimmed))];
+        return [$loading, Cmd::promise(fn () => $this->createQueryPromise($trimmed, $query->queryGen))];
     }
 
     /**
@@ -648,16 +681,16 @@ final class App implements Model
      *
      * @return \React\Promise\PromiseInterface<QueryRowsLoadedMsg>
      */
-    private function createQueryPromise(string $sql): \React\Promise\PromiseInterface
+    private function createQueryPromise(string $sql, int $queryGen): \React\Promise\PromiseInterface
     {
         try {
             $context = $this->connection->serverContext ?? $this->createContext();
         } catch (\Throwable $e) {
-            return \React\Promise\resolve(new QueryRowsLoadedMsg($sql, [], $e->getMessage()));
+            return \React\Promise\resolve(new QueryRowsLoadedMsg($sql, [], $e->getMessage(), $queryGen));
         }
         if ($context === null) {
             return \React\Promise\resolve(
-                new QueryRowsLoadedMsg($sql, [], 'This driver does not support async queries'),
+                new QueryRowsLoadedMsg($sql, [], 'This driver does not support async queries', $queryGen),
             );
         }
 
@@ -676,25 +709,28 @@ final class App implements Model
 
         return $connection->query($sql)
             ->then(
-                static fn (array $rows): QueryRowsLoadedMsg => new QueryRowsLoadedMsg($sql, $rows, null),
+                static fn (array $rows): QueryRowsLoadedMsg => new QueryRowsLoadedMsg($sql, $rows, null, $queryGen),
             )
             ->otherwise(
-                static fn (\Throwable $e): QueryRowsLoadedMsg => new QueryRowsLoadedMsg($sql, [], $e->getMessage()),
+                static fn (\Throwable $e): QueryRowsLoadedMsg => new QueryRowsLoadedMsg($sql, [], $e->getMessage(), $queryGen),
             );
     }
 
     /**
      * Fold an async query result into the model.
      *
-     * Mirrors applyLoadedRows for the table-browse path. A result that arrives
-     * after the user has since run another query is considered stale and
-     * dropped — the in-flight result for the old query must not overwrite a
-     * fresh result.
+     * Mirrors applyLoadedRows for the table-browse path. A result whose
+     * dispatch generation no longer matches the current one is stale — a
+     * fresher query was issued after it was dispatched — and is dropped so an
+     * in-flight answer for an old run can never overwrite a newer result. The
+     * generation (not the SQL text) is the staleness authority (client-012):
+     * running the same statement twice with a write between is exactly the
+     * case text comparison got wrong.
      */
     private function applyQueryRows(QueryRowsLoadedMsg $msg): self
     {
-        // Stale result: another query was issued after this one was dispatched.
-        if (($this->query->history[0] ?? '') !== $msg->sql) {
+        // Stale result: a query with a newer generation was dispatched since.
+        if ($msg->queryGen !== $this->query->queryGen) {
             return $this;
         }
         if ($msg->error !== null) {
@@ -730,17 +766,22 @@ final class App implements Model
         if (!$this->asyncTransportAvailable()) {
             return [$this->loadTable($name), null];
         }
+        // client-012: bump the load generation before dispatch. Re-selecting the
+        // SAME table leaves selectedTable unchanged, so the name guard in the
+        // fold cannot see the older leg is now superseded — the gen can.
+        $browse = $this->browse
+            ->withTableCursor(array_search($name, $this->browse->tables, true) ?: 0)
+            ->withSelectedTable($name)
+            ->withRows([])
+            ->withRowCursor(0)
+            ->withResultTable(null)
+            ->withRowsLoading(true)
+            ->withIncrementedLoadGen();
         $loading = $this->mutate([
-            'browse' => $this->browse
-                ->withTableCursor(array_search($name, $this->browse->tables, true) ?: 0)
-                ->withSelectedTable($name)
-                ->withRows([])
-                ->withRowCursor(0)
-                ->withResultTable(null)
-                ->withRowsLoading(true),
+            'browse' => $browse,
             'ui' => $this->ui->withError(null)->withStatus('loading…'),
         ]);
-        return [$loading, Cmd::promise(fn () => $this->createRowsPromise($name))];
+        return [$loading, Cmd::promise(fn () => $this->createRowsPromise($name, $browse->loadGen))];
     }
 
     /**
@@ -805,12 +846,18 @@ final class App implements Model
 
     /**
      * Fold an async browse result into the model. A result for a table the user
-     * has since navigated away from is stale and dropped — leaving the current
-     * in-flight load's spinner untouched.
+     * has since navigated away from, or a superseded load of the SAME table
+     * (out-of-order settle — client-012), is stale and dropped, leaving the
+     * current in-flight load's spinner untouched.
      */
     private function applyLoadedRows(TableRowsLoadedMsg $msg): self
     {
         if ($msg->table !== $this->browse->selectedTable) {
+            return $this;
+        }
+        // Re-selecting the same table keeps selectedTable unchanged; only the
+        // generation can tell the older in-flight leg from the current one.
+        if ($msg->loadGen !== $this->browse->loadGen) {
             return $this;
         }
         if ($msg->error !== null) {
@@ -835,16 +882,16 @@ final class App implements Model
      * metadata query nor the row fetch blocks the UI. Reuses the same pooled
      * async connection as the admin pane (same DSN → same connection key).
      */
-    private function createRowsPromise(string $name): \React\Promise\PromiseInterface
+    private function createRowsPromise(string $name, int $loadGen): \React\Promise\PromiseInterface
     {
         try {
             $context = $this->connection->serverContext ?? $this->createContext();
         } catch (\Throwable $e) {
-            return \React\Promise\resolve(new TableRowsLoadedMsg($name, [], $e->getMessage()));
+            return \React\Promise\resolve(new TableRowsLoadedMsg($name, [], $e->getMessage(), $loadGen));
         }
         if ($context === null) {
             return \React\Promise\resolve(
-                new TableRowsLoadedMsg($name, [], 'Async browse unsupported for this driver'),
+                new TableRowsLoadedMsg($name, [], 'Async browse unsupported for this driver', $loadGen),
             );
         }
 
@@ -868,10 +915,10 @@ final class App implements Model
                 return $connection->query(PreviewQuery::build($flavor, $name, $columns));
             })
             ->then(
-                static fn (array $rows): TableRowsLoadedMsg => new TableRowsLoadedMsg($name, $rows, null),
+                static fn (array $rows): TableRowsLoadedMsg => new TableRowsLoadedMsg($name, $rows, null, $loadGen),
             )
             ->otherwise(
-                static fn (\Throwable $e): TableRowsLoadedMsg => new TableRowsLoadedMsg($name, [], $e->getMessage()),
+                static fn (\Throwable $e): TableRowsLoadedMsg => new TableRowsLoadedMsg($name, [], $e->getMessage(), $loadGen),
             );
     }
 
@@ -1355,21 +1402,48 @@ final class App implements Model
             return \React\Promise\resolve(null);
         }
         foreach ($pending as $sql) {
-            $promises[] = $connection->query($sql)->then(
+            // client-012 never-reject law, dispatch side: a dead pooled client
+            // can throw synchronously from query() — that must mark the leg
+            // errored like any other, never escape the arm into silence.
+            try {
+                $leg = $connection->query($sql);
+            } catch (\Throwable $e) {
+                $cache->markError($sql, $e->getMessage());
+                QueryLogger::log('error', $sql, 0, $e->getMessage());
+                continue;
+            }
+            $promises[] = $leg->then(
                 static function(array $rows) use ($cache, $sql): void {
                     $cache->store($sql, $rows);
                     QueryLogger::log('query', $sql, count($rows));
                 },
                 static function(\Throwable $e) use ($cache, $sql): void {
-                    $cache->store($sql, []);
+                    // client-012 (:1328): MARK the leg errored instead of
+                    // caching an empty list — a stored [] rendered as an
+                    // authoritative "No data" grid on the flagship surfaces.
+                    $cache->markError($sql, $e->getMessage());
                     QueryLogger::log('error', $sql, 0, $e->getMessage());
                 },
             );
         }
 
         if ($drainOnly) {
+            // client-026: the never-reject law closes here. A throwing leg
+            // handler used to reject the whole all(), the promise died in
+            // silence, and the tick looped into a 1 s retry with no tell.
             return \React\Promise\all($promises)->then(
                 static fn(array $results): Msg => new AdminDrainCompletedMsg(),
+            )->otherwise(
+                static function(\Throwable $e): Msg {
+                    try {
+                        QueryLogger::log('error', 'admin drain', 0, $e->getMessage());
+                    } catch (\Throwable) {
+                        // Logging must not re-break the recovery path.
+                    }
+                    // The pages still need their re-read signal: stale/absent
+                    // cache values will re-pend themselves via lookup().
+                    return new AdminDrainCompletedMsg();
+                },
             );
         }
 

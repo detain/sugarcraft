@@ -44,6 +44,18 @@ final class AdminQueryCache
     /** @var array<string, true> */
     private array $pending = [];
 
+    /**
+     * client-012: the last known failure per query. An errored drain leg used
+     * to `store($sql, [])` — the page then rendered that empty list as an
+     * authoritative "No data" grid (the processlist's permanent blank while
+     * the header said Connected/Running). Errored legs are now MARKED here and
+     * their value slots left untouched, so a page sees loading/last-known
+     * truth plus this named cause instead of a fabricated empty success.
+     *
+     * @var array<string, string>
+     */
+    private array $errors = [];
+
     private ?AsyncConnection $connection = null;
     private string $connectionKey = '';
 
@@ -95,7 +107,33 @@ final class AdminQueryCache
     {
         $this->results[$sql] = $rows;
         $this->storedAt[$sql] = microtime(true);
-        unset($this->pending[$sql]);
+        unset($this->pending[$sql], $this->errors[$sql]);
+    }
+
+    /**
+     * Mark a query leg as errored WITHOUT caching an empty result (client-012).
+     *
+     * The drain's failure arm used to `store($sql, [])`; a page reading that
+     * back through {@see self::lookup()} saw an authoritative empty list and
+     * rendered a permanent "No data" grid while the header still said
+     * "Connected". Recording the failure separately leaves the value slot a
+     * true cache miss (null → the page keeps its loading/last-known shape), so
+     * the defect's tell is a named cause instead of a fabricated empty success.
+     */
+    public function markError(string $sql, string $message): void
+    {
+        $this->errors[$sql] = $message;
+        unset($this->results[$sql], $this->storedAt[$sql], $this->pending[$sql]);
+    }
+
+    /**
+     * The last known failure for $sql, or null when none. Cleared by a
+     * subsequent success ({@see self::store()}) or a
+     * {@see self::invalidateConnection()}/{@see self::forget()}.
+     */
+    public function errorFor(string $sql): ?string
+    {
+        return $this->errors[$sql] ?? null;
     }
 
     /**
@@ -120,6 +158,7 @@ final class AdminQueryCache
     {
         $this->results = [];
         $this->storedAt = [];
+        $this->errors = [];
     }
 
     /**

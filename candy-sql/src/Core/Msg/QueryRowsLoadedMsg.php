@@ -18,10 +18,15 @@ final readonly class QueryRowsLoadedMsg implements Msg
 {
     /**
      * @param list<array<string,mixed>> $rows
+     * @param int $queryGen The QueryState generation this dispatch was issued
+     *        under (client-012); the fold drops any reply that does not carry
+     *        the current generation, so a superseded in-flight leg can never
+     *        settle over a fresher result — text comparison could not see it.
      */
     public function __construct(
         public string $sql,
         public array $rows,
-        public ?string $error = null,
+        public ?string $error,
+        public int $queryGen,
     ) {}
 }
