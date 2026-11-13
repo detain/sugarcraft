@@ -123,12 +123,51 @@ final class DiffEncoderTest extends TestCase
         $this->assertSame("\x1b[1;1H\x1b[0;1m\x1b[0m", $bytes);
     }
 
-    public function testEncodeSetStyleOpNullResets(): void
+    public function testEncodeSetStyleOpNullAgainstTheDefaultPenIsSkipped(): void
     {
+        // sugar-cellbuffer-009 disclosure: the old stream carried a redundant
+        // reset for a null-vs-null (no-transition) op. The skip the SetStyleOp
+        // docblock promised is now real, and the terminal state is identical:
+        // the pen was already default.
         $ops = [new SetStyleOp(null)];
         $bytes = $this->encoder->encode($ops);
 
-        $this->assertSame("\x1b[1;1H\x1b[0m", $bytes);
+        $this->assertSame("\x1b[1;1H", $bytes);
+    }
+
+    public function testADoubledSetStyleOpEmitsTheSgrOnce(): void
+    {
+        $ops = [new SetStyleOp(Style::bold()), new SetStyleOp(Style::bold())];
+        $bytes = $this->encoder->encode($ops);
+
+        $this->assertSame("\x1b[1;1H\x1b[0;1m\x1b[0m", $bytes);
+    }
+
+    public function testASetStyleOpEqualByValueToTheCellJustWrittenEmitsNothing(): void
+    {
+        // Value equality, not identity: the pen arrives from a different
+        // instance and must still be recognised as unchanged.
+        $bold = Style::new(null, null, Style::ATTR_BOLD);
+        $ops = [
+            new SetCellOp([Cell::new('X', Style::bold())]),
+            new SetStyleOp($bold),
+            new SetCellOp([Cell::new('Y', $bold)]),
+        ];
+        $bytes = $this->encoder->encode($ops);
+
+        $this->assertSame("\x1b[1;1H\x1b[0;1mXY\x1b[0m", $bytes);
+    }
+
+    public function testARealTransitionStillRidesAfterADuplicate(): void
+    {
+        $ops = [
+            new SetStyleOp(Style::bold()),
+            new SetStyleOp(Style::bold()),
+            new SetStyleOp(Style::reverse()),
+        ];
+        $bytes = $this->encoder->encode($ops);
+
+        $this->assertSame("\x1b[1;1H\x1b[0;1m\x1b[0;7m\x1b[0m", $bytes);
     }
 
     public function testEncodeSetHyperlinkOpOpen(): void

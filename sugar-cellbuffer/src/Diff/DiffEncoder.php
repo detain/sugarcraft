@@ -230,6 +230,15 @@ final class DiffEncoder
 
     private function encodeSetStyle(SetStyleOp $op): string
     {
+        // The same by-value transition guard the SetCellOp write path and
+        // Buffer::diff() apply: a redundant SetStyleOp (hand-built streams
+        // are the documented consumer shape) must not ship duplicate SGR
+        // bytes. The SetStyleOp docblock always promised this skip; here it
+        // is actually true.
+        if (Style::valuesEqual($this->currentStyle, $op->style)) {
+            return '';
+        }
+
         $sgr = $this->emitSgr($op->style);
         $this->currentStyle = $op->style;
 
