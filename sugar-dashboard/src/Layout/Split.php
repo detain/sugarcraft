@@ -7,6 +7,7 @@ namespace SugarCraft\Dashboard\Layout;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 use SugarCraft\Dashboard\Foundation\Drawable;
 use SugarCraft\Dashboard\Foundation\Theme;
 
@@ -307,8 +308,7 @@ final class Split implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     private function renderVerticalDivider(int $paneWidth, int $row, int $maxHeight): string
     {
-        $dividerChar = '│';
-        return str_repeat($dividerChar, $this->dividerSize);
+        return $this->paintDivider(str_repeat('│', $this->dividerSize));
     }
 
     /**
@@ -316,8 +316,22 @@ final class Split implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     private function renderHorizontalDivider(int $width): string
     {
-        $dividerChar = '─';
-        return str_repeat($dividerChar, $width);
+        return $this->paintDivider(str_repeat('─', $width));
+    }
+
+    /**
+     * Apply the configured divider color (finding sugar-dashboard-023: the
+     * knob was accepted everywhere and consulted nowhere — a no-op public
+     * surface on the flagship two-pane widget). Under a profile that cannot
+     * express color the sequences collapse to nothing and bytes stay plain.
+     */
+    private function paintDivider(string $divider): string
+    {
+        if ($this->dividerColor === null) {
+            return $divider;
+        }
+
+        return $this->dividerColor->toFg(ColorMode::profile()) . $divider . Ansi::reset();
     }
 
     // ─── Withers ──────────────────────────────────────────────────

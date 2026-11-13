@@ -92,4 +92,28 @@ final class SplitTest extends TestCase
         $split = Split::horizontal([]);
         $this->assertSame('', $split->render());
     }
+
+    // ═══════════════════════════════════════════════════════════════
+    // dividerColor is consulted (finding sugar-dashboard-023)
+    // ═══════════════════════════════════════════════════════════════
+
+    public function testDividerColorPaintsTheRenderedDivider(): void
+    {
+        $split = Split::horizontal([new Text('a'), new Text('b')])
+            ->withDividerColor(\SugarCraft\Core\Util\Color::hex('#ff0000'));
+        $rendered = $split->render();
+
+        $fg = \SugarCraft\Core\Util\Color::hex('#ff0000')->toFg(\SugarCraft\Dashboard\Foundation\ColorMode::profile());
+        $this->assertStringContainsString($fg . '│' . \SugarCraft\Core\Util\Ansi::reset(), $rendered);
+    }
+
+    public function testNullDividerColorEmitsPlainDividers(): void
+    {
+        $split = Split::horizontal([new Text('a'), new Text('b')])
+            ->withDividerColor(null);
+        $rendered = $split->render();
+
+        $this->assertStringContainsString('│', $rendered);
+        $this->assertStringNotContainsString("\x1b[", $rendered);
+    }
 }
