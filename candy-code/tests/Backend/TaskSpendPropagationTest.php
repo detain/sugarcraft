@@ -174,7 +174,10 @@ final class TaskSpendPropagationTest extends TestCase
         $this->assertCount(2, $provider->requests, 'one caller call, one sub-agent call, then nothing');
         $refusal = self::lastTaskRefusal($events);
         $this->assertStringContainsString('stopped by the session spend cap after 1 provider call', $refusal);
-        $this->assertStringNotContainsString('TypeError', $refusal);
+        // Judge only the refusal's own sentence: the partial-output tail embeds
+        // the repo's recent git log (the sub-agent's environment block), and a
+        // commit subject that merely mentions "TypeError" is not the bug.
+        $this->assertStringNotContainsString('TypeError', explode('Its partial output', $refusal)[0]);
         $this->assertEqualsWithDelta(1.10, $reply->usage?->costUsd ?? 0.0, 1e-9);
     }
 

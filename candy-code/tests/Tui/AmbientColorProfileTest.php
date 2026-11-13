@@ -96,9 +96,11 @@ final class AmbientColorProfileTest extends TestCase
         self::assertSame(ColorProfile::Ascii, Renderer::negotiateColorProfile(['NO_COLOR' => '1', 'TERM' => 'xterm'], true));
         self::assertSame(ColorProfile::NoTty, Renderer::negotiateColorProfile(['TERM' => 'dumb'], true));
         self::assertSame(ColorProfile::TrueColor, Renderer::negotiateColorProfile(['CLICOLOR_FORCE' => '1', 'TERM' => 'xterm'], true));
-        // sugar-core's ladder orders NO_COLOR ahead of the force vars; pin the
-        // precedence as-is rather than relitigating it here.
-        self::assertSame(ColorProfile::Ascii, Renderer::negotiateColorProfile(['NO_COLOR' => '1', 'CLICOLOR_FORCE' => '1'], true));
+        // CP-22: sugar-colorprofile's chain owns the ladder and an explicit
+        // force variable outranks the passive NO_COLOR preference (the
+        // documented asymmetry in DetectionChain), where the pre-CP-22 core
+        // ladder ordered NO_COLOR first.
+        self::assertSame(ColorProfile::TrueColor, Renderer::negotiateColorProfile(['NO_COLOR' => '1', 'CLICOLOR_FORCE' => '1'], true));
         self::assertSame(ColorProfile::TrueColor, Renderer::negotiateColorProfile(['COLORTERM' => 'truecolor', 'TERM' => 'xterm'], true));
         self::assertSame(ColorProfile::Ansi256, Renderer::negotiateColorProfile(['TERM' => 'xterm-256color'], true));
     }

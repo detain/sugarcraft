@@ -100,7 +100,7 @@ final readonly class ImageIngress
 
         $source = ImageSource::fromString($bytes);
 
-        return self::hydrate($origin, $source);
+        return self::hydrate($origin, $source, true);
     }
 
     /** Base name of the origin path — what the form's source rows show. */
@@ -115,8 +115,22 @@ final readonly class ImageIngress
         return $this->width . '×' . $this->height;
     }
 
-    private static function hydrate(string $pathOrOrigin, ImageSource $source): self
+    private static function hydrate(string $pathOrOrigin, ImageSource $source, bool $fromBytes = false): self
     {
+        // sugar-image SI-32 sizes intake from the header alone, so a file with
+        // a valid header and a broken body is no longer refused by
+        // ImageSource. This is the form's door: an unreadable image must never
+        // occupy a slot, so the body is decoded once here (the declared-pixel
+        // guard already bounded the allocation) and refused with the
+        // renderers' own message.
+        if (@imagecreatefromstring($source->bytes) === false) {
+            // Exception classes keep the pre-SI-32 split: the in-memory door
+            // refused with InvalidArgumentException, the file door with
+            // RuntimeException.
+            $message = \SugarCraft\Image\Lang::t('renderer.gd_load_failed');
+            throw $fromBytes ? new \InvalidArgumentException($message) : new \RuntimeException($message);
+        }
+
         return new self(
             $pathOrOrigin,
             $source->bytes,

@@ -381,7 +381,7 @@ final class Renderer
             return null;
         }
 
-        return ColorProfile::detect($env);
+        return ColorProfile::detectTerminal($env);
     }
 
     /** Test seam mirroring {@see resetSizeCache()}: clears the one-shot and restores the TrueColor resting state. */
