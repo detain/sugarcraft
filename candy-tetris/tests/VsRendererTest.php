@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace SugarCraft\Tetris\Tests;
 
+use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Testing\Snapshot\Assertions;
+use SugarCraft\Tetris\Bag;
 use SugarCraft\Tetris\Board;
 use SugarCraft\Tetris\Game;
-use SugarCraft\Tetris\Piece;
 use SugarCraft\Tetris\Tetromino;
 use SugarCraft\Tetris\VsGame;
 use SugarCraft\Tetris\VsRenderer;
@@ -14,6 +16,49 @@ use PHPUnit\Framework\TestCase;
 
 final class VsRendererTest extends TestCase
 {
+    /** Draw the same kind every time so every frame is a fixed state. */
+    private static function bag(): Bag
+    {
+        return new Bag(static fn(int $max): int => 0);
+    }
+
+    private static function versusStart(ColorProfile $profile): VsGame
+    {
+        return new VsGame(
+            Game::start(self::bag()),
+            Game::start(self::bag()),
+            colorProfile: $profile,
+        );
+    }
+
+    /**
+     * -011 cure: the 373-line VS renderer had zero byte-exact coverage —
+     * split-screen widths, colour posture and strip copy all lived inside
+     * contains-substring asserts. One fixed versus state pinned at both
+     * TrueColor and Ascii gives the whole frame (boards, divider, strip) a
+     * cannot-fail-proof oracle, and gates tetris-10's zero-byte migration
+     * contract. The strip copy here is the PRE-06-rework baseline — if
+     * step -06 changes it, that step re-baselines these goldens.
+     */
+    public function testTheVersusStartFrameIsByteExactInTrueColor(): void
+    {
+        $output = VsRenderer::render(self::versusStart(ColorProfile::TrueColor));
+        $this->assertNotEmpty($output);
+        Assertions::assertGoldenAnsi(
+            __DIR__ . '/fixtures/vs-starting-board-truecolor.golden',
+            $output,
+        );
+    }
+
+    public function testTheVersusStartFrameIsByteExactInAscii(): void
+    {
+        $output = VsRenderer::render(self::versusStart(ColorProfile::Ascii));
+        $this->assertNotEmpty($output);
+        Assertions::assertGoldenAnsi(
+            __DIR__ . '/fixtures/vs-starting-board-ascii.golden',
+            $output,
+        );
+    }
     public function testRenderReturnsNonEmptyString(): void
     {
         $vs = VsGame::start();
@@ -134,24 +179,41 @@ final class VsRendererTest extends TestCase
         $this->assertStringContainsString('press r to restart', $output);
     }
 
-    public function testRenderComputerBoardWithGhostPiece(): void
+    /**
+     * -011 cure (the second cannot-fail pair): the old ghost/placed tests
+     * asserted only `"\x1b["` presence — any frame at all passed. One fixed
+     * TrueColor state (computer has placed blocks AND an in-flight piece
+     * whose ghost reaches the floor) is now byte-exact: if the ghost layer
+     * or placed-cell rendering disappears or shifts, this golden fails.
+     */
+    public function testTheComputerBoardGhostAndPlacedPiecesAreByteExact(): void
     {
-        // Build a VS game where computer has placed a piece, so ghost is visible
-        $computerGame = Game::start();
+        $computer = Game::start(self::bag());
+        $rows = $computer->board->rows();
+        foreach ([20, 21] as $y) {
+            foreach ([3, 4] as $x) {
+                $rows[$y][$x] = Tetromino::T;
+            }
+        }
+        $computer = new Game(
+            board: new Board($rows),
+            piece: $computer->piece,
+            bag: $computer->bag,
+            score: $computer->score,
+        );
 
-        // Hard drop computer's piece to place it on the board
-        $computerWithPlacedPiece = $computerGame->mutate(['piece' => new \SugarCraft\Tetris\Piece(
-            $computerGame->piece->kind,
-            $computerGame->piece->rotation,
-            $computerGame->piece->x,
-            Board::ROWS - 5 // Near bottom so ghost is visible
-        )]);
+        $vs = new VsGame(
+            Game::start(self::bag()),
+            $computer,
+            colorProfile: ColorProfile::TrueColor,
+        );
 
-        $vs = new VsGame(Game::start(), $computerWithPlacedPiece);
         $output = VsRenderer::render($vs);
-
-        // Should contain ANSI codes for rendering
-        $this->assertStringContainsString("\x1b[", $output);
+        $this->assertNotEmpty($output);
+        Assertions::assertGoldenAnsi(
+            __DIR__ . '/fixtures/vs-computer-ghost-board-truecolor.golden',
+            $output,
+        );
     }
 
     public function testRenderComputerPiecesUseDifferentHue(): void
@@ -175,32 +237,4 @@ final class VsRendererTest extends TestCase
         $this->assertStringContainsString('COMPUTER', $output);
     }
 
-    public function testRenderComputerBoardWithPlacedPieces(): void
-    {
-        // Build a VS game where computer has placed pieces on the board
-        $computerGame = Game::start();
-
-        // Create a board with some pieces already placed for computer
-        $rows = $computerGame->board->rows();
-        $rows[20][3] = Tetromino::T;
-        $rows[20][4] = Tetromino::T;
-        $rows[21][3] = Tetromino::T;
-        $rows[21][4] = Tetromino::T;
-        $computerBoard = new Board($rows);
-
-        // Keep the piece at a position where it and its ghost will render
-        $computerWithPlacedPieces = new Game(
-            $computerBoard,
-            $computerGame->piece,
-            $computerGame->bag,
-            $computerGame->score,
-        );
-
-        $vs = new VsGame(Game::start(), $computerWithPlacedPieces);
-        $output = VsRenderer::render($vs);
-
-        // Should render ANSI codes for the computer board with pieces
-        $this->assertStringContainsString("\x1b[", $output);
-        $this->assertStringContainsString('COMPUTER', $output);
-    }
 }

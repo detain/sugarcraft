@@ -112,25 +112,37 @@ final class RendererTest extends TestCase
         $this->assertStringContainsString("\x1b[0;48;2;", $out);
     }
 
-    public function testBlockStyleReturnsStyleForTetromino(): void
+    /**
+     * -044 cure: the old oracle was `assertNotNull` on a `: Style`-typed
+     * factory that cannot return null — it certified nothing. The styles now
+     * get their real state: blockStyle carries the kind's RGB as BACKGROUND,
+     * ghostStyle carries it as FOREGROUND with the faint attribute (the
+     * landing-preview posture at Renderer.php:275-281).
+     */
+    public function testBlockStyleCarriesTheKindColourAsBackground(): void
     {
         $reflector = new \ReflectionClass(Renderer::class);
         $method = $reflector->getMethod('blockStyle');
         $method->setAccessible(true);
 
         $style = $method->invoke(null, Tetromino::T);
-        // blockStyle returns a Style with a background RGB colour
-        $this->assertNotNull($style);
+
+        $this->assertSame(Tetromino::T->rgbColor(), $style->bg());
+        $this->assertNull($style->fg());
+        $this->assertFalse($style->hasFaint());
     }
 
-    public function testGhostStyleReturnsStyleWithFaintAttribute(): void
+    public function testGhostStyleCarriesTheKindColourFaintInForeground(): void
     {
         $reflector = new \ReflectionClass(Renderer::class);
         $method = $reflector->getMethod('ghostStyle');
         $method->setAccessible(true);
 
         $style = $method->invoke(null, Tetromino::T);
-        $this->assertNotNull($style);
+
+        $this->assertSame(Tetromino::T->rgbColor(), $style->fg());
+        $this->assertNull($style->bg());
+        $this->assertTrue($style->hasFaint());
     }
 
     public function testRenderMiniIsBufferBackedExactSnapshot(): void
