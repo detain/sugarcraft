@@ -322,6 +322,15 @@ code, pre, .mono {
         display: block;
     }
 
+    /* SD-S12: after Escape parks focus on the trigger, the plain
+       :focus-within reveal would show a panel that aria (and the user's
+       keypress) say is closed. The lock class wins by source order over
+       all three reveal selectors above; nav.js drops it on the next
+       deliberate open or when focus leaves the item. */
+    .nav-item.nav-locked .nav-drop {
+        display: none;
+    }
+
     /* The 40-item package list flows into columns so the panel's height
        stays bounded; overflow-y above catches the remainder. */
     .nav-drop-wide {
