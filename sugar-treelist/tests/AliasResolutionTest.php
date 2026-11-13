@@ -57,11 +57,12 @@ final class AliasResolutionTest extends TestCase
         $this->assertSame(3, $lenient->adjacentBonus);
     }
 
-    public function testDeprecatedDefaultFactoryStillResolvesThroughAlias(): void
+    public function testScoringProfileAliasResolvesToCanonicalFuzzyClass(): void
     {
-        // External consumers still call SugarCraft\TreeList\ScoringProfile::default();
-        // the deprecated spelling must keep producing the canonical weights.
-        $this->assertEquals(ScoringProfile::canonical(), ScoringProfile::default());
+        // The banned default() spelling was deleted from sugar-fuzzy; the alias
+        // must resolve to the canonical class and canonical() is the root factory.
+        $this->assertSame(\SugarCraft\Fuzzy\ScoringProfile::class, (new \ReflectionClass(ScoringProfile::class))->getName());
+        $this->assertEquals(new \SugarCraft\Fuzzy\ScoringProfile(), ScoringProfile::canonical());
     }
 
     public function testLibrarySourceAvoidsDeprecatedScoringProfileDefault(): void

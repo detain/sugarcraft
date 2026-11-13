@@ -76,7 +76,8 @@ Do NOT drop the traceback walk — it is the reason this library exists.
   a path to dip through 0; 8-char candidates never exposed this.
 - The "Configurable scoring in SahilmMatcher" enhancement above is DONE:
   `SugarCraft\Fuzzy\SahilmScoring`, injected as the 2nd constructor arg.
-- `ScoringProfile::default()` / `FuzzyMatcherFactory::create()` are deprecated
-  forwarding aliases of `canonical()` / `named()` (banned factory spellings).
-  `default()` stays until sugar-treelist's `FuzzyMatch` migrates.
+- `ScoringProfile::default()` / `FuzzyMatcherFactory::create()` (banned factory
+  spellings, deprecated forwards of `canonical()` / `named()`) were DELETED
+  2026-11-13: sugar-treelist's `FuzzyMatch` already used `canonical()`, and the
+  only remaining callers were the deprecation pins. Use `canonical()`/`named()`.
 

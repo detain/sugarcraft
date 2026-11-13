@@ -106,27 +106,20 @@ final class FuzzyMatcherFactoryTest extends TestCase
     }
 
     #[Test]
-    public function testDeprecatedCreateForwardsToNamed(): void
+    public function testNamedKeepsScoringNamedArgument(): void
     {
         $this->assertEquals(
             FuzzyMatcherFactory::named('smith-waterman', ScoringProfile::strict()),
-            FuzzyMatcherFactory::create('smith-waterman', ScoringProfile::strict()),
+            FuzzyMatcherFactory::named(type: 'smith-waterman', scoring: ScoringProfile::strict()),
         );
         $this->expectException(\InvalidArgumentException::class);
-        FuzzyMatcherFactory::create('sahilm', ScoringProfile::strict());
+        FuzzyMatcherFactory::named('sahilm', ScoringProfile::strict());
     }
 
-    /**
-     * Parameter names are API under named arguments: the deprecated
-     * `create()` shipped as `create(string $type, ?ScoringProfile $profile)`,
-     * so a dev-master consumer's `profile:` call must keep resolving.
-     */
     #[Test]
-    public function testDeprecatedCreateKeepsProfileNamedArgument(): void
+    public function testBannedFactorySpellingsAreGone(): void
     {
-        $this->assertEquals(
-            FuzzyMatcherFactory::named('smith-waterman', ScoringProfile::strict()),
-            FuzzyMatcherFactory::create(type: 'smith-waterman', profile: ScoringProfile::strict()),
-        );
+        $this->assertFalse(\method_exists(FuzzyMatcherFactory::class, 'create'));
+        $this->assertFalse(\method_exists(ScoringProfile::class, 'default'));
     }
 }

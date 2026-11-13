@@ -65,19 +65,6 @@ final class ScoringProfile
         return new self();
     }
 
-    /**
-     * Former spelling of {@see self::canonical()}, kept so existing callers
-     * (`SugarCraft\TreeList\FuzzyMatch`, which reaches this class through its
-     * `class_alias`) keep resolving. `::default()` is a banned root-factory
-     * spelling under the repo naming rule.
-     *
-     * @deprecated Use {@see self::canonical()}.
-     */
-    public static function default(): self
-    {
-        return self::canonical();
-    }
-
     /** Tighter matching — higher rewards, harsher penalties. */
     public static function strict(): self
     {

@@ -75,8 +75,7 @@ equal haystack — keep their input order (`usort` is stable as of PHP 8.0).
 
 The Smith-Waterman scoring weights are injectable via an immutable `ScoringProfile`.
 The **default** profile is bit-equivalent to the historical hard-coded constants
-for ASCII input, so passing no profile (or `ScoringProfile::canonical()`; `default()`
-is a deprecated alias) preserves existing ASCII output byte-for-byte — the two
+for ASCII input, so passing no profile (or `ScoringProfile::canonical()`) preserves existing ASCII output byte-for-byte — the two
 documented deviations are listed under "Canonical matcher & consumer migration":
 
 ```php
@@ -192,7 +191,7 @@ $matcher->matchAll('app', ['apple', 'apricot']); // list<MatchResult>, ranked
 ```
 
 Each matcher takes its own weight type; passing the other one (or an unknown
-name) throws `InvalidArgumentException`. `create()` is a deprecated alias.
+name) throws `InvalidArgumentException`.
 
 ## MatchResult
 
