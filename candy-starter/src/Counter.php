@@ -57,6 +57,7 @@ final class Counter implements Model
 
     public function __construct(public readonly int $n = 0) {}
 
+    /** Mirrors charmbracelet/bubbletea-app-template/Model.init — a null return just means "no startup Cmd". */
     public function init(): ?\Closure
     {
         return null;
@@ -113,6 +114,8 @@ final class Counter implements Model
     // two bytes. Raw SGR and OSC-8 payload is an injection surface
     // under any of the three, not payload. The full form lives in this
     // package's README "Trust boundary" section.
+    // Mirrors charmbracelet/bubbletea-app-template/Model.view — the
+    // current frame, rendered as a plain string here.
     public function view(): string
     {
         $body = sprintf("count: %d\n↑ ↓ to change · q / Esc / Ctrl+C quit", $this->n);
@@ -135,17 +138,30 @@ final class Counter implements Model
             ->padding(1, 2);
     }
 
+    /**
+     * No charmbracelet/bubbletea-app-template counterpart: the live-source
+     * seam is SugarCraft-specific — see the README's "Getting Msgs in".
+     */
     public function subscriptions(): ?Subscriptions
     {
         return null;
     }
 
-    /** Determines if the given key message should trigger program quit. */
+    /**
+     * Quit matrix: plain `q` under any modifier EXCEPT ctrl, Esc under any
+     * modifier, or ctrl+c. Every design point here is WHY, and every one is
+     * pinned cell-by-cell in CounterTest's quit matrix:
+     * - the q-arm tests the rune EXACTLY against 'q' and demands
+     *   `ctrl === false`, so alt+q/shift+q still quit while ctrl+q (which
+     *   the decoder surfaces escaped as Char 'q' with ctrl: true) never
+     *   does — the modifier-exact gap on q is deliberate teaching surface;
+     * - the Escape arm ignores modifiers entirely (ctrl+Esc quits);
+     * - both rune arms pin KeyType::Char, so a decoder that populates runes
+     *   on named keys cannot fire them off-type (Ctrl+C as Enter+'c' is a
+     *   no-op, not a quit).
+     */
     private function shouldQuit(KeyMsg $msg): bool
     {
-        // quit: plain `q` under any modifier EXCEPT ctrl (alt+q quits — the
-        // rune-exact gap is intentional teaching surface, pinned in
-        // CounterTest), Esc under any modifier, or ctrl+c.
         if ($msg->type === KeyType::Char && $msg->rune === 'q' && $msg->ctrl === false) {
             return true;
         }
