@@ -152,7 +152,17 @@ final class ProfileWriter
      * bypasses degradation entirely; use $writer->write($data) instead.
      *
      * @param string $data  Raw bytes (potentially containing ANSI sequences)
-     * @return int|false    Number of bytes written, or false on error
+     * @return int|false    Number of bytes actually written (empty payload ⇒
+     *                      0), or false on a write error. A single fwrite can
+     *                      SHORT-WRITE on pipes and non-blocking destinations,
+     *                      and the remainder would silently vanish under a
+     *                      success-shaped count; the loop below chases partial
+     *                      progress until the payload is delivered. Zero
+     *                      progress (a full non-blocking buffer) stops the
+     *                      chase and returns the bytes delivered so far —
+     *                      callers on non-blocking streams check the count.
+     *                      The writer never flips the caller's stream mode:
+     *                      the handle belongs to the caller.
      */
     public function write(string $data): int|false
     {
@@ -162,7 +172,28 @@ final class ProfileWriter
             $data = $this->degradePalette()->degrade($data);
         }
 
-        return \fwrite($this->stream, $data);
+        // PHP's own stream layer chases a cooperative short write inside a
+        // single fwrite(); what it CANNOT promise is the stream that refuses
+        // one call (buffer momentarily full) and would take more later —
+        // the non-blocking-pipe shape this method's contract is written
+        // against (finding -073/PROC-006). One retry rung per call of ours,
+        // stopping at the first zero-progress answer: the partial count is
+        // the honest end of the line, spinning is not, and flipping the
+        // caller's blocking mode would be rude.
+        $total = 0;
+        $length = strlen($data);
+        while ($total < $length) {
+            $written = \fwrite($this->stream, substr($data, $total));
+            if ($written === false) {
+                return false;
+            }
+            if ($written === 0) {
+                break;
+            }
+            $total += $written;
+        }
+
+        return $total;
     }
 
     /**
