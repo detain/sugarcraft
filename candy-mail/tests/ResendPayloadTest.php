@@ -133,6 +133,43 @@ final class ResendPayloadTest extends TestCase
         }
     }
 
+    public function testPayloadCarriesTheDetectedContentTypePerAttachment(): void
+    {
+        $transport = new ResendTransport('test_key');
+        $email = new Email(
+            from:        ['sender@example.com'],
+            to:          ['recipient@example.com'],
+            attachments: [Attachment::fromContent("a,b\n1,2", 'report.csv', 'text/csv')],
+        );
+
+        $payload = $this->invokeBuildPayload($transport, $email);
+
+        $this->assertSame('text/csv', $payload['attachments'][0]['content_type']);
+        $this->assertSame('report.csv', $payload['attachments'][0]['filename']);
+    }
+
+    public function testInlineAttachmentRefusesOnThisTransport(): void
+    {
+        // The JSON payload carries no Content-ID field, so a cid part could
+        // never resolve at the reader — building it must refuse, not drop.
+        $transport = new ResendTransport('test_key');
+        $tmp = \tempnam(\sys_get_temp_dir(), 'sp-inline-');
+        \file_put_contents($tmp, 'PNGFAKE');
+        try {
+            $email = (new Email(
+                from:     ['sender@example.com'],
+                to:       ['recipient@example.com'],
+                htmlBody: '<p><img src="cid:hero"></p>',
+            ))->withInlineAttachment($tmp, 'hero');
+
+            $this->expectException(\InvalidArgumentException::class);
+            $this->expectExceptionMessage('Content-ID');
+            $this->invokeBuildPayload($transport, $email);
+        } finally {
+            @\unlink($tmp);
+        }
+    }
+
     public function testPayloadNoCcWhenCcEmpty(): void
     {
         $transport = new ResendTransport('test_key');

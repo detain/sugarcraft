@@ -72,5 +72,5 @@ return [
     'cli.stdin_too_large' => 'STDIN 입력이 {limit}바이트 상한을 초과했습니다. 입력을 줄이거나 파일로 첨부하세요.',
     'smtp.invalid_host' => 'SMTP 호스트 {host}은(는) 유효한 호스트 이름 또는 주소가 아닙니다(문자, 숫자, 점, 하이픈만)',
     'smtp.invalid_port' => 'SMTP 포트 {port}가 범위를 벗어났습니다(1~65535 사이여야 함)',
-    'smtp.invalid_timeout' => 'SMTP 타임아웃 {timeout}이 1~3600 사이의 초 값이 아닙니다',
+    'smtp.invalid_timeout' => 'SMTP 타임아웃 {timeout}이 1~3600 사이의 초 값이 아닙니다',    'resend.cid_unsupported' => 'Resend API 페이로드에 Content-ID 필드가 없습니다: 첨부 {filename}은(는) 인라인입니다. 인라인 이미지는 SMTP로만 전송됩니다.',
 ];

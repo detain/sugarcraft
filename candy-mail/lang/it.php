@@ -72,5 +72,5 @@ return [
     'cli.stdin_too_large' => 'L’input STDIN ha superato il limite di {limit} byte; ridurre l’input o allegarlo come file.',
     'smtp.invalid_host' => 'L’host SMTP {host} non è un nome host né un indirizzo validi (solo lettere, cifre, punti e trattini)',
     'smtp.invalid_port' => 'La porta SMTP {port} è fuori intervallo (deve essere compresa tra 1 e 65535)',
-    'smtp.invalid_timeout' => 'Il timeout SMTP {timeout} non è un numero di secondi tra 1 e 3600',
+    'smtp.invalid_timeout' => 'Il timeout SMTP {timeout} non è un numero di secondi tra 1 e 3600',    'resend.cid_unsupported' => 'Il payload dell’API Resend non ha un campo Content-ID: l’allegato {filename} è inline; le immagini incorporate viaggiano solo via SMTP.',
 ];

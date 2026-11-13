@@ -177,6 +177,15 @@ final class ResendTransport implements Transport
     /**
      * Build the Resend API payload array.
      *
+     * The published email payload fields for an attachment are filename,
+     * content and content_type (https://resend.com/docs/api-reference/emails/send-email)
+     * - the detected MIME type is forwarded so the provider pins the part
+     * type. The payload is JSON, not MIME: it carries NO Content-ID field,
+     * so an inline (cid) attachment cannot travel this transport at all -
+     * building the payload refuses loudly instead of shipping a message
+     * whose image reference could never resolve (the --render divergence
+     * note, enforced at the wire).
+     *
      * @return array<string, mixed>
      */
     protected function buildPayload(Email $email): array
@@ -215,12 +224,20 @@ final class ResendTransport implements Transport
             $payload['headers'] = $email->headers;
         }
 
-        // Attachments (Resend accepts base64-encoded content)
+        // Attachments (Resend accepts base64-encoded content; content_type
+        // carries the detected MIME type per the published field set).
         $resendAtts = [];
         foreach ($email->attachments as $att) {
+            if ($att->cid !== null) {
+                // An inline part's Content-ID has no JSON counterpart - a
+                // silent drop would mail an <img src="cid:…"> that renders
+                // as a broken placeholder forever. Loud refusal instead.
+                throw new \InvalidArgumentException(Lang::t('resend.cid_unsupported', ['filename' => $att->filename]));
+            }
             $resendAtts[] = [
-                'filename' => $att->filename,
-                'content'  => \base64_encode($att->content()),
+                'filename'     => $att->filename,
+                'content'      => \base64_encode($att->content()),
+                'content_type' => $att->mimeType,
             ];
         }
         if ($resendAtts !== []) {

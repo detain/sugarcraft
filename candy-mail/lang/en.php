@@ -79,5 +79,5 @@ return [
     'cli.stdin_too_large' => 'STDIN input exceeded the {limit}-byte cap; trim the input or attach it as a file.',
     'smtp.invalid_host' => 'SMTP host {host} is not a valid hostname or address (letters, digits, dots, and hyphens only)',
     'smtp.invalid_port' => 'SMTP port {port} is out of range (must be between 1 and 65535)',
-    'smtp.invalid_timeout' => 'SMTP timeout {timeout} is not a number of seconds between 1 and 3600',
+    'smtp.invalid_timeout' => 'SMTP timeout {timeout} is not a number of seconds between 1 and 3600',    'resend.cid_unsupported' => 'The Resend API payload has no Content-ID field: the attachment {filename} is inline - inline images ride the SMTP transport only.',
 ];

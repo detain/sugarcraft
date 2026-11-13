@@ -79,5 +79,5 @@ return [
     'cli.stdin_too_large' => 'L’entrée STDIN a dépassé la limite de {limit} octets ; réduisez l’entrée ou joignez-la comme fichier.',
     'smtp.invalid_host' => 'L’hôte SMTP {host} n’est pas un nom d’hôte ni une adresse valide (lettres, chiffres, points et traits d’union uniquement)',
     'smtp.invalid_port' => 'Le port SMTP {port} est hors plage (doit être compris entre 1 et 65535)',
-    'smtp.invalid_timeout' => 'Le délai SMTP {timeout} n’est pas un nombre de secondes entre 1 et 3600',
+    'smtp.invalid_timeout' => 'Le délai SMTP {timeout} n’est pas un nombre de secondes entre 1 et 3600',    'resend.cid_unsupported' => 'La charge utile de l’API Resend n’a pas de champ Content-ID : la pièce {filename} est inline ; les images intégrées ne voyagent que par SMTP.',
 ];

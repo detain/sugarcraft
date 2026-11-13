@@ -72,5 +72,5 @@ return [
     'cli.stdin_too_large' => 'STDIN 入力が上限 {limit} バイトを超過しました。入力を削減するか、ファイルとして添付してください。',
     'smtp.invalid_host' => 'SMTPホスト {host} は有効なホスト名またはアドレスではありません（文字、数字、ドット、ハイフンのみ）',
     'smtp.invalid_port' => 'SMTPポート {port} が範囲外です（1〜65535の間である必要があります）',
-    'smtp.invalid_timeout' => 'SMTPタイムアウト {timeout} は 1 から 3600 の秒数ではありません',
+    'smtp.invalid_timeout' => 'SMTPタイムアウト {timeout} は 1 から 3600 の秒数ではありません',    'resend.cid_unsupported' => 'Resend APIペイロードにContent-IDフィールドはありません:添付ファイル{filename}はインラインです。インライン画像はSMTP経由のみ。',
 ];
