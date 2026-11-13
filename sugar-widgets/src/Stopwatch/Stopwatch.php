@@ -26,8 +26,7 @@ final class Stopwatch implements Model
      * IDs are assigned sequentially starting from 1 on first construction.
      * This is intentional — stable, predictable IDs aid debugging when
      * tracing tick routing in a live application.
-     *
-     *      */
+     */
     private static int $nextId = 0;
 
     public readonly int $id;

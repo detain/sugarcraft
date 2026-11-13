@@ -243,7 +243,7 @@ final class AnimatedProgress implements Model
     }
 
     /**
-     * Immutable rebuild. The spring cache survives (m2) exactly when the
+     * Immutable rebuild. The spring cache survives exactly when the
      * three tuning fields are untouched — withSpringOptions()/withFps()
      * pass values, which drops the cache so the next getSpring() re-tunes.
      */

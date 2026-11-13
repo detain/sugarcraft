@@ -193,10 +193,10 @@ final class Tabs implements Model
         $segments = [];
         foreach ($this->labels as $i => $label) {
             $style = $i === $this->active ? $this->activeStyle : $this->inactiveStyle;
-            // M9: while focused, the active tab gains an underline. Before
-            // this the `focused` flag drew nothing — focused and blurred
-            // frames were byte-identical, so keyboard focus was invisible
-            // (an a11y affordance the flag promised but did not deliver).
+            // While focused, the active tab gains an underline: the
+            // `focused` flag must DRAW something — otherwise focused and
+            // blurred frames are byte-identical and keyboard focus is
+            // invisible (an a11y affordance the flag promises).
             if ($i === $this->active && $this->focused) {
                 $style = $style->underline();
             }
