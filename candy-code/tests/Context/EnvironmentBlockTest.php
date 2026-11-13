@@ -2202,9 +2202,10 @@ final class EnvironmentBlockTest extends TestCase
         $this->assertStringNotContainsString('Fatal error', $out);
         $this->assertStringNotContainsString('Call to undefined function', $out);
         $this->assertStringContainsString('unavailable (proc_open is disabled on this build)', $out);
-        // The uncapped branch line still goes through shell_exec, which this
-        // probe leaves enabled — so the block is degraded, not blank.
-        $this->assertStringContainsString('Current branch:', $out);
+        // S-O47: no unbounded shell_exec fallback for the branch read, even
+        // though this probe leaves shell_exec enabled; the line is degraded,
+        // not blank and not unbounded.
+        $this->assertStringContainsString('Current branch: unavailable (proc_open is disabled on this build)', $out);
         // P3.S3: the caption claims the MECHANISM (re-derived per step), not
         // that any particular field was readable, so it is still emitted on a
         // build where the capped fields could not run — each of which states

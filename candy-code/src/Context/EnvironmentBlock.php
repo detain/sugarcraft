@@ -7,7 +7,6 @@ namespace SugarCraft\Code\Context;
 use DateTimeImmutable;
 use SugarCraft\Code\Providers\ModelMetadata;
 use SugarCraft\Code\Tools\Concerns\CapturesProcessOutput;
-use SugarCraft\Code\Support\WindowsShell;
 use SugarCraft\Code\Workspace\GitRunner;
 use SugarCraft\Code\Tools\Concerns\TruncatesOutput;
 
@@ -25,8 +24,7 @@ use SugarCraft\Code\Tools\Concerns\TruncatesOutput;
  * `log`, and one `diff` for each of the staged and unstaged views), and the
  * block's git section reflects the repository as the agent has already changed
  * it rather than as it was at session start. FIVE is the count WHEN THE PROCESS
- * HELPERS EXIST AND THE DIFF IS EMITTED: all five go through `proc_open` (the
- * branch read falls back to `shell_exec` only where `proc_open` is disabled),
+ * HELPERS EXIST AND THE DIFF IS EMITTED: all five go through `proc_open`,
  * each bounded by {@see GIT_TIMEOUT_SECONDS}, and a build with `proc_open` in
  * `disable_functions` runs fewer — see {@see gitStatusSnapshot()} for what it
  * emits instead, and why a hard failure there would have taken the whole
@@ -633,8 +631,8 @@ final readonly class EnvironmentBlock implements PromptSection
      * `php -d disable_functions=proc_open,shell_exec` against a real repo,
      * re-run at the SHIPPED constant (the position and the field count are the
      * same either way; only the caption's own text differs): the caption
-     * rendered above `Current branch: unavailable (shell_exec is disabled on
-     * this build)` and FOUR fields reading {@see NO_PROCESS_REASON} —
+     * rendered above `Current branch: unavailable (proc_open is disabled on
+     * this build)` and FOUR further fields reading {@see NO_PROCESS_REASON} —
      * `Status:`, `Recent commits:`, `Staged changes (...)` and
      * `Unstaged changes (...)`; `grep -c` of that constant over the render
      * returns 4. This sentence used to say THREE, which contradicted "all four
@@ -1258,8 +1256,8 @@ final readonly class EnvironmentBlock implements PromptSection
             // Unguarded by function_exists() as a considered choice, not an
             // oversight: gitStatusSnapshot() below reaches the shell FIVE times
             // in this same render path, all through proc_open since the branch
-            // read gained its time bound (15d-14), with shell_exec as the
-            // branch's fallback where proc_open is disabled; an earlier
+            // read gained its time bound (15d-14), with no shell_exec fallback
+            // where proc_open is disabled (S-O47); an earlier
             // revision of this comment still said "shell_exec() three
             // times", which had been true of the three-command version and of
             // nothing since. Both of those are far more commonly disabled than
@@ -1517,11 +1515,9 @@ final readonly class EnvironmentBlock implements PromptSection
      *
      * A DISABLED PROCESS HELPER IS A THIRD OUTCOME, distinct from both: git was
      * never asked, so there is no exit code to report and "empty" would be a
-     * lie. `branch` reports `unavailable (shell_exec is disabled on this build)`
-     * and the four capped fields report {@see NO_PROCESS_REASON}. Five
-     * subprocesses per call is therefore the count WHERE `proc_open` EXISTS; on
-     * a build with `proc_open` disabled it is one (the branch, through
-     * `shell_exec`), and with both disabled it is zero and the git section is
+     * lie. `branch` and the four capped fields all report {@see NO_PROCESS_REASON}.
+     * Five subprocesses per call is therefore the count WHERE `proc_open`
+     * EXISTS; on a build with it disabled it is zero and the git section is
      * five unavailability lines instead of an exception.
      *
      * A GIT THAT DOES NOT ANSWER IN TIME IS A FOURTH OUTCOME: the field it was
@@ -1614,9 +1610,10 @@ final readonly class EnvironmentBlock implements PromptSection
      * empty is a real answer for this field). A TIMEOUT is not that answer,
      * so it reports {@see gitTimeoutReason()} and marks the render timed out.
      *
-     * `shell_exec` remains the fallback for a build with `proc_open` in
-     * `disable_functions`, unbounded as before — there is no bounded spawn
-     * left to use there — and with both disabled the field says so.
+     * There is NO `shell_exec` fallback: it has no deadline or size cap, so on
+     * a build with `proc_open` in `disable_functions` the field reports
+     * {@see NO_PROCESS_REASON} like the other git fields rather than risk an
+     * unbounded read on every render.
      */
     private function gitBranch(bool &$timedOut): string
     {
@@ -1633,19 +1630,7 @@ final readonly class EnvironmentBlock implements PromptSection
             return trim($captured['stdout']);
         }
 
-        if (!\function_exists('shell_exec')) {
-            return 'unavailable (shell_exec is disabled on this build)';
-        }
-
-        // shell_exec is cmd.exe on Windows, which cannot read the POSIX line
-        // below; with no bounded spawn and no shell to hand, the field says so.
-        if (WindowsShell::isWindows()) {
-            return 'unavailable (proc_open is disabled on this build)';
-        }
-
-        // The runner's own command line, so even this unbounded fallback reads
-        // under the same options and environment as every bounded read.
-        return trim((string) shell_exec($this->git()->shellCommand('-C', $this->cwd, ...$argv) . ' 2>/dev/null'));
+        return self::NO_PROCESS_REASON;
     }
 
     /**
