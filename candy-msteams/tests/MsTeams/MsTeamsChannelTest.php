@@ -439,6 +439,38 @@ final class MsTeamsChannelTest extends TestCase
         }
     }
 
+    /**
+     * msteams-21 (leg b): codes minted by a previous process live in the
+     * store, but their addSecret died with that process. Boot must re-register
+     * the live pending roster or the first outbound chunk can echo a live
+     * pairing code straight through the redaction door.
+     */
+    public function testAPendingCodeFromTheStoreIsRedactedFromBootOnward(): void
+    {
+        $this->writeUserConfig(['channels.msteams' => ['enabled' => true]]);
+        $store = new CredentialStore(CredentialStore::defaultPath());
+        $store->writeMsteamsPairing('default', [
+            'CD234567' => ['userId' => 'peer-x', 'createdAt' => time(), 'expiresAt' => time() + 3600, 'lastReminderAt' => time()],
+        ], ['peer-x'], [
+            'appId' => 'app-rer', 'appPassword' => 'rer-secret', 'tenantId' => '6a5b4c3d-2e1f-4a0b-9c8d-7e6f5a4b3c2d',
+        ]);
+
+        $channel = new MsTeamsChannel();
+        $channel->start($this->context(static function (string $line): void {
+        }));
+        try {
+            $safetyProp = new \ReflectionProperty(MsTeamsChannel::class, 'safety');
+            $safetyProp->setAccessible(true);
+            $safety = $safetyProp->getValue($channel);
+            self::assertNotNull($safety);
+
+            self::assertStringNotContainsString('CD234567', $safety->outbound('is CD234567 the pairing code?'), 'the boot roster must already carry the stored code');
+            self::assertStringContainsString('[redacted]', $safety->outbound('is CD234567 the pairing code?'));
+        } finally {
+            $channel->dispose();
+        }
+    }
+
     /** Run the shared loop for $ms of wall time (timer stops it). */
     private function pump(int $ms): void
     {

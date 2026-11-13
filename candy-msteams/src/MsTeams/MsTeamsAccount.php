@@ -1220,7 +1220,21 @@ final class MsTeamsAccount implements PlatformFace, StreamingFace
         if ($action === 'approve') {
             $code = \strtoupper(\trim((string) ($args[1] ?? '')));
             $paired = $code === '' ? null : $this->pairing->approve($this->account, $code);
-            $this->sendRaw($serviceUrl, $conversationId, $paired === null ? 'No pending pairing matches that code.' : "Paired {$paired}.");
+            if ($paired !== null) {
+                $this->sendRaw($serviceUrl, $conversationId, "Paired {$paired}.");
+
+                return;
+            }
+            // msteams-21: 'no such code' and 'code without a requester id'
+            // are different truths — the second one is still sitting in the
+            // pending list, so say what the approver should do instead.
+            $stillPending = \array_any(
+                $this->pairing->pending($this->account),
+                static fn (array $row): bool => ($row['code'] ?? '') === $code,
+            );
+            $this->sendRaw($serviceUrl, $conversationId, $stillPending
+                ? 'No requester id on this code yet — nothing to pair. Ask them to send a fresh DM, then approve the new code.'
+                : 'No pending pairing matches that code.');
 
             return;
         }

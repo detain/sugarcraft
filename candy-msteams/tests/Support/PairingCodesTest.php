@@ -47,6 +47,32 @@ final class PairingCodesTest extends TestCase
         }
     }
 
+    /**
+     * msteams-21: an id-less code is unapprovable but must NOT be burned —
+     * approve() used to unset it before the empty-userId check, so the
+     * approver saw 'no such code' and the retry-after-id path was dead.
+     */
+    public function testAnIdLessCodeIsNeverBurnedByApprove(): void
+    {
+        $this->store->writeMsteamsPairing('default', [
+            'XY234567' => ['userId' => '', 'createdAt' => time(), 'expiresAt' => time() + 600, 'lastReminderAt' => time()],
+        ], []);
+
+        self::assertNull($this->codes->approve('default', 'XY234567'));
+
+        $rows = $this->codes->pending('default');
+        self::assertCount(1, $rows, 'the id-less code must survive the refused approve');
+        self::assertSame('XY234567', $rows[0]['code']);
+        self::assertSame([], $this->store->msteamsAllowUsers('default'), 'nothing may join the allowlist');
+
+        // The ordinary happy path still redeems.
+        $this->store->writeMsteamsPairing('default', [
+            'AB234567' => ['userId' => 'peer-real', 'createdAt' => time(), 'expiresAt' => time() + 600, 'lastReminderAt' => time()],
+        ], []);
+        self::assertSame('peer-real', $this->codes->approve('default', 'AB234567'));
+        self::assertSame([], $this->codes->pending('default'), 'a redeemed code is consumed');
+    }
+
     public function testFreshPeersReceiveAnEightGlyphCodeFromTheSafeAlphabet(): void
     {
         $answer = $this->codes->request('default', 'peer-1');

@@ -108,14 +108,20 @@ final class PairingCodes
         }
 
         $userId = strval($pending[$code]['userId'] ?? '');
+        if ($userId === '') {
+            // msteams-21: an id-less code is unapprovable AND unburrnable —
+            // burning it punishes a retry when the requester's id eventually
+            // shows. Leave it pending; the caller owns the distinct notice.
+            return null;
+        }
         unset($pending[$code]);
         $allowUsers = $this->store->msteamsAllowUsers($account);
-        if ($userId !== '' && !in_array($userId, $allowUsers, true)) {
+        if (!in_array($userId, $allowUsers, true)) {
             $allowUsers[] = $userId;
         }
         $this->store->writeMsteamsPairing($account, $pending, $allowUsers);
 
-        return $userId === '' ? null : $userId;
+        return $userId;
     }
 
     public function isPaired(string $account, string $peerId): bool

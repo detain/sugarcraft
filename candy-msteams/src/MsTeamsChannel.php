@@ -203,6 +203,18 @@ final class MsTeamsChannel implements ChannelInterface, AcceptsHttpRequests
         // build once with the app passwords, then only add.
         $this->safety = (new TextSafety())->withSecrets($secrets);
         $pairing = new PairingCodes($store, $this->safety);
+        // msteams-21: pending codes minted by a PREVIOUS process live in the
+        // store, but their addSecret died with that process — without this
+        // re-register the first outbound chunk of the new process can echo a
+        // live pairing code the very door it should have redacted.
+        foreach ($accounts as $account) {
+            foreach ($pairing->pending($account) as $row) {
+                $code = (string) ($row['code'] ?? '');
+                if ($code !== '') {
+                    $this->safety->addSecret($code);
+                }
+            }
+        }
 
         $dir = Bootstrap::trustedConfigDirPath() . '/msteams';
         if (!is_dir($dir)) {
