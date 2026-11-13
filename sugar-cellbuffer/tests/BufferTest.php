@@ -718,35 +718,87 @@ final class BufferTest extends TestCase
 
     public function testRoundTripRandomPairsTwentyIterations(): void
     {
+        // sugar-cellbuffer-014 (TEST-03): the draws used to be unseeded
+        // random_int — a failure could not be reproduced, and a green run
+        // proved less than it appeared. A per-test xorshift keeps the
+        // generator deterministic (the state is echoed on failure) without
+        // touching the global mt_rand stream.
+        //
+        // The alphabet was widened from A-Z/null-bold to the shapes the
+        // risky code paths actually consume: a 2-column rune (pairing and
+        // continuation skip), hyperlinks with and without ids (OSC 8
+        // transition tracking), palette-slot/underline pens (by-value style
+        // equality), and region fills that produce >= 3-cell blank runs
+        // (EraseRunOp).
+        $state = 0xC311B;
+        $roll = static function (int $mod) use (&$state): int {
+            $state ^= ($state << 13) & PHP_INT_MAX;
+            $state ^= $state >> 7;
+            $state ^= ($state << 17) & PHP_INT_MAX;
+
+            return abs($state) % $mod;
+        };
+
+        $palette = [
+            null,
+            Style::bold(),
+            Style::fromSgr('31'),
+            Style::fromSgr('4;58;5;57'),
+            new Style(0x010203, null, Style::ATTR_ITALIC),
+            new Style(null, null, 0, null, null, 0x0A141E), // underline pen, no attribute
+        ];
+        $runes = ['A', 'B', 'Z', ' ', '中'];
+
         for ($i = 0; $i < 20; $i++) {
-            $w = random_int(3, 10);
-            $h = random_int(2, 5);
+            $w = 3 + $roll(8);
+            $h = 2 + $roll(4);
             $prev = Buffer::new($w, $h);
             $curr = $prev;
 
-            $changeCount = random_int(0, 5);
+            $changeCount = $roll(7);
             for ($c = 0; $c < $changeCount; $c++) {
-                $col = random_int(0, $w - 1);
-                $row = random_int(0, $h - 1);
-                $rune = chr(random_int(65, 90));
-                $style = random_int(0, 2) === 0 ? Style::bold() : null;
-                $curr = $curr->withCellAt($col, $row, Cell::new($rune, $style));
+                $col = $roll($w);
+                $row = $roll($h);
+                if ($roll(5) === 0 && $w >= 3) {
+                    // Region fill: the blank-run generator feeding ECH.
+                    $run = 1 + $roll($w - $col);
+                    $fillRegion = new Region(new Position($col, $row), $run, 1);
+                    $curr = $curr->fill($fillRegion, $roll(2) === 0 ? Cell::new() : Cell::new('-'));
+                    continue;
+                }
+                $rune = $runes[$roll(count($runes))];
+                $style = $palette[$roll(count($palette))];
+                $link = $roll(4) === 0
+                    ? new Hyperlink('https://example.test/l' . $c, $roll(2) === 0 ? 'id' . $c : '')
+                    : null;
+                $width = $rune === '中' ? 2 : 1;
+                $curr = $curr->withCellAt($col, $row, new Cell($rune, $style, $link, $width));
             }
 
             $diff = $curr->diff($prev);
             $restored = $prev->applyDiff($diff);
+
+            // Stabilisation oracle: if ANY cell field (rune, width, style
+            // BY VALUE, link by url+id) failed to survive the round-trip,
+            // the second diff is non-empty. This catches pen and link loss
+            // the old rune+width loop could not even see.
+            $this->assertSame(
+                [],
+                $restored->diff($curr),
+                "Round-trip not at a fixpoint, iteration $i (generator state $state, seed 0xC311B)"
+            );
 
             for ($r = 0; $r < $h; $r++) {
                 for ($c = 0; $c < $w; $c++) {
                     $this->assertSame(
                         $curr->cellAt($c, $r)->rune(),
                         $restored->cellAt($c, $r)->rune(),
-                        "Round-trip mismatch at ($c, $r) iteration $i"
+                        "Round-trip mismatch at ($c, $r) iteration $i (state $state, seed 0xC311B)"
                     );
                     $this->assertSame(
                         $curr->cellAt($c, $r)->width(),
                         $restored->cellAt($c, $r)->width(),
-                        "Width mismatch at ($c, $r) iteration $i"
+                        "Width mismatch at ($c, $r) iteration $i (state $state, seed 0xC311B)"
                     );
                 }
             }
