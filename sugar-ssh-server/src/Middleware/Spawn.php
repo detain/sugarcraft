@@ -53,8 +53,8 @@ use SugarCraft\SshServer\TransportAware;
  */
 final class Spawn implements Middleware, TransportAware
 {
-    /** @var callable(Session): array */
-    private $factory;
+    /** @var \Closure(Session): array */
+    private \Closure $factory;
 
     private ?ChildSpawner $transport = null;
 
@@ -63,7 +63,11 @@ final class Spawn implements Middleware, TransportAware
      */
     public function __construct(callable $factory)
     {
-        $this->factory = $factory;
+        // Normalised here, so the field can be a native type (PHP has
+        // no `callable` property type) - and an unusable factory (a
+        // name that resolves to nothing) fails at construction, before
+        // any session reaches the spawner, instead of at session-time.
+        $this->factory = \Closure::fromCallable($factory);
     }
 
     /**
@@ -77,7 +81,7 @@ final class Spawn implements Middleware, TransportAware
         $this->transport = $transport;
     }
 
-    public function handle(Context $ctx, Session $session, callable $next)
+    public function handle(Context $ctx, Session $session, callable $next): void
     {
         if ($this->transport === null) {
             throw new \RuntimeException(Lang::t('spawn.no_transport'));

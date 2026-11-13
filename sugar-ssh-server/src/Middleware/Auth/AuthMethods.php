@@ -75,7 +75,7 @@ final class AuthMethods implements Middleware
         $this->announce = $announce;
     }
 
-    public function handle(Context $ctx, Session $session, callable $next)
+    public function handle(Context $ctx, Session $session, callable $next): void
     {
         $derived = $ctx->withValue(self::CONTEXT_KEY, $this->methods);
 

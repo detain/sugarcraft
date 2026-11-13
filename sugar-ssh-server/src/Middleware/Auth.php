@@ -150,7 +150,7 @@ final class Auth implements Middleware
         $this->fingerprintValidator = $fingerprintValidator;
     }
 
-    public function handle(Context $ctx, Session $session, callable $next)
+    public function handle(Context $ctx, Session $session, callable $next): void
     {
         if ($this->users !== [] && !in_array($session->user, $this->users, true)) {
             $this->reject($session, 'user not allowed: ' . $this->sanitize($session->user));

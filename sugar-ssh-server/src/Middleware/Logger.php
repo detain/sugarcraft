@@ -60,7 +60,17 @@ final class Logger implements Middleware
      */
     public const LOG_PATH_ENV = 'SSH_SERVER_LOG';
 
-    /** @var resource */
+    /**
+     * Deliberately left as a docblock-typed property: PHP has no
+     * `resource` type (a native `mixed` would state less), and the
+     * sink-release paths probe it with isset()/is_resource() from
+     * reconfiguration code that can run before any handle was stored -
+     * a typed-but-uninitialised property would raise there instead of
+     * falling through. (strict-typing sweep: the docblock stays the
+     * only faithful type for a resource handle)
+     *
+     * @var resource
+     */
     private $stream;
     private bool $owns = false;
     private string $describedAs = 'stream';
@@ -193,7 +203,7 @@ final class Logger implements Middleware
         }
     }
 
-    public function handle(Context $ctx, Session $session, callable $next)
+    public function handle(Context $ctx, Session $session, callable $next): void
     {
         $start = microtime(true);
         $this->write([

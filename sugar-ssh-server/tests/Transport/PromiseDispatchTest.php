@@ -70,6 +70,27 @@ final class PromiseDispatchTest extends TestCase
         $this->assertContains('recording', $log);
     }
 
+    public function testAMiddlewareThatHandsBackAStrayValueDiesAtDispatch(): void
+    {
+        // The void|Promise contract cannot be native on the interface
+        // (PHP rejects void inside union returns), so the one caller
+        // that can observe it enforces it: an untyped legacy
+        // middleware returning a stray value - the accidental
+        // `return $next(...)` class of slip - must name its culprit
+        // instead of being silently dropped by the walk.
+        $rogue = new class implements Middleware {
+            public function handle(Context $ctx, Session $s, callable $next)
+            {
+                return 'accidental-value';
+            }
+        };
+
+        $this->expectException(\TypeError::class);
+        $this->expectExceptionMessage('returned string; a middleware must return nothing or a PromiseInterface');
+
+        (new HostSshdTransport())->run(Context::background(), $this->fakeSession(), [$rogue]);
+    }
+
     public function testAsyncMiddlewareRejectShortCircuitsChain(): void
     {
         $log = [];

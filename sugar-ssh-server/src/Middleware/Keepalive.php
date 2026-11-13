@@ -82,7 +82,7 @@ final class Keepalive implements Middleware, TransportAware
         });
     }
 
-    public function handle(Context $ctx, Session $session, callable $next)
+    public function handle(Context $ctx, Session $session, callable $next): void
     {
         // Keepalive is passive — it only acts via the transport's
         // pump loop callback registered in setTransport.

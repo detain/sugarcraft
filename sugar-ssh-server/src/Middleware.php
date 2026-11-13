@@ -32,6 +32,17 @@ interface Middleware
      * will wait for the promise to settle before continuing the
      * chain.
      *
+     * The union is a docblock contract because it cannot be spelled
+     * natively: PHP rejects `void` inside any return union outright
+     * (`void|PromiseInterface` is a compile-time fatal). The honest
+     * strict form is therefore two-sided - every implementation
+     * declares the tightest native type it actually honours (`: void`
+     * or `: PromiseInterface`), and the dispatch loop rejects any
+     * other value a middleware hands back.
+     *
+     * @param \Closure(Context, Session): void $next Continuation down
+     *     the chain (the dispatcher's own hop is declared `: void`,
+     *     so invoking it yields nothing).
      * @return void|\React\Promise\PromiseInterface
      */
     public function handle(Context $ctx, Session $session, callable $next);

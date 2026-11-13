@@ -102,7 +102,7 @@ final class RateLimit implements Middleware
         $this->stderr = StreamHelper::openOrValidate($stderr);
     }
 
-    public function handle(Context $ctx, Session $session, callable $next)
+    public function handle(Context $ctx, Session $session, callable $next): void
     {
         if (!$this->take($session)) {
             // Throttled is not served: say so on the session so the

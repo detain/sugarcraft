@@ -19,11 +19,15 @@ final class StreamHelper
      * @param string        $target Stream URI opened when $stream is null
      * @param string        $mode   fopen mode for $target ('w' outputs,
      *                              'r' for a read stream such as php://stdin)
-     * @return resource
+     * @return resource Native signatures cannot say it: `resource` is
+     *                  not a PHP type (declaring `: resource` compiles
+     *                  the name as a CLASS and fatals on the real
+     *                  handle), so the native form is `mixed` and this
+     *                  docblock carries the shape.
      * @throws \RuntimeException When $target cannot be opened
      * @throws \InvalidArgumentException When $stream is neither null nor a resource
      */
-    public static function openOrValidate($stream, string $target = 'php://stderr', string $mode = 'w')
+    public static function openOrValidate(mixed $stream, string $target = 'php://stderr', string $mode = 'w'): mixed
     {
         if ($stream === null) {
             $opened = fopen($target, $mode);

@@ -55,9 +55,13 @@ final class InProcessTransport implements Transport, ChildSpawner
      * SIGWINCH-driven resize can be verified without setting up a
      * host PTY.
      *
-     * @var (callable(): array{cols:int, rows:int})|null
+     * Normalised to a plain Closure by withSizeProvider(), which is
+     * the only writer (callable is not expressible as a property
+     * type), so the field is natively `?\Closure`.
+     *
+     * @var (\Closure(): array{cols:int, rows:int})|null
      */
-    private $sizeProvider = null;
+    private ?\Closure $sizeProvider = null;
 
     /**
      * Optional callback invoked in the pump loop whenever
@@ -65,9 +69,12 @@ final class InProcessTransport implements Transport, ChildSpawner
      * Keepalive use this hook to send periodic heartbeat bytes
      * through the PTY master without busy-polling.
      *
-     * @var callable|null
+     * Normalised to a plain Closure by setKeepaliveCallback(), the
+     * only writer.
+     *
+     * @var ?\Closure
      */
-    private $keepaliveCallback = null;
+    private ?\Closure $keepaliveCallback = null;
 
     /** PID of the live child, used for signal forwarding; null once runChild() tears it down. */
     private ?int $childPid = null;
@@ -109,7 +116,7 @@ final class InProcessTransport implements Transport, ChildSpawner
     public function withSizeProvider(callable $provider): self
     {
         $clone = clone $this;
-        $clone->sizeProvider = $provider;
+        $clone->sizeProvider = \Closure::fromCallable($provider);
         return $clone;
     }
 
@@ -126,7 +133,7 @@ final class InProcessTransport implements Transport, ChildSpawner
      */
     public function setKeepaliveCallback(callable $callback): void
     {
-        $this->keepaliveCallback = $callback;
+        $this->keepaliveCallback = \Closure::fromCallable($callback);
     }
 
     /**

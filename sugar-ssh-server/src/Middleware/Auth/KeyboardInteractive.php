@@ -179,7 +179,7 @@ final class KeyboardInteractive implements Middleware
         return $normalised;
     }
 
-    public function handle(Context $ctx, Session $session, callable $next)
+    public function handle(Context $ctx, Session $session, callable $next): void
     {
         $this->writeChallenges();
         $responses = $this->readResponses();

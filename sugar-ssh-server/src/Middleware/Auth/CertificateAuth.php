@@ -70,7 +70,7 @@ final class CertificateAuth implements Middleware
         $this->stderr   = StreamHelper::openOrValidate($stderr);
     }
 
-    public function handle(Context $ctx, Session $session, callable $next)
+    public function handle(Context $ctx, Session $session, callable $next): void
     {
         $pem = $this->certFromEnv();
 

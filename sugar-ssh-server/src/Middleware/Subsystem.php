@@ -64,7 +64,7 @@ final class Subsystem implements Middleware
         return isset($this->handlers[$name]);
     }
 
-    public function handle(Context $ctx, Session $session, callable $next)
+    public function handle(Context $ctx, Session $session, callable $next): void
     {
         $command = $session->command ?? '';
 

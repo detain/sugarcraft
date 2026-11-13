@@ -59,7 +59,7 @@ final class PasswordAuth implements Middleware
         $this->stderr   = StreamHelper::openOrValidate($stderr);
     }
 
-    public function handle(Context $ctx, Session $session, callable $next)
+    public function handle(Context $ctx, Session $session, callable $next): void
     {
         $password = self::readDeliveredCredential();
 

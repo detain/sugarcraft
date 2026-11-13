@@ -83,7 +83,7 @@ final class BubbleTea implements Middleware, TransportAware
         $this->inProcessMode = true;
     }
 
-    public function handle(Context $ctx, Session $session, callable $next)
+    public function handle(Context $ctx, Session $session, callable $next): void
     {
         if ($this->inProcessMode) {
             throw new \RuntimeException(Lang::t('bubbletea.requires_host_sshd'));

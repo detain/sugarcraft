@@ -60,6 +60,18 @@ trait DispatchesMiddlewareStack
         $result = $stack[$idx]->handle($ctx, $session, $next);
         if ($result instanceof \React\Promise\PromiseInterface) {
             PromiseAwait::settle($result, ctx: $ctx);
+        } elseif ($result !== null) {
+            // Fail-loud at the one place the contract can be enforced:
+            // the interface cannot express void|Promise natively (PHP
+            // rejects void inside union returns), so a middleware that
+            // is not natively typed and hands back a stray value - the
+            // accidental `return $next(...)` class of slip - dies here
+            // with a named culprit instead of being silently dropped.
+            throw new \TypeError(\sprintf(
+                '%s::handle() returned %s; a middleware must return nothing or a PromiseInterface.',
+                \get_class($stack[$idx]),
+                \get_debug_type($result),
+            ));
         }
 
         return Server::resolveStatus($session);
