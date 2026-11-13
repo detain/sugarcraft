@@ -35,7 +35,9 @@ final class ArgParser
      * `--ttl=3600` and the separated form `--ttl 3600`. A non-numeric,
      * negative, or absurdly large value is refused loudly.
      * `--binary` / `--text` force the storage encoding; when neither is
-     * given `binary` stays null and the caller auto-detects.
+     * given `binary` stays null and the caller auto-detects. The two
+     * force-flags are mutually exclusive: carrying both refuses as a usage
+     * error instead of letting the later spelling silently win.
      *
      * @param list<string> $argv  Full argv array.
      * @param int         $offset Offset where set subcommand args begin.
@@ -48,6 +50,7 @@ final class ArgParser
         [$tokens, $tail] = self::splitPositional($argv, $offset);
         $ttl = null;
         $binary = null;
+        $forced = null;
         $out = [];
 
         $count = count($tokens);
@@ -62,12 +65,19 @@ final class ArgParser
                 }
                 $p++;
                 $ttl = self::ttlSeconds($next);
-            } elseif ($arg === '--binary') {
-                $binary = true;
-            } elseif ($arg === '--text') {
-                $binary = false;
+            } elseif ($arg === '--binary' || $arg === '--text') {
+                // candy-kv-086 (gate G9, refuse default): contradictory force
+                // flags do not resolve to whichever spelling walked last —
+                // the parser refuses rather than guesses, the same law that
+                // retired the multi-letter -dX guess. A repeated agreement
+                // (--text --text) stays harmless.
+                if ($forced !== null && $forced !== $arg) {
+                    throw new \InvalidArgumentException('Options --binary and --text are mutually exclusive; pick one.');
+                }
+                $forced = $arg;
+                $binary = $arg === '--binary';
             } elseif (self::isOptionLike($arg)) {
-                throw self::unknownOption($arg, 'set');
+                throw self::unknownOption($arg, 'set', $argv);
             } else {
                 $out[] = $arg;
             }
@@ -107,7 +117,7 @@ final class ArgParser
             if ($arg === '--sanitize') {
                 $sanitize = true;
             } elseif (self::isOptionLike($arg)) {
-                throw self::unknownOption($arg, 'get');
+                throw self::unknownOption($arg, 'get', $argv);
             } else {
                 $out[] = $arg;
             }
@@ -140,7 +150,7 @@ final class ArgParser
             if ($arg === '--dry-run') {
                 $dryRun = true;
             } elseif (self::isOptionLike($arg)) {
-                throw self::unknownOption($arg, 'delete');
+                throw self::unknownOption($arg, 'delete', $argv);
             } else {
                 $out[] = $arg;
             }
@@ -199,7 +209,7 @@ final class ArgParser
                     // unambiguous only in separated form: `-d ', '`.
                     $attachedChars = \preg_split('//u', $attached, -1, PREG_SPLIT_NO_EMPTY);
                     if (\strlen($attached) > 1 && ($attachedChars === false || \count($attachedChars) > 1)) {
-                        throw self::unknownOption($arg, 'list');
+                        throw self::unknownOption($arg, 'list', $argv);
                     }
                     $delimiter = $attached;
                 } else {
@@ -217,6 +227,14 @@ final class ArgParser
                             'Option -d requires a delimiter value, got flag-like "' . Store::sanitizeForTty($next) . '".'
                         );
                     }
+                    if ($next === '') {
+                        // candy-kv-087: an empty argv token was never
+                        // "flag-like" — the old echo named an empty string as
+                        // if it were an option. The honest cause: '' is no
+                        // delimiter at all, it would glue the columns
+                        // together and read as output corruption.
+                        throw new \InvalidArgumentException('Option -d requires a delimiter value; the empty string is not one.');
+                    }
                     // kv-036: a bare '-' fails isOptionLike (the exemption is
                     // parser-wide, not per-flag), so it lands here as the
                     // visible delimiter it is — same answer as the attached
@@ -225,7 +243,7 @@ final class ArgParser
                     $p++;
                 }
             } elseif (self::isOptionLike($arg)) {
-                throw self::unknownOption($arg, 'list');
+                throw self::unknownOption($arg, 'list', $argv);
             } else {
                 $out[] = $arg;
             }
@@ -271,7 +289,7 @@ final class ArgParser
         [$tokens, $tail] = self::splitPositional($argv, $offset);
         foreach ($tokens as $arg) {
             if (self::isOptionLike($arg)) {
-                throw self::unknownOption($arg, 'delete-db');
+                throw self::unknownOption($arg, 'delete-db', $argv);
             }
         }
         $out = array_merge($tokens, $tail);
@@ -318,7 +336,7 @@ final class ArgParser
                 }
                 $ifExists = $mode;
             } elseif (self::isOptionLike($arg)) {
-                throw self::unknownOption($arg, 'import');
+                throw self::unknownOption($arg, 'import', $argv);
             } else {
                 $out[] = $arg;
             }
@@ -345,7 +363,7 @@ final class ArgParser
 
         foreach ($tokens as $arg) {
             if (self::isOptionLike($arg)) {
-                throw self::unknownOption($arg, 'export');
+                throw self::unknownOption($arg, 'export', $argv);
             }
             $out[] = $arg;
         }
@@ -401,7 +419,7 @@ final class ArgParser
                 $p++;
                 $db = $next;
             } elseif (self::isOptionLike($arg)) {
-                throw self::unknownOption($arg, 'prune');
+                throw self::unknownOption($arg, 'prune', $argv);
             } else {
                 $out[] = $arg;
             }
@@ -487,7 +505,7 @@ final class ArgParser
         if (preg_match('/^[0-9]{1,9}$/', $raw) !== 1) {
             throw new \InvalidArgumentException(
                 sprintf(
-                    'Option --ttl expects an integer of seconds from 1 to %d, got "%s".',
+                    'Option --ttl expects an integer number of seconds from 1 to %d, got "%s".',
                     Ttl::MAX_SECONDS,
                     // kv-004: --ttl's value is raw argv bytes; the refusal echoes them.
                     Store::sanitizeForTty($raw)
@@ -559,7 +577,7 @@ final class ArgParser
         }
     }
 
-    private static function unknownOption(string $token, string $command): \InvalidArgumentException
+    private static function unknownOption(string $token, string $command, array $argv): \InvalidArgumentException
     {
         // Report the flag NAME, not any =payload: a typo'd flag may carry
         // secret material, and usage errors echo into terminals, logs,
@@ -568,8 +586,14 @@ final class ArgParser
         // refusal — scrub before interpolation (the =payload stays withheld).
         $name = Store::sanitizeForTty((string) \strtok($token, '='));
 
+        // candy-kv-087: the help hint must name the binary the operator is
+        // actually holding — renamed copies and phar launches carry their own
+        // argv[0], exactly the convention bin/candy-kv:86 and the {bin}
+        // parameterization of every catalogued usage line already follow.
+        $bin = Store::sanitizeForTty(\basename((string) ($argv[0] ?? 'candy-kv')));
+
         return new \InvalidArgumentException(
-            sprintf('Unknown option "%s" for %s. Run "candy-kv --help" for usage.', $name, $command)
+            sprintf('Unknown option "%s" for %s. Run "%s --help" for usage.', $name, $command, $bin)
         );
     }
 }

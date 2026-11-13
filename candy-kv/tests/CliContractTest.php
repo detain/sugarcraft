@@ -127,8 +127,19 @@ final class CliContractTest extends TestCase
     {
         $run = $this->runKv(['set', 'big-ttl-k', 'v', '--ttl=10000000000']);
         $this->assertSame(2, $run['exit']);
-        $this->assertStringContainsString('integer of seconds', $run['stderr']);
+        $this->assertStringContainsString('integer number of seconds', $run['stderr']);
         $this->assertSame(1, $this->runKv(['get', 'big-ttl-k'])['exit']);
+    }
+
+    public function testContradictoryForceFlagsExitTwoAndStoreNothing(): void
+    {
+        // candy-kv-086 gate G9 end-to-end: the --binary --text pair is a
+        // usage error refusing BEFORE any write — last-wins was the silent
+        // clobber shape the flag pair must never fall back to.
+        $run = $this->runKv(['set', 'clob-k', 'v', '--binary', '--text']);
+        $this->assertSame(2, $run['exit'], $run['stdout'] . $run['stderr']);
+        $this->assertStringContainsString('mutually exclusive', $run['stderr']);
+        $this->assertSame(1, $this->runKv(['get', 'clob-k'])['exit'], 'the refused set must have stored nothing');
     }
 
     public function testUnknownFlagRefusedAndNothingStored(): void

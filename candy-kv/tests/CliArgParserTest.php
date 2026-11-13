@@ -275,7 +275,7 @@ final class CliArgParserTest extends TestCase
     public function testSetRefusesNonNumericTtlAttached(): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('integer of seconds');
+        $this->expectExceptionMessage('integer number of seconds');
         ArgParser::set(['candy-kv', 'set', 'mykey', '--ttl=soon'], 2);
     }
 
@@ -362,7 +362,7 @@ final class CliArgParserTest extends TestCase
     {
         // 10 digits exceeds the 999999999-second ceiling: refuse, never clamp to a zombie.
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('integer of seconds');
+        $this->expectExceptionMessage('integer number of seconds');
         ArgParser::set(['candy-kv', 'set', 'mykey', 'myvalue', '--ttl=10000000000'], 2);
     }
 
@@ -371,6 +371,79 @@ final class CliArgParserTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('takes at most');
         ArgParser::set(['candy-kv', 'set', 'mykey', 'myvalue', 'extra'], 2);
+    }
+
+    // candy-kv-086/087: surplus coverage was verb-skewed (set/list/deleted-db
+    // had pins, the read verbs and import answered untested), the
+    // --binary --text pair silently last-won, and the help hint hardcoded
+    // 'candy-kv' where every other surface parameterizes the bin name.
+
+    public function testGetRefusesSurplusPositional(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('get takes at most 1 argument(s), got extra "b".');
+        ArgParser::get(['candy-kv', 'get', 'a', 'b'], 2);
+    }
+
+    public function testDeleteRefusesSurplusPositional(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('delete takes at most 1 argument(s), got extra "b".');
+        ArgParser::delete(['candy-kv', 'delete', 'a', 'b'], 2);
+    }
+
+    public function testImportRefusesSurplusPositional(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('import takes at most 2 argument(s), got extra "c".');
+        ArgParser::import(['candy-kv', 'import', 'json', 'd.json', 'c'], 2);
+    }
+
+    public function testSetRefusesContradictoryForceFlagsInEitherOrder(): void
+    {
+        foreach (['--binary', '--text'] as $first) {
+            $second = $first === '--binary' ? '--text' : '--binary';
+            try {
+                ArgParser::set(['candy-kv', 'set', 'k', 'v', $first, $second], 2);
+                $this->fail("{$first} {$second} must refuse as a usage error");
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString('mutually exclusive', $e->getMessage());
+            }
+        }
+    }
+
+    public function testSetToleratesARelentedRepeatedForceFlag(): void
+    {
+        // The refusal is for CONTRADICTION, not for repetition: a script
+        // that appends --text to an alias already carrying --text must not
+        // be scolded for asking the same thing twice.
+        $result = ArgParser::set(['candy-kv', 'set', 'k', 'v', '--text', '--text'], 2);
+        $this->assertFalse($result['binary']);
+    }
+
+    public function testListRefusesEmptyStringDelimiterNamingTheRealCause(): void
+    {
+        // kv-087: the empty token was never flag-like; saying so was a
+        // diagnosis error on argv bytes the user can SEE are empty.
+        try {
+            ArgParser::list(['candy-kv', 'list', '-d', '', 'pat'], 2);
+            $this->fail('empty delimiter must refuse');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('the empty string is not one', $e->getMessage());
+            $this->assertStringNotContainsString('flag-like', $e->getMessage());
+        }
+    }
+
+    public function testUnknownOptionHelpHintNamesTheRunningBinary(): void
+    {
+        // kv-087 {bin}-ization: renamed copies and phar launches carry their
+        // own argv[0]; the hint must echo THAT, not a hardcoded name.
+        try {
+            ArgParser::set(['kv-secret.phar', 'set', 'k', '--frobnicate'], 2);
+            $this->fail('expected refusal');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('Run "kv-secret.phar --help" for usage.', $e->getMessage());
+        }
     }
 
     public function testUnknownOptionNamesTheFlagNotItsPayload(): void
