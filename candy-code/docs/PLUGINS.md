@@ -183,7 +183,10 @@ lists, second loads, dark until enabled); what differs is trust and plumbing:
    replies expire — the bridge's durable state is keyed by the session
    grammar in its own sidecar, never by the live request.
 4. DM pairing re-states the shared law — 8 glyphs, one hour, at most three
-   pending, codes redacted everywhere but their one notice. Group chats and
+   pending, codes redacted everywhere but their one notice and an approver's
+   direct-message `/pair list`. `/pair list` and `/pair approve` need the
+   approver roster (an empty roster answers nobody), and a group or channel
+   `/pair list` names no code and asks for a direct message. Group chats and
    channel posts are BLOCKED by default: nothing in a group is served until
    a `groups` policy row names that conversation.
 5. Approvals are adaptive cards with the same universal `/approve <id>
