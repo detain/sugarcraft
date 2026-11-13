@@ -137,6 +137,9 @@ final class Table
     private string $footerStyle   = '90';    // bright black
 
     private bool $showHeader = true;
+    // Footer visibility defaults ON (audit ST-56, finding 071): arming
+    // pagination alone prints the footer — examples/basic.php renders
+    // "Page 2 of 2" with no withShowFooter() call anywhere.
     private bool $showFooter = true;
     private FooterType $footerType = FooterType::Page;
 

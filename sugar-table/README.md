@@ -469,9 +469,10 @@ $t = $t->withFooterType(FooterType::Both)
 echo $t->View();  // Footer: "Page 2 of 4  |  Showing 26 to 50 of 100 rows"
 ```
 
-Regardless of type, the footer row itself renders only when `withShowFooter(true)`
-and pagination is active (`withPageSize(n)` with `n > 0`); with pagination off
-there is no footer at all.
+Regardless of type, the footer row renders when `showFooter` is on — it is
+**by default**, so arming pagination (`withPageSize(n)` with `n > 0`) prints
+the footer with no opt-in (call `withShowFooter(false)` to silence it) — and
+only while pagination is active; with pagination off there is no footer at all.
 
 The row count footer uses the `showing_rows` i18n key and updates automatically based on the current page and any active filters/searches.
 
