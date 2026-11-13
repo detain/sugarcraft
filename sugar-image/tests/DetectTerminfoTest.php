@@ -320,7 +320,11 @@ final class DetectTerminfoTest extends TestCase
             // with a gate answer the shape must name the binary; without one
             // it must start at the (empty) resolved path, never at "infocmp".
             $this->assertSame(
-                [(InfocmpBinary::path() ?? '') . " -1 'susetm' 2>/dev/null"],
+                // CP-11 (sugar-colorprofile, landed contract): the constructed
+            // command dropped its shell ' 2>/dev/null' suffix — stderr is a
+            // piped descriptor at the exec door now. Re-anchored to the
+            // committed shape; the anti-PATH-lookup intent of this pin stands.
+            [(InfocmpBinary::path() ?? '') . " -1 'susetm'"],
                 $double->commands,
                 'the exec command shape changed',
             );
