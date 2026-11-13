@@ -6,6 +6,7 @@ namespace SugarCraft\Gallery\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\I18n\T;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Gallery\PosterCard;
 use SugarCraft\Gallery\PosterGrid;
 use SugarCraft\Style\Layout;
@@ -454,18 +455,29 @@ final class PosterGridTest extends TestCase
 
     public function testNewClampsGeometryToMinimums(): void
     {
-        // cardWidth below 4 is clamped to 4, posterHeight below 1 is clamped to 1
+        // -029: the clamps are asserted through the PUBLIC surface the
+        // consumer reads, not reflection into the fields behind it — if a
+        // future shape renames storage but breaks cardWidth()/cellHeight()
+        // the promise, the pin must still go red.
         $g = PosterGrid::new(1, 0, -5, -3);
 
-        // Use reflection to check internal values since geometry accessors compute from them
-        $reflection = new \ReflectionClass($g);
-        $cardWidth = $reflection->getProperty('cardWidth');
-        $cardWidth->setAccessible(true);
-        $posterHeight = $reflection->getProperty('posterHeight');
-        $posterHeight->setAccessible(true);
+        self::assertSame(4, $g->cardWidth(), 'cardWidth floored at 4');
+        self::assertSame(1, $g->posterHeight(), 'posterHeight floored at 1');
+        self::assertSame(3, $g->cellHeight(), 'title + poster + position rows');
+        self::assertGreaterThanOrEqual(1, $g->columns(), 'a sub-cell viewport still promises one column');
 
-        self::assertSame(4, $cardWidth->getValue($g), 'cardWidth floored at 4');
-        self::assertSame(1, $posterHeight->getValue($g), 'posterHeight floored at 1');
+        // And the painted rows honour the clamped geometry: five 4-wide
+        // cards at zero spacing fill the 20-cell viewport, nothing wider.
+        $painted = $g
+            ->withViewport(20, 8)
+            ->withItems([0 => new PosterCard('a', 'A')])
+            ->withTotal(1)
+            ->render(false);
+        $widths = array_map(static fn (string $l): int => Width::string($l), explode("\n", $painted));
+        self::assertSame(20, max($widths), 'the widest row fills the clamped grid');
+        foreach ($widths as $w) {
+            self::assertLessThanOrEqual(20, $w, 'no row overflows the viewport');
+        }
     }
 
     public function testClearBoxCacheOnEmptyCacheReturnsZero(): void

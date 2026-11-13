@@ -445,4 +445,21 @@ final class RailTest extends TestCase
         $starved = (new Rail('T', $this->cards(3)))->render(6, true, 4, 1);
         self::assertLessThanOrEqual(6, Width::string(explode("\n", $starved)[0]));
     }
+
+    public function testTheFullRailFrameIsTheGoldenItWasAlwaysDocumentedToBe(): void
+    {
+        // sugar-gallery-026: every prior assertion sampled the frame (one
+        // line, one substring). This is the whole picture, byte-pinned:
+        // head with bullet, title and counter; two skeleton poster rows;
+        // the padded title row. Locale pinned 'en' by setUp, geometry is
+        // the README's, nothing about it is time- or width-mutable.
+        $frame = (new Rail('Browse', $this->cards(3)))->render(46, true, 10, 2);
+
+        self::assertSame(implode("\n", [
+            '● Browse  (1/3)',
+            '░░░░░░░░░░  ░░░░░░░░░░  ░░░░░░░░░░',
+            '░░░░░░░░░░  ░░░░░░░░░░  ░░░░░░░░░░',
+            '▸ Card 0      Card 1      Card 2  ',
+        ]), $frame, 'md5 2504c6713e6eb66531d5ab0e5c4f36a0 — the whole rail, stamped after SG-S23 settled the yield priority');
+    }
 }
