@@ -379,6 +379,24 @@ stack changes around your own `push`/`pop` calls. Naming tax: "close" here is
 the upstream port's historical term for LEAVING a level — nothing is
 destroyed or finalized by it.
 
+## Localization
+
+Two glyphs are user-visible — the separator (` › `) and the truncation marker
+(`… `) — and both are published consts: `NavStack::SEPARATOR` and
+`NavStack::TRUNCATOR` are the single source. `Breadcrumb`'s defaults,
+`Escape`'s default separator and the `lang/en.php` registry copy all reference
+that pair — the registry copy is headed as such, and `LangCoverageTest` pins
+it byte-identical. Everything else visible is titles you supplied.
+
+The `lang/` registry is therefore DORMANT BY POLICY: no render path consults
+it. A host that wants localized glyphs reads `Lang::t('separator')` /
+`Lang::t('truncator')` itself and feeds `Breadcrumb::setSeparator()` /
+`setTruncator()`. The one string assistive technology ever utters from this
+package is `viewHtml()`'s `<nav aria-label>` — that is the `$label`
+parameter, localized by passing your own string, never from this registry.
+Nothing negotiates a locale inside the library, and that is by design: the
+punctuation is per-app taste, not per-locale text to translate.
+
 ## Shared foundations
 
 Mouse hit-testing is self-contained via [sugar-mouse](https://github.com/sugarcraft/sugar-mouse). The `Scanner` class handles zone registration and hit testing locally — no external zone-manager wiring is needed.

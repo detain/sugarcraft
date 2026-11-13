@@ -40,7 +40,17 @@ namespace SugarCraft\NavStack;
 final class NavStack
 {
     /** Default separator used in view() and viewHtml() output. */
-    private const SEPARATOR = ' › ';
+    /**
+     * The shipped default separator — THE single source for the glyph
+     * (NS-13). {@see Breadcrumb}'s default and {@see Escape}'s
+     * DEFAULT_SEPARATOR reference this const; {@see ../lang/en.php} keeps
+     * a byte-identical registry COPY whose agreement with these consts is
+     * pinned by LangCoverageTest.
+     */
+    public const SEPARATOR = ' › ';
+
+    /** Shipped default truncation marker — see {@see SEPARATOR} for the single-source law (NS-13). */
+    public const TRUNCATOR = '… ';
 
     /**
      * Hard ceiling on stack depth — navigation stacks grow from user

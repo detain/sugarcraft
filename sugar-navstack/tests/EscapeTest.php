@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\NavStack\Tests;
 
 use SugarCraft\NavStack\Escape;
+use SugarCraft\NavStack\NavStack;
 use PHPUnit\Framework\TestCase;
 
 final class EscapeTest extends TestCase
@@ -88,10 +89,12 @@ final class EscapeTest extends TestCase
 
     public function testTitleDefaultSeparatorMatchesBreadcrumbArrow(): void
     {
-        // With no $separator argument the default is ' › ' (Breadcrumb's own
-        // default), NOT the ASCII ' > ' — so a title carrying the real crumb
+        // With no $separator argument the default is the single-source
+        // NavStack::SEPARATOR (NS-13) that Breadcrumb also starts from,
+        // NOT the ASCII ' > ' — so a title carrying the real crumb
         // separator gets escaped, and an ASCII ' > ' is left untouched.
-        $this->assertSame('A\ › B', Escape::title('A › B'));
+        $sep = NavStack::SEPARATOR;
+        $this->assertSame('A\\' . $sep . 'B', Escape::title('A' . $sep . 'B'));
         $this->assertSame('A > B', Escape::title('A > B'));
     }
 

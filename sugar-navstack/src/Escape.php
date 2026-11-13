@@ -13,7 +13,8 @@ namespace SugarCraft\NavStack;
  * back out. Because the separator is configurable
  * ({@see Breadcrumb::setSeparator()}), both methods take a $separator so the
  * caller can pass the SAME one they gave the breadcrumb; the default matches
- * {@see Breadcrumb}'s (and {@see NavStack::view()}'s) default separator (' › ').
+ * {@see Breadcrumb}'s (and {@see NavStack::view()}'s) default separator,
+ * {@see NavStack::SEPARATOR} — one source, no byte-duplicate to drift (NS-13).
  *
  * Limits (this is a display-splitting aid, not a general quoting system):
  * both operations are purely mechanical left-to-right replacements of whole
@@ -35,8 +36,8 @@ namespace SugarCraft\NavStack;
  */
 final class Escape
 {
-    /** Matches {@see Breadcrumb}'s default separator. */
-    private const DEFAULT_SEPARATOR = ' › ';
+    /** Matches the shipped default separator — one source, {@see NavStack::SEPARATOR} (NS-13). */
+    private const DEFAULT_SEPARATOR = NavStack::SEPARATOR;
 
     /**
      * Escape a title so it can safely appear in a breadcrumb render.

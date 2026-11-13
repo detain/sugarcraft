@@ -7,6 +7,7 @@ namespace SugarCraft\NavStack\Tests;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\I18n\Lang as BaseLang;
 use SugarCraft\NavStack\Lang;
+use SugarCraft\NavStack\NavStack;
 
 /**
  * Verifies that the sugar-navstack i18n facade and its lang registry load.
@@ -50,18 +51,18 @@ final class LangCoverageTest extends TestCase
         $this->assertIsArray($result);
     }
 
-    public function testSeparatorKeyPresent(): void
+    public function testLangRegistryAgreesWithShippedGlyphConsts(): void
     {
-        $langFile = __DIR__ . '/../lang/en.php';
-        $translations = require $langFile;
+        // NS-13: lang/en.php is the REGISTRY COPY of the glyph defaults.
+        // The consts are the single source; the copy must stay byte-
+        // identical or the documented localization recipe (host reads
+        // Lang::t then feeds the setters) ships split-brain glyphs.
+        $translations = require __DIR__ . '/../lang/en.php';
+        $this->assertIsArray($translations);
         $this->assertArrayHasKey('separator', $translations);
-    }
-
-    public function testTruncatorKeyPresent(): void
-    {
-        $langFile = __DIR__ . '/../lang/en.php';
-        $translations = require $langFile;
         $this->assertArrayHasKey('truncator', $translations);
+        $this->assertSame(NavStack::SEPARATOR, $translations['separator'], 'registry separator must equal the shipped const');
+        $this->assertSame(NavStack::TRUNCATOR, $translations['truncator'], 'registry truncator must equal the shipped const');
     }
 
     public function testLangFacadeResolves(): void

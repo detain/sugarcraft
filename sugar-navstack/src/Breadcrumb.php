@@ -58,8 +58,9 @@ final class Breadcrumb
         return new self();
     }
 
-    private string $separator  = ' › ';
-    private string $truncator  = '… ';
+    // Glyph defaults reference the single source (NS-13): NavStack::SEPARATOR / NavStack::TRUNCATOR.
+    private string $separator  = NavStack::SEPARATOR;
+    private string $truncator  = NavStack::TRUNCATOR;
     private int    $maxWidth   = 0;  // 0 = no limit
 
     /**
