@@ -62,14 +62,36 @@ final class EmptyInputAndLogForgeTest extends TestCase
 
     public function testTheNotesAndFoldLiveAtTheSharedBoundaries(): void
     {
-        $filter = (string) file_get_contents(__DIR__ . '/../../src/Command/FilterCommand.php');
-        $table  = (string) file_get_contents(__DIR__ . '/../../src/Command/TableCommand.php');
-        $log    = (string) file_get_contents(__DIR__ . '/../../src/Command/LogCommand.php');
-        // scriptui-33 re-pin (DISCLOSED): filter's refusal moved to the
-        // filter-specific copy; table keeps the shared sentence.
-        self::assertStringContainsString("Lang::t('runtime.empty_input_filter')", $filter);
-        self::assertStringContainsString("Lang::t('runtime.empty_input')", $table);
-        self::assertStringContainsString('str_replace(["\r\n", "\r", "\n"]', $log);
+        // scriptui-53: key choice and folding are now OBSERVABLE, not
+        // grepped. filter and table answer the same empty-stdin shape with
+        // their own distinct documented sentences (the scriptui-33 split
+        // survives: each command must carry its own wording, verbatim from
+        // the catalog), and the log sinks fold CRLF into one physical line.
+        [$filterStatus, $filterStdout, $filterStderr] = $this->runForgeChild(['filter']);
+        self::assertSame(1, $filterStatus);
+        self::assertSame('', $filterStdout);
+        self::assertStringContainsString(
+            'Nothing to filter: standard input produced no lines.',
+            $filterStderr,
+            'filter must answer with the filter-specific sentence',
+        );
+
+        [$tableStatus, $tableStdout, $tableStderr] = $this->runForgeChild(['table']);
+        self::assertSame(0, $tableStatus);
+        self::assertSame('', $tableStdout);
+        self::assertStringContainsString(
+            'Input produced no lines; nothing to do.',
+            $tableStderr,
+            'table must answer with the shared sentence, not filter\'s',
+        );
+        self::assertStringNotContainsString('Nothing to filter', $tableStderr);
+
+        $tester = new CommandTester((new Application())->find('log'));
+        $status = $tester->execute(['message' => ["a\r\nb"], '--formatter' => 'logfmt'], ['decorated' => false]);
+        self::assertSame(0, $status);
+        $display = $tester->getDisplay();
+        self::assertSame(1, substr_count($display, "\n"), 'a CRLF message folds into one physical line');
+        self::assertStringNotContainsString("\r", $display, 'the carriage return must not survive the fold');
     }
 
     /**

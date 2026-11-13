@@ -74,11 +74,41 @@ final class RefusalValueInjectionTest extends TestCase
         $this->assertStringContainsString('Allowed:', $stderr);
     }
 
-    public function testTheFoldLivesAtTheSharedTranslationChokepoint(): void
+    public function testBothRefusalChokepointsFoldControlBytesBehaviourally(): void
     {
-        $lang = (string) \file_get_contents(__DIR__ . '/../../src/Lang.php');
-        $this->assertStringContainsString('cellValue', $lang, 'Lang::t must fold control bytes in params');
-        $app = (string) \file_get_contents(__DIR__ . '/../../src/Application.php');
-        $this->assertStringContainsString('cellValue', $app, 'the enum-violation line shares the fold');
+        // scriptui-53: the fold at the shared translation chokepoint is
+        // already exercised through Lang::t above
+        // (testInterpolatedValuesNeverCarryLiveControlBytes); the
+        // Application enum-violation door gets its own behaviour leg here —
+        // a crafted --suit value must arrive sanitized in the rendered
+        // refusal. (The old arm grepped the cellValue call text out of
+        // Lang.php and Application.php, which passes while the runtime
+        // forgets to fold.)
+        require_once __DIR__ . '/../Fixtures/Enum/SuitType.php';
+        require_once __DIR__ . '/../Fixtures/Enum/EnumFlagCommand.php';
+
+        $app = new \SugarCraft\ScriptUi\Application();
+        $app->setAutoExit(false);
+        $app->scan('SugarCraft\\ScriptUi\\Tests\\Fixtures\\Enum');
+        self::assertTrue($app->has('enum-fixture'));
+
+        $out = new \Symfony\Component\Console\Output\BufferedOutput();
+        $code = $app->run(
+            new \Symfony\Component\Console\Input\ArgvInput(
+                ['candy-scriptui', 'enum-fixture', '--suit', "red\x1b[31mR\nforged"],
+            ),
+            $out,
+        );
+
+        $display = $out->fetch();
+        self::assertSame(\Symfony\Component\Console\Command\Command::INVALID, $code);
+        self::assertStringNotContainsString("\x1b", $display, 'the enum door must fold control bytes');
+        self::assertStringNotContainsString("forged\n", $display);
+        self::assertSame(
+            1,
+            substr_count($display, "\n"),
+            'a crafted newline inside --suit must not split the refusal into forged lines',
+        );
+        self::assertStringContainsString('red', $display, 'the visible letters survive the fold');
     }
 }
