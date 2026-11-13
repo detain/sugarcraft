@@ -211,6 +211,10 @@ $email2 = new Email(
 - **Self-signed / private CAs.** Peer verification is always on (never blanket-disable
   `verify_peer`). Point the handshake at your bundle with `->withCaFile('/path/ca.pem')`;
   it feeds both the implicit-TLS stream context and the STARTTLS upgrade.
+- **Missing `ext-openssl` is a named refusal.** Without the extension an encrypted
+  connection used to die as an opaque stream error (or, worse, after the relay had seen
+  `STARTTLS`). The transport now refuses by name before dialling SMTPS and before sending
+  `STARTTLS` — the same posture as Resend's `ext-curl` refusal.
 - **Message integrity.** Attachment filenames and MIME types pass the same CR/LF gate as
   subjects and addresses; MIME part parameters are RFC 2045-quoted.
 - **Secret masking.** `__debugInfo()` masks the SMTP password and the Resend API key.

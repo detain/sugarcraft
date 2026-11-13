@@ -83,4 +83,5 @@ return [
     'resend.cid_unsupported' => 'The Resend API payload has no Content-ID field: the attachment {filename} is inline - inline images ride the SMTP transport only.',
     'smtp.incomplete_credentials' => 'SMTP credentials incomplete: supply both username and password, or neither to send anonymously',
     'email.non_ascii_address' => 'Email address {addr} contains non-ASCII characters: SMTPUTF8 is not supported — use an ASCII envelope address',
+    'smtp.openssl_missing' => 'ext-openssl is required to secure the SMTP connection (STARTTLS/SMTPS) - install the extension; nothing is sent before the channel can be encrypted',
 ];

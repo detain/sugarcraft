@@ -47,6 +47,13 @@ final class SmtpTransport implements Transport
     private string $heloHost;
     /** Optional custom CA bundle for peer verification (null = system trust store). */
     private ?string $caFile = null;
+    /**
+     * TEST-ONLY seam (CM-43): null consults extension_loaded('openssl') live;
+     * false simulates the extension being absent so the named-refusal arms
+     * are pinned without rebuilding PHP. Mirrors the ResendTransport $apiUrl
+     * injection precedent.
+     */
+    private ?bool $assumeOpenssl = null;
 
     /** @var resource|null */
     private $socket = null;
@@ -98,6 +105,7 @@ final class SmtpTransport implements Transport
         string $password = '',
         int $timeout = 30,
         string $heloHost = '',
+        ?bool $assumeOpenssl = null,
     ) {
         // heloHost is interpolated verbatim into
         // `EHLO {host}\r\n` — BEFORE STARTTLS and BEFORE AUTH — so a value
@@ -143,6 +151,7 @@ final class SmtpTransport implements Transport
         // plaintext. Opt out explicitly with withRequireTls(false).
         $this->requireTls  = true;
         $this->heloHost    = $heloHost;
+        $this->assumeOpenssl = $assumeOpenssl;
     }
 
     /**
@@ -332,6 +341,14 @@ final class SmtpTransport implements Transport
 
     private function connect(): void
     {
+        // Implicit TLS dials an ssl:// transport that does not exist without
+        // ext-openssl: the failure used to surface as an opaque
+        // stream_socket_client URL error. Name the remedy before the dial
+        // (CM-43, mirroring the STARTTLS arm).
+        if ($this->implicitTls && !$this->tlsExtensionAvailable()) {
+            throw new \RuntimeException(Lang::t('smtp.openssl_missing'));
+        }
+
         $target  = $this->connectTarget();
         $context = \stream_context_create($this->streamContextOptions());
         $socket  = @\stream_socket_client(
@@ -446,6 +463,16 @@ final class SmtpTransport implements Transport
         ];
     }
 
+    /**
+     * Is the TLS extension this transport needs actually present? The
+     * CM-43 seam lets tests pin the named-refusal arms with the probe
+     * forced false; production consults the live runtime.
+     */
+    private function tlsExtensionAvailable(): bool
+    {
+        return $this->assumeOpenssl ?? \extension_loaded('openssl');
+    }
+
     private function startTlsIfNeeded(): void
     {
         // Already encrypted (implicit TLS / SMTPS) — STARTTLS would be a protocol
@@ -461,6 +488,16 @@ final class SmtpTransport implements Transport
                 throw new \RuntimeException(Lang::t('smtp.tls_required', ['host' => $this->host]));
             }
             return;
+        }
+
+        // A server that offers STARTTLS against a client whose TLS extension
+        // is missing used to die inside enable_crypto with a raw
+        // PHP-internal diagnostic. Name the missing extension — the same
+        // posture ResendTransport takes for ext-curl (resend.curl_missing) —
+        // and refuse BEFORE sending STARTTLS, so the relay never sees a
+        // command we cannot honour.
+        if (!$this->tlsExtensionAvailable()) {
+            throw new \RuntimeException(Lang::t('smtp.openssl_missing'));
         }
 
         $this->sendRaw("STARTTLS\r\n");

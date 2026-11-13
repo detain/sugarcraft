@@ -221,6 +221,56 @@ final class SmtpTransportErrorTest extends TestCase
         return $ref->invokeArgs($obj, $args);
     }
 
+    public function testImplicitTlsSendNamesOpensslBeforeDialling(): void
+    {
+        // Port 465 puts the transport in implicit-TLS mode; without
+        // ext-openssl the ssl:// client used to fail as an opaque
+        // stream_socket_client URL error. CM-43 pins the named refusal, and
+        // its placement before the dial: smtp.invalid.example is never even
+        // looked up because the probe short-circuits the connect.
+        $transport = new SmtpTransport('smtp.invalid.example', 465, assumeOpenssl: false);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('ext-openssl');
+
+        $transport->send(new Email(
+            from: ['me@example.com'],
+            to: ['you@example.com'],
+            subject: 'cm43',
+            body: 'body',
+        ));
+    }
+
+    public function testStarttlsUpgradeNamesOpensslBeforeSendingTheCommand(): void
+    {
+        // The other CM-43 arm: STARTTLS was advertised, the extension is
+        // missing. Refusal must happen BEFORE the STARTTLS command leaves
+        // the client — a relay must never see a promise we cannot honour.
+        [$server, $client] = \stream_socket_pair(\STREAM_PF_UNIX, \STREAM_SOCK_STREAM, \STREAM_IPPROTO_IP);
+        $this->assertIsResource($server);
+        $this->assertIsResource($client);
+
+        $transport = new SmtpTransport('smtp.example.com', 587, assumeOpenssl: false);
+        $socket = new \ReflectionProperty($transport, 'socket');
+        $socket->setAccessible(true);
+        $socket->setValue($transport, $client);
+        $response = new \ReflectionProperty($transport, 'lastResponse');
+        $response->setAccessible(true);
+        $response->setValue($transport, "250-smtp.example.com\r\n250-STARTTLS\r\n250 HELP\r\n");
+
+        try {
+            $this->invokePrivate($transport, 'startTlsIfNeeded');
+            $this->fail('expected the named openssl refusal');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('ext-openssl', $e->getMessage());
+        }
+
+        // Nothing reached the would-be relay: closing the client gives EOF.
+        \fclose($client);
+        $this->assertSame('', (string) \stream_get_contents($server));
+        \fclose($server);
+    }
+
     public function testSendRefusesAnEmptySenderBeforeDialling(): void
     {
         $transport = new SmtpTransport('smtp.invalid.example', 587);

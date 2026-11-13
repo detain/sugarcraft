@@ -76,4 +76,5 @@ return [
     'resend.cid_unsupported' => 'Resend API yükü Content-ID alanı içermiyor: {filename} eki satır içi — satır içi görseller yalnızca SMTP ile gönderilir.',
     'smtp.incomplete_credentials' => 'SMTP kimlik bilgileri eksik: kullanıcı adı ve parolayı birlikte verin veya anonim gönderim için ikisini de boş bırakın',
     'email.non_ascii_address' => 'E-posta adresi {addr} ASCII dışı karakter içeriyor: SMTPUTF8 desteklenmiyor — ASCII zarf adresi kullanın',
+    'smtp.openssl_missing' => 'SMTP bağlantısını güvenceye almak için ext-openssl gereklidir (STARTTLS/SMTPS) — eklentiyi kurun; kanal şifrelenemeden hiçbir şey gönderilmez',
 ];

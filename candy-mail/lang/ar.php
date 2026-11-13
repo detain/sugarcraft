@@ -76,4 +76,5 @@ return [
     'resend.cid_unsupported' => 'الحمولة البرمجية لـ Resend لا تحتوي على حقل Content-ID: المرفق {filename} مضمّن؛ الصور المضمّنة لا تسري إلا عبر SMTP.',
     'smtp.incomplete_credentials' => 'بيانات اعتماد SMTP غير مكتملة: قدِّم اسم المستخدم وكلمة المرور معًا، أو اترك كليهما فارغًا للإرسال المجهول',
     'email.non_ascii_address' => 'عنوان البريد {addr} يحتوي على محارف غير ASCII: بروتوكول SMTPUTF8 غير مدعوم — استخدم عنوان مغلف بـ ASCII',
+    'smtp.openssl_missing' => 'حزمة ext-openssl مطلوبة لتأمين اتصال SMTP (STARTTLS/SMTPS) - قم بتثبيت الحزمة; لا يُرسل شيء قبل إمكانية تشفير القناة',
 ];

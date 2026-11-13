@@ -76,4 +76,5 @@ return [
     'resend.cid_unsupported' => 'A carga útil da API Resend não tem campo Content-ID: o anexo {filename} é inline; imagens embutidas viajam apenas por SMTP.',
     'smtp.incomplete_credentials' => 'Credenciais SMTP incompletas: forneça usuário e senha juntos, ou nenhum deles para envio anônimo',
     'email.non_ascii_address' => 'O endereço de e-mail {addr} contém caracteres não ASCII: SMTPUTF8 não é suportado — use um endereço ASCII',
+    'smtp.openssl_missing' => 'ext-openssl é necessário para proteger a conexão SMTP (STARTTLS/SMTPS) - instale a extensão; nada é enviado antes que o canal possa ser criptografado',
 ];

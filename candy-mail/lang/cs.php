@@ -76,4 +76,5 @@ return [
     'resend.cid_unsupported' => 'Payload API Resend nemá pole Content-ID: příloha {filename} je inline; vložené obrázky přepravuje pouze SMTP.',
     'smtp.incomplete_credentials' => 'Údaje SMTP nejsou kompletní: zadejte uživatelské jméno i heslo společně, nebo obojí prázdné pro anonymní odeslání',
     'email.non_ascii_address' => 'E-mailová adresa {addr} obsahuje ne-ASCII znaky: SMTPUTF8 není podporován — použijte ASCII obálkovou adresu',
+    'smtp.openssl_missing' => 'ext-openssl je vyžadován k zabezpečení SMTP spojení (STARTTLS/SMTPS) - nainstalujte rozšíření; nic se neodesílá, dokud nelze kanál šifrovat',
 ];
