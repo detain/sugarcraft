@@ -65,6 +65,38 @@ final class LangTest extends TestCase
         $this->assertInstanceOf(\SugarCraft\Core\I18n\Lang::class, new Lang());
     }
 
+    public function testEverySrcLangKeyExistsInEnglishCatalog(): void
+    {
+        // PTY-25: the exemption boundary is only honest if the keys are.
+        // Every LITERAL Lang::t('key') call site in src/ must exist in
+        // lang/en.php — a missing key renders as the bare key string in
+        // front of a console operator (see testTWithMissingKeyReturnsKey).
+        $root = \dirname(__DIR__) . '/src';
+        $used = [];
+        $iterator = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root));
+        foreach ($iterator as $file) {
+            if (!$file instanceof \SplFileInfo || !$file->isFile() || $file->getExtension() !== 'php') {
+                continue;
+            }
+            if (\preg_match_all("/Lang::t\\(\\s*'([a-z0-9_.]+)'/", (string) \file_get_contents($file->getPathname()), $m)) {
+                $used = \array_merge($used, $m[1]);
+            }
+        }
+        $used = \array_values(\array_unique($used));
+        \sort($used);
+
+        $this->assertNotEmpty($used, 'the src census found no Lang::t keys at all');
+
+        $catalog = require \dirname(__DIR__) . '/lang/en.php';
+        $missing = \array_values(\array_diff($used, \array_keys($catalog)));
+        $this->assertSame(
+            [],
+            $missing,
+            'src/ calls Lang::t() with keys absent from lang/en.php (they would render as bare keys): '
+            . \implode(', ', $missing),
+        );
+    }
+
     public function testTWithPlaceholderSubstitution(): void
     {
         T::reset();

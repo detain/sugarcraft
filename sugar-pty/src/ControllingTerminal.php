@@ -55,7 +55,7 @@ final class ControllingTerminal
             'Darwin' => self::TIOCSCTTY_DARWIN,
             'BSD' => self::TIOCSCTTY_FREEBSD,
             default => throw new PtyException(
-                "sugar-pty has no validated TIOCSCTTY request number for platform family '{$family}'",
+                Lang::t('ctty.no_request_family', ['family' => $family]),
             ),
         };
     }
@@ -75,15 +75,13 @@ final class ControllingTerminal
     public static function claim(int $fd): void
     {
         if (PHP_OS_FAMILY === 'Windows') {
-            throw new PtyException('ControllingTerminal is POSIX-only.');
+            throw new PtyException(Lang::t('ctty.posix_only'));
         }
 
         $libc = self::libc();
 
         if ($libc->setsid() === -1) {
-            throw new PtyException(
-                'ControllingTerminal::claim setsid() failed (already a session leader, or the calling process is a group leader)',
-            );
+            throw new PtyException(Lang::t('ctty.setsid_failed'));
         }
 
         $cttyRequest = self::cttyRequestFor(\PHP_OS_FAMILY);
@@ -96,9 +94,7 @@ final class ControllingTerminal
         // $int=0 would pass a pointer-to-zero, which the kernel would
         // misinterpret. See [gotcha:ioctl-third-arg-ulong-not-pointer].
         if ($libc->ioctl($fd, $cttyRequest, null) !== 0) {
-            throw new PtyException(
-                "ControllingTerminal::claim ioctl({$fd}, TIOCSCTTY, 0) failed",
-            );
+            throw new PtyException(Lang::t('ctty.ioctl_failed', ['fd' => $fd]));
         }
     }
 

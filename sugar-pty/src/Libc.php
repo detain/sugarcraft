@@ -85,10 +85,7 @@ final class Libc
         }
 
         if (PHP_OS_FAMILY === 'Windows') {
-            throw new PtyException(
-                'sugar-pty requires POSIX libc; on Windows use the ConPTY backend '
-                . 'via PtySystemFactory instead.'
-            );
+            throw new PtyException(Lang::t('libc.posix_only'));
         }
 
         $library = self::libraryPath();
@@ -97,7 +94,7 @@ final class Libc
             self::$ffi = \FFI::cdef(self::cdef(), $library);
         } catch (\FFI\Exception $e) {
             throw new PtyException(
-                "Failed to load libc from '{$library}': " . $e->getMessage(),
+                Lang::t('libc.load_failed', ['library' => $library, 'detail' => $e->getMessage()]),
                 0,
                 $e,
             );
@@ -172,8 +169,7 @@ final class Libc
             'Darwin' => self::DEFAULT_DARWIN,
             'BSD' => self::resolveFreebsdLibrary(),
             default => throw new PtyException(
-                "sugar-pty has no validated libc soname for platform family '{$family}'"
-                . ' (mapped: Linux, Darwin, FreeBSD; set SUGARCRAFT_LIBC if you know better)',
+                Lang::t('libc.no_soname_family', ['family' => $family]),
             ),
         };
     }
@@ -186,11 +182,9 @@ final class Libc
             }
         }
 
-        throw new PtyException(
-            'sugar-pty found none of the known FreeBSD libc sonames ('
-            . \implode(', ', self::FREEBSD_LIBRARY_CANDIDATES)
-            . '); set SUGARCRAFT_LIBC to the real one',
-        );
+        throw new PtyException(Lang::t('libc.no_freebsd_soname', [
+            'candidates' => \implode(', ', self::FREEBSD_LIBRARY_CANDIDATES),
+        ]));
     }
 
     /**
@@ -305,7 +299,7 @@ CPROTO;
             'Linux' => '__errno_location',
             'Darwin', 'BSD' => '__error',
             default => throw new PtyException(
-                "sugar-pty has no validated errno accessor for platform family '{$family}'",
+                Lang::t('libc.no_errno_symbol', ['family' => $family]),
             ),
         };
     }
@@ -411,10 +405,7 @@ CPROTO;
     public static function libutil(): \FFI
     {
         if (PHP_OS_FAMILY === 'Windows') {
-            throw new PtyException(
-                'sugar-pty requires POSIX libc; on Windows use the ConPTY backend '
-                . 'via PtySystemFactory instead.'
-            );
+            throw new PtyException(Lang::t('libc.posix_only'));
         }
 
         if (PHP_OS_FAMILY === 'Darwin') {
@@ -474,8 +465,8 @@ CPROTO;
         }
 
         throw new PtyException(
-            'Failed to load openpty from any candidate (' . \implode(' | ', $report) . ')'
-            . (\is_string($override) && $override !== '' ? '' : '; set SUGARCRAFT_LIBC if your libc exports it under another path'),
+            Lang::t('libc.openpty_candidates_failed', ['report' => \implode(' | ', $report)])
+            . (\is_string($override) && $override !== '' ? '' : Lang::t('libc.openpty_hint_set_libc')),
         );
     }
 

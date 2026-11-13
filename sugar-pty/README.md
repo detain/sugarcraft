@@ -587,13 +587,20 @@ $opts = (new PumpOptions())
 ## Internationalization
 
 User-facing exception strings route through `Lang::t()` (`src/Lang.php`,
-catalog `lang/en.php`, TEN key namespaces — `close.*`, `libc.*`, `open.*`,
+catalog `lang/en.php`, FOURTEEN key namespaces — `close.*`, `ctty.*`,
+`expect.*`, `libc.*`, `master.*`, `multi.*`, `open.*`,
 `process.*`, `read.*`, `resize.*`, `size.*`, `spawn.*`, `stream.*`,
-`write.*`, 23 keys total). Lookup is
+`write.*`, 37 keys total). Lookup is
 exact key → base language → `en` → the raw key, so an untranslated
 string still renders English rather than throwing. Contributing a
 locale means adding `lang/<code>.php` with the same key tree — no code
-changes elsewhere.
+changes elsewhere. Documented boundary (PTY-25): a throw site gets a key
+iff a console operator can ever see it — a runtime failure of the PTY,
+libc or session machinery. Pure programmer-misuse guards
+(`InvalidArgumentException` from `PumpOptions`/`Expect` constructors,
+arity/value validation) stay raw English on purpose: they mark bugs in
+calling code, not operator-actionable conditions, and giving them keys
+would widen the translation surface for zero user benefit.
 
 ## Library lookup
 

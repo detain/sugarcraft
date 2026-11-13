@@ -209,12 +209,11 @@ final class Expect
      */
     private function stalled(int $written, int $total): \RuntimeException
     {
-        return new \RuntimeException(\sprintf(
-            'Failed to write to master PTY: no progress for %d ms with %d of %d bytes delivered',
-            (int) (self::SEND_STALL_BUDGET_SEC * 1000),
-            $written,
-            $total,
-        ));
+        return new \RuntimeException(Lang::t('expect.stalled', [
+            'budget_ms' => (int) (self::SEND_STALL_BUDGET_SEC * 1000),
+            'written' => $written,
+            'total' => $total,
+        ]));
     }
 
     /**

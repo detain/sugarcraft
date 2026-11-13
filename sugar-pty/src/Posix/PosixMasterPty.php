@@ -470,7 +470,7 @@ final class PosixMasterPty implements MasterPty
     private function assertOpen(): void
     {
         if ($this->closed) {
-            throw new PtyException('cannot operate on a closed PosixMasterPty');
+            throw new PtyException(\SugarCraft\Pty\Lang::t('master.closed'));
         }
     }
 }
