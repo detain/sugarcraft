@@ -50,7 +50,7 @@ Two implementation paths, both supported: the 7-method `Handler` interface is th
 
 **Null sink** — `NullHandler` is the shipped `Handler` that consumes everything and does nothing, with seven bare counter accessors (`printCount()` … `sosPmApcCount()`) so even a silent sink stays observable. It deliberately does NOT implement `BulkPrintHandler` — a null sink always wants the byte-level per-char truth, so `printCount()` counts runes, never runs.
 
-**Bulk print (opt-in)** — implement `BulkPrintHandler` (a capability interface extending `Handler`, resolved once in the parser's constructor) and each contiguous Ground-state printable-ASCII run arrives as ONE `printRun(string $run)` call instead of one `printChar()` per byte — same events, same order, only the grouping changes. Multi-byte runes still arrive per-char. `HandlerAdapter` implements it as a loop over its own per-char leg, so a `CsiHandler` behind the adapter still observes exactly one `printable()` per rune.
+**Bulk print (opt-in)** — implement `BulkPrintHandler` (a capability interface extending `Handler`, resolved once in the parser's constructor) and each contiguous Ground-state printable-ASCII run arrives as ONE `printRun(string $run)` call instead of one `printChar()` per byte — same events, same order, only the grouping changes. Multi-byte runes still arrive per-char. The split rule is the plain one: a run breaks on any byte outside printable ASCII `0x20-0x7E`, so spaces stay in-band (`'two three'` is ONE run) and any control, escape or high byte ends it. `HandlerAdapter` implements it as a loop over its own per-char leg, so a `CsiHandler` behind the adapter still observes exactly one `printable()` per rune.
 
 ## Quickstart
 
@@ -293,15 +293,21 @@ product:
   `stringOverflowed()`), and clears both with `resetLog()`.
 
 Test breadth is hand-built edge pins (`ParserOverflowTest`,
-`Utf8PolicyTest`, `DcsTruncationTest` and friends); there is no continuous
-fuzzing in CI.
+`Utf8PolicyTest`, `DcsTruncationTest` and friends) plus seeded equivalence
+matrices that pin the bulk fast path to the per-byte path on fixed corpora;
+there is no continuous fuzzing in CI.
 
 ## Decoders (Codec)
 
 `SugarCraft\AnsiParser\Codec` ships three **pure value decoders** — typed,
 label-safe views over the fields `Handler` already delivers, with no parser
 state of their own. All three escape and clip attacker-controlled bytes
-before any terminal label (`describe()`).
+before any terminal label (`describe()`). The namespace's one-way twin is
+`KeySequence`: a key-name → wire-byte **encoder** (`TABLE`, `encode()`,
+`names()` — 40 exact, case-sensitive names; unknown or empty names yield
+`null`). Its values are the real bytes a keyboard produces, so a driven
+program believes them (`Up` is `ESC [ C`, never a glyph; literal glyph
+bytes ride the paste/IME path and exercise a different parser).
 
 | Class | Entry point | Reads |
 |---|---|---|
