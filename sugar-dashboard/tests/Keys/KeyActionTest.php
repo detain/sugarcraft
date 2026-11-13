@@ -62,4 +62,25 @@ final class KeyActionTest extends TestCase
         $this->assertTrue($receivedKey->alt);
         $this->assertTrue($receivedKey->shift);
     }
+
+    public function testNonCallableExecuteThrowsAtConstruction(): void
+    {
+        // D-139: the callable promise is enforced at construction, not with
+        // a fatal at dispatch.
+        foreach (['not-callable', 42, ['a', 'b']] as $bad) {
+            try {
+                new KeyAction('guarded', $bad);
+                $this->fail('non-callable execute must throw at construction');
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString('guarded', $e->getMessage());
+                $this->assertStringContainsString('callable', $e->getMessage());
+            }
+        }
+    }
+
+    public function testFirstClassCallableIsAccepted(): void
+    {
+        $action = new KeyAction('accepts', strrev(...));
+        $this->assertTrue(is_callable($action->execute));
+    }
 }

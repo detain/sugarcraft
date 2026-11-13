@@ -16,8 +16,19 @@ final class KeyAction
      */
     public function __construct(
         public readonly string $name,
+        // 'callable' is not a legal property type in PHP, so the promise is
+        // enforced at construction instead of fatally at dispatch (finding
+        // sugar-dashboard-142).
         public readonly mixed $execute,
-    ) {}
+    ) {
+        if (!is_callable($this->execute)) {
+            throw new \InvalidArgumentException(sprintf(
+                'KeyAction "%s" requires a callable, got %s',
+                $name,
+                get_debug_type($this->execute),
+            ));
+        }
+    }
 
     /**
      * Execute the action with the given key.
