@@ -45,9 +45,14 @@ final class Outbox
     public const CLOSE_TRY_AGAIN_LATER = 1013;
 
     /**
-     * @var list<array{bytes: string, ephemeral: bool, coalesce: ?string, message: ?array<string, mixed>}>
+     * FIFO with O(1) head removal (array_shift re-indexes the whole list, so a
+     * full drain of k entries was O(k^2)).
+     *
+     * @var \SplQueue<array{bytes: string, ephemeral: bool, coalesce: ?string, message: ?array<string, mixed>}>
      */
-    private array $queue = [];
+    private \SplQueue $queue;
+
+    private int $unencodable = 0;
 
     private int $buffered = 0;
 
@@ -71,6 +76,7 @@ final class Outbox
         private readonly float $graceSeconds,
         private readonly ?\Closure $overflowNotice,
     ) {
+        $this->queue = new \SplQueue();
         $connection->onDrain(fn () => $this->flush());
     }
 
@@ -113,12 +119,29 @@ final class Outbox
             return;
         }
 
-        if ($coalesceKey !== null && $this->buffered > $this->softBytes && $this->queue !== []) {
-            $last = \array_key_last($this->queue);
-            $tail = $this->queue[$last];
+        // A message json_encode cannot represent (INF/NAN cost math, depth) is
+        // counted and dropped; an empty string must never become a text frame.
+        try {
+            $encoded = self::encode($message);
+        } catch (\JsonException) {
+            $this->unencodable++;
+
+            return;
+        }
+
+        if ($coalesceKey !== null && $this->buffered > $this->softBytes && !$this->queue->isEmpty()) {
+            $last = $this->queue->count() - 1;
+            $tail = $this->queue->top();
             $merged = $tail['message'] === null || $tail['coalesce'] !== $coalesceKey ? null : self::coalesced($tail['message'], $message);
+            $bytes = null;
             if ($merged !== null) {
-                $bytes = self::encode($merged);
+                try {
+                    $bytes = self::encode($merged);
+                } catch (\JsonException) {
+                    $bytes = null;
+                }
+            }
+            if ($bytes !== null) {
                 $this->buffered += \strlen($bytes) - \strlen($tail['bytes']);
                 $this->queue[$last] = ['bytes' => $bytes, 'ephemeral' => true, 'coalesce' => $coalesceKey, 'message' => $merged];
                 $this->flush();
@@ -127,7 +150,7 @@ final class Outbox
             }
         }
 
-        $this->enqueue(['bytes' => self::encode($message), 'ephemeral' => true, 'coalesce' => $coalesceKey, 'message' => $message]);
+        $this->enqueue(['bytes' => $encoded, 'ephemeral' => true, 'coalesce' => $coalesceKey, 'message' => $message]);
     }
 
     /** Bytes held here, not yet handed to the socket. */
@@ -139,7 +162,13 @@ final class Outbox
     /** Messages held here, not yet handed to the socket. */
     public function count(): int
     {
-        return \count($this->queue);
+        return $this->queue->count();
+    }
+
+    /** Ephemeral messages refused because json_encode could not represent them. */
+    public function unencodable(): int
+    {
+        return $this->unencodable;
     }
 
     /** Whether the queue is past the soft watermark (coalescing, narration). */
@@ -168,8 +197,8 @@ final class Outbox
         }
         $this->flushing = true;
         try {
-            while ($this->queue !== [] && $this->connection->isOpen() && !$this->connection->isCongested()) {
-                $entry = \array_shift($this->queue);
+            while (!$this->queue->isEmpty() && $this->connection->isOpen() && !$this->connection->isCongested()) {
+                $entry = $this->queue->dequeue();
                 $this->buffered -= \strlen($entry['bytes']);
                 $this->connection->send($entry['bytes']);
             }
@@ -192,7 +221,7 @@ final class Outbox
     /** Forget everything queued (the connection is gone). */
     public function discard(): void
     {
-        $this->queue = [];
+        $this->queue = new \SplQueue();
         $this->buffered = 0;
         $this->cancelGrace();
     }
@@ -205,10 +234,19 @@ final class Outbox
         if (!$this->connection->isOpen()) {
             return;
         }
-        $this->queue[] = $entry;
+        $this->queue->enqueue($entry);
         $this->buffered += \strlen($entry['bytes']);
-        $this->flush();
 
+        // Past the hard mark on a congested socket the flush cannot help, so
+        // shed first: overflow() flushes once itself, instead of a no-op flush
+        // followed by the shed's own second one.
+        if ($this->buffered > $this->hardBytes && $this->connection->isCongested()) {
+            $this->overflow();
+
+            return;
+        }
+
+        $this->flush();
         if ($this->buffered > $this->hardBytes) {
             $this->overflow();
         }
@@ -223,7 +261,7 @@ final class Outbox
      */
     private function overflow(): void
     {
-        $kept = [];
+        $kept = new \SplQueue();
         foreach ($this->queue as $entry) {
             if ($entry['ephemeral']) {
                 $this->dropped++;
@@ -231,7 +269,7 @@ final class Outbox
 
                 continue;
             }
-            $kept[] = $entry;
+            $kept->enqueue($entry);
         }
         $this->queue = $kept;
 
@@ -239,7 +277,7 @@ final class Outbox
             $this->overflowing = true;
             if ($this->overflowNotice !== null) {
                 $notice = ($this->overflowNotice)($this->dropped);
-                $this->queue[] = ['bytes' => $notice, 'ephemeral' => false, 'coalesce' => null, 'message' => null];
+                $this->queue->enqueue(['bytes' => $notice, 'ephemeral' => false, 'coalesce' => null, 'message' => null]);
                 $this->buffered += \strlen($notice);
             }
             $this->graceTimer = $this->loop->addTimer($this->graceSeconds, function (): void {
@@ -280,9 +318,12 @@ final class Outbox
         return $earlier;
     }
 
-    /** @param array<string, mixed> $message */
+    /**
+     * @param array<string, mixed> $message
+     * @throws \JsonException
+     */
     private static function encode(array $message): string
     {
-        return (string) \json_encode($message, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE);
+        return \json_encode($message, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR);
     }
 }

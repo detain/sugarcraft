@@ -39,6 +39,36 @@ final class BackpressureTest extends TestCase
         self::assertSame([1, 2, 3], \array_column($client->received(), 'n'), 'in order, nothing lost');
     }
 
+    public function testAnUnencodableEphemeralIsCountedNeverQueuedAsAnEmptyFrame(): void
+    {
+        $client = WireClient::open(new ProtocolPendingHandler());
+        $outbox = Outbox::for($client->connection, Loop::get());
+        $client->toClient->pause();
+
+        $outbox->pushEphemeral(['jsonrpc' => '2.0', 'method' => 'event', 'params' => ['cost' => \INF]]);
+
+        self::assertSame(0, $outbox->count(), 'no zero-byte frame was enqueued');
+        self::assertSame(0, $outbox->bufferedBytes());
+        self::assertSame(1, $outbox->unencodable());
+        $client->toClient->resume();
+        self::assertSame([], $client->received());
+    }
+
+    public function testACongestedPushPastTheHardMarkShedsWithoutFlushingFirst(): void
+    {
+        $client = WireClient::open(new ProtocolPendingHandler());
+        $outbox = Outbox::for($client->connection, Loop::get(), static fn (int $d): string => '{"overflow":' . $d . '}', 10, 100, 60.0);
+        $client->toClient->pause();
+        $outbox->push('{"n":0}');
+        self::assertTrue($client->connection->isCongested());
+        $outbox->pushEphemeral(self::delta('e', 0));
+        $outbox->push(\str_repeat('x', 150));
+
+        self::assertTrue($outbox->isOverflowing());
+        $client->toClient->resume();
+        $outbox->discard();
+    }
+
     public function testPastTheSoftMarkDeltasOfOnePartAreMerged(): void
     {
         $client = WireClient::open(new ProtocolPendingHandler());
