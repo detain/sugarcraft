@@ -117,15 +117,18 @@ final class TableTest extends TestCase
 
     public function testSortByDescending(): void
     {
-        $t = (new Table())
-            ->addColumn(Column::make('Num', 5))
-            ->addRow(['1'])
-            ->addRow(['2'])
-            ->addRow(['3'])
-            ->sortBy(0, false); // descending
+        // Position pin (finding-007): the old contains-'3' assertion held
+        // under EVERY permutation, so a full comparator inversion stayed
+        // green. Descending must reverse the whole visible order, row by
+        // row — assert each row's actual key.
+        $t = Table::new()
+            ->withColumn(Column::new('Num', 5))
+            ->withRow(['1'])
+            ->withRow(['2'])
+            ->withRow(['3'])
+            ->withSort(0, false); // descending
 
-        $output = $t->render();
-        $this->assertStringContainsString('3', $output);
+        $this->assertSame(['3', '2', '1'], $this->dataColumn($t));
     }
 
     public function testSortByResetsCursor(): void
@@ -327,32 +330,41 @@ final class TableTest extends TestCase
 
     public function testSortByNextTogglesDirectionOnSameColumn(): void
     {
-        $t = (new Table())
-            ->addColumn(Column::make('Name', 10))
-            ->addRow(['Alice'])
-            ->addRow(['Bob'])
-            ->sortByNext(0); // ascending
+        // Position pin (finding-007): every stage asserts the FULL ordered
+        // column, not presence of one value. Insertion order is deliberately
+        // not alphabetical so a table that never sorted also fails the pins.
+        $t = Table::new()
+            ->withColumn(Column::new('Name', 10))
+            ->withRow(['Bob'])
+            ->withRow(['Cara'])
+            ->withRow(['Alice']);
 
-        $first = $t->sortByNext(0); // now descending
-        $second = $first->sortByNext(0); // back to ascending
+        $ascending = $t->sortByNext(0); // fresh column starts ascending
+        $this->assertSame(['Alice', 'Bob', 'Cara'], $this->dataColumn($ascending));
 
-        // After two toggles, should be back to ascending (sortByNext toggles same col)
-        $this->assertStringContainsString('Alice', $second->render());
+        $descending = $ascending->sortByNext(0); // same column toggles direction
+        $this->assertSame(['Cara', 'Bob', 'Alice'], $this->dataColumn($descending));
+
+        $again = $descending->sortByNext(0); // and toggles back
+        $this->assertSame(['Alice', 'Bob', 'Cara'], $this->dataColumn($again));
     }
 
     public function testSortByNextSwitchesColumnToAscending(): void
     {
-        $t = (new Table())
-            ->addColumn(Column::make('A', 5))
-            ->addColumn(Column::make('B', 5))
-            ->addRow(['a', '1'])
-            ->addRow(['b', '2'])
-            ->sortBy(0);
+        // Position pin (finding-007): switching the sort column to B must
+        // move the '1' row to the top of the frame. Pinning BOTH columns'
+        // ordered values proves the row actually relocated — an A-order
+        // illusion (no re-sort) cannot pass.
+        $t = Table::new()
+            ->withColumn(Column::new('A', 5))
+            ->withColumn(Column::new('B', 5))
+            ->withRow(['x', '2'])
+            ->withRow(['y', '1'])
+            ->withSort(0); // A ascending: x, y
 
-        // Now switch to sort by column 1
-        $t2 = $t->sortByNext(1);
-        $output = $t2->render();
-        $this->assertStringContainsString('1', $output);
+        $t2 = $t->sortByNext(1); // switch to B ascending: (y,1) then (x,2)
+        $this->assertSame(['1', '2'], $this->dataColumn($t2, 1));
+        $this->assertSame(['y', 'x'], $this->dataColumn($t2, 0));
     }
 
     // Helper
@@ -362,6 +374,24 @@ final class TableTest extends TestCase
         $prop = $reflection->getProperty('cursorRow');
         $prop->setAccessible(true);
         return $prop->getValue($t);
+    }
+
+    /**
+     * Ordered values of one column across the rendered data rows.
+     *
+     * Skips the header + ruler band (lines 0-1) and splits the default
+     * ' │ ' separator, so tests pin ROW POSITIONS rather than substring
+     * presence (finding-007: presence-only assertions survive any sort
+     * permutation).
+     */
+    private function dataColumn(Table $t, int $col = 0): array
+    {
+        $values = [];
+        foreach (array_slice($t->buildLines(), 2) as $line) {
+            $cells = array_map('trim', explode(' │ ', $line));
+            $values[] = $cells[$col] ?? '';
+        }
+        return $values;
     }
 
     // ---- Table family hardening (lib-fixes-1103) --------------------------
