@@ -285,17 +285,17 @@ final class SelfUpdateTest extends TestCase
         return self::SERVER_ORIGIN . '/' . $name;
     }
 
-    public function testTheRosterCarriesSixteenVerbsWithSelfUpdateInAlphaOrder(): void
+    public function testTheRosterCarriesEighteenVerbsWithSelfUpdateInAlphaOrder(): void
     {
-        // Sixteen as of the cc-eval w1b bank: the `workflow` verb is the
-        // sixteenth name. `gc` (commit f32a28195, gc-cli-1106 closeout) was
+        // Eighteen: `config` and `permissions` joined the sixteen the cc-eval
+        // w1b bank left (`workflow` was the sixteenth name). `gc` (commit f32a28195, gc-cli-1106 closeout) was
         // the fifteenth; the earlier `lsp` and `import` additions are
         // ancestors of this tree. The count word follows the live derivation.
         // Re-derive from ParsedArgs::SUBCOMMANDS.
         $accepted = ParsedArgs::SUBCOMMANDS;
         sort($accepted);
         self::assertSame(
-            ['acp', 'attach', 'bundles', 'completion', 'doctor', 'gc', 'import', 'login', 'lsp', 'mcp', 'models', 'self-update', 'serve', 'session', 'usage', 'workflow'],
+            ['acp', 'attach', 'bundles', 'completion', 'config', 'doctor', 'gc', 'import', 'login', 'lsp', 'mcp', 'models', 'permissions', 'self-update', 'serve', 'session', 'usage', 'workflow'],
             $accepted,
         );
         self::assertTrue(class_exists(ArgvParser::class));
