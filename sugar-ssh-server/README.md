@@ -716,9 +716,10 @@ public function handle(Context $ctx, Session $session, callable $next): void
 ```
 
 `Auth`, `PasswordAuth`, `KeyboardInteractive`, `CertificateAuth`,
-`RateLimit` and the transport-side `DispatchesMiddlewareStack` all do
-exactly this — mark once at the deny site, then write the human-facing
-notice wherever it can actually be seen. `markRefused()` is a one-way
+`RateLimit`, the transport-side `DispatchesMiddlewareStack` and — for refused
+exec requests — `DefaultChannelHandler` all do exactly this — mark once at
+the deny site, then write the human-facing notice wherever it can actually be
+seen. `markRefused()` is a one-way
 latch: a session that has been refused stays refused.
 
 Both transports read the outcome through one resolver,

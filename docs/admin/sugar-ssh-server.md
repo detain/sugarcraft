@@ -53,7 +53,7 @@ things to the cron entry or CI step reading `$?`:
 | Code | Meaning |
 |------|---------|
 | the child's own code | the chain reached a spawner and a process ran: `0` means that program succeeded, `3` means it did not |
-| `Server::EXIT_DENIED` (`129`) | nothing was served: a shipped gate (`Auth`, `RateLimit`, `PasswordAuth`, `CertificateAuth`, `KeyboardInteractive`) refused, or the `Context` was already dead when the walk reached a hop |
+| `Server::EXIT_DENIED` (`129`) | nothing was served: a shipped gate (`Auth`, `RateLimit`, `PasswordAuth`, `CertificateAuth`, `KeyboardInteractive`) refused, `DefaultChannelHandler` refused an exec request (deny-notice on stderr, latch on the session), or the `Context` was already dead when the walk reached a hop |
 | `0` | the walk ran out of middleware without any of the above — an empty or purely observational stack |
 
 `129` is `128 + SIGHUP`, the shell's own convention for "this process did

@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\SshServer\Tests;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\SshServer\Channel\DefaultChannelHandler;
+use SugarCraft\SshServer\Channel\Msg\ExecMsg;
 use SugarCraft\SshServer\Context;
 use SugarCraft\SshServer\Middleware;
 use SugarCraft\SshServer\Middleware\Auth;
@@ -87,6 +89,41 @@ final class ExitStatusTest extends TestCase
 
         $this->assertSame(Server::EXIT_DENIED, $status);
         $this->assertStringContainsString('Unauthorized', $read());
+    }
+
+    public function testARefusedExecReportsARefusalAndNotASuccessfulNothing(): void
+    {
+        // The exec door closes through the channel handler rather than a
+        // stack gate; the refusal latch is what carries the answer there
+        // too (audit 004). Before the mark, `ssh host whoami` against a
+        // server that refused the program reported `0` to the caller.
+        $session = $this->someone('alice', '198.51.100.7');
+        $stderr = \fopen('php://memory', 'w+');
+        $this->assertIsResource($stderr);
+        $handler = new DefaultChannelHandler(stderr: $stderr);
+
+        $handler->handleExec(new ExecMsg('/bin/whoami'), $session);
+
+        $this->assertSame(Server::EXIT_DENIED, Server::resolveStatus($session));
+        \fclose($stderr);
+    }
+
+    public function testAnEmptyExecRequestIsNothingToRunAndStaysASuccess(): void
+    {
+        // The sibling pin: an empty request is NOT a refusal — zero tokens
+        // decodes to "nothing to run", which the exit contract resolves to
+        // success. If these two ever share a branch, this is the test that
+        // notices.
+        $session = $this->someone('alice', '198.51.100.7');
+        $stderr = \fopen('php://memory', 'w+');
+        $this->assertIsResource($stderr);
+        $handler = new DefaultChannelHandler(stderr: $stderr);
+
+        $handler->handleExec(new ExecMsg(''), $session);
+
+        $this->assertFalse($session->refused());
+        $this->assertSame(0, Server::resolveStatus($session));
+        \fclose($stderr);
     }
 
     public function testTheSecondThrottledConnectionIsRefusedNotCompleted(): void

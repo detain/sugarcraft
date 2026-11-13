@@ -684,6 +684,39 @@ final class DefaultChannelHandlerTest extends TestCase
         $this->assertStringContainsString('Exec request refused: /bin/ls', $read());
     }
 
+    /**
+     * The refusal is also latched on the session, not merely announced:
+     * `Server::resolveStatus` can then answer 129 instead of the `0` that
+     * "nothing ran" would otherwise give (audit 004).
+     */
+    public function testARefusedExecLatchesTheSessionForTheExitContract(): void
+    {
+        [$spy, $handler] = $this->recordingHandler();
+        $session = $this->fakeSession();
+
+        $handler->handleExec(new ExecMsg('/bin/ls -la'), $session);
+
+        $this->assertSame([], $spy->spawned);
+        $this->assertTrue($session->refused(), 'the exec denial must reach the exit contract');
+    }
+
+    public function testAGrantedOrEmptyExecRequestLeavesTheSessionUnlatched(): void
+    {
+        [$spy, $handler] = $this->recordingHandler(['/bin/ls']);
+        $granted = $this->fakeSession();
+
+        $handler->handleExec(new ExecMsg('/bin/ls'), $granted);
+
+        $this->assertCount(1, $spy->spawned);
+        $this->assertFalse($granted->refused(), 'a granted request is not a refusal');
+
+        $empty = $this->fakeSession();
+        $handler->handleExec(new ExecMsg(''), $empty);
+
+        $this->assertTrue($handler->execRequested());
+        $this->assertFalse($empty->refused(), 'nothing-to-run is a nothing-to-do success, not a denial');
+    }
+
     public function testTheAllowlistSpawnsTheExactProgramWithItsArguments(): void
     {
         [$spy, $handler] = $this->recordingHandler(['/bin/ls']);

@@ -209,7 +209,12 @@ final class DefaultChannelHandler implements ChannelHandler
         $argv = self::decodeCommandString($msg->command);
         $this->pendingCommand = $argv;
         if ($argv === []) {
-            // Nothing to run — an empty request is not a refusal worth a notice.
+            // Nothing to run — an empty request is not a refusal worth a
+            // notice. The README exit contract resolves "the walk finished
+            // with nothing to spawn" to `0`, and a request that decodes to
+            // zero tokens is indistinguishable from an empty command
+            // string, so it exits 0 like any other nothing-to-do session;
+            // it is not markRefused'd.
             return;
         }
         if (!$this->execAllowed($session, $argv)) {
@@ -265,8 +270,26 @@ final class DefaultChannelHandler implements ChannelHandler
      *
      * @param list<string> $argv
      */
+    /**
+     * Deny an exec request: latch the refusal, then announce it.
+     *
+     * The mark is the exit contract — the other deny sites (the auth
+     * gates, `RateLimit`, the transport-side
+     * {@see \SugarCraft\SshServer\Transport\DispatchesMiddlewareStack})
+     * each run {@see Session::markRefused()} once at the deny site, and
+     * {@see \SugarCraft\SshServer\Server::resolveStatus()} maps that latch
+     * to `EXIT_DENIED`. This method joins them: a refused exec is a
+     * refusal, not a successful nothing. The mark comes BEFORE the stderr
+     * guard on purpose — the refusal is a fact about the session, while
+     * the notice is best-effort and drops silently when the stream is
+     * closed.
+     *
+     * @param non-empty-list<string> $argv
+     */
     private function refuseExec(Session $session, array $argv): void
     {
+        $session->markRefused();
+
         if (!\is_resource($this->stderr)) {
             return;
         }
