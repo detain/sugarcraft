@@ -252,4 +252,24 @@ final class Calendar implements \SugarCraft\Dashboard\Foundation\SizedItem
             markerColor: $this->markerColor,
         );
     }
+
+    /**
+     * Set the color used for the marker glyph on marked days (finding
+     * sugar-dashboard-163: the markerColor the ctor accepts and render
+     * consults had no wither, so the promoted-only color trio was
+     * half-documented).
+     */
+    public function withMarkerColor(?Color $color): self
+    {
+        return new self(
+            year: $this->year,
+            month: $this->month,
+            startDayOfWeek: $this->startDayOfWeek,
+            highlightDay: $this->highlightDay,
+            markedDays: $this->markedDays,
+            headerColor: $this->headerColor,
+            todayColor: $this->todayColor,
+            markerColor: $color,
+        );
+    }
 }
