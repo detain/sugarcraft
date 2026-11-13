@@ -288,6 +288,44 @@ There is no dedicated disabled-day style: every out-of-bounds day always
 receives the built-in faint composition, layered onto whichever style the
 chain above chose, and none of the seven setters influence it.
 
+## Accessibility and terminal fallbacks
+
+The picker emits raw SGR unconditionally — nothing in this lib consults a
+colour profile, honours `NO_COLOR`, or sniffs for dumb terminals. That policy
+belongs to the host, and the seams are:
+
+- **Strip host-side.** For text-safe output, pipe `view()` through the host's
+  own ANSI stripper (sugar-core's `Ansi::strip` is the same seam the golden
+  tests use), and run the optional `ColorProfile` ladder in the host framework
+  — this widget prints digits and leaves the decision to the consumer.
+- **Monochrome at the source.** Because empty style strings are refused (see
+  Styling), a colourless build re-points every setter at attribute-only
+  codes, e.g.
+  `->withHeaderStyle('1')->withDayNameStyle('2')->withTodayStyle('1;4')`
+  `->withSelectedStyle('3')->withSelectedTodayStyle('1;3')`
+  `->withCursorStyle('7')->withRangeStyle('9')` —
+  bold / faint / italic / underline / reverse / crossed-out stay
+  distinguishable without any colour channel.
+- **Marginal contrast.** The shipped `90` bright-black day-name and week
+  styles are the lowest-contrast defaults; `37` or `97` are the suggested
+  alternates on dark themes.
+- **Which cues survive a colourless display.** The cursor's reverse block and
+  the faint attribute on disabled days do (faint composes onto the state
+  colour rather than masking it, so a dimmed today keeps BOTH cues);
+  green/cyan/yellow state colours alone do not. Where even that is not
+  enough, `withoutToday()` (see Today anchor) removes the marker outright
+  rather than faking suppression.
+- **Blink.** Codes `5`/`6` decode but are discouraged (see Styling); hosts
+  with a reduced-motion lint should avoid them.
+
+### Embedding hazard: do not bind bare Ctrl chords to quit
+
+NUL bytes and corrupted paste sequences arrive on many terminals as `Char`
+messages with invented Ctrl chords (`rune=''`, `ctrl=true`). This widget's
+`Model` is inert to them — unguarded keys are ignored and guarded keys refuse
+loudly — but a host that maps "any Ctrl chord" to quit force-quits on every
+garbage paste. Bind quit to a named key or an explicit, labelled chord.
+
 ## Keyboard handling
 
 `handleKey()` is the non-TEA wire surface; `Model` is the TEA one. Both

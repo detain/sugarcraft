@@ -22,6 +22,13 @@ declare(strict_types=1);
  * print a truncated transcript. A silent open stream keeps the loop alive
  * for the full script; the run ends through the demo's own QuitMsg.
  *
+ * Embedding hazard for REAL hosts (do not copy the script's QuitMsg wiring as
+ * a keymap): never bind bare Ctrl chords with empty labels to quit. NUL and
+ * corrupted paste bytes arrive on many terminals as invented `Char` messages
+ * with `rune=''`, `ctrl=true`; this Model ignores garbage and refuses guarded
+ * keys cleanly, but a host-side "any Ctrl chord quits" rule force-quits on
+ * every such paste. Quit belongs on a named key or an explicit labelled chord.
+ *
  * Transcript honesty: every unlabelled `label -> type payload` line is a
  * byte for byte EventStore event. The only non-event line is the host's
  * range-mode switch, prefixed `[host]` so no reader mistakes it for a
