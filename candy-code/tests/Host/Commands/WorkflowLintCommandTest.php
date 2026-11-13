@@ -55,6 +55,24 @@ final class WorkflowLintCommandTest extends TestCase
         self::assertFalse($result->rows[1]->error, 'a clean lint is an ordinary reply');
     }
 
+    public function testTheLintFramingLocalisesWhileTheReportContentStaysMachineSide(): void
+    {
+        $plan = $this->writeWfaPlan(<<<'YAML'
+            name: wfa-de
+            description: one stage
+            stages:
+              - name: only
+                agent: coder
+                prompt: do it
+            YAML);
+
+        $reply = \SugarCraft\Code\Lang::inLocale('de', fn (): string => (string) $this->lint($plan)->rows[1]->content);
+
+        self::assertStringContainsString('Lint des Workflows `wfa-de` (keine Agenten gestartet):', $reply);
+        self::assertStringContainsString('Urteil: clean — no findings', $reply, 'the verdictLine content stays English machine-side');
+        self::assertStringNotContainsString('Verdict:', $reply);
+    }
+
     public function testADanglingResultsRefFailsTheLintWithAnErrorFlag(): void
     {
         $result = $this->lint($this->writeWfaPlan(<<<'YAML'

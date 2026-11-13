@@ -5334,6 +5334,8 @@ sovrascritti (la legge onlyUnset).',
     'host.agent_resume.feed_degraded' => 'Il feed di avanzamento in tempo reale di questa esecuzione di follow-up si è degradato: {count} aggiornamento/i non sono mai arrivati. L\'esecuzione è terminata; il suo risultato segue.',
     'host.agent_resume.feed_broke' => 'Il feed di avanzamento dell\'esecuzione di follow-up si è interrotto prima di riportare un risultato, quindi l\'esito è sconosciuto. Controlla il registro di trascrizione dell\'esecuzione.',
     'host.agent_resume.no_fork' => 'Questa esecuzione di follow-up non ha potuto essere forkata, quindi è stata eseguita in questo processo senza feed di avanzamento in tempo reale.',
+    'host.workflows.lint_header' => 'Lint del workflow `{name}` (nessun agente avviato):',
+    'host.workflows.lint_verdict' => 'Verdetto: {verdict}',
     'hooks.subagent_grant.denied' => 'La modalità di permesso \'{mode}\' dell\'agente "{agent}" non consente {tool}.',
     'hooks.subagent_grant.ask' => 'Consentire l\'esecuzione di {tool}? (l\'agente "{agent}" è in modalità di permesso: {mode})',
 ];

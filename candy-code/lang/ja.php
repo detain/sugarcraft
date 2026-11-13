@@ -5330,6 +5330,8 @@ TXT,
     'host.agent_resume.feed_degraded' => 'このフォローアップ実行のライブ進捗フィードが劣化しました。{count} 件の更新が届きませんでした。実行自体は完了しており、結果は以下のとおりです。',
     'host.agent_resume.feed_broke' => 'フォローアップ実行の進捗フィードが結果を報告する前に途切れたため、結果は不明です。実行のトランスクリプトログを確認してください。',
     'host.agent_resume.no_fork' => 'このフォローアップ実行はフォークできなかったため、ライブ進捗フィードなしでこのプロセス内で実行されました。',
+    'host.workflows.lint_header' => 'ワークフロー `{name}` の lint（エージェントは起動していません）:',
+    'host.workflows.lint_verdict' => '判定: {verdict}',
     'hooks.subagent_grant.denied' => '権限モード \'{mode}\' (エージェント "{agent}") では {tool} は許可されていません。',
     'hooks.subagent_grant.ask' => '{tool} の実行を許可しますか？ (エージェント "{agent}" は権限モード {mode} で動作中)',
 ];

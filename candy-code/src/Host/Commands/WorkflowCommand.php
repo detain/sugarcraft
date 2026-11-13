@@ -816,13 +816,16 @@ final class WorkflowCommand implements HostCommand
 
         $report = WorkflowLinter::lint($workflow, [], self::toolUniverse($context), $includeResolver, self::presetNames($workflow, $context));
 
-        $lines = ["Lint of workflow `{$workflow->name}` (no agents dispatched):", '', $report->renderPlanTable()];
+        // The framing is localised (S-H08); the plan table, findings and
+        // verdictLine() content stay machine-side English by design — they
+        // are the linter's own stable report text.
+        $lines = [Lang::t('host.workflows.lint_header', ['name' => $workflow->name]), '', $report->renderPlanTable()];
         if ($report->hasFindings()) {
             $lines[] = '';
             $lines[] = $report->renderFindings();
         }
         $lines[] = '';
-        $lines[] = 'Verdict: ' . $report->verdictLine();
+        $lines[] = Lang::t('host.workflows.lint_verdict', ['verdict' => $report->verdictLine()]);
 
         return self::respond($inputText, implode("\n", $lines), $report->hasErrors());
     }
