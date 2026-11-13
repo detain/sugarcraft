@@ -31,6 +31,12 @@ use React\EventLoop\TimerInterface;
  * per request (a slow-drip client that keeps talking still dies). Body
  * sizes are capped by ONE knob: the router's maxRequestBodyBytes() — the
  * socket and the pack paths can never disagree about what is acceptable.
+ * The sweep enforces the request deadline between ticks; it cannot preempt
+ * work already inside dispatch(), so the response write carries its OWN
+ * two-part bound (zero-progress stall grace + absolute ceiling in
+ * {@see self::writeAll()}) and the router's child pumps are bounded by
+ * the ladder in Git\StatelessRpc — no phase of a served request is
+ * unbounded.
  *
  * The envelope stated above is per seat, and the honest arithmetic of the
  * whole house follows from it: 64 seats × a 256 MiB default body cap is a
@@ -501,32 +507,44 @@ final class HttpListener
     /**
      * Push $bytes through a non-blocking stream, retrying every partial
      * accept until the whole payload is handed to the kernel — or until the
-     * client makes zero progress for $stallSeconds, or the socket errors.
-     * Returns the byte count actually written (== strlen($bytes) on
-     * success); the caller's close path is identical either way because a
-     * half-delivered response is already protocol-dead to the client.
+     * client makes zero progress for $stallSeconds, or the write outlives
+     * the absolute ceiling, or the socket errors. Returns the byte count
+     * actually written (== strlen($bytes) on success); the caller's close
+     * path is identical either way because a half-delivered response is
+     * already protocol-dead to the client.
+     *
+     * The progress re-arm bounds only the ZERO-progress grace: a client
+     * that accepts one byte every few seconds used to hold the seat — and,
+     * in the serial-loop build, every other client with it — for as long as
+     * it liked. The absolute ceiling (start + $absoluteSeconds, monotonic)
+     * is the same shape GitDaemon::drainWrite and StdioPipe's hard bound
+     * already enforce, so no response write is unbounded anywhere in the
+     * lib. Sweeping deadlines cannot preempt a write already in flight
+     * (single-threaded dispatch), which is exactly why the bound lives here.
      *
      * @param resource $stream
      */
-    private static function writeAll($stream, string $bytes, ?float $stallSeconds = null): int
+    private static function writeAll($stream, string $bytes, ?float $stallSeconds = null, ?float $absoluteSeconds = null): int
     {
-        $stall  = $stallSeconds ?? self::WRITE_STALL_SECONDS;
-        $total  = \strlen($bytes);
-        $offset = 0;
-        $giveUp = \microtime(true) + $stall;
+        $stall    = $stallSeconds ?? self::WRITE_STALL_SECONDS;
+        $absolute = $absoluteSeconds ?? self::WRITE_ABSOLUTE_SECONDS;
+        $total    = \strlen($bytes);
+        $offset   = 0;
+        $absoluteNs = \hrtime(true) + (int) ($absolute * 1e9);
+        $giveUp   = \microtime(true) + $stall;
 
         while ($offset < $total) {
+            if (\microtime(true) >= $giveUp || \hrtime(true) >= $absoluteNs) {
+                return $offset; // wedged (zero progress past the grace) or dribbling (past the ceiling)
+            }
             $written = @\fwrite($stream, \substr($bytes, $offset));
             if ($written === false) {
                 return $offset; // socket error / reset by peer
             }
             if ($written > 0) {
                 $offset += $written;
-                $giveUp = \microtime(true) + $stall; // progress re-arms the window
+                $giveUp = \microtime(true) + $stall; // progress re-arms the window, never past the ceiling
                 continue;
-            }
-            if (\microtime(true) >= $giveUp) {
-                return $offset; // wedged client: buffer full, zero progress past the grace
             }
             // 0-byte accept: kernel buffer full (or EINTR-ish moment). Wait
             // for writability in short ticks so the stall deadline stays
@@ -541,6 +559,14 @@ final class HttpListener
 
     /** How long a response write may make ZERO progress on a client socket. */
     private const WRITE_STALL_SECONDS = 10.0;
+
+    /**
+     * Absolute ceiling for one response write regardless of trickle
+     * progress — mirrors StdioPipe::HARD_SECONDS, the per-request bound
+     * the daemon pump already carries. A seat that keeps the house's
+     * kernel buffers fed forever is still only a seat for this long.
+     */
+    private const WRITE_ABSOLUTE_SECONDS = 300.0;
 
     /** @param resource $client */
     private static function peerAddress($client): ?string

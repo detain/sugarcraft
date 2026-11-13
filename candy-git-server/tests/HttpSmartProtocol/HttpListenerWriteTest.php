@@ -78,6 +78,52 @@ final class HttpListenerWriteTest extends TestCase
         }
     }
 
+    public function testWriteAllStopsATricklingPeerAtTheAbsoluteCeiling(): void
+    {
+        // S01: the progress re-arm bounds the ZERO-progress grace only — a
+        // peer that keeps the buffers fed used to extend the write forever.
+        // The 64 KiB pipe absorbs the first window (progress), then refuses
+        // more while a sleeping child holds the read end: the 10 s stall
+        // grace is re-armed by that first window, so ONLY the absolute
+        // ceiling may end the call — at its bound, not before, and not
+        // unboundedly after.
+        $proc = \proc_open(['sleep', '30'], [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+        self::assertIsResource($proc);
+        $writer = $pipes[0];
+        \stream_set_blocking($writer, false);
+
+        $payload = \random_bytes(1024 * 1024);
+        $started = \microtime(true);
+        try {
+            $written = self::invokeWriteAll($writer, $payload, 10.0, 0.5);
+        } finally {
+            $elapsed = \microtime(true) - $started;
+            @\fclose($writer);
+            @\fclose($pipes[1]);
+            @\fclose($pipes[2]);
+            @\proc_terminate($proc);
+            @\proc_close($proc);
+        }
+
+        self::assertGreaterThan(0, $written, 'the write must hand the pipe its first windows');
+        self::assertLessThan(\strlen($payload), $written, 'a never-read pipe cannot absorb the whole payload');
+        self::assertGreaterThanOrEqual(0.5 - 0.05, $elapsed, 'the ceiling fired early — progress re-arm is not supposed to end the call');
+        self::assertLessThan(2.0, $elapsed, 'the absolute ceiling never fired — trickle progress extended the write past its bound');
+    }
+
+    public function testTheWriteCeilingIsBakedIntoBothResponseWriters(): void
+    {
+        // Structural pin for S01: the re-arm may not regress to the
+        // unbounded shape — the loop must carry BOTH a wall grace and a
+        // monotonic absolute ceiling, checked ahead of every feed.
+        $source = (string) \file_get_contents(__DIR__ . '/../../src/HttpSmartProtocol/HttpListener.php');
+        $writeAll = self::sliceBetween($source, 'private static function writeAll', 'private const WRITE_STALL_SECONDS');
+
+        self::assertMatchesRegularExpression('/hrtime\(true\)\s*>=\s*\$absoluteNs/', $writeAll, 'writeAll lost its absolute ceiling check');
+        self::assertStringContainsString('$absoluteNs = \\hrtime(true) +', $writeAll, 'the ceiling must start at the call, not advance with progress');
+        self::assertMatchesRegularExpression('/microtime\(true\)\s*>=\s*\$giveUp/', $writeAll, 'writeAll lost the zero-progress grace');
+    }
+
     public function testNoOneShotClientWriteRemainsOnTheResponsePath(): void
     {
         // Structural pin: the defect SHAPE — a bare @fwrite($client, ...) in
@@ -98,11 +144,11 @@ final class HttpListenerWriteTest extends TestCase
     }
 
     /** @param resource $writer */
-    private static function invokeWriteAll($writer, string $bytes, float $stallSeconds): int
+    private static function invokeWriteAll($writer, string $bytes, float $stallSeconds, ?float $absoluteSeconds = null): int
     {
         $method = new \ReflectionMethod(HttpListener::class, 'writeAll');
 
-        return (int) $method->invoke(null, $writer, $bytes, $stallSeconds);
+        return (int) $method->invoke(null, $writer, $bytes, $stallSeconds, $absoluteSeconds);
     }
 
     private static function sliceBetween(string $haystack, string $startNeedle, string $endNeedle): string
