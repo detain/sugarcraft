@@ -312,11 +312,27 @@ final class Table
         return $clone;
     }
 
+    /**
+     * Change the page size and RE-ANCHOR against the new pagination. The
+     * cursor law (audit #5/#9, see resetCursor()) says every view-rebuilding
+     * setter keeps the selection inside the view; a page count change is the
+     * most literal rebuild there is, and this setter used to miss it — shrink
+     * past the last surviving page left the table rendering an empty "Page 3
+     * of 1" box. Growth keeps the current page, re-paginated under the new
+     * size (gotoPage clamps into [0, TotalPages-1] and parks the cursor on
+     * the page's first row).
+     */
     public function withPageSize(int $n): self
     {
         $clone = clone $this;
         $clone->pageSize = $n;
-        return $clone;
+        if ($n <= 0) {
+            // Pagination off: the whole view is one frame, no page can be
+            // stranded — nothing to re-anchor.
+            return $clone;
+        }
+
+        return $clone->gotoPage($clone->page);
     }
 
     /**

@@ -154,6 +154,57 @@ final class TableTest extends TestCase
         $this->assertSame('20', $t->CurrentRowData()?->get('n'));
     }
 
+    /**
+     * ST-04 pin: shrinking the page size past the last surviving page must
+     * clamp the page and re-park the cursor — it used to keep the stale
+     * interior page, rendering an empty body with a "Page 3 of 1" footer.
+     */
+    public function testWithPageSizeShrinkClampsPage(): void
+    {
+        $t = Table::fromColumns([Column::new('n', 'N', 5)])
+            ->withRows(
+                \array_map(
+                    fn ($i) => Row::new(RowData::from(['n' => (string) $i])),
+                    \range(0, 24)
+                )
+            )
+            ->withPageSize(10)
+            ->withPage(2);
+        $this->assertSame(3, $t->TotalPages());
+
+        $shrunk = $t->withPageSize(30);
+
+        $this->assertSame(1, $shrunk->TotalPages());
+        $this->assertSame(0, $shrunk->CurrentPage());
+        $this->assertSame('0', $shrunk->CurrentRowData()?->get('n'));
+        $this->assertSame('Page 1 of 1', $shrunk->PageFooter());
+        $this->assertNotEmpty($shrunk->Rows(), 'shrink must never strand the frame as an empty body');
+    }
+
+    /**
+     * ST-04 pin: growth keeps the current page, re-paginated under the new
+     * size — page 1 of 3 (rows 10-19) at size 10 becomes page 1 of 5
+     * (rows 5-9) at size 5, cursor parked on the page's first row.
+     */
+    public function testWithPageSizeGrowRepaginatesCurrentPage(): void
+    {
+        $t = Table::fromColumns([Column::new('n', 'N', 5)])
+            ->withRows(
+                \array_map(
+                    fn ($i) => Row::new(RowData::from(['n' => (string) $i])),
+                    \range(0, 24)
+                )
+            )
+            ->withPageSize(10)
+            ->withPage(1);
+
+        $grown = $t->withPageSize(5);
+
+        $this->assertSame(5, $grown->TotalPages());
+        $this->assertSame(1, $grown->CurrentPage());
+        $this->assertSame('5', $grown->CurrentRowData()?->get('n'));
+    }
+
     public function testNextPage(): void
     {
         $t = Table::fromColumns([Column::new('n', 'N', 5)])
