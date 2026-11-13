@@ -59,4 +59,12 @@ return [
     'pane.hidden_suffix' => '+ocultos',
     'pane.more_above' => '{count} mais acima',
     'pane.more_below' => '{count} mais abaixo',
+    'status.opening_editor' => 'a editar {name}…',
+    'status.opening_pager' => 'a ver {name}…',
+    'status.running' => 'a executar {name}…',
+    'status.opened' => 'de volta de {name}',
+    'status.editor_failed' => '{name} terminou com o código {code}',
+    'status.no_editor' => 'nenhum editor encontrado para {name}',
+    'status.no_viewer' => 'sem visualizador para {name}',
+    'status.not_executable' => '{name} não é executável',
 ];

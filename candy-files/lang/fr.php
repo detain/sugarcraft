@@ -59,4 +59,12 @@ return [
     'pane.hidden_suffix' => '+cachés',
     'pane.more_above' => '{count} de plus en haut',
     'pane.more_below' => '{count} de plus en bas',
+    'status.opening_editor' => 'Édition de {name}…',
+    'status.opening_pager' => 'Lecture de {name}…',
+    'status.running' => 'Exécution de {name}…',
+    'status.opened' => 'retour de {name}',
+    'status.editor_failed' => '{name} a quitté avec le code {code}',
+    'status.no_editor' => 'aucun éditeur trouvé pour {name}',
+    'status.no_viewer' => 'aucun visualiseur pour {name}',
+    'status.not_executable' => '{name} non exécutable',
 ];

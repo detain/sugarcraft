@@ -9,9 +9,11 @@ use SugarCraft\Core\Concerns\Mutable;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
+use SugarCraft\Core\Msg\ExecMsg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\KeyboardEnhancementsMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
+use SugarCraft\Core\Util\Editor;
 use SugarCraft\Core\Subscriptions;
 use SugarCraft\Core\SubscriptionCapable;
 use SugarCraft\Core\Undo\UndoActionType;
@@ -182,6 +184,19 @@ final class Manager implements Model
             return [$this->handleCopyCompleted($msg), null];
         }
 
+        // CF-03: a spawned external program (editor / pager / runner) has
+        // exited and the runtime restored the screen. Refresh the pane the
+        // program may have mutated (an editor rewrites the file; a script
+        // can touch anything in the cwd) and report the exit honestly.
+        if ($msg instanceof ExecMsg) {
+            $paneName = $this->activePane()->currentEntry()?->name;
+            $label = $paneName !== null ? Entry::sanitizeName($paneName) : '';
+            $status = $msg->exitCode === 0
+                ? Lang::t('status.opened', ['name' => $label])
+                : Lang::t('status.editor_failed', ['name' => $label, 'code' => $msg->exitCode]);
+            return [$this->refreshAllPanes()->withStatus($status), null];
+        }
+
         if (($msg instanceof KeyMsg) === false) {
             return [$this, null];
         }
@@ -201,7 +216,7 @@ final class Manager implements Model
             return [$this, Cmd::quit()];
         }
 
-        return [$this->dispatch($msg), null];
+        return $this->dispatch($msg);
     }
 
     /**
@@ -274,7 +289,12 @@ final class Manager implements Model
         return $this->activeIdx === 0 ? $this->right : $this->left;
     }
 
-    private function dispatch(KeyMsg $msg): self
+    /**
+     * Key routing for the idle (no confirm/search) state.
+     *
+     * @return array{0:self, 1:?\Closure} [next Model, ?Cmd]
+     */
+    private function dispatch(KeyMsg $msg): array
     {
         // CF-05: shortcut letters are the UNMODIFIED keyboard's domain.
         // InputReader decodes the legacy Ctrl+D byte (0x04) to a Char rune
@@ -284,7 +304,25 @@ final class Manager implements Model
         // predicate; chords with explicit owners (Ctrl+Z/Y/W) keep their
         // own modified arms further down.
         $plain = $msg->type === KeyType::Char && !$msg->ctrl && !$msg->alt;
-        return match (true) {
+
+        // CF-03 (owner's one ruling, shared with CF-54): the open grammar.
+        // Enter / Right edit — dirs navigate as they always did, a file
+        // under the cursor used to be a SILENT NO-OP (Pane::navigate drops
+        // non-dirs), which read as a dead key. `l` is the diamond's right
+        // leg: navigate for dirs, $PAGER for text files (a binary/huge
+        // sniff refuses into a localized status — never page garbage). `x`
+        // runs executables and refuses anything else.
+        if ($msg->type === KeyType::Enter || $msg->type === KeyType::Right) {
+            return $this->openEntry('edit');
+        }
+        if ($plain && $msg->rune === 'l') {
+            return $this->openEntry('view');
+        }
+        if ($plain && $msg->rune === 'x') {
+            return $this->runEntry();
+        }
+
+        $next = match (true) {
             $plain && $msg->rune === '/'
                 => $this->search(''),
             // Tab cycling. The parser NEVER puts a "\t" rune on a Char
@@ -327,9 +365,6 @@ final class Manager implements Model
             $msg->type === KeyType::End,
             $plain && $msg->rune === 'G'
                 => $this->withActivePane(fn(Pane $p) => $p->gotoBottom()),
-            $msg->type === KeyType::Enter,
-            $msg->type === KeyType::Right
-                => $this->navigate(),
             $msg->type === KeyType::Left,
             $plain && $msg->rune === 'h'
                 => $this->goUp(),
@@ -383,6 +418,7 @@ final class Manager implements Model
                 => $this->duplicateTab(),
             default => $this,
         };
+        return [$next, null];
     }
 
     private function withActive(int $idx): self
@@ -437,6 +473,149 @@ final class Manager implements Model
     private function navigate(): self
     {
         return $this->withActivePane(fn(Pane $p) => $p->navigate($this->lister));
+    }
+
+    /**
+     * CF-03: Enter/Right (edit) and `l` (view) on the entry under the
+     * cursor. Dirs navigate exactly as before; files spawn. The spawn is a
+     * Cmd::exec — the runtime suspends raw/alt-screen around the child and
+     * feeds the exit back as ExecMsg, which update() turns into a re-list
+     * plus an honest status.
+     *
+     * @param 'edit'|'view' $mode
+     * @return array{0:self, 1:?\Closure}
+     */
+    private function openEntry(string $mode): array
+    {
+        $pane = $this->activePane();
+        $entry = $pane->currentEntry();
+        if ($entry === null) {
+            return [$this, null];
+        }
+        if ($entry->isDir || $entry->isParentSentinel()) {
+            return [$this->navigate(), null];
+        }
+        $full = Pane::join($pane->cwd, $entry->name);
+        $label = Entry::sanitizeName($entry->name);
+        if ($mode === 'view') {
+            // The pager leg earns its keep only on viewable text: a NUL in
+            // the head, a file beyond 32 MiB, or an unreadable one refuses
+            // with a localized status instead of painting escape sequences
+            // across the user's terminal.
+            $argv = $this->isBinaryOrHuge($full) ? null : $this->pagerCommand();
+            if ($argv === null) {
+                return [$this->withStatus(Lang::t('status.no_viewer', ['name' => $label])), null];
+            }
+            return [
+                $this->withStatus(Lang::t('status.opening_pager', ['name' => $label])),
+                Cmd::exec([...$argv, $full]),
+            ];
+        }
+        try {
+            $editor = Editor::command();
+        } catch (\RuntimeException) {
+            return [$this->withStatus(Lang::t('status.no_editor', ['name' => $label])), null];
+        }
+        return [
+            $this->withStatus(Lang::t('status.opening_editor', ['name' => $label])),
+            Cmd::exec([...$editor, $full]),
+        ];
+    }
+
+    /**
+     * CF-03 `x`: run the file under the cursor, but ONLY when it carries an
+     * exec bit — a plain text file must not spawn through the shell.
+     *
+     * @return array{0:self, 1:?\Closure}
+     */
+    private function runEntry(): array
+    {
+        $pane = $this->activePane();
+        $entry = $pane->currentEntry();
+        $label = $entry === null ? '' : Entry::sanitizeName($entry->name);
+        if ($entry === null || $entry->isDir || $entry->isParentSentinel()) {
+            return [$this->withStatus(Lang::t('status.not_executable', ['name' => $label])), null];
+        }
+        $full = Pane::join($pane->cwd, $entry->name);
+        $perms = @fileperms($full);
+        if (!is_int($perms) || ($perms & 0111) === 0) {
+            return [$this->withStatus(Lang::t('status.not_executable', ['name' => $label])), null];
+        }
+        return [
+            $this->withStatus(Lang::t('status.running', ['name' => $label])),
+            Cmd::exec([$full]),
+        ];
+    }
+
+    /**
+     * CF-03: pager argv — $PAGER (possibly with flags) then the classic
+     * less→more fallback chain. Null when nothing resolves.
+     *
+     * @return ?list<string>
+     */
+    private function pagerCommand(): ?array
+    {
+        $candidates = [];
+        $env = getenv('PAGER');
+        if (is_string($env) && trim($env) !== '') {
+            $candidates[] = trim($env);
+        }
+        $candidates[] = DIRECTORY_SEPARATOR === '\\' ? 'more' : 'less';
+        if (DIRECTORY_SEPARATOR !== '\\') {
+            $candidates[] = 'more';
+        }
+        foreach ($candidates as $candidate) {
+            $argv = preg_split('/\s+/u', $candidate) ?: [];
+            if ($argv === [] || $argv[0] === '') {
+                continue;
+            }
+            $bin = self::resolveBinary($argv[0]);
+            if ($bin !== null) {
+                $argv[0] = $bin;
+                return array_values(array_filter($argv, static fn(string $a): bool => $a !== ''));
+            }
+        }
+        return null;
+    }
+
+    /**
+     * CF-03: absolute path or PATH lookup. Mirrors sugar-core Editor's
+     * private which() — Editor exposes only the $EDITOR chain, and the
+     * pager needs the same probe for $PAGER/less/more.
+     */
+    private static function resolveBinary(string $cmd): ?string
+    {
+        if ($cmd === '') {
+            return null;
+        }
+        if (str_contains($cmd, DIRECTORY_SEPARATOR) || (DIRECTORY_SEPARATOR === '\\' && str_contains($cmd, '/'))) {
+            return is_file($cmd) && is_executable($cmd) ? $cmd : null;
+        }
+        $probe = DIRECTORY_SEPARATOR === '\\'
+            ? 'where ' . escapeshellarg($cmd) . ' 2>NUL'
+            : 'command -v ' . escapeshellarg($cmd) . ' 2>/dev/null';
+        $out = @shell_exec($probe);
+        if (!is_string($out) || trim($out) === '') {
+            return null;
+        }
+        $first = strtok(trim($out), "\r\n");
+        return $first !== false && $first !== '' ? $first : null;
+    }
+
+    /** CF-03: NUL byte in the head, unreadable, or larger than 32 MiB. */
+    private function isBinaryOrHuge(string $path): bool
+    {
+        $size = @filesize($path);
+        if ($size !== false && $size > 32 * 1024 * 1024) {
+            return true;
+        }
+        $fh = @fopen($path, 'rb');
+        if ($fh === false) {
+            return true;
+        }
+        $head = fread($fh, 8192);
+        fclose($fh);
+        return !is_string($head) || str_contains($head, "\x00");
     }
 
     private function goUp(): self

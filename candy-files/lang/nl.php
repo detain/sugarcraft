@@ -59,4 +59,12 @@ return [
     'pane.hidden_suffix' => '+verborgen',
     'pane.more_above' => '{count} meer boven',
     'pane.more_below' => '{count} meer onder',
+    'status.opening_editor' => '{name} bewerken…',
+    'status.opening_pager' => '{name} bekijken…',
+    'status.running' => '{name} uitvoeren…',
+    'status.opened' => 'terug uit {name}',
+    'status.editor_failed' => '{name} eindigde met code {code}',
+    'status.no_editor' => 'geen editor gevonden voor {name}',
+    'status.no_viewer' => 'geen viewer voor {name}',
+    'status.not_executable' => '{name} is niet uitvoerbaar',
 ];

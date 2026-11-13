@@ -59,4 +59,12 @@ return [
     'pane.hidden_suffix' => '+скрытые',
     'pane.more_above' => 'ещё {count} выше',
     'pane.more_below' => 'ещё {count} ниже',
+    'status.opening_editor' => 'редактирование {name}…',
+    'status.opening_pager' => 'просмотр {name}…',
+    'status.running' => 'запуск {name}…',
+    'status.opened' => 'возврат из {name}',
+    'status.editor_failed' => '{name} завершился с кодом {code}',
+    'status.no_editor' => 'редактор не найден для {name}',
+    'status.no_viewer' => 'нет просмотрщика для {name}',
+    'status.not_executable' => '{name} не является исполняемым',
 ];

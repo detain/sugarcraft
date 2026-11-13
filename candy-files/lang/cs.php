@@ -59,4 +59,12 @@ return [
     'pane.hidden_suffix' => '+skryté',
     'pane.more_above' => '{count} navíc nad',
     'pane.more_below' => '{count} navíc pod',
+    'status.opening_editor' => 'úprava {name}…',
+    'status.opening_pager' => 'zobrazení {name}…',
+    'status.running' => 'spouštění {name}…',
+    'status.opened' => 'návrat z {name}',
+    'status.editor_failed' => '{name} skončil s kódem {code}',
+    'status.no_editor' => 'pro {name} nebyl nalezen žádný editor',
+    'status.no_viewer' => 'žádný prohlížeč pro {name}',
+    'status.not_executable' => '{name} není spustitelný',
 ];

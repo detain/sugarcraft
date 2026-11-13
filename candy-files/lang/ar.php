@@ -59,4 +59,12 @@ return [
     'pane.hidden_suffix' => '+مخفية',
     'pane.more_above' => '{count} عنصرًا إضافيًا أعلاه',
     'pane.more_below' => '{count} عنصرًا إضافيًا أدناه',
+    'status.opening_editor' => 'تحرير {name}…',
+    'status.opening_pager' => 'عرض {name}…',
+    'status.running' => 'تشغيل {name}…',
+    'status.opened' => 'العودة من {name}',
+    'status.editor_failed' => 'انتهى {name} بالرمز {code}',
+    'status.no_editor' => 'لم يتم العثور على محرر لـ {name}',
+    'status.no_viewer' => 'لا يوجد عارض لـ {name}',
+    'status.not_executable' => '{name} غير قابل للتنفيذ',
 ];

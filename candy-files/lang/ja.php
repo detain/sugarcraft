@@ -59,4 +59,12 @@ return [
     'pane.hidden_suffix' => '+隠し',
     'pane.more_above' => '上方にあと{count}件',
     'pane.more_below' => '下方にあと{count}件',
+    'status.opening_editor' => '{name} を編集中…',
+    'status.opening_pager' => '{name} を表示中…',
+    'status.running' => '{name} を実行中…',
+    'status.opened' => '{name} から戻りました',
+    'status.editor_failed' => '{name} がコード {code} で終了しました',
+    'status.no_editor' => '{name} を開くエディタが見つかりません',
+    'status.no_viewer' => '{name} を表示するビューアがありません',
+    'status.not_executable' => '{name} は実行可能ではありません',
 ];

@@ -59,4 +59,12 @@ return [
     'pane.hidden_suffix' => '+ukryte',
     'pane.more_above' => '{count} więcej powyżej',
     'pane.more_below' => '{count} więcej poniżej',
+    'status.opening_editor' => 'edycja {name}…',
+    'status.opening_pager' => 'podgląd {name}…',
+    'status.running' => 'uruchamianie {name}…',
+    'status.opened' => 'powrót z {name}',
+    'status.editor_failed' => '{name} zakończył się kodem {code}',
+    'status.no_editor' => 'nie znaleziono edytora dla {name}',
+    'status.no_viewer' => 'brak podglądu dla {name}',
+    'status.not_executable' => '{name} nie jest wykonywalny',
 ];

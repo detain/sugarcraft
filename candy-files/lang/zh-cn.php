@@ -59,4 +59,12 @@ return [
     'pane.hidden_suffix' => '+隐藏',
     'pane.more_above' => '上方还有 {count} 项',
     'pane.more_below' => '下方还有 {count} 项',
+    'status.opening_editor' => '正在编辑 {name}…',
+    'status.opening_pager' => '正在查看 {name}…',
+    'status.running' => '正在运行 {name}…',
+    'status.opened' => '已从 {name} 返回',
+    'status.editor_failed' => '{name} 退出，代码 {code}',
+    'status.no_editor' => '未找到 {name} 的编辑器',
+    'status.no_viewer' => '没有可用于 {name} 的查看器',
+    'status.not_executable' => '{name} 不可执行',
 ];

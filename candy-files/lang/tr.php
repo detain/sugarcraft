@@ -59,4 +59,12 @@ return [
     'pane.hidden_suffix' => '+gizli',
     'pane.more_above' => 'yukarıda {count} fazla',
     'pane.more_below' => 'aşağıda {count} fazla',
+    'status.opening_editor' => '{name} düzenleniyor…',
+    'status.opening_pager' => '{name} görüntüleniyor…',
+    'status.running' => '{name} çalıştırılıyor…',
+    'status.opened' => '{name} kapandı',
+    'status.editor_failed' => '{name} {code} koduyla çıktı',
+    'status.no_editor' => '{name} için editör bulunamadı',
+    'status.no_viewer' => '{name} için görüntüleyici yok',
+    'status.not_executable' => '{name} çalıştırılabilir değil',
 ];

@@ -59,4 +59,12 @@ return [
     'pane.hidden_suffix' => '+숨김',
     'pane.more_above' => '위쪽 {count}개 더',
     'pane.more_below' => '아래쪽 {count}개 더',
+    'status.opening_editor' => '{name} 편집 중…',
+    'status.opening_pager' => '{name} 보기 중…',
+    'status.running' => '{name} 실행 중…',
+    'status.opened' => '{name} 복귀됨',
+    'status.editor_failed' => '{name}이(가) 코드 {code}(으)로 종료됨',
+    'status.no_editor' => '{name}용 편집기를 찾을 수 없습니다',
+    'status.no_viewer' => '{name}용 뷰어가 없습니다',
+    'status.not_executable' => '{name}은(는) 실행 불가능',
 ];

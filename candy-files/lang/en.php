@@ -70,4 +70,12 @@ return [
     'pane.hidden_suffix' => '+hidden',
     'pane.more_above' => '{count} more above',
     'pane.more_below' => '{count} more below',
+    'status.opening_editor' => 'editing {name}…',
+    'status.opening_pager' => 'viewing {name}…',
+    'status.running' => 'running {name}…',
+    'status.opened' => 'back from {name}',
+    'status.editor_failed' => '{name} exited with code {code}',
+    'status.no_editor' => 'no editor found for {name}',
+    'status.no_viewer' => 'no viewer for {name}',
+    'status.not_executable' => '{name} is not executable',
 ];
