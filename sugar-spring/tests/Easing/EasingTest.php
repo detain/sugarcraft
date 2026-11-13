@@ -298,7 +298,7 @@ final class EasingTest extends TestCase
 
     public function testResultIsAlwaysInValidRange(): void
     {
-        // Non-overshooting cases must stay within [0,1]
+        // Non-overshooting cases must stay within [0, 1]
         $nonOvershootingEasings = [
             Easing::Linear,
             Easing::QuadraticIn,
@@ -333,7 +333,7 @@ final class EasingTest extends TestCase
      * M-E (review 1102): the old spelling `sin(13πt/2)·2^(-10t) + t` dropped
      * the phase shift and added t instead of 1 — an "ease-out" that DIPPED
      * NEGATIVE at t=0.2 (-0.0023) while endpoint pins stayed green. The
-     * canonical curve answers 1.125 at t=0.2 and never leaves (0, 1.26]
+     * canonical curve returns 1.125 at t=0.2 and never leaves (0, 1.26]
      * after the start. The previous version of this test asserted the BROKEN
      * dip ("must be negative"); flipping it is the point.
      */
@@ -345,7 +345,7 @@ final class EasingTest extends TestCase
             1.125,
             $easing->ease(0.2),
             1e-9,
-            'ElasticOut at t=0.2 must answer the canonical 2^(-2)·sin(1.25·2π/3)+1 = 1.125'
+            'ElasticOut at t=0.2 must return the canonical 2^(-2)·sin(1.25·2π/3)+1 = 1.125'
         );
 
         // A rubber-band ease-out rings AROUND 1 — it must never dip back
@@ -377,7 +377,7 @@ final class EasingTest extends TestCase
      * M-F (review 1102): the old angular constant M_PI*2.5 left the two
      * halves of ElasticInOut disagreeing by 0.444 across the t=0.5 frame
      * (left limit 0.2778 vs value 0.7222 — a renderer visibly teleported
-     * the object). Continuity requires (2π)/4.5: both halves answer 0.5.
+     * the object). Continuity requires (2π)/4.5: both halves return 0.5.
      */
     public function testElasticInOutIsContinuousAtMidpoint(): void
     {
@@ -442,7 +442,7 @@ final class EasingTest extends TestCase
 
     /**
      * SPR-07 (finding 063): the documented non-finite passthrough contract —
-     * Easing.php class docblock and README — says NAN answers NAN from EVERY
+     * Easing.php class docblock and README — says NAN returns NAN for EVERY
      * case, ±INF survives the polynomial curves with the sign their leading
      * terms dictate, and flips to NAN inside the sin-modulated Elastic and
      * Back trig. Until now that prose had zero test coverage (the sibling
@@ -457,7 +457,7 @@ final class EasingTest extends TestCase
         float $expectedAtPlusInf,
         float $expectedAtMinusInf,
     ): void {
-        $this->assertNan($case->ease(NAN), "{$case->name} must answer NAN to NAN");
+        $this->assertNan($case->ease(NAN), "{$case->name} must return NAN for NAN");
 
         foreach (['+INF' => $expectedAtPlusInf, '-INF' => $expectedAtMinusInf] as $label => $expected) {
             $actual = $case->ease($label === '+INF' ? INF : -INF);

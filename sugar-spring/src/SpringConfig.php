@@ -72,7 +72,7 @@ final readonly class SpringConfig
         $this->angularFrequency = sqrt($tension / $mass);
         // An underflowed zero root must not reach the raw float division —
         // PHP 8.3 faults that as DivisionByZeroError, which would escape the
-        // constructor un-guarded. The IEEE answer is infinite damping; hand
+        // constructor unguarded. The IEEE answer is infinite damping; hand
         // that honest value to the derived guard below and let it refuse.
         $this->dampingRatio = $root === 0.0 ? INF : $friction / (2.0 * $root);
 

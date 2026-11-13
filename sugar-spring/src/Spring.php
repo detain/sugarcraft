@@ -317,7 +317,7 @@ final class Spring
      * that need a different band (e.g. {@see SpringChain}'s looser stage-handoff
      * threshold) pass their own.
      *
-     * Non-finite inputs answer FALSE — the safe direction: a poisoned state is
+     * Non-finite inputs return FALSE — the safe direction: a poisoned state is
      * never reported settled. {@see update()} refuses to produce one, so a
      * spring-driven loop that only feeds this predicate values it emitted
      * terminates by construction.

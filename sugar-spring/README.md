@@ -51,7 +51,7 @@ positive (zero freezes the state, a negative value integrates backwards).
 These are refusals, not slowdowns — a non-converging spring would otherwise
 spin your frame loop until the user closes the window.
 
-One entry vocabulary: every class in this library answers both the plain
+One entry vocabulary: every class in this library ships both the plain
 `new X(...)` form and the house factory shape `X::new(...)` — `Spring`,
 `SpringConfig`, `Vector`, `Point`, `CubicBezier`, `Projectile`,
 `SpringChain`. Same door, same guarantees; the mirror is not a semantics
@@ -170,7 +170,7 @@ the family's character. Settle frames are measured for a 0 → 100 move at the
 default `1e-4` threshold; under reduced motion every preset instead snaps to
 target in one tick (see [Reduced motion](#reduced-motion)). No
 critical-by-construction preset ships (none was tuned); build one with
-`dampingRatio: 1.0` (the critical-damped example above) or `new SpringConfig(...)`
+`dampingRatio: 1.0` (the critically damped example above) or `new SpringConfig(...)`
 with friction `2 * sqrt(tension * mass)`.
 
 ```php
@@ -220,7 +220,7 @@ behaviours:
 - **Under-damped** (`0 < ζ < 1`) — oscillates around the target,
   amplitudes decaying each cycle. Reach for this when the feel should read
   as bouncy.
-- **Critically-damped** (`ζ = 1`) — fastest convergence with no
+- **Critically damped** (`ζ = 1`) — fastest convergence with no
   overshoot. The default for "snap to value" animations.
 - **Over-damped** (`ζ > 1`) — converges without overshoot but slower
   than critical. Reach for this for slow, weighty motion.
@@ -366,7 +366,7 @@ The Y-axis convention is **Y-up** by default: `Projectile::gravity()` returns `(
 Y means "up the screen". Terminal renderers usually grow downward —
 flip to `Projectile::gravityYDown()` when you want gravity to pull toward the bottom of the grid
 without manually negating every coordinate. (The deprecated `Gravity::standard()` /
-`Gravity::standardYDown()` spellings answer identically until 2.0.0.)
+`Gravity::standardYDown()` spellings return identically until 2.0.0.)
 
 `Projectile::update()` returns a **new `Projectile`** instance each
 call — `update()` never mutates the receiver. The hazard is discarding
@@ -521,7 +521,7 @@ Both easing kinds — the analytic `Easing` enum (16 cases) and the solver-backe
 implement `SugarCraft\Spring\Easing\EasingFunction`, the extension seam: write
 your own `ease()` and pass it anywhere an easing function is consumed (the same
 name does not make same-named enum cases and presets value-twins: `CubicIn` is
-literally `t³`, its bezier fit is not). Two kinds is ONE palette, not a palette
+literally `t³`, its Bezier fit is not). Two kinds is ONE palette, not a palette
 plus a fallback: reaching for the enum's simplicity caps nothing about where the
 value can be consumed, and it never pushes you across to the solver to get a
 legitimately-missing curve — the enum carries the analytic family, CubicBezier
@@ -540,7 +540,7 @@ via static factory methods, 26 named presets in two families:
   `cubic-bezier()`, which generalizes them);
 - 21 Penner-style curves — Sine, Quad, Cubic, Quart, Quint, Expo and Circ,
   each in In/Out/InOut — approximated with the
-  [easings.net](https://easings.net/) table expressed as bezier control
+  [easings.net](https://easings.net/) table expressed as Bezier control
   points.
 The Penner rows are named for the easing family, not for a CSS standard list:
 
@@ -600,7 +600,7 @@ is solved so the curve is monotonic within `[0, 1]` (control x-values are
 range-checked). The y-output of every one of the 26 named presets lands on
 exactly 0 and 1 at the endpoints, and none overshoots the interval — each
 named curve's control y-values sit inside `[0, 1]`, which keeps the whole
-Bézier inside it.
+Bezier curve inside it.
 Overshoot *between* endpoints arises only from user-supplied elastic- or
 back-flavoured control points — same honesty rule as `Easing`.
 
@@ -682,7 +682,7 @@ are refused with `InvalidArgumentException`).
   seam; `evaluate()` is the deprecated alias until 2.0.0). 26 static factories:
   the five CSS timing keywords (`linear`, `ease` as `cssEase()`, `easeIn`, `easeOut`,
   `easeInOut`) and 21 Penner-style curves (`easeIn/Out/InOut` × `Sine`, `Quad`,
-  `Cubic`, `Quart`, `Quint`, `Expo`, `Circ`) expressed as bezier control
+  `Cubic`, `Quart`, `Quint`, `Expo`, `Circ`) expressed as Bezier control
   points.
 
 Exception messages are translated through `SugarCraft\Spring\Lang` (the
@@ -767,7 +767,7 @@ The spring core mirrors [charmbracelet/harmonica](https://github.com/charmbracel
 after [Ryan Juckett's spring physics
 articles](https://ryanjuckett.com/posts/spring-physics-part-1/); preset values
 descend from the react-spring-era folk tables and are tuned by hand; the
-bezier control points follow [easings.net](https://easings.net/). The
+Bezier control points follow [easings.net](https://easings.net/). The
 reduced-motion lookup rides sugar-colorprofile's
 [Probe](https://github.com/detain/sugarcraft/tree/master/sugar-colorprofile).
 Originally inspired by the Go [Charm](https://github.com/charmbracelet)

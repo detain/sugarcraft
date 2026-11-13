@@ -66,7 +66,7 @@ final class CubicBezierTest extends TestCase
             $cb = CubicBezier::$method();
             // Exact grid: accumulating 0.1 in float ends the loop at
             // 1.0000000000000002 — off-domain by construction, where the
-            // unclamped solve legitimately answers a hair past 1. Sample
+            // unclamped solve legitimately returns a hair past 1. Sample
             // the closed interval it pins.
             for ($i = 0; $i <= 10; $i++) {
                 $t = $i / 10.0;
@@ -229,7 +229,7 @@ final class CubicBezierTest extends TestCase
 
     /**
      * ease() is deliberately UNCLAMPED in the OUTPUT and for finite
-     * out-of-range t — back/elastic control points overshoot [0,1] by design
+     * out-of-range t — back/elastic control points overshoot [0, 1] by design
      * and a finite out-of-domain t extrapolates rather than throwing. Pinned
      * so a future "tidy-up" clamp is a disclosed behavior change, not a
      * silent one. Non-finite t is the exception: refused since step 35

@@ -136,7 +136,7 @@ final class Vector implements \JsonSerializable
      * @throws \RuntimeException if called on a zero-OR-SUB-BAND length
      *         (see above), or on one whose length OVERFLOWED to INF (finite
      *         components around 1e154 and up sum their squares past
-     *         float_MAX) — dividing by INF would silently answer the zero
+     *         float_MAX) — dividing by INF would silently report the zero
      *         vector, the opposite of a unit vector.
      */
     public function normalize(): self
@@ -176,7 +176,7 @@ final class Vector implements \JsonSerializable
      * `[x, y, z]` list. **The index order is contractual and frozen** — this
      * method and the serializer are two halves of one wire format, so no
      * component may ever move or gain a name. int entries (json_decode of
-     * `1` answers int) are widened here; everything else about the members —
+     * `1` yields an int) are widened here; everything else about the members —
      * type, arity — is refused before the constructor ever sees a partial
      * tuple, and finiteness stays the constructor's own door (one guard, no
      * duplicated policy).

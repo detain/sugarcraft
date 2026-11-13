@@ -7,7 +7,7 @@ namespace SugarCraft\Spring\Easing;
 use SugarCraft\Spring\Lang;
 
 /**
- * Cubic bezier easing functions — matches the CSS `cubic-bezier()` spec.
+ * Cubic Bezier easing functions — matches the CSS `cubic-bezier()` spec.
  *
  * Use the static factory methods to construct named presets. The algorithm
  * follows the canonical CSS spec: find t such that x(t) = input, then return
@@ -25,7 +25,7 @@ use SugarCraft\Spring\Lang;
  * internally consistent with its Quint/Expo neighbours.
  *
  * Implements the {@see EasingFunction} seam through its sampler
- * {@see ease()}. A bezier curve and the same-named {@see Easing} enum case
+ * {@see ease()}. A Bezier curve and the same-named {@see Easing} enum case
  * are different value families, not drop-in twins: the enum is analytic
  * (CubicIn is literally t³), this curve is a table fit, and their non-finite
  * policies diverge by design — {@see Easing} passes NAN/INF through, this
@@ -80,7 +80,7 @@ final class CubicBezier implements EasingFunction
     private readonly float $y2;
 
     /**
-     * Bézier polynomial coefficients (endpoints P0=0, P3=1 baked in), one
+     * Bezier polynomial coefficients (endpoints P0=0, P3=1 baked in), one
      * constructor-hoisted set per axis: x(t) = ax·t³ + bx·t² + cx·t and the
      * y mirror. The sampler AND the Newton derivative consume the SAME six
      * floats — before the hoist each method recomputed them inline per call,
@@ -172,7 +172,7 @@ final class CubicBezier implements EasingFunction
     /**
      * Factory alias of the constructor — the house `::new()` entry shape
      * (finding 052), SHIPPED rather than exempted on purpose: this class
-     * already answers static calls with named presets, and the uniform door
+     * already serves static calls with named presets, and the uniform door
      * costs nothing next to teaching five classes one vocabulary. Custom
      * (off-table) curves take this door; the 26 named ones take their
      * presets, which stay the memoized shared instances.
@@ -364,7 +364,7 @@ final class CubicBezier implements EasingFunction
         return ($lower + $upper) / 2.0;
     }
 
-    // Bézier polynomial with endpoints P0=0, P3=1 and B=x1, C=x2:
+    // Bezier polynomial with endpoints P0=0, P3=1 and B=x1, C=x2:
     // x(t) = (1+3B-3C)t³ + (3C-6B)t² + 3Bt  (the ax/bx/cx fields hoisted in
     // the constructor are its terms; the samplers below only evaluate)
 

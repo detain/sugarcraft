@@ -57,7 +57,7 @@ final class Point implements \JsonSerializable
      * to get HERE there). Feeds Vector-returning callers (normalize for a
      * direction, length for a budget) without hand-writing the subtraction.
      * Coordinates near 1e308 overflow the difference to INF, which the Vector
-     * door refuses outright — distance() answers INF for that pair instead
+     * door refuses outright — distance() returns INF for that pair instead
      * (it never builds a Vector); the asymmetry is by construction, not drift.
      */
     public function delta(self $to): Vector
@@ -91,7 +91,7 @@ final class Point implements \JsonSerializable
      * `[x, y, z]` list (Point carries z like Vector — the serializer always
      * emits three entries). **The index order is contractual and frozen**:
      * this method and the serializer are two halves of one wire format. int
-     * entries (json_decode of `1` answers int) are widened here; wrong arity
+     * entries (json_decode of `1` yields an int) are widened here; wrong arity
      * or type is refused before the constructor sees a partial tuple, and
      * finiteness stays the constructor's own door.
      *

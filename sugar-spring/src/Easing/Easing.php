@@ -14,11 +14,11 @@ namespace SugarCraft\Spring\Easing;
  * The solver-backed half lives in {@see CubicBezier} — 26 named presets
  * from the pre-2022 easings.net table plus arbitrary custom `cubic-bezier()`
  * control points. Both kinds satisfy the same {@see EasingFunction} seam,
- * so choosing this enum over the bezier family caps nothing downstream;
+ * so choosing this enum over the Bezier family caps nothing downstream;
  * curves not named here (Sine, Quart, Quint, Expo, Circ) ship as
  * CubicBezier presets while analytic enum cases for them stay a gated
  * ruling. Same-named members of the two kinds are NOT value-twins: the
- * enum is exact math, the bezier is a table fit.
+ * enum is exact math, the Bezier curve is a table fit.
  *
  * **Reduced motion.** Deliberately ignores REDUCE_MOTION: NOT spring-based,
  * pure functions of time with no target to snap *to* — the gate belongs in
@@ -57,7 +57,7 @@ enum Easing implements EasingFunction
      * input nor the output is rejected or clamped.
      *
      * Why the numbers can leave the unit box: an out-of-range $t simply
-     * extrapolates — ease(2.0) answers whatever the formula gives, so
+     * extrapolates — ease(2.0) returns whatever the formula gives, so
      * callers feeding a progress ratio from host state should clamp
      * upstream. In the other direction, Elastic/Back curves overshoot past
      * 1.0 (and below 0.0 on their anticipation legs) by design — that
@@ -66,13 +66,13 @@ enum Easing implements EasingFunction
      * Two edges to respect. (1) Mapping an eased value onto discrete cells
      * (indices, widths) requires your own clamp or rounding gate:
      * `round(ease($t) * 40)` can be a negative cell. (2) Non-finite $t
-     * flows through unguarded here: NAN answers NAN from every case, ±INF
+     * flows through unguarded here: NAN returns NAN for every case, ±INF
      * survives the polynomial curves and flips to NAN inside the
      * Elastic/Back trig — clamp upstream. Contrast
      * {@see CubicBezier::ease()}, which refuses a non-finite t outright.
      *
      * @param float $t Normalized time, designed for [0.0, 1.0]
-     * @return float Eased value (may exceed [0,1] for Elastic/Back curves due to intentional overshoot)
+     * @return float Eased value (may exceed [0, 1] for Elastic/Back curves; intentional overshoot)
      */
     public function ease(float $t): float
     {
@@ -118,7 +118,7 @@ enum Easing implements EasingFunction
 
     /**
      * ElasticIn — canonical Penner/easings.net form `-(2^(10t-10)) ·
-     * sin((10t - 10.75) · (2π/3))`. The raw formula answers -4.88e-4 at
+     * sin((10t - 10.75) · (2π/3))`. The raw formula returns -4.88e-4 at
      * t = 0 (sin of a huge negative phase, not zero), so the exact endpoints
      * are guarded.
      */
@@ -156,7 +156,7 @@ enum Easing implements EasingFunction
 
     /**
      * ElasticInOut — canonical two-half form with the (2π)/4.5 angular
-     * constant continuity REQUIRES: at t = 0.5 both halves answer exactly
+     * constant continuity REQUIRES: at t = 0.5 both halves return exactly
      * 0.5. The previous M_PI * 2.5 constant left the two halves disagreeing
      * by 0.444 across the half-way frame — a renderer crossing that frame
      * visibly teleported the object.
