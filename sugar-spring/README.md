@@ -502,11 +502,18 @@ every `Elastic*` and `Back*` case — clamp upstream. The solver-backed
 `CubicBezier::ease()` takes the opposite policy: it refuses a non-finite
 `t` outright, because a Newton iteration has nothing honest to answer with.
 
-Both easing kinds — the analytic `Easing` enum and the solver-backed
-`CubicBezier` curves — implement `SugarCraft\Spring\Easing\EasingFunction`,
-the extension seam: write your own `ease()` and pass it anywhere an easing
-function is consumed (the same name does not make same-named enum cases and
-presets value-twins: `CubicIn` is literally `t³`, its bezier fit is not).
+Both easing kinds — the analytic `Easing` enum (16 cases) and the solver-backed
+`CubicBezier` curves (26 named presets plus any custom `cubic-bezier()` tuple) —
+implement `SugarCraft\Spring\Easing\EasingFunction`, the extension seam: write
+your own `ease()` and pass it anywhere an easing function is consumed (the same
+name does not make same-named enum cases and presets value-twins: `CubicIn` is
+literally `t³`, its bezier fit is not). Two kinds is ONE palette, not a palette
+plus a fallback: reaching for the enum's simplicity caps nothing about where the
+value can be consumed, and it never pushes you across to the solver to get a
+legitimately-missing curve — the enum carries the analytic family, CubicBezier
+carries the easings.net table fits, and a curve absent from the 16 (Sine, Quart,
+Quint, Expo, Circ — by name) ships today as CubicBezier presets while expanding
+the analytic enum stays a gated ruling, not an oversight.
 
 ### CubicBezier
 

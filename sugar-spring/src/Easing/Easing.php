@@ -9,6 +9,17 @@ namespace SugarCraft\Spring\Easing;
  *
  * Each case applies an easing curve to a normalized time t (0.0 to 1.0).
  *
+ * **Palette boundary.** This enum is the ANALYTIC half of the library's
+ * easing palette: sixteen closed-form curves (`CubicIn` is literally t³).
+ * The solver-backed half lives in {@see CubicBezier} — 26 named presets
+ * from the pre-2022 easings.net table plus arbitrary custom `cubic-bezier()`
+ * control points. Both kinds satisfy the same {@see EasingFunction} seam,
+ * so choosing this enum over the bezier family caps nothing downstream;
+ * curves not named here (Sine, Quart, Quint, Expo, Circ) ship as
+ * CubicBezier presets while analytic enum cases for them stay a gated
+ * ruling. Same-named members of the two kinds are NOT value-twins: the
+ * enum is exact math, the bezier is a table fit.
+ *
  * **Reduced motion.** Deliberately ignores REDUCE_MOTION: NOT spring-based,
  * pure functions of time with no target to snap *to* — the gate belongs in
  * the application (mirror of the note on {@see \SugarCraft\Spring\Spring}).
