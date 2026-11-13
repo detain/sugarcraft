@@ -138,12 +138,11 @@ final class PostgresServerContext implements ServerContextInterface
 
     public function statusVariablesTs(): float
     {
-        if ($this->statusVariablesTsCache !== null) {
-            return $this->statusVariablesTsCache;
-        }
-
-        $this->statusVariables();
-        return $this->statusVariablesTsCache ?? microtime(true);
+        // SQL-A03 (admindata-005): non-fetching by contract, mirroring
+        // ServerContext — the async render path must never trigger a
+        // synchronous pg_stat_database scan by reading a stamp. The stamp
+        // describes data already held; statusVariables() alone owns fetching.
+        return $this->statusVariablesTsCache ?? 0.0;
     }
 
     /** @return list<array<string, mixed>> */

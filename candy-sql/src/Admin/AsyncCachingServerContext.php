@@ -28,6 +28,9 @@ final class AsyncCachingServerContext implements ServerContextInterface
     /**
      * Wall-clock time the last non-empty status snapshot was accepted from the
      * async pipeline (construction seed or refreshFromLiveCache adoption).
+     * Adoption also seeds the inner ServerContext where supported, so the
+     * restart latch and Uptime baseline stay honest while the render path
+     * itself never fetches (SQL-A03).
      */
     private ?float $statusVarsAdoptedAt = null;
 
@@ -241,7 +244,18 @@ final class AsyncCachingServerContext implements ServerContextInterface
         $status = $this->cache()->statusVariables();
         if ($status !== null && $status !== []) {
             $this->cachedStatusVars = $status;
-            $this->statusVarsAdoptedAt = microtime(true);
+            // The payload's true arrival, not "now" (MINOR-1 rule) — a
+            // re-adoption of an already-aged row must not launder it fresh.
+            $fetchedAt = $this->cache()->storedAt('status') ?? microtime(true);
+            $this->statusVarsAdoptedAt = $fetchedAt;
+            // SQL-A03: the restart latch and the inner freshness stamp live
+            // in ServerContext, which the async render path never lets fetch.
+            // Adopting without seeding left wasReset() lying false for the
+            // whole session; the seed is the only path Uptime reaches it.
+            if (\method_exists($this->inner, 'seedStatusSnapshot')) {
+                /** @psalm-suppress UndefinedMethod — guarded above */
+                $this->inner->seedStatusSnapshot($status, $fetchedAt);
+            }
         }
 
         $server = $this->cache()->serverVariables();

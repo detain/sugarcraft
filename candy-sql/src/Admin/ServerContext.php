@@ -162,10 +162,15 @@ final class ServerContext implements ServerContextInterface
 
     public function statusVariablesTs(): float
     {
-        if ($this->statusVariablesTsCache !== null) {
-            return $this->statusVariablesTsCache;
-        }
-        $this->statusVariables();
+        // SQL-A03: NON-fetching by contract. This used to call
+        // statusVariables() on a cold cache, which is how the "non-blocking"
+        // AsyncCachingServerContext ended up issuing one duration-unbounded
+        // blocking SHOW GLOBAL STATUS from inside the render path every TTL
+        // window (the remote-RTT UI freeze). The stamp describes the data
+        // this context already holds: fresh snapshots arrive either through a
+        // successful statusVariables() fetch or through the async pipeline's
+        // seedStatusSnapshot() adoption — both advance it. Readers that want
+        // DATA call statusVariables(); that method alone owns fetching.
         return $this->statusVariablesTsCache ?? 0.0;
     }
 
@@ -227,8 +232,31 @@ final class ServerContext implements ServerContextInterface
 
     public function wasReset(): bool
     {
-        $this->statusVariables();
+        // SQL-A03: NON-fetching — same contract as statusVariablesTs(). The
+        // latch is written by detectReset(), which runs on every successful
+        // fetch and on every async adoption via seedStatusSnapshot(); a
+        // render-path read must never issue SHOW GLOBAL STATUS to answer it.
         return $this->wasResetCache ?? false;
+    }
+
+    /**
+     * Adopt a snapshot the async admin pipeline fetched elsewhere (SQL-A03).
+     *
+     * WHY: the AsyncCachingServerContext wrapper serves data from
+     * AdminQueryCache and never lets the render path reach this context's
+     * fetch — but the restart latch and the freshness stamp live HERE, so
+     * unless adopted snapshots are seeded, Uptime is never observed and
+     * wasReset() lies false for the whole session. Called from the arrival
+     * site (refreshFromLiveCache) with the payload's TRUE fetchedAt so age
+     * math reads honestly (same anti-laundering rule as MINOR-1).
+     *
+     * @param array<string, string> $statusVars
+     */
+    public function seedStatusSnapshot(array $statusVars, float $fetchedAt): void
+    {
+        $this->statusVariablesCache = $statusVars;
+        $this->statusVariablesTsCache = $fetchedAt;
+        $this->detectReset();
     }
 
     /**
@@ -238,7 +266,7 @@ final class ServerContext implements ServerContextInterface
      */
     public function lastUptime(): ?int
     {
-        $this->statusVariables();
+        // SQL-A03: non-fetching, same contract as wasReset()/statusVariablesTs().
         return $this->lastUptime;
     }
 

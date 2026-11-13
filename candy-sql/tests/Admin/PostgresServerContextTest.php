@@ -60,6 +60,15 @@ final class PostgresServerContextTest extends TestCase
         $this->assertSame(1, $this->db->queryCount('pg_stat_database'));
     }
 
+    public function testColdStampServesZeroWithoutAQuery(): void
+    {
+        // SQL-A03: reading the freshness stamp must never issue a
+        // pg_stat_database scan from the async render path.
+        $this->assertSame(0.0, $this->ctx->statusVariablesTs());
+        $this->assertFalse($this->ctx->wasReset());
+        $this->assertSame(0, $this->db->queryCount('pg_stat_database'));
+    }
+
     public function testRefreshForcesOneNewFetchAfterTheWindow(): void
     {
         $this->ctx->statusVariables();

@@ -187,10 +187,14 @@ final class AsyncCachingServerContextTest extends TestCase
         $ctx = new AsyncCachingServerContext($inner, cache: $cache);
         $this->assertSame(1000.0, $ctx->statusVariablesTs());
 
-        $before = microtime(true);
         $ctx->refreshFromLiveCache();
 
-        $this->assertGreaterThanOrEqual($before, $ctx->statusVariablesTs());
+        // SQL-A03: adoption stamps the payload's TRUE arrival (the cache's
+        // own storedAt), not the adoption instant — and that arrival post-dates
+        // the inner's frozen sync stamp, which is the progress this pin is
+        // about. Laundering "now" onto aged rows was MINOR-1's disease.
+        $this->assertSame($cache->storedAt('status'), $ctx->statusVariablesTs());
+        $this->assertGreaterThan(1000.0, $ctx->statusVariablesTs());
         $this->assertSame(['Threads_connected' => '7'], $ctx->statusVariables());
     }
 

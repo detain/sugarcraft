@@ -123,6 +123,18 @@ final class AdminQueryCache
     }
 
     /**
+     * When the payload under $key last arrived, or null if never stored.
+     *
+     * SQL-A03: adopters must stamp their snapshots with the payload's TRUE
+     * fetchedAt rather than "now" — the same anti-laundering rule the
+     * AsyncCachingServerContext constructor carries for MINOR-1.
+     */
+    public function storedAt(string $key): ?float
+    {
+        return $this->storedAt[$key] ?? null;
+    }
+
+    /**
      * Lazily build and reuse the async connection for the given target so we
      * don't open a fresh TCP/auth connection on every tick. The key encodes
      * the flavor + DSN; a change rebuilds the connection.
@@ -146,12 +158,14 @@ final class AdminQueryCache
      * so App::createContext() used to mint a FRESH ServerContext on each call.
      * A pane switch drops the admin page (AdminState::withPane()); the next
      * render rebuilds it, and any synchronous delegation into the inner context
-     * (statusVariablesTs()/wasReset()) hit a brand-new, cold TTL cache — one
-     * blocking SHOW GLOBAL STATUS per navigation, inside the very window the
-     * TTL was supposed to cover. Holding one context per live database handle
-     * here — the same process-global pattern as {@see connection()} above —
-     * lets the per-context TTL cache survive page resets, so a render inside
-     * the window answers from cache instead of re-issuing the query.
+     * used to hit a brand-new, cold TTL cache — one blocking SHOW GLOBAL STATUS
+     * per navigation, inside the very window the TTL was supposed to cover
+     * (SQL-A03 cured the fetch-on-stamp-read itself: the stamp getters are now
+     * non-fetching by contract). The memo still carries the weight: it is the
+     * stable seed target for the restart latch and Uptime baseline that
+     * refreshFromLiveCache adoption feeds. Holding one context per live
+     * database handle — the same process-global pattern as {@see connection()}
+     * above — keeps that latch state and seed target stable across page resets.
      *
      * Identity (not DSN) is the key: a reconnect that swaps in a new handle
      * must not resurrect a context bound to the dead one, while a handle that
