@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Host;
 
+use SugarCraft\McpClient\JsonLines\Reader;
 use React\EventLoop\Loop;
 use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
@@ -236,11 +237,11 @@ final class AgentResume
     {
         stream_set_blocking($socket, false);
         $deferred = new Deferred();
-        $buffer = '';
+        $lines = new Reader();
         $result = null;
         $dropped = 0;
 
-        Loop::addReadStream($socket, static function ($stream) use (&$buffer, &$result, &$dropped, $deferred, $pid, $callId, $onActivity): void {
+        Loop::addReadStream($socket, static function ($stream) use ($lines, &$result, &$dropped, $deferred, $pid, $callId, $onActivity): void {
             $chunk = @fread($stream, 65536);
             if ($chunk === false && !feof($stream)) {
                 // A read error is not an end of stream: left armed it would
@@ -253,10 +254,10 @@ final class AgentResume
                 return;
             }
             if (\is_string($chunk) && $chunk !== '') {
-                $buffer .= $chunk;
-                while (($newline = strpos($buffer, "\n")) !== false) {
-                    $line = substr($buffer, 0, $newline);
-                    $buffer = substr($buffer, $newline + 1);
+                // A torn or non-JSON line is DROPPED (the feed is best-effort and
+                // the result frame is the contract); an unterminated tail at EOF
+                // is not a frame, so it is never decoded.
+                foreach ($lines->feed($chunk) as $line) {
                     $decoded = json_decode($line, true);
                     if (!\is_array($decoded)) {
                         continue;

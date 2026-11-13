@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Providers;
 
+use SugarCraft\McpClient\JsonLines\Reader;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
 use SugarCraft\Code\Messages\Message;
@@ -592,7 +593,7 @@ final readonly class CustomProvider implements ProviderInterface, RebindsModel, 
             }
 
             $stream = $response->getBody();
-            $buffer = '';
+            $lines = new Reader();
 
             // Accumulates delta.tool_calls[] fragments across chunks, keyed
             // by the OpenAI stream's per-call `index`. Threaded as a local
@@ -620,13 +621,10 @@ final readonly class CustomProvider implements ProviderInterface, RebindsModel, 
 
             while (!$stream->eof()) {
                 $chunk = $stream->read(8192);
-                $buffer .= $chunk;
 
-                // Process complete lines in buffer
-                while (($newlinePos = strpos($buffer, "\n")) !== false) {
-                    $line = substr($buffer, 0, $newlinePos);
-                    $buffer = substr($buffer, $newlinePos + 1);
-
+                // Process complete lines; the Reader keeps the partial tail
+                // (and never re-scans it) until its newline arrives.
+                foreach ($lines->feed($chunk) as $line) {
                     $line = trim($line);
                     // Audit 15a A5: `data:` with or without the one optional
                     // space - the spec's reading, which some gateways rely on.
@@ -714,7 +712,7 @@ final readonly class CustomProvider implements ProviderInterface, RebindsModel, 
             // A server that closes after its last frame without the "\n" the
             // loop splits on leaves that frame in $buffer; it can still be the
             // sentinel, and a clean end must not be mistaken for a cut.
-            $sawDone = $sawDone || SseData::isDone($buffer);
+            $sawDone = $sawDone || SseData::isDone($lines->partial());
 
             // Audit 15a A3: EOF with neither a `finish_reason` nor `[DONE]` is
             // a cut connection (proxy idle-timeout, server restart, reset),

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Cli;
 
+use SugarCraft\McpClient\JsonLines\Reader;
 use React\EventLoop\Loop;
 use React\EventLoop\LoopInterface;
 use React\Stream\ReadableResourceStream;
@@ -107,17 +108,17 @@ final class Acp
             $loop->stop();
         };
 
-        $buffer = '';
+        // Line splitting is sugar-mcp-client's JsonLines Reader (rider R17a),
+        // capped at MAX_LINE_BYTES: an over-cap line is discarded whole and
+        // answered with ONE malformed frame ('{'), so the peer gets its parse
+        // error instead of a half line reaching the server.
+        $lines = new Reader(self::MAX_LINE_BYTES);
         $stream = new ReadableResourceStream($in, $loop);
-        $stream->on('data', static function (string $chunk) use (&$buffer, $server): void {
-            $buffer .= $chunk;
-            while (($newline = \strpos($buffer, "\n")) !== false) {
-                $line = \substr($buffer, 0, $newline);
-                $buffer = \substr($buffer, $newline + 1);
+        $stream->on('data', static function (string $chunk) use ($lines, $server): void {
+            foreach ($lines->feed($chunk) as $line) {
                 $server->receive($line);
             }
-            if (\strlen($buffer) > self::MAX_LINE_BYTES) {
-                $buffer = '';
+            for ($oversized = $lines->takeOversized(); $oversized > 0; $oversized--) {
                 $server->receive('{');
             }
         });

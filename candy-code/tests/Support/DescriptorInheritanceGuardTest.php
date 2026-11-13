@@ -726,7 +726,12 @@ final class DescriptorInheritanceGuardTest extends TestCase
      *
      * @var array<string, array{count:int, reason:string}>
      */
-    private const SHORT_VIA_HELPER_IN_LIBS = [];
+    private const SHORT_VIA_HELPER_IN_LIBS = [
+        'sugar-core/Util/SecretStore.php::spawn' => [
+            'count' => 1,
+            'reason' => 'S-L04: the keychain read helper (`secret-tool lookup` / `security find-generic-password -w`) the app\'s Keychain now delegates to; the handle never escapes the function, pipes close and BoundedShutdown::terminateBounded() reaps it on every exit path, bounded by TIMEOUT_SECONDS (the same short-lived shape the app-side Keychain::spawn() carries for the write path)',
+        ],
+    ];
 
     /**
      * Appearances of the name that are not calls, and what each one is.

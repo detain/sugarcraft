@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Cli\Serve;
 
+use SugarCraft\McpClient\JsonLines\Reader;
 use SugarCraft\Code\Channels\ChannelInboundLog;
 use SugarCraft\Code\Channels\ChannelRegistry;
 use SugarCraft\Code\Channels\ChannelsStore;
@@ -655,19 +656,20 @@ trait ServeStartup
         }
 
         $listener->on('connection', static function (ConnectionInterface $connection) use ($server, $tokens): void {
-            $buffer = '';
-            $connection->on('data', static function (string $chunk) use (&$buffer, $connection, $server, $tokens): void {
-                $buffer .= $chunk;
-                if (\strlen($buffer) > 4096) {
+            $lines = new Reader();
+            $connection->on('data', static function (string $chunk) use ($lines, $connection, $server, $tokens): void {
+                // One request line, at most 4096 bytes: an unterminated tail
+                // or a longer line closes the peer; only the FIRST line is read.
+                $complete = $lines->feed($chunk);
+                if ($lines->pendingBytes() > 4096 || ($complete !== [] && \strlen($complete[0]) > 4096)) {
                     $connection->close();
 
                     return;
                 }
-                $newline = \strpos($buffer, "\n");
-                if ($newline === false) {
+                if ($complete === []) {
                     return;
                 }
-                [$verb, $token] = \explode(' ', \substr($buffer, 0, $newline), 2) + [1 => ''];
+                [$verb, $token] = \explode(' ', $complete[0], 2) + [1 => ''];
                 // Authenticate BEFORE any verb runs: a refused peer must cause
                 // zero side effects (reload-token rotates every credential).
                 if (!$tokens->matches(\trim($token))) {
@@ -715,25 +717,9 @@ trait ServeStartup
     private static function readReport($stream, float $seconds, ?int &$daemonPid = null): ?array
     {
         \stream_set_blocking($stream, false);
-        $buffer = '';
+        $lines = new Reader();
         $deadline = \microtime(true) + $seconds;
         while (true) {
-            // Whole lines first: the daemon's pid greeting may share a read
-            // with (or precede) the report, and it is not the report.
-            while (($newline = \strpos($buffer, "\n")) !== false) {
-                $line = \json_decode(\substr($buffer, 0, $newline), true);
-                $buffer = \substr($buffer, $newline + 1);
-                if (\is_array($line) && \is_bool($line['ok'] ?? null)) {
-                    return $line;
-                }
-                if (\is_array($line) && \is_int($line['pid'] ?? null) && ($line['hello'] ?? false) === true) {
-                    $daemonPid = $line['pid'];
-
-                    continue;
-                }
-
-                return null;
-            }
             $remaining = $deadline - \microtime(true);
             if ($remaining <= 0) {
                 return null;
@@ -751,7 +737,22 @@ trait ServeStartup
             if ($chunk === false || ($chunk === '' && \feof($stream))) {
                 return null;
             }
-            $buffer .= $chunk;
+            // Whole lines: the daemon's pid greeting may share a read with (or
+            // precede) the report, and it is not the report. A non-JSON line
+            // ends the wait (null), as does EOF with a partial line.
+            foreach ($lines->feed($chunk) as $raw) {
+                $line = \json_decode($raw, true);
+                if (\is_array($line) && \is_bool($line['ok'] ?? null)) {
+                    return $line;
+                }
+                if (\is_array($line) && \is_int($line['pid'] ?? null) && ($line['hello'] ?? false) === true) {
+                    $daemonPid = $line['pid'];
+
+                    continue;
+                }
+
+                return null;
+            }
         }
     }
 

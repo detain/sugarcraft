@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Providers\Concerns;
 
+use SugarCraft\McpClient\JsonLines\Reader;
 use SugarCraft\Code\Attachments\FileMentions;
 use SugarCraft\Code\Messages\AssistantMessage;
 use SugarCraft\Code\Messages\Message;
@@ -2345,18 +2346,22 @@ trait AnthropicMessagesWire
      */
     private static function decodeSseStream(iterable $chunks): \Generator
     {
-        $buffer = '';
+        // Unbounded Reader on purpose: the bound is THIS wire's refuse policy,
+        // checked below with the exact byte counts its message quotes (a
+        // capped Reader would drop silently and could not name them).
+        $lines = new Reader();
 
         foreach ($chunks as $chunk) {
-            yield from self::decodeSseEvents($chunk, $buffer);
+            yield from self::decodeSseEvents($chunk, $lines);
         }
 
-        yield from self::flushSseBuffer($buffer);
+        yield from self::flushSseBuffer($lines);
     }
 
     /**
      * Splits an Anthropic SSE byte chunk into decoded events, carrying any
-     * partial trailing line over in `$buffer` for the next chunk.
+     * partial trailing line over in `$lines` (sugar-mcp-client's JsonLines
+     * Reader, rider R17a) for the next chunk.
      *
      * The `event:` lines are ignored on purpose - the payload repeats the
      * event name in its own `type` field, which is what
@@ -2372,12 +2377,9 @@ trait AnthropicMessagesWire
      *
      * @return \Generator<int, array<string, mixed>>
      */
-    private static function decodeSseEvents(string $chunk, string &$buffer): \Generator
+    private static function decodeSseEvents(string $chunk, Reader $lines): \Generator
     {
-        $buffer .= $chunk;
-
-        while (($newline = strpos($buffer, "\n")) !== false) {
-            $line = substr($buffer, 0, $newline);
+        foreach ($lines->feed($chunk) as $line) {
 
             // The bound is measured on the WIRE line, CR included - a frame
             // is refused for what it cost the accumulator, not for what
@@ -2391,7 +2393,6 @@ trait AnthropicMessagesWire
             }
 
             $line = trim($line);
-            $buffer = substr($buffer, $newline + 1);
 
             if (!str_starts_with($line, 'data:')) {
                 continue;
@@ -2412,10 +2413,10 @@ trait AnthropicMessagesWire
         // the frame that will never terminate must not grow memory past it
         // either - refuse NOW, mid-stream, not when the newline eventually
         // (never) arrives.
-        if (strlen($buffer) > self::MAX_SSE_FRAME_BYTES) {
+        if ($lines->pendingBytes() > self::MAX_SSE_FRAME_BYTES) {
             throw new ProviderException(
                 'SSE frame exceeds the ' . self::MAX_SSE_FRAME_BYTES . '-byte bound ('
-                . strlen($buffer) . ' bytes accumulated without a line terminator).'
+                . $lines->pendingBytes() . ' bytes accumulated without a line terminator).'
             );
         }
     }
@@ -2432,9 +2433,9 @@ trait AnthropicMessagesWire
      *
      * @return \Generator<int, array<string, mixed>>
      */
-    private static function flushSseBuffer(string &$buffer): \Generator
+    private static function flushSseBuffer(Reader $lines): \Generator
     {
-        yield from self::decodeSseEvents("\n", $buffer);
+        yield from self::decodeSseEvents("\n", $lines);
     }
     // -------------------------------------------------------------------------
     // Per-host hooks the shared wire delegates to (see trait docblock)

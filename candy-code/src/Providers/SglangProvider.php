@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Providers;
 
+use SugarCraft\McpClient\JsonLines\Reader;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
 use GuzzleHttp\Exception\RequestException;
@@ -1279,7 +1280,7 @@ final readonly class SglangProvider implements ProviderInterface, ReportsServedM
             }
 
             $stream = $response->getBody();
-            $buffer = '';
+            $lines = new Reader();
 
             // Accumulates delta.tool_calls[] fragments across chunks, keyed
             // by the OpenAI stream's per-call `index`. Threaded as a local
@@ -1376,11 +1377,8 @@ final readonly class SglangProvider implements ProviderInterface, ReportsServedM
             // the plain PSR-7 StreamInterface. Buffer raw chunks and split on
             // "\n" ourselves (same approach as CustomProvider::completeStream()).
             while (!$stream->eof()) {
-                $buffer .= $stream->read(8192);
-
-                while (($newlinePos = strpos($buffer, "\n")) !== false) {
-                    $line = trim(substr($buffer, 0, $newlinePos));
-                    $buffer = substr($buffer, $newlinePos + 1);
+                foreach ($lines->feed($stream->read(8192)) as $line) {
+                    $line = trim($line);
 
                     // Audit 15a A5: `data:` with or without the one optional
                     // space - the spec's reading, which some gateways rely on.
@@ -1499,7 +1497,7 @@ final readonly class SglangProvider implements ProviderInterface, ReportsServedM
             // A server that closes after its last frame without the "\n" the
             // loop splits on leaves that frame in $buffer; it can still be the
             // sentinel, and a clean end must not be mistaken for a cut.
-            $sawDone = $sawDone || SseData::isDone($buffer);
+            $sawDone = $sawDone || SseData::isDone($lines->partial());
 
             // Audit 15a A3: EOF with neither a `finish_reason` nor `[DONE]` is
             // a cut connection (proxy idle-timeout, server restart, reset),

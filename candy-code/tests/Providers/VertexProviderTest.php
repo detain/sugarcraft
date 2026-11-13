@@ -2132,10 +2132,10 @@ final class VertexProviderTest extends TestCase
     /**
      * @return array<int, array<string, mixed>>
      */
-    private function decodeSseEvents(string $chunk, string &$buffer): array
+    private function decodeSseEvents(string $chunk, \SugarCraft\McpClient\JsonLines\Reader $buffer): array
     {
         $call = \Closure::bind(
-            static function (string $chunk, string &$buffer): array {
+            static function (string $chunk, \SugarCraft\McpClient\JsonLines\Reader $buffer): array {
                 return iterator_to_array(VertexProvider::decodeSseEvents($chunk, $buffer), false);
             },
             null,
@@ -2147,19 +2147,19 @@ final class VertexProviderTest extends TestCase
 
     public function testDecodeSseEventsIgnoresEventLinesAndDecodesData(): void
     {
-        $buffer = '';
+        $buffer = new \SugarCraft\McpClient\JsonLines\Reader();
         $events = $this->decodeSseEvents(
             "event: content_block_delta\ndata: {\"type\":\"content_block_delta\"}\n\n",
             $buffer,
         );
 
         $this->assertSame([['type' => 'content_block_delta']], $events);
-        $this->assertSame('', $buffer);
+        $this->assertSame('', $buffer->partial());
     }
 
     public function testDecodeSseEventsCarriesAPartialLineAcrossChunks(): void
     {
-        $buffer = '';
+        $buffer = new \SugarCraft\McpClient\JsonLines\Reader();
 
         $this->assertSame([], $this->decodeSseEvents('data: {"type":"mess', $buffer));
         $this->assertSame(
@@ -2170,7 +2170,7 @@ final class VertexProviderTest extends TestCase
 
     public function testDecodeSseEventsSkipsDoneAndUndecodablePayloads(): void
     {
-        $buffer = '';
+        $buffer = new \SugarCraft\McpClient\JsonLines\Reader();
 
         $this->assertSame([], $this->decodeSseEvents("data: [DONE]\ndata: not json\ndata:\n", $buffer));
     }

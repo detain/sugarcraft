@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Providers;
 
+use SugarCraft\McpClient\JsonLines\Reader;
 use SugarCraft\Code\Messages\AssistantMessage;
 use SugarCraft\Code\Messages\Message;
 use SugarCraft\Code\Messages\SystemMessage;
@@ -281,7 +282,7 @@ final readonly class CodexProvider implements ProviderInterface, RebindsModel, S
         stream_set_blocking($pipes[2], false);
 
         $pending = CodexInvocation::feedStdin($pipes[0], $prompt);
-        $buffer = '';
+        $lines = new Reader();
         $errors = '';
         $failureError = null;
         $open = [1 => $pipes[1], 2 => $pipes[2]];
@@ -339,12 +340,7 @@ final readonly class CodexProvider implements ProviderInterface, RebindsModel, S
                         continue;
                     }
 
-                    $buffer .= $chunk;
-
-                    while (($pos = strpos($buffer, "\n")) !== false) {
-                        $line = substr($buffer, 0, $pos);
-                        $buffer = substr($buffer, $pos + 1);
-
+                    foreach ($lines->feed($chunk) as $line) {
                         $chunk = $this->parseLine($line);
                         if ($chunk !== null) {
                             $failureError = $chunk->isError ? $chunk->errorMessage : $failureError;
@@ -356,7 +352,7 @@ final readonly class CodexProvider implements ProviderInterface, RebindsModel, S
             }
 
             // A final object written without a closing newline is still whole.
-            $chunk = $this->parseLine($buffer);
+            $chunk = $this->parseLine($lines->partial());
             if ($chunk !== null) {
                 $failureError = $chunk->isError ? $chunk->errorMessage : $failureError;
 

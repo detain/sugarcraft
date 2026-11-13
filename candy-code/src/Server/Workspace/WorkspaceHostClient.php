@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Server\Workspace;
 
+use SugarCraft\McpClient\JsonLines\Reader;
 use React\EventLoop\Loop;
 use React\EventLoop\LoopInterface;
 use React\EventLoop\TimerInterface;
@@ -190,26 +191,32 @@ final class WorkspaceHostClient
             $connection->on('close', static fn () => ForkedChild::forgetServerStream($socket));
 
             // The first line is the token; anything else is not our child.
-            $buffer = '';
+            $lines = new Reader();
             $onData = null;
-            $onData = static function (string $chunk) use (&$buffer, &$onData, &$settled, &$timer, $connection, $closeListener, $fail, $deferred, $loop, $root, $process, $groupPid, $stdin, $logPath, $token): void {
-                $buffer .= $chunk;
-                $newline = \strpos($buffer, "\n");
-                if ($newline === false) {
-                    if (\strlen($buffer) > 256) {
+            $onData = static function (string $chunk) use ($lines, &$onData, &$settled, &$timer, $connection, $closeListener, $fail, $deferred, $loop, $root, $process, $groupPid, $stdin, $logPath, $token): void {
+                $complete = $lines->feed($chunk);
+                if ($complete === []) {
+                    if ($lines->pendingBytes() > 256) {
                         $connection->close();
                     }
 
                     return;
                 }
                 $connection->removeListener('data', $onData);
-                if (!\hash_equals($token, \substr($buffer, 0, $newline)) || $settled) {
+                if (!\hash_equals($token, $complete[0]) || $settled) {
                     $connection->close();
 
                     return;
                 }
                 $closeListener();
-                $rpc = RemoteSessionHost::overStream($connection, self::CLIENT_NAME, \substr($buffer, $newline + 1));
+                // Everything after the token line belongs to the RPC stream,
+                // byte for byte: the lines the Reader already split off, each
+                // with its newline, then the unterminated tail it retained.
+                $rest = '';
+                foreach (\array_slice($complete, 1) as $line) {
+                    $rest .= $line . "\n";
+                }
+                $rpc = RemoteSessionHost::overStream($connection, self::CLIENT_NAME, $rest . $lines->partial());
                 $rpc->hello()->then(
                     static function () use (&$settled, &$timer, $deferred, $loop, $root, $process, $groupPid, $stdin, $rpc, $logPath): void {
                         if ($settled) {

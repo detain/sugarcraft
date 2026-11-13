@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Providers\Concerns;
 
+use SugarCraft\McpClient\JsonLines\Reader;
 use SugarCraft\Code\Attachments\FileMentions;
 use SugarCraft\Code\Messages\AssistantMessage;
 use SugarCraft\Code\Messages\SystemMessage;
@@ -620,10 +621,9 @@ trait OpenAiResponsesWire
         $incomplete = false;
 
         $stream = $response->getBody();
-        $buffer = '';
         $eventName = null;
 
-        foreach (self::sseLines($stream, $buffer) as $line) {
+        foreach (self::sseLines($stream) as $line) {
             if ($line === '') {
                 $eventName = null;
 
@@ -1062,28 +1062,25 @@ trait OpenAiResponsesWire
      *
      * @return \Generator<int, string>
      */
-    private static function sseLines(\Psr\Http\Message\StreamInterface $stream, string &$buffer): \Generator
+    private static function sseLines(\Psr\Http\Message\StreamInterface $stream): \Generator
     {
+        // Line boundaries held across reads by sugar-mcp-client's Reader
+        // (rider R17a): emit whole lines only, the tail of a partial event
+        // waits for the next read and is never re-scanned.
+        $reader = new Reader();
         while (!$stream->eof()) {
             $chunk = $stream->read(8192);
             if ($chunk === '') {
                 continue;
             }
 
-            $buffer .= $chunk;
-
-            // Emit whole lines only; the tail of a partial event waits for
-            // the next read.
-            while (($nl = strpos($buffer, "\n")) !== false) {
-                $line = rtrim(substr($buffer, 0, $nl), "\r");
-                $buffer = substr($buffer, $nl + 1);
-                yield $line;
+            foreach ($reader->feed($chunk) as $line) {
+                yield rtrim($line, "\r");
             }
         }
 
-        if ($buffer !== '') {
-            yield rtrim($buffer, "\r");
-            $buffer = '';
+        if ($reader->partial() !== '') {
+            yield rtrim($reader->partial(), "\r");
         }
     }
 

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Providers;
 
+use SugarCraft\McpClient\JsonLines\Reader;
 use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Context\ModelWindows;
 use SugarCraft\Code\Cli\LaunchNotices;
@@ -347,7 +348,7 @@ final readonly class ClaudeCodeProvider implements ProviderInterface, RebindsMod
         stream_set_blocking($pipes[2], false);
 
         $pending = ClaudeCodeInvocation::feedStdin($pipes[0], $prompt);
-        $buffer = '';
+        $lines = new Reader();
         $errors = '';
         $resultError = null;
         $open = [1 => $pipes[1], 2 => $pipes[2]];
@@ -441,17 +442,12 @@ final readonly class ClaudeCodeProvider implements ProviderInterface, RebindsMod
                         continue;
                     }
 
-                    $buffer .= $chunk;
-
                     // NDJSON, ONE JSON OBJECT PER LINE (audit 15a A12). This
                     // used to accept only `data: `-prefixed lines, the SSE
                     // framing of the HTTP API underneath; the CLI's
                     // stream-json prints bare objects, so every line was
                     // dropped and each turn streamed an empty reply.
-                    while (($pos = strpos($buffer, "\n")) !== false) {
-                        $line = substr($buffer, 0, $pos);
-                        $buffer = substr($buffer, $pos + 1);
-
+                    foreach ($lines->feed($chunk) as $line) {
                         $chunk = $this->parseLine($line);
                         if ($chunk !== null) {
                             $resultError = $chunk->isError ? $chunk->errorMessage : $resultError;
@@ -464,7 +460,7 @@ final readonly class ClaudeCodeProvider implements ProviderInterface, RebindsMod
 
             // A final object the child wrote without a closing newline is
             // still a whole object: the pipe hit EOF, nothing more is coming.
-            $chunk = $this->parseLine($buffer);
+            $chunk = $this->parseLine($lines->partial());
             if ($chunk !== null) {
                 $resultError = $chunk->isError ? $chunk->errorMessage : $resultError;
 
