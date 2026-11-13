@@ -1,6 +1,6 @@
 {
     "name": "sugarcraft/candy-scriptui",
-    "description": "Interactive terminal widgets for shell scripts \u2014 composer-installable CLI of SugarCraft TUI primitives, modeled on charmbracelet/gum. 13 subcommands: choose, confirm, file, filter, format, input, join, log, pager, spin, style, table, write.",
+    "description": "Interactive terminal widgets for shell scripts — composer-installable CLI of SugarCraft TUI primitives, modeled on charmbracelet/gum. 13 interactive subcommands plus completion and version: choose, confirm, file, filter, format, input, join, log, pager, spin, style, table, write.",
     "type": "library",
     "license": "MIT",
     "keywords": [
@@ -35,6 +35,7 @@
     ],
     "require": {
         "php": "^8.3",
+        "ext-mbstring": "*",
         "sugarcraft/sugar-core": "dev-master",
         "sugarcraft/sugar-forms": "dev-master",
         "sugarcraft/sugar-fuzzy": "dev-master",
