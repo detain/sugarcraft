@@ -33,6 +33,7 @@ return [
 
     // Command/SpinCommand.php
     'spinner.unknown_style'   => 'style de spinner inconnu : {name}',
+    'spinner.windows_unsupported' => 'spin ne peut pas exécuter de commandes sur Windows natif : le backend de processus ny est pas pris en charge — utilisez WSL à la place.',
 
     // Command/FormatCommand.php
     'format.unknown_theme'    => 'thème inconnu : {name}',

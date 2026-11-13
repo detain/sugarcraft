@@ -16,6 +16,7 @@ use SugarCraft\ScriptUi\Process\RealProcess;
 use SugarCraft\ScriptUi\Runtime\InteractiveRuntime;
 use SugarCraft\ScriptUi\Runtime\SignalExit;
 use SugarCraft\ScriptUi\Runtime\TimeoutGuard;
+use SugarCraft\Pty\PtyException;
 use SugarCraft\ScriptUi\Attribute\Example;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -149,7 +150,17 @@ final class SpinCommand extends Command
             return Command::FAILURE;
         }
 
-        $process = ($this->processFactory)($argv, $showOutput, $showError);
+        try {
+            $process = ($this->processFactory)($argv, $showOutput, $showError);
+        } catch (PtyException $e) {
+            // scriptui-08: a spawn-stage refusal (native Windows
+            // unsupported, or a plain spawn failure) reaches the user as
+            // a clean sentence + exit code — the matrix must never lie
+            // with a raw exception frame.
+            fwrite(STDERR, $e->getMessage() . "\n");
+            return Command::FAILURE;
+        }
+
         $model   = SpinModel::spawn($process, $title, $style, $align);
 
         $loop    = \React\EventLoop\Loop::get();

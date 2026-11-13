@@ -22,6 +22,7 @@ return [
     'log.encode_failed' => 'kon logvermelding niet naar json coderen',
     'log.bad_format' => 'ongeldige --format-tekenreeks: {format}',
     'spinner.unknown_style'   => 'onbekende spinnerstijl: {name}',
+    'spinner.windows_unsupported' => 'spin kan geen opdrachten uitvoeren op native Windows: het procesbackend wordt daar niet ondersteund — gebruik in plaats daarvan WSL.',
     'format.unknown_theme'    => 'onbekend thema: {name}',
     'io.read_failed' => 'kon bestand niet lezen: {path}',
     'io.write_failed' => 'kon niet naar bestand schrijven: {path}',

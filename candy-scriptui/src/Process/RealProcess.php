@@ -7,6 +7,7 @@ namespace SugarCraft\ScriptUi\Process;
 use React\EventLoop\LoopInterface;
 use SugarCraft\Pty\Libc;
 use SugarCraft\Pty\PtyException;
+use SugarCraft\ScriptUi\Lang;
 
 /**
  * The canonical non-PTY child handle for candy-scriptui: one copy owns
@@ -29,7 +30,10 @@ use SugarCraft\Pty\PtyException;
  * PosixProcess handle shape (proc_open with /dev/null stdin — a child
  * that inherited our stdin would steal it from the interactive
  * runtime — non-blocking capture pipes, pid-reuse-guarded signalling,
- * and the bounded TERM→grace→KILL reap ladder).
+ * and the bounded TERM→grace→KILL reap ladder). Native Windows is
+ * refused outright at spawn (scriptui-08): this ladder has no Windows
+ * backend, so callers get a localized clean refusal instead of the old
+ * half-spawn-and-throw behaviour.
  *
  * @see \SugarCraft\ScriptUi\Process\Process for the pinned contract.
  */
@@ -114,6 +118,21 @@ final class RealProcess implements Process
     ): self {
         if ($command === []) {
             throw new \InvalidArgumentException('RealProcess::spawn requires a non-empty command');
+        }
+
+        if (\DIRECTORY_SEPARATOR === '\\') {
+            // scriptui-08 (candy-scriptui-021): the whole lifecycle this
+            // class is built on — /dev/null stdio, the Libc::kill FFI
+            // signalling rung, the detach/group-kill wrapper — has no
+            // native Windows backend (sugar-pty's Libc::kill throws there
+            // unconditionally; its Windows/ConPTY routing is a separate
+            // rider). Before this guard `spin` merely LOOKED green on the
+            // Windows CI matrix: RealProcessTest skips there and
+            // SpinCommandTest injects FakeProcess, so the half-spawned
+            // child and the always-throwing terminate were never exercised.
+            // Fail fast instead, with a localized sentence the command
+            // surfaces as a clean refusal (rc FAILURE), never an exception.
+            throw new PtyException(Lang::t('spinner.windows_unsupported'));
         }
 
         // scriptui-04 (candy-scriptui-006): plain proc_open leaves the

@@ -22,6 +22,7 @@ return [
     'log.encode_failed' => 'nepodařilo se zakódovat záznam protokolu do json',
     'log.bad_format' => 'neplatný řetězec --format: {format}',
     'spinner.unknown_style'   => 'neznámý styl spinneru: {name}',
+    'spinner.windows_unsupported' => 'spin nelze použít na nativním Windows: procesní backend tam není podporován — místo toho použijte WSL.',
     'format.unknown_theme'    => 'neznámé téma: {name}',
     'io.read_failed' => 'soubor nelze přečíst: {path}',
     'io.write_failed' => 'do souboru nelze zapsat: {path}',
