@@ -400,7 +400,19 @@ final class ReadOnlyCommands
         $skipProgram = \in_array($name, $programTools, true);
 
         foreach ($args as $arg) {
-            if ($arg === '' || $arg[0] === '-') {
+            if ($arg === '') {
+                continue;
+            }
+            if ($arg[0] === '-') {
+                // S-O11: an option can CARRY a path (`--file=/etc/passwd`,
+                // `-f/etc/passwd`) and the attached form never reaches the
+                // operand scan as its own word. Judge the embedded value by
+                // the same jail rules as a detached operand.
+                $embedded = self::embeddedValue($arg);
+                if ($embedded !== null && !self::operandInside($embedded, $root, $home, $changedDirectory)) {
+                    return false;
+                }
+
                 continue;
             }
             if ($skipProgram) {
@@ -408,49 +420,81 @@ final class ReadOnlyCommands
 
                 continue;
             }
-            $tilde = $arg === '~' || str_starts_with($arg, '~/')
-                || $arg === '$HOME' || str_starts_with($arg, '$HOME/')
-                || $arg === '${HOME}' || str_starts_with($arg, '${HOME}/');
-            $absolute = $arg[0] === '/';
-            $escaping = $arg === '..' || str_starts_with($arg, '../')
-                || \preg_match('#(^|/)\.\.(/|$)#', $arg) === 1;
-
-            if ($tilde) {
-                // The home directory is where every CLI parks its credentials;
-                // the auto-allow never reads it unasked, dot-file or not.
-                return false;
-            }
-            if ($escaping) {
-                // Lexically leaves (or passes through) a parent: judgeable
-                // only from a known cwd, which a mid-chain `cd` invalidates.
-                if ($root === null || $changedDirectory || !str_starts_with($arg, './')) {
-                    return false;
-                }
-                $normalised = self::normaliseInsideRoot($arg, $root);
-
-                return $normalised !== null;
-            }
-            if (!$absolute) {
-                // Relative operands resolve under the shell's directory — and
-                // every `cd` this line passed already landed inside the
-                // project, so a relative path without `..` cannot leave it.
-                continue;
-            }
-            if ($root === null) {
-                return false;
-            }
-            if ($home !== null && ($arg === $home || str_starts_with($arg, $home . '/'))) {
-                return false;
-            }
-            if ($arg !== $root && !str_starts_with($arg, $root . '/')) {
-                return false;
-            }
-            if (self::normaliseInsideRoot($arg, $root) === null) {
+            if (!self::operandInside($arg, $root, $home, $changedDirectory)) {
                 return false;
             }
         }
 
         return true;
+    }
+
+    /**
+     * The path-shaped value attached to an option word, or null. Long options
+     * attach with `=` (`--opt=VALUE`); short ones glue the value on
+     * (`-fVALUE`, `-f=VALUE`). Only a value that ANCHORS (absolute, `~`,
+     * `$HOME`, or containing `..`) is returned: `--color=auto` and `-n5`
+     * carry nothing to jail, and `-es/a/b/` is a script, not a path.
+     */
+    private static function embeddedValue(string $option): ?string
+    {
+        if (str_starts_with($option, '--')) {
+            $eq = strpos($option, '=');
+            $value = $eq === false ? '' : substr($option, $eq + 1);
+        } else {
+            $value = substr($option, 2);
+            if (str_starts_with($value, '=')) {
+                $value = substr($value, 1);
+            }
+        }
+        if ($value === '') {
+            return null;
+        }
+        $anchored = $value[0] === '/' || $value[0] === '~'
+            || str_starts_with($value, '$HOME') || str_starts_with($value, '${HOME}')
+            || \preg_match('#(^|/)\.\.(/|$)#', $value) === 1;
+
+        return $anchored ? $value : null;
+    }
+
+    /** One operand against the project jail (see operandsStayInsideProject). */
+    private static function operandInside(string $arg, ?string $root, ?string $home, bool $changedDirectory): bool
+    {
+        $tilde = $arg === '~' || str_starts_with($arg, '~/')
+            || $arg === '$HOME' || str_starts_with($arg, '$HOME/')
+            || $arg === '${HOME}' || str_starts_with($arg, '${HOME}/');
+        if ($tilde) {
+            // The home directory is where every CLI parks its credentials;
+            // the auto-allow never reads it unasked, dot-file or not.
+            return false;
+        }
+        $escaping = $arg === '..' || str_starts_with($arg, '../')
+            || \preg_match('#(^|/)\.\.(/|$)#', $arg) === 1;
+        if ($escaping) {
+            // Lexically leaves (or passes through) a parent: judgeable
+            // only from a known cwd, which a mid-chain `cd` invalidates.
+            if ($root === null || $changedDirectory || !str_starts_with($arg, './')) {
+                return false;
+            }
+
+            return self::normaliseInsideRoot($arg, $root) !== null;
+        }
+        if ($arg[0] !== '/') {
+            // Relative operands resolve under the shell's directory, and
+            // every `cd` this line passed already landed inside the
+            // project, so a relative path without `..` cannot leave it.
+            return true;
+        }
+        if ($root === null) {
+            return false;
+        }
+        if ($home !== null && ($arg === $home || str_starts_with($arg, $home . '/'))) {
+            return false;
+        }
+        if ($arg !== $root && !str_starts_with($arg, $root . '/')) {
+            return false;
+        }
+
+        return self::normaliseInsideRoot($arg, $root) !== null;
     }
 
     /**
@@ -1010,6 +1054,13 @@ final class ReadOnlyCommands
     private static function argumentsAreReadOnly(string $name, array $args, array $flags): bool
     {
         $check = self::COMMANDS[$name];
+        // S-O11: `--files0-from=FILE` makes the tool read its operand LIST from
+        // FILE, so the names it opens are invisible to the jail. `--fil` is the
+        // shortest unambiguous prefix on sort; wc/du accept `--f`.
+        if (in_array($name, ['wc', 'du', 'sort'], true)
+            && !self::noOptionMatches($args, $name === 'sort' ? '/^--fil/' : '/^--f/')) {
+            return false;
+        }
         if ($check === null) {
             return true;
         }

@@ -260,6 +260,47 @@ final class ReadOnlyAutoAllowTest extends TestCase
         self::assertFalse(ReadOnlyCommands::autoAllows('printenv', $this->root));
     }
 
+    public function testAnOptionCarriedPathFacesTheSameJailAsADetachedOne(): void
+    {
+        // S-O11: `--opt=/abs` and `-f/abs` attach the path to the option word,
+        // which the operand scan used to skip wholesale.
+        $r = $this->root;
+        // Outside: refused in every spelling, where the detached form refuses.
+        self::assertFalse(ReadOnlyCommands::autoAllows('date -f /etc/passwd', $r), 'detached baseline');
+        foreach ([
+            'date --file=/etc/passwd',
+            'date -f/etc/passwd',
+            'date --date=/etc/passwd',
+            'date -r/etc/shadow',
+            'date --reference=~/.ssh/id_rsa',
+            'date -f$HOME/.netrc',
+            'date --file=../../etc/passwd',
+            'grep --exclude-from=/etc/shadow x f',
+            'sort --files0-from=/etc/x',
+            'sort --fil=names',
+            'wc --files0-from=names.txt',
+            'wc --files0-from=' . $r . '/names.txt',
+            'du --files0-from=-',
+            'cat --foo=/etc/hostname f',
+        ] as $command) {
+            self::assertFalse(ReadOnlyCommands::autoAllows($command, $r), $command);
+        }
+        self::assertFalse(ReadOnlyCommands::autoAllows('date --file=/etc/passwd', null), 'no root fails closed');
+        // Inside, and non-path option values: unchanged.
+        foreach ([
+            'date --file=' . $r . '/sub/dates.txt',
+            'date -f' . $r . '/sub/dates.txt',
+            'date --file=sub/dates.txt',
+            'date --date=yesterday +%F',
+            'grep --color=auto -n5 x f',
+            'grep --include=*.php -r x sub',
+            'sort -k2 -t, f',
+            'wc -l sub/notes.md',
+        ] as $command) {
+            self::assertTrue(ReadOnlyCommands::autoAllows($command, $r), $command);
+        }
+    }
+
     public function testPlanKeepsItsOwnReadOnlyJudgement(): void
     {
         $plan = new PermissionGate(PermissionMode::Plan);
