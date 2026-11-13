@@ -189,28 +189,35 @@ final class VeilStackTest extends TestCase
     {
         $bg = "....................\n....................\n....................";
 
-        $veil0 = Veil::new()->withZIndex(0);
-        $veil1 = Veil::new()->withZIndex(1);
+        // SO-26: the veils carry content now — the empty-content pair could
+        // only ever prove the return was a string. Higher z paints last and
+        // fully covers the lower layer at the shared anchor (the shape
+        // ZIndexIsStackOrderOnlyTest already pins — reused deliberately,
+        // no fresh golden minted).
+        $veil0 = Veil::new()->withContent('[AAAA]')->withZIndex(0)
+            ->withPosition(Position::TOP, Position::LEFT);
+        $veil1 = Veil::new()->withContent('[BBBB]')->withZIndex(1)
+            ->withPosition(Position::TOP, Position::LEFT);
 
-        // compositeAll uses each veil's own Position::TOP, Position::LEFT
         $stack = VeilStack::new()->add($veil0)->add($veil1);
 
         $result = $stack->compositeAll($bg);
 
-        // Should return a string (the composited result)
-        $this->assertIsString($result);
+        $this->assertStringContainsString('[BBBB]', $result, 'top layer painted');
+        $this->assertStringNotContainsString('[AAAA]', $result, 'lower layer fully covered at the shared anchor');
     }
 
     public function testCompositeAllWithSingleVeil(): void
     {
         $bg = "....................";
-        $veil = Veil::new()->withZIndex(0);
+        $veil = Veil::new()->withContent('[X]')->withZIndex(0)
+            ->withPosition(Position::TOP, Position::LEFT);
 
         $stack = VeilStack::new()->add($veil);
         $result = $stack->compositeAll($bg);
 
-        // Even with single veil, composite should be called
-        $this->assertIsString($result);
+        // SO-26: the layer's bytes, not an isString nod.
+        $this->assertSame('[X]' . str_repeat('.', 17), $result);
     }
 
     // ─── count() (Countable) ───────────────────────────────────────────────────
@@ -233,19 +240,20 @@ final class VeilStackTest extends TestCase
 
     public function testCompositeAllWithOffsetAppliesToEachVeil(): void
     {
-        // Verify compositeAll method is actually called and uses proper background
+        // SO-26: the name now matches the behavior — compositeAll takes the
+        // uniform offsets (landed with SO-32) and EVERY layer's frame shifts.
         $bg = "....................\n....................\n....................";
 
-        $veil0 = Veil::new()->withZIndex(0);
-        $veil1 = Veil::new()->withZIndex(1);
+        $stack = VeilStack::new()
+            ->add(Veil::new()->withContent('0')->withZIndex(0)
+                ->withPosition(Position::TOP, Position::LEFT))
+            ->add(Veil::new()->withContent('1')->withZIndex(1)
+                ->withPosition(Position::CENTER, Position::LEFT));
 
-        $stack = VeilStack::new()->add($veil0)->add($veil1);
+        $lines = Veil::new()->splitLines($stack->compositeAll($bg, 3, 1));
 
-        // compositeAll with multiple veils should composite each in z-order
-        $result = $stack->compositeAll($bg);
-
-        $this->assertIsString($result);
-        $this->assertNotEmpty($result);
+        $this->assertSame('...0' . str_repeat('.', 16), $lines[1], 'z0 layer took the one-row nudge');
+        $this->assertSame('...1' . str_repeat('.', 16), $lines[2], 'z1 layer took it too');
     }
 
     public function testCompositeAllOffsetsDefaultIsByteIdentical(): void
@@ -406,15 +414,17 @@ final class VeilStackTest extends TestCase
     /**
      * The whole point of z-index is overlap resolution: when two veils occupy the
      * same cell, the one with the higher z-index (composited last, per sorted())
-     * must win. Drive the composite in sorted() order and assert the topmost
-     * glyph is what survives at the shared cell.
+     * must win. Drive the stack API itself (compositeAll) and assert the
+     * topmost glyph survives at the shared cell.
      */
     public function testStackCompositeTopmostVeilWinsOverlap(): void
     {
         $bg = str_repeat('.', 10) . "\n" . str_repeat('.', 10);
 
-        $bottom = Veil::new()->withZIndex(0); // glyph 'B'
-        $top    = Veil::new()->withZIndex(5); // glyph 'T'
+        $bottom = Veil::new()->withZIndex(0)->withContent('B')
+            ->withPosition(Position::TOP, Position::LEFT); // glyph 'B'
+        $top    = Veil::new()->withZIndex(5)->withContent('T')
+            ->withPosition(Position::TOP, Position::LEFT); // glyph 'T'
 
         // Added out of z-order; sorted() must return [bottom(0), top(5)].
         $stack  = VeilStack::new()->add($top)->add($bottom);
@@ -422,15 +432,13 @@ final class VeilStackTest extends TestCase
         $this->assertSame(0, $sorted[0]->zIndex());
         $this->assertSame(5, $sorted[1]->zIndex());
 
-        // Composite each veil's glyph at the SAME cell (TOP, LEFT) in sorted order.
-        $glyphs = ['B', 'T'];
-        $result = $bg;
-        foreach ($sorted as $i => $veil) {
-            $result = $veil->withoutSession()->composite($glyphs[$i], $result, Position::TOP, Position::LEFT);
-        }
+        // SO-26: stack API over content-bearing veils — the old body
+        // hand-composited each glyph in a loop, pinning the test's own
+        // arithmetic instead of compositeAll()'s painting.
+        $result = $stack->compositeAll($bg);
 
         $firstLine = Veil::new()->splitLines($result)[0];
-        $this->assertSame('T', \mb_substr($firstLine, 0, 1), 'Highest z-index veil wins the shared cell');
+        $this->assertSame('T' . str_repeat('.', 9), $firstLine, 'Highest z-index veil wins the shared cell');
         $this->assertStringNotContainsString('B', $result, 'Overwritten lower-z glyph is gone');
     }
 
