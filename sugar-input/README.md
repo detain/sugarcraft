@@ -79,7 +79,8 @@ composer require sugarcraft/sugar-input:@dev
 
 The explicit `:@dev` is needed while the package has no tagged release and
 your project's `minimum-stability` is `stable` — it resolves against the
-default branch regardless. Use the plain form once a stable tag exists.
+default branch even with no tagged release. Use the plain form once a stable
+tag exists.
 
 ## Requirements
 
@@ -92,7 +93,7 @@ default branch regardless. Use the plain form once a stable tag exists.
   `SignalResizeDriver`; without pcntl, `arm()` returns `false` and detection
   stays off — never a silent half-start.
 - A `tput` binary on `PATH` for the resize driver's dimension probes. When
-  terminfo cannot be resolved the probe fails soft and dimensions keep their
+  terminfo cannot be resolved, the probe fails soft and dimensions keep their
   last known value (80×24 until a real answer arrives).
 - `evenement`, `react/stream` and `react/event-loop` are hard requires
   (declared): `ReactInputDriver` emits through `evenement` and reads on a
@@ -189,7 +190,7 @@ the right shape first:
   `?1006`), bracketed paste (`?2004`), focus reporting (`?1004`), and the
   Kitty keyboard flags query/enable sequence are the host's writes. The
   decoder is stateless about which modes are on; a disabled
-  `EscapeDecoderOptions` family only filters parsing, it does not enable or
+  `EscapeDecoderOptions` family only filters parsing and does not enable or
   disable anything on the wire.
 
 ### Bracketed paste
@@ -266,10 +267,10 @@ prefix.
 
 Shift+letter is protocol-dependent — code accordingly: legacy terminals send
 the capital directly (`Shift+a` → key `"A"`, NO `SHIFT` bit), the Kitty
-protocol sends key `"a"` WITH the `SHIFT` bit. A match arm on `"A"` silently
-dies the moment Kitty negotiation turns on; match `mb_strtolower($key)` plus
-`$modifiers->includes(KeyModifier::SHIFT)` if you need case-independent
-handling of both worlds.
+protocol sends key `"a"` WITH the `SHIFT` bit; a match arm on `"A"` silently
+stops matching the moment Kitty negotiation turns on — match
+`mb_strtolower($key)` plus `$modifiers->includes(KeyModifier::SHIFT)` if you
+need case-independent handling of both worlds.
 
 Modifier state arrives **on events** — you read them; you do not build masks
 (the `KeyModifier` constructor is private):
@@ -329,7 +330,7 @@ surfaces it as a `TerminalReplyEvent`:
 |---|---|---|
 | `device-attributes` | `CSI ? Pm c` / `CSI > Pm c` (bare `CSI Pm c` drains too) | DA1 / DA2 reply |
 | `cursor-position` | `CSI row ; col R` | DSR/CPR report (never a phantom `F3`) |
-| `dsr-status` | `CSI 0 n` / `CSI 3 n` (any `CSI … n` final drains) | DSR ok / not-ok reply — every `n`-final frame is drained so an echoed query can never mis-parse as a key |
+| `dsr-status` | `CSI 0 n` / `CSI 3 n` (any `CSI … n` final drains) | DSR ok / not-ok reply — every `n`-final frame is drained so an echoed query can never be mis-parsed as a key |
 | `window-report` | `CSI Pm t` | XTWINOPS geometry/resize report |
 | `kitty-flags` | `CSI ? flags u` (incl. bare `CSI ? u`) | Kitty keyboard flags query/reply |
 | `mode-report` | `CSI ? mode ; status $ y` (public `CSI mode ; status $ y` too) | DECRPM mode report |
@@ -431,9 +432,10 @@ Complete-by-design omissions, pinned by tests so they stay known:
 ## Security: decoded content is untrusted
 
 Everything this library emits is attacker-writable input. A terminal's input
-buffer is not only fingers on keys: any process with permission can write bytes
-into the pts slave, a remote `tmux send-keys` session injects keystrokes, and a
-paste's own content is whatever the clipboard held. Treat key names,
+buffer is not fed only by fingers on keys: any process with permission can
+write bytes into the pts slave, a remote `tmux send-keys` session injects
+keystrokes, and a paste's own content is whatever the clipboard held. Treat
+key names,
 `PasteEvent::content`, `TerminalReplyEvent::body` / `params`, and every `raw`
 field as hostile bytes:
 
