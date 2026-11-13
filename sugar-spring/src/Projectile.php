@@ -118,7 +118,56 @@ final class Projectile
     {
         $newPos = $this->position->add($this->velocity->scale($this->deltaTime));
         $newVel = $this->velocity->add($this->acceleration->scale($this->deltaTime));
-        return new self($this->deltaTime, $newPos, $newVel, $this->acceleration);
+        return $this->rebuild(position: $newPos, velocity: $newVel);
+    }
+
+    /**
+     * The single rebuild path (finding 005): every derived instance — the
+     * frame from update(), each fluent with*() below — is one constructor
+     * call carrying the swapped fields and preserving the rest, so the
+     * construction door's finite/negative-dt refusal guards the fluent
+     * surface too. The constructor signature and semantics are unchanged.
+     */
+    private function rebuild(
+        ?Point $position = null,
+        ?Vector $velocity = null,
+        ?Vector $acceleration = null,
+        ?float $deltaTime = null,
+    ): self {
+        return new self(
+            $deltaTime ?? $this->deltaTime,
+            $position ?? $this->position,
+            $velocity ?? $this->velocity,
+            $acceleration ?? $this->acceleration,
+        );
+    }
+
+    /** New projectile at $position, same velocity/acceleration/frame time. */
+    public function withPosition(Point $position): self
+    {
+        return $this->rebuild(position: $position);
+    }
+
+    /** New projectile with $velocity, same position/acceleration/frame time. */
+    public function withVelocity(Vector $velocity): self
+    {
+        return $this->rebuild(velocity: $velocity);
+    }
+
+    /** New projectile with $acceleration, same position/velocity/frame time. */
+    public function withAcceleration(Vector $acceleration): self
+    {
+        return $this->rebuild(acceleration: $acceleration);
+    }
+
+    /**
+     * New projectile stepping at $deltaTime, same state. 0.0 is a LEGAL
+     * value here (the accepted-freeze idiom, finding 049) and must not be
+     * swallowed by a naive null-coalescing rebuild — pinned.
+     */
+    public function withDeltaTime(float $deltaTime): self
+    {
+        return $this->rebuild(deltaTime: $deltaTime);
     }
 
     public function position(): Point      { return $this->position; }

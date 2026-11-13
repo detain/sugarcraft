@@ -229,4 +229,87 @@ final class ProjectileTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         new Projectile(1.0 / 60.0, Point::zero(), new Vector(0.0, -INF), Vector::zero());
     }
+
+    // ── SPR-20 (finding 005): the fluent rebuild surface ────────────────────
+
+    public function testEachWithMutatorSwapsExactlyItsOwnField(): void
+    {
+        $base = Projectile::new(
+            deltaTime: 1.0 / 60.0,
+            position: Point::zero(),
+            velocity: new Vector(5.0, 10.0),
+            acceleration: Projectile::gravity(),
+        );
+
+        $moved = $base->withPosition(new Point(1.0, 2.0, 3.0));
+        $this->assertEquals(new Point(1.0, 2.0, 3.0), $moved->position());
+        $this->assertSame($base->velocity(), $moved->velocity(), 'velocity object must be carried by identity');
+        $this->assertSame($base->acceleration(), $moved->acceleration(), 'acceleration object must be carried by identity');
+        $this->assertSame(1.0 / 60.0, $moved->deltaTime);
+
+        $reaimed = $base->withVelocity(new Vector(-5.0, 10.0));
+        $this->assertEquals(new Vector(-5.0, 10.0), $reaimed->velocity());
+        $this->assertSame($base->position(), $reaimed->position(), 'a velocity swap must not clone or move the position');
+        $this->assertSame($base->acceleration(), $reaimed->acceleration());
+        $this->assertSame(1.0 / 60.0, $reaimed->deltaTime);
+
+        $dragged = $base->withAcceleration(Projectile::terminalGravity());
+        $this->assertEquals(Projectile::terminalGravity(), $dragged->acceleration());
+        $this->assertSame($base->position(), $dragged->position());
+        $this->assertSame($base->velocity(), $dragged->velocity());
+        $this->assertSame(1.0 / 60.0, $dragged->deltaTime);
+
+        $resynced = $base->withDeltaTime(1.0 / 120.0);
+        $this->assertSame(1.0 / 120.0, $resynced->deltaTime);
+        $this->assertSame($base->position(), $resynced->position());
+        $this->assertSame($base->velocity(), $resynced->velocity());
+        $this->assertSame($base->acceleration(), $resynced->acceleration());
+    }
+
+    public function testReceiverIsNeverMutatedAndTheChainComposes(): void
+    {
+        $base = Projectile::new(1.0 / 60.0, Point::zero(), new Vector(0.0, 10.0), Projectile::gravity());
+
+        $chained = $base->withVelocity(new Vector(0.0, 20.0))->withAcceleration(Vector::zero());
+
+        $this->assertEquals(new Vector(0.0, 10.0), $base->velocity(), 'withVelocity on the base must not touch it');
+        $this->assertEquals(Projectile::gravity(), $base->acceleration(), 'the chain tail must not reach back into the receiver');
+        $this->assertEquals(new Vector(0.0, 20.0), $chained->velocity());
+        $this->assertEquals(Vector::zero(), $chained->acceleration());
+        $this->assertSame(1.0 / 60.0, $chained->deltaTime);
+    }
+
+    /**
+     * The naive-coalescing trap for the fluent door: 0.0 is a LEGAL frame
+     * time (the accepted-freeze idiom, finding 049) — an implementation
+     * using a truthy test or forgetting 0.0 in ?? would silently keep the
+     * old dt instead of freezing.
+     */
+    public function testWithDeltaTimeAcceptsTheLegalFreezeAndRefusesPoison(): void
+    {
+        $base = Projectile::new(1.0 / 60.0, Point::zero(), new Vector(0.0, 10.0), Projectile::gravity());
+
+        $frozen = $base->withDeltaTime(0.0);
+        $this->assertSame(0.0, $frozen->deltaTime, '0.0 must survive the rebuild, not coalesce back to 1/60');
+        $this->assertEquals($base->position(), $frozen->update()->position(), 'the swapped freeze must behave like a constructed freeze');
+
+        try {
+            $base->withDeltaTime(INF);
+            $this->fail('withDeltaTime must ride the construction door');
+        } catch (\InvalidArgumentException $error) {
+            $this->assertStringContainsString('deltaTime', $error->getMessage());
+        }
+
+        $this->expectException(\InvalidArgumentException::class);
+        $base->withDeltaTime(-1.0);
+    }
+
+    public function testWithPositionRefusesPoisonAndAlwaysReturnsFresh(): void
+    {
+        $base = Projectile::new(1.0 / 60.0, Point::zero(), new Vector(0.0, 10.0), Projectile::gravity());
+
+        $swapped = $base->withPosition(Point::zero());
+        $this->assertEquals($base->position(), $swapped->position(), 'an equal-value swap keeps the state identical');
+        $this->assertNotSame($base, $swapped, 'fluent rebuild always returns a new instance');
+    }
 }

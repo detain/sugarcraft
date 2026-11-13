@@ -363,6 +363,12 @@ naming the component), so bound your accelerations and velocities. A
 `deltaTime` of `0` is accepted and freezes the integrator — every Euler term
 is multiplied by it, so `update()` keeps handing back an identical state.
 
+Re-aiming a projectile between frames is fluent like the rest of the library:
+`withPosition()` / `withVelocity()` / `withAcceleration()` / `withDeltaTime()`
+each return a **new** `Projectile` with only that field swapped — no
+four-argument rebuild, and the construction door validates every swap (so
+`withDeltaTime(0.0)` freezes legally, `withDeltaTime(INF)` refuses loudly).
+
 ## When is it done? (the completion contract)
 
 A spring has finished when `Spring::settled($pos, $vel, $target, $threshold)`
@@ -615,7 +621,10 @@ back-flavoured control points — same honesty rule as `Easing`.
   `springAt60Fps(?bool $reducedMotionOverride = null)`.
 - **`Projectile`** — `Projectile::new(...)` / `update()` / `position()` /
   `velocity()` / `acceleration()` (identical `->position` etc. properties
-  exist) / `gravity()` / `terminalGravity()` / `gravityYDown()` /
+  exist) / `withPosition()` / `withVelocity()` / `withAcceleration()` /
+  `withDeltaTime()` (fluent: each returns a new Projectile preserving the
+  other three fields; the construction door still refuses poisoned values) /
+  `gravity()` / `terminalGravity()` / `gravityYDown()` /
   `terminalGravityYDown()` / `GRAVITY` / `TERMINAL_GRAVITY`.
 - **`Gravity`** — package-level static accessors: `standard()`, `terminal()`,
   `standardYDown()`, `terminalYDown()`.
