@@ -374,29 +374,41 @@ final readonly class Viewport
 
     // ---- content + dimensions -----------------------------------------
 
+    /** Returns a new Viewport; the receiver is unchanged (fluent house law). */
     public function setContent(string $content): self
     {
         return new self($this->inner->setContent($content), $this->stickyHeader, $this->stickyFooter, $this->syncedViewport);
     }
 
     /**
-     * Resize. Unlike {@see FlexBox::render()}'s clamp-tolerant geometry, the
-     * forms delegate THROWS InvalidArgumentException on a negative dimension.
+     * Resize — THE single sizing spelling of this lib (FBX-06). Returns a
+     * new Viewport; the receiver is unchanged (fluent house law). Unlike
+     * {@see FlexBox::render()}'s clamp-tolerant geometry, the forms
+     * delegate THROWS InvalidArgumentException on a negative dimension —
+     * see the README argument policy.
      */
     public function withSize(int $width, int $height): self
     {
         return new self($this->inner->withSize($width, $height), $this->stickyHeader, $this->stickyFooter, $this->syncedViewport);
     }
 
-    public function setWidth(int $width): self
-    {
-        return new self($this->inner->setWidth($width), $this->stickyHeader, $this->stickyFooter, $this->syncedViewport);
-    }
+    /**
+     * BC forwarder onto the single sizing spelling.
+     *
+     * @deprecated Resize through {@see self::withSize()} alone; this
+     *     one-dimension twin was the second vocabulary the lib collapsed
+     *     away (finding-005) — it could also drift from withSize's
+     *     throw-at-door posture. Use withSize(). REMOVED-IN: 2.0.0.
+     */
+    public function setWidth(int $width): self { return $this->withSize($width, $this->height()); }
 
-    public function setHeight(int $height): self
-    {
-        return new self($this->inner->setHeight($height), $this->stickyHeader, $this->stickyFooter, $this->syncedViewport);
-    }
+    /**
+     * BC forwarder onto the single sizing spelling.
+     *
+     * @deprecated Resize through {@see self::withSize()} alone (finding-005
+     *     collapse). Use withSize(). REMOVED-IN: 2.0.0.
+     */
+    public function setHeight(int $height): self { return $this->withSize($this->width(), $height); }
 
     public function width(): int  { return $this->inner->getWidth(); }
     public function height(): int { return $this->inner->getHeight(); }
@@ -421,6 +433,7 @@ final readonly class Viewport
 
     // ---- offset --------------------------------------------------------
 
+    /** Returns a new Viewport; the receiver is unchanged (fluent house law). */
     public function setYOffset(int $offset): self
     {
         return new self($this->inner->setYOffset($offset), $this->stickyHeader, $this->stickyFooter, $this->syncedViewport);
@@ -428,6 +441,7 @@ final readonly class Viewport
 
     public function yOffset(): int { return $this->inner->yOffset(); }
 
+    /** Returns a new Viewport; the receiver is unchanged (fluent house law). */
     public function setXOffset(int $offset): self
     {
         return new self($this->inner->setXOffset($offset), $this->stickyHeader, $this->stickyFooter, $this->syncedViewport);

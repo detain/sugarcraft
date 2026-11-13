@@ -14,8 +14,11 @@ use SugarCraft\Flexbox\Viewport;
  * Pins the accessor-deprecation era (the bare-accessor rename wave).
  *
  * Viewport's dimension accessors were renamed to their bare twins —
- * width()/height() were unclaimed in-lib (the mutators are the
- * setWidth()/setHeight() spellings, so there is no fluent collision).
+ * width()/height() were unclaimed in-lib (the mutators were the
+ * setWidth()/setHeight() spellings, so there was no fluent
+ * collision; FBX-06 collapsed that second vocabulary into
+ * withSize(), and the survivors are pinned here as reshape
+ * forwarders).
  * The legacy get*() spellings stay byte-identical one-line BC
  * forwarders marked '@deprecated' + 'REMOVED-IN: 2.0.0' until v2.0.0.
  * The delegates still answer through the canonical widgets viewport's
@@ -54,6 +57,16 @@ final class AccessorDeprecationTest extends TestCase
             // the same legs — the structural regex accepts the self::
             // delegate form.
             'Column::make' => [Column::class, 'make', 'new', ['Name', 10], 'equal'],
+            // The sizing collapse (FBX-06): setWidth()/setHeight() were the
+            // second vocabulary — they now forward to withSize(), which
+            // needs the OTHER dimension from the receiver, so the BC leg
+            // reshapes the canonical call through a closure instead of
+            // passing the same args twice. The structural leg keeps the
+            // one-line + marker law and relaxes only the same-arity check.
+            'Viewport::setWidth' => [Viewport::class, 'setWidth', 'withSize', [30], 'equal',
+                static fn (Viewport $v): array => [30, $v->height()]],
+            'Viewport::setHeight' => [Viewport::class, 'setHeight', 'withSize', [15], 'equal',
+                static fn (Viewport $v): array => [$v->width(), 15]],
         ];
     }
 
@@ -77,15 +90,16 @@ final class AccessorDeprecationTest extends TestCase
      * @param 'same'|'equal' $mode
      */
     #[DataProvider('deprecatedAccessors')]
-    public function testTheDeprecatedForwarderMatchesTheBareTwin(string $class, string $legacy, string $bare, array $args, string $mode): void
+    public function testTheDeprecatedForwarderMatchesTheBareTwin(string $class, string $legacy, string $bare, array $args, string $mode, ?callable $reshape = null): void
     {
         $object = self::fixture($class);
         $this->assertTrue(method_exists($object, $bare), $class . "::" . $bare . "() must exist");
+        $bareArgs = $reshape !== null ? $reshape($object) : $args;
         if ($mode === 'equal') {
-            $this->assertEquals($object->{$bare}(...$args), $object->{$legacy}(...$args));
+            $this->assertEquals($object->{$bare}(...$bareArgs), $object->{$legacy}(...$args));
             return;
         }
-        $this->assertSame($object->{$bare}(...$args), $object->{$legacy}(...$args));
+        $this->assertSame($object->{$bare}(...$bareArgs), $object->{$legacy}(...$args));
     }
 
     /**
@@ -96,7 +110,7 @@ final class AccessorDeprecationTest extends TestCase
      * @param class-string $class
      */
     #[DataProvider('deprecatedAccessors')]
-    public function testEverySweptForwarderCarriesMarkersAndSingleReturn(string $class, string $legacy, string $bare, array $args): void
+    public function testEverySweptForwarderCarriesMarkersAndSingleReturn(string $class, string $legacy, string $bare, array $args, string $mode = 'same', ?callable $reshape = null): void
     {
         $method = new \ReflectionMethod($class, $legacy);
         $doc = (string) $method->getDocComment();
@@ -110,14 +124,17 @@ final class AccessorDeprecationTest extends TestCase
             $method->getEndLine() - $method->getStartLine() + 1
         );
         $this->assertCount(1, $lines, $class . '::' . $legacy . ' must be a single-line forwarder');
+        $argsPat = $reshape !== null ? '[^;]*' : '(\$\w+(, \$\w+)*)?';
         $this->assertMatchesRegularExpression(
-            '/public (?:static )?function ' . preg_quote($legacy, '/') . '\(.*\)[^{]*\{ return (?:\$this->|self::)' . preg_quote($bare, '/') . '\((\$\w+(, \$\w+)*)?\); \}\s*$/',
+            '/public (?:static )?function ' . preg_quote($legacy, '/') . '\(.*\)[^{]*\{ return (?:\$this->|self::)' . preg_quote($bare, '/') . '\(' . $argsPat . '\); \}\s*$/',
             $lines[0]
         );
         $bareMethod = new \ReflectionMethod($class, $bare);
         $this->assertTrue($bareMethod->isPublic());
         $this->assertStringNotContainsString(self::MARKER, (string) $bareMethod->getDocComment());
-        $this->assertSame($method->getNumberOfParameters(), $bareMethod->getNumberOfParameters());
+        if ($reshape === null) {
+            $this->assertSame($method->getNumberOfParameters(), $bareMethod->getNumberOfParameters());
+        }
         $this->assertSame((string) $method->getReturnType(), (string) $bareMethod->getReturnType());
     }
 
@@ -175,7 +192,7 @@ final class AccessorDeprecationTest extends TestCase
         sort($found);
         sort($expected);
         $this->assertSame($expected, $found, 'src/ census drifted from the tested pairs');
-        $this->assertCount(11, $found);
+        $this->assertCount(13, $found);
     }
 
     /**
@@ -198,7 +215,7 @@ final class AccessorDeprecationTest extends TestCase
             $rows,
             PREG_SET_ORDER
         );
-        $this->assertCount(11, $rows, 'README Accessor-deprecation table must list exactly the swept pairs');
+        $this->assertCount(13, $rows, 'README Accessor-deprecation table must list exactly the swept pairs');
         $tabled = [];
         foreach ($rows as $row) {
             $tabled[$row['class'] . '::' . $row['legacy']] = $row['bare'];

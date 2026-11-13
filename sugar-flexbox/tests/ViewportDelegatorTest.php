@@ -140,20 +140,26 @@ final class ViewportDelegatorTest extends TestCase
 
     public function testSetWidthReturnsNewInstance(): void
     {
+        // BC spelling (FBX-06 collapsed sizing onto withSize; the roster
+        // pins the equality) — single-dimension resize must still answer
+        // a NEW Viewport keeping the other dimension.
         $vp = Viewport::withContent("hello\nworld", 20, 10);
         $vp2 = $vp->setWidth(30);
 
         $this->assertNotSame($vp, $vp2);
         $this->assertSame(30, $vp2->getWidth());
+        $this->assertEquals($vp->withSize(30, 10), $vp2);
     }
 
     public function testSetHeightReturnsNewInstance(): void
     {
+        // BC spelling (FBX-06) — see the setWidth twin above.
         $vp = Viewport::withContent("hello\nworld", 20, 10);
         $vp2 = $vp->setHeight(15);
 
         $this->assertNotSame($vp, $vp2);
         $this->assertSame(15, $vp2->getHeight());
+        $this->assertEquals($vp->withSize(20, 15), $vp2);
     }
 
     // ---- X offset delegators ----------------------------------------------

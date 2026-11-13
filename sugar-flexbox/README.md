@@ -277,7 +277,10 @@ not ghost) — callers that clear the terminal out-of-band must still call
 ## Accessor deprecation (2026-10-24)
 
 `Viewport`'s dimension accessors follow the house bare-accessor convention:
-call `width()` and `height()`, and `Table`'s mutation-flavoured builders are
+call `width()` and `height()`; sizing itself has ONE spelling,
+`withSize($width, $height)` (`setWidth()`/`setHeight()` were the second
+vocabulary and now forward to it, carrying the receiver's other
+dimension); and `Table`'s mutation-flavoured builders are
 now `withColumn()/withRow()/withSort()/withFilter()/withCursor()` — every one
 of them returns a **new** Table; the receiver is unchanged, so muscle-memory
 chaining like `$t->addRow($r);` inside a loop dropped rows silently. The
@@ -294,6 +297,8 @@ sugar-flexbox v2.0.0. Migrating is a name swap with no behavior change:
 | `Flexbox` | `Viewport` | `getWidth()` | `width()` |
 | `Flexbox` | `Viewport` | `getHeight()` | `height()` |
 | `Flexbox` | `Viewport` | `withScrollbar()` | `showScrollbar()` |
+| `Flexbox` | `Viewport` | `setWidth()` | `withSize()` |
+| `Flexbox` | `Viewport` | `setHeight()` | `withSize()` |
 | `Flexbox\Table` | `Table` | `addColumn()` | `withColumn()` |
 | `Flexbox\Table` | `Table` | `addRow()` | `withRow()` |
 | `Flexbox\Table` | `Table` | `sortBy()` | `withSort()` |
