@@ -572,6 +572,41 @@ final class StdioMcpServerRoundTripTest extends TestCase
         self::assertSame('framed-clean', $decoded['id'] ?? null, 'the refused payload leaked bytes onto the wire ahead of the clean frame');
     }
 
+    public function testWriteFramedRefusesAnEmbeddedCarriageReturnBeforeTheWire(): void
+    {
+        $server = $this->spawn('echoer', 'echo_server.php', 5.0);
+        $server->start();
+
+        // A bare CR is a line terminator for many stdio readers on the far
+        // side of the pipe (Node readline, Python universal-newline IO), so
+        // a payload carrying one forges a second frame toward the child even
+        // though our own reader only splits on LF. The guard must treat CR
+        // and LF with the same law.
+        $forged = '{"jsonrpc":"2.0","id":"framed-first","method":"tools/call","params":{"name":"echo","arguments":{"raw":"FIRST"}}}'
+            . "\r"
+            . '{"jsonrpc":"2.0","id":"ghost-forgery","method":"tools/call","params":{"name":"echo","arguments":{"raw":"GHOST"}}}';
+
+        $refusal = null;
+        try {
+            $server->writeFramed($forged);
+        } catch (\InvalidArgumentException $e) {
+            $refusal = $e->getMessage();
+        }
+        // Capture, exit the try, assert after — harness law.
+        self::assertIsString($refusal, 'a payload with an embedded carriage return reached the wire');
+        self::assertStringContainsString('single-line', $refusal);
+
+        // Nothing was written: the NEXT clean frame's answer is the first
+        // line on the wire. A CR-blind guard lets framed-first answer first.
+        $clean = '{"jsonrpc":"2.0","id":"framed-clean","method":"tools/call","params":{"name":"echo","arguments":{"raw":"CLEAN"}}}';
+        self::assertTrue($server->writeFramed($clean, StdioMcpServer::monotonicNow() + 3.0));
+
+        $line = self::readWireLine($server, 6.0);
+        self::assertIsString($line);
+        $decoded = json_decode((string) $line, true);
+        self::assertSame('framed-clean', $decoded['id'] ?? null, 'the refused payload leaked bytes onto the wire ahead of the clean frame');
+    }
+
     public function testThePublicFramingHelperDelegatesAndNeverDoubleFrames(): void
     {
         $src = (string) file_get_contents(__DIR__ . '/../src/StdioMcpServer.php');
@@ -588,7 +623,7 @@ final class StdioMcpServerRoundTripTest extends TestCase
         // private leg.
         self::assertSame(1, substr_count($framed, '$this->writeLine($json, $deadline)'), 'the helper stopped delegating to the single private leg');
         self::assertSame(1, substr_count($framed . $line, ' . "\n"'), 'framing escaped the private core — the public helper or the core now double-frames');
-        self::assertSame(1, substr_count($framed, 'str_contains($json,'), 'the boundary newline guard vanished from the public helper');
+        self::assertSame(1, substr_count($framed, 'strpbrk($json, "\r\n")'), 'the boundary line-break guard vanished from the public helper');
     }
 
     /**

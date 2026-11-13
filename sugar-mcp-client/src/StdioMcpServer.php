@@ -1352,22 +1352,26 @@ final class StdioMcpServer implements McpServer
      * raw frame.
      *
      * The payload must be a single-line JSON document — an embedded raw
-     * newline would forge a second wire frame, so it is refused loudly at
-     * the boundary (the private leg must still accept the salvage-prefixed
+     * newline OR carriage return would forge a second wire frame (many
+     * stdio line readers — Node readline, Python universal-newline IO,
+     * and friends — split on a bare CR as well as LF, so the CR carries
+     * the same forging power toward the child even though our own
+     * framing only reads LF). It is therefore refused loudly at the
+     * boundary (the private leg must still accept the salvage-prefixed
      * shape, which is why this validates and delegates instead of replacing).
      *
      * @param float|null $deadline absolute monotonic instant, same law as
      *        {@see self::notify()}: compute it from {@see self::monotonicNow()}
      * @return bool true once the whole frame went out; false when it did not
      *         (not started, dead pipe, deadline lost)
-     * @throws \InvalidArgumentException when $json embeds a newline, or when
-     *         $deadline is not a monotonic instant
+     * @throws \InvalidArgumentException when $json embeds a carriage return
+     *         or newline, or when $deadline is not a monotonic instant
      */
     public function writeFramed(string $json, ?float $deadline = null): bool
     {
-        if (str_contains($json, "\n")) {
+        if (strpbrk($json, "\r\n") !== false) {
             throw new \InvalidArgumentException(
-                'MCP frame payload must be a single-line JSON document; an embedded newline would forge a second wire frame.',
+                'MCP frame payload must be a single-line JSON document; an embedded CR or LF would forge a second wire frame.',
             );
         }
 
