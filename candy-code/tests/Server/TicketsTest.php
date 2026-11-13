@@ -119,6 +119,34 @@ final class TicketsTest extends TestCase
         self::assertNull($secrets->peek($first), 'the soonest-expiring secret made room');
     }
 
+    public function testImportEnforcesTheCapOnABulkRestoreKeepingTheNewest(): void
+    {
+        $secrets = ExpiringSecrets::new(60, $this->clock(), 3);
+        $rows = [];
+        for ($i = 1; $i <= 10; ++$i) {
+            $rows[\hash('sha256', "s$i")] = $this->now + 100 + $i;
+        }
+        $secrets->import($rows, 'v');
+
+        self::assertSame(3, $secrets->count(), 'import trims to the cap, not by one');
+        self::assertCount(3, $secrets->export());
+        self::assertSame('v', $secrets->peek('s10'));
+        self::assertSame('v', $secrets->peek('s8'));
+        self::assertNull($secrets->peek('s7'), 'older claims evicted');
+        self::assertNull($secrets->peek('s1'));
+    }
+
+    public function testImportUnderTheCapKeepsEveryRowAndExistingEntries(): void
+    {
+        $secrets = ExpiringSecrets::new(60, $this->clock(), 3);
+        $live = $secrets->mint('live');
+        $secrets->import([\hash('sha256', 'a') => $this->now + 500, \hash('sha256', 'b') => $this->now + 600], 'v');
+
+        self::assertSame(3, $secrets->count());
+        self::assertSame('live', $secrets->peek($live), 'live entry kept when room exists');
+        self::assertSame('v', $secrets->peek('a'));
+    }
+
     public function testTheLimiterLocksAnAddressOutAfterTenFailuresInAMinute(): void
     {
         $limiter = RateLimiter::new($this->clock());

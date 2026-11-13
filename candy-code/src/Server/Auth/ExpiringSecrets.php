@@ -41,7 +41,7 @@ final class ExpiringSecrets
     public function mint(string $value = '', int $bytes = 32): string
     {
         $this->purge();
-        $this->trimToCapacity();
+        $this->trimTo($this->capacity - 1);
 
         $secret = \bin2hex(\random_bytes($bytes));
         $this->entries[self::hash($secret)] = ['expires' => ($this->clock)() + $this->ttlSeconds, 'value' => $value];
@@ -80,7 +80,11 @@ final class ExpiringSecrets
         foreach ($hashToExpires as $hash => $expires) {
             $this->entries[$hash] ??= ['expires' => $expires, 'value' => $value];
         }
-        $this->trimToCapacity();
+        // A restored file may carry many future claims; evict oldest-expiry
+        // until the cap holds, not just one (a single eviction left the map
+        // arbitrarily over capacity).
+        $this->purge();
+        $this->trimTo($this->capacity);
     }
 
     /** The value $secret is bound to, consuming it; null when unknown or expired. */
@@ -131,13 +135,16 @@ final class ExpiringSecrets
         return \count($this->entries);
     }
 
-    /** Oldest expiry first, so a flood of mints cannot grow the map past the cap. */
-    private function trimToCapacity(): void
+    /** Evict oldest expiry first until at most $max entries remain. */
+    private function trimTo(int $max): void
     {
-        if (\count($this->entries) >= $this->capacity) {
-            \uasort($this->entries, static fn (array $a, array $b): int => $a['expires'] <=> $b['expires']);
-            \array_shift($this->entries);
+        $max = \max(0, $max);
+        $over = \count($this->entries) - $max;
+        if ($over <= 0) {
+            return;
         }
+        \uasort($this->entries, static fn (array $a, array $b): int => $a['expires'] <=> $b['expires']);
+        $this->entries = \array_slice($this->entries, $over, null, true);
     }
 
     private function purge(): void
