@@ -25,6 +25,8 @@ use SugarCraft\Core\Undo\UndoActionType;
 use SugarCraft\Files\Manager\ManagerBuilder;
 use SugarCraft\Files\Msg\CopyCompletedMsg;
 use SugarCraft\Files\Msg\SearchDoneMsg;
+use SugarCraft\Files\Support\Archive;
+use SugarCraft\Files\Support\ArchiveExtractor;
 use SugarCraft\Files\Support\Bookmarks;
 use SugarCraft\Files\Support\Home;
 use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
@@ -186,6 +188,10 @@ final class Manager implements Model
         // moved — and keeps the invalidator so the disk-trusted refresh
         // points (ops, `r`) can bypass second-granularity mtime ties.
         [$lister, $invalidate] = FsLister::memo($lister);
+        // CF-33: archive paths (`a.zip!/dir`) answer from the in-process
+        // index and sit OUTSIDE the mtime memo - a virtual path has no
+        // directory mtime of its own (the index carries its own signature).
+        $lister = Archive::lister($lister);
         $left = Pane::open($leftCwd, $lister);
         $right = Pane::open($rightCwd, $lister);
         // Initialize with 1 tab containing the dual panes
@@ -557,7 +563,15 @@ final class Manager implements Model
             return $this->openEntry('view');
         }
         if ($plain && $msg->rune === 'x') {
-            return $this->runEntry();
+            // CF-33: inside an archive view `x` is EXTRACT (there is nothing
+            // to run in a read-only listing); everywhere else it still runs.
+            return Archive::inside($this->activePane()->cwd) ? [$this->armExtract(), null] : $this->runEntry();
+        }
+        // CF-33: the archive view is read-only. Every mutating chord is
+        // refused with a visible status instead of failing deep in the copy
+        // engine against a path that is not on disk.
+        if ($plain && ($refused = $this->archiveRefusal($msg->rune)) !== null) {
+            return [$refused, null];
         }
 
         // CF-50: the clipboard chords are the one arm besides open/run that
@@ -935,6 +949,16 @@ final class Manager implements Model
         }
         $full = Pane::join($pane->cwd, $entry->name);
         $label = Entry::sanitizeName($entry->name);
+        // CF-33: inside an archive view a file has no on-disk bytes to hand
+        // to an editor or pager - say so and point at `x`.
+        if (Archive::inside($pane->cwd)) {
+            return [$this->withStatus(Lang::t('status.archive_entry_readonly')), null];
+        }
+        // CF-33: an archive file under the cursor BROWSES (Enter and `l`
+        // alike), the way a directory navigates.
+        if (Archive::format($entry->name) !== null) {
+            return [$this->openArchive($pane, $entry, $full), null];
+        }
         if ($mode === 'view') {
             // The pager leg earns its keep only on viewable text: a NUL in
             // the head, a file beyond 32 MiB, or an unreadable one refuses
@@ -1103,6 +1127,138 @@ final class Manager implements Model
     }
 
     /**
+     * CF-33: refuse the mutating chords while the active pane (or, for
+     * copy/move, the destination pane) is an archive view. Null = allowed.
+     */
+    private function archiveRefusal(string $rune): ?self
+    {
+        $active = Archive::inside($this->activePane()->cwd);
+        $dest = ($rune === 'c' || $rune === 'm') && Archive::inside($this->inactivePane()->cwd);
+        $mutating = in_array($rune, ['d', 'c', 'm', 'R', 'N', 'y', 'Y', 'p'], true);
+        if (!$mutating || !($active || $dest)) {
+            return null;
+        }
+        return $this->withStatus(Lang::t('status.archive_readonly'));
+    }
+
+    /**
+     * CF-33 `x` inside an archive view: arm the copy confirm for an
+     * EXTRACT of the selection (or cursor entry) into the other pane. The
+     * gate text names the destination exactly like `c` does; the bytes move
+     * only after the answer, through {@see performExtractAsync()}.
+     */
+    private function armExtract(): self
+    {
+        $pane = $this->activePane();
+        $current = $pane->currentEntry();
+        $count = count($pane->selected);
+        if ($count === 0 && ($current === null || $current->isParentSentinel())) {
+            return $this->withStatus(Lang::t('status.nothing_to_copy'));
+        }
+        $dest = $this->inactivePane();
+        if (Archive::inside($dest->cwd)) {
+            return $this->withStatus(Lang::t('status.archive_readonly'));
+        }
+        $names = $count > 0
+            ? Lang::t('confirm.selected_entries', ['count' => $count])
+            : "'" . Entry::sanitizeName((string) $current?->name) . "'";
+        return $this->withConfirm(
+            ConfirmState::CopySelected,
+            Lang::t('confirm.extract', ['names' => $names, 'dest' => Entry::sanitizeName($dest->cwd)]),
+            $dest->cwd,
+            'extract'
+        );
+    }
+
+    /**
+     * CF-33: the confirmed extract. Stage the wanted entries into a private
+     * temp tree on the event loop (sliced - ArchiveExtractor), then run the
+     * staged tree through the ordinary AsyncOps copy engine into the
+     * destination so overwrite counting, error reasons and the CF-44
+     * in-flight accounting are the copy path's own. The staging tree is
+     * removed on every exit, success or failure.
+     *
+     * @return array{0:self, 1:?\Closure}
+     */
+    private function performExtractAsync(): array
+    {
+        $pane = $this->activePane();
+        $split = Archive::split($pane->cwd);
+        $dst = $this->pendingOpDest;
+        if ($split === null || $dst === null) {
+            return [$this->withConfirm(ConfirmState::None, Lang::t('status.cancelled')), null];
+        }
+        [$archive, $inner] = $split;
+        $names = [];
+        foreach ($pane->selected !== [] ? array_keys($pane->selected) : [$pane->currentEntry()?->name] as $n) {
+            if ($n !== null && $n !== '' && $n !== '..') {
+                $names[] = (string) $n;
+            }
+        }
+        $rel = static fn(string $n): string => $inner === '' ? $n : $inner . '/' . $n;
+        $wanted = array_map($rel, $names);
+        $existed = [];
+        foreach ($names as $n) {
+            if (file_exists(Pane::join($dst, $n)) || is_link(Pane::join($dst, $n))) {
+                $existed[$n] = true;
+            }
+        }
+        $pending = $this
+            ->withConfirm(ConfirmState::None, Lang::t('status.extract_pending', ['count' => count($names)]))
+            ->mutate(['copyBatchesInFlight' => $this->copyBatchesInFlight + 1]);
+        $cmd = Cmd::promise(static function () use ($archive, $wanted, $names, $dst, $existed, $rel): \React\Promise\PromiseInterface {
+            try {
+                $staging = ArchiveExtractor::newStaging();
+            } catch (\Throwable $e) {
+                return \React\Promise\resolve(new CopyCompletedMsg([], count($names), 0, 0, $e->getMessage()));
+            }
+            $fail = static function (\Throwable $e) use ($staging, $names): CopyCompletedMsg {
+                ArchiveExtractor::discard($staging);
+                return new CopyCompletedMsg([], count($names), 0, 0, $e->getMessage());
+            };
+            return ArchiveExtractor::extractAsync($archive, $wanted, $staging)->then(
+                static function (array $stats) use ($staging, $names, $dst, $existed, $rel, $fail): \React\Promise\PromiseInterface {
+                    $map = [];
+                    $missing = 0;
+                    foreach ($names as $n) {
+                        $staged = $staging . '/' . $rel($n);
+                        if (file_exists($staged) || is_link($staged)) {
+                            $map[$staged] = Pane::join($dst, $n);
+                        } else {
+                            $missing++;
+                        }
+                    }
+                    return (new AsyncOps())->copyManyAsync($map)->then(
+                        static function (array $results) use ($staging, $map, $existed, $names, $missing, $stats): CopyCompletedMsg {
+                            ArchiveExtractor::discard($staging);
+                            $ok = array_filter($results, static fn($r): bool => $r === true);
+                            $reason = null;
+                            foreach ($results as $r) {
+                                if (is_string($r)) {
+                                    $reason = $r;
+                                    break;
+                                }
+                            }
+                            $okMap = [];
+                            $overwrote = 0;
+                            foreach ($ok as $staged => $_) {
+                                $okMap[$staged] = $map[$staged];
+                                if (isset($existed[basename($map[$staged])])) {
+                                    $overwrote++;
+                                }
+                            }
+                            return new CopyCompletedMsg($okMap, count($results) - count($ok) + $missing, $stats['skipped'], $overwrote, $reason);
+                        },
+                        $fail,
+                    );
+                },
+                $fail,
+            );
+        });
+        return [$pending, $cmd];
+    }
+
+    /**
      * CF-30 `a`: pin the active pane's directory. Idempotent - pinning a
      * directory twice says so instead of growing a duplicate. The store is
      * written through immediately (atomic), so a crash never loses a pin.
@@ -1223,6 +1379,31 @@ final class Manager implements Model
         return $this->mutate(['infoLines' => $lines, 'status' => '']);
     }
 
+    /**
+     * CF-33: enter an archive as a read-only virtual directory. Refusals
+     * are statuses (missing PHP extension, unreadable / over-limit
+     * archive) and leave the pane exactly where it was.
+     */
+    private function openArchive(Pane $pane, Entry $entry, string $full): self
+    {
+        $label = Entry::sanitizeName($entry->name);
+        $format = (string) Archive::format($entry->name);
+        $missing = Archive::missingExtension($format);
+        if ($missing !== null) {
+            return $this->withStatus(Lang::t('status.archive_needs_ext', ['name' => $label, 'ext' => $missing]));
+        }
+        $virtual = $full . Archive::SEP;
+        $opened = Pane::open($virtual, $this->lister, $pane->sort, $pane->showHidden);
+        if (!$opened->readable) {
+            return $this->withStatus(Lang::t('status.archive_unreadable', ['name' => $label]));
+        }
+        $hidden = Archive::hiddenCount($full);
+        $status = $hidden > 0
+            ? Lang::t('status.archive_browse_hidden', ['name' => $label, 'count' => $hidden])
+            : Lang::t('status.archive_browse', ['name' => $label]);
+        return $this->transition($pane, $opened)->withStatus($status);
+    }
+
     private function goUp(): self
     {
         $active = $this->activePane();
@@ -1234,7 +1415,10 @@ final class Manager implements Model
             return $this->withActivePane(fn(Pane $p) => $p->unreadable())
                 ->withStatus(Lang::t('status.unreadable', ['dir' => Entry::sanitizeName($parentPath)]));
         }
-        return $this->transition($active, $parent->cursorOnName(basename($active->cwd)));
+        // CF-33: leaving an archive's root lands on the archive file itself.
+        $split = Archive::split($active->cwd);
+        $leaving = $split !== null && $split[1] === '' ? basename($split[0]) : basename($active->cwd);
+        return $this->transition($active, $parent->cursorOnName($leaving));
     }
 
     private function cycleSort(): self
@@ -1427,7 +1611,9 @@ final class Manager implements Model
         // For copy, return an async Cmd; delete/move remain synchronous
         return match ($this->confirm) {
             ConfirmState::DeleteSelected => [$this->performDelete(), null],
-            ConfirmState::CopySelected => $this->performCopyAsync(),
+            ConfirmState::CopySelected => $this->pendingOpType === 'extract'
+                ? $this->performExtractAsync()
+                : $this->performCopyAsync(),
             ConfirmState::MoveSelected => [$this->performMove(), null],
             default => [$this->withConfirm(ConfirmState::None, Lang::t('status.cancelled'))
                 ->withInputBuffer(null), null],

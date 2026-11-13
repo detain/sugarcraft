@@ -37,6 +37,11 @@
         "react/event-loop": "^1.6",
         "react/promise": "^3.3"
     },
+    "suggest": {
+        "ext-zip": "Browse and extract .zip archives (CF-33)",
+        "ext-zlib": "Browse and extract .tar.gz / .tgz archives (CF-33)",
+        "ext-bz2": "Browse and extract .tar.bz2 / .tbz2 archives (CF-33)"
+    },
     "require-dev": {
         "phpunit/phpunit": "^10.5"
     },

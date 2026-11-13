@@ -118,9 +118,9 @@ naming `sugar-core`.
 | `↓` / `j`       | Move cursor down                                    |
 | `Home` / `g`    | Top of listing                                      |
 | `End` / `G`     | Bottom of listing                                   |
-| `Enter` / `→`   | Open: a directory navigates, a file launches `$EDITOR` (via the `VISUAL`/`EDITOR` chain; refused with a status when none resolves) |
+| `Enter` / `→`   | Open: a directory navigates, an archive (`.zip`, `.tar`, `.tar.gz`/`.tgz`, `.tar.bz2`/`.tbz2`) browses as a read-only directory (CF-33), any other file launches `$EDITOR` (via the `VISUAL`/`EDITOR` chain; refused with a status when none resolves) |
 | `l`             | Page the file under cursor through `$PAGER` (binary or > 32 MiB payloads are refused with a status); on a directory it opens — `l` is the right half of the vim diamond `h j k l` |
-| `x`             | Run the entry under cursor when it carries the exec bit (argv spawn — never a shell string) |
+| `x`             | Run the entry under cursor when it carries the exec bit (argv spawn — never a shell string). **Inside an archive view `x` extracts** the selection (or cursor entry; directories recurse) into the other pane through the copy confirm gate (CF-33) |
 | `←` / `h`       | Go up one directory                                 |
 | `Space`         | Toggle selection on the entry under cursor + advance|
 | `Ctrl+a`        | Select every listed entry (CF-31); the `..` sentinel is never marked |
@@ -198,6 +198,39 @@ contour and friends. `Ctrl+PgUp`/`Ctrl+PgDn` are the alternative on
 standard terminal emulators: there the Page keys report modified
 unambiguously — but tmux and browser terminals may intercept modified
 Page keys themselves.
+
+### Archives (CF-33)
+
+Enter (or `l`) on a `.zip`, `.tar`, `.tar.gz`/`.tgz` or `.tar.bz2`/`.tbz2` opens it
+as a **read-only virtual directory** — the header shows paths like
+`/home/me/pkg.zip!/docs`. Navigation, selection, search-free paging, `w`/`W`
+and the `1`–`9` tabs work as in any pane; `Left`/`h` at the archive root returns
+to the folder and parks the cursor on the archive file. Everything that would
+write — `d c m R N y Y p`, copying or moving INTO an archive pane, opening an
+entry in the editor/pager — is refused with the status `archive view is
+read-only — x extracts to the other pane`.
+
+`x` extracts the marked entries (or the one under the cursor; a directory pulls
+its whole subtree) into the other pane's directory behind the same y/n gate `c`
+uses, with the copy engine's overwrite announcement and in-flight accounting.
+Extraction runs on the event loop in 1 MiB slices into a private `0700` staging
+tree that the copy engine then places and that is removed on every exit, so a big
+archive never freezes the keyboard.
+
+Safety rules (enforced in `Support\Archive` / `ArchiveExtractor`, not trusted to
+a library): an entry name that is absolute, carries a drive letter or NUL, or
+contains a `..` segment (either slash flavour) is dropped from the listing and
+cannot be extracted (zip-slip); symlinks, hard links, devices and encrypted zip
+records are never listed or created, and the entry greeting counts what was
+hidden; files are written `0644` / dirs `0755` whatever the archive says (no
+setuid survives); and two bomb ceilings apply — a compressed tar may expand to at
+most 256 MiB while being indexed, and one extraction may write at most 512 MiB
+(counted over bytes actually written, never the header's claim) or the whole
+batch is rejected, as is an archive of more than 50 000 records. Tar parsing is
+in-process (`Support\TarReader`: ustar prefix, GNU long names, pax paths,
+checksums verified, truncation detected). `.zip` needs `ext-zip`, `.tar.gz`
+`ext-zlib`, `.tar.bz2` `ext-bz2` (all `suggest`ed in `composer.json`); without
+the extension the status names the one that is missing.
 
 ## Behavior and limits
 
@@ -363,12 +396,16 @@ reads through `FsLister`.
 | `Lang`              | i18n wrapper over the `lang/*.php` catalogues (16 locales) consumed by Manager/Renderer strings |
 | `Support\Version`   | `--version` build-stamp resolution — the phar archive's own stamp wins when launched from a stamped phar; a source checkout reports `dev-master` |
 | `Support\Home`      | Launcher home-directory cascade (CF-18) — POSIX `HOME`, then Windows `USERPROFILE`, then `HOMEDRIVE`+`HOMEPATH`, `/` last |
+| `Support\Archive`   | Archive format detection, `a.zip!/inner` virtual paths, the safe-name normaliser and the cached read-only index (CF-33) |
+| `Support\ArchiveExtractor` | Loop-sliced extraction into a private staging tree with the bomb meter (CF-33) |
+| `Support\TarReader` | Forward-only ustar/GNU/pax tar reader over plain or compress.zlib/bzip2 streams (CF-33) |
+| `Support\Bookmarks` | Atomic JSON bookmark store under `$XDG_DATA_HOME` (CF-30) |
 | `ManagerBuilder`    | Fluent builder for `Manager` — avoids 26-argument positional construction   |
 | `Msg/CopyCompletedMsg` | Async-copy completion Msg dispatched by the Program into `Manager::update()` |
 
 ## Test plan
 
-- 504 tests / 8550 assertions — this pair is hand-typed: candy-files runs its
+- 542 tests / 9121 assertions — this pair is hand-typed: candy-files runs its
   suite lib-local and its totals are not part of the repository-wide pinned
   count, so re-derive them by running `vendor/bin/phpunit` in this directory
   whenever tests change.

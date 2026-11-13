@@ -4,10 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Files\Tests;
 
-use React\EventLoop\Loop;
-use SugarCraft\Core\AsyncCmd;
 use SugarCraft\Core\KeyType;
-use SugarCraft\Core\Msg;
 use SugarCraft\Files\ConfirmState;
 use SugarCraft\Files\Manager;
 use SugarCraft\Files\Tests\Support\FsTestCase;
@@ -35,24 +32,6 @@ final class ManagerYankTest extends FsTestCase
     private function mgr(): Manager
     {
         return Manager::start($this->src, $this->dst, \SugarCraft\Files\FsLister::lister());
-    }
-
-    /** Drive a scheduled async copy to completion; the Manager that absorbed its CopyCompletedMsg. */
-    private function settle(Manager $pending, ?\Closure $cmd): Manager
-    {
-        if ($cmd === null) {
-            return $pending;
-        }
-        $async = $cmd();
-        $this->assertInstanceOf(AsyncCmd::class, $async);
-        $final = $pending;
-        $async->promise->then(function (?Msg $resolved) use ($pending, &$final): void {
-            if ($resolved !== null) {
-                [$final] = $pending->update($resolved);
-            }
-        });
-        Loop::run();
-        return $final;
     }
 
     public function testYankStagesWithoutTouchingTheFilesystem(): void

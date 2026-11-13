@@ -66,6 +66,24 @@ abstract class FsTestCase extends TestCase
         return $m;
     }
 
+    /** Drive a scheduled async Cmd to completion; the Manager that absorbed its Msg. */
+    protected function settle(Manager $pending, ?\Closure $cmd): Manager
+    {
+        if ($cmd === null) {
+            return $pending;
+        }
+        $async = $cmd();
+        $this->assertInstanceOf(\SugarCraft\Core\AsyncCmd::class, $async);
+        $final = $pending;
+        $async->promise->then(function (?\SugarCraft\Core\Msg $resolved) use ($pending, &$final): void {
+            if ($resolved !== null) {
+                [$final] = $pending->update($resolved);
+            }
+        });
+        \React\EventLoop\Loop::run();
+        return $final;
+    }
+
     protected function cursorOn(Manager $m, string $name): Manager
     {
         for ($i = 0, $n = count($m->activePane()->entries); $i < $n; $i++) {
