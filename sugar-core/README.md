@@ -248,6 +248,17 @@ library's full surface.
 | `MSYSTEM` | `Util\Tty\EnvDetect` (MSYS2 id) | not MSYS2 |
 | `MINTTY_SHORTCUT` | `Util\Tty\EnvDetect` (mintty id) | not mintty by this signal |
 | `OSTYPE` | `Util\Tty\EnvDetect` (`cygwin` id) | not Cygwin |
+
+**`ColorProfile::detect()` delegation (CP-22).** `sugar-colorprofile` is the
+colour-detection SSOT. When it is installed, `Util\ColorProfile::detect()`
+delegates to its `DetectionChain` (guarded by `class_exists`, no `require`
+cycle; `sugar-colorprofile` is a `suggest`). Without it the local ladder
+remains as the legacy fallback and the `Util\ColorProfile` enum is
+`@deprecated`. The answers differ deliberately in three corners:
+`TERM=dumb` on a non-TTY is `Ascii` (was `NoTty`), `FORCE_COLOR=1` is `Ansi`
+(was `TrueColor`), and `CI=true` without `TERM` is `Ascii` (was `Ansi`).
+`SugarCraft\Colorprofile\ColorProfile::fromCore()` / `toCore()` bridge the
+two enums. Tests that depend on an answer must pin the env explicitly.
 | `PATH` | `Util\Executable\Locator` (the search path `locate()` walks, after any `$extraPath` argument) | empty — nothing is found unless the caller passed `$extraPath` |
 | `PATHEXT` | `Util\Executable\Locator` (Windows extensions; POSIX never reads it) | `DEFAULT_WINDOWS_EXTENSIONS` = `.COM`, `.EXE`, `.BAT`, `.CMD` |
 | `COLUMNS` | `Util\Tty\PosixBackend` (size fallback when stdout is not a tty) | ignored (read as 0) — next fallback wins |
