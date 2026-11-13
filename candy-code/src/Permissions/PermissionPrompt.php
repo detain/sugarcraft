@@ -650,12 +650,17 @@ final class PermissionPrompt
 
         // Roadmap 5.14a: the agent is now waiting on the user, which is the
         // other moment the `notify` setting rings for.
-        return new ArmedPrompt($msg, $deferred, 'candy-code: ' . Lang::t('chat.notify.awaiting_approval', [
-            'tool' => $msg->toolCall->name,
-            'origin' => $origin === null ? '' : Lang::t('chat.notify.awaiting_approval_origin', [
+        // Two whole-sentence keys chosen here, not a joiner fragment appended
+        // to a base: a translator who trims the fragment's leading space (or
+        // writes a full-width paren) can no longer glue the origin to the tool.
+        $notice = $origin === null
+            ? Lang::t('chat.notify.awaiting_approval', ['tool' => $msg->toolCall->name])
+            : Lang::t('chat.notify.awaiting_approval_origin_attached', [
+                'tool' => $msg->toolCall->name,
                 'agent' => $origin->name !== '' ? $origin->name : $origin->id,
-            ]),
-        ]));
+            ]);
+
+        return new ArmedPrompt($msg, $deferred, 'candy-code: ' . $notice);
     }
 
     /**

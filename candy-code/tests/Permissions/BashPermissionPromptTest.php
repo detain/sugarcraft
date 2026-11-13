@@ -293,6 +293,57 @@ final class BashPermissionPromptTest extends TestCase
         self::assertStringContainsString('always allow Bash(git log *)', $out);
     }
 
+    /**
+     * S-T07: the sub-agent origin rides its own whole-sentence key. The rendered
+     * notification is byte-identical to the old base+joiner composition.
+     */
+    public function testASubAgentsAskRingsTheWholeSentenceOriginNotification(): void
+    {
+        $inbox = new \ArrayObject();
+        $chat = (new Chat(
+            history: [Message::user('audit'), Message::toolRunning(new ToolCall('Task', [], 'call_1'))],
+            backend: new EchoBackend(),
+            inFlight: true,
+            generation: self::GENERATION,
+            liveToolEvents: $inbox,
+            workspace: \SugarCraft\Code\Host\WorkspaceContext::new(root: sys_get_temp_dir(), userConfig: ['notify' => 'osc9']),
+        ))->withSize(100, 40);
+        $chat->agentLive()->apply(new SubAgentActivity(
+            SubAgentActivity::OP_STARTED,
+            'run-2',
+            'explore',
+            'look at the session layer',
+            1,
+            '',
+            parentCallId: 'call_1',
+            description: 'look at the session layer',
+        ));
+        $inbox[] = [self::GENERATION, new PermissionAsked(self::pendingAsk('inner_1', self::bash('git log', 'c'), null, new AskOrigin('run-2', 'explore', 'call_1')))];
+
+        [, $cmd] = $chat->update(new ToolEventPumpMsg());
+
+        $collect = static function (?\Closure $c) use (&$collect): array {
+            if ($c === null) {
+                return [];
+            }
+            $m = $c();
+            if ($m instanceof BatchMsg) {
+                $out = [];
+                foreach ($m->cmds as $inner) {
+                    $out = [...$out, ...$collect($inner)];
+                }
+
+                return $out;
+            }
+
+            return $m instanceof \SugarCraft\Core\RawMsg ? [$m->bytes] : [];
+        };
+        self::assertSame(
+            ["\x1b]9;candy-code: waiting for approval: Bash (sub-agent explore)\x07"],
+            $collect($cmd),
+        );
+    }
+
     /** Chat's own tool path remembers the same scope the engine path does. */
     public function testChatsOwnToolPathShowsTheCommandAndTheEnginesScope(): void
     {
