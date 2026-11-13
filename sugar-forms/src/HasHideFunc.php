@@ -38,6 +38,12 @@ trait HasHideFunc
         return $clone;
     }
 
+    /** Short-form alias of {@see withHideFunc()} (SF-44 alias grid). */
+    public function hideFunc(?\Closure $fn): static
+    {
+        return $this->withHideFunc($fn);
+    }
+
     /** @param array<string,mixed> $values */
     public function isHidden(array $values): bool
     {

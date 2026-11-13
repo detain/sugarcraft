@@ -51,6 +51,12 @@ trait HasDynamicLabels
         return $clone;
     }
 
+    /** Short-form alias of {@see withTitleFunc()} (SF-44 alias grid). */
+    public function titleFunc(?\Closure $fn): static
+    {
+        return $this->withTitleFunc($fn);
+    }
+
     /**
      * @param ?\Closure(): string $fn  invoked at render time; null clears
      * @return static
@@ -60,6 +66,12 @@ trait HasDynamicLabels
         $clone = clone $this;
         $clone->descriptionFunc = $fn;
         return $clone;
+    }
+
+    /** Short-form alias of {@see withDescriptionFunc()} (SF-44 alias grid). */
+    public function descriptionFunc(?\Closure $fn): static
+    {
+        return $this->withDescriptionFunc($fn);
     }
 
     /**

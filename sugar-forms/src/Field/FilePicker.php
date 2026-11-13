@@ -78,6 +78,9 @@ final class FilePicker implements \SugarCraft\Forms\Field, \SugarCraft\Forms\Hyd
     public function key(): string  { return $this->key; }
     public function value(): mixed { return $this->picker->selected(); }
 
+    /** Selected path (the {@see self::value()} read under its domain name). */
+    public function path(): ?string { return $this->picker->selected(); }
+
     public function focus(): array
     {
         [$p, $cmd] = $this->picker->focus();

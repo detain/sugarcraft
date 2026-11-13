@@ -124,7 +124,11 @@ $form = Form::new(
 > (`title`, `desc`, `placeholder`, `width`, `height`, `validator`, `options`,
 > `min`, `max`, …): the short form delegates to the long `with*` name
 > (`withTitle`, `withDescription`, …). Pick whichever reads better at the
-> call site.
+> call site. The grid is enforced by `tests/ShortAliasMatrixTest.php`: every
+> public `with*` knob has its short form or a dated exemption (a name squatted
+> by the field's `value()` read, or an `@internal` wiring channel). The three
+> picker fields construct identically: `Select::new($key, 'a', 'b')`,
+> `MultiSelect::new($key, ['a', 'b'])`, `RadioPills::new($key, 'a', 'b')`.
 
 ### Field types
 

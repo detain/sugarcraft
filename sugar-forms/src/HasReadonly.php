@@ -64,6 +64,16 @@ trait HasReadonly
         return $clone;
     }
 
+    /**
+     * Short-form alias of {@see withReadonly()} (SF-44 alias grid). The
+     * reserved word is legal as a method name since PHP 7.0 and the read
+     * keeps {@see isReadonly()} — no squat to route around.
+     */
+    public function readonly(bool $on = true): static
+    {
+        return $this->withReadonly($on);
+    }
+
     /** True while the field refuses mutating input. */
     public function isReadonly(): bool
     {

@@ -107,11 +107,20 @@ final class Select implements \SugarCraft\Forms\Field, \SugarCraft\Forms\Hydrata
         $this->asyncSuggestionsFetchTimeoutSeconds = $asyncSuggestionsFetchTimeoutSeconds;
     }
 
-    public static function new(string $key): self
+    /**
+     * @param array<string>|string ...$options RadioPills-shaped options: one
+     *                                         list or bare strings (SF-44
+     *                                         copy-paste parity across the
+     *                                         three picker fields)
+     */
+    public static function new(string $key, array|string ...$options): self
     {
+        $flat = count($options) === 1 && is_array($options[0]) ? array_values($options[0]) : array_map(strval(...), $options);
+        $items = array_map(static fn(string $o) => new StringItem($o), $flat);
+
         return new self(
             key:                       $key,
-            list:                      ItemList::new([], 60, 5)->withShowDescription(false),
+            list:                      ItemList::new($items, 60, 5)->withShowDescription(false),
             title:                     '',
             description:               '',
             fuzzyCandidates:           [],
@@ -275,6 +284,9 @@ final class Select implements \SugarCraft\Forms\Field, \SugarCraft\Forms\Hydrata
     public function options(string ...$options): self    { return $this->withOptions(...$options); }
     public function fuzzy(array $candidates): self         { return $this->withFuzzySuggestions($candidates); }
     public function enum(string $enumClass): self         { return $this->withEnum($enumClass); }
+    public function selected(string $v): self               { return $this->withSelected($v); }
+    public function selectedIndex(int $index): self         { return $this->withSelectedIndex($index); }
+    public function visibleLines(int $lines): self          { return $this->withVisibleLines($lines); }
 
     /**
      * Attach the cancellation source of a NEWLY scheduled async fetch. The

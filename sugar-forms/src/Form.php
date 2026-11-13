@@ -322,6 +322,10 @@ final class Form implements Model
     public function width(int $cells): self        { return $this->withWidth($cells); }
     public function height(int $rows): self        { return $this->withHeight($rows); }
     public function timeout(int $ms): self         { return $this->withTimeout($ms); }
+    public function keyMap(?KeyMap $keyMap): self  { return $this->withKeyMap($keyMap); }
+    /** @param list<Constraint>|null $constraints */
+    public function constraints(?array $constraints): self { return $this->withConstraints($constraints); }
+    public function focus(string $key): self          { return $this->withFocus($key); }
 
     /** Configured timeout in milliseconds; 0 means none. */
     public function timeoutMs(): int { return $this->timeoutMs; }

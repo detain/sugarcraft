@@ -137,6 +137,7 @@ final class Text implements \SugarCraft\Forms\Field, \SugarCraft\Forms\AsyncVali
     public function height(int $h): self          { return $this->withHeight($h); }
     public function validator(\Closure $fn): self { return $this->withValidator($fn); }
     public function validation(callable $predicate, string $errorMessage): self { return $this->withValidation($predicate, $errorMessage); }
+    public function validateOn(ValidateOn $when): self { return $this->withValidateOn($when); }
 
     public function key(): string  { return $this->key; }
     public function value(): mixed { return $this->area->value(); }

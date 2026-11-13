@@ -177,6 +177,9 @@ final class Input implements \SugarCraft\Forms\Field, \SugarCraft\Forms\AsyncVal
     public function email(): self { return $this->withValidator(new \SugarCraft\Forms\Validator\Email()); }
     public function minlength(int $n): self { return $this->withValidator(new \SugarCraft\Forms\Validator\MinLength($n)); }
     public function maxlength(int $n): self { return $this->withValidator(new \SugarCraft\Forms\Validator\MaxLength($n)); }
+    public function passwordMask(?string $pattern, string $echoChar = '*'): self { return $this->withPasswordMask($pattern, $echoChar); }
+    public function suggestionsFunc(\Closure $fn): self { return $this->withSuggestionsFunc($fn); }
+    public function validateOn(ValidateOn $when): self { return $this->withValidateOn($when); }
 
     /**
      * Attach the cancellation source of a NEWLY scheduled async fetch. The

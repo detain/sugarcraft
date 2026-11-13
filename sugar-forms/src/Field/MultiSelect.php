@@ -60,11 +60,19 @@ final class MultiSelect implements \SugarCraft\Forms\Field, \SugarCraft\Forms\Hy
         public readonly int $width = 0,
     ) {}
 
-    public static function new(string $key): self
+    /**
+     * @param array<string>|string ...$options RadioPills-shaped options: one
+     *                                         list or bare strings (SF-44
+     *                                         copy-paste parity across the
+     *                                         three picker fields)
+     */
+    public static function new(string $key, array|string ...$options): self
     {
+        $flat = count($options) === 1 && is_array($options[0]) ? array_values($options[0]) : array_map(strval(...), $options);
+
         return new self(
             key: $key,
-            options: [],
+            options: $flat,
             selected: [],
             cursor: 0,
             focused: false,
@@ -138,6 +146,7 @@ final class MultiSelect implements \SugarCraft\Forms\Field, \SugarCraft\Forms\Hy
     public function title(string $t): self                { return $this->withTitle($t); }
     public function desc(string $d): self                 { return $this->withDescription($d); }
     public function options(string ...$options): self    { return $this->withOptions(...$options); }
+    public function width(int $w): self              { return $this->withWidth($w); }
     public function min(int $n): self                     { return $this->withMin($n); }
     public function max(int $n): self                     { return $this->withMax($n); }
     public function limit(int $n): self                   { return $this->withLimit($n); }
