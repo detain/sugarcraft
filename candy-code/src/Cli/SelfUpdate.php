@@ -113,9 +113,60 @@ final class SelfUpdate
     public static function engine(?string $publicKey = null): LibSelfUpdate
     {
         return LibSelfUpdate::new(self::source($publicKey))
-            ->withTranslator(static fn(string $key, array $params = []): string => Lang::t('cli.' . $key, $params))
+            ->withTranslator(static fn(string $key, array $params = []): string => self::translate($key, $params))
             ->withWindows(WindowsShell::isWindows())
             ->withSwapLauncher(static fn(int $parentPid, string $new, string $phar): bool => WindowsSwap::launch($parentPid, $new, $phar));
+    }
+
+    /**
+     * The engine's translator: every library key maps to a LITERAL
+     * `Lang::t()` call on a full `cli.selfupdate.*` key so the static catalogue scanners (which cannot
+     * see a concatenated key) keep proving each key is both used and defined.
+     *
+     * @param array<string, mixed> $params
+     */
+    public static function translate(string $key, array $params = []): string
+    {
+        return match ($key) {
+            'selfupdate.channel_invalid' => Lang::t('cli.selfupdate.channel_invalid', $params),
+            'selfupdate.check_available' => Lang::t('cli.selfupdate.check_available', $params),
+            'selfupdate.check_unknown' => Lang::t('cli.selfupdate.check_unknown', $params),
+            'selfupdate.check_up_to_date' => Lang::t('cli.selfupdate.check_up_to_date', $params),
+            'selfupdate.composer_mode' => Lang::t('cli.selfupdate.composer_mode', $params),
+            'selfupdate.composer_mode_root' => Lang::t('cli.selfupdate.composer_mode_root', $params),
+            'selfupdate.dir_not_writable' => Lang::t('cli.selfupdate.dir_not_writable', $params),
+            'selfupdate.downgrade_refused' => Lang::t('cli.selfupdate.downgrade_refused', $params),
+            'selfupdate.download_failed' => Lang::t('cli.selfupdate.download_failed', $params),
+            'selfupdate.empty_download' => Lang::t('cli.selfupdate.empty_download', $params),
+            'selfupdate.fetch_failed' => Lang::t('cli.selfupdate.fetch_failed', $params),
+            'selfupdate.flags_exclusive' => Lang::t('cli.selfupdate.flags_exclusive', $params),
+            'selfupdate.hash_mismatch' => Lang::t('cli.selfupdate.hash_mismatch', $params),
+            'selfupdate.hash_unreadable' => Lang::t('cli.selfupdate.hash_unreadable', $params),
+            'selfupdate.installed' => Lang::t('cli.selfupdate.installed', $params),
+            'selfupdate.no_dev_release' => Lang::t('cli.selfupdate.no_dev_release', $params),
+            'selfupdate.no_release' => Lang::t('cli.selfupdate.no_release', $params),
+            'selfupdate.phar_not_writable' => Lang::t('cli.selfupdate.phar_not_writable', $params),
+            'selfupdate.preserve_failed' => Lang::t('cli.selfupdate.preserve_failed', $params),
+            'selfupdate.rename_failed' => Lang::t('cli.selfupdate.rename_failed', $params),
+            'selfupdate.rollback_failed' => Lang::t('cli.selfupdate.rollback_failed', $params),
+            'selfupdate.rollback_missing' => Lang::t('cli.selfupdate.rollback_missing', $params),
+            'selfupdate.rollback_restored' => Lang::t('cli.selfupdate.rollback_restored', $params),
+            'selfupdate.sidecar_malformed' => Lang::t('cli.selfupdate.sidecar_malformed', $params),
+            'selfupdate.sidecar_names' => Lang::t('cli.selfupdate.sidecar_names', $params),
+            'selfupdate.sig.deprecated' => Lang::t('cli.selfupdate.sig.deprecated', $params),
+            'selfupdate.sig.sidecar_invalid' => Lang::t('cli.selfupdate.sig.sidecar_invalid', $params),
+            'selfupdate.signature_invalid' => Lang::t('cli.selfupdate.signature_invalid', $params),
+            'selfupdate.signature_missing' => Lang::t('cli.selfupdate.signature_missing', $params),
+            'selfupdate.staged_windows' => Lang::t('cli.selfupdate.staged_windows', $params),
+            'selfupdate.swap_leftover' => Lang::t('cli.selfupdate.swap_leftover', $params),
+            'selfupdate.swap_spawn_failed' => Lang::t('cli.selfupdate.swap_spawn_failed', $params),
+            'selfupdate.uncomparable' => Lang::t('cli.selfupdate.uncomparable', $params),
+            'selfupdate.unexpected_operand' => Lang::t('cli.selfupdate.unexpected_operand', $params),
+            'selfupdate.unsigned_allowed' => Lang::t('cli.selfupdate.unsigned_allowed', $params),
+            'selfupdate.up_to_date' => Lang::t('cli.selfupdate.up_to_date', $params),
+            'selfupdate.usage' => Lang::t('cli.selfupdate.usage', $params),
+            default => $key,
+        };
     }
 
     public static function run(
@@ -137,7 +188,7 @@ final class SelfUpdate
         $problem = $options->validate();
         if ($problem !== null) {
             return NonInteractive::failUsage(
-                'candy-code: ' . Lang::t('cli.' . $problem[0], $problem[1]),
+                'candy-code: ' . self::translate($problem[0], $problem[1]),
                 $args->outputFormat,
                 Lang::t('cli.selfupdate.usage'),
             );

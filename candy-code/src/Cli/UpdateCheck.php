@@ -146,7 +146,10 @@ final class UpdateCheck
                 ->withNow($now)
                 ->withFetcher($fetcher)
                 ->withOptOutEnv(self::UPDATE_CHECK_OPT_OUT_ENV)
-                ->withTranslator(static fn(string $key, array $params = []): string => Lang::t('startup.' . $key, $params))
+                ->withTranslator(static fn(string $key, array $params = []): string => match ($key) {
+                    'update.available' => Lang::t('startup.update.available', $params),
+                    default => $key,
+                })
                 ->withLogger(static function (string $message): void {
                     if (self::$loggedOnce) {
                         return;
