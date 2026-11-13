@@ -11,7 +11,9 @@ namespace SugarCraft\AnsiParser\Parser;
  * sugar-vterm), a debug logger ({@see DebugHandler}), or a unit-test
  * mock for any sub-handler.
  *
- * Mirrors charmbracelet/x/ansi.Handler
+ * The upstream antecedent — charmbracelet/x/ansi.Handler — is a STRUCT of
+ * function fields, not an interface; this is the interface-ized shape
+ * (finding sugar-ansi-parser-004, cite re-pointed).
  */
 interface Handler
 {

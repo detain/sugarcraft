@@ -26,7 +26,10 @@ namespace SugarCraft\AnsiParser\Parser;
  * consume (the SCO-gated `CSI ? s/u` discard is considered consumed —
  * forwarding it would re-open the cursor-teleport defect gated below).
  *
- * Mirrors charmbracelet/x/ansi.HandlerAdapter
+ * Cite honesty (finding sugar-ansi-parser-004): lib-original. Upstream
+ * charmbracelet/x/ansi routes parse events through handler FUNCTION FIELDS
+ * and ships no `HandlerAdapter` class — the sieve + `$fallback` design above
+ * is ours, not a mirror.
  */
 final class HandlerAdapter implements BulkPrintHandler
 {

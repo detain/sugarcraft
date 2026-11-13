@@ -9,7 +9,9 @@ namespace SugarCraft\AnsiParser\Parser;
  *
  * Stores the window title and the currently-active OSC 8 hyperlink.
  *
- * Mirrors charmbracelet/x/ansi.OscHandler
+ * No upstream class mirrors this one (finding 004): it is a lib-original
+ * ready-made {@see OscHandler} implementation, here as the storage leg of
+ * the vcr/renderer wiring.
  */
 final class OscHandlerImpl implements OscHandler
 {

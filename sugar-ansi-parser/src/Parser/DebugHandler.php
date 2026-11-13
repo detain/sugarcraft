@@ -14,7 +14,8 @@ namespace SugarCraft\AnsiParser\Parser;
  * long-lived program fed by an untrusted stream. Never install this handler
  * on a production parser; snapshot and clear `$log` between turns at most.
  *
- * Mirrors charmbracelet/x/ansi.DebugHandler
+ * Lib-original (finding 004) — charmbracelet ships no DebugHandler; this is
+ * the full-shape showcase for the 7-method {@see Handler} interface.
  */
 final class DebugHandler implements Handler
 {

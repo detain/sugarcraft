@@ -12,8 +12,13 @@ namespace SugarCraft\AnsiParser\Parser;
  * sequence split across two `feed()` calls resumes at the correct state
  * on the second call.
  *
- * Mirrors charmbracelet/x/ansi/parser. Adds a Utf8 state so multi-byte
- * runes arrive at the handler as a single `printChar(string $rune)` call.
+ * Mirrors charmbracelet/x/ansi/parser — the Utf8 STATE is upstream's own
+ * table tweak (Transitions' header lists it under "same tweaks", and that
+ * attribution is correct, finding sugar-ansi-parser-027). What is
+ * lib-original here is the handler-facing BEHAVIOUR: completed runes arrive
+ * as a single `printChar(string $rune)` call, and CAN/SUB inside a string
+ * state dispatch the payload collected so far before aborting (the fidelity
+ * note at the Transitions rows credits it).
  *
  * UTF-8 policy: by default the parser does NOT validate UTF-8 — every
  * structurally-completed rune byte sequence is forwarded verbatim (overlong,
@@ -62,7 +67,10 @@ final class Parser
      * opt into {@see SubparamsAwareHandler} and have the parser push them in
      * immediately before each parameterised dispatch.
      *
-     * Mirrors charmbracelet/x/ansi `Param.HasMore` / `Params.HasMore(i)`.
+     * Conceptual mirror of charmbracelet/x/ansi `Param.HasMore()` and the
+     * free `parser.HasMore` helper in ansi/parser/seq.go (finding 026: there
+     * is no `Params.HasMore(i)` list method upstream — the old cite spelled a
+     * symbol that does not exist).
      *
      * @var list<bool>
      */

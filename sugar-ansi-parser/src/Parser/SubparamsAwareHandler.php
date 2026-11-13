@@ -50,9 +50,12 @@ namespace SugarCraft\AnsiParser\Parser;
  * would be an illegal state the signature fails to express, and the parser's
  * `instanceof` check on a `Handler` is identical either way.
  *
- * Mirrors the shape of charmbracelet/x/ansi `Params.HasMore(i)` consumers, where
- * the parameter list carries its own continuation flags instead of requiring
- * callers to consult the parser.
+ * Conceptually mirrors charmbracelet/x/ansi's continuation-flag consumers —
+ * `Param.HasMore()` on a single param and the free `parser.HasMore` helper
+ * in ansi/parser/seq.go (finding 026: the old cite's `Params.HasMore(i)`
+ * spelled a list-level method that does not exist upstream) — where the
+ * parameter carries its own continuation flags instead of requiring callers
+ * to consult the parser.
  *
  * ## Two live routes: push (opt-in) and pull (parser owners)
  *

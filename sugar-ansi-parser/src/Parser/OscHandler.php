@@ -15,7 +15,9 @@ namespace SugarCraft\AnsiParser\Parser;
  * including the empty-URI close path that resets both fields. sugar-vterm
  * carries its own implementer on the emulator side.
  *
- * Mirrors charmbracelet/x/ansi.OscHandler
+ * Loosely modeled on charmbracelet/x/vt's per-OSC function types — those are
+ * struct fields there, not interfaces (finding 004); the interface shape and
+ * this library's implementations are lib-original.
  */
 interface OscHandler
 {

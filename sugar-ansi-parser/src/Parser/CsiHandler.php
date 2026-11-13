@@ -12,7 +12,9 @@ namespace SugarCraft\AnsiParser\Parser;
  * representation. Implementations translate completed CSI sequences
  * into state mutations appropriate for their context.
  *
- * Mirrors charmbracelet/x/ansi.CsiHandler
+ * Loosely modeled on charmbracelet/x/vt's per-final single-value function
+ * types — those are struct fields there, not interfaces (finding 004); the
+ * typed-method interface shape is lib-original.
  */
 interface CsiHandler
 {
