@@ -131,7 +131,7 @@ final class GeometryAndTerminalStateTest extends TestCase
         self::assertNull($cmd);
         self::assertInstanceOf(PagerModel::class, $next);
         self::assertSame(150, $next->viewport->width);
-        self::assertSame(50, $next->viewport->height);
+        self::assertSame(49, $next->viewport->height, 'scriptui-20: the resize re-fit keeps the footer reservation');
         self::assertFalse($next->isExited());
 
         // Already-sized model keeps identity (no repaint churn per tick).
