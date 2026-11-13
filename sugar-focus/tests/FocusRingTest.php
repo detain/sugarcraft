@@ -220,6 +220,17 @@ final class FocusRingTest extends TestCase
         self::assertFalse($ring->has('c'));
     }
 
+    public function testEmptyRingSentinelsAnswerNoForTheEmptyStringId(): void
+    {
+        // "" is a legal id elsewhere in the API, so the membership pair must
+        // answer honestly for it on a ring that never registered one, instead
+        // of aliasing "not provided" semantics onto the sentinel.
+        $ring = FocusRing::new();
+
+        self::assertFalse($ring->has(''));
+        self::assertFalse($ring->isFocused(''));
+    }
+
     public function testPreviousFromFirstRegionOnTwoElementRingWraps(): void
     {
         $ring = FocusRing::of('a', 'b'); // index 0
@@ -1073,6 +1084,22 @@ final class FocusRingTest extends TestCase
         self::assertSame('d', $ring->current(), 'the landing did not strand traversal');
     }
 
+    /**
+     * Trap pin (SF-05): reorder remaps focus BY ID, so a parked focus on a
+     * disabled region survives the remap still parked. Anyone "tidying" the
+     * remap to route through the enabled wall would silently teleport parked
+     * focus — that refactor must redden this pin rather than slip through on
+     * green neighbours.
+     */
+    public function testReorderKeepsAParkedFocusParkedOnItsDisabledSurvivor(): void
+    {
+        $ring = FocusRing::of('a', 'b', 'c')->focus('b')->disable('b')->reorder('b', 'c', 'a');
+
+        self::assertSame('b', $ring->current(), 'the by-id remap ignores the enabled set: parked focus stays put');
+        self::assertNull($ring->enabledIndex());
+        self::assertCacheConsistent($ring);
+    }
+
     // ─── reorder() no-op identity on an empty ring ─────────────────────────
 
     public function testReorderOnEmptyRingIsIdentity(): void
@@ -1125,6 +1152,36 @@ final class FocusRingTest extends TestCase
 
         $unknown = FocusRing::restore(['ids' => ['a', 'b'], 'focused' => 'gone', 'index' => 1]);
         self::assertSame('a', $unknown->current(), 'an unknown focused id degrades to the first region, not the stale index');
+    }
+
+    /**
+     * The focus leg is gated on is_string() BEFORE the lookup, so any
+     * non-string value — including ones PHP might loose-match against a
+     * string id such as "1" — is ignored and the positional leg decides.
+     */
+    public function testRestoreIgnoresNonStringFocusedLegs(): void
+    {
+        $object = new \stdClass();
+
+        foreach ([1, 0, true, false, 2.5, [], $object] as $focused) {
+            $ring = FocusRing::restore(['ids' => ['1', 'a'], 'focused' => $focused, 'index' => 1]);
+
+            self::assertSame(
+                'a',
+                $ring->current(),
+                'non-string focus (' . get_debug_type($focused) . ') must fall through to the index leg',
+            );
+        }
+    }
+
+    public function testRestoreIntOneDoesNotLooseMatchStringOneId(): void
+    {
+        // The discriminating shape: string "1" IS a member of the id list, so
+        // only a strict gate — never a loose comparison — keeps int 1 from
+        // selecting it.
+        $ring = FocusRing::restore(['ids' => ['1', 'a'], 'focused' => 1, 'index' => 1]);
+
+        self::assertSame('a', $ring->current());
     }
 
     public function testRestoreRestoresAParkedFocus(): void
