@@ -60,6 +60,12 @@ LF  C0 LF (line feed)
 A saved capture works exactly like a pipe: pass the file as the argument and the
 same report comes out.
 
+Every transcript above is byte-exact and safe to scroll: the display column
+prints named tokens (`BEL`, `LF`, `ESC`) wherever a raw control byte was sent,
+so the samples diff cleanly against `od` output and no sequence in a captured
+file can beep, retitle your window, or move your cursor while you read the
+report.
+
 A pipe is reported live: stdin is read chunk by chunk and each segment's line is
 written as soon as the sequence completes, so `tail -f log | candy-ansi-inspect`
 emits per sequence instead of waiting for the writer to close — and the bytes of
@@ -122,12 +128,31 @@ use SugarCraft\AnsiInspect\Inspector;
 foreach (Inspector::parse("\e[1;31mboom\e[0m") as $segment) {
     echo $segment->describe(), "\n";
 }
+```
 
-// One-shot report:
-echo Inspector::report($capturedTerminalOutput);
+```text
+ESC[1;31m  SGR bold, foreground red
+boom
+ESC[0m  SGR reset
+```
 
-// Machine-readable report: a JSON array of {type, content, description}:
-echo Inspector::reportAsJson($capturedTerminalOutput);
+`report()` renders exactly those lines as one string — the same text the
+CLI prints:
+
+```php
+echo Inspector::report("\e[1;31mboom\e[0m");   // the three lines above
+```
+
+`reportAsJson()` is the machine-readable view: one object per segment with
+`type` (`sequence` or `text`), raw `content` bytes, and the `description`:
+
+```php
+echo Inspector::reportAsJson("\e[1;31mboom");  // pretty JSON:
+```
+
+```text
+{ "type": "sequence", "content": "\u001b[1;31m", "description": "ESC[1;31m  SGR bold, foreground red" },
+{ "type": "text",     "content": "boom",         "description": "boom" }
 ```
 
 For incremental sources — reading a log or a live pipe chunk by chunk —
@@ -139,15 +164,22 @@ sequence still arrives as its own segment:
 ```php
 use SugarCraft\AnsiInspect\StreamingInspector;
 
+$handle = popen('printf "a\\e[31" | ', 'r');    // any byte source works
 $streaming = new StreamingInspector();
-while (($chunk = fread($handle, 8192)) !== false) {
-    foreach ($streaming->feed($chunk) as $segment) {
-        echo $segment->describe(), "\n";
-    }
+while (!feof($handle)) {                        // feof, not `!== false`:
+    foreach ($streaming->feed((string) fread($handle, 8192)) as $segment) {
+        echo $segment->describe(), "\n";        //   fread returns "" at EOF
+    }                                           // 'a' arrives as its run ends
 }
 foreach ($streaming->finish() as $segment) {
-    echo $segment->describe(), "\n";
+    echo $segment->describe(), "\n";            // the dangling ESC[31 arrives here
 }
+pclose($handle);
+```
+
+```text
+a
+ESC[31  truncated CSI (unterminated)
 ```
 
 ## What it decodes
@@ -213,21 +245,22 @@ cd candy-ansi-inspect && composer install && vendor/bin/phpunit
 
 ## Byte-fidelity contract
 
-Reported bytes are the bytes that were sent: parameters keep the separator the
-sender used (`ESC[4;3m` never comes back as `ESC[4:3m`, and an omitted
-parameter keeps its empty slot) — in a CSI **and** in a DCS prelude, which travel
-through the same parameter arrays; a dispatched CSI replays its own window tail
-verbatim, so stacked private markers, mid-body DEL bytes and the 8-bit `0x9B`
-spelling survive even though the parser's single slots collapse them out of the
-callback fields; a string's `ESC \` terminator is reported once,
-inside the sequence it closed; an abandoned `ESC O` leaves the text behind it
-alone; and a sequence the stream cut short still arrives, as a `truncated …`
-segment carrying its raw bytes.
+Reported bytes are the bytes that were sent, in four respects:
 
-That is a contract about the bytes `raw()` returns. The report's display column
-tokenises them instead — control bytes arrive as named escapes (`ESC`, `BEL`,
-`RI`, `\x8B`) so a payload can never forge a segment line or replay controls at
-the terminal.
+- Parameters keep the separator the sender used (`ESC[4;3m` never comes back
+  as `ESC[4:3m`) and an omitted parameter keeps its empty slot — in a CSI
+  **and** in a DCS prelude, which travel through the same parameter arrays.
+- A dispatched CSI replays its own window tail verbatim, so stacked private
+  markers, mid-body DEL bytes and the 8-bit `0x9B` spelling survive even
+  though the parser's single slots collapse them out of the callback fields.
+- A string's `ESC \` terminator is reported once, inside the sequence it
+  closed; an abandoned `ESC O` leaves the text behind it alone; and a
+  sequence the stream cut short still arrives, as a `truncated …` segment
+  carrying its raw bytes.
+- `raw()` returns the bytes themselves, while the report's display column
+  tokenises them instead — control bytes arrive as named escapes (`ESC`,
+  `BEL`, `RI`, `\x8B`) so a payload can never forge a segment line or replay
+  controls at the terminal.
 
 Eleven deviations from exact byte equality are known, and each is pinned by a
 named test rather than hidden — anything *else* that loses a byte is a bug:
