@@ -403,6 +403,27 @@ final class RendererFactoryTest extends TestCase
         }
     }
 
+    /**
+     * @testdox SV-H9/009: a WezTerm seat is a TrueColor claim ONLY (sugar-colorprofile's TerminalProbe table maps TERM_PROGRAM=WezTerm to Capability::TrueColor, never ITerm2), so supportedModes() excludes the iterm2 rung the README once promised it — pinned through the scripted seam, no env poisoning
+     */
+    public function testWezTermTrueColorOnlyReportNeverClaimsTheIterm2Rung(): void
+    {
+        // Mirrors the foreign probe's WezTerm row as read from disk
+        // (TerminalProbe's table — the colorprofile lane owns it; sugar-video
+        // documents and obeys). The seam feeds the report the real probe
+        // would hand this seat.
+        RendererFactory::setDiagnoseForTesting(new \SugarCraft\ColorProfile\Probe\ProbeReport([
+            \SugarCraft\ColorProfile\Probe\Capability::TrueColor->value => true,
+        ]));
+
+        $modes = RendererFactory::supportedModes();
+        $this->assertNotContains(Mode::Iterm2, $modes, 'the OSC 1337 door is closed when no seat claimed ITerm2');
+        $this->assertNotContains(Mode::Sixel, $modes);
+        $this->assertNotContains(Mode::Kitty, $modes);
+        $this->assertContains(Mode::TrueColor, $modes, 'the one claim WezTerm does make arrives as a text rung');
+        $this->assertNotSame(Mode::Iterm2, RendererFactory::autoMode(), 'and the auto ladder never ascends to the rung either');
+    }
+
     protected function tearDown(): void
     {
         \SugarCraft\Video\Render\RendererFactory::setDiagnoseForTesting(null);

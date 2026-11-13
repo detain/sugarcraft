@@ -112,7 +112,7 @@ These demos resolve the autoloader from a repo checkout (the library's own `vend
 | `quarterblock` | 24-bit quarter-block characters, 2×2 sub-cell resolution | 24-bit color |
 | `sixel` | Sixel graphics protocol (DEC) | Sixel-capable |
 | `kitty` | Kitty graphics protocol (APC `\x1b_G`) | Kitty-compatible — recognised via the `TERM=xterm-kitty` environment surrogate, no protocol handshake |
-| `iterm2` | iTerm2 inline image (OSC 1337) | iTerm2 / WezTerm |
+| `iterm2` | iTerm2 inline image (OSC 1337) | iTerm2 only — WezTerm is recognised as a TrueColor seat and never an OSC 1337 one, so explicit `iterm2` there takes the typed refusal |
 | `auto` | Selector, not a ninth mode: resolves the terminal from its environment at open and picks the best mode it can render — a lookup table, no protocol negotiation. There is no `Mode::Auto` case — `Mode::from('auto')` throws a `ValueError`; `Mode::AUTO_WIRE` carries the token and `Mode::wires()` the full accepted list | — |
 
 Each row's mode column is that case's exact wire token: `Mode::wireName()`
@@ -129,7 +129,10 @@ historical name, issues no raw OSC query round-trips; the ANSI fallback
 reads `SugarCraft\ColorProfile\Probe::colorProfile()` and a pure `TermDb`
 match chain over the captured environment. The consequence is honest: seats
 that could render graphics but are absent from the table (foot, plain
-xterm, contour, kitty under tmux) never auto-ascend to a graphics rung.
+xterm, contour, kitty under tmux) never auto-ascend to a graphics rung — and WezTerm,
+which IS in the table, is listed there for its TrueColor upgrade only: the probe
+never answers `Capability::ITerm2` for it, so the iTerm2 rung stays as closed
+to WezTerm auto as to foot.
 The kitty rung is environment-driven: `RendererFactory::supports()`
 consults sugar-colorprofile's `Capability::KittyKeyboard`, which its probe sets
 only when `TERM` equals `xterm-kitty` — the player never negotiates the Kitty
