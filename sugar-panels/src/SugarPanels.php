@@ -325,6 +325,11 @@ final class SugarPanels
         // (exactly ONCE — cached in $previousFrame), build the current buffer, diff and
         // emit the delta. Reused callers thus build exactly one buffer per frame, same as
         // before; fresh-instance callers build zero.
+        // The :288 early-return above makes previousCells non-null on every path
+        // that reaches here (it is set together with $hadState and cleared only
+        // with it), but a null-narrowing static analysis cannot follow — the
+        // assert states the invariant the runtime already guarantees.
+        \assert($this->previousCells !== null);
         $prev = $this->previousFrame ??= $this->bufferFromGrid($this->previousCells, $width, $height);
         $current = $this->bufferFromGrid($cells, $width, $height);
         $ops = $current->diff($prev);
