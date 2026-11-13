@@ -32,6 +32,27 @@ declare(strict_types=1);
             return;
         }
     }
+    // A renamed, suffix-less archive (the composer-install shape: download
+    // X.phar, mv it to a bare name): PHP neither auto-mounts it (the CLI
+    // runs it as a plain script, Phar::running() answers '') nor resolves
+    // phar://__FILE__ (measured PHP 8.3.6: without a .phar segment the
+    // wrapper cannot locate the archive). Phar::mapPhar() does find the
+    // signature inside the running file and mounts it under its build-time
+    // alias — the composer-style identity of a renamed binary. The alias
+    // is owned by tools/build-phar.php; PharBuildScriptTest pins both sides
+    // agree. A plain source run with no archive fails the probe and lands
+    // on the honest refusal below.
+    if ($archive === '' && class_exists('Phar')) {
+        try {
+            if (@Phar::mapPhar('candy-gifview.phar') !== false
+                && is_file('phar://candy-gifview.phar/vendor/autoload.php')) {
+                require 'phar://candy-gifview.phar/vendor/autoload.php';
+                return;
+            }
+        } catch (\Throwable) {
+            // Not an archive (or the alias drifted): fall through.
+        }
+    }
     fwrite(STDERR, "candy-gifview: cannot find composer autoload.php\n");
     exit(1);
 })();

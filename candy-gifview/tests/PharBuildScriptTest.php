@@ -51,9 +51,37 @@ final class PharBuildScriptTest extends TestCase
         // The autoload guard must resolve BOTH phar identities, not just one.
         self::assertStringContainsString('phar://', $bin);
         self::assertStringContainsString('Phar::running', $bin);
-        // A bare '/x.phar/entry' path fails is_file in PHP 8.3 — the guard must
-        // never probe one, it must prefix with the phar:// stream instead.
-        self::assertStringNotContainsString('.phar/vendor', $bin);
+        // A bare (un-prefixed) '/x.phar/entry' path fails is_file in PHP 8.3 —
+        // every archive-entry probe must ride the phar:// stream wrapper (the
+        // renamed-boot arm adds legitimate PREFIXED '.phar/vendor' reads, so
+        // the law is per-line, not substring-ambient).
+        foreach (explode("\n", $bin) as $line) {
+            if (str_contains($line, '.phar/vendor')) {
+                self::assertStringContainsString(
+                    'phar://',
+                    $line,
+                    'an archive-entry probe without the phar:// prefix: ' . trim($line),
+                );
+            }
+        }
+        // Renamed suffix-less boot law: the alias the guard maps must equal
+        // the alias the builder stamps, or the suffix-less identity misses.
+        self::assertSame(
+            1,
+            preg_match("/mapPhar\('([^']+)'\)/", $bin, $binAlias),
+            'the guard lost its Phar::mapPhar() renamed-boot candidate',
+        );
+        $build = $this->readAppFile('tools/build-phar.php');
+        self::assertSame(
+            1,
+            preg_match('/new Phar\(\$outArg, 0, \'([^\']+)\'\)/', $build, $buildAlias),
+            'the builder no longer stamps a fixed archive alias',
+        );
+        self::assertSame(
+            $buildAlias[1],
+            $binAlias[1],
+            'phar alias drift between guard and builder kills the renamed boot',
+        );
         // The shim still delegates every branch to the testable Cli::main().
         self::assertStringContainsString('GifView\\Cli::main(', $bin);
         // Locale lands before the first message is formatted (DM3 wiring).
