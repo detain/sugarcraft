@@ -104,6 +104,42 @@ enum ColorProfile: string
     }
 
     /**
+     * Lift a sugar-core `Util\ColorProfile` onto this vocabulary (CP-22).
+     *
+     * The Core enum is the legacy five-rung fork (its detector stays as the
+     * fallback when this library is absent); this is the one-way-in half of
+     * the bridge that lets Core delegate to the single ladder. `NoTty` maps
+     * to {@see self::NoTTY} (the spelling differs, the meaning does not).
+     */
+    public static function fromCore(\SugarCraft\Core\Util\ColorProfile $core): self
+    {
+        return match ($core) {
+            \SugarCraft\Core\Util\ColorProfile::TrueColor => self::TrueColor,
+            \SugarCraft\Core\Util\ColorProfile::Ansi256 => self::Ansi256,
+            \SugarCraft\Core\Util\ColorProfile::Ansi => self::Ansi,
+            \SugarCraft\Core\Util\ColorProfile::Ascii => self::Ascii,
+            \SugarCraft\Core\Util\ColorProfile::NoTty => self::NoTTY,
+        };
+    }
+
+    /**
+     * Project onto the five-rung Core enum (CP-22). Lossy on purpose: Core
+     * has no 240/8/fgbg rungs, so each lands on the nearest rung that never
+     * emits a color the profile could not render — Ansi240 to Ansi256,
+     * Ansi8 to Ansi, Fgbg to Ascii.
+     */
+    public function toCore(): \SugarCraft\Core\Util\ColorProfile
+    {
+        return match ($this) {
+            self::TrueColor => \SugarCraft\Core\Util\ColorProfile::TrueColor,
+            self::Ansi256, self::Ansi240 => \SugarCraft\Core\Util\ColorProfile::Ansi256,
+            self::Ansi, self::Ansi8 => \SugarCraft\Core\Util\ColorProfile::Ansi,
+            self::Fgbg, self::Ascii => \SugarCraft\Core\Util\ColorProfile::Ascii,
+            self::NoTTY => \SugarCraft\Core\Util\ColorProfile::NoTty,
+        };
+    }
+
+    /**
      * Human-readable label for display.
      *
      * CALIBER EXEMPTION (2026-11-13, CP-25): English display identifiers, not

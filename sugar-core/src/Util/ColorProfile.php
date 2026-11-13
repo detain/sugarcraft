@@ -6,6 +6,12 @@ namespace SugarCraft\Core\Util;
 
 /**
  * Terminal color capability tiers, matching charmbracelet/colorprofile.
+ *
+ * @deprecated since CP-22 — `SugarCraft\ColorProfile\ColorProfile` is the
+ *             single vocabulary and detector. This enum stays as the
+ *             five-rung projection (`ColorProfile::toCore()` / `fromCore()`)
+ *             and `detect()` delegates to the chain when it is installed;
+ *             the local ladder is a fallback for installs without it.
  */
 enum ColorProfile: int
 {
@@ -56,6 +62,19 @@ enum ColorProfile: int
             }
         }
 
+        // CP-22: when sugar-colorprofile is installed it owns the env ladder
+        // (one SSOT for the fleet). sugar-core cannot require it (colorprofile
+        // requires sugar-core, a cycle), hence the class_exists guard and the
+        // `suggest` entry. The TTY gate above stays local: it is a stream
+        // question, not an environment one. An empty array must not reach the
+        // chain as-is, because the chain reads the ambient env for [].
+        if (class_exists(\SugarCraft\ColorProfile\DetectionChain::class)) {
+            return \SugarCraft\ColorProfile\DetectionChain::detect($env === [] ? ['TERM' => ''] : $env)
+                ->toColorProfile()
+                ->toCore();
+        }
+
+        // Legacy fallback ladder: used only when sugar-colorprofile is absent.
         $term      = strtolower($env['TERM']         ?? '');
         $colorTerm = strtolower($env['COLORTERM']    ?? '');
         $program   = strtolower($env['TERM_PROGRAM'] ?? '');

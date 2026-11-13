@@ -43,7 +43,8 @@
         "phpstan/phpstan-phpunit": "^2.0"
     },
     "suggest": {
-        "ext-ffi": "Required on Windows for raw TTY support (the sugar-pty termios backend)."
+        "ext-ffi": "Required on Windows for raw TTY support (the sugar-pty termios backend).",
+        "sugarcraft/sugar-colorprofile": "Single color-detection ladder; Util\\ColorProfile::detect() delegates to it when installed (CP-22). Not required: it depends on sugar-core."
     },
     "scripts": {
         "analyse": "vendor/bin/phpstan analyse src --no-progress"

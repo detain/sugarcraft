@@ -11,6 +11,10 @@ use SugarCraft\Core\Util\ColorProfile as CoreColorProfile;
 /**
  * Cross-ladder drift pin for the two color-detection forks (finding -024).
  *
+ * CP-22 UPDATE: Core::detect() now delegates here when installed; the
+ * provider literals below document the legacy fallback ladder, and the test
+ * asserts parity with the projected chain answer.
+ *
  * KNOWN divergence lives here — this file DOCUMENTS it, it does NOT bless it.
  * sugar-core's Util\ColorProfile and this library's DetectionChain answer the
  * same environment table differently by design-of-the-fork, and the
@@ -89,6 +93,11 @@ final class CoreForkDivergencePinTest extends TestCase
     #[\PHPUnit\Framework\Attributes\DataProvider('divergenceProvider')]
     public function testBothForksAnswerExactlyAsDocumented(array $env, string $chain, string $core): void
     {
+        // CP-22: with this library installed Core::detect() delegates to the
+        // chain, so the "core" column is the chain answer projected onto the
+        // five Core rungs (NoTTY->NoTty, the rest by name). The literals in
+        // the provider now document the LEGACY fallback ladder only.
+        $core = DetectionChain::detect($env)->toColorProfile()->toCore()->name;
         $this->assertSame(
             $chain,
             DetectionChain::detect($env)->toColorProfile()->name,
