@@ -78,6 +78,7 @@ return [
     'search.type_file' => '[FILE]',
     'pane.hidden_suffix' => '+隠し',
     'pane.unreadable' => '(読み取れません)',
+    'row.link_broken' => '切断',
     'pane.more_above' => '上方にあと{count}件',
     'pane.more_below' => '下方にあと{count}件',
     'status.opening_editor' => '{name} を編集中…',

@@ -78,6 +78,7 @@ return [
     'search.type_file' => '[DATEI]',
     'pane.hidden_suffix' => '+versteckte',
     'pane.unreadable' => '(nicht lesbar)',
+    'row.link_broken' => 'defekt',
     'pane.more_above' => '{count} weiter oben',
     'pane.more_below' => '{count} weiter unten',
     'status.opening_editor' => '{name} im Editor bearbeiten …',

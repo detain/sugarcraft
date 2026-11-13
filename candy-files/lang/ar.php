@@ -78,6 +78,7 @@ return [
     'search.type_file' => '[ملف]',
     'pane.hidden_suffix' => '+مخفية',
     'pane.unreadable' => '(غير قابل للقراءة)',
+    'row.link_broken' => 'مكسور',
     'pane.more_above' => '{count} عنصرًا إضافيًا أعلاه',
     'pane.more_below' => '{count} عنصرًا إضافيًا أدناه',
     'status.opening_editor' => 'تحرير {name}…',

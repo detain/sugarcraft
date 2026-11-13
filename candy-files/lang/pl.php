@@ -78,6 +78,7 @@ return [
     'search.type_file' => '[PLIK]',
     'pane.hidden_suffix' => '+ukryte',
     'pane.unreadable' => '(nie do odczytu)',
+    'row.link_broken' => 'uszkodzony',
     'pane.more_above' => '{count} więcej powyżej',
     'pane.more_below' => '{count} więcej poniżej',
     'status.opening_editor' => 'edycja {name}…',

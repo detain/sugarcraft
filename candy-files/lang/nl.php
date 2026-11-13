@@ -78,6 +78,7 @@ return [
     'search.type_file' => '[BESTAND]',
     'pane.hidden_suffix' => '+verborgen',
     'pane.unreadable' => '(onleesbaar)',
+    'row.link_broken' => 'defect',
     'pane.more_above' => '{count} meer boven',
     'pane.more_below' => '{count} meer onder',
     'status.opening_editor' => '{name} bewerken…',

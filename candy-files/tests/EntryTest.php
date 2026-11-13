@@ -25,6 +25,14 @@ final class EntryTest extends TestCase
         $this->assertSame('LINK', (new Entry('a', false, 1234, 0, isLink: true))->displaySize());
     }
 
+    public function testDisplaySizeForLinkToDirectory(): void
+    {
+        // CF-45 (closes 081): isDir follows links (navigate() must enter
+        // them), so the LINK token wins the size column or a symlinked
+        // directory would hide its nature.
+        $this->assertSame('LINK', (new Entry('a', true, 4096, 0, isLink: true))->displaySize());
+    }
+
     public function testDisplaySizeBytes(): void
     {
         $this->assertSame('512B', (new Entry('a', false, 512, 0))->displaySize());

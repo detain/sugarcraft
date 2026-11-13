@@ -37,6 +37,26 @@ final class RendererTest extends TestCase
         return static fn(string $p): array => $tree[$p] ?? [];
     }
 
+    public function testSymlinkRowsShowTargetAndMarkBroken(): void
+    {
+        // CF-45 (closes 081): the name leg names the target; the size
+        // leg answers LINK even for a link-to-dir; a dead target gets
+        // the localized (broken) tag.
+        $tree = [
+            '/' => [
+                new Entry('goodlink', true, 0, 0, isLink: true, linkTarget: '/home'),
+                new Entry('deadlink', false, 0, 0, isLink: true, linkTarget: '/no', linkBroken: true),
+            ],
+        ];
+        $m   = Manager::start('/', '/', static fn(string $p): array => $tree[$p] ?? []);
+        $out = Renderer::render($m);
+
+        $this->assertStringContainsString('goodlink -> /home', $out);
+        $this->assertStringContainsString('deadlink -> /no', $out);
+        $this->assertStringContainsString('(broken)', $out);
+        $this->assertStringContainsString('LINK', $out);
+    }
+
     public function testRenderProducesNonEmptyOutput(): void
     {
         $m = Manager::start('/', '/', $this->fakeFs());

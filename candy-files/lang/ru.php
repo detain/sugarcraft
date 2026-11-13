@@ -78,6 +78,7 @@ return [
     'search.type_file' => '[ФАЙЛ]',
     'pane.hidden_suffix' => '+скрытые',
     'pane.unreadable' => '(не читается)',
+    'row.link_broken' => 'битая',
     'pane.more_above' => 'ещё {count} выше',
     'pane.more_below' => 'ещё {count} ниже',
     'status.opening_editor' => 'редактирование {name}…',

@@ -208,7 +208,22 @@ final class Renderer
             $i = $start + $offset;
             $marker  = isset($pane->selected[$entry->name]) ? $glyphs->mark : ' ';
             $arrow   = ($i === $pane->cursor) ? $glyphs->cursor : ' ';
-            $name    = $entry->isDir ? $entry->name . '/' : $entry->name;
+            // CF-45: the arrow leg replaces the directory slash for
+            // links — `mylink -> /dir` reads, `mylink/ -> /dir` double-marks.
+            $name    = $entry->isDir && !$entry->isLink ? $entry->name . '/' : $entry->name;
+            // CF-45 (closes 081): a link shows what it is by naming
+            // its target in the same leg — `mylink -> /some/dir`, with
+            // a localized (broken) tag when the target does not
+            // resolve. The raw target is filesystem data like any
+            // name, so it is sanitized before render.
+            if ($entry->isLink) {
+                if ($entry->linkTarget !== '') {
+                    $name .= ' -> ' . Entry::sanitizeName($entry->linkTarget);
+                }
+                if ($entry->linkBroken) {
+                    $name .= ' (' . Lang::t('row.link_broken') . ')';
+                }
+            }
             $name    = Entry::sanitizeName($name);
             $size    = $entry->displaySize();
             // Cell-accurate columns: `%-26s`/`%7s` padded bytes, which

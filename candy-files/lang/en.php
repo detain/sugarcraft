@@ -89,6 +89,7 @@ return [
     // Pane header suffixes
     'pane.hidden_suffix' => '+hidden',
     'pane.unreadable' => '(unreadable)',
+    'row.link_broken' => 'broken',
     'pane.more_above' => '{count} more above',
     'pane.more_below' => '{count} more below',
     'status.opening_editor' => 'editing {name}…',

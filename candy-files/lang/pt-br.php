@@ -78,6 +78,7 @@ return [
     'search.type_file' => '[ARQUIVO]',
     'pane.hidden_suffix' => '+ocultos',
     'pane.unreadable' => '(ilegível)',
+    'row.link_broken' => 'quebrado',
     'pane.more_above' => '{count} mais acima',
     'pane.more_below' => '{count} mais abaixo',
     'status.opening_editor' => 'editando {name}…',

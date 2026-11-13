@@ -60,13 +60,28 @@ final class FsLister
                 $isDir  = $isLink
                     ? \is_dir($full)
                     : ($mode & 0170000) === 0040000;
+                // CF-45 (closes 081): carry the raw target and whether it
+                // resolves, so the row can show `name -> target` and mark
+                // dead links visibly instead of silently claiming DIR.
+                // stat() follows links, so its failure IS the brokenness
+                // answer — and a resolvable-but-unreadable target is live,
+                // not broken.
+                $linkTarget = '';
+                $linkBroken = false;
+                if ($isLink) {
+                    $target     = @readlink($full);
+                    $linkTarget = $target === false ? '' : $target;
+                    $linkBroken = @stat($full) === false;
+                }
                 $out[] = new Entry(
-                    name:     $name,
-                    isDir:    $isDir,
-                    size:     (int) $stat['size'],
-                    mtime:    (int) $stat['mtime'],
-                    isLink:   $isLink,
-                    isHidden: str_starts_with($name, '.'),
+                    name:       $name,
+                    isDir:      $isDir,
+                    size:       (int) $stat['size'],
+                    mtime:      (int) $stat['mtime'],
+                    isLink:     $isLink,
+                    isHidden:   str_starts_with($name, '.'),
+                    linkTarget: $linkTarget,
+                    linkBroken: $linkBroken,
                 );
             }
             return $out;

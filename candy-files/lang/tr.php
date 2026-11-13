@@ -78,6 +78,7 @@ return [
     'search.type_file' => '[DOSYA]',
     'pane.hidden_suffix' => '+gizli',
     'pane.unreadable' => '(okunamaz)',
+    'row.link_broken' => 'bozuk',
     'pane.more_above' => 'yukarıda {count} fazla',
     'pane.more_below' => 'aşağıda {count} fazla',
     'status.opening_editor' => '{name} düzenleniyor…',

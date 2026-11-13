@@ -78,6 +78,7 @@ return [
     'search.type_file' => '[文件]',
     'pane.hidden_suffix' => '+隐藏',
     'pane.unreadable' => '(不可读)',
+    'row.link_broken' => '失效',
     'pane.more_above' => '上方还有 {count} 项',
     'pane.more_below' => '下方还有 {count} 项',
     'status.opening_editor' => '正在编辑 {name}…',

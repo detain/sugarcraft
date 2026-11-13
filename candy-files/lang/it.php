@@ -78,6 +78,7 @@ return [
     'search.type_file' => '[FILE]',
     'pane.hidden_suffix' => '+nascosti',
     'pane.unreadable' => '(non leggibile)',
+    'row.link_broken' => 'rotto',
     'pane.more_above' => '{count} più in alto',
     'pane.more_below' => '{count} più in basso',
     'status.opening_editor' => 'modifica di {name}…',

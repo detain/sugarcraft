@@ -78,6 +78,7 @@ return [
     'search.type_file' => '[SOUBOR]',
     'pane.hidden_suffix' => '+skryté',
     'pane.unreadable' => '(nečitelné)',
+    'row.link_broken' => 'poškozen',
     'pane.more_above' => '{count} navíc nad',
     'pane.more_below' => '{count} navíc pod',
     'status.opening_editor' => 'úprava {name}…',

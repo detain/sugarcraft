@@ -78,6 +78,7 @@ return [
     'search.type_file' => '[파일]',
     'pane.hidden_suffix' => '+숨김',
     'pane.unreadable' => '(읽을 수 없음)',
+    'row.link_broken' => '손상',
     'pane.more_above' => '위쪽 {count}개 더',
     'pane.more_below' => '아래쪽 {count}개 더',
     'status.opening_editor' => '{name} 편집 중…',

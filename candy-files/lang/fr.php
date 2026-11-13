@@ -78,6 +78,7 @@ return [
     'search.type_file' => '[FICHIER]',
     'pane.hidden_suffix' => '+cachés',
     'pane.unreadable' => '(illisible)',
+    'row.link_broken' => 'rompu',
     'pane.more_above' => '{count} de plus en haut',
     'pane.more_below' => '{count} de plus en bas',
     'status.opening_editor' => 'Édition de {name}…',

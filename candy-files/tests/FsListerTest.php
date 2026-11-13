@@ -76,6 +76,35 @@ final class FsListerTest extends TestCase
     }
 
     /**
+     * CF-45 (closes 081): the raw target rides on the Entry and a link
+     * whose target does not resolve is flagged, so the row can show
+     * `name -> target` and mark dead links instead of pretending a
+     * link-to-dir is an ordinary directory.
+     */
+    public function testLinkTargetsAreCapturedAndBrokenLinksMarked(): void
+    {
+        $realDir = $this->tmpDir . '/target';
+        mkdir($realDir, 0755, true);
+        if (@symlink($realDir, $this->tmpDir . '/good') === false) {
+            $this->markTestSkipped('symlinks not supported on this filesystem');
+        }
+        if (@symlink($this->tmpDir . '/missing', $this->tmpDir . '/dead') === false) {
+            $this->markTestSkipped('symlinks not supported on this filesystem');
+        }
+
+        $entries = (FsLister::lister())($this->tmpDir);
+        $good    = $this->entryNamed($entries, 'good');
+        $dead    = $this->entryNamed($entries, 'dead');
+
+        $this->assertNotNull($good);
+        $this->assertNotNull($dead);
+        $this->assertSame($realDir, $good->linkTarget, 'live link carries its raw target');
+        $this->assertFalse($good->linkBroken, 'a resolving link is not broken');
+        $this->assertSame($this->tmpDir . '/missing', $dead->linkTarget);
+        $this->assertTrue($dead->linkBroken, 'a target that does not resolve is broken');
+    }
+
+    /**
      * Because a symlinked directory now reports isDir=true, navigate() enters
      * it. Before the fix isDir was false and navigate() no-oped on it. Revert
      * the FsLister fix and cwd stays put → this fails.
