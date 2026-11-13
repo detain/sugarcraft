@@ -65,7 +65,7 @@ final class EscapeSoftCancelTest extends TestCase
         $this->assertTrue($armed->inFlight);
         // ISS-103: the glyph is the registry's stored frame (wall clock here,
         // never advanced because no pump runs), so the needle derives it.
-        $glyph = AgentLiveRegistry::SPINNER[$armed->agentLive()->spinnerFrame()];
+        $glyph = AgentLiveRegistry::brailleFrames()[$armed->agentLive()->spinnerFrame()];
         $this->assertStringContainsString($glyph . ' thinking… · Esc Esc to cancel', self::statusBar($armed));
     }
 
@@ -92,7 +92,7 @@ final class EscapeSoftCancelTest extends TestCase
     {
         $chat = self::steppingChat(new CancellationToken());
         $bar = self::statusBar($chat);
-        $glyph = AgentLiveRegistry::SPINNER[$chat->agentLive()->spinnerFrame()];
+        $glyph = AgentLiveRegistry::brailleFrames()[$chat->agentLive()->spinnerFrame()];
 
         $this->assertStringContainsString($glyph . ' step 2 · thinking…', $bar);
         $this->assertStringNotContainsString('ctx ', $bar);

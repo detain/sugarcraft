@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Agents\Live;
 use SugarCraft\Code\Events\SubAgentActivity;
 use SugarCraft\Code\Tui\ScreenReaderMode;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Forms\Spinner\Spinner;
 use SugarCraft\Style\Style;
 
 /**
@@ -35,19 +36,20 @@ final class AgentLiveRegistry
     /** Finished runs kept for their rows before the oldest are forgotten. */
     public const MAX_FINISHED = 256;
 
-    /** The spinner's frames, in order (the braille "dots" cycle). */
-    public const SPINNER = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
-
     /**
      * a11y-F5: the same spinner for a terminal negotiated down to the ASCII
      * colour profile — braille dots are not a glyph such a terminal is on-
      * record to draw, so there the frame cycle is the classic four-stroke
      * `|/-\`. Readers take the set through {@see spinnerGlyph()}, never by
-     * indexing {@see SPINNER} directly.
+     * indexing {@see brailleFrames()} directly.
      */
     public const SPINNER_ASCII = ['|', '/', '-', '\\'];
 
-    /** Milliseconds per spinner frame: about 12 frames a second at most. */
+    /**
+     * Milliseconds per spinner frame: about 12 frames a second at most. S-U09:
+     * deliberately the app's own cadence, not sugar-forms' 100 ms
+     * {@see Spinner::intervalMs()} — the live strip repaints at 80 ms.
+     */
     public const SPINNER_FRAME_MS = 80;
 
     /**
@@ -306,7 +308,7 @@ final class AgentLiveRegistry
         return $this->lastBeatAt[$id] ?? null;
     }
 
-    /** Index into {@see SPINNER} as of the last {@see advance()}. */
+    /** Index into {@see brailleFrames()} as of the last {@see advance()}. */
     public function spinnerFrame(): int
     {
         return $this->spinnerFrame;
@@ -327,12 +329,24 @@ final class AgentLiveRegistry
      */
     public static function spinnerFrames(): array
     {
-        return Style::getDefaultProfile() === ColorProfile::Ascii ? self::SPINNER_ASCII : self::SPINNER;
+        return Style::getDefaultProfile() === ColorProfile::Ascii ? self::SPINNER_ASCII : self::brailleFrames();
+    }
+
+    /**
+     * The braille "dots" cycle, in order. S-U09 (R15): the frame vocabulary is
+     * defined once, by sugar-forms' default {@see Spinner} style; only the
+     * ASCII fallback and the 80 ms cadence are this app's own.
+     *
+     * @return list<string>
+     */
+    public static function brailleFrames(): array
+    {
+        return Spinner::frames();
     }
 
     /**
      * The glyph for spinner index $frame in the active frame set. The stored
-     * index is a mod over {@see SPINNER}; the ASCII set is shorter and wraps
+     * index is a mod over {@see brailleFrames()}; the ASCII set is shorter and wraps
      * on its own count, so every reader must take the glyph through here
      * rather than index a const directly.
      */
@@ -364,7 +378,7 @@ final class AgentLiveRegistry
             return 0;
         }
 
-        return intdiv((int) floor($seconds * 1000), self::SPINNER_FRAME_MS) % count(self::SPINNER);
+        return intdiv((int) floor($seconds * 1000), self::SPINNER_FRAME_MS) % count(self::brailleFrames());
     }
 
     /**

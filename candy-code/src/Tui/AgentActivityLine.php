@@ -58,7 +58,7 @@ final class AgentActivityLine
     }
 
     /**
-     * @param int        $spinnerFrame  index into {@see AgentLiveRegistry::SPINNER}
+     * @param int        $spinnerFrame  index into {@see AgentLiveRegistry::brailleFrames()}
      * @param float      $now           the registry's clock ({@see AgentLiveRegistry::now()})
      * @param float|null $elapsedSeconds the run's duration when the caller knows
      *        it better than the frames do (a settled Task row's own duration);
@@ -148,7 +148,7 @@ final class AgentActivityLine
     public static function glyph(AgentLiveState $state, Theme $theme, int $spinnerFrame): array
     {
         if (!$state->isFinished()) {
-            $frames = AgentLiveRegistry::SPINNER;
+            $frames = AgentLiveRegistry::brailleFrames();
 
             return [$frames[(($spinnerFrame % count($frames)) + count($frames)) % count($frames)], $theme->assistantLabel];
         }

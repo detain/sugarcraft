@@ -99,7 +99,8 @@ final class AgentLiveRegistryTest extends TestCase
             self::assertSame('/', AgentLiveRegistry::spinnerGlyph(5), 'the mod-10 stored index maps down safely');
 
             Style::setDefaultProfile(ColorProfile::Ansi256);
-            self::assertSame(AgentLiveRegistry::SPINNER, AgentLiveRegistry::spinnerFrames());
+            self::assertSame(AgentLiveRegistry::brailleFrames(), AgentLiveRegistry::spinnerFrames());
+            self::assertSame(\SugarCraft\Forms\Spinner\Spinner::frames(), AgentLiveRegistry::brailleFrames(), 'S-U09: one frame vocabulary, owned by sugar-forms');
             self::assertSame('⠋', AgentLiveRegistry::spinnerGlyph(0));
 
             Style::setDefaultProfile(null);
@@ -118,7 +119,7 @@ final class AgentLiveRegistryTest extends TestCase
     {
         $source = (string) file_get_contents(\dirname(__DIR__, 3) . '/src/Renderer.php');
 
-        self::assertSame(0, substr_count($source, 'AgentLiveRegistry::SPINNER['), 'every spinner reader must go through spinnerGlyph()');
+        self::assertSame(0, substr_count($source, 'AgentLiveRegistry::brailleFrames()['), 'every spinner reader must go through spinnerGlyph()');
     }
 
     public function testFramesFoldIntoOneStatePerRunUnderItsTaskCall(): void
