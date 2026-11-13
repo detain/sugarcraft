@@ -205,6 +205,112 @@ final class DetectReplyClampTest extends TestCase
     }
 
     /**
+     * (finding 106) The compact `#rrggbb`/`#rgb` colour-reply spelling some
+     * emulators put on the wire is modelled alongside the rgb: triplet,
+     * both branches feeding the same Xcms digit-scaling in
+     * parseOscColor(); near-miss `#` shapes stay non-replies.
+     */
+    public function testTheCompactHashColourReplySpellingIsModelled(): void
+    {
+        $parse = new \ReflectionMethod(Detect::class, 'parseOscColor');
+
+        $accepts = [
+            // [reply, terminator, expected 'rrggbb']
+            ["\x1b]10;#ffffff\x1b\\", Detect::OSC10_REPLY_TERMINATOR, 'ffffff'],
+            ["\x1b]10;#abc\x07",      Detect::OSC10_REPLY_TERMINATOR, 'aabbcc'], // cyclic expand
+            ["\x1b]11;#0F0f0F\x1b\\", Detect::OSC11_REPLY_TERMINATOR, '0f0f0f'], // lowered
+            ["\x1b]11;#123456\x07",     Detect::OSC11_REPLY_TERMINATOR, '123456'],
+            ["\x1b]10;rgb:1a/2b/3c\x1b\\", Detect::OSC10_REPLY_TERMINATOR, '1a2b3c'], // control: triplet still parses
+        ];
+
+        foreach ($accepts as [$reply, $terminator, $expected]) {
+            $this->assertSame($expected, $parse->invoke(null, $reply, $terminator), 'parse drifted for ' . $this->escapeBytes($reply));
+        }
+
+        $rejects = [
+            "\x1b]10;#1234567\x1b\\", // neither 3 nor 6 digits
+            "\x1b]10;#12345\x1b\\",   // five digits fits neither exact shape
+            "\x1b]10;#8080\x1b\\",    // four digits is not a component triple
+            "\x1b]10;#12\x1b\\",      // two digits is not a component triple
+            "\x1b]10;#ff/00/00\x1b\\", // hybrid spelling belongs to no grammar
+            "\x1b]10;?\x1b\\",        // the query echo stays a non-reply
+            "\x1b]11;#ffffff\x1b\\",  // OSC11 bytes never read as OSC10
+            '#ffffff',                // typed text lacks the OSC intro entirely
+        ];
+
+        foreach ($rejects as $bytes) {
+            $this->assertSame(
+                null,
+                $parse->invoke(null, $bytes, Detect::OSC10_REPLY_TERMINATOR),
+                'non-reply accepted: ' . $this->escapeBytes($bytes),
+            );
+        }
+    }
+
+    /**
+     * (finding 108) parseTermFeatures answers the RANK of the token set,
+     * never its order: every permutation of a list yields one identical
+     * verdict — explicit negative first, unknown poisons a sixel claim to
+     * AUTO (live DA1 confirmation), a clean sixel claim wins.
+     */
+    public function testTheFeatureListVerdictIsOrderInsensitive(): void
+    {
+        $parse = new \ReflectionMethod(Detect::class, 'parseTermFeatures');
+
+        $cases = [
+            [[ 'sixel', 'unknown' ],           null],  // the coin-flip pair, both orders
+            [[ 'sixel', 'no-sixel' ],          false], // definite negative outranks the claim
+            [[ 'no-sixel', 'unknown' ],        false], // the negative stays definite beside an untrusted list
+            [[ 'sixel', 'unknown', 'no-sixel' ], false],
+            [[ 'sixel', 'clipboard' ],         true],
+            [[ 'sixel' ],                      true],
+            [[ 'unknown' ],                    null],
+            [[ 'clipboard', 'suspend' ],       false], // a reported list simply lacking sixel
+            [[ 'clipboard' ],                  false],
+        ];
+
+        foreach ($cases as [$tokens, $expected]) {
+            $signature = implode('/', $tokens);
+            foreach ($this->permutations($tokens) as $perm) {
+                foreach ([',', ';', ' ', "\t"] as $sep) {
+                    $reply = implode($sep, $perm);
+                    $this->assertSame(
+                        $expected,
+                        $parse->invoke(null, $reply),
+                        sprintf('order-sensitive verdict for %s joined by %s', $signature, var_export($sep, true)),
+                    );
+                }
+            }
+        }
+    }
+
+    /**
+     * @param list<string> $items
+     *
+     * @return list<list<string>>
+     */
+    private function permutations(array $items): array
+    {
+        if (count($items) <= 1) {
+            return [$items];
+        }
+
+        $out = [];
+        foreach ($items as $i => $head) {
+            foreach ($this->permutations([...array_slice($items, 0, $i), ...array_slice($items, $i + 1)]) as $tail) {
+                $out[] = [$head, ...$tail];
+            }
+        }
+
+        return $out;
+    }
+
+    private function escapeBytes(string $bytes): string
+    {
+        return str_replace(["\x1b", "\x07"], ['<ESC>', '<BEL>'], $bytes);
+    }
+
+    /**
      * Create a blocking stream pair for simulated stdin I/O.
      *
      * @return array{read: resource, write: resource}

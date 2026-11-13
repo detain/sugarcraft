@@ -112,26 +112,34 @@ final class Detect
     public const XTWINOPS_REPLY_TERMINATOR = '/\e\[[468];[\d;]*t/';
 
     /**
-     * Terminator for an OSC 10 (default foreground) reply:
-     * `` ESC ] 10 ; rgb:x/y/z (ST|BEL) `` with 1-4 hex digits per component.
+     * Terminator for an OSC 10 (default foreground) reply, one of two
+     * spellings: `` ESC ] 10 ; rgb:x/y/z (ST|BEL) `` with 1-4 hex digits
+     * per component, or `` ESC ] 10 ; #hhh... (ST|BEL) `` with three or
+     * six hex digits (the compact XTerm form).
      *
-     * It demands the ``rgb:`` prefix and the full hex triplet — a shape the
-     * query (`` ESC ] 10 ; ? ST ``) never carries and typed text cannot
-     * fabricate, so echoed query bytes and stray user keystrokes can neither
-     * terminate the read nor fake a reply (the same echo-safety argument,
-     * applied to the OSC reply space). BEL is accepted alongside ST because xterm-class
-     * terminals close string sequences either way. Public so tests pin its
-     * polarity; scope note: XTerm replies ``rgb:``, and the '#rrggbb'
-     * spelling some emulators use is NOT modelled here — chafa's reply
-     * parser is triplet-only (probe_color_to_packed_rgb), and this stage
-     * ports exactly that.
+     * Either branch demands the full reply shape the query (`` ESC ] 10 ;
+     * ? ST ``) never carries and typed text cannot fabricate, so echoed
+     * query bytes and stray user keystrokes can neither terminate the
+     * read nor fake a reply (the same echo-safety argument, applied to
+     * the OSC reply space). BEL is accepted alongside ST because
+     * xterm-class terminals close string sequences either way. Public so
+     * tests pin its polarity. Scope: XTerm replies ``rgb:``, and chafa's
+     * reply parser is triplet-only (probe_color_to_packed_rgb) — but the
+     * ``#rrggbb``/``#rgb`` spelling is what several real emulators put
+     * on the wire (this file's own corpus notes say so), and a reply we
+     * cannot read is a lost probe. Finding 106: the compact form is
+     * modelled alongside the triplet, both branches share the capture
+     * numbering through a branch-reset group, so {@see parseOscColor()}
+     * scales every component by the same XTerm/Xcms digit rule; the
+     * ``rgb:`` prefix stays case-strict (chafa sscanf literal), and a
+     * ``#`` reply of neither 3 nor 6 digits stays a non-reply.
      */
     public const OSC10_REPLY_TERMINATOR
-        = '/\e\]10;rgb:([0-9a-fA-F]{1,4})\/([0-9a-fA-F]{1,4})\/([0-9a-fA-F]{1,4})(?:\e\\\\|\x07)/';
+        = '/\e\]10;(?|rgb:([0-9a-fA-F]{1,4})\/([0-9a-fA-F]{1,4})\/([0-9a-fA-F]{1,4})|#([0-9a-fA-F]{2})([0-9a-fA-F]{2})([0-9a-fA-F]{2})|#([0-9a-fA-F])([0-9a-fA-F])([0-9a-fA-F]))(?:\e\\\\|\x07)/';
 
     /** OSC 11 (default background) twin of {@see OSC10_REPLY_TERMINATOR}. */
     public const OSC11_REPLY_TERMINATOR
-        = '/\e\]11;rgb:([0-9a-fA-F]{1,4})\/([0-9a-fA-F]{1,4})\/([0-9a-fA-F]{1,4})(?:\e\\\\|\x07)/';
+        = '/\e\]11;(?|rgb:([0-9a-fA-F]{1,4})\/([0-9a-fA-F]{1,4})\/([0-9a-fA-F]{1,4})|#([0-9a-fA-F]{2})([0-9a-fA-F]{2})([0-9a-fA-F]{2})|#([0-9a-fA-F])([0-9a-fA-F])([0-9a-fA-F]))(?:\e\\\\|\x07)/';
 
     /**
      * Plausibility ceilings for an XTWINOPS reply. Chafa's real
@@ -631,30 +639,52 @@ final class Detect
      * one from tmux's own reply.
      *
      * tmux 3.4+ additionally spells refusals as `no-<feature>`; a `no-sixel`
-     * token is the DEFINITE no even when a bare list also came through, so it
-     * is checked per token, not after the loop.
+     * token is the DEFINITE no. Every token is collected before any verdict
+     * is taken — the answer is the RANK of what the list contains
+     * (negative > unknown > positive > "no sixel among the features"),
+     * never the ORDER it arrives in. The old early-returns meant
+     * `sixel,unknown` claimed yes while `unknown,sixel` fell through to the
+     * DA1 probe: the same list two ways was a coin-flip. Now a stray
+     * `unknown` marker (tmux never asked the outer terminal) poisons a
+     * positive sixel claim and lands on the live DA1 confirmation
+     * regardless of position.
      */
     private static function parseTermFeatures(string $output): ?bool
     {
         $tokens = preg_split('/[,;\s]+/', trim($output), -1, PREG_SPLIT_NO_EMPTY) ?: [];
 
+        $sawSixel = false;
+        $sawNoSixel = false;
+        $sawUnknown = false;
         $sawFeature = false;
         foreach ($tokens as $token) {
             if (str_starts_with($token, 'no-')) {
                 if (substr($token, 3) === 'sixel') {
-                    return false; // explicit negative outranks everything else
+                    $sawNoSixel = true; // explicit negative outranks everything else
                 }
                 continue;
             }
             if ($token === 'unknown') {
                 // tmux's own "I never asked the outer terminal" marker —
                 // features were reported, but not trustworthily. AUTO.
-                return null;
+                $sawUnknown = true;
+                continue;
             }
             if ($token === 'sixel') {
-                return true;
+                $sawSixel = true;
+                continue;
             }
             $sawFeature = true;
+        }
+
+        if ($sawNoSixel) {
+            return false;
+        }
+        if ($sawUnknown) {
+            return null;
+        }
+        if ($sawSixel) {
+            return true;
         }
 
         // A list came back, sixel was simply not in it: chicle's exact

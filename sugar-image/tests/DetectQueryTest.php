@@ -121,6 +121,8 @@ final class DetectQueryTest extends TestCase
             "\x1b]10;rgb:1a/2b/3c\x1b\\",
             "\x1b]10;rgb:1a1a/2b2b/3c3c\x1b\\",
             "\x1b]10;rgb:FF/00/EE\x07",
+            "\x1b]10;#ffffff\x1b\\",              // compact form — finding 106 (SI-13)
+            "\x1b]10;#abc\x07",                   // #rgb short form
         ];
         foreach ($replies10 as $reply) {
             $this->assertSame(1, preg_match(Detect::OSC10_REPLY_TERMINATOR, $reply), 'OSC10 rejected ' . $this->escape($reply));
@@ -145,7 +147,7 @@ final class DetectQueryTest extends TestCase
             "\x1b]10;?\x1b\\\x1b]11;?\x1b\\",
             "hello\x1b]10;rgb:1a/2b\x07",       // only two components
             "\x1b]10;RGB:1a/2b/3c\x1b\\",         // prefix is case-strict (chafa sscanf literal)
-            "\x1b]10;#ffffff\x1b\\",              // '#rrggbb' shape deliberately unmodelled
+            "\x1b]10;#1234\x1b\\",                // compact form: 4 digits is neither #rgb nor #rrggbb
             "\x1b]10;rgb:zz/00/00\x1b\\",          // not hex
             'plain text',
         ];
@@ -214,6 +216,38 @@ final class DetectQueryTest extends TestCase
     }
 
     /**
+     * (finding 106) The compact `#rrggbb`/`#rgb` spelling several emulators
+     * use answers on the live probe path exactly like the rgb: triplet — a
+     * well-formed compact reply on each leg narrows to 'rrggbb' rather than
+     * falling through as unknown (which is what the old triplet-only
+     * terminator did, silently losing the colour those terminals report).
+     */
+    public function testTheCompactHashSpellingIsAdoptedEndToEnd(): void
+    {
+        [$fg, $bg] = $this->colorsFrom($this->preload(
+            "\x1b]10;#1a2b3c\x1b\\" . "\x1b]11;#def\x07",
+        ));
+
+        $this->assertSame('1a2b3c', $fg);
+        $this->assertSame('ddeeff', $bg);
+    }
+
+    /**
+     * A compact-form answer on one leg must not blind the other leg's rgb:
+     * triplet (the mixed-spelling reply the old grammar could only half
+     * read).
+     */
+    public function testMixedCompactAndTripletSpellingsBothParse(): void
+    {
+        [$fg, $bg] = $this->colorsFrom($this->preload(
+            "\x1b]10;#808080\x07" . "\x1b]11;rgb:1f/2f/3f\x1b\\",
+        ));
+
+        $this->assertSame('808080', $fg);
+        $this->assertSame('1f2f3f', $bg);
+    }
+
+    /**
      * Malformed replies read as unknown (null) on their OWN leg: a broken
      * fg answer must never black out a well-formed bg reply, and vice
      * versa. Each row ships the malformed shape in slot 10 next to a valid
@@ -226,7 +260,7 @@ final class DetectQueryTest extends TestCase
         yield 'not hex'            => ["\x1b]10;rgb:zz/00/00\x1b\\"];
         yield 'two components'     => ["\x1b]10;rgb:1a/2b\x1b\\"];
         yield 'uppercase prefix'   => ["\x1b]10;RGB:1a/2b/3c\x1b\\"];
-        yield 'hash form'          => ["\x1b]10;#ffffff\x1b\\"];
+        yield 'hash form, near-miss digits' => ["\x1b]10;#1234\x1b\\"];
         yield 'no terminator'      => ["\x1b]10;rgb:1a/2b/3c"];
         yield 'echo only'          => ["\x1b]10;?\x1b\\"];
         yield 'typed text'         => ["hello\rworld\x07"];
