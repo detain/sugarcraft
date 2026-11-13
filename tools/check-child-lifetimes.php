@@ -44,8 +44,9 @@ declare(strict_types=1);
  *
  * WHAT IS IN SCOPE. Every first-level directory that carries a
  * `composer.json` with an `autoload` section — a lib's REAL autoload roots
- * (directory-form psr-4 / classmap / files entries), read from its manifest
- * exactly the way
+ * (directory-form psr-4 / classmap entries, plus `files` entries in either
+ * form — a side-effect file is autoloaded code like any other and the census
+ * reads it), read from its manifest exactly the way
  * candy-code's guard reads them, never an assumed `src/`. `autoload-dev` is
  * deliberately not read for the same stated reason the guard gives: Composer
  * registers it for the root package only, so a lib's own tests are
@@ -200,6 +201,22 @@ final class CheckChildLifetimes
                 . 'on every settle path. ChafaRendererStderrTest pins the ladder under a '
                 . 'timeout-KILL leash.',
         ],
+        'sugar-image/src/Renderer/ChafaRenderer.php::available' => [
+            'count' => 1,
+            'kind' => 'reap-bounded',
+            'reason' => 'the --version availability probe child. All three stdio legs are FILE '
+                . 'sinks (fd 0 and 2 the kernel null device, fd 1 a private tempnam sink) — zero '
+                . 'parent-side pipes, so nothing can block on an unread pipe and no parent fd is '
+                . 'inheritable above the named files. Past the is_resource gate the handle goes '
+                . 'straight into self::reap — the same bounded TERM→grace→KILL ladder ending in '
+                . 'proc_close() on every path that the ::render row above vouches for, with no '
+                . 'return or throw between the hand-off and the reap — and the memo is written '
+                . 'either way, so a wedged binary is answered once, not per call. The sink is read '
+                . 'after the settle and unlinked on every path out, including the failed-spawn arm. '
+                . 'The scanner reads it as UNCLASSIFIED because the handle goes to is_resource() '
+                . 'first. Surfaced by the CP-46 census un-abort: committed sugar-image code all '
+                . 'along, invisible behind the old exit-2.',
+        ],
         'sugar-video/src/AudioPlayer.php::start' => [
             'count' => 1,
             'kind' => 'fd-open',
@@ -324,7 +341,10 @@ final class CheckChildLifetimes
             $manifest = self::readManifest("$root/$lib/composer.json", $lib);
 
             foreach (self::autoloadRoots("$root/$lib", $manifest) as $absolute) {
-                foreach (self::phpFiles($absolute) as $file) {
+                // A root is a directory to recurse or — a files-section entry
+                // no directory root covers — one autoloaded file to scan as
+                // itself. Either way every byte of autoloaded code is seen.
+                foreach (is_file($absolute) ? [$absolute] : self::phpFiles($absolute) as $file) {
                     $files++;
                     $raw = @file_get_contents($file);
                     if (false === $raw) {
@@ -483,42 +503,52 @@ final class CheckChildLifetimes
     }
 
     /**
-     * The directory-form autoload roots one manifest declares.
+     * The autoload roots one manifest declares, as walkable units.
      *
-     * A classmap/files entry that points at a FILE (a legal composer form)
-     * is refused loudly: array_filter('is_dir') used to drop such entries
-     * in silence, which hid autoloaded code - and any proc_open site in it -
-     * from the census. A root nested inside another root of the same
-     * manifest is pruned to the outermost, so no file is ever tokenized
-     * twice (double tokenization would inflate site counts and poison the
-     * COUNT DRIFT ledger).
+     * A psr-4/classmap entry that points at a FILE is refused loudly: the
+     * pre-RT-12 array_filter('is_dir') dropped such entries in silence, which
+     * hid autoloaded code - and any proc_open site in it - from the census.
+     * For a `files` entry the file form IS the composer contract (that section
+     * names raw side-effect includes, CP-46 being the tree's first user), so
+     * dropping or refusing either one would repeat RT-12's exact sin in a new
+     * costume: an uncovered files entry becomes a single-file root, and one
+     * already inside a walked directory root is pruned — the file gets
+     * tokenized exactly once, never twice (double tokenization would inflate
+     * site counts and poison the COUNT DRIFT ledger). A root nested inside
+     * another root of the same manifest is pruned to the outermost for the
+     * same single-tokenization invariant.
      *
      * @param  array<string, mixed> $manifest
-     * @return list<string> absolute directories, in declaration order
+     * @return list<string> absolute directories (then uncovered files), in declaration order
      */
     public static function autoloadRoots(string $libDir, array $manifest): array
     {
         $autoload = is_array($manifest['autoload'] ?? null) ? $manifest['autoload'] : [];
-        $paths = [];
+        $dirs = [];
+        $files = [];
 
         foreach (['psr-4', 'classmap', 'files'] as $section) {
             foreach (is_array($autoload[$section] ?? null) ? $autoload[$section] : [] as $value) {
                 foreach (is_array($value) ? $value : [$value] as $path) {
-                    if (is_string($path) && $path !== '') {
-                        $paths[] = rtrim($libDir . '/' . $path, '/');
+                    if (!is_string($path) || $path === '') {
+                        continue;
+                    }
+
+                    $absolute = rtrim($libDir . '/' . $path, '/');
+                    if (is_dir($absolute)) {
+                        $dirs[] = $absolute;
+                    } elseif (is_file($absolute)) {
+                        if ($section !== 'files') {
+                            fwrite(STDERR, "check-child-lifetimes: $libDir autoloads a file ($absolute) - a $section root is a directory to the census; point the entry at its directory.\n");
+                            exit(2);
+                        }
+                        $files[] = $absolute;
                     }
                 }
             }
         }
 
-        foreach ($paths as $path) {
-            if (is_file($path)) {
-                fwrite(STDERR, "check-child-lifetimes: $libDir autoloads a file ($path) - the census walks directory roots only; point the entry at its directory.\n");
-                exit(2);
-            }
-        }
-
-        $dirs = array_values(array_unique(array_filter($paths, 'is_dir')));
+        $dirs = array_values(array_unique($dirs));
         $dropped = [];
         foreach ($dirs as $outer) {
             foreach ($dirs as $inner) {
@@ -527,8 +557,27 @@ final class CheckChildLifetimes
                 }
             }
         }
+        $keptDirs = array_values(array_filter($dirs, static fn(string $dir): bool => !isset($dropped[$dir])));
 
-        return array_values(array_filter($dirs, static fn(string $dir): bool => !isset($dropped[$dir])));
+        // A files entry under any declared directory root — pruned or kept —
+        // is already tokenized by that root's walk; only uncovered ones ride
+        // as their own root. Check against the FULL $dirs set, not $keptDirs:
+        // a pruned inner root still lives inside a walked outer one.
+        $extraFiles = [];
+        foreach (array_unique($files) as $file) {
+            $covered = false;
+            foreach ($dirs as $dir) {
+                if (str_starts_with($file, $dir . '/')) {
+                    $covered = true;
+                    break;
+                }
+            }
+            if (!$covered) {
+                $extraFiles[] = $file;
+            }
+        }
+
+        return array_merge($keptDirs, $extraFiles);
     }
 
     /**

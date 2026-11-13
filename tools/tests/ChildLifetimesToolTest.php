@@ -102,7 +102,13 @@ final class ChildLifetimesToolTest extends TestCase
         // precedent shape), and the site count stayed 30 (no new spawn).
         // 13 -> 14 on 2026-11-12: sugar-releases/src/WindowsSwap.php::launch (the detached
         // swap helper extracted from candy-code) is a new reap-bounded row and a new site.
-        $this->assertStringContainsString('14 findings', $out);
+        // 14 -> 15 on 2026-11-13 (adoption lane CP-14/CP-46 follow-up): the census had
+        // been ABORTING at sugar-colorprofile's autoload.files entry since ac34b072c, so
+        // everything alphabetically after it — including sugar-image's committed
+        // ChafaRenderer::available probe site — was invisible fleet-wide. autoloadRoots
+        // now walks files-section entries instead of refusing the lib; the surface
+        // finding landed with its own honest reap-bounded row in the same commit.
+        $this->assertStringContainsString('15 findings', $out);
         // Frozen literal: counts every @proc_open site tree-wide — flip it in the SAME commit that adds a site.
         // 33 -> 30 re-derived live with the tool on 2026-11-04: net -3 of tree
         // drift since 0bcc4346b (the pin predates later spawn consolidation,
@@ -124,7 +130,15 @@ final class ChildLifetimesToolTest extends TestCase
         // consolidation visibly churning). Per the author/census law the flip
         // belongs to the commit that removes or mints a site, not to whoever
         // notices; this lane refused to guess the number red into green.
-        $this->assertStringContainsString('31 proc_open sites', $out);
+        // 31 -> 30 finalised live with the tool on 2026-11-13 (adoption lane):
+        // the churn the note watched has committed — CP-11 (2463a4b42) folded
+        // colorprofile's synchronous infocmp execs into the one bounded
+        // InfocmpBinary::runBounded door, retiring one raw site (its own
+        // message quotes "Census 30 sites/0 problems (was 31)"), and the
+        // ac34b072c autoload.files abort had kept the tool from answering at
+        // all since. With the abort cured, the live tree answers 30 — the
+        // number the two observations above already measured.
+        $this->assertStringContainsString('30 proc_open sites', $out);
     }
 
     /**
@@ -347,8 +361,11 @@ final class ChildLifetimesToolTest extends TestCase
         // registry (the candy-top AsyncCommand shape), making the runner
         // long-lived by construction — its fd-open row vouches for the
         // bounded dying interval, not for a reaped exit path.
+        // 6 -> 7 reap-bounded on 2026-11-13: the CP-46 census un-abort let
+        // sugar-image's committed ChafaRenderer::available probe site derive
+        // at all — it joined with its own honest reap-bounded row.
         // Re-derive with the tool if a row changes dimension.
-        $this->assertSame(['reap-bounded' => 6, 'fd-open' => 8], $counts);
+        $this->assertSame(['reap-bounded' => 7, 'fd-open' => 8], $counts);
     }
 
     /**
@@ -485,7 +502,10 @@ final class ChildLifetimesToolTest extends TestCase
         // RT-12 (013): a classmap entry pointing at a FILE used to be
         // dropped in silence by array_filter('is_dir') - the autoloaded
         // code and every spawn in it vanished from the census while the
-        // docblock advertised classmap support. Now it refuses.
+        // docblock advertised classmap support. Now it refuses. A
+        // files-section entry is the OTHER composer contract (raw include
+        // of exactly that file, CP-46 being the tree's first user) - it is
+        // walked as its own root instead, pinned by the two arms below.
         \mkdir("$this->tmpDir/filemap-lib/src", 0777, true);
         \file_put_contents(
             "$this->tmpDir/filemap-lib/composer.json",
@@ -504,6 +524,111 @@ final class ChildLifetimesToolTest extends TestCase
         $this->assertSame(2, $rc, $out . $err);
         $this->assertStringContainsString('autoloads a file', $err);
         $this->assertStringContainsString('src/File.php', $err);
+    }
+
+    public function testFilesSectionEntryOutsideAnyRootIsWalkedAsItsOwnRoot(): void
+    {
+        // CP-46 doctrine: a files-section entry IS autoloaded code wherever it
+        // sits — dropping it (pre-RT-12) or aborting on it (RT-12's blunt
+        // refusal meeting the tree's first real files entry) both hide its
+        // spawns. autoloadRoots instead adds it as a single-file root, so a
+        // planted exposed spawn behind it reddens the census like any other.
+        \mkdir("$this->tmpDir/files-lib/src", 0777, true);
+        \mkdir("$this->tmpDir/files-lib/bin", 0777, true);
+        \file_put_contents(
+            "$this->tmpDir/files-lib/composer.json",
+            (string) \json_encode([
+                'name' => 'sugarcraft/files-lib',
+                'autoload' => [
+                    'psr-4' => ['SugarCraft\\ToolFixture\\' => 'src/'],
+                    'files' => ['bin/Probe.php'],
+                ],
+            ]),
+        );
+        \file_put_contents("$this->tmpDir/files-lib/src/Clean.php", "<?php\ndeclare(strict_types=1);\n");
+        \file_put_contents("$this->tmpDir/files-lib/bin/Probe.php", <<<'PHP'
+            <?php
+
+            declare(strict_types=1);
+
+            final class Probe
+            {
+                /** @var resource|null */
+                private $child = null;
+
+                public function start(): void
+                {
+                    $this->child = proc_open(
+                        ['true'],
+                        [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+                        $pipes
+                    );
+                }
+            }
+            PHP);
+
+        [$out, $err, $rc] = $this->runTool($this->tmpDir);
+
+        $this->assertSame(1, $rc, "the spawn behind a files entry went unseen:\n$out$err");
+        $this->assertStringContainsString('UNACCOUNTED exposed at files-lib/bin/Probe.php::start', $err);
+
+        $report = \CheckChildLifetimes::derive($this->tmpDir);
+        $this->assertSame(2, $report['files'], 'both roots tokenized, the extra files root included');
+        $this->assertSame(1, $report['sites'], 'the files-entry site counted exactly once');
+    }
+
+    public function testFilesSectionEntryCoveredByADirectoryRootIsTokenizedOnce(): void
+    {
+        // The double-tokenization poison RT-12 prunes nested roots for, now
+        // in its files-entry costume: autoload.files src/Sub/Alias.php, where
+        // the manifest ALSO declares psr-4 prefixes for src/ and src/Sub/.
+        // The nested src/Sub/ dir root prunes to src/, and the files entry is
+        // covered by it — the file's ONE site must be derived ONCE, not three
+        // times (once per candidate root). A fix that quietly added the
+        // covered file as a second root would slip through a zero-site src/
+        // fixture; the planted spawn makes every double walk visible as
+        // COUNT DRIFT in the site count.
+        \mkdir("$this->tmpDir/dup-lib/src/Sub", 0777, true);
+        \file_put_contents(
+            "$this->tmpDir/dup-lib/composer.json",
+            (string) \json_encode([
+                'name' => 'sugarcraft/dup-lib',
+                'autoload' => [
+                    'psr-4' => [
+                        'SugarCraft\\ToolFixture\\' => 'src/',
+                        'SugarCraft\\ToolFixture\\Sub\\' => 'src/Sub/',
+                    ],
+                    'files' => ['src/Sub/Alias.php'],
+                ],
+            ]),
+        );
+        \file_put_contents("$this->tmpDir/dup-lib/src/Other.php", "<?php\ndeclare(strict_types=1);\n");
+        \file_put_contents("$this->tmpDir/dup-lib/src/Sub/Alias.php", <<<'PHP'
+            <?php
+
+            declare(strict_types=1);
+
+            final class Alias
+            {
+                /** @var resource|null */
+                private $child = null;
+
+                public function start(): void
+                {
+                    $this->child = proc_open(
+                        ['true'],
+                        [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+                        $pipes
+                    );
+                }
+            }
+            PHP);
+
+        $report = \CheckChildLifetimes::derive($this->tmpDir);
+
+        $this->assertSame(2, $report['files'], 'src walk covers Alias.php once — the pruned root and the files entry add no extra walk');
+        $this->assertSame(1, $report['sites'], 'the covered site counted once, never twice or thrice');
+        $this->assertCount(1, $report['findings'], 'one derivation for one site — COUNT DRIFT bait refused');
     }
 
     public function testNestedRootsArePrunedToTheOutermost(): void
