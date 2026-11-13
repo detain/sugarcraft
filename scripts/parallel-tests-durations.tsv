@@ -731,7 +731,7 @@ candy-code/tests/Support/KeychainTest.php	0.429	22
 candy-code/tests/Agents/TaskListHooksTest.php	0.424	10
 candy-code/tests/Agents/SystemPromptMemoTest.php	0.423	5
 candy-code/tests/Support/WindowsTaskKillTest.php	0.430	16
-candy-code/tests/Support/WindowsPipesTest.php	0.010	5
+candy-code/tests/Support/WindowsPipesTest.php	0.010	6
 candy-code/tests/Chat/ChatPostToolUseBlockTest.php	0.420	7
 candy-code/tests/Skills/LearnedSkillsTest.php	0.419	18
 candy-code/tests/Tui/DirectoryPickerTest.php	0.417	12

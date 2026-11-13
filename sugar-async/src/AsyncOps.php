@@ -1298,6 +1298,8 @@ final class AsyncOps
      *
      * @param array<int|string, resource> $pipes
      * @param array<int, int|string> $discard
+     * @param null|callable(): bool $running  Child-still-running probe; Windows
+     *        needs it to end before the deadline ({@see WindowsPipes::runningProbe()})
      */
     public static function drain(
         array $pipes,
@@ -1306,7 +1308,8 @@ final class AsyncOps
         ?callable $clock = null,
         bool $stopAtCap = false,
         array $discard = [],
+        ?callable $running = null,
     ): DrainResult {
-        return ChildPump::drain($pipes, $deadline, $maxBytes, $clock, $stopAtCap, $discard);
+        return ChildPump::drain($pipes, $deadline, $maxBytes, $clock, $stopAtCap, $discard, running: $running);
     }
 }

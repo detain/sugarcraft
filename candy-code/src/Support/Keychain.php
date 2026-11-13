@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Support;
 
 use SugarCraft\Async\ChildPump;
+use SugarCraft\Async\WindowsPipes;
 use SugarCraft\Async\Clock;
 use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Cli\LaunchNotices;
@@ -398,6 +399,7 @@ final class Keychain
             Clock::monotonicSeconds() + $budget,
             self::MAX_STDOUT_BYTES,
             discard: [2],
+            running: WindowsPipes::runningProbe($process),
         );
         $stdout = $drain->buffer(1);
         $overflowed = $drain->droppedBytes(1) > 0;

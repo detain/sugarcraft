@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Support;
 
 use SugarCraft\Async\ChildPump;
+use SugarCraft\Async\WindowsPipes;
 use SugarCraft\Async\Clock;
 
 /**
@@ -414,6 +415,7 @@ final class ProcessContainment
             Clock::monotonicSeconds() + 2.0,
             4_096,
             stopAtCap: true,
+            running: WindowsPipes::runningProbe($probe),
         );
         $report = $drain->buffer(1) . $drain->buffer(2);
 

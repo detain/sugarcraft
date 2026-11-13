@@ -426,8 +426,12 @@ optional full jitter via `withJitter()`, `serverHint()`, `withAttempts()`).
 - `nap(owedMicros)` → `Retry::nap()`; a sleep that is re-armed after EINTR.
 - `reconnect(dial, backoff, token:, loop:, onRetry:)` → `Retry::reconnect()`;
   redials until success or cancellation; success ends the cycle.
-- `drain(pipes, deadline, maxBytes)` → `ChildPump::drain()`; one select loop over
-  all pipes, returning a `DrainResult`.
+- `drain(pipes, deadline, maxBytes, running:)` → `ChildPump::drain()`; one select loop over
+  all pipes, returning a `DrainResult`. On Windows, proc_open pipes can't be made
+  non-blocking and `select()` reports them ready while empty, so the pump polls
+  each pipe's readable byte count instead (`WindowsPipes`). Windows can't report
+  a pipe's EOF either, so pass `running: WindowsPipes::runningProbe($proc)`. The
+  drain then ends when the child exits; without the probe it ends at the deadline.
 
 ```php
 use SugarCraft\Async\{AsyncOps, Backoff};

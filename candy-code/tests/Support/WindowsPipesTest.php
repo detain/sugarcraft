@@ -74,4 +74,14 @@ final class WindowsPipesTest extends TestCase
         self::assertSame('', WindowsPipes::readAvailable($stream));
         \fclose($stream);
     }
+
+    public function testRunningProbeForwardsToSugarAsync(): void
+    {
+        $proc = \proc_open([\PHP_BINARY, '-r', ''], [], $pipes);
+        self::assertIsResource($proc);
+        $probe = WindowsPipes::runningProbe($proc);
+        \proc_close($proc);
+
+        self::assertFalse($probe(), 'a closed handle counts as exited');
+    }
 }

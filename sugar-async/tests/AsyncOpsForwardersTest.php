@@ -56,8 +56,9 @@ final class AsyncOpsForwardersTest extends TestCase
         $pipe = fopen('php://temp', 'w+');
         fwrite($pipe, 'hello');
         rewind($pipe);
-        $r = AsyncOps::drain([0 => $pipe], microtime(true) + 2.0, 1024, static fn (): float => microtime(true));
+        $r = AsyncOps::drain([0 => $pipe], microtime(true) + 2.0, 1024, static fn (): float => microtime(true), running: static fn (): bool => false);
         self::assertInstanceOf(DrainResult::class, $r);
         self::assertSame('hello', $r->buffer(0));
+        self::assertTrue($r->closed(), "the running probe is forwarded: an exited child ends the Windows arm before the deadline");
     }
 }

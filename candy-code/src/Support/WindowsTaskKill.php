@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Support;
 
 use SugarCraft\Async\ChildPump;
+use SugarCraft\Async\WindowsPipes;
 use SugarCraft\Async\Clock;
 
 /**
@@ -228,6 +229,7 @@ final class WindowsTaskKill
             Clock::monotonicSeconds() + self::childBoundSeconds(),
             0,
             discard: [1, 2],
+            running: WindowsPipes::runningProbe($process),
         );
         if (!$drain->closed()) {
             \proc_terminate($process, 9);

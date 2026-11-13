@@ -27,6 +27,20 @@ namespace SugarCraft\Async;
  * $stopAtCap ends the walk instead, for callers that kill the child anyway.
  * Slots in $discard are drained to keep the child unblocked and never kept.
  *
+ * Windows arm: proc_open pipes there cannot be made non-blocking, select()
+ * reports every pipe ready while empty, and the fread() that follows parks
+ * until the child writes or exits, so the select loop above would lose its
+ * deadline and deadlock on an empty stderr while the child fills stdout
+ * ({@see WindowsPipes}). On that runtime the pump instead polls each pipe's
+ * readable byte count and reads only that much. A Windows pipe cannot report
+ * EOF without a read that might block, so the walk ends when the `$running`
+ * probe says the child exited and a pass finds nothing left: reason CLOSED,
+ * meaning "the child is done and its output is read". Bytes a backgrounded
+ * grandchild keeps writing after that are read for at most
+ * {@see WindowsPipes::EXIT_DRAIN_GRACE_SECONDS}. Without a `$running` probe
+ * the arm cannot tell a finished child from a silent one, so it reads until
+ * the deadline and reports EXPIRED — bounded, never wedged.
+ *
  * Not here: feeding stdin (interactive relays live in sugar-pty).
  */
 final class ChildPump
@@ -47,7 +61,12 @@ final class ChildPump
      * @param float $sliceSeconds  Longest single select wait before the deadline is rechecked
      * @param null|callable(array &$read, mixed &$write, mixed &$except, int $sec, int $usec): (int|false) $select
      *        stream_select() seam: same contract, `$read` narrowed in place.
-     *        Tests inject an EINTR-shaped false.
+     *        Tests inject an EINTR-shaped false. POSIX arm only.
+     * @param null|callable(): bool $running  Whether the child is still running
+     *        ({@see WindowsPipes::runningProbe()}). The Windows arm needs it to
+     *        end before the deadline; the select arm ends on EOF and ignores it.
+     * @param null|bool $pollPipes  Force the Windows (true) or select (false)
+     *        arm; null picks by the real runtime ({@see WindowsPipes::runtimeNeedsIt()}).
      */
     public static function drain(
         array $pipes,
@@ -59,6 +78,8 @@ final class ChildPump
         float $sliceSeconds = 0.1,
         int $selectRetries = self::SELECT_RETRIES,
         ?callable $select = null,
+        ?callable $running = null,
+        ?bool $pollPipes = null,
     ): DrainResult {
         if ($maxBytes < 0) {
             throw new \InvalidArgumentException('Max bytes must be >= 0');
@@ -89,6 +110,10 @@ final class ChildPump
             $refused = strlen($bytes) - max(0, min($room, strlen($bytes)));
             $dropped[$slot] += $refused;
         };
+
+        if ($pollPipes ?? WindowsPipes::runtimeNeedsIt()) {
+            return self::pollDrain($pipes, $deadline, $maxBytes, $clock, $stopAtCap, $buffers, $dropped, $capture, $running);
+        }
 
         $open = $pipes;
         $failures = 0;
@@ -158,5 +183,74 @@ final class ChildPump
         }
 
         return new DrainResult($buffers, $dropped, $reason);
+    }
+
+    /**
+     * The Windows arm: read only what each pipe reports readable, end on the
+     * child's exit (see the class docblock).
+     *
+     * @param array<int|string, resource> $pipes
+     * @param callable(): float $clock
+     * @param array<int|string, string> $buffers
+     * @param array<int|string, int> $dropped
+     * @param \Closure(int|string, string): void $capture
+     * @param null|callable(): bool $running
+     */
+    private static function pollDrain(
+        array $pipes,
+        float $deadline,
+        int $maxBytes,
+        callable $clock,
+        bool $stopAtCap,
+        array &$buffers,
+        array &$dropped,
+        \Closure $capture,
+        ?callable $running,
+    ): DrainResult {
+        if ($pipes === []) {
+            return new DrainResult($buffers, $dropped, DrainResult::CLOSED);
+        }
+
+        $exitedAt = null;
+
+        while (true) {
+            if ($stopAtCap) {
+                foreach ($buffers as $kept) {
+                    if (strlen($kept) >= $maxBytes) {
+                        return new DrainResult($buffers, $dropped, DrainResult::STOPPED);
+                    }
+                }
+            }
+
+            $now = $clock();
+            if ($now >= $deadline) {
+                return new DrainResult($buffers, $dropped, DrainResult::EXPIRED);
+            }
+
+            // Sampled BEFORE the reads: everything a child wrote before it
+            // exited is already in the pipe, so an empty pass after an exit
+            // seen here means nothing more is coming from the child itself.
+            if ($exitedAt === null && $running !== null && !$running()) {
+                $exitedAt = $now;
+            }
+
+            $got = false;
+            foreach ($pipes as $slot => $pipe) {
+                $chunk = WindowsPipes::readAvailable($pipe, self::READ_BYTES);
+                if ($chunk !== '') {
+                    $capture($slot, $chunk);
+                    $got = true;
+                }
+            }
+
+            if ($exitedAt !== null && (!$got || $now - $exitedAt >= WindowsPipes::EXIT_DRAIN_GRACE_SECONDS)) {
+                return new DrainResult($buffers, $dropped, DrainResult::CLOSED);
+            }
+
+            if (!$got) {
+                $nap = min(WindowsPipes::POLL_MICROSECONDS, (int) ceil(($deadline - $now) * 1_000_000));
+                usleep(max(1, $nap));
+            }
+        }
     }
 }

@@ -163,8 +163,10 @@ final class WindowsTaskKillTest extends TestCase
         // EXEC as data: a successful child is true, a failed one is false,
         // BOTH drained to EOF and reaped — the exit-status contract taskkill
         // would ride on Windows is tested here with real local binaries.
-        self::assertTrue($this->driveTreeKillRunner(['/bin/true']));
-        self::assertFalse($this->driveTreeKillRunner(['/bin/false']));
+        // The PHP binary stands in for /bin/true and /bin/false so the leg
+        // runs on a Windows host too.
+        self::assertTrue($this->driveTreeKillRunner([\PHP_BINARY, '-r', 'exit(0);']));
+        self::assertFalse($this->driveTreeKillRunner([\PHP_BINARY, '-r', 'exit(1);']));
     }
 
     public function testTheMissingBinaryLegReturnsFalseQuicklyThroughTheRealTreePath(): void
@@ -174,6 +176,9 @@ final class WindowsTaskKillTest extends TestCase
         // a weird box fails loudly instead of silently changing the case),
         // and the answer must be false WITHOUT hanging — the child's exec
         // failure is status 127, drain sees immediate EOF, proc_close reaps.
+        if (\PHP_OS_FAMILY === 'Windows') {
+            self::markTestSkipped('Every Windows host carries taskkill; this leg pins the binary-missing path of a POSIX host.');
+        }
         self::assertSame('', ProcessContainment::locateOnPath('taskkill'), 'this box must not carry a taskkill');
 
         $started = \hrtime(true);
@@ -195,7 +200,7 @@ final class WindowsTaskKillTest extends TestCase
         WindowsTaskKill::setChildBoundForTesting(0.4);
 
         $started = \hrtime(true);
-        $verdict = $this->driveTreeKillRunner(['/bin/sleep', '2']);
+        $verdict = $this->driveTreeKillRunner([\PHP_BINARY, '-r', 'sleep(2);']);
         $elapsedSeconds = (\hrtime(true) - $started) / 1_000_000_000;
 
         self::assertFalse($verdict, 'a wedged killer is a failed kill, never an assumed one');
@@ -248,7 +253,7 @@ final class WindowsTaskKillTest extends TestCase
             }
         );
 
-        $process = proc_open(ProcessContainment::spawnSpec(['/bin/sleep', '5']), [
+        $process = proc_open(ProcessContainment::spawnSpec([\PHP_BINARY, '-r', 'sleep(5);']), [
             0 => ['pipe', 'r'],
             1 => ['pipe', 'w'],
             2 => ['pipe', 'w'],
@@ -275,7 +280,7 @@ final class WindowsTaskKillTest extends TestCase
         // remains is exactly what this leg pins the SHAPE of.)
         $this->armWindowsKill(static fn (array $argv): bool => false);
 
-        $process = proc_open(ProcessContainment::spawnSpec(['/bin/sleep', '5']), [
+        $process = proc_open(ProcessContainment::spawnSpec([\PHP_BINARY, '-r', 'sleep(5);']), [
             0 => ['pipe', 'r'],
             1 => ['pipe', 'w'],
             2 => ['pipe', 'w'],
@@ -394,7 +399,7 @@ final class WindowsTaskKillTest extends TestCase
         );
 
         try {
-            self::assertSame($dir . '/git.exe', ProcessContainment::locateOnPath('git'));
+            self::assertSame($dir . \DIRECTORY_SEPARATOR . 'git.exe', ProcessContainment::locateOnPath('git'));
             self::assertSame('', ProcessContainment::locateOnPath('nothere'));
         } finally {
             @unlink($dir . '/git.exe');
