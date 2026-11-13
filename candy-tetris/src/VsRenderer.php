@@ -156,10 +156,15 @@ final class VsRenderer
         return implode("\n", $rows);
     }
 
+    /**
+     * No-TTY refusal — one plain line, zero SGR bytes. Kept verbatim with
+     * {@see Renderer::refusal()}; colour is optional, the TTY is not
+     * (candy-tetris-041).
+     */
     private static function refusal(): string
     {
-        return "candy-tetris needs a colour-capable interactive terminal.\n"
-            . "Run it from a TTY (TERM=xterm-256color or better).\n";
+        return "candy-tetris needs an interactive terminal (a TTY).\n"
+            . "It plays without colour: set NO_COLOR.\n";
     }
 
     private static function tooSmallNotice(int $cols, int $rows): string

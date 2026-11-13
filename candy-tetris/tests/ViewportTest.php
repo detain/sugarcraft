@@ -162,7 +162,8 @@ final class ViewportTest extends TestCase
         $game = self::fresh()->update(new ColorProfileMsg(ColorProfile::NoTty))[0];
         $frame = Renderer::render($game);
         self::assertStringNotContainsString("\x1b[", $frame, 'a dumb terminal must receive zero escape bytes');
-        self::assertStringContainsString('colour-capable', $frame);
+        self::assertStringContainsString('interactive terminal (a TTY)', $frame);
+        self::assertStringNotContainsString('colour-capable', $frame, 'the refusal must not demand colour the app does not need (candy-tetris-041)');
     }
 
     public function testSpawnBlockedDeathNamesItsReason(): void

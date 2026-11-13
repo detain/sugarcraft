@@ -201,12 +201,15 @@ final class Renderer
 
     /**
      * Plain-text refusal for a terminal with no rendering capability at
-     * all (MA-12): zero SGR bytes, nothing to misparse.
+     * all (MA-12): zero SGR bytes, nothing to misparse. The floor is the
+     * TTY itself — colour is optional (NO_COLOR/CLICOLOR=0 play fine),
+     * so the copy must not demand colour (candy-tetris-041); the same
+     * line is kept verbatim in VsRenderer (candy-tetris-027 family).
      */
     private static function refusal(): string
     {
-        return "candy-tetris needs a colour-capable interactive terminal.\n"
-            . "Run it from a TTY (TERM=xterm-256color or better).\n";
+        return "candy-tetris needs an interactive terminal (a TTY).\n"
+            . "It plays without colour: set NO_COLOR.\n";
     }
 
     /**
