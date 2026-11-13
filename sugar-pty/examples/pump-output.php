@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 /**
  * pump-output — Spawn a long-running command and pump its output
- * line-by-line through the master end, demonstrating non-blocking
+ * line-by-line through the master end, demonstrating a non-blocking
  * read with timeout.
  *
  * Uses the {@see \SugarCraft\Pty\PtySystemFactory} DI-friendly entry

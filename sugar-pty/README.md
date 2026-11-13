@@ -42,7 +42,12 @@ Failed to load libc` the moment it binds — the
 carries the fix and a one-line check for what your PHP actually answered.
 
 From a clone of the monorepo instead of a composer require:
-`cd sugar-pty && composer install && vendor/bin/phpunit`.
+`cd sugar-pty && composer install && vendor/bin/phpunit`. Vendor-mode
+heads-up (the root AGENTS.md gotcha): a bare install resolves sibling
+`sugarcraft/*` packages from Packagist copies, and a later `composer
+update` can swap in-tree symlinks for those copies — restore the linked
+development wiring with `php ../scripts/refresh-deps.php --mode=linked`
+(`--status` reports which mode each lib is in).
 
 ## Quickstart
 
@@ -459,6 +464,8 @@ See [`examples/multi-pump.php`](examples/multi-pump.php) for the full
 interactive demo — two shells teed to stdout with per-session prefixes,
 quit on Ctrl-C.
 
+**API surface.** `add(MasterPty $master, resource $stdoutSink, ?Child $child = null, ?PumpOptions $opts = null): int` registers a session and returns its id; `tick(): int` pumps one round (bytes drained); `allDone(): bool` reports that every session has exited or EOF'd; `run(?int $pumpDeadlineUs = null): array` drives everything to completion in one blocking call and returns the session-id → exit-code map (`examples/multi-pump.php` sizes the fleet with `size()` and lets you watch it drain); `size(): int` counts registered sessions; `has(int $id): bool` answers membership; `remove(int $id): bool` unregisters (false for unknown ids). `runAsync()` is the promise form — see [Async](#async-reactphp).
+
 ## Async (ReactPHP)
 
 Every blocking primitive has an event-loop counterpart, so a ReactPHP
@@ -592,11 +599,11 @@ $opts = (new PumpOptions())
 
 ## Examples
 
-- [`examples/spawn-bash.php`](examples/spawn-bash.php) — The simplest end-to-end slice: `PtySystemFactory::new()->open()` → `$pair->slave()->spawn(['bash', ...])` → drain master → reap. Start here.
-- [`examples/pump-output.php`](examples/pump-output.php) — Long-running counter; demonstrates non-blocking read with timeout, line-by-line pumping.
-- [`examples/resize-forwarding.php`](examples/resize-forwarding.php) — Wire `SignalForwarder` to deliver host SIGWINCH into the child PTY's TIOCSWINSZ; observe the child's `tput cols / lines` flip mid-stream. (This is the `attachSigwinch()` object form with a size-provider closure; the raw `open(2)`-fd variant is the snippet above the Caveats paragraph in [Resize forwarding](#resize-forwarding).)
-- [`examples/multi-pump.php`](examples/multi-pump.php) — Multiplex several PTY sessions through one `MultiPump` tick loop with per-session prefixes.
-- [`examples/expect-login.php`](examples/expect-login.php) — `Expect` round-trip: send a token through the master, match it inside a bounded timeout, tear the child down with an explicit kill + wait, then close the master.
+- [`examples/spawn-bash.php`](examples/spawn-bash.php) — The simplest end-to-end slice: `PtySystemFactory::new()->open()` → `$pair->slave()->spawn(['bash', ...])` → drain master → reap. Start here. (Interactive — manual.)
+- [`examples/pump-output.php`](examples/pump-output.php) — Long-running counter; demonstrates non-blocking read with timeout, line-by-line pumping. (Executed by CI.)
+- [`examples/resize-forwarding.php`](examples/resize-forwarding.php) — Wire `SignalForwarder` to deliver host SIGWINCH into the child PTY's TIOCSWINSZ; observe the child's `tput cols / lines` flip mid-stream. (This is the `attachSigwinch()` object form with a size-provider closure; the raw `open(2)`-fd variant is the snippet above the Caveats paragraph in [Resize forwarding](#resize-forwarding).) (Interactive — manual.)
+- [`examples/multi-pump.php`](examples/multi-pump.php) — Multiplex several PTY sessions through one `MultiPump` tick loop with per-session prefixes. (Executed by CI.)
+- [`examples/expect-login.php`](examples/expect-login.php) — `Expect` round-trip: send a token through the master, match it inside a bounded timeout, tear the child down with an explicit kill + wait, then close the master. (Executed by CI.)
 
 ## Internationalization
 
@@ -604,7 +611,8 @@ User-facing exception strings route through `Lang::t()` (`src/Lang.php`,
 catalog `lang/en.php`, FIFTEEN key namespaces — `close.*`, `ctty.*`,
 `expect.*`, `libc.*`, `master.*`, `multi.*`, `open.*`,
 `process.*`, `read.*`, `resize.*`, `size.*`, `spawn.*`, `stream.*`,
-`windows.*`, `write.*`, 81 keys total). Lookup is
+`windows.*`, `write.*`, 81 keys total). The catalog is currently
+English-only — `lang/` ships `en.php` and nothing else. Lookup is
 exact key → base language → `en` → the raw key, so an untranslated
 string still renders English rather than throwing. Contributing a
 locale means adding `lang/<code>.php` with the same key tree — no code
@@ -634,7 +642,7 @@ and a row here nothing reads.
 | `SUGARCRAFT_LIBC` | `Libc` | Path to the C library to bind FFI against, instead of the per-family default (`libc.so.6` on Linux, `/usr/lib/libSystem.B.dylib` on macOS, first existing soname candidate on FreeBSD; unmapped families throw). Also tried FIRST (dlopen+dlsym-proven to export `openpty`) by the `@internal` `libutil()` test surface before falling back to `libutil.so.1`. For musl, Alpine and custom sysroots. |
 | `SUGARCRAFT_PTY_BACKEND` | `PtySystemFactory::new()` | Which PTY backend to build: unset / `auto`, `posix-ffi`, `conpty`, `sidecar`, `pecl`. `conpty` resolves `Windows\ConPtySystem` on Windows and, on any other host, throws `UnsupportedPlatformException` naming the availability probe's reason. `posix-ffi` resolves `PosixPtySystem` on the POSIX families and, on a Windows host, throws symmetrically — both hard pins refuse their contradicting platform; only `auto` forgives. `sidecar` and `pecl` are declared but not implemented in this release — selecting either throws `UnsupportedPlatformException`. Unrecognised values throw `\InvalidArgumentException`. See [Backend selection](#backend-selection). |
 | `SUGARCRAFT_TERMIOS` | `TermiosFactory` | `stty` forces the subprocess termios backend instead of the FFI one. Anything else leaves the platform default in place. |
-| `SUGAR_PTY_HANG_BUDGET` | `tests/Support/HangWatchdog` | Seconds a single test may run before the suite's own watchdog turns a wedged test into a named failure plus a forensic bundle. `0` opts the watchdog out entirely; unset uses the built-in budget. **Test suite only** — it configures nothing in `src/`, and it is here because a contributor chasing a hang needs to find it. |
+| `SUGAR_PTY_HANG_BUDGET` | `tests/Support/HangWatchdog` | Seconds a single test may run before the suite's own watchdog turns a wedged test into a named failure plus a forensic bundle. Built-in budget: `DEFAULT_BUDGET_SEC = 90.0` s — set well clear of the slowest legitimate leg (`ControllingTerminalTest::testCtrlCKillsChildThroughPty`, which asserts its own elapsed time under 8.5 s) so a slow CI box widens the margin rather than eating it; it is a HANG detector, not a performance budget. On overrun the watchdog (a separate process, `tests/Support/hang-watchdog.php`) SIGKILLs the runner and dumps forensics. `0` opts the watchdog out entirely; unset uses the built-in budget. **Test suite only** — it configures nothing in `src/`, and it is here because a contributor chasing a hang needs to find it. |
 | `SUGAR_PTY_SHIM_AUTOLOAD` | `bin/pty-shim` (written by `Spawn::proc`) | Autoloader hand-off for `controllingTerminal: true` children: the shim `require`s this path before claiming the ctty. **Package-internal, not a user knob** — `Spawn` stages the variable around the child's spawn and scrubs inherited or caller-supplied values in both env modes; the hand-off is deliberately NOT an argv slot, so the token cannot be forged into a command position. |
 | `SUGAR_PTY_DEBUG_ARGV` | `Argv` | Opt-in debug rendering of spawn-failure messages: with it set (non-empty, not `0`), exception messages interpolate the FULL command line instead of `"program" (+N args redacted)`. Off by default because argv routinely carries secrets and every throwable logger on earth would copy them. A debugging convenience at the operator's own console — not a user-facing feature, and not safe to set in service environments. |
 
