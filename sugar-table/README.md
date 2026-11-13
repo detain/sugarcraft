@@ -15,13 +15,13 @@ sugar-table — a customizable data table component for PHP 8.3+ terminal UIs: p
 ## Features
 
 - **Column definitions**: key (the caller owns uniqueness — nothing in the table enforces it), title, width (fixed or flexible), optional style
-- **Row data**: each `Row` carries a key-value map (`RowData`); `withRows()` /
-  `addRows()` take `Row` objects, or plain key-map arrays which are coerced to
-  rows at the entry point (anything else throws `InvalidArgumentException` naming
-  the index). A value renders
-  as text when it is scalar or `__toString`-able (booleans print as `1` or nothing),
-  and as an empty string otherwise — arrays and resources included; a key the row
-  omits shows the missing-data placeholder (see Missing Data Indicator)
+- **Row data**: each `Row` carries a key-value map (`RowData`). `withRows()` /
+  `addRows()` take `Row` objects or plain key-map arrays, coerced to rows at
+  the entry point; anything else throws `InvalidArgumentException` naming the
+  index. A value renders as text when it is scalar or `__toString`-able
+  (booleans print as `1` or nothing); arrays, resources and other non-scalars
+  render as an empty string. A key the row omits shows the missing-data
+  placeholder (see Missing Data Indicator)
 - **Styled cells**: `StyledCell` wraps value + ANSI style, overrides row/column/base styles (never string-cast one directly — see Rows)
 - **Row styles**: zebra striping, bold rows, per-row ANSI styling
 - **Selection**: single-row cursor via `SelectNext()`/`SelectPrevious()`/`withSelectedIndex()`; row 0 carries the highlight on first render (use `withSelectable(false)` for a cursorless table); `handleKey()` scrolls
@@ -33,7 +33,16 @@ sugar-table — a customizable data table component for PHP 8.3+ terminal UIs: p
 - **Missing data indicator**: configurable placeholder for absent cells — the default `-` is a lone hyphen that reads ambiguously beside dashes inside your data, so `withMissingIndicator('(empty)')` gives an unmistakable absent-cell signal
 - **Border styling**: `withBorder(Border $border)` — consume any `SugarCraft\Style\Border` family (normal/rounded/thick/double/block/ascii/hidden/markdownBorder) + `withBorderStyle(string $ansiStyle)` for ANSI color/styling on default border
 - **Borderless mode**: `withBorderless()` — render NO outer box (no top/bottom border rows, no left/right border columns; a single space separates columns) so the table composes inside another bordered shell (e.g. a sugar-panels content box) without a double border. A selected row's reverse-video highlight stays continuous across the column gaps
-- **Width control**: `withWidth(int $cols)` pins the total render width and `ColumnWidth::Flex` columns split the leftover room by weight. The pin is honoured both ways: pinning BELOW the declared widths scales the visible columns down proportionally (their content clips with a visible `…` rather than vanishing), and pinning ABOVE the natural width with no `Flex`/`Percent` column to absorb the surplus throws rather than silently rendering narrower than `$cols`. Lines are clamped at the frame edge, never padded past it. Default `cellPadding` is 0 (flush) — chosen for width economy; `withCellPadding(1)` buys readability when columns run together
+- **Width control**: `withWidth(int $cols)` pins the total render width;
+  `ColumnWidth::Flex` columns split the leftover room by weight. Default
+  `cellPadding` is 0 (flush) — chosen for width economy; `withCellPadding(1)`
+  buys readability when columns run together
+- **Pin exactness**: the pin is honoured both ways. Pinning BELOW the declared
+  widths scales the visible columns down proportionally (their content clips
+  with a visible `…` rather than vanishing). Pinning ABOVE the natural width
+  with no `Flex`/`Percent` column to absorb the surplus throws rather than
+  silently rendering narrower than `$cols`. Lines are clamped at the frame
+  edge, never padded past it
 - **Viewport virtualization**: render only visible rows via `withViewportHeight()` + `withScrollY()`
 - **Render cost**: O(visible cells) per frame (flat-grid pass); the Content/Dynamic width solve scans the full row set once per width memo — keep large datasets viewport-scoped and hold one `Table` across frames (see Keeping a Table across frames)
 - **Column width modes**: `ColumnWidth` enum — Fixed, Percent, Dynamic, Content, Flex
@@ -331,10 +340,10 @@ $t = $t->withScrollY($t->scrollYForKey($key))  // update scroll
 
 ## Global Search
 
-Call `search()` to filter rows across the scanned columns simultaneously: every
-column is scanned while none is marked with `withFilterable()`, and only the
-marked ones once any column opts in (the gate is detailed under "How It Works"
-below):
+Call `search()` to run one needle across the scanned columns at once: a row
+survives when ANY scanned column contains the text, case-insensitively, and
+it must also pass every active `Filter()`. Which columns are scanned is the
+shared filterable gate — described once, under "How It Works" below.
 
 ```php
 $t = Table::fromColumns([
@@ -377,7 +386,7 @@ $t = $t->Filter('name', 'alice')  // name must contain "alice"
 | Method     | Scope        | Logic   |
 |------------|--------------|---------|
 | `Filter()` | Single column | AND (row must match ALL column filters) |
-| `search()` | Filterable columns (all when none marked) | OR (row matches if ANY scanned column contains text) |
+| `search()` | Filterable columns (the gate above) | OR (row matches if ANY scanned column contains text) |
 
 - **Unknown column key**: `Filter()` and `SortBy()` throw `InvalidArgumentException`
 - **Entry-point types**: `fromColumns()` requires every index to hold a `Column`;
@@ -460,7 +469,7 @@ $t = Table::fromColumns([...])
 |--------|----------------------------------------|--------------------------|
 | `Page` | `Page N of M`                          | `PageFooter()`           |
 | `Rows` | `Showing X to Y of Z rows`             | `RowsFooter()`           |
-| `Both` | `Page N of M \|  Showing X to Y of Z rows` | Combines both |
+| `Both` | `Page N of M  \|  Showing X to Y of Z rows` | Combines both |
 
 ```php
 // Show only row count footer
@@ -597,9 +606,10 @@ echo $t->View();
 - **scrollX** skips `$offset` non-frozen columns from the left of the scrollable region
 - **Frozen columns** (if any) are always visible regardless of scrollX
 - **Negative values** are clamped to 0 automatically
-- **Excessive scroll** is tolerated but total: at or beyond the number of scrollable
-  columns no scrollable column remains — without a frozen prefix the table renders
-  as the empty string, with one only the frozen columns paint (see Empty states)
+- **Scrolling past the end empties the view**: at or beyond the number of
+  scrollable columns, no scrollable column remains — without a frozen prefix the
+  table renders as the empty string; with one, only the frozen columns paint
+  (see Empty states)
 
 ### Interaction with Frozen Columns
 
