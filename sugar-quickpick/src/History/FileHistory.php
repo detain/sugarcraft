@@ -67,6 +67,17 @@ class FileHistory
      */
     private const READ_CHUNK_BYTES = 65536;
 
+    /**
+     * On-disk row schema: {"n": ordinal, "v": value, "f": FORMAT_VERSION}.
+     *
+     * Every write stamps "f"; a read row WITHOUT "f" predates the field and
+     * is the original (n,v) shape, so it loads. A row whose "f" carries any
+     * other value was written by a format this build does not understand
+     * and is skipped whole — interpreting unknown bytes is how a future
+     * writer corrupts an old reader's screen (-067).
+     */
+    private const FORMAT_VERSION = 1;
+
     /** @var string */
     private string $path;
 
@@ -265,6 +276,9 @@ class FileHistory
     /**
      * Append an item to the history file.
      *
+     * One row per call: a schema-stamped JSON object — see {@see
+     * self::FORMAT_VERSION} for the on-disk shape.
+     *
      * Creates the file exclusively when it does not exist yet and chmod's it
      * 0600 before the first payload line; the chmod is best-effort (its
      * failure is suppressed), so the effective creation mode stays
@@ -289,7 +303,7 @@ class FileHistory
         $this->rejectSymlink();
 
         $line = \json_encode(
-            ['n' => $item->number(), 'v' => $item->value()],
+            ['n' => $item->number(), 'v' => $item->value(), 'f' => self::FORMAT_VERSION],
             \JSON_THROW_ON_ERROR | \JSON_INVALID_UTF8_SUBSTITUTE,
         ) . "\n";
 
@@ -363,7 +377,10 @@ class FileHistory
      * Lines that are not decodable JSON OBJECTS carrying a usable "v" value
      * are skipped — a bare scalar, array, or object without "v" is not an
      * entry that was ever written here, and minting FilteredItem(0, '')
-     * ghosts out of it hides corpus corruption behind phantom rows. The
+     * ghosts out of it hides corpus corruption behind phantom rows. Rows
+     * stamped with an unknown format ("f" not this build's) are skipped
+     * whole, and an "n" that is not a real int reads as ordinal 0 rather
+     * than being coerced out of garbage (-040/-067). The
      * file handle is always closed, even if an exception escapes during
      * decoding.
      *
@@ -435,7 +452,17 @@ class FileHistory
                 if (\is_string($value) === false && \is_int($value) === false) {
                     continue; // objects/arrays/null/bool are not item values
                 }
-                $items[] = new FilteredItem((int) ($decoded['n'] ?? 0), (string) $value);
+                $format = $decoded['f'] ?? self::FORMAT_VERSION;
+                if ($format !== self::FORMAT_VERSION) {
+                    continue; // a format this build does not know: not interpreted, not guessed (-067)
+                }
+                // (int)-coercion invented ordinals out of garbage: a string
+                // "7px" or float 7.9 became a plausible-looking number. The
+                // ordinal is honest int or nothing (-040).
+                $ordinal = \array_key_exists('n', $decoded) && \is_int($decoded['n'])
+                    ? $decoded['n']
+                    : 0;
+                $items[] = new FilteredItem($ordinal, (string) $value);
             }
             \flock($handle, \LOCK_UN);
         } finally {

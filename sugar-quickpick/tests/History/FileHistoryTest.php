@@ -205,4 +205,68 @@ final class FileHistoryTest extends TestCase
         $this->assertSame('relative', $items[0]->value());
         $this->assertStringStartsWith(\realpath($this->baseDir), $history->path());
     }
+
+    /**
+     * S-21/-040: the old (int)-coercion invented ordinals out of garbage —
+     * "7px" became 7, an array became 1. An "n" that is not a real int must
+     * read as ordinal 0.
+     */
+    public function testNonIntegerOrdinalReadsAsZero(): void
+    {
+        \file_put_contents($this->tmpPath, "{\"n\":[9],\"v\":\"array-ordinal\"}\n{\"n\":\"7px\",\"v\":\"string-ordinal\"}\n");
+        \chmod($this->tmpPath, 0600);
+
+        $items = (new FileHistory($this->tmpPath))->all();
+
+        $this->assertCount(2, $items);
+        $this->assertSame([0, 0], array_map(static fn($i) => $i->number(), $items));
+    }
+
+    /** S-21/-067: every write stamps the format version on the row. */
+    public function testAppendStampsFormatVersion(): void
+    {
+        $history = new FileHistory($this->tmpPath);
+        $history->append(new FilteredItem(3, 'stamped'));
+
+        $raw = (string) \file_get_contents($this->tmpPath);
+        $decoded = \json_decode(\trim($raw), true);
+
+        $this->assertIsArray($decoded);
+        $this->assertArrayHasKey('f', $decoded);
+        $this->assertSame(1, $decoded['f']);
+    }
+
+    /**
+     * S-21/-067: rows predating the "f" field are the original (n,v) shape
+     * and must still load — the gate opens backwards, never sideways.
+     */
+    public function testLegacyRowsWithoutFormatFieldStillLoad(): void
+    {
+        \file_put_contents($this->tmpPath, "{\"n\":2,\"v\":\"legacy-row\"}\n");
+        \chmod($this->tmpPath, 0600);
+
+        $items = (new FileHistory($this->tmpPath))->all();
+
+        $this->assertCount(1, $items);
+        $this->assertSame(2, $items[0]->number());
+        $this->assertSame('legacy-row', $items[0]->value());
+    }
+
+    /**
+     * S-21/-067: a row from a FUTURE format is skipped whole, never
+     * interpreted — old readers guessing at new bytes is how corpora get
+     * laundered into nonsense rows.
+     */
+    public function testUnknownFormatRowsAreSkipped(): void
+    {
+        \file_put_contents(
+            $this->tmpPath,
+            "{\"n\":1,\"v\":\"known\"}\n{\"n\":2,\"v\":\"future\",\"f\":99}\n",
+        );
+        \chmod($this->tmpPath, 0600);
+
+        $items = (new FileHistory($this->tmpPath))->all();
+
+        $this->assertSame(['known'], array_map(static fn($i) => $i->value(), $items));
+    }
 }
