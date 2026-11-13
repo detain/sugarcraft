@@ -30,4 +30,8 @@ return [
     'tabs.next_tab' => 'التبويب التالي',
     'tabs.prev_tab' => 'التبويب السابق',
     'tabs.jump_to' => 'التبويب {index}',
+    'timer.paused_tag' => 'متوقف',
+    'timer.timeout_tag' => 'انتهى الوقت',
+    'stopwatch.not_started_tag' => 'لم يبدأ',
+    'stopwatch.paused_tag' => 'متوقف',
 ];

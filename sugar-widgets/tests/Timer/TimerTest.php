@@ -26,7 +26,9 @@ final class TimerTest extends TestCase
         $this->assertSame(10.0, $t->remaining);
         $this->assertFalse($t->isRunning());
         $this->assertFalse($t->timedOut());
-        $this->assertSame('0:10', $t->view());
+        // Fresh-and-stopped renders the visible paused tag (W-19) — the
+        // RUNNING bytes are the zero-move contract, tested separately.
+        $this->assertSame("0:10 \x1b[2mpaused\x1b[0m", $t->view());
     }
 
     public function testStartReturnsTickCmd(): void
@@ -191,7 +193,7 @@ final class TimerTest extends TestCase
     public function testViewRendersRemainingTime(): void
     {
         $t = Timer::new(5.0);
-        $this->assertSame('0:05', $t->view());
+        $this->assertSame("0:05 \x1b[2mpaused\x1b[0m", $t->view());
     }
 
     // ─── finite guards + reset validation + negative format (008/063) ──
@@ -242,5 +244,27 @@ final class TimerTest extends TestCase
         $this->assertSame('0:00', Timer::format(INF));
         $this->assertSame('0:05', Timer::format(5.0), 'positive rendering unchanged');
         $this->assertSame('1:02:03', Timer::format(3723.0));
+    }
+
+    public function testStateTagsArePairwiseVisibleAcrossTheMatrix(): void
+    {
+        $fresh = Timer::new(3.0, 1.0);
+        [$running, ] = $fresh->start();
+        $t = $running;
+        for ($i = 0; $i < 10 && !$t->timedOut(); $i++) {
+            [$t, ] = $t->update(new TickMsg($t->id, $t->epoch));
+        }
+        $this->assertTrue($t->timedOut(), 'ticks drove the timer to timeout');
+        // Running bytes are the zero-move contract: no tag, no dim SGR.
+        $this->assertSame('', $running->stateLabel());
+        $this->assertStringNotContainsString("\x1b[2m", $running->view());
+        $this->assertSame('paused', $fresh->stateLabel());
+        $this->assertSame('timeout', $t->stateLabel());
+        $paused  = $fresh->view();
+        $timeout = $t->view();
+        $this->assertNotSame($paused, $timeout, 'paused vs timeout visible in the frame');
+        $this->assertStringContainsString(" \x1b[2mpaused\x1b[0m", $paused);
+        $this->assertStringContainsString(" \x1b[2mtimeout\x1b[0m", $timeout);
+        $this->assertStringEndsWith("timeout\x1b[0m", $timeout);
     }
 }

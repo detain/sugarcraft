@@ -30,4 +30,8 @@ return [
     'tabs.next_tab' => 'scheda successiva',
     'tabs.prev_tab' => 'scheda precedente',
     'tabs.jump_to' => 'scheda {index}',
+    'timer.paused_tag' => 'in pausa',
+    'timer.timeout_tag' => 'tempo scaduto',
+    'stopwatch.not_started_tag' => 'non avviato',
+    'stopwatch.paused_tag' => 'in pausa',
 ];

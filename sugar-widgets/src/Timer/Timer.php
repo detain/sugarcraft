@@ -8,6 +8,7 @@ use SugarCraft\Widgets\Lang;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
+use SugarCraft\Style\Style;
 
 /**
  * Countdown timer. Construct with a duration; call {@see start()} to begin
@@ -95,7 +96,25 @@ final class Timer implements Model
 
     public function view(): string
     {
-        return self::format($this->remaining);
+        $label = $this->stateLabel();
+        $time  = self::format($this->remaining);
+        return $label === '' ? $time : $time . ' ' . Style::new()->dim()->render($label);
+    }
+
+    /**
+     * Plain-text state tag for the non-running states — '' while running,
+     * so the running bytes stay byte-identical (hard constraint). Timeout
+     * and pause were invisible in the frame: a paused '0:10' and a fresh
+     * '0:10', or a timed-out '0:00' and a reset '0:00', rendered the same,
+     * leaving AT consumers nothing to diff (W-19/021). Hosts that want to
+     * style the tag themselves compose it from this label.
+     */
+    public function stateLabel(): string
+    {
+        if ($this->running) {
+            return '';
+        }
+        return $this->timedOut ? Lang::t('timer.timeout_tag') : Lang::t('timer.paused_tag');
     }
 
     /**

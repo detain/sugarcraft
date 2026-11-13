@@ -30,4 +30,8 @@ return [
     'tabs.next_tab' => 'sonraki sekme',
     'tabs.prev_tab' => 'önceki sekme',
     'tabs.jump_to' => 'sekme {index}',
+    'timer.paused_tag' => 'duraklatıldı',
+    'timer.timeout_tag' => 'zaman aşımı',
+    'stopwatch.not_started_tag' => 'başlatılmadı',
+    'stopwatch.paused_tag' => 'duraklatıldı',
 ];

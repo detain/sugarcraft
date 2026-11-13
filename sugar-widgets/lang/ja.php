@@ -30,4 +30,8 @@ return [
     'tabs.next_tab' => '次のタブ',
     'tabs.prev_tab' => '前のタブ',
     'tabs.jump_to' => 'タブ{index}',
+    'timer.paused_tag' => '一時停止',
+    'timer.timeout_tag' => 'タイムアウト',
+    'stopwatch.not_started_tag' => '未開始',
+    'stopwatch.paused_tag' => '一時停止',
 ];

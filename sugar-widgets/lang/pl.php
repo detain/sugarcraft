@@ -30,4 +30,8 @@ return [
     'tabs.next_tab' => 'następna karta',
     'tabs.prev_tab' => 'poprzednia karta',
     'tabs.jump_to' => 'karta {index}',
+    'timer.paused_tag' => 'wstrzymane',
+    'timer.timeout_tag' => 'przekroczono czas',
+    'stopwatch.not_started_tag' => 'nie rozpoczęto',
+    'stopwatch.paused_tag' => 'wstrzymane',
 ];

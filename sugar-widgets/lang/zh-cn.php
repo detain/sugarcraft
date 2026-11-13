@@ -30,4 +30,8 @@ return [
     'tabs.next_tab' => '下一个标签页',
     'tabs.prev_tab' => '上一个标签页',
     'tabs.jump_to' => '标签页 {index}',
+    'timer.paused_tag' => '已暂停',
+    'timer.timeout_tag' => '超时',
+    'stopwatch.not_started_tag' => '未开始',
+    'stopwatch.paused_tag' => '已暂停',
 ];

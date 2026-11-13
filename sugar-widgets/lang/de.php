@@ -30,4 +30,8 @@ return [
     'tabs.next_tab' => 'nächster Tab',
     'tabs.prev_tab' => 'vorheriger Tab',
     'tabs.jump_to' => 'Tab {index}',
+    'timer.paused_tag' => 'pausiert',
+    'timer.timeout_tag' => 'Zeit abgelaufen',
+    'stopwatch.not_started_tag' => 'nicht gestartet',
+    'stopwatch.paused_tag' => 'pausiert',
 ];

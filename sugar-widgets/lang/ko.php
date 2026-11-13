@@ -30,4 +30,8 @@ return [
     'tabs.next_tab' => '다음 탭',
     'tabs.prev_tab' => '이전 탭',
     'tabs.jump_to' => '탭 {index}',
+    'timer.paused_tag' => '일시정지',
+    'timer.timeout_tag' => '시간 초과',
+    'stopwatch.not_started_tag' => '시작되지 않음',
+    'stopwatch.paused_tag' => '일시정지',
 ];

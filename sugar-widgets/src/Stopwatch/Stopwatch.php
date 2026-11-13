@@ -9,6 +9,7 @@ use SugarCraft\Widgets\Timer\Timer;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
+use SugarCraft\Style\Style;
 
 /**
  * Count-up stopwatch. Mirror of {@see Timer}: starts at zero, increments
@@ -68,7 +69,24 @@ final class Stopwatch implements Model
 
     public function view(): string
     {
-        return Timer::format($this->elapsed);
+        $label = $this->stateLabel();
+        $time  = Timer::format($this->elapsed);
+        return $label === '' ? $time : $time . ' ' . Style::new()->dim()->render($label);
+    }
+
+    /**
+     * Plain-text state tag — '' while running (byte-identical running
+     * frames), 'not started' at zero, 'paused' once elapsed time is held
+     * (W-19/021 four-state matrix; see {@see Timer::stateLabel()}).
+     */
+    public function stateLabel(): string
+    {
+        if ($this->running) {
+            return '';
+        }
+        return $this->elapsed <= 0.0
+            ? Lang::t('stopwatch.not_started_tag')
+            : Lang::t('stopwatch.paused_tag');
     }
 
     /**

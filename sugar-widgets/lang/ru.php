@@ -30,4 +30,8 @@ return [
     'tabs.next_tab' => 'следующая вкладка',
     'tabs.prev_tab' => 'предыдущая вкладка',
     'tabs.jump_to' => 'вкладка {index}',
+    'timer.paused_tag' => 'приостановлено',
+    'timer.timeout_tag' => 'время истекло',
+    'stopwatch.not_started_tag' => 'не запущено',
+    'stopwatch.paused_tag' => 'приостановлено',
 ];

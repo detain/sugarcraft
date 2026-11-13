@@ -30,4 +30,8 @@ return [
     'tabs.next_tab' => 'próxima aba',
     'tabs.prev_tab' => 'aba anterior',
     'tabs.jump_to' => 'aba {index}',
+    'timer.paused_tag' => 'em pausa',
+    'timer.timeout_tag' => 'tempo esgotado',
+    'stopwatch.not_started_tag' => 'não iniciado',
+    'stopwatch.paused_tag' => 'em pausa',
 ];

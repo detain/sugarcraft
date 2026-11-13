@@ -30,4 +30,8 @@ return [
     'tabs.next_tab' => 'onglet suivant',
     'tabs.prev_tab' => 'onglet précédent',
     'tabs.jump_to' => 'onglet {index}',
+    'timer.paused_tag' => 'en pause',
+    'timer.timeout_tag' => 'délai expiré',
+    'stopwatch.not_started_tag' => 'non démarré',
+    'stopwatch.paused_tag' => 'en pause',
 ];

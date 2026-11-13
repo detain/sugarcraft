@@ -30,4 +30,8 @@ return [
     'tabs.next_tab' => 'další karta',
     'tabs.prev_tab' => 'předchozí karta',
     'tabs.jump_to' => 'karta {index}',
+    'timer.paused_tag' => 'pozastaveno',
+    'timer.timeout_tag' => 'čas vypršel',
+    'stopwatch.not_started_tag' => 'nezahájeno',
+    'stopwatch.paused_tag' => 'pozastaveno',
 ];

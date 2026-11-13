@@ -24,7 +24,7 @@ final class StopwatchTest extends TestCase
         $s = Stopwatch::new();
         $this->assertSame(0.0, $s->elapsed);
         $this->assertFalse($s->isRunning());
-        $this->assertSame('0:00', $s->view());
+        $this->assertSame("0:00 \x1b[2mnot started\x1b[0m", $s->view());
     }
 
     public function testStartTicks(): void
@@ -179,5 +179,20 @@ final class StopwatchTest extends TestCase
     {
         $this->expectException(\InvalidArgumentException::class);
         Stopwatch::new(1.0)->withInterval(NAN);
+    }
+
+    public function testStateTagsArePairwiseVisibleAcrossTheMatrix(): void
+    {
+        $fresh = Stopwatch::new(1.0);
+        [$running, ] = $fresh->start();
+        [$moved, ] = $running->update(new TickMsg($running->id, $running->epoch));
+        $stopped = $moved->stop();
+        $this->assertSame('', $running->stateLabel());
+        $this->assertStringNotContainsString("\x1b[2m", $running->view(), 'running bytes are a zero-move');
+        $this->assertSame('not started', $fresh->stateLabel());
+        $this->assertSame('paused', $stopped->stateLabel());
+        $this->assertNotSame($fresh->view(), $stopped->view(), 'never-started vs paused are distinct');
+        $this->assertStringContainsString(" \x1b[2mnot started\x1b[0m", $fresh->view());
+        $this->assertStringContainsString(" \x1b[2mpaused\x1b[0m", $stopped->view());
     }
 }

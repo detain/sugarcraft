@@ -30,4 +30,8 @@ return [
     'tabs.next_tab' => 'siguiente pestaña',
     'tabs.prev_tab' => 'anterior pestaña',
     'tabs.jump_to' => 'pestaña {index}',
+    'timer.paused_tag' => 'en pausa',
+    'timer.timeout_tag' => 'tiempo agotado',
+    'stopwatch.not_started_tag' => 'sin iniciar',
+    'stopwatch.paused_tag' => 'en pausa',
 ];
