@@ -19,10 +19,19 @@
  *
  * The wrapper runs as a subprocess under the sugar-pty PTY, so
  * Ctrl+C / Ctrl+Z / SIGWINCH all behave correctly via the
- * controlling-terminal claim. The supervisor middleware layer
- * (Logger, Auth, RateLimit) runs in the parent, before the
- * wrapper is exec'd — same composition model as the legacy
- * BubbleTea pattern, just with process isolation.
+ * controlling-terminal claim. The supervisor's registered middleware
+ * runs in the parent, before the wrapper is exec'd — same composition
+ * model as the legacy BubbleTea pattern, just with process isolation.
+ *
+ * WHAT THIS EXAMPLE DELIBERATELY OMITS. The composition model can run
+ * gating layers in the parent, but this file registers none: the
+ * supervisor stack is Logger + Spawn — no `Auth`, no `RateLimit` — so
+ * any user sshd lets through mounts the Program, unhurried. That is
+ * the open-default posture the library README tabulates under
+ * 'Defaults that are open until you close them': fine for a smoke
+ * test, not a deployment. The pair with run-program.php still has to
+ * stay together in a deployment; what it lacks is identity and
+ * throttle, and both are one ->use() away in the parent.
  */
 
 declare(strict_types=1);

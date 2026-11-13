@@ -18,10 +18,20 @@
  *       PermitTTY yes
  *
  * Compared to bare ForceCommand-to-bash, this version gets you:
- * - middleware composition (Logger, Auth, RateLimit, custom)
+ * - a composable middleware stack (this specimen registers Logger +
+ *   Spawn; everything else is one ->use() away)
  * - ability to swap the inner cmd per-user via the Spawn factory
  * - clean process isolation (supervisor crash doesn't kill the shell;
  *   shell exit cleanly tears down the supervisor)
+ *
+ * WHAT THIS EXAMPLE DELIBERATELY OMITS. There is no `Auth` and no
+ * `RateLimit` in this stack, so *any* user sshd lets through lands in a
+ * login bash, and nothing throttles a script hammering the endpoint —
+ * that is the open-default posture the library README tabulates under
+ * 'Defaults that are open until you close them': fine for a smoke test,
+ * not a deployment. Unlike hello-server.php this specimen hands out a
+ * shell, which makes the omission the whole difference between a demo
+ * and an exposure.
  */
 
 declare(strict_types=1);
