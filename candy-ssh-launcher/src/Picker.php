@@ -27,8 +27,8 @@ use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
  * and exit fast — no event loop, no full Program lifecycle.
  *
  * Test seam: the streams are constructor arguments and tests subclass
- * this class overriding {@see setRawMode()} (and {@see detectColumns()}
- * for the width-clamp pin) — there is no
+ * this class overriding {@see setRawMode()} (and {@see detectSize()}
+ * for the geometry pins) — there is no
  * `inputStream()` / `outputStream()` to override.
  */
 class Picker
@@ -51,11 +51,27 @@ class Picker
      */
     private const DESCRIPTION_COLOR = "\x1b[90m";
     /**
-     * Rows the visible window shows at once (F-25). A frame with more rows
-     * than the terminal has soft-wraps and strands chrome; ten keeps the
-     * picker inside any real window and gives PgUp/PgDn a page to scroll.
+     * Rows the visible window shows at once (F-25) — a CAP, not the
+     * window: on a short terminal the window shrinks to what fits above
+     * the chrome (-002, and the old comment's "keeps the picker inside
+     * any real window" claim was false for short-but-real ones). Ten
+     * gives PgUp/PgDn a page to scroll on ordinary windows.
      */
     private const WINDOW_ROWS = 10;
+    /**
+     * Chrome rows a full frame can carry: title, filter, blank, help —
+     * plus the (shown of total) count row and the (no matches) row when
+     * each is visible. draw() budgets the exact count per frame; pageSpan
+     * uses the worst case so a page never scrolls past a too-tight window.
+     */
+    private const MAX_CHROME_ROWS = 6;
+    /**
+     * Narrowest terminal the picker will run on: below this the chrome
+     * cannot fit a single honest row and the frame would scramble
+     * (-061) — pick() refuses (returns null, like a cancel) instead of
+     * rendering a lie.
+     */
+    private const MIN_COLS = 12;
 
     /** @var resource */
     protected $in;
@@ -76,9 +92,15 @@ class Picker
      * armCancelSignal() is strictly picker-scoped.
      */
     private ?bool $asyncSignalsBeforeArm = null;
-    /** Terminal width in columns; null = probed-and-not-a-tty, unset = not yet probed. */
-    private ?int $cols = null;
-    private bool $colsProbed = false;
+    /** Terminal geometry in cells; re-probed at the top of every draw()
+     * (-013: the old one-shot latch held the first size forever, so a
+     * mid-pick resize re-stranded the frame). null = not probed yet.
+     *
+     * @var ?array{cols:?int, rows:?int}
+     */
+    private ?array $geometry = null;
+    /** Set by the SIGWINCH handler; makes readKey() deliver a repaint wake. */
+    private bool $resizePending = false;
 
     /**
      * @param resource|null $in
@@ -99,6 +121,14 @@ class Picker
         if ($endpoints === []) {
             return null;
         }
+        // -061: refuse a terminal too narrow to hold the chrome. Nothing
+        // is drawn and no raw mode is entered — the refusal behaves like
+        // a cancel (pick() returns null, bin prints its cancel line),
+        // which is the honest signal for "render impossible here".
+        $probed = $this->detectSize() ?? ['cols' => null, 'rows' => null];
+        if ($probed['cols'] !== null && $probed['cols'] < self::MIN_COLS) {
+            return null;
+        }
         $this->totalEndpoints = count($endpoints);
         $this->aborted = false;
         // Arm BEFORE raw mode: setRawMode shells out to stty (fork+exec+
@@ -107,6 +137,7 @@ class Picker
         // before raw entry is harmless (the handler's setRawMode(false)
         // is a no-op pair on a canonical tty).
         $this->armCancelSignal();
+        $this->armResizeSignal();
         $this->setRawMode(true);
         try {
             while (true) {
@@ -226,6 +257,7 @@ class Picker
         } finally {
             $this->setRawMode(false);
             $this->disarmCancelSignal();
+            $this->disarmResizeSignal();
             if ($this->aborted) {
                 // Esc/^C: erase the transient frame before releasing the
                 // cursor line. After a successful pick the frame is a
@@ -312,6 +344,35 @@ class Picker
     }
 
     /**
+     * Arm the resize wake (-013): SIGWINCH invalidates the geometry cache
+     * and flags readKey() to return a repaint sentinel, so the frame
+     * redraws against the new size without waiting for the next keypress.
+     * The per-draw re-probe in draw() is the belt — this handler is the
+     * immediate wake. Builds without ext-pcntl simply repaint one key
+     * late; the geometry itself can no longer strand (the old latch was
+     * the bug, the signal is latency).
+     */
+    private function armResizeSignal(): void
+    {
+        if (!function_exists('pcntl_signal')) {
+            return;
+        }
+        pcntl_signal(SIGWINCH, function (): void {
+            $this->geometry = null;
+            $this->resizePending = true;
+        });
+    }
+
+    /** Undo armResizeSignal() — picker-scoped, like the cancel arms. */
+    private function disarmResizeSignal(): void
+    {
+        if (function_exists('pcntl_signal')) {
+            pcntl_signal(SIGWINCH, SIG_DFL);
+        }
+        $this->resizePending = false;
+    }
+
+    /**
      * @param list<Endpoint> $endpoints
      * @return list<array{endpoint: Endpoint, result: ?MatchResult, displayLine: string}>
      */
@@ -372,8 +433,20 @@ class Picker
      */
     private function draw(array $matches): void
     {
+        $this->geometry = null; // re-probe per frame: resizes are real (-013)
+        $size = $this->geometry();
+        $showCount = $this->filter !== '' && $this->totalEndpoints > 0;
+        $showNone = $matches === [];
+        // title + filter + blank + help, plus the conditional count and
+        // no-matches rows — the rows the budget below must leave for data.
+        $chromeRows = 4 + ($showCount ? 1 : 0) + ($showNone ? 1 : 0);
+
         fwrite($this->out, Ansi::cursorTo(1, 1) . Ansi::eraseToEnd());
-        fwrite($this->out, Lang::t('picker.title') . "\r\n");
+        // -014: every row the frame writes goes through clampRow — the
+        // chrome used to bypass it, and a localized help string (62-78
+        // cells) soft-wrapped on ≤78-col panes, stranding the overflow
+        // under the next redraw.
+        fwrite($this->out, $this->clampRow(Lang::t('picker.title')) . "\r\n");
         // Belt-and-braces: intake (isTextKey) already refuses control bytes,
         // but the echo passes through the same sanitizer the config-derived
         // strings use, so no raw ESC can reach the terminal from here either.
@@ -381,26 +454,31 @@ class Picker
         // integrity suite — picker.filter must keep that shape verbatim.
         $filterLine = Lang::t('picker.filter') . self::FILTER_COLOR . $this->stripControls($this->filter) . Ansi::reset();
         fwrite($this->out, $this->clampRow($filterLine) . "\r\n");
-        if ($this->filter !== '' && $this->totalEndpoints > 0) {
+        if ($showCount) {
             // Honest funnel: how much of the config the filter killed
             // (2026-10-23). The count row stays out of the filter line
             // itself (the integrity suite counts ESC bytes per 'filter: '
             // line) and out of reflection draws where totalEndpoints is
             // still 0.
-            fwrite($this->out, Lang::t('picker.count', [
+            fwrite($this->out, $this->clampRow(Lang::t('picker.count', [
                 'shown' => (string) count($matches),
                 'total' => (string) $this->totalEndpoints,
-            ]) . "\r\n");
+            ])) . "\r\n");
         }
-        if ($matches === []) {
-            fwrite($this->out, Lang::t('picker.no_matches') . "\r\n");
+        if ($showNone) {
+            fwrite($this->out, $this->clampRow(Lang::t('picker.no_matches')) . "\r\n");
         }
         // F-25: render-side visible window. windowTop is recomputed from
         // the cursor every frame, so no navigation branch has to maintain
         // it; array_slice keeps original keys, so $i still identifies the
-        // absolute row for the marker test.
+        // absolute row for the marker test. -002: on a terminal with known
+        // rows the window shrinks to what fits above the chrome instead of
+        // scrolling the picker's own title out of the viewport.
         $total   = count($matches);
         $visible = min(self::WINDOW_ROWS, $total);
+        if ($size['rows'] !== null && $total > 0) {
+            $visible = min($visible, max(1, $size['rows'] - $chromeRows));
+        }
         $top     = max(0, min($this->cursor, $total - $visible));
         foreach (array_slice($matches, $top, $visible, true) as $i => $record) {
             $e = $record['endpoint'];
@@ -412,18 +490,25 @@ class Picker
             }
             fwrite($this->out, $this->clampRow("{$marker}{$line}") . "\r\n");
         }
-        fwrite($this->out, "\r\n" . Lang::t('picker.help') . "\r\n");
+        fwrite($this->out, "\r\n" . $this->clampRow(Lang::t('picker.help')) . "\r\n");
     }
 
     /**
      * Page span for PgUp/PgDn (F-25): what the visible window shows at
-     * once, never below one.
+     * once, never below one — on a rows-known terminal, never past what
+     * fits above the worst-case chrome either (-002: a page of 10 onto a
+     * 7-row window would scroll the frame blind again).
      *
      * @param array<int|string, array<string, mixed>> $matches
      */
     private function pageSpan(array $matches): int
     {
-        return min(self::WINDOW_ROWS, max(1, count($matches)));
+        $span = min(self::WINDOW_ROWS, max(1, count($matches)));
+        $rows = $this->geometry()['rows'];
+        if ($rows !== null) {
+            $span = min($span, max(1, $rows - self::MAX_CHROME_ROWS));
+        }
+        return $span;
     }
 
     /**
@@ -432,14 +517,18 @@ class Picker
      * overflow under the next redraw (eraseToEnd only clears to the end of
      * the CURRENT line; 2026-10-23). Non-terminals — every byte-pinned
      * picker test and any piped run — probe null and pass through unclamped.
+     * The floor is cols-1 at the extremes too (-061): the old
+     * max(8, cols-1) could EXCEED the terminal on 4-8-col ttys, defeating
+     * the invariant in exactly the narrow case it existed for; the
+     * sub-MIN_COLS refusal in pick() keeps that band degenerate-but-safe.
      */
     private function clampRow(string $row): string
     {
-        $cols = $this->columns();
+        $cols = $this->geometry()['cols'];
         if ($cols === null) {
             return $row;
         }
-        $limit = max(8, $cols - 1);
+        $limit = max(1, $cols - 1);
         if (Width::of($row) <= $limit) {
             return $row;
         }
@@ -447,25 +536,36 @@ class Picker
         return Width::truncateAnsi($row, $limit - 1) . '…';
     }
 
-    private function columns(): ?int
+    /**
+     * Terminal geometry, probed once per frame (draw() resets the cache
+     * at its top; the SIGWINCH handler clears it for between-frame wakes)
+     * and normalized so "no tty" is ['cols' => null, 'rows' => null].
+     *
+     * @return array{cols:?int, rows:?int}
+     */
+    private function geometry(): array
     {
-        if (!$this->colsProbed) {
-            $this->colsProbed = true;
-            $this->cols = $this->detectColumns();
+        if ($this->geometry === null) {
+            $this->geometry = $this->detectSize() ?? ['cols' => null, 'rows' => null];
         }
-        return $this->cols;
+        return $this->geometry;
     }
 
     /**
-     * Test seam: the real terminal width when $out is a tty, null otherwise.
+     * Test seam: the real terminal size when $out is a tty, null
+     * otherwise. {@see PickerChromeTest} overrides it to force geometry
+     * without a PTY.
+     *
+     * @return ?array{cols:?int, rows:?int}
      */
-    protected function detectColumns(): ?int
+    protected function detectSize(): ?array
     {
         $tty = new Tty($this->out);
         if (!$tty->isTty()) {
             return null;
         }
-        return $tty->size()['cols'] ?? null;
+        $size = $tty->size();
+        return ['cols' => $size['cols'] ?? null, 'rows' => $size['rows'] ?? null];
     }
 
     /**
@@ -620,6 +720,15 @@ class Picker
             $ready = @stream_select($r, $w, $e, 0, 200_000);
             if (function_exists('pcntl_signal_dispatch')) {
                 pcntl_signal_dispatch();
+            }
+            if ($this->resizePending) {
+                // -013 repaint wake: return an unbound byte (form feed —
+                // never a keystroke here, and isTextKey() refuses control
+                // bytes anyway) so the switch drops it and the loop
+                // redraws against fresh geometry without waiting for a
+                // keypress.
+                $this->resizePending = false;
+                return "\x0c";
             }
             if ($ready !== 0) {
                 // > 0: a byte (or EOF) is ready. false: select errored —
