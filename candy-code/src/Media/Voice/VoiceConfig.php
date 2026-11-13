@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Media\Voice;
 
 use SugarCraft\Code\Cli\Bootstrap;
+use SugarCraft\Code\Support\Log;
 
 /**
  * The voice family's settings snapshot (C-TUI-6.l, GAP-MOD-23).
@@ -40,6 +41,8 @@ final class VoiceConfig
     public const MIN_SECONDS = 5;
     public const MAX_SECONDS = 600;
     public const DEFAULT_MAX_SECONDS = 120;
+
+    private static ?string $readFailure = null;
 
     private function __construct(
         public readonly string $baseUrl,
@@ -106,24 +109,79 @@ final class VoiceConfig
     }
 
     /**
-     * DELIBERATE SILENCE (candy-code-content-009), same ruling as
-     * {@see \SugarCraft\Code\Media\Sd\Client}'s `settings()`: this reader runs
+     * The reason the settings could not be read, or null while they could (or
+     * the file simply does not exist). Latched per process: the first failure
+     * is kept and logged once, repeated reads neither re-log nor overwrite it.
+     */
+    public static function readFailure(): ?string
+    {
+        return self::$readFailure;
+    }
+
+    /** @internal test seam: forget the latched failure so the next read may record again. */
+    public static function resetReadFailure(): void
+    {
+        self::$readFailure = null;
+    }
+
+    /**
+     * FAIL-SOFT, BUT NOT SILENT (candy-code-content-009, same fail direction as
+     * {@see \SugarCraft\Code\Media\Sd\Client}'s `settings()`): this reader runs
      * mid-keystroke (recorder arm, take transcription), where a message has no
      * surface to land on, so an unreadable settings file reads as "voice off"
      * — the safe direction, since voice is OFF until a user-tier
-     * `voice.baseUrl` exists. A corrupt file is therefore indistinguishable
-     * HERE from an unconfigured one by design; the diagnosis lives where the
-     * file is actually loaded (Bootstrap's config-read failure reporting and
-     * the doctor/settings surfaces), not on this hot path.
+     * `voice.baseUrl` exists. A file that is ABSENT is the normal unconfigured
+     * state and says nothing. A file that is PRESENT but throws on read, or does
+     * not decode to a JSON object, records its reason ONCE per process into
+     * {@see readFailure()} and onto the app log, so "why is voice off?" has an
+     * answer without spamming every keystroke.
      *
      * @return array<string, mixed>
      */
     private static function readSettings(): array
     {
         try {
-            return Bootstrap::readUserConfig();
-        } catch (\Throwable) {
+            $settings = Bootstrap::readUserConfig();
+        } catch (\Throwable $e) {
+            self::recordFailure($e::class . ': ' . $e->getMessage());
+
             return [];
         }
+
+        if (self::$readFailure === null) {
+            self::probeUserFile();
+        }
+
+        return $settings;
+    }
+
+    /** Bootstrap's reader folds a corrupt file into [] silently; detect that here, once. */
+    private static function probeUserFile(): void
+    {
+        $path = Bootstrap::userConfigPath();
+        if (!\is_file($path)) {
+            return;
+        }
+
+        $contents = @\file_get_contents($path);
+        if ($contents === false) {
+            self::recordFailure($path . ' is not readable');
+
+            return;
+        }
+
+        if (!\is_array(\json_decode($contents, true))) {
+            self::recordFailure($path . ' is not a valid JSON object');
+        }
+    }
+
+    private static function recordFailure(string $reason): void
+    {
+        if (self::$readFailure !== null) {
+            return;
+        }
+
+        self::$readFailure = $reason;
+        Log::channel(Log::APP, 'voice settings unreadable (' . $reason . '); voice stays off until the file is repaired');
     }
 }

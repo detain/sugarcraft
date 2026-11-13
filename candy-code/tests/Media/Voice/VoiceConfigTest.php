@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Media\Voice;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Config\LayeredSettings;
 use SugarCraft\Code\Config\Settings\Definitions\MediaSettings;
 use SugarCraft\Code\Config\Settings\SettingDefinition;
@@ -92,12 +93,71 @@ final class VoiceConfigTest extends TestCase
             'voice has no env hatch by design; the endpoint tier and the key expansion live behind the settings file');
     }
 
-    public function testTheSettingsReadSwallowCarriesItsDeliberateSilenceRuling(): void
+    public function testAbsentConfigFileIsSilentAndVoiceStaysOff(): void
     {
-        $source = (string) \file_get_contents(\dirname(__DIR__, 3) . '/src/Media/Voice/VoiceConfig.php');
+        $log = $this->withConfig(null);
 
-        self::assertStringContainsString('DELIBERATE SILENCE', $source,
-            'the catch-to-[] in readSettings() is a ruling, not an accident; the comment must stay with it');
+        self::assertFalse(VoiceConfig::fromSettings()->enabled());
+        self::assertNull(VoiceConfig::readFailure());
+        self::assertSame('', (string) \file_get_contents($log));
+    }
+
+    public function testCorruptConfigRecordsOneReasonAcrossRepeatedReads(): void
+    {
+        $log = $this->withConfig('{not json');
+
+        for ($i = 0; $i < 3; $i++) {
+            self::assertFalse(VoiceConfig::fromSettings()->enabled());
+        }
+
+        self::assertNotNull(VoiceConfig::readFailure());
+        self::assertStringContainsString('not a valid JSON object', (string) VoiceConfig::readFailure());
+        self::assertSame(1, \substr_count((string) \file_get_contents($log), 'voice settings unreadable'));
+    }
+
+    public function testValidConfigIsUnaffected(): void
+    {
+        $log = $this->withConfig((string) \json_encode(['voice.baseUrl' => 'https://x.invalid']));
+
+        self::assertSame('https://x.invalid', VoiceConfig::fromSettings()->baseUrl);
+        self::assertNull(VoiceConfig::readFailure());
+        self::assertSame('', (string) \file_get_contents($log));
+    }
+
+    protected function tearDown(): void
+    {
+        Bootstrap::useConfigPath(null);
+        VoiceConfig::resetReadFailure();
+        if ($this->prevLog !== null) {
+            \ini_set('error_log', $this->prevLog);
+        }
+        foreach ($this->tmp as $f) {
+            @\unlink($f);
+        }
+        $this->tmp = [];
+    }
+
+    /** @var list<string> */
+    private array $tmp = [];
+    private ?string $prevLog = null;
+
+    /** Point the config at $contents (null = no file) and capture error_log into a temp file. */
+    private function withConfig(?string $contents): string
+    {
+        VoiceConfig::resetReadFailure();
+        $dir = \sys_get_temp_dir() . '/vc-' . \bin2hex(\random_bytes(4));
+        $cfg = $dir . '-config.json';
+        $log = $dir . '-err.log';
+        \file_put_contents($log, '');
+        $this->tmp = [$cfg, $log];
+        if ($contents !== null) {
+            \file_put_contents($cfg, $contents);
+        }
+        Bootstrap::useConfigPath($cfg);
+        $this->prevLog = (string) \ini_get('error_log');
+        \ini_set('error_log', $log);
+
+        return $log;
     }
 
     /** @return list<string> */
