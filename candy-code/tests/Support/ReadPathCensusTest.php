@@ -208,9 +208,6 @@ final class ReadPathCensusTest extends TestCase
                 . 'FILE_PATTERN (the payload\'s msgId must equal the stem) before its content is read, and the '
                 . 'directory path itself comes only from forSession()\'s ID_PATTERN-checked session id under the owned home',
         ],
-        'Agents/Live/SubAgentTranscriptLog.php|fopen' => [
-            'SELF_LOCATED — the run\'s own log under ~/.candy-code/subagents, opened to append',
-        ],
         'Agents/Mailbox.php|fopen' => [
             'SELF_LOCATED — an inbox file under the team store this process writes',
             'SELF_LOCATED — the same inbox, re-opened to compact it',
@@ -358,6 +355,9 @@ final class ReadPathCensusTest extends TestCase
             'SELF_LOCATED — acquireUserConfigLock(): the `.config.json.lock` sidecar beside the '
                 . 'config, created by this process under umask 077 and opened `c` only for the '
                 . 'timed LOCK_EX; no byte of it is read',
+        ],
+        'Cli/Bootstrap.php|glob' => [
+            'NAMES_ONLY — sweepOrphanConfigTemps() lists this user config directory\'s `.config.json.XXXXXX` temps by an escaped literal pattern; no content is read, and only a regular non-link file we own past the orphan age is unlinked',
         ],
         'Cli/Bootstrap.php|scandir' => [
             'NAMES_ONLY — installedBundleNames() (C-EXT-4.d) lists the names under the home '
@@ -655,6 +655,10 @@ final class ReadPathCensusTest extends TestCase
         ],
         // A RecursiveDirectoryIterator until audit 15d-17 made the tier walk a
         // sorted scandir() walk; the anchor and per-entry gate are unchanged.
+        'Context/SymbolMapRebuilder.php|fopen' => [
+            'SELF_LOCATED — start() probes the symbol-map cache\'s own sibling lock file, opened `c` (create, no truncate), content never read',
+            'SELF_LOCATED — the rebuild takes the same sibling lock file of the cache this process owns; flock only, content never read',
+        ],
         'Context/RuleLoader.php|scandir' => [
             'CONTAINED — the tier directory is anchored to its tree (project/root) or to the owned '
                 . 'HOME/.candy-code (user), and each `*.md` is confined to the resolved directory '
@@ -1066,6 +1070,9 @@ final class ReadPathCensusTest extends TestCase
                 . 'only to hold flock(); lstat refuses anything but a regular file and no byte '
                 . 'of it is read',
         ],
+        'Session/DraftJournal.php|file_get_contents' => [
+            'SELF_LOCATED — take() reads the one-line draft-length marker this journal itself wrote at its own path; a torn or malformed body reads as null',
+        ],
         'Session/Gc/GcInventory.php|fopen' => [
             // gc-cli-1106 closeout 2026-11-06: lockSweep() opens each `.lock`
             // in this application's own session-lock directory only to test
@@ -1363,6 +1370,9 @@ final class ReadPathCensusTest extends TestCase
                 . 'child exits and immediately discarded; decoded as JSON, never executed '
                 . '(mirror of the Config/StatusLineCommand.php row above)',
         ],
+        'Media/Voice/VoiceConfig.php|file_get_contents' => [
+            'SELF_LOCATED — probeUserFile() re-reads the user config at Bootstrap::userConfigPath(), the config this app itself writes under the owned home, only to detect a corrupt body; the content is json-decoded for a warning and never consumed as data',
+        ],
         'Media/Voice/Transcriber.php|file_get_contents' => [
             'SELF_LOCATED — the WAV body uploaded once to the user-configured endpoint; the '
                 . 'path is the one AudioRecorder::start() generated in the PrivateDir-verified '
@@ -1386,6 +1396,9 @@ final class ReadPathCensusTest extends TestCase
                 . '~/.candy-code/media root HomeDirectory::owned() establishes (tests hand a '
                 . 'temp root to the forSession() seam)',
         ],
+        'Support/LineAppends.php|fopen' => [
+            'SELF_LOCATED — append() opens `ab` a log the caller owns, after refusing a linked directory or file under a 0700-created dir; write-only, nothing is read',
+        ],
         'Support/MacAltNotice.php|file_get_contents' => [
             'OWNED_HOME — readStamp(): the one-line mac-alt-notice version stamp this class '
                 . 'itself wrote under the ~/.candy-code/cache root HomeDirectory::owned() '
@@ -1403,6 +1416,9 @@ final class ReadPathCensusTest extends TestCase
             'NAMES_ONLY — removeSweptTree() lists one already-condemned expired session directory '
                 . 'to unlink its regular files and rmdir it when empty; links are unlinked, never '
                 . 'followed, and no file content is ever read',
+        ],
+        'Support/PrivateRetainedDir.php|fopen' => [
+            'SELF_LOCATED — the `wb` open of a partial in a store directory verified() created 0700 and checked ours, after lstat refused a stranded partial; write-only, nothing is read',
         ],
         'Support/PrivateRetainedDir.php|scandir' => [
             'NAMES_ONLY — sweep() lists a retained store\'s own owner-only directory (and its one level of '
