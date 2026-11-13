@@ -175,6 +175,23 @@ closure (the `Progress` precedent is spelled out under
 Components deliberately do not read the environment themselves so a
 single detection point keeps every widget consistent.
 
+### The `0` dimension sentinel — one table, per-surface meanings
+
+There is no repo-wide `DimensionPolicy` yet (unifying the behaviour is a
+gated product call, not yet ruled — each surface below documents its own
+law next to its setter). A fresh probe of each, November 2026:
+
+| Surface | `0` means |
+| --- | --- |
+| `Table::withSize()` width | auto — columns take their content width |
+| `Table::withSize()` height | header only — ZERO body rows paint |
+| `Table::withPageSize()` | pagination disabled — all rows are one page |
+| `Tree::withSize()` either axis | unbounded — all rows, no truncation |
+| `Tabs` `width:` / `withWidth()` | no clip — the full bar renders (`::new()` defaults to **80**, unlike Table's 0-auto) |
+| `TextEdit::view(limit)` | `<= 0` = unlimited cells |
+| `Progress::withWidth()` | bar collapses to its label text only |
+| `Help::withWidth()` | no cap on either view (the W-17 clamp idles) |
+
 ### Verb return-shape parity
 
 The house law (W-10): a value verb returns `self`; only `update()` — and

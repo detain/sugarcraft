@@ -288,6 +288,14 @@ final class Tree implements Model
         return $this->copy(roots: array_values($roots))->clamp();
     }
 
+    /**
+     * Render window in cells; negatives throw. ZERO contract (W-35):
+     * `width 0` = unbounded (labels are never truncated) and `height 0`
+     * = ALL rows render — the opposite of
+     * {@see \SugarCraft\Widgets\Table\Table::withSize()}, where a zero
+     * height paints no body rows at all. See the README dimension table
+     * for the per-surface `0` law.
+     */
     public function withSize(int $width, int $height): self
     {
         return $this->copy(width: $width, height: $height)->clamp();

@@ -43,7 +43,9 @@ use SugarCraft\Mouse\Zones\MsgZoneInBounds;
  *
  * When the rendered tab bar exceeds {@see $width}, it is clipped to the
  * available space and ellipsis (`…`) are shown on the overflow side(s)
- * to indicate hidden tabs.
+ * to indicate hidden tabs. `width 0` means NO clip — the whole bar
+ * renders (W-35 dimension law; `::new()` defaults to 80, unlike
+ * {@see Table}, whose default is 0 = auto).
  *
  * Mirrors charmbracelet/bubbles `Tabs`.
  */

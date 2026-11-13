@@ -451,6 +451,15 @@ final class Table implements Model
      * When {@see withPageSize()} is also active, the painted window
      * clamps to this height (pageSize never overflows the frame).
      */
+    /**
+     * Viewport in cells; negatives throw. Zero contracts (W-35):
+     * `width 0` = auto — each column takes the widest of its cells;
+     * `height 0` = paints ZERO body rows (header only) — the opposite
+     * of {@see \SugarCraft\Widgets\Tree\Tree::withSize()}, where 0 is
+     * unbounded. The README dimension table enumerates every surface's
+     * `0` meaning; unifying them into one law is a gated product call
+     * (DimensionPolicy pass — see W-14's clamp and W-36's minimums).
+     */
     public function withSize(int $width, int $height): self
     {
         if ($width < 0 || $height < 0) {
