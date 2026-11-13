@@ -698,7 +698,7 @@ final class GenDocsTest extends TestCase
         \file_put_contents("$root/docs/_data/fixture-alpha.body.html",
             '<p class="lede" style="margin-top: 28px;">Chrome fixture.</p>' . "\n"
             . '<figure><img src="https://raw.githubusercontent.com/detain/sugarcraft/master/fixture-alpha/.vhs/demo.gif" alt="demo"></figure>' . "\n"
-            . '<figure><img src="https://raw.githubusercontent.com/detain/sugarcraft/master/fixture-alpha/.vhs/pre.gif" alt="pre" onerror="custom-crutch-kept"></figure>' . "\n"
+            . '<figure><img src="https://raw.githubusercontent.com/detain/sugarcraft/master/fixture-alpha/.vhs/pre.gif" alt="pre" onerror="this.parentElement.style.display=\'none\'"></figure>' . "\n"
             . '<figure><img src="../img/icons/fixture-alpha.png" alt="icon"></figure>' . "\n");
 
         $r = $this->runScript($root);
@@ -710,12 +710,19 @@ final class GenDocsTest extends TestCase
             '<img src="https://raw.githubusercontent.com/detain/sugarcraft/master/fixture-alpha/.vhs/demo.gif" alt="demo" ' . $crutch . '>',
             $page
         );
-        $this->assertSame(1, substr_count($page, $crutch), 'standard crutch appears exactly once on the page');
-        // Pre-crutched gif: custom bytes survive verbatim, nothing appended.
+        // RT-34 law: a NON-canonical onerror value in _data is residue, so the
+        // pre-crutched fixture carries the canonical literal — and the exact
+        // tag assertions below still pin the crutch-leg's real contract: an
+        // already-crutched img gains nothing, because any existing onerror=
+        // satisfies it (gen-docs.php's own "not merely the canonical string"
+        // comment), and one appends exactly once.
+        $this->assertSame(2, substr_count($page, $crutch), 'one crutch per demo GIF, never a third');
+        // Pre-crutched gif: canonical bytes survive verbatim, nothing appended.
         $this->assertStringContainsString(
-            '<img src="https://raw.githubusercontent.com/detain/sugarcraft/master/fixture-alpha/.vhs/pre.gif" alt="pre" onerror="custom-crutch-kept">',
+            '<img src="https://raw.githubusercontent.com/detain/sugarcraft/master/fixture-alpha/.vhs/pre.gif" alt="pre" onerror="this.parentElement.style.display=\'none\'">',
             $page
         );
+        $this->assertStringNotContainsString($crutch . ' ' . $crutch, $page, 'a crutch was doubled onto one img');
         // Non-gif img: no crutch was demanded.
         $this->assertStringContainsString('<img src="../img/icons/fixture-alpha.png" alt="icon">', $page);
     }

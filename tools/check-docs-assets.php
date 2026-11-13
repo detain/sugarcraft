@@ -107,7 +107,82 @@ final class CheckDocsAssets
         return self::$readCache[$path] ??= (string) @file_get_contents($path);
     }
 
+
     /**
+     * RT-34 (repo-tooling-037): the tag/attribute deny-list for every UNTRUSTED
+     * HTML fragment the generators embed. The `docs/_data/<slug>.body.html`
+     * store (and, on the narrative pages, the markdown converter's raw-HTML
+     * passthrough) reach https://sugarcraft.github.io verbatim, so anyone who
+     * can open a merged PR against those sources can otherwise plant script
+     * there — no auth and no cookies on the target, but a fully trusted origin:
+     * phishing, brand damage, drive-by. Parse-don't-validate at the render
+     * boundary: find the residue, refuse the build, name it. The copies of
+     * this body across gen-docs.php, gen-doc-pages.php and this file are
+     * token-pinned against each other by tools/tests/HtmlResidueDriftTest.php
+     * — the three enforcement points cannot drift apart, and the committed
+     * corpus is re-checked retroactively rather than assumed clean.
+     *
+     * @return list<string> human-readable findings; [] means the fragment is clean
+     */
+    public static function htmlResidueProblems(string $html): array
+    {
+        $problems = [];
+    // The repo's own canonical demo-GIF crutch (gen-docs.php's
+    // DEMO_GIF_ONERROR, demanded by check-docs-assets' crutch leg) is the ONE
+    // allow-listed attribute, and ONLY as the exact full literal — anything
+    // merely shaped like an onerror= stays residue.
+        $html = str_replace('onerror="this.parentElement.style.display=\'none\'"', 'ALLOWED_DEMO_CRUTCH', $html);
+        if (preg_match_all('/<\s*(script|iframe|object|embed|form|base)\b/i', $html, $tags) === 1) {
+            foreach (array_values(array_unique($tags[1])) as $tag) {
+                $problems[] = 'disallowed tag <' . strtolower($tag) . '>';
+            }
+        }
+        if (preg_match_all('/<\s*meta[^>]*http-equiv/is', $html) === 1) {
+            $problems[] = 'disallowed meta http-equiv channel';
+        }
+        if (preg_match_all('/<[a-zA-Z][^>]*\son[a-zA-Z:]+\s*=/is', $html, $attrs) === 1) {
+            foreach ($attrs[0] as $fragment) {
+                if (preg_match('/\s(on[a-zA-Z:]+)\s*=/i', $fragment, $one) === 1) {
+                    $problems[] = 'event handler attribute ' . strtolower($one[1]);
+                }
+            }
+        }
+        if (preg_match_all('/(href|src|action|xlink:href)\s*=\s*([\'"]?)\s*(javascript|vbscript)\s*:/i', $html, $urls) === 1) {
+            foreach (array_values(array_unique($urls[3])) as $scheme) {
+                $problems[] = 'scriptable URL scheme ' . strtolower($scheme) . ':';
+            }
+        }
+        if (preg_match_all('/(href|src|action|xlink:href)\s*=\s*([\'"]?)\s*data\s*:\s*text\s*\/\s*html/is', $html) === 1) {
+            $problems[] = 'scriptable URL scheme data:text/html';
+        }
+
+        return array_values(array_unique($problems));
+    }
+
+    /**
+     * RT-34: the SECOND enforcement point — already-committed `docs/_data/
+     * *.body.html` fragments re-pass the same deny-list retroactively, so
+     * residue that landed before the gate (or via a path that skipped
+     * gen-docs) reddens CI rather than sitting published. Scratch --root
+     * trees legitimately carry minimal or absent corpora: the real-tree
+     * floor lives in tools/tests/HtmlResidueDriftTest, not here.
+     *
+     * @return list<string>
+     */
+    private static function htmlResidue(string $root): array
+    {
+        $findings = [];
+        foreach (glob("$root/docs/_data/*.body.html") ?: [] as $file) {
+            foreach (self::htmlResidueProblems(self::readCached($file)) as $problem) {
+                $findings[] = self::relative($root, $file) . ': ' . $problem;
+            }
+        }
+
+        return $findings;
+    }
+
+    /**
+   /**
      * @return list<string> human-readable findings, empty when the tree is clean
      */
     public static function derive(string $root, ?array &$census = null): array
@@ -122,6 +197,7 @@ final class CheckDocsAssets
             self::searchAffordance($root),
             self::navBlockIdentity($root),
             self::sitemapCoverage($root),
+            self::htmlResidue($root),
         );
 
         // RT-20: a findings-only answer is vacuously green on a tree the legs
