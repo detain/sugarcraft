@@ -6,6 +6,7 @@ namespace SugarCraft\Top\Collect\Gpu;
 
 use SugarCraft\Top\Collect\Paths;
 use SugarCraft\Top\Collect\Read;
+use SugarCraft\Top\Collect\Sentinel;
 
 /**
  * Enumerates PCI accelerators from sysfs. Each list is de-duplicated by
@@ -78,7 +79,7 @@ final class PciCards
             if ($card === null) {
                 continue;
             }
-            $key = $card->busId === 'n/a' ? $card->device : $card->busId;
+            $key = $card->busId === Sentinel::UNAVAILABLE ? $card->device : $card->busId;
             if (!isset($seen[$key])) {
                 $seen[$key] = true;
                 $out[] = $card;

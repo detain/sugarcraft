@@ -12,6 +12,7 @@ use SugarCraft\Top\Collect\GpuProcess;
 use SugarCraft\Top\Collect\GpuSnapshot;
 use SugarCraft\Top\Collect\GpuVendor;
 use SugarCraft\Top\Collect\Paths;
+use SugarCraft\Top\Collect\Sentinel;
 
 use function React\Promise\all;
 use function React\Promise\resolve;
@@ -246,7 +247,7 @@ final class Accelerators
                 }
                 $gpus[] = $d->withIndex($index);
                 $standIns += $isStandIn ? 1 : 0;
-                if (!$isStandIn && $b->drmClients() && $d->busId !== 'n/a') {
+                if (!$isStandIn && $b->drmClients() && $d->busId !== Sentinel::UNAVAILABLE) {
                     $pdevIndex[$d->busId] = $index;
                 }
             }
@@ -286,8 +287,8 @@ final class Accelerators
      */
     private static function pad(array $now, array $before): array
     {
-        $key = static fn (GpuDevice $d): string => $d->uuid !== 'n/a' ? 'u:' . $d->uuid
-            : ($d->busId !== 'n/a' ? 'b:' . $d->busId : 'n:' . $d->kind->value . ':' . $d->name . ':' . $d->index);
+        $key = static fn (GpuDevice $d): string => $d->uuid !== Sentinel::UNAVAILABLE ? 'u:' . $d->uuid
+            : ($d->busId !== Sentinel::UNAVAILABLE ? 'b:' . $d->busId : 'n:' . $d->kind->value . ':' . $d->name . ':' . $d->index);
         $current = [];
         foreach ($now as $d) {
             $current[$key($d)] ??= $d;
