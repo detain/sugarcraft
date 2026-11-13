@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Toast\Tests;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Toast\{Action, Position, Toast, ToastType};
+use SugarCraft\Toast\{Action, Alert, Position, Toast, ToastType};
 
 /**
  * Pins the label ingress normalisation.
@@ -150,5 +150,61 @@ final class ToastActionLabelIngressTest extends TestCase
         foreach (['Retry', 'Undo', 'Keep both', 'Über', '取消'] as $clean) {
             $this->assertSame($clean, Action::new($clean, static function () {})->label);
         }
+    }
+
+    // ------------------------------------------------------------------
+    // ACTION LIST INGRESS (TST-ACTIONS): the Alert ctor honours its own
+    // list<Action> signature. Before this law held, ['Retry','Ignore']
+    // (raw strings) or a string-keyed map rode through un-inspected until
+    // the renderer reached for $action->label and fataled several frames
+    // away from the caller. Same fail-fast shape as HistoryLog's entries
+    // guard: list-shape first, then per-member type naming the position.
+    // ------------------------------------------------------------------
+
+    public function testStringMemberAmongActionsThrowsNamingPosition(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('action 1 must be an Action; got string');
+        new Alert(ToastType::Info, 'msg', null, null, [Action::new('Ok', static function () {}), 'Retry']);
+    }
+
+    public function testNestedArrayMemberNamesItsType(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('action 0 must be an Action; got array');
+        new Alert(ToastType::Info, 'msg', null, null, [[ 'label' => 'Ok', 'callback' => null ]]);
+    }
+
+    public function testStringKeyedActionMapIsRefusedAsNonList(): void
+    {
+        // array_is_list arm: keys carry meaning to nobody here, and the
+        // renderer iterates positionally — a map would silently reorder
+        // or skip buttons depending on insertion key.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('actions must be a list');
+        new Alert(ToastType::Info, 'msg', null, null, ['primary' => Action::new('Ok', static function () {})]);
+    }
+
+    public function testWithActionsDoorCannotSmuggleGarbage(): void
+    {
+        $alert = new Alert(ToastType::Info, 'msg');
+        try {
+            $alert->withActions([new \stdClass()]);
+            $this->fail('withActions() must reach the constructor guard, not bypass it');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('action 0 must be an Action; got stdClass', $e->getMessage());
+        }
+    }
+
+    public function testGenuineActionListStillAdmitsByteIdentical(): void
+    {
+        // Positive control: the guard must cost the honest path nothing.
+        $actions = [
+            Action::new('Retry', static function (): void {}),
+            Action::new('Ignore', static function (): void {}),
+        ];
+        $alert = new Alert(ToastType::Info, 'msg', null, null, $actions);
+        $this->assertSame($actions, $alert->actions);
+        $this->assertSame($actions, $alert->withActions($actions)->actions);
     }
 }

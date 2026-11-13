@@ -25,7 +25,11 @@ final class Alert
      *        by $persistent (via withoutExpiry()/withCancelledExpiry() or
      *        Toast::cancelAlert()), not by null alone.
      * @param float|null $progress  Progress 0.0–1.0 (non-finite throws; the constructor stores the value as given — withProgress() clamps on attach and render clamps again); null = no progress bar
-     * @param list<Action> $actions  Clickable action buttons
+     * @param list<Action> $actions  Clickable action buttons (validated below:
+     *        a non-list or a non-Action member throws at construction — the
+     *        documented shape was once enforced by nothing, and a garbage
+     *        member rode through to the renderer's `$action->label` where it
+     *        fatalled far from the caller who passed it)
      * @param Color|null $backgroundColor  Optional box background fill (null = no fill, plain render)
      * @param Color|null $foregroundColor  Optional message-text colour (null = terminal default)
      * @param Color|null $borderColor  Optional box-glyph (border) colour (null = terminal default)
@@ -42,8 +46,9 @@ final class Alert
      *        appending a second box — progress toasts once had no
      *        lifecycle at all. null = anonymous, always
      *        appends.
-     * @throws \InvalidArgumentException when $progress is non-finite, or when
-     *         $expiresAt is non-finite or below the epoch floor
+     * @throws \InvalidArgumentException when $progress is non-finite, when
+     *         $expiresAt is non-finite or below the epoch floor, or when
+     *         $actions is not a list of Action instances
      */
     public function __construct(
         public readonly ToastType $type,
@@ -69,6 +74,16 @@ final class Alert
                 'Alert progress must be a finite 0.0-1.0 float (out-of-range values '
                 . 'clamp); NAN/INF have no honest bar to render'
             );
+        }
+        if (!\array_is_list($actions)) {
+            throw new \InvalidArgumentException('Alert actions must be a list (sequential, zero-based keys)');
+        }
+        foreach ($actions as $position => $action) {
+            if (!$action instanceof Action) {
+                throw new \InvalidArgumentException(
+                    "Alert action {$position} must be an Action; got " . \get_debug_type($action)
+                );
+            }
         }
     }
 
@@ -206,6 +221,8 @@ final class Alert
      * Attach action buttons.
      *
      * @param list<Action> $actions
+     * @throws \InvalidArgumentException on a non-list or non-Action member
+     *         (the constructor validates; this door cannot smuggle garbage)
      */
     public function withActions(array $actions): self
     {
