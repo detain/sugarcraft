@@ -1,4 +1,4 @@
-# SugarCraft\Dashboard
+# SugarDashboard
 
 sugar-dashboard — a TUI building-block library for PHP 8.3+: column grid,
 constraint layout, ratio grid, data grid, tree, modal, status bar, tabs,
@@ -46,19 +46,19 @@ composer require sugarcraft/sugar-dashboard
 
 | Type | Description | Key Methods |
 |------|-------------|-------------|
-| `Cell` | Single terminal cell (rune + Style) — sugar-dashboard SSOT, distinct from `\SugarCraft\Vterm\Cell\Cell` | |
-| `Buffer` | Cell grid buffer for drawing — sugar-dashboard SSOT, distinct from `\SugarCraft\Vterm\Buffer\Buffer` | `cell(x,y)`, `setCell(x,y,Cell)`, `fill(rect,Cell)` |
+| `Cell` | Single terminal cell (rune + Style) — the package's own single source of truth, distinct from `\SugarCraft\Vterm\Cell\Cell` | |
+| `Buffer` | Cell grid buffer for drawing — the package's own single source of truth, distinct from `\SugarCraft\Vterm\Buffer\Buffer` | `cell(x,y)`, `setCell(x,y,Cell)`, `fill(rect,Cell)` |
 | `Rect` | Rectangle geometry (rectmath bounds model: minX/minY/maxX/maxY) — distinct from `\SugarCraft\Core\Rect` (offset+size model) | `contains()`, `intersect()`, `dx()`, `dy()` |
-| `Style` | Terminal styling (inline foreground/background Color slots) — sugar-dashboard SSOT, distinct from `\SugarCraft\Style\Style` (padding/margin/borders) | `withForeground()`, `withBackground()`, `withBold()`, `toAnsi()` |
-| `StyleParser` | Parses `[text](fg:red,bg:blue)` into Dash Cell arrays — sugar-dashboard SSOT, NOT drop-in compatible with `\SugarCraft\Style\StyleParser` | |
+| `Style` | Terminal styling (inline foreground/background Color slots) — the package's own single source of truth, distinct from `\SugarCraft\Style\Style` (padding/margin/borders) | `withForeground()`, `withBackground()`, `withBold()`, `toAnsi()` |
+| `StyleParser` | Parses `[text](fg:red,bg:blue)` into Dash Cell arrays — the package's own single source of truth, NOT drop-in compatible with `\SugarCraft\Style\StyleParser` | |
 | `Color` | Backward-compat alias for `\SugarCraft\Core\Util\Color` (true duplicate, replaced by `class_alias` shim — prefer Core import in new code) | |
-| `Theme` | Pre-defined theme palettes (9 colour slots + helpers; `fg()`/`bg()` emit at the process-wide `ColorMode` capability, `NO_COLOR` → empty string) — sugar-dashboard SSOT, distinct from `\SugarCraft\Style\Theme` (13 slots, readonly properties, immutable `with*()` builders, no render helpers) | `dark()`, `dracula()`, `oneDark()`, `githubDark()`, `light()` |
-| `ColorMode` | Process-wide colour capability gate for every renderer in the library — charts, gauges and chrome route through it instead of each deciding on its own — the one capability authority (finding M-7); it deliberately diverges from `ColorProfile::detect()` in three documented, probe-pinned places, see Color Environment | `use(?ColorProfile): void`, `profile(): ColorProfile` |
+| `Theme` | Pre-defined theme palettes (9 color slots + helpers; `fg()`/`bg()` emit at the process-wide `ColorMode` capability, `NO_COLOR` → empty string) — the package's own single source of truth, distinct from `\SugarCraft\Style\Theme` (13 slots, readonly properties, immutable `with*()` builders, no render helpers) | `dark()`, `dracula()`, `oneDark()`, `githubDark()`, `light()` |
+| `ColorMode` | Process-wide color capability gate for every renderer in the library — charts, gauges and chrome route through it instead of each deciding on its own — the one capability authority (finding M-7); it deliberately diverges from `ColorProfile::detect()` in three documented, probe-pinned places, see Color Environment | `use(?ColorProfile): void`, `profile(): ColorProfile` |
 | `Threshold` | Maps a numeric value (typically a 0..1 ratio) to a `Color` via ordered stops — the shared "green below 60%, yellow below 80%, red above" pattern that gauges, meters and status indicators would otherwise each reinvent; `health()` is the preset triple | `of(array $stops)`, `health(?ok, ?warn, ?critical)`, `colorFor(float): Color`, `stops()` |
 | `EdgeStyle` | String enum `Solid`/`Dashed`/`Dotted`/`Bold` — currently dormant: no consumers in the library (the live tree-edge variant is `Components\Tree\EdgeStyle`, which carries `Double` in place of `Bold` and is consumed by `Network`) | |
 | `Segment` | 7-segment display component (digital-clock/calculator style) — renders characters from horizontal and vertical segments | `new(string)`, `withDigitWidth()`, `withShowColon()`, `withOnColor()`, `withOffColor()`, `withContent()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/segment.gif) |
 
-> **Dual-SSOT note.** Five Foundation primitives (`Style`/`Theme`/`Rect`/`Buffer`/`Cell`) plus `StyleParser` are intentionally distinct from same-named canonical types in `sugar-style`/`sugar-core`/`sugar-vterm`. The two families have distinct design lineages and the API shapes diverge. Only `Color` was a true duplicate and is now a `class_alias` to `\SugarCraft\Core\Util\Color`. See `CALIBER_LEARNINGS.md` entries `[pattern:dual-foundation-ssot]`, `[pattern:dual-style-ssot]`, `[pattern:dual-theme-ssot]`, `[pattern:dual-rect-models]`, `[pattern:dual-buffer-roles]`, `[pattern:dual-cell-shapes]`.
+> **Dual-source-of-truth (SSOT) note.** Five Foundation primitives (`Style`/`Theme`/`Rect`/`Buffer`/`Cell`) plus `StyleParser` are intentionally distinct from same-named canonical types in `sugar-style`/`sugar-core`/`sugar-vterm`. The two families have distinct design lineages and the API shapes diverge. Only `Color` was a true duplicate and is now a `class_alias` to `\SugarCraft\Core\Util\Color`. See `CALIBER_LEARNINGS.md` entries `[pattern:dual-foundation-ssot]`, `[pattern:dual-style-ssot]`, `[pattern:dual-theme-ssot]`, `[pattern:dual-rect-models]`, `[pattern:dual-buffer-roles]`, `[pattern:dual-cell-shapes]`.
 
 ---
 
@@ -87,8 +87,8 @@ composer require sugarcraft/sugar-dashboard
 | `VStack` | Vertical stack with alignment and spacing | `new(...items)`, `spaced(int, ...items)`, `centered(...items)`, `right(...items)` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/vstack.gif) |
 | `HStack` | Horizontal stack with spacing and alignment | `new(...items)`, `spaced(int, ...items)`, `centered(...items)` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/hstack.gif) |
 | `ZStack` | Layered stack (items on top of each other) | `new(...items)`, `left(...items)`, `right(...items)`, `top(...items)`, `bottom(...items)` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/zstack.gif) |
-| `Stack` | Basic vertical stack | `new(...items)`, `spaced(int, ...items)` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/stack.gif) |
-| `Split` | Split view with two panes | `new(...items)`, `horizontal()`, `vertical()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/split.gif) |
+| `Stack` | Vertical column of children with configurable spacing | `new(...items)`, `spaced(int, ...items)` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/stack.gif) |
+| `Split` | Two-pane split (horizontal or vertical) with ratio control and optional dividers | `new(...items)`, `horizontal()`, `vertical()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/split.gif) |
 
 ### Border & Frame Components
 
@@ -102,20 +102,19 @@ composer require sugarcraft/sugar-dashboard
 | Type | Description | Key Methods/Factories | GIF |
 |------|-------------|----------------------|-----|
 | `Spacer` | Empty space filler with optional fill character | `new(int $width, int $height)`, `dotted(int)`, `dashed(int)`, `vertical(int, int)` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/spacer.gif) |
-| `LayoutItem` | Item with flex properties for layouts | `flex(Item, int)`, `fixed(Item)` | |
-| `Window` | Window frame with title bar | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/window.gif) |
-| `Screen` | Terminal screen container | | |
-| `Viewport` | Scrollable viewport | | |
-| `Sidebar` | Sidebar navigation panel | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/sidebar.gif) |
+| `LayoutItem` | Child wrapper carrying flex-grow or fixed sizing for the layout engines | `flex(Item, int)`, `fixed(Item)` | |
+| `Window` | Titled, bordered window with close/maximize controls and optional drop shadow | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/window.gif) |
+| `Screen` | Full-screen host: alternate-buffer entry, cursor/mouse enable, teardown that reverses exactly what setup armed (size negotiates `COLUMNS`/`LINES`, never ioctls) | | |
+| `Viewport` | Clip-and-scroll container: renders a sized window over content taller or wider than it | | |
+| `Sidebar` | Navigation column over labeled items with optional icons, active highlight and dividers | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/sidebar.gif) |
 | `Breakpoint` | Static helpers for responsive breakpoints — `narrow()`/`medium()`/`wide()`/`pick()` (default thresholds 90/140, Homedash convention) | `narrow(int $width, int $threshold = 90): bool`, `medium(int $width, int $narrow = 90, int $wide = 140): bool`, `wide(int $width, int $threshold = 140): bool`, `pick(int $width, array $thresholds): string` | |
 | `Pad` | Padding wrapper — CSS-style padding with optional borders (for the tree-structured focus split, see the live `Layout\Boxer` subtree) | | |
 
 ### Layout Subsystems (Tile, Boxer, RatioGrid, Focus)
 
 These four subsystems carry the layout names in the GIF grid and the
-`dashboard-live` demo but had no API surface documented; each lives under
-`src/Layout/` (the data grid they feed, `Components\GridTable`, is documented
-in the Components section).
+`dashboard-live` demo. Each lives under `src/Layout/` (the data grid they
+feed, `Components\GridTable`, is documented in the Components section).
 
 | Type | Description | Key Methods/Factories |
 |------|-------------|----------------------|
@@ -157,7 +156,7 @@ its `Layout\Grid\` option value parts.
 | `Donut` | Donut chart with proportional segments | `new(data)`, `mocha(data)`, `withSize()`, `withCenterLabel()`, `withShowPercentage()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/donut.gif) |
 | `Gauge` | Horizontal progress bar / gauge | `new(float $ratio)`, `withWidth()`, `withFilledColor()`, `withEmptyColor()`, `withPercentage()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/gauge.gif) |
 | `GaugeChart` | Circular gauge chart | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/gauge-chart.gif) |
-| `GaugeCircle` | Circular gauge visualization | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/gauge-circle.gif) |
+| `GaugeCircle` | Circular gauge face for a bounded value | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/gauge-circle.gif) |
 | `HeatMapChart` | 2D heatmap with color gradient | `new(data)`, `sample()`, `withRowLabels()`, `withColumnLabels()`, `withLowColor()`, `withHighColor()` | |
 | `Heatmap` | Heat map visualization with legend | `new(data)`, `sample()`, `withLegend()`, `withValues()`, `withLowColor()`, `withHighColor()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/heatmap.gif) |
 | `RadarChart` | Radar/spider chart for multi-axis data | `new(labels, series)`, `withSize()`, `withGridLines()`, `withShowLabels()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/radar-chart.gif) |
@@ -165,7 +164,7 @@ its `Layout\Grid\` option value parts.
 | `SparklineBar` | Bar-style sparkline | `new(array $data)`, `withData()`, `withWidth()`, `withHeight()`, `withShowValues()` (default **on** — pass `false` to opt out), `withColor()`, `withMaxColor()`, `withMinColor()`, `withBarGaps()`, `withSeparator()`, `setSize()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/sparkline-bar.gif) |
 | `SparklineArea` | Area-style sparkline | `new(array $data)`, `withData()`, `withWidth()`, `withHeight()`, `withShowLine()`, `withShowFill()`, `withLineColor()`, `withFillColor()`, `withMaxColor()`, `withMinColor()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/sparkline-area.gif) |
 | `SparkArea` | Spark area chart | `new(array $values)`, `withHeight()`, `withColor()`, `withShowMinMax()`, `withGradient()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/spark-area.gif) |
-| `FunnelChart` | Funnel chart visualization | `new(array $stages)`, `withHorizontal()`, `withShowValues()` (default **on** — pass `false` to opt out), `withShowPercentages()` (default **on** — pass `false` to opt out), `setSize()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/funnel-chart.gif) |
+| `FunnelChart` | Conversion funnel: tapering stage bars with per-stage values and percentages | `new(array $stages)`, `withHorizontal()`, `withShowValues()` (default **on** — pass `false` to opt out), `withShowPercentages()` (default **on** — pass `false` to opt out), `setSize()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/funnel-chart.gif) |
 | `Funnel` | Funnel visualization component | | |
 | `Meter` | Meter/gauge component | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/meter.gif) |
 | `OHLC` | Open-High-Low-Close data | | |
@@ -177,32 +176,32 @@ its `Layout\Grid\` option value parts.
 
 #### Value redundancy (color-vision aids)
 
-Colour alone should never be the only channel carrying a reading. These
+Color alone should never be the only channel carrying a reading. These
 shipped toggles encode the same value redundantly as text, position, or
-shape, so the panels stay readable in a colour-blind terminal:
+shape, so the panels stay readable in a color-blind terminal:
 
 - `Chart::withShowValues()` — prints the numeric value on each bar.
 - `Gauge::withPercentage()` — prints the fill ratio as a number beside
   the bar length.
 - `Heatmap::withValues()` — writes each cell's value over the gradient
   fill. (`HeatMapChart` carries the low→high gradient but no value
-  overlay; label it yourself when colour is the only channel.)
+  overlay; label it yourself when color is the only channel.)
 - `Plot\Chart\Meter::withGradient($stops, positionWise: true)` — hue maps
   to fill *position*, so the meter reads identically by height alone.
 - `Plot\DistanceFade` — selection distance is expressed as a dimming
   falloff, a shape cue independent of the palette.
 - `Plot\Braille\DualSampleGraph::withGradient()` and
-  `Plot\Braille\BrailleCanvas::withGradient()` — the colour follows the
+  `Plot\Braille\BrailleCanvas::withGradient()` — the color follows the
   sample value; the glyph geometry always carries it on its own.
 
 ### Graph & Network Visualization
 
 | Type | Description | Key Methods/Factories | GIF |
 |------|-------------|----------------------|-----|
-| `Graph` | Graph visualization | | |
+| `Graph` | Generic two-axis chart: colors, axis labels and grid, legend, point highlighting | | |
 | `Bubble` | Bubble chart | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/bubble.gif) |
 | `BubblePoint` | Bubble chart point | | |
-| `WordCloud` | Word cloud visualization | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/word-cloud.gif) |
+| `WordCloud` | Weighted words placed by importance (`{word, weight}` shapes) | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/word-cloud.gif) |
 | `DotMatrix` | Dot matrix display | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/dot-matrix.gif) |
 | `Partition` | Partition chart | | |
 | `PartitionSegment` | Partition segment | | |
@@ -213,15 +212,15 @@ shape, so the panels stay readable in a colour-blind terminal:
 Ported from [aristocratos/btop](https://github.com/aristocratos/btop) for
 [candy-top](https://github.com/detain/sugarcraft/tree/master/candy-top);
 every class is a standalone immutable value object, and the integer
-colour/quantization laws are byte-faithful to btop (several are pinned
+color/quantization laws are byte-faithful to btop (several are pinned
 against oracle fixtures generated from btop's own C++).
 
 | Type | Description | Key Methods/Factories |
 |------|-------------|----------------------|
 | `Plot\Gradient101` | btop `Theme::generateGradients`: expand ≥2 stops into a 101-entry ramp (index = percent) with btop's truncating integer law | `expand(list<Color>): list<Color>` |
-| `Plot\Braille\BrailleCanvas` | Dot canvas — now with an optional value→colour ramp | `withGradient(stops, ?scale)`, `withValue()`, `withoutGradient()`, `gradient()`, `value()` |
+| `Plot\Braille\BrailleCanvas` | Dot canvas — now with an optional value→color ramp | `withGradient(stops, ?scale)`, `withValue()`, `withoutGradient()`, `gradient()`, `value()` |
 | `Plot\Braille\DualSampleGraph` | btop `Draw::Graph`: two adjacent samples quantized into one glyph; braille / block / block2 / tty families | `new(width, height, family, invert, noZero, maxValue, offset)`, `push()`, `withData()`, `withGradient()`, `withUnderlay()`, `underlay()`, `render()` |
-| `Plot\Chart\Meter` | Analog meter — now with btop's one-row position-coloured `■` bar (value redundancy aid — see **Value redundancy** above) | `withGradient(stops, positionWise)`, `withGlyph()`, `withInvert()`, `withMeterBg()`, `memoStats()`, `resetMemo()` |
+| `Plot\Chart\Meter` | Analog meter — now with btop's one-row position-colored `■` bar (value redundancy aid — see **Value redundancy** above) | `withGradient(stops, positionWise)`, `withGlyph()`, `withInvert()`, `withMeterBg()`, `memoStats()`, `resetMemo()` |
 | `Foundation\NetAutoScale` | btop net-graph ceiling hysteresis (grow/shrink only after 5 sustained samples) | `new(sync)`, `offer(down, up)`, `downloadMax()`, `uploadMax()`, `maxFor()`, `counters()`, `forceRescale()` |
 | `Foundation\GradientStore` | Named 101-entry ramps — `at('cpu', 73)` is btop `Theme::g("cpu")[73]` | `new()`, `fromStops()`, `ramp()`, `withGradient()`, `at()`, `gradient()`, `has()`, `names()` |
 | `Plot\DistanceFade` | btop proc-list distance fade (text dims, metrics blend to grey away from the selection; value redundancy aid — see **Value redundancy** above) | `ramp()`, `distance()`, `fadeIndex()`, `fadeColor()`, `metricPosition()`, `metricColor()`, `flatMetricColor()`, `metricValues()` |
@@ -240,8 +239,8 @@ an inverted graph, the underlay mini-graph and position-mode meters.
 0..100 leg, three stops split at 50 (btop's start/mid/end), more stops
 split evenly. `BrailleCanvas::withGradient($stops, ?Closure $scale = null)`
 attaches such a ramp; afterwards every `setPoint()` / `setLine()` with a
-`null` colour paints the ramp colour at the canvas' current value
-(`withValue()`), while an explicit colour still wins. `$scale` maps a raw
+`null` color paints the ramp color at the canvas' current value
+(`withValue()`), while an explicit color still wins. `$scale` maps a raw
 sample onto 0..1 (clamped) — the place for btop's
 `(v + offset) * 100 / max_value` law. The ramp, scale and value survive
 `setSize()`; `withoutGradient()` detaches it.
@@ -286,8 +285,8 @@ and every `push()` scrolls the frame half a cell (a whole cell in `tty`).
   history. History is retained up to the widest width seen (floor
   `HISTORY_CELLS` = 1024), so shrinking and growing back redraws old
   samples.
-- `withGradient($stops)` colours through a `Gradient101` ramp: a one-row
-  graph colours each cell by `max(prev, cur)`, taller graphs colour each
+- `withGradient($stops)` colors through a `Gradient101` ramp: a one-row
+  graph colors each cell by `max(prev, cur)`, taller graphs color each
   row by its vertical position (value redundancy aid — glyph height alone
   still carries the reading; see **Value redundancy** under Chart
   Components).
@@ -325,11 +324,11 @@ echo DualSampleGraph::new(5, 1, noZero: true)
 #### Meter position mode
 
 `Meter::withGradient(array $stops, bool $positionWise = false)` attaches a
-`Gradient101` ramp. With `positionWise: false` the analog body is coloured
+`Gradient101` ramp. With `positionWise: false` the analog body is colored
 by the meter's value. With `positionWise: true` the meter renders btop's
 one-row `Draw::Meter` bar instead: cell `i` (1-based) sits at
 `y = round(i * 100 / width)`, is filled while `value >= y` and takes ramp
-colour `y` — so a 50% bar on green→red is green-to-yellow, never all
+color `y` — so a 50% bar on green→red is green-to-yellow, never all
 yellow — and the unfilled tail is painted in `meter_bg`.
 
 - `withWidth()` honours widths down to 1 cell in position mode (a layout
@@ -400,10 +399,10 @@ row, exactly `width()` cells wide, with btop's own column sizing
 (`ProcColumns::btop()`; pass `withColumns(ProcColumns::new(...))` for a
 custom layout). The selected (`$row + 1 === $selected`) or `followed`
 row is a bold highlight bar; every other row fades its text by distance
-from the selection and colours cpu/name, mem and threads by value
+from the selection and colors cpu/name, mem and threads by value
 (`withProcGradient()` / `withProcColors()` toggle btop's
 `proc_gradient` / `proc_colors`). Control characters in name/cmd/user
-become spaces. Colours come from `ProcRowPalette` (`btop()` is btop's
+become spaces. Colors come from `ProcRowPalette` (`btop()` is btop's
 Default theme; `withRamps()` accepts ramps from a `GradientStore`).
 
 `DistanceFade` exposes the underlying law as static helpers — including
@@ -439,7 +438,7 @@ foreach ($procs as $row => $p) {
 > mouse, or resize events. Interactive widgets are pure renderers whose entire
 > input vocabulary is their state setters (`withValue()`, `withActiveIndex()`,
 > `withSelected()`, …), and focus-emphasis is host-driven the same way — a
-> focused `Input` gets its highlight through the border colour passed to it,
+> focused `Input` gets its highlight through the border color passed to it,
 > not through an internal focus bit.
 >
 > What the lib provides is the machinery the host wires together:
@@ -684,14 +683,14 @@ in the same namespace are its value parts.
 | `Sankey` | Sankey diagram for flow visualization | `new()`, `addNode()`, `addFlow()`, `withHorizontal()`, `withShowLabels()` | |
 | `SankeyNode` | Node in Sankey diagram: `id`, `label`, `value`, `color` | | |
 | `SankeyFlow` | Flow connection: `source`, `target`, `value`, `color` | | |
-| `Sunburst` | Sunburst chart visualization | | |
-| `Treemap` | Treemap chart visualization | | |
+| `Sunburst` | Nested-ring hierarchy of a weighted tree | | |
+| `Treemap` | Space-filling nested rectangles for a weighted tree | | |
 | `TreemapLeaf` | Leaf node in treemap | | |
-| `TreeViz` | Tree visualization | | |
+| `TreeViz` | Branching tree drawing over a `TreeProvider` model | | |
 | `Network` | Network diagram | | |
 | `NetworkNode` | Node in network | | |
 | `NetworkShape` | `Circle`, `Square`, `Diamond`, `Hexagon`, `Star` | | |
-| `MindMap` | Mind map visualization | | |
+| `MindMap` | Radial mind-map rendering of a branch model | | |
 | `OrgChart` | Organization chart | | |
 | `ClassDiagram` | UML class diagram | | |
 | `Flowchart` | Flowchart diagram | | |
@@ -702,7 +701,7 @@ in the same namespace are its value parts.
 | `Gantt` | Gantt chart | | |
 | `PERT` | PERT chart | | |
 | `Timeline` | Timeline display | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/timeline.gif) |
-| `TimelineViz` | Timeline visualization | | |
+| `TimelineViz` | Chronological event track with grouped milestones | | |
 | `TimelineNode` | Node in timeline | | |
 
 ### Components\Table (Table Components)
@@ -749,7 +748,7 @@ in the same namespace are its value parts.
 
 | Type | Description | Key Methods |
 |------|-------------|-------------|
-| `Center` | Calculate centered position | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/center.gif) |
+| `Center` | Geometry helper computing centered coordinates inside a container (see note below for the renderable `Layout\Center`) | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/center.gif) |
 | `Overlay` | Auto-positioning helper for overlays — computes the optimal position relative to an anchor, choosing above or below based on available space, clamped to container bounds | `calculate(int $overlayWidth, int $overlayHeight, int $anchorX, int $anchorY, int $containerWidth, int $containerHeight): array`, `fitsBelow()`, `fitsAbove()` | |
 
 > Note: `Position\Center` is the geometry helper (computes centered
@@ -762,7 +761,7 @@ in the same namespace are its value parts.
 | Type | Description | Key Methods |
 |------|-------------|-------------|
 | `Truncate` | String truncation with ANSI awareness |
-| `RenderBar` | Bar rendering helper — colour follows the process-wide `ColorMode` capability (`?ColorProfile` parameter; `NO_COLOR` strips every escape) |
+| `RenderBar` | Bar rendering helper — color follows the process-wide `ColorMode` capability (`?ColorProfile` parameter; `NO_COLOR` strips every escape) |
 | `WrapCells` | Cell-aware text wrapping |
 
 ## Module Namespace (Module Interface)
@@ -771,7 +770,7 @@ in the same namespace are its value parts.
 |------|-------------|-------------|
 | `Module` | MVC-style Model–Update–View interface aligned with `Core\Model`: `init(): ?Closure`, `update(Msg): array{0:Module,1:?Cmd}`, `view(): string|View`, `subscriptions(): ?Subscriptions`, plus `name(): string`, `minSize(): array{0:int,1:int}` |
 | `BaseModule` | Abstract helper — `withState(array): static` for immutable state, default `update()` returns `[self,null]` |
-| `LegacyModule` | Deprecated array-state interface — superseded by `Module` |
+| `LegacyModule` | Array-state module adapter; the `Module` contract supersedes it (see the accessor-deprecation section for the family roster) |
 | `LegacyModuleAdapter` | `@internal` wrapper that adapts `LegacyModule` to the `Module` contract |
 | `ModuleConfig` | Module configuration |
 | `ImagePlacer` | Optional interface for image placements |
@@ -807,11 +806,13 @@ in the same namespace are its value parts.
 > never outlive the dashboard that started it — the ladder kills the direct
 > child; grandchildren it spawns (say, from a shell wrapper) outlive it, so
 > authors needing tree-killing wrap the command themselves. Plugin children get
-> a small explicit environment allow-list (`PATH`, `HOME`, `USER`, `LANG`,
-> `TERM`, `COLORTERM` — `ExternalModule::pluginEnvironment()`); the dashboard's
+> a small explicit environment allow-list (an internal
+> allow-list of `PATH`, `HOME`, `USER`, `LANG`, `TERM`, `COLORTERM`,
+> built by a private `ExternalModule` helper — internal behavior, not public API); the dashboard's
 > own secrets are never handed to third-party binaries by inheritance. Any
 > plugin-supplied text reaching terminal chrome (names, error lines) passes
-> through `chromeLabel()`, which strips control bytes, CR reflow, and zone
+> through an internal
+> sanitizer (private `ExternalModule` helper, not public API) that strips control bytes, CR reflow, and zone
 > sentinels and clips over-length labels. The same bounded-teardown story
 > covers `GenericModule` and `SystemModule` command runs (5 s deadline, 1 MiB
 > output cap via `BoundedCommand`, with the same direct-children-only reap), and
@@ -1016,20 +1017,20 @@ The `examples/` directory contains standalone demo files that showcase individua
 | `dashboard-live.php` | **Interactive dashboard** — the headline demo. Program event loop, raw mode, Clock/System/Weather modules, Boxer layout, FocusManager, per-panel tick, keyboard navigation (Tab/arrows), quit (q/Ctrl-C). Run with `php examples/dashboard-live.php` |
 | `dashboard-showcase.php` | Multi-component server dashboard with gauges, charts, timeline, breadcrumb, avatar group |
 | `dashboard-complex.php` | Full-featured analytics dashboard with charts, stats, funnel, sparkline |
-| `dashboard-accordion-timeline.php` | Accordion and timeline components |
-| `dashboard-metrics.php` | Key statistics and status indicators |
-| `dashboard-status.php` | Spinners, progress bars, gauges, alerts |
+| `dashboard-accordion-timeline.php` | Collapsing Accordion sections beside a milestone Timeline |
+| `dashboard-metrics.php` | Stat cards and StatusIndicator dots over live series |
+| `dashboard-status.php` | Spinner, Progress and Gauge faces with Alert variants |
 | `dashboard-charts.php` | Chart components including area, donut, radar, heatmap |
-| `dashboard-form.php` | Form components demo |
-| `dashboard-ui.php` | UI components demo |
-| `dashboard-nav.php` | Navigation components demo |
-| `dashboard-text.php` | Text components demo |
-| `dashboard-time.php` | Time components demo |
-| `dashboard-media.php` | Media components demo |
-| `dashboard-data.php` | Data display components demo |
-| `dashboard-devtools.php` | Devtools components demo |
-| `dashboard-layout.php` | Layout containers demo |
-| `dual-sample-graph.php` | btop-style `DualSampleGraph` in all four families (braille / block / block2 / tty), inverted + underlay graphs, and position-coloured `Meter` bars |
+| `dashboard-form.php` | Input, Select, Toggle, Slider and Checkbox arranged in a framed two-column grid (render-only) |
+| `dashboard-ui.php` | Badge, Tag and Chip variants on Card and Text chrome (render-only) |
+| `dashboard-nav.php` | Breadcrumb trails and the Navbar row (render-only) |
+| `dashboard-text.php` | FigletText banners and a Marquee scroller (render-only) |
+| `dashboard-time.php` | Clock, Timer and Stopwatch faces with a Calendar heat grid (render-only) |
+| `dashboard-media.php` | QRCode, Barcode and Pictogram plates (render-only) |
+| `dashboard-data.php` | GridTable, List components and a TreeNode table across grid layouts (render-only) |
+| `dashboard-devtools.php` | Diff views, HexDump panels and a LogViewer (render-only) |
+| `dashboard-layout.php` | VStack/HStack/ZStack nesting over a framed grid shell (render-only) |
+| `dual-sample-graph.php` | btop-style `DualSampleGraph` in all four families (braille / block / block2 / tty), inverted + underlay graphs, and position-colored `Meter` bars |
 
 The table lists the headline demos only — `examples/` carries the full set
 (one file per component family and beyond); see the directory for anything
@@ -1037,7 +1038,7 @@ not named above.
 
 ## Accessor deprecation (2026-10-24)
 
-Per the house bare-accessor convention (`AGENTS.md`: *"Bare accessors (no* `get`*"), ruling 3b)*, 89 `get*()` accessors across 41 classes were renamed to their bare twins (the 2026-10-24 remediation pass added 8 whose names collide with `TreeProvider` members on classes that do not implement that interface). The legacy names remain as byte-identical BC forwarders, each marked `@deprecated` with `REMOVED-IN: 2.0.0` in its docblock — they will be removed in sugar-dashboard v2.0.0.
+Per the house bare-accessor convention (`AGENTS.md`: *"Bare accessors (no* `get`*"), ruling 3b)*, 89 `get*()` accessors across 41 classes were renamed to their bare twins (8 of them collide with `TreeProvider` members on classes that do **not** implement that interface — the remediation pass swept those in as violations, not protocol members). The legacy names remain as byte-identical BC forwarders, each marked `@deprecated` with `REMOVED-IN: 2.0.0` in its docblock — they will be removed in sugar-dashboard v2.0.0.
 
 The protocol members the first pass left on `get*()` were completed by the W-R sweep (owner ruling D3b, 2026-11-06): `SizedItem::getInnerSize()` → `innerSize()` (the interface plus its 187 implementations), `Drawable::getRect()` → `rect()` (the interface plus `Plot`, `Badge`, `Card`, and `Buffer`; `setRect()` is a mutator and keeps its name), and the `TreeProvider` quintet → `roots()/children()/node()/depth()/totalValue()` on both the interface and its sole implementor `ArrayTreeProvider`. These carry **no** BC forwarders: the sweep's consumer census found zero call sites outside the lib reaching any of them, and every in-lib call site was re-armed in the same commit, so shims would only have doubled the public surface. The same names on classes that do **not** implement `TreeProvider` were violations, not protocol members, and the 2026-10-24 remediation pass swept them into the marked table below (`Boxer::getNode`, `Node::getChildren`, the `PartitionSegment` and `DendrogramNode` `getTotalValue`/`getDepth` pairs, `SunburstSegment::getTotalValue`, `HeatmapCalendar::getTotalValue`). `Address::getChild()` remains a documented carve-out: the bare name `child()` is taken by the static factory `Address::child(self, int)` — an honest carve beats a forced rename. Boolean `is*()`/`has*()` predicates are convention-compliant and stay as-is. External consumers (`candy-sql`, `candy-top`, `sugar-charts`) do import sugar-dashboard classes (`Gauge`, `Badge`, `Card`, `BrailleCanvas`, and more); no external call site reaches a renamed accessor, and the BC forwarders carry any such call until v2.0.0.
 
