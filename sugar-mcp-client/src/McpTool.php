@@ -91,7 +91,8 @@ final class McpTool
     }
 
     /**
-     * Every wire field must be present with its declared type.
+     * The spec-required fields must be present, and every field that IS
+     * present must carry its declared type.
      *
      * WHY isset() and not array_key_exists(): fromArray() reads every field
      * with `??`, which supplies the typed default for an ABSENT key and for an
@@ -99,18 +100,19 @@ final class McpTool
      * perfectly well-typed as far as the constructor is concerned.
      * array_key_exists() would call that key present, find `null` failing
      * `is_string()`, and drop a legitimate tool on the floor. isset() is false
-     * for both shapes, which is exactly the question this method asks.
+     * for both shapes, which is exactly the question this method asks — for
+     * the genuinely optional fields. The two the MCP spec makes required
+     * (`name`, `inputSchema`) carry their own presence arms below.
      *
      * @param array<string,mixed> $definition
      */
     private static function toolDefinitionIsWellTyped(array $definition): bool
     {
-        // name is the ONE field the wire contract requires: the loop below
-        // treats an absent field as well-typed (isset() semantics fit
-        // description/inputSchema, which fromArray() legitimately defaults),
-        // but an absent or empty name would mint a phantom tool the router
-        // cannot address (measured: a bare `{}` definition landed as a tool
-        // named ''). Require it present, a string, and non-empty.
+        // The MCP wire contract requires two fields: name and inputSchema
+        // (spec `required: ["name", "inputSchema"]`, 2024-11-05). An absent or
+        // empty name would mint a phantom tool the router cannot address
+        // (measured: a bare `{}` definition landed as a tool named '').
+        // Require it present, a string, and non-empty.
         if (!isset($definition['name']) || !is_string($definition['name']) || $definition['name'] === '') {
             return false;
         }
@@ -139,6 +141,16 @@ final class McpTool
             return false;
         }
 
+        // inputSchema is the contract's other required member: a schema-less
+        // tool cannot be called correctly in the first place, so the old
+        // isset()-leniency that serves description/annotations was WRONG here.
+        // The refused definition rides the same skip-and-count rails into
+        // StdioMcpServer's malformedToolDefinitions() ledger as any wrong-typed
+        // field does.
+        if (!isset($definition['inputSchema'])) {
+            return false;
+        }
+
         // The refusal is deliberately NAME-scoped. A description is
         // free-form prose the server authors for humans — tabs and newlines
         // are legitimate inside a multi-line paragraph — and fromArray()
@@ -156,6 +168,14 @@ final class McpTool
             if (!$predicate($definition[$field])) {
                 return false;
             }
+        }
+
+        // The loop has now proven inputSchema an array; its one inner shape
+        // law: a tool's argument schema describes an object. `type` is absent
+        // in the wild — legal, carried through untouched — but a present,
+        // non-`object` one is a malformed definition we never route calls to.
+        if (($definition['inputSchema']['type'] ?? 'object') !== 'object') {
+            return false;
         }
 
         return true;

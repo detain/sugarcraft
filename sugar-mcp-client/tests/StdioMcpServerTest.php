@@ -192,6 +192,16 @@ final class StdioMcpServerTest extends TestCase
                     ['name' => 'keeper', 'description' => '', 'inputSchema' => []],
                 ]],
             ], ['keeper'], ['array', '', 'array']],
+            // PARITY-01: the spec requires inputSchema, so a named-but-
+            // schema-less definition is malformed too — it skips and is
+            // counted under its own name (the door that catches wrong-typed
+            // names also catches missing required members).
+            'schema-less definition skips and is counted' => ['probe', [
+                'result' => ['tools' => [
+                    ['name' => 'schemaless', 'description' => 'no inputSchema member'],
+                    ['name' => 'typed', 'description' => '', 'inputSchema' => ['type' => 'object']],
+                ]],
+            ], ['typed'], ['schemaless']],
         ];
     }
 

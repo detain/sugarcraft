@@ -68,8 +68,10 @@ final class McpToolTest extends TestCase
     public function testTryFromArrayAcceptsTheExplicitNullFieldShapes(): void
     {
         // The {"name":"write","description":null} case: isset() semantics keep
-        // this tool ALIVE — array_key_exists() used to drop it.
-        $tool = McpTool::tryFromArray(['name' => 'write', 'description' => null], 'fs');
+        // this tool ALIVE — array_key_exists() used to drop it. (inputSchema
+        // is absent from the leniency exactly because the spec makes it
+        // required — its null shape is refused, see malformedDefinitions.)
+        $tool = McpTool::tryFromArray(['name' => 'write', 'description' => null, 'inputSchema' => []], 'fs');
 
         self::assertNotNull($tool);
         self::assertSame('', $tool->description);
@@ -94,10 +96,15 @@ final class McpToolTest extends TestCase
             'name absent entirely' => [[], 'name'],
             'name is the empty string' => [['name' => ''], 'name'],
             'name is null' => [['name' => null], 'name'],
-            'description is a number' => [['name' => 'ok', 'description' => 7], 'description'],
+            'description is a number' => [['name' => 'ok', 'description' => 7, 'inputSchema' => []], 'description'],
+            // PARITY-01: the spec requires inputSchema; schema-less definitions
+            // are spec-forbidden, not merely sparse.
+            'inputSchema absent entirely' => [['name' => 'ok'], 'inputSchema'],
+            'inputSchema is explicitly null' => [['name' => 'ok', 'inputSchema' => null], 'inputSchema'],
+            'inputSchema type is not object' => [['name' => 'ok', 'inputSchema' => ['type' => 'string']], 'inputSchema.type'],
             'inputSchema is a string' => [['name' => 'ok', 'inputSchema' => 'nope'], 'inputSchema'],
             'inputSchema is a number' => [['name' => 'ok', 'inputSchema' => 42], 'inputSchema'],
-            'annotations is a string' => [['name' => 'ok', 'annotations' => 'readOnly'], 'annotations'],
+            'annotations is a string' => [['name' => 'ok', 'annotations' => 'readOnly', 'inputSchema' => []], 'annotations'],
         ];
     }
 
@@ -126,7 +133,7 @@ final class McpToolTest extends TestCase
     {
         $annotations = ['readOnlyHint' => true, 'openWorldHint' => false, 'title' => 'Query'];
 
-        $hinted = McpTool::tryFromArray(['name' => 'query', 'annotations' => $annotations], 'db');
+        $hinted = McpTool::tryFromArray(['name' => 'query', 'annotations' => $annotations, 'inputSchema' => []], 'db');
         self::assertNotNull($hinted);
         self::assertSame($annotations, $hinted->annotations);
 
