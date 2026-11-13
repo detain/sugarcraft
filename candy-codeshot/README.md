@@ -305,6 +305,24 @@ imported with `Theme\VsCodeThemeLoader::load()` and
   `#7f7f7f` (xterm classic spells it `#808080`) — so contrast on dark themes
   is low by design.
 
+## Security
+
+- **Invisible formatting characters pass through by design** — the
+  renderers escape and sanitize *markup* but never rewrite *text*, so
+  bidi overrides (RIGHT-TO-LEFT OVERRIDE U+202E and friends), bidi
+  isolates (U+2066..U+2069) and zero-width characters (U+200B..U+200D,
+  U+FEFF) survive into SVG/PNG artifacts unmarked. A screenshot tool
+  that altered source bytes would misrepresent the code it shows, so
+  fidelity wins; the cost is the "Trojan Source" window: a rendered line
+  can *appear* to read differently from what its bytes contain. When
+  showing untrusted input, pre-sweep it library-side with
+  `SugarCraft\Core\Util\Sanitize::markInvisibleFormatting()` (renders
+  those codepoints as visible `<U+XXXX>` markers) or use
+  `Sanitize::untrustedForDisplay()`, which marks them as part of its
+  display policy. The CLI itself never alters subject text; the
+  pass-through is pinned by
+  `tests/SvgInjectionTest::testInvisibleBidiOverridesSurviveUnmarkedAsDocumented`.
+
 ## Demos
 
 ### Code screenshot

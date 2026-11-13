@@ -150,6 +150,34 @@ final class SvgInjectionTest extends TestCase
         $this->assertStringContainsString('abcde', $svg, 'the letters around the dropped bytes must survive');
     }
 
+    public function testInvisibleBidiOverridesSurviveUnmarkedAsDocumented(): void
+    {
+        // cs-14 (-019, SEC-04) G1-disclose arm: invisible formatting
+        // characters are NOT a markup threat (they cannot escape a text
+        // node), and a screenshot tool that rewrote source bytes would
+        // lie about the code it shows — so the policy is documented
+        // pass-through, pinned here so the README Security sentence can
+        // never drift into silent marking. U+202E (RIGHT-TO-LEFT
+        // OVERRIDE) plus the isolate/zero-width family must arrive in
+        // the artifact verbatim and unmarked, still well-formed.
+        $payload = "a\u{202E}b\u{2066}c\u{2069}d\u{200B}e\u{200D}f\u{FEFF}g\n";
+        $svg     = SvgRenderer::dark()->withWindow(false)->render($payload);
+
+        SvgOracle::assertWellFormed($svg, 'legal bidi/zero-width scalars must not break the document');
+        foreach (["\u{202E}", "\u{2066}", "\u{2069}", "\u{200B}", "\u{200D}", "\u{FEFF}"] as $char) {
+            $this->assertStringContainsString(
+                $char,
+                $svg,
+                'codepoint U+' . strtoupper(dechex(mb_ord($char))) . ' must pass through unmarked (README Security disclosure)',
+            );
+        }
+        $this->assertStringNotContainsString('<U+', $svg, 'the artifact must NOT carry Sanitize markers — that is the caller-side opt-in');
+        $this->assertNotFalse(
+            strpos($svg, rtrim($payload, "\n")),
+            'the whole payload must arrive verbatim and contiguous — invisible bytes included, nothing marked or reordered',
+        );
+    }
+
     // ---------------------------------------------------------------------
     // Property leg: arbitrary bytes must always yield a parsable document.
     // ---------------------------------------------------------------------
