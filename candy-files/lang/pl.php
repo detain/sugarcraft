@@ -25,6 +25,7 @@ return [
     'status.refreshed' => 'odświeżono',
     'status.unreadable' => 'nie można odczytać {dir} — wyświetlana poprzednia zawartość',
     'status.copy_pending' => 'kopiowanie {count} wpisów…',
+    'status.quit_armed'     => '{count} kopiowań wciąż w toku — naciśnij q ponownie, aby mimo to wyjść',
     'status.deleted' => 'usunięto {count} wpisów',
     'status.deleted_with_errors' => 'usunięto {count} wpisów, błędów: {errors}',
     'status.deleted_skipped' => 'usunięto {count} wpisów (pominięto {skipped})',

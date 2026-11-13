@@ -25,6 +25,7 @@ return [
     'status.refreshed' => 'aktualisiert',
     'status.unreadable' => 'kann {dir} nicht lesen — bisheriger Inhalt wird angezeigt',
     'status.copy_pending' => 'kopiere {count} Einträge…',
+    'status.quit_armed'     => '{count} Kopiervorgänge laufen noch — q erneut drücken, um trotzdem zu beenden',
     'status.deleted' => '{count} Einträge gelöscht',
     'status.deleted_with_errors' => '{count} Einträge gelöscht, {errors} Fehler',
     'status.deleted_skipped' => '{count} Einträge gelöscht ({skipped} übersprungen)',

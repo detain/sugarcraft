@@ -25,6 +25,7 @@ return [
     'status.refreshed' => '已刷新',
     'status.unreadable' => '无法读取 {dir} — 显示之前的内容',
     'status.copy_pending' => '正在复制 {count} 个条目…',
+    'status.quit_armed'     => '仍有 {count} 个复制批次进行中 — 仍要退出请按 q',
     'status.deleted' => '已删除 {count} 个条目',
     'status.deleted_with_errors' => '已删除 {count} 个条目，{errors} 个错误',
     'status.deleted_skipped' => '已删除 {count} 个条目（跳过 {skipped} 个）',

@@ -13,6 +13,7 @@ use SugarCraft\Core\InputReader;
 use SugarCraft\Files\ConfirmState;
 use SugarCraft\Files\Entry;
 use SugarCraft\Files\Manager;
+use SugarCraft\Files\Msg\CopyCompletedMsg;
 use PHPUnit\Framework\TestCase;
 
 final class ManagerTest extends TestCase
@@ -51,6 +52,44 @@ final class ManagerTest extends TestCase
         $m = $this->start();
         [, $cmd] = $m->update(new KeyMsg(KeyType::Char, 'q'));
         $this->assertInstanceOf(\Closure::class, $cmd);
+    }
+
+    public function testQuitDuringInFlightBatchArmsInsteadOfQuitting(): void
+    {
+        $m = new Manager($this->start()->left, $this->start()->right, lister: $this->fakeFs(), copyBatchesInFlight: 1);
+        [$armed, $cmd] = $m->update(new KeyMsg(KeyType::Char, 'q'));
+        $this->assertNull($cmd, 'CF-44: first press must not quit while a batch is in flight');
+        $this->assertTrue($armed->quitArmed);
+        $this->assertStringContainsString('1', $armed->status, 'the question names the batch count');
+    }
+
+    public function testSecondQuitPressExitsDespiteInFlightBatch(): void
+    {
+        $m = new Manager($this->start()->left, $this->start()->right, lister: $this->fakeFs(), copyBatchesInFlight: 1);
+        [$armed] = $m->update(new KeyMsg(KeyType::Char, 'q'));
+        [, $cmd] = $armed->update(new KeyMsg(KeyType::Char, 'q'));
+        $this->assertInstanceOf(\Closure::class, $cmd);
+    }
+
+    public function testOtherKeyDisarmsPendingQuit(): void
+    {
+        $m = new Manager($this->start()->left, $this->start()->right, lister: $this->fakeFs(), copyBatchesInFlight: 1);
+        [$armed] = $m->update(new KeyMsg(KeyType::Char, 'q'));
+        [$reset] = $armed->update(new KeyMsg(KeyType::Char, 'j'));
+        $this->assertFalse($reset->quitArmed);
+        $this->assertSame('', $reset->status, 'the stale quit question must not linger as chrome');
+    }
+
+    public function testCopyCompletionRetiresTheInFlightCounter(): void
+    {
+        $m = $this->start();
+        [$m] = $m->update(new KeyMsg(KeyType::Char, ' '));   // select 'home'
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'c'));   // arm copy to the inactive pane
+        [$m, $cmd] = $m->update(new KeyMsg(KeyType::Char, 'y')); // confirm: batch scheduled
+        $this->assertInstanceOf(\Closure::class, $cmd);
+        $this->assertSame(1, $m->copyBatchesInFlight);
+        $done = $m->update(new CopyCompletedMsg(['/home' => '/home/home'], 0, 0, 0))[0];
+        $this->assertSame(0, $done->copyBatchesInFlight);
     }
 
     public function testTabSwapsActivePane(): void

@@ -25,6 +25,7 @@ return [
     'status.refreshed' => 'atualizado',
     'status.unreadable' => 'não é possível ler {dir} — mostrando o conteúdo anterior',
     'status.copy_pending' => 'copiando {count} itens…',
+    'status.quit_armed'     => '{count} cópias ainda em andamento — pressione novamente q para sair mesmo assim',
     'status.deleted' => '{count} itens excluídos',
     'status.deleted_with_errors' => '{count} itens excluídos com {errors} erros',
     'status.deleted_skipped' => '{count} itens excluídos ({skipped} pulados)',

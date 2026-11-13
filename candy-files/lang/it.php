@@ -25,6 +25,7 @@ return [
     'status.refreshed' => 'aggiornato',
     'status.unreadable' => 'impossibile leggere {dir}: viene mostrato il contenuto precedente',
     'status.copy_pending' => 'copia di {count} voci…',
+    'status.quit_armed'     => '{count} copie ancora in corso — premi di nuovo q per uscire comunque',
     'status.deleted' => '{count} voci eliminate',
     'status.deleted_with_errors' => '{count} voci eliminate, {errors} errori',
     'status.deleted_skipped' => '{count} voci eliminate ({skipped} saltate)',

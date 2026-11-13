@@ -25,6 +25,7 @@ return [
     'status.refreshed' => 'rafraîchi',
     'status.unreadable' => 'lecture impossible de {dir} — affichage du contenu précédent',
     'status.copy_pending' => 'copie de {count} entrées…',
+    'status.quit_armed'     => '{count} copies toujours en cours — appuyez de nouveau sur q pour quitter malgré tout',
     'status.deleted' => '{count} entrées supprimées',
     'status.deleted_with_errors' => '{count} entrées supprimées, {errors} erreurs',
     'status.deleted_skipped' => '{count} entrées supprimées ({skipped} ignorées)',

@@ -25,6 +25,7 @@ return [
     'status.refreshed' => 'تم التحديث',
     'status.unreadable' => 'لا يمكن قراءة {dir} — يتم عرض المحتويات السابقة',
     'status.copy_pending' => 'جارٍ نسخ {count} عناصر…',
+    'status.quit_armed'     => 'لديك {count} عمليات نسخ قيد التنفيذ — اضغط q مجددًا للخروج رغم ذلك',
     'status.deleted' => 'تم حذف {count} عناصر',
     'status.deleted_with_errors' => 'تم حذف {count} عناصر مع {errors} أخطاء',
     'status.deleted_skipped' => 'تم حذف {count} عناصر ({skipped} متجاهل)',

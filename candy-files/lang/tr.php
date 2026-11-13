@@ -25,6 +25,7 @@ return [
     'status.refreshed' => 'yenilendi',
     'status.unreadable' => '{dir} okunamıyor — önceki içerik gösteriliyor',
     'status.copy_pending' => '{count} öğe kopyalanıyor…',
+    'status.quit_armed'     => '{count} kopyalama hâlâ sürüyor — yine de çıkmak için yeniden q tuşuna basın',
     'status.deleted' => '{count} öğe silindi',
     'status.deleted_with_errors' => '{count} öğe silindi, {errors} hata',
     'status.deleted_skipped' => '{count} öğe silindi ({skipped} atlandı)',

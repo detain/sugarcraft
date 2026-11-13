@@ -28,6 +28,7 @@ return [
     'status.refreshed'        => 'refreshed',
     'status.unreadable' => 'cannot read {dir} — showing previous contents',
     'status.copy_pending'     => 'copying {count} entries…',
+    'status.quit_armed'     => '{count} copy batches still in flight — press q again to quit anyway',
     'status.deleted'           => 'deleted {count} entries',
     'status.deleted_with_errors' => 'deleted {count} entries with {errors} errors',
     'status.deleted_skipped'   => 'deleted {count} entries ({skipped} skipped)',

@@ -25,6 +25,7 @@ return [
     'status.refreshed' => '更新しました',
     'status.unreadable' => '{dir} を読み込めません —前回の内容を表示しています',
     'status.copy_pending' => '{count} 件をコピー中…',
+    'status.quit_armed'     => 'コピー {count} 件が実行中 — それでも終了するには q をもう一度押してください',
     'status.deleted' => '{count} 件削除しました',
     'status.deleted_with_errors' => '{count} 件削除、エラー {errors} 件',
     'status.deleted_skipped' => '{count} 件削除、スキップ {skipped} 件',

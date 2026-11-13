@@ -25,6 +25,7 @@ return [
     'status.refreshed' => 'обновлено',
     'status.unreadable' => 'не удаётся прочитать {dir} — показано прежнее содержимое',
     'status.copy_pending' => 'копирую {count} элементов…',
+    'status.quit_armed'     => '{count} копирований ещё в процессе — нажмите q ещё раз, чтобы выйти всё равно',
     'status.deleted' => 'удалено элементов: {count}',
     'status.deleted_with_errors' => 'удалено элементов: {count}, ошибок: {errors}',
     'status.deleted_skipped' => 'удалено {count} (пропущено {skipped})',

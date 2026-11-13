@@ -25,6 +25,7 @@ return [
     'status.refreshed' => '새로고침됨',
     'status.unreadable' => '{dir}을(를) 읽을 수 없습니다 — 이전 콘텐츠를 표시합니다',
     'status.copy_pending' => '{count}개 항목 복사 중…',
+    'status.quit_armed'     => '복사 {count}건 진행 중 — 그래도 종료하려면 q를 다시 누르세요',
     'status.deleted' => '{count}개 항목 삭제됨',
     'status.deleted_with_errors' => '{count}개 항목 삭제, 오류 {errors}건',
     'status.deleted_skipped' => '{count}개 항목 삭제, 건너뜀 {skipped}건',

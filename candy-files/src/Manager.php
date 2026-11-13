@@ -102,6 +102,10 @@ final class Manager implements Model
         public readonly ?string $inputBuffer = null,
         public readonly int $termCols = 0,
         public readonly int $termRows = 0,
+        /** CF-44: async copy batches scheduled but not yet reported complete. */
+        public readonly int $copyBatchesInFlight = 0,
+        /** CF-44: first `q` landed while a batch was in flight; second press quits. */
+        public readonly bool $quitArmed = false,
     ) {
         $this->lister = $lister ?? FsLister::lister();
     }
@@ -222,10 +226,27 @@ final class Manager implements Model
         }
 
         if ($msg->type === KeyType::Char && $msg->rune === 'q' && !$msg->ctrl && !$msg->alt) {
+            // CF-44: quitting while a copy batch is in flight needs a second
+            // press. The shutdown handler will remove the ephemeral trash
+            // root and the loop dies mid-batch — bytes half-landed, undo
+            // stack unreachable — so the first press only arms the question,
+            // naming how many batches are still running.
+            if ($this->copyBatchesInFlight > 0 && !$this->quitArmed) {
+                return [$this->mutate([
+                    'quitArmed' => true,
+                    'status' => Lang::t('status.quit_armed', ['count' => $this->copyBatchesInFlight]),
+                ]), null];
+            }
             return [$this, Cmd::quit()];
         }
 
-        return $this->dispatch($msg);
+        // Any other keystroke drops the pending quit question (CF-44) —
+        // the armed state is about THIS batch window, not the session, and
+        // the question is chrome: a stale copy of it would keep pleading
+        // for a second press that no longer quits.
+        $model = $this->quitArmed ? $this->mutate(['quitArmed' => false, 'status' => '']) : $this;
+
+        return $model->dispatch($msg);
     }
 
     /**
@@ -262,7 +283,9 @@ final class Manager implements Model
         $newUndoStack = array_slice($newUndoStack, -self::UNDO_LIMIT);
         return $this->refreshAllPanes()
             ->withConfirm(ConfirmState::None, $status)
-            ->withUndoRedoStacks($newUndoStack, []); // Clear redo on new action
+            ->withUndoRedoStacks($newUndoStack, []) // Clear redo on new action
+            // CF-44: this completion retires exactly one armed batch.
+            ->mutate(['copyBatchesInFlight' => max(0, $this->copyBatchesInFlight - 1)]);
     }
 
     /**
@@ -1251,8 +1274,12 @@ final class Manager implements Model
             }
         }
 
-        // Build the initial Manager state (before async op completes)
-        $pendingManager = $this->withConfirm(ConfirmState::None, Lang::t('status.copy_pending', ['count' => count($copiedItems)]));
+        // Build the initial Manager state (before async op completes). The
+        // in-flight counter is what makes CF-44's quit guard name a number:
+        // one batch = one scheduled CopyCompletedMsg, whatever its size.
+        $pendingManager = $this
+            ->withConfirm(ConfirmState::None, Lang::t('status.copy_pending', ['count' => count($copiedItems)]))
+            ->mutate(['copyBatchesInFlight' => $this->copyBatchesInFlight + 1]);
 
         // Return a Cmd that runs the async copy via AsyncOps.
         $asyncOps = new AsyncOps();

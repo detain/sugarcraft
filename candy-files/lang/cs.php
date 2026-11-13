@@ -25,6 +25,7 @@ return [
     'status.refreshed' => 'obnoveno',
     'status.unreadable' => 'nelze číst {dir} — zobrazen předchozí obsah',
     'status.copy_pending' => 'kopírování {count} položek…',
+    'status.quit_armed'     => '{count} kopírování stále probíhá — pro ukončení stiskněte znovu q',
     'status.deleted' => 'smazáno {count} položek',
     'status.deleted_with_errors' => 'smazáno {count} položek, chyb {errors}',
     'status.deleted_skipped' => 'smazáno {count} položek ({skipped} přeskočeno)',
