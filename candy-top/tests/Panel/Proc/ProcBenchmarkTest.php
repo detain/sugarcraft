@@ -19,14 +19,18 @@ use SugarCraft\Top\View\Surface;
 
 /**
  * Budget: sampling + sort + render of 500 processes under 50 ms on a
- * 120x40 terminal. Non-blocking: an over-budget run on a slow or busy
- * machine is reported incomplete rather than failed, and CI only checks
- * that the pipeline runs (machine speed there is not ours to promise).
+ * 120x40 terminal. The budget is local-owned and soft: an over-budget run
+ * on a slow or busy machine is reported incomplete with the numbers, never
+ * failed (S-N09: the old CI leg self-skipped before measuring, so no
+ * machine ever reported a figure). CI enforces a 10x wall — a real
+ * complexity regression breaches it; machine noise does not — and both
+ * messages carry the best-of-5 milliseconds so there is always a number.
  */
 #[Group('benchmark')]
 final class ProcBenchmarkTest extends TestCase
 {
     private const BUDGET_MS = 50.0;
+    private const CEILING_MS = 500.0;
 
     public function testFiveHundredProcessesFitTheFrameBudget(): void
     {
@@ -52,15 +56,14 @@ final class ProcBenchmarkTest extends TestCase
             $best[$tree ? 'tree' : 'flat'] = min($runs);
         }
 
-        if (getenv('CI') !== false && getenv('CI') !== '') {
-            $this->addToAssertionCount(1);
-
-            return;
+        $worst = max($best);
+        $figures = json_encode($best);
+        if ($worst > self::CEILING_MS) {
+            $this->fail(sprintf('proc scan blew the %.0f ms wall: %s', self::CEILING_MS, $figures));
         }
-        $slow = array_filter($best, static fn (float $ms): bool => $ms > self::BUDGET_MS);
-        if ($slow !== []) {
-            $this->markTestIncomplete(sprintf('proc scan over budget on this machine: %s', json_encode($best)));
+        if ($worst > self::BUDGET_MS) {
+            $this->markTestIncomplete(sprintf('proc scan over budget on this machine: %s', $figures));
         }
-        $this->assertLessThanOrEqual(self::BUDGET_MS, max($best));
+        $this->assertLessThanOrEqual(self::BUDGET_MS, $worst);
     }
 }
