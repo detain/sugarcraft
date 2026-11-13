@@ -57,6 +57,38 @@ final class DockLayoutTest extends TestCase
         $this->assertSame('main', DockLayout::new('main')->centerPaneId);
     }
 
+    public function testResolvePaintPathRidesTheConstructorCache(): void
+    {
+        $layout = DockLayout::new()
+            ->withSlotAdded(Side::Left, 'a')
+            ->withSlotAdded(Side::Left, 'b')
+            ->withSlotAdded(Side::Left, 'c');
+        $frame = Region::fromSize(100, 30);
+
+        $warm = $layout->resolve($frame);
+
+        // Finding 012: the rescale used to run once per frame inside
+        // stackHeights. The counter is the decisive instrument — before the
+        // cache this loop recorded 60 computations, after it records zero.
+        DockLayout::resetScaledComputationCount();
+        for ($paint = 0; $paint < 60; $paint++) {
+            $again = $layout->resolve($frame);
+        }
+
+        $this->assertSame(0, DockLayout::scaledComputationCount(), '60 frames must rescale nothing');
+        $this->assertEquals($warm->regions, $again->regions, 'the cached split is byte-identical to the recomputed one');
+
+        // A revision clones through the constructor, so the cache RE-DERIVES
+        // on build — it can never outlive the slots it describes — and the
+        // fresh instance still paints at zero cost.
+        $retuned = $layout->withStackWeight(Side::Left, 0, 5, 1);
+        $this->assertGreaterThan(0, DockLayout::scaledComputationCount(), 'building a revision recomputes the rescale');
+        $before = DockLayout::scaledComputationCount();
+        $layout->resolve($frame);
+        $retuned->resolve($frame);
+        $this->assertSame($before, DockLayout::scaledComputationCount(), 'painting either revision costs nothing');
+    }
+
     public function testConstructorRefusesAnyDividerWidthButOne(): void
     {
         // The persisted shape has exactly one divider column (fromArray forces

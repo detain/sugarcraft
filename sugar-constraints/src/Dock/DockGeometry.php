@@ -37,6 +37,20 @@ final readonly class DockGeometry
         public array $regions,
         public array $dividerColumns,
     ) {
+    }
+
+    /**
+     * The validating public door for untrusted payloads: every element of the
+     * shape is checked before construction (the scan used to live in the
+     * private constructor, where resolve() paid it once per frame on bytes it
+     * had just built itself — finding 028 moved it to this door; the paint
+     * path takes {@see solved()} instead).
+     *
+     * @param array<string,Region> $regions
+     * @param list<array{x:int,side:Side}> $dividerColumns
+     */
+    public static function new(array $regions = [], array $dividerColumns = []): self
+    {
         foreach ($regions as $paneId => $region) {
             if ($region instanceof Region === false) {
                 throw new \InvalidArgumentException(
@@ -54,13 +68,23 @@ final readonly class DockGeometry
                 );
             }
         }
+
+        return new self($regions, $dividerColumns);
     }
 
     /**
+     * @internal construction from {@see DockLayout::resolve()} — the walk
+     * builds every Region and divider row itself, so re-scanning its own
+     * output element-by-element each paint is pure overhead (finding 028,
+     * once per frame on the paint path). Hosts keep using {@see new()},
+     * which validates untrusted payloads. Same private constructor, zero
+     * validation — that is the whole difference, and it is why this seam is
+     * @internal.
+     *
      * @param array<string,Region> $regions
      * @param list<array{x:int,side:Side}> $dividerColumns
      */
-    public static function new(array $regions = [], array $dividerColumns = []): self
+    public static function solved(array $regions, array $dividerColumns): self
     {
         return new self($regions, $dividerColumns);
     }

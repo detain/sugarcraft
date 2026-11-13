@@ -50,6 +50,34 @@ final class DockLayout
     public const DEFAULT_SHARE_DENOM = 3;
 
     /**
+     * Constructor-derived scaled stack weights per side (null = empty side),
+     * retained so the paint path never rescales (finding 012).
+     *
+     * @var array<string, ?array{weights:list<int>,total:int}>
+     */
+    private readonly array $stackScaled;
+
+    /**
+     * @internal test seam for the finding-012 perf pin: counts every
+     * scaledStackWeights computation. Not part of any contract; the value is
+     * process-global on purpose (the ctor path and any hypothetical future
+     * caller share it).
+     */
+    private static int $scaledComputations = 0;
+
+    /** @internal */
+    public static function scaledComputationCount(): int
+    {
+        return self::$scaledComputations;
+    }
+
+    /** @internal */
+    public static function resetScaledComputationCount(): void
+    {
+        self::$scaledComputations = 0;
+    }
+
+    /**
      * @param list<DockSlot> $leftSlots
      * @param list<DockSlot> $rightSlots
      */
@@ -95,15 +123,36 @@ final class DockLayout
         // resolve() splits each stack in exact integer arithmetic over the
         // stack's common denominator; a weight set whose scaled sum cannot be
         // held in a native int would force a lossy fallback inside resolve(),
-        // which never throws — so refuse it here, at every entry point.
-        foreach ([['Left', $leftSlots], ['Right', $rightSlots]] as [$sideName, $slots]) {
-            if ($slots !== [] && self::scaledStackWeights($slots) === null) {
-                throw new \InvalidArgumentException(
-                    "DockLayout {$sideName} stack weights overflow exact integer arithmetic "
-                    . '(their common-denominator sum exceeds PHP_INT_MAX); use smaller rationals'
-                );
-            }
+        // which never throws — so refuse it here, at every entry point. And
+        // since every entry point computes the rescale anyway, RETAIN it: the
+        // paint path (appendStack → stackHeights) used to recompute the
+        // identical result every frame (finding 012) and now reads this cache.
+        // mutate() clones through this constructor, so every revision
+        // re-validates AND re-derives — the cache cannot drift from the slots.
+        $this->stackScaled = [
+            self::key(Side::Left) => $leftSlots === [] ? null : self::requireScaled($leftSlots, 'Left'),
+            self::key(Side::Right) => $rightSlots === [] ? null : self::requireScaled($rightSlots, 'Right'),
+        ];
+    }
+
+    /**
+     * One scaled-stack computation for the constructor cache: the overflow
+     * refusal lives here — the single entry point — with the message the
+     * guards have always carried.
+     *
+     * @param list<DockSlot> $slots
+     * @return array{weights:list<int>,total:int}
+     */
+    private static function requireScaled(array $slots, string $sideName): array
+    {
+        $scaled = self::scaledStackWeights($slots);
+        if ($scaled === null) {
+            throw new \InvalidArgumentException(
+                "DockLayout {$sideName} stack weights overflow exact integer arithmetic "
+                . '(their common-denominator sum exceeds PHP_INT_MAX); use smaller rationals'
+            );
         }
+        return $scaled;
     }
 
     /**
@@ -146,12 +195,12 @@ final class DockLayout
                 "Pane '{$paneId}' is the center surface; a pane has exactly one home"
             );
         }
-        $slot = DockSlot::new($paneId);
         if ($this->findSlot($paneId) !== null) {
             throw new \InvalidArgumentException(
                 "Pane '{$paneId}' is already docked; a pane has exactly one home"
             );
         }
+        $slot = DockSlot::new($paneId);
 
         [$key, $slots] = $this->sideAccessors($side);
         $position = $index ?? count($slots);
@@ -351,11 +400,30 @@ final class DockLayout
     }
 
     /**
+     * Clone through the constructor's full validation. The spread is EXPLICIT
+     * (not a raw get_object_vars() splat) so the constructor-derived
+     * stackScaled cache is never smuggled through as an unknown named
+     * argument — and never copied stale: the clone re-derives it at the top
+     * of the constructor from the merged slots.
+     *
      * @param array<string, mixed> $changes
      */
     private function mutate(array $changes): self
     {
-        return new self(...array_merge(get_object_vars($this), $changes));
+        $values = array_merge(get_object_vars($this), $changes);
+
+        return new self(
+            centerPaneId: $values['centerPaneId'],
+            leftSlots: $values['leftSlots'],
+            rightSlots: $values['rightSlots'],
+            leftShareNum: $values['leftShareNum'],
+            leftShareDenom: $values['leftShareDenom'],
+            rightShareNum: $values['rightShareNum'],
+            rightShareDenom: $values['rightShareDenom'],
+            centerMinCols: $values['centerMinCols'],
+            sideMinCols: $values['sideMinCols'],
+            dividerCols: $values['dividerCols'],
+        );
     }
 
     // ── Resolution ──
@@ -386,7 +454,7 @@ final class DockLayout
     public function resolve(Region $frame): DockGeometry
     {
         if ($frame->width <= 0 || $frame->height <= 0) {
-            return DockGeometry::new();
+            return DockGeometry::solved([], []);
         }
 
         $active = [];
@@ -409,7 +477,7 @@ final class DockLayout
         if ($plan === null) {
             // Center-only across the whole frame (final rung of the ladder,
             // also the shape when both sides were empty from the start).
-            return DockGeometry::new([
+            return DockGeometry::solved([
                 $this->centerPaneId => new Region($frame->x, $frame->y, $frame->width, $frame->height),
             ], []);
         }
@@ -437,7 +505,7 @@ final class DockLayout
             $this->appendStack($regions, Side::Right, $cursor, $rightCols, $frame);
         }
 
-        return DockGeometry::new($regions, $dividers);
+        return DockGeometry::solved($regions, $dividers);
     }
 
     /**
@@ -517,7 +585,7 @@ final class DockLayout
     private function appendStack(array &$regions, Side $side, int $x, int $cols, Region $frame): void
     {
         $slots = $this->slots($side);
-        $heights = $this->stackHeights($slots, $frame->height);
+        $heights = $this->stackHeights($slots, $frame->height, $this->stackScaled[self::key($side)]);
 
         // Gap-affordance law: stackHeights() budgets gap rows only while the
         // frame can pay for the full gap total; once it collapses the slots to
@@ -548,9 +616,12 @@ final class DockLayout
      * of throwing.
      *
      * @param list<DockSlot> $slots
+     * @param ?array{weights:list<int>,total:int} $scaled this side's scaled
+     *        weights from the constructor cache (null only for an empty side,
+     *        which this path never receives)
      * @return list<int>
      */
-    private function stackHeights(array $slots, int $height): array
+    private function stackHeights(array $slots, int $height, ?array $scaled): array
     {
         $count = count($slots);
         if ($count === 1) {
@@ -562,8 +633,9 @@ final class DockLayout
             return array_fill(0, $count, 0);
         }
 
-        // Non-null: the constructor refuses weight sets that would overflow.
-        $scaled = self::scaledStackWeights($slots);
+        // Non-null: the constructor computed (and overflow-gated) this side's
+        // rescale when the instance was built — the paint path reads the
+        // cache instead of rescaling every frame (finding 012).
         assert($scaled !== null);
 
         $heights = [];
@@ -588,6 +660,7 @@ final class DockLayout
      */
     private static function scaledStackWeights(array $slots): ?array
     {
+        self::$scaledComputations++;
         $reduced = [];
         $lcm = 1;
         foreach ($slots as $slot) {
