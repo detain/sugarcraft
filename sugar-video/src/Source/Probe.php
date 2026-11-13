@@ -27,6 +27,14 @@ namespace SugarCraft\Video\Source;
  * not its cache); PATH-flipping test concerns clear it via
  * {@see clearBinaryCacheForTesting()}.
  *
+ * SV-M17: the memo distinguishes "ran, answered nothing" (a genuine miss —
+ * cached for the full TTL) from "could not execute" (shell_exec returned
+ * null — a transient fork hiccup under CI load): a failure is only given
+ * {@see EXEC_RETRY_SECONDS} of grace, so one hiccup cannot pin
+ * `decoder.ffmpeg_missing` for a minute on a machine that HAS ffmpeg.
+ * The expiry clock is monotonic hrtime by default and scriptable via
+ * {@see setClockForTesting()} (same shape as Player's pacing seam).
+ *
  * Mirrors the approach of seatedro/glyph and maxcurzi/tplay binary probes.
  */
 class Probe
@@ -34,8 +42,34 @@ class Probe
     /** Memo lifetime in seconds — long enough to absorb a playback's reopens, short enough that a mid-session install converges. */
     public const CACHE_TTL_SECONDS = 60.0;
 
-    /** @var array<string, array{value: ?string, at: float}> memoized PATH lookups, keyed by bare command name */
+    /**
+     * Grace a FAILED EXECUTION (shell_exec returned null — the lookup never
+     * ran, so there is no answer) keeps in the memo. SV-M17: deliberately
+     * tiny — treating a fork hiccup like a genuine 60s absence pinned
+     * `decoder.ffmpeg_missing` for a minute on machines that have ffmpeg.
+     */
+    public const EXEC_RETRY_SECONDS = 1.0;
+
+    /** @var array<string, array{value: ?string, at: float, ttl: float}> memoized PATH lookups, keyed by bare command name */
     private static array $lookups = [];
+
+    /** Monotonic clock seam (seconds); null = hrtime. Scripted by tests for expiry arms. */
+    private static ?\Closure $clock = null;
+
+    /**
+     * Inject a deterministic clock (seconds since arbitrary origin) for the
+     * memo-expiry tests; null restores the live monotonic hrtime clock.
+     */
+    public static function setClockForTesting(?\Closure $clock): void
+    {
+        self::$clock = $clock;
+    }
+
+    /** The memo expiry clock: scripted seam when set, monotonic hrtime otherwise. */
+    private static function now(): float
+    {
+        return self::$clock !== null ? (float) (self::$clock)() : hrtime(true) / 1_000_000_000;
+    }
     /**
      * Path to the ffmpeg binary, or null if not found.
      *
@@ -114,24 +148,43 @@ class Probe
         // TTL memo: fresh entries answer without forking a shell at all;
         // expired ones re-lookup and overwrite. Path-separator commands above
         // stay uncached — an is_file() check costs less than the memo book.
-        $now = hrtime(true) / 1_000_000_000;
+        $now = self::now();
         $memo = self::$lookups[$cmd] ?? null;
-        if ($memo !== null && $now - $memo['at'] < self::CACHE_TTL_SECONDS) {
+        if ($memo !== null && $now - $memo['at'] < $memo['ttl']) {
             return $memo['value'];
         }
 
-        $out = @shell_exec($shell);
+        $out = static::runShellLookup($shell);
         if (!is_string($out)) {
-            $value = null;
-        } else {
-            $first = strtok(trim($out), "\r\n");
-            // strtok returns false when string is empty, otherwise a non-empty token
-            $value = $first ?: null;
+            // SV-M17: the lookup COULD NOT EXECUTE (shell_exec returns null
+            // only when the command itself fails to run — fork exhaustion
+            // under CI load). That is not an answer; caching it like a
+            // genuine absence pinned `decoder.ffmpeg_missing` for a full
+            // minute on machines that have ffmpeg. A tiny retry window
+            // keeps a persistent failure from re-forking per open.
+            self::$lookups[$cmd] = ['value' => null, 'at' => $now, 'ttl' => self::EXEC_RETRY_SECONDS];
+
+            return null;
         }
 
-        self::$lookups[$cmd] = ['value' => $value, 'at' => $now];
+        $first = strtok(trim($out), "\r\n");
+        // strtok returns false when string is empty, otherwise a non-empty token
+        $value = $first ?: null;
+
+        self::$lookups[$cmd] = ['value' => $value, 'at' => $now, 'ttl' => self::CACHE_TTL_SECONDS];
 
         return $value;
+    }
+
+    /**
+     * Execute a `command -v`/`where` lookup and hand back the raw shell_exec
+     * answer: string output (possibly empty = "ran, found nothing") or null
+     * (= could not execute). Split out as the protected seam so tests can
+     * script the failure-vs-absence distinction without a real fork storm.
+     */
+    protected static function runShellLookup(string $shell): ?string
+    {
+        return @shell_exec($shell);
     }
 
     /**
