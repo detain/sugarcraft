@@ -23,7 +23,10 @@ use SugarCraft\Style\Style;
  * selectedOption styles checked MultiSelect boxes, prompt carries the
  * focused-Select caret glyph, error styles the field-inline `! error`
  * row, errorSummaryItem styles each bullet inside the error summary
- * (the split researched from huh's own slot pair). A standalone field
+ * (the split researched from huh's own slot pair). submitted / aborted
+ * style the two terminal `[submitted]` / `[aborted]` lines (SF-33, slots
+ * 13-14 — plain in every preset, so the chrome lands un-themed bytes by
+ * default). A standalone field
  * rendered without a theme keeps its plain legacy bytes; the theme
  * arrives through Form::view().
  *
@@ -52,15 +55,30 @@ final class Theme
         public readonly Style $help,
         public readonly Style $prompt,
         ?Style $errorSummaryItem = null,
+        ?Style $submitted = null,
+        ?Style $aborted = null,
     ) {
         // SF-9 (sugar-forms-094): huh splits the summary BLOCK style from
         // the per-field bullet ITEM style; the slot lands additive with a
         // plain default so pre-split constructions keep their bytes.
         $this->errorSummaryItem = $errorSummaryItem ?? Style::new();
+        // SF-33 (sugar-forms-070): the two terminal chrome lines were the
+        // last un-themed rows in view() while everything else rides slots.
+        // Same landing discipline as errorSummaryItem: additive parameters,
+        // plain defaults, every shipped preset stays byte-neutral — a host
+        // that wants coloured terminal lines supplies them per construction.
+        $this->submitted = $submitted ?? Style::new();
+        $this->aborted   = $aborted ?? Style::new();
     }
 
     /** Per-field bullet line inside the error summary (SF-9, slot 12). */
     public readonly Style $errorSummaryItem;
+
+    /** Styles the final `[submitted]` line (SF-33, slot 13). */
+    public readonly Style $submitted;
+
+    /** Styles the final `[aborted]` line (SF-33, slot 14). */
+    public readonly Style $aborted;
 
     /**
      * Default coloured theme. Bright pink accents on the chrome.

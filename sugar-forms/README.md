@@ -160,11 +160,15 @@ trailing-dot-safe matcher) before acting on it.
 All fields share a common navigation contract: `Tab` / `↓` advances,
 `Shift+Tab` / `↑` retreats (Shift+Tab arrives on the wire as CSI `Z`,
 decoded to `Tab` with `shift: true`; `Alt+Tab` remains an accepted
-alias), `Enter` on the last interactive field submits, `Esc` / `Ctrl+C`
+alias), `Enter` advances focus on non-final fields and submits on the last
+interactive field, `Esc` / `Ctrl+C`
 aborts. Skippable fields (e.g. plain `Note`s) are passed over silently.
 The bindings live in a {@see \SugarCraft\Forms\KeyMap} — pass your own
 via `Form::withKeyMap()` and {@see \SugarCraft\Forms\Form::keyBinds()}
-renders the active set, never the defaults.
+renders the active set, never the defaults. `keyBinds()` also appends an
+advisory `enter` row spelling out that split role, and every label it
+renders is catalogued — host-facing chrome localizes with the active
+locale, the keys column stays the physical spelling.
 
 #### Keyboard & wire shapes
 
@@ -265,7 +269,10 @@ paint the field bodies too: focused/blurred titles, the cursor surface
 (list rows, Confirm/RadioPills pills, the Date cursor cell), option rows,
 the focused-Select caret (prompt slot), checked boxes (selectedOption),
 the inline `! error` row (error), and the summary bullets
-(errorSummaryItem — split from the errorSummary block slot). The shipped
+(errorSummaryItem — split from the errorSummary block slot), plus the two
+terminal `[submitted]` / `[aborted]` lines (submitted / aborted slots,
+SF-33 — plain in every shipped preset, so the chrome bytes do not move
+until a host styles them). The shipped
 `ansi()` default keeps every existing field-body byte identical (its field
 slots are the plain styles the legacy code hard-coded); pick any other
 preset — or `Theme::plain()` for a zero-SGR render — and the body

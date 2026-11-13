@@ -734,19 +734,25 @@ final class Form implements Model
             $blocks[] = $this->clipToWidth($theme->description->render(Lang::t('form.validating')));
         }
         if (count($this->groups) > 1 && $this->showHelp && $group->showHelp) {
+            // SF-33: the Step-of-N copy rides the catalogue; en bytes are
+            // identical to the pre-catalogue sprintf it replaces.
             $blocks[] = $this->clipToWidth($theme->help->render(
-                sprintf('Step %d of %d', $this->groupIndex + 1, count($this->groups))
+                Lang::t('form.step_of', ['current' => $this->groupIndex + 1, 'total' => count($this->groups)])
             ));
         }
         if ($this->errorSummary && $this->hasErrors()) {
             $blocks[] = $this->clipToWidth($this->renderErrorSummary($theme));
         }
         $body = implode("\n\n", $blocks);
+        // SF-33 (sugar-forms-070): the two terminal lines were the last
+        // chrome drawn as raw literals outside the theme; they now route
+        // through the catalogue and the submitted/aborted slots, whose
+        // plain defaults reproduce the old bytes exactly.
         if ($this->submitted) {
-            return $body . "\n\n[submitted]";
+            return $body . "\n\n" . $theme->submitted->render(Lang::t('form.submitted'));
         }
         if ($this->aborted) {
-            return $body . "\n\n[aborted]";
+            return $body . "\n\n" . $theme->aborted->render(Lang::t('form.aborted'));
         }
         return $body;
     }
@@ -1521,8 +1527,10 @@ final class Form implements Model
      * The four navigation rows are
      * derived live from {@see self::activeKeyMap()} (m21) — the labels follow
      * whatever map the form actually uses, including custom bindings —
-     * followed by the fixed next-page / prev-page rows when the form spans
-     * groups. There is no per-field extras channel: keys a field consumes
+     * followed by the advisory Enter row (SF-107: the split advance/submit
+     * role) and, when the form spans groups, the fixed next-page /
+     * prev-page rows. Label copy is catalogued (SF-33); the keys column of
+     * the derived rows stays the physical spelling. There is no per-field extras channel: keys a field consumes
      * beyond the map live in that field's own update() (the README
      * field-types table inventories them) and are deliberately not rendered
      * here. Mirrors the surface of charmbracelet/huh.`KeyBinds()`.
@@ -1532,15 +1540,22 @@ final class Form implements Model
     public function keyBinds(): array
     {
         $keyMap = $this->activeKeyMap();
+        // SF-33 (sugar-forms-039/-107): the action labels and the fixed
+        // paging/Enter copy now ride the catalogue (default-en bytes
+        // unchanged); the keys column of the four map-derived rows stays
+        // the physical key spelling — those are wires, not words. The
+        // advisory `enter` row makes the split Enter role (advance on
+        // non-final fields, submit on the last) visible to hosts.
         $binds = [
-            ['next',   implode(' / ', $keyMap->labelsFor('next'))],
-            ['prev',   implode(' / ', $keyMap->labelsFor('prev'))],
-            ['submit', implode(' / ', $keyMap->labelsFor('submit'))],
-            ['quit',   implode(' / ', $keyMap->labelsFor('abort'))],
+            [Lang::t('keybind.next'),   implode(' / ', $keyMap->labelsFor('next'))],
+            [Lang::t('keybind.prev'),   implode(' / ', $keyMap->labelsFor('prev'))],
+            [Lang::t('keybind.submit'), implode(' / ', $keyMap->labelsFor('submit'))],
+            [Lang::t('keybind.quit'),   implode(' / ', $keyMap->labelsFor('abort'))],
+            [Lang::t('keybind.enter'),  Lang::t('keybind.enter_keys')],
         ];
         if (count($this->groups) > 1) {
-            $binds[] = ['next page', 'tab past last field'];
-            $binds[] = ['prev page', 'shift+tab on first field'];
+            $binds[] = [Lang::t('keybind.next_page'), Lang::t('keybind.next_page_keys')];
+            $binds[] = [Lang::t('keybind.prev_page'), Lang::t('keybind.prev_page_keys')];
         }
         return $binds;
     }

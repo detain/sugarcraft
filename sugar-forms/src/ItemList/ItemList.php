@@ -248,7 +248,10 @@ final class ItemList implements Model
             $lines[] = '/' . RenderSafe::clean($this->filterText);
         }
         if ($count === 0) {
-            $lines[] = $this->filterText !== '' ? 'No matches.' : 'No items.';
+            // SF-33 (sugar-forms-107): the empty-list rows were the last raw
+            // chrome literals in this widget (the SF-56 catalogue already
+            // carried its throws); en bytes unchanged.
+            $lines[] = $this->filterText !== '' ? Lang::t('list.no_matches') : Lang::t('list.no_items');
             if ($this->showStatusBar && ($status = $this->status()) !== '') {
                 $lines[] = $status;
             }
