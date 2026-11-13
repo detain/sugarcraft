@@ -34,6 +34,10 @@ final class ColorGateTest extends TestCase
 
     protected function tearDown(): void
     {
+        // The facade seam (SL-23): a test that installed must leave the
+        // runner's handler back on the stack — reflection-only statics
+        // rewind used to leak live wrappers into later test files.
+        Log::removePanicHandler();
         foreach ($this->envSnapshot as $key => $value) {
             if ($value === false) {
                 \putenv($key);
@@ -173,7 +177,6 @@ final class ColorGateTest extends TestCase
 
     public function testPanicHandlerDefaultsToPlainReportOnAPipedStderr(): void
     {
-        $snapshot = $this->snapshotPanicStatics();
         try {
             \putenv('CLICOLOR_FORCE');
             Log::installPanicHandler();
@@ -186,13 +189,12 @@ final class ColorGateTest extends TestCase
             $title = $this->panicStyle($formatter, 'titleStyle');
             $this->assertSame('x', $title->render('x'), 'piped STDERR must install the plain panic formatter');
         } finally {
-            $this->restorePanicStatics($snapshot);
+            Log::removePanicHandler();
         }
     }
 
     public function testPanicHandlerDefaultsToPrettyUnderForceColor(): void
     {
-        $snapshot = $this->snapshotPanicStatics();
         try {
             \putenv('CLICOLOR_FORCE=1');
             Log::installPanicHandler();
@@ -201,7 +203,7 @@ final class ColorGateTest extends TestCase
             $title = $this->panicStyle($formatter, 'titleStyle');
             $this->assertNotSame('x', $title->render('x'), 'CLICOLOR_FORCE=1 must select the pretty panic formatter');
         } finally {
-            $this->restorePanicStatics($snapshot);
+            Log::removePanicHandler();
         }
     }
 
@@ -230,7 +232,6 @@ final class ColorGateTest extends TestCase
 
     public function testReinstallReplacesInsteadOfStacking(): void
     {
-        $snapshot = $this->snapshotPanicStatics();
         try {
             // Deterministic start: a marker handler is what any first-install
             // would have captured as "previous" — seeding our static to match
@@ -238,6 +239,7 @@ final class ColorGateTest extends TestCase
             $marker = static function (): void {};
             \set_exception_handler($marker);
             (new \ReflectionProperty(Log::class, 'panicPrevious'))->setValue(null, $marker);
+            (new \ReflectionProperty(Log::class, 'panicInstalled'))->setValue(null, true);
 
             Log::installPanicHandler();
             Log::installPanicHandler();
@@ -252,7 +254,11 @@ final class ColorGateTest extends TestCase
             $epoch = (new \ReflectionProperty(Log::class, 'panicEpoch'))->getValue();
             $this->assertIsInt($epoch);
         } finally {
-            $this->restorePanicStatics($snapshot);
+            // Unwind the facade's own pushes (the seeded install skips the
+            // noop capture, so exactly the two wrappers), then the marker
+            // this test pushed with its own set_exception_handler().
+            Log::removePanicHandler();
+            \restore_exception_handler();
         }
     }
 
@@ -277,21 +283,6 @@ final class ColorGateTest extends TestCase
     // -------------------------------------------------------------------------
     // Internal plumbing for the panic pins above
     // -------------------------------------------------------------------------
-
-    /** @return array{previous: mixed, epoch: int} */
-    private function snapshotPanicStatics(): array
-    {
-        $previous = (new \ReflectionProperty(Log::class, 'panicPrevious'))->getValue();
-        $epoch    = (new \ReflectionProperty(Log::class, 'panicEpoch'))->getValue();
-        return ['previous' => $previous, 'epoch' => $epoch];
-    }
-
-    /** @param array{previous: mixed, epoch: int} $snapshot */
-    private function restorePanicStatics(array $snapshot): void
-    {
-        (new \ReflectionProperty(Log::class, 'panicPrevious'))->setValue(null, $snapshot['previous']);
-        (new \ReflectionProperty(Log::class, 'panicEpoch'))->setValue(null, $snapshot['epoch']);
-    }
 
     /** Read the $formatter captured inside the currently installed handler. */
     private function installedPanicFormatter(): \SugarCraft\Log\PanicFormatter

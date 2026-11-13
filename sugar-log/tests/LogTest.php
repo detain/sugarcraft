@@ -37,6 +37,7 @@ final class LogTest extends TestCase
         if (\file_exists($this->tempPath)) {
             \unlink($this->tempPath);
         }
+        Log::removePanicHandler();
         Log::reset();
     }
 
@@ -394,5 +395,54 @@ final class LogTest extends TestCase
 
         $this->assertSame(1, \substr_count($result['stderr'], 'report rendered by sugar-log'));
         $this->assertStringContainsString('twice-y', $result['stderr']);
+    }
+
+    public function testChainedPreviousHandlerStillRunsAfterTheReport(): void
+    {
+        // sugar-log-011 pin: the captured "previous" is not just stored — it
+        // runs. A host handler set before install keeps its seat behind the
+        // panic report, so integrations (error pages, sentries) still fire.
+        $result = StderrNoticeCapture::run(<<<'CODE'
+            \set_exception_handler(static function (\Throwable $e): void {
+                \fwrite(\STDERR, 'PREV-SAW:' . $e->getMessage() . "\n");
+            });
+            \SugarCraft\Log\Log::installPanicHandler(\SugarCraft\Log\PanicFormatter::plain());
+            throw new \RuntimeException('chained');
+            CODE);
+
+        $stderr = $result['stderr'];
+        $this->assertStringContainsString('report rendered by sugar-log', $stderr);
+        $this->assertStringContainsString('PREV-SAW:chained', $stderr);
+        $banner = \strpos($stderr, 'report rendered by sugar-log');
+        $chained = \strpos($stderr, 'PREV-SAW:');
+        $this->assertIsInt($banner);
+        $this->assertIsInt($chained);
+        $this->assertLessThan($chained, $banner, 'the report must precede the chained handler');
+    }
+
+    public function testRemoveLeavesExactlyTheHandlerInstallFound(): void
+    {
+        // Stack-neutral contract proof (sugar-log-011 order-fragility): after
+        // install+remove the runner's handler is back in the slot — a later
+        // throw in the same process is rendered by the host, never by a
+        // leaked sugar-log banner. PHP exposes no handler getter, so the top
+        // slot is peeked the same push-and-pop way the sibling probes do.
+        $peek = static function (): mixed {
+            $slot = \set_exception_handler(static function (): void {});
+            \restore_exception_handler();
+            return $slot;
+        };
+
+        $foreign = static function (): void {};
+        \set_exception_handler($foreign); // now the top slot: what install will find
+        try {
+            Log::installPanicHandler(PanicFormatter::plain());
+            $this->assertNotSame($foreign, $peek(), 'install must take the slot');
+
+            Log::removePanicHandler();
+            $this->assertSame($foreign, $peek(), 'remove must restore the exact handler found at install');
+        } finally {
+            \restore_exception_handler(); // pop the probe, leave the runner's state as found
+        }
     }
 }
