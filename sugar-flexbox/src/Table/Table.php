@@ -527,9 +527,23 @@ final class Table
 
         $lines = [];
 
+        // A width-0 column is a HIDDEN column: it contributes no cell,
+        // no joint, and no ruler cluster (FBX-34) — hiding the middle of
+        // A/H/B must read 'A │ B', not 'A │  │ B'. The cursor marker and
+        // the sort arrows keep working: 'first column' means first
+        // VISIBLE column, and hidden columns are simply not a leg of the
+        // frame at all. computeTotalWidth() counts the same joints, so
+        // the arithmetic and the bytes never disagree.
+        $visibleCols = [];
+        foreach ($this->columns as $ci => $col) {
+            if ($col->width > 0) {
+                $visibleCols[$ci] = $col;
+            }
+        }
+
         // Header
         $headerCols = [];
-        foreach ($this->columns as $ci => $col) {
+        foreach ($visibleCols as $ci => $col) {
             // The active column's arrow comes from the Table's own sort
             // state (a click owns it, nothing else); every other column's
             // arrow is authored Column::sorted() state — the secondary
@@ -554,7 +568,7 @@ final class Table
         // desync header from ruler. The default ' │ ' is
         // 3 cells wide, producing '─┬─' exactly as before.
         $sepParts = [];
-        foreach ($this->columns as $col) {
+        foreach ($visibleCols as $col) {
             $sepParts[] = \str_repeat('─', $col->width);
         }
         $lines[] = \implode($this->rulerJoint(), $sepParts);
@@ -576,13 +590,13 @@ final class Table
             }
             $isCursor = ($ri === $this->cursorRow);
             if ($isCursor) {
-                $lines[] = $this->buildRowLine($ri, $row, true);
+                $lines[] = $this->buildRowLine($ri, $row, true, $visibleCols);
                 continue;
             }
             if (($cached[$ri][0] ?? null) === $key) {
                 $line = $cached[$ri][1];
             } else {
-                $line = $this->buildRowLine($ri, $row, false);
+                $line = $this->buildRowLine($ri, $row, false, $visibleCols);
             }
             $memo[$ri] = [$key, $line];
             $lines[]   = $line;
@@ -600,10 +614,15 @@ final class Table
      * and the window never renumbers rows, so a windowed line is the very
      * bytes the full frame paints at the same index.
      */
-    private function buildRowLine(int $ri, array $row, bool $isCursor): string
+    /**
+     * @param array<int, Column> $visibleCols width-0 columns emit NOTHING —
+     *                                       see buildLines() for the hidden-column law
+     */
+    private function buildRowLine(int $ri, array $row, bool $isCursor, array $visibleCols): string
     {
         $rowCols = [];
-        foreach ($this->columns as $ci => $col) {
+        $firstVisible = \array_key_first($visibleCols);
+        foreach ($visibleCols as $ci => $col) {
             $val = $row[$ci] ?? '';
             $cellStr = $col->padded($val, $ri);
 
@@ -617,7 +636,7 @@ final class Table
             // header's sort arrow, then re-clamp so the cell keeps its
             // exact allocated width. Applied AFTER the column style so
             // the prefix always renders un-styled and bare.
-            if ($isCursor && $this->cursorMarker !== '' && $ci === 0) {
+            if ($isCursor && $this->cursorMarker !== '' && $ci === $firstVisible) {
                 $clamped = Width::truncateAnsi(
                     $this->cursorMarker . $cellStr,
                     $col->width
@@ -952,7 +971,10 @@ final class Table
     public function computeTotalWidth(): int
     {
         $colWidths = \array_sum(\array_map(fn(Column $c) => $c->width, $this->columns));
-        $joints    = \max(0, \count($this->columns) - 1);
+        // Joints live BETWEEN visible cells only: a hidden (width-0)
+        // column takes neither a cell nor a joint (FBX-34).
+        $visible   = \count(\array_filter($this->columns, static fn(Column $c): bool => $c->width > 0));
+        $joints    = \max(0, $visible - 1);
         return $colWidths + Width::string($this->separator) * $joints;
     }
 

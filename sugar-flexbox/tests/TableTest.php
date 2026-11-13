@@ -722,6 +722,62 @@ final class TableTest extends TestCase
         $this->assertSame('100', $t->withCursor(0)->currentCell(0), 'the settled view still heads with 100');
     }
 
+    // ---- hidden (width-0) columns (FBX-34) ------------------------------
+
+    public function testHiddenMiddleColumnEmitsNeitherCellNorJoint(): void
+    {
+        $t = Table::new()
+            ->addColumn(Column::new('A', 3))
+            ->addColumn(Column::new('H', 0))
+            ->addColumn(Column::new('B', 3))
+            ->withRow(['1', '2', '3']);
+
+        $this->assertSame(
+            ['A   │ B  ', '────┬────', '1   │ 3  '],
+            $t->buildLines(),
+            'no " │  │ " joint pairs and no "─┬─┬─" ruler clusters'
+        );
+        $this->assertSame(9, $t->computeTotalWidth(), 'arithmetic counts the same joints the bytes emit');
+    }
+
+    public function testHiddenEdgeColumnsLeaveTheFrameClean(): void
+    {
+        $t = Table::new()
+            ->addColumn(Column::new('H', 0))
+            ->addColumn(Column::new('A', 3))
+            ->addColumn(Column::new('T', 0))
+            ->withRow(['x', 'y', 'z']);
+
+        $this->assertSame(['A  ', '───', 'y  '], $t->buildLines());
+        $this->assertSame(3, $t->computeTotalWidth());
+    }
+
+    public function testTheFocusMarkerRidesTheFirstVisibleColumn(): void
+    {
+        $t = Table::new()
+            ->addColumn(Column::new('H', 0))
+            ->addColumn(Column::new('A', 6))
+            ->withRow(['x', 'y'])
+            ->withCursorMarker('>')
+            ->withCursor(0);
+
+        $lines = $t->buildLines();
+        // Hidden column one is not a cell to mark; the marker lands on
+        // the first VISIBLE column's allocated width.
+        $this->assertSame('>y    ', $lines[2]);
+    }
+
+    public function testEveryColumnHiddenCollapsesTheFrameToZeroWidth(): void
+    {
+        $t = Table::new()
+            ->addColumn(Column::new('H', 0))
+            ->addColumn(Column::new('K', 0))
+            ->withRow(['x', 'y']);
+
+        $this->assertSame(['', '', ''], $t->buildLines());
+        $this->assertSame(0, $t->computeTotalWidth());
+    }
+
     // ---- authored secondary tiebreak (FBX-37) ---------------------------
 
     public function testAuthoredPrioritiesBreakThePrimaryTieInOrder(): void
