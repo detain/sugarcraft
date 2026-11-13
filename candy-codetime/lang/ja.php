@@ -24,6 +24,7 @@ return [
     'cli.invalid_days' => '日数は整数である必要があります。受け取った値: "{value}"',
     'cli.backend_invalid' => "無効なバックエンド (file または sqlite を使用)",
     'cli.backend_unavailable' => "sqlite バックエンドは利用できません: PHP 拡張機能 sqlite3 が読み込まれていません",
+    'cli.backend_other_hint' => '注意: {other} バックエンドにも記録があります。--backend={other} で選択してください',
     'cli.storage_error' => 'candy-codetime: ストレージエラー: {message}',
     'cli.dashboard_needs_tty' => 'candy-codetime: ダッシュボードには対話型ターミナルが必要です (stdin と stdout が TTY でありません)。非対話の出力は candy-codetime export <csv|json|ics> を使ってください',
     'cli.milestone_usage' => "使用法: candy-codetime milestone add [name] [description] | list",

@@ -24,6 +24,7 @@ return [
     'cli.invalid_days' => 'gün sayısı bir tam sayı olmalı, alınan: "{value}"',
     'cli.backend_invalid' => "geçersiz arka uç (file veya sqlite kullanın)",
     'cli.backend_unavailable' => "sqlite arka ucu kullanılamıyor: PHP sqlite3 uzantısı yüklü değil",
+    'cli.backend_other_hint' => 'not: {other} arka ucu da kayıtlar içeriyor - --backend={other} ile seçin',
     'cli.storage_error' => 'candy-codetime: depolama hatası: {message}',
     'cli.dashboard_needs_tty' => 'candy-codetime: panel etkileşimli bir uçbirim gerektirir (stdin ve stdout TTY değil). Uçbirimsiz çıktı için: candy-codetime export <csv|json|ics>',
     'cli.milestone_usage' => "Kullanım: candy-codetime milestone add [name] [description] | list",

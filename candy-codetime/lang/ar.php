@@ -24,6 +24,7 @@ return [
     'cli.invalid_days' => 'يجب أن يكون عدد الأيام عددًا صحيحًا، الوارد: "{value}"',
     'cli.backend_invalid' => "واجهة تخزين غير صالحة (استخدم file أو sqlite)",
     'cli.backend_unavailable' => "واجهة تخزين sqlite غير متاحة: امتداد sqlite3 لـ PHP غير محمّل",
+    'cli.backend_other_hint' => 'ملاحظة: واجهة تخزين {other} تحتوي أيضًا على سجلات - اخترها باستخدام --backend={other}',
     'cli.storage_error' => 'candy-codetime: خطأ التخزين: {message}',
     'cli.dashboard_needs_tty' => 'candy-codetime: لوحة المتابعة تحتاج إلى طرفية تفاعلية (stdin وstdout ليستا TTY). للإخراج بدون طرفية: candy-codetime export <csv|json|ics>',
     'cli.milestone_usage' => "الاستخدام: candy-codetime milestone add [name] [description] | list",

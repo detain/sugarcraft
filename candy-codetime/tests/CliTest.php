@@ -214,7 +214,10 @@ final class CliTest extends TestCase
 
         // The file backend must NOT see the sqlite-only heartbeat — proves the
         // flag actually routed the write to sqlite rather than the JSONL store.
-        $fileExport = $this->runCli(['export', 'json', '1']);
+        // Pinned through the explicit door since CT-S07: a BARE run now
+        // auto-selects the store that holds the data (pinned separately in
+        // testTheStoreHoldingTheDataIsAutoSelected).
+        $fileExport = $this->runCli(['--backend=file', 'export', 'json', '1']);
         $this->assertSame('[]', trim($fileExport['stdout']));
     }
 
@@ -443,8 +446,9 @@ final class CliTest extends TestCase
         $this->assertContains('spaced', array_column($rows, 'project'),
             'the space form must select the same backend as --backend=sqlite');
 
-        // The file backend must NOT have received the row: it never lands in JSONL.
-        $file = $this->runCli(['export', 'json', '1']);
+        // The file backend must NOT have received the row: it never lands in
+        // JSONL. Explicit door (CT-S07 auto-select pinned separately).
+        $file = $this->runCli(['--backend=file', 'export', 'json', '1']);
         $this->assertSame(0, $file['exit'], $file['stderr']);
         $this->assertSame([], json_decode($file['stdout'], true));
 
@@ -643,6 +647,71 @@ final class CliTest extends TestCase
         $res = $this->runCli(['dashboard', '30x']);
         $this->assertSame(1, $res['exit']);
         $this->assertStringContainsString('days must be a whole number, got "30x"', $res['stderr']);
+    }
+
+    public function testBackendPreferenceRidesTheEnvironment(): void
+    {
+        // An sqlite user sets the preference once; every bare command then
+        // reads and writes the database, not the JSONL store.
+        [$rc] = [0];
+        $res = $this->runCli(['push', 'envproj', 'php', 'a.php', '60'], null, ['CANDY_CODETIME_BACKEND' => 'sqlite']);
+        $this->assertSame(0, $res['exit'], $res['stderr']);
+        $this->assertFileExists($this->dataDir . '/candy-codetime.db');
+        $this->assertSame([], glob($this->dataDir . '/*.jsonl'));
+
+        $res = $this->runCli(['export', 'json'], null, ['CANDY_CODETIME_BACKEND' => 'sqlite']);
+        $this->assertSame(0, $res['exit']);
+        $this->assertStringContainsString('envproj', $res['stdout']);
+    }
+
+    public function testTheBackendFlagOutranksTheEnvironmentPreference(): void
+    {
+        // The env var is a default, not a lock: the operator standing at the
+        // command line wins.
+        $res = $this->runCli(['--backend=file', 'push', 'flagproj', 'php', 'b.php', '60'], null, ['CANDY_CODETIME_BACKEND' => 'sqlite']);
+        $this->assertSame(0, $res['exit'], $res['stderr']);
+        $this->assertNotSame([], glob($this->dataDir . '/*.jsonl'));
+        $this->assertFileDoesNotExist($this->dataDir . '/candy-codetime.db');
+    }
+
+    public function testAnInvalidEnvironmentBackendIsRefusedLikeAnInvalidFlag(): void
+    {
+        $res = $this->runCli(['export', 'json'], null, ['CANDY_CODETIME_BACKEND' => 'postgres']);
+        $this->assertSame(1, $res['exit']);
+        $this->assertStringContainsString('invalid backend', $res['stderr']);
+    }
+
+    public function testTheStoreHoldingTheDataIsAutoSelected(): void
+    {
+        // Record once with the flag; then every BARE command has to follow
+        // the data instead of opening an empty file TUI on the sqlite user.
+        $res = $this->runCli(['--backend=sqlite', 'push', 'autoproj', 'php', 'c.php', '60']);
+        $this->assertSame(0, $res['exit'], $res['stderr']);
+
+        $res = $this->runCli(['export', 'json']);
+        $this->assertSame(0, $res['exit']);
+        $this->assertStringContainsString('autoproj', $res['stdout']);
+        // The auto-select must not mint a stray JSONL store on the way.
+        $this->assertSame([], glob($this->dataDir . '/*.jsonl'));
+    }
+
+    public function testTheOtherStoreGetsAOneLinePointer(): void
+    {
+        $res = $this->runCli(['push', 'filedata', 'php', 'd.php', '60']);
+        $this->assertSame(0, $res['exit'], $res['stderr']);
+
+        // An explicit sqlite pick while the file store holds records - the
+        // split is exactly the thing the user cannot see from the numbers.
+        $res = $this->runCli(['--backend=sqlite', 'export', 'json']);
+        $this->assertStringContainsString('the file backend also has records', $res['stderr']);
+
+        // The mirror: put rows in the db too, then an explicit
+        // --backend=file gets pointed at sqlite (auto-select cannot save it
+        // here - the flag is law).
+        $res = $this->runCli(['--backend=sqlite', 'push', 'dbdata', 'php', 'e.php', '60']);
+        $this->assertSame(0, $res['exit'], $res['stderr']);
+        $res = $this->runCli(['--backend=file', 'export', 'json']);
+        $this->assertStringContainsString('the sqlite backend also has records', $res['stderr']);
     }
 
     private function runHook(string $hookBin, string $file, string $project, string $language): array

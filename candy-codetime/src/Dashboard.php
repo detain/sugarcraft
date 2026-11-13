@@ -40,12 +40,18 @@ final class Dashboard implements Model
         public readonly ?int $width = null,
         public readonly ?ColorProfile $colorProfile = null,
         public readonly ?int $height = null,
+        /**
+         * Which store this dashboard is actually reading (CT-S07): painted
+         * as a `[file]`/`[sqlite]` badge so a split-store user is never
+         * shown a number whose provenance is a guess.
+         */
+        public readonly ?string $backendLabel = null,
     ) {}
 
-    public static function start(HeartbeatReader $source, ?\DateTimeImmutable $endDay = null, int $days = 7): self
+    public static function start(HeartbeatReader $source, ?\DateTimeImmutable $endDay = null, int $days = 7, ?string $backendLabel = null): self
     {
         $end = ($endDay ?? new \DateTimeImmutable('today'))->setTime(0, 0);
-        return (new self($source, $end, $days))->reload();
+        return (new self($source, $end, $days, backendLabel: $backendLabel))->reload();
     }
 
     public function init(): ?\Closure
@@ -64,6 +70,7 @@ final class Dashboard implements Model
                 $msg->cols,
                 $this->colorProfile,
                 $msg->rows,
+                $this->backendLabel,
             ), null];
         }
         if ($msg instanceof ColorProfileMsg) {
@@ -78,6 +85,7 @@ final class Dashboard implements Model
                 $this->width,
                 $msg->profile,
                 $this->height,
+                $this->backendLabel,
             ), null];
         }
         if (!$msg instanceof KeyMsg) {
@@ -129,6 +137,7 @@ final class Dashboard implements Model
             $this->width,
             $this->colorProfile,
             $this->height,
+            $this->backendLabel,
         );
     }
 
@@ -142,7 +151,7 @@ final class Dashboard implements Model
         // The width has to ride the shift: without it the next frame is laid
         // out for an unknown terminal and the rows we sized to the window
         // (panes, timeline) silently stop being clipped.
-        return (new self($this->source, $next, $this->days, $this->stats, $this->width, $this->colorProfile, $this->height))->recompute();
+        return (new self($this->source, $next, $this->days, $this->stats, $this->width, $this->colorProfile, $this->height, $this->backendLabel))->recompute();
     }
 
     /**
@@ -165,6 +174,7 @@ final class Dashboard implements Model
             $this->width,
             $this->colorProfile,
             $this->height,
+            $this->backendLabel,
         ))->recompute();
     }
 

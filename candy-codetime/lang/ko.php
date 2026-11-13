@@ -24,6 +24,7 @@ return [
     'cli.invalid_days' => '일수는 정수여야 합니다. 입력값: "{value}"',
     'cli.backend_invalid' => "잘못된 백엔드 (file 또는 sqlite 사용)",
     'cli.backend_unavailable' => "sqlite 백엔드를 사용할 수 없습니다: PHP 확장 sqlite3 이 로드되지 않았습니다",
+    'cli.backend_other_hint' => '참고: {other} 백엔드에도 기록이 있습니다. --backend={other}(으)로 선택하세요',
     'cli.storage_error' => 'candy-codetime: 저장소 오류: {message}',
     'cli.dashboard_needs_tty' => 'candy-codetime: 대시보드에는 대화형 터미널이 필요합니다 (stdin과 stdout이 TTY가 아닙니다). 터미널 없이 출력하려면 candy-codetime export <csv|json|ics>를 사용하세요',
     'cli.milestone_usage' => "사용법: candy-codetime milestone add [name] [description] | list",

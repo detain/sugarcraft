@@ -24,6 +24,7 @@ return [
     'cli.invalid_days' => 'liczba dni musi być liczbą całkowitą, otrzymano "{value}"',
     'cli.backend_invalid' => "nieprawidłowy backend (użyj file lub sqlite)",
     'cli.backend_unavailable' => "backend sqlite niedostępny: rozszerzenie PHP sqlite3 nie jest załadowane",
+    'cli.backend_other_hint' => 'uwaga: backend {other} też zawiera rekordy - wybierz go przez --backend={other}',
     'cli.storage_error' => 'candy-codetime: błąd przechowywania: {message}',
     'cli.dashboard_needs_tty' => 'candy-codetime: panel wymaga interaktywnego terminala (stdin i stdout nie są TTY). Dla wyjścia bez terminala: candy-codetime export <csv|json|ics>',
     'cli.milestone_usage' => "Użycie: candy-codetime milestone add [name] [description] | list",

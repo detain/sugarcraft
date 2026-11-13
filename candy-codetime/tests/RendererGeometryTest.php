@@ -338,6 +338,22 @@ final class RendererGeometryTest extends TestCase
      * Sanitize::untrusted(): the C1 codepoint is gone and the invalid name
      * keeps its clean bytes.
      */
+    public function testTheHeaderBadgesTheStoreItActuallyReads(): void
+    {
+        // CT-S07: with two stores and a per-invocation flag, "which one am
+        // I looking at" is a first-class fact of the frame - never a guess.
+        $end = new \DateTimeImmutable(self::END);
+        $render = static function (?string $label) use ($end): string {
+            return Renderer::render(new Dashboard(
+                new Store(sys_get_temp_dir()), $end, 7, new Stats([], []), 62, null, null, $label,
+            ));
+        };
+        $this->assertStringContainsString('[sqlite]', $render('sqlite'));
+        $this->assertStringContainsString('[file]', $render('file'));
+        // No label (library callers, examples) paints no badge at all.
+        $this->assertStringNotContainsString('[sqlite]', $render(null));
+    }
+
     public function testTheHeaderPaintsTheSelectedWindowSpan(): void
     {
         // CT-S06: the range is derived from the Model's days, not a baked-in

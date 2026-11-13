@@ -185,7 +185,15 @@ final class Renderer
             ->render("[{$start} – {$end}]");
         $tot = self::tint(Style::new()->bold(), '#6ee7b7', $d->colorProfile)
             ->render($total);
-        return $title . '  ' . $range . '   total: ' . $tot;
+        // CT-S07: the provenance of every number on this screen, painted
+        // next to the name. clean()-routed even though the CLI only ever
+        // passes its own two words - the property is public and settable.
+        $badge = '';
+        if ($d->backendLabel !== null) {
+            $badge = self::tint(Style::new(), '#7d6e98', $d->colorProfile)
+                    ->render('[' . self::clean($d->backendLabel) . ']') . ' ';
+        }
+        return $title . '  ' . $badge . $range . '   total: ' . $tot;
     }
 
     /**

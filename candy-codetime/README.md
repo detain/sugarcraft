@@ -97,7 +97,8 @@ Options (accepted before or after the command):
 
 | Option / env | Effect |
 |--------------|--------|
-| `--backend=file\|sqlite` | Storage for `push`/`export`/`gaps`/`dashboard` (default: `file`). Both forms work: `--backend=sqlite` and `--backend sqlite`. The sqlite backend needs the `sqlite3` PHP extension; without it the CLI exits with a clear message instead of crashing. |
+| `--backend=file\|sqlite` | Storage for `push`/`export`/`gaps`/`dashboard`. Both forms work: `--backend=sqlite` and `--backend sqlite`. The sqlite backend needs the `sqlite3` PHP extension; without it the CLI exits with a clear message instead of crashing. With neither the flag nor `CANDY_CODETIME_BACKEND` set, the CLI auto-selects `sqlite` when the database holds records and the JSONL store does not — the store is re-decided per invocation, never persisted. |
+| `CANDY_CODETIME_BACKEND=<name>` | Default backend (`file` or `sqlite`) for every invocation, so an sqlite user need not repeat the flag. An explicit `--backend` on the command line outranks it; a junk value is refused like a junk flag. The dashboard header badges the store it actually reads (`[file]`/`[sqlite]`), and when the *other* store also holds records the CLI prints a one-line pointer on STDERR. |
 | `CANDY_CODETIME_DIR=<path>` | Data directory (default `$XDG_DATA_HOME/candy-codetime`, falling back to `~/.local/share/candy-codetime` — note that an unset `HOME` resolves to `./.local/share/…`). |
 
 A storage failure ends any command with a one-line message on stderr and exit
@@ -223,6 +224,8 @@ the frame under the stored profile.
 |----------------|------------------------------|
 | `←`            | Move the window back one day |
 | `→`            | Move it forward one day      |
+| `+`            | Widen the window (7/14/30/90 days) |
+| `-`            | Narrow the window back down  |
 | `r`            | Reload from disk             |
 | `q` / `Esc`    | Quit                         |
 | `Ctrl+C`       | Quit                         |

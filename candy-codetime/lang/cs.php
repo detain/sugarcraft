@@ -24,6 +24,7 @@ return [
     'cli.invalid_days' => 'počet dní musí být celé číslo, obdrženo "{value}"',
     'cli.backend_invalid' => "neplatný backend (použijte file nebo sqlite)",
     'cli.backend_unavailable' => "backend sqlite není dostupný: rozšíření PHP sqlite3 není načteno",
+    'cli.backend_other_hint' => 'poznámka: backend {other} obsahuje také záznamy - vyber ho pomocí --backend={other}',
     'cli.storage_error' => 'candy-codetime: chyba úložiště: {message}',
     'cli.dashboard_needs_tty' => 'candy-codetime: dashboard potřebuje interaktivní terminál (stdin a stdout nejsou TTY). Pro výstup bez terminálu: candy-codetime export <csv|json|ics>',
     'cli.milestone_usage' => "Použití: candy-codetime milestone add [name] [description] | list",

@@ -126,6 +126,16 @@ $argv = $argv ?? [];
 // run the file backend.
 $backend = 'file';
 $backendNext = false;
+// CANDY_CODETIME_BACKEND carries the preference across invocations: an
+// sqlite user no longer repeats --backend=sqlite on every command line for
+// it to stick. An explicit flag still outranks it (parsed later), and junk
+// in either is refused the same way.
+$backendChosen = false;
+$envBackend = getenv('CANDY_CODETIME_BACKEND');
+if (is_string($envBackend) && $envBackend !== '') {
+    $backend = $envBackend;
+    $backendChosen = true;
+}
 // `--time=<unix>` (equals or space form) rides the same global scanner as
 // --backend; CT-S02's backfill seam. Only the push arm consumes it — a real
 // timestamp supplied once instead of the wall clock inventing one at read time.
@@ -136,6 +146,7 @@ foreach (array_slice($argv, 1) as $arg) {
     if ($backendNext) {
         $backend = $arg;
         $backendNext = false;
+        $backendChosen = true;
         continue;
     }
     if ($timeNext) {
@@ -153,6 +164,7 @@ foreach (array_slice($argv, 1) as $arg) {
     }
     if (str_starts_with($arg, '--backend=')) {
         $backend = substr($arg, strlen('--backend='));
+        $backendChosen = true;
         continue;
     }
     if (str_starts_with($arg, '--time=')) {
@@ -211,6 +223,49 @@ $writeStdout = static function (string $payload) use ($storageError): void {
 
 $store = new Store(getenv('CANDY_CODETIME_DIR') ?: Store::defaultDir());
 $dbPath = $store->dir . '/candy-codetime.db';
+
+/**
+ * Cheap "does this store hold anything" probes, used for the auto-select
+ * and the cross-store pointer below. Both are best-effort by design: a
+ * locked database, a missing extension or an unreadable sidecar just mean
+ * "cannot tell", which is never a reason to steer anyone.
+ */
+$fileStoreHasData = static function () use ($store): bool {
+    foreach ((glob($store->dir . '/*.jsonl') ?: []) as $file) {
+        if (is_file($file) && (filesize($file) ?: 0) > 0) {
+            return true;
+        }
+    }
+    return false;
+};
+$dbHasData = static function () use ($dbPath): bool {
+    if (!extension_loaded('sqlite3') || !is_file($dbPath)) {
+        return false;
+    }
+    try {
+        $db = new SQLite3($dbPath);
+        $found = (bool) $db->querySingle('SELECT EXISTS(SELECT 1 FROM heartbeats LIMIT 1)');
+        $db->close();
+        return $found;
+    } catch (Throwable) {
+        return false;
+    }
+};
+
+if (!$backendChosen && $dbHasData() && !$fileStoreHasData()) {
+    // Follow the data: a user who has been recording into the database
+    // is still a sqlite user even with the flag and env var unnamed —
+    // 'file' as the default would open an empty TUI and hide their week.
+    $backend = 'sqlite';
+}
+
+// One line on the other door: a split store is the quietly-wrong answer,
+// not a loud one, so both halves of the answer get pointed at explicitly.
+$otherBackend = $backend === 'sqlite' ? 'file' : 'sqlite';
+$otherHasData = $backend === 'sqlite' ? $fileStoreHasData() : $dbHasData();
+if ($otherHasData) {
+    fwrite(STDERR, Lang::t('cli.backend_other_hint', ['other' => $otherBackend]) . "\n");
+}
 
 // The privacy contract is a launch invariant, not a write-path favor:
 // plugin-direct appends and the pre-rename migration move never run the
@@ -612,7 +667,7 @@ if (!TtyDetect::isAtty(STDIN) || !TtyDetect::isAtty(STDOUT)) {
 }
 try {
     $reader = $backend === 'sqlite' ? $sqlite() : $store;
-    $dashboard = Dashboard::start($reader, null, $dashDays);
+    $dashboard = Dashboard::start($reader, null, $dashDays, $backend);
 } catch (\Throwable $e) {
     $storageError($e);
 }

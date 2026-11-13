@@ -24,6 +24,7 @@ return [
     'cli.invalid_days' => '天数必须为整数，收到 "{value}"',
     'cli.backend_invalid' => "无效的后端 (请使用 file 或 sqlite)",
     'cli.backend_unavailable' => "sqlite 后端不可用: 未加载 PHP 扩展 sqlite3",
+    'cli.backend_other_hint' => '注意：{other} 后端也存有记录 - 请使用 --backend={other} 选择它',
     'cli.storage_error' => 'candy-codetime: 存储错误：{message}',
     'cli.dashboard_needs_tty' => 'candy-codetime：仪表板需要交互式终端（stdin 与 stdout 不是 TTY）。无终端输出请使用：candy-codetime export <csv|json|ics>',
     'cli.milestone_usage' => "用法: candy-codetime milestone add [name] [description] | list",
