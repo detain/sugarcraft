@@ -10,11 +10,12 @@ namespace SugarCraft\Mouse;
  * {@see MouseEvent::$x} / {@see MouseEvent::$y}.
  *
  * The zone is the smallest axis-aligned rectangle that contains every cell
- * occupied by the marked content.  When the marked content spans multiple
- * rows, the zone rectangle may include cells that were never part of the
- * marked content (e.g. a zone opened at column 3 covering "AA\n……BB" spans
- * col 3–8, row 1–2: cells 5–8 of row 1 and 3–4 of row 2 sit inside the
- * bounding box although no marked glyph was ever painted there).
+ * occupied by the marked content. When the marked content spans multiple
+ * rows, the rectangle also covers cells that were never marked: content
+ * "AAA" on row 1 and "B" on row 2, opened at column 3, records one zone at
+ * columns 3-5, rows 1-2 (3 wide x 2 tall = 6 cells). The cells at columns
+ * 4-5 of row 2 sit inside that bounding box although no marked glyph was
+ * ever painted there.
  * Use {@see inBounds()} with awareness that it tests a bounding box, not the
  * exact cell set.
  *
@@ -38,7 +39,7 @@ final class Zone
      * @param int    $startCol Leftmost column (1-based).
      * @param int    $startRow Topmost row (1-based).
      * @param int    $endCol   Rightmost column (1-based, inclusive).
-     * @param int    $endRow  Lowest row (1-based, inclusive).
+     * @param int    $endRow   Lowest row (1-based, inclusive).
      */
     public function __construct(
         public readonly string $id,

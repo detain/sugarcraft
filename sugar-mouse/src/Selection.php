@@ -11,24 +11,25 @@ namespace SugarCraft\Mouse;
  * Mutable layer — see README §Choosing your tracker idiom.
  *
  * Ported upstream from candy-code's `Tui\TextSelection`.
- * With mouse motion tracking on (modes 1002/1003, with or without the
- * SGR coordinate companion 1006), the terminal hands every press/drag/release to
- * the application instead of running its own copy-on-select, so an app that
- * wants the gesture every terminal user expects has to own it — the way tmux
- * copy-mode, Candy Code and OpenCode do. candy-code grew this as an immutable
- * value object rebuilt per event (its `Tui\TextSelection` is now an immutable
- * adapter that clones this machine per step); upstreamed, it is one small mutable
- * machine — the same deliberate exception to the fluent convention
- * {@see ZoneClickTracker} already makes in this lib: a gesture IS live
- * sequential state. Every read ({@see range()}) still returns a fresh
- * immutable snapshot, so a caller can hold the frozen geometry past the next
- * event.
+ *
+ * With mouse motion tracking on (modes 1002/1003, with or without the SGR
+ * coordinate companion 1006), the terminal hands every press, drag and
+ * release to the application instead of running its own copy-on-select. An
+ * app that wants the gesture terminal users expect must therefore own it —
+ * the way tmux copy-mode, the Candy Code app and OpenCode each do.
+ *
+ * candy-code grew this as an immutable value object rebuilt per event; its
+ * `Tui\TextSelection` is now an immutable adapter that clones this machine
+ * per step. Upstreamed, it is one small mutable machine — the same
+ * deliberate exception to the fluent convention {@see ZoneClickTracker}
+ * already makes in this lib: a gesture IS live sequential state. Every
+ * read ({@see range()}) still returns a fresh immutable snapshot, so a
+ * caller can hold the frozen geometry past the next event.
  *
  * Coordinates are 1-based terminal cells — the space {@see Zone} and
- * {@see MouseEvent} speak, which is the space SGR reports arrive in. Feed the
- * reported cells straight in; unlike the downstream original there is no
- * rebasing to 0 and the region is just four viewport numbers, never a pane's
- * geometry.
+ * {@see MouseEvent} speak, and the space {@see SelectionRange} documents in
+ * full. Feed the reported cells straight in; the region is just four
+ * viewport numbers, never a pane's geometry.
  *
  * The release itself is NOT modelled here: copying, toasts and dismissal
  * policy belong to the app. It reads {@see range()} (or
@@ -51,8 +52,8 @@ final class Selection
      * inverted pair ($rowTo < $rowFrom or $colTo < $colFrom) is an EMPTY
      * region — the viewport has no text rows yet — and every gesture attempt
      * declines. Empty is never an error, so nothing is swapped or thrown:
-     * inventing selectable cells out of a degenerate viewport would be the
-     * lie.
+     * inventing selectable cells out of a degenerate viewport would simply
+     * be wrong.
      *
      * @param int $rowFrom region's first row    (1-based, inclusive)
      * @param int $rowTo   region's last row     (1-based, inclusive)
@@ -63,10 +64,10 @@ final class Selection
     {
         // Floor into terminal space the way Scan::parse()'s viewport clamp
         // does; below-row-1 cells cannot exist, and clamping the region
-        // rather than the query keeps every later comparison trusted. The
-        // floor must never UN-invert a pair, though: rows 1..0 mean "no
-        // rows" and lifting the bound to 1 would hand a press a selectable
-        // cell the viewport never had (downstream at() declines it).
+        // rather than the query keeps every later comparison in-bounds.
+        // The floor must never UN-invert a pair, though: rows 1..0 mean
+        // "no rows", and lifting the bound to 1 would hand a press a
+        // selectable cell the viewport never had.
         [$rowFrom, $rowTo] = self::flooredPair($rowFrom, $rowTo);
         [$colFrom, $colTo] = self::flooredPair($colFrom, $colTo);
 
@@ -101,9 +102,10 @@ final class Selection
     /**
      * Anchor a gesture at a pressed cell.
      *
-     * A press outside the region selects nothing — and, plain, also drops a
-     * previous selection, the same collapse candy-code performs when a
-     * press lands off the transcript while a copied highlight is up. With
+     * A press outside the region selects nothing, and a plain press (no
+     * modifier) also drops a previous selection — the same collapse
+     * candy-code performs when a press lands off the transcript while a
+     * copied highlight is up. With
      * $shiftExtend the previous selection survives instead: a shift-press on
      * chrome is declined, not acted on.
      *
@@ -145,8 +147,8 @@ final class Selection
      * the anchor holds still — EVERY motion extends it — so $shiftExtend
      * only decides what a motion with no gesture behind it means: a plain
      * dragTo starts one at the pointer (some terminals report the first
-     * swept cell as a drag with no preceding press), a shift-drag has
-     * nothing to extend and is declined.
+     * swept cell as a drag with no preceding press). A shift-drag has
+     * nothing to extend, so it is declined.
      */
     public function dragTo(int $row, int $col, bool $shiftExtend = false): bool
     {
@@ -235,9 +237,10 @@ final class Selection
     /**
      * True once the head has left the anchor — this is a drag, not a click.
      *
-     * Geometric: a drag that returns to its own anchor cell un-dragges, so a
-     * there-and-back sweep releases as a click and copies nothing. The
-     * downstream original latched the flag past a drift tolerance instead;
+     * Geometric truth: a drag that returns to its own anchor cell ends the
+     * drag, so a there-and-back sweep releases as a click and copies
+     * nothing. The downstream original latched the flag beyond a drift
+     * tolerance instead;
      * an app that wants latching tracks its own max-drift (candy-code's
      * `Tui\TextSelection` adapter latches its own flag past its click
      * tolerance on top of this machine) — the model

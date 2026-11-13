@@ -18,7 +18,7 @@ enum MouseAction: string
     /** Button released — completes a click if it matches the last Press. */
     case Release = 'release';
 
-    /** Button held and mouse moved — not a click, suppress duplicates. */
+    /** Button held and mouse moved — not a click; {@see ZoneClickTracker} suppresses the duplicate presses it fires. */
     case Drag = 'drag';
 
     /** Scroll wheel activated — not a click; the trackers ignore it. */

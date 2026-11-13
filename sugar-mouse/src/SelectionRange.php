@@ -11,12 +11,10 @@ use SugarCraft\Core\Util\Width;
  * A normalized, inclusive range of cells a mouse text selection covers over a
  * painted frame — the frozen product of a {@see Selection} gesture.
  *
- * Ported upstream from candy-code's `Tui\TextSelection`: with SGR mouse
- * tracking on, the terminal
- * runs NO copy-on-select of its own, so every mouse-tracking app that wants
- * the drag gesture terminal users expect has to own it — the way tmux
- * copy-mode, Candy Code and OpenCode each do. This class is that gesture's
- * geometry and nothing else: no model, no clipboard, no painting.
+ * Ported upstream from candy-code's `Tui\TextSelection`. The mode framing
+ * and gesture story are told once in {@see Selection}'s class docblock;
+ * this class is that gesture's geometry and nothing else: no model, no
+ * clipboard, no painting.
  *
  * STREAM, NOT BLOCK. The first row runs from the start cell to the text
  * column's right edge, middle rows are whole, the last row stops at the end
@@ -31,7 +29,6 @@ use SugarCraft\Core\Util\Width;
  * reports arrive in, so an app wires its pointer straight in with no
  * rebasing. (Downstream candy-code once indexed frame cells from 0; its
  * `Tui\TextSelection` now runs on this class with 1-based cells end to end.)
- * In {@see extract()} the frame line for row R is `$lines[R - 1]`.
  */
 final class SelectionRange
 {
@@ -63,9 +60,9 @@ final class SelectionRange
      * @param int      $colA    column of the first cell
      * @param int      $rowB    row of the second cell (e.g. the gesture's head)
      * @param int      $colB    column of the second cell
-     * @param int|null $edgeFrom region text-column left edge; null defaults to the left endpoint,
+     * @param int|null $edgeFrom left edge of the region's text column; null defaults to the left endpoint,
      *                           and an explicit edge crossing right of the end cell is clamped to it
-     * @param int|null $edgeTo   region text-column right edge; null defaults to the right endpoint,
+     * @param int|null $edgeTo   right edge of the region's text column; null defaults to the right endpoint,
      *                           and an explicit edge crossing left of the start cell is clamped to it
      *
      * @throws \InvalidArgumentException when any coordinate is off-terminal (< 1)
@@ -141,7 +138,7 @@ final class SelectionRange
     /**
      * The text this range covers, read from the frame's lines.
      *
-     * The release-half ported from candy-code: escapes are stripped,
+     * Ported from candy-code's release half: escapes are stripped,
      * trailing padding is trimmed from every row, and blank rows at either
      * end are dropped — a drag that started in a transcript's padding row
      * must not copy a leading newline. Rows join with "\n": the frame does

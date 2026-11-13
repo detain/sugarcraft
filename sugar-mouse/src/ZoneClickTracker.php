@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace SugarCraft\Mouse;
 
 /**
- * Deduplicate MouseDown/Up pairs so callers receive a single ClickResult
- * per logical click — suppressing spurious extra Press events fired during
- * drag and discarding mismatched Press+Release on different zones.
+ * Deduplicate press/release pairs so callers receive one ClickResult per
+ * logical click — suppressing spurious extra Press events fired during a
+ * drag and discarding mismatched Press+Release pairs on different zones.
  *
  * Mutable layer — see README §Choosing your tracker idiom.
  *
@@ -33,7 +33,7 @@ namespace SugarCraft\Mouse;
  * a lost click beats firing the wrong control (permission-grant zones are
  * dispatched by positional ids and reflow across frames).
  *
- * Mirrors bubblezone issue #10 improvement (zone-level click dedup).
+ * Mirrors the zone-level click deduplication added in bubblezone issue #10.
  */
 final class ZoneClickTracker
 {
@@ -200,8 +200,9 @@ final class ZoneClickTracker
      * re-resolution.  The registry is rebuilt every frame, so the two scans
      * hand out distinct Zone instances for one control — object identity is
      * meaningless here and agreement is id plus the exact bounding box.
-     * Same id at a different box still refuses: the coordinate then covers
-     * different content than where the press landed (reflow moved it).
+     * Same id at a different box still does not agree: the coordinate then
+     * covers different content from where the press landed (a reflow
+     * moved it).
      */
     private static function agrees(Zone $press, Zone $current): bool
     {
