@@ -75,7 +75,8 @@ use SugarCraft\Image\Renderer\SixelRenderer;
 
 $image  = ImageSource::fromFile('examples/fixture-gradient.png');
 
-// Probe terminal once, pick best protocol
+// Probe the terminal — auto()/probe() re-resolve on every call;
+// wrap Detect::cached() to memoise one answer per process.
 $mosaic = Mosaic::probe();
 
 // Force a specific backend
@@ -419,6 +420,53 @@ the structured `ProbeReport` behind the decision — sugar-colorprofile's
 renderer — a terminal that lands on the symbol tier still reports `HalfBlock`,
 because that tier rides the same text slot.
 
+### Detection inputs
+
+The probe is a function of documented inputs — no hidden state. Four
+families:
+
+**Identity variables.** `TermDb::ENV_KEYS` is the whole census: the
+table-driven identity stage reads exactly these fifteen variables and
+nothing else.
+
+| Variable | What it contributes |
+|----------|-------------------|
+| `TERM` | terminfo class; absent or `dumb` floors the probe to unknown |
+| `TERM_PROGRAM`, `TERM_PROGRAM_VERSION` | launching emulator and version |
+| `LC_TERMINAL`, `TERMINAL_NAME` | alternative emulator branding exports |
+| `TMUX` | presence gates the tmux passthrough transaction (see Inside tmux) |
+| `KITTY_WINDOW_ID`, `KITTY_PID` | kitty identity markers |
+| `XTERM_VERSION`, `KONSOLE_VERSION`, `VTE_VERSION`, `MLTERM`, `GHOSTTY_BIN_DIR`, `WEZTERM_EXECUTABLE`, `ComSpec` | per-terminal identity markers (the live-DA1 round trip on the TTY arbitrates what the table cannot settle) |
+
+**Colour-related variables.** `NO_COLOR` (and `CLICOLOR=0`) are consulted
+only by the terminfo sixel-detection ladder: they can change which
+protocol is detected, never which colours are emitted — no renderer
+honours them (see Limited-colour and no-colour terminals below).
+
+**Binary overrides.** `SUGAR_IMAGE_CHAFA`, `SUGAR_IMAGE_TMUX` and
+`SUGAR_IMAGE_STTY` each name the external binary their stage consults,
+through the same absolute-path gate described in Chafa binary discovery.
+Configuration is trusted input; `PATH` is consulted only for the one
+explicitly named bare value, absolute entries only.
+
+**Passthrough lease.** `SUGAR_IMAGE_TMUX_PASSTHROUGH_TTL` sets the
+re-validation interval (seconds, default 30; `0` re-verifies before
+every frame, negative or unparsable falls back to the default), so a
+mid-session `set-option allow-passthrough off` elsewhere on the server
+is noticed instead of being asserted forever — see Inside tmux.
+
+`examples/inline-image.php` is the shortest read of this path; its
+documented exit alphabet is the script header's, and these are the legs
+that produce it (the GD check at the top of `main()` precedes argument
+parsing, so a GD-less box with no arguments exits 2, not 1):
+
+| Exit | Leg |
+|------|-----|
+| 0 | the image rendered and its bytes were written to stdout |
+| 1 | usage: no image path given, or a width that is not a positive integer of cells, or no file at the given path |
+| 2 | ext-gd is not loaded |
+| 3 | the path exists but is not a readable regular file; the bytes did not load as a supported image; or the render refused at the requested size (e.g. the canvas-ceiling guard) |
+
 
 
 Every renderer implements `Renderer::delete(string $imageId): string`
@@ -445,14 +493,24 @@ tmux panes **swallow** DCS, APC and OSC strings unless the window's
 `allow-passthrough` option is `on` (or `all`), so Sixel, Kitty (APC) and
 iTerm2 (OSC 1337) output would otherwise vanish inside tmux — the decorated
 renderer's bytes never reach the outer terminal and the user sees a blank
-line. `TmuxPassthrough` automates chafa's workaround as a pane-scoped
-transaction: `ensure()` reads the current value (`show-options -pqv`), flips
-`set-option -p allow-passthrough on` only when needed, and `retire()`
+line. `TmuxPassthrough` automates chafa's workaround as a scoped
+transaction: `ensure()` reads the current value exit-aware (a `no such
+option` error is not an unset — on servers predating the pane-scoped
+option the answer falls back once to the global scope, and the restore
+matches whichever scope carried the truth: `-gu` clears a global the
+transaction found unset, `-g` re-sets one it found off), flips
+`allow-passthrough on` only when needed, and `retire()`
 restores the prior value — or unsets with `-u` exactly when it was unset
 before. A process-lifetime restore is registered on first change, and the
 whole thing is **fail-soft**: outside tmux, without the binary, or against
 an unparseable answer it degrades to the manual-configuration silence,
-never a throw. Embedders who own their tmux configuration opt out with
+never a throw. The applied answer rides a re-validation lease
+(`SUGAR_IMAGE_TMUX_PASSTHROUGH_TTL`, default 30 s): at expiry the next
+frame re-queries the option and, if something else flipped it off, takes
+the transaction over — restoring the flipper's value on shutdown — rather
+than keep asserting an envelope that no longer reaches the outer
+terminal; a re-query that comes back dead or uninformative fails soft and
+keeps the ledger. Embedders who own their tmux configuration opt out with
 `Detect::setAutoPassthrough(false)`. GNU screen has its own envelope
 instead: `ScreenPacketizer` and `ScreenPassthrough`, which live under
 `Passthrough/` behind the shared `PassthroughDecorator` interface. The
