@@ -424,6 +424,51 @@ final class ChildLifetimesToolTest extends TestCase
         $this->assertSame(0, $report['sites']);
     }
 
+    public function testTheShippedRosterPassesItsOwnBootValidation(): void
+    {
+        // RT-37: every ACCOUNTED row kind is licensed today.
+        $this->assertSame([], \CheckChildLifetimes::rosterProblems());
+    }
+
+    public function testAMisspelledRowKindRefusesAtBootNotMidVerdict(): void
+    {
+        // The refusal must name the row and die before any verdict
+        // formatting - the blank-licence mis-accusation it prevents is
+        // untestable without this CLI leg.
+        // The copy lives in tools/ so its __DIR__-relative require of
+        // candy-code's TokenFunctionRanges resolves exactly like the shipped
+        // file's does; it is unlinked before this test returns.
+        $copy = \dirname(__DIR__) . '/.roster-typo-test.php';
+        $tool = \dirname(__DIR__) . '/check-child-lifetimes.php';
+        $source = (string) \file_get_contents($tool);
+        $typos = \preg_replace(
+            "/'kind' => 'fd-open',/",
+            "'kind' => 'licencse',",
+            $source,
+            1,
+        );
+        $this->assertNotSame($source, $typos, 'the fixture anchor drifted');
+        \file_put_contents($copy, $typos);
+
+        $process = \proc_open(
+            [\PHP_BINARY, $copy, '--root=' . $this->tmpDir],
+            [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+        );
+        $this->assertIsResource($process);
+        $out = (string) \stream_get_contents($pipes[1]);
+        $err = (string) \stream_get_contents($pipes[2]);
+        \fclose($pipes[1]);
+        \fclose($pipes[2]);
+
+        $rc = \proc_close($process);
+        \unlink($copy);
+
+        $this->assertSame(2, $rc, $out . $err);
+        $this->assertStringContainsString("has kind 'licencse'", $err);
+        $this->assertStringContainsString('ACCOUNTED row', $err);
+    }
+
     public function testFileFormAutoloadEntryIsALoudRefusal(): void
     {
         // RT-12 (013): a classmap entry pointing at a FILE used to be

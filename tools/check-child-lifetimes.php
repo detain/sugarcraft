@@ -549,6 +549,28 @@ final class CheckChildLifetimes
     }
 
     /**
+     * Boot-time roster sanity: every ACCOUNTED row must vouch for a kind
+     * KIND_LICENSES actually licenses. Without this, a misspelled row kind
+     * survives until verdict() formats a matching finding and PHP's
+     * undefined-index warning prints a BLANK licence - blaming scanned code
+     * for the roster's own typo. Fail fast at load instead.
+     *
+     * @return list<string>
+     */
+    public static function rosterProblems(): array
+    {
+        $problems = [];
+        foreach (self::ACCOUNTED as $key => $row) {
+            if (!array_key_exists($row['kind'], self::KIND_LICENSES)) {
+                $problems[] = "ACCOUNTED row $key has kind '{$row['kind']}' - not a licensed dimension ("
+                    . implode(', ', array_keys(self::KIND_LICENSES)) . ')';
+            }
+        }
+
+        return $problems;
+    }
+
+    /**
      * @return array<string, mixed>
      */
     private static function readManifest(string $path, string $lib): array
@@ -575,6 +597,14 @@ if (PHP_SAPI === 'cli' && realpath((string) ($argv[0] ?? '')) === realpath(__FIL
 
     if (!is_dir($root)) {
         fwrite(STDERR, "check-child-lifetimes: --root is not a directory: $root\n");
+        exit(2);
+    }
+
+    $rosterProblems = CheckChildLifetimes::rosterProblems();
+    if ($rosterProblems !== []) {
+        foreach ($rosterProblems as $problem) {
+            fwrite(STDERR, "check-child-lifetimes: $problem\n");
+        }
         exit(2);
     }
 
