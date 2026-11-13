@@ -64,16 +64,16 @@ no border AND no implicit style must use `->withBorder(false)->withBorderStyle(n
 carry margin as a first-class concept.**
 
 Margin is implemented directly on Node rather than delegated to Style,
-preserving the Boundary between the layout engine and the styling system.
+preserving the boundary between the layout engine and the styling system.
 
-### 2026-06 — lang-facade-base
+### 2026-05-24 — lang-facade-base
 **Pattern:** Lang class now extends `SugarCraft\Core\I18n\Lang` — `t()` method inherited from base; NAMESPACE and DIR are the only per-lib constants.
-**Source:** core i18n refactor.
+**Source:** core i18n refactor (lang-consolidation, f7e39f21e).
 
 ### 2026-05-31 — buffer-diff-boundaries
-**Pattern:** Reset `previousFrame` on resize / cursor-position-lost / first paint. Don't try to diff across these boundaries.
-**Anti-pattern:** Retaining a previousFrame across a window resize or cursor-move event produces a delta against a buffer that no longer maps to the physical terminal state — visual corruption.
-**Source:** 2026-05 buffer-diff consumer work.
+**Pattern:** The renderer invalidates the diff cache only at the two boundaries it can detect — first paint and viewport size change. Anything else that disturbs the terminal cursor between renders (an external cursor move, a host writing elsewhere) is invisible to the library: the consumer must call `resetPreviousFrame()` after it. Never try to diff across such a boundary.
+**Anti-pattern:** Retaining a previousFrame across a window resize or an external cursor move produces a delta against a buffer that no longer maps to the physical terminal state — visual corruption.
+**Source:** 2026-05 buffer-diff consumer work (the cursor-move half is consumer advice from a debugging integration, not a library-detected boundary — clarified 2026-11).
 
 ### 2026-06-23 — flex-grow-children
 **Pattern:** `Node::withFlex(int)` / `withGrow()` add a `flex` weight. In `renderVertical`/`renderHorizontal`, if any child is flex, fixed children take their *natural* size (`totalHeight()`/`totalWidth()`, so borders/padding are reserved) and flex children share the leftover by weight (the last flex child absorbs the integer-rounding remainder so children sum to exactly the content span). With NO flex child, the historical weight-by-`min*` split is untouched (100% back-compat).
