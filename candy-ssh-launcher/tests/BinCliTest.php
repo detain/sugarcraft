@@ -123,8 +123,32 @@ final class BinCliTest extends TestCase
             fwrite($pipes[0], $stdin);
         }
         fclose($pipes[0]);
-        $stdout = stream_get_contents($pipes[1]);
-        $stderr = stream_get_contents($pipes[2]);
+        // Bounded drain (sshl-40/-098): a wedged child must fail the leg with
+        // an output excerpt, never park a shard forever. The same shape as
+        // runUnderPty's deadline loop; exit status still comes from
+        // proc_close so every leg sees exactly the old rc semantics.
+        stream_set_blocking($pipes[1], false);
+        stream_set_blocking($pipes[2], false);
+        $deadline = microtime(true) + 20.0;
+        $stdout = '';
+        $stderr = '';
+        while (true) {
+            $stdout .= (string) stream_get_contents($pipes[1]);
+            $stderr .= (string) stream_get_contents($pipes[2]);
+            if (!proc_get_status($proc)['running']) {
+                break;
+            }
+            if (microtime(true) >= $deadline) {
+                proc_terminate($proc, 9);
+                $this->fail(
+                    'runBin child exceeded the 20s deadline — stdout: ' . $this->printable($stdout)
+                    . ' — stderr: ' . $this->printable($stderr),
+                );
+            }
+            usleep(20_000);
+        }
+        $stdout .= (string) stream_get_contents($pipes[1]);
+        $stderr .= (string) stream_get_contents($pipes[2]);
         fclose($pipes[1]);
         fclose($pipes[2]);
         $code = proc_close($proc);
