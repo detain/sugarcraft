@@ -190,7 +190,11 @@ final class Gateway
 
         switch ($op) {
             case self::OP_HELLO:
-                $intervalMs = (int) ((\is_array($d) ? $d['heartbeat_interval_ms'] ?? 41250 : 41250));
+                // Discord v10 HELLO spells the field `heartbeat_interval`
+                // (milliseconds). The `_ms` spelling is kept as a fallback
+                // for fixtures and any edge that mimics the earlier draft;
+                // the hardcoded default matches the documented value.
+                $intervalMs = (int) ((\is_array($d) ? $d['heartbeat_interval'] ?? $d['heartbeat_interval_ms'] ?? 41250 : 41250));
                 $this->startHeartbeat($intervalMs);
                 if ($this->sessionId !== null && $this->seq !== null) {
                     $this->send(self::OP_RESUME, ['token' => $this->token, 'session_id' => $this->sessionId, 'seq' => $this->seq]);

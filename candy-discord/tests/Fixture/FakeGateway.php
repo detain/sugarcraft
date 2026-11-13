@@ -26,6 +26,8 @@ use React\Socket\SocketServer;
 final class FakeGateway
 {
     public int $hbMs = 41250;
+    /** Emit the pre-v10 `heartbeat_interval_ms` HELLO spelling (fallback-arm pin). */
+    public bool $legacyHelloKey = false;
     public ?int $closeAfterIdentify = null;
     public bool $ackHeartbeats = true;
 
@@ -158,10 +160,12 @@ final class FakeGateway
             $connection->on('close', function () use ($id): void {
                 unset($this->clients[$id], $this->framing[$id]);
             });
-            // Every gateway connection opens with HELLO (op 10).
+            // Every gateway connection opens with HELLO (op 10). v10 spells
+            // the field `heartbeat_interval`; $legacyHelloKey reproduces the
+            // old `_ms` spelling so the fallback arm stays pinned.
             $this->framing[$id]->sendMessage((string) \json_encode([
                 'op' => 10,
-                'd' => ['heartbeat_interval_ms' => $this->hbMs],
+                'd' => [($this->legacyHelloKey ? 'heartbeat_interval_ms' : 'heartbeat_interval') => $this->hbMs],
             ]));
             if ($rest !== '') {
                 $this->framing[$id]->onData($rest);

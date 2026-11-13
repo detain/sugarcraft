@@ -73,7 +73,21 @@ final class GatewayLadderTest extends TestCase
 
     public function testHeartbeatsBeatAtTheIntervalTheHelloAnnounces(): void
     {
+        // The fake speaks the Discord v10 spelling (`heartbeat_interval`);
+        // a gateway that only read the legacy `_ms` key would fall back to
+        // 41250 ms and never beat inside the settle window.
         $this->fake->hbMs = 120;
+        $this->connect(true);
+        $this->settle(1500);
+        self::assertGreaterThanOrEqual(2, $this->fake->beatCount);
+    }
+
+    public function testTheLegacyMsHelloSpellingStillSetsTheInterval(): void
+    {
+        // Fallback arm: an edge that mimics the old draft spelling must not
+        // silently disable server-assigned heartbeats.
+        $this->fake->hbMs = 120;
+        $this->fake->legacyHelloKey = true;
         $this->connect(true);
         $this->settle(1500);
         self::assertGreaterThanOrEqual(2, $this->fake->beatCount);
