@@ -4,6 +4,17 @@
 **Library:** sugar-toast (PHP port of DaltonSW/bubbleup)
 **Upstream:** https://github.com/daltonsw/bubbleup
 
+> **SUPERSEDED IN PART — 2026-11-13 (TST-RESEARCH):** the body below is the
+> dated 2026-05-13 snapshot of the PRE-enhancement lib and is preserved
+> unedited. Since then the Executive Summary's "Missing" list has largely
+> shipped: action buttons, progress toasts, stacking control (maxConcurrent +
+> Overflow), ESC-dismiss plumbing, 9-point positioning, history log and
+> viewport bounds are all on disk. Do NOT draw a gap map from the stale ❌
+> rows. The genuinely open item is **§2.7 (custom alert types, P2)** — still
+> open as of this writing, tracked as reviews finding sugar-toast-016; see the
+> TST-CUSTTYPE row (registration seam is an owner decision, parity note
+> shipped).
+
 ---
 
 ## Executive Summary
