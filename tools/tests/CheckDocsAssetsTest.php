@@ -32,6 +32,9 @@ final class CheckDocsAssetsTest extends TestCase
 
     private const RAW = 'https://raw.githubusercontent.com/detain/sugarcraft/master/';
 
+    /** Root-page (index/libraries/apps) crutch: hides the img itself, not a wrapper. */
+    private const ROOT_GIF_CRUTCH = 'onerror="this.style.display=\'none\'"';
+
     /** The exact crutch string the generator's DEMO_GIF_ONERROR guarantees. */
     private const GIF_CRUTCH = 'onerror="this.parentElement.style.display=\'none\'"';
 
@@ -492,7 +495,7 @@ final class CheckDocsAssetsTest extends TestCase
             . '<a href="lib/alpha.html">x</a>'
             . '<img src="img/icons/alpha.png" alt="">'
             . '<img loading="lazy" src="https://sugarcraft.invalid/static/chrome.gif" alt="">'
-            . '<img src="' . self::RAW . 'alpha/.vhs/d.gif" alt="">'
+            . '<img src="' . self::RAW . 'alpha/.vhs/d.gif" alt="" width="640" height="360" ' . self::ROOT_GIF_CRUTCH . '>'
             . '</body></html>');
         // A chrome-bearing detail page, mirroring the shape the generator
         // guarantees: shared nav with the search trigger, the modal DOM, a

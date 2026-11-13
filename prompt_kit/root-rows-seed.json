@@ -881,7 +881,7 @@
         "sugar-releases": {
             "readme": {
                 "needles": [
-                    "Phar self-update engine + launch-time update notice — GitHub release selection (stable + rolling dev channel), sha256-sidecar and pinned-key Ed25519 verification before the swap, one-shot `.old` rollback, Windows relaunch-dance swap. Extracted from candy-code."
+                    "Phar self-update engine + launch-time update notice — GitHub release selection (stable + rolling latest channel), sha256-sidecar and pinned-key Ed25519 verification before the swap, one-shot `.old` rollback, Windows relaunch-dance swap. Extracted from candy-code."
                 ],
                 "dead": []
             },

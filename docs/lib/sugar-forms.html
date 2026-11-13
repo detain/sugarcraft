@@ -206,9 +206,10 @@ $form = Form::new(
 // $form is a SugarCraft Model — drive it with a Program. The Model is
 // immutable: Program drives a COPY and run() returns the final model, so
 // capture it before reading values back.
-$form = (new Program($form))->run();
-if ($form->isSubmitted()) {
-    echo $form->values()['name'], "\n";
+$final = (new Program($form))->run();
+$done = $final instanceof Form ? $final : throw new RuntimeException('not a Form');
+if ($done->isSubmitted()) {
+    echo $done->values()['name'], "\n";
 }
 
 // Async suggestions:

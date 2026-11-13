@@ -53,13 +53,15 @@ final class AnsiViewTest extends TestCase
     private const SCRIPT = '/tools/ansi-view.php';
 
     /**
-     * tools/ scripts covered by an exemption INSTEAD of a naming test. There
-     * are none today, and adding a row here is the deliberate, reviewer-visible
-     * act the exemption is supposed to be.
+     * tools/ scripts covered by an exemption INSTEAD of a naming test.
+     * Adding a row here is the deliberate, reviewer-visible act the
+     * exemption is supposed to be.
      *
      * @var array<string, string>
      */
-    private const EXEMPT_WITH_REASON = [];
+    private const EXEMPT_WITH_REASON = [
+        'check-published-channel.php' => 'read-only live probe of Packagist and the Pages site that the sync workflow runs in --advisory mode; its only verdict is a network measurement, so a hermetic test would pin a stub rather than the behaviour',
+    ];
 
     /** @var list<string> scratch trees, removed in tearDown */
     private array $temps = [];

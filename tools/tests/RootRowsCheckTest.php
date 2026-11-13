@@ -36,7 +36,7 @@ final class RootRowsCheckTest extends TestCase
 
     private const GREEN_README = "| <img src=\"media/icons/sugar-demo.png\" width=\"48\" alt=\"\"> | **[SugarDemo](sugar-demo/)** | Demo row wording fresh. |\n";
     private const GREEN_MATCHUPS = "| **SugarDemo** | `sugar-demo/` | port | Demo row wording fresh. |\n";
-    private const GREEN_CARDS = "<a class=\"lib-card\" href=\"lib/sugar-demo.html\"><h3>SugarDemo</h3><p class=\"summary\">Demo row wording fresh.</p></a>\n";
+    private const GREEN_CARDS = "<div class=\"lib-card\"><h3><a class=\"lib-card-title\" href=\"lib/sugar-demo.html\">SugarDemo</a></h3><p class=\"summary\">Demo row wording fresh.</p></div>\n";
     private const STALE_WORDING = 'Demo row wording stale.';
     private const NEEDLE = 'Demo row wording fresh.';
     private const DEAD = 'Box-drawing layout engine';
@@ -143,7 +143,7 @@ final class RootRowsCheckTest extends TestCase
 
     public function testTheIndexAnchorOnlyReadsLibCardTilesNotDecoyHrefs(): void
     {
-        $revertedCard = '<a class="lib-card" href="lib/sugar-demo.html"><h3>SugarDemo</h3><p class="summary">' . self::STALE_WORDING . "</p></a>\n";
+        $revertedCard = '<div class="lib-card"><h3><a class="lib-card-title" href="lib/sugar-demo.html">SugarDemo</a></h3><p class="summary">' . self::STALE_WORDING . "</p></div>\n";
         $index = "<img src=\"icons/sugar-demo.png\" data-href=\"lib/sugar-demo.html\">\n" . $revertedCard;
         $this->writeFixture(self::GREEN_README, self::GREEN_MATCHUPS, $index, $this->seedArming(['index']));
 
@@ -159,8 +159,8 @@ final class RootRowsCheckTest extends TestCase
 
     public function testAnIndexCardWithoutASummaryParagraphFailsClosed(): void
     {
-        $index = '<a class="lib-card" href="lib/sugar-demo.html"><h3>SugarDemo</h3></a>' . "\n"
-            . '<a class="lib-card" href="lib/sugar-next.html"><p class="summary">The next card owns this summary.</p></a>' . "\n";
+        $index = '<div class="lib-card"><h3><a class="lib-card-title" href="lib/sugar-demo.html">SugarDemo</a></h3></div>' . "\n"
+            . '<div class="lib-card"><h3><a class="lib-card-title" href="lib/sugar-next.html">SugarNext</a></h3><p class="summary">The next card owns this summary.</p></div>' . "\n";
         $seed = '{"slugs":{"sugar-demo":{"index":{"needles":["' . self::NEEDLE . '"]}}}}';
         $this->writeFixture(self::GREEN_README, self::GREEN_MATCHUPS, $index, $seed);
 

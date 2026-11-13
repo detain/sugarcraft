@@ -320,11 +320,12 @@
     <pre class="code"><code class="language-php">use SugarCraft\Dashboard\Layout\Grid\{StackedGrid, Options, ItemOptions};
 use SugarCraft\Dashboard\Components\Card\{Card, Text};
 
-$grid = new StackedGrid(new Options(fitScreen: true));
-$grid-&gt;addItem(Card::titled(Text::new('CPU 42%'), 'Load'), new ItemOptions(column: 0));
-$grid-&gt;addItem(Card::titled(Text::new('3 alerts'), 'Alerts'), new ItemOptions(column: 1, expandVertical: true));
+$grid = (new StackedGrid(new Options(fitScreen: true)))
+    -&gt;withItem(Card::titled(Text::new('CPU 42%'), 'Load'), new ItemOptions(column: 0))
+    -&gt;withItem(Card::titled(Text::new('3 alerts'), 'Alerts'), new ItemOptions(column: 1, expandVertical: true));
 
-$grid-&gt;setSize(100, 24);
+// Every with*() / setSize() returns a sized COPY — keep the result.
+$grid = $grid-&gt;setSize(100, 24);
 echo $grid-&gt;render();   // two bordered cards side by side; below 90 columns they stack</code></pre>
 
     <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>

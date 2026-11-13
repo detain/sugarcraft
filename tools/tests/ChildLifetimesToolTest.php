@@ -138,7 +138,9 @@ final class ChildLifetimesToolTest extends TestCase
         // ac34b072c autoload.files abort had kept the tool from answering at
         // all since. With the abort cured, the live tree answers 30 — the
         // number the two observations above already measured.
-        $this->assertStringContainsString('30 proc_open sites', $out);
+        // 30 -> 32 on 2026-11-13: two more accounted spawn sites landed in
+        // sibling lanes (tool reports 0 problems, every exposed site has a roster row).
+        $this->assertStringContainsString('32 proc_open sites', $out);
     }
 
     /**
