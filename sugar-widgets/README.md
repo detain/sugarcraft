@@ -616,6 +616,10 @@ cd sugar-widgets && composer install && vendor/bin/phpunit
 
 ![table](.vhs/table.gif)
 
+### Tabs
+
+![tabs](.vhs/tabs.gif)
+
 ### Text area
 
 ![text-area](.vhs/text-area.gif)

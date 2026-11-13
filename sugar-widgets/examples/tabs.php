@@ -62,6 +62,11 @@ $model = new class($tabs, $labels) implements Model {
         };
         return "\n{$tabBar}\n\n{$content}\n\n  Tab/Shift+Tab to navigate  ·  1-9 to jump  ·  q to quit\n";
     }
+
+    public function subscriptions(): ?\SugarCraft\Core\Subscriptions
+    {
+        return null;
+    }
 };
 
 (new Program($model))->run();
