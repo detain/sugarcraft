@@ -43,10 +43,10 @@ final class ToastHostFrameIngestTest extends TestCase
         $out = $this->withToast($row . "\n" . \str_repeat("filler\n", 5));
 
         // The frame comes back as a real OSC-8 open + close, exactly once
-        // each (cellbuffer's toAnsi spells the open the params-less short
-        // form 'ESC]8;url ESC\'; the close is 'ESC]8;;ESC\').
+        // each (cellbuffer's toAnsi spells the open spec-conformant
+        // 'ESC]8;;url ESC\' since CB-01 790e4ef2c; the close is 'ESC]8;;ESC\').
         $this->assertSame(2, \substr_count($out, "\x1b]8;"), 'expected one link open + one close');
-        $this->assertStringContainsString("\x1b]8;" . self::URL . "\x1b\\CLICKY", $out);
+        $this->assertStringContainsString("\x1b]8;;" . self::URL . "\x1b\\CLICKY", $out);
         // No printable ']' framing may exist that is NOT ESC-introduced:
         // every ']8;' sequence on the wire is preceded by an ESC.
         $this->assertSame(
@@ -128,14 +128,14 @@ final class ToastHostFrameIngestTest extends TestCase
 public function testComposedFrameRoundTripsItsLinkThroughTheNextRender(): void
     {
         // Delta hosts feed view()'s OUTPUT back in as the next background.
-        // cellbuffer's short-form open ('ESC]8;url') must parse as an OPEN,
-        // not an empty-url CLOSE — the link survives successive renders.
+        // cellbuffer's spec-form open ('ESC]8;;url', CB-01 790e4ef2c) must
+        // parse as an OPEN, not an empty-url CLOSE — the link survives.
         $frame = $this->withToast("\x1b]8;;" . self::URL . "\x1b\CLICKY\x1b]8;;\x1b\ tail\n" . \str_repeat("filler\n", 5));
         $again = Toast::new(40)
             ->withPosition(Position::BottomRight)
             ->alert(ToastType::Info, 'ingestion pin')
             ->view($frame, 80, 12);
-        $this->assertStringContainsString("\x1b]8;" . self::URL . "\x1b\\CLICKY", $again, 'link lost on the second render');
+        $this->assertStringContainsString("\x1b]8;;" . self::URL . "\x1b\\CLICKY", $again, 'link lost on the second render');
     }
 
     public function testEmptyQueueStillReturnsBackgroundByteIdentical(): void
