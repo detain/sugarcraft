@@ -33,21 +33,79 @@ final class Platform
         ?\Closure $killTree = null,
     ) {
         $this->killTree = $killTree ?? static function (int $pid): void {
-            $proc = @proc_open(
-                ['taskkill', '/F', '/T', '/PID', (string) $pid],
-                [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
-                $pipes,
-            );
-            if (!is_resource($proc)) {
+            if ($pid <= 0) {
                 return;
             }
-            fclose($pipes[0]);
-            stream_get_contents($pipes[1]);
-            stream_get_contents($pipes[2]);
-            fclose($pipes[1]);
-            fclose($pipes[2]);
-            proc_close($proc);
+            // Git-for-Windows bash first: its fork emulation leaves backgrounded
+            // children with no living Windows parent, so taskkill's tree walk
+            // cannot reach them; the MSYS process-group kill does (it runs the
+            // taskkill walk itself first). A pid that is no MSYS process falls
+            // through to the plain walk below.
+            $bash = self::msysBash();
+            if ($bash !== '' && self::runBounded([$bash, '-c', self::MSYS_GROUP_KILL_SCRIPT, 'msys-group-kill', (string) $pid])) {
+                return;
+            }
+            self::runBounded(['taskkill', '/F', '/T', '/PID', (string) $pid]);
         };
+    }
+
+    /** Run under Git-for-Windows bash with $1 = the Windows pid; exit 0 = the group was found and killed. */
+    private const MSYS_GROUP_KILL_SCRIPT = 'w=$1; for d in /proc/[0-9]*; do '
+        . 'read -r x < "$d/winpid" 2>/dev/null || continue; '
+        . '[ "$x" = "$w" ] || continue; '
+        . 'read -r g < "$d/pgid" 2>/dev/null || exit 1; '
+        . 'MSYS_NO_PATHCONV=1 taskkill /T /F /PID "$w" >/dev/null 2>&1; '
+        . 'kill -9 -- "-$g" 2>/dev/null; '
+        . 'exit 0; done; exit 1';
+
+    /** How long a killer child may run before it is itself stopped. */
+    private const KILLER_BOUND_SECONDS = 10.0;
+
+    /**
+     * A Git/MSYS bash.exe — never System32's WSL launcher — or '' when the host
+     * has none: PATH first, then the stock installer location.
+     */
+    private static function msysBash(): string
+    {
+        $found = self::windows()->findExecutable('bash');
+        if ($found !== null && !str_contains(strtolower($found), '\\system32\\')) {
+            return $found;
+        }
+        $programFiles = getenv('ProgramFiles');
+        if ($programFiles === false || $programFiles === '') {
+            return '';
+        }
+        $candidate = rtrim($programFiles, '\\/') . '\\Git\\bin\\bash.exe';
+
+        return is_file($candidate) ? $candidate : '';
+    }
+
+    /**
+     * Spawn $argv (a list, no shell), discard its output under a bound with
+     * pipes + polling (never a blocking read), and report exit status 0.
+     *
+     * @param non-empty-list<string> $argv
+     */
+    private static function runBounded(array $argv): bool
+    {
+        $proc = @proc_open($argv, [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+        if (!is_resource($proc)) {
+            return false;
+        }
+        fclose($pipes[0]);
+        $drained = \SugarCraft\Core\Util\Proc\WindowsPipes::drainUntilExit(
+            [1 => $pipes[1], 2 => $pipes[2]],
+            \SugarCraft\Core\Util\Proc\WindowsPipes::runningProbe($proc),
+            microtime(true) + self::KILLER_BOUND_SECONDS,
+            0,
+        );
+        if ($drained['timedOut']) {
+            proc_terminate($proc);
+        }
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+
+        return proc_close($proc) === 0;
     }
 
     /** The host platform. */
