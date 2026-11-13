@@ -11,7 +11,7 @@ use SugarCraft\SshLauncher\Support\CommentStrip;
 /**
  * Loads a wishlist directory from disk.
  *
- * Two formats are accepted (auto-detected by extension):
+ * Two formats are accepted (detected by extension, then content-sniffed):
  *
  *   - **JSON** (`wishlist.json`) — a top-level array of objects:
  *     ```json

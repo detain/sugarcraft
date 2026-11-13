@@ -11,7 +11,8 @@ use SugarCraft\Core\I18n\Lang as BaseLang;
  *
  * Wraps the shared {@see \SugarCraft\Core\I18n\T} registry with the
  * `'sshlauncher'` namespace baked in. Translated strings live in
- * {@see ../lang/en.php}. The literal word `wishlist` inside several
+ * `lang/en.php` and its fifteen locale siblings. The literal word
+ * `wishlist` inside several
  * messages is deliberate: it names the ON-DISK CONFIG FORMAT (the
  * wishlist.{yml,yaml,json} filename heritage predates the rename), not
  * the product.

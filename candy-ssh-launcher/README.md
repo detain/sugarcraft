@@ -125,7 +125,7 @@ So a config in the directory you launch from takes precedence over your home con
 
 ## Config format
 
-Flat list of endpoint objects (YAML subset or JSON). The reader format follows the file extension (`.json`, `.yml`/`.yaml`); a config named otherwise is content-sniffed — JSON iff the payload opens with `[` or `{`, else the YAML subset:
+Flat list of endpoint objects (YAML subset or JSON). The parser is chosen by the file extension (`.json`, `.yml`/`.yaml`). A config named otherwise is content-sniffed: JSON if the payload opens with `[` or `{`, else the YAML subset:
 
 ```yaml
 - name: production
@@ -162,15 +162,15 @@ Flat list of endpoint objects (YAML subset or JSON). The reader format follows t
 | `user` | string, optional | Remote user (omitted → ssh's own default). |
 | `description` | string, optional | Dimmed text after the endpoint row. |
 | `identityFiles` | list, optional | Identity files, in order, each passed as its own `-i`; a bare scalar (`identityFiles: ~/.ssh/id`) is accepted as a one-item list. |
-| `identity_file` / `identityFile` | string, optional | Singular aliases of the above. They are not merged: the plural `identityFiles` wins when present, else `identity_file`, else `identityFile` — a losing alias is silently discarded, so spell exactly one per endpoint. |
-| `proxyJump` | string, optional | Passed to ssh as `-J`. |
+| `identity_files` / `identity_file` / `identityFile` | list / string, optional | Accepted alternate spellings of the identity key — `identity_files` is the upstream-snake plural (takes a list), the other two are singular strings. They are not merged: the canonical `identityFiles` wins when present, else `identity_files`, else `identity_file`, else `identityFile` — a losing spelling is silently discarded, so use exactly one of these keys per endpoint. |
+| `proxyJump` / `proxy_jump` | string, optional | Passed to ssh as `-J`; the canonical spelling wins when both appear. |
 | `options` | list, optional | Passed verbatim as repeated `-o Key=Value`; a bare scalar is accepted as a one-item list; an empty item is refused at dispatch. |
 | `flags` | list, optional | Extra ssh(1) flag letters (`-A`, `-t`, `-T`, `-N`, `-f`, `-X` are not `-o`-able): pass `t`, `N` — the dash is added at argv build, before the destination. An entry that itself starts with a dash is refused at dispatch (the option-injection guard), and an empty item is skipped. |
 | `remoteCommand` | string, optional; alias `remote_command` | The ssh(1) command positional: appended after the destination per the `ssh [options] destination [command]` synopsis, so tunnel/kubectl/tmux-attach endpoints are expressible. Leading-dash values are refused at dispatch; an empty value behaves as no command. |
 
 Limits of the embedded YAML reader: flat entries only, and a nested list is written one `- item` line at a time — any number of items accumulates, but each must be a scalar. An optional field can be left out entirely or written `key: null` / `key: ~` — both read as omitted; a bare `key:` is never an omission: on a list field it opens the `- item` block, and on a scalar field it is refused by name as a non-scalar. **Inline flow collections** (`options: [a, b]`) are refused with a message that names the fix — write the nested list form; block mappings indented under a list field are refused by name, field and line. A `#` after whitespace starts a comment, and stripping is quote-aware: outside quotes only, so `description: "fix #1"` keeps its hash. Files saved **with a UTF-8 BOM load fine** (the mark is stripped at the read); **UTF-16 files are refused by name** with a re-save-as-UTF-8 hint — the reader never guesses an encoding. Booleans are refused at any string field rather than reaching ssh as `"1"` — and the boolean set is YAML 1.2 core only (`true/True/TRUE`, `false/False/FALSE`): `yes`, `no`, `on`, `off` are ordinary strings, so a host genuinely named `yes` loads as `yes`.
 
-**Tilde expansion is identity-only.** A leading `~` on `identityFiles` / `identity_file` / `identityFile` is expanded by the launcher itself — on both ingest paths (wishlist and ssh_config import), against `$HOME` first, the passwd entry as fallback, and a loud refusal naming the path when neither exists; `~user` resolves via passwd and stays literal for an unresolvable user. Every other field — `host`, `proxyJump`, `options`, and tildes anywhere but the start of a path (`a~b`, `/x/~/y`) — is passed to ssh exactly as written. Expansion of those is then client-dependent: OpenSSH expands `-i` argv against the *passwd* home (not `$HOME`), and dropbear/busybox never expand at all — which is why identity paths are expanded here and absolute paths remain the portable spelling.
+**Tilde expansion is identity-only.** A leading `~` on any identity key spelling is expanded by the launcher itself, on both ingest paths (wishlist and ssh_config import). `$HOME` is checked first and the passwd entry is the fallback; when neither exists the load refuses loudly, naming the path. `~user` resolves via passwd and stays literal for an unresolvable user. Every other field — `host`, `proxyJump`, `options`, and tildes anywhere but the start of a path (`a~b`, `/x/~/y`) — is passed to ssh exactly as written. Expansion of those is then client-dependent: OpenSSH expands `-i` argv against the *passwd* home (not `$HOME`), and dropbear/busybox never expand at all — which is why identity paths are expanded here and absolute paths remain the portable spelling.
 
 ## Keybindings
 
@@ -224,11 +224,16 @@ The parser handles:
 | `IdentityFile <path>` | `identityFiles[]` |
 | `ProxyJump <host>`   | `proxyJump`       |
 
-Keywords accept both `Key Value` and `Key=Value` spacing (ssh_config(5) legal forms), and a repeated `Host` pattern reuses its block instead of duplicating endpoints. Precedence follows `ssh_config(5)`: *for each parameter, the first obtained value will be used.* A `Host *` block wins only where it appears before any matching specific block — conventionally it is written last and therefore acts as a fallback. `IdentityFile` is the documented exception and accumulates in file order. Host patterns are used as the endpoint name (when no `HostName` is specified, the pattern itself becomes the host).
+Keywords accept both `Key Value` and `Key=Value` spacing (ssh_config(5) legal forms), and a repeated `Host` pattern reuses its block instead of duplicating endpoints. Precedence follows `ssh_config(5)`: *for each parameter, the first obtained value will be used.* A `Host *` block wins only where it appears before any matching specific block — conventionally it is written last and therefore acts as a fallback. `IdentityFile` is the documented exception and accumulates in file order. The block's pattern becomes the endpoint's `name`. And if the block carries no `HostName`, that same pattern also becomes the `host`.
 
-Pattern matching is a deliberate **subset** of ssh_config(5): a block applies to a host only when the host matches a pattern *literally* or the pattern is exactly `*`. Wildcards like `Host web*` therefore contribute nothing to `web1` (they still mint a `web*` entry of their own). Unlike ssh, which expands such patterns when matching config blocks, the importer reads them literally — treat imports as a starting point and diff against your real config. A negated `!pattern` is skipped at mint time entirely: it is an exclusion token, never a hostname, so it never becomes a selectable endpoint (a block left with no positive patterns mints nothing).
+Pattern matching is a deliberate **subset** of ssh_config(5): a block applies to a host only when the host matches a pattern *literally* or the pattern is exactly `*`. Wildcards like `Host web*` therefore contribute nothing to `web1` (they still mint a `web*` entry of their own). Unlike ssh, which matches such patterns against the hostname you connect to, the importer reads them literally — treat imports as a starting point and diff against your real config. A negated `!pattern` is skipped at mint time entirely — it is an exclusion token, never a hostname. It therefore never becomes a selectable endpoint, and a block left with no positive patterns mints nothing.
 
-Import surprises worth knowing: keywords outside the table above are dropped silently; a block whose only pattern is `Host *` mints no endpoint of its own; a multi-pattern block `Host a b c` mints one endpoint **per pattern** (sharing the block's values) minus any `!negations`, which only exclude; and quoted patterns are no exception — patterns split on spaces, so `Host "web 1"` mints a `web` and a `1"` entry.
+Import surprises worth knowing:
+
+- Keywords outside the table above are dropped silently.
+- A block whose only pattern is `Host *` mints no endpoint of its own.
+- A multi-pattern block `Host a b c` mints one endpoint **per pattern**, sharing the block's values; `!negation` tokens only exclude, they never mint.
+- Quoted patterns are no exception — patterns split on spaces, so `Host "web 1"` mints entries literally named `"web` and `1"` (quotes are not stripped).
 
 ## Security
 
