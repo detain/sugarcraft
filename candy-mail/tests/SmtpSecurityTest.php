@@ -263,6 +263,46 @@ final class SmtpSecurityTest extends TestCase
         }
     }
 
+    public function testEnvelopeWireContractDedupeNoBccAndDotStuffing(): void
+    {
+        // CM-10 (closes 010): the envelope semantics the transport promises —
+        // one RCPT per unique recipient (case-duplicate cc collapses onto the
+        // first-spelled to), the blind copy never surfaces as a header, and a
+        // body line opening with a dot leaves dot-stuffed — pinned on the
+        // bytes the fake server actually received, not on projections.
+        $this->requireFork();
+        [$port, $pid, $log] = $this->forkFakeServer(false);
+
+        try {
+            $email = new Email(
+                from:    ['me@sender.test'],
+                to:      ['Ada@Example.com', 'second@x.test'],
+                subject: 'Wire contract',
+                body:    "Hide\n.dot line\nEnd",
+                cc:      ['Ada@Example.com'],
+                bcc:     ['Hidden@Pool.example'],
+            );
+            $transport = (new SmtpTransport('127.0.0.1', $port))->withRequireTls(false);
+            $transport->send($email);
+        } finally {
+            $this->reap($pid);
+        }
+
+        $wire = (string) \file_get_contents($log);
+        @\unlink($log);
+
+        $rcpts = [];
+        \preg_match_all('/^RCPT TO:<([^>]*)>/mi', $wire, $m);
+        $rcpts = $m[1];
+        $this->assertSame(
+            ['Ada@Example.com', 'second@x.test', 'Hidden@Pool.example'],
+            $rcpts,
+            'exact deduped RCPT set, first spelling kept, bcc rides the envelope',
+        );
+        $this->assertStringNotContainsString('Bcc:', $wire, 'the blind copy must never reach the wire as a header');
+        $this->assertStringContainsString("\r\n..dot line\r\n", $wire, 'a leading-dot body line must leave dot-stuffed');
+    }
+
     public function testCaFileIsImmutableAndFeedsTheSslContext(): void
     {
         $base = new SmtpTransport('smtp.example.com', 465);
