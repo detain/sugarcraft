@@ -129,7 +129,11 @@ final class DiffEncoder
             return $this->encodeSetHyperlink($op);
         }
 
-        return '';
+        // Unknown op subclasses must never vanish from the byte stream
+        // silently: a seventh op type reaching an encoder that predates it
+        // is a programmer error, refused loudly like every other bad data
+        // path in this lib.
+        throw new \InvalidArgumentException('Unencodable diff op ' . $op::class);
     }
 
     private function encodeMoveCursor(MoveCursorOp $op): string

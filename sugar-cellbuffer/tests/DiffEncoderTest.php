@@ -493,4 +493,37 @@ final class DiffEncoderTest extends TestCase
         // cannot leave the terminal mid-screen for the next writer.
         $this->assertSame("\x1b[1;1H", $this->encoder->encode([]));
     }
+
+    public function testAnUnknownDiffOpIsRefusedInsteadOfVanishing(): void
+    {
+        // encodeOp's instanceof cascade used to end in `return ''`, so a
+        // seventh op type — or a hand-built stream carrying one — dropped
+        // its bytes silently. Fail-fast names the class (sugar-cellbuffer-025).
+        $op = new Support\PhantomOp();
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Unencodable diff op ' . Support\PhantomOp::class);
+
+        $this->encoder->encode([$op]);
+    }
+
+    public function testTheKnownOpTypesAllRemainEncodable(): void
+    {
+        // The throw is the cascade's ONLY tail: every shipped op still
+        // encodes, so the refusal cannot silently swallow a real frame.
+        $bytes = $this->encoder->encode([
+            new MoveCursorOp(2, 1),
+            new SetStyleOp(Style::bold()),
+            new SetCellOp([Cell::new('X')]),
+            new RepeatRunOp('X', 9),
+            new EraseRunOp(2),
+            new SetHyperlinkOp(new Hyperlink('https://example.com', 'pinned')),
+        ]);
+
+        $this->assertStringContainsString("\x1b[2;3H", $bytes);
+        $this->assertStringContainsString('X', $bytes);
+        $this->assertStringContainsString("\x1b[9b", $bytes);
+        $this->assertStringContainsString("\x1b[2X", $bytes);
+        $this->assertStringContainsString("\x1b]8;id=pinned;https://example.com\x1b\\", $bytes);
+    }
 }
