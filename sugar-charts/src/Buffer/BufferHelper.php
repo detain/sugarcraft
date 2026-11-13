@@ -96,7 +96,12 @@ final class BufferHelper
     /**
      * Place a string into a Buffer row starting at column $x, returning
      * the modified grid. Handles wide characters by creating continuation
-     * cells for each wide char.
+     * cells for each wide char, and merges zero-width decorations into
+     * their base cell (Canvas::setCell parity, sugar-charts-094).
+     *
+     * @internal No production surface calls this yet (grep-verified; the
+     *           sole consumer is its own suite). Grows into the placement
+     *           canon as renderers move onto Buffer grids.
      *
      * @param list<Cell> $grid
      * @return list<Cell> Modified grid with cells placed
@@ -108,6 +113,27 @@ final class BufferHelper
         $col = $x;
         foreach ($clusters as $cluster) {
             $gw = self::graphemeWidth($cluster);
+            if ($gw === 0) {
+                // Zero-width decoration: merge into the base cell it
+                // annotates instead of occupying a slot the base already
+                // took (mirrors Canvas::setCell). The base is the current
+                // slot when it already holds a real rune, otherwise the
+                // slot just written. Empty, blank and continuation cells
+                // decorate nothing, so a mark arriving before any base is
+                // dropped.
+                $slot = $y * $width + $col;
+                foreach ([$slot, $col > 0 ? $slot - 1 : -1] as $idx) {
+                    if ($idx < 0) {
+                        continue;
+                    }
+                    $anchor = $grid[$idx] ?? null;
+                    if ($anchor !== null && $anchor->width() > 0 && $anchor->rune() !== '' && $anchor->rune() !== ' ') {
+                        $grid[$idx] = new Cell($anchor->rune() . $cluster, $anchor->style(), $anchor->link(), $anchor->width());
+                        break;
+                    }
+                }
+                continue;
+            }
             if ($col >= $width) {
                 break;
             }

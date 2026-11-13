@@ -349,4 +349,79 @@ final class BufferHelperTest extends TestCase
         }
         $this->assertFalse($reflector->hasConstant('ZERO_WIDTH'), 'ZERO_WIDTH table must not exist');
     }
+
+    /**
+     * Zero-width decoration must merge into the base rune instead of
+     * taking (and later losing) the slot behind it (sugar-charts-094).
+     * The NUL is its own cluster under both split canons, so the arm
+     * fires identically on intl-less hosts.
+     *
+     * @covers \SugarCraft\Charts\Buffer\BufferHelper::placeString
+     */
+    public function testPlaceStringMergesZeroWidthIntoBase(): void
+    {
+        $width = 4;
+        $grid = array_fill(0, $width, Cell::new(' '));
+        $result = BufferHelper::placeString($grid, $width, 1, 0, 0, "a\x00b");
+
+        $this->assertSame("a\x00", $result[0]->rune(), 'the decoration must ride the base cell, not trail it as a stray');
+        $this->assertSame(1, $result[0]->width());
+        $this->assertSame('b', $result[1]->rune());
+        foreach ($result as $i => $cell) {
+            $this->assertNotSame(0, $cell->width(), "no zero-width ghost cell may survive at slot {$i}");
+        }
+    }
+
+    /**
+     * A mark arriving before any base has nothing to decorate: it is
+     * dropped, and the first real rune still lands at $x.
+     *
+     * @covers \SugarCraft\Charts\Buffer\BufferHelper::placeString
+     */
+    public function testPlaceStringDropsLeadingZeroWidthWithoutBase(): void
+    {
+        $width = 4;
+        $grid = array_fill(0, $width, Cell::new(' '));
+        $result = BufferHelper::placeString($grid, $width, 1, 0, 0, "\x00xy");
+
+        $this->assertSame('x', $result[0]->rune());
+        $this->assertSame('y', $result[1]->rune());
+        $this->assertSame(' ', $result[2]->rune());
+    }
+
+    /**
+     * A wide rune's continuation half is not a base: a decoration that
+     * arrives past it is dropped, never merged onto the ghost cell.
+     *
+     * @covers \SugarCraft\Charts\Buffer\BufferHelper::placeString
+     */
+    public function testPlaceStringRefusesToMergeOntoContinuation(): void
+    {
+        $width = 6;
+        $grid = array_fill(0, $width, Cell::new(' '));
+        $result = BufferHelper::placeString($grid, $width, 1, 0, 0, "日\x00");
+
+        $this->assertSame('日', $result[0]->rune());
+        $this->assertSame(2, $result[0]->width());
+        $this->assertSame('', $result[1]->rune(), 'continuation cell must stay untouched');
+        $this->assertSame(0, $result[1]->width());
+        $this->assertSame(' ', $result[2]->rune(), 'the stranded decoration is dropped, not parked in slot 2');
+    }
+
+    /**
+     * Pre-filled grids: a decoration merging onto the current slot when
+     * it already carries a caller-placed base (Canvas::setCell parity).
+     *
+     * @covers \SugarCraft\Charts\Buffer\BufferHelper::placeString
+     */
+    public function testPlaceStringMergesOntoPreplacedBase(): void
+    {
+        $width = 4;
+        $grid = array_fill(0, $width, Cell::new(' '));
+        $grid[1] = new Cell('k', null, null, 1);
+        $result = BufferHelper::placeString($grid, $width, 1, 1, 0, "\x00");
+
+        $this->assertSame("k\x00", $result[1]->rune(), 'the mark at x=1 merges onto the base occupying that slot');
+        $this->assertSame(' ', $result[2]->rune());
+    }
 }
