@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Charts\Picture;
 
+use SugarCraft\Charts\Support\ColorLadder;
 use SugarCraft\Charts\Support\MemoizesRender;
 use SugarCraft\Core\Util\Color;
 
@@ -307,7 +308,10 @@ final class Picture
 
     private function fallbackText(string $msg = '[image — terminal protocol not detected]'): string
     {
-        return $msg;
+        // CH-36: the ladder covers this text surface only — protocol
+        // payloads (DCS/Sixel, OSC, APC) are image data, not terminal
+        // styling, and deliberately bypass SGR stripping.
+        return ColorLadder::guard($msg);
     }
 
     /** @return array<string,string> */

@@ -7,6 +7,7 @@ namespace SugarCraft\Charts\Legend;
 use SugarCraft\Charts\Chart\Position;
 use SugarCraft\Charts\Support\Rune;
 use SugarCraft\Charts\Support\UntrustedText;
+use SugarCraft\Charts\Support\ColorLadder;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Width;
@@ -251,30 +252,14 @@ final class Legend
     }
 
     /**
-     * Whether this render pass must emit no color at all.
-     *
-     * The legend's raw-CSI and hex paths bypass {@see Style}, so they need
-     * their own honouring of the de-facto standard: CLICOLOR_FORCE /
-     * FORCE_COLOR (any non-empty, non-"0" value) win outright, otherwise
-     * NO_COLOR set to ANY non-empty value — including "0" — disabless
-     * (no-color.org; `getenv()` returns FALSE, not '', when unset, so
-     * comparing against '' alone would read "unset" as "disable"), and
-     * CLICOLOR=0 disables by BSD convention.
+     * Whether this render pass must emit no color at all — the ladder
+     * lives in {@see ColorLadder::suppressed()} since CH-36 so every
+     * emitter shares one decision (this class keeps the private seam
+     * because coloredIndicator wraps raw CSI outside Style).
      */
     private static function colorSuppressed(): bool
     {
-        foreach (['CLICOLOR_FORCE', 'FORCE_COLOR'] as $forceVar) {
-            $force = getenv($forceVar);
-            if ($force !== false && $force !== '' && $force !== '0') {
-                return false;
-            }
-        }
-        $noColor = getenv('NO_COLOR');
-        if ($noColor !== false && $noColor !== '') {
-            return true;
-        }
-
-        return getenv('CLICOLOR') === '0';
+        return ColorLadder::suppressed();
     }
 
     /**

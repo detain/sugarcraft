@@ -7,6 +7,7 @@ namespace SugarCraft\Charts\Chart;
 use SugarCraft\Charts\Legend\Legend;
 use SugarCraft\Charts\Lang;
 use SugarCraft\Charts\Support\CellGrid;
+use SugarCraft\Charts\Support\ColorLadder;
 use SugarCraft\Charts\Support\MemoizesRender;
 use SugarCraft\Charts\Support\UntrustedText;
 use SugarCraft\Charts\Support\Rune;
@@ -95,9 +96,9 @@ abstract class Chart implements ChromeAccessors
         // (a caller may clear or steal the grid between calls), so a
         // render with an attached grid re-composes every time.
         if ($this->canvas !== null) {
-            return $this->composeView();
+            return ColorLadder::guard($this->composeView());
         }
-        return $this->memoizedRender(fn(): string => $this->composeView());
+        return ColorLadder::guard($this->memoizedRender(fn(): string => $this->composeView()));
     }
 
     private function composeView(): string

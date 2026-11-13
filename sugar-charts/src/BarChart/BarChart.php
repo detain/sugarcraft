@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Charts\BarChart;
 
+use SugarCraft\Charts\Support\ColorLadder;
 use SugarCraft\Charts\Support\MemoizesRender;
 use SugarCraft\Charts\Chart\ChartExtras;
 use SugarCraft\Charts\Chart\ChromeAccessors;
@@ -442,7 +443,7 @@ final class BarChart implements ChromeAccessors
         // CH-34 (sugar-charts-112): compose once, serve repeats from the
         // per-instance memo; mutate paths build new objects and start
         // empty. These renderers have no caller-owned canvas bridge.
-        return $this->memoizedRender(fn(): string => $this->composeView());
+        return ColorLadder::guard($this->memoizedRender(fn(): string => $this->composeView()));
     }
 
     private function composeView(): string
