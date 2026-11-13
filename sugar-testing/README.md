@@ -480,9 +480,11 @@ deliberately out of scope — not asserted impossible. The tape-side
 companion to the key builders is the static `keyMsgToVhs(KeyMsg): ?string` — it
 renders a decoded key message back into VHS `Type` syntax (a quoted rune for
 character keys, `Enter`/`PageUp`/`F12` and friends for named keys, `null` for
-anything unmappable). `save()` is a plain
-trusted-path write that fails loudly on a short write — there is no path jail and no
-atomic publish here; those are `GoldenFile`'s guarantees, not this class's. See
+anything unmappable). `save()` refuses a
+symlinked target and publishes atomically (temp file + rename, with a counted
+byte-for-byte write), so a crashed or short write can never leave a half-tape;
+the full path jail — confining writes under a fixtures subtree — remains
+`GoldenFile`'s guarantee, not this class's. See
 `examples/tape-recorder.php` for a runnable demo.
 
 ### TemporaryDirectoryTrait

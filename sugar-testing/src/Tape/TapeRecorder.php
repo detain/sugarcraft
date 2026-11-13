@@ -44,7 +44,8 @@ final class TapeRecorder
     /** @var list<string> */
     private array $lines = [];
 
-    private bool $headerWritten = false;
+    /** @var list<string> header directives emitted by the first header() call */
+    private array $headerLines = [];
 
     private function __construct(
         private readonly string $outputPath,
@@ -61,11 +62,16 @@ final class TapeRecorder
     /**
      * Write the VHS header with theme and dimensions.
      *
+     * An identical re-issue (same arguments) is a harmless no-op; a header()
+     * call carrying a DIFFERENT set than the one already emitted throws —
+     * the old silent no-op meant a corrected call could never take effect.
+     *
      * @param string $theme Font/Theme name (default: TokyoNight)
      * @param int    $width  Terminal width in pixels
      * @param int    $height Terminal height in pixels
      * @param int    $fontSize Font size
      * @return $this
+     * @throws \RuntimeException when a different header set follows the first
      */
     public function header(
         string $theme = 'TokyoNight',
@@ -73,17 +79,34 @@ final class TapeRecorder
         int $height = 480,
         int $fontSize = 14,
     ): self {
-        if ($this->headerWritten === false) {
-            // $theme is caller-supplied and CI executes the tape: escape it
-            // like typed content so a quote or newline cannot forge a line.
-            $this->lines[] = 'Set Theme "' . self::escapeVhsRune($theme) . '"';
-            $this->lines[] = 'Set FontSize ' . $fontSize;
-            $this->lines[] = 'Set Width ' . $width;
-            $this->lines[] = 'Set Height ' . $height;
-            $this->lines[] = '';
-            $this->headerWritten = true;
+        // $theme is caller-supplied and CI executes the tape: escape it
+        // like typed content so a quote or newline cannot forge a line.
+        $candidate = [
+            'Set Theme "' . self::escapeVhsRune($theme) . '"',
+            'Set FontSize ' . $fontSize,
+            'Set Width ' . $width,
+            'Set Height ' . $height,
+            '',
+        ];
+
+        if ($this->headerLines === []) {
+            foreach ($candidate as $directive) {
+                $this->lines[] = $directive;
+            }
+
+            $this->headerLines = $candidate;
+
+            return $this;
         }
-        return $this;
+
+        if ($candidate === $this->headerLines) {
+            return $this;
+        }
+
+        throw new \RuntimeException(Lang::t('tape.header_conflict', [
+            'emitted'  => trim(implode(' | ', $this->headerLines)),
+            'attempted' => trim(implode(' | ', $candidate)),
+        ]));
     }
 
     /**
@@ -118,13 +141,42 @@ final class TapeRecorder
     /**
      * Record a sleep delay.
      *
-     * @param int|float $seconds
+     * The emitted literal is canonical decimal (%.3F rounded, trailing
+     * zeros trimmed) so an int-valued 2 records 'Sleep 2' and never the
+     * float-garbage default stringification of an INI-changed precision;
+     * NAN/INF and negatives are refused at the call rather than exported
+     * into a directive CI executes.
+     *
+     * @param float $seconds non-negative delay in seconds
      * @return $this
+     * @throws \InvalidArgumentException on NAN, INF, or a negative delay
      */
     public function sleep(float $seconds): self
     {
-        $this->lines[] = 'Sleep ' . $seconds;
+        if (!\is_finite($seconds) || $seconds < 0) {
+            throw new \InvalidArgumentException(Lang::t('tape.bad_sleep', [
+                'seconds' => \var_export($seconds, true),
+            ]));
+        }
+
+        $this->lines[] = 'Sleep ' . self::formatSeconds($seconds);
+
         return $this;
+    }
+
+    /**
+     * Locale-independent decimal rendering (always '.' separator, never a
+     * garbage NAN/INF literal — callers reject those before formatting).
+     */
+    private static function formatSeconds(float $seconds): string
+    {
+        $formatted = \sprintf('%.3F', $seconds);
+
+        if (\str_contains($formatted, '.')) {
+            $formatted = \rtrim(\rtrim($formatted, '0'), '.');
+        }
+
+        return $formatted === '' || $formatted === '-' ? '0' : $formatted;
     }
 
     /**
@@ -180,36 +232,62 @@ final class TapeRecorder
     }
 
     /**
-     * Finalize and write the tape file to disk.
+     * Finalize and publish the tape file to disk (atomic).
      *
-     * A short or failed write throws with the underlying reason — a tape
-     * that silently stops half-way would render a truncated GIF that looks
-     * intentional.
+     * The payload lands via temp-file + rename, mirroring {@see
+     * \SugarCraft\Testing\Snapshot\GoldenFile::save()} — a crashed or
+     * short write never leaves a half-written tape that CI would render
+     * into a truncated GIF looking intentional. An existing target that
+     * is a symlink is refused outright: callers pass generated paths,
+     * and writing through a link would let a planted pointer redirect the
+     * bytes. A short or failed write throws with the underlying reason.
      *
      * @return void
      */
     public function save(): void
     {
-        $dir = \dirname($this->outputPath);
+        $path = $this->outputPath;
+
+        if (is_link($path)) {
+            throw new \RuntimeException(Lang::t('tape.untrusted_link', ['path' => $path]));
+        }
+
+        $dir = \dirname($path);
         if (\is_dir($dir) === false) {
             @\mkdir($dir, 0755, true);
             if (\is_dir($dir) === false) {
                 throw new \RuntimeException(Lang::t('tape.write_failed', [
-                    'path' => $dir,
-                    'reason' => (string) (error_get_last()['message'] ?? 'directory could not be created'),
+                    'path'   => $path,
+                    'reason' => 'could not create parent directory ' . $dir,
                 ]));
             }
         }
 
         $content = implode("\n", $this->lines) . "\n";
-        $written = @\file_put_contents($this->outputPath, $content);
+
+        // '@' fronts the checked-false shape: a failed write raises an
+        // E_WARNING (which failOnWarning would trip) before we can raise
+        // the typed error; the reason is recovered from error_get_last().
+        $tmp = $dir . '/.tape-tmp-' . \bin2hex(\random_bytes(6)) . '-' . \getmypid();
+        $written = @\file_put_contents($tmp, $content);
 
         if ($written !== \strlen($content)) {
+            @\unlink($tmp);
+
             throw new \RuntimeException(Lang::t('tape.write_failed', [
-                'path' => $this->outputPath,
+                'path'   => $path,
                 'reason' => $written === false
                     ? (string) (error_get_last()['message'] ?? 'write failed')
                     : \sprintf('short write (%d of %d bytes)', $written, \strlen($content)),
+            ]));
+        }
+
+        if (!@\rename($tmp, $path)) {
+            @\unlink($tmp);
+
+            throw new \RuntimeException(Lang::t('tape.write_failed', [
+                'path'   => $path,
+                'reason' => (string) (error_get_last()['message'] ?? 'rename failed'),
             ]));
         }
     }

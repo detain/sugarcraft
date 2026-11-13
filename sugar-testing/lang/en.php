@@ -18,6 +18,9 @@ return [
     // Tape recorder operations
     'tape.write_failed' => 'Failed to write tape file {path}: {reason}',
     'tape.forbidden_substitution' => 'VHS rewrites double-brace key tokens inside quoted Type content, so caller text must never carry a double-open-brace or double-close-brace sequence — a tape could otherwise steer keys the demo never pressed (refused value: {value})',
+    'tape.untrusted_link' => 'Refusing to write a tape through a symlink: {path}',
+    'tape.header_conflict' => 'header() was already emitted with a different set — emitted: {emitted}; attempted: {attempted}',
+    'tape.bad_sleep' => 'sleep() needs a finite non-negative delay, got: {seconds}',
 
     // ProgramSimulator errors
     'simulator.cmd_loop_overflow' => 'Cmd message loop exceeded {max} cycles',

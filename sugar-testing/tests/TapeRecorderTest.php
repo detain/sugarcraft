@@ -366,4 +366,97 @@ final class TapeRecorderTest extends TestCase
         $this->assertSame('"A"', TapeRecorder::keyMsgToVhs(new KeyMsg(type: KeyType::Char, rune: 'A', shift: true)));
         $this->assertSame('Space', TapeRecorder::keyMsgToVhs(new KeyMsg(type: KeyType::Space)));
     }
+
+    public function testSaveRefusesSymlinkedTarget(): void
+    {
+        // Callers pass generated paths, but a planted symlink must never
+        // redirect the tape bytes somewhere else.
+        $realTarget = $this->tmpDir . '/elsewhere.txt';
+        file_put_contents($realTarget, 'original');
+        symlink($realTarget, $this->tapePath);
+
+        $recorder = TapeRecorder::to($this->tapePath)->header();
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('through a symlink');
+
+        try {
+            $recorder->save();
+        } finally {
+            $this->assertSame('original', file_get_contents($realTarget));
+        }
+    }
+
+    public function testSaveLeavesNoStrayTempFiles(): void
+    {
+        TapeRecorder::to($this->tapePath)
+            ->header()
+            ->type('hi')
+            ->save();
+
+        $entries = [];
+        foreach (new FilesystemIterator($this->tmpDir) as $entry) {
+            $entries[] = $entry->getFilename();
+        }
+        sort($entries);
+
+        $this->assertSame(['demo.tape'], $entries);
+        $this->assertStringStartsWith('Set Theme "TokyoNight"', (string) file_get_contents($this->tapePath));
+    }
+
+    public function testHeaderReIssueWithDifferentSetThrowsNamingBoth(): void
+    {
+        // The old silent no-op meant a corrected header() call could never
+        // take effect; the conflict must surface, naming what is on tape.
+        $recorder = TapeRecorder::to($this->tapePath)->header();
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('already emitted with a different set');
+
+        try {
+            $recorder->header(theme: 'Dracula', width: 1024);
+        } catch (\RuntimeException $error) {
+            $this->assertStringContainsString('TokyoNight', $error->getMessage());
+            $this->assertStringContainsString('Dracula', $error->getMessage());
+
+            throw $error;
+        }
+    }
+
+    public function testHeaderIdenticalReIssueIsANoOp(): void
+    {
+        TapeRecorder::to($this->tapePath)
+            ->header()
+            ->header()
+            ->save();
+
+        $written = (string) file_get_contents($this->tapePath);
+
+        $this->assertSame(1, substr_count($written, 'Set Theme'));
+    }
+
+    public function testSleepRejectsNegativeAndNonFiniteDelays(): void
+    {
+        foreach ([-1.0, NAN, \INF] as $bad) {
+            try {
+                TapeRecorder::to($this->tapePath)->sleep($bad);
+                $this->fail('sleep() accepted ' . var_export($bad, true));
+            } catch (\InvalidArgumentException $error) {
+                $this->assertStringContainsString('finite non-negative', $error->getMessage());
+            }
+        }
+    }
+
+    public function testSleepFormatsCanonicalDecimal(): void
+    {
+        TapeRecorder::to($this->tapePath)->header()->sleep(2.0)->sleep(0.0005)->save();
+
+        $written = (string) file_get_contents($this->tapePath);
+
+        // int-valued floats never print a float tail, and the 4th decimal
+        // rounds into the dialect's three-decimal resolution.
+        $this->assertStringContainsString("Sleep 2\n", $written);
+        $this->assertStringContainsString("Sleep 0.001\n", $written);
+        $this->assertStringNotContainsString('Sleep 2.0', $written);
+    }
 }
