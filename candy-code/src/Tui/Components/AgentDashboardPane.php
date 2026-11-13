@@ -728,8 +728,14 @@ final class AgentDashboardPane
             : $output;
 
         $lines = explode("\n", rtrim($tail, "\n"));
-        if (strlen($output) > self::PEEK_TAIL_BYTES && count($lines) > 1) {
-            array_shift($lines);
+        if (strlen($output) > self::PEEK_TAIL_BYTES) {
+            if (count($lines) > 1) {
+                array_shift($lines);
+            } else {
+                // Single-line cut: nothing to drop, so strip the orphaned
+                // UTF-8 continuation bytes the byte cut left at its head.
+                $lines[0] = (string) preg_replace('/^[\x80-\xBF]+/', '', $lines[0]);
+            }
         }
 
         return array_map(

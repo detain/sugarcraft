@@ -254,7 +254,9 @@ final class AgentSplitColumn
      * Byte-bounded first so a megabyte of streamed output is not exploded into
      * an array to throw all but eight entries away; the first surviving line is
      * dropped when the cut happened mid-buffer because a byte cut lands
-     * mid-line and mid-codepoint.
+     * mid-line and mid-codepoint. When the cut leaves a single line there is
+     * nothing to drop, so the orphaned UTF-8 continuation bytes at its head
+     * are stripped instead and the surviving fragment starts on a codepoint.
      *
      * @return list<string>
      */
@@ -268,8 +270,12 @@ final class AgentSplitColumn
         $tail = $cut ? substr($output, -self::TAIL_BYTES) : $output;
 
         $lines = explode("\n", rtrim($tail, "\n"));
-        if ($cut && count($lines) > 1) {
-            array_shift($lines);
+        if ($cut) {
+            if (count($lines) > 1) {
+                array_shift($lines);
+            } else {
+                $lines[0] = (string) preg_replace('/^[\x80-\xBF]+/', '', $lines[0]);
+            }
         }
 
         return array_map(

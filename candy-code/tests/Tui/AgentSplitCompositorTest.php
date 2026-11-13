@@ -149,6 +149,39 @@ final class AgentSplitCompositorTest extends TestCase
     }
 
     /**
+     * A single over-long line cut mid-codepoint must not render orphan
+     * continuation bytes at the head of the tile's first row.
+     */
+    public function testSingleLineTailCutNeverStartsOnAContinuationByte(): void
+    {
+        $manager = new AgentManager($this->createMock(ProviderInterface::class), new SkillRegistry());
+        $agent = new Agent(
+            name: 'reviewer',
+            description: 'Reviews code',
+            prompt: '',
+            model: 'claude-sonnet-4-6',
+            provider: 'anthropic',
+            tools: [],
+            skillNames: [],
+            hooks: [],
+            isActive: false,
+        );
+        // 4097 bytes, no newline: a 3-byte codepoint straddles the cut so the
+        // surviving tail begins with two orphan continuation bytes.
+        $run = new SubAgent(id: 'run-x', agent: $agent, task: 'Audit');
+        $run->status = SubAgent::STATUS_STREAMING;
+        $run->output = "\u{20AC}" . str_repeat('a', 4094);
+        self::assertSame(4097, strlen($run->output));
+
+        $m = new \ReflectionMethod(AgentSplitColumn::class, 'tail');
+        $tail = $m->invoke(null, $run->output);
+
+        self::assertCount(1, $tail);
+        self::assertStringStartsWith('a', $tail[0]);
+        self::assertTrue(mb_check_encoding($tail[0], 'UTF-8'));
+    }
+
+    /**
      * Scrolling the column skips whole tiles from the top and says how many,
      * and never scrolls the last tile out of view.
      */
