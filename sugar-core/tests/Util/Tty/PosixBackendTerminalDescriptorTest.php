@@ -176,7 +176,7 @@ final class PosixBackendTerminalDescriptorTest extends TestCase
                 // so query() answers on arm64 too and the sink is asserted
                 // directly on every POSIX host. The fix itself is what the
                 // next macos-15 run re-proves.
-                $size = SizeIoctl::query($fd);
+                $size = PosixBackend::queryWinsize($fd);
                 self::assertArrayHasKey('rows', $size);
                 self::assertArrayHasKey('cols', $size);
             } finally {
@@ -221,7 +221,7 @@ final class PosixBackendTerminalDescriptorTest extends TestCase
             );
 
             $this->expectException(\RuntimeException::class);
-            SizeIoctl::query($resourceId);
+            PosixBackend::queryWinsize($resourceId);
         } finally {
             fclose($handle);
         }

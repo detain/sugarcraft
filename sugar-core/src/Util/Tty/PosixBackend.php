@@ -107,7 +107,7 @@ final class PosixBackend implements Backend
             $fd = self::descriptorForStream($this->stream);
             if ($fd !== null) {
                 try {
-                    $result = SizeIoctl::query($fd);
+                    $result = self::queryWinsize($fd);
                     // Validate: kernel returns 0 for unset fields on some emulators
                     if ($result['cols'] > 0 && $result['rows'] > 0) {
                         return ['cols' => $result['cols'], 'rows' => $result['rows']];
@@ -174,7 +174,7 @@ final class PosixBackend implements Backend
         $ttyFd = self::openDeviceDescriptor(self::CONTROLLING_TERMINAL);
         if ($ttyFd !== null) {
             try {
-                $result = SizeIoctl::query($ttyFd);
+                $result = self::queryWinsize($ttyFd);
                 if ($result['cols'] > 0 && $result['rows'] > 0) {
                     return ['cols' => $result['cols'], 'rows' => $result['rows']];
                 }
@@ -233,6 +233,37 @@ final class PosixBackend implements Backend
      * POSIX rather than by the platform's <fcntl.h>.
      */
     private const O_RDONLY = 0;
+
+    /**
+     * Read the kernel's winsize for a GENUINE descriptor.
+     *
+     * Replaces `SizeIoctl::query()`, which sugar-pty deleted in PTY-40
+     * (commit 61e336754) on the grounds that nothing in sugar-pty called it;
+     * this was the caller that census missed. It composes the surviving
+     * `@internal` doors the way `PosixMasterPty::size()` does. The
+     * `posix_isatty()` guard is kept because a non-terminal (or a stream
+     * resource id passed by mistake) must refuse rather than answer: the
+     * ioctl alone would also refuse, but only with an errno the callers
+     * here cannot tell from "no FFI".
+     *
+     * @internal Test seam as well as an implementation detail.
+     *
+     * @return array{rows:int, cols:int, xpix:int, ypix:int}
+     * @throws \RuntimeException when $fd is not a terminal or the ioctl fails
+     */
+    public static function queryWinsize(int $fd): array
+    {
+        if (!\posix_isatty($fd)) {
+            throw new \RuntimeException('descriptor ' . $fd . ' is not a terminal');
+        }
+        $ws = SizeIoctl::emptyBuffer();
+        $rc = SizeIoctl::getSizeViaLibc(Libc::lib(), $fd, $ws);
+        if ($rc !== 0) {
+            throw new \RuntimeException('TIOCGWINSZ ioctl failed on fd ' . $fd . ' with rc=' . $rc);
+        }
+
+        return SizeIoctl::unpack($ws);
+    }
 
     /**
      * Open a device file and return the GENUINE file descriptor, or null.

@@ -139,26 +139,16 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
      */
     private const ROSTER = [
         // ---- sugar-core -------------------------------------------------
-        'sugar-core/src/Util/Tty/PosixBackend.php::SizeIoctl::query($fd)' => [
+        'sugar-core/src/Util/Tty/PosixBackend.php::posix_isatty($fd)' => [
             DescriptorSinkScanner::VARIABLE,
-            'CORRECT. size()\'s first arm. WHAT THIS ROW USED TO SAY: "OPEN, KNOWN, LATENT ... '
-            . 'two lines up it does `$fd = (int) $this->stream` ... closing it needs the '
-            . 'descriptor carried alongside the stream, which the constructor does not do". '
-            . 'WHAT IS TRUE NOW: the assignment is `$fd = self::descriptorForStream($this->'
-            . 'stream)`, which resolves a GENUINE descriptor -- by identity for the three '
-            . 'standard streams, otherwise by matching st_dev+st_ino against the process\'s own '
-            . 'descriptor table -- and no constructor signature changed. WHY THE OLD ROW STILL '
-            . 'EARNS ITS PLACE HERE: it recorded that a constructor change was the only way, '
-            . 'and that is the sentence a future reader would otherwise re-derive. It was '
-            . 'incomplete, not wrong: a descriptor can also be recovered from the process '
-            . 'itself. Pinned end to end by PosixBackendStreamDescriptorTest.',
-        ],
-        'sugar-core/src/Util/Tty/PosixBackend.php::SizeIoctl::query($ttyFd)' => [
-            DescriptorSinkScanner::VARIABLE,
-            'CORRECT. size()\'s /dev/tty arm. $ttyFd comes from openDeviceDescriptor(), which '
-            . 'asks libc to open the device and hands back a genuine descriptor. This arm used '
-            . 'to read `(int) $tty[0]` on a freshly fopen\'d handle, and was wrong on every run '
-            . 'rather than latent -- see PosixBackendTerminalDescriptorTest.',
+            'CORRECT. queryWinsize(), the single door both size() arms (the stream arm and the '
+            . '/dev/tty arm) now go through, replacing the two SizeIoctl::query($fd) / '
+            . '($ttyFd) rows that stood here until sugar-pty PTY-40 deleted query(). The '
+            . 'parameter is a GENUINE descriptor at both call sites: descriptorForStream() (std '
+            . 'identity or st_dev+st_ino match) for the stream arm, openDeviceDescriptor() for '
+            . 'the /dev/tty arm. A stream resource id reaching it is refused by this very '
+            . 'guard -- pinned by PosixBackendTerminalDescriptorTest::'
+            . 'testTheResourceIdReadingIsRejectedByTheSinkTheProductionArmCalls.',
         ],
         'sugar-core/src/Util/Tty/PosixBackend.php::TermiosFactory::open($fd)' => [
             DescriptorSinkScanner::VARIABLE,
