@@ -218,7 +218,8 @@ image, still appears.
 ## Remote images
 
 Load images straight from a URL. `fromUrl()` is synchronous (PHP stream
-wrappers — `http`/`https`/`file`/`data`, redirects followed); `fromUrlAsync()`
+wrappers — only `http`/`https` permitted by default, see **Security** below;
+redirects followed); `fromUrlAsync()`
 is non-blocking on the ReactPHP event loop and resolves with a decoded
 `ImageSource`, ideal for fetching many posters concurrently without stalling
 the render loop.
@@ -258,6 +259,9 @@ connector and timeout yourself.
 > checked and privately moments later (TTL-0 rebinding TOCTOU) is a disclosed
 > residual — proxy the fetch if you need a connect-time guarantee. Header
 > values containing CR/LF are rejected to prevent request splitting.
+> `ImageSource::overrideHostResolver()` swaps the guard's address resolution
+> process-wide — it is a test seam for exercising these checks without real
+> DNS, not a configuration knob; leave it alone outside tests.
 
 ## Persistent render cache
 
