@@ -47,10 +47,16 @@ final readonly class DateRange
 
     /**
      * Whole elapsed days between start and end — 2026-01-01 to 2026-01-03
-     * returns 2, although the calendar span covers three days. With an
-     * open-ended range, $now supplies the closing date; it defaults to real
-     * wall-clock now so the pure-integer math stays testable without a clock
-     * injection when the caller wants the live figure.
+     * returns 2, although the calendar span covers three days. The count is
+     * SIGNED: an inverted range (end before start) reports the negative
+     * elapsed figure — 2026-01-05 to 2026-01-01 returns -4, never a mirror
+     * +4 — so a consumer can tell "backwards" from "same instant".
+     * Membership deliberately disagrees: contains() treats an inverted
+     * range as empty (false everywhere); the sign is direction information,
+     * not an invitation to probe inside. With an open-ended range, $now
+     * supplies the closing date; it defaults to real wall-clock now so the
+     * pure-integer math stays testable without a clock injection when the
+     * caller wants the live figure.
      */
     public function durationInDays(?\DateTimeImmutable $now = null): ?int
     {
@@ -58,8 +64,11 @@ final readonly class DateRange
             return null;
         }
         $end = $this->end ?? $now ?? new \DateTimeImmutable();
-        // Midnight-normalised operands keep the diff an integer day count.
-        return $end->setTime(0, 0, 0)->diff($this->start->setTime(0, 0, 0))->days;
+        // Midnight-normalised operands keep the diff an integer day count;
+        // DateInterval::days is unsigned, so the direction is applied here.
+        $days = $end->setTime(0, 0, 0)->diff($this->start->setTime(0, 0, 0))->days;
+
+        return self::dayKey($end) < self::dayKey($this->start) ? -$days : $days;
     }
 
     public function isComplete(): bool

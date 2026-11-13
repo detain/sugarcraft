@@ -328,7 +328,9 @@ Beyond `DatePicker` itself, the shipped public classes are:
   open-ended a null end admits every day from the start forward, the
   mid-selection caveat), `durationInDays(?$now = null)` (whole *elapsed* days —
   `2026-01-01` to `2026-01-03` returns `2` although the calendar span covers
-  three days; optional clock seam: a null end measures against `$now`), and
+  three days; **signed**: an inverted range returns the negative count while
+  `contains()` still reads it as empty; optional clock seam: a null end
+  measures against `$now`), and
   `isComplete()`.
 - **`EventStore`** / **`EventStoreInterface`** — the host-facing transition
   channel: `record($type, $payload)`, `release()` (drain-and-clear),

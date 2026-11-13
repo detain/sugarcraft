@@ -6,6 +6,7 @@ namespace SugarCraft\DatePicker\Tests;
 
 use SugarCraft\CellBuffer\Style;
 use SugarCraft\DatePicker\DatePicker;
+use SugarCraft\DatePicker\DateRange;
 use SugarCraft\DatePicker\PickerEvent;
 use SugarCraft\DatePicker\EventStore;
 use PHPUnit\Framework\TestCase;
@@ -117,5 +118,22 @@ final class SemanticsPinsTest extends TestCase
 
         $after = new \DateTimeImmutable('2027-01-01T00:00:00Z');
         $this->assertFalse($dp->inBounds($after), 'the next calendar day is out of bounds');
+    }
+
+    public function testDateRangeContainsIsTimezoneSafeAcrossZones(): void
+    {
+        // dp-27 mirror of the inBounds tz pin: DateRange membership is the
+        // same day-key law — a Tokyo evening instant whose UTC day is the
+        // NEXT calendar day must fall outside a UTC range ending today-UTC.
+        $range = new DateRange(
+            new \DateTimeImmutable('2026-05-01T00:00:00Z'),
+            new \DateTimeImmutable('2026-05-10T00:00:00Z'),
+        );
+
+        $tokyoSameDay = new \DateTimeImmutable('2026-05-10T23:00:00+09:00'); // still 05-10 in Tokyo
+        $this->assertTrue($range->contains($tokyoSameDay), 'membership reads the wall date, not the instant');
+
+        $tokyoNextDay = new \DateTimeImmutable('2026-05-11T01:00:00+09:00'); // 05-10T16:00Z, still 05-11 in Tokyo
+        $this->assertFalse($range->contains($tokyoNextDay), 'the next wall date is outside the range');
     }
 }
