@@ -335,7 +335,9 @@ use SugarCraft\Log\Level;
 $log = Logger::new();
 // fopen('a') creates the file as 0666 & ~umask — a typical umask of 0022
 // leaves world-readable 0644; set umask 0077 (or chmod after) for a 0600 log.
-$fh  = fopen('/tmp/app.log', 'a');   // plain bytes on files: styling is auto-dropped
+// The mode arithmetic is POSIX: on Windows, log ACLs come from the parent
+// directory instead.
+$fh  = fopen(sys_get_temp_dir() . '/sugar-log-app.log', 'a');   // plain bytes on files: styling is auto-dropped
 $out = $log->withOutput($fh);
 
 // 2. Error-stream routing — severe records go to a second stream
@@ -455,7 +457,7 @@ $hooks = new HookRegistry();
 // Register a callback for all Warn-and-above entries
 $id = $hooks->onLevel(Level::Warn, function (Level $level, string $psrLevel, string $message, array $context) {
     // Dispatch to external service, enrich context, etc.
-    file_put_contents('/tmp/warn.log', "[{$level->label()}] {$message}\n", FILE_APPEND);
+    file_put_contents(sys_get_temp_dir() . '/sugar-log-warn.log', "[{$level->label()}] {$message}\n", FILE_APPEND);
 });
 
 // Wire the registry into the bridge — this is how hooks fire
