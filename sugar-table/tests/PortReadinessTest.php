@@ -336,9 +336,31 @@ final class PortReadinessTest extends TestCase
 
         $buffer = self::renderBuffer($t);
         // Borderless + header: row 0 header, row 1 separator, row 2 data.
-        $firstCell = $buffer->cellAt(0, 2);
-        $this->assertSame(1, $firstCell->width);
-        $this->assertStringContainsString("\u{0301}", $firstCell->rune, 'combining mark must stay attached to its base cell');
-        $this->assertSame('x', $buffer->cellAt(1, 2)->rune);
+        $cells = [];
+        for ($c = 0; $c < 4; $c++) {
+            $cells[] = $buffer->cellAt($c, 2);
+        }
+
+        // ST-07 run-batching may merge the body remainder and the padding
+        // tail into one multi-column Cell, so the slots past the base are
+        // shape-free. The LAW this probe pins — the mark rides its base and
+        // never inflates a slot of its own — is asserted representation-
+        // invariantly: exactly one cell carries it, that cell is the base's,
+        // it keeps the base's width, and no cell holds the bare mark.
+        $standaloneMarks = \array_filter(
+            $cells,
+            static fn (\SugarCraft\CellBuffer\Cell $cell): bool => $cell->rune === "\u{0301}"
+        );
+        $this->assertCount(0, $standaloneMarks, 'the mark must never occupy a slot of its own');
+        $markCells = \array_filter(
+            $cells,
+            static fn (\SugarCraft\CellBuffer\Cell $cell): bool => \str_contains($cell->rune, "\u{0301}")
+        );
+        $this->assertCount(1, $markCells, 'the mark rides exactly one cell');
+        $markCell = \reset($markCells);
+        $this->assertSame(0, \array_search($markCell, $cells, true), 'the mark rides the base cell (slot 0)');
+        $this->assertSame(1, $markCell->width, 'a ridden mark must not inflate its cell width');
+        $this->assertSame("e\u{0301}", $markCell->rune, 'combining mark must stay attached to its base cell');
+        $this->assertStringStartsWith('x', $cells[1]->rune, 'the body resumes after the base cell');
     }
 }

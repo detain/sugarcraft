@@ -2469,11 +2469,63 @@ final class Table
         $clusters = $this->graphemeClusters($text);
         $bufWidth = $canvas->width;
         $col = $startCol;
-        $lastCol = null;
-        $lastCluster = '';
-        $lastGw = 1;
+        // Origin-level record of the last placed cell (slot, full rune,
+        // span): a zero-width cluster rides this cell — which after ST-07
+        // may be a batched run — exactly as it rode the last per-cluster
+        // cell before batching.
+        $lastOrigin = -1;
+        $lastRune = '';
+        $lastN = 1;
+        // Audit ST-07: contiguous single-width ASCII runs (cell bodies and
+        // the padding tail) are batched into ONE multi-column Cell, the
+        // fillBorderRow precedent, instead of one Cell + put per cluster.
+        // Any wide, zero-width, or non-ASCII cluster flushes the batch first,
+        // so the per-cluster path below keeps its exact semantics. Invariant:
+        // a batched run never crosses the cell budget or the buffer edge, so
+        // flushing always lands; the run's interior slots are written as
+        // width-0 empties (the render pass skips those), byte-identical to
+        // the per-cluster fill the run replaces.
+        $runStr = '';
+        $runOrigin = -1;
+
+        $flushRun = function () use (&$runStr, &$runOrigin, $canvas, $row, $style, &$col, &$lastOrigin, &$lastRune, &$lastN): void {
+            if ($runOrigin === -1) {
+                return;
+            }
+            $n = \strlen($runStr); // ASCII fast path: bytes == clusters == columns
+            $canvas->put($runOrigin, $row, new Cell($runStr, $style, null, $n));
+            for ($c = 1; $c < $n; $c++) {
+                // Interior slots carry styled width-0 empties — the exact
+                // fillBorderRow pattern. (Canvas blanks are NORMAL width-1
+                // cells that the render pass emits as a space; only the
+                // width-0 skip removes a slot from the output.)
+                $canvas->put($runOrigin + $c, $row, new Cell('', $style, null, 0));
+            }
+            $lastOrigin = $runOrigin;
+            $lastRune = $runStr;
+            $lastN = $n;
+            $col = $runOrigin + $n;
+            $runStr = '';
+            $runOrigin = -1;
+        };
 
         foreach ($clusters as $cluster) {
+            // ASCII fast path: printable single-width bytes batch together.
+            // The bounds mirror the per-cluster guards the batched run stands
+            // in for: cell budget (startCol + cellWidth) and buffer edge.
+            if (\strlen($cluster) === 1 && $cluster >= ' ' && $cluster <= '~'
+                && ($col + \strlen($runStr)) < $startCol + $cellWidth
+                && ($col + \strlen($runStr)) < $bufWidth
+            ) {
+                if ($runOrigin === -1) {
+                    $runOrigin = $col;
+                }
+                $runStr .= $cluster;
+                continue;
+            }
+
+            $flushRun();
+
             if ($col >= $bufWidth) {
                 break; // never write past the buffer (defensive: too-narrow width)
             }
@@ -2487,9 +2539,9 @@ final class Table
             // that sized the column.
             $gw = Width::of($cluster);
             if ($gw === 0) {
-                if ($lastCol !== null) {
-                    $canvas->put($lastCol, $row, new Cell($lastCluster . $cluster, $style, null, $lastGw));
-                    $lastCluster .= $cluster;
+                if ($lastOrigin >= 0) {
+                    $lastRune .= $cluster;
+                    $canvas->put($lastOrigin, $row, new Cell($lastRune, $style, null, $lastN));
                 }
                 continue;
             }
@@ -2511,9 +2563,9 @@ final class Table
             }
 
             $canvas->put($col, $row, new Cell($cluster, $style, null, $gw));
-            $lastCol = $col;
-            $lastCluster = $cluster;
-            $lastGw = $gw;
+            $lastOrigin = $col;
+            $lastRune = $cluster;
+            $lastN = $gw;
 
             // A wide grapheme occupies two slots: the display-width-2 cell at $col
             // plus a continuation marker at $col + 1 (NOT $col + 2 — advancing by
@@ -2524,10 +2576,21 @@ final class Table
             $col += $gw;
         }
 
-        // Fill remaining width with spaces if needed (clamped to the buffer).
-        while (($col - $startCol) < $cellWidth && $col < $bufWidth) {
-            $canvas->put($col, $row, new Cell(' ', $style, null, 1));
-            $col++;
+        // Flush before padding: a run that ends exactly at the cell budget
+        // must not absorb the tail — the old code's padding cells always
+        // started their own slot run, and per-cell probes read that shape.
+        $flushRun();
+
+        // Fill remaining width with spaces if needed (clamped to the buffer),
+        // as one batched run Cell (ST-07): the spaces live in the origin
+        // cell's own rune string, so the emitted bytes match the per-space
+        // fill exactly — the interior slots become width-0 empties.
+        $pad = \min($startCol + $cellWidth, $bufWidth) - $col;
+        if ($pad > 0) {
+            $canvas->put($col, $row, new Cell(\str_repeat(' ', $pad), $style, null, $pad));
+            for ($c = 1; $c < $pad; $c++) {
+                $canvas->put($col + $c, $row, new Cell('', $style, null, 0));
+            }
         }
 
         return $canvas;
