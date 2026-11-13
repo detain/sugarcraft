@@ -98,19 +98,21 @@ final class Counter implements Model
     //
     // Trust boundary: Program writes the frame to the terminal
     // UNMEDIATED, so anything interpolated here must be trusted. Text
-    // from files, the network, or user input goes through one of
-    // sugar-core's two sanitizer policies first: Sanitize::untrusted()
-    // strips terminal-control payload but deliberately preserves the
+    // from files, the network, or user input goes through a sugar-core
+    // sanitizer first — use SugarCraft\Core\Util\Sanitize, then the
+    // policy the destination calls for: Sanitize::untrusted() strips
+    // terminal-control payload but deliberately preserves the
     // private-use arena U+E000-U+F8FF (legitimate image-overlay
-    // markers and Nerd Font glyphs live there); untrustedForMarkedFrames()
-    // does the same pass and additionally sweeps the sugar-mouse zone
-    // sentinels U+E000/U+E001 — that extra sweep is the one a frame
-    // carrying image/mouse-zone markers needs (View's image layer and
-    // ImageOverlay::marker(), the Panes helper — machinery outside the
-    // Model contract itself), because forged zone markers ride exactly
-    // those two bytes. Raw SGR and OSC-8 payload is an injection
-    // surface under either policy, not payload. The short form lives
-    // in this package's README "Trust boundary" section.
+    // markers and Nerd Font glyphs live there);
+    // Sanitize::untrustedForDisplay() adds CR-to-LF conversion and
+    // invisible-format marking, the multi-line-panes policy;
+    // Sanitize::untrustedForMarkedFrames() additionally sweeps the
+    // sugar-mouse zone sentinels U+E000/U+E001 — the sweep a frame
+    // carrying View image-layer / ImageOverlay::marker() / Panes
+    // markers needs, because forged zone markers ride exactly those
+    // two bytes. Raw SGR and OSC-8 payload is an injection surface
+    // under any of the three, not payload. The full form lives in this
+    // package's README "Trust boundary" section.
     public function view(): string
     {
         $body = sprintf("count: %d\n↑ ↓ to change · q / Esc / Ctrl+C quit", $this->n);

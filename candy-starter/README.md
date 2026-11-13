@@ -114,7 +114,17 @@ The demo takes none of these doors (no subscriptions, no promises, external `sen
 
 ### Trust boundary
 
-`Program` writes whatever `view()` returns to the terminal **unmediated** — the styled frame is the one place your bytes become the user's screen. So render only text you control. Anything from outside — file contents, network responses, another user's input — goes through one of sugar-core's two sanitizer policies: `Sanitize::untrusted()` strips terminal-control payload but deliberately preserves the private-use arena U+E000–U+F8FF (widening that sweep would eat legitimate image-overlay markers and Nerd Font glyphs); `Sanitize::untrustedForMarkedFrames()` does the same pass and additionally sweeps the `sugar-mouse` zone sentinels U+E000/U+E001 — that extra sweep is the one a frame carrying image/mouse-zone markers needs, because forged zone markers ride exactly those two bytes — and those markers are machinery outside the Model contract itself: View's image layer, `ImageOverlay::marker()`, the `Panes` helper. The demo renders an integer it owns, so it needs none — but the line where your app starts rendering the world is exactly the line this rule bites. The fleet-wide law is hubbed in the monorepo's `docs/TRUST-BOUNDARY.md`; the starter keeps the short form.
+`Program` writes whatever `view()` returns to the terminal **unmediated**. The styled frame is the one place your bytes become the user's screen. So render only text you control.
+
+Text from outside — file contents, network responses, another user's input — goes through a sugar-core sanitizer first: `use SugarCraft\Core\Util\Sanitize;`, then whichever of its three policies the destination calls for.
+
+- `Sanitize::untrusted()` strips terminal-control payload but deliberately preserves the private-use arena U+E000–U+F8FF. Widening that sweep would eat legitimate image-overlay markers and Nerd Font glyphs.
+- `Sanitize::untrustedForDisplay()` adds CR-to-LF conversion and invisible-format marking on top of the `untrusted()` sweep — the policy for multi-line rendered text, where CR-overwrite and bidi spoofing are the threat (see the log-tail note in "Common next steps").
+- `Sanitize::untrustedForMarkedFrames()` makes the same sweep as `untrusted()` and additionally clears the `sugar-mouse` zone sentinels U+E000/U+E001. A frame carrying image/mouse-zone markers needs that extra sweep, because forged zone markers ride exactly those two bytes. Those markers are machinery outside the Model contract itself: View's image layer, `ImageOverlay::marker()`, the `Panes` helper.
+
+Raw SGR and OSC-8 payload is an injection surface under any of the three, not a payload to pass through.
+
+The demo renders an integer it owns, so it needs none — but the line where your app starts rendering the world is exactly the line this rule bites. The fleet-wide law is hubbed in [docs/TRUST-BOUNDARY.md](https://github.com/detain/sugarcraft/blob/master/docs/TRUST-BOUNDARY.md); the starter keeps the short form.
 
 ## Common next steps
 
@@ -126,9 +136,11 @@ The demo takes none of these doors (no subscriptions, no promises, external `sen
 | Tail a log into a scrollable pane | `sugarcraft/sugar-forms` — `Viewport`    |
 | Build a multi-page wizard         | `sugarcraft/sugar-forms` — `Group`       |
 | Plot a sparkline                  | `sugarcraft/sugar-charts` — `Sparkline`  |
-| Style the frame (bold, faint, colour) | `sugarcraft/sugar-style` — `Style`, `Theme` (the demo already frames itself with a `Style` — built once into a static, the memoize-at-the-boundary pattern for any constant decoration) |
-| Translate your UI strings         | `sugarcraft/sugar-core` — `Lang::t()` with `lang/<code>.php` lookup files (see `LOCALES.md`) |
+| Style the frame (bold, faint, colour) | `sugarcraft/sugar-style` — `Style`, `Theme` |
+| Translate your UI strings         | `sugarcraft/sugar-core` — `Lang::t()` with `lang/<code>.php` lookup files (see [LOCALES.md](https://github.com/detain/sugarcraft/blob/master/LOCALES.md)) |
 | Make it `ssh`-accessible          | `sugarcraft/sugar-ssh-server`            |
+
+One pattern the demo already models for you: its frame `Style` is built once into a static, and the memoize-at-the-boundary shape is what any constant decoration wants.
 
 One trust note for the log-tail row: multi-line external text is exactly where CR-overwrite and bidi spoofing apply — pipe log contents (or any other foreign stream) through `Sanitize::untrustedForDisplay()` before it reaches a pane: the `untrusted()` sweep plus CR-to-LF conversion and invisible-format marking (sugar-core).
 
