@@ -77,6 +77,10 @@ final class Renderer
             max((int) $d->width, self::SIDE_BY_SIDE),
             $d->colorProfile,
             $d->height,
+            $d->backendLabel,
+            $d->droppedLines,
+            $d->unreadableFiles,
+            $d->loadError,
         ), 0);
         $lines = array_slice(explode("\n", rtrim($joined, "\n")), 0, max(1, $d->height));
         return self::clipRows(implode("\n", $lines), $d->width) . "\n";
@@ -113,6 +117,26 @@ final class Renderer
 
         $timeline = self::timeline($d);
 
+        // CT-S19: the in-frame diagnostics channel. The banner (a load that
+        // threw — previous Stats keep the rest of the frame honest) rides
+        // right under the header; the per-load data-loss counts land above
+        // the help row. Both go through clean()/clip(), so a hostile path
+        // or exception text cannot inject frame bytes.
+        $banner = $d->loadError === null ? '' : self::clip(self::tint(
+            Style::new(),
+            '#f87171',
+            $d->colorProfile,
+        )->render(' ' . self::clean($d->loadError)), $d->width) . "\n";
+        $notes = '';
+        if ($d->droppedLines > 0) {
+            $notes .= self::clip(self::tint(Style::new(), '#fca5a5', $d->colorProfile)
+                ->render(' ' . Lang::t('ui.diagnostics_dropped', ['count' => $d->droppedLines])), $d->width) . "\n";
+        }
+        if ($d->unreadableFiles > 0) {
+            $notes .= self::clip(self::tint(Style::new(), '#fca5a5', $d->colorProfile)
+                ->render(' ' . Lang::t('ui.diagnostics_unreadable', ['count' => $d->unreadableFiles])), $d->width) . "\n";
+        }
+
         // CT-S13: the translated help row is longer than English in most
         // locales (German/pl fill 67-75 cells). A row that does not fit falls
         // back to the key-only variant, which is identical in every locale
@@ -125,7 +149,7 @@ final class Renderer
         $help = self::clip(self::tint(Style::new(), '#7d6e98', $d->colorProfile)
             ->render($helpText), $d->width);
 
-        return self::clipRows($header . "\n" . $top . "\n" . $timeline . "\n" . $help, $d->width) . "\n";
+        return self::clipRows($header . "\n" . $banner . $top . "\n" . $timeline . "\n" . $notes . $help, $d->width) . "\n";
     }
 
     /**

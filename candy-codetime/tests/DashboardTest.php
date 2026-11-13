@@ -10,6 +10,7 @@ use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\CodeTime\Dashboard;
 use SugarCraft\CodeTime\Heartbeat;
 use SugarCraft\CodeTime\Stats;
+use SugarCraft\CodeTime\Storage\SqliteBackend;
 use SugarCraft\CodeTime\Store;
 use PHPUnit\Framework\TestCase;
 
@@ -459,4 +460,62 @@ final class DashboardTest extends TestCase
         $this->assertSame(\SugarCraft\Core\Util\ColorProfile::Ascii, $resized->colorProfile);
         $this->assertSame(60, $resized->width);
     }
+    public function testDroppedLinesLandOnTheModelAndACleanReloadClearsThem(): void
+    {
+        // CT-S19: corrupt day files surface as a counted footer note on the
+        // model (paintable through the frame), and the note describes the
+        // load it accompanies — once the file is repaired, a reload goes
+        // back to a clean frame with no stale counts.
+        $store = new Store($this->storeDir);
+        $store->silenceDiagnostics();
+        $today = (new \DateTimeImmutable('today'))->setTime(0, 0);
+        $file  = $this->storeDir . '/' . $today->format('Y-m-d') . '.jsonl';
+        file_put_contents($file, "{oops\n{also\n{bad\n");
+
+        $dash = Dashboard::start($store);
+        $this->assertSame(3, $dash->droppedLines);
+        $this->assertNull($dash->loadError);
+        $stripped = preg_replace('/\x1b\[[0-9;]*m/', '', $dash->view());
+        $this->assertMatchesRegularExpression('/^ dropped 3 .*day files$/m', $stripped, 'the footer row counts the drops in-frame');
+
+        file_put_contents($file, json_encode([
+            'time' => $today->getTimestamp() + 60, 'project' => 'sugar', 'language' => 'php',
+            'file' => 'sugar.php', 'duration' => 60, 'tags' => [],
+        ]) . "\n");
+        $clean = $dash->update(new KeyMsg(KeyType::Char, 'r'))[0];
+        $this->assertSame(0, $clean->droppedLines);
+        $this->assertStringNotContainsString('corrupt line', preg_replace('/\x1b\[[0-9;]*m/', '', $clean->view()));
+    }
+
+    public function testASwappedOutDatabaseKeepsTheFrameAndPaintsABanner(): void
+    {
+        // CT-S19: an unreadable db after launch (locked, swapped, truncated)
+        // used to throw straight out of update() and kill the TUI mid
+        // session. Now the previous Stats ride on and the error becomes an
+        // in-frame banner row; the app keeps running.
+        $dbPath = $this->tmp . '/candy-codetime.db';
+        $backend = new SqliteBackend($dbPath);
+        $backend->insert(new Heartbeat(
+            time: (new \DateTimeImmutable('today'))->getTimestamp() + 60,
+            project: 'sugar', language: 'php', file: 'sugar.php', duration: 120,
+        ));
+        $dash = Dashboard::start($backend);
+        $this->assertSame(120, $dash->stats->totalSeconds());
+
+        // Blow the table out from under the open handle, exactly like a
+        // storage swap mid-run would.
+        $saboteur = new \SQLite3($dbPath);
+        $saboteur->exec('DROP TABLE heartbeats');
+        $saboteur->close();
+
+        [$next, $cmd] = $dash->update(new KeyMsg(KeyType::Char, 'r'));
+        $this->assertNull($cmd);
+        $this->assertNotNull($next->loadError);
+        $this->assertStringContainsString('failed', $next->loadError);
+        $this->assertSame(120, $next->stats->totalSeconds(), 'the last good read keeps the frame populated');
+        $stripped = preg_replace('/\x1b\[[0-9;]*m/', '', $next->view());
+        $this->assertMatchesRegularExpression('/^ candy-codetime: .*failed.*$/m', $stripped, 'the banner row rides under the header');
+        $this->assertStringContainsString('Top projects', $stripped);
+    }
+
 }

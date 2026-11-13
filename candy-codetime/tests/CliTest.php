@@ -649,6 +649,23 @@ final class CliTest extends TestCase
         $this->assertStringContainsString('days must be a whole number, got "30x"', $res['stderr']);
     }
 
+    public function testExportAnnouncesDroppedGarbageOnTheWarningLane(): void
+    {
+        // CT-S19: the CLI export path is not the alt screen, so the counted
+        // notice rides stderr there — one line, with the count, and the
+        // readable rows still export.
+        $today = (new \DateTimeImmutable('today'))->format('Y-m-d');
+        $good = json_encode([
+            'time' => (new \DateTimeImmutable('today'))->setTime(0, 0)->getTimestamp() + 60,
+            'project' => 'sugar', 'language' => 'php', 'file' => 'sugar.php', 'duration' => 60, 'tags' => [],
+        ]);
+        file_put_contents($this->dataDir . '/' . $today . '.jsonl', $good . "\n" . "{oops\n" . 'garbage\n');
+        $res = $this->runCli(['export', 'csv']);
+        $this->assertSame(0, $res['exit'], $res['stderr']);
+        $this->assertStringContainsString('sugar.php', $res['stdout']);
+        $this->assertStringContainsString('dropped 2 unparseable line(s)', $res['stderr']);
+    }
+
     public function testBackendPreferenceRidesTheEnvironment(): void
     {
         // An sqlite user sets the preference once; every bare command then

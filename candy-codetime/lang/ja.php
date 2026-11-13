@@ -60,4 +60,6 @@ return [
     'ui.activity_minutes_heading' => '日次アクティビティ（分）',
     'ui.activity_heading' => '日次アクティビティ',
     'ui.no_data' => '(データなし)',
+    'ui.diagnostics_dropped' => '日次ファイルから破損行を {count} 行除外しました',
+    'ui.diagnostics_unreadable' => '日次ファイルを {count} 件読み込めませんでした',
 ];

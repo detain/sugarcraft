@@ -678,4 +678,11 @@ try {
 } catch (\Throwable $e) {
     $storageError($e);
 }
+// CT-S19: from here the alt screen owns the terminal. The first recompute
+// inside start() already printed this launch's notices to stderr pre-TUI;
+// later loads report through the dashboard's in-frame notes instead, so no
+// raw bytes ever land between sync frames.
+if ($reader instanceof Store) {
+    $reader->silenceDiagnostics();
+}
 (new Program($dashboard, new ProgramOptions(useAltScreen: true)))->run();

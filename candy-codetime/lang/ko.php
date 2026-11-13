@@ -60,4 +60,6 @@ return [
     'ui.activity_minutes_heading' => '일별 활동(분)',
     'ui.activity_heading' => '일별 활동',
     'ui.no_data' => '(데이터 없음)',
+    'ui.diagnostics_dropped' => '일별 파일에서 손상된 줄 {count}개를 건너뜀',
+    'ui.diagnostics_unreadable' => '일별 파일 {count}개를 읽을 수 없음',
 ];

@@ -60,4 +60,6 @@ return [
     'ui.activity_minutes_heading' => 'Dagelijkse activiteit (minuten)',
     'ui.activity_heading' => 'Dagelijkse activiteit',
     'ui.no_data' => '(geen gegevens)',
+    'ui.diagnostics_dropped' => '{count} beschadigde regels uit dagsbestanden genegeerd',
+    'ui.diagnostics_unreadable' => 'kon {count} dagsbestand(en) niet lezen',
 ];

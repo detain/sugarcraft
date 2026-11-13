@@ -60,4 +60,6 @@ return [
     'ui.activity_minutes_heading' => 'Attività giornaliera (minuti)',
     'ui.activity_heading' => 'Attività giornaliera',
     'ui.no_data' => '(nessun dato)',
+    'ui.diagnostics_dropped' => 'scartate {count} righe danneggiate dai file giornalieri',
+    'ui.diagnostics_unreadable' => 'impossibile leggere {count} file giornalieri',
 ];

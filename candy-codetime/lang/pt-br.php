@@ -60,4 +60,6 @@ return [
     'ui.activity_minutes_heading' => 'Atividade diária (minutos)',
     'ui.activity_heading' => 'Atividade diária',
     'ui.no_data' => '(sem dados)',
+    'ui.diagnostics_dropped' => '{count} linhas corrompidas descartadas dos arquivos diários',
+    'ui.diagnostics_unreadable' => 'não foi possível ler {count} arquivos diários',
 ];

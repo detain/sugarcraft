@@ -47,6 +47,20 @@ final class Dashboard implements Model
          * shown a number whose provenance is a guess.
          */
         public readonly ?string $backendLabel = null,
+        /**
+         * Lines the LAST load had to drop (CT-S19). Painted as a footer note
+         * so corrupt day files are visible while the alt screen is live,
+         * where writing them to stderr would shred the repaint.
+         */
+        public readonly int $droppedLines = 0,
+        /** Day files the last load could not open at all (CT-S19). */
+        public readonly int $unreadableFiles = 0,
+        /**
+         * Set when the last load threw (CT-S19): the previous Stats keep the
+         * frame alive and this message rides the banner row, painted through
+         * clean(), so a locked or swapped-out database never kills the TUI.
+         */
+        public readonly ?string $loadError = null,
     ) {}
 
     public static function start(HeartbeatReader $source, ?\DateTimeImmutable $endDay = null, int $days = 7, ?string $backendLabel = null): self
@@ -72,6 +86,9 @@ final class Dashboard implements Model
                 $this->colorProfile,
                 $msg->rows,
                 $this->backendLabel,
+                $this->droppedLines,
+                $this->unreadableFiles,
+                $this->loadError,
             ), null];
         }
         if ($msg instanceof ColorProfileMsg) {
@@ -87,6 +104,9 @@ final class Dashboard implements Model
                 $msg->profile,
                 $this->height,
                 $this->backendLabel,
+                $this->droppedLines,
+                $this->unreadableFiles,
+                $this->loadError,
             ), null];
         }
         if (!$msg instanceof KeyMsg) {
@@ -129,19 +149,49 @@ final class Dashboard implements Model
     private function recompute(): self
     {
         $from = $this->endDay->modify('-' . ($this->days - 1) . ' days');
-        $beats = $this->source->loadRange($from, $this->endDay);
-        // CT-S08: the model carries the markers; a file reader has none.
-        $milestones = $this->source instanceof SqliteBackend ? $this->source->milestones() : [];
-        return new self(
-            $this->source,
-            $this->endDay,
-            $this->days,
-            Stats::compute($beats, $from, $this->endDay, $milestones),
-            $this->width,
-            $this->colorProfile,
-            $this->height,
-            $this->backendLabel,
-        );
+        // CT-S19: storage trouble must never kill the running TUI. The last
+        // good Stats ride; the fresh load's data-loss counts land on the
+        // model's note channel, and anything that throws becomes an in-frame
+        // banner (painted through clean()) instead of an uncaught exception
+        // dumped onto the alt screen mid-repaint.
+        try {
+            $beats = $this->source->loadRange($from, $this->endDay);
+            // CT-S08: the model carries the markers; a file reader has none.
+            $milestones = $this->source instanceof SqliteBackend ? $this->source->milestones() : [];
+            $notes = $this->source instanceof Store
+                ? $this->source->drainDiagnostics()
+                : ['dropped' => 0, 'unreadable' => 0];
+            return new self(
+                $this->source,
+                $this->endDay,
+                $this->days,
+                Stats::compute($beats, $from, $this->endDay, $milestones),
+                $this->width,
+                $this->colorProfile,
+                $this->height,
+                $this->backendLabel,
+                $notes['dropped'],
+                $notes['unreadable'],
+                null,
+            );
+        } catch (\Throwable $error) {
+            if ($this->source instanceof Store) {
+                $this->source->drainDiagnostics();
+            }
+            return new self(
+                $this->source,
+                $this->endDay,
+                $this->days,
+                $this->stats,
+                $this->width,
+                $this->colorProfile,
+                $this->height,
+                $this->backendLabel,
+                $this->droppedLines,
+                $this->unreadableFiles,
+                $error->getMessage(),
+            );
+        }
     }
 
     private function shift(int $direction): self

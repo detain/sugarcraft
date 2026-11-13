@@ -60,4 +60,6 @@ return [
     'ui.activity_minutes_heading' => 'Activité quotidienne (minutes)',
     'ui.activity_heading' => 'Activité quotidienne',
     'ui.no_data' => '(aucune donnée)',
+    'ui.diagnostics_dropped' => '{count} lignes corrompues ignorées dans les fichiers du jour',
+    'ui.diagnostics_unreadable' => 'lecture impossible de {count} fichier(s) du jour',
 ];

@@ -60,4 +60,6 @@ return [
     'ui.activity_minutes_heading' => '每日活动（分钟）',
     'ui.activity_heading' => '每日活动',
     'ui.no_data' => '（无数据）',
+    'ui.diagnostics_dropped' => '从日文件中丢弃了 {count} 个损坏行',
+    'ui.diagnostics_unreadable' => '无法读取 {count} 个日文件',
 ];

@@ -40,6 +40,20 @@ final class Store implements HeartbeatReader
     // memoization, not observable state
     private array $dayCache = [];
 
+    /**
+     * Lines the last read wave dropped (CT-S19): over-cap monsters and lines
+     * that are not JSON at all, plus days that could not be opened at all.
+     * The dashboard drains these onto its model so the TUI can report
+     * in-frame; CLI paths print one counted notice per file on stderr, the
+     * same single-deliberate-line footing the unreadable-day warning had.
+     */
+    private int $droppedLineCount = 0;
+
+    private int $unreadableDayCount = 0;
+
+    /** True once the alt screen owns the terminal (see silenceDiagnostics). */
+    private bool $silentDiagnostics = false;
+
     public function __construct(public readonly string $dir)
     {}
 
@@ -151,6 +165,31 @@ final class Store implements HeartbeatReader
     }
 
     /**
+     * Stop the store writing to stderr; counting continues (CT-S19). The
+     * dashboard launcher calls this the moment the alt screen takes over, so
+     * mid-session reloads can never spray raw bytes into a sync frame.
+     */
+    public function silenceDiagnostics(): void
+    {
+        $this->silentDiagnostics = true;
+    }
+
+    /**
+     * Take the data-loss counters since the last drain (CT-S19). Resetting
+     * here is what makes a footer count describe the load it accompanies
+     * instead of the whole process lifetime.
+     *
+     * @return array{dropped: int, unreadable: int}
+     */
+    public function drainDiagnostics(): array
+    {
+        $drained = ['dropped' => $this->droppedLineCount, 'unreadable' => $this->unreadableDayCount];
+        $this->droppedLineCount = 0;
+        $this->unreadableDayCount = 0;
+        return $drained;
+    }
+
+    /**
      * Tighten one path to owner-private modes, refusing to proceed when the
      * chmod fails (silent loose modes would contradict the privacy contract).
      */
@@ -194,6 +233,10 @@ final class Store implements HeartbeatReader
             // swept like every other way out) and carry on with an empty day
             // — the reader's exit shape is unchanged.
             $last = error_get_last();
+            $this->unreadableDayCount++;
+            if ($this->silentDiagnostics) {
+                return [];
+            }
             fwrite(STDERR, 'candy-codetime: warning: cannot read day file '
                 . Sanitize::untrusted($file)
                 . (isset($last['message']) ? ': ' . Sanitize::untrusted((string) $last['message']) : '')
@@ -201,8 +244,13 @@ final class Store implements HeartbeatReader
             return [];
         }
         $rows = [];
+        $overCap = 0;
+        $malformed = 0;
+        $firstOffender = 0;
+        $lineNo = 0;
         try {
             while (($line = fgets($fh, self::MAX_LINE_BYTES)) !== false) {
+                $lineNo++;
                 if (!str_ends_with($line, "\n") && !feof($fh)) {
                     // Over-cap line: keep draining until the logical line ends,
                     // but never hold more than one buffer of it.
@@ -211,6 +259,7 @@ final class Store implements HeartbeatReader
                             break;
                         }
                     }
+                    $overCap++;
                     continue;
                 }
                 $line = trim($line);
@@ -220,10 +269,30 @@ final class Store implements HeartbeatReader
                 $decoded = json_decode($line, true);
                 if (is_array($decoded)) {
                     $rows[] = Heartbeat::fromArray($decoded);
+                } else {
+                    // CT-S19: a line nobody will ever read must still be
+                    // counted here — the silence around these drains was the
+                    // bug, and one offender's position is worth naming.
+                    $firstOffender = $firstOffender === 0 ? $lineNo : $firstOffender;
+                    $malformed++;
                 }
             }
         } finally {
             fclose($fh);
+        }
+        // One counted notice per file per read wave; the accumulators feed
+        // the dashboard footer whether or not the stderr lane is open.
+        $this->droppedLineCount += $overCap + $malformed;
+        if (!$this->silentDiagnostics && ($overCap > 0 || $malformed > 0)) {
+            if ($overCap > 0) {
+                fwrite(STDERR, 'candy-codetime: warning: dropped ' . $overCap
+                    . ' over-cap line(s) from ' . Sanitize::untrusted($file) . "\n");
+            }
+            if ($malformed > 0) {
+                fwrite(STDERR, 'candy-codetime: warning: dropped ' . $malformed
+                    . ' unparseable line(s) from ' . Sanitize::untrusted($file)
+                    . ' (first at line ' . $firstOffender . ')' . "\n");
+            }
         }
         $this->dayCache[$key] = $rows;
         return $rows;

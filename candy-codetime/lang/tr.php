@@ -60,4 +60,6 @@ return [
     'ui.activity_minutes_heading' => 'Günlük etkinlik (dakika)',
     'ui.activity_heading' => 'Günlük etkinlik',
     'ui.no_data' => '(veri yok)',
+    'ui.diagnostics_dropped' => 'günlük dosyalardan {count} bozuk satır atlandı',
+    'ui.diagnostics_unreadable' => '{count} günlük dosya okunamadı',
 ];

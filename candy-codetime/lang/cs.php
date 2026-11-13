@@ -60,4 +60,6 @@ return [
     'ui.activity_minutes_heading' => 'Denní aktivita (minuty)',
     'ui.activity_heading' => 'Denní aktivita',
     'ui.no_data' => '(žádná data)',
+    'ui.diagnostics_dropped' => 'vynecháno {count} poškozených řádků ze souborů dnů',
+    'ui.diagnostics_unreadable' => 'nelze přečíst {count} soubor(ů) dne',
 ];

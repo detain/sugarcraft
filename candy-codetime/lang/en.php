@@ -60,4 +60,6 @@ return [
     'ui.activity_minutes_heading' => 'Daily activity (minutes)',
     'ui.activity_heading' => 'Daily activity',
     'ui.no_data' => '(no data)',
+    'ui.diagnostics_dropped' => 'dropped {count} corrupt line(s) from the day files',
+    'ui.diagnostics_unreadable' => 'could not read {count} day file(s)',
 ];

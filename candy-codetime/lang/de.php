@@ -60,4 +60,6 @@ return [
     'ui.activity_minutes_heading' => 'Tägliche Aktivität (Minuten)',
     'ui.activity_heading' => 'Tägliche Aktivität',
     'ui.no_data' => '(keine Daten)',
+    'ui.diagnostics_dropped' => '{count} beschädigte Zeilen aus Tagesdateien verworfen',
+    'ui.diagnostics_unreadable' => '{count} Tagesdatei(en) konnten nicht gelesen werden',
 ];

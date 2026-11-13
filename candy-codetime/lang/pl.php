@@ -60,4 +60,6 @@ return [
     'ui.activity_minutes_heading' => 'Dzienna aktywność (minuty)',
     'ui.activity_heading' => 'Dzienna aktywność',
     'ui.no_data' => '(brak danych)',
+    'ui.diagnostics_dropped' => 'pominięto {count} uszkodzonych linii z plików dziennych',
+    'ui.diagnostics_unreadable' => 'nie można odczytać {count} plików dziennych',
 ];

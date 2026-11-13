@@ -60,4 +60,6 @@ return [
     'ui.activity_minutes_heading' => 'النشاط اليومي (دقائق)',
     'ui.activity_heading' => 'النشاط اليومي',
     'ui.no_data' => '(لا بيانات)',
+    'ui.diagnostics_dropped' => 'تم إسقاط {count} سطرًا تالفًا من ملفات اليوم',
+    'ui.diagnostics_unreadable' => 'لم يمكن قراءة {count} ملف يوم',
 ];

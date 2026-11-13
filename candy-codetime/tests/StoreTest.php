@@ -365,6 +365,70 @@ final class StoreTest extends TestCase
         $this->assertSame(['first', 'last'], array_map(static fn($r) => $r->project, $rows));
     }
 
+    public function testDrainedLinesAreAnnouncedOnceWithTheirCounts(): void
+    {
+        // CT-S19: the over-cap drain and the json_decode drain were silent
+        // data loss. Each is now one counted notice per file per read, and
+        // the first offender's position is named.
+        $day    = new \DateTimeImmutable('2026-05-05');
+        $script = sys_get_temp_dir() . '/candy-codetime-drain-' . bin2hex(random_bytes(4)) . '.php';
+        $good   = static fn(string $p): string => json_encode([
+            'time' => (new \DateTimeImmutable('2026-05-05'))->getTimestamp() + 60,
+            'project' => $p, 'language' => 'php', 'file' => $p . '.php', 'duration' => 60, 'tags' => [],
+        ]);
+        $lines = $good('first') . "\n"
+            . str_repeat('x', Store::MAX_LINE_BYTES + 100) . "\n"
+            . "{oops\n"
+            . 'not even close' . "\n"
+            . $good('last') . "\n";
+        file_put_contents($this->tmp . '/2026-05-05.jsonl', $lines);
+        file_put_contents($script, "<?php\n"
+            . 'require ' . var_export(__DIR__ . '/../vendor/autoload.php', true) . ";\n"
+            . '$store = new \\SugarCraft\\CodeTime\\Store(' . var_export($this->tmp, true) . ");\n"
+            . '$rows = $store->loadDay(new \\DateTimeImmutable(' . var_export('2026-05-05', true) . "));\n"
+            . 'fwrite(STDOUT, (string) count($rows));' . "\n");
+        $proc = proc_open([PHP_BINARY, $script], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+        $out = stream_get_contents($pipes[1]);
+        $err = stream_get_contents($pipes[2]);
+        proc_close($proc);
+        $this->assertSame('2', $out);
+        $this->assertSame(2, substr_count($err, "\n"), 'exactly two counted notices, not silence and not a pile-up: ' . $err);
+        $this->assertStringContainsString('dropped 1 over-cap line(s)', $err);
+        $this->assertStringContainsString('dropped 2 unparseable line(s)', $err);
+        $this->assertStringContainsString('(first at line 3)', $err);
+        $this->assertStringContainsString('2026-05-05.jsonl', $err);
+        unlink($script);
+    }
+
+    public function testSilencedStoreKeepsTheTerminalCleanButTheCountsStillDrain(): void
+    {
+        // CT-S19: while the alt screen is live the store must put nothing on
+        // stderr, yet the dashboard footer still needs the numbers.
+        $day = new \DateTimeImmutable('2026-05-06');
+        file_put_contents($this->tmp . '/2026-05-06.jsonl', "{oops\n{again\n");
+        $script = sys_get_temp_dir() . '/candy-codetime-silent-' . bin2hex(random_bytes(4)) . '.php';
+        file_put_contents($script, "<?php\n"
+            . 'require ' . var_export(__DIR__ . '/../vendor/autoload.php', true) . ";\n"
+            . '$store = new \\SugarCraft\\CodeTime\\Store(' . var_export($this->tmp, true) . ");\n"
+            . '$store->silenceDiagnostics();' . "\n"
+            . '$store->loadDay(new \\DateTimeImmutable(' . var_export('2026-05-06', true) . "));\n"
+            . '$chmod = ' . var_export($this->tmp . '/2026-05-07.jsonl', true) . ";\n"
+            . 'file_put_contents($chmod, "x\n");' . "\n"
+            . 'chmod($chmod, 0o000);' . "\n"
+            . '$store->loadDay(new \\DateTimeImmutable(' . var_export('2026-05-07', true) . "));\n"
+            . 'chmod($chmod, 0o600);' . "\n"
+            . '$notes = $store->drainDiagnostics();' . "\n"
+            . 'fwrite(STDOUT, $notes[\'dropped\'] . \'|\' . $notes[\'unreadable\']);' . "\n");
+        $proc = proc_open([PHP_BINARY, $script], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+        $out = stream_get_contents($pipes[1]);
+        $err = stream_get_contents($pipes[2]);
+        proc_close($proc);
+        $this->assertSame('', $err, 'the silent lane keeps every byte off stderr: ' . $err);
+        $this->assertSame('2|1', $out, 'two dropped lines and one unreadable day still counted');
+        $this->assertFileExists($this->tmp . '/2026-05-07.jsonl');
+        unlink($script);
+    }
+
     public function testEnsurePrivateDirTightensAnExistingLooseDirectory(): void
     {
         $dir = $this->tmp . '/loose';
