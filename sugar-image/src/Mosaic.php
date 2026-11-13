@@ -1126,7 +1126,16 @@ final class Mosaic implements IncrementalRenderer
     /**
      * Render a poster that already lives on local disk, with the same
      * Fill-by-default scaling and optional {@see DiskCache} windowing as
-     * {@see poster()}. The cache key is derived from $path in place of a URL.
+     * {@see poster()}. The cache key is derived from $path in place of a
+     * URL — and, unlike the URL legs, from the file's CURRENT identity
+     * (mtime at nanosecond resolution + size, finding 034): a remote URL
+     * is an immutable-enough handle for a TTL-free memo, but a path is a
+     * promise that the bytes under it never change, and they do. An
+     * edited or replaced poster therefore self-invalidates on the next
+     * call instead of serving the old encode forever under a stable key.
+     * Entries for since-deleted generations age out through the normal
+     * eviction cap; a stat failure (file vanished mid-call) falls back
+     * to the bare path — fromFile() is about to throw anyway.
      *
      * @throws \InvalidArgumentException  if the file cannot be read or decoded.
      */
@@ -1136,7 +1145,8 @@ final class Mosaic implements IncrementalRenderer
         ?int $cellH = null,
         ?DiskCache $cache = null,
     ): string {
-        $key = $this->posterCacheKey($path, $cellW, $cellH);
+        $stat = @stat($path);
+        $key = $this->posterCacheKey(self::fileIdentityKeySource($path, $stat), $cellW, $cellH);
         if ($cache !== null) {
             $cached = $cache->get($key);
             if ($cached !== null) {
@@ -1148,6 +1158,22 @@ final class Mosaic implements IncrementalRenderer
         $cache?->put($key, $rendered);
 
         return $rendered;
+    }
+
+    /**
+     * Stamp a path-keyed poster source with the file's current identity
+     * (seconds + nanoseconds + size), or leave it bare when stat failed
+     * — the caller's next step (fromFile) throws on a vanished path, so
+     * the bare leg only ever defines the key of a render that never
+     * happens.
+     *
+     * @param array<string,mixed>|false $stat  the @stat() answer for $path
+     */
+    private static function fileIdentityKeySource(string $path, array|false $stat): string
+    {
+        return $stat === false
+            ? $path
+            : $path . '|@' . $stat['mtime'] . '.' . ($stat['mtime_ns'] ?? 0) . '#' . $stat['size'];
     }
 
     /**

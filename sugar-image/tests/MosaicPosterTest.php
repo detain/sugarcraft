@@ -45,6 +45,16 @@ final class MosaicPosterTest extends TestCase
         }
 
         foreach (glob($this->cacheDir . '/*') ?: [] as $file) {
+            if (is_dir($file)) {
+                // DiskCache roots created INSIDE the sandbox (the 034
+                // arms keep their entries one level down so the naive
+                // sweep below never confuses them with poster copies).
+                foreach ((array) glob($file . '/*') as $inner) {
+                    @unlink((string) $inner);
+                }
+                @rmdir($file);
+                continue;
+            }
             unlink($file);
         }
         @rmdir($this->cacheDir);
@@ -237,13 +247,66 @@ final class MosaicPosterTest extends TestCase
         $cache  = new DiskCache($this->cacheDir);
 
         $out = $mosaic->posterFile($path, 8, 4, $cache);
-        $key = DiskCache::key($path, 8, 4, 'kitty|Fill');
 
+        // Post-034 the file-key leg embeds the file's mtime+size, so the
+        // naive public DiskCache::key() shape can no longer derive the
+        // path-keyed entry — that is the finding: the key is mosaic-
+        // internal by construction until G3 ships a public poster-key
+        // door. The round-trip is pinned behaviourally instead: exactly
+        // one stored entry, and the second call serves stored bytes
+        // without re-encoding (same content, count still 1).
         $this->assertNotSame('', $out);
-        $this->assertSame($out, $cache->get($key));
+        $this->assertSame(1, $cache->count());
 
-        // Second call serves the stored bytes (hit path) — same content.
+        // Second call serves the stored bytes (hit path) — same content,
+        // no second entry written.
         $this->assertSame($out, $mosaic->posterFile($path, 8, 4, $cache));
+        $this->assertSame(1, $cache->count());
+    }
+
+    public function testAnEditedPosterFileSelfInvalidatesItsCachedEncode(): void
+    {
+        // Finding 034: a path-keyed entry used to be an immortal memo of
+        // whatever bytes the path held at first render — replace the file
+        // and the old encode served forever. Now the key carries the
+        // file's identity, so an edit is a miss.
+        $path   = $this->cacheDir . '/poster-edit-me.png';
+        $cache  = new DiskCache($this->cacheDir . '/c');
+        $mosaic = Mosaic::kitty();
+
+        copy(__DIR__ . '/fixtures/4x2.png', $path);
+        $first = $mosaic->posterFile($path, 8, 4, $cache);
+        $this->assertSame(1, $cache->count());
+
+        copy(__DIR__ . '/fixtures/8x4_red.png', $path); // different bytes AND size
+        $second = $mosaic->posterFile($path, 8, 4, $cache);
+
+        $this->assertNotSame($first, $second, 'the edited file must render its own bytes, not the cached generation');
+        $this->assertSame(2, $cache->count(), 'a changed identity is a new key — the old generation ages out through eviction');
+
+        $fresh = Mosaic::kitty()->posterFile($path, 8, 4);
+        $this->assertSame($fresh, $second, 'the miss re-encodes exactly what a cache-less render produces');
+    }
+
+    public function testASizePreservingRewriteWithFreshMtimeStillInvalidates(): void
+    {
+        // The subtle half of 034: a rewrite that happens to land the same
+        // byte count (in-place palette swap, re-compressed same-size
+        // PNG) must not slip through on size alone — mtime (ns-aware)
+        // carries the edit.
+        $path  = $this->cacheDir . '/poster-same-size.png';
+        $cache = new DiskCache($this->cacheDir . '/c');
+
+        copy(__DIR__ . '/fixtures/4x2.png', $path);
+        $mosaic = Mosaic::kitty();
+        $first  = $mosaic->posterFile($path, 8, 4, $cache);
+
+        // Same bytes (so any size-gated logic stays honest) but a mtime
+        // five seconds later: a re-save tool would land here too.
+        touch($path, time() + 5);
+
+        $mosaic->posterFile($path, 8, 4, $cache);
+        $this->assertSame(2, $cache->count(), 'a bumped mtime is a new key even at identical size');
     }
 
     public function testPosterFileWithoutCache(): void
@@ -267,14 +330,19 @@ final class MosaicPosterTest extends TestCase
         $path  = __DIR__ . '/fixtures/4x2.png';
         $cache = new DiskCache($this->cacheDir);
 
+        // Post-034 the path legs fold the file's identity into the key,
+        // so the pre-seed must derive the stamped key through the same
+        // (private) door rather than the naive public DiskCache::key()
+        // shape — that mismatch IS the G3 finding, pinned from the other
+        // side here.
         // The scale-less default must key as Fill (the default poster scale).
-        $cache->put(DiskCache::key($path, 8, 4, 'kitty|Fill'), 'FILL-CACHED');
+        $cache->put($this->posterFileKey(Mosaic::kitty(), $path), 'FILL-CACHED');
         $this->assertSame('FILL-CACHED', Mosaic::kitty()->posterFile($path, 8, 4, $cache));
 
         // A Fit mosaic must NOT collide with that Fill entry…
         $fit = Mosaic::kitty()->withScale(Scale::Fit);
         // …and its own key serves its own entry.
-        $cache->put(DiskCache::key($path, 8, 4, 'kitty|Fit'), 'FIT-CACHED');
+        $cache->put($this->posterFileKey($fit, $path), 'FIT-CACHED');
         $this->assertSame('FIT-CACHED', $fit->posterFile($path, 8, 4, $cache));
     }
 
@@ -291,6 +359,20 @@ final class MosaicPosterTest extends TestCase
         $method->setAccessible(true);
 
         return $method->invoke($mosaic, $url, 8, 4);
+    }
+
+    /**
+     * Same, for the FILE legs: chains the private identity stamp so the
+     * pre-seed matches what posterFile() computes post-034.
+     */
+    private function posterFileKey(Mosaic $mosaic, string $path): string
+    {
+        $stamp = new ReflectionMethod(Mosaic::class, 'fileIdentityKeySource');
+        $stamp->setAccessible(true);
+        $method = new ReflectionMethod(Mosaic::class, 'posterCacheKey');
+        $method->setAccessible(true);
+
+        return $method->invoke($mosaic, $stamp->invoke(null, $path, @stat($path)), 8, 4);
     }
 
     private function startServer(): void
