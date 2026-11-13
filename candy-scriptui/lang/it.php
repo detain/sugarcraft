@@ -42,4 +42,5 @@ return [
     'format.template_unresolved' => 'template: {count} segnaposto espansi a vuoto: {names} — una variabile deve essere impostata e consentita tramite --allow-env.',
     'runtime.empty_input' => 'L\'input non conteneva righe; nulla da fare.',
     'runtime.conflicting_flags' => 'Le opzioni {first} e {second} non possono essere combinate con valori diversi.',
+    'runtime.empty_selection' => 'Nessun elemento selezionato — premere Spazio per spuntare almeno un elemento prima di Invio.',
 ];

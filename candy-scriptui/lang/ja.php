@@ -42,4 +42,5 @@ return [
     'format.template_unresolved' => 'テンプレート: {count} 個のプレースホルダーが空に展開されました: {names} — 変数を設定し --allow-env で許可する必要があります。',
     'runtime.empty_input' => '入力行がありません。操作何もしません。',
     'runtime.conflicting_flags' => 'フラグ {first} と {second} は異なる値と同時に指定できません。',
+    'runtime.empty_selection' => '項目が選択されていません — Enterの前にスペースキーで少なくとも1項目をマークしてください。',
 ];

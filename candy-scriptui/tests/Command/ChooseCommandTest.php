@@ -86,10 +86,13 @@ final class ChooseCommandTest extends TestCase
 
     public function testNoSelectedPrintsMessageOnEmptyMultiSubmit(): void
     {
-        // Multi mode, Enter with nothing ticked: submitted but empty.
+        // Multi mode, Enter with nothing ticked: REFUSED (scriptui-22,
+        // gate G3 default ship) — the --no-selected message lane keeps
+        // its wording and rc 1.
         $model = ChooseModel::fromOptions(['a', 'b'], limit: 2);
         [$model, ] = $model->update(new KeyMsg(KeyType::Enter));
-        $this->assertTrue($model->isSubmitted());
+        $this->assertTrue($model->isRefusedEmpty());
+        $this->assertFalse($model->isSubmitted());
         $this->assertSame([], $model->selectedAll());
 
         $output = new BufferedOutput();
@@ -99,17 +102,21 @@ final class ChooseCommandTest extends TestCase
         $this->assertSame("nothing chosen\n", $output->fetch());
     }
 
-    public function testEmptyMultiSubmitWithoutNoSelectedKeepsLegacySuccess(): void
+    public function testEmptyMultiEnterRefusesInsteadOfLegacySuccess(): void
     {
+        // DISCLOSED contract flip (scriptui-22 / gate G3 default): this
+        // pin used to certify the blank-line + exit 0 "legacy success".
+        // An empty answer from a multi choose is now a refusal — a
+        // pipeline must never read "chose nothing" as "chose the empty
+        // string" (rm $files with nothing in $files).
         $model = ChooseModel::fromOptions(['a', 'b'], limit: 2);
         [$model, ] = $model->update(new KeyMsg(KeyType::Enter));
 
         $output = new BufferedOutput();
         $status = ChooseCommand::renderResult($model, $output, "\n", null);
 
-        // Without the flag, pipelines keep the historical blank-line + 0.
-        $this->assertSame(0, $status);
-        $this->assertSame("\n", $output->fetch());
+        $this->assertSame(1, $status);
+        $this->assertSame('', $output->fetch());
     }
 
     public function testRenderResultPrintsSelectionOnSubmit(): void

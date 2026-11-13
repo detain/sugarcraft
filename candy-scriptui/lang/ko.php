@@ -42,4 +42,5 @@ return [
     'format.template_unresolved' => '템플릿: 자리 표시자 {count}개가 비어 있는 값으로 확장됨: {names} — 변수를 설정하고 --allow-env로 허용해야 합니다.',
     'runtime.empty_input' => '입력에 줄이 없습니다. 작업을 수행하지 않습니다.',
     'runtime.conflicting_flags' => '{first} 및 {second} 플래그는 다른 값과 함께 사용할 수 없습니다.',
+    'runtime.empty_selection' => '선택된 항목이 없습니다 — Enter 전에 Space로 최소 한 항목을 표시하십시오.',
 ];

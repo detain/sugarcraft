@@ -42,4 +42,5 @@ return [
     'format.template_unresolved' => 'szablon: {count} symboli zastępczych rozwinięto do pustych: {names} — zmienna musi być ustawiona i dozwolona przez --allow-env.',
     'runtime.empty_input' => 'Wejście nie zawierało linii; nic do zrobienia.',
     'runtime.conflicting_flags' => 'Opcji {first} i {second} nie można łączyć z różnymi wartościami.',
+    'runtime.empty_selection' => 'Nie wybrano żadnego elementu — naciśnij Spację, aby zaznaczyć co najmniej jeden element przed Enterem.',
 ];

@@ -42,4 +42,5 @@ return [
     'format.template_unresolved' => 'القالب: {count} عنصر نائب توسّع إلى فراغ: {names} — يجب ضبط المتغير والسماح به عبر --allow-env.',
     'runtime.empty_input' => 'المدخل لا يحتوي على أسطر؛ لا شيء للقيام به.',
     'runtime.conflicting_flags' => 'لا يمكن دمج الخيارين {first} و{second} بقيم مختلفة.',
+    'runtime.empty_selection' => 'لم يتم تحديد أي عنصر — اضغط مسافة لتحديد عنصر واحد على الأقل قبل الإدخال.',
 ];

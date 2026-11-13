@@ -55,4 +55,5 @@ return [
     'format.template_unresolved' => 'plantilla: {count} marcador(es) expandido(s) a vacío: {names} — una variable debe estar definida y permitida con --allow-env.',
     'runtime.empty_input' => 'La entrada no contenía líneas; nada que hacer.',
     'runtime.conflicting_flags' => 'Las opciones {first} y {second} no se pueden combinar con valores diferentes.',
+    'runtime.empty_selection' => 'Ningún elemento seleccionado — pulse Espacio para marcar al menos un elemento antes de Intro.',
 ];

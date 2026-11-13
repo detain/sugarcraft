@@ -157,6 +157,19 @@ final class ChooseCommand extends Command
         ?string $noSelectedMessage,
     ): int {
         $empty = $final->isMulti() ? $final->selectedAll() === [] : $final->selected() === null;
+        // scriptui-22 (gate G3 default ship): a zero-selection Enter in
+        // multi mode is a REFUSAL (rc 1 + plain notice), never a
+        // "successful" empty answer that rm-erases nothing. With an
+        // explicit --no-selected message the operator's own wording
+        // wins, same rc.
+        if ($final->isRefusedEmpty()) {
+            if ($noSelectedMessage !== null) {
+                $output->write($noSelectedMessage . "\n", false, OutputInterface::OUTPUT_RAW);
+            } else {
+                fwrite(STDERR, Lang::t('runtime.empty_selection') . "\n");
+            }
+            return Command::FAILURE;
+        }
         // Without --no-selected an empty-but-submitted selection keeps the
         // historical behavior (blank line, exit 0) so existing pipelines
         // don't suddenly start failing.

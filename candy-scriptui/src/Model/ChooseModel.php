@@ -99,6 +99,9 @@ final class ChooseModel implements Model
         public readonly array $checked   = [],
         public readonly bool $ordered    = false,
         public readonly bool $interrupted = false,
+        // scriptui-22: multi-mode Enter pressed with zero ticks — the
+        // session ends refused (rc 1 + STDERR notice), not "succeeded".
+        public readonly bool $refusedEmpty = false,
     ) {}
 
     public function init(): ?\Closure
@@ -108,7 +111,7 @@ final class ChooseModel implements Model
 
     public function update(Msg $msg): array
     {
-        if ($this->submitted || $this->aborted) {
+        if ($this->submitted || $this->aborted || $this->refusedEmpty) {
             return [$this, null];
         }
         if ($msg instanceof KeyMsg) {
@@ -120,6 +123,16 @@ final class ChooseModel implements Model
                     return [$this->copy(aborted: true, interrupted: $msg->ctrl), Cmd::quit()];
                 }
                 if ($msg->type === KeyType::Enter && !empty($this->list->visibleItems())) {
+                    // scriptui-22 (finding 020, gate G3 default ship): in
+                    // multi mode Enter with NOTHING ticked used to submit
+                    // an EMPTY selection with exit 0 — `files=$(choose
+                    // --limit 9 -- *.bak); rm $files` "succeeded" having
+                    // chosen nothing. The refusal ends the session with a
+                    // plain diagnostic and rc 1 instead of laundering a
+                    // no-op as a successful answer.
+                    if ($this->multi && $this->selectedCount() === 0) {
+                        return [$this->copy(refusedEmpty: true), Cmd::quit()];
+                    }
                     return [$this->copy(submitted: true), Cmd::quit()];
                 }
                 // Multi-select: Space toggles the highlighted item.
@@ -141,7 +154,7 @@ final class ChooseModel implements Model
             $cap = $this->limit > 0 ? "/{$this->limit}" : '';
             $body .= "\n[" . $count . $cap . " selected]";
         }
-        if (!$this->submitted && !$this->aborted) {
+        if (!$this->submitted && !$this->aborted && !$this->refusedEmpty) {
             // In-app keybinding discoverability (gum's list help line).
             $body .= "\n" . Lang::t('hints.choose');
         }
@@ -258,6 +271,7 @@ final class ChooseModel implements Model
     public function isAborted(): bool   { return $this->aborted; }
     public function isInterrupted(): bool { return $this->interrupted; }
     public function isMulti(): bool     { return $this->multi; }
+    public function isRefusedEmpty(): bool { return $this->refusedEmpty; }
 
     /** Toggle the highlighted index in multi mode. */
     private function toggle(): self
@@ -297,6 +311,7 @@ final class ChooseModel implements Model
         ?bool $aborted = null,
         ?array $checked = null,
         ?bool $interrupted = null,
+        ?bool $refusedEmpty = null,
     ): self {
         return new self(
             list:       $list       ?? $this->list,
@@ -307,6 +322,7 @@ final class ChooseModel implements Model
             checked:    $checked    ?? $this->checked,
             ordered:    $this->ordered,
             interrupted: $interrupted ?? $this->interrupted,
+            refusedEmpty: $refusedEmpty ?? $this->refusedEmpty,
         );
     }
 
