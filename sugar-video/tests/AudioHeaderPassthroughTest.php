@@ -278,9 +278,9 @@ final class AudioHeaderPassthroughTest extends TestCase
             'a multi-@ authority must not leak its second fragment',
         );
         self::assertSame(
-            'https://cdn.example.test/clip.mp4?sig=a1b2',
-            (string) $redact->invoke(null, 'https://cdn.example.test/clip.mp4?sig=a1b2'),
-            'a credential-free URL passes through untouched',
+            'https://cdn.example.test/clip.mp4?start=10&quality=2',
+            (string) $redact->invoke(null, 'https://cdn.example.test/clip.mp4?start=10&quality=2'),
+            'a credential-free query passes through untouched (L75 recast: this arm used to cite `?sig=` as the benign example — `sig` IS a presigned secret; see testPresignedQuerySecretsAreScrubbedForDisplay)',
         );
         self::assertSame(
             '/tmp/local-clip.mp4',
@@ -292,6 +292,88 @@ final class AudioHeaderPassthroughTest extends TestCase
             (string) $redact->invoke(null, 'https://host/a' . '@' . 'b.png'),
             'an @ inside the PATH is not userinfo and must survive',
         );
+    }
+
+    /**
+     * @testdox L75: presigned query secrets are scrubbed for display, benign parameters survive
+     *
+     * The signed-stream feature carries its credential in the QUERY
+     * (X-Amz-Signature / sig / token / SAS pairs), where the userinfo mask
+     * never reaches — so every display surface that echoes a source must run
+     * the deny-list scrub too. Display-only law: the scrubbed text exists to
+     * be LOGGED; the spawned child keeps the real URL, which the argv-built
+     * FfmpegDecoderTest and AudioPlayer header-passthrough arms already pin
+     * from the other side.
+     */
+    public function testPresignedQuerySecretsAreScrubbedForDisplay(): void
+    {
+        $redact = new ReflectionMethod(AudioPlayer::class, 'redactCredentials');
+        $redact->setAccessible(true);
+
+        $signed = 'https://cdn.example.test/clip.mp4'
+            . '?X-Amz-Signature=ABC123secret&X-Amz-Credential=KEYID%2F2026&size=10'
+            . '&token=tok-456&sig=zzz9&se=2026-01-01T00%3A00%3A00Z&api_key=k7#frag-keeps-anchor';
+
+        $masked = (string) $redact->invoke(null, $signed);
+
+        foreach (['ABC123secret', 'KEYID%2F2026', 'tok-456', 'zzz9', '2026-01-01T00%3A00%3A00Z', 'k7'] as $secret) {
+            self::assertStringNotContainsString($secret, $masked, "the value {$secret} must never reach a display surface");
+        }
+        self::assertStringContainsString('X-Amz-Signature=(redacted)', $masked);
+        self::assertStringContainsString('size=10', $masked, 'layout parameters are not secrets and must survive for context');
+        self::assertStringContainsString('#frag-keeps-anchor', $masked, 'the fragment rides untouched');
+
+        // Both masks compose: userinfo AND query.
+        $both = (string) $redact->invoke(null, 'http://user:pw@example.test/a.mp4?token=xyz&x=1');
+        self::assertSame('http://***@example.test/a.mp4?token=(redacted)&x=1', $both);
+
+        // A keyless parameter and an empty-value secret param are both honest.
+        self::assertSame(
+            'https://h/p?bareflag&token=(redacted)',
+            (string) $redact->invoke(null, 'https://h/p?bareflag&token='),
+            'an empty secret value still lands as (redacted); a flagless name survives',
+        );
+
+        // Case-insensitivity without case destruction: the NAME is echoed as sent.
+        self::assertSame(
+            'https://h/p?SiG=(redacted)&Expires=(redacted)',
+            (string) $redact->invoke(null, 'https://h/p?SiG=abc&Expires=99'),
+        );
+    }
+
+    /**
+     * @testdox L75: the header-drop log surface never echoes a presigned value
+     *
+     * The finding's second half names two surfaces: decoder.ffmpeg_exit and
+     * the header-drop log, both of which quote the SOURCE into display text.
+     * (The open-time ffmpeg-missing refusal deliberately names no source at
+     * all — no leak surface there by design.) The drop-log arm is driven
+     * exactly like the sibling userinfo round-2 case above it: local source
+     * + headers ⇒ logged-and-dropped, and the presigned query in the path
+     * must arrive scrubbed.
+     */
+    public function testTheHeaderDropLogSurfaceScrubbsTheSignature(): void
+    {
+        $logged = $this->captureErrorLog(function (): void {
+            $decoder = new \SugarCraft\Video\Decode\FfmpegDecoder();
+            try {
+                $decoder->open(
+                    '/tmp/sv-l75-missing.mp4?X-Amz-Signature=LEAKCANARY42&size=10',
+                    8, 4, 10.0,
+                    null, 0.0,
+                    ['Authorization' => 'Bearer x'],
+                );
+            } catch (\RuntimeException) {
+                // the missing-file refusal after the drop-log is expected —
+                // this arm pins WHAT THE LOG SAID, not the refusal path
+            } finally {
+                $decoder->close();
+            }
+        });
+
+        self::assertStringNotContainsString('LEAKCANARY42', $logged, 'no presigned value may ride the log text');
+        self::assertStringContainsString('X-Amz-Signature=(redacted)', $logged, 'the log still identifies which stream dropped its headers');
+        self::assertStringContainsString('size=10', $logged, 'layout parameters survive for context');
     }
 
     /**

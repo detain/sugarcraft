@@ -94,15 +94,64 @@ class AudioPlayer
      * notice prints the source verbatim, password included, straight into error_log.
      * Refusing to send credentials and then logging them is no refusal at all.
      */
+    /**
+     * Query parameter names whose VALUE is a credential and must never reach
+     * a display surface (SV-L75), matched case-insensitively against the
+     * lower-cased key. Presigned object-store URLs — the documented
+     * signed-stream feature — carry their secrets in the QUERY, where the
+     * userinfo pass cannot see them: AWS SigV4 (x-amz-*), GCS signing
+     * (x-goog-*, Signature/Expires pairs), the bare short forms (sig/sas
+     * style), Azure SAS (se/sk/sp/sv/sr/st/skt/sas arrive as one signed
+     * bundle), plus the generic token/key/auth/secret/password/jwt family
+     * numbered tails (`api_key_2`) included. Matching is anchored per
+     * parameter and runs only after a `?` — a path segment can never match.
+     */
+    private const SECRET_QUERY_KEY_PATTERN = '/^(sign|signature|token|key|apikey|api[-_]?key'
+        . '|auth|auth[-_]?token|jwt|secret|password|credential|expires'
+        . '|access[-_]?token|refresh[-_]?token|session|session[-_]?id|sessiontoken'
+        . '|x-amz[-_a-z0-9]*|x-goog[-_a-z0-9]*|x-azure[-_a-z0-9]*'
+        . '|aws[-_]?token|google[-_]?access[-_]?token|sig(?:nature)?v[24]|sig'
+        . '|se|sk|sp|sv|sr|st|skt|sas|spr)$/';
+
     public static function redactCredentials(string $source): string
     {
         // Public because FfmpegDecoder redacts the same source for the same
         // reason (header-drop log, decode-failure message) — one masking
         // rule, two surfaces, no drift.
+        //
+        // DISPLAY-ONLY LAW: the result feeds error_log and refusal messages,
+        // never argv — the spawned child keeps the real URL, so the query
+        // scrub can never break a signature.
+        //
         // Greedy within the authority (the class excludes `/`, so it cannot cross
         // into the path): a non-conforming URL with several `@` signs masks ALL of
         // the userinfo, not just the run before the first `@`.
-        return (string) preg_replace('#^(\w+://)[^/]*@#', '$1***@', $source);
+        $masked = (string) preg_replace('#^(\w+://)[^/]*@#', '$1***@', $source);
+
+        $queryAt = strpos($masked, '?');
+        if ($queryAt === false) {
+            return $masked;
+        }
+
+        $fragmentAt = strpos($masked, '#', $queryAt);
+        $head = substr($masked, 0, $queryAt + 1);
+        $query = $fragmentAt === false ? substr($masked, $queryAt + 1) : substr($masked, $queryAt + 1, $fragmentAt - $queryAt - 1);
+        $fragment = $fragmentAt === false ? '' : substr($masked, $fragmentAt);
+
+        $parts = [];
+        foreach (explode('&', $query) as $pair) {
+            $eq = strpos($pair, '=');
+            if ($eq === false) {
+                $parts[] = $pair; // flagless parameter: no value to hide
+                continue;
+            }
+            $name = substr($pair, 0, $eq);
+            $parts[] = preg_match(self::SECRET_QUERY_KEY_PATTERN, strtolower($name)) === 1
+                ? $name . '=(redacted)'
+                : $pair;
+        }
+
+        return $head . implode('&', $parts) . $fragment;
     }
 
     /**
