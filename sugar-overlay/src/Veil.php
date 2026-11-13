@@ -680,6 +680,10 @@ final class Veil
      * composite() consumes the bundle; coveredCells() folds the painted
      * rect from it. Two arithmetics that could drift is how zone-lift
      * hosts get lied to — so there is exactly one (sugar-overlay-012).
+     * The canvas anchors project against is the backdrop's measured
+     * bounding box — widest line × line count — not the terminal
+     * (sugar-overlay-011); a modal that must center the SCREEN pads or
+     * squares its canvas to true dimensions first.
      *
      * @return array{canvasEmpty: bool, bgLines: list<string>, bgSegs: array<int, list<array{string,int}>>, bgWidths: list<int>, bgWidth: int, bgHeight: int, fgLines: list<string>, fgSegs: array<int, list<array{string,int}>>, fgWidths: list<int>, fgWidth: int, fgHeight: int, x: int, y: int}
      */

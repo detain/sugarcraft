@@ -88,6 +88,13 @@ composite(string $foreground, string $background,
 - `$xOffset` / `$yOffset` shift from the anchor in columns/rows
   (`+` right/down, `-` left/up).
 
+The canvas the anchors project against is the backdrop's measured
+bounding box — widest line × line count — not your terminal's canvas. A
+ragged backdrop centers against its longest row; if a modal must center
+the SCREEN, pad or square the canvas to its true dimensions before
+handing it over (the workaround every consumer discovered the hard way
+was exactly this).
+
 Offsets are applied verbatim — they are never clamped, and can push part
 of the block (or all of it) off the canvas. Fully off-canvas yields just
 the dimmed backdrop; pushing further changes nothing. The axes are also
