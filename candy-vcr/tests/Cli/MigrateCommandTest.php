@@ -11,6 +11,7 @@ use SugarCraft\Vcr\Cli\MigrateCommand;
 use SugarCraft\Vcr\Event;
 use SugarCraft\Vcr\EventKind;
 use SugarCraft\Vcr\Format\JsonlFormat;
+use SugarCraft\Vcr\Format\RelativeFormat;
 use SugarCraft\Vcr\Tests\Support\Stream;
 
 /**
@@ -107,6 +108,77 @@ final class MigrateCommandTest extends TestCase
 
             $this->assertSame(1, $exit);
             $this->assertStringContainsString('invalid JSON', $err);
+        } finally {
+            @unlink($path);
+        }
+    }
+
+    public function testRelativeDtCassetteIsRefusedByNameNotAsCorruption(): void
+    {
+        // VCR-S34 (finding 060): a valid RelativeFormat (dt) cassette used
+        // to hit the plain JsonlFormat reader and come back as
+        // "missing 't' or 'k'" - corruption wording for healthy tape.
+        // The migrate door must sniff the dt spelling and refuse honestly.
+        $path = tempnam(sys_get_temp_dir(), 'cv-migrate-');
+        $cassette = new Cassette(
+            new CassetteHeader(
+                version: 1,
+                createdAt: '2026-05-07T10:00:00Z',
+                cols: 80,
+                rows: 24,
+                runtime: 'test',
+                timestampMode: CassetteHeader::TIMESTAMP_MODE_RELATIVE,
+            ),
+            [new Event(t: 0.0, kind: EventKind::Quit, payload: [])],
+        );
+        (new RelativeFormat())->write($cassette, $path);
+
+        try {
+            $stdout = Stream::memory('w+');
+            $stderr = Stream::memory('w+');
+            $exit = (new MigrateCommand())->run([$path], $stdout, $stderr);
+            rewind($stdout);
+            rewind($stderr);
+            $out = (string) stream_get_contents($stdout);
+            $err = (string) stream_get_contents($stderr);
+
+            $this->assertSame(2, $exit);
+            $this->assertStringContainsString('relative-mode (dt) cassettes are not migratable yet', $err);
+            $this->assertStringNotContainsString('missing', $err, 'no corruption wording for a valid dt tape');
+            $this->assertSame('', $out);
+        } finally {
+            @unlink($path);
+        }
+    }
+
+    public function testCassetteNewerThanTheBuildIsRefusedByNamedCapError(): void
+    {
+        // VCR-S34 (finding 093 cap-transparency leg): a cassette above
+        // this build's read-cap must never reach the "already at the
+        // latest" door - CassetteHeader's ctor refuses it by name, and
+        // migrate surfaces that honest error, not corruption wording and
+        // not a false "latest" claim.
+        $path = tempnam(sys_get_temp_dir(), 'cv-migrate-');
+        $header = json_encode([
+            'v' => 3,
+            'created' => '2026-05-07T10:00:00Z',
+            'cols' => 80,
+            'rows' => 24,
+            'runtime' => 'test',
+        ]);
+        file_put_contents($path, $header . "\n" . json_encode(['t' => 0.0, 'k' => 'quit']) . "\n");
+        try {
+            $stdout = Stream::memory('w+');
+            $stderr = Stream::memory('w+');
+            $exit = (new MigrateCommand())->run([$path], $stdout, $stderr);
+            rewind($stdout);
+            rewind($stderr);
+            $out = (string) stream_get_contents($stdout);
+            $err = (string) stream_get_contents($stderr);
+
+            $this->assertSame(1, $exit);
+            $this->assertStringContainsString('newer than this build can read', $err);
+            $this->assertStringNotContainsString('already at the latest', $out);
         } finally {
             @unlink($path);
         }

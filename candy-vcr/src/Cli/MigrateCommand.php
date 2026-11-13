@@ -15,7 +15,10 @@ use SugarCraft\Vcr\Migration\MigrationRunner;
  * omitted the file is migrated in-place after creating a .bak backup.
  * With --dry-run the cassette is validated but no files are written.
  * Input is a JSONL cassette; the other formats the loader knows (cast,
- * YAML, tape, gzip) are refused rather than fed to the JSON parser.
+ * YAML, tape, gzip) are refused rather than fed to the JSON parser, and
+ * relative-mode (`dt`) cassettes — which the loader happily reads via
+ * RelativeFormat — are refused by name because the migrators only speak
+ * the absolute-t wire (until the dt format decision lands).
  */
 final class MigrateCommand implements DocumentedCommand
 {
@@ -88,6 +91,16 @@ final class MigrateCommand implements DocumentedCommand
             return 2;
         }
 
+        // Relative-mode (`dt`) cassettes are the loader's RelativeFormat
+        // family — perfectly valid files the plain JsonlFormat reader below
+        // used to report as "missing 't' or 'k'", corruption wording for
+        // healthy tape (finding 060). The migrators speak absolute wire, so
+        // refuse the mode by name until the dt format decision ships.
+        if (self::looksRelative($inputPath)) {
+            fwrite($stderr, Lang::t('cli.err', ['verb' => 'migrate', 'message' => Lang::t('migrate.relative_unsupported')]) . "\n");
+            return 2;
+        }
+
         try {
             $format = new JsonlFormat();
             $cassette = $format->read($inputPath);
@@ -99,11 +112,22 @@ final class MigrateCommand implements DocumentedCommand
         $originalVersion = $cassette->header->version;
 
         if (!$runner->canMigrate($cassette)) {
+            // Wording truth (finding 093): reaching this door means the
+            // cassette passed the header's read-cap, so its version is at
+            // or below what this build knows; with the default chain the
+            // only no-step state IS the cap itself (v2), making "already
+            // at the latest" the true statement. A cassette NEWER than the
+            // build is refused one layer up by CassetteHeader's ctor with
+            // a named "newer than this build can read" error - the cap
+            // transparency this finding asked for already lives there,
+            // pinned by MigrateCommandTest.
             fwrite($stdout, Lang::t('migrate.already_latest', ['version' => $originalVersion]) . "\n");
             return 0;
         }
 
-        $migrated = $runner->migrate($cassette, $dryRun);
+        $result = $runner->migrateWithStatus($cassette, $dryRun);
+        $migrated = $result['cassette'];
+        $truncated = $result['truncated'];
         $targetVersion = $migrated->header->version;
 
         if ($dryRun) {
@@ -112,6 +136,9 @@ final class MigrateCommand implements DocumentedCommand
                 if ($m['source'] >= $originalVersion && $m['target'] <= $targetVersion) {
                     fwrite($stdout, "  {$m['source']} → {$m['target']}: {$m['description']}\n");
                 }
+            }
+            if ($truncated) {
+                fwrite($stderr, Lang::t('migrate.truncated', ['to' => $targetVersion]) . "\n");
             }
             return 0;
         }
@@ -188,7 +215,42 @@ final class MigrateCommand implements DocumentedCommand
         }
 
         fwrite($stdout, Lang::t('migrate.done', ['from' => $originalVersion, 'to' => $targetVersion, 'count' => $cassette->eventCount()]) . "\n");
+        if ($truncated) {
+            // Distinguishable half-work (finding 118): the output written
+            // is NOT at the newest version the chain could have reached.
+            fwrite($stderr, Lang::t('migrate.truncated', ['to' => $targetVersion]) . "\n");
+        }
         return 0;
+    }
+
+    /**
+     * The `"dt"` content sniff {@see \SugarCraft\Vcr\Format\CassetteLoader::loadJsonl()}
+     * uses, mirrored at the migrate door: skip the header line, ask whether
+     * the first event row carries a dt field. Unreadable input says no —
+     * the reader below names that failure properly.
+     */
+    private static function looksRelative(string $path): bool
+    {
+        $handle = @fopen($path, 'rb');
+        if ($handle === false) {
+            return false;
+        }
+        try {
+            $sawHeader = false;
+            while (($line = fgets($handle)) !== false) {
+                if (trim($line) === '') {
+                    continue;
+                }
+                if (!$sawHeader) {
+                    $sawHeader = true;
+                    continue;
+                }
+                return str_contains($line, '"dt"');
+            }
+        } finally {
+            fclose($handle);
+        }
+        return false;
     }
 
     /**

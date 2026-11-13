@@ -17,6 +17,9 @@ use SugarCraft\Vcr\CassetteHeader;
  */
 final class MigrationRunner
 {
+    /** Safety guard against misconfigured migrators looping the chain forever. */
+    private const MAX_ITERATIONS = 10;
+
     /** @var list<CassetteMigrator> */
     private array $migrators;
 
@@ -41,11 +44,26 @@ final class MigrationRunner
      */
     public function migrate(Cassette $cassette, bool $dryRun = false, ?int $maxVersion = null): Cassette
     {
+        return $this->migrateWithStatus($cassette, $dryRun, $maxVersion)['cassette'];
+    }
+
+    /**
+     * Migrate and report whether the chain actually reached its cap.
+     *
+     * A chain that stops early — no migrator handles the next step, or the
+     * iteration guard trips — used to look like a complete migration from
+     * the caller's seat (finding 118). `truncated` makes the difference
+     * observable: the result still returned "a migrated cassette", which
+     * is true but not the whole truth.
+     *
+     * @return array{cassette: Cassette, truncated: bool}
+     */
+    public function migrateWithStatus(Cassette $cassette, bool $dryRun = false, ?int $maxVersion = null): array
+    {
         $current = $cassette;
         $iterations = 0;
-        $maxIterations = 10; // safety guard against misconfigured migrators
 
-        while ($iterations < $maxIterations) {
+        while ($iterations < self::MAX_ITERATIONS) {
             $found = false;
             foreach ($this->migrators as $migrator) {
                 if ($migrator->canMigrate($current)) {
@@ -63,7 +81,29 @@ final class MigrationRunner
             $iterations++;
         }
 
-        return $current;
+        $cap = $maxVersion ?? $this->highestTargetVersion();
+        // Truncated = the result sits below the cap it was aimed at: a
+        // missing step in the chain, or the iteration guard tripping mid
+        // climb. A cassette that lands exactly on the cap (or starts above
+        // it — nothing to do) is complete, and an explicit maxVersion the
+        // chain reaches is a deliberate ceiling, not a stall.
+        $truncated = $current->header->version < $cap;
+
+        return ['cassette' => $current, 'truncated' => $truncated];
+    }
+
+    /**
+     * Highest target version any registered migrator reaches — the cap
+     * this build can migrate TO (finding 093: callers must be able to say
+     * "this build migrates up to v{max}" instead of guessing "latest").
+     */
+    public function highestTargetVersion(): int
+    {
+        $max = 0;
+        foreach ($this->migrators as $migrator) {
+            $max = max($max, $migrator->targetVersion());
+        }
+        return $max;
     }
 
     /**

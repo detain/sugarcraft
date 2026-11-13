@@ -149,6 +149,83 @@ final class MigrationRunnerTest extends TestCase
         $this->assertSame($v2->header->version, $v2again->header->version);
     }
 
+    public function testMigrateWithStatusReportsCompleteChainAsNotTruncated(): void
+    {
+        $runner = new MigrationRunner();
+        $status = $runner->migrateWithStatus($this->buildV1Cassette());
+
+        $this->assertSame(2, $status['cassette']->header->version);
+        $this->assertFalse($status['truncated'], 'v1 -> v2 reaches the registered cap');
+    }
+
+    public function testMigrateWithStatusFlagsAStalledChainAsTruncated(): void
+    {
+        // VCR-S34 (finding 118): with a gap in the registered steps, the
+        // cassette lands below the cap and used to look "migrated". The
+        // status must say truncated.
+        $runner = new MigrationRunner([
+            new V1ToV2Migrator(),
+            self::gapMigrator(5, 6),
+        ]);
+        $status = $runner->migrateWithStatus($this->buildV1Cassette());
+
+        $this->assertSame(2, $status['cassette']->header->version, 'chain stops at the gap');
+        $this->assertTrue($status['truncated'], '2 < highest target 6 - half-work, name it');
+    }
+
+    public function testMigrateWithStatusRespectsAnExplicitCeilingWithoutTruncation(): void
+    {
+        // Reaching a caller-chosen maxVersion is completion, not a stall.
+        $runner = new MigrationRunner([
+            new V1ToV2Migrator(),
+            self::gapMigrator(2, 3),
+        ]);
+        $status = $runner->migrateWithStatus($this->buildV1Cassette(), maxVersion: 2);
+
+        $this->assertSame(2, $status['cassette']->header->version);
+        $this->assertFalse($status['truncated'], 'the chain landed exactly on the requested ceiling');
+    }
+
+    public function testHighestTargetVersionNamesTheBuildCap(): void
+    {
+        $this->assertSame(2, (new MigrationRunner())->highestTargetVersion());
+        $this->assertSame(0, (new MigrationRunner([]))->highestTargetVersion());
+        $this->assertSame(
+            6,
+            (new MigrationRunner([new V1ToV2Migrator(), self::gapMigrator(5, 6)]))->highestTargetVersion(),
+        );
+    }
+
+    /** A migrator that only re-stamps the version, for gap-chain fixtures. */
+    private static function gapMigrator(int $source, int $target): CassetteMigrator
+    {
+        return new class ($source, $target) implements CassetteMigrator {
+            public function __construct(private int $source, private int $target)
+            {
+            }
+            public function canMigrate(Cassette $cassette): bool
+            {
+                return $cassette->header->version === $this->source;
+            }
+            public function migrate(Cassette $cassette, bool $dryRun = false): Cassette
+            {
+                return new Cassette($cassette->header->withVersion($this->target), $cassette->events);
+            }
+            public function sourceVersion(): int
+            {
+                return $this->source;
+            }
+            public function targetVersion(): int
+            {
+                return $this->target;
+            }
+            public function describe(): string
+            {
+                return "v{$this->source} -> v{$this->target} fixture";
+            }
+        };
+    }
+
     private function buildV1Cassette(): Cassette
     {
         return new Cassette(
