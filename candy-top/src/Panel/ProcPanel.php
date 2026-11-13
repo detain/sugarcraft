@@ -15,6 +15,7 @@ use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Dashboard\Plot\ProcRow\ProcGraphTracker;
 use SugarCraft\Top\Collect\Gpu\Settled;
 use SugarCraft\Top\Collect\GpuSnapshot;
+use SugarCraft\Top\Collect\Process;
 use SugarCraft\Top\Collect\ProcessControl;
 use SugarCraft\Top\Collect\ProcSnapshot;
 use SugarCraft\Top\Collect\TunableProcList;
@@ -572,13 +573,20 @@ final class ProcPanel implements Panel, ClickCapture
         }
         $carry = [];
         $fresh = [];
+        $usage = $this->gpuUsage();
         foreach ($snap->processes as $p) {
             $cpu = $p->cpu >= 0.0 ? $p->cpu : ($this->carry[$p->pid] ?? 0.0);
             $carry[$p->pid] = $cpu;
             // io is never carried: an UNMEASURED rate means the collector
             // was not reading io (columns off), the file is unreadable
             // (EACCES) or this is the pid's first io sample — all "-".
-            $fresh[$p->pid] = $this->entry($p, $cpu);
+            $prior = isset($previous[$p->pid]) ? $this->entries[$previous[$p->pid]] : null;
+            // Unchanged rows ride their previous object (candy-top-102):
+            // rebuilding all n ProcEntry objects per tick measured
+            // ~14 µs/entry — 36 ms at 4k procs, 114 ms at 8k, freezing the
+            // panel on exactly the big hosts the fold is for. Only rows
+            // whose inputs actually moved are rebuilt.
+            $fresh[$p->pid] = self::carried($prior, $p, $cpu, $usage) ?? $this->entry($p, $cpu);
         }
         // Keep the previous order (btop sorts its persistent vector in
         // place); new pids join at the end in scan order.
@@ -653,11 +661,36 @@ final class ProcPanel implements Panel, ClickCapture
     }
 
     /** A sampled process as a row: the #1008-carried cpu, io as sampled, #1552 GPU use joined by pid. */
-    private function entry(\SugarCraft\Top\Collect\Process $p, float $cpu): ProcEntry
+    private function entry(Process $p, float $cpu): ProcEntry
     {
         $usage = $this->gpuUsage();
 
         return ProcEntry::of($p, $cpu, $p->ioRead, $p->ioWrite, $usage->utilization($p->pid), $usage->memory($p->pid));
+    }
+
+    /**
+     * The previous entry for a row whose every input is unchanged — the
+     * identical object, or null to rebuild (candy-top-102). ProcEntry::of()
+     * is a pure function of these inputs, so equal inputs mean the new
+     * object would be a field-by-field copy of the carried one; `prefix`,
+     * `depth` and `collapsed` are re-stamped by the tree fold below for
+     * everyone, carried or not.
+     *
+     * @param float $cpu the carried-cpu value the rebuild would receive
+     */
+    private static function carried(?ProcEntry $prior, Process $p, float $cpu, GpuUsage $usage): ?ProcEntry
+    {
+        if ($prior === null || $prior->process != $p) {
+            return null;
+        }
+        if ($prior->cpu !== max(0.0, $cpu)) {
+            return null;
+        }
+        if ($prior->gpu !== max(0.0, min(100.0, $usage->utilization($p->pid)))) {
+            return null;
+        }
+
+        return $prior->gpuMem === max(0, $usage->memory($p->pid)) ? $prior : null;
     }
 
     // ---- keys ---------------------------------------------------------------
