@@ -78,9 +78,42 @@ final class StyleSheetTest extends TestCase
     public function testForUnknownKindReturnsEmptyStyle(): void
     {
         $sheet = StyleSheet::base();
-        // Just verify it doesn't crash and returns a valid style.
+        // SM-S55 (MDTEST-08): assert the unasserted byte no-op, not just the
+        // type — a regression that gave unknown kinds a visible style flips
+        // red here, while the old instanceof leg passed on any Style.
         $style = $sheet->for(BlockKind::Table, 0);
         $this->assertInstanceOf(Style::class, $style);
+        $this->assertSame('x', $style->render('x'), 'unknown kinds must render their input byte-identically');
+    }
+
+    public function testForDepthAboveAllRegisteredEntriesReturnsEmptyStyle(): void
+    {
+        // SM-S55 (MDTEST-08): drive the two no-hit legs of for() directly —
+        // public construction cannot reach them because base() seeds every
+        // BlockKind case at depth 0. Sheet one: kind absent entirely (early
+        // return). Sheet two: kind present, every entry deeper than the
+        // requested depth (walk-up miss). Both legs must yield the exact
+        // byte no-op, which the old instanceof check never asserted.
+        $inject = static function (array $styles): StyleSheet {
+            $ref  = new \ReflectionClass(StyleSheet::class);
+            $sheet = $ref->newInstanceWithoutConstructor();
+            $ref->getProperty('styles')->setValue($sheet, $styles);
+            return $sheet;
+        };
+
+        $bold = Style::new()->bold();
+
+        $missingKind = $inject([])->for(BlockKind::Heading, 0);
+        $this->assertFalse($missingKind->isBold());
+        $this->assertSame('x', $missingKind->render('x'), 'absent kinds must fall to the empty style byte-exactly');
+
+        $deepOnly = $inject(['Heading' => [3 => $bold]])->for(BlockKind::Heading, 1);
+        $this->assertFalse($deepOnly->isBold(), 'a walk-up miss must NOT inherit the deeper entry');
+        $this->assertSame('x', $deepOnly->render('x'), 'a walk-up miss must fall to the empty style byte-exactly');
+
+        // Control leg: the same sheet answers at-or-below the entry, so the
+        // two asserts above cannot be flattered by a stubbed-to-empty for().
+        $this->assertTrue($inject(['Heading' => [3 => $bold]])->for(BlockKind::Heading, 3)->isBold());
     }
 
     public function testStylesForReturnsAllDepths(): void
