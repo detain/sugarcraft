@@ -24,8 +24,8 @@ namespace SugarCraft\ColorProfile;
  * 1 ms; re-converting the palette would add ~40 % on top.
  *
  * Palette table: indices 0-15 are the {@see StandardColors} ANSI-16 set;
- * 16-231 the canonical xterm 6×6×6 cube (channel levels 0, 95, 135, 175, 215,
- * 255 — {@see Color::CUBE_LEVELS}); 232-255 the 8+10n gray ramp. The table is
+ * 16-231 are the canonical xterm 6×6×6 cube (channel levels 0, 95, 135, 175,
+ * 215, 255 — {@see Color::CUBE_LEVELS}); 232-255 are the 8+10n gray ramp. The table is
  * built straight from {@see Color::fromAnsi256Index()} so the matcher's
  * palette, the encoder's rounding targets, and sugar-core's Util\Color::ansi256
  * share ONE source of truth (a cross-library pin guards this — the old local

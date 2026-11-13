@@ -42,8 +42,8 @@ use SugarCraft\ColorProfile\Probe\TerminfoParser;
  *   in parity with the sync leg's promotion gate
  *
  * Every spawned child is bounded: a wall-clock ceiling timer escalates
- * TERM → KILL and the exit handler cancels BOTH rungs (spawn failures never
- * reach a handler — they are caught at start(), CP-14), so a settled
+ * SIGTERM → SIGKILL and the exit handler cancels BOTH rungs (spawn failures
+ * never reach a handler — they are caught at start(), CP-14), so a settled
  * caller can never be followed by a stray SIGKILL. Each child runs under the
  * shared minimal environment ({@see InfocmpBinary::childEnvironment()}) —
  * `TERM` and a fixed `PATH`, never the parent's `TERMINFO`/`TERMINFO_DIRS`/
@@ -83,7 +83,7 @@ final class AsyncProbe
     /**
      * Wall-clock budget for one infocmp child. infocmp reads a local terminfo
      * file; anything still running after this is wedged and gets escalated
-     * TERM → KILL while the caller receives the chain answer.
+     * SIGTERM → SIGKILL while the caller receives the chain answer.
      */
     private const PROBE_TIMEOUT_SECONDS = 5.0;
 
@@ -288,7 +288,7 @@ final class AsyncProbe
         });
 
         // The child's stderr must be drained or infocmp can block writing to
-        // a full pipe and die on the TERM→KILL ladder over a cosmetic warning.
+        // a full pipe and die on the SIGTERM→SIGKILL ladder over a cosmetic warning.
         // A bounded prefix is retained; everything past the cap is discarded.
         $stderr = '';
         $process->stderr?->on('data', function ($chunk) use (&$stderr): void {

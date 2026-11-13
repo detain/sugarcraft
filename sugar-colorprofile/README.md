@@ -150,7 +150,7 @@ Maintenance):
 
 1. `CLICOLOR_FORCE=1` → TrueColor (overrides every env leg — and since CP-07 outranks the step-0 stream gate too)
 2. `FORCE_COLOR` (non-empty) → level: numeric 3+ → TrueColor (as do `true`/`yes`/`on` in any case), `2` → Ansi256, `1` → Ansi; every other spelling (`0`/`false`/`no`/`off`/…) → `Ascii` floor (colorless — color codes dropped, decoration kept)
-3. `NO_COLOR` (set and **non**-empty; `""` = unset — the NO_COLOR standard treats any present-and-not-empty value as "off" — content never matters) → the colorless `Ascii` rung — color codes dropped, decoration (`\x1b[1m`/`\x1b[4m`) kept; this is what `Palette::withProfile(ColorProfile::Ascii)` pins, so the pin is now the same answer the env already gives
+3. `NO_COLOR` (set and **non**-empty; `""` = unset — the NO_COLOR standard treats any present-and-not-empty value as "off" — content never matters) → the colorless `Ascii` rung — color codes dropped, decoration (`\x1b[1m`/`\x1b[4m`) kept; the explicit way to pin this same floor is in Color Degradation below
 4. `CLICOLOR=0` → `Ascii` (the colorless rung)
 5. `TERM=dumb` (case-insensitive) → `Ascii` (the colorless rung)
 6. `TMUX`/`STY` set + base TERM begins `screen` → Ansi256 — the multiplexer cap
@@ -389,13 +389,17 @@ $plain = $matcher->withError(new Color(12, 34, 56), $none);  // null accumulator
 The 256-entry and 16-entry palette Lab tables are memoized statically (fingerprint-guarded
 against `StandardColors` reassignments, so the cache can never freeze a stale table), so a warm
 CIEDE2000 search costs ~1 ms on a stock laptop; recomputing the 256 sRGB→Lab
-conversions per search would add an estimated ≈40 % on top — the figure is the
+conversions per search would add an estimated 40 % on top — the figure comes from the
 `NearestColor` header note, while `NearestColorTest` pins the absolute warm-search
 cost and the memoization itself, not the ratio.
 
-The matcher's 256-entry table is the canonical xterm palette: slots 0-15 are the
-ANSI-16 set, 16-231 the 6×6×6 cube at channel levels 0/95/135/175/215/255, and
-232-255 the `8+10n` gray ramp — derived from `Color::fromAnsi256Index()` and
+The matcher's 256-entry table is the canonical xterm palette, slot for slot:
+
+- slots 0-15 are the ANSI-16 set,
+- slots 16-231 are the 6×6×6 cube at channel levels 0/95/135/175/215/255, and
+- slots 232-255 are the `8+10n` gray ramp —
+
+all derived from `Color::fromAnsi256Index()` and
 cross-pinned to sugar-core's decoder (`Ansi256TableParityTest`). Earlier
 versions shipped a private even-51-step cube; that table never matched a real
 terminal and is gone.
@@ -434,7 +438,7 @@ if (Probe::reducedMotion()) {
 
 Detection's inputs are the env vars in the precedence table above — and,
 through phase 2, the terminfo database the `infocmp` child consults. The
-binary is launched from a fixed absolute-path roster, and every exec surface hands the child a minimal environment built in one place (`Probe\InfocmpBinary::childEnvironment()`: the queried `TERM` and a fixed `PATH` only). `TERMINFO`, `TERMINFO_DIRS` and `HOME` all steer `infocmp`'s lookup (a search path you can inspect with `infocmp -1 -D`), and inheriting them from a parent whose environment an attacker controls would hand that attacker the database; they are therefore never passed. The stripped child environment is the correct security default, but it also silently defeats the classic `tic`-compiled TrueColor entry living in `~/.terminfo`: the child's search will not find it, so export `COLORTERM=truecolor` instead — that rides the env ladder directly (step 7). What remains outside this library's reach is the database itself: an attacker who can write to the system terminfo directories still owns the answer, so the name-position guard in `Probe\TerminfoParser` protects the *parse* from a hostile database but cannot vouch for the *source*. Treat every detection answer as a rendering hint, never as an authorization signal: enabling a feature, granting trust, or selecting a transport on the basis of a `Tc`/`RGB`/`Sixel` capability names a privilege the environment holds, not one this library holds.
+binary is launched from a fixed absolute-path roster, and every exec surface hands the child a minimal environment built in one place (`Probe\InfocmpBinary::childEnvironment()`: the queried `TERM` and a fixed `PATH` only). `TERMINFO`, `TERMINFO_DIRS` and `HOME` all steer `infocmp`'s lookup (a search path you can inspect with `infocmp -1 -D`), and inheriting them from a parent whose environment an attacker controls would hand that attacker the database; they are therefore never passed. The stripped child environment is the correct security default, but it also silently defeats the classic `tic`-compiled TrueColor entry living in `~/.terminfo`: the child's search will not find it, so export `COLORTERM=truecolor` instead — that rides the env ladder directly (step 7). What remains outside this library's reach is the database itself: an attacker who can write to the system terminfo directories still controls what the probe reports, so the name-position guard in `Probe\TerminfoParser` protects the *parse* from a hostile database but cannot vouch for the *source*. Treat every detection answer as a rendering hint, never as an authorization signal. A detected capability describes what the environment provides, not what this library guarantees: choosing a feature, granting trust, or selecting a transport on the basis of a `Tc`/`RGB`/`Sixel` answer opts into a promise the environment made — one this library cannot enforce.
 
 ## ColorProfile Enum
 
@@ -574,25 +578,30 @@ Beyond the env ladder above, the library exposes a richer capability surface:
   on the loop you pass in: called without one, the promise resolves in-place
   through the bounded sync face (an implicit singleton pickup would park the
   child on a loop its caller may never run, settling only in somebody else's
-  `Loop::run()`). Every child is bounded (5 s ceiling → TERM, 1 s grace →
-  KILL, the KILL timer cancelled when the child exits first, both pipes
-  drained into keep-a-prefix 8 KiB buffers so a chatty child can neither
-  wedge on a full pipe nor grow the accumulator without end), a spawn that
-  fails to launch releases its cap slot and settles from the chain instead
-  of throwing, and slot reclamation kills AND reaps children whose loop was
-  abandoned — so the public `AsyncProbe::MAX_CONCURRENT_PROBES = 4` cap can
-  never wedge, and abandoned probes leave neither zombies nor pipe fds
-  behind. **Every async settle answers from the detection chain, except the
-  TrueColor promotion read from a `Tc`-declaring child dump** — which itself
-  only runs on the Ansi and Ansi256 rungs and sees at most the capped
-  prefix; no blocking exec ever runs on the loop thread. The no-loop
-  fallback is the sync `Probe::colorProfile()`; its phase-2 `infocmp` exec
-  rides the same bounded door as the child (above), but it still blocks the
-  calling thread for up to that ceiling — inside a live loop, pass the loop
-  and stay off the tick path. Env suppression, a missing infocmp binary, an
-  unset or `dumb` TERM, a TERM whose shape infocmp would read as an option,
-  a chain rung other than Ansi/Ansi256, the cap being reached, or a
-  timeout/kill all settle to the chain's answer. Results are advisory only.
+  `Loop::run()`). Env suppression, a missing infocmp binary, an unset or
+  `dumb` TERM, a TERM whose shape infocmp would read as an option, a chain
+  rung other than Ansi/Ansi256, the cap being reached, or a timeout/kill all
+  settle to the chain's answer. Results are advisory only.
+
+  Every child is bounded: a 5 s wall-clock ceiling sends SIGTERM, a 1 s grace
+  escalates to SIGKILL, and the exit handler cancels the SIGKILL timer when
+  the child exits first. Both pipes drain into keep-a-prefix 8 KiB buffers,
+  so a chatty child can neither wedge on a full pipe nor grow the accumulator
+  without end. A spawn that fails to launch releases its concurrency slot and
+  settles from the chain instead of throwing, and slot reclamation kills AND
+  reaps children whose loop was abandoned — so the public
+  `AsyncProbe::MAX_CONCURRENT_PROBES = 4` cap can never wedge, and abandoned
+  probes leave neither zombies nor pipe fds behind.
+
+  Every async settle answers from the detection chain, with one carve-out:
+  the TrueColor promotion read from a `Tc`-declaring child dump — which
+  itself only runs on the Ansi and Ansi256 rungs and sees at most the capped
+  prefix. No blocking exec ever runs on the loop thread.
+
+  The no-loop fallback is the sync `Probe::colorProfile()`. Its phase-2
+  `infocmp` exec rides the same bounded door as the child (previous
+  paragraph), but it still blocks the calling thread for up to that ceiling —
+  inside a live loop, pass the loop and stay off the tick path.
 
 ## Overriding detection
 
@@ -610,7 +619,7 @@ Beyond the env ladder above, the library exposes a richer capability surface:
 - The **empty** map is not hermetic: `Env::resolve([])` falls through to the
   ambient environment — `[]` means "use what the process already has", never
   "no environment". A test wanting a controlled env must inject at least one
-  key (this trap was hit live during review).
+  key.
 
 ## Deprecation: StandardColors mutable statics
 
