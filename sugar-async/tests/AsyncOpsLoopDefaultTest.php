@@ -16,7 +16,7 @@ use function React\Promise\resolve;
 /**
  * B8 (M10): withTimeout()/withDeadline() share the library-wide loop
  * convention — pass null for the loop and the helpers bind the shared
- * Loop::get(), exactly like retry()/debounce()/throttle()/onPending().
+ * Loop::get(), exactly like retry()/debounce()/throttle()/pendingNotice()/boundWait().
  */
 final class AsyncOpsLoopDefaultTest extends TestCase
 {

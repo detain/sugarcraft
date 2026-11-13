@@ -15,10 +15,11 @@ use function React\Promise\resolve;
 /**
  * Static helpers for async operations on top of ReactPHP.
  *
- * withTimeout(), withDeadline(), cancellable(), retry(), all(), race() and
- * onPending() are stateless helpers. debounce() and throttle() return
- * invokable Subscription handles that retain mutable timer/cooldown state
- * across calls; singleFlight() returns a stateful coalescing closure.
+ * withTimeout(), withDeadline(), cancellable(), retry(), all(), race(),
+ * pendingNotice() and boundWait() are stateless helpers. debounce() and
+ * throttle() return invokable Subscription handles that retain mutable
+ * timer/cooldown state across calls; singleFlight() returns a stateful
+ * coalescing closure.
  *
  * Nothing here blocks the caller: every wait is expressed as a promise,
  * and every timer is armed on a supplied or shared event loop.
@@ -388,7 +389,7 @@ final class AsyncOps
      * exactly once when it settles.
      *
      * A leader whose promise never settles blocks the key forever: bound the
-     * worker itself ({ withDeadline()}/{ onPending()}) when the loader
+     * worker itself ({@see withDeadline()}/{@see boundWait()}) when the loader
      * may stall. Flight state is per-process — never share a singleFlight
      * closure across pcntl_fork: a child's settles do not propagate, so the
      * parent's slot leaks.
@@ -942,17 +943,59 @@ final class AsyncOps
     }
 
     /**
-     * Watch a promise for slowness. While $promise is still pending after
-     * $seconds, the $onPending notice runs ONCE (a "taking longer than
-     * expected" spinner hint). The returned promise tracks the inner one
-     * either way — the notice neither cancels nor abandons the work, and the
-     * E646 law holds: this is an advisory tick, never a wall-clock killer of
-     * user-paced operations. With $onPending null the wait itself is bounded:
-     * the returned promise rejects with a TimeoutException (still pending)
-     * instead, and the inner keeps running like under withTimeout().
+     * Announce slowness without interrupting the wait. If $promise is still
+     * pending after $seconds, $onPending runs ONCE (a "taking longer than
+     * expected" spinner hint). The returned promise tracks the inner one —
+     * the notice neither cancels nor abandons the work, and the E646 law
+     * holds: this is an advisory tick, never a wall-clock killer of
+     * user-paced operations. A hook that throws is logged, never propagated.
      *
-     * @param null|callable(): void $onPending  Advisory notice; throws are logged, never propagated
+     * @param callable(): void $onPending  Required advisory notice
      * @return PromiseInterface<mixed>
+     */
+    public static function pendingNotice(
+        PromiseInterface $promise,
+        float $seconds,
+        callable $onPending,
+        ?LoopInterface $loop = null,
+    ): PromiseInterface {
+        if ($seconds <= 0 || !is_finite($seconds)) {
+            throw new \InvalidArgumentException('Pending notice seconds must be a positive finite number');
+        }
+
+        return self::watchPending($promise, $seconds, $onPending, null, $loop);
+    }
+
+    /**
+     * Bound the wait without stopping the work. If $promise is still pending
+     * after $seconds, the returned promise rejects with a TimeoutException
+     * whose message names (still pending) — the inner operation keeps
+     * running, like under withTimeout(). These are the bounded-wait
+     * semantics for user-paced operations: this library puts no blanket
+     * wall-clock timeout on operations whose pace belongs to the user. To
+     * announce a slow wait instead of ending it, use {@see pendingNotice()}.
+     *
+     * @return PromiseInterface<mixed>
+     */
+    public static function boundWait(
+        PromiseInterface $promise,
+        float $seconds,
+        ?LoopInterface $loop = null,
+        ?string $label = null,
+    ): PromiseInterface {
+        if ($seconds <= 0 || !is_finite($seconds)) {
+            throw new \InvalidArgumentException('Bounded wait seconds must be a positive finite number');
+        }
+
+        return self::watchPending($promise, $seconds, null, $label, $loop);
+    }
+
+    /**
+     * @deprecated REMOVED-IN: 2.0.0 — the dual contract is split into
+     *             {@see pendingNotice()} (advisory hook) and
+     *             {@see boundWait()} (bounded rejection) so the mode is
+     *             visible at the call site. This shim delegates: a hook
+     *             goes to pendingNotice(), a null hook to boundWait().
      */
     public static function onPending(
         PromiseInterface $promise,
@@ -961,15 +1004,36 @@ final class AsyncOps
         ?LoopInterface $loop = null,
         ?string $label = null,
     ): PromiseInterface {
-        if ($seconds <= 0 || !is_finite($seconds)) {
-            throw new \InvalidArgumentException('Pending notice seconds must be a positive finite number');
-        }
+        \trigger_error(
+            'AsyncOps::onPending(): the dual-contract helper is deprecated — call pendingNotice() with a hook or boundWait() without one (support ends in 2.0.0).',
+            \E_USER_DEPRECATED,
+        );
 
+        return $onPending !== null
+            ? self::pendingNotice($promise, $seconds, $onPending, $loop)
+            : self::boundWait($promise, $seconds, $loop, $label);
+    }
+
+    /**
+     * Shared timer machinery for pendingNotice() and boundWait(): the hook
+     * arm announces and keeps waiting, the no-hook arm rejects with a
+     * TimeoutException at expiry while the inner runs on.
+     *
+     * @param null|callable(): void $onPending
+     * @return PromiseInterface<mixed>
+     */
+    private static function watchPending(
+        PromiseInterface $promise,
+        float $seconds,
+        ?callable $onPending,
+        ?string $label,
+        ?LoopInterface $loop,
+    ): PromiseInterface {
         $loop ??= \React\EventLoop\Loop::get();
         $settled = false;
         $timer = null;
 
-        $deferred = new Deferred(static function () use (&$settled, &$timer, $loop): never {
+        $deferred = new Deferred(static function () use (&$settled, &$timer, $loop, $label): never {
             if ($settled !== true) {
                 $settled = true;
                 if ($timer !== null) {
@@ -977,7 +1041,7 @@ final class AsyncOps
                     $timer = null;
                 }
             }
-            throw new OperationCancelledException('Async operation cancelled');
+            throw new OperationCancelledException(self::cancellationMessage($label), label: $label);
         });
 
         $timer = $loop->addTimer($seconds, static function () use (&$settled, &$timer, $loop, $onPending, $deferred, $seconds, $label): void {

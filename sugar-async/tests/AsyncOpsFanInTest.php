@@ -99,12 +99,12 @@ final class AsyncOpsFanInTest extends TestCase
         $this->assertSame([0.01, 0.02], $this->intervals);
     }
 
-    public function test_on_pending_notices_once_and_keeps_waiting(): void
+    public function test_pending_notice_fires_once_and_keeps_waiting(): void
     {
         $loop = $this->clockwork();
         $inner = new Deferred();
         $notices = 0;
-        $promise = AsyncOps::onPending($inner->promise(), 0.5, static function () use (&$notices): void {
+        $promise = AsyncOps::pendingNotice($inner->promise(), 0.5, static function () use (&$notices): void {
             $notices++;
         }, $loop);
         $this->fireAll();
@@ -114,13 +114,13 @@ final class AsyncOpsFanInTest extends TestCase
         $this->assertSame([], $this->live);
     }
 
-    public function test_on_pending_never_notices_a_quick_settle(): void
+    public function test_pending_notice_never_notices_a_quick_settle(): void
     {
         $loop = $this->clockwork();
         $inner = new Deferred();
         $inner->resolve('early');
         $notices = 0;
-        $promise = AsyncOps::onPending($inner->promise(), 0.5, static function () use (&$notices): void {
+        $promise = AsyncOps::pendingNotice($inner->promise(), 0.5, static function () use (&$notices): void {
             $notices++;
         }, $loop);
         $this->assertSame([], $this->live);
@@ -128,11 +128,11 @@ final class AsyncOpsFanInTest extends TestCase
         $this->assertSame(0, $notices);
     }
 
-    public function test_on_pending_without_a_notice_abandons_by_timeout(): void
+    public function test_bound_wait_abandons_the_wait_by_timeout(): void
     {
         $loop = $this->clockwork();
         $inner = new Deferred();
-        $promise = AsyncOps::onPending($inner->promise(), 0.5, null, $loop);
+        $promise = AsyncOps::boundWait($inner->promise(), 0.5, $loop);
         $this->fireAll();
         $error = null;
         $promise->then(null, static function (\Throwable $e) use (&$error): void {
@@ -143,12 +143,70 @@ final class AsyncOpsFanInTest extends TestCase
         $this->assertSame(0.5, $error->seconds());
     }
 
-    public function test_on_pending_refuses_unbounded_notice_windows(): void
+    public function test_pending_notice_refuses_unbounded_notice_windows(): void
     {
         foreach ([0.0, -1.0, \NAN, \INF] as $seconds) {
             $this->expectException(\InvalidArgumentException::class);
             $this->expectExceptionMessage('Pending notice seconds must be a positive finite number');
-            AsyncOps::onPending(resolve(1), $seconds, null, $this->clockwork());
+            AsyncOps::pendingNotice(resolve(1), $seconds, static function (): void {}, $this->clockwork());
+        }
+    }
+
+    public function test_bound_wait_refuses_unbounded_wait_windows(): void
+    {
+        foreach ([0.0, -1.0, \NAN, \INF] as $seconds) {
+            $this->expectException(\InvalidArgumentException::class);
+            $this->expectExceptionMessage('Bounded wait seconds must be a positive finite number');
+            AsyncOps::boundWait(resolve(1), $seconds, $this->clockwork());
+        }
+    }
+
+    /**
+     * SA-06 BC contract: the deprecated onPending() shim must delegate
+     * one-to-one — a hook lands on the pendingNotice() (advisory) arm, a
+     * null hook on the boundWait() (rejection) arm — and each call raises
+     * exactly one E_USER_DEPRECATED naming both settled helpers.
+     */
+    public function test_on_pending_shim_delegates_one_to_one_to_the_split_names(): void
+    {
+        $notices = [];
+        \set_error_handler(static function (int $severity, string $message) use (&$notices): bool {
+            $notices[] = [$severity, $message];
+
+            return true;
+        });
+        try {
+            $loop = $this->clockwork();
+            $inner = new Deferred();
+            $fired = 0;
+            $advisory = AsyncOps::onPending($inner->promise(), 0.5, static function () use (&$fired): void {
+                $fired++;
+            }, $loop);
+            $this->fireAll();
+            $this->assertSame(1, $fired, 'hook arm behaves as pendingNotice()');
+            $inner->resolve('v');
+            $this->assertSame('v', $this->outcome($advisory), 'advisory arm never rejects on expiry');
+
+            $loop2 = $this->clockwork();
+            $hung = new Deferred();
+            $bounded = AsyncOps::onPending($hung->promise(), 0.5, null, $loop2);
+            $this->fireAll();
+            $error = null;
+            $bounded->then(null, static function (\Throwable $e) use (&$error): void {
+                $error = $e;
+            });
+            $this->assertInstanceOf(TimeoutException::class, $error, 'null hook arm behaves as boundWait()');
+            $this->assertStringContainsString('(still pending)', $error->getMessage());
+        } finally {
+            \restore_error_handler();
+        }
+
+        $this->assertCount(2, $notices, 'one deprecation per shim call');
+        foreach ($notices as [$severity, $message]) {
+            $this->assertSame(\E_USER_DEPRECATED, $severity);
+            $this->assertStringContainsString('pendingNotice()', $message);
+            $this->assertStringContainsString('boundWait()', $message);
+            $this->assertStringContainsString('2.0.0', $message);
         }
     }
 

@@ -67,8 +67,8 @@ $loop->addTimer(0.06, static function () use ($loop, $guard, &$seen): void {
         ->then(static function (string $first) use (&$seen): void {
             $seen[] = "race:$first";
         });
-    // A still-pending promise with a null hook rejects with a named TimeoutException.
-    AsyncOps::onPending((new Deferred())->promise(), 0.01, null, $loop)
+    // A still-pending promise under a bounded wait rejects with a named TimeoutException.
+    AsyncOps::boundWait((new Deferred())->promise(), 0.01, $loop)
         ->then(null, static function (\Throwable $e) use (&$seen, $loop, $guard): void {
             $seen[] = 'pending:' . $e::class;
             $loop->cancelTimer($guard);

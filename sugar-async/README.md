@@ -11,7 +11,7 @@ Shared async utilities for SugarCraft — cancellation tokens, subscriptions, di
 - **Cancellation tokens** — `CancellationSource` / `CancellationToken` / `Cancellable` for coordinated cancellation across async operations
 - **Subscriptions** — `Subscription` handles from `onCancel()` / `debounce()` / `throttle()` and `Subscriptions::compose()` for managing lifecycles in Model–Update–View apps
 - **Suspension** — `Suspended` value-object for commands paused across update cycles
-- **AsyncOps** — static helpers: `withTimeout`, `withDeadline`, `cancellable`, `singleFlight`, `retry`, `all`, `race`, `onPending`, `debounce`, `throttle`
+- **AsyncOps** — static helpers: `withTimeout`, `withDeadline`, `cancellable`, `singleFlight`, `retry`, `all`, `race`, `pendingNotice`, `boundWait`, `debounce`, `throttle`
 - **AsyncCache** — promise-library-only async cache-aside: monotonic TTL, in-flight loader coalescing, optional serve-stale-on-error, optional entry bound with introspection
 
 ### Why async in a terminal app
@@ -75,7 +75,7 @@ further guarantees:
   logger-injection seam, so a TUI tearing down mid-frame should expect a stray
   interleaved line to corrupt the in-progress render. The hook-failure sites are
   the cancellation callbacks (`CancellationToken`), the `retry` `onRetry:` and
-  `onPending` hooks (`AsyncOps`), and `Subscriptions::disposeAll()`.
+  `pendingNotice` hooks (`AsyncOps`), and `Subscriptions::disposeAll()`.
   `CancellationToken::none()` is a shared never-cancelled
   sentinel for "no token here" plumbing: its `onCancel()` hands back an
   already-spent handle and nothing is ever retained.
@@ -182,8 +182,8 @@ echo $msg, "\n";
 
 ## AsyncOps
 
-`withTimeout`, `withDeadline`, `cancellable`, `retry`, `all`, `race`, and
-`onPending` are stateless helpers; `debounce` and `throttle` return **invokable
+`withTimeout`, `withDeadline`, `cancellable`, `retry`, `all`, `race`,
+`pendingNotice` and `boundWait` are stateless helpers; `debounce` and `throttle` return **invokable
 `Subscription` handles** that retain timer/cooldown state; `singleFlight` returns
 a stateful coalescing closure. Where a helper takes a `LoopInterface`, passing
 `null` binds the shared `Loop::get()`.
@@ -200,7 +200,8 @@ wait ends, and what happens when the caller cancels the wrapper:
 | `singleFlight` | One flight per key settles for every joined caller. | The join is not abandonable by design — wrap the join in `cancellable()` when the wait itself must be abandonable. |
 | `debounce` / `throttle` | A superseded or suppressed call resolves `null` — nothing failed; with `trailing: true` the last suppressed call still fires. | `unsubscribe()` drops the pending burst and any queued trailing call, each resolving `null`. |
 | `all` / `race` | The fan-in mirrors its members: `all()` waits for every one, `race()` settles with the first to finish; members are never cancelled. | The fan-in has no cancel path of its own — cancel the member promises directly. |
-| `onPending` | With a hook, the notice fires after N seconds and the wait continues. Without a hook, the wrapper rejects with a `TimeoutException` whose message names `(still pending)` while the inner keeps running. | The wrapper releases the notice timer and rejects with `OperationCancelledException`. |
+| `pendingNotice` | The notice fires after N seconds and the wait continues — a slow operation is announced, never interrupted. | The wrapper releases the notice timer and rejects with `OperationCancelledException`. |
+| `boundWait` | At expiry the wrapper rejects with a `TimeoutException` whose message names `(still pending)` while the inner keeps running. | The wrapper releases the wait timer and rejects with `OperationCancelledException`. |
 
 - `withTimeout(promise, seconds, loop:, label:)` — rejects with `TimeoutException`
   after N seconds. The inner operation is NOT cancelled and keeps running to
@@ -275,14 +276,20 @@ wait ends, and what happens when the caller cancels the wrapper:
   `race` settles with the first outcome — on empty input it THROWS
   `InvalidArgumentException` synchronously at the call site (no promise is ever
   produced to carry a rejection; a race nobody entered has no answer to give).
-- `onPending(promise, seconds, onPending:, ?loop:, label:)` — pure notice
-  combinator: if the promise is still pending after N seconds the advisory hook
-  runs once ("Still waiting on login…"); the inner is never cancelled by this
-  helper. Without a hook the derived promise rejects with a `TimeoutException`
-  naming the abandonment ("… (still pending)") while the inner keeps running —
-  bounded-wait semantics for user-paced actions: the wait lifts at N seconds,
-  the inner is never killed — this library puts no blanket wall-clock timeout on
+- `pendingNotice(promise, seconds, onPending, loop:)` — pure notice combinator:
+  if the promise is still pending after N seconds the REQUIRED advisory hook
+  runs once ("Still waiting on login…") and the wait continues; the inner is
+  never cancelled by this helper, and a hook that throws is logged, never
+  propagated.
+- `boundWait(promise, seconds, loop:, label:)` — bounded wait that stops the
+  waiting, not the work: if the promise is still pending after N seconds the
+  derived promise rejects with a `TimeoutException` naming the abandonment
+  ("… (still pending)") while the inner keeps running — bounded-wait
+  semantics for user-paced actions: the wait lifts at N seconds, the inner is
+  never killed — this library puts no blanket wall-clock timeout on
   operations whose pace belongs to the user.
+  The deprecated `onPending()` shim delegates to this pair (hook →
+  `pendingNotice()`, no hook → `boundWait()`) and leaves in 2.0.
 
 Both failure modes surface as `RuntimeException` subclasses — `TimeoutException`
 for timeouts (with structured `seconds()` / `label()` fields),
@@ -303,7 +310,8 @@ Bad arguments are refused **synchronously at the call site** with an
 `InvalidArgumentException` — no promise is ever produced to carry the error, so
 these throws escape a bare `->then()` chain. Verified guard set:
 
-- `withTimeout`, `withDeadline`, `onPending`, `debounce`, and `throttle` refuse
+- `withTimeout`, `withDeadline`, `pendingNotice`, `boundWait`, `debounce`, and
+  `throttle` refuse
   a seconds value that is not positive and finite.
 - `retry` refuses `attempts < 1`, a non-positive-finite `baseBackoffSeconds`, a
   non-positive-finite `maxTotalSeconds` (when set), and a negative or

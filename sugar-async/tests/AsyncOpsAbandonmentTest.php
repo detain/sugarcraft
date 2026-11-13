@@ -493,4 +493,50 @@ final class AsyncOpsAbandonmentTest extends TestCase
         $this->assertSame('user-sync', $error->label(), 'the label arrives as data, not message archaeology');
         $this->assertStringContainsString('user-sync', $error->getMessage());
     }
+
+    public function testAbandoningBoundWaitCarriesTheLabel(): void
+    {
+        $loop = new StreamSelectLoop();
+        $inner = new Deferred();
+
+        $wrapped = AsyncOps::boundWait(promise: $inner->promise(), seconds: 30.0, loop: $loop, label: 'login');
+        $this->assertSame(1, self::armedTimers($loop), 'the wait timer is armed');
+
+        $error = null;
+        $wrapped->then(null, static function (\Throwable $e) use (&$error): void {
+            $error = $e;
+        });
+
+        $wrapped->cancel();
+
+        $this->assertInstanceOf(OperationCancelledException::class, $error);
+        $this->assertSame('Operation "login" cancelled', $error->getMessage());
+        $this->assertSame('login', $error->label());
+        $this->assertSame(0, self::armedTimers($loop), 'abandoning releases the wait timer');
+    }
+
+    public function testAbandoningPendingNoticeKeepsTheGenericCancellationMessage(): void
+    {
+        $loop = new StreamSelectLoop();
+        $inner = new Deferred();
+
+        $wrapped = AsyncOps::pendingNotice(
+            promise: $inner->promise(),
+            seconds: 30.0,
+            onPending: static function (): void {},
+            loop: $loop,
+        );
+
+        $error = null;
+        $wrapped->then(null, static function (\Throwable $e) use (&$error): void {
+            $error = $e;
+        });
+
+        $wrapped->cancel();
+
+        $this->assertInstanceOf(OperationCancelledException::class, $error);
+        $this->assertSame('Async operation cancelled', $error->getMessage());
+        $this->assertNull($error->label(), 'the advisory arm takes no label');
+        $this->assertSame(0, self::armedTimers($loop));
+    }
 }
