@@ -1070,4 +1070,80 @@ final class CliTest extends TestCase
         $this->assertStringContainsString('goalproj', $res['stdout']);
         $this->assertSame('', $res['stderr']);
     }
+
+    private function removeTree(string $dir): void
+    {
+        if (!is_dir($dir)) {
+            return;
+        }
+        foreach (array_merge(glob($dir . '/*') ?: [], glob($dir . '/.*') ?: []) as $child) {
+            if ($child === $dir . '/.' || $child === $dir . '/..') {
+                continue;
+            }
+            is_dir($child) && !is_link($child) ? $this->removeTree($child) : @unlink($child);
+        }
+        @rmdir($dir);
+    }
+
+    public function testPushAutoDetectsProjectAndLanguageInsideAGitRepo(): void
+    {
+        $repo = $this->workDir . '/myrepo';
+        mkdir($repo . '/.git', 0700, true);
+        mkdir($repo . '/src', 0700, true);
+        file_put_contents($repo . '/src/main.php', "<?php\n");
+
+        $res = $this->runCli(['push', 'src/main.php', '60'], $repo, ['CANDY_CODETIME_DIR' => $this->dataDir]);
+        $this->assertSame(0, $res['exit']);
+        $this->assertStringContainsString('recorded 60s of myrepo (php)', $res['stdout']);
+
+        $dump = $this->runCli(['export', 'json'], $repo, ['CANDY_CODETIME_DIR' => $this->dataDir]);
+        $rows = json_decode($dump['stdout'], true);
+        $this->assertSame('myrepo', $rows[0]['project']);
+        $this->assertSame('php', $rows[0]['language']);
+        $this->assertSame('src/main.php', $rows[0]['file']);
+        $this->removeTree($repo);
+    }
+
+    public function testExplicitSlotsOutrankTheDetectors(): void
+    {
+        $repo = $this->workDir . '/myrepo';
+        mkdir($repo . '/.git', 0700, true);
+        file_put_contents($repo . '/a.py', "x\n");
+
+        $res = $this->runCli(['push', 'chosen', 'custom', 'a.py', '30'], $repo, ['CANDY_CODETIME_DIR' => $this->dataDir]);
+        $this->assertSame(0, $res['exit']);
+        $this->assertStringContainsString('recorded 30s of chosen (custom)', $res['stdout']);
+        $this->removeTree($repo);
+    }
+
+    public function testAPathShapedShortFormCarriesDurationAndTags(): void
+    {
+        file_put_contents($this->workDir . '/notes.md', "# hi\n");
+        $res = $this->runCli(['push', 'notes.md', '120', 'reading,fun'], $this->workDir, ['CANDY_CODETIME_DIR' => $this->dataDir]);
+        $this->assertSame(0, $res['exit']);
+        $dump = $this->runCli(['export', 'json'], null, ['CANDY_CODETIME_DIR' => $this->dataDir]);
+        $rows = json_decode($dump['stdout'], true);
+        $this->assertSame('markdown', $rows[0]['language']);
+        $this->assertSame([120], [$rows[0]['duration']]);
+        $this->assertSame(['reading', 'fun'], $rows[0]['tags']);
+    }
+
+    public function testAnUnresolvableShortFormFilesUnderUnknownInsteadOfGuessing(): void
+    {
+        $res = $this->runCli(['push', $this->workDir . '/x/q.zzz'], null, ['CANDY_CODETIME_DIR' => $this->dataDir]);
+        $this->assertSame(0, $res['exit']);
+        // The walk stops above 'x' (the only directory in the path that is
+        // not shared geography); language stays unknown, never invented.
+        $this->assertStringContainsString(' (unknown)', $res['stdout']);
+    }
+
+    public function testTheTwoSlotTypoStillHitsTheMissingArgsDoorNotTheDetector(): void
+    {
+        // 'proj 60' does not look like a path, so it stays on the explicit
+        // ladder — where the missing file is named, not invented.
+        $res = $this->runCli(['push', 'proj', '60'], null, ['CANDY_CODETIME_DIR' => $this->dataDir]);
+        $this->assertSame(1, $res['exit']);
+        $this->assertStringContainsString('candy-codetime push', $res['stderr']);
+        $this->assertStringContainsString('[<project> <language>] <file>', $res['stderr']);
+    }
 }

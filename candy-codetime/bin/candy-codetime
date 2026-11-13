@@ -54,6 +54,7 @@ use SugarCraft\CodeTime\Lang;
 use SugarCraft\CodeTime\Report\GapsReport;
 use SugarCraft\CodeTime\Storage\SqliteBackend;
 use SugarCraft\CodeTime\Store;
+use SugarCraft\CodeTime\Support\Detect;
 use SugarCraft\CodeTime\Support\Version;
 
 /**
@@ -357,9 +358,36 @@ if ($cmd === 'push') {
     $cwd = getcwd();
 
     if (!$stdinBatch) {
-        $project  = $positional[1] ?? null;
-        $language = $positional[2] ?? null;
-        $file     = $positional[3] ?? null;
+        // CT-S32: the manual lane. When the first slot looks like a path
+        // (a separator, or an extension the map knows), it IS the tracked
+        // file and project/language come from Detect — the friction that
+        // kept `push` out of the habit. Anything else keeps the explicit
+        // ladder byte-for-byte; typed slots always outrank detection.
+        $firstSlot = (string) ($positional[1] ?? '');
+        $looksLikeFile = $firstSlot !== ''
+            && (str_contains($firstSlot, '/')
+                || str_contains($firstSlot, '\\')
+                // A bare 'x.ext 60 work' would be indistinguishable from the
+                // legacy 'project language file': a bare name only leads the
+                // short form while a real duration (two or three slots) or a
+                // tag list (four slots) follows. Digits in slot two are never
+                // a language word, so the ladder stays honest.
+                || (Detect::language($firstSlot) !== 'unknown'
+                    && count($positional) - 1 >= 2 && ctype_digit((string) $positional[2]))
+                || (Detect::language($firstSlot) !== 'unknown'
+                    && count($positional) - 1 === 4
+                    && $positional[2] === '' && $positional[3] === ''));
+        if ($looksLikeFile) {
+            $file        = $firstSlot;
+            $durationRaw = $positional[2] ?? null;
+            $tagsRaw     = $positional[3] ?? null;
+            $project     = Detect::project($file, $cwd);
+            $language    = Detect::language($file);
+        } else {
+            $project  = $positional[1] ?? null;
+            $language = $positional[2] ?? null;
+            $file     = $positional[3] ?? null;
+        }
         if ($project === null || $language === null || $file === null) {
             fwrite(STDERR, Lang::t('cli.push_missing_args') . "\n");
             fwrite(STDERR, Lang::t('cli.push_usage') . "\n");
@@ -402,7 +430,9 @@ if ($cmd === 'push') {
 
         // A non-numeric duration used to silently cast to 0 — a heartbeat that
         // records nothing but claims success. Refuse it at the boundary instead.
-        $durationRaw = $positional[4] ?? null;
+        if (!$looksLikeFile) {
+            $durationRaw = $positional[4] ?? null;
+        }
         if ($durationRaw !== null && !ctype_digit($durationRaw)) {
             fwrite(STDERR, Lang::t('cli.push_invalid_duration', ['value' => Sanitize::untrusted($durationRaw)]) . "\n");
             exit(1);
@@ -414,7 +444,9 @@ if ($cmd === 'push') {
         // and only the typed door lost them. A comma-list labels the beat the
         // same way a plugin-written row does; blank members are noise, not
         // tags, so they fall out.
-        $tagsRaw = $positional[5] ?? null;
+        if (!$looksLikeFile) {
+            $tagsRaw = $positional[5] ?? null;
+        }
         $tags = [];
         if ($tagsRaw !== null) {
             foreach (explode(',', $tagsRaw) as $tag) {

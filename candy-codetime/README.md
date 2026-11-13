@@ -62,7 +62,10 @@ is the whole how-to. Three doors exist, pick one:
    apply), and falls back to a raw append under `flock` when no binary is on
    `PATH`.
 2. **A direct `push`** typed (or scripted) by you: `candy-codetime push
-   <project> <language> <file> [duration]`, backdated with `--time=<unix>`.
+   <file> [duration]` — a path-shaped first slot names the project from the
+   nearest repository root and the language from the extension — or spell
+   both out (`candy-codetime push <project> <language> <file> [duration]`)
+   to override detection. Backdate any form with `--time=<unix>`.
 3. **A raw `printf … >> YYYY-MM-DD.jsonl`** from cron — the exact line shape
    is in *Data layout* below, but see the two caveats there before choosing
    this door: raw lines are unstamped unless you write `time` into them, and
@@ -84,7 +87,7 @@ calendar date, matching the store layout.)
 | Command | Arguments | What it does |
 |---------|-----------|--------------|
 | `dashboard` | `[days]` | Open the TUI (reads the selected backend), showing a `[days]`-day window ending today (default 7). Inside the TUI, `+`/`-` step the window through 7, 14, 30, 90 days. Without an interactive terminal it refuses with a pointer to `export` instead of hanging. |
-| `push` | `<project> <language> <file> [duration] [tags]` \| `--` | Record heartbeats. `duration` is whole seconds (default 60); a non-numeric value is rejected, not silently read as 0; durations above one year are clamped to 31,536,000 s. `--time=<unix>` files a single beat at a past (or future) instant instead of `now` — a malformed value is refused, never coerced. `push --` reads a batch: one JSON heartbeat per line on stdin, each with its own `time`; a malformed line is named with its line number on STDERR and the run exits 1 after the well-formed rows still land. `tags` is a comma-list (`work,review`) stored with the beat and carried by every export format; blank members are dropped. Both forms pass the same ignore door and the same clamps. |
+| `push` | `[<project> <language>] <file> [duration] [tags]` \| `--` | Record heartbeats. `duration` is whole seconds (default 60); a non-numeric value is rejected, not silently read as 0; durations above one year are clamped to 31,536,000 s. `--time=<unix>` files a single beat at a past (or future) instant instead of `now` — a malformed value is refused, never coerced. `push --` reads a batch: one JSON heartbeat per line on stdin, each with its own `time`; a malformed line is named with its line number on STDERR and the run exits 1 after the well-formed rows still land. `tags` is a comma-list (`work,review`) stored with the beat and carried by every export format; blank members are dropped. When project and language are omitted (the first slot contains a path separator or a known extension), they are detected: project is the nearest `.git` ancestor's name (else the first path segment relative to the working directory, else `unknown`), language is the extension map (`php`, `js`, `ts`, `python`, …, else `unknown`). Typed slots always win. Both forms pass the same ignore door and the same clamps. |
 | `milestone` | `add [name] [description]` \| `list` | Manage release markers. `name` and `description` are read for `add` only. Milestones live only in SQLite, so this command uses the sqlite backend regardless of `--backend` (a `milestone add` into a file-only data dir says so on stderr before it creates the database); the sqlite dashboard marks the milestone days with `*` under the weekday row. |
 | `export` | `<csv\|json\|ics> [days]` | Dump heartbeats for the last N days (default 7, clamped to [1, 3660]; a non-numeric count is refused with a one-line error and exit 1). Output goes to STDOUT — redirect it to a file to save it. |
 | `gaps` | `[days]` | List untracked stretches of at least 300 seconds within the last N days (default 7, days clamped to [1, 3660]; a non-numeric count is refused with a one-line error and exit 1). |
