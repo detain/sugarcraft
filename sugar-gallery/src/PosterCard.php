@@ -462,26 +462,9 @@ final readonly class PosterCard
         // LOCALE-resolved text, and the process-wide memo must never freeze a
         // translation against a later T::setLocale(). The rebuild is a
         // str_repeat plus one fit — no per-frame fit cost worth caching.
-        if ($this->failed) {
+        $key = $this->bodyKey($width, $posterHeight);
+        if ($key === null) {
             return self::failedRows($width, $posterHeight);
-        }
-
-        // The key branches, the draw branches and hasPoster() all consult the
-        // SAME predicates — paintableOverlayId()/filledPoster() — so a body can
-        // never be cached under a branch key its draw disagrees with (the C1/M7
-        // lesson: an unaddressable overlay or empty poster must fall through to
-        // the skeleton exactly like hasPoster() reports it).
-        $paintableOverlay = $this->paintableOverlayId();
-        $posterFilled = $this->filledPoster();
-
-        if ($paintableOverlay !== null) {
-            $key = 'i|' . $this->imageId . '|' . $width . '|' . $posterHeight;
-        } elseif ($posterFilled !== null) {
-            // The hash rides the card from ingress (sugar-gallery-014): same
-            // bytes, same key — no per-frame md5 of the whole payload.
-            $key = 'p|' . $width . '|' . $posterHeight . '|' . strlen($posterFilled) . '|' . $this->posterHash;
-        } else {
-            $key = 's|' . $width . '|' . $posterHeight;
         }
 
         $cache = &self::fitCacheRef();
@@ -489,6 +472,8 @@ final readonly class PosterCard
             return $cache[$key];
         }
 
+        $paintableOverlay = $this->paintableOverlayId();
+        $posterFilled = $this->filledPoster();
         if ($paintableOverlay !== null) {
             // Overlay mode: reserve the poster area with blank cells and drop a
             // one-cell marker at the top-left; the runtime paints the graphics
@@ -506,6 +491,71 @@ final readonly class PosterCard
         $cache[$key] = $lines;
 
         return $lines;
+    }
+
+    /**
+     * Identity of the fitted body rows for this card's content at a geometry —
+     * exactly the string {@see bodyRows()} keys its memo on, or null for a
+     * failed cell (whose first line resolves through `Lang::t()` at draw time
+     * and must never be frozen into a content-keyed memo).
+     *
+     * The key branches, the draw branches and hasPoster() all consult the SAME
+     * predicates — paintableOverlayId()/filledPoster() — so a body can never
+     * be cached under a branch key its draw disagrees with (the C1/M7 lesson:
+     * an unaddressable overlay or empty poster must fall through to the
+     * skeleton exactly like hasPoster() reports it).
+     */
+    private function bodyKey(int $width, int $posterHeight): ?string
+    {
+        if ($this->failed) {
+            return null;
+        }
+
+        if ($this->paintableOverlayId() !== null) {
+            return 'i|' . $this->imageId . '|' . $width . '|' . $posterHeight;
+        }
+
+        $posterFilled = $this->filledPoster();
+        if ($posterFilled !== null) {
+            // The hash rides the card from ingress (sugar-gallery-014): same
+            // bytes, same key — no per-frame md5 of the whole payload.
+            return 'p|' . $width . '|' . $posterHeight . '|' . strlen($posterFilled) . '|' . $this->posterHash;
+        }
+
+        return 's|' . $width . '|' . $posterHeight;
+    }
+
+    /**
+     * A content key naming the exact bytes {@see render()} emits at this
+     * geometry, or null when the card is a failed cell (see
+     * {@see bodyKey()} — a locale-resolved notice line cannot be content-keyed
+     * without freezing a translation).
+     *
+     * Two cards share a key only when their whole render is byte-identical —
+     * body rows, focus marker, the title field that feeds the title row, and
+     * the progress ratio — so a consumer may memo rendered output by this key
+     * instead of hashing the emitted block. That is what kills the grid's
+     * second full-art hash (sugar-gallery-047: {@see PosterGrid::box()} re-
+     * keyed every frame with an md5 over the finished block while the card
+     * already carried the ingress hash from sugar-gallery-014).
+     */
+    public function renderMemoKey(bool $focused, int $width, int $posterHeight): ?string
+    {
+        $body = $this->bodyKey(max(4, $width), max(1, $posterHeight));
+        if ($body === null) {
+            return null;
+        }
+
+        // The discriminator names which field feeds the title row: a plain
+        // title runs strip-then-truncate while a styled title takes the
+        // ANSI-preserving path, so equal characters in different fields must
+        // not share a key even when their bytes would.
+        $titleField = $this->styledTitle !== null ? 'S' . $this->styledTitle : 'P' . $this->title;
+
+        return $body
+            . '|' . ($focused ? 'f' : '-')
+            . '|t' . md5($titleField)
+            . ($this->progress !== null ? '|p' . $this->progress : '');
     }
 
     /**

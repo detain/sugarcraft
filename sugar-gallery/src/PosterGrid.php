@@ -38,12 +38,16 @@ final class PosterGrid
     private array $items = [];
 
     /**
-     * Process-wide memo of boxed cells: `cardWidth|cellHeight|len|hash` → the
-     * width/height-normalised block. {@see render()} re-boxes every visible cell
-     * every frame and most frames repeat the previous frame's cells verbatim
-     * (every unloaded cell is the *same* skeleton), so caching {@see box()}'s
-     * per-line {@see Width::string()} work turns a per-frame cost into a one-time
-     * one. Keyed by content so it can never return a stale box; bounded to
+     * Process-wide memo of boxed cells: geometry + the cell's CONTENT identity
+     * — the card's own {@see PosterCard::renderMemoKey()} when it has one
+     * (sugar-gallery-047: no per-frame md5 over a full-art block), else a
+     * length+hash guard — → the width/height-normalised block. {@see render()}
+     * re-boxes every visible cell every frame and most frames repeat the
+     * previous frame's cells verbatim (every unloaded cell is the *same*
+     * skeleton), so caching {@see box()}'s per-line {@see Width::string()} work
+     * turns a per-frame cost into a one-time one — and the sentinel sweep
+     * rides the cached block, so a steady frame hashes nothing and sweeps
+     * nothing. Keyed by content so it can never return a stale box; bounded to
      * {@see BOX_CACHE_CAP}, evicting the oldest half when full.
      *
      * @var array<string, string>
@@ -709,12 +713,17 @@ final class PosterGrid
         } else {
             // M8/m19: the untrusted-for-marked-frames law enforced at the choke
             // point where text becomes a click-target. VERBATIM poster/styled-
-            // title bytes may carry forged U+E000/U+E001 zone sentinels; they
-            // are swept BEFORE box-fitting (so width accounting and the emitted
-            // frame stay consistent) and before marking, which means a hostile
-            // card can neither mint a phantom `cell:` zone nor spoof another
-            // cell's id into a duplicate-zone throw on the app's click path.
-            $body = $this->box(AnsiGuard::stripSentinels($card->render($focused, $this->cardWidth, $this->posterHeight)));
+            // title bytes may carry forged U+E000/U+E001 zone sentinels; box()
+            // sweeps them BEFORE fitting (so width accounting and the emitted
+            // frame stay consistent) and before marking, and it does so ONCE —
+            // the sweep rides the cached block (sugar-gallery-047) — which
+            // means a hostile card can neither mint a phantom `cell:` zone nor
+            // spoof another cell's id into a duplicate-zone throw on the app's
+            // click path.
+            $body = $this->box(
+                $card->render($focused, $this->cardWidth, $this->posterHeight),
+                $card->renderMemoKey($focused, $this->cardWidth, $this->posterHeight),
+            );
         }
 
         return $zones !== null ? $zones->mark('cell:' . $idx, $body) : $body;
@@ -725,18 +734,25 @@ final class PosterGrid
      * clip/pad the line count to cellHeight and every line (ANSI-aware) to
      * cardWidth, so an over- or under-sized poster can never inflate its column
      * and break grid alignment.
+     *
+     * The forged-sentinel sweep rides the cached block: it runs here, before
+     * fitting, so width accounting sees the bytes the frame will emit. The
+     * optional {@see PosterCard::renderMemoKey()} content key lets a card-name
+     * its exact render instead of paying a second full-art md5 every frame
+     * (sugar-gallery-047); without one, the length+hash guard below still keys
+     * the memo — same bytes, same key.
      */
-    private function box(string $block): string
+    private function box(string $block, ?string $contentKey = null): string
     {
         $width = $this->cardWidth;
         $height = $this->cellHeight();
 
-        $key = $width . '|' . $height . '|' . strlen($block) . '|' . md5($block);
+        $key = ($contentKey ?? 'h|' . strlen($block) . '|' . md5($block)) . '|' . $width . '|' . $height;
         if (isset(self::$boxCache[$key])) {
             return self::$boxCache[$key];
         }
 
-        $lines = explode("\n", $block);
+        $lines = explode("\n", AnsiGuard::stripSentinels($block));
 
         if (count($lines) > $height) {
             $lines = array_slice($lines, 0, $height);

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Gallery\Tests;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Core\I18n\T;
 use SugarCraft\Gallery\PosterCard;
 use SugarCraft\Gallery\PosterGrid;
 use SugarCraft\Style\Layout;
@@ -600,5 +601,64 @@ final class PosterGridTest extends TestCase
 
         $g = $g->left();
         self::assertSame(0, $g->cursorIndex(), 'left() clamps at the first item');
+    }
+
+    public function testCardsWithSameGeometryAndDifferentArtNeverShareABoxedFrame(): void
+    {
+        // SG-S15 (sugar-gallery-047): the box memo keys on the CARD's render
+        // identity, not geometry alone — replace the content key with a
+        // constant (or drop the poster hash from it) and cell one comes back
+        // wearing cell zero's art. Both posters fit the same 10×1 area; only
+        // the marker letter differs.
+        $blockArt = static fn (string $mark): string => $mark . str_repeat("\e[48;2;10;20;30m█\e[0m", 30);
+        $a = (new PosterCard('0', 'one'))->withPoster($blockArt('Q'));
+        $b = (new PosterCard('1', 'two'))->withPoster($blockArt('Z'));
+        $g = PosterGrid::new(10, 1, 2, 0)->withViewport(30, 10)->withReset(2)->withItems([0 => $a, 1 => $b]);
+
+        PosterGrid::clearBoxCache();
+        $frame = $g->render(true);
+
+        self::assertSame(1, substr_count($frame, 'Q'), 'the first cell carries its own art');
+        self::assertSame(1, substr_count($frame, 'Z'), 'the second cell is not a cached copy of the first');
+    }
+
+    public function testTheSentinelSweepRidesTheCachedBox(): void
+    {
+        // SG-S15: the forged-sentinel sweep runs once, inside box()'s miss
+        // path — the cached frame is the swept-and-fitted boundary. A sweep
+        // dropped anywhere on this route leaves U+E000 in a frame; storing the
+        // raw block before sweeping shows up on the second render.
+        $card = (new PosterCard('0', "Forg\u{E000}ed"))->withPoster(str_repeat('█', 6));
+        $g = $this->grid(1)->withItems([0 => $card]);
+        PosterGrid::clearBoxCache();
+
+        $first = $g->render(true);
+        $second = $g->render(true);
+
+        self::assertStringNotContainsString("\u{E000}", $first, 'the miss path sweeps before fitting');
+        self::assertStringNotContainsString("\u{E000}", $second, 'the hit path returns swept bytes');
+        self::assertSame($first, $second, 'a steady frame re-emits the cached box verbatim');
+    }
+
+    public function testAFailedCellStaysLocaleLiveThroughTheGridPath(): void
+    {
+        // SG-S15: renderMemoKey() answers null for a failed card BECAUSE its
+        // notice resolves through Lang at draw time; the box memo then falls
+        // back to the length+hash guard, so a locale flip between frames must
+        // still reach the screen. Content-key failed cards to "save a hash"
+        // and the German row never arrives.
+        // cardWidth 24: both notices must survive the title-row budget whole
+        // (the default helper's 10-cell grid would truncate them before the
+        // sweep question ever arises).
+        $g = PosterGrid::new(24, 1, 0, 0)->withViewport(40, 10)->withReset(1)->withItems([0 => (new PosterCard('0', 'X'))->withFailed()]);
+        T::setLocale('en');
+        PosterGrid::clearBoxCache();
+        $english = $g->render(true);
+        T::setLocale('de');
+        $german = $g->render(true);
+        T::setLocale('en');
+
+        self::assertStringContainsString('(unavailable)', $english);
+        self::assertStringContainsString('(nicht verfügbar)', $german, 'the fallback key keeps the notice locale-live');
     }
 }

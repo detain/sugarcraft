@@ -786,4 +786,36 @@ final class PosterCardTest extends TestCase
             self::assertSame(2048, $constant->getValue(), "{$class}::{$name} bounds the memo at 2048 entries");
         }
     }
+
+    public function testRenderMemoKeyNamesTheRenderBytesAndRefusesALocaleFrozenCell(): void
+    {
+        // SG-S15 (sugar-gallery-047): the seam the grid's box memo keys on.
+        // Equal content + geometry + focus + title field + progress ⇒ equal
+        // key (and a byte-identical render); any of those differing ⇒ a
+        // different key; a failed cell ⇒ null (its notice is locale-resolved
+        // at draw time and must never be frozen into a content-keyed memo).
+        $card = (new PosterCard('1', 'Title'))->withPoster('AAAA')->withProgress(0.5);
+        $sameBytes = (new PosterCard('7', 'Title'))->withPoster('AAAA')->withProgress(0.5);
+        self::assertSame(
+            $card->renderMemoKey(false, 12, 2),
+            $sameBytes->renderMemoKey(false, 12, 2),
+            'content keys on bytes, not on the id the render never emits',
+        );
+        self::assertSame($card->render(false, 12, 2), $sameBytes->render(false, 12, 2));
+
+        $sameLenDifferentArt = $card->withPoster('AAAB');
+        self::assertNotSame($card->renderMemoKey(false, 12, 2), $sameLenDifferentArt->renderMemoKey(false, 12, 2), 'art sensitivity is not length-only');
+
+        $styled = (new PosterCard('1', 'ignored'))->withStyledTitle('Title');
+        self::assertNotSame($card->renderMemoKey(false, 12, 2), $styled->renderMemoKey(false, 12, 2), 'the title-field discriminator keeps plain and styled bytes apart');
+
+        self::assertNotSame($card->renderMemoKey(false, 12, 2), $card->renderMemoKey(true, 12, 2), 'focus rides the key');
+        self::assertNotSame($card->renderMemoKey(false, 12, 2), $card->renderMemoKey(false, 12, 3), 'geometry rides the key');
+        self::assertNotSame($card->renderMemoKey(false, 12, 2), $card->withProgress(0.6)->renderMemoKey(false, 12, 2), 'progress rides the key');
+        self::assertNotSame($card->renderMemoKey(false, 12, 2), $card->withProgress(null)->renderMemoKey(false, 12, 2), 'and its absence changes the key shape');
+
+        self::assertNull($card->withFailed()->renderMemoKey(false, 12, 2), 'a failed cell refuses to be content-keyed');
+
+        self::assertSame($card->renderMemoKey(false, 2, 0), $card->renderMemoKey(false, 4, 1), 'the seam clamps exactly like render() does');
+    }
 }

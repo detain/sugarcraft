@@ -337,8 +337,9 @@ click path) straight into the frame. `stripControls()` / `sanitize()` /
 `withSafePoster()` / `withSafeStyledTitle()` perform the surgical sweep
 (`AnsiGuard::stripSentinels()`); the verbatim setters (`withPoster()`,
 `withStyledTitle()`, `withImage()`) deliberately store exactly the bytes you
-handed them, so the sweep runs again downstream — the grid re-sweeps every card
-body right before it marks zones, and `Rail::render()` sweeps its own title —
+handed them, so the sweep runs again downstream — the grid sweeps every card
+body on its way into the box memo (the swept bytes ride the cached frame) and
+marks only swept output, and `Rail::render()` sweeps its own title —
 so even verbatim `withPoster()` bytes cannot reach the marking choke point with
 forgery intact. Stored bytes can still be verbatim, so the law at the frame's
 own edge stays yours: an app that composes frames for a marker-consuming
