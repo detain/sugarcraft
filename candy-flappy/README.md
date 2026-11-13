@@ -15,7 +15,7 @@
 
 candy-flappy — a Flappy-Bird-style terminal game on the SugarCraft stack (PHP 8.3+). The bird's vertical motion is a SugarSpring projectile (gravity + an upward velocity kick on each tap), pipes scroll left at a fixed cell rate, collision is per-cell. Development happens in the [`detain/sugarcraft`](https://github.com/detain/sugarcraft) monorepo; the `sugarcraft/candy-flappy` package on Packagist is a split mirror of this directory — file issues against the monorepo.
 
-*Formerly published as `sugarcraft/honey-flap` (renamed 2026-10; namespace `SugarCraft\Flap\` → `SugarCraft\Flappy\`). The first run of `bin/candy-flappy` migrates a pre-rename `.honey-flap` high-score directory automatically, under the same config base the game itself uses: `$XDG_CONFIG_HOME` first, `$HOME/.config` as fallback (see "High scores, config, and environment").*
+*Formerly published as `sugarcraft/honey-flap` (renamed 2026-10). Old high scores migrate automatically.*
 
 ## Requirements
 
@@ -274,6 +274,11 @@ such a run is impossible.
   (0600) are already mode-correct.
 - Config base resolution: `XDG_CONFIG_HOME` if set, else `HOME/.config`. With
   neither set the game refuses to launch rather than guess.
+- First-run rename migration (moved out of the intro, flappy-82): the first
+  run of `bin/candy-flappy` migrates a pre-rename `.honey-flap` high-score
+  directory automatically — the package was `sugarcraft/honey-flap` with
+  namespace `SugarCraft\Flap\` until the 2026-10 rename — under the same
+  config base the game itself uses. The example runner does not migrate.
 - To reset the leaderboard: `rm ~/.config/.candy-flappy/scores.json`.
 - Colour posture follows `sugar-core`'s `ColorProfile::detect()`:
   `NO_COLOR` forces the ASCII posture; `CLICOLOR_FORCE` / `FORCE_COLOR` can
