@@ -56,7 +56,7 @@ final class ToastTest extends TestCase
      * Regression test: every NerdFont icon must be exactly one valid codepoint.
      * The pre-fix Error glyph was mojibake (U+FFFD + 佬 = 2 codepoints).
      *
-     * @see https://github.com/charmbracelet/bubbleup
+     * @see https://github.com/DaltonSW/bubbleup
      */
     public function testNerdIconsAreSingleValidCodepoints(): void
     {

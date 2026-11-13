@@ -183,10 +183,15 @@ final class ToastAlertExtendTest extends TestCase
             ->alert(ToastType::Warning, 'second');
 
         $oldSecondExpiry = $this->getQueue($t)[1]->expiresAt;
+        $before = \microtime(true);
         $result = $t->extendAlert(0, 60.0);
+        $after = \microtime(true);
 
+        // TST-HYGIENE (038): bracket per this file's own :162-163 idiom — the
+        // old 1-second tolerance arm flaked on any >1s stall.
         $queue = $this->getQueue($result);
-        $this->assertGreaterThan(60.0 - 1.0, $queue[0]->expiresAt - \microtime(true));
+        $this->assertGreaterThanOrEqual($before + 60.0, $queue[0]->expiresAt);
+        $this->assertLessThanOrEqual($after + 60.0, $queue[0]->expiresAt);
         $this->assertEqualsWithDelta($oldSecondExpiry, $queue[1]->expiresAt, 0.001);
     }
 
@@ -200,12 +205,16 @@ final class ToastAlertExtendTest extends TestCase
             ->cancelAlert(0)
             ->alert(ToastType::Success, 'second-keeps-timer');
 
+        $before = \microtime(true);
         $result = $t->extendAll(45.0);
+        $after = \microtime(true);
 
+        // TST-HYGIENE (038): bracket, not 1s tolerance (see extendAlert pin).
         $queue = $this->getQueue($result);
         $this->assertNull($queue[0]->expiresAt, 'persistent alert is never given a timer');
         $this->assertNotNull($queue[1]->expiresAt);
-        $this->assertGreaterThan(44.0, $queue[1]->expiresAt - \microtime(true));
+        $this->assertGreaterThanOrEqual($before + 45.0, $queue[1]->expiresAt);
+        $this->assertLessThanOrEqual($after + 45.0, $queue[1]->expiresAt);
     }
 
     public function testExtendAllOnEmptyQueueSucceeds(): void

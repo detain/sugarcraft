@@ -40,10 +40,18 @@ final class ToastMessageCapTest extends TestCase
         $elapsed = \microtime(true) - $started;
 
         $this->assertStringContainsString('[truncated]', $out);
+        // TST-HYGIENE (037): the fixed 5.0 wall-clock ceiling reddened under
+        // loaded shared runners with no defect. Bracket instead: ~16x the
+        // workload must not cost 200x the control render's time — the
+        // linear-path contract stays enforced, CI load cannot.
+        $controlToast = $this->got('word');
+        $controlStart = \microtime(true);
+        $controlToast->view('', 80, 24);
+        $control = \microtime(true) - $controlStart;
         $this->assertLessThan(
-            5.0,
+            0.1 + $control * 200.0,
             $elapsed,
-            'a 20K-cell message must render in well under a second on the linear path (M6 perf pin)'
+            'M6 perf pin: a 20K-cell message renders on the linear path (ratio-bracketed vs control)'
         );
         // Bounded frame: 8192 cells / ~46 inner cells ≈ 179 rows maximum.
         $rows = \explode("\n", $out);

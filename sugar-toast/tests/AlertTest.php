@@ -48,6 +48,11 @@ final class AlertTest extends TestCase
         // Start with an alert that would expire soon
         $alert = (new Alert(ToastType::Info, 'msg'))->withExpiry(0.001);
         // Wait for it to nearly expire
+        // TST-HYGIENE (039): isExpired() compares two wall-clock reads, so the
+        // EXACT `== deadline` boundary is unpinnable by any test (an NTP step
+        // or a stall jumps it). This sleeps far past the deadline instead;
+        // pinning the boundary itself needs an injectable clock seam — future
+        // API candidate, deliberately not here.
         \usleep(2000);
         $this->assertTrue($alert->isExpired());
 
