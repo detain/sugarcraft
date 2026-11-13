@@ -44,6 +44,19 @@ The current sugar-datepicker implementation is a direct port of the Go upstream 
 | DateEntry (input + dropdown) | ❌ | ❌ | ❌ | ✅ `DateSelect` |
 | Keyboard nav (PageUp/PageDown) | ❌ | Limited | N/A | ✅ |
 
+**Status correction — 2026-11-13 (sugar-datepicker-023, EXEC row dp-21).**
+The table above is the 2026-05-13 analysis and stays as written (historical
+record law); the ❌ marks have since moved on the shipped surface:
+
+| Feature | now | Where |
+|---------|-----|-------|
+| Date range selection | ✅ | `src/DatePicker.php` range mode (`withRangeMode`, `handleKey` Enter arming, normalization) + `src/DateRange.php` VO + programmatic `withRange()` preset (dp-19) |
+| Event store | ✅ | `src/EventStore.php` (bounded ring, O(1) eviction) + `src/PickerEvent.php` eight wire kinds recorded by `src/Model.php` (dp-09/dp-20/dp-28) |
+| Localization | ✅ machinery | `Lang::t` throughout, 20-key `lang/en.php` incl. the `{month} {year}` header template; locale budget/token validator pins every shipped file (dp-14/dp-15); broader locale set rides its own row |
+| Keyboard nav (PageUp/PageDown) | ✅ | `DatePicker::KEY_PAGE_UP/KEY_PAGE_DOWN` handled on the non-TEA surface too (dp-10); `Model` chords PageUp/PageDown |
+| Focus-based nav (header/month/year) | ❌ by design | the upstream `Focus` enum was deliberately dropped for a single-cursor model — disclosed in README Limitations (dp-10/dp-36) |
+| Time picker / DateEntry | ❌ open | out of scope for this component; `setTime` names the instant, not a time-of-day widget |
+
 ---
 
 ## 2. Library Analysis
