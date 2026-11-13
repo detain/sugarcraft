@@ -404,12 +404,12 @@ final class Compiler
         match ($node->key) {
             // VHS semantics: Width/Height are the OUTPUT IMAGE size in PIXELS, not
             // terminal columns/rows. The grid is derived from these in compile().
-            'Width' => $this->widthPx = max(1, (int) $node->value),
-            'Height' => $this->heightPx = max(1, (int) $node->value),
+            'Width' => $this->widthPx = $this->parseDimension('Width', $node->value) ?? $this->widthPx,
+            'Height' => $this->heightPx = $this->parseDimension('Height', $node->value) ?? $this->heightPx,
             'Theme' => $this->theme = trim($node->value, '"\' '),
             'TypingSpeed' => $this->typingSpeed = $this->parseTypingSpeed($node->value),
             'PlaybackSpeed' => $this->playbackSpeed = $this->parsePlaybackSpeed($node->value),
-            'FontSize' => $this->fontSize = (int) $node->value,
+            'FontSize' => $this->fontSize = $this->parseFontSize($node->value) ?? $this->fontSize,
             'FontFamily' => $this->fontFamily = trim($node->value, '"\' '),
             // Opt-in exec mode: the tape's typed commands run in this shell and the
             // program's real output is captured into the frames. Absence keeps the
@@ -459,6 +459,52 @@ final class Compiler
         }
         $this->reportCompileProblem("Unparseable Framerate value '{$value}' — using the render default");
         return null;
+    }
+
+    /**
+     * `Set Width`/`Set Height` (finding 011): digits-only form checked BEFORE
+     * any cast, so `Set Width abc` is a named warning routed through the
+     * strict gate like its sibling arms — not the silent 1-pixel canvas the
+     * old blind (int) cast produced. An over-capacity number throws in BOTH
+     * modes: refusing to allocate is a memory-safety door, not a tape-
+     * grammar opinion, and the max(1, …) floor keeps the legacy 0-as-1px
+     * seat.
+     */
+    private function parseDimension(string $key, string $value): ?int
+    {
+        $raw = trim($value, " \t\n\r\0\x0B'\"");
+        if (!preg_match('/^\d+$/', $raw)) {
+            $this->reportCompileProblem("Unparseable Set {$key} value '{$raw}' — using the previous size");
+            return null;
+        }
+        $n = (int) $raw;
+        if ($n > CassetteHeader::MAX_DIM_PX) {
+            throw new \RuntimeException(
+                "Set {$key} {$n} exceeds the " . CassetteHeader::MAX_DIM_PX . "-pixel limit — refusing to allocate",
+            );
+        }
+        return max(1, $n);
+    }
+
+    /** @see parseDimension() — same door discipline for `Set FontSize`. */
+    private function parseFontSize(string $value): ?int
+    {
+        $raw = trim($value, " \t\n\r\0\x0B'\"");
+        if (!preg_match('/^\d+$/', $raw)) {
+            $this->reportCompileProblem("Unparseable Set FontSize value '{$raw}' — using the previous font size");
+            return null;
+        }
+        $n = (int) $raw;
+        if ($n > CassetteHeader::MAX_FONT_SIZE) {
+            throw new \RuntimeException(
+                'Set FontSize ' . $n . ' exceeds the ' . CassetteHeader::MAX_FONT_SIZE . "-point limit — refusing to allocate",
+            );
+        }
+        if ($n < 1) {
+            $this->reportCompileProblem("Set FontSize {$n} is meaningless — using the previous font size");
+            return null;
+        }
+        return $n;
     }
 
     /**

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Vcr\Raster;
 
+use SugarCraft\Vcr\CassetteHeader;
 use SugarCraft\Vterm\Cell;
 use SugarCraft\Vterm\Buffer\Buffer;
 use SugarCraft\Vterm\Cursor;
@@ -111,7 +112,16 @@ final class GdRasterizer implements Rasterizer
         $width = $cols * $cellW;
         $height = $rows * $cellH;
 
-        \assert($width >= 1 && $height >= 1);
+        // Finding 011 (defensive backstop): the header door caps grids at
+        // CassetteHeader::MAX_COLS_ROWS, but rasterize() is public — a direct
+        // caller with a hand-built oversized Snapshot must be refused before
+        // imagecreatetruecolor is asked for the allocation, not after.
+        $maxPx = CassetteHeader::MAX_COLS_ROWS * 512;
+        if ($width < 1 || $height < 1 || $width > $maxPx || $height > $maxPx) {
+            throw new \RuntimeException(
+                "Raster canvas {$width}x{$height} is outside the supported allocation limits",
+            );
+        }
         $canvas = imagecreatetruecolor($width, $height);
         if ($canvas === false) {
             throw new \RuntimeException('Failed to create canvas image');
