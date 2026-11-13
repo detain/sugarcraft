@@ -318,6 +318,13 @@ final class Manager
      * is no worker to stop, but `close()` still drops every recorded
      * zone and disables the manager so subsequent `mark()` / `scan()`
      * calls become pass-throughs. Idempotent.
+     *
+     * WARNING — close()-then-use is silent by design: after this the
+     * registry is empty and scanning is a pass-through, so every hit-test
+     * resolves nothing and markers stop appearing. To run a fresh UI
+     * through the facade, re-arm with `Zones::setDefaultManager(null)`
+     * (or use a new manager instance); `setEnabled(true)` alone revives
+     * marking but NOT the dropped zones.
      */
     public function close(): void
     {
