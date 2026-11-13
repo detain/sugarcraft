@@ -97,9 +97,19 @@ final class DiskIo
         return [new DiskIoSnapshot($devices), new self($this->paths, $this->clock, $this->physicalOnly, $previous, $now)];
     }
 
+    /**
+     * @var array<string, bool> memoized isPhysical, keyed by "<paths-root>|<name>"
+     */
+    private static array $physical = [];
+
+    /**
+     * Hotplug-only truth (candy-top-039): the sysfs block layout does not
+     * churn while the monitor runs, so two stats per diskstats row per
+     * tick were pure overhead — the memo answers every later tick.
+     */
     private function isPhysical(string $name): bool
     {
-        return is_dir($this->paths->sys("block/{$name}"))
+        return self::$physical[$this->paths->root . '|' . $name] ??= is_dir($this->paths->sys("block/{$name}"))
             && !is_dir($this->paths->sys("devices/virtual/block/{$name}"));
     }
 }

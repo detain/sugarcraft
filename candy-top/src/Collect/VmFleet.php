@@ -124,7 +124,9 @@ final class VmFleet
         if (!$this->enabled) {
             return [new VmFleetSnapshot([]), $this];
         }
-        clearstatcache();
+        // candy-top-040: stat-cache invalidation is per-file where it is
+        // needed (status XML mtimes, bridge dirs) — a process-wide
+        // clearstatcache() here taxed every sibling collector's probes.
         $now = ($this->clock)();
         $stale = $this->lastAt > 0 && $this->maxWindow > 0 && $now - $this->lastAt > $this->maxWindow;
         $hostMem = $this->hostMem > 0 ? $this->hostMem : self::memTotal($this->paths);
@@ -342,6 +344,10 @@ final class VmFleet
                 continue;
             }
             $file = $dir . '/' . $entry;
+            // candy-top-040: per-file invalidation, not the process-wide
+            // clearstatcache() — voiding the whole stat cache every sample
+            // taxed every sibling collector's probes.
+            clearstatcache(true, $file);
             $mtime = @filemtime($file);
             $size = @filesize($file);
             if ($mtime === false || $size === false || $size > self::XML_MAX_BYTES) {
@@ -411,7 +417,9 @@ final class VmFleet
         $byMac = [];
         foreach ($ifaces as $iface) {
             $mac = strtolower(Read::line($net . '/' . $iface . '/address') ?? '');
-            if (strlen($mac) === 17 && !is_dir($net . '/' . $iface . '/bridge')) {
+            $bridge = $net . '/' . $iface . '/bridge';
+            clearstatcache(true, $bridge);
+            if (strlen($mac) === 17 && !is_dir($bridge)) {
                 $byMac[$mac] = $iface;
             }
         }
