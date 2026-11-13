@@ -35,8 +35,8 @@ use SugarCraft\Core\Util\Width;
  * The emit-side caps ({@see Mark::MAX_ID_BYTES}, {@see Mark::MAX_CONTENT_BYTES})
  * bound what Mark writes, not what parse reads — an unterminated CSI or OSC
  * run swallows the rest of its frame by design (it may still be streaming
- * in), so feed parse() frames you expect to be terminal-sized; untrusted
- * megabyte blobs are the caller's input-trust problem, exactly like
+ * in), so feed parse() frames you expect to be terminal-sized. Vetting
+ * untrusted megabyte blobs is the caller's job — the same duty as
  * sweeping untrusted text before marking it.
  *
  * A sentinel that does NOT begin a valid tag — a bare U+E000 whose would-be
@@ -75,8 +75,9 @@ use SugarCraft\Core\Util\Width;
  * opened on unless they painted it — and a zone that paints again after the
  * `\r` widens its bbox to start at column 1. The same painted-cells-only
  * rule governs rows: a `\n` that ends a row holding no cell of the zone
- * extends nothing, so `'abc\n\n' + close` stays the one-row box `'abc'
- * painted` — trailing blank lines inside the tags are content the zone
+ * extends nothing, so a box opened around 'abc' followed by two newlines
+ * and its close tag stays a one-row box over 'abc' — the trailing blank
+ * lines inside the tags are content the zone
  * owns but never drew, and a bbox may not claim undrawn rows.
  *
  * A zone still open at a `\n` that has painted NOTHING yet (its content
@@ -111,11 +112,10 @@ use SugarCraft\Core\Util\Width;
  * way), but the surviving sequence's payload bytes come out mangled.
  * Sweep untrusted content before it reaches either side.
  *
- * Design note — streaming/chunked parsing: for large terminals or
- * streaming renderers, a ScanIterator (implementing IteratorAggregate)
- * could yield zones incrementally as each chunk is scanned, avoiding
- * a full in-memory parse of the entire buffer.  The current Scan class
- * is suitable for single-shot scans; factor chunk support out if needed.
+ * Scope note — parsing is single-shot: one complete buffer in, every zone
+ * it contains out. Chunked or incremental parsing is deliberately not
+ * built here; a renderer that streams would add an iterator beside this
+ * class rather than widening it.
  */
 final class Scan
 {
@@ -585,8 +585,9 @@ final class Scan
      * cell grid and passes ANSI sequences through zero-width. The two
      * diverge only when a WELL-FORMED tag hides inside an OSC/CSI payload
      * (id charsets forbid ESC and control bytes, so an escape byte always
-     * breaks the tag shape) — hostile input that {@see strip()} removes while
-     * parse never saw it as a tag. Removing bytes parse considered invisible
+     * breaks the tag shape). Only hostile input is affected: {@see strip()}
+     * removes bytes that were never tags for parse, so deleting markup parse
+     * treated as invisible
      * markup cannot shift any zone the consumer will act on; it DOES mangle
      * the surviving sequence's payload (a window title or DCS graphic loses
      * the cut bytes) — a documented consequence of the fail-safe byte-wise

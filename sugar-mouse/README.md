@@ -251,7 +251,7 @@ a range").
 ## Accessibility
 
 Zone tags are private-use-area codepoints: screen readers announce them as
-Dotted-Circle garbage or "unknown character" noise, and the mouse
+dotted-circle placeholder glyphs or "unknown character" noise, and the mouse
 trackers (hover, drag, multi-click) are pointer-only affordances. Ship a
 keyboard path for every zone-driven action, print ONLY the stripped frame —
 at the `Zones\Manager` layer `scan()` returns it display-ready, and at the

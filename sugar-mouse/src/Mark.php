@@ -21,9 +21,10 @@ use SugarCraft\Core\Util\Sanitize;
  * controls or anything adjacent to them: they are ZERO WIDTH to the
  * scanner and normally render as nothing, but they are NOT
  * guaranteed invisible on every host — terminals fall back to rendering
- * unused PUA codepoints as boxes or Dotted Circle, and screen readers
- * announce them as garbage. Treat a frame that leaks markers as cosmetic
- * noise, never as hidden text. {@see Scan::strip()} removes them.
+ * unused PUA codepoints as boxes or dotted-circle placeholder glyphs, and
+ * screen readers announce them as unknown-character noise. Treat a frame
+ * that leaks markers as cosmetic noise, never as hidden text.
+ * {@see Scan::strip()} removes them.
  *
  * Marking can be globally disabled (e.g. for non-interactive output such
  * as width-only measurement passes).  When {@see $enabled} is false,
@@ -42,7 +43,7 @@ final class Mark
      * byte-wise (no /u) so any byte >= 0x80 is rejected.  This inherently bars
      * the PUA sentinel bytes U+E000 (\xEE\x80\x80) / U+E001 (\xEE\x80\x81) plus
      * any CSI/OSC/APC/control byte — an id carrying those would desync
-     * {@see Scan::parse()} (a zone-marker injection).
+     * {@see Scan::parse()} by injecting a counterfeit zone marker.
      */
     private const ID_PATTERN = '/\A[A-Za-z0-9._:-]+\z/';
 
@@ -78,7 +79,7 @@ final class Mark
     ) {}
 
     /**
-     * Factory — the default root: a Mark instance with marking enabled.
+     * House factory: returns a Mark instance with marking enabled.
      *
      * Equivalent to `new Mark()`; the public constructor is kept for the
      * existing `new Mark()` call sites across the monorepo.
@@ -130,9 +131,9 @@ final class Mark
      * output) will forge zones at parse time — sweeping untrusted text is the
      * consumer's duty, and {@see self::untrusted()} is the tool: pass any
      * untrusted string through it before wrapping it (or before composing it
-     * into a marked frame). Per the fleet trust-boundary story
-     * (docs/TRUST-BOUNDARY.md in the sugarcraft monorepo — not a link
-     * relative to this split repo).
+     * into a marked frame). This seam follows the fleet trust-boundary story,
+     * documented at docs/TRUST-BOUNDARY.md in the sugarcraft monorepo — a
+     * plain path, not a link, because that file sits outside this split repo.
      *
      * @throws \InvalidArgumentException When $id contains any byte outside
      *         {@see self::ID_PATTERN} — e.g. a sentinel byte, a control
@@ -223,9 +224,10 @@ final class Mark
     /**
      * Quoted single-line repr of $value for exception messages: printable
      * ASCII passes through (with quote/backslash escapes and \n \r \t), every
-     * other byte becomes \xHH. var_export()/print_r() re-emit control and
-     * UTF-8 bytes RAW into the message — a hostile id would smuggle terminal
-     * traffic into whoever logs or prints the refusal. This never does.
+     * other byte becomes \xHH. var_export() and print_r() re-emit control and
+     * UTF-8 bytes RAW into the message, so a hostile id could smuggle terminal
+     * traffic into every log or terminal that later prints the refusal; this
+     * function escapes everything that is not printable ASCII instead.
      */
     public static function escapeForMessage(string $value): string
     {
