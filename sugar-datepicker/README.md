@@ -232,30 +232,38 @@ chain above chose, and none of the seven setters influence it.
 
 ## Keyboard handling
 
-`handleKey()` maps the `KEY_*` constants — `left`, `right`, `up`, `down`,
-`home`, `end`, `enter`, and BOTH escape spellings `esc` (BC wire value) and
-`escape` (the name sugar-core uses) — onto cursor
-movement, selection and clearing.
+`handleKey()` is the non-TEA wire surface; `Model` is the TEA one. Both
+channels' vocabularies, in one table (dp-10):
+
+| Action | `handleKey()` string (`KEY_*` value) | Model `KeyMsg` type |
+|---|---|---|
+| Move cursor | `left`, `right`, `up`, `down` | `KeyType::Left`/`Right`/`Up`/`Down` |
+| First/last selectable day | `home`, `end` | `KeyType::Home`, `KeyType::End` |
+| Select / arm or complete a range leg | `enter` | `KeyType::Enter` |
+| Clear selection / cancel range | `esc` (BC wire value) or `escape` (sugar-core spelling) — both act | `KeyType::Escape` |
+| Month back / forward | `pgup`, `pgdn` | `KeyType::PageUp`, `KeyType::PageDown` |
+| Year jump / jump-to-today | programmatic only: `goToPreviousYear()`, `goToNextYear()`, `goToToday()` | — |
+
 Unrecognized keys are surfaced through `error_log('datepicker: unknown key …')`
 and leave the receiver unchanged (loud at integration time, state-safe at
-runtime — no throw). The `Model`
-wrapper routes Enter, Escape, Home and End through these `KEY_*` strings — its
-arrow arm calls the `MoveCursor*` methods directly, and `PageUp`/`PageDown`
-(which have no `KEY_*` constant) call `goToPreviousMonth()`/`goToNextMonth()` —
-so a TEA application never needs to call `handleKey()` directly.
+runtime — no throw). A TEA application never needs to call `handleKey()`: the
+`Model` maps every `KeyType` arm itself.
 
 Honest limitations: there is no month-wrap on arrow keys (they clamp at the grid
 edge and can rest on empty lead-in/trailing cells, where single-mode Enter falls
 back to the first of the month but range-mode Enter does nothing), and no
-typeahead year entry. Home and End land on the first/last **selectable** day of
-the viewed month: the jump scans past dimmed min/max-violating days, and a whole
-month outside the window leaves the cursor in place. Chord policy: through the `Model`, the four action keys
-Enter, Escape, PageUp and PageDown are host-reserved under ANY chord — Ctrl,
-Alt or Shift held — so a chat host's Shift+Enter newline is never hijacked.
-The arrows and Home/End are the deliberate terminal-compatibility exception:
-they act bare and chorded alike. `PageUp`/`PageDown` step one
-month through the `Model`; larger jumps between months and years go through the
-`GoTo*` methods.
+typeahead year entry. The year/today jumps stay programmatic on purpose:
+upstream's Focus enum, tab-cycling and per-focus arrows were DROPPED in this
+port (single-cursor design — an intentional divergence, not an omission), so no
+key vocabulary exists for them. Home and End land on the first/last
+**selectable** day of the viewed month: the jump scans past dimmed
+min/max-violating days, and a whole month outside the window leaves the cursor
+in place. Chord policy: through the `Model`, the four action keys Enter,
+Escape, PageUp and PageDown are host-reserved under ANY chord — Ctrl, Alt or
+Shift held — so a chat host's Shift+Enter newline is never hijacked. The arrows
+and Home/End are the deliberate terminal-compatibility exception: they act bare
+and chorded alike. `PageUp`/`PageDown` step one month on both channels; larger
+jumps between months and years go through the `goTo*()` methods.
 
 ## Events
 

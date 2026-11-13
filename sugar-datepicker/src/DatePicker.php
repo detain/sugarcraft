@@ -90,6 +90,12 @@ final class DatePicker
     public const KEY_ESCAPE_ALT = 'escape';
     public const KEY_HOME  = 'home';
     public const KEY_END   = 'end';
+    // dp-10: month stepping on the non-TEA surface. The Quick Start advertises
+    // handleKey() alone, so a direct host must be able to leave its month —
+    // the Model always had KeyType::PageUp/PageDown; these are the wire-string
+    // twins of the same arms, respecting the settled chord policy at the Model.
+    public const KEY_PAGE_UP   = 'pgup';
+    public const KEY_PAGE_DOWN = 'pgdn';
 
     /** Currently viewed month (1-indexed). */
     private int $viewMonth;
@@ -612,13 +618,17 @@ final class DatePicker
      * Home/End:   jump to the first / last SELECTABLE day of the viewed month
      *             (min/max are consulted: the jump scans past dimmed days;
      *             a whole month outside the window leaves the cursor in place)
+     * PgUp/PgDn:  step the viewed month back/forward (dp-10), clamped to the
+     *             bound months by withMinDate()/withMaxDate()
      *
      * An unrecognized key returns the receiver unchanged AND logs
      * `datepicker: unknown key …` — the wire vocabulary IS the API of a
      * key-driven widget, so a typo must be loud at integration time (no
      * throw: handleKey stays pure). A refused selection likewise returns
-     * state-equal results silently. Callers must compare on state,
-     * not object identity, to detect a no-op.
+     * state-equal results at this surface — the non-TEA channel cannot
+     * announce; the TEA Model records PickerEvent::SELECTION_REFUSED for the
+     * same attempt. Callers must compare on state, not object identity, to
+     * detect a no-op.
      */
     public function handleKey(string $key): self
     {
@@ -639,6 +649,12 @@ final class DatePicker
         }
         if ($key === self::KEY_END) {
             return $this->jumpToLastValidDay();
+        }
+        if ($key === self::KEY_PAGE_UP) {
+            return $this->goToPreviousMonth();
+        }
+        if ($key === self::KEY_PAGE_DOWN) {
+            return $this->goToNextMonth();
         }
         if ($key === self::KEY_ENTER) {
             return $this->rangeMode

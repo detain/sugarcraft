@@ -994,6 +994,36 @@ final class DatePickerTest extends TestCase
     {
         $this->assertSame('esc', DatePicker::KEY_ESCAPE);
         $this->assertSame('escape', DatePicker::KEY_ESCAPE_ALT);
+        // dp-10: the month-step wire twins of KeyType::PageUp/PageDown.
+        $this->assertSame('pgup', DatePicker::KEY_PAGE_UP);
+        $this->assertSame('pgdn', DatePicker::KEY_PAGE_DOWN);
+    }
+
+    public function testHandleKeyPageStepsMonthOnTheNonTeaSurface(): void
+    {
+        // dp-10: the Quick Start advertises handleKey() alone — a direct host
+        // must be able to leave its month without the Model.
+        $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
+            ->handleKey(DatePicker::KEY_PAGE_DOWN);
+        $this->assertSame(6, $dp->viewMonth());
+
+        $dp = $dp->handleKey(DatePicker::KEY_PAGE_UP)->handleKey(DatePicker::KEY_PAGE_UP);
+        $this->assertSame(4, $dp->viewMonth());
+    }
+
+    public function testHandleKeyPageStepsRespectBoundMonths(): void
+    {
+        // With a single-month window both page keys clamp — no wrap, no throw.
+        $dp = DatePicker::new(new \DateTimeImmutable('2026-05-15'))
+            ->withMinDate(new \DateTimeImmutable('2026-05-10'))
+            ->withMaxDate(new \DateTimeImmutable('2026-05-20'));
+
+        $this->assertSame(5, $dp->handleKey(DatePicker::KEY_PAGE_DOWN)->viewMonth());
+        $this->assertSame(5, $dp->handleKey(DatePicker::KEY_PAGE_UP)->viewMonth());
+        // The programmatic year legs honour the same clamp (no key exists for
+        // them — the single-cursor divergence disclosed in the README).
+        $this->assertSame(2026, $dp->goToPreviousYear()->viewYear());
+        $this->assertSame(2026, $dp->goToNextYear()->viewYear());
     }
 
     public function testUnknownKeyIsLoudInErrorLogButNeverThrows(): void
