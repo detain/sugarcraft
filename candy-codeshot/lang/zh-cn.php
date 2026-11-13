@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 return [
     'cli.unknown_flag'         => "candy-codeshot：无法识别的标志 '{flag}'",
+'cli.unexpected_argument'  => "candy-codeshot: 意外参数 '{arg}' - 最多只能指定一个输入文件",
     'cli.unknown_theme'       => "candy-codeshot：未知的主题 '{name}'。已知：dark, light, dracula, tokyo-night, nord",
     'cli.unknown_window_style' => "candy-codeshot：未知的窗口样式 '{style}'。已知：macos, windows-terminal, iterm, hyper, none",
     'cli.unknown_format'      => "candy-codeshot：未知的格式 '{format}'。已知：svg, png",
@@ -62,6 +63,8 @@ candy-codeshot - 将代码或终端输出渲染为 SVG 或 PNG 截图
   PNG 输出会忽略上述仅限 SVG 的选项，并在 stderr 上逐一宣布被丢弃的选项。
   当 stdout 是终端时，缺少 --output 文件的 PNG 输出会被拒绝；
   交互式读取 stdin 会打印提示并等待 Ctrl-D。
+  单独的 "-" 表示 stdin(不给文件时本就是默认行为);单独的 "--" 结束选项解析,其后的每个参数都是操作数。
+  theme 和 window-style 的值在匹配时不区分大小写与下划线("Tokyo_Night" 和 "tokyo-night" 选择同一主题)。
 
 退出码:
   0  成功

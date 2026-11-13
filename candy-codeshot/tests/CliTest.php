@@ -894,6 +894,80 @@ final class CliTest extends TestCase
         $this->assertStringContainsString('SVG output too large', $result['stderr']);
     }
 
+    /**
+     * cs-29 (-056): `--` ends option parsing; tokens after it are operands.
+     */
+    public function testDoubleDashEndsOptionParsing(): void
+    {
+        $dir = $this->makeTempDir();
+        try {
+            file_put_contents($dir . '/notes.txt', "hello dashdash\n");
+            $ok = $this->runCli(['--', 'notes.txt'], null, $dir);
+            $this->assertSame(0, $ok['exitCode'], $ok['stderr']);
+            $this->assertStringContainsString('hello dashdash', $ok['stdout']);
+
+            // A flag-shaped token after `--` is an operand — and a SECOND
+            // operand, so it is refused by name, never interpreted:
+            $refused = $this->runCli(['notes.txt', '--', '--theme'], null, $dir);
+            $this->assertSame(2, $refused['exitCode']);
+            $this->assertStringContainsString("unexpected argument '--theme'", $refused['stderr']);
+        } finally {
+            $this->rmTree($dir);
+        }
+    }
+
+    public function testSecondPositionalIsNamedUnexpectedArgumentNotFlag(): void
+    {
+        $dir = $this->makeTempDir();
+        try {
+            file_put_contents($dir . '/a.txt', "first\n");
+            file_put_contents($dir . '/b.txt', "second\n");
+            $r = $this->runCli(['a.txt', 'b.txt'], null, $dir);
+            $this->assertSame(2, $r['exitCode']);
+            $this->assertStringContainsString("unexpected argument 'b.txt'", $r['stderr']);
+            $this->assertStringNotContainsString('unrecognised flag', $r['stderr']);
+        } finally {
+            $this->rmTree($dir);
+        }
+    }
+
+    public function testLoneDashIsTheStdinAliasAndLoneDashAfterAPathIsRefused(): void
+    {
+        $alias = $this->runCli(['-', '--no-window'], "hello dash alias\n");
+        $this->assertSame(0, $alias['exitCode'], $alias['stderr']);
+        $this->assertStringContainsString('hello dash alias', $alias['stdout']);
+
+        $dir = $this->makeTempDir();
+        try {
+            file_put_contents($dir . '/a.txt', "first\n");
+            $r = $this->runCli(['a.txt', '-'], null, $dir);
+            $this->assertSame(2, $r['exitCode']);
+            $this->assertStringContainsString("unexpected argument '-'", $r['stderr']);
+        } finally {
+            $this->rmTree($dir);
+        }
+    }
+
+    /**
+     * cs-29 (-065): window-style folds case and underscores like --theme.
+     */
+    public function testWindowStyleFoldsToThemeParity(): void
+    {
+        $upper = $this->runCli(['--window-style', 'MACOS', '--no-shadow'], "x\n");
+        $lower = $this->runCli(['--window-style', 'macos', '--no-shadow'], "x\n");
+        $this->assertSame(0, $upper['exitCode'], $upper['stderr']);
+        $this->assertSame(0, $lower['exitCode']);
+        $this->assertSame($lower['stdout'], $upper['stdout']);
+
+        $underscored = $this->runCli(['--window-style', 'Windows_Terminal', '--no-shadow'], "x\n");
+        $this->assertSame(0, $underscored['exitCode'], $underscored['stderr']);
+        $this->assertStringContainsString('#1e1e1e', $underscored['stdout']);
+
+        $stillRefused = $this->runCli(['--window-style', 'gnome'], "x\n");
+        $this->assertSame(2, $stillRefused['exitCode']);
+        $this->assertStringContainsString('unknown window style', $stillRefused['stderr']);
+    }
+
     private function makeTempDir(): string
     {
         $dir = sys_get_temp_dir() . '/codeshot_cwd_' . uniqid('', true);

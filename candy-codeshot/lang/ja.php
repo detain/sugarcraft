@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 return [
     'cli.unknown_flag'         => "candy-codeshot：認識できないフラグ '{flag}'",
+'cli.unexpected_argument'  => "candy-codeshot: 予期しない引数 '{arg}' - 入力ファイルは最大 1 件です",
     'cli.unknown_theme'       => "candy-codeshot：不明なテーマ '{name}'。既知：dark, light, dracula, tokyo-night, nord",
     'cli.unknown_window_style' => "candy-codeshot：不明なウィンドウスタイル '{style}'。既知：macos, windows-terminal, iterm, hyper, none",
     'cli.unknown_format'      => "candy-codeshot：不明な形式 '{format}'。既知：svg, png",
@@ -63,6 +64,9 @@ candy-codeshot - コードやターミナル出力をSVGまたはPNGのスクリ
   stderrに通知します。stdout が端末のとき --output ファイルなしの
   PNG 出力は拒否されます。標準入力を対話的に読む場合は通知を
   表示して Ctrl-D を待ちます。
+  単独の "-" は stdin を表します(ファイルを指定しない場合の既定動作と同じ)。単独の "--" は
+  オプション解釈を終了し、以降のトークンはすべてオプランドです。theme と window-style の値は
+  大文字・小文字と下線/ハイフンの違いを区別せず比較します("Tokyo_Night" と "tokyo-night" は同じテーマ)。
 
 終了コード:
   0  成功

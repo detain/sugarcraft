@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 return [
     'cli.unknown_flag'         => "candy-codeshot: neznámý příznak '{flag}'",
+'cli.unexpected_argument'  => "candy-codeshot: neočekávaný argument '{arg}' - jako vstup lze zadat nejvýše jeden soubor",
     'cli.unknown_theme'       => "candy-codeshot: neznámé téma '{name}'. Známá: dark, light, dracula, tokyo-night, nord",
     'cli.unknown_window_style' => "candy-codeshot: neznámý styl okna '{style}'. Známé: macos, windows-terminal, iterm, hyper, none",
     'cli.unknown_format'      => "candy-codeshot: neznámý formát '{format}'. Známé: svg, png",
@@ -63,6 +64,9 @@ Poznámky:
   volby a každou vynechanou volbu oznámí na stderr. PNG bez souboru
   --output je odmítnuto, když je stdout terminál; interaktivní čtení ze
   stdin zobrazí oznámení a čeká na Ctrl-D.
+  Samotné „-“ značí stdin (bez souboru tak jako tak výchozí); samotné „--“ ukončuje zpracování voleb a
+  každý další token je operand. Hodnoty theme a window-style se porovnávají bez rozdílu
+  velikosti písmen a podtržení („Tokyo_Night“ i „tokyo-night“ volí stejné téma).
 
 Návratové kódy:
   0  úspěch

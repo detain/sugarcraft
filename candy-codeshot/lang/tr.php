@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 return [
     'cli.unknown_flag'         => "candy-codeshot: bilinmeyen bayrak '{flag}'",
+'cli.unexpected_argument'  => "candy-codeshot: beklenmeyen argüman '{arg}' - en fazla bir giriş dosyası verilebilir",
     'cli.unknown_theme'       => "candy-codeshot: bilinmeyen tema '{name}'. Bilinenler: dark, light, dracula, tokyo-night, nord",
     'cli.unknown_window_style' => "candy-codeshot: bilinmeyen pencere tarzı '{style}'. Bilinenler: macos, windows-terminal, iterm, hyper, none",
     'cli.unknown_format'      => "candy-codeshot: bilinmeyen biçem '{format}'. Bilinenler: svg, png",
@@ -63,6 +64,9 @@ Notlar:
   bıraktığı her birini stderr üzerinde duyurur. stdout bir terminalse
   --output dosyasız PNG reddedilir; etkileşimli stdin okuma bir uyarı
   yazdırır ve Ctrl-D bekler.
+  Tek başına "-" stdin'i belirtir (dosya yokken zaten varsayılan); tek başına "--" seçenek
+  çözümlemesini bitirir, sonrasında her belirteç bir işlenendir. theme ve window-style değerleri
+  büyük/küçük harf ve alt çizgi ayrımı yapılmadan karşılaştırılır.
 
 Çıkış kodları:
   0  başarılı

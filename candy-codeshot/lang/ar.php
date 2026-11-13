@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 return [
     'cli.unknown_flag'         => "candy-codeshot: خيار غير معروف '{flag}'",
+'cli.unexpected_argument'  => "candy-codeshot: وسيط غير متوقع '{arg}' - ملف إدخال واحد كحد أقصى",
     'cli.unknown_theme'       => "candy-codeshot: سمة غير معروفة '{name}'. المعروفة: dark, light, dracula, tokyo-night, nord",
     'cli.unknown_window_style' => "candy-codeshot: نمط نافذة غير معروف '{style}'. المعروفة: macos, windows-terminal, iterm, hyper, none",
     'cli.unknown_format'      => "candy-codeshot: صيغة غير معروفة '{format}'. المعروفة: svg, png",
@@ -62,6 +63,8 @@ candy-codeshot - يعرض الشفرة أو مخرجات الطرفية كلقط
   --unsafe-paths. إخراج PNG يتجاهل خيارات SVG فقط أعلاه ويعلن عن كل خيار متروك
   على stderr. يُرفض تنسيق PNG بدون ملف --output عندما يكون stdout
   طرفية؛ وتطبع قراءة stdin التفاعلية تنبيهاً وتنتظر Ctrl-D.
+  يسمّي "-" المفرد stdin (وهو الوضع الافتراضي عند غياب الملف أصلًا)؛ وينهي "--" المفرد تحليل الخيارات،
+  فيصبح كل رمز بعده وسيطًا. وتُقارَن قيم theme وwindow-style دون تمييز لحالة الأحرف أو الخطوط السفلية.
 
 رموز الخروج:
   0  نجاح

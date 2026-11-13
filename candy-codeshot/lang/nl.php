@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 return [
     'cli.unknown_flag'         => "candy-codeshot: onbekende vlag '{flag}'",
+'cli.unexpected_argument'  => "candy-codeshot: onverwacht argument '{arg}' - maximaal één invoerbestand",
     'cli.unknown_theme'       => "candy-codeshot: onbekend thema '{name}'. Bekend: dark, light, dracula, tokyo-night, nord",
     'cli.unknown_window_style' => "candy-codeshot: onbekende vensterstijl '{style}'. Bekend: macos, windows-terminal, iterm, hyper, none",
     'cli.unknown_format'      => "candy-codeshot: onbekend formaat '{format}'. Bekend: svg, png",
@@ -63,6 +64,10 @@ Opmerkingen:
   en meldt elke weggelaten optie op stderr. PNG zonder --output-bestand
   wordt geweigerd als stdout een terminal is; interactief stdin lezen
   toont een melding en wacht op Ctrl-D.
+  Een los "-" staat voor stdin (zonder bestand al de standaard); een los "--" beeindigt de
+  optie-analyse, elk volgend token is een operand. De waarden van theme en window-style worden zonder
+  onderscheid van hoofd-/kleurletters en liggende streepjes vergeleken ("Tokyo_Night" en "tokyo-night"
+  kiezen hetzelfde thema).
 
 Exitcodes:
   0  succes

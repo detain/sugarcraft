@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 return [
     'cli.unknown_flag'         => "candy-codeshot: unrecognised flag '{flag}'",
+    'cli.unexpected_argument'  => "candy-codeshot: unexpected argument '{arg}' - at most one input file may be given",
     'cli.unknown_theme'        => "candy-codeshot: unknown theme '{name}'. Known: dark, light, dracula, tokyo-night, nord",
     'cli.unknown_window_style' => "candy-codeshot: unknown window style '{style}'. Known: macos, windows-terminal, iterm, hyper, none",
     'cli.unknown_format'       => "candy-codeshot: unknown format '{format}'. Known: svg, png",
@@ -62,7 +63,11 @@ Notes:
   unless --unsafe-paths is given. PNG output ignores the SVG-only options
   above and announces each one it drops on stderr. PNG without an --output
   file is refused when stdout is a terminal; reading stdin interactively
-  prints a notice and waits for Ctrl-D.
+  prints a notice and waits for Ctrl-D. A lone "-" names stdin (the default
+  when no file is given anyway); a lone "--" ends option parsing, so every
+  token after it is an operand. Theme and window-style values are matched
+  case- and underscore-insensitively ("Tokyo_Night" and "tokyo-night" pick
+  the same theme).
 
 Exit codes:
   0  success

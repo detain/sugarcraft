@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 return [
     'cli.unknown_flag'         => "candy-codeshot: неизвестный флаг '{flag}'",
+'cli.unexpected_argument'  => "candy-codeshot: неожиданный аргумент '{arg}' - не более одного входного файла",
     'cli.unknown_theme'       => "candy-codeshot: неизвестная тема '{name}'. Известные: dark, light, dracula, tokyo-night, nord",
     'cli.unknown_window_style' => "candy-codeshot: неизвестный стиль окна '{style}'. Известные: macos, windows-terminal, iterm, hyper, none",
     'cli.unknown_format'      => "candy-codeshot: неизвестный формат '{format}'. Известные: svg, png",
@@ -63,6 +64,9 @@ candy-codeshot - рендерит код или вывод терминала в
   о каждом отброшенном в stderr. PNG без файла --output отклоняется,
   когда stdout является терминалом; интерактивное чтение из stdin
   печатает уведомление и ждёт Ctrl-D.
+  Одиночный «-» означает stdin (это и так режим по умолчанию без файла); одиночное «--» завершает
+  разбор опций, все последующие токены — операнды. Значения theme и window-style сравниваются без учёта
+  регистра и подчёркиваний («Tokyo_Night» и «tokyo-night» выбирают одну и ту же тему).
 
 Коды выхода:
   0  успех

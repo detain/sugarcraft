@@ -20,6 +20,18 @@ declare(strict_types=1);
  * the CWD, missing ext-gd).
  */
 
+// candy-codeshot-057 (a): PSR-12 §5 puts imports at the top of the file.
+// They used to sit below the autoload walk, which looks like a mistake and
+// invites "tidying" them further down — it is not load-bearing: `use` is a
+// compile-time alias only, no class is touched before the require below.
+use SugarCraft\CodeShot\CodeHighlighter;
+use SugarCraft\CodeShot\Lang;
+use SugarCraft\CodeShot\LanguageDetector;
+use SugarCraft\CodeShot\PngRenderer;
+use SugarCraft\CodeShot\SvgRenderer;
+use SugarCraft\CodeShot\Support\Version;
+use SugarCraft\CodeShot\Theme;
+
 // The three house autoload shapes, in the order candy-mdview probes them:
 // a standalone dev checkout, a composer-installed dependency copied to its
 // real dist path under <project>/vendor/sugarcraft/candy-codeshot/bin, and a
@@ -33,19 +45,20 @@ $autoloadCandidates = [
     __DIR__ . '/../../vendor/autoload.php',
 ];
 
-// A phar build stamps THIS file as the archive stub: under `php
-// candy-codeshot.phar` __FILE__ names the archive while \Phar::running(false)
-// answers '' (measured PHP 8.3 — a bare '/x.phar/entry' path fails is_file,
-// so the probe must be the 'phar://' stream over the real archive path);
-// when required from inside the archive, running() answers the path instead.
-// Either identity resolves the archive, and once found its bundled vendor/
-// becomes the ONLY candidate — a working-tree vendor beside a published
-// .phar must never outrank it. Outside an archive nothing changes.
-$archive = str_ends_with(__FILE__, '.phar')
-    ? 'phar://' . __FILE__
-    : (\Phar::running(false) !== '' ? 'phar://' . \Phar::running(false) : '');
-if ($archive !== '') {
-    $autoloadCandidates = [$archive . '/vendor/autoload.php'];
+// candy-codeshot-055: the archive identity is probed through the one
+// runningArchivePath() below (PHP binds unconditional top-level functions at
+// compile time, so calling it here is legal even though the declaration
+// follows). A phar build stamps THIS file as the archive stub: under
+// `php candy-codeshot.phar` __FILE__ names the archive while
+// \Phar::running(false) answers ''; when required from inside the archive,
+// running() answers the path instead. A bare '/x.phar/entry' path fails
+// is_file, so the probe rides the 'phar://' stream over the real archive
+// path. Once the archive is found its bundled vendor/ becomes the ONLY
+// candidate — a working-tree vendor beside a published .phar must never
+// outrank it. Outside an archive nothing changes.
+$archivePath = runningArchivePath();
+if ($archivePath !== '') {
+    $autoloadCandidates = ['phar://' . $archivePath . '/vendor/autoload.php'];
 }
 
 $autoloadFound = false;
@@ -62,14 +75,6 @@ if (!$autoloadFound) {
     fwrite(STDERR, "candy-codeshot: cannot find composer autoload.php - run 'composer install' in this checkout, or invoke the bin through a composer-installed project's vendor/bin\n");
     exit(1);
 }
-
-use SugarCraft\CodeShot\CodeHighlighter;
-use SugarCraft\CodeShot\Lang;
-use SugarCraft\CodeShot\LanguageDetector;
-use SugarCraft\CodeShot\PngRenderer;
-use SugarCraft\CodeShot\SvgRenderer;
-use SugarCraft\CodeShot\Support\Version;
-use SugarCraft\CodeShot\Theme;
 
 // The catalogs ship sixteen locales, but nothing used to SELECT one — every
 // translated string stayed dormant behind the built-in default. Pick the
@@ -295,12 +300,16 @@ while (($arg = array_shift($argv)) !== null) {
         case '--border-radius': $borderRadius = candy_codeshot_int_flag('--border-radius', array_shift($argv), MAX_BORDER_RADIUS); $sawBorderRadius = true; break;
         case '--window-style':
             $styleRaw = candy_codeshot_flag_value('--window-style', array_shift($argv));
+            // candy-codeshot-065: fold like --theme does (case- and
+            // underscore-insensitive). The raw compare made `--theme Tokyo_Night`
+            // work while the equally reasonable `--window-style MacOS` exited 2.
+            $styleKey = strtolower(str_replace('_', '-', $styleRaw));
             $valid = ['macos', 'windows-terminal', 'iterm', 'hyper', 'none'];
-            if (!in_array($styleRaw, $valid, true)) {
+            if (!in_array($styleKey, $valid, true)) {
                 fwrite(STDERR, Lang::t('cli.unknown_window_style', ['style' => $styleRaw]) . "\n");
                 exit(2);
             }
-            $windowStyle = $styleRaw;
+            $windowStyle = $styleKey;
             break;
         case '--ligatures':     $ligatures    = true; $sawLigatures = true; break;
         case '--unsafe-paths':  $unsafePaths  = true; break;
@@ -365,9 +374,37 @@ while (($arg = array_shift($argv)) !== null) {
         case '--help':
             fwrite(STDOUT, Lang::t('cli.usage') . "\n");
             exit(0);
+        case '--':
+            // candy-codeshot-056: POSIX option terminator — every token after
+            // `--` is an operand, never a flag. The first names the input
+            // file; extras are rejected by their own name.
+            while (($operand = array_shift($argv)) !== null) {
+                if ($inputPath === null) {
+                    $inputPath = $operand;
+                } else {
+                    fwrite(STDERR, Lang::t('cli.unexpected_argument', ['arg' => $operand]) . "\n");
+                    exit(2);
+                }
+            }
+            break 2;
+        case '-':
+            // The conventional stdin alias (-056): reading stdin is already
+            // the default when no path is supplied, so the alias is accepted
+            // as a no-op — and refused by name only when a real path has
+            // already claimed the input.
+            if ($inputPath !== null) {
+                fwrite(STDERR, Lang::t('cli.unexpected_argument', ['arg' => $arg]) . "\n");
+                exit(2);
+            }
+            break;
         default:
             if ($inputPath === null && !str_starts_with($arg, '-')) {
                 $inputPath = $arg;
+            } elseif (!str_starts_with($arg, '-')) {
+                // -056: a second operand was mis-named "unrecognised flag" —
+                // nothing about `notes.txt` looks like a flag.
+                fwrite(STDERR, Lang::t('cli.unexpected_argument', ['arg' => $arg]) . "\n");
+                exit(2);
             } else {
                 fwrite(STDERR, Lang::t('cli.unknown_flag', ['flag' => $arg]) . "\n");
                 exit(2);
@@ -536,9 +573,12 @@ if ($format === 'png') {
         $renderer = $renderer->withLigatures(true);
     }
     if ($fontPath !== null) {
-        // The path was existence/sniffed above, so withFont's own not-found
-        // throw is unreachable from this CLI today; the catch stays as the
-        // fail-closed net for a file deleted between the check and the embed.
+        // Existence, confinement and signature checks already ran above, so
+        // withFont's own not-found throw is unreachable from this CLI today;
+        // the catch stays as the fail-closed net for a file deleted between
+        // the check and the embed. (candy-codeshot-098: this comment used to
+        // say "was existence/sniffed" — the grammar was as broken as the
+        // sentence claims the legs are not.)
         try {
             $renderer = $renderer->withFont($fontPath);
         } catch (\InvalidArgumentException $e) {
@@ -554,7 +594,11 @@ if ($format === 'png') {
             // Unreachable from the CLI today: the parse gate rejects
             // `--highlight 0:5` / `5:3` before any renderer is built. The
             // catch stays as the fail-closed net for renderer-contract drift,
-            // mirroring the withFont leg above.
+            // mirroring the withFont leg above. candy-codeshot-073 pinned
+            // exactly this note: the frame is localized while {reason}
+            // carries the engine's English message — a drift that only
+            // surfaces if the parse gate and this contract ever disagree,
+            // and then in two tongues at once.
             fwrite(STDERR, Lang::t('cli.highlight_rejected', ['spec' => $start . ':' . $end, 'reason' => $e->getMessage()]) . "\n");
             exit(2);
         }

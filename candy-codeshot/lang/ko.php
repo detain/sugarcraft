@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 return [
     'cli.unknown_flag'         => "candy-codeshot: 인식할 수 없는 플래그 '{flag}'",
+'cli.unexpected_argument'  => "candy-codeshot: 예상치 못한 인자 '{arg}' - 입력 파일은 최대 하나만 허용",
     'cli.unknown_theme'       => "candy-codeshot: 알 수 없는 테마 '{name}'. 알려진 테마: dark, light, dracula, tokyo-night, nord",
     'cli.unknown_window_style' => "candy-codeshot: 알 수 없는 창 스타일 '{style}'. 알려진 스타일: macos, windows-terminal, iterm, hyper, none",
     'cli.unknown_format'      => "candy-codeshot: 알 수 없는 형식 '{format}'. 알려진 형식: svg, png",
@@ -62,6 +63,9 @@ candy-codeshot - 코드 또는 터미널 출력을 SVG 또는 PNG 스크린샷�
   있어야 합니다. PNG 출력은 위 SVG 전용 옵션을 무시하며 각 생략된 옵션을
   stderr로 알림니다. stdout이 터미널이면 --output 파일 없는 PNG 출력은
   거부됩니다. 대화형 stdin 읽기는 알림을 출력하고 Ctrl-D를 기다립니다.
+  단독 "-"은 stdin을 나타냅니다(파일이 없을 때의 기본값과 동일). 단독 "--"는 옵션 해석을 끝내며
+  이후 모든 토큰은 피연산자입니다. theme과 window-style 값은 대소문자와 밑줄/하이픈 차이를
+  무시하고 비교합니다("Tokyo_Night"과 "tokyo-night"은 같은 테마).
 
 종료 코드:
   0  성공

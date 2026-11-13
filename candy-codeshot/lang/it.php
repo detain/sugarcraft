@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 return [
     'cli.unknown_flag'         => "candy-codeshot: flag non riconosciuto '{flag}'",
+'cli.unexpected_argument'  => "candy-codeshot: argomento inatteso '{arg}' - al massimo un file di input",
     'cli.unknown_theme'       => "candy-codeshot: tema sconosciuto '{name}'. Conosciuti: dark, light, dracula, tokyo-night, nord",
     'cli.unknown_window_style' => "candy-codeshot: stile finestra sconosciuto '{style}'. Conosciuti: macos, windows-terminal, iterm, hyper, none",
     'cli.unknown_format'      => "candy-codeshot: formato sconosciuto '{format}'. Conosciuti: svg, png",
@@ -63,6 +64,9 @@ Note:
   opzione scartata su stderr. PNG senza file --output è rifiutato quando
   stdout è un terminale; la lettura interattiva di stdin stampa un avviso
   e attende Ctrl-D.
+  Un "-" isolato designa stdin (comunque il default senza file); "--" termina l'analisi delle opzioni e
+  ogni token successivo è un operando. I valori di theme e window-style sono confrontati senza distinzione
+  di maiuscole e di trattini bassi ("Tokyo_Night" e "tokyo-night" scelgono lo stesso tema).
 
 Codici di uscita:
   0  successo
