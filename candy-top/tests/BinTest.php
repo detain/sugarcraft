@@ -6,6 +6,7 @@ namespace SugarCraft\Top\Tests;
 
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Top\Cli\Help;
 use SugarCraft\Top\Input\KeyTable;
 use SugarCraft\Top\Lang;
 
@@ -36,6 +37,17 @@ final class BinTest extends TestCase
         foreach (KeyTable::keyRows() as $row) {
             $this->assertMatchesRegularExpression('/^  ' . preg_quote($row->keyLabel(), '/') . ' +' . preg_quote($row->description(), '/') . '$/m', $out, 'KEYS is the KeyTable');
         }
+    }
+
+    public function testVersionNeedsNoTtyAndPrintsTheInProcessString(): void
+    {
+        // S-X12 / candy-top-135: the flag a packaging script or a bug
+        // report runs first. The phar leg and the indirect helper existed;
+        // the source-tree bin leg never did — this is that row.
+        [$code, $out, $err] = self::invoke(['--version']);
+        $this->assertSame(0, $code);
+        $this->assertSame(Help::version(), $out, 'child stdout equals the in-process version() byte for byte');
+        $this->assertSame('', $err, 'nothing on stderr; no host probe, no theme scan');
     }
 
     public function testComposerPublishesTheBinary(): void
