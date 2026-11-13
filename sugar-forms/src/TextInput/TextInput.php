@@ -16,6 +16,7 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Forms\Util\RenderSafe;
 use SugarCraft\Style\Style;
 
@@ -24,9 +25,13 @@ use SugarCraft\Style\Style;
  *
  * Handles printable insertion, backspace / delete, arrow / Home / End
  * cursor movement, and a few common Emacs-style chord shortcuts (Ctrl+A
- * / Ctrl+E / Ctrl+U / Ctrl+K). Multibyte-safe — positions and edits use
- * `mb_substr` / `mb_strlen` so a `cursorPos` always refers to a grapheme
- * index, not a byte offset.
+ * / Ctrl+E / Ctrl+U / Ctrl+K). Grapheme- and cell-aware — `cursorPos` is
+ * a codepoint offset quantized to grapheme-cluster boundaries (ICU
+ * segmentation via `Width::nextCluster`): one Left/Right press crosses a
+ * whole cluster (base + combining marks, ZWJ families, skin-tone pairs),
+ * backspace/delete never orphan a mark, and the `width` scroll window is
+ * measured in terminal cells — a 20-wide field shows ten CJK glyphs,
+ * not twenty codepoints.
  *
  * The component embeds a {@see Cursor} so its visual cursor blinks via
  * `Cmd::tick`. The parent Model is responsible for deciding what an
@@ -190,8 +195,8 @@ final class TextInput implements Model
         }
 
         return match ($msg->type) {
-            KeyType::Left      => [$this->moveCursor(max(0, $this->cursorPos - 1)), null],
-            KeyType::Right     => [$this->moveCursor(min($this->length(), $this->cursorPos + 1)), null],
+            KeyType::Left      => [$this->clusterLeft(), null],
+            KeyType::Right     => [$this->clusterRight(), null],
             KeyType::Up        => $this->historyNavigateUp(),
             KeyType::Down      => $this->historyNavigateDown(),
             KeyType::Home      => [$this->moveCursor(0), null],
@@ -238,8 +243,8 @@ final class TextInput implements Model
         return match ($action) {
             self::OVERRIDE_MOVE_START      => [$this->moveCursor(0), null],
             self::OVERRIDE_MOVE_END        => [$this->moveCursor($this->length()), null],
-            self::OVERRIDE_MOVE_LEFT       => [$this->moveCursor(max(0, $this->cursorPos - 1)), null],
-            self::OVERRIDE_MOVE_RIGHT      => [$this->moveCursor(min($this->length(), $this->cursorPos + 1)), null],
+            self::OVERRIDE_MOVE_LEFT       => [$this->clusterLeft(), null],
+            self::OVERRIDE_MOVE_RIGHT      => [$this->clusterRight(), null],
             self::OVERRIDE_BACKSPACE       => [$this->backspace(), null],
             self::OVERRIDE_DELETE_FORWARD  => [$this->deleteForward(), null],
             self::OVERRIDE_DELETE_TO_START => [$this->deleteToStart(), null],
@@ -316,8 +321,8 @@ final class TextInput implements Model
         }
 
         return match ($msg->type) {
-            KeyType::Left      => [$this->moveCursor(max(0, $this->cursorPos - 1)), null],
-            KeyType::Right     => [$this->moveCursor(min($this->length(), $this->cursorPos + 1)), null],
+            KeyType::Left      => [$this->clusterLeft(), null],
+            KeyType::Right     => [$this->clusterRight(), null],
             KeyType::Home      => [$this->moveCursor(0), null],
             KeyType::End       => [$this->moveCursor($this->length()), null],
             KeyType::Backspace => [$this->backspace(), null],
@@ -346,10 +351,10 @@ final class TextInput implements Model
 
             // Cursor movements
             $action === VimAction::CursorLeft
-                => [$this->moveCursor(max(0, $this->cursorPos - 1)), null],
+                => [$this->clusterLeft(), null],
 
             $action === VimAction::CursorRight
-                => [$this->moveCursor(min($this->length(), $this->cursorPos + 1)), null],
+                => [$this->clusterRight(), null],
 
             $action === VimAction::CursorLineStart
                 => [$this->moveCursor(0), null],
@@ -394,7 +399,7 @@ final class TextInput implements Model
 
         // 'a' = append (move cursor right before entering insert mode)
         if ($rune === 'a') {
-            $cursorPos = min($this->length(), $cursorPos + 1);
+            $cursorPos = $this->nextClusterStart($cursorPos);
         }
         // 'A' = append at end of line
         elseif ($rune === 'A') {
@@ -471,19 +476,13 @@ final class TextInput implements Model
     }
 
     /**
-     * Delete character under cursor (vim x).
+     * Delete character under cursor (vim x) — the same whole-cluster
+     * deletion the Delete key performs (SF-6): `x` on the base of an
+     * accented cluster takes the marks with it.
      */
     private function vimDeleteChar(): self
     {
-        $len = $this->length();
-        if ($len === 0 || $this->cursorPos >= $len) {
-            return $this;
-        }
-
-        $before = mb_substr($this->value, 0, $this->cursorPos, 'UTF-8');
-        $after = mb_substr($this->value, $this->cursorPos + 1, null, 'UTF-8');
-
-        return $this->mutate(value: $before . $after);
+        return $this->deleteForward();
     }
 
     /** Render the component as a multi-line ANSI string. */
@@ -502,38 +501,65 @@ final class TextInput implements Model
         }
 
         $display = $this->displayedValue();
-        $len     = mb_strlen($display, 'UTF-8');
-        $pos     = $this->cursorPos;
+        $runs    = self::graphemeRuns($display);
+        $count   = count($runs);
+        $totalCp = $count > 0 ? $runs[$count - 1]['cpEnd'] : 0;
+        $pos     = min($this->cursorPos, $totalCp);
 
-        // Scroll window when width > 0 so the cursor stays visible.
-        $start = $this->offset;
-        if ($this->width > 0) {
-            if ($pos < $start) {
-                $start = $pos;
+        // The run the cursor paints on: the run whose end is right of $pos
+        // (a cursor left mid-cluster by a charLimit-clipped paste still
+        // shows its WHOLE cluster — never half an emoji in reverse video);
+        // at end-of-text a virtual one-cell space run.
+        $j = $count;
+        for ($i = 0; $i < $count; $i++) {
+            if ($pos < $runs[$i]['cpEnd']) {
+                $j = $i;
+                break;
             }
-            if ($pos - $start >= $this->width) {
-                $start = $pos - $this->width + 1;
-            }
-            $start = max(0, min($start, max(0, $len - $this->width + 1)));
-        } else {
-            $start = 0;
         }
 
-        $sliceLen = $this->width > 0 ? $this->width : null;
-        $slice    = mb_substr($display, $start, $sliceLen, 'UTF-8');
-        $relPos   = $pos - $start;
+        // Scroll window in TERMINAL CELLS (sugar-forms-003): the old
+        // codepoint budget showed ~2x too much CJK. The cursor run keeps
+        // its slot, the runs left of it are admitted newest-first, then the
+        // rest of the budget fills behind it.
+        $first = 0;
+        $last  = $count;
+        if ($this->width > 0) {
+            $used  = $j < $count ? max(1, $runs[$j]['cells']) : 1;
+            $first = $j;
+            for ($i = $j - 1; $i >= 0; $i--) {
+                if ($used + $runs[$i]['cells'] > $this->width) {
+                    break;
+                }
+                $used += $runs[$i]['cells'];
+                $first = $i;
+            }
+            $last = min($count, $j + 1);
+            while ($last < $count && $used + $runs[$last]['cells'] <= $this->width) {
+                $used += $runs[$last]['cells'];
+                $last++;
+            }
+        }
+
+        $textOf = static fn (int $from, int $to): string => $to <= $from
+            ? ''
+            : implode('', array_map(
+                static fn (array $run): string => $run['text'],
+                array_slice($runs, $from, $to - $from),
+            ));
 
         if (!$this->focused) {
-            return $prefixStr . $stylePrompt($this->prompt) . $styleText($slice) . $suffixStr;
+            return $prefixStr . $stylePrompt($this->prompt) . $styleText($textOf($first, $last)) . $suffixStr;
         }
 
-        $sliceLenActual = mb_strlen($slice, 'UTF-8');
-        $before = mb_substr($slice, 0, $relPos, 'UTF-8');
-        $charAt = $relPos < $sliceLenActual ? mb_substr($slice, $relPos, 1, 'UTF-8') : ' ';
-        $after  = $relPos < $sliceLenActual ? mb_substr($slice, $relPos + 1, null, 'UTF-8') : '';
-
+        $charAt     = $j < $count ? $runs[$j]['text'] : ' ';
         $cursorView = $this->cursor->setChar($charAt)->view();
-        return $prefixStr . $stylePrompt($this->prompt) . $styleText($before) . $cursorView . $styleText($after) . $suffixStr;
+        return $prefixStr
+            . $stylePrompt($this->prompt)
+            . $styleText($textOf($first, $j))
+            . $cursorView
+            . $styleText($textOf($j + 1, $last))
+            . $suffixStr;
     }
 
     // ---- focus + setters ------------------------------------------------
@@ -931,7 +957,7 @@ final class TextInput implements Model
         return $this->err;
     }
 
-    /** Manually move the cursor (clamped to `[0, length()]`). */
+    /** Manually move the cursor (clamped to `[0, length()]` and snapped down to the start of the cluster at the target). */
     public function setCursor(int $pos): self
     {
         return $this->moveCursor($pos);
@@ -1043,24 +1069,181 @@ final class TextInput implements Model
         );
     }
 
+    // ---- grapheme-cluster + cell math (sugar-forms-003) -----------------
+
+    /**
+     * Walk $text one grapheme cluster at a time (ICU segmentation via
+     * Width::nextCluster — the same helper Viewport and TextArea run on),
+     * scoring each cluster its terminal-cell cost. A ZWJ family is ONE
+     * entry costing two cells, not three entries costing six; `e` + U+0301
+     * is one entry costing one cell. Every cursor move, deletion and window
+     * slice quantizes through this walk, so the cursor never sits inside a
+     * cluster for user-driven motion and the width budget counts cells,
+     * never codepoints.
+     *
+     * @return list<array{text:string, cells:int, cpStart:int, cpEnd:int}>
+     */
+    private static function graphemeRuns(string $text): array
+    {
+        $runs  = [];
+        $byte  = 0;
+        $cp    = 0;
+        $bytes = strlen($text);
+        while ($byte < $bytes) {
+            $cluster = Width::nextCluster($text, $byte);
+            if ($cluster === '') {
+                // A stray byte is a run of one; advancing by strlen of a
+                // refused answer would stall the walk on invalid input.
+                $cluster = substr($text, $byte, 1);
+            }
+            $runs[] = [
+                'text'    => $cluster,
+                'cells'   => Width::of($cluster),
+                'cpStart' => $cp,
+                'cpEnd'   => $cp + mb_strlen($cluster, 'UTF-8'),
+            ];
+            $byte += strlen($cluster);
+            $cp   += mb_strlen($cluster, 'UTF-8');
+        }
+        return $runs;
+    }
+
+    /**
+     * Ascending codepoint offsets of the cluster boundaries of the buffer:
+     * 0 first, then one end-offset per cluster (the last equals length()).
+     * For a value with no multi-codepoint clusters this is just 0..n — the
+     * unit the old codepoint math used, which is why every existing pin
+     * still holds.
+     *
+     * @return list<int>
+     */
+    private function clusterBoundaries(): array
+    {
+        $bounds = [0];
+        foreach (self::graphemeRuns($this->value) as $run) {
+            $bounds[] = $run['cpEnd'];
+        }
+        return $bounds;
+    }
+
+    /**
+     * The cluster boundary just left of $pos (0 at the start) — where a
+     * Left press lands, and the start of the cluster a backspace doomed.
+     *
+     * @return int
+     */
+    private function prevClusterStart(int $pos): int
+    {
+        $target = 0;
+        foreach ($this->clusterBoundaries() as $bound) {
+            if ($bound >= $pos) {
+                break;
+            }
+            $target = $bound;
+        }
+        return $target;
+    }
+
+    /**
+     * The next cluster boundary strictly right of $pos (length() at the
+     * end) — where a Right press lands.
+     */
+    private function nextClusterStart(int $pos): int
+    {
+        foreach ($this->clusterBoundaries() as $bound) {
+            if ($bound > $pos) {
+                return $bound;
+            }
+        }
+        return $this->length();
+    }
+
+    /** $pos snapped down to the start of the cluster it sits in (identity at a boundary). */
+    private function snapToClusterStart(int $pos): int
+    {
+        $target = 0;
+        foreach ($this->clusterBoundaries() as $bound) {
+            if ($bound > $pos) {
+                break;
+            }
+            $target = $bound;
+        }
+        return $target;
+    }
+
+    /**
+     * The cluster immediately left of $pos, as [start, end] codepoint
+     * offsets. When $pos sits inside a cluster the whole containing cluster
+     * is the doomed span (SF-6: backspace must never orphan a combining
+     * mark). Caller guarantees $pos > 0.
+     *
+     * @return array{0:int, 1:int}
+     */
+    private function backwardClusterSpan(int $pos): array
+    {
+        $bounds = $this->clusterBoundaries();
+        for ($i = 1, $count = count($bounds); $i < $count; $i++) {
+            if ($bounds[$i] >= $pos) {
+                return [$bounds[$i - 1], $bounds[$i]];
+            }
+        }
+        return [0, 0];
+    }
+
+    /**
+     * The cluster under $pos, as [start, end] codepoint offsets, or null
+     * past the end. Boundary-exact $pos deletes the run starting there
+     * (one cluster in ASCII — identical to the old `+1` math).
+     *
+     * @return ?array{0:int, 1:int}
+     */
+    private function forwardClusterSpan(int $pos): ?array
+    {
+        $bounds = $this->clusterBoundaries();
+        for ($i = 1, $count = count($bounds); $i < $count; $i++) {
+            if ($bounds[$i] > $pos) {
+                return [$bounds[$i - 1], $bounds[$i]];
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Splice out codepoints [from, to) and hand back the survivor.
+     */
+    private function spliceOut(int $from, int $to): string
+    {
+        return mb_substr($this->value, 0, $from, 'UTF-8')
+            . mb_substr($this->value, $to, null, 'UTF-8');
+    }
+
+    private function clusterLeft(): self
+    {
+        return $this->mutate(cursorPos: $this->prevClusterStart($this->cursorPos));
+    }
+
+    private function clusterRight(): self
+    {
+        return $this->mutate(cursorPos: $this->nextClusterStart($this->cursorPos));
+    }
+
     private function backspace(): self
     {
         if ($this->cursorPos === 0) {
             return $this;
         }
-        $before = mb_substr($this->value, 0, $this->cursorPos - 1, 'UTF-8');
-        $after  = mb_substr($this->value, $this->cursorPos, null, 'UTF-8');
-        return $this->mutate(value: $before . $after, cursorPos: $this->cursorPos - 1);
+        [$cut, $end] = $this->backwardClusterSpan($this->cursorPos);
+        return $this->mutate(value: $this->spliceOut($cut, $end), cursorPos: $cut);
     }
 
     private function deleteForward(): self
     {
-        if ($this->cursorPos >= $this->length()) {
+        $span = $this->forwardClusterSpan($this->cursorPos);
+        if ($span === null) {
             return $this;
         }
-        $before = mb_substr($this->value, 0, $this->cursorPos, 'UTF-8');
-        $after  = mb_substr($this->value, $this->cursorPos + 1, null, 'UTF-8');
-        return $this->mutate(value: $before . $after);
+        [$cut, $end] = $span;
+        return $this->mutate(value: $this->spliceOut($cut, $end));
     }
 
     private function deleteToStart(): self
@@ -1078,7 +1261,7 @@ final class TextInput implements Model
     private function moveCursor(int $pos): self
     {
         $clamped = max(0, min($this->length(), $pos));
-        return $this->mutate(cursorPos: $clamped);
+        return $this->mutate(cursorPos: $this->snapToClusterStart($clamped));
     }
 
     /**
