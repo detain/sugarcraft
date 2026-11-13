@@ -182,7 +182,7 @@ echo $toast-&gt;view($bg);</code></pre>
     <div class="feature-grid">
       <div class="feature"><strong>Four types</strong><span>Error, Warning, Info, Success — severity carried by icon + colour; add <code>withAccessibleText()</code> for a plain-text severity word (box shape and border glyphs are the same across types, so colour is never the sole carrier).</span></div>
             <div class="feature"><strong>Positions</strong><span>9 positions: TopLeft, TopCenter, TopRight, BottomLeft, BottomCenter, BottomRight, MiddleLeft, MiddleCenter, MiddleRight.</span></div>
-            <div class="feature"><strong>Auto-dismiss</strong><span>Configurable duration. Passing <code>null</code> $expiresAt at the alert()/progressToast() doors means &quot;use the configured duration&quot; — persistence is reached by keeping the toast duration unset or through the explicit sentinel (<code>withoutExpiry()</code>/<code>cancelAlert()</code>).</span></div>
+            <div class="feature"><strong>Auto-dismiss</strong><span>Configurable duration. Passing <code>null</code> $expiresAt at the alert()/progressToast() doors means &quot;use the configured duration&quot; — persistence is reached by keeping the toast duration unset or through the explicit sentinel (<code>withCancelledExpiry()</code>, deprecated alias <code>withoutExpiry()</code>, or <code>cancelAlert()</code>).</span></div>
             <div class="feature"><strong>Symbol sets</strong><span>NerdFont, Unicode, or Ascii.</span></div>
             <div class="feature"><strong>Overflow control</strong><span>DropOldest, DropNewest, or Enqueue when maxConcurrent is exceeded.</span></div>
             <div class="feature"><strong>Progress toasts</strong><span>Inline progress bar beneath the message body — by default the bar speaks in glyph and colour; the numeric percentage (0–100%) prints only under <code>withAccessibleText()</code>.</span></div>
@@ -243,7 +243,7 @@ echo $toast-&gt;view($bg);</code></pre>
 <tr><td>Alert</td><td>withActions(list&lt;Action&gt;)</td><td>Attach action buttons</td></tr>
 <tr><td>Alert</td><td>isExpired(): bool</td><td>Check expiry</td></tr>
 <tr><td>Alert</td><td>withExpiry(float $duration)</td><td>Set expiry from now</td></tr>
-<tr><td>Alert</td><td>withoutExpiry() / withCancelledExpiry()</td><td>Make the alert persistent (never auto-dismisses)</td></tr>
+<tr><td>Alert</td><td>withoutExpiry() / withCancelledExpiry()</td><td>Make the alert persistent (never auto-dismisses) — withCancelledExpiry() is the canonical door, withoutExpiry() is a DEPRECATED forwarder kept working until 2.x</td></tr>
 <tr><td>Alert</td><td>withExtendedExpiry(float)</td><td>Reset the expiry to N seconds from NOW</td></tr>
 <tr><td>Alert</td><td>withBackgroundColor(?Color) / withForegroundColor(?Color) / withBorderColor(?Color)</td><td>Per-alert colour overrides — <code>null</code> is unstyled (no fill / terminal default), not the type colour; the type's colour reaches only the icon</td></tr>
 <tr><td>Action</td><td>new(string $label, \Closure(): void $callback)</td><td>Factory</td></tr>

@@ -22,7 +22,8 @@ final class Alert
      *        front-door wording). null means INHERIT — Toast::alert(),
      *        progressToast() and push() arm the configured withDuration()
      *        timer when one is set; a truly never-expiring alert is expressed
-     *        by $persistent (via withoutExpiry()/withCancelledExpiry() or
+     *        by $persistent (via withCancelledExpiry()/its deprecated alias
+     *        withoutExpiry() or
      *        Toast::cancelAlert()), not by null alone.
      * @param float|null $progress  Progress 0.0–1.0 (non-finite throws; the constructor stores the value as given — withProgress() clamps on attach and render clamps again); null = no progress bar
      * @param list<Action> $actions  Clickable action buttons (validated below:
@@ -36,7 +37,7 @@ final class Alert
      * @param bool $persistent  Explicit never-expire sentinel. When true, the
      *        queueing doors skip duration inheritance entirely. An explicit
      *        withExpiry()/withExtendedExpiry() clears it (a timer was asked
-     *        for); withoutExpiry() sets it. The constructor accepts it
+     *        for); withCancelledExpiry() sets it. The constructor accepts it
      *        alongside an explicit $expiresAt, but isExpired() short-circuits
      *        on the sentinel — the companion timestamp is stored and unread
      *        while persistence stands.
@@ -164,18 +165,28 @@ final class Alert
     }
 
     /**
-     * Alias for {@see withCancelledExpiry()} — makes the alert explicitly
-     * persistent (sets the $persistent sentinel, so the queueing doors will
-     * not re-inherit a duration). The two spellings are the same door and
-     * are documented as aliases: the sentinel once did not exist, and push()
-     * re-inherited an expiry precisely because no state distinguished
-     * "never" from "not stated".
+     * DEPRECATED forwarder to {@see withCancelledExpiry()} — the two spellings
+     * were one door all along, and the twin doubled API surface, census rows,
+     * and greppability in a lib whose naming culture renamed getHistory →
+     * history outright. `withCancelledExpiry()` is the canonical spelling (the
+     * sentinel's own vocabulary); this alias stays callable until 2.x so
+     * existing hosts keep compiling. The sentinel once did not exist at all,
+     * and push() re-inherited an expiry precisely because no state
+     * distinguished "never" from "not stated" — the history the alias name
+     * froze.
+     *
+     * @deprecated use {@see withCancelledExpiry()}; this forwarder is kept
+     *             working (pinned) until 2.x removes it.
      */
     public function withoutExpiry(): self
     {
         return $this->withCancelledExpiry();
     }
 
+    /**
+     * Canonical persistence door: set the persistent sentinel + clear the
+     * expiry (used by `Toast::cancelAlert()`).
+     */
     public function withCancelledExpiry(): self
     {
         return $this->mutate(['expiresAt' => null, 'persistent' => true]);

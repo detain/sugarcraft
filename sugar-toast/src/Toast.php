@@ -301,7 +301,7 @@ final class Toast
      * is left null the alert INHERITS withDuration() — a null $expiresAt is
      * "use the default", not "never expire". For a persistent alert keep the
      * toast's duration unset (the default, or withDuration(null)), queue a
-     * ->withoutExpiry() Alert via push() (that sets the explicit persistent
+     * ->withCancelledExpiry() Alert via push() (that sets the explicit persistent
      * sentinel, which the inheritance door honours),
      * or call cancelAlert() on a queued alert.
      *
@@ -678,7 +678,7 @@ final class Toast
      * Cancel the expiry on the alert at $index, making it persistent —
      * $index addresses {@see activeAlerts()} (the live queue, not the raw
      * array), and the change goes through the explicit sentinel {@see
-     * Alert::withoutExpiry()}. Has no effect if $index is out of bounds or
+     * Alert::withCancelledExpiry()}. Has no effect if $index is out of bounds or
      * the alert is already persistent.
      */
     public function cancelAlert(int $index): self
@@ -688,7 +688,7 @@ final class Toast
             return $this;
         }
         $queue = $this->queue;
-        $queue[$target] = $queue[$target]->withoutExpiry();
+        $queue[$target] = $queue[$target]->withCancelledExpiry();
         return $this->mutate(['queue' => $queue]);
     }
 

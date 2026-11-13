@@ -157,8 +157,8 @@ By default, alerts inherit `withDuration()` for auto-dismiss timing. A `null`
 own explicit sentinel on `Alert`. To get a persistent alert that never expires
 automatically, either keep the toast's duration unset (the default, or
 `withDuration(null)`) so queued alerts inherit nothing, or mark the alert
-itself persistent — `withoutExpiry()` and its alias `withCancelledExpiry()`
-set the sentinel. The sentinel reaches the queue through `push()` alone:
+itself persistent — `withCancelledExpiry()` and its deprecated alias
+`withoutExpiry()` (kept working until 2.x) set the sentinel. The sentinel reaches the queue through `push()` alone:
 `alert()` and `progressToast()` build fresh non-persistent alerts, so on a
 toast with `withDuration()` configured they inherit an expiry whatever the
 intent — cancel one after the fact with `cancelAlert()`. `push()` skips
@@ -171,7 +171,7 @@ $toast = $toast->alert(ToastType::Info, 'Connected');       // never expires
 
 // Per-alert escape hatch from an inherited expiry — persistent is explicit,
 // so push() will NOT re-arm the toast's duration on this alert:
-$alert = (new Alert(ToastType::Info, 'Connected'))->withoutExpiry();
+$alert = (new Alert(ToastType::Info, 'Connected'))->withCancelledExpiry();
 $toast = $toast->push($alert);
 ```
 
@@ -520,8 +520,8 @@ already over the new cap survive until the next push evicts them.
 | `Alert` | `->borderColor: ?Color` | Box-glyph (border) colour (`null` = terminal default) |
 | `Alert` | `->persistent: bool` | Explicit never-expire sentinel: the queueing doors skip duration inheritance while it is set, and `isExpired()` short-circuits on it — a companion `$expiresAt` accepted alongside is stored but unread while persistence stands |
 | `Alert` | `->id: ?string` | Stable identity for update-in-place: re-queuing an alert with the same id through `alert()`/`progressToast()`/`push()` REPLACES the live alert at its queue position instead of appending a second box; `null` = anonymous, always appends |
-| `Alert` | `withoutExpiry()` | Make this alert persistent (never auto-dismisses) — alias of `withCancelledExpiry()`, sets the explicit sentinel |
-| `Alert` | `withCancelledExpiry()` | Set the persistent sentinel + clear the expiry (used by `Toast::cancelAlert()`) |
+| `Alert` | `withoutExpiry()` | DEPRECATED forwarder to `withCancelledExpiry()` (kept working until 2.x) — makes the alert persistent (never auto-dismisses) via the explicit sentinel |
+| `Alert` | `withCancelledExpiry()` | Canonical persistence door: set the persistent sentinel + clear the expiry (used by `Toast::cancelAlert()`) |
 | `Alert` | `withExtendedExpiry(float)` | Reset the expiry to N seconds from NOW |
 | `Alert` | `withBackgroundColor(?Color)` | Override box background (`null` = no fill, plain render) |
 | `Alert` | `withForegroundColor(?Color)` | Override text colour (`null` = terminal default, not the type colour) |
