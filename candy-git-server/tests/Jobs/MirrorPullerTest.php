@@ -67,7 +67,6 @@ final class MirrorPullerTest extends TestCase
     public function testConstructorParsesConfiguredSchedule(): void
     {
         $puller = $this->puller('@every 8h');
-
         $this->assertSame(8 * 3600, $puller->schedule()->intervalSeconds);
     }
 
@@ -445,5 +444,129 @@ final class MirrorPullerTest extends TestCase
         $puller->detach();
 
         $this->assertFalse($puller->isAttached());
+    }
+
+    // -------------------------------------------------------------------------
+    // S25 (finding 044): persisted cadence + cross-process mirror lock
+    // -------------------------------------------------------------------------
+
+    /** A repo with a REAL git directory — the locked/stamped shapes. */
+    private function gitRepo(string $name): Repo
+    {
+        $path = $this->tmpDir . '/' . $name;
+        \mkdir($path . '/.git', 0755, true);
+
+        return Repo::new($name, $path)->withMirrorFrom('https://up.invalid/r.git');
+    }
+
+    private function captureErrorLog(callable $fn): string
+    {
+        $log = $this->tmpDir . '/errlog-' . \uniqid('', true);
+        $previous = \ini_get('error_log');
+        \ini_set('error_log', $log);
+        try {
+            $fn();
+        } finally {
+            \ini_set('error_log', $previous === false ? '' : $previous);
+        }
+
+        return \is_file($log) ? (string) \file_get_contents($log) : '';
+    }
+
+    public function testPullStampsTheAttemptIntoTheMetadataPlaneAndAFreshProcessHonorsIt(): void
+    {
+        $repo = $this->gitRepo('cadence');
+        $puller = $this->puller();
+        $puller->registerRepo($repo);
+        $this->assertCount(1, $puller->dueMirrors(1000), 'never-pulled is due');
+        $this->assertTrue($puller->pull($repo, 1000));
+        $this->assertSame(1000, $repo->mirrorLastAttempt(), 'the attempt must live on disk, not just in this process');
+
+        // The cron shape 044 died on: a BRAND-NEW puller object (the next
+        // tick's fresh php process) must read the stamp off disk.
+        $fresh = $this->puller();
+        $fresh->registerRepo($repo);
+        $this->assertSame([], $fresh->dueMirrors(1500), '500s after a stamped attempt (interval 600s) a fresh process may NOT re-pull');
+        $this->assertCount(1, $fresh->dueMirrors(1700), 'once the interval passes, disk cadence releases the mirror again');
+        $this->assertSame(1000, $fresh->lastPullAt('cadence'));
+    }
+
+    public function testAMirrorWhoseLockIsHeldElsewhereSkipsWithoutStamping(): void
+    {
+        $repo = $this->gitRepo('raced');
+        $lockFile = $repo->gitDir() . '/' . Repo::MIRROR_LOCK_FILE;
+        $hold = \fopen($lockFile, 'c');
+        $this->assertIsResource($hold);
+        $this->assertTrue(\flock($hold, \LOCK_EX | \LOCK_NB));
+
+        $puller = $this->puller();
+        $log = $this->captureErrorLog(function () use ($puller, $repo): void {
+            $this->assertFalse($puller->pull($repo, 1000), 'the sibling holds the fetch — this call must skip');
+        });
+        $this->assertStringContainsString('holds its lock', $log);
+        $this->assertSame([], $this->commands, 'the skip must happen BEFORE the exec seam');
+        $this->assertNull($repo->mirrorLastAttempt(), 'a skip is not an attempt — the winner stamps, the loser stays scheduled');
+
+        \flock($hold, \LOCK_UN);
+        \fclose($hold);
+        // Free again: the same call now runs the batch.
+        $this->assertTrue($puller->pull($repo, 2000));
+        $this->assertSame(2000, $repo->mirrorLastAttempt());
+    }
+
+    public function testAnUnfitUpstreamIsRefusedButStillStamped(): void
+    {
+        // The hot-loop guard survives the persistence move: even a
+        // scheme refusal stamps, so a broken config cannot re-fire every
+        // second on a cron host.
+        $repo = $this->gitRepo('unfit')->withMirrorFrom('ext::sh -c whoami');
+        $puller = $this->puller();
+        $log = $this->captureErrorLog(fn () => $this->assertFalse($puller->pull($repo, 1000)));
+        $this->assertStringContainsString('ext::', $log);
+        $this->assertSame([], $this->commands);
+        $this->assertSame(1000, $repo->mirrorLastAttempt());
+    }
+
+    public function testTwoRealProcessesRacingOneMirrorYieldExactlyOnePull(): void
+    {
+        $repo = $this->gitRepo('cronrace');
+        $this->config(); // mint the config.yaml the child reads
+        $child = (string) \realpath(__DIR__ . '/mirror-e2e-child.php');
+        $marker = $this->tmpDir . '/marker';
+        $configPath = $this->tmpDir . '/config.yaml';
+
+        $runChild = function () use ($child, $repo, $marker, $configPath): string {
+            $proc = \proc_open(
+                ['timeout', '-s', 'KILL', '15', \PHP_BINARY, $child, $repo->path(), $marker, $configPath],
+                [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+                $pipes
+            );
+            $this->assertIsResource($proc);
+            $out = (string) \stream_get_contents($pipes[1]);
+            \fclose($pipes[1]);
+            $err = (string) \stream_get_contents($pipes[2]);
+            \fclose($pipes[2]);
+            $rc = \proc_close($proc);
+            $this->assertSame(0, $rc, 'child exit: ' . $rc . ' err: ' . $err);
+
+            return $out;
+        };
+
+        // 1) Parent holds the mirror lock; the child tick must skip whole.
+        $lockFile = $repo->gitDir() . '/' . Repo::MIRROR_LOCK_FILE;
+        $hold = \fopen($lockFile, 'c');
+        $this->assertIsResource($hold);
+        $this->assertTrue(\flock($hold, \LOCK_EX | \LOCK_NB), 'parent could not hold the lock');
+        $out = $runChild();
+        $this->assertStringContainsString('pulled=0', $out);
+        $this->assertFileDoesNotExist($marker, 'the locked tick never reached the wire');
+        \flock($hold, \LOCK_UN);
+        \fclose($hold);
+
+        // 2) Uncontended, the very same child shape pulls and stamps.
+        $out = $runChild();
+        $this->assertStringContainsString('pulled=1', $out);
+        $this->assertFileExists($marker);
+        $this->assertNotNull($repo->mirrorLastAttempt(), 'the child stamp landed on disk for the parent to read');
     }
 }

@@ -180,10 +180,272 @@ final class Repo
         }
     }
 
+    // ---------------------------------------------------------------------
+    // Metadata plane (S25, finding 012): the fields the visibility marker
+    // never carried — description, allowPush, mirrorFrom,
+    // highlightLanguage, collaborators (+ the mirror job's persisted
+    // last-attempt). One JSON file inside the git dir, written through the
+    // same atomic discipline, guarded by its own sidecar lock so two
+    // control-plane processes cannot lose each other's edits.
+    // ---------------------------------------------------------------------
+
+    /** Name of the per-repo metadata file (lives inside the git directory). */
+    public const META_FILE = 'candy-git-server-meta.json';
+
+    /** Sidecar lock spanning meta load→mutate→publish. */
+    public const META_LOCK_FILE = 'candy-git-server-meta.lock';
+
+    /** Lock a mirror's pull batch against concurrent cron ticks (finding 044). */
+    public const MIRROR_LOCK_FILE = 'candy-git-server-mirror.lock';
+
+    /** Current metadata-plane schema version. */
+    public const META_VERSION = 1;
+
+    public static function metaPathFor(string $gitDir): string
+    {
+        return $gitDir . '/' . self::META_FILE;
+    }
+
+    /**
+     * @return array{version:int,description:string,allowPush:string,mirrorFrom:?string,
+     *               highlightLanguage:string,collaborators:list<string>,mirrorLastAttempt:?int}
+     */
+    private static function metaDefaults(): array
+    {
+        return [
+            'version'           => self::META_VERSION,
+            'description'       => '',
+            'allowPush'         => false,
+            'mirrorFrom'        => null,
+            'highlightLanguage' => '',
+            'collaborators'     => [],
+            'mirrorLastAttempt' => null,
+        ];
+    }
+
+    /**
+     * Read the metadata plane with the lib's strict-vocabulary discipline
+     * (S07 kin): every field is CHECKED, garbage falls back to its safe
+     * default with one named error_log line — never a cast of junk into a
+     * security posture (a string-'false' allowPush must not read TRUE). A
+     * version NEWER than this build understands is refused wholesale:
+     * silently dropping fields the future added would UNDO the operator's
+     * metadata on the next publish, which is exactly the loss 012 is about.
+     * Missing/unreadable file = plain defaults (a fresh repo has no meta).
+     *
+     * @return array<string, mixed>
+     */
+    public static function readMeta(string $gitDir): array
+    {
+        $defaults = self::metaDefaults();
+        $raw = @\file_get_contents(self::metaPathFor($gitDir));
+        if ($raw === false || \trim($raw) === '') {
+            return $defaults;
+        }
+        $decoded = \json_decode($raw, true);
+        if (!\is_array($decoded)) {
+            \error_log("candy-git-server: {$gitDir}: metadata plane is corrupt JSON; using safe defaults");
+
+            return $defaults;
+        }
+        $version = $decoded['version'] ?? self::META_VERSION;
+        if (!\is_int($version) || $version > self::META_VERSION) {
+            \error_log('candy-git-server: ' . $gitDir
+                . ': metadata plane version ' . (\is_scalar($version) ? (string) $version : \gettype($version))
+                . ' is newer than this build understands; refusing the overlay (no fields are dropped and re-published)');
+
+            return $defaults;
+        }
+
+        $meta = $defaults;
+        $meta['version'] = self::META_VERSION;
+
+        if (\array_key_exists('description', $decoded)) {
+            if (\is_string($decoded['description'])) {
+                $meta['description'] = $decoded['description'];
+            } else {
+                \error_log("candy-git-server: {$gitDir}: metadata description is not a string; defaulting");
+            }
+        }
+        if (\array_key_exists('allowPush', $decoded)) {
+            // The ONLY accepted spellings are the JSON booleans — a
+            // "truthy string" is precisely the 007 garbage this lib
+            // refused at the config boundary.
+            if (\is_bool($decoded['allowPush'])) {
+                $meta['allowPush'] = $decoded['allowPush'];
+            } else {
+                \error_log("candy-git-server: {$gitDir}: metadata allowPush is not a boolean; defaulting to false");
+            }
+        }
+        if (\array_key_exists('mirrorFrom', $decoded)) {
+            if ($decoded['mirrorFrom'] === null || \is_string($decoded['mirrorFrom'])) {
+                $meta['mirrorFrom'] = $decoded['mirrorFrom'];
+            } else {
+                \error_log("candy-git-server: {$gitDir}: metadata mirrorFrom is neither string nor null; defaulting");
+            }
+        }
+        if (\array_key_exists('highlightLanguage', $decoded)) {
+            if (\is_string($decoded['highlightLanguage'])) {
+                $meta['highlightLanguage'] = $decoded['highlightLanguage'];
+            } else {
+                \error_log("candy-git-server: {$gitDir}: metadata highlightLanguage is not a string; defaulting");
+            }
+        }
+        if (\array_key_exists('collaborators', $decoded) && \is_array($decoded['collaborators'])) {
+            $clean = [];
+            foreach ($decoded['collaborators'] as $entry) {
+                if (\is_string($entry) && Repo::isJailSafeName($entry)) {
+                    $clean[] = $entry;
+                } else {
+                    \error_log("candy-git-server: {$gitDir}: metadata collaborator entry rejected (not a plain name)");
+                }
+            }
+            $meta['collaborators'] = \array_values(\array_unique($clean));
+        } elseif (\array_key_exists('collaborators', $decoded)) {
+            \error_log("candy-git-server: {$gitDir}: metadata collaborators is not a list; defaulting to empty");
+        }
+        if (\array_key_exists('mirrorLastAttempt', $decoded)) {
+            if (\is_int($decoded['mirrorLastAttempt']) && $decoded['mirrorLastAttempt'] >= 0) {
+                $meta['mirrorLastAttempt'] = $decoded['mirrorLastAttempt'];
+            } elseif ($decoded['mirrorLastAttempt'] === null) {
+                $meta['mirrorLastAttempt'] = null;
+            } else {
+                \error_log("candy-git-server: {$gitDir}: metadata mirrorLastAttempt is not a non-negative int; defaulting");
+            }
+        }
+
+        return $meta;
+    }
+
+    /** This handle's persistable fields as a metadata-plane array. */
+    public function metaSnapshot(): array
+    {
+        return [
+            'version'           => self::META_VERSION,
+            'description'       => $this->description,
+            'allowPush'         => $this->allowPush,
+            'mirrorFrom'        => $this->mirrorFrom,
+            'highlightLanguage' => $this->highlightLanguage,
+            'collaborators'     => $this->collaborators(),
+            // The job owns this stamp through mutateMeta(); the VO never
+            // carries it, so a snapshot publish leaves it untouched.
+            'mirrorLastAttempt' => null,
+        ];
+    }
+
+    /**
+     * Publish this handle's fields to the metadata plane atomically. The
+     * mirror last-attempt stamp is PRESERVED across a snapshot publish —
+     * it belongs to the job, not to whoever edited the description.
+     */
+    public function writeMeta(): void
+    {
+        $gitDir = $this->gitDir();
+        $snapshot = $this->metaSnapshot();
+        $existing = self::readMeta($gitDir);
+        $snapshot['mirrorLastAttempt'] = $existing['mirrorLastAttempt'];
+        $this->publishMeta($gitDir, $snapshot);
+    }
+
+    private function publishMeta(string $gitDir, array $meta): void
+    {
+        $json = \json_encode($meta, \JSON_PRETTY_PRINT | \JSON_UNESCAPED_SLASHES);
+        if ($json === false) {
+            throw new \RuntimeException('candy-git-server: metadata plane could not be encoded for ' . $gitDir);
+        }
+        // 0644 like the visibility marker: operator metadata, not a
+        // secret (credentials never enter this plane). Atomic xb+fsync+
+        // rename via the S24 helper — a truncated meta publish can only
+        // ever leave the old bytes, never a half-written ACL story.
+        AtomicWriter::write(self::metaPathFor($gitDir), $json . "\n", 0644);
+    }
+
+    /**
+     * Load→mutate→publish the metadata plane under an exclusive sidecar
+     * lock (UserStore's S11 discipline in miniature): concurrent
+     * `repo collaborator` processes serialize instead of each publishing
+     * over the other's bytes. The mutator receives the validated on-disk
+     * array and returns the array to publish; its value comes back out.
+     *
+     * @param callable(array<string,mixed>): array<string,mixed> $mutator
+     * @return array<string,mixed> the published metadata
+     */
+    public function mutateMeta(callable $mutator): array
+    {
+        $gitDir = $this->gitDir();
+        if (!\is_dir($gitDir)) {
+            throw new \RuntimeException(Lang::t('repo.visibility_marker_unwritable', ['file' => $gitDir]));
+        }
+        $lock = @\fopen($gitDir . '/' . self::META_LOCK_FILE, 'c');
+        if ($lock === false) {
+            throw new \RuntimeException(Lang::t('repo.visibility_marker_unwritable', ['file' => $gitDir . '/' . self::META_LOCK_FILE]));
+        }
+        @\chmod($gitDir . '/' . self::META_LOCK_FILE, 0600);
+        try {
+            if (!\flock($lock, \LOCK_EX)) {
+                throw new \RuntimeException(Lang::t('repo.visibility_marker_unwritable', ['file' => $gitDir . '/' . self::META_LOCK_FILE]));
+            }
+            $meta = $mutator(self::readMeta($gitDir));
+            if (!\is_array($meta)) {
+                throw new \LogicException('metadata mutator must return an array');
+            }
+            $meta['version'] = self::META_VERSION;
+            $this->publishMeta($gitDir, $meta);
+
+            return $meta;
+        } finally {
+            @\flock($lock, \LOCK_UN);
+            @\fclose($lock);
+        }
+    }
+
+    /**
+     * Overlay this handle with the on-disk metadata plane (the scan
+     * path's missing half — pre-012 the launcher rebuilt visibility
+     * only, and every CollaboratorOnly repo silently degraded to
+     * admin-only across a restart). Visibility stays the marker's
+     * business; the meta never carries it.
+     */
+    public function withMetaFromDisk(): self
+    {
+        $meta = self::readMeta($this->gitDir());
+
+        return (new self(
+            $this->name,
+            $this->path,
+            $meta['description'],
+            $this->visibility,
+            $meta['allowPush'],
+            $meta['mirrorFrom'],
+            $meta['highlightLanguage'],
+            $meta['collaborators'],
+        ));
+    }
+
+    /**
+     * The mirror job's persisted last-attempt for this repo (null =
+     * never), read straight from the metadata plane.
+     */
+    public function mirrorLastAttempt(): ?int
+    {
+        $stamp = self::readMeta($this->gitDir())['mirrorLastAttempt'];
+
+        return \is_int($stamp) ? $stamp : null;
+    }
+
+    /** Persist a mirror pull-attempt stamp (finding 044). */
+    public function stampMirrorAttempt(int $when): void
+    {
+        $this->mutateMeta(static function (array $meta) use ($when): array {
+            $meta['mirrorLastAttempt'] = $when;
+
+            return $meta;
+        });
+    }
+
     // -------------------------------------------------------------------------
     // Builder
     // -------------------------------------------------------------------------
-
     public function withDescription(string $d): self
     {
         return new self($this->name, $this->path, $d, $this->visibility, $this->allowPush, $this->mirrorFrom, $this->highlightLanguage, $this->collaborators);

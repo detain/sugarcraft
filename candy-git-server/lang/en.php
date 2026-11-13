@@ -61,9 +61,22 @@ return [
     'cli.user_list_header' => "Users ({path}):",
 
     // bin/candy-git-server — repo
-    'cli.usage_repo_root'      => 'Usage: candy-git-server repo list|create|info',
+    'cli.usage_repo_root'      => 'Usage: candy-git-server repo list|create|info|collaborator|mirror|push-access',
     'cli.usage_repo_create'    => 'Usage: candy-git-server repo create <name>',
-    'cli.usage_repo_info'      => 'Usage: candy-git-server repo info <name>',
+'cli.usage_repo_info'      => 'Usage: candy-git-server repo info <name>',
+    'cli.usage_repo_collaborator' => 'Usage: candy-git-server repo collaborator <name> add|remove <user> [data-path]',
+    'cli.usage_repo_mirror' => 'Usage: candy-git-server repo mirror <name> <url>|--clear [data-path]',
+    'cli.usage_repo_push_access' => 'Usage: candy-git-server repo push-access <name> allow|deny [data-path]',
+    'cli.repo_info_plane' => 'Collaborators:{collaborators}
+Mirror:      {mirror}
+Highlight:   {highlight}
+Last mirror attempt: {mirror_last_try}',
+    'cli.repo_collaborator_added' => "Repo '{name}': collaborator '{user}' added (plane now: {plane})",
+    'cli.repo_collaborator_removed' => "Repo '{name}': collaborator '{user}' removed (plane now: {plane})",
+    'cli.repo_mirror_set' => "Repo '{name}': mirroring upstream {url} (due on the next schedule tick)",
+    'cli.repo_mirror_cleared' => "Repo '{name}': mirror upstream cleared",
+    'cli.repo_mirror_refused' => 'Mirror upstream refused: {why}',
+    'cli.repo_push_access_set' => "Repo '{name}': push-without-write-access is now {value}",
     'cli.no_repos'             => 'No repositories yet.',
     'cli.repo_listing_none'    => '  (no repositories yet)',
     'cli.repo_invalid_name'    => 'Invalid repo name: {name} (use only alphanumeric, dot, underscore, hyphen; must not start with a dot or hyphen)',

@@ -56,9 +56,22 @@ return [
     'cli.user_list_header' => "Utilisateurs ({path}) :",
 
     // bin/candy-git-server — repo
-    'cli.usage_repo_root'      => 'Usage : candy-git-server repo list|create|info',
+    'cli.usage_repo_root'      => 'Usage : candy-git-server repo list|create|info|collaborator|mirror|push-access',
     'cli.usage_repo_create'    => 'Usage : candy-git-server repo create <name>',
-    'cli.usage_repo_info'      => 'Usage : candy-git-server repo info <name>',
+'cli.usage_repo_info'      => 'Usage : candy-git-server repo info <name>',
+    'cli.usage_repo_collaborator' => 'Utilisation : candy-git-server repo collaborator <name> add|remove <user> [data-path]',
+    'cli.usage_repo_mirror' => 'Utilisation : candy-git-server repo mirror <name> <url>|--clear [data-path]',
+    'cli.usage_repo_push_access' => 'Utilisation : candy-git-server repo push-access <name> allow|deny [data-path]',
+    'cli.repo_info_plane' => 'Collaborateurs:{collaborators}
+Miroir:      {mirror}
+Coloration:   {highlight}
+Dernière tentative de miroir: {mirror_last_try}',
+    'cli.repo_collaborator_added' => "Dépôt '{name}' : collaborateur '{user}' ajouté (état actuel : {plane})",
+    'cli.repo_collaborator_removed' => "Dépôt '{name}' : collaborateur '{user}' retiré (état actuel : {plane})",
+    'cli.repo_mirror_set' => "Dépôt '{name}' : miroir de l'amont {url} (au prochain tick)",
+    'cli.repo_mirror_cleared' => "Dépôt '{name}' : miroir amont effacé",
+    'cli.repo_mirror_refused' => 'Miroir amont refusé : {why}',
+    'cli.repo_push_access_set' => "Dépôt '{name}' : le push sans accès en écriture vaut maintenant {value}",
     'cli.no_repos'             => 'Aucun dépôt pour le moment.',
     'cli.repo_listing_none'    => '  (aucun dépôt pour le moment)',
     'cli.repo_invalid_name'    => 'Nom de dépôt invalide : {name} (utilisez uniquement alphanumérique, point, tiret bas, tiret, ne doit pas commencer par un point ou un tiret)',

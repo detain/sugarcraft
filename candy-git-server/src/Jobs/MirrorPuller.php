@@ -56,6 +56,13 @@ use SugarCraft\GitServer\Support\BoundedCommand;
  * pulls.
  *
  * Mirrors charmbracelet/soft-serve's mirror job.
+ *
+ * CADENCE AND RACE (S25, finding 044): last-attempt stamps persist in
+ * the repo's metadata plane, so a fresh cron process inherits the
+ * schedule instead of treating every mirror as due; and each fetch runs
+ * under a per-repo non-blocking flock, so racing ticks serialize on one
+ * pull rather than racing '+refs/*:refs/*' ref-updates whose refusals
+ * are silent on the wire.
  */
 final class MirrorPuller
 {
@@ -94,7 +101,9 @@ final class MirrorPuller
     /** @var array<string, Repo> repo name => Repo */
     private array $repos = [];
 
-    /** @var array<string, int> repo name => last pull attempt (unix time) */
+    /** @var array<string, int> repo name => last pull attempt (unix time);
+     *     in-process cache of the truth — the durable stamp lives in each
+     *     repo's metadata plane (S25, finding 044) */
     private array $lastPull = [];
 
     /**
@@ -165,14 +174,36 @@ final class MirrorPuller
 
         return \array_values(\array_filter(
             $this->mirrors(),
-            fn (Repo $r) => $this->schedule->isDue($this->lastPull[$r->name] ?? null, $now),
+            fn (Repo $r) => $this->schedule->isDue($this->effectiveLastPull($r), $now),
         ));
     }
 
     /** When the last pull of a repo was attempted (null = never). */
     public function lastPullAt(string $repoName): ?int
     {
-        return $this->lastPull[$repoName] ?? null;
+        $repo = $this->repos[$repoName] ?? null;
+
+        return $repo === null ? ($this->lastPull[$repoName] ?? null) : $this->effectiveLastPull($repo);
+    }
+
+    /**
+     * The cadence memory finding 044 lacked: this process's stamp if it
+     * has one, else the metadata plane's persisted stamp (a fresh cron
+     * process re-reads disk instead of re-pulling everything), and the
+     * LATER of the two when both exist.
+     */
+    public function effectiveLastPull(Repo $repo): ?int
+    {
+        $mem = $this->lastPull[$repo->name] ?? null;
+        $disk = \is_dir($repo->gitDir()) ? $repo->mirrorLastAttempt() : null;
+        if ($mem === null) {
+            return $disk;
+        }
+        if ($disk === null) {
+            return $mem;
+        }
+
+        return \max($mem, $disk);
     }
 
     // -------------------------------------------------------------------------
@@ -200,6 +231,17 @@ final class MirrorPuller
      * is refused: a host that re-enters mid-batch (a synchronous seam
      * calling runOnce, a housekeeping pass beside an attached timer) gets
      * a logged skip and zero, never two interleaved pull batches.
+     *
+     * S25 (finding 044): last-attempt stamps live in the repo's metadata
+     * plane, not just this process — the README-recommended cron shape
+     * (a FRESH php process per tick) used to re-pull every mirror on
+     * every tick because in-memory `null` reads as due. The overlap guard
+     * is likewise cross-process now: a per-repo non-blocking flock, so
+     * two cron ticks racing the same mirror serialize on ONE pull
+     * instead of racing `+refs/*:refs/*` ref-updates whose refusals
+     * were silent. A mirror whose lock is held is skipped WITHOUT a
+     * stamp (the winner's batch is the attempt; the loser stays
+     * honestly scheduled by the winner's stamp).
      *
      * @return int number of mirrors pulled successfully
      */
@@ -242,9 +284,13 @@ final class MirrorPuller
     }
 
     /**
-     * Fetch a single mirror from its upstream. The attempt is recorded
+     * Pull a single mirror from its upstream. The attempt is recorded
      * even on failure — and on refusal — so a broken or unfit config
-     * cannot hot-loop the job.
+     * cannot hot-loop the job. The stamp is BOTH in-memory (this
+     * process's cadence) and persisted to the metadata plane (finding
+     * 044), and the whole fetch runs under the repo's non-blocking
+     * mirror lock: a concurrent cron tick holding it means the pull is
+     * already happening, and this call skips with a log line.
      *
      * @param float|null $timeoutSeconds per-fetch wall ceiling; defaults
      *                                   to the full FETCH_TIMEOUT_SECONDS
@@ -256,43 +302,122 @@ final class MirrorPuller
             return false;
         }
 
-        $this->lastPull[$repo->name] = $now ?? \time();
-
-        $url = (string) $repo->mirrorFrom;
-        $refusal = self::upstreamRefusal($url, $this->allowGit);
-        if ($refusal !== null) {
-            // The refusal names the problem, never the URL: a hostile
-            // config drop should not get its payload echoed into logs.
-            \error_log("candy-git-server: mirror pull refused for {$repo->name}: {$refusal}");
-
-            return false;
-        }
-        if ($this->allowGit && \stripos($url, self::GIT_SCHEME . '://') === 0) {
-            // Admitted under opt-in: say so on every pull, so an operator
-            // who flipped the key for a trusted LAN mirror still sees the
-            // unauthenticated transport in the log when something smells
-            // wrong later.
-            \error_log("candy-git-server: mirroring {$repo->name} over git:// under git.mirror_allow_git_protocol — unauthenticated transport");
-        }
-
-        $result = ($this->exec)([
-            'git', '-C', $repo->path(), 'fetch', '--prune', $url, '+refs/*:refs/*',
-        ], $timeoutSeconds ?? self::FETCH_TIMEOUT_SECONDS);
-
-        if ($result['code'] !== 0) {
-            \error_log("candy-git-server: mirror pull failed for {$repo->name}: "
-                . self::redactCredentials(\implode(' ', $result['output']), $url));
+        $lockHandle = $this->acquireMirrorLock($repo);
+        if ($lockHandle === null) {
+            \error_log("candy-git-server: mirror pull skipped for {$repo->name} — a concurrent pull holds its lock");
 
             return false;
         }
 
-        return true;
+        try {
+            $stampAt = $now ?? \time();
+            $this->lastPull[$repo->name] = $stampAt;
+            $this->stampAttempt($repo, $stampAt);
+
+            $url = (string) $repo->mirrorFrom;
+            $refusal = self::upstreamRefusal($url, $this->allowGit);
+            if ($refusal !== null) {
+                // The refusal names the problem, never the URL: a hostile
+                // config drop should not get its payload echoed into logs.
+                \error_log("candy-git-server: mirror pull refused for {$repo->name}: {$refusal}");
+
+                return false;
+            }
+            if ($this->allowGit && \stripos($url, self::GIT_SCHEME . '://') === 0) {
+                // Admitted under opt-in: say so on every pull, so an operator
+                // who flipped the key for a trusted LAN mirror still sees the
+                // unauthenticated transport in the log when something smells
+                // wrong later.
+                \error_log("candy-git-server: mirroring {$repo->name} over git:// under git.mirror_allow_git_protocol — unauthenticated transport");
+            }
+
+            $result = ($this->exec)([
+                'git', '-C', $repo->path(), 'fetch', '--prune', $url, '+refs/*:refs/*',
+            ], $timeoutSeconds ?? self::FETCH_TIMEOUT_SECONDS);
+
+            if ($result['code'] !== 0) {
+                \error_log("candy-git-server: mirror pull failed for {$repo->name}: "
+                    . self::redactCredentials(\implode(' ', $result['output']), $url));
+
+                return false;
+            }
+
+            return true;
+        } finally {
+            $this->releaseMirrorLock($lockHandle);
+        }
+    }
+
+    /**
+     * Claim the per-repo mirror lock without blocking (finding 044).
+     * Returns the handle to keep open until the batch ends, or null when
+     * the lock is held elsewhere. A repo whose git directory does not
+     * exist (library-caller VOs over plain temp paths) runs UNLOCKED:
+     * there is no lockable inode and no cron racing them either — the
+     * pull itself will fail honestly downstream.
+     *
+     * @return resource|null
+     */
+    private function acquireMirrorLock(Repo $repo)
+    {
+        $gitDir = $repo->gitDir();
+        if (!\is_dir($gitDir)) {
+            return 'unlocked';
+        }
+        $lock = @\fopen($gitDir . '/' . Repo::MIRROR_LOCK_FILE, 'c');
+        if ($lock === false) {
+            // Lock state unavailable — refusing the pull would hand an
+            // attacker a DoS by simply making the file unreadable; the
+            // documented posture is fail-open-with-log for scheduling
+            // hardening (not a security gate).
+            \error_log("candy-git-server: mirror lock for {$repo->name} could not be opened; running unlocked");
+
+            return 'unlocked';
+        }
+        @\chmod($gitDir . '/' . Repo::MIRROR_LOCK_FILE, 0600);
+        if (!\flock($lock, \LOCK_EX | \LOCK_NB)) {
+            @\fclose($lock);
+
+            return null;
+        }
+
+        return $lock;
+    }
+
+    /** @param resource|string|null $handle */
+    private function releaseMirrorLock($handle): void
+    {
+        if (\is_resource($handle)) {
+            @\flock($handle, \LOCK_UN);
+            @\fclose($handle);
+        }
+    }
+
+    /**
+     * Persist the attempt stamp through the metadata plane's lock. A
+     * failure to stamp is LOUD but does not abort the pull — the fetch
+     * already happened (or is happening); losing the cadence memory is
+     * the pre-044 status quo, not a new fault.
+     */
+    private function stampAttempt(Repo $repo, int $when): void
+    {
+        if (!\is_dir($repo->gitDir())) {
+            return;
+        }
+        try {
+            $repo->stampMirrorAttempt($when);
+        } catch (\RuntimeException $e) {
+            \error_log("candy-git-server: mirror stamp for {$repo->name} could not be persisted: " . $e->getMessage());
+        }
     }
 
     /**
      * Why an operator-supplied upstream URL is unfit to fetch, or null.
+     * Public (S25, finding 012): the CLI consults the SAME admission at
+     * the door, so `repo mirror` refuses ext::/scheme-garbage before it
+     * can ever sit in the plane waiting for a tick to complain.
      */
-    private static function upstreamRefusal(string $url, bool $allowGit = false): ?string
+    public static function upstreamRefusal(string $url, bool $allowGit = false): ?string
     {
         if ($url === '') {
             return 'empty upstream URL';

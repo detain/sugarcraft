@@ -16,6 +16,9 @@ declare(strict_types=1);
  *   candy-git-server user deactivate <username>    Disable an account, keep its credentials
  *   candy-git-server repo list                     List repos
  *   candy-git-server repo create <name>            Create a repo
+ *   candy-git-server repo collaborator <n> add|remove <user>   Manage the persisted ACL
+ *   candy-git-server repo mirror <n> <url>|--clear Set/clear the upstream
+ *   candy-git-server repo push-access <n> allow|deny           Toggle the allowPush posture
  *   candy-git-server help                          Show this help
  *
  * PHP port of the charmbracelet/soft-serve Go project; the binary was
@@ -351,7 +354,13 @@ function cmdServeHttp(array $args): int
         // the marker an operator minted (repo create --public, or the
         // file itself). Directory presence is never publication.
         $repo = \SugarCraft\GitServer\Repo::new($entry, $gitDir)
-            ->withVisibility(\SugarCraft\GitServer\Repo::markerVisibility($gitDir));
+            ->withVisibility(\SugarCraft\GitServer\Repo::markerVisibility($gitDir))
+            // S25 (finding 012): the scan no longer forgets everything the
+            // marker does not carry — description/collaborators/allowPush/
+            // mirrorFrom/highlight all come back off the metadata plane,
+            // so a CollaboratorOnly repo is still collaborator-only after
+            // a restart instead of silently degrading to admin-only.
+            ->withMetaFromDisk();
         if ($repo->isVisiblePublic()) {
             $published++;
         }
@@ -859,11 +868,14 @@ function cmdRepo(array $args): int
     $subargs    = \array_slice($args, 1);
 
     return match ($subcommand) {
-        'list'   => cmdRepoList($subargs),
-        'create' => cmdRepoCreate($subargs),
-        'info'   => cmdRepoInfo($subargs),
-        'help'   => say(Lang::t('cli.usage_repo_root')),
-        default  => cmdUnknown("repo {$subcommand}"),
+        'list'         => cmdRepoList($subargs),
+        'create'       => cmdRepoCreate($subargs),
+        'info'         => cmdRepoInfo($subargs),
+        'collaborator' => cmdRepoCollaborator($subargs),
+        'mirror'       => cmdRepoMirror($subargs),
+        'push-access'  => cmdRepoPushAccess($subargs),
+        'help'         => say(Lang::t('cli.usage_repo_root')),
+        default        => cmdUnknown("repo {$subcommand}"),
     };
 }
 
@@ -1003,7 +1015,9 @@ function cmdRepoInfo(array $args): int
         return error(Lang::t('cli.repo_not_found', ['name' => $name]) . "\n");
     }
 
-    $repo = Repo::new($name, $gitDir)->withVisibility(Repo::markerVisibility($gitDir));
+    $repo = Repo::new($name, $gitDir)
+        ->withVisibility(Repo::markerVisibility($gitDir))
+        ->withMetaFromDisk(); // S25 (finding 012): info prints the persisted plane, not always-empty fields
 
     $yes = Lang::t('cli.bool_yes');
     $no  = Lang::t('cli.bool_no');
@@ -1017,6 +1031,173 @@ function cmdRepoInfo(array $args): int
         'path'        => $repo->path(),
         'branches'    => \implode(', ', $repo->branches()),
         'tags'        => \implode(', ', $repo->tags()),
+    ]) . "\n";
+
+    // S25 (finding 012): the plane fields the base template never had a
+    // slot for. Empty collaborator list prints as the localized "none"
+    // rather than vanishing — an operator reading "Collaborators:" off a
+    // CollaboratorOnly repo must be able to see that it is EMPTY (the
+    // 012 failure mode was invisible ACL loss, not missing garnish).
+    echo Lang::t('cli.repo_info_plane', [
+        'collaborators'     => $repo->collaborators() !== [] ? \implode(', ', $repo->collaborators()) : Lang::t('cli.none_value'),
+        'mirror'            => $repo->mirrorFrom ?? Lang::t('cli.none_value'),
+        'highlight'         => $repo->highlightLanguage !== '' ? $repo->highlightLanguage : Lang::t('cli.none_value'),
+        'mirror_last_try'   => ($last = $repo->mirrorLastAttempt()) === null ? Lang::t('cli.none_value') : \date('Y-m-d H:i:s', $last),
+    ]) . "\n";
+
+    return 0;
+}
+
+/**
+ * `repo collaborator <name> add|remove <user> [datadir]` — persist the
+ * collaborator list into the metadata plane (S25, finding 012; the ACL
+ * this list enforces was volatile before the plane existed).
+ */
+function cmdRepoCollaborator(array $args): int
+{
+    [$name, $action, $user] = [$args[0] ?? '', $args[1] ?? '', $args[2] ?? ''];
+    if ($name === '' || !Repo::isJailSafeName($name) || !\in_array($action, ['add', 'remove'], true) || $user === '') {
+        return error(Lang::t('cli.usage_repo_collaborator') . "\n");
+    }
+    $dataPath = bin_data_path($args[3] ?? null);
+    $repoPath = "{$dataPath}/repositories/{$name}";
+    if (!\is_dir(Repo::gitDirFor($repoPath))) {
+        return error(Lang::t('cli.repo_not_found', ['name' => $name]) . "\n");
+    }
+
+    $repo = Repo::new($name, $repoPath);
+    try {
+        $published = $repo->mutateMeta(static function (array $meta) use ($user, $action): array {
+            $list = $meta['collaborators'];
+            if ($action === 'add') {
+                if (!\in_array($user, $list, true)) {
+                    $list[] = $user;
+                }
+            } else {
+                $list = \array_values(\array_filter($list, static fn (string $u): bool => $u !== $user));
+            }
+            $meta['collaborators'] = $list;
+
+            return $meta;
+        });
+    } catch (\RuntimeException $e) {
+        return error('candy-git-server: ' . $e->getMessage() . "\n");
+    }
+
+    echo Lang::t($action === 'add' ? 'cli.repo_collaborator_added' : 'cli.repo_collaborator_removed', [
+        'name'  => $name,
+        'user'  => $user,
+        'plane' => \implode(', ', $published['collaborators']) ?: '-',
+    ]) . "\n";
+
+    return 0;
+}
+
+/**
+ * `repo mirror <name> [--clear | <url>] [datadir]` — persist the
+ * upstream that makes a repo a mirror (S25: zero shipped production
+ * callers existed for withMirrorFrom, so MirrorPuller was
+ * dead-on-arrival by construction). The URL passes the SAME admission
+ * the job applies at fetch time — refused upstreams never enter the
+ * plane.
+ */
+function cmdRepoMirror(array $args): int
+{
+    $name = $args[0] ?? '';
+    if ($name === '' || !Repo::isJailSafeName($name)) {
+        return error(Lang::t('cli.usage_repo_mirror') . "\n");
+    }
+    $rest = \array_slice($args, 1);
+    $dataPath = bin_data_path($rest[1] ?? null);
+    $repoPath = "{$dataPath}/repositories/{$name}";
+    if (!\is_dir(Repo::gitDirFor($repoPath))) {
+        return error(Lang::t('cli.repo_not_found', ['name' => $name]) . "\n");
+    }
+
+    $repo = Repo::new($name, $repoPath);
+    if (($rest[0] ?? '') === '--clear') {
+        try {
+            $repo->mutateMeta(static function (array $meta): array {
+                $meta['mirrorFrom'] = null;
+
+                return $meta;
+            });
+        } catch (\RuntimeException $e) {
+            return error('candy-git-server: ' . $e->getMessage() . "\n");
+        }
+        echo Lang::t('cli.repo_mirror_cleared', ['name' => $name]) . "\n";
+
+        return 0;
+    }
+
+    $url = $rest[0] ?? '';
+    if ($url === '' || \str_starts_with($url, '--')) {
+        return error(Lang::t('cli.usage_repo_mirror') . "\n");
+    }
+    // Door admission (mirror of the job's runtime refusal): the git://
+    // verdict follows THIS data path's config when one exists.
+    $allowGit = false;
+    try {
+        $allowGit = Config::load($dataPath . '/config.yaml')->mirrorAllowGitProtocol;
+    } catch (\Throwable) {
+        // No parsable config: the strict default stands (git:// refused).
+    }
+    $refusal = \SugarCraft\GitServer\Jobs\MirrorPuller::upstreamRefusal($url, $allowGit);
+    if ($refusal !== null) {
+        return error(Lang::t('cli.repo_mirror_refused', ['why' => $refusal]) . "\n");
+    }
+
+    try {
+        $repo->mutateMeta(static function (array $meta) use ($url): array {
+            $meta['mirrorFrom'] = $url;
+            // A re-pointed upstream restarts the cadence honestly: the
+            // old mirror's stamp says nothing about the new one.
+            $meta['mirrorLastAttempt'] = null;
+
+            return $meta;
+        });
+    } catch (\RuntimeException $e) {
+        return error('candy-git-server: ' . $e->getMessage() . "\n");
+    }
+
+    echo Lang::t('cli.repo_mirror_set', ['name' => $name, 'url' => $url]) . "\n";
+
+    return 0;
+}
+
+/**
+ * `repo push-access <name> allow|deny [datadir]` — the missing producer
+ * for the allowPush posture canWrite already consults (S25, G-4 default
+ * under finding 087: persist the vocabulary rather than delete it — the
+ * plane now carries it, so a CollaboratorOnly repo's "anyone can push"
+ * opt-in is a recorded operator decision, not test-only fiction).
+ */
+function cmdRepoPushAccess(array $args): int
+{
+    [$name, $decision] = [$args[0] ?? '', $args[1] ?? ''];
+    if ($name === '' || !Repo::isJailSafeName($name) || !\in_array($decision, ['allow', 'deny'], true)) {
+        return error(Lang::t('cli.usage_repo_push_access') . "\n");
+    }
+    $dataPath = bin_data_path($args[2] ?? null);
+    $repoPath = "{$dataPath}/repositories/{$name}";
+    if (!\is_dir(Repo::gitDirFor($repoPath))) {
+        return error(Lang::t('cli.repo_not_found', ['name' => $name]) . "\n");
+    }
+
+    $repo = Repo::new($name, $repoPath);
+    try {
+        $repo->mutateMeta(static function (array $meta) use ($decision): array {
+            $meta['allowPush'] = $decision === 'allow';
+
+            return $meta;
+        });
+    } catch (\RuntimeException $e) {
+        return error('candy-git-server: ' . $e->getMessage() . "\n");
+    }
+
+    echo Lang::t('cli.repo_push_access_set', [
+        'name'  => $name,
+        'value' => Lang::t($decision === 'allow' ? 'cli.bool_yes' : 'cli.bool_no'),
     ]) . "\n";
 
     return 0;

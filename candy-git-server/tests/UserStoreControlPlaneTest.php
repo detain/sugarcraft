@@ -475,4 +475,54 @@ final class UserStoreControlPlaneTest extends TestCase
         $list = $this->runBin(['user', 'list'], $env);
         $this->assertStringNotContainsString('alice', $list['out']);
     }
+
+    // -------------------------------------------------------------------------
+    // S25 (finding 012): the repo metadata plane over the CLI
+    // -------------------------------------------------------------------------
+
+    public function testRepoPlaneMutationsPersistAndReadBackThroughAFreshProcess(): void
+    {
+        $env = ['CANDY_GIT_SERVER_DATA_PATH' => $this->tmpDir];
+        $this->assertSame(0, $this->runBin(['repo', 'create', 'plane1'], $env)['rc']);
+
+        $this->assertSame(0, $this->runBin(['repo', 'collaborator', 'plane1', 'add', 'alice'], $env)['rc']);
+        // A SEPARATE process adds the second name: the plane must merge,
+        // never let the second writer's snapshot clobber the first (012's
+        // lost-update shape at the repo boundary).
+        $add2 = $this->runBin(['repo', 'collaborator', 'plane1', 'add', 'bob'], $env);
+        $this->assertSame(0, $add2['rc'], $add2['err']);
+        $this->assertStringContainsString('alice', $add2['out'], 'the echo reports the WHOLE committed plane');
+
+        $this->assertSame(0, $this->runBin(['repo', 'push-access', 'plane1', 'allow'], $env)['rc']);
+        $mirror = $this->runBin(['repo', 'mirror', 'plane1', 'https://up.invalid/r.git'], $env);
+        $this->assertSame(0, $mirror['rc'], $mirror['err']);
+
+        $info = $this->runBin(['repo', 'info', 'plane1'], $env);
+        $this->assertSame(0, $info['rc']);
+        $this->assertStringContainsString('alice', $info['out']);
+        $this->assertStringContainsString('bob', $info['out']);
+        $this->assertStringContainsString('https://up.invalid/r.git', $info['out']);
+        // Allow push: yes — the G-4 persisted vocabulary is REAL now.
+        $this->assertStringContainsString('Allow push: yes', \preg_replace('/\s+/', ' ', $info['out']) ?: $info['out']);
+
+        // remove collaborator round-trips too.
+        $this->assertSame(0, $this->runBin(['repo', 'collaborator', 'plane1', 'remove', 'alice'], $env)['rc']);
+        $plane = \json_decode((string) \file_get_contents($this->tmpDir . '/repositories/plane1/.git/' . \SugarCraft\GitServer\Repo::META_FILE), true);
+        $this->assertSame(['bob'], $plane['collaborators']);
+        $this->assertTrue($plane['allowPush']);
+    }
+
+    public function testRepoMirrorRefusesUnfitUpstreamsAtTheDoor(): void
+    {
+        $env = ['CANDY_GIT_SERVER_DATA_PATH' => $this->tmpDir];
+        $this->assertSame(0, $this->runBin(['repo', 'create', 'plane2'], $env)['rc']);
+
+        $r = $this->runBin(['repo', 'mirror', 'plane2', 'ext::sh -c whoami'], $env);
+        $this->assertSame(1, $r['rc'], 'the transport that executes commands must never enter the plane');
+        $this->assertStringContainsString('refused', $r['err']);
+        $r = $this->runBin(['repo', 'mirror', 'plane2', 'git://host/pub'], $env);
+        $this->assertSame(1, $r['rc'], 'git:// keeps its strict default at the CLI door too');
+        // Unknown repo refuses.
+        $this->assertSame(1, $this->runBin(['repo', 'collaborator', 'ghost', 'add', 'alice'], $env)['rc']);
+    }
 }

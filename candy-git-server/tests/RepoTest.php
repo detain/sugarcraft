@@ -263,4 +263,107 @@ final class RepoTest extends TestCase
 
         return \is_file($log) ? (string) \file_get_contents($log) : '';
     }
+
+    // -------------------------------------------------------------------------
+    // S25 (findings 012, 044, 087): the metadata plane
+    // -------------------------------------------------------------------------
+
+    private function planeRepo(string $name = 'plane'): Repo
+    {
+        $path = $this->tmpDir . '/' . $name;
+        \mkdir($path . '/.git', 0755, true);
+
+        return Repo::new($name, $path);
+    }
+
+    public function testEveryPlaneFieldRoundTripsThroughDisk(): void
+    {
+        $repo = $this->planeRepo();
+        $published = $repo->withDescription('the truth')
+            ->withAllowPush(true)
+            ->withMirrorFrom('https://up.invalid/r.git')
+            ->withHighlightLanguage('php')
+            ->addCollaborator('alice')
+            ->addCollaborator('bob');
+        $published->writeMeta();
+
+        // A fresh handle — the restart shape 012 died on: same name, same
+        // path, memory wiped. The overlay must rebuild the whole posture.
+        $rebuilt = Repo::new('plane', $this->tmpDir . '/plane')
+            ->withMetaFromDisk();
+        $this->assertSame('the truth', $rebuilt->description);
+        $this->assertTrue($rebuilt->allowPush, 'the G-4 persisted vocabulary survives restart');
+        $this->assertSame('https://up.invalid/r.git', $rebuilt->mirrorFrom);
+        $this->assertSame('php', $rebuilt->highlightLanguage);
+        $this->assertSame(['alice', 'bob'], $rebuilt->collaborators());
+        // Visibility is the MARKER's business: the plane never carries it.
+        $this->assertSame(\SugarCraft\GitServer\Visibility::Private, $rebuilt->visibility);
+    }
+
+    public function testPlaneGarbageFallsToSafeDefaultsAndNamedNewerVersionRefusesTheWholeOverlay(): void
+    {
+        $repo = $this->planeRepo('garbage');
+        $metaFile = Repo::metaPathFor($repo->gitDir());
+
+        // Corrupt JSON: defaults + one loud line.
+        \file_put_contents($metaFile, '{oops');
+        $log = $this->captureErrorLog(function () use ($repo): void {
+            $overlay = $repo->withMetaFromDisk();
+            $this->assertSame('', $overlay->description);
+            $this->assertFalse($overlay->allowPush);
+        });
+        $this->assertStringContainsString('corrupt JSON', $log);
+
+        // String-'false' allowPush: the exact 007 garbage this lib refuses
+        // at every other boundary — it must NOT read TRUE.
+        \file_put_contents($metaFile, '{"version":1,"allowPush":"false","description":42}');
+        $log = $this->captureErrorLog(function () use ($repo): void {
+            $overlay = $repo->withMetaFromDisk();
+            $this->assertFalse($overlay->allowPush);
+            $this->assertSame('', $overlay->description);
+        });
+        $this->assertStringContainsString('allowPush', $log);
+
+        // Newer schema: the overlay refuses ENTIRELY (field-by-field
+        // salvage would re-publish away fields this build cannot see).
+        \file_put_contents($metaFile, '{"version":99,"description":"from the future"}');
+        $log = $this->captureErrorLog(function () use ($repo): void {
+            $overlay = $repo->withMetaFromDisk();
+            $this->assertSame('', $overlay->description);
+        });
+        $this->assertStringContainsString('newer than this build', $log);
+    }
+
+    public function testSnapshotPublishPreservesTheJobsMirrorStamp(): void
+    {
+        $repo = $this->planeRepo('stampkeep');
+        $repo->stampMirrorAttempt(1234);
+        $repo->withDescription('edited later')->writeMeta();
+
+        $meta = Repo::readMeta($repo->gitDir());
+        $this->assertSame(1234, $meta['mirrorLastAttempt'], 'a description edit must not erase the cadence memory');
+        $this->assertSame('edited later', $meta['description']);
+    }
+
+    public function testMutateMetaRunsTheMutatorOverFreshDiskBytes(): void
+    {
+        $repo = $this->planeRepo('merge');
+        $repo->mutateMeta(static fn (array $m): array => $m); // mint the file
+        // An intervening writer lands between our read and write — the
+        // lock means the mutator always sees the LATEST bytes.
+        $other = Repo::new('merge', $this->tmpDir . '/merge')
+            ->addCollaborator('early');
+        $other->mutateMeta(static function (array $m): array {
+            $m['collaborators'][] = 'early';
+
+            return $m;
+        });
+        $late = $repo->mutateMeta(static function (array $m): array {
+            $m['collaborators'][] = 'late';
+
+            return $m;
+        });
+        $this->assertContains('early', $late['collaborators'], 'mutateMeta merges over committed bytes, never over a stale snapshot');
+        $this->assertContains('late', $late['collaborators']);
+    }
 }

@@ -56,9 +56,22 @@ return [
     'cli.user_list_header' => "Utilizadores ({path}):",
 
     // bin/candy-git-server — repo
-    'cli.usage_repo_root'      => 'Uso: candy-git-server repo list|create|info',
+    'cli.usage_repo_root'      => 'Uso: candy-git-server repo list|create|info|collaborator|mirror|push-access',
     'cli.usage_repo_create'    => 'Uso: candy-git-server repo create <name>',
-    'cli.usage_repo_info'      => 'Uso: candy-git-server repo info <name>',
+'cli.usage_repo_info'      => 'Uso: candy-git-server repo info <name>',
+    'cli.usage_repo_collaborator' => 'Uso: candy-git-server repo collaborator <name> add|remove <user> [data-path]',
+    'cli.usage_repo_mirror' => 'Uso: candy-git-server repo mirror <name> <url>|--clear [data-path]',
+    'cli.usage_repo_push_access' => 'Uso: candy-git-server repo push-access <name> allow|deny [data-path]',
+    'cli.repo_info_plane' => 'Colaboradores:{collaborators}
+Espelho:      {mirror}
+Destaque:   {highlight}
+Última tentativa de espelho: {mirror_last_try}',
+    'cli.repo_collaborator_added' => "Repositório '{name}': colaborador '{user}' adicionado (estado atual: {plane})",
+    'cli.repo_collaborator_removed' => "Repositório '{name}': colaborador '{user}' removido (estado atual: {plane})",
+    'cli.repo_mirror_set' => "Repositório '{name}': espelhando o upstream {url} (no próximo tick)",
+    'cli.repo_mirror_cleared' => "Repositório '{name}': espelho do upstream limpo",
+    'cli.repo_mirror_refused' => 'Espelho do upstream recusado: {why}',
+    'cli.repo_push_access_set' => "Repositório '{name}': push sem acesso de escrita agora é {value}",
     'cli.no_repos'             => 'Ainda não há repositórios.',
     'cli.repo_listing_none'    => '  (ainda sem repositórios)',
     'cli.repo_invalid_name'    => 'Nome de repositório inválido: {name} (use apenas alfanumérico, ponto, sublinhado, hífen, não deve começar com ponto ou hífen)',
