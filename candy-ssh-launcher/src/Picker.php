@@ -14,12 +14,12 @@ use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
 
 /**
  * Tiny terminal picker — renders marker-prefixed display lines
- * (SELECTED_MARKER over displayLine()) of {@see Endpoint}s,
- * lets the user move with j/k, ↑/↓, Home/End and PgUp/PgDn, narrow with
- * type-to-search,
- * and pick with Enter. Returns the selected Endpoint or null on Esc or
- * the cancel byte; on a real terminal Ctrl-C raises SIGINT, which the
- * picker traps to restore the terminal before exiting 130.
+ * (SELECTED_MARKER over displayLine()) of {@see Endpoint}s. The user
+ * moves with j/k, ↑/↓, Home/End and PgUp/PgDn, narrows with
+ * type-to-search, and picks with Enter. Returns the selected Endpoint,
+ * or null on Esc or the cancel byte (0x03 — what a closed stdin maps to
+ * as well). On a real terminal Ctrl-C raises SIGINT, which the picker
+ * traps to restore the terminal before exiting 130.
  *
  * Why not the full SugarWidgets `List` widget? That's overkill for a
  * one-shot picker that we immediately replace with `pcntl_exec`.
@@ -101,8 +101,13 @@ class Picker
         }
         $this->totalEndpoints = count($endpoints);
         $this->aborted = false;
-        $this->setRawMode(true);
+        // Arm BEFORE raw mode: setRawMode shells out to stty (fork+exec+
+        // reap), and a Ctrl+C landing in that window would hit SIG_DFL —
+        // process dies, finally never runs, echo stays off. A SIGINT
+        // before raw entry is harmless (the handler's setRawMode(false)
+        // is a no-op pair on a canonical tty).
         $this->armCancelSignal();
+        $this->setRawMode(true);
         try {
             while (true) {
                 $matches = $this->filterMatches($endpoints);
@@ -539,7 +544,7 @@ class Picker
      */
     private function readKey(): string
     {
-        $b = fread($this->in, 1);
+        $b = $this->readFirstByte();
         if ($b === false || $b === '') {
             return "\x03";
         }
@@ -558,6 +563,43 @@ class Picker
         // lead — isTextKey() drops the malformed shapes; only printable
         // ASCII survives.
         return $b;
+    }
+
+    /**
+     * First byte of a key event, waited for in bounded select slices with
+     * a signal dispatch between them (-001).
+     *
+     * A bare blocking fread is NOT signal-interruptible in userland: PHP
+     * dispatches queued pcntl handlers only at opcode boundaries, and the
+     * kernel silently restarts the interrupted read (SA_RESTART), so an
+     * armed SIGINT handler would sit queued until some later byte released
+     * the read — Ctrl-C looked dead on a real terminal. The select slice +
+     * explicit pcntl_signal_dispatch() closes the window with or without
+     * async-signal mode. stream_select() is a no-op guarantee on memory
+     * streams (tests), so those keep the plain fread path — the same
+     * stream-type bypass nextByteWithWait() documents.
+     */
+    private function readFirstByte(): string|false
+    {
+        if ((stream_get_meta_data($this->in)['stream_type'] ?? '') === 'MEMORY') {
+            return fread($this->in, 1);
+        }
+        while (true) {
+            $r = [$this->in];
+            $w = null;
+            $e = null;
+            $ready = @stream_select($r, $w, $e, 0, 200_000);
+            if (function_exists('pcntl_signal_dispatch')) {
+                pcntl_signal_dispatch();
+            }
+            if ($ready !== 0) {
+                // > 0: a byte (or EOF) is ready. false: select errored —
+                // hand the stream to fread anyway, so an unreachable fd
+                // still maps to the EOF cancel byte exactly as the old
+                // blocking call did.
+                return fread($this->in, 1);
+            }
+        }
     }
 
     /**

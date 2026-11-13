@@ -322,4 +322,133 @@ PHP;
         [, , $p] = $this->drive("\x1b[H\x1b[F");
         $this->assertSame('', $this->filterOf($p));
     }
+
+    /**
+     * The -001 critical regression: SIGINT must break a genuinely blocked
+     * read — with stdin OPEN and no byte ever typed — restoring the
+     * terminal and exiting 130. The historical SIGINT test closed stdin
+     * right after the kill, so it only proved the deferred EOF→cancel
+     * mapping, never signal interruptibility. Also pins -018's order: by
+     * the moment setRawMode(true) runs, the SIGINT handler must already be
+     * armed (child reports pcntl_signal_get_handler at raw-entry).
+     */
+    public function testSigintInterruptsABlockedReadWithStdinStillOpen(): void
+    {
+        if (
+            !function_exists('pcntl_async_signals') || !function_exists('pcntl_signal')
+            || !function_exists('pcntl_signal_dispatch') || !function_exists('pcntl_signal_get_handler')
+            || !function_exists('posix_kill')
+        ) {
+            $this->markTestSkipped('the SIGINT interruptibility pin needs ext-pcntl and ext-posix');
+        }
+
+        $autoload = realpath(__DIR__ . '/../vendor/autoload.php');
+        $this->assertIsString($autoload);
+
+        $child = <<<'PHP'
+<?php
+declare(strict_types=1);
+require '__AUTOLOAD__';
+use SugarCraft\SshLauncher\Endpoint;
+use SugarCraft\SshLauncher\Picker;
+$c = new class (STDIN, STDOUT) extends Picker {
+    public function setRawMode(bool $on): void
+    {
+        if ($on) {
+            // -018 order probe: raw entry must happen AFTER the arm.
+            fwrite(STDOUT, 'ARM:' . (pcntl_signal_get_handler(\SIGINT) === \SIG_DFL ? 'DFL' : 'HANDLED') . "\n");
+        }
+        fwrite(STDOUT, ($on ? 'RAW:ON' : 'RAW:OFF') . "\n");
+    }
+};
+$c->pick([new Endpoint(name: 'a', host: 'a.test')]);
+fwrite(STDOUT, "RETURNED\n");
+PHP;
+        $child = str_replace('__AUTOLOAD__', $autoload, $child);
+        $script = tempnam(sys_get_temp_dir(), 'sshlaunch-sigint-block-') . '.php';
+        file_put_contents($script, $child);
+
+        $proc = proc_open(
+            [PHP_BINARY, $script],
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+            \dirname(__DIR__),
+            ['PATH' => '/usr/bin:/bin', 'HOME' => \sys_get_temp_dir()],
+        );
+        $this->assertIsResource($proc);
+
+        try {
+            // Wait for the child to enter raw mode WITHOUT typing anything:
+            // it is now blocked inside readKey's first leg.
+            $seen = '';
+            stream_set_blocking($pipes[1], false);
+            $deadline = microtime(true) + 5.0;
+            while (!str_contains($seen, 'RAW:ON') && microtime(true) < $deadline) {
+                $chunk = fread($pipes[1], 128);
+                if ($chunk === false || $chunk === '') {
+                    usleep(20000);
+                    continue;
+                }
+                $seen .= $chunk;
+            }
+            $this->assertStringContainsString('RAW:ON', $seen, 'child never entered raw mode');
+            $this->assertStringContainsString(
+                'ARM:HANDLED',
+                $seen,
+                '-018: SIGINT handler must be armed before setRawMode(true)',
+            );
+
+            $pid = proc_get_status($proc)['pid'];
+            $this->assertTrue(posix_kill($pid, \SIGINT));
+
+            // The decisive leg: the child must exit WHILE stdin is still
+            // open. The pre-fix bare fread kept the process wedged here
+            // (QA's 20 s watch → SIGKILL).
+            $exited = false;
+            $deadline = microtime(true) + 5.0;
+            while (microtime(true) < $deadline) {
+                if (!proc_get_status($proc)['running']) {
+                    $exited = true;
+                    break;
+                }
+                usleep(20000);
+            }
+            $this->assertTrue(
+                $exited,
+                '-001: SIGINT did not interrupt the blocked read while stdin stayed open',
+            );
+
+            // Now release stdin and reap; drain the announced restore.
+            fclose($pipes[0]);
+            $pipes[0] = null;
+            stream_set_blocking($pipes[1], true);
+            $rest = (string) stream_get_contents($pipes[1]);
+            fclose($pipes[1]);
+            $pipes[1] = null;
+            $err = (string) stream_get_contents($pipes[2]);
+            fclose($pipes[2]);
+            $pipes[2] = null;
+            $code = proc_close($proc);
+            $proc = null;
+
+            $this->assertSame(130, $code, 'stdout: ' . $seen . $rest . ' stderr: ' . $err);
+            $this->assertStringContainsString('RAW:OFF', $seen . $rest, 'SIGINT path restored the terminal');
+            $this->assertStringNotContainsString('RETURNED', $seen . $rest, 'the handler exits; pick() never returns');
+            $this->assertStringContainsString(
+                \SugarCraft\SshLauncher\Lang::t('cli.cancelled'),
+                $err,
+            );
+        } finally {
+            foreach ((array) $pipes as $pipe) {
+                if (is_resource($pipe)) {
+                    fclose($pipe);
+                }
+            }
+            if ($proc !== null) {
+                proc_terminate($proc);
+                proc_close($proc);
+            }
+            @unlink($script);
+        }
+    }
 }
