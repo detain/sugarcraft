@@ -50,9 +50,31 @@ final class FontEmbedLineHighlightTest extends TestCase
 
     public function testNoFontEmbeddedWhenPathIsNull(): void
     {
-        $svg = SvgRenderer::dark()->withFont(null)->withWindow(false)->render("x\n");
-        $this->assertStringNotContainsString('base64,', $svg);
-        $this->assertStringNotContainsString('@font-face', $svg);
+        // Vacuous-guard cure (lineage #58 origin): the old shape started from a
+        // fresh dark() — where fontPath was ALREADY null — so the can't-clear
+        // bug could never fail it. Set a font first, then clear it.
+        $tmp = tempnam(sys_get_temp_dir(), 'font_');
+        file_put_contents($tmp, 'fake font data');
+
+        try {
+            $set = SvgRenderer::dark()->withFont($tmp);
+            $this->assertSame($tmp, $set->fontPath);
+
+            $cleared = $set->withFont(null);
+            $this->assertNull($cleared->fontPath);
+
+            // Render level: the cleared renderer must embed nothing...
+            $svg = $cleared->withWindow(false)->render("x\n");
+            $this->assertStringNotContainsString('base64,', $svg);
+            $this->assertStringNotContainsString('@font-face', $svg);
+
+            // ...while the original still does (a clear must not retroactively
+            // strip the renderer it was derived from).
+            $embedded = $set->withWindow(false)->render("x\n");
+            $this->assertStringContainsString('@font-face', $embedded);
+        } finally {
+            unlink($tmp);
+        }
     }
 
     /** @return array<string, array{0:string, 1:?string}> */

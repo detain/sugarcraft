@@ -43,6 +43,14 @@ final class SvgRenderer
     /** Font blobs larger than this (32 MiB) are refused by render(). */
     public const MAX_EMBEDDED_FONT_BYTES = 33_554_432;
 
+    /**
+     * "Not passed" marker for copy()'s `mixed $fontPath` leg. A path string
+     * containing a NUL byte can never be a real filename, and null is a VALUE
+     * on this leg — `withFont(null)` means "clear" — so the unset case needs
+     * its own sentinel (cures the can't-clear bug, lineage #58 origin).
+     */
+    private const FONT_UNSET = "\0font-path-unset";
+
     /** @param array{range: array{0:int,1:int}, color:string}|null $highlight */
     public function __construct(
         public readonly Theme $theme       = new Theme(
@@ -473,7 +481,7 @@ final class SvgRenderer
         ?int $borderRadius = null,
         ?WindowStyle $windowStyle = null,
         ?bool $ligatures = null,
-        mixed $fontPath = null,
+        mixed $fontPath = self::FONT_UNSET,
         mixed $highlight = null,
         ?string $title = null,
     ): self {
@@ -487,7 +495,14 @@ final class SvgRenderer
             borderRadius: $borderRadius ?? $this->borderRadius,
             windowStyle:  $windowStyle  ?? $this->windowStyle,
             ligatures:    $ligatures    ?? $this->ligatures,
-            fontPath:     is_null($fontPath) ? $this->fontPath : $fontPath,
+            // Dedicated sentinel (not null): null is a VALUE here — withFont(null)
+            // must clear — so "not passed" needs its own marker.
+            fontPath:     $fontPath === self::FONT_UNSET ? $this->fontPath : $fontPath,
+            // The null-conflation is safe on this leg and kept as-is: copy() is
+            // private and withHighlight() always passes a non-null range array
+            // (the inner 'color' may be null), and there is no highlight-removal
+            // API — an explicit-null highlight is unreachable, so no can't-clear
+            // bug exists here to cure.
             highlight:    is_null($highlight) ? $this->highlight : $highlight,
             title:        $title        ?? $this->title,
         );
