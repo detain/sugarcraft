@@ -82,8 +82,9 @@ another class's file resolves only if that file was loaded first, and is
 
 The injection line is the only entry that writes to your tree, and the revert is
 narrowed on purpose: CI spells that line `git checkout -- .`, which is safe in
-a throwaway checkout and would eat your uncommitted work here. MEASURED on this
-tree: `--fix --strict-closure` dirties `*/composer.json` and NOTHING else — no
+a throwaway checkout and would eat your uncommitted work here. **Measured** on
+this tree: `--fix --strict-closure` dirties `*/composer.json` and **nothing**
+else — no
 root manifest, no lock, no file outside that glob — so the glob reverts all of
 it. `git status --porcelain` after the `--fix` is the check that
 cannot go stale.
@@ -110,7 +111,7 @@ from the lock and silently ignore the injection — it only warns.
 - **Immutability**: every `Style`, `Model`, `Field`, etc. is immutable;
   `with*()` returns a new instance.
 - **Readonly DTOs** for value objects.
-- **`fn(...)` short closures** for one-liners; full `static function (…) {}`
+- **`fn(...)` short closures** for one-liners; full `static function (...) {}`
   closures otherwise.
 - **No silent failures**: throw `\InvalidArgumentException` /
   `\RuntimeException` rather than returning `null` for "wasn't valid input".
@@ -132,7 +133,9 @@ from the lock and silently ignore the injection — it only warns.
 
 1. Open an issue first for non-trivial changes so we can agree on the
    shape before you spend the time.
-2. Branch from `master`. Branch names: `feature/x`, `fix/y`, `docs/z`.
+2. Branch from `master`. Branch names: `ai/<slug>-<short>` for AI-authored
+   work, `feat/<slug>-<short>` for human-authored work (the scheme in
+   `AGENTS.md`).
 3. One concern per PR. Don't pile a refactor onto a feature.
 4. Make sure every test suite the change touches is green before
    pushing.
