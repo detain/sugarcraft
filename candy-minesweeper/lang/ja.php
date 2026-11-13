@@ -11,7 +11,7 @@ declare(strict_types=1);
 return [
     'board.too_small' => '盤面が小さすぎます',
     'board.minecount_out_of_range' => '地雷数 が範囲外です',
-    'board.rows_shape_mismatch' => '行の形状が幅/高さと一致しません',
+    'board.rows_shape_mismatch' => 'グリッドデータが {width}×{height} の盤面と一致しません',
     'custom.min_rows' => '行数は2以上である必要があります',
     'custom.min_cols' => '列数は2以上である必要があります',
     'custom.max_rows' => '行数は50以下である必要があります',
@@ -23,7 +23,7 @@ return [
     'ui.cleared' => '★ クリア — r でもう一度',
     'ui.help_rules' => '数字は周囲の地雷の数',
     'ui.help_moves' => '↑ ↓ ← → / hjkl  移動  ·  space / enter  開く',
-    'ui.help_board' => '左クリック  開ける · f / 右クリック  旗 · c / 中クリック  周囲を公開',
+    'ui.help_board' => '左クリック  開く · f / 右クリック  旗 · c / 中クリック  周囲を開く',
     'ui.help_session' => 'r  リスタート  ·  S  保存  ·  L  読込  ·  q / Esc / Ctrl+C  終了',
     'ui.saved' => 'ゲームを保存しました',
     'ui.restarted' => '盤面を再開始しました',

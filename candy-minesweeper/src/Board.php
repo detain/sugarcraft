@@ -42,15 +42,15 @@ final class Board
         // reveals outside the real data no-op). unserialize() already checks
         // the wire shape — the direct-ctor path gets the same guarantee.
         if (count($rows) !== $height) {
-            throw new \InvalidArgumentException(Lang::t('board.rows_shape_mismatch'));
+            throw new \InvalidArgumentException(Lang::t('board.rows_shape_mismatch', ['width' => $width, 'height' => $height]));
         }
         foreach ($rows as $row) {
             if (!is_array($row) || count($row) !== $width) {
-                throw new \InvalidArgumentException(Lang::t('board.rows_shape_mismatch'));
+                throw new \InvalidArgumentException(Lang::t('board.rows_shape_mismatch', ['width' => $width, 'height' => $height]));
             }
             foreach ($row as $cell) {
                 if (!$cell instanceof Cell) {
-                    throw new \InvalidArgumentException(Lang::t('board.rows_shape_mismatch'));
+                    throw new \InvalidArgumentException(Lang::t('board.rows_shape_mismatch', ['width' => $width, 'height' => $height]));
                 }
             }
         }

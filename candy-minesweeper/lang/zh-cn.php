@@ -11,7 +11,7 @@ declare(strict_types=1);
 return [
     'board.too_small' => '棋盘太小',
     'board.minecount_out_of_range' => '地雷数量 超出范围',
-    'board.rows_shape_mismatch' => '行的形状与宽/高不匹配',
+    'board.rows_shape_mismatch' => '网格数据与 {width}×{height} 棋盘不匹配',
     'custom.min_rows' => '行数至少为 2',
     'custom.min_cols' => '列数至少为 2',
     'custom.max_rows' => '行数最多为 50',

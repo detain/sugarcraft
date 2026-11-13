@@ -11,7 +11,7 @@ declare(strict_types=1);
 return [
     'board.too_small' => 'tabuleiro muito pequeno',
     'board.minecount_out_of_range' => 'número de minas fora do intervalo',
-    'board.rows_shape_mismatch' => 'o formato das linhas não corresponde à largura/altura',
+    'board.rows_shape_mismatch' => 'os dados da grade não correspondem ao tabuleiro {width}×{height}',
     'custom.min_rows' => 'as linhas devem ser no mínimo 2',
     'custom.min_cols' => 'as colunas devem ser no mínimo 2',
     'custom.max_rows' => 'as linhas devem ser no máximo 50',

@@ -11,7 +11,7 @@ declare(strict_types=1);
 return [
     'board.too_small' => 'plateau trop petit',
     'board.minecount_out_of_range' => 'nombre de mines hors plage',
-    'board.rows_shape_mismatch' => 'la forme des lignes ne correspond pas à largeur/hauteur',
+    'board.rows_shape_mismatch' => 'les données de la grille ne correspondent pas au plateau {width}×{height}',
     'custom.min_rows' => 'les lignes doivent être au moins 2',
     'custom.min_cols' => 'les colonnes doivent être au moins 2',
     'custom.max_rows' => 'les lignes doivent être au plus 50',
@@ -23,7 +23,7 @@ return [
     'ui.cleared' => '★ gagné — appuyez sur r pour rejouer',
     'ui.help_rules' => 'un chiffre compte les mines voisines',
     'ui.help_moves' => '↑ ↓ ← → / hjkl  déplacer  ·  espace / entrée  révéler',
-    'ui.help_board' => 'clic gauche  ouvrir · f / clic droit  drapeau · c / clic du milieu  groupée',
+    'ui.help_board' => 'clic gauche  ouvrir · f / clic droit  drapeau · c / milieu  ouvrir autour',
     'ui.help_session' => 'r  rejouer  ·  S  sauvegarder  ·  L  charger  ·  q / Esc / Ctrl+C  quitter',
     'ui.saved' => 'Partie sauvegardée',
     'ui.restarted' => 'Plateau relancé',

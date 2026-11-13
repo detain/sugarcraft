@@ -11,7 +11,7 @@ declare(strict_types=1);
 return [
     'board.too_small'           => 'board too small',
     'board.minecount_out_of_range' => 'mine count out of range',
-    'board.rows_shape_mismatch' => 'rows shape does not match width/height',
+    'board.rows_shape_mismatch' => 'grid data does not match the {width}×{height} board',
     'custom.min_rows'            => 'rows must be at least 2',
     'custom.min_cols'            => 'columns must be at least 2',
     'custom.max_rows'            => 'rows must be at most 50',
