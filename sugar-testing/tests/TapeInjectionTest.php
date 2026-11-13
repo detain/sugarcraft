@@ -36,7 +36,7 @@ final class TapeInjectionTest extends TestCase
 
     public function testTypedNewlineCannotForgeADirectiveLine(): void
     {
-        TapeRecorder::to($this->tapePath)
+        TapeRecorder::new($this->tapePath)
             ->type("a\nSet FontSize 4242")
             ->save();
 
@@ -52,21 +52,21 @@ final class TapeInjectionTest extends TestCase
         // content; silently stripping them would corrupt legitimate text,
         // so the builder refuses the whole value loudly.
         try {
-            TapeRecorder::to($this->tapePath)->type('safe {{ctrl+c}} text');
+            TapeRecorder::new($this->tapePath)->type('safe {{ctrl+c}} text');
             self::fail('typed content carrying the substitution markers must throw');
         } catch (\InvalidArgumentException $e) {
             self::assertStringContainsString('must never carry', $e->getMessage());
         }
 
         // A single brace is ordinary text and still records fine.
-        TapeRecorder::to($this->tapePath)->type('x {y} z')->save();
+        TapeRecorder::new($this->tapePath)->type('x {y} z')->save();
         self::assertStringContainsString('Type "x {y} z"', (string) \file_get_contents($this->tapePath));
     }
 
     public function testHeaderThemeCannotCarrySubstitutionMarkers(): void
     {
         try {
-            TapeRecorder::to($this->tapePath)->header(theme: 'Tokyo{{enter}}Night');
+            TapeRecorder::new($this->tapePath)->header(theme: 'Tokyo{{enter}}Night');
             self::fail('theme carrying the substitution markers must throw');
         } catch (\InvalidArgumentException $e) {
             self::assertStringContainsString('must never carry', $e->getMessage());
@@ -75,7 +75,7 @@ final class TapeInjectionTest extends TestCase
 
     public function testControlBytesNeverSurviveRawInsideTypedText(): void
     {
-        TapeRecorder::to($this->tapePath)
+        TapeRecorder::new($this->tapePath)
             ->header()
             ->type("b\rc\x07d\x00e")
             ->save();
@@ -90,7 +90,7 @@ final class TapeInjectionTest extends TestCase
 
     public function testCommentCannotForgeADirectiveLine(): void
     {
-        TapeRecorder::to($this->tapePath)
+        TapeRecorder::new($this->tapePath)
             ->comment("note\nShell \"rm -rf /\"")
             ->save();
 
@@ -104,7 +104,7 @@ final class TapeInjectionTest extends TestCase
 
     public function testHeaderThemeCannotEscapeItsQuotes(): void
     {
-        TapeRecorder::to($this->tapePath)
+        TapeRecorder::new($this->tapePath)
             ->header(theme: 'Evil" Enter')
             ->save();
 
@@ -118,7 +118,7 @@ final class TapeInjectionTest extends TestCase
 
     public function testLineIsTheDeliberateVerbatimHatch(): void
     {
-        TapeRecorder::to($this->tapePath)
+        TapeRecorder::new($this->tapePath)
             ->line('Set FontSize 42')
             ->save();
 
@@ -131,7 +131,7 @@ final class TapeInjectionTest extends TestCase
 
     public function testResizeIsACommentLineNotADirective(): void
     {
-        TapeRecorder::to($this->tapePath)
+        TapeRecorder::new($this->tapePath)
             ->resize(80, 24)
             ->save();
 

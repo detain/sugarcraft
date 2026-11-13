@@ -50,7 +50,7 @@ final class ControlParitySimulatorTest extends TestCase
 
     public function testBatchMsgRunsMembersWithoutReachingModel(): void
     {
-        $result = ProgramSimulator::for(new ControlRecorderModel())
+        $result = ProgramSimulator::new(new ControlRecorderModel())
             ->addMsgs(new BatchMsg([
                 fn (): Msg => $this->key('B'),
                 fn (): Msg => $this->key('C'),
@@ -63,7 +63,7 @@ final class ControlParitySimulatorTest extends TestCase
 
     public function testSequenceMsgDispatchesMembersInOrder(): void
     {
-        $result = ProgramSimulator::for(new ControlRecorderModel())
+        $result = ProgramSimulator::new(new ControlRecorderModel())
             ->addMsgs(new SequenceMsg([
                 fn (): Msg => $this->key('1'),
                 fn (): Msg => $this->key('2'),
@@ -75,7 +75,7 @@ final class ControlParitySimulatorTest extends TestCase
 
     public function testNonClosureBatchMemberRefusesLoudly(): void
     {
-        $sim = ProgramSimulator::for(new ControlRecorderModel())
+        $sim = ProgramSimulator::new(new ControlRecorderModel())
             ->addMsgs(new BatchMsg(['not-a-cmd']));
 
         $this->expectException(\RuntimeException::class);
@@ -86,7 +86,7 @@ final class ControlParitySimulatorTest extends TestCase
 
     public function testQuitMsgInQueueHaltsDrainAndDropsTheRest(): void
     {
-        $result = ProgramSimulator::for(new ControlRecorderModel())
+        $result = ProgramSimulator::new(new ControlRecorderModel())
             ->addMsgs($this->key('a'), new QuitMsg(), $this->key('z'))
             ->run();
 
@@ -97,7 +97,7 @@ final class ControlParitySimulatorTest extends TestCase
 
     public function testInterruptMsgAlsoHalts(): void
     {
-        $result = ProgramSimulator::for(new ControlRecorderModel())
+        $result = ProgramSimulator::new(new ControlRecorderModel())
             ->addMsgs($this->key('a'), new InterruptMsg(), $this->key('z'))
             ->run();
 
@@ -109,7 +109,7 @@ final class ControlParitySimulatorTest extends TestCase
     {
         // The 'q' key IS shown to the model (it decides to quit); the QuitMsg
         // the resulting cmd produces halts the drain like production's.
-        $result = ProgramSimulator::for(new ControlRecorderModel())
+        $result = ProgramSimulator::new(new ControlRecorderModel())
             ->addMsgs($this->key('q'), $this->key('z'))
             ->run();
 
@@ -119,7 +119,7 @@ final class ControlParitySimulatorTest extends TestCase
 
     public function testSuspendMsgIsDroppedWithoutAModelTurn(): void
     {
-        $result = ProgramSimulator::for(new ControlRecorderModel())
+        $result = ProgramSimulator::new(new ControlRecorderModel())
             ->addMsgs(new SuspendMsg(), $this->key('s'))
             ->run();
 
@@ -129,7 +129,7 @@ final class ControlParitySimulatorTest extends TestCase
 
     public function testRawMsgWritesBytesWithoutAModelTurn(): void
     {
-        $result = ProgramSimulator::for(new ControlRecorderModel())
+        $result = ProgramSimulator::new(new ControlRecorderModel())
             ->addMsgs(new RawMsg("\x1b[9mX"))
             ->run();
 
@@ -139,7 +139,7 @@ final class ControlParitySimulatorTest extends TestCase
 
     public function testPrintMsgAppendsATerminatedLineToOutput(): void
     {
-        $result = ProgramSimulator::for(new ControlRecorderModel())
+        $result = ProgramSimulator::new(new ControlRecorderModel())
             ->addMsgs(new PrintMsg('hello'))
             ->run();
 
@@ -151,7 +151,7 @@ final class ControlParitySimulatorTest extends TestCase
     {
         // No virtual clock: the produce() result dispatches on the spot,
         // matching how Program::dispatch recurses from its one-shot timer.
-        $result = ProgramSimulator::for(new ControlRecorderModel())
+        $result = ProgramSimulator::new(new ControlRecorderModel())
             ->addMsgs(new TickRequest(5.0, fn (): Msg => $this->key('T')))
             ->run();
 
@@ -160,7 +160,7 @@ final class ControlParitySimulatorTest extends TestCase
 
     public function testExecRequestRefusesLoudly(): void
     {
-        $sim = ProgramSimulator::for(new ControlRecorderModel())
+        $sim = ProgramSimulator::new(new ControlRecorderModel())
             ->addMsgs(new ExecRequest('ls'));
 
         $this->expectException(\RuntimeException::class);
@@ -171,7 +171,7 @@ final class ControlParitySimulatorTest extends TestCase
 
     public function testStartupTrioIsDeliveredBeforeInitWhenArmed(): void
     {
-        $result = ProgramSimulator::for(new ControlRecorderModel())
+        $result = ProgramSimulator::new(new ControlRecorderModel())
             ->withWindowSize(80, 24)
             ->withEnvironment(['K' => 'V'])
             ->withColorProfile(ColorProfile::detect(['FORCE_COLOR' => '1']))
@@ -184,14 +184,14 @@ final class ControlParitySimulatorTest extends TestCase
 
     public function testStartupTrioIsAbsentByDefault(): void
     {
-        $result = ProgramSimulator::for(new ControlRecorderModel())->run();
+        $result = ProgramSimulator::new(new ControlRecorderModel())->run();
 
         self::assertSame('I', $result->model->trace);
     }
 
     public function testRunIsRepeatable(): void
     {
-        $sim = ProgramSimulator::for(new ControlRecorderModel())->addMsgs($this->key('a'));
+        $sim = ProgramSimulator::new(new ControlRecorderModel())->addMsgs($this->key('a'));
 
         $first  = $sim->run();
         $second = $sim->run();
@@ -202,7 +202,7 @@ final class ControlParitySimulatorTest extends TestCase
 
     public function testFramesAccumulateOnePerUpdatePlusFinal(): void
     {
-        $result = ProgramSimulator::for(new ControlRecorderModel())
+        $result = ProgramSimulator::new(new ControlRecorderModel())
             ->addMsgs($this->key('a'), $this->key('b'))
             ->run();
 
@@ -216,7 +216,7 @@ final class ControlParitySimulatorTest extends TestCase
         // setter clones, so configuring a handle that already queued messages
         // would silently run WITHOUT them. addMsgs() marks the handle sent;
         // any with*() after that refuses.
-        $handle = ProgramSimulator::for(new ControlRecorderModel());
+        $handle = ProgramSimulator::new(new ControlRecorderModel());
         $handle->addMsgs($this->key('x'));
 
         try {
@@ -228,7 +228,7 @@ final class ControlParitySimulatorTest extends TestCase
 
         // Configure-first arm: the configured handle carries later sends and
         // runs them — the disciplined order behaves exactly as before.
-        $configured = ProgramSimulator::for(new ControlRecorderModel())->withRealCmdRunner(true);
+        $configured = ProgramSimulator::new(new ControlRecorderModel())->withRealCmdRunner(true);
         $configured->addMsgs($this->key('x'));
 
         $cloneRun = $configured->run();
@@ -240,7 +240,7 @@ final class ControlParitySimulatorTest extends TestCase
         // send() survives as a thin alias so external consumers migrate on
         // their own schedule: same handle back, same queueing, and the
         // configure-after-send guard trips through it too.
-        $sim = ProgramSimulator::for(new ControlRecorderModel());
+        $sim = ProgramSimulator::new(new ControlRecorderModel());
         $returned = $sim->send($this->key('x'));
         self::assertSame($sim, $returned, 'send() alias must mutate and return the same handle');
 
@@ -256,7 +256,7 @@ final class ControlParitySimulatorTest extends TestCase
 
     public function testTestResultCarriesTheModelAndOutputShapes(): void
     {
-        $result = ProgramSimulator::for(new ControlRecorderModel())->run();
+        $result = ProgramSimulator::new(new ControlRecorderModel())->run();
 
         self::assertInstanceOf(TestResult::class, $result);
         self::assertInstanceOf(ControlRecorderModel::class, $result->model);

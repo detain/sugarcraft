@@ -23,7 +23,7 @@ final class ProgramSimulatorTest extends TestCase
         $model = new CounterModel();
         $program = new Program($model);
 
-        $sim = ProgramSimulator::for($program);
+        $sim = ProgramSimulator::new($program);
 
         $this->assertInstanceOf(ProgramSimulator::class, $sim);
     }
@@ -32,7 +32,7 @@ final class ProgramSimulatorTest extends TestCase
     {
         // A bare Model may be passed directly; it is wrapped in a default
         // Program internally, so run() drives its init/update/view.
-        $sim = ProgramSimulator::for(new CounterModel(7));
+        $sim = ProgramSimulator::new(new CounterModel(7));
 
         $this->assertInstanceOf(ProgramSimulator::class, $sim);
 
@@ -44,7 +44,7 @@ final class ProgramSimulatorTest extends TestCase
 
     public function testForBareModelProcessesQueuedMessages(): void
     {
-        $sim = ProgramSimulator::for(new CounterModel(0));
+        $sim = ProgramSimulator::new(new CounterModel(0));
         $sim->addMsgs(new KeyMsg(
             type: KeyType::Char,
             rune: '+',
@@ -64,7 +64,7 @@ final class ProgramSimulatorTest extends TestCase
     {
         $model = new CounterModel();
         $program = new Program($model);
-        $sim = ProgramSimulator::for($program);
+        $sim = ProgramSimulator::new($program);
 
         $result = $sim->addMsgs(new KeyMsg(
             type: KeyType::Char,
@@ -81,7 +81,7 @@ final class ProgramSimulatorTest extends TestCase
     {
         $model = new CounterModel();
         $program = new Program($model);
-        $sim = ProgramSimulator::for($program);
+        $sim = ProgramSimulator::new($program);
 
         $result = $sim->run();
 
@@ -93,7 +93,7 @@ final class ProgramSimulatorTest extends TestCase
     {
         $model = new CounterModel(0);
         $program = new Program($model);
-        $sim = ProgramSimulator::for($program);
+        $sim = ProgramSimulator::new($program);
 
         $sim->addMsgs(new KeyMsg(
             type: KeyType::Char,
@@ -126,7 +126,7 @@ final class ProgramSimulatorTest extends TestCase
     {
         $model = new CounterModel(42);
         $program = new Program($model);
-        $sim = ProgramSimulator::for($program);
+        $sim = ProgramSimulator::new($program);
 
         $result = $sim->run();
 
@@ -137,7 +137,7 @@ final class ProgramSimulatorTest extends TestCase
     {
         $model = new CounterModel(5);
         $program = new Program($model);
-        $sim = ProgramSimulator::for($program);
+        $sim = ProgramSimulator::new($program);
 
         $sim->addMsgs(new KeyMsg(
             type: KeyType::Char,
@@ -158,7 +158,7 @@ final class ProgramSimulatorTest extends TestCase
     {
         $model = new CounterModel();
         $program = new Program($model);
-        $sim = ProgramSimulator::for($program);
+        $sim = ProgramSimulator::new($program);
 
         // A model that emits a cmd on init would populate cmds.
         $result = $sim->run();
@@ -172,7 +172,7 @@ final class ProgramSimulatorTest extends TestCase
         $program = new Program($model);
 
         $capturedCmds = [];
-        $sim = ProgramSimulator::for($program)->withFakeCmdRunner(
+        $sim = ProgramSimulator::new($program)->withFakeCmdRunner(
             function ($cmd) use (&$capturedCmds): ?\SugarCraft\Core\Msg {
                 $capturedCmds[] = $cmd;
                 return null;
@@ -197,7 +197,7 @@ final class ProgramSimulatorTest extends TestCase
         $model = new CmdProducingCounterModel(0);
         $program = new Program($model);
 
-        $sim = ProgramSimulator::for($program)->withFakeCmdRunner(
+        $sim = ProgramSimulator::new($program)->withFakeCmdRunner(
             static fn (): ?\SugarCraft\Core\Msg => new KeyMsg(
                 type: KeyType::Char,
                 rune: '+',
@@ -224,7 +224,7 @@ final class ProgramSimulatorTest extends TestCase
         $program = new Program($model);
 
         // Use default runner (no fake runner) so the init cmd executes.
-        $sim = ProgramSimulator::for($program);
+        $sim = ProgramSimulator::new($program);
 
         $result = $sim->run();
 
@@ -245,7 +245,7 @@ final class ProgramSimulatorTest extends TestCase
         $model = new CmdProducingCounterModel(0);
         $program = new Program($model);
 
-        $sim = ProgramSimulator::for($program)
+        $sim = ProgramSimulator::new($program)
             ->withRealCmdRunner(false)  // Capture-only mode
             ->withFakeCmdRunner(static fn (): ?\SugarCraft\Core\Msg => null);
 
@@ -264,11 +264,11 @@ final class ProgramSimulatorTest extends TestCase
         // captureCmds() must be behaviourally identical to
         // withRealCmdRunner(false): the side-effecting init cmd is captured,
         // never executed, and both spellings produce the same run.
-        $boolArm = ProgramSimulator::for(new CmdProducingCounterModel(0))
+        $boolArm = ProgramSimulator::new(new CmdProducingCounterModel(0))
             ->withRealCmdRunner(false)
             ->run();
 
-        $direct = ProgramSimulator::for(new CmdProducingCounterModel(0))
+        $direct = ProgramSimulator::new(new CmdProducingCounterModel(0))
             ->captureCmds()
             ->run();
 
@@ -292,14 +292,14 @@ final class ProgramSimulatorTest extends TestCase
             shift: false,
         );
 
-        $capture = ProgramSimulator::for(new CmdProducingCounterModel(0))
+        $capture = ProgramSimulator::new(new CmdProducingCounterModel(0))
             ->withCmdCapture($inject)
             ->run();
 
         $this->assertSame(1, $capture->model->count());
         $this->assertCount(1, $capture->cmds);
 
-        $executeArm = ProgramSimulator::for(new CmdProducingCounterModel(0))
+        $executeArm = ProgramSimulator::new(new CmdProducingCounterModel(0))
             ->withRealCmdRunner(true)
             ->withFakeCmdRunner($inject)
             ->run();
@@ -311,7 +311,7 @@ final class ProgramSimulatorTest extends TestCase
     {
         // captureCmds()/withCmdCapture() clone too — the configure-before-
         // send contract (testing-02) binds them as well.
-        $sent = ProgramSimulator::for(new CounterModel())->addMsgs(new KeyMsg(
+        $sent = ProgramSimulator::new(new CounterModel())->addMsgs(new KeyMsg(
             type: KeyType::Char,
             rune: '+',
             alt: false,
@@ -338,7 +338,7 @@ final class ProgramSimulatorTest extends TestCase
     {
         $model = new CounterModel(99);
         $program = new Program($model);
-        $sim = ProgramSimulator::for($program);
+        $sim = ProgramSimulator::new($program);
 
         $result = $sim->run();
 
@@ -355,7 +355,7 @@ final class ProgramSimulatorTest extends TestCase
         // the queue, and it should be processed in the run loop.
         $model = new SubscriptionProducingModel(0);
         $program = new Program($model);
-        $sim = ProgramSimulator::for($program);
+        $sim = ProgramSimulator::new($program);
 
         $result = $sim->run();
 
@@ -379,7 +379,7 @@ final class ProgramSimulatorTest extends TestCase
         $program = new Program($model);
 
         // Send any message to populate the queue and trigger applyMsg()
-        $sim = ProgramSimulator::for($program)
+        $sim = ProgramSimulator::new($program)
             ->withFakeCmdRunner(
                 static fn (): \SugarCraft\Core\Msg => new KeyMsg(
                     type: KeyType::Char,
@@ -414,7 +414,7 @@ final class ProgramSimulatorTest extends TestCase
         $model = new CmdProducingCounterModel(0);
         $program = new Program($model);
 
-        $sim = ProgramSimulator::for($program)
+        $sim = ProgramSimulator::new($program)
             ->withRealCmdRunner(true)
             ->withFakeCmdRunner(static fn ($cmd) => null);
 
@@ -443,10 +443,21 @@ final class ProgramSimulatorTest extends TestCase
             },
         );
 
-        $sim = ProgramSimulator::for(new CounterModel());
+        $sim = ProgramSimulator::new(new CounterModel());
 
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('pump() exceeded');
         $sim->addMsgs($self)->run();
+    }
+
+    public function testDeprecatedForAliasStillBuildsAWorkingSimulator(): void
+    {
+        // The factory spelling moved to ::new() (sugar-core AGENTS.md
+        // convention); the old ::for() stays as a delegating alias.
+        $result = ProgramSimulator::for(new CounterModel(7))
+            ->addMsgs(new KeyMsg(type: KeyType::Char, rune: '+'))
+            ->run();
+
+        $this->assertSame("Count: 8\n", $result->view);
     }
 }

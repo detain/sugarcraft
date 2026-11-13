@@ -54,9 +54,17 @@ final class TapeRecorder
     /**
      * Factory — create a new tape recorder writing to $outputPath.
      */
-    public static function to(string $outputPath): self
+    public static function new(string $outputPath): self
     {
         return new self($outputPath);
+    }
+
+    /**
+     * @deprecated use {@see new()} — mirrors the sugar-core factory spelling.
+     */
+    public static function to(string $outputPath): self
+    {
+        return self::new($outputPath);
     }
 
     /**

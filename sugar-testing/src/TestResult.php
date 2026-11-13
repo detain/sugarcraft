@@ -14,6 +14,9 @@ use PHPUnit\Framework\Assert;
  * messages were dropped because a QuitMsg/InterruptMsg ended the drain
  * early — so a test can pin "the quit actually stopped things" instead of
  * trusting an empty-looking run.
+ *
+ * Upstream-antecedented (charmbracelet/teatest TestResult) but first-party
+ * hardened — see docs/MATCHUPS.md.
  */
 final readonly class TestResult
 {

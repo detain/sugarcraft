@@ -109,7 +109,7 @@ $counter = new class implements \SugarCraft\Core\Model {
     }
 };
 
-$result = ProgramSimulator::for($counter)
+$result = ProgramSimulator::new($counter)
     ->addMsgs(...ScriptedInput::new()->key('a')->key('q')->build())
     ->run();
 
@@ -134,7 +134,7 @@ simulator is a single spread: `$sim->addMsgs(...$input->build());`
 ```php
 use SugarCraft\Testing\ProgramSimulator;
 
-$sim = ProgramSimulator::for($program);           // Model or Program
+$sim = ProgramSimulator::new($program);           // Model or Program
 
 $sim = $sim->withRealCmdRunner(false);             // capture-only: cmds collected, never executed
 $sim = $sim->withFakeCmdRunner(fn ($cmd) => $nextMsg); // substitute the Cmd result (new sim — keep it)
@@ -455,7 +455,7 @@ choreography):
 ```php
 use SugarCraft\Testing\Tape\TapeRecorder;
 
-TapeRecorder::to(__DIR__ . '/.vhs/demo.tape')
+TapeRecorder::new(__DIR__ . '/.vhs/demo.tape')
     ->header(theme: 'TokyoNight')          // Set Theme/FontSize/Width/Height
                                           // (+ Set TypingSpeed when the optional
                                           //  $typingSpeed float is passed)
@@ -473,7 +473,8 @@ line — `type()` neutralizes newlines and control bytes inside the quotes,
 `comment()` prefixes every physical line, and even the theme string is escaped.
 `line()` is the deliberate verbatim escape hatch: CI executes the tapes these
 files describe, so only feed it trusted, generated directives. Beyond the fence
-above, the builder roster is `to()`, `header()`, `type()`, `enter()`, `sleep()`,
+above, the builder roster is `new()` (deprecated alias `to()`), `header()`,
+`type()`, `enter()`, `sleep()`,
 `resize()`, `comment()`, `line()`, `save()` — and `resize()` is disclosure-only:
 the harness supports initial dimensions only (fixed by `header()`), so it records
 a `# Resize CxR` comment line and changes nothing; whether upstream VHS grew a

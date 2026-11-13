@@ -22,7 +22,7 @@ use SugarCraft\Testing\Tape\TapeRecorder;
 
 $tapePath = sys_get_temp_dir() . '/sugar-testing-tape-recorder-demo-' . getmypid() . '-' . bin2hex(random_bytes(6)) . '.tape';
 
-$recorder = TapeRecorder::to($tapePath)
+$recorder = TapeRecorder::new($tapePath)
     ->header(theme: 'TokyoNight')
     ->type('php examples/tape-recorder.php')
     ->enter()

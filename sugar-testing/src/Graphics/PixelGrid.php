@@ -12,7 +12,7 @@ use SugarCraft\Testing\Lang;
  *
  * Cells are stored row-major; a `null` cell means "no pixel painted here"
  * (transparent), which matters for Sixel bands that stop short of the full
- * raster height. Colour triples are `[r, g, b]` in 0..255.
+ * raster height. Color triples are `[r, g, b]` in 0..255.
  *
  * Mirrors the pixel buffer a sugar-image renderer rasterises before encoding.
  */

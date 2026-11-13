@@ -17,7 +17,7 @@ final class ProgramSimulatorSubscriptionTest extends TestCase
 {
     public function testSubscriptionFiresAfterInitAndAfterEverySentMessage(): void
     {
-        $sim = ProgramSimulator::for(new RecordingModel(subscribed: true))
+        $sim = ProgramSimulator::new(new RecordingModel(subscribed: true))
             ->addMsgs(new KeyMsg(KeyType::Char, rune: 'a'))
             ->addMsgs(new KeyMsg(KeyType::Char, rune: 'b'));
 
@@ -26,7 +26,7 @@ final class ProgramSimulatorSubscriptionTest extends TestCase
 
     public function testSubscriptionMessagesAfterSentMessagesAreNotDropped(): void
     {
-        $sim = ProgramSimulator::for(new SubscriptionProducingModel(0))
+        $sim = ProgramSimulator::new(new SubscriptionProducingModel(0))
             ->addMsgs(new KeyMsg(KeyType::Char, rune: 'a'))
             ->addMsgs(new KeyMsg(KeyType::Char, rune: 'b'));
 
@@ -35,7 +35,7 @@ final class ProgramSimulatorSubscriptionTest extends TestCase
 
     public function testRunIsRepeatable(): void
     {
-        $sim = ProgramSimulator::for(new RecordingModel(subscribed: true))
+        $sim = ProgramSimulator::new(new RecordingModel(subscribed: true))
             ->addMsgs(new KeyMsg(KeyType::Char, rune: 'a'));
 
         $first = $sim->run();
@@ -50,7 +50,7 @@ final class ProgramSimulatorSubscriptionTest extends TestCase
     {
         // Messages a subscription produces do not fire it again, so a
         // subscription producing on every call leaves run() bounded.
-        $sim = ProgramSimulator::for(new RecordingModel(subscribed: true));
+        $sim = ProgramSimulator::new(new RecordingModel(subscribed: true));
 
         $this->assertSame('*', $sim->run()->view);
     }

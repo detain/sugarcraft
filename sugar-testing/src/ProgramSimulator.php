@@ -30,6 +30,9 @@ use SugarCraft\Core\Util\ColorProfile;
  * init(), update(), and view() in sequence — without touching real
  * stdin/stdout or installing signal handlers.
  *
+ * Upstream-antecedented (charmbracelet/teatest Tester) but first-party
+ * hardened — see docs/MATCHUPS.md.
+ *
  * Control-layer parity: messages are routed through the interception
  * ladder {@see Program::dispatch()} uses for the control messages listed
  * below, so a model never sees what the runtime would have swallowed.
@@ -133,13 +136,12 @@ final class ProgramSimulator
     private ?ColorProfileMsg $startupProfile = null;
 
     /**
-     * @param private readonly Program $program PHP's readonly keyword prevents
-     *                                          re-assignment of this property,
-     *                                          but does NOT prevent internal
-     *                                          mutation of the Program or its
-     *                                          model. The model is safe to
-     *                                          read but may be modified by
-     *                                          update() calls during run().
+     * @param Program $program The program under simulation.
+     *
+     * Note: PHP's readonly keyword prevents re-assignment of this property,
+     * but does NOT prevent internal mutation of the Program or its model.
+     * The model is safe to read but may be modified by update() calls
+     * during run().
      */
     private function __construct(
         private readonly Program $program,
@@ -153,13 +155,22 @@ final class ProgramSimulator
      * {@see ProgramOptions}; it is wrapped in a default {@see Program}
      * (no I/O happens because the simulator never calls Program::run()).
      */
-    public static function for(Model|Program $program): self
+    public static function new(Model|Program $program): self
     {
         if ($program instanceof Model) {
             $program = new Program($program);
         }
 
         return new self($program);
+    }
+
+    /**
+     * @deprecated use {@see new()} — mirrors the sugar-core factory spelling
+     *             (AGENTS.md: factories are `::new()`, never `::for()`).
+     */
+    public static function for(Model|Program $program): self
+    {
+        return self::new($program);
     }
 
     /**

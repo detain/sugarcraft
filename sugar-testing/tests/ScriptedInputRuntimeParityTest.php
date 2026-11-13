@@ -75,7 +75,7 @@ final class ScriptedInputRuntimeParityTest extends TestCase
         // A model treating every PasteMsg as the whole paste is correct for a
         // small paste and wrong for a chunked one; the simulator must expose it.
         $content = str_repeat('x', InputReader::MAX_PASTE_BYTES + 8192);
-        $sim = ProgramSimulator::for(new RecordingModel());
+        $sim = ProgramSimulator::new(new RecordingModel());
         foreach (ScriptedInput::new()->paste($content)->build() as $msg) {
             $sim = $sim->send($msg);
         }

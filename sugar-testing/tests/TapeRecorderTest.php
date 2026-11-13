@@ -38,14 +38,14 @@ final class TapeRecorderTest extends TestCase
 
     public function testToFactory(): void
     {
-        $recorder = TapeRecorder::to($this->tapePath);
+        $recorder = TapeRecorder::new($this->tapePath);
 
         $this->assertInstanceOf(TapeRecorder::class, $recorder);
     }
 
     public function testHeaderWritesVhsHeader(): void
     {
-        TapeRecorder::to($this->tapePath)
+        TapeRecorder::new($this->tapePath)
             ->header()
             ->save();
 
@@ -58,7 +58,7 @@ final class TapeRecorderTest extends TestCase
 
     public function testHeaderRespectsCustomValues(): void
     {
-        TapeRecorder::to($this->tapePath)
+        TapeRecorder::new($this->tapePath)
             ->header(theme: 'Dracula', width: 1024, height: 768, fontSize: 16)
             ->save();
 
@@ -72,7 +72,7 @@ final class TapeRecorderTest extends TestCase
 
     public function testTypeWritesKeyCommand(): void
     {
-        TapeRecorder::to($this->tapePath)
+        TapeRecorder::new($this->tapePath)
             ->header()
             ->type('echo hello')
             ->save();
@@ -84,7 +84,7 @@ final class TapeRecorderTest extends TestCase
 
     public function testEnterWritesEnterCommand(): void
     {
-        TapeRecorder::to($this->tapePath)
+        TapeRecorder::new($this->tapePath)
             ->header()
             ->enter()
             ->save();
@@ -96,7 +96,7 @@ final class TapeRecorderTest extends TestCase
 
     public function testSleepWritesSleepCommand(): void
     {
-        TapeRecorder::to($this->tapePath)
+        TapeRecorder::new($this->tapePath)
             ->header()
             ->sleep(1.5)
             ->save();
@@ -108,7 +108,7 @@ final class TapeRecorderTest extends TestCase
 
     public function testResizeWritesComment(): void
     {
-        TapeRecorder::to($this->tapePath)
+        TapeRecorder::new($this->tapePath)
             ->header()
             ->resize(120, 30)
             ->save();
@@ -120,7 +120,7 @@ final class TapeRecorderTest extends TestCase
 
     public function testCommentWritesCommentLine(): void
     {
-        TapeRecorder::to($this->tapePath)
+        TapeRecorder::new($this->tapePath)
             ->header()
             ->comment('This is a demo')
             ->save();
@@ -132,7 +132,7 @@ final class TapeRecorderTest extends TestCase
 
     public function testLineAppendsVerbatim(): void
     {
-        TapeRecorder::to($this->tapePath)
+        TapeRecorder::new($this->tapePath)
             ->header()
             ->line('Custom line here')
             ->save();
@@ -144,7 +144,7 @@ final class TapeRecorderTest extends TestCase
 
     public function testFullTapeHasCorrectStructure(): void
     {
-        TapeRecorder::to($this->tapePath)
+        TapeRecorder::new($this->tapePath)
             ->header()
             ->comment('Demo tape')
             ->type('php examples/counter.php')
@@ -168,7 +168,7 @@ final class TapeRecorderTest extends TestCase
     {
         $nestedPath = $this->tmpDir . '/nested/path/demo.tape';
 
-        TapeRecorder::to($nestedPath)
+        TapeRecorder::new($nestedPath)
             ->header()
             ->save();
 
@@ -375,7 +375,7 @@ final class TapeRecorderTest extends TestCase
         file_put_contents($realTarget, 'original');
         symlink($realTarget, $this->tapePath);
 
-        $recorder = TapeRecorder::to($this->tapePath)->header();
+        $recorder = TapeRecorder::new($this->tapePath)->header();
 
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('through a symlink');
@@ -389,7 +389,7 @@ final class TapeRecorderTest extends TestCase
 
     public function testSaveLeavesNoStrayTempFiles(): void
     {
-        TapeRecorder::to($this->tapePath)
+        TapeRecorder::new($this->tapePath)
             ->header()
             ->type('hi')
             ->save();
@@ -408,7 +408,7 @@ final class TapeRecorderTest extends TestCase
     {
         // The old silent no-op meant a corrected header() call could never
         // take effect; the conflict must surface, naming what is on tape.
-        $recorder = TapeRecorder::to($this->tapePath)->header();
+        $recorder = TapeRecorder::new($this->tapePath)->header();
 
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('already emitted with a different set');
@@ -425,7 +425,7 @@ final class TapeRecorderTest extends TestCase
 
     public function testHeaderIdenticalReIssueIsANoOp(): void
     {
-        TapeRecorder::to($this->tapePath)
+        TapeRecorder::new($this->tapePath)
             ->header()
             ->header()
             ->save();
@@ -439,7 +439,7 @@ final class TapeRecorderTest extends TestCase
     {
         foreach ([-1.0, NAN, \INF] as $bad) {
             try {
-                TapeRecorder::to($this->tapePath)->sleep($bad);
+                TapeRecorder::new($this->tapePath)->sleep($bad);
                 $this->fail('sleep() accepted ' . var_export($bad, true));
             } catch (\InvalidArgumentException $error) {
                 $this->assertStringContainsString('finite non-negative', $error->getMessage());
@@ -449,7 +449,7 @@ final class TapeRecorderTest extends TestCase
 
     public function testSleepFormatsCanonicalDecimal(): void
     {
-        TapeRecorder::to($this->tapePath)->header()->sleep(2.0)->sleep(0.0005)->save();
+        TapeRecorder::new($this->tapePath)->header()->sleep(2.0)->sleep(0.0005)->save();
 
         $written = (string) file_get_contents($this->tapePath);
 
@@ -462,7 +462,7 @@ final class TapeRecorderTest extends TestCase
 
     public function testHeaderEmitsTypingSpeedAfterHeightWhenPassed(): void
     {
-        TapeRecorder::to($this->tapePath)
+        TapeRecorder::new($this->tapePath)
             ->header(width: 100, height: 80, fontSize: 12, typingSpeed: 0.05)
             ->save();
 
@@ -475,7 +475,7 @@ final class TapeRecorderTest extends TestCase
     {
         // The parameter is optional precisely so existing tapes stay
         // byte-identical: null must not shift a single byte.
-        TapeRecorder::to($this->tapePath)->header()->save();
+        TapeRecorder::new($this->tapePath)->header()->save();
 
         $written = (string) file_get_contents($this->tapePath);
 
@@ -486,7 +486,7 @@ final class TapeRecorderTest extends TestCase
     {
         foreach ([NAN, \INF, -0.5] as $bad) {
             try {
-                TapeRecorder::to($this->tapePath)->header(typingSpeed: $bad);
+                TapeRecorder::new($this->tapePath)->header(typingSpeed: $bad);
                 $this->fail('header() accepted typingSpeed ' . var_export($bad, true));
             } catch (\InvalidArgumentException $error) {
                 $this->assertStringContainsString('finite non-negative delay', $error->getMessage());
@@ -496,11 +496,23 @@ final class TapeRecorderTest extends TestCase
 
     public function testHeaderTypingSpeedParticipatesInTheConflictGuard(): void
     {
-        $recorder = TapeRecorder::to($this->tapePath)->header(typingSpeed: 0.05);
+        $recorder = TapeRecorder::new($this->tapePath)->header(typingSpeed: 0.05);
 
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('already emitted with a different set');
 
         $recorder->header();
+    }
+
+    public function testDeprecatedToAliasStillTargetsTheSamePath(): void
+    {
+        // The builder factory moved to ::new(); ::to() remains as a
+        // delegating alias so existing tapes keep generating.
+        TapeRecorder::to($this->tapePath)
+            ->header()
+            ->save();
+
+        $this->assertFileExists($this->tapePath);
+        $this->assertStringStartsWith('Set Theme "TokyoNight"', (string) file_get_contents($this->tapePath));
     }
 }
