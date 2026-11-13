@@ -36,8 +36,12 @@ final class ValueCoercion
             return 'null';
         }
 
-        if (\is_int($v) || \is_float($v)) {
+        if (\is_int($v)) {
             return (string) $v;
+        }
+
+        if (\is_float($v)) {
+            return self::floatString($v);
         }
 
         if (\is_string($v)) {
@@ -59,6 +63,28 @@ final class ValueCoercion
         // Fallback for unknown types (closures arrive through the object arm
         // above and report their class name, e.g. 'Closure')
         return 'unknown';
+    }
+
+    /**
+     * Shortest-roundtrip float rendering for the text/logfmt arms.
+     *
+     * A bare (string) cast honours php.ini `precision` (14 on some distros, 16
+     * or 17 on others), so the same float could log different bytes on
+     * different hosts - 1.0000000000000002 collapses to "1" at precision 14.
+     * json_encode instead honours serialize_precision (-1 upstream default):
+     * the fewest digits that read back as the identical double, which is what
+     * the JSON arm already emits and what Go's %v prints. Non-finite floats
+     * keep their NAN/INF/-INF names (json_encode would refuse them).
+     */
+    private static function floatString(float $v): string
+    {
+        if (!\is_finite($v)) {
+            return \is_nan($v) ? 'NAN' : ($v > 0 ? 'INF' : '-INF');
+        }
+
+        $encoded = \json_encode($v);
+
+        return \is_string($encoded) ? $encoded : (string) $v;
     }
 
     /**

@@ -290,6 +290,62 @@ final class FormatterValueCoercionTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
+    // [SL-32] Shortest-roundtrip float text
+    // -------------------------------------------------------------------------
+
+    public function testFloatsStringifyWithShortestRoundtripDigits(): void
+    {
+        // The text arm used to honour php.ini `precision` (this host: 14),
+        // so 1.0000000000000002 collapsed to "1" on some distros and not
+        // others. serialize_precision=-1 digits are now pinned for the
+        // representative cases, including the exponent form Go's %v prints.
+        $coerce = \SugarCraft\Log\Formatter\ValueCoercion::class;
+        $this->assertSame('0.1', $coerce::stringify(0.1));
+        $this->assertSame('1.0000000000000002', $coerce::stringify(1.0000000000000002));
+        $this->assertSame('1.0e+25', $coerce::stringify(1e25));
+        $this->assertSame('1', $coerce::stringify(1.0));
+        $this->assertSame('INF', $coerce::stringify(INF));
+        $this->assertSame('-INF', $coerce::stringify(-INF));
+        $this->assertSame('NAN', $coerce::stringify(NAN));
+    }
+
+    public function testFloatBytesAgreeAcrossTextLogfmtAndJsonArms(): void
+    {
+        // One float, one spelling, everywhere: the collapse-prone edge value
+        // must reach the wire identically in all three formatter arms.
+        $context = ['edge' => 1.0000000000000002, 'big' => 1e25, 'whole' => 1.0];
+
+        $textHandle = \fopen('php://memory', 'r+');
+        Logger::new(new TextFormatter(reportTimestamp: false), stream: $textHandle)
+            ->withPrefix('')->info('m', $context);
+        \rewind($textHandle);
+        $text = \stream_get_contents($textHandle);
+        \fclose($textHandle);
+
+        $logfmtHandle = \fopen('php://memory', 'r+');
+        Logger::new(new LogfmtFormatter(reportTimestamp: false), stream: $logfmtHandle)
+            ->info('m', $context);
+        \rewind($logfmtHandle);
+        $logfmt = \stream_get_contents($logfmtHandle);
+        \fclose($logfmtHandle);
+
+        $jsonHandle = \fopen('php://memory', 'r+');
+        Logger::new(new JsonFormatter(reportTimestamp: false), stream: $jsonHandle)
+            ->info('m', $context);
+        \rewind($jsonHandle);
+        $json = \stream_get_contents($jsonHandle);
+        \fclose($jsonHandle);
+
+        foreach (['edge=1.0000000000000002', 'big=1.0e+25', 'whole=1'] as $needle) {
+            $this->assertStringContainsString($needle, $text, 'text arm: ' . $needle);
+            $this->assertStringContainsString($needle, $logfmt, 'logfmt arm: ' . $needle);
+        }
+        $this->assertStringContainsString('"edge":1.0000000000000002', $json);
+        $this->assertStringContainsString('"big":1.0e+25', $json);
+        $this->assertStringContainsString('"whole":1', $json);
+    }
+
+    // -------------------------------------------------------------------------
     // JsonFormatter json_encode failure fallback
     // -------------------------------------------------------------------------
 
