@@ -4,7 +4,7 @@
 **Date:** 2026-06-30
 **Deciders:** SugarCraft Audit Team
 
-> **Naming note (2026-10 rename):** this record predates the rename. `candy-async` is the package today published as `sugar-async` (its `AsyncOps` now lives at `sugar-async/src/AsyncOps.php`); `candy-files` kept its name. Historical paths are preserved verbatim below.
+> **Naming note (2026-10 rename):** this record predates the rename. `candy-async` is the package today published as `sugar-async` (its `AsyncOps` now lives at `sugar-async/src/AsyncOps.php`); `candy-files` kept its name. Historical paths are preserved verbatim below. <!-- @rename-keep historical naming note: the old slug is what this line exists to name -->
 
 ---
 

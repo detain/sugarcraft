@@ -638,7 +638,7 @@ $loop->run();
   handler (`.then(null, ...)`) or an `otherwise()` arm.
 - **A timeout that never fires.** The loop must actually run: `Loop::run()` (or
   your host program's loop) drives every timer this library arms.
-- **`composer` resolves an old `candy-async`.** The package was renamed to
+- **`composer` resolves an old `candy-async`.** <!-- @rename-keep historical package name in a rename-troubleshooting bullet --> The package was renamed to
   `sugarcraft/sugar-async` in the 2026-10 rename; `class_alias` shims were never
   shipped — update use statements.
 - Issues: <https://github.com/detain/sugarcraft/issues>
