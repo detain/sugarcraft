@@ -7,6 +7,7 @@ asking.
 | Page | What it answers | Read it when |
 |---|---|---|
 | [GLOSSARY.md](GLOSSARY.md) | What TUI, MCP, OSC 52, sixel, PTY, SGR… mean | Any page's vocabulary stops you |
+| [SECURITY.md](SECURITY.md) | How to report a vulnerability, and where each surface's security model lives | You found a security issue or are assessing the trust model |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Dev modes, the sharded suite, the drift guards, docs cadence | You are changing this package's code or docs |
 | [ADDING_A_PROVIDER.md](ADDING_A_PROVIDER.md) | The provider contract: capabilities, carrier fields, registration, behaviour laws | You are wiring a new model API |
 | [COMMANDS.md](COMMANDS.md) | Every slash command, argument-for-argument | You want to know what you can type |

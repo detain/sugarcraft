@@ -110,6 +110,7 @@ Claude Code, OpenCode and OpenClaw.
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | What runs where: the binary, the bootstrap, `Chat`, the engine, sessions |
 | [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md) | Exit codes, missing skills/tools/hooks, provider problems, where diagnostics go |
 | [`docs/GLOSSARY.md`](docs/GLOSSARY.md) | Terminal acronyms and project vocabulary, glossed where they first appear, and the identifier labels you meet in code comments |
+| [`docs/SECURITY.md`](docs/SECURITY.md) | Reporting a vulnerability privately, and where the security model of each surface is documented (the root policy is the source of truth) |
 | [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md) | Working on this package: linked vs published vendor modes, the sharded suite, the drift guards, and the docs cadence |
 | [`docs/ADDING_A_PROVIDER.md`](docs/ADDING_A_PROVIDER.md) | The provider contract end to end: capabilities, the response fields the engine consumes, registration, and the behaviour laws |
 | [`candy-code-web`](https://github.com/sugarcraft/candy-code-web) | The browser UI that `candy-code serve` hosts |
