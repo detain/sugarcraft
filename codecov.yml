@@ -54,13 +54,11 @@ flag_management:
     - name: sugar-spring
       paths: ["sugar-spring/src/**"]
       carryforward: true
-      carryforward: true
     - name: sugar-widgets
       paths: ["sugar-widgets/src/**"]
       carryforward: true
     - name: sugar-charts
       paths: ["sugar-charts/src/**"]
-      carryforward: true
       carryforward: true
     - name: candy-scriptui
       paths: ["candy-scriptui/src/**"]
