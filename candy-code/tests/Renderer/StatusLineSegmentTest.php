@@ -43,7 +43,7 @@ final class StatusLineSegmentTest extends TestCase
     {
         return (new Chat(
             history: [Message::user('hello'), Message::assistant('hi')],
-            backend: new EchoBackend(),
+            backend: self::windowedBackend(),
         ))->withSize($cols, 30);
     }
 
@@ -626,7 +626,7 @@ final class StatusLineSegmentTest extends TestCase
                     0,
                 )),
             ],
-            backend: new EchoBackend(),
+            backend: self::windowedBackend(),
         ))->withSize($cols, 30);
     }
 
@@ -646,7 +646,7 @@ final class StatusLineSegmentTest extends TestCase
     {
         $chat = (new Chat(
             history: [Message::user('hello', self::ANCHOR - 100)],
-            backend: new EchoBackend(),
+            backend: self::windowedBackend(),
             maxCostUsd: $cap,
         ))->withSize($cols, 30);
 
@@ -692,7 +692,7 @@ final class StatusLineSegmentTest extends TestCase
                 Message::user('again', self::ANCHOR - 60),
                 Message::assistant('Second.', self::ANCHOR - 5)->withUsage(Usage::new(600, 0.02, 300, 100, 200, 0)),
             ],
-            backend: new EchoBackend(),
+            backend: self::windowedBackend(),
         ))->withSize(100, 30);
 
         $segment = $this->cacheSegment($chat, 60, (float) self::ANCHOR);
@@ -950,7 +950,7 @@ final class StatusLineSegmentTest extends TestCase
 
         $withNewer = (new Chat(
             history: [Message::user('hello', self::ANCHOR - 200), $fullReport, $totalOnly, $invalidated],
-            backend: new EchoBackend(),
+            backend: self::windowedBackend(),
         ))->withSize(100, 30);
 
         // First leg — pins the reverse walk. The newest usable report wins over
@@ -965,7 +965,7 @@ final class StatusLineSegmentTest extends TestCase
         // from the wrong end of the walk lands on '1s' and fails this string.
         $olderOnly = (new Chat(
             history: [Message::user('hello', self::ANCHOR - 200), $fullReport, $totalOnly],
-            backend: new EchoBackend(),
+            backend: self::windowedBackend(),
         ))->withSize(100, 30);
 
         self::assertSame('50% cache · 1m', $this->cacheSegment($olderOnly, 60, (float) self::ANCHOR));
@@ -1229,7 +1229,7 @@ final class StatusLineSegmentTest extends TestCase
                 $chat->history[0],
                 Message::assistant('Replaced.', self::ANCHOR - 42),
             ],
-            backend: new EchoBackend(),
+            backend: self::windowedBackend(),
         ))->withSize(100, 30);
         $after = $this->transcriptSignature($replaced);
 
@@ -1248,5 +1248,38 @@ final class StatusLineSegmentTest extends TestCase
             $after[0],
             'the untouched first entry must read the same in both signatures — a difference here means the plant disturbed more than the replaced slot',
         );
+    }
+
+    /**
+     * A backend that reports its own 100K window. These fixtures are about the
+     * segments beside the context figure, so the window must read as measured:
+     * an unreported window would add the "assumed" tag and move every segment
+     * these assertions pin.
+     */
+    private static function windowedBackend(): \SugarCraft\Code\Backend&\SugarCraft\Code\Backend\ReportsContextWindow
+    {
+        return new class implements \SugarCraft\Code\Backend, \SugarCraft\Code\Backend\ReportsContextWindow {
+            private readonly EchoBackend $echo;
+
+            public function __construct()
+            {
+                $this->echo = new EchoBackend();
+            }
+
+            public function complete(array $history, ?callable $onToken = null, ?callable $onEvent = null): \SugarCraft\Code\Message
+            {
+                return $this->echo->complete($history, $onToken, $onEvent);
+            }
+
+            public function completeAsync(array $history, ?callable $onToken = null, ?\SugarCraft\Code\Backend\CancellationToken $cancellation = null, ?callable $onEvent = null): \React\Promise\PromiseInterface
+            {
+                return $this->echo->completeAsync($history, $onToken, $cancellation, $onEvent);
+            }
+
+            public function contextWindow(): int
+            {
+                return 100_000;
+            }
+        };
     }
 }

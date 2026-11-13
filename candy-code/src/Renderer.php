@@ -22,6 +22,7 @@ use SugarCraft\Code\Media\Voice\VoiceSession;
 use SugarCraft\Code\Support\Clusters;
 use SugarCraft\Code\Support\StartupSummary;
 use SugarCraft\Code\Tui\ScreenReaderMode;
+use SugarCraft\Code\Tui\ToolRowTarget;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Core\View;
 use SugarCraft\Image\ImageLayer;
@@ -2643,6 +2644,16 @@ final class Renderer
         $backgroundJobs = $frame->backgroundJobCount();
         if ($backgroundJobs > 0) {
             $segment = ' · ' . Lang::t('tui.status.bg_jobs', ['count' => $backgroundJobs]);
+            $floor = Width::of(self::stripZoneMarkers($processing)) + Width::of($segment) + 3 + 2;
+            if ($floor <= $cols) {
+                $processing .= $segment;
+            }
+        }
+        // The context figure is a guess when the backend reports no window. The
+        // tag is a trailing segment on the same fit rule, so it never widens
+        // the context figure or squeezes out the spend beside it.
+        if ($chat->contextWindowAssumed()) {
+            $segment = ' · ' . Lang::t('tui.status.context_assumed');
             $floor = Width::of(self::stripZoneMarkers($processing)) + Width::of($segment) + 3 + 2;
             if ($floor <= $cols) {
                 $processing .= $segment;
@@ -5370,6 +5381,7 @@ final class Renderer
             // distillation. Part of the status, so the bound below makes room
             // for it; the row and its body are untouched (Ctrl+O still shows
             // what the tool printed).
+            $status .= self::shellRunStatus($result, $theme);
             $badge = self::pruneBadge($ledger, $result);
             if ($badge !== null) {
                 $status .= ' ' . self::dim($theme)->render($badge);
@@ -5541,7 +5553,8 @@ final class Renderer
      */
     private static function toolCallSuffix(ToolResult $result, Theme $theme, int $width, int $used): string
     {
-        if (!$result->hasDescription()) {
+        $source = self::toolRowText($result);
+        if ($source === null) {
             return '';
         }
 
@@ -5551,12 +5564,57 @@ final class Renderer
             return '';
         }
 
-        $text = Width::truncate(self::oneLine((string) $result->description), $room);
+        $text = Width::truncate(self::oneLine($source), $room);
         if (trim($text) === '') {
             return '';
         }
 
         return self::dim($theme)->render($separator . $text);
+    }
+
+    /**
+     * What a tool row says after its head: the model's own `description` when
+     * the model sent one, else the literal target the call acted on
+     * ({@see ToolRowTarget}, `$ ls -la` for a shell), else the mechanical
+     * one-liner. Null when there is nothing to say.
+     */
+    private static function toolRowText(ToolResult $result): ?string
+    {
+        $described = $result->arguments['description'] ?? null;
+        if (is_string($described) && trim($described) !== '' && $result->description !== null) {
+            return $result->description;
+        }
+
+        $target = ToolRowTarget::of($result->name, $result->arguments);
+        if ($target !== null) {
+            return $target;
+        }
+
+        return $result->description;
+    }
+
+    /**
+     * The `exit N · 1.2s` status of a shell row: the exit code and wall time
+     * Bash reports, the two facts a user checks a failed command for. Empty for
+     * every other tool, and for a Bash row with neither fact.
+     */
+    private static function shellRunStatus(ToolResult $result, Theme $theme): string
+    {
+        if (strtolower($result->name) !== 'bash') {
+            return '';
+        }
+
+        $parts = [];
+        if ($result->exitCode !== null) {
+            $parts[] = Lang::t('tui.tool.exit_code', ['code' => $result->exitCode]);
+        }
+        if ($result->durationMs !== null) {
+            $parts[] = $result->durationMs < 1000
+                ? $result->durationMs . 'ms'
+                : number_format($result->durationMs / 1000, 1, '.', '') . 's';
+        }
+
+        return $parts === [] ? '' : ' ' . self::dim($theme)->render(implode(' · ', $parts));
     }
 
     /**
@@ -7066,6 +7124,16 @@ final class Renderer
             // wider than the popup was sized for.
             $plainName = self::clipToWidth($specName, max(0, $budget - 1));
             [$hint, $tail] = self::fitSlashMenuRow($plainName, $badge, $description, $argumentHint, $budget);
+            // The shortcut column: the chord from the key table, pushed to the
+            // popup's right edge when the row leaves two columns for the gap.
+            $chord = KeyBindingRegistry::commandShortcut($spec->name);
+            if ($chord !== null) {
+                $used = Width::string('/' . $plainName . $badge . $hint . $tail);
+                $gap = $budget - $used - Width::string($chord);
+                if ($gap >= 2) {
+                    $tail .= str_repeat(' ', $gap) . $chord;
+                }
+            }
 
             // Highlight the NAME only, and against the plain text: the styled
             // run carries SGR bytes that no width budget can measure, so every
@@ -8073,6 +8141,22 @@ final class Renderer
         if ($prompt !== '') {
             $lines[] = '';
             $lines[] = Style::new()->foreground($theme->systemLabel)->render($prompt);
+        }
+
+        // Which rule decided this ask, and where it was written, so the user
+        // can see what an "always" would be added beside and what to edit to
+        // change it. Absent when no rule speaks (the gate is asking by default).
+        $matched = $chat->permissionMatchedRule();
+        if ($matched !== null) {
+            $source = $matched->source->value . ($matched->file === null ? '' : ' · ' . $matched->file);
+            $lines[] = Style::new()->foreground($theme->systemLabel)->render(self::wrapPermissionText(
+                Lang::t('tui.permission.matched_rule', [
+                    'pattern' => self::permissionVisibleOneLine($matched->pattern),
+                    'action' => $matched->action->value,
+                    'source' => self::permissionVisibleOneLine($source),
+                ]),
+                $inner,
+            ));
         }
 
         $stage = $chat->permissionStage();

@@ -2824,7 +2824,8 @@ final class KeyHelpTest extends TestCase
      *    of 33 columns or more it is the whole 33-column cue (audit 15b-09: on a
      *    narrower one it takes a shorter form, then is cut);
      * 2. the IDLE bar fits the terminal at every size, and from 54 columns up
-     *    takes exactly the four values 54/62/65/75 it always had (below 54 it
+     *    takes exactly the values 54/62/65/71/79/82/92 (the four it always had,
+ *    plus the "(assumed)" context label's steps; below 54 it
      *    used to stay 54 wide and over-run);
      * 3. the bar responds to COLUMNS ONLY: `rows <= 4` fires the cue too, but
      *    the bar with the reference closed is the same at every row count.
@@ -2872,7 +2873,11 @@ final class KeyHelpTest extends TestCase
 
         $bars = array_keys($wideBars);
         sort($bars);
-        $this->assertSame([54, 62, 65, 75], $bars, 'from 54 columns up the bar widens in four steps as the readouts fit');
+        // The extra steps are the context readout's "(assumed)" label, shown
+        // when the window is not reported (candy-code-want #6): it adds a
+        // width at which the label fits next to the readout, and at which it
+        // no longer fits. Anything else appearing here is a regression.
+        $this->assertSame([54, 62, 65, 71, 79, 82, 92], $bars, 'from 54 columns up the bar widens as the readouts fit');
 
         // Rows do not enter it: one width per column across every row tried.
         foreach ($barByCol as $cols => $seen) {

@@ -75,6 +75,7 @@ use SugarCraft\Code\Permissions\PermissionReply;
 use SugarCraft\Code\Tools\ToolCall as EngineToolCall;
 use SugarCraft\Code\Commands\CommandLoader;
 use SugarCraft\Code\Commands\CommandRegistry;
+use SugarCraft\Code\Commands\KeyBindingRegistry;
 use SugarCraft\Code\Commands\CommandSpec;
 use SugarCraft\Code\Commands\McpAuthCommand;
 use SugarCraft\Code\Commands\McpPromptCommands;
@@ -3813,6 +3814,23 @@ final class Chat implements Model
         return $this->mutate(['permissionScopeEdit' => null])->withInputBuf(\is_string($draft) ? $draft : '');
     }
 
+    /**
+     * The configured or remembered rule that decides the pending permission
+     * request, read-only through the gate's {@see \SugarCraft\Code\Permissions\PermissionGate::explainRule()}
+     * so the prompt names the rule `/permissions explain` would name. Null when
+     * no request is pending, no gate is wired, or no rule speaks.
+     */
+    public function permissionMatchedRule(): ?\SugarCraft\Code\Permissions\PermissionRule
+    {
+        $request = $this->pendingPermission();
+        $gate = $this->permissionGate();
+        if ($request === null || $gate === null) {
+            return null;
+        }
+
+        return $gate->explainRule($request->toolCall, $this->projectRoot());
+    }
+
     /** Delegates to {@see PermissionPrompt::alwaysAsks()} (W5-A); forensic prose lives there. */
     public function permissionAlwaysAsks(): ?string
     {
@@ -5203,6 +5221,7 @@ final class Chat implements Model
             $result->description,
             $result->arguments,
             $result->denial,
+            $result->exitCode,
         );
     }
 
@@ -6090,6 +6109,7 @@ final class Chat implements Model
                 // Audit F-P8: a callback's DECLARED refusal is structure, so
                 // it crosses as the kind's backing value, not via the text.
                 'denial' => $result->denial?->value,
+                'exitCode' => $result->exitCode,
             ],
             'raw' => json_decode(json_encode($raw) ?: 'null', true),
             // Roadmap 3.I-2: what this call's Read/Edit/Write recorded lives
@@ -6353,6 +6373,7 @@ final class Chat implements Model
             isset($r['diff']) && is_string($r['diff']) ? $r['diff'] : null,
             isset($r['durationMs']) && is_int($r['durationMs']) ? $r['durationMs'] : null,
             denial: isset($r['denial']) && is_string($r['denial']) ? DenialKind::tryFrom($r['denial']) : null,
+            exitCode: isset($r['exitCode']) && is_int($r['exitCode']) ? $r['exitCode'] : null,
         );
 
         if (($decoded['succeeded'] ?? false) === true && $this->onToolCall !== null) {
@@ -6385,7 +6406,14 @@ final class Chat implements Model
      */
     public function view(): string|\SugarCraft\Core\View
     {
-        $view = Renderer::renderView($this);
+        // #16: the status bar's "N bg" segment rides the per-paint seam, set
+        // here and reset after, so no other paint inherits this count.
+        Renderer::setBackgroundJobCount($this->backgroundJobCount());
+        try {
+            $view = Renderer::renderView($this);
+        } finally {
+            Renderer::setBackgroundJobCount(0);
+        }
 
         // The View wrapper exists only to carry the pixel-graphics layer an
         // image-bearing tool result puts on it (§9 E3); Program
@@ -6393,6 +6421,31 @@ final class Chat implements Model
         // literal frame keeps view() substitutable for its own body wherever
         // no image is on screen - which is every frame of a text-only session.
         return $view->images === [] ? $view->body : $view;
+    }
+
+    /**
+     * Background work this session can still see: sessions the supervisor
+     * reports active, plus the shells this session owns (or the untagged
+     * ones) that are running. Counted per paint, so a finished job drops off
+     * the status bar on the next frame.
+     */
+    public function backgroundJobCount(): int
+    {
+        $count = $this->backgroundSupervisor === null
+            ? 0
+            : \count($this->backgroundSupervisor->activeSessions());
+
+        $registry = $this->workspace?->service(\SugarCraft\Code\Background\BackgroundShellRegistry::class);
+        if ($registry instanceof \SugarCraft\Code\Background\BackgroundShellRegistry) {
+            $owner = $this->currentSessionId;
+            foreach ($registry->ownedBy($owner) as $id) {
+                if (($registry->status($id, $owner)['state'] ?? null) === 'running') {
+                    $count++;
+                }
+            }
+        }
+
+        return $count;
     }
 
     /**
@@ -11115,6 +11168,10 @@ final class Chat implements Model
             return \SugarCraft\Code\Host\Commands\SchedulesCommand::isReadOnlyVerb($tokens[1] ?? 'list');
         }
 
+        if ($name === 'tasks') {
+            return \SugarCraft\Code\Commands\TasksCommand::isReadOnlyVerb($tokens[1] ?? 'list');
+        }
+
         if ($name === 'shells') {
             // C-TOOL-3.d judgement: `list` and `output` read the launch's
             // shell table and the log files a shell writes, changing nothing,
@@ -12587,8 +12644,35 @@ final class Chat implements Model
      */
     private function handleExitCommand(): array
     {
+        $this->abandonActiveHookGroups();
+
         return [$this, Cmd::quit()];
     }
+
+    /**
+     * Quit reaps the hook processes still running, the same way
+     * {@see \SugarCraft\Code\Agents\AgentWorkerPool::cancelAll()} reaps its
+     * workers: SIGTERM the group, then SIGKILL after a 2-second grace if it has
+     * not gone. The grace runs on the loop, so the quit is not held up by it.
+     *
+     * @return int the number of hook groups signalled
+     */
+    public function abandonActiveHookGroups(): int
+    {
+        $pids = \SugarCraft\Code\Support\HookProcessGroups::live();
+        foreach ($pids as $pid) {
+            \SugarCraft\Code\Support\ProcessContainment::killTreeAsync(
+                $pid,
+                \React\EventLoop\Loop::get(),
+                self::HOOK_QUIT_GRACE_SECONDS,
+            );
+        }
+
+        return \count($pids);
+    }
+
+    /** The SIGTERM-to-SIGKILL grace a quit gives a live hook group. */
+    private const HOOK_QUIT_GRACE_SECONDS = 2.0;
 
     /**
      * `/init [focus]` (roadmap 5.14e) — a command that STARTS A TURN.
@@ -13583,8 +13667,9 @@ final class Chat implements Model
                 $specDescription = PaneLabel::of($spec->description);
                 $left = '  /' . $specName . ($specHint !== '' ? ' ' . $specHint : '');
                 $leftWidth = Width::string($left);
+                $chord = KeyBindingRegistry::commandShortcut($spec->name);
                 if ($leftWidth <= self::HELP_NAME_COLS - 2) {
-                    $lines[] = self::clip($left . str_repeat(' ', self::HELP_NAME_COLS - $leftWidth) . $specDescription, $budget);
+                    $lines[] = self::withShortcut($left . str_repeat(' ', self::HELP_NAME_COLS - $leftWidth) . $specDescription, $chord, $budget);
                     continue;
                 }
 
@@ -13602,7 +13687,7 @@ final class Chat implements Model
                 // description column sized to it would leave the descriptions
                 // nowhere to go.
                 $lines[] = self::clip($left, $budget);
-                $lines[] = self::clip(str_repeat(' ', self::HELP_NAME_COLS) . $specDescription, $budget);
+                $lines[] = self::withShortcut(str_repeat(' ', self::HELP_NAME_COLS) . $specDescription, $chord, $budget);
             }
         }
 
@@ -13715,6 +13800,26 @@ final class Chat implements Model
      * Used by the `/help` listing, whose rows are built from registry data
      * that can be arbitrarily long.
      */
+    /**
+     * $line with $chord right-aligned to $budget, the `/help` shortcut column.
+     * The description gives up its tail first; without room for the chord and
+     * a gap of at least two, the row is just clipped as it always was.
+     */
+    private static function withShortcut(string $line, ?string $chord, int $budget): string
+    {
+        if ($chord === null || $chord === '') {
+            return self::clip($line, $budget);
+        }
+        $chordWidth = Width::string($chord);
+        $room = $budget - $chordWidth - 2;
+        if ($room < 1) {
+            return self::clip($line, $budget);
+        }
+        $body = self::clip($line, $room);
+
+        return $body . str_repeat(' ', $budget - $chordWidth - Width::string($body)) . $chord;
+    }
+
     private static function clip(string $line, int $cols): string
     {
         if (Width::string($line) <= $cols) {
@@ -16871,6 +16976,11 @@ final class Chat implements Model
      *
      * @return array{0:Chat,1:?\Closure}
      */
+    private function handleTasksCommand(string $inputText): array
+    {
+        return $this->runHostCommand(new \SugarCraft\Code\Commands\TasksCommand($this->agentLive()), $inputText);
+    }
+
     private function handleShellsCommand(string $inputText): array
     {
         return $this->runHostCommand(new \SugarCraft\Code\Host\Commands\ShellsCommand(), $inputText);
