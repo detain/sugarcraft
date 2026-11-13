@@ -51,12 +51,28 @@ if ($archive !== '') {
     }
 }
 
-// Locale wiring: sixteen catalogs ship with this app (en source-of-truth plus
-// fifteen translations); without this
+// Locale wiring: seventeen catalogs ship with this app (en source-of-truth
+// plus sixteen translations); without this
 // call they are dead weight (the process default is 'en'). T::detect()
 // reads LC_ALL → LC_MESSAGES → LANG, strips encoding suffixes and
 // lowercases; T::translate() then falls back territory → base language →
 // English, so de_DE.UTF-8 lands on lang/de.php and pt_BR on lang/pt-br.php.
+// scriptui-79 (finding 112): native Windows cmd/PowerShell export NONE of
+// those variables, so every Windows user got English on a claimed platform.
+// When no language env exists at all, seed LANG from intl's default locale
+// (which reflects the Win32 user locale; on POSIX hosts it answers en-US
+// unless the admin set intl.default_locale, so non-Windows behaviour is
+// unchanged in practice). No env set, no intl, or a default nobody recognises
+// → English, exactly as before.
+if (!isset($_SERVER['LC_ALL']) && getenv('LC_ALL') === false
+    && !isset($_SERVER['LC_MESSAGES']) && getenv('LC_MESSAGES') === false
+    && !isset($_SERVER['LANG']) && getenv('LANG') === false
+    && extension_loaded('intl')) {
+    $winDefault = \Locale::getDefault();
+    if (is_string($winDefault) && trim($winDefault) !== '' && !in_array($winDefault, ['C', 'POSIX', 'root'], true)) {
+        putenv('LANG=' . $winDefault);
+    }
+}
 \SugarCraft\Core\I18n\T::setLocale(\SugarCraft\Core\I18n\T::detect());
 // Pre-rename env compatibility: CANDYSHELL_* was this app's option-fallback
 // prefix before the 2026-10 rename to candy-scriptui. Import any old-prefix
