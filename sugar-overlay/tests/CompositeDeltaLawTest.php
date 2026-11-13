@@ -36,6 +36,35 @@ final class CompositeDeltaLawTest extends TestCase
         $this->assertSame(self::HOME, $veil->composite("Hi", self::BG, Position::TOP, Position::LEFT));
     }
 
+    public function testSingleLineFramesCompositeNormallyNotUpstreamRawPassthrough(): void
+    {
+        // SO-34 divergence pin (sugar-overlay-079): upstream returns the fg
+        // raw when neither side has a newline. This lib lays the frame out
+        // like any other — width and canvas are never ignored.
+        $veil = Veil::new();
+
+        $this->assertSame(
+            'HIcd',
+            $veil->composite('HI', 'abcd', Position::TOP, Position::LEFT),
+            'single-line fg over single-line bg composites; upstream would answer "HI"',
+        );
+    }
+
+    public function testEmptyForegroundOverBackdropDimsInsteadOfPassingThrough(): void
+    {
+        // SO-34 divergence pin (sugar-overlay-080): upstream passes the bg
+        // verbatim for an empty fg; here the dim ramp covers every row.
+        // Opacity 60 -> factor 0.4 -> 255*0.4 rounds to 102 per channel.
+        $veil = Veil::new()->withBackdrop(60);
+
+        $this->assertSame(
+            "\e[38;2;102;102;102mline one\e[39m
+\e[38;2;102;102;102mline two\e[39m",
+            $veil->composite('', "line one\nline two", Position::TOP, Position::LEFT),
+            'the whole canvas dims — the bare branch holds at opacity 0 only',
+        );
+    }
+
     public function testChangedStateAtSameDimensionsEmitsADeltaNotAFullFrame(): void
     {
         $veil = Veil::new();

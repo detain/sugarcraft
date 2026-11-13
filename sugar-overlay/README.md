@@ -735,6 +735,23 @@ diff, sugar-mouse `Scanner`/`Mark` the hit-testing, sugar-spring
 `CubicBezier` the easing, sugar-style `Border`/`Style` the chrome, and
 sugar-core `Width` the terminal-column measurement.
 
+## Divergences from Upstream
+
+Added 2026-11-13, pinned by `CompositeDeltaLawTest` (sugar-overlay-079/080).
+Two `Composite()` branches of the Go antecedent are deliberately not
+mirrored:
+
+- **Single-line frames composite; no raw passthrough.** Upstream returns
+  the fg **raw** when neither side contains a newline, ignoring width and
+  placement entirely. Here a single-line fg over a single-line bg is laid
+  out like any other frame (`"HI"` over `"abcd"` yields `HIcd`, not `HI`) —
+  an improvement over the antecedent, but a divergence hosts comparing
+  against upstream output will see.
+- **An empty fg still dims.** Upstream passes the bg **verbatim** when the
+  fg is empty; here the backdrop ramp applies to every row, so an empty
+  foreground over `withBackdrop(n)` (`n > 0`) ships a fully dimmed canvas.
+  Pure pass-through holds only at opacity 0.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
@@ -742,4 +759,6 @@ MIT — see [LICENSE](LICENSE).
 ## Credits
 
 Design antecedent: rmhubbert/bubbletea-overlay (Go). sugar-overlay's
-compositor semantics mirror that package's; it is its own codebase.
+compositor semantics mirror that package's; it is its own codebase, and the
+two unmirrored branches are listed under
+[Divergences from Upstream](#divergences-from-upstream).

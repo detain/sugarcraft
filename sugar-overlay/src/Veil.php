@@ -845,6 +845,13 @@ final class Veil
      * against what was actually emitted; a frame with no cells at all resets
      * the session, forcing the next one out in full.
      *
+     * Two branches beside that mirror are DELIBERATELY unmirrored (see the
+     * README's Divergences from Upstream section, sugar-overlay-079/080):
+     * a single-line fg/bg pair is composited normally instead of returning
+     * the fg raw (upstream ignores width there; this lib never does), and an
+     * empty fg over a real canvas dims per backdropOpacity instead of
+     * passing the bg verbatim (pure pass-through holds only at opacity 0).
+     *
      * @param string    $foreground  The overlay content (e.g. a modal). TRUST BOUNDARY: passed through verbatim — forged zone sentinels / OSC 8 links inside it become REAL zones and links (see withContent()).
      * @param string    $background   The base content. TRUST BOUNDARY: equally attacker-reachable — forged sentinels or links in the BACKDROP mint real zones and links too (the same zero-assumption walk paints it); sweep untrusted backdrop text before compositing.
      * @param Position $vertical     Vertical position anchor
@@ -1097,6 +1104,9 @@ final class Veil
             // `if bg == "" { return fg }` early return. It still goes through
             // the session bookkeeping: a skipped rememberFull() would let the
             // next composite diff against a frame from before this one.
+            // The reverse branch is NOT mirrored (sugar-overlay-080): with a
+            // real canvas and an empty fg the rows fall through to dimLine(),
+            // so a backdrop>0 dims the whole frame instead of shipping bg.
             if ($fgHeight === 0 || $p['fgWidth'] === 0) {
                 return $this->emitFrame($background, 0, 0);
             }
