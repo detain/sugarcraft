@@ -44,7 +44,7 @@ sugar-table — a customizable data table component for PHP 8.3+ terminal UIs: p
   silently rendering narrower than `$cols`. Lines are clamped at the frame
   edge, never padded past it
 - **Viewport virtualization**: render only visible rows via `withViewportHeight()` + `withScrollY()`
-- **Render cost**: O(visible cells) per frame (flat-grid pass); the Content/Dynamic width solve scans the full row set once per width memo — keep large datasets viewport-scoped and hold one `Table` across frames (see Keeping a Table across frames)
+- **Render cost**: O(visible cells) per frame (flat-grid pass); the Content/Dynamic width solve scans the full row set once per width memo — keep large datasets viewport-scoped and hold one `Table` across frames (see Keeping a Table Across Frames)
 - **Column width modes**: `ColumnWidth` enum — Fixed, Percent, Dynamic, Content, Flex
 - **Cell text wrapping**: `WrapMode` enum — None, WordWrap, Character
 - **Multi-line row rendering**: `withMultilineMode(bool $multiline)` — when enabled, rows expand to the maximum height of any cell; when disabled (default), cells are clamped to one line (backward compatible)
@@ -332,6 +332,8 @@ $t = $t->handleKey(Table::KEY_PAGE_DOWN);
 - **No-op for unknown keys**: Unrecognized keys return the current `scrollY` unchanged
 - **Requires viewport**: Keyboard scrolling only works when `withViewportHeight()` is set
 
+Combine scrolling with cursor selection in one frame:
+
 ```php
 // Combined: keyboard scroll + cursor selection
 $t = $t->withScrollY($t->scrollYForKey($key))  // update scroll
@@ -425,7 +427,7 @@ The default `-` is a single hyphen — it reads ambiguously beside real hyphens
 inside data (host names, minus signs), so pick a placeholder that cannot collide
 with your content.
 
-## Empty states
+## Empty States
 
 The degenerate shapes have defined, non-crashing output:
 
@@ -449,7 +451,7 @@ Pinned by `tests/TableEmptyStateTest.php`.
 ```php
 $t = $t->withPageSize(25)               // 25 rows per page
     ->withPage(2);                      // 0-based: jumps to the THIRD page
-echo $t->PageFooter();                  // 'Page 3 of 4' (i18n-aware)
+echo $t->PageFooter();                  // 'Page 3 of 4' with 100 rows (i18n-aware)
 ```
 
 ### Footer Types
@@ -469,7 +471,7 @@ $t = Table::fromColumns([...])
 |--------|----------------------------------------|--------------------------|
 | `Page` | `Page N of M`                          | `PageFooter()`           |
 | `Rows` | `Showing X to Y of Z rows`             | `RowsFooter()`           |
-| `Both` | `Page N of M  \|  Showing X to Y of Z rows` | Combines both |
+| `Both` | `Page N of M  \|  Showing X to Y of Z rows` | `PageFooter()` + `RowsFooter()` |
 
 ```php
 // Show only row count footer
@@ -489,7 +491,7 @@ only while pagination is active; with pagination off there is no footer at all.
 
 The row count footer uses the `showing_rows` i18n key and updates automatically based on the current page and any active filters/searches.
 
-### Numeric setters: coercion vs throw
+### Numeric Setters: Coercion vs Throw
 
 - `withScrollX()`, `withScrollY()`, `withViewportHeight()`, `withWidth()` and
   `withCellPadding()` clamp negatives to `0` (a negative viewport height means
@@ -609,7 +611,7 @@ echo $t->View();
 - **Scrolling past the end empties the view**: at or beyond the number of
   scrollable columns, no scrollable column remains — without a frozen prefix the
   table renders as the empty string; with one, only the frozen columns paint
-  (see Empty states)
+  (see Empty States)
 
 ### Interaction with Frozen Columns
 
@@ -720,7 +722,7 @@ Uses multi-pass computation:
    (Flex contributes its weight, Dynamic and Content count as one share each)
 5. **Content**: exact content width (min 1)
 
-## Keeping a Table across frames
+## Keeping a Table Across Frames
 
 The render path memoizes its expensive work — the per-column content-width
 scan, the width solve, the filter/sort rebuild — inside the `Table` value
@@ -768,7 +770,7 @@ $label = Lang::t('no_matches');            // 'No rows match your filter'
 $pager = Lang::t('page_of', ['page' => 2, 'total' => 4]); // 'Page 2 of 4'
 ```
 
-## Security & untrusted content
+## Security & Untrusted Content
 
 Every cell value, column title and expanded-detail line passes through
 `Sanitize::value()` (`src/Sanitize.php`) on its way to the buffer, so untrusted
@@ -1047,7 +1049,7 @@ $t->isExpanded(1);   // false — row 1 is not expanded
 
   `isExpanded`) use page-relative indices via `pagedRows()`
 
-### Row index domains
+### Row Index Domains
 
 The library runs three different row-index domains side by side — mixing them
 is the classic off-by-one-page bug. Pick by call site:
@@ -1099,14 +1101,14 @@ shipped here, if a keeper above disappears without a ruling, or if this list
 and the roster in that test drift apart. Rename-era history lives in
 `CALIBER_LEARNINGS.md`.
 
-## Shared foundations
+## Shared Foundations
 
 sugar-table adopts `sugar-cellbuffer` for all buffer-based rendering. Layout fills a flat mutable
 `RenderCanvas` grid in a single pass; it is frozen into an immutable `Buffer` exactly once per
 `View()` call. `View()` writes only internal render memos (width solve, filter/sort cache, style
 parse) — never visible state.
 
-### styleFunc signature
+### styleFunc Signature
 
 `Table::withStyleFunc()` accepts a callable with the signature:
 
@@ -1150,7 +1152,7 @@ Anything outside this table's vocabulary is dropped at parse time — the
 recognised set is what `Style` carries; `withStyleFunc()` returns are folded
 into it whatever their accepted form.
 
-## Snapshot tests
+## Snapshot Tests
 
 Render output is covered by golden-file snapshot tests. Fixture files live
 in `tests/fixtures/` with a `.golden` extension and are compared against
