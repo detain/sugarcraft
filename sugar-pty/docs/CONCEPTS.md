@@ -236,9 +236,10 @@ policy without the pump holding it hostage.
 
 ```php
 $child->pid();         // OS pid
-$child->exited();      // non-blocking probe via proc_get_status()
-$child->wait();        // FFI waitpid(WNOHANG) fast path between
-                       // 10ms proc_get_status probes; blocks until exit
+$child->exited();      // non-blocking probe: waitpid(WNOHANG) FFI
+                       // first, proc_get_status() fallback
+$child->wait();        // blocking reap: same probe order each round,
+                       // 10ms cadence between rounds, until exit
 $child->exitCode();    // null until exit, cached after
 $child->kill($sig);    // Libc::kill(): posix_kill() when ext-posix
                        // is loaded, FFI kill(2) otherwise. A no-op once
@@ -304,14 +305,10 @@ Only two top-level `src/` classes are deprecated: the `Pty` facade
 (a `MasterPty` adapter over the same `PosixPtySystem` path) and the
 `Child` class (a backward-compatibility shim that `PosixChild` still *extends* —
 not a pure alias: it carries the promoted constructor and the public `$pid`
-property, which is why the removal has a dependency to unwind). Both will
-go away at v2.0, and consumers on the old shape keep working until
-then. The alias removal has one dependency to unwind first: `PosixChild`
-currently *extends* `Child` to inherit its promoted constructor (which
-is where the public `$pid` property lives) and the `ChildPollTrait`
-plumbing — the v2.0 plan folds that plumbing into `PosixChild` itself
-before deleting the alias, and `final` already prevents the debt from
-growing. `Spawn` is **not** a deprecated facade: it is `@internal`,
+property). Both go away at v2.0, and consumers on the old shape keep working
+until then. The v2.0 plan folds that promoted constructor and the
+`ChildPollTrait` plumbing into `PosixChild` itself *before* deleting `Child`,
+and `final` keeps the debt from growing meanwhile. `Spawn` is **not** a deprecated facade: it is `@internal`,
 load-bearing for every spawn path, and not removal-scheduled.
 
 ## Backend selection via `SUGARCRAFT_PTY_BACKEND`
