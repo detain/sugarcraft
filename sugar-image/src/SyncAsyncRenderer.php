@@ -9,12 +9,21 @@ use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
 
 /**
- * Synchronous async renderer — defers work to the next event loop tick
- * without blocking the caller, then resolves when the work is complete.
+ * Synchronous async renderer — DEFERS the encode to the next event-loop
+ * tick, but does not YIELD it back.
  *
- * This is a drop-in for environments where ReactPHP ChildProcess is not
- * available, or for testing.  It still yields the event loop between
- * scheduling the work and completing it, allowing other events to fire.
+ * Honest shape (finding 006): the promise settles without blocking the
+ * CALLER's statement, and other queued work runs before the tick fires —
+ * but once it does, the WHOLE encode occupies the loop thread to
+ * completion. A poster-class render "may run minutes" per the
+ * ChafaRenderer's own contract, so on a live TUI loop this backend can
+ * starve input, timers, and sockets for one un-paced stretch. That is a
+ * FEATURE for its real homes — tests that await a deterministic single
+ * tick, and single-shot scripts with nothing else on the loop — and a
+ * hazard for anything else: loop residents wanting interleaved progress
+ * want {@see PacedAsyncRenderer} (AdaptiveImage::withAsync's default),
+ * which slices the same encode against a per-slice budget. It is also
+ * the documented drop-in for environments without ReactPHP ChildProcess.
  */
 final class SyncAsyncRenderer implements AsyncRenderer
 {

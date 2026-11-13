@@ -47,11 +47,18 @@ final class AdaptiveImage
      * (truth-flip: the old wording implied continuity).
      *
      * The async renderer is used only for renderAsync(); the normal render()
-     * method is always synchronous.
+     * method is always synchronous. The default (finding 006) is a
+     * {@see PacedAsyncRenderer} pumping this mosaic's row-lazy seam: the
+     * encode advances in budgeted slices and yields the loop between them,
+     * so a minute-long poster encode cannot monopolise a TUI's loop the way
+     * a whole-encode-on-one-tick backend does. Pass a renderer explicitly
+     * to opt into a different strategy — {@see SyncAsyncRenderer} remains
+     * for tests and single-shot scripts, where "schedule, then block the
+     * loop once" is exactly what you want.
      */
     public function withAsync(?AsyncRenderer $renderer = null): self
     {
-        $asyncRenderer = $renderer ?? new SyncAsyncRenderer($this->mosaic);
+        $asyncRenderer = $renderer ?? new PacedAsyncRenderer($this->mosaic);
 
         return new self(
             image:      $this->image,

@@ -10,6 +10,7 @@ use SugarCraft\Image\Renderer\AcceptsOptimization;
 use SugarCraft\Image\Renderer\CanvasModeConfigurable;
 use SugarCraft\Image\Renderer\ChafaRenderer;
 use SugarCraft\Image\Renderer\ConfigFingerprintProvider;
+use SugarCraft\Image\Renderer\IncrementalRenderer;
 use SugarCraft\Image\Renderer\HalfBlockRenderer;
 use SugarCraft\Image\Renderer\Iterm2Renderer;
 use SugarCraft\Image\Renderer\KittyRenderer;
@@ -51,7 +52,7 @@ use function React\Promise\resolve;
  * $mosaic = Mosaic::iterm2();
  * ```
  */
-final class Mosaic
+final class Mosaic implements IncrementalRenderer
 {
     /**
      * Approximate height:width ratio of a terminal cell (cells are ~twice as
@@ -637,6 +638,50 @@ final class Mosaic
      */
     public function render(ImageSource $image, ?int $width = null, ?int $height = null): string
     {
+        [$image, $w, $h] = $this->resolveRenderBox($image, $width, $height);
+
+        return $this->renderer->render($image, $w, $h);
+    }
+
+    /**
+     * Row-lazy twin of {@see render()}: the SAME scale pipeline runs up
+     * front (including its throws), then the encoded bytes arrive as
+     * append-order chunks whose concatenation is exactly what render()
+     * would have returned.
+     *
+     * When the tier underneath speaks {@see IncrementalRenderer} natively
+     * (Kitty, Sixel, HalfBlock) its chunks pass straight through, so a
+     * {@see PacedAsyncRenderer} pumping this seam yields the loop between
+     * real encode units. When it does not (chafa's child stream, the ASCII
+     * tiers, a passthrough decorator) the whole encode lands as ONE chunk
+     * — the interface contract's "heavy stages happen at the first slice"
+     * clause honoured by the degenerate route: no pacing benefit, no
+     * behavioural surprise, bytes identical to render().
+     *
+     * @return \Generator<int, string>
+     * @throws \InvalidArgumentException the same no-width throw as render()
+     */
+    public function renderRows(ImageSource $image, int $width, ?int $height = null): \Generator
+    {
+        [$image, $w, $h] = $this->resolveRenderBox($image, $width, $height);
+
+        if ($this->renderer instanceof IncrementalRenderer) {
+            yield from $this->renderer->renderRows($image, $w, $h);
+
+            return;
+        }
+
+        yield $this->renderer->render($image, $w, $h);
+    }
+
+    /**
+     * The width-forcing and scale pre-pass shared by render() and
+     * renderRows() — ONE pipeline, two doors, zero drift possible.
+     *
+     * @return array{0: ImageSource, 1: int, 2: ?int} final image, cell width, cell height
+     */
+    private function resolveRenderBox(ImageSource $image, ?int $width, ?int $height): array
+    {
         if ($width === null) {
             if ($this->forcedWidth === null) {
                 throw new \InvalidArgumentException(Lang::t('mosaic.no_render_width'));
@@ -681,7 +726,7 @@ final class Mosaic
             }
         }
 
-        return $this->renderer->render($image, $w, $h);
+        return [$image, $w, $h];
     }
 
     /**
