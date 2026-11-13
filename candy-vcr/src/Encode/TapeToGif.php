@@ -48,6 +48,24 @@ final class TapeToGif
     }
 
     /**
+     * The single fps precedence ladder (finding 008): explicit caller/CLI
+     * value → tape `Set Framerate` → the 30.0 house default. Public so the
+     * door is testable without rendering pixels, and any second render path
+     * that appears later can reuse the ladder instead of re-forking it.
+     */
+    public static function resolveFps(?float $cliFps, ?float $tapeFramerate): float
+    {
+        if ($cliFps !== null) {
+            return $cliFps;
+        }
+        if ($tapeFramerate !== null && is_finite($tapeFramerate) && $tapeFramerate > 0.0) {
+            return $tapeFramerate;
+        }
+
+        return 30.0;
+    }
+
+    /**
      * Render a .tape file to a .gif file.
      *
      * @param array{
@@ -79,24 +97,6 @@ final class TapeToGif
      *   $outputPath is null the tape's own confined `Output <path>` directive
      *   is honored, falling back to the tape name with a `.gif` extension.
      */
-    /**
-     * The single fps precedence ladder (finding 008): explicit caller/CLI
-     * value → tape `Set Framerate` → the 30.0 house default. Public so the
-     * door is testable without rendering pixels, and any second render path
-     * that appears later can reuse the ladder instead of re-forking it.
-     */
-    public static function resolveFps(?float $cliFps, ?float $tapeFramerate): float
-    {
-        if ($cliFps !== null) {
-            return $cliFps;
-        }
-        if ($tapeFramerate !== null && is_finite($tapeFramerate) && $tapeFramerate > 0.0) {
-            return $tapeFramerate;
-        }
-
-        return 30.0;
-    }
-
     public function render(string $tapePath, ?string $outputPath = null, array $options = []): string
     {
         $cliTheme = $options['theme'] ?? null;
