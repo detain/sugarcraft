@@ -64,7 +64,9 @@ Fatal 12 — deliberately *not* RFC 5424 severities) — use `->value` for
 threshold comparisons. A record is emitted when its level value is at or
 above the logger's `minLevel` (default `Info`, hence the `Debug` opt-in
 above). The two methods that bypass the filter are `print()` and its
-formatted sibling `printf()`:
+formatted sibling `printf()`. A PSR-3 severity string (from env, config, or
+the wire) maps onto this ladder via `Level::fromPsrString()`, which returns
+`null` for unknown strings:
 
 ```php
 use SugarCraft\Log\Level;

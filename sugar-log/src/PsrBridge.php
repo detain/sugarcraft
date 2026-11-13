@@ -213,16 +213,9 @@ final class PsrBridge implements LoggerInterface
      */
     private static function toSugarCraftLevel(string $psrLevel): ?Level
     {
-        return match ($psrLevel) {
-            LogLevel::EMERGENCY => Level::Fatal,
-            LogLevel::ALERT => Level::Fatal,
-            LogLevel::CRITICAL => Level::Fatal,
-            LogLevel::ERROR => Level::Error,
-            LogLevel::WARNING => Level::Warn,
-            LogLevel::NOTICE => Level::Info,
-            LogLevel::INFO => Level::Info,
-            LogLevel::DEBUG => Level::Debug,
-            default => null,
-        };
+        // [API-01] The 8-way mapping now lives on the enum so non-bridge
+        // callers (env/config strings) can use it too; delegation preserves
+        // the existing null-then-throw contract byte-for-byte.
+        return Level::fromPsrString($psrLevel);
     }
 }
