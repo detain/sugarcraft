@@ -137,6 +137,23 @@ final class ExplainViewTest extends TestCase
         $this->assertStringContainsString('no query plan', $out);
     }
 
+
+    public function testRenderSanitizesServerDerivedControlBytes(): void
+    {
+        // client-024: a hostile schema name riding the EXPLAIN detail line
+        // must render as visible sanitized bytes — no smuggled escape on the
+        // wire (the render() output is advertised as embeddable).
+        $provider = $this->createMock(ExplainProviderInterface::class);
+        $hostile = "SEARCH TABLE \x1b[31m\x07evil\x1b]0;pwn\x07";
+        $view = new ExplainView([['detail' => $hostile]], Flavor::Sqlite, $provider);
+
+        $out = $view->render();
+
+        $this->assertStringNotContainsString("\x1b[31m", $out);
+        $this->assertStringNotContainsString("\x07", $out);
+        $this->assertStringNotContainsString("\x1b]", $out);
+        $this->assertStringContainsString('evil', $out);
+    }
     public function testDepthIsParsedFromPipeNotation(): void
     {
         // Directly test the ExplainView with a known raw detail that has nesting.

@@ -129,10 +129,14 @@ final class ExplainView
     private function renderRow(ExplainRow $row): string
     {
         $indent = $row->indent;
+        // client-024: server-derived text (schema/table names ride the EXPLAIN
+        // detail line) must not smuggle escape bytes onto the wire — every
+        // sibling paint site routes through CellValue::sanitize; this was the
+        // outlier. Sanitize before styling so the SGR wrapper stays ours.
         $label  = Style::new()->bold()->foreground($this->tagColor($row->tag))
-            ->render($row->tag);
+            ->render(CellValue::sanitize($row->tag));
         $detail = Style::new()->foreground(Color::hex('#e2e8f0'))
-            ->render($row->detail);
+            ->render(CellValue::sanitize($row->detail));
 
         return "{$indent}{$label}  {$detail}";
     }
