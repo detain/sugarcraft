@@ -28,12 +28,12 @@ herstart (end)
 afsluiten',
     'next_label' => 'volgende:',
     'hold_label' => 'opslag:',
-    'paused'     => '[ gepauzeerd — druk p om verder te gaan ]',
+    'paused'     => '[ gepauzeerd — druk {keys} om verder te gaan ]',
 
     // Game-over banner
     'over.title'                => 'GAME OVER',
     'over.final_score'          => 'eindscore: {points}',
-    'over.restart_hint'         => 'druk r voor een nieuw spel — q om af te sluiten',
+    'over.restart_hint'         => 'druk {restart} voor een nieuw spel — {quit} om af te sluiten',
     'over.reason'               => 'reden: {reason}',
     'over.reason.spawn_blocked' => 'geen ruimte voor het volgende stuk',
     'over.reason.top_out'       => 'de stapel raakte het plafond',
@@ -57,6 +57,14 @@ afsluiten',
     // away); the exchange rule stays a sentence of its own.
     'vs.garbage_rule' => 'gewiste regels sturen de tegenstander rommel — één gat per regel',
     'vs.record' => 'balans: {wins} gewonnen, {losses} verloren',
+    // Match-strip frame words (candy-tetris-008): the scoreboard
+    // labels are catalogue-owned; keep them short — the strip
+    // derives its columns from their display widths.
+    'vs.strip.you' => 'jij',
+    'vs.strip.computer' => 'computer',
+    'vs.strip.score' => 'score:',
+    'vs.strip.lines' => 'regels:',
+    'vs.strip.level' => 'niveau:',
     'intro.title' => 'welkom bij candy-tetris',
     'intro.goal' => 'verwijder regels — bereik de top niet',
     'intro.press' => 'druk op {keys} om te spelen',

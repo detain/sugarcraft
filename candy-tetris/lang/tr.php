@@ -28,12 +28,12 @@ yeniden (sonra)
 çık',
     'next_label' => 'sonraki:',
     'hold_label' => 'bekleme:',
-    'paused'     => '[ duraklatıldı — devam için p ]',
+    'paused'     => '[ duraklatıldı — devam için {keys} ]',
 
     // Game-over banner
     'over.title'                => 'OYUN BİTTİ',
     'over.final_score'          => 'son skor: {points}',
-    'over.restart_hint'         => 'yeniden başlatmak için r — çıkmak için q',
+    'over.restart_hint'         => 'yeniden başlatmak için {restart} — çıkmak için {quit}',
     'over.reason'               => 'sebep: {reason}',
     'over.reason.spawn_blocked' => 'sonraki parça için yer yok',
     'over.reason.top_out'       => 'yığın tavana ulaştı',
@@ -57,6 +57,14 @@ yeniden (sonra)
     // away); the exchange rule stays a sentence of its own.
     'vs.garbage_rule' => 'temizlenen satırlar rakibe çöp satırı gönderir — her satırda bir boşluk',
     'vs.record' => 'rekor: {wins} galibiyet, {losses} mağlubiyet',
+    // Match-strip frame words (candy-tetris-008): the scoreboard
+    // labels are catalogue-owned; keep them short — the strip
+    // derives its columns from their display widths.
+    'vs.strip.you' => 'sen',
+    'vs.strip.computer' => 'bilgisayar',
+    'vs.strip.score' => 'puan:',
+    'vs.strip.lines' => 'satır:',
+    'vs.strip.level' => 'seviye:',
     'intro.title' => 'candy-tetris oyununa hoş geldin',
     'intro.goal' => 'satırları temizle — tepeye ulaşma',
     'intro.press' => 'oynamak için {keys} tuşuna bas',

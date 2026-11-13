@@ -130,7 +130,9 @@ final class EarnedMomentsTest extends TestCase
         $withAward = $mutate->invoke($vs, ['player' => $badge]);
 
         $frame = VsRenderer::render($withAward);
-        self::assertStringContainsString('lvl 0  TETRIS', $frame, 'player row carries the moment whole');
+        // candy-tetris-008: the badge leg used to abbreviate 'lvl' away
+        // from the card's 'level' — the re-pin names the drift's cure.
+        self::assertStringContainsString('level: 0  TETRIS', $frame, 'player row carries the moment whole');
         self::assertStringContainsString(
             'computer  score: 0       lines: 0   level: 0',
             $frame,

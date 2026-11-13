@@ -28,12 +28,12 @@ return [
 выход',
     'next_label' => 'след:',
     'hold_label' => 'холд:',
-    'paused'     => '[ пауза — нажмите p, чтобы продолжить ]',
+    'paused'     => '[ пауза — нажмите {keys}, чтобы продолжить ]',
 
     // Game-over banner
     'over.title'                => 'ИГРА ОКОНЧЕНА',
     'over.final_score'          => 'итоговый счёт: {points}',
-    'over.restart_hint'         => 'нажмите r, чтобы начать заново — q, чтобы выйти',
+    'over.restart_hint'         => 'нажмите {restart}, чтобы начать заново — {quit}, чтобы выйти',
     'over.reason'               => 'причина: {reason}',
     'over.reason.spawn_blocked' => 'нет места для следующей фигуры',
     'over.reason.top_out'       => 'стопка достигла потолка',
@@ -57,6 +57,14 @@ return [
     // away); the exchange rule stays a sentence of its own.
     'vs.garbage_rule' => 'снятые линии отправляют сопернику мусор — по одному отверстию в ряду',
     'vs.record' => 'счёт: {wins} выиграно, {losses} проиграно',
+    // Match-strip frame words (candy-tetris-008): the scoreboard
+    // labels are catalogue-owned; keep them short — the strip
+    // derives its columns from their display widths.
+    'vs.strip.you' => 'вы',
+    'vs.strip.computer' => 'компьютер',
+    'vs.strip.score' => 'счёт:',
+    'vs.strip.lines' => 'линии:',
+    'vs.strip.level' => 'уровень:',
     'intro.title' => 'добро пожаловать в candy-tetris',
     'intro.goal' => 'удаляйте линии — не достигайте верха',
     'intro.press' => 'нажмите {keys}, чтобы играть',

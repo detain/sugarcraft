@@ -28,12 +28,12 @@ return [
 종료',
     'next_label' => '다음:',
     'hold_label' => '홀드:',
-    'paused'     => '[ 일시 정지 — p로 재개 ]',
+    'paused'     => '[ 일시 정지 — {keys}로 재개 ]',
 
     // Game-over banner
     'over.title'                => '게임 오버',
     'over.final_score'          => '최종 점수: {points}',
-    'over.restart_hint'         => 'r로 재시작 — q로 종료',
+    'over.restart_hint'         => '{restart}로 재시작 — {quit}로 종료',
     'over.reason'               => '이유: {reason}',
     'over.reason.spawn_blocked' => '다음 조각을 둘 자리가 없습니다',
     'over.reason.top_out'       => '층이 천장에 닿았습니다',
@@ -57,6 +57,14 @@ return [
     // away); the exchange rule stays a sentence of its own.
     'vs.garbage_rule' => '줄을 지우면 상대에게 잔해가 내려간다 (구멍 하나)',
     'vs.record' => '전적: {wins}승 {losses}패',
+    // Match-strip frame words (candy-tetris-008): the scoreboard
+    // labels are catalogue-owned; keep them short — the strip
+    // derives its columns from their display widths.
+    'vs.strip.you' => '나',
+    'vs.strip.computer' => '컴퓨터',
+    'vs.strip.score' => '점수:',
+    'vs.strip.lines' => '줄:',
+    'vs.strip.level' => '레벨:',
     'intro.title' => 'candy-tetris에 오신 것을 환영합니다',
     'intro.goal' => '줄을 지우세요 — 위에 닿으면 끝',
     'intro.press' => '{keys} 눌러 시작',

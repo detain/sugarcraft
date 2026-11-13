@@ -5,7 +5,10 @@ declare(strict_types=1);
 namespace SugarCraft\Tetris\Tests;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Core\I18n\T;
+use SugarCraft\Tetris\Game;
 use SugarCraft\Tetris\Score;
+use SugarCraft\Tetris\Support\Bindings;
 use SugarCraft\Tetris\Tetromino;
 use SugarCraft\Tetris\VsGame;
 use SugarCraft\Tetris\VsRenderer;
@@ -81,5 +84,55 @@ final class VsStripTest extends TestCase
         $frame = VsRenderer::render(VsGame::start());
 
         self::assertSame(1, substr_count($frame, 'next:'), 'exactly one next line — the human board only');
+    }
+
+    /**
+     * candy-tetris-005: the versus pause overlay shares the solo law —
+     * it names the player's live binding, never the baked default.
+     */
+    public function testTheVersusPauseOverlayNamesTheLivePauseBinding(): void
+    {
+        $player = Game::start(bindings: Bindings::table()->withOverride('pause', 'x'))
+            ->mutate(['paused' => true]);
+        $frame = VsRenderer::render(new VsGame($player, Game::start()));
+
+        self::assertStringContainsString('press x to resume', $frame);
+        self::assertStringNotContainsString('press p to resume', $frame);
+    }
+
+    /**
+     * candy-tetris-008: the scoreboard's frame words were sprintf literals
+     * — the only un-translatable pixels in the whole frame. Under German
+     * the strip must speak German; columns derive from label widths, so
+     * the numbers still line up between the two rows.
+     */
+    public function testTheStripFrameWordsComeFromTheCatalogue(): void
+    {
+        try {
+            T::setLocale('de');
+            $frame = VsRenderer::render(VsGame::start());
+
+            self::assertMatchesRegularExpression('/du\s+Punkte:\s+0+\s+Reihen:\s+0+\s+Stufe:\s+0/u', $frame);
+            self::assertMatchesRegularExpression('/Computer\s+Punkte:/u', $frame);
+            self::assertStringNotContainsString('score:', $frame, 'English frame words must not leak into de');
+            self::assertStringNotContainsString('you  ', $frame);
+        } finally {
+            T::setLocale('en');
+        }
+    }
+
+    /**
+     * candy-tetris-008 (GUX-04 leg): the badge leg used to abbreviate the
+     * level word to 'lvl' while the plain leg spelled 'level' — a drift
+     * no catalogue can express. Both legs now say what the card says.
+     */
+    public function testTheBadgeRowKeepsTheLocalizedLevelWord(): void
+    {
+        $vs     = VsGame::start();
+        $badge  = $vs->player->mutate(['lastAward' => 'TETRIS']);
+        $frame  = VsRenderer::render(new VsGame($badge, $vs->computer));
+
+        self::assertMatchesRegularExpression('/level: \d+  TETRIS/', $frame, 'badge rides the spelled-out level leg');
+        self::assertStringNotContainsString('lvl ', $frame);
     }
 }

@@ -28,12 +28,12 @@ restart (konec)
 konec',
     'next_label' => 'další:',
     'hold_label' => 'hold:',
-    'paused'     => '[ pauza — p obnoví hru ]',
+    'paused'     => '[ pauza — {keys} obnoví hru ]',
 
     // Game-over banner
     'over.title'                => 'KONEC HRY',
     'over.final_score'          => 'konečné skóre: {points}',
-    'over.restart_hint'         => 'r pro restart — q pro konec',
+    'over.restart_hint'         => '{restart} pro restart — {quit} pro konec',
     'over.reason'               => 'důvod: {reason}',
     'over.reason.spawn_blocked' => 'není místo pro další kus',
     'over.reason.top_out'       => 'stack dosáhl stropu',
@@ -57,6 +57,14 @@ konec',
     // away); the exchange rule stays a sentence of its own.
     'vs.garbage_rule' => 'vyčištěné řádky pošlou soupeři odpad — každý řádek má jednu díru',
     'vs.record' => 'zápas: {wins} vyhráno, {losses} prohráno',
+    // Match-strip frame words (candy-tetris-008): the scoreboard
+    // labels are catalogue-owned; keep them short — the strip
+    // derives its columns from their display widths.
+    'vs.strip.you' => 'ty',
+    'vs.strip.computer' => 'počítač',
+    'vs.strip.score' => 'skóre:',
+    'vs.strip.lines' => 'řádky:',
+    'vs.strip.level' => 'úroveň:',
     'intro.title' => 'vítejte v candy-tetris',
     'intro.goal' => 'maž řádky — nedosáhni na vrchol',
     'intro.press' => 'pro hraní stiskni {keys}',

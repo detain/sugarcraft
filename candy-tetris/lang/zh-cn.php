@@ -28,12 +28,12 @@ return [
 退出',
     'next_label' => '下一个:',
     'hold_label' => '暂存:',
-    'paused'     => '[ 已暂停 — 按 p 继续 ]',
+    'paused'     => '[ 已暂停 — 按 {keys} 继续 ]',
 
     // Game-over banner
     'over.title'                => '游戏结束',
     'over.final_score'          => '最终分数: {points}',
-    'over.restart_hint'         => '按 r 重新开始 — 按 q 退出',
+    'over.restart_hint'         => '按 {restart} 重新开始 — 按 {quit} 退出',
     'over.reason'               => '原因: {reason}',
     'over.reason.spawn_blocked' => '没有空间放下下一块',
     'over.reason.top_out'       => '堆叠到达顶部',
@@ -57,6 +57,14 @@ return [
     // away); the exchange rule stays a sentence of its own.
     'vs.garbage_rule' => '消一行就向对手发送一行垃圾（每行一个洞）',
     'vs.record' => '战绩: {wins} 胜, {losses} 负',
+    // Match-strip frame words (candy-tetris-008): the scoreboard
+    // labels are catalogue-owned; keep them short — the strip
+    // derives its columns from their display widths.
+    'vs.strip.you' => '你',
+    'vs.strip.computer' => '电脑',
+    'vs.strip.score' => '分数:',
+    'vs.strip.lines' => '行数:',
+    'vs.strip.level' => '等级:',
     'intro.title' => '欢迎游玩 candy-tetris',
     'intro.goal' => '消除行 — 别堆到顶部',
     'intro.press' => '按 {keys} 开始',

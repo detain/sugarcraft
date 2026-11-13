@@ -28,12 +28,12 @@ reiniciar (fim)
 sair',
     'next_label' => 'seguinte:',
     'hold_label' => 'reserva:',
-    'paused'     => '[ em pausa — prima p para retomar ]',
+    'paused'     => '[ em pausa — prima {keys} para retomar ]',
 
     // Game-over banner
     'over.title'                => 'FIM DO JOGO',
     'over.final_score'          => 'pontuação final: {points}',
-    'over.restart_hint'         => 'prima r para reiniciar — prima q para sair',
+    'over.restart_hint'         => 'prima {restart} para reiniciar — prima {quit} para sair',
     'over.reason'               => 'motivo: {reason}',
     'over.reason.spawn_blocked' => 'sem espaço para a peça seguinte',
     'over.reason.top_out'       => 'a pilha atingiu o teto',
@@ -57,6 +57,14 @@ sair',
     // away); the exchange rule stays a sentence of its own.
     'vs.garbage_rule' => 'as linhas removidas enviam lixo ao adversário, cada linha com um buraco',
     'vs.record' => 'percurso: {wins} ganhos, {losses} perdidos',
+    // Match-strip frame words (candy-tetris-008): the scoreboard
+    // labels are catalogue-owned; keep them short — the strip
+    // derives its columns from their display widths.
+    'vs.strip.you' => 'você',
+    'vs.strip.computer' => 'computador',
+    'vs.strip.score' => 'marcador:',
+    'vs.strip.lines' => 'linhas:',
+    'vs.strip.level' => 'nível:',
     'intro.title' => 'bem-vindo ao candy-tetris',
     'intro.goal' => 'elimina linhas — não chegues ao topo',
     'intro.press' => 'prime {keys} para jogar',

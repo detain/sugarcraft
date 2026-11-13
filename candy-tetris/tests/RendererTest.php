@@ -9,6 +9,7 @@ use SugarCraft\Tetris\Bag;
 use SugarCraft\Tetris\Board;
 use SugarCraft\Tetris\Game;
 use SugarCraft\Tetris\Renderer;
+use SugarCraft\Tetris\Support\Bindings;
 use SugarCraft\Tetris\Tetromino;
 use PHPUnit\Framework\TestCase;
 
@@ -72,6 +73,55 @@ final class RendererTest extends TestCase
         $out = Renderer::render($over);
         $this->assertStringContainsString('GAME OVER', $out);
         $this->assertStringContainsString('final score', $out);
+    }
+
+    /**
+     * candy-tetris-005: the banners teach the LIVE table. A player who
+     * remapped pause never sees a dead 'p' promise; the default table
+     * still spells the shipped bytes (goldens), and the two-token quit
+     * reads in the intro's keycap grammar, not as one impossible chord.
+     */
+    public function testThePauseBannerNamesTheLivePauseBinding(): void
+    {
+        $remapped = $this->deterministicGame()
+            ->mutate(['bindings' => Bindings::table()->withOverride('pause', 'x')]);
+        $out = Renderer::render($remapped->mutate(['paused' => true]));
+
+        $this->assertStringContainsString('press x to resume', $out);
+        $this->assertStringNotContainsString('press p to resume', $out);
+    }
+
+    public function testTheOverBannerNamesTheLiveRestartAndQuitBindings(): void
+    {
+        $remapped = $this->deterministicGame()->mutate(['bindings' => Bindings::table()
+            ->withOverride('restart', 't')
+            ->withOverride('quit', 'z'),
+        ]);
+        $out = Renderer::render($remapped->mutate(['over' => true, 'overReason' => Game::OVER_CRUSHED]));
+
+        $this->assertStringContainsString('press t to restart', $out);
+        $this->assertStringContainsString('press z to quit', $out);
+        $this->assertStringNotContainsString('press r to restart', $out);
+        $this->assertStringNotContainsString('press q to quit', $out);
+    }
+
+    public function testDefaultBannersSpellTheShippedBytesWithTheLiveQuitChordNamed(): void
+    {
+        $out = Renderer::render($this->deterministicGame()->mutate([
+            'over' => true,
+            'overReason' => Game::OVER_CRUSHED,
+        ]));
+
+        // 'quit' binds two live tokens (candy-tetris-034 added the
+        // second); the hint spells both in the intro's keycap grammar and
+        // folds onto whole lines so the wider truth is never clipped.
+        $this->assertStringContainsString('press r to restart', $out);
+        $this->assertStringContainsString('press q or ctrl+c to quit', $out);
+        $this->assertContains(
+            'press q or ctrl+c to quit',
+            array_map(static fn(string $line): string => trim($line), explode("\n", $out)),
+            'the quit clause lands whole on its own line — never clipped at the frame edge',
+        );
     }
 
     public function testRenderShowsGhostPieceAtLandingPosition(): void

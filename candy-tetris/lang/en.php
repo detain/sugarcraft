@@ -29,10 +29,10 @@ return [
     'help_card'    => "move\nrotate cw\nrotate ccw\nsoft drop\nhard drop\nhold\npause\nrestart (over)\nquit",
     'next_label'   => 'next:',
     'hold_label'   => 'hold:',
-    'paused'       => '[ paused — press p to resume ]',
+    'paused'       => '[ paused — press {keys} to resume ]',
     'over.title'       => 'GAME OVER',
     'over.final_score' => 'final score: {points}',
-    'over.restart_hint' => 'press r to restart — press q to quit',
+    'over.restart_hint' => 'press {restart} to restart — press {quit} to quit',
     // MA-10: the game-over banner names WHY the run ended — the fatal
     // piece sits in the hidden rows, so the banner is the only evidence.
     'over.reason'               => 'reason: {reason}',
@@ -62,6 +62,14 @@ return [
     // away); the exchange rule stays a sentence of its own.
     'vs.garbage_rule' => 'clear lines — the opponent gets rows with one hole',
     'vs.record' => 'record: {wins} won, {losses} lost',
+    // Match-strip frame words (candy-tetris-008): the scoreboard
+    // labels are catalogue-owned; keep them short — the strip
+    // derives its columns from their display widths.
+    'vs.strip.you' => 'you',
+    'vs.strip.computer' => 'computer',
+    'vs.strip.score' => 'score:',
+    'vs.strip.lines' => 'lines:',
+    'vs.strip.level' => 'level:',
     'intro.title' => 'welcome to candy-tetris',
     'intro.goal' => 'clear lines — do not reach the top',
     'intro.press' => 'press {keys} to play',

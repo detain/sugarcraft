@@ -28,12 +28,12 @@ relancer (fin)
 quitter',
     'next_label' => 'suivante :',
     'hold_label' => 'réserve :',
-    'paused'     => '[ en pause — appuyez sur p pour reprendre ]',
+    'paused'     => '[ en pause — appuyez sur {keys} pour reprendre ]',
 
     // Game-over banner
     'over.title'                => 'PARTIE TERMINÉE',
     'over.final_score'          => 'score final : {points}',
-    'over.restart_hint'         => 'appuyez sur r pour relancer — sur q pour quitter',
+    'over.restart_hint'         => 'appuyez sur {restart} pour relancer — sur {quit} pour quitter',
     'over.reason'               => 'motif : {reason}',
     'over.reason.spawn_blocked' => 'plus de place pour la pièce suivante',
     'over.reason.top_out'       => 'la pile a atteint le plafond',
@@ -57,6 +57,14 @@ quitter',
     // away); the exchange rule stays a sentence of its own.
     'vs.garbage_rule' => 'les lignes effacées envoient des lignes parasites à l\'adversaire, chacune avec un trou',
     'vs.record' => 'bilan : {wins} gagnés, {losses} perdus',
+    // Match-strip frame words (candy-tetris-008): the scoreboard
+    // labels are catalogue-owned; keep them short — the strip
+    // derives its columns from their display widths.
+    'vs.strip.you' => 'vous',
+    'vs.strip.computer' => 'ordinateur',
+    'vs.strip.score' => 'score:',
+    'vs.strip.lines' => 'lignes:',
+    'vs.strip.level' => 'niveau:',
     'intro.title' => 'bienvenue dans candy-tetris',
     'intro.goal' => 'effacez des lignes — ne pas atteindre le sommet',
     'intro.press' => 'appuyez sur {keys} pour jouer',

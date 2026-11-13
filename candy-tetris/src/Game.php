@@ -542,9 +542,22 @@ final class Game implements Model
      */
     public function introBeginLabel(): string
     {
+        return $this->keyLabel('begin');
+    }
+
+    /**
+     * The live, human-readable name of an action's bindings (candy-tetris-
+     * 005): every banner that tells the player to press something must
+     * print the table as it stands, never a baked literal — a remapped
+     * pause whose overlay still says 'p' strands the player at the screen
+     * it claims to unlock. Tokens render in keycap long form and join with
+     * the locale's own disjunction, so 'q' + 'ctrl+c' reads 'q or ctrl+c'.
+     */
+    public function keyLabel(string $id): string
+    {
         $names = array_map(
             static fn(string $token): string => Bindings::KEY_NAMES[$token] ?? $token,
-            $this->keys()->tokens('begin'),
+            $this->keys()->tokens($id),
         );
 
         return implode(Lang::t('key_or'), $names);

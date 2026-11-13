@@ -28,12 +28,12 @@ return [
 خروج',
     'next_label' => 'التالي:',
     'hold_label' => 'التخزين:',
-    'paused'     => '[ متوقف مؤقتًا — اضغط p للمتابعة ]',
+    'paused'     => '[ متوقف مؤقتًا — اضغط {keys} للمتابعة ]',
 
     // Game-over banner
     'over.title'                => 'انتهت اللعبة',
     'over.final_score'          => 'النتيجة النهائية: {points}',
-    'over.restart_hint'         => 'اضغط r لإعادة التشغيل — اضغط q للخروج',
+    'over.restart_hint'         => 'اضغط {restart} لإعادة التشغيل — اضغط {quit} للخروج',
     'over.reason'               => 'السبب: {reason}',
     'over.reason.spawn_blocked' => 'لا توجد مساحة للقطعة التالية',
     'over.reason.top_out'       => 'وصل الركام إلى السقف',
@@ -57,6 +57,14 @@ return [
     // away); the exchange rule stays a sentence of its own.
     'vs.garbage_rule' => 'مسح الخطوط يرسل صفوف قمامة للخصم — ثقب واحد في كل صف',
     'vs.record' => 'السجل: {wins} فوز، {losses} خسارة',
+    // Match-strip frame words (candy-tetris-008): the scoreboard
+    // labels are catalogue-owned; keep them short — the strip
+    // derives its columns from their display widths.
+    'vs.strip.you' => 'أنت',
+    'vs.strip.computer' => 'الحاسوب',
+    'vs.strip.score' => 'نقاط:',
+    'vs.strip.lines' => 'أسطر:',
+    'vs.strip.level' => 'المستوى:',
     'intro.title' => 'مرحبًا بك في candy-tetris',
     'intro.goal' => 'امسح الأسطر — لا تصل إلى القمة',
     'intro.press' => 'اضغط {keys} للعب',

@@ -19,7 +19,9 @@ final class LangTest extends TestCase
 {
     public function testUiStringsResolveByteIdentical(): void
     {
-        self::assertSame('[ paused — press p to resume ]', Lang::t('paused'));
+        // candy-tetris-005: the template is placeholder-owned; the shipped
+        // bytes still read exactly as before when fed the default binding.
+        self::assertSame('[ paused — press p to resume ]', Lang::t('paused', ['keys' => 'p']));
         self::assertSame('GAME OVER', Lang::t('over.title'));
         self::assertSame(
             'final score: 1234',

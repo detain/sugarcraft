@@ -178,6 +178,22 @@ final class LocaleParityTest extends TestCase
         );
     }
 
+    /**
+     * The over-banner fold (candy-tetris-005) re-splits the hint on the
+     * house em-dash joiner; a locale that dropped or duplicated it would
+     * silently opt out of the whole-word line discipline.
+     */
+    #[DataProvider('localeFiles')]
+    public function testEveryRestartHintIsTheTwoClauseHousePair(string $code, string $path): void
+    {
+        $locale = require $path;
+        $this->assertSame(
+            2,
+            count(preg_split('/\s+—\s+/', (string) $locale['over.restart_hint']) ?: []),
+            "locale '$code' restart_hint must be two clauses joined by one spaced em-dash — the banner fold counts on it",
+        );
+    }
+
     public function testEnglishSourceOfTruthCarriesEveryRenderedKey(): void
     {
         $en = require __DIR__ . '/../lang/en.php';
@@ -189,6 +205,7 @@ final class LocaleParityTest extends TestCase
             'over.best', 'over.new_best', 'over.games',
             'label.player', 'label.computer', 'win.player', 'win.computer',
             'vs.garbage_rule', 'vs.record',
+            'vs.strip.you', 'vs.strip.computer', 'vs.strip.score', 'vs.strip.lines', 'vs.strip.level',
             'intro.title', 'intro.goal', 'intro.press', 'intro.vs', 'key_or',
             'mode.unknown', 'help_text',
             // Launch/CLI diagnostic frame (candy-tetris-028): the first

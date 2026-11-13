@@ -28,12 +28,12 @@ riavvia (fine)
 esci',
     'next_label' => 'successivo:',
     'hold_label' => 'riserva:',
-    'paused'     => '[ in pausa — premi p per riprendere ]',
+    'paused'     => '[ in pausa — premi {keys} per riprendere ]',
 
     // Game-over banner
     'over.title'                => 'FINE PARTITA',
     'over.final_score'          => 'punteggio finale: {points}',
-    'over.restart_hint'         => 'premi r per ricominciare — premi q per uscire',
+    'over.restart_hint'         => 'premi {restart} per ricominciare — premi {quit} per uscire',
     'over.reason'               => 'motivo: {reason}',
     'over.reason.spawn_blocked' => 'nessuno spazio per il pezzo successivo',
     'over.reason.top_out'       => 'la pila ha raggiunto il tetto',
@@ -57,6 +57,14 @@ esci',
     // away); the exchange rule stays a sentence of its own.
     'vs.garbage_rule' => 'le righe eliminate inviano righe di rifiuti all\'avversario, ognuna con un buco',
     'vs.record' => 'bilancio: {wins} vinte, {losses} perse',
+    // Match-strip frame words (candy-tetris-008): the scoreboard
+    // labels are catalogue-owned; keep them short — the strip
+    // derives its columns from their display widths.
+    'vs.strip.you' => 'tu',
+    'vs.strip.computer' => 'computer',
+    'vs.strip.score' => 'punteggio:',
+    'vs.strip.lines' => 'righe:',
+    'vs.strip.level' => 'livello:',
     'intro.title' => 'benvenuto in candy-tetris',
     'intro.goal' => 'elimina le righe — non arrivare in cima',
     'intro.press' => 'premi {keys} per giocare',

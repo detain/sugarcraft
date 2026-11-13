@@ -28,12 +28,12 @@ Neustart (Ende)
 beenden',
     'next_label' => 'nächste:',
     'hold_label' => 'Lager:',
-    'paused'     => '[ Pause — p zum Fortsetzen ]',
+    'paused'     => '[ Pause — {keys} zum Fortsetzen ]',
 
     // Game-over banner
     'over.title'                => 'SPIEL VORBEI',
     'over.final_score'          => 'Endpunktzahl: {points}',
-    'over.restart_hint'         => 'r für Neustart — q zum Beenden',
+    'over.restart_hint'         => '{restart} für Neustart — {quit} zum Beenden',
     'over.reason'               => 'Grund: {reason}',
     'over.reason.spawn_blocked' => 'kein Platz für die nächste Figur',
     'over.reason.top_out'       => 'Der Stapel hat die Decke erreicht',
@@ -57,6 +57,14 @@ beenden',
     // away); the exchange rule stays a sentence of its own.
     'vs.garbage_rule' => 'gelöschte Linien senden dem Gegner Reihen mit je einem Loch',
     'vs.record' => 'Bilanz: {wins} gewonnen, {losses} verloren',
+    // Match-strip frame words (candy-tetris-008): the scoreboard
+    // labels are catalogue-owned; keep them short — the strip
+    // derives its columns from their display widths.
+    'vs.strip.you' => 'du',
+    'vs.strip.computer' => 'Computer',
+    'vs.strip.score' => 'Punkte:',
+    'vs.strip.lines' => 'Reihen:',
+    'vs.strip.level' => 'Stufe:',
     'intro.title' => 'willkommen bei candy-tetris',
     'intro.goal' => 'Linien löschen — nicht oben ankommen',
     'intro.press' => 'drücke {keys} zum Spielen',

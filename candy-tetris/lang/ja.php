@@ -28,12 +28,12 @@ return [
 終了',
     'next_label' => '次:',
     'hold_label' => 'ホールド:',
-    'paused'     => '[ 一時停止中 — p で再開 ]',
+    'paused'     => '[ 一時停止中 — {keys} で再開 ]',
 
     // Game-over banner
     'over.title'                => 'ゲームオーバー',
     'over.final_score'          => '最終スコア: {points}',
-    'over.restart_hint'         => 'r でリスタート — q で終了',
+    'over.restart_hint'         => '{restart} でリスタート — {quit} で終了',
     'over.reason'               => '理由: {reason}',
     'over.reason.spawn_blocked' => '次のテトリミノを置けません',
     'over.reason.top_out'       => '積みが天井に達しました',
@@ -57,6 +57,14 @@ return [
     // away); the exchange rule stays a sentence of its own.
     'vs.garbage_rule' => 'ライン消去で相手にゴミ行が届く（各行に穴が一つ）',
     'vs.record' => '通算: {wins}勝 {losses}敗',
+    // Match-strip frame words (candy-tetris-008): the scoreboard
+    // labels are catalogue-owned; keep them short — the strip
+    // derives its columns from their display widths.
+    'vs.strip.you' => '自分',
+    'vs.strip.computer' => 'コンピュータ',
+    'vs.strip.score' => 'スコア:',
+    'vs.strip.lines' => '行数:',
+    'vs.strip.level' => 'レベル:',
     'intro.title' => 'candy-tetris へようこそ',
     'intro.goal' => '行を消す — 上まで積んだら終わり',
     'intro.press' => '{keys} で開始',

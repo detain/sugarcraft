@@ -86,7 +86,8 @@ final class VsRenderer
         // pause gate in VsGame::update — but until now the paused world
         // was indistinguishable from a hang: zero on-frame evidence.
         if ($game->player->paused === true) {
-            return self::paintBanner($body, [Lang::t('paused')]);
+            // candy-tetris-005: the overlay names the live pause binding.
+            return self::paintBanner($body, [Lang::t('paused', ['keys' => $game->player->keyLabel('pause')])]);
         }
 
         return $body;
@@ -122,9 +123,12 @@ final class VsRenderer
             ]);
         }
         // The versus over screen answers r exactly like the solo one
-        // (VsGame::update), so the banner teaches both live keys:
-        // restart_hint carries 'press r to restart — press q to quit'.
-        $lines[] = Lang::t('over.restart_hint');
+        // (VsGame::update), so the banner teaches both live keys
+        // (candy-tetris-005: named from the player's table, folded to
+        // whole-word lines through the shared solo helper).
+        foreach (Renderer::restartHintLines($game->player) as $hintLine) {
+            $lines[] = $hintLine;
+        }
         return $lines;
     }
 
@@ -275,31 +279,23 @@ final class VsRenderer
             : $player->hold->value . ($player->canHold === false ? ' ' . Lang::t('hold_used') : '');
 
         // The award must land whole: the $line truncator would otherwise
-        // half-cut it into 'TETR'. A level fits ≤2 digits at any sane
-        // score (3600 lines/level → level ≤ 4 digits even absurdly), so
-        // the score/lines fields give way before the badge does.
+        // half-cut it into 'TETR', so the score/lines fields give way by
+        // one digit each before the badge does.
         $youAward = $player->lastAward !== null ? '  ' . $player->lastAward : '';
 
+        // candy-tetris-008: the frame words are catalogue keys like every
+        // other string the strip speaks — English baked into sprintf made
+        // the whole panel un-translatable, and the badge leg's 'lvl' drift
+        // from the card's 'level' died with this pass. Columns are derived
+        // from the locale's own label widths (findings:130: mb_strwidth
+        // semantics through Width::of); the 9-slot name column is the
+        // shipped English alignment, so en bytes stand unchanged.
+        $nameYou  = Lang::t('vs.strip.you');
+        $nameCpu  = Lang::t('vs.strip.computer');
+        $nameCol  = max(9, Width::of($nameYou), Width::of($nameCpu));
         $rows = [
-            $line($youAward === ''
-                ? sprintf(
-                    'you       score: %-7d lines: %-3d level: %d',
-                    $player->score->points,
-                    $player->score->lines,
-                    $player->score->level,
-                )
-                : sprintf(
-                    'you       score: %-6d lines: %-2d lvl %d',
-                    $player->score->points,
-                    $player->score->lines,
-                    $player->score->level,
-                ) . $youAward),
-            $line(sprintf(
-                'computer  score: %-7d lines: %-3d level: %d',
-                $computer->score->points,
-                $computer->score->lines,
-                $computer->score->level,
-            )),
+            $line(self::stripRow($nameYou, $player->score, $nameCol, $youAward)),
+            $line(self::stripRow($nameCpu, $computer->score, $nameCol, '')),
             $line(sprintf('%s %s        %s %s', Lang::t('next_label'), $nextLetters, Lang::t('hold_label'), $holdText)),
         ];
 
@@ -324,6 +320,23 @@ final class VsRenderer
             ->width(50);
 
         return $card->render($body);
+    }
+
+    /**
+     * One scoreboard row of the match strip (candy-tetris-008): locale
+     * labels, display-width-padded numeric columns, and the award badge
+     * riding at the tail whole. With a badge present the two wide fields
+     * each give a digit so the row still fits the strip's 50-cell budget.
+     */
+    private static function stripRow(string $name, Score $score, int $nameCol, string $award): string
+    {
+        $figures = $award === '' ? [7, 3] : [6, 2];
+
+        return $name . str_repeat(' ', max(1, $nameCol - Width::of($name)))
+            . ' ' . Lang::t('vs.strip.score') . ' ' . str_pad((string) $score->points, $figures[0])
+            . ' ' . Lang::t('vs.strip.lines') . ' ' . str_pad((string) $score->lines, $figures[1])
+            . ' ' . Lang::t('vs.strip.level') . ' ' . $score->level
+            . $award;
     }
 
     /**

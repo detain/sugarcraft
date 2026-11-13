@@ -108,7 +108,10 @@ final class Renderer
             return self::paintBanner($body, self::overLines($game));
         }
         if ($game->paused === true) {
-            return self::paintBanner($body, [Lang::t('paused')]);
+            // candy-tetris-005: the overlay names the LIVE pause binding —
+            // a remapped table must not strand the player under a key the
+            // game no longer answers.
+            return self::paintBanner($body, [Lang::t('paused', ['keys' => $game->keyLabel('pause')])]);
         }
         return $body;
     }
@@ -161,8 +164,36 @@ final class Renderer
         if ($game->overReason !== null) {
             $lines[] = Lang::t('over.reason', ['reason' => self::reasonText($game->overReason)]);
         }
-        $lines[] = Lang::t('over.restart_hint');
+        // candy-tetris-005: both verbs are live bindings, and the hint
+        // must arrive WHOLE — a wide remap or the two-token quit would be
+        // clipped mid-word by the board-width banner otherwise, so the
+        // two sentences own one line each (the default table reproduces
+        // the original pair byte-for-byte, stacked).
+        foreach (self::restartHintLines($game) as $line) {
+            $lines[] = $line;
+        }
         return $lines;
+    }
+
+    /**
+     * The over-screen hint as one or two banner lines (candy-tetris-005):
+     * the clause pair is joined in the catalogue by the house em-dash, and
+     * the fold re-splits it so a wide remap — or the honest two-token
+     * quit — can never be clipped mid-word by the frame width. With the
+     * shipped table this renders exactly the two sentences the old single
+     * line held, stacked; a locale that stops carrying the joiner simply
+     * stays one line (and LocaleParityTest fails the roster first).
+     *
+     * @return non-empty-list<string>
+     */
+    public static function restartHintLines(Game $game): array
+    {
+        $hint = Lang::t('over.restart_hint', [
+            'restart' => $game->keyLabel('restart'),
+            'quit'    => $game->keyLabel('quit'),
+        ]);
+
+        return preg_split('/\s+—\s+/u', $hint) ?: [$hint];
     }
 
     private static function reasonText(string $reason): string
