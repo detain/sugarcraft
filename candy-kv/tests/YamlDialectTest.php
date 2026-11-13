@@ -256,7 +256,7 @@ final class YamlDialectTest extends TestCase
             $importer->importFromString('k: true');
             $this->fail('the importer must refuse a bool-valued entry');
         } catch (\RuntimeException $e) {
-            $this->assertStringContainsString('Entry "k" has a bool value', $e->getMessage());
+            $this->assertStringContainsString('Entry "k" has a value of type bool', $e->getMessage());
         }
     }
 

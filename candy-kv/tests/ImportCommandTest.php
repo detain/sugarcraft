@@ -281,7 +281,7 @@ final class ImportCommandTest extends TestCase
 
         $this->assertSame(1, $res['exit'], $res['stderr']);
         $this->assertStringContainsString('Import failed:', $res['stderr']);
-        $this->assertStringContainsString('array value', $res['stderr'], 'the diagnostic must stay informative');
+        $this->assertStringContainsString('value of type array', $res['stderr'], 'the diagnostic must stay informative');
         // kv-005: the scrubber deletes whole ESC-introduced sequences, so even
         // the printable residue ([31m) no longer rides a stderr diagnostic.
         $this->assertStringContainsString('RED', $res['stderr'], 'the entry name must stay visible');
@@ -397,6 +397,105 @@ final class ImportCommandTest extends TestCase
         // (ImportCommit owns the check), and the command reports rc 1.
         $this->assertSame(1, $this->cmd->run('json', $this->tmpDir . '/bad.json', false, 'clobber'));
         $this->assertStringContainsString('Unknown import policy', $this->captured($this->errStream));
+    }
+
+    // ─── candy-kv-101/102/103: importer edge hygiene ───────────────────────
+
+    public function testDirectoryPathIsRefusedAsOneCleanLineWithoutPhpWarning(): void
+    {
+        // The /tmp repro shape: a directory answered file_exists() with
+        // true, the read that followed emitted an E_WARNING leaking the
+        // importing library's absolute source path, and the failure rode
+        // out as a laundered "Import failed: Cannot read JSON file".
+        $dir = $this->tmpDir . '/folder.json';
+        \mkdir($dir);
+        $mark = \ftell($this->errStream);
+
+        $this->assertSame(1, $this->cmd->run('json', $dir, false));
+
+        $err = $this->capturedFrom($mark, $this->errStream);
+        $this->assertSame("Not a regular file: {$dir}\n", $err, 'exactly one clean refusal line on stderr — no notice, no second line');
+    }
+
+    public function testDirectoryImportThroughTheBinaryLeaksNoSourcePath(): void
+    {
+        // The CLI leg runs a real child so any stray warning would land on
+        // the captured stderr verbatim, and PHPUnit would never see it —
+        // this pin is what actually reproduces the reviewer's probe.
+        $res = $this->runChild(['import', 'json', $this->tmpDir]);
+
+        $this->assertSame(1, $res['exit']);
+        $this->assertStringContainsString('Not a regular file', $res['stderr']);
+        $this->assertStringNotContainsString('Warning', $res['stderr']);
+        $this->assertStringNotContainsString('.php', $res['stderr'], 'the refusing script path must never surface');
+        $this->assertSame(1, \substr_count($res['stderr'], "\n"), 'one line, not a notice stacked under it');
+    }
+
+    public function testDirectoryThroughTheJsonLibraryDoorRefusesWithoutWarning(): void
+    {
+        // The public library doors take config/upload paths, not argv —
+        // the guard lives there too. Under PHPUnit an E_WARNING counts
+        // as an error, so reaching the bare read fails this test by
+        // construction; the domain refusal must come first.
+        $dir = $this->tmpDir . '/nested.json';
+        \mkdir($dir);
+        try {
+            (new \SugarCraft\Kv\Import\JsonImporter($this->store))->importFromFile($dir);
+            $this->fail('expected the domain refusal before any read');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('Cannot read JSON file', $e->getMessage());
+        }
+    }
+
+    public function testDirectoryThroughTheYamlLibraryDoorRefusesWithoutWarning(): void
+    {
+        $dir = $this->tmpDir . '/nested.yaml';
+        \mkdir($dir);
+        try {
+            (new \SugarCraft\Kv\Import\YamlImporter($this->store))->importFromFile($dir);
+            $this->fail('expected the domain refusal before any read');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('Cannot read YAML file', $e->getMessage());
+        }
+    }
+
+    public function testEmptyAndWhitespaceJsonDocumentsImportZeroLikeYaml(): void
+    {
+        // candy-kv-102: a document that IS whitespace already imported as
+        // "Imported 0 entries." through YAML (the dialect short-circuits
+        // trim === ''); through JSON the same shape died on a decode
+        // Syntax error. One shape, one verdict now — the empty mapping.
+        $json = new \SugarCraft\Kv\Import\JsonImporter($this->store);
+        foreach (['', ' ', "\n", "\t \r\n"] as $document) {
+            $this->assertSame(0, $json->importFromString($document)->imported, 'imported count for ' . \var_export($document, true));
+        }
+        $this->assertSame(0, $json->importFromString('{}')->imported, 'the {} twin stays at zero');
+        $this->assertSame(
+            0,
+            (new \SugarCraft\Kv\Import\YamlImporter($this->store))->importFromString('')->imported,
+            'the YAML leg the JSON one now mirrors'
+        );
+
+        // At the CLI door: rc 0 and the localized zero line, no failure.
+        $path = $this->tmpDir . '/empty.json';
+        \file_put_contents($path, '');
+        $this->assertSame(0, $this->cmd->run('json', $path, false));
+        $this->assertStringContainsString('0', $this->captured($this->outStream));
+        $this->assertSame('', $this->captured($this->errStream));
+    }
+
+    public function testNonScalarValueRefusalReadsOfTypeWording(): void
+    {
+        // candy-kv-103: 'has a array value' is article abuse — the type
+        // name is not reliably consonant-led. The ImportExportTest and
+        // YamlFallbackTest corpus pins carry the same sentence through
+        // both engines; this is the door pin.
+        try {
+            (new \SugarCraft\Kv\Import\JsonImporter($this->store))->importFromString('{"k":[1]}');
+            $this->fail('expected the non-scalar refusal');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('has a value of type array', $e->getMessage());
+        }
     }
 
     /**

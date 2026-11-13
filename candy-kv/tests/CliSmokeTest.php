@@ -102,27 +102,31 @@ final class CliSmokeTest extends TestCase
     // on pipes). Every stdin-touching case therefore runs the real binary as
     // a child with stdin under the test's control.
 
-    public function testImportStdinEmptyFailsThroughDecodeNotReadFailure(): void
+    public function testImportStdinEmptyImportsZeroNotDecodeFailure(): void
     {
         // Empty stdin: file_get_contents('php://stdin') returns '' (a string,
-        // never false), so exit 1 arrives via the JSON-decode exception in the
-        // catch block — NOT the dead `$json === false` branch. This pins the
-        // actual mechanism (audit #2 side-note).
+        // never false), so the old shape died in the catch block as a JSON
+        // decode Syntax error while the identical YAML document imported 0
+        // entries at rc 0. candy-kv-102 unified the verdict — a document
+        // that IS whitespace is the empty mapping on both routes. The audit
+        // #2 mechanism note survives: the false-return read-failure branch
+        // is still not what an empty pipe reaches (it never fires here now,
+        // because empty is no longer a failure at all).
+        // DISCLOSED PIN FLIP: the pre-fix pin asserted exit 1 + 'Import
+        // failed'; that asserted the asymmetry, not a law.
         $res = $this->runSkateFeeding(['import', 'json', '-'], null);
-        $this->assertSame(1, $res['exit']);
-        $this->assertStringContainsString('Import failed', $res['stderr']);
-        $this->assertStringNotContainsString(
-            'Failed to read from STDIN',
-            $res['stderr'],
-            'the false-return branch is unreachable on an empty pipe — the failure must surface as a decode error'
-        );
+        $this->assertSame(0, $res['exit'], $res['stderr']);
+        $this->assertStringContainsString('Imported 0 entries.', $res['stdout']);
+        $this->assertSame('', $res['stderr']);
     }
 
-    public function testImportDevStdinEmptyFails(): void
+    public function testImportDevStdinEmptyImportsZero(): void
     {
+        // candy-kv-102 twin for the /dev/stdin spelling (DISCLOSED PIN FLIP
+        // from the same exit-1 asymmetry assert).
         $res = $this->runSkateFeeding(['import', 'json', '/dev/stdin'], null);
-        $this->assertSame(1, $res['exit']);
-        $this->assertStringContainsString('Import failed', $res['stderr']);
+        $this->assertSame(0, $res['exit'], $res['stderr']);
+        $this->assertStringContainsString('Imported 0 entries.', $res['stdout']);
     }
 
     public function testImportStdinPipedJsonSucceeds(): void

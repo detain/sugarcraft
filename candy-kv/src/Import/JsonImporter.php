@@ -119,6 +119,15 @@ final class JsonImporter
         // config or uploads in wrapping automation, never a terminal argv.
         InputPath::refuseStreamWrapper($path);
 
+        // candy-kv-101: guard the read itself, not just the CLI door — a
+        // directory (or FIFO) makes file_get_contents emit an E_WARNING
+        // carrying this library's absolute source path before returning
+        // false. is_file() answers without touching contents, so the
+        // domain refusal below is the only thing the caller ever sees.
+        if (!\is_file($path)) {
+            throw new \RuntimeException("Cannot read JSON file: {$path}");
+        }
+
         $json = \file_get_contents($path);
         if ($json === false) {
             throw new \RuntimeException("Cannot read JSON file: {$path}");
@@ -234,8 +243,11 @@ final class JsonImporter
                 // null lands here too: get_debug_type(null) = 'null'. A
                 // null once coerced silently to an empty string — explicit
                 // "nothing" is not the same as "".
+                // candy-kv-103: "of type %s", not "a %s value" — the old
+                // pattern read "has a array value"; the type name is not
+                // reliably consonant-led.
                 throw new \RuntimeException(
-                    \sprintf('Entry "%s" has a %s value; only strings and numbers round-trip.', $key, \get_debug_type($value))
+                    \sprintf('Entry "%s" has a value of type %s; only strings and numbers round-trip.', $key, \get_debug_type($value))
                 );
             }
 
@@ -308,6 +320,16 @@ final class JsonImporter
      */
     private static function decodeDocument(string $json): array
     {
+        // candy-kv-102: empty-document symmetry with the YAML route. The
+        // dialect answers trim === '' as an empty mapping and the importer
+        // commits 'Imported 0 entries.' at rc 0; json_decode('') threw
+        // Syntax error, so one document shape carried two verdicts. A
+        // document that IS whitespace imports nothing — loudly silently,
+        // exactly like its YAML twin.
+        if (\trim($json) === '') {
+            return [];
+        }
+
         /** @var mixed $decoded */
         $decoded = \json_decode($json, true, flags: \JSON_THROW_ON_ERROR | \JSON_BIGINT_AS_STRING);
 

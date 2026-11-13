@@ -95,6 +95,16 @@ final class ImportCommand
                     \fwrite($this->stderr, "File not found: " . Store::sanitizeForTty($path) . "\n");
                     return 1;
                 }
+                if (!\is_file($path)) {
+                    // candy-kv-101: a directory answers file_exists() with
+                    // true, and the read that followed emitted an E_WARNING
+                    // naming the importing library's absolute source path
+                    // before failing. Refuse every non-regular path here —
+                    // one clean line, and no filesystem call with warning
+                    // potential runs at all.
+                    \fwrite($this->stderr, "Not a regular file: " . Store::sanitizeForTty($path) . "\n");
+                    return 1;
+                }
                 $report = $importer->importFromFile($path, $atomic, $ifExists);
             }
 
@@ -102,8 +112,9 @@ final class ImportCommand
             return 0;
         } catch (\Throwable $e) {
             // Sanitize-on-egress: importer failure texts name file-chosen keys
-            // (JsonImporter 'Entry "%s" has a %s value', YamlDialect binary/base64
-            // refusals) — attacker-chosen bytes must not reach the TTY raw.
+            // (JsonImporter 'Entry "%s" has a value of type %s', YamlDialect
+            // binary/base64 refusals) — attacker-chosen bytes must not reach
+            // the TTY raw.
             \fwrite($this->stderr, "Import failed: " . Store::sanitizeForTty($e->getMessage()) . "\n");
             return 1;
         }

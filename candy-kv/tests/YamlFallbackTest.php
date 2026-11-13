@@ -66,7 +66,7 @@ final class YamlFallbackTest extends TestCase
         $yaml = "empty-key: \n";
         $importer = new YamlImporter($this->store);
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('Entry "empty-key" has a null value; only strings and numbers round-trip.');
+        $this->expectExceptionMessage('Entry "empty-key" has a value of type null; only strings and numbers round-trip.');
         $importer->importFromString($yaml, false);
     }
 
@@ -76,7 +76,7 @@ final class YamlFallbackTest extends TestCase
         $yaml = "nil-key: ~\n";
         $importer = new YamlImporter($this->store);
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('Entry "nil-key" has a null value; only strings and numbers round-trip.');
+        $this->expectExceptionMessage('Entry "nil-key" has a value of type null; only strings and numbers round-trip.');
         $importer->importFromString($yaml, false);
     }
 
@@ -85,7 +85,7 @@ final class YamlFallbackTest extends TestCase
         $yaml = "null-key: null\n";
         $importer = new YamlImporter($this->store);
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('Entry "null-key" has a null value; only strings and numbers round-trip.');
+        $this->expectExceptionMessage('Entry "null-key" has a value of type null; only strings and numbers round-trip.');
         $importer->importFromString($yaml, false);
     }
 
@@ -288,7 +288,7 @@ final class YamlFallbackTest extends TestCase
         // document refuses with the same message.
         $importer = new YamlImporter($this->store);
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('Entry "tilde" has a null value; only strings and numbers round-trip.');
+        $this->expectExceptionMessage('Entry "tilde" has a value of type null; only strings and numbers round-trip.');
         $importer->importFromString("tilde: ~\n", false);
     }
 

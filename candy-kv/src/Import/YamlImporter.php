@@ -117,6 +117,12 @@ final class YamlImporter
         // config or uploads in wrapping automation, never a terminal argv.
         InputPath::refuseStreamWrapper($path);
 
+        // candy-kv-101: same directory guard as the JSON door — refuse
+        // before a warning-emitting filesystem read can name this file.
+        if (!\is_file($path)) {
+            throw new \RuntimeException("Cannot read YAML file: {$path}");
+        }
+
         $yaml = \file_get_contents($path);
         if ($yaml === false) {
             throw new \RuntimeException("Cannot read YAML file: {$path}");
@@ -249,8 +255,10 @@ final class YamlImporter
                 // null lands here too: get_debug_type(null) = 'null'. A
                 // null once coerced silently to an empty string — explicit
                 // "nothing" is not the same as "".
+                // candy-kv-103: "of type %s" wording, shared with the JSON
+                // twin so one failure class keeps one sentence.
                 throw new \RuntimeException(
-                    \sprintf('Entry "%s" has a %s value; only strings and numbers round-trip.', $key, \get_debug_type($value))
+                    \sprintf('Entry "%s" has a value of type %s; only strings and numbers round-trip.', $key, \get_debug_type($value))
                 );
             }
 

@@ -164,7 +164,7 @@ final class ImportExportTest extends TestCase
 
         $importer = new JsonImporter($this->store);
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('Entry "arr" has a array value; only strings and numbers round-trip.');
+        $this->expectExceptionMessage('Entry "arr" has a value of type array; only strings and numbers round-trip.');
         $importer->importFromFile($path, false);
     }
 
@@ -174,7 +174,7 @@ final class ImportExportTest extends TestCase
         // is not "" and must not masquerade as a stored empty value.
         $importer = new JsonImporter($this->store);
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('Entry "k" has a null value; only strings and numbers round-trip.');
+        $this->expectExceptionMessage('Entry "k" has a value of type null; only strings and numbers round-trip.');
         $importer->importFromString('{"k":null}', false);
     }
 
@@ -190,7 +190,7 @@ final class ImportExportTest extends TestCase
             $importer->importFromFile($path, false);
             $this->fail('expected RuntimeException');
         } catch (\RuntimeException $e) {
-            $this->assertStringContainsString('has a array value', $e->getMessage());
+            $this->assertStringContainsString('has a value of type array', $e->getMessage());
         }
         $this->assertSame('', $this->store->get('good'));
     }
@@ -520,7 +520,7 @@ final class ImportExportTest extends TestCase
         // empty string entry. Explicit "nothing" must refuse, like JSON.
         $importer = new YamlImporter($this->store);
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('Entry "k" has a null value; only strings and numbers round-trip.');
+        $this->expectExceptionMessage('Entry "k" has a value of type null; only strings and numbers round-trip.');
         $importer->importFromString("k:\n", false);
     }
 
