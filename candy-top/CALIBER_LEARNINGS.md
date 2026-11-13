@@ -61,7 +61,7 @@
 ## Deferred from P-A (deliberately)
 
 - (Done in P-F1: the refused-toggle size-error box and the App-owned overlay seam — see "P-F1 overlays/menus".)
-- P-B: btop #1008 keeps the last valid reading when a collector briefly fails, instead of showing `n/a`. PlaceholderPanel currently replaces its snapshot on every sample.
+- (Done in P-B: btop #1008 keeps the last valid reading when a collector briefly fails, instead of showing `n/a` — panels carry the last measured snapshot (`MemPanel`, `ProcPanel`, `GpuHold`, the disk and ipmi feeds) and the README advertises it in the Collectors, GPU and Differences-from-btop sections. PlaceholderPanel paints the latest snapshot, so a failed round no longer blanks its readouts.)
 
 ## P-C net panel
 
