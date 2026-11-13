@@ -46,6 +46,58 @@ final class ManagerSearchFuzzyTest extends TestCase
     }
 
     /**
+     * CF-48 (closes 095): a composed (NFC) query must hit a decomposed
+     * (NFD) on-disk name — the macOS byte shape — and the result must
+     * still carry the RAW entry, since display and selection key off
+     * what the filesystem actually stores.
+     */
+    public function testComposedQueryFindsDecomposedName(): void
+    {
+        $decomposed = "cafe\u{0301}-menu.txt";
+        $tree       = ['/' => [new Entry($decomposed, false, 1, 0)]];
+        $m          = Manager::start('/', '/', static fn(string $p): array => $tree[$p] ?? []);
+
+        $found = $m->search("caf\u{00E9}");
+
+        $this->assertNotSame([], $found->searchResults, 'NFC query must find the NFD name');
+        $this->assertSame($decomposed, $found->searchResults[0]->name);
+    }
+
+    /** CF-48: the reverse direction — NFD query (a pasted macOS name) finds an NFC file. */
+    public function testDecomposedQueryFindsComposedName(): void
+    {
+        $composed = "caf\u{00E9}-menu.txt";
+        $tree     = ['/' => [new Entry($composed, false, 1, 0)]];
+        $m        = Manager::start('/', '/', static fn(string $p): array => $tree[$p] ?? []);
+
+        $found = $m->search("cafe\u{0301}");
+
+        $this->assertNotSame([], $found->searchResults, 'NFD query must find the NFC name');
+        $this->assertSame($composed, $found->searchResults[0]->name);
+    }
+
+    /** CF-48: pattern select meets glob and names in the same NFC view. */
+    public function testPatternSelectNormalizesBothSides(): void
+    {
+        $composed = "caf\u{00E9}.txt";
+        $tree     = [
+            '/' => [
+                new Entry($composed, false, 1, 0),
+                new Entry('plain.txt', false, 1, 0),
+            ],
+        ];
+        $m = Manager::start('/', '/', static fn(string $p): array => $tree[$p] ?? []);
+
+        [$armed] = $m->update(new KeyMsg(KeyType::Char, '*'));
+        foreach (['c', 'a', 'f', 'e', "\u{0301}", '.', 't', 'x', 't'] as $ch) {
+            [$armed] = $armed->update(new KeyMsg(KeyType::Char, $ch));
+        }
+        [$done] = $armed->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertSame([$composed], $done->left->selectedNames(), 'decomposed pattern selects the composed file by its raw name');
+    }
+
+    /**
      * C-1 family: bare 0x20 decodes to KeyType::Space, not a printable
      * Char. While the search append leg only accepted Char, a query
      * containing a space was untypeable — file names with spaces are

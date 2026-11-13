@@ -182,6 +182,7 @@ The whole transition layer is pure — filesystem I/O is injected as a `Closure(
 - `LangCoverageTest` enforces translation-key coverage in both directions (every used key exists; no unused key lingers); `LocaleParityTest` pins all 16 shipped locales to the English key set with identical placeholder tokens
 - Localized chrome (CF-16): search prompt, DIR/LINK size tokens and the sort header label ride the catalogues (dynamic size-column width, byte-stable at `en`), and the launcher activates the detected locale before its first printed byte (order-pinned; German `--help` proven in a pinned child environment)
 - Symlink rows (CF-45): a link's row names its target in the same leg (`mylink -> /dir`), the size column answers `LINK` even for a link-to-directory, and a target that does not resolve is tagged `(broken)`
+- Normalization-insensitive matching (CF-48): search and pattern-select compare names NFC-normalized on both sides — a composed query finds macOS's decomposed bytes and vice versa — while display and selection keep the raw on-disk name
 - Glyph tiers (CF-35): `Support\GlyphSet` picks unicode vs strictly-ASCII chrome from lang/charset/TERM (deterministic table units, `CANDY_FILES_GLYPHS` escape hatch), the ascii frame carries no Ambiguous glyph and fits `termCols`, and user filenames keep their bytes on every tier
 
 ## Demos

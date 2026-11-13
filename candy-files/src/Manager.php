@@ -1283,9 +1283,13 @@ final class Manager implements Model
                 ->withInputBuffer(null);
         }
         $next = $this->withActivePane(static function (Pane $p) use ($glob): Pane {
+            // CF-48 (closes 095): glob and names meet in the same NFC
+            // view as the search matcher (selection keys stay the raw
+            // on-disk name).
+            $normalizedGlob = self::norm($glob);
             $wanted = [];
             foreach ($p->entries as $entry) {
-                if (!$entry->isParentSentinel() && fnmatch($glob, $entry->name, FNM_NOESCAPE)) {
+                if (!$entry->isParentSentinel() && fnmatch($normalizedGlob, self::norm($entry->name), FNM_NOESCAPE)) {
                     $wanted[$entry->name] = true;
                 }
             }
@@ -1806,30 +1810,37 @@ final class Manager implements Model
         // majority of a large directory and cannot drop a single result —
         // it is a strict superset of the scorer's positive set.
         $queryChars = [];
-        foreach (self::codepoints(mb_strtolower($query)) as $ch) {
+        // CF-48 (closes 095): the whole match view is NFC-normalized on
+        // BOTH sides. macOS stores names decomposed (NFD) while keyboards
+        // emit composed characters (NFC), so a raw compare loses matches in
+        // both directions; one shared normalized view means `café` finds
+        // cafe+acute on disk and vice versa. Display and selection keep
+        // the raw on-disk name.
+        $normalizedQuery = self::norm($query);
+        foreach (self::codepoints(mb_strtolower($normalizedQuery)) as $ch) {
             $queryChars[$ch] = true;
         }
-        $survivors = [];
+        // Queue entries per NORMALIZED name so ranked results map back 1:1
+        // even if a directory surfaces two entries sharing a name — or two
+        // distinct raw names that collapse to one under normalization.
+        $byName = [];
+        $names  = [];
         foreach ($candidates as $entry) {
-            foreach (self::codepoints(mb_strtolower($entry->name)) as $ch) {
+            $normalizedName = self::norm($entry->name);
+            foreach (self::codepoints(mb_strtolower($normalizedName)) as $ch) {
                 if (isset($queryChars[$ch])) {
-                    $survivors[] = $entry;
+                    $names[] = $normalizedName;
+                    $byName[$normalizedName][] = $entry;
                     break;
                 }
             }
         }
         $matcher = SmithWatermanMatcher::new();
-        // Queue entries per name so ranked results map back 1:1 even if a
-        // directory ever surfaces two entries sharing a name.
-        $byName = [];
-        foreach ($survivors as $entry) {
-            $byName[$entry->name][] = $entry;
-        }
-        $names = array_map(static fn(Entry $e) => $e->name, $survivors);
         $results = [];
         // Hard cap via the matcher's own limit: ranking is global, so the
         // cap must apply after the sort (MatchResultSorter), not before.
-        foreach ($matcher->matchAll($query, $names, $cap) as $result) {
+        // The scorer sees the SAME normalized view as the prefilter (CF-48).
+        foreach ($matcher->matchAll($normalizedQuery, $names, $cap) as $result) {
             $entry = array_shift($byName[$result->haystack]);
             if ($entry !== null) {
                 $results[] = $entry;
@@ -1843,6 +1854,18 @@ final class Manager implements Model
     {
         $out = preg_split('//u', $s, -1, PREG_SPLIT_NO_EMPTY);
         return $out === false ? str_split($s) : $out;
+    }
+
+    /**
+     * CF-48 (closes 095): NFC-normalize a string for the shared match
+     * view. ext-intl is a hard dependency (composer.json), but an
+     * unnormalizable string — invalid UTF-8 from a hostile filename —
+     * is compared as-is rather than dropped: a normalization failure
+     * must never strand the whole search.
+     */
+    private static function norm(string $s): string
+    {
+        return \Normalizer::normalize($s, \Normalizer::FORM_C) ?? $s;
     }
 
     /** Exit search mode */
