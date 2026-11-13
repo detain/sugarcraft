@@ -92,7 +92,7 @@ try {
 $log->print('always prints'); // bypasses the level FILTER — the label still renders
 ```
 
-## Formatted Helpers
+## Formatted helpers
 
 Every level method has a `sprintf`-style sibling — `debugf()`, `infof()`,
 `warnf()`, `errorf()`, `fatalf()`, plus `printf()` for the always-print
@@ -119,7 +119,7 @@ never gets called). `enabled(Level $level)` answers publicly whether a level
 passes the current `minLevel`. `printf()` skips the guard exactly like
 `print()` — it always renders — but still accepts the mixed slot two.
 
-## Static Facade
+## Static facade
 
 `Log` is a process-shared façade over one lazily-created default `Logger` — the
 package-level function style of charmbracelet/log:
@@ -158,7 +158,7 @@ line, then throws). `Log::installPanicHandler()` is undone by
 `Log::removePanicHandler()`, which restores whatever exception handling
 existed before the first install.
 
-## Structured Fields
+## Structured fields
 
 ```php
 use SugarCraft\Log\Logger;
@@ -433,7 +433,7 @@ Untrusted data can never forge or reshape a record:
   encode fails anyway the JSON fallback drops only the offending field — the
   envelope and every other entry survive, flagged by `_encode_error`.
 
-## Panic Handlers
+## Panic handlers
 
 ```php
 use SugarCraft\Log\Log;
@@ -457,7 +457,7 @@ Log::restoreTerminal();
 
 The panic handler catches uncaught exceptions and fatal PHP errors (`E_ERROR`, `E_PARSE`, `E_CORE_ERROR`, `E_COMPILE_ERROR`, `E_USER_ERROR`), restores the terminal to a usable state, and prints a banner with the error class, message, and backtrace. Styling is decided once, at install time, from whether STDERR is a color-capable terminal then (NO_COLOR suppresses it unless CLICOLOR_FORCE overrides); it is not re-evaluated per report, so a report captured to a file after a TTY install still carries ANSI unless you pass `PanicFormatter::plain()` explicitly. All four banner roles (`title`, `exception`, `backtrace`, `muted`) are replaceable per instance with `withTitleStyle()`, `withExceptionStyle()`, `withBacktraceStyle()` and `withMutedStyle()`, so the crash report's colors can be retuned without subclassing the formatter. Both factories take two knobs, `$showLocals` and `$redactPaths` — the latter a list of secret substrings (paths, tokens, any literal) replaced with `[redacted]` wherever it can surface — and those knobs configure only the formatter chosen by default: combining an explicit formatter with non-default knobs throws `InvalidArgumentException` rather than silently ignoring the caller's privacy settings. The exception message is treated as untrusted input: terminal-control bytes are swept and newlines flattened, so a message that embeds user data can never forge extra report rows and no escape sequences are emitted into whatever displays the output. `redactPaths` substrings are stripped from the message as they are from frames and locals under one policy: exact-substring matching on raw bytes (case-folded on Windows, where path case carries no meaning) before the control sweep, compared against both the configured spelling and its `realpath` when that path resolves, with empty entries ignored. Re-installing replaces the previous sugar-log handler instead of stacking. Internal frames with no file/line render honestly as `?:?`, and the report ends with a neutral footer identifying sugar-log for issue filing. `showLocals` dumps call arguments only for traces that carry them — PHP's engine omits `args` from exception traces, so for plain uncaught exceptions there are no locals to show; the knob is live for manually injected frame arrays.
 
-## PSR-3 Bridge
+## PSR-3 bridge
 
 `PsrBridge` wraps a `Logger` instance and **implements** `Psr\Log\LoggerInterface`: all nine methods (`emergency`, `alert`, `critical`, `error`, `warning`, `notice`, `info`, `debug`, `log`) are real interface methods, so the bridge satisfies a `LoggerInterface` type-hint anywhere a PSR-3 logger is expected. The eight severity methods never throw — a hostile `__toString()` or a formatter that raises is contained and announced as a sanitized notice on STDERR, and the `RuntimeException` that backs `Fatal` is contained silently (its record already went out on the wire, so there is nothing to announce). Nothing propagates into the caller. Only `log()`, which takes the PSR-3 spec's `mixed $level`, may raise: an unrecognized or non-string level is an `InvalidArgumentException`, as PSR-3 itself prescribes for that method:
 
@@ -484,7 +484,7 @@ stream exists and every level is written to STDOUT, see
 `Info`; `debug` → `Debug`.
 
 The bridge also fires registered hooks after the write attempt (see
-[Hook System](#hook-system)), enabling middleware-style interceptors. A failed
+[Hook system](#hook-system)), enabling middleware-style interceptors. A failed
 write that was announced as an internal notice still reaches the hooks — they
 are part of the observability surface — but records the level filter drops, and
 messages whose `__toString()` explodes before a write is ever attempted, never
@@ -492,7 +492,7 @@ fire them. A hook
 that throws is contained per-handler the same way — one hostile callback can
 never cancel the walk or eat the log line.
 
-## Hook System
+## Hook system
 
 The hook system lets you register callbacks that fire whenever a log entry is emitted at or above a given level. Hooks receive the `Level`, PSR-3 level string, message, and context — useful for reacting to a completed write: forwarding, counters, alerts. They run *after* the record is written and receive copies, so a hook can never modify or suppress the record it observes.
 
@@ -543,7 +543,7 @@ final class MetricsHook implements Hook
 
 Structured implementations register through `HookRegistry::addHook(Level, Hook): int` — the object-taking twin of `onLevel()`, whose second parameter is a bare `callable` (handing a `MetricsHook` to `onLevel()` is a `TypeError`). Both return a registration id that `remove()` accepts.
 
-## Parts Order
+## Parts order
 
 `PartsOrder` is a config DTO that controls which log-parts appear and in what sequence when formatting. It ships with three named presets:
 
@@ -573,7 +573,7 @@ message from every rendered line. `PartsOrder` is honored only by
 `TextFormatter`; JSON and logfmt ignore it (a JSON object has no member order,
 a logfmt record is fixed-shape).
 
-## Caller Information
+## Caller information
 
 The normal way to enable caller reporting is `Logger::setReportCaller(true)`
 (or the `reportCaller:` constructor argument); the logger then tags every
