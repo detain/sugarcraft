@@ -38,9 +38,10 @@ final class WrapCellsTest extends TestCase
     public function testWrapLongWordBreaksByDefault(): void
     {
         $lines = WrapCells::wrap('superlongword', 5);
-        // Long word is placed on new line but not broken
-        $this->assertNotEmpty($lines);
-        $this->assertGreaterThan(1, count($lines));
+        // Without breakWords the word is NOT broken and NOT dropped: it owns
+        // its line (an honest overflow). The old second line here was the
+        // algorithm's phantom empty-line artifact (finding sugar-dashboard-037).
+        $this->assertSame(['superlongword'], $lines);
     }
 
     public function testWrapBreakWordsAllowsLongWordBreak(): void
@@ -105,23 +106,23 @@ final class WrapCellsTest extends TestCase
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // ANSI escape codes stripped from width calculation
+    // ANSI escapes survive the wrap (never stripped — finding 037)
     // ═══════════════════════════════════════════════════════════════
 
-    public function testWrapStripsAnsiForWidthCalculation(): void
+    public function testWrapFitsByVisibleCellsNotEscapeBytes(): void
     {
         $ansi = "\x1b[31mred\x1b[0m text";
         $lines = WrapCells::wrap($ansi, 50);
-        // "red text" is 8 chars, fits in 50
-        $this->assertSame(['red text'], $lines);
+        // Width::string ignores escape bytes for FITTING, but the SGR
+        // sequences survive into the output — the class never strips.
+        $this->assertSame(["\x1b[31mred\x1b[0m text"], $lines);
     }
 
-    public function testWrapPreservesContentAfterAnsiStripped(): void
+    public function testWrapKeepsStyledRunsByteIdentical(): void
     {
         $ansi = "\x1b[1mbold\x1b[0m hello";
         $lines = WrapCells::wrap($ansi, 50);
-        $this->assertStringContainsString('hello', $lines[0]);
-        $this->assertStringContainsString('bold', $lines[0]);
+        $this->assertSame(["\x1b[1mbold\x1b[0m hello"], $lines);
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -147,5 +148,59 @@ final class WrapCellsTest extends TestCase
     {
         $lines = WrapCells::wrapAndPad('hello', 0);
         $this->assertSame([''], $lines);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Losslessness + cell-boundary cuts (finding sugar-dashboard-037)
+    // ═══════════════════════════════════════════════════════════════
+
+    public function testWordBreakIsLosslessConcatRebuildsVisibleContent(): void
+    {
+        $lines = WrapCells::wrap('TheQuickBrownFoxJumps', 5, breakWords: true);
+        // Every line respects the cell budget...
+        foreach ($lines as $line) {
+            $this->assertLessThanOrEqual(5, Width::string($line));
+        }
+        // ...and not one character of the word was discarded across cuts.
+        $this->assertSame(
+            'TheQuickBrownFoxJumps',
+            implode('', $lines)
+        );
+    }
+
+    public function testMidWordSgrSurvivesTheCutWithoutDanglingEscapes(): void
+    {
+        $styled = "\x1b[31mAAAAAA\x1b[0m";
+        $lines = WrapCells::wrap($styled, 4, breakWords: true);
+        $this->assertGreaterThan(1, count($lines));
+        foreach ($lines as $line) {
+            // Dangling-escape probe: every ESC opens a complete CSI.
+            $this->assertSame(
+                substr_count($line, "\x1b"),
+                preg_match_all('/\x1b\[[0-9;]*m/', $line)
+            );
+        }
+        // Visible A's are exactly preserved (styling may be re-armed/harvested).
+        $this->assertSame('AAAAAA', implode('', array_map(
+            static fn (string $l): string => preg_replace('/\x1b\[[0-9;]*m/', '', $l) ?? '',
+            $lines
+        )));
+    }
+
+    public function testWideGlyphAloneOnNarrowLineOwnsTheLine(): void
+    {
+        // A 2-cell glyph at width 1 cannot share or split: it takes the line
+        // whole (honest overflow) instead of being dropped or cut.
+        $lines = WrapCells::wrap('あいう', 1, breakWords: true);
+        $this->assertSame(['あ', 'い', 'う'], $lines);
+    }
+
+    public function testWrapAndPadPadsByDisplayCellsNotCodepoints(): void
+    {
+        $lines = WrapCells::wrapAndPad("\x1b[31mhi\x1b[0m", 6);
+        $this->assertCount(1, $lines);
+        $this->assertSame(6, Width::string($lines[0]));
+        // The SGR payload survives the pad leg too.
+        $this->assertStringContainsString("\x1b[31m", $lines[0]);
     }
 }

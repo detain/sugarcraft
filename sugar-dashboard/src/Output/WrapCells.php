@@ -4,19 +4,27 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dashboard\Output;
 
-use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Width;
 
 /**
  * Helper for wrapping text into cells/columns.
  *
  * Provides word-wrapping functionality that respects ANSI escape codes
- * and maintains proper cell alignment.
+ * and maintains proper cell alignment. Slices happen at DISPLAY-CELL
+ * boundaries over the original string via Width's canonical takeAnsi/
+ * dropAnsi pair — nothing is stripped, no escape is cut mid-sequence,
+ * and no word remainder is ever discarded (finding sugar-dashboard-037).
  */
 final class WrapCells
 {
     /**
      * Wrap text to fit within a given width.
+     *
+     * A whitespace run that no longer fits at the current position is
+     * dropped: that is the wrap point itself. When $breakWords is false,
+     * a word that does not fit the current line moves whole to the next
+     * line — even if it is wider than the line itself (it then owns that
+     * line untouched, an honest overflow rather than a silent break).
      *
      * @param string $text The text to wrap
      * @param int $width Maximum width per line
@@ -38,99 +46,92 @@ final class WrapCells
                 continue;
             }
 
-            $words = preg_split('/(\s+)/', $paragraph, -1, PREG_SPLIT_DELIM_CAPTURE);
+            $words = preg_split('/(\s+)/', $paragraph, -1, PREG_SPLIT_DELIM_CAPTURE) ?: [];
             $currentLine = '';
             $currentWidth = 0;
 
             foreach ($words as $word) {
-                $wordWidth = Width::string($word);
-                // Strip ANSI from the word for output (keep width calculation using original)
-                $wordClean = Ansi::strip($word);
+                if ($word === '') {
+                    continue;
+                }
 
-                // Handle whitespace
-                if ($word !== '' && preg_match('/^\s+$/', $word) !== 0) {
-                    $spaceWidth = $wordWidth;
-                    if ($currentWidth + $spaceWidth <= $width) {
-                        $currentLine .= $wordClean;
-                        $currentWidth += $spaceWidth;
+                $wordWidth = Width::string($word);
+
+                // Handle whitespace: keep it inside a line when it fits; a
+                // run that overflows marks the break and is dropped.
+                if ($wordWidth === 0 || preg_match('/^\s+$/', $word) !== 0) {
+                    if ($wordWidth <= $width - $currentWidth) {
+                        $currentLine .= $word;
+                        $currentWidth += $wordWidth;
                     }
                     continue;
                 }
 
-                // Handle regular words
-                if ($wordWidth <= $width) {
-                    if ($currentWidth + $wordWidth <= $width) {
-                        $currentLine .= $wordClean;
-                        $currentWidth += $wordWidth;
-                    } else {
+                // Word fits on the current line — place it untouched.
+                if ($wordWidth <= $width - $currentWidth) {
+                    $currentLine .= $word;
+                    $currentWidth += $wordWidth;
+                    continue;
+                }
+
+                // The word needs the next line. Without breakWords it moves
+                // whole (over-wide words own their line as-is).
+                if (!$breakWords) {
+                    if ($currentLine !== '') {
+                        $lines[] = $currentLine;
+                    }
+                    $currentLine = $word;
+                    $currentWidth = $wordWidth;
+                    continue;
+                }
+
+                // breakWords: slice the ORIGINAL at cell boundaries so SGR
+                // sequences survive the cut and every remainder is carried.
+                $remaining = $word;
+                while ($remaining !== '') {
+                    if (Width::string($remaining) === 0) {
+                        // Only escape bytes remain (e.g. a harvested reset):
+                        // they carry no cells, so let them ride the current
+                        // line instead of spinning on a zero-width piece.
+                        $currentLine .= $remaining;
+                        $remaining = '';
+                        continue;
+                    }
+
+                    $budget = $width - $currentWidth;
+                    if ($budget <= 0) {
+                        $lines[] = $currentLine;
+                        $currentLine = '';
+                        $currentWidth = 0;
+                        continue;
+                    }
+
+                    $piece = self::fitAnsi($remaining, $budget);
+
+                    if ($piece === null) {
+                        // The leading cluster alone exceeds the remaining
+                        // budget: flush and let it start a fresh line.
                         if ($currentLine !== '') {
                             $lines[] = $currentLine;
+                            $currentLine = '';
+                            $currentWidth = 0;
+                            continue;
                         }
-                        $currentLine = $wordClean;
-                        $currentWidth = $wordWidth;
+                        // Even a whole line cannot hold one cluster (e.g. a
+                        // 2-cell glyph at width 1): it owns the line anyway
+                        // — an honest overflow beats losing the glyph.
+                        $piece = self::firstCluster($remaining);
                     }
-                } else {
-                    // Long word that needs to be broken
-                    if ($breakWords) {
-                        $remaining = $word;
-                        while ($remaining !== '') {
-                            $chunkWidth = min($wordWidth, $width - $currentWidth);
-                            if ($chunkWidth <= 0) {
-                                if ($currentLine !== '') {
-                                    $lines[] = $currentLine;
-                                }
-                                $currentLine = '';
-                                $currentWidth = 0;
-                                $chunkWidth = min($wordWidth, $width);
-                            }
 
-                            // Strip ANSI so that charsForWidth (which uses Width::string
-                            // internally) finds the right character boundary in terms of
-                            // display width. The stripped text is only used to determine
-                            // how many characters fit; we then extract those characters
-                            // from the original $remaining to preserve any surrounding ANSI.
-                            $remainingClean = Ansi::strip($remaining);
-                            $charsForThisChunk = self::charsForWidth($remainingClean, $chunkWidth);
+                    $pieceWidth = Width::string($piece);
+                    $currentLine .= $piece;
+                    $currentWidth += $pieceWidth;
+                    $remaining = Width::dropAnsi($remaining, $pieceWidth);
 
-                            // When charsForWidth returns 0, a single char is too wide for
-                            // chunkWidth (e.g. CJK 2-cells in 1-cell slot). Extract 1 char
-                            // anyway to prevent infinite loop, and flush current line.
-                            if ($charsForThisChunk === 0) {
-                                $charsForThisChunk = 1;
-                            }
-
-                            $chunk = mb_substr($remaining, 0, $charsForThisChunk, 'UTF-8');
-                            $chunkClean = Ansi::strip($chunk);
-                            $chunkWidth = Width::string($chunk);
-
-                            // When charsForThisChunk was forced to 1 (single char too wide for
-                            // remaining slot), the char doesn't fit on the current line.
-                            // Flush current line first, then start a new line with the char.
-                            if ($charsForThisChunk === 1 && $chunkWidth > $width - $currentWidth) {
-                                if ($currentLine !== '') {
-                                    $lines[] = $currentLine;
-                                }
-                                $currentLine = $chunkClean;
-                                $currentWidth = $chunkWidth;
-                            } else {
-                                $currentLine .= $chunkClean;
-                                $currentWidth += $chunkWidth;
-                            }
-                            $remaining = mb_substr($remaining, mb_strlen($chunk, 'UTF-8'), null, 'UTF-8');
-
-                            if ($currentWidth >= $width && $currentLine !== '') {
-                                $lines[] = $currentLine;
-                                $currentLine = '';
-                                $currentWidth = 0;
-                            }
-                        }
-                    } else {
-                        // Long word that overflows: push the accumulated line
-                        // (even if empty, to count the "new line" slot), then
-                        // place the word on its own line.
+                    if ($remaining !== '' && $currentWidth >= $width) {
                         $lines[] = $currentLine;
-                        $currentLine = $wordClean;
-                        $currentWidth = $wordWidth;
+                        $currentLine = '';
+                        $currentWidth = 0;
                     }
                 }
             }
@@ -144,29 +145,39 @@ final class WrapCells
     }
 
     /**
-     * Calculate how many characters fit within a given width.
+     * The longest cell-accurate ANSI-preserving prefix of $text that fits
+     * within $budget display cells, or null when not even the leading
+     * cluster fits. Width::takeAnsi includes a straddling wide cluster
+     * whole, so the first probe can overshoot; walking the budget down a
+     * cell at a time is bounded by that overshoot (a cluster is never
+     * more than a couple of cells wide).
      */
-    private static function charsForWidth(string $text, int $maxWidth): int
+    private static function fitAnsi(string $text, int $budget): ?string
     {
-        $lo = 0;
-        $hi = mb_strlen($text, 'UTF-8');
-
-        while ($lo < $hi) {
-            $mid = (int) (($lo + $hi + 1) / 2);
-            $candidate = mb_substr($text, 0, $mid, 'UTF-8');
-
-            if (Width::string($candidate) <= $maxWidth) {
-                $lo = $mid;
-            } else {
-                $hi = $mid - 1;
+        for ($cells = $budget; $cells >= 1; $cells--) {
+            $piece = Width::takeAnsi($text, $cells);
+            if ($piece === '') {
+                return null;
+            }
+            if (Width::string($piece) <= $cells) {
+                return $piece;
             }
         }
 
-        return $lo;
+        return null;
+    }
+
+    /** The leading cluster (grapheme) of $text. */
+    private static function firstCluster(string $text): string
+    {
+        return Width::nextCluster($text, 0);
     }
 
     /**
      * Wrap and pad lines to a consistent width.
+     *
+     * Padding is measured in DISPLAY CELLS, not codepoints, so styled or
+     * wide-character lines still land on the grid.
      *
      * @param string $text The text to wrap
      * @param int $width Maximum width per line
@@ -177,7 +188,7 @@ final class WrapCells
     {
         $lines = self::wrap($text, $width);
         return array_map(
-            fn($line) => str_pad($line, $width, $pad),
+            static fn (string $line): string => Width::padRight($line, $width, $pad),
             $lines
         );
     }
