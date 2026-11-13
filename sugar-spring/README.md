@@ -573,12 +573,18 @@ back-flavoured control points — same honesty rule as `Easing`.
 - **`Spring`** — `__construct($deltaTime, $angularFrequency, $dampingRatio,
   ?bool $reducedMotionOverride = null)` (the classic `$dt`/`ω`/`ζ` triple;
   refuses non-finite inputs, `dt <= 0`, `ω < 1e-9`, `ζ <= 0` and coefficient
-  overflow) / `update($pos, $vel, $target)` / `fps(float $n)` (refuses rates
+  overflow) / `update($pos, $vel, $target)` (returns ONE shape carrying both
+  views — named `position`/`velocity` plus positional `0`/`1`, so existing
+  `[$pos, $vel] =` destructures stay valid verbatim while transposed reads
+  are statically flaggable) / bare tuning accessors `deltaTime()` /
+  `angularFrequency()` / `dampingRatio()` / `reducedMotionOverride()` (the
+  constructor inputs remembered on the object) / `fps(float $n)` (refuses rates
   whose reciprocal is not finite) /
   `fromPreset(SpringPreset, ?float $deltaTime = null, ?bool $reducedMotionOverride = null)` /
   static `settled($pos, $vel, $target, $threshold = SETTLING_THRESHOLD)`.
   `const SETTLING_THRESHOLD = 1e-4`. `update()` rejects non-finite state and
-  short-circuits to `[$target, 0.0]` when the env-driven reduced-motion
+  short-circuits to `position = $target, velocity = 0.0` when the env-driven
+  reduced-motion
   lookup — or the per-instance override — resolves to `true`.
 - **`SpringChain`** — `__construct($stages, int $activeIndex = 0)` /
   `new($stages)` / `withStage(Spring, $pos, $vel, $target)` (build-time only;

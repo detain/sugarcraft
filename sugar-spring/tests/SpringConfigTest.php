@@ -149,14 +149,16 @@ final class SpringConfigTest extends TestCase
     {
         $config = new SpringConfig(tension: 100.0, friction: 10.0, mass: 1.0);
 
+        $snapPair = $config->spring(1.0 / 60.0, true)->update(0.0, 0.0, 100.0);
         $this->assertSame(
             [100.0, 0.0],
-            $config->spring(1.0 / 60.0, true)->update(0.0, 0.0, 100.0),
+            [$snapPair[0], $snapPair[1]],
             'spring(dt, override: true) must snap despite any host env'
         );
+        $animatedPair = $config->springAt60Fps(false)->update(0.0, 0.0, 100.0);
         $this->assertNotSame(
             [100.0, 0.0],
-            $config->springAt60Fps(false)->update(0.0, 0.0, 100.0),
+            [$animatedPair['position'], $animatedPair['velocity']],
             'springAt60Fps(override: false) must animate despite any host env'
         );
     }

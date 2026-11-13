@@ -29,6 +29,15 @@ final class Spring
     private readonly ?bool $reducedMotionOverride;
 
     /**
+     * The tuning triple, remembered verbatim for the bare accessors below —
+     * a live Spring was otherwise write-only (finding 017): persist/restore
+     * and debug had to keep their own copy of what the constructor was fed.
+     */
+    private readonly float $deltaTime;
+    private readonly float $angularFrequency;
+    private readonly float $dampingRatio;
+
+    /**
      * Process-wide memo of the host reduced-motion signal. Probe::reducedMotion()
      * rebuilt two full env snapshots (`array_merge($_ENV, getenv())`) on EVERY
      * call, so a frame loop of live springs paid an env scan per spring per
@@ -79,6 +88,11 @@ final class Spring
         if ($dampingRatio <= 0.0) {
             throw new \InvalidArgumentException(Lang::t('spring.damping_positive', ['dampingRatio' => $dampingRatio]));
         }
+
+        // Inputs are parsed-and-trusted from here down; remember them raw.
+        $this->deltaTime = $deltaTime;
+        $this->angularFrequency = $angularFrequency;
+        $this->dampingRatio = $dampingRatio;
 
         if ($dampingRatio > 1.0 + self::EPSILON) {
             $za = -$angularFrequency * $dampingRatio;
@@ -163,7 +177,11 @@ final class Spring
      *         target would otherwise ride the snap branch verbatim and pin
      *         settled() to false forever (a non-terminating animation loop).
      *
-     * @return array{0:float,1:float}
+     * @return array{0: float, 1: float, position: float, velocity: float}
+     *         Positional 0/1 stays the destructuring contract (existing
+     *         `[$pos, $vel] =` callers and list() keep working verbatim);
+     *         the named keys exist so a transposed read is a documented
+     *         static-analysis hit instead of a silent swap.
      */
     public function update(float $pos, float $vel, float $target): array
     {
@@ -180,13 +198,54 @@ final class Spring
         }
 
         if (($this->reducedMotionOverride ?? self::probeReducedMotion()) === true) {
-            return [$target, 0.0];
+            return self::statePair($target, 0.0);
         }
 
         $oldPos = $pos - $target;
         $newPos = $oldPos * $this->posPosCoef + $vel * $this->posVelCoef + $target;
         $newVel = $oldPos * $this->velPosCoef + $vel * $this->velVelCoef;
-        return [$newPos, $newVel];
+        return self::statePair($newPos, $newVel);
+    }
+
+    /**
+     * The one construction site of update()'s return shape (finding 018):
+     * position first under BOTH views, velocity second — so the list and
+     * keyed readings can never disagree.
+     *
+     * @return array{0: float, 1: float, position: float, velocity: float}
+     */
+    private static function statePair(float $position, float $velocity): array
+    {
+        return [
+            'position' => $position,
+            'velocity' => $velocity,
+            0 => $position,
+            1 => $velocity,
+        ];
+    }
+
+    /** Tuning triple: seconds elapsed per integration step. */
+    public function deltaTime(): float
+    {
+        return $this->deltaTime;
+    }
+
+    /** Tuning triple: rad/sec (NOT Hz) — see the constructor note. */
+    public function angularFrequency(): float
+    {
+        return $this->angularFrequency;
+    }
+
+    /** Tuning triple: <1 oscillating, =1 critical, >1 over-damped. */
+    public function dampingRatio(): float
+    {
+        return $this->dampingRatio;
+    }
+
+    /** The pinned reduced-motion override, or null when it defers to the environment. */
+    public function reducedMotionOverride(): ?bool
+    {
+        return $this->reducedMotionOverride;
     }
 
     /**

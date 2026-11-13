@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Spring\Tests;
 
 use SugarCraft\Spring\Spring;
+use SugarCraft\Spring\SpringPreset;
 use PHPUnit\Framework\TestCase;
 
 final class SpringTest extends TestCase
@@ -273,6 +274,53 @@ final class SpringTest extends TestCase
         new Spring(1.0 / 60.0, 1e155, 1e155);
     }
 
+    /**
+     * SPR-11 (finding 017): the tuning triple is readable off the object —
+     * persist/restore/debug no longer needs a shadow copy of what the
+     * constructor was fed.
+     */
+    public function testTuningAccessorsReportTheConstructorTriple(): void
+    {
+        $spring = new Spring(1.0 / 75.0, 7.5, 0.8, true);
+        $this->assertSame(1.0 / 75.0, $spring->deltaTime());
+        $this->assertSame(7.5, $spring->angularFrequency());
+        $this->assertSame(0.8, $spring->dampingRatio());
+        $this->assertTrue($spring->reducedMotionOverride());
+
+        $defaulted = new Spring(1.0 / 60.0, 6.0, 1.0);
+        $this->assertNull($defaulted->reducedMotionOverride(), 'null override means defer-to-environment');
+
+        // The fromPreset path that previously discarded the config (finding
+        // 017's complaint) now leaves recoverable tuning on the object.
+        $preset = Spring::fromPreset(SpringPreset::Wobbly, 1.0 / 60.0);
+        $this->assertSame(1.0 / 60.0, $preset->deltaTime());
+        $this->assertTrue(is_finite($preset->angularFrequency()) && $preset->angularFrequency() > 0.0);
+        $this->assertTrue(is_finite($preset->dampingRatio()) && $preset->dampingRatio() > 0.0);
+    }
+
+    /**
+     * SPR-11 (finding 018 cheap leg): update() answers ONE documented shape
+     * carrying both views — positional 0/1 for every existing destructure
+     * (sugar-widgets AnimatedProgress included) and named position/velocity
+     * so a transposed read is a static-analysis hit. The value-level pins are
+     * swap-sensitive: position 10.0 and velocity 0.0 are distinguishable.
+     */
+    public function testUpdateReturnCarriesBothViewsOfTheSamePair(): void
+    {
+        $spring = new Spring(1.0 / 60.0, 6.0, 1.0, false);
+        $pair = $spring->update(10.0, 0.0, 10.0);
+
+        $this->assertSame(['position', 'velocity', 0, 1], array_keys($pair));
+        $this->assertSame(10.0, $pair['position']);
+        $this->assertSame(0.0, $pair['velocity']);
+        $this->assertSame($pair['position'], $pair[0]);
+        $this->assertSame($pair['velocity'], $pair[1]);
+
+        [$pos, $vel] = $pair;
+        $this->assertSame(10.0, $pos, 'positional destructure must still read position');
+        $this->assertSame(0.0, $vel);
+    }
+
     public function testFpsRejectsNonFiniteRates(): void
     {
         foreach ([INF, NAN] as $bad) {
@@ -327,13 +375,15 @@ final class SpringTest extends TestCase
             1.0 / 60.0,
             reducedMotionOverride: true,
         );
-        $this->assertSame([42.0, 0.0], $calm->update(0.0, 0.0, 42.0));
+        $calmPair = $calm->update(0.0, 0.0, 42.0);
+        $this->assertSame([42.0, 0.0], [$calmPair['position'], $calmPair['velocity']]);
 
         $moving = Spring::fromPreset(
             \SugarCraft\Spring\SpringPreset::Stiff,
             1.0 / 60.0,
             reducedMotionOverride: false,
         );
-        $this->assertNotSame([42.0, 0.0], $moving->update(0.0, 0.0, 42.0));
+        $movingPair = $moving->update(0.0, 0.0, 42.0);
+        $this->assertNotSame([42.0, 0.0], [$movingPair[0], $movingPair[1]]);
     }
 }
