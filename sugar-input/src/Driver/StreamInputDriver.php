@@ -134,14 +134,8 @@ final class StreamInputDriver implements InputDriver
      */
     public function read(): Event|null
     {
-        $buffered = count($this->eventBuffer);
-        if ($this->bufferOffset < $buffered) {
-            $event = $this->eventBuffer[$this->bufferOffset++];
-            if ($this->bufferOffset === $buffered) {
-                $this->eventBuffer = [];
-                $this->bufferOffset = 0;
-            }
-
+        $event = $this->consumeBuffered();
+        if ($event !== null) {
             return $event;
         }
 
@@ -156,7 +150,7 @@ final class StreamInputDriver implements InputDriver
                 $this->primeBuffer($this->decoder->decode(''));
             }
 
-            return $this->takeBuffered();
+            return $this->consumeBuffered();
         }
 
         $events = $this->decoder->decode($chunk);
@@ -169,7 +163,7 @@ final class StreamInputDriver implements InputDriver
         }
         $this->primeBuffer($events);
 
-        return $this->takeBuffered();
+        return $this->consumeBuffered();
     }
 
     /**
@@ -187,8 +181,12 @@ final class StreamInputDriver implements InputDriver
         $this->bufferOffset = 0;
     }
 
-    /** Pop the next buffered event, compacting the buffer when drained. */
-    private function takeBuffered(): Event|null
+    /**
+     * Pop the next buffered event, compacting the buffer when drained. The
+     * one consume-clear block: every caller (read's fast path included)
+     * advances the cursor through here, so the compaction law is stated once.
+     */
+    private function consumeBuffered(): Event|null
     {
         $buffered = count($this->eventBuffer);
         if ($this->bufferOffset >= $buffered) {
