@@ -11,7 +11,7 @@
         "candy-code": {
             "readme": {
                 "needles": [
-                    "Terminal AI coding agent (TUI) — eleven provider type keys over nine engines (OpenAI / Anthropic / Claude Code / Codex / SGLang / Bedrock / Vertex / Gemini / custom), thirty-eight built-in tools on every launch behind permission modes, sub-agents, teams and workflows, MCP client and server, hooks, skills and image/video generation — plus an offline echo backend for demos."
+                    "Terminal AI coding agent (TUI) — nine provider engines, thirty-eight built-in tools behind permission modes, sub-agents, teams, workflows, MCP, hooks and skills, plus an offline echo backend."
                 ],
                 "dead": []
             },
@@ -625,7 +625,7 @@
         "sugar-mouse": {
             "readme": {
                 "needles": [
-                    "Mouse hit-testing — mark rendered regions, scan the frame, hit-test the event; `ZoneClickTracker` for press/release dedupe, plus the absorbed bubblezone-style `Zones` facade and the `Zones\\Manager` layer (hover / drag / multi-click) under `SugarCraft\\Mouse\\Zones`. Shared default via `Zones::defaultManager()`; `newGlobal()` mints a fresh independent one. Pointer-driven; keyboard paths are consumer-owned — see sugar-mouse README Accessibility."
+                    "Mouse hit-testing — mark rendered regions, scan the frame, hit-test events; hover / drag / multi-click managers included."
                 ],
                 "dead": []
             },
@@ -689,7 +689,7 @@
         "sugar-pty": {
             "readme": {
                 "needles": [
-                    "Pseudo-terminal primitives — `PtySystemFactory` → `Contract\\PtySystem` master/slave: POSIX via FFI to libc (Linux/macOS, opt-in controlling terminal) plus a Windows ConPTY backend (`CreatePseudoConsole`; beware its empty-`$env` full-parent inversion). Legacy `Pty` facade @deprecated through v1.x."
+                    "Pseudo-terminal primitives — `PtySystemFactory` master/slave: POSIX FFI to libc (opt-in controlling terminal) plus a Windows ConPTY backend. Legacy `Pty` facade `@deprecated` through v1.x."
                 ],
                 "dead": []
             },
