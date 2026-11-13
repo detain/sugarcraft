@@ -254,8 +254,16 @@ function main(array $argv): int
     try {
         $mailer->send($email);
         echo Lang::t('cli.email_sent', ['transport' => $mailer->transportName()]) . "\n";
+    } catch (\RuntimeException $e) {
+        // Protocol/transport failures announce themselves — SmtpTransport
+        // wraps its whole conversation in smtp.send_failed and the Resend
+        // arms name the provider — so re-wrapping here printed the double
+        // 'Send failed: SMTP send failed: …' lie. They ride bare.
+        fwrite(STDERR, Sanitize::untrusted($e->getMessage()) . "\n");
+        return 1;
     } catch (\Throwable $e) {
-        // Send failures carry server/Resend-response bytes verbatim.
+        // Genuinely non-transport refusals (envelope shape, missing
+        // credential at the seam) carry a bare noun phrase — frame it once.
         fwrite(STDERR, Sanitize::untrusted(Lang::t('cli.send_failed', ['message' => $e->getMessage()])) . "\n");
         return 1;
     }
@@ -346,7 +354,11 @@ function parseArgs(array $argv): array
                     }
                 }
                 if ($best !== null) {
-                    $hint = ' ' . Lang::t('cli.did_you_mean', ['suggestion' => '--' . $best]);
+                    // The hint rides its OWN line: some locales' sentences run
+                    // long, and a space-joined pair wrapped into an
+                    // unreadable wall. Both keys stay, every locale keeps
+                    // ownership of its own sentence.
+                    $hint = "\n" . Lang::t('cli.did_you_mean', ['suggestion' => '--' . $best]);
                 }
                 throw new \InvalidArgumentException(Lang::t('cli.unknown_option', ['option' => $arg]) . $hint);
             }

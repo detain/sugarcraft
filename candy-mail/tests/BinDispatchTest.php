@@ -569,6 +569,38 @@ final class BinDispatchTest extends TestCase
         }
     }
 
+    public function testRelayFailureAnnouncesTheWrapExactlyOnce(): void
+    {
+        // CM-13 era finding 013: a refused dial printed
+        // 'Send failed: SMTP send failed: Cannot connect …' — the transport
+        // names its own failure and the bin wrapped it a second time. The
+        // bin now prints transport RuntimeExceptions bare.
+        $server = @\stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
+        $this->assertNotFalse($server, 'could not reserve a loopback port: ' . $errstr);
+        $port = (int) \substr(\strrchr(\stream_socket_get_name($server, false), ':'), 1);
+        @\fclose($server); // closed on purpose: the dial below is refused
+
+        $result = $this->runCli(
+            ['--to', 'b@example.com'],
+            'hello',
+            [
+                'CANDY_MAIL_FROM'             => 'a@example.com',
+                'CANDY_MAIL_SMTP_HOST'        => '127.0.0.1',
+                'CANDY_MAIL_SMTP_PORT'        => (string) $port,
+                'CANDY_MAIL_SMTP_REQUIRE_TLS' => '0',
+            ]
+        );
+
+        $this->assertSame(1, $result['status']);
+        $this->assertStringContainsString('SMTP send failed:', $result['err']);
+        $this->assertStringNotContainsString('Send failed: SMTP send failed:', $result['err'], 'the wrap must ride exactly once');
+        $this->assertSame(
+            1,
+            \substr_count($result['err'], 'ailed:'),
+            'one named failure per refused send, not a stacked pair'
+        );
+    }
+
     // ------------------------------------------------------------------
     // B4b (lib-reviews-1102 fix wave): M-B / M-C / M-G / M-P end to end.
     // ------------------------------------------------------------------

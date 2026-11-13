@@ -258,7 +258,9 @@ final class CliTest extends TestCase
             $this->fail('expected InvalidArgumentException');
         } catch (\InvalidArgumentException $e) {
             $this->assertStringContainsString('Unknown option: --subjct', $e->getMessage());
-            $this->assertStringContainsString('Did you mean --subject?', $e->getMessage());
+            // The hint rides its own line (CM-12): a space-joined pair
+            // wrapped unreadably in the longer locales.
+            $this->assertStringContainsString("\nDid you mean --subject?", $e->getMessage());
         }
     }
 
@@ -269,6 +271,7 @@ final class CliTest extends TestCase
             $this->fail('expected InvalidArgumentException');
         } catch (\InvalidArgumentException $e) {
             $this->assertStringNotContainsString('Did you mean', $e->getMessage());
+            $this->assertStringNotContainsString("\n", $e->getMessage(), 'the no-hint refusal stays a single line');
         }
     }
 
