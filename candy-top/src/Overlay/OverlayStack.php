@@ -58,6 +58,31 @@ final class OverlayStack
     }
 
     /**
+     * Re-run btop's push size rule against an ALREADY-OPEN stack (the
+     * terminal changed size under it, #104): when the top no longer fits
+     * the overlay's {@see Overlay::minSize()}, the whole stack gives way to
+     * the size-error box exactly like a breached {@see push()} —
+     * `menuMask.reset(); menuMask.set(SizeError)`. The dropped menus are
+     * NOT saved, so a later refit can never revive a menu mid-interaction
+     * (finding 126: a retained menu kept capturing keys behind the notice).
+     * The size-error box itself is always-shown, so revalidating it is a
+     * no-op, as is revalidating a fitting or empty stack.
+     */
+    public function revalidate(int $cols, int $rows): self
+    {
+        $top = $this->top();
+        if ($top === null) {
+            return $this;
+        }
+        [$w, $h] = $top->minSize();
+        if ($cols >= $w && $rows >= $h) {
+            return $this;
+        }
+
+        return new self([Menus::sizeError()]);
+    }
+
+    /**
      * Swap the top for `$overlay`; null pops it (btop `Closed`). A pop
      * re-runs btop's size rule for the menu it uncovers (Menu::process picks
      * the next set bit as a NEW current menu and checks the terminal again),

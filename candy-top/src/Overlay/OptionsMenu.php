@@ -78,10 +78,16 @@ final class OptionsMenu implements Overlay
         return min(self::WIDTH, $cols - 2);
     }
 
-    /** The option column (cells) inside a box of `$width` — the rest is the divider, gutter and description. */
+    /**
+     * The option column (cells) inside a box of `$width` — the rest is the
+     * divider, gutter and description. Floored at 1: below the menu's
+     * minSize the stack's size rule (#104) has already swapped in the
+     * size-error box, so this is the geometry-level fail-safe that keeps
+     * the divider junction from ever `str_repeat()`-ing a negative run.
+     */
     private static function fieldWidth(int $width): int
     {
-        return $width - self::DESCRIPTION_COL - 4;
+        return max(1, $width - self::DESCRIPTION_COL - 4);
     }
 
     private function __construct(
@@ -515,7 +521,7 @@ final class OptionsMenu implements Overlay
             $surface,
             $y + 8 + $g['delta'],
             $x,
-            $hi . '├' . $ink->fg('div_line') . str_repeat('─', $g['field']) . '┬' . str_repeat('─', $g['w'] - $g['field'] - 3) . $hi . '┤',
+            $hi . '├' . $ink->fg('div_line') . str_repeat('─', $g['field']) . '┬' . str_repeat('─', max(0, $g['w'] - $g['field'] - 3)) . $hi . '┤',
             '',
             $frame,
         );

@@ -201,7 +201,7 @@ final class AppOverlayTest extends TestCase
         $this->assertCount(40, $dimmed->lines());
     }
 
-    public function testResizeWhileOpenRecentresAndTheSizeNoticeHidesIt(): void
+    public function testResizeWhileOpenRecentresAndABreachDropsTheMenu(): void
     {
         $app = self::key(self::app(), 'f1');
         [$app] = $app->update(new WindowSizeMsg(100, 30));
@@ -212,13 +212,48 @@ final class AppOverlayTest extends TestCase
         [$x, $y] = HelpMenu::geometry(100, 30);
         $this->assertSame('╭', $s->glyph($x - 1, $y + 5), 'the help box re-centred');
 
+        // #104: the push size rule runs against the OPEN stack too — the
+        // menu the shrink no longer fits yields to the size-error box
+        // instead of painting (and answering keys) behind the notice.
         [$tiny] = $app->update(new WindowSizeMsg(40, 10));
-        $this->assertInstanceOf(HelpMenu::class, $tiny->overlay(), 'kept behind the size notice');
+        $this->assertInstanceOf(MsgBox::class, $tiny->overlay(), 'the open menu yields to the size-error box');
+        $this->assertSame('error', $tiny->overlay()?->title);
         $this->assertStringContainsString('Terminal size too small', implode("\n", $tiny->surface()?->plainLines() ?? []));
         [$tiny] = $tiny->update(self::keyMsg('x'));
-        $this->assertInstanceOf(HelpMenu::class, $tiny->overlay(), 'behind the notice only q and 1-4 act');
+        $this->assertSame('error', $tiny->overlay()?->title, 'behind the notice only q and 1-4 act');
         [$back] = $tiny->update(new WindowSizeMsg(120, 40));
-        $this->assertInstanceOf(HelpMenu::class, $back->overlay());
+        $this->assertInstanceOf(MsgBox::class, $back->overlay(), '#126: a dropped menu never revives mid-interaction on refit');
+        $this->assertNotInstanceOf(HelpMenu::class, $back->overlay());
+    }
+
+    public function testTheReviewersShrinkReproPaintsTheSizeErrorAndSurvives(): void
+    {
+        // reviews/findings/candy-top.md 121-era: boot 100x30, `o`, shrink to
+        // 40x10, toggle a box — the OptionsMenu paint used to str_repeat() a
+        // negative option column (EXIT 255, raw PHP stack in the terminal).
+        $app = self::key(self::app(100, 30), 'o');
+        $this->assertInstanceOf(OptionsMenu::class, $app->overlay());
+        [$app] = $app->update(new WindowSizeMsg(40, 10));
+        $this->assertNotInstanceOf(OptionsMenu::class, $app->overlay());
+        [$app] = $app->update(self::keyMsg('1'));
+        $surface = $app->surface();
+        $this->assertNotNull($surface, 'the surface paints (no ValueError out of the menu tier)');
+        $this->assertCount(10, $surface->lines());
+    }
+
+    public function testBlindKeysBehindTheSizeNoticeCannotMutateTheHiddenMenu(): void
+    {
+        // #126 measured live: blind Down x4 + Right through the size notice
+        // applied a real vim_keys change. With the breach swapping the stack
+        // to the error box, the same keystrokes must land nowhere.
+        $app = self::key(self::app(120, 40, self::config(['vim_keys' => false])), 'o');
+        [$app] = $app->update(new WindowSizeMsg(62, 20));
+        $this->assertInstanceOf(MsgBox::class, $app->overlay(), 'the 80x24 menu gives way at 62x20');
+        foreach (['down', 'down', 'down', 'down'] as $k) {
+            [$app] = $app->update(self::keyMsg($k));
+        }
+        [$app] = $app->update(self::keyMsg('right'));
+        $this->assertFalse($app->config->bool('vim_keys'), 'the keys hit the error box, not the options');
     }
 
     public function testRefusedToggleOpensTheSizeErrorBox(): void

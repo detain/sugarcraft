@@ -385,6 +385,11 @@ final class App implements Model
     {
         if ($msg instanceof WindowSizeMsg) {
             $next = $this->mutate(cols: max(0, $msg->cols), rows: max(0, $msg->rows))->relayout();
+            // #104: btop's push size rule runs against the OPEN stack too —
+            // a menu the new size is too small for yields to the size-error
+            // box (dropped, never revived on refit) instead of painting a
+            // broken layout that keeps capturing blind keys.
+            $next = $next->mutate(overlays: $next->overlays->revalidate($next->cols, $next->rows));
             [$next, $cmd] = $next->broadcast($msg);
 
             // btop repaints everything once on a resize, menu or not.

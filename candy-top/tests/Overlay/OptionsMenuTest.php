@@ -336,6 +336,21 @@ final class OptionsMenuTest extends OverlayTestCase
         );
     }
 
+    public function testGeometryFloorsTheOptionFieldSoTheDividerCannotRepeatNegatively(): void
+    {
+        // #104 fail-safe: box width - 45 - 4 goes negative below 51 cols;
+        // the divider junction must str_repeat() a floored field (the stack
+        // size rule swaps the menu out first — this is the geometry guard).
+        $c = self::context([], 40, 10);
+        $g = OptionsMenu::new()->geometry($c);
+        $this->assertSame(38, $g['w']);
+        $this->assertSame(1, $g['field'], 'w - DESCRIPTION_COL - 4 floored at 1');
+
+        $surface = Surface::new(40, 10);
+        OptionsMenu::new()->paint($surface, $c);
+        $this->assertCount(10, $surface->lines(), 'the pathological paint survives');
+    }
+
     /**
      * The active category tab is a selected_bg/selected_fg block over its
      * `[label]`; inactive tabs stay fg-only. Same paint path and derived

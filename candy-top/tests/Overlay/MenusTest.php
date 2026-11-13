@@ -98,4 +98,20 @@ final class MenusTest extends OverlayTestCase
         $this->assertSame(2, OverlayStack::new()->push(Menus::sizeError(), 120, 40)->push(Menus::signalReturn(1), 50, 20)->count(), 'a msgBox needs only 50x20');
         $this->assertSame(1, OverlayStack::new()->push(Menus::sizeError(), 10, 5)->count(), 'the size error itself always shows');
     }
+
+    public function testRevalidateRunsThePushSizeRuleAgainstAnOpenStack(): void
+    {
+        // #104: a resize under an open menu re-runs the push rule — the
+        // whole stack yields to the size-error box, dropped for good.
+        $stack = OverlayStack::new()->push(Menus::main(), 120, 40)->push(Menus::options(), 120, 40);
+        $this->assertSame($stack, $stack->revalidate(120, 40), 'a stack that still fits is untouched');
+        $this->assertNull(OverlayStack::new()->revalidate(10, 5)->top(), 'an empty stack has nothing to check');
+
+        $breach = $stack->revalidate(40, 10);
+        $this->assertSame(1, $breach->count(), 'btop menuMask.reset(): every pending menu goes');
+        $this->assertInstanceOf(MsgBox::class, $breach->top());
+        $this->assertSame('error', $breach->top()?->title);
+        $this->assertSame(1, $breach->revalidate(120, 40)->count(), 'a refit revives nothing — no menu kept behind the box');
+        $this->assertSame($breach, $breach->revalidate(10, 5), 'the size error itself always shows');
+    }
 }
