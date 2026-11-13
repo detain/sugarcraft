@@ -386,6 +386,56 @@ env value. Negatable options (`--no-<name>`, `InputOption::VALUE_NEGATABLE`) are
 sourced from the environment — the fallback skips them (the shipped
 command surface currently defines none).
 
+#### Scope warning
+
+`CANDY_SCRIPTUI_<NAME>` is **not command-scoped**: one exported
+`CANDY_SCRIPTUI_TIMEOUT=5` arms the deadline on every command that defines
+`--timeout` (thirteen of them), and `CANDY_SCRIPTUI_FOREGROUND` themes every
+command that defines `--foreground`. Prefer setting it inline for a single
+invocation, or use the command-scoped gum spellings below.
+
+### `GUM_*` mirror (gum scripts keep their theming)
+
+Scripts migrated from `gum` by renaming the binary export
+`GUM_<COMMAND>_<OPTION>` variables (`GUM_CHOOSE_CURSOR_PREFIX`,
+`GUM_FILTER_HEIGHT`, `GUM_STYLE_FOREGROUND`, ...). The launcher reads those
+as a **read-only, lowest-precedence fallback** for the same allow-listed
+presentation options, and only for the command named in the variable:
+
+1. an explicit `--option` on the command line wins;
+2. then `CANDY_SCRIPTUI_<OPTION>`;
+3. then `GUM_<COMMAND>_<OPTION>` (this mirror).
+
+The mirror is the native allow-list plus `cursor` (gum's own spelling), no
+more: a gum variable for anything that answers for the user, grants
+capability or redirects data (`GUM_INPUT_PLACEHOLDER`, `GUM_CONFIRM_DEFAULT`,
+`GUM_FORMAT_ALLOW_ENV`, ...) is ignored, the same fail-closed rule as above.
+Flag options (`bold`, ...) arm on `1` / `true` / `yes`. Which commands each
+option reaches:
+
+| option | variable | commands |
+| --- | --- | --- |
+| `align` | `GUM_<COMMAND>_ALIGN` | `choose`, `confirm`, `file`, `filter`, `input`, `join`, `pager`, `spin`, `style`, `write` |
+| `background` | `GUM_<COMMAND>_BACKGROUND` | `choose`, `confirm`, `file`, `filter`, `format`, `input`, `pager`, `style`, `write` |
+| `bold` | `GUM_<COMMAND>_BOLD` | `choose`, `confirm`, `file`, `filter`, `input`, `pager`, `style`, `write` |
+| `border` | `GUM_<COMMAND>_BORDER` | `choose`, `confirm`, `file`, `filter`, `input`, `pager`, `style`, `table`, `write` |
+| `border-foreground` | `GUM_<COMMAND>_BORDER_FOREGROUND` | `choose`, `confirm`, `file`, `filter`, `input`, `pager`, `style`, `write` |
+| `cursor` | `GUM_<COMMAND>_CURSOR` | `choose`, `filter` |
+| `cursor-prefix` | `GUM_<COMMAND>_CURSOR_PREFIX` | `choose` |
+| `faint` | `GUM_<COMMAND>_FAINT` | `choose`, `confirm`, `file`, `filter`, `input`, `pager`, `style`, `write` |
+| `foreground` | `GUM_<COMMAND>_FOREGROUND` | `choose`, `confirm`, `file`, `filter`, `format`, `input`, `pager`, `style`, `write` |
+| `height` | `GUM_<COMMAND>_HEIGHT` | `choose`, `file`, `filter`, `pager`, `style`, `table`, `write` |
+| `italic` | `GUM_<COMMAND>_ITALIC` | `choose`, `confirm`, `file`, `filter`, `input`, `pager`, `style`, `write` |
+| `prefix` | `GUM_<COMMAND>_PREFIX` | `log` |
+| `reverse` | `GUM_<COMMAND>_REVERSE` | `filter` |
+| `separator` | `GUM_<COMMAND>_SEPARATOR` | `join`, `table` |
+| `strikethrough` | `GUM_<COMMAND>_STRIKETHROUGH` | `choose`, `confirm`, `file`, `filter`, `input`, `pager`, `style`, `write` |
+| `timeout` | `GUM_<COMMAND>_TIMEOUT` | `choose`, `confirm`, `file`, `filter`, `format`, `input`, `join`, `log`, `pager`, `spin`, `style`, `table`, `write` |
+| `underline` | `GUM_<COMMAND>_UNDERLINE` | `choose`, `confirm`, `file`, `filter`, `input`, `pager`, `style`, `write` |
+| `unselected-prefix` | `GUM_<COMMAND>_UNSELECTED_PREFIX` | `choose`, `filter` |
+| `width` | `GUM_<COMMAND>_WIDTH` | `choose`, `filter`, `input`, `pager`, `style`, `write` |
+
+
 ### Shell completion
 
 ```sh

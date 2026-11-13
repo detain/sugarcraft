@@ -85,6 +85,44 @@ final class Application extends SymfonyApplication
     ];
 
     /**
+     * scriptui-68: options that may ALSO be sourced from gum's own
+     * command-scoped variables, `GUM_<COMMAND>_<OPTION>` (e.g.
+     * `GUM_CHOOSE_CURSOR_PREFIX`, `GUM_FILTER_HEIGHT`, `GUM_STYLE_FOREGROUND`),
+     * so a gum script migrated by renaming the binary keeps its theming.
+     *
+     * Same fail-closed doctrine as {@see ENV_FALLBACK_OPTIONS}: presentation
+     * knobs only — this roster is that one plus `cursor` (gum's own cursor
+     * flag name), and a gum variable for an option outside it (a placeholder,
+     * a default answer, a file path) is ignored. The mirror is READ-ONLY and
+     * LOWEST precedence: explicit flag > `CANDY_SCRIPTUI_<OPTION>` >
+     * `GUM_<COMMAND>_<OPTION>`. Being command-scoped it cannot collide across
+     * commands the way the unscoped CANDY_SCRIPTUI_ names do.
+     *
+     * @var list<string>
+     */
+    public const GUM_ENV_MIRROR_OPTIONS = [
+        'align',
+        'background',
+        'bold',
+        'border',
+        'border-foreground',
+        'cursor',
+        'cursor-prefix',
+        'faint',
+        'foreground',
+        'height',
+        'italic',
+        'prefix',
+        'reverse',
+        'separator',
+        'strikethrough',
+        'timeout',
+        'underline',
+        'unselected-prefix',
+        'width',
+    ];
+
+    /**
      * Sentinel stamp written by tools/build-phar.php when `git describe` found
      * no reachable scriptui tag. versionString() refuses it as a version —
      * working-tree noise must not masquerade as a release identity.
@@ -397,17 +435,21 @@ final class Application extends SymfonyApplication
             if ($input->hasParameterOption('--' . $option->getName(), true)) {
                 continue;
             }
-            $envVar = $this->optionToEnvVar($option);
-            $envValue = getenv($envVar);
+            $envValue = \in_array($option->getName(), self::ENV_FALLBACK_OPTIONS, true)
+                ? getenv($this->optionToEnvVar($option))
+                : false;
+            if ($envValue === false && \in_array($option->getName(), self::GUM_ENV_MIRROR_OPTIONS, true)) {
+                // scriptui-68: read-only gum mirror, consulted only when the
+                // native variable is unset.
+                $envValue = getenv(self::gumEnvVar((string) $command->getName(), $option));
+            }
+            // Fail-closed: only presentation knobs may come from the
+            // environment (see ENV_FALLBACK_OPTIONS for why) — an option
+            // outside both rosters never reads a variable at all.
             if ($envValue === false) {
                 continue;
             }
             if ($option->isNegatable()) {
-                continue;
-            }
-            // Fail-closed: only presentation knobs may come from the
-            // environment (see ENV_FALLBACK_OPTIONS for why).
-            if (!\in_array($option->getName(), self::ENV_FALLBACK_OPTIONS, true)) {
                 continue;
             }
             if (!$option->acceptValue()) {
@@ -457,6 +499,14 @@ final class Application extends SymfonyApplication
         foreach ($valueOptions as $name => $value) {
             $input->setOption($name, $value);
         }
+    }
+
+    /** gum's variable shape: GUM_<COMMAND>_<OPTION>, upper-cased, `-` as `_`. */
+    public static function gumEnvVar(string $commandName, InputOption $option): string
+    {
+        $part = static fn (string $v): string => strtoupper((string) preg_replace('/[^A-Za-z0-9]/', '_', $v));
+
+        return 'GUM_' . $part($commandName) . '_' . $part($option->getName());
     }
 
     private function optionToEnvVar(InputOption $option): string
