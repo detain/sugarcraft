@@ -295,6 +295,16 @@ final class Graph
     }
 
     /**
+     * Internal sampling ceiling (sugar-charts-114): one sample per ~4096
+     * perimeter pixels is already coarser than a terminal can resolve, so
+     * caller-supplied sample counts and radius-driven 4×r enumerations
+     * stop at this bound BEFORE any allocation. The public API keeps its
+     * accepted-input contract (values below the ceiling are untouched);
+     * the ceiling simply bounds the worst case.
+     */
+    private const MAX_SAMPLES = 4096;
+
+    /**
      * Sample N points along the unit circle and place them on the
      * canvas. Mirrors ntcharts' `getCirclePoints` helper.
      *
@@ -302,7 +312,7 @@ final class Graph
      */
     public static function getCirclePoints(int $cx, int $cy, int $radius, int $samples = 32): array
     {
-        $samples = max(8, $samples);
+        $samples = min(self::MAX_SAMPLES, max(8, $samples));
         $pts = [];
         for ($i = 0; $i < $samples; $i++) {
             $theta = 2.0 * M_PI * $i / $samples;
@@ -345,7 +355,9 @@ final class Graph
      */
     public static function getFullCirclePoints(int $cx, int $cy, int $radius): array
     {
-        $samples = max(16, 4 * max(1, $radius));
+        // 4×r enumeration is caller-controlled through $radius — clamp
+        // it to the same pre-allocation ceiling (sugar-charts-114).
+        $samples = min(self::MAX_SAMPLES, max(16, 4 * max(1, $radius)));
         $seen = [];
         $pts = [];
         foreach (self::getCirclePoints($cx, $cy, $radius, $samples) as [$x, $y]) {
