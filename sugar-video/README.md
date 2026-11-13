@@ -31,14 +31,14 @@ Reel::open('clip.mp4')->play();
 **Reel** is the everyday entry point: an immutable description of what to
 play — source, render mode, size, ramp, subtitles, audio — finished with
 `play()`, which builds its own sugar-core `Program`, owns the event loop,
-and blocks until you quit. **Player** is the TEA model underneath it
+and blocks until you quit. **Player** is the MVC-style Model–Update–View runtime underneath it
 (`init()`/`update()`/`view()`); a host that already owns a program loop
 mounts the model itself via `Reel::toPlayer()`, described under
 “Embedding the player without owning the loop”.
 
 > **Status:** complete — full implementation with ffmpeg decode pipe,
 > pure-PHP GIF fallback, all rendering modes (ascii/ansi256/truecolor/
-> half-block/quarter-block/sixel/kitty/iTerm2), delta repaint, seek, speed control,
+> halfblock/quarterblock/sixel/kitty/iterm2), delta repaint, seek, speed control,
 > and a runnable example.
 
 ## Install
@@ -114,6 +114,11 @@ These demos resolve the autoloader from a repo checkout (the library's own `vend
 | `kitty` | Kitty graphics protocol (APC `\x1b_G`) | Kitty-compatible — recognized via the `TERM=xterm-kitty` environment surrogate, no protocol handshake |
 | `iterm2` | iTerm2 inline image (OSC 1337) | iTerm2 only — WezTerm is recognized as a TrueColor seat and never an OSC 1337 one, so explicit `iterm2` there takes the typed refusal |
 | `auto` | Selector, not a ninth mode: resolves the terminal from its environment at open and picks the best mode it can render — a lookup table, no protocol negotiation. There is no `Mode::Auto` case — `Mode::from('auto')` throws a `ValueError`; `Mode::AUTO_WIRE` carries the token and `Mode::wires()` the full accepted list | — |
+
+Styling convention, stated once: a backticked lowercase token (`halfblock`)
+is a selectable MODE — the CLI and wire vocabulary; capitalized names (Sixel,
+Kitty, iTerm2) refer to the terminal PROTOCOL behind a rung; bare prose like
+half-block describes the rendering technique, not the mode token.
 
 Each row's mode column is that case's exact wire token: `Mode::wireName()`
 returns it, and it equals `strtolower($mode->name)` for every case (pinned),
@@ -312,7 +317,7 @@ $player = Player::open('clip.mp4', cellsW: 80, cellsH: 24);
 
 #### Tell the player how big one cell is
 
-In the graphics modes (`sixel`, `kitty`, `iTerm2`) the terminal's cell pixel size
+In the graphics modes (`sixel`, `kitty`, `iterm2`) the terminal's cell pixel size
 is a **decode** input: the frame is rasterized at `cols × cellPxW` by
 `rows × cellPxH` so the image fills the pixel box instead of being resampled up
 from one pixel per cell. Only the host knows that number, so `Reel` accepts it
@@ -484,8 +489,8 @@ Playback starts paused — `Space` is the first key you will press.
   read. The cue follows the **playhead**, not the wall clock: a paused
   player keeps painting the active cue (Space at 12.3 s holds the sentence
   you are reading; a seek repaints the cue at the landed time) — pause is a
-  legibility state, not a subtitle freeze. The image protocols (sixel,
-  kitty, iTerm2) draw frames as graphics and emit no text at all, so a
+  legibility state, not a subtitle freeze. The image protocols (Sixel, Kitty,
+  iTerm2) draw frames as graphics and emit no text at all, so a
   video without a caption track is opaque to
   assistive technology: the track is the text alternative for the visual
   channel in the WCAG 1.2 sense.
@@ -543,10 +548,11 @@ video file (mp4/gif/avi/webm)
                     │   Mosaic bridge         │
                     └─────────┬──────────────┘
                               │
-                    ┌─────────┴──────────────┐
-                    │   Player (MVC model)    │
-                    │   tick() → view()       │
-                    └─────────┬──────────────┘
+                    ┌──────────┴───────────────┐
+                    │   Player (MVC-style      │
+                    │   Model–Update–View)     │
+                    │   tick() → view()        │
+                    └──────────┬───────────────┘
                               │
                     ┌─────────▼──────────────┐
                     │   Program (sugar-core)  │
@@ -601,11 +607,11 @@ expects.
 
 - **Audio plays at 1.0× regardless of playback speed.** Changing speed with `[`/`]` only affects video pacing. The audio companion (ffplay/mpv) always plays at normal speed. A/V will diverge noticeably when using speeds other than 1.0×.
 
-- **An option-shaped audio source is refused silently.** A video path that begins with `-` is never handed to ffplay/mpv: both parse leading-dash arguments as command-line options, and `mpv --script=` executes arbitrary Lua. The audio companion simply stays off for such a source (video playback is unaffected) — the route speaks only plain local paths and http(s) URLs, so a `-`-prefixed source is never legitimate anyway. Announcing the refusal is a possible future code leg, pending owner ruling.
+- **An option-shaped audio source is refused silently.** A video path that begins with `-` is never handed to ffplay/mpv: both parse leading-dash arguments as command-line options, and `mpv --script=` executes arbitrary Lua. The audio companion simply stays off for such a source (video playback is unaffected) — the route speaks only plain local paths and http(s) URLs, so a `-`-prefixed source is never legitimate anyway. The refusal is currently silent; a visible announcement may be added.
 
 - **Seeking repositions audio but not frame-exactly.** A seek creates a new AudioPlayer at the correct offset, but the video frame timing and audio timing are only approximately synchronized (frame-skip resync keeps them close at 1.0×).
 
-- **GIF playback fills the terminal in HalfBlock mode** (each cell = 2 source rows). In text modes (ascii/ansi256/truecolor) the GIF renders at its native pixel dimensions without 2× vertical scaling.
+- **GIF playback fills the terminal in `halfblock` mode** (each cell = 2 source rows). In text modes (ascii/ansi256/truecolor) the GIF renders at its native pixel dimensions without 2× vertical scaling.
 
 - **Sixel frames cost PHP time.** The pure-PHP encoder spends more CPU time per large sixel frame than a native accelerator would; no child process is ever spawned from the video render path.
 
@@ -687,7 +693,7 @@ Ceilings that shape what plays: source capture is capped at 64 MiB per file (`Gi
 
 ## Color and terminal honesty
 
-The graphics ladder in `RendererFactory::auto()` descends Sixel → Kitty → iTerm2 → half-block → ANSI 256-color → plain ASCII: a TrueColor profile answers with the half-block rung when the terminal draws block glyphs safely, and with ANSI 256 when it cannot, so auto never selects `truecolor` or `quarterblock` — those are explicit modes only. The rung walk is a pure decision over the collected signals (`RendererFactory::autoModeFrom()`); `supports()` is the door for explicit modes and the mode cycle, where an unsupported choice raises a typed refusal naming the best mode for this seat. Graphics modes refuse loudly when the PHP lacks ext-gd — and the refuse runs
+The graphics ladder in `RendererFactory::auto()` descends `sixel` → `kitty` → `iterm2` → `halfblock` → `ansi256` → `ascii`: a TrueColor profile answers with the half-block rung when the terminal draws block glyphs safely, and with ANSI 256 when it cannot, so auto never selects `truecolor` or `quarterblock` — those are explicit modes only. The rung walk is a pure decision over the collected signals (`RendererFactory::autoModeFrom()`); `supports()` is the door for explicit modes and the mode cycle, where an unsupported choice raises a typed refusal naming the best mode for this seat. Graphics modes refuse loudly when the PHP lacks ext-gd — and the refuse runs
 before any probe or decoder child is spawned, so a refused open leaks nothing
 (SV-L66); an auto-resolved graphics seat on such a build steps down to the
 next honest rung instead of throwing — refusals are for promises, not
