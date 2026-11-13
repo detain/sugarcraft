@@ -38,42 +38,42 @@ final class ItemSourceTest extends TestCase
 
     public function testChoosePositionalStillAutoPicks(): void
     {
-        self::assertSame("Pizza\n", $this->run('choose --select-if-one Pizza'));
+        self::assertSame("Pizza\n", $this->displayOf('choose --select-if-one Pizza'));
     }
 
     public function testChooseItemAutoPicks(): void
     {
-        self::assertSame("Pizza\n", $this->run('choose --item Pizza --select-if-one'));
+        self::assertSame("Pizza\n", $this->displayOf('choose --item Pizza --select-if-one'));
     }
 
     public function testFilterItemAutoPicks(): void
     {
-        self::assertSame("Pizza\n", $this->run('filter --item Pizza --select-if-one'));
+        self::assertSame("Pizza\n", $this->displayOf('filter --item Pizza --select-if-one'));
     }
 
     public function testFilterPositionalAutoPicks(): void
     {
-        self::assertSame("Pizza\n", $this->run('filter Pizza --select-if-one'));
+        self::assertSame("Pizza\n", $this->displayOf('filter Pizza --select-if-one'));
     }
 
     public function testCommaSplitFeedsTwoItems(): void
     {
         // Two items — auto-pick must NOT fire (proves the split happened).
-        self::assertSame(1, $this->status('filter --item=Pizza,Burger --select-if-one'));
+        self::assertSame(1, $this->exitCode('filter --item=Pizza,Burger --select-if-one'));
     }
 
     public function testEscapedCommaStaysOneItem(): void
     {
-        self::assertSame("a,b\n", $this->run('choose --item=a\\,b --select-if-one'));
+        self::assertSame("a,b\n", $this->displayOf('choose --item=a\\,b --select-if-one'));
     }
 
     public function testChooseWithoutItemsRefuses(): void
     {
         // No stdin leg exists for choose: the honest refusal is exit 1.
-        self::assertSame(1, $this->status('choose'));
+        self::assertSame(1, $this->exitCode('choose'));
     }
 
-    private function run(string $line): string
+    private function displayOf(string $line): string
     {
         $app = new Application();
         $app->setAutoExit(false);
@@ -85,7 +85,7 @@ final class ItemSourceTest extends TestCase
         return $out->fetch();
     }
 
-    private function status(string $line): int
+    private function exitCode(string $line): int
     {
         $app = new Application();
         $app->setAutoExit(false);
