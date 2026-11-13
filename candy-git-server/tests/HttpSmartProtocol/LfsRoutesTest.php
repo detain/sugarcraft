@@ -40,7 +40,7 @@ final class LfsRoutesTest extends TestCase
         );
         $this->config = Config::load($this->tmpDir . '/config.yaml');
 
-        $this->server = new Server($this->config);
+        $this->server = new Server($this->config, \SugarCraft\GitServer\AccessControl::instance());
         $this->stats = new Stats();
         $this->server->setStats($this->stats);
 
@@ -343,7 +343,7 @@ final class LfsRoutesTest extends TestCase
             $this->tmpDir . '/config.yaml',
             "name: LfsOff\nlfs:\n enabled: false\n"
         );
-        $server = new Server(Config::load($this->tmpDir . '/config.yaml'));
+        $server = new Server(Config::load($this->tmpDir . '/config.yaml'), \SugarCraft\GitServer\AccessControl::instance());
         $server->setStats(new Stats());
         $server->registerRepo(Repo::new('testrepo.git', $this->tmpDir . '/testrepo.git')->withPublic(true));
 

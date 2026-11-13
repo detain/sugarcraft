@@ -69,7 +69,7 @@ final class SmartHttpCloneTest extends TestCase
         $this->git(['init', '-q', '--bare', '-b', 'main', $this->barePath]);
         $this->git(['-C', $this->workPath, 'push', '-q', $this->barePath, 'main']);
 
-        $this->router = new Server(Config::fromDefaults());
+        $this->router = new Server(Config::fromDefaults(), \SugarCraft\GitServer\AccessControl::instance());
         $this->router->registerRepo(Repo::new('fixture.git', $this->barePath)->withPublic(true));
         $this->router->registerUser(
             \SugarCraft\GitServer\User::new('bob')->withPasswordHash(\password_hash('correct horse', \PASSWORD_DEFAULT))

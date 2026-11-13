@@ -144,7 +144,7 @@ final class LiveAuthStateRefreshTest extends TestCase
         $configPath = $this->tmpDir . '/data/config.yaml';
         \file_put_contents($configPath, "name: live-refresh-test\nhttp:\n  user_trust_mode: proxy\n  trusted_proxies:\n    - 127.0.0.7\n");
         $this->config = Config::load($configPath);
-        $server = new Server($this->config);
+        $server = new Server($this->config, \SugarCraft\GitServer\AccessControl::instance());
         $server->watchUserStore($this->config->dataPath);
         $this->seedPublicRepo($server);
         $this->writeStore([User::new('alice')->withAdmin(true)]);
@@ -230,7 +230,7 @@ final class LiveAuthStateRefreshTest extends TestCase
 
     private function makeServer(): Server
     {
-        $server = new Server($this->config);
+        $server = new Server($this->config, \SugarCraft\GitServer\AccessControl::instance());
         $server->watchUserStore($this->config->dataPath);
 
         return $server;

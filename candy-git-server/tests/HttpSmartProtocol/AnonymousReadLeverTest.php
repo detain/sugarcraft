@@ -225,6 +225,33 @@ final class AnonymousReadLeverTest extends TestCase
         return self::PASSWORDS[$username];
     }
 
+    // -------------------------------------------------------------------------
+    // Posture isolation (finding 032, G-6): the process-global lever
+    // belongs to the daemon and SSH transports; a listener built WITHOUT an
+    // injected matrix answers its own posture only — a permissive
+    // co-tenant can no longer pin a strict server open.
+    // -------------------------------------------------------------------------
+
+    public function testAPermissiveGlobalLeverCannotPinAnIsolatedListenerOpen(): void
+    {
+        $pubPath = $this->tmpDir . '/repos/iso.git';
+        \mkdir($pubPath, 0755, true);
+        \exec('git init --bare -q ' . \escapeshellarg($pubPath) . ' 2>/dev/null');
+
+        $server = new Server(Config::fromDefaults());
+        $server->registerRepo(Repo::new('iso.git', $pubPath)->withVisibility(Visibility::Public));
+
+        AccessControl::instance()->setAllowAnonymousRead(true);
+        $closed = $server->handleRequest('GET', '/iso.git/info/refs', 'service=git-upload-pack', [], '');
+        self::assertSame(401, $closed['status'], 'the global arm must not reach the isolated listener');
+
+        $server->setAllowAnonymousRead(true);
+        $open = $server->handleRequest('GET', '/iso.git/info/refs', 'service=git-upload-pack', [], '');
+        self::assertSame(200, $open['status'], "the listener's own arm opens its own posture");
+
+        AccessControl::instance()->setAllowAnonymousRead(false);
+    }
+
     private function makeServer(): Server
     {
         $pubPath = $this->tmpDir . '/repos/pub.git';
@@ -234,7 +261,9 @@ final class AnonymousReadLeverTest extends TestCase
         $main = \trim((string) \shell_exec('git -C ' . \escapeshellarg($pubPath) . ' rev-parse refs/heads/master 2>/dev/null'));
         \file_put_contents($pubPath . '/refs/heads/feature', $main . "\n");
 
-        $server = new Server(Config::fromDefaults());
+        // Lever tests arm the process-global matrix, so the fixture's
+        // listener shares it explicitly (the documented embedder choice).
+        $server = new Server(Config::fromDefaults(), AccessControl::instance());
         $server->registerRepo(Repo::new('pub.git', $pubPath)->withVisibility(Visibility::Public));
         $server->registerUser(User::new('reader')->withPasswordHash(\password_hash(self::PASSWORDS['reader'], \PASSWORD_DEFAULT)));
         $server->registerUser(User::new('boss')->withAdmin(true)->withPasswordHash(\password_hash(self::PASSWORDS['boss'], \PASSWORD_DEFAULT)));

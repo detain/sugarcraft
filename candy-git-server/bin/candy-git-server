@@ -277,13 +277,13 @@ function cmdServeHttp(array $args): int
     // `user key` actually reach the wire. A corrupt store refuses the
     // launch loudly rather than serving an auth-less server.
     //
-    // Raise-only, mirroring Server's and GitDaemon's own arms: config OFF
-    // never LOWERS a lever another component already honoured — the
-    // transport that parsed this config decides its own posture, and the
-    // process-global AccessControl singleton is armed upward only.
-    if ($config->allowAnonymousRead) {
-        \SugarCraft\GitServer\AccessControl::instance()->setAllowAnonymousRead(true);
-    }
+    // Finding 032 (G-6): the listener's posture is armed by its OWN
+    // constructor from the parsed config below — the process-global
+    // AccessControl lever belongs to the daemon and SSH transports, and
+    // serve --http starts neither, so bin no longer writes it. A raw
+    // global write here would re-couple this launch to any co-tenant
+    // posture in the process, which is exactly the seam the finding
+    // closed; the shape is pinned by BinServeRefusalTest.
 
     try {
         // all() reads (and validates) the persisted store: a corrupt file

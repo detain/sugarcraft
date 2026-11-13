@@ -43,7 +43,7 @@ final class SmartHttpReadPathTest extends TestCase
         $this->tmpDir = \sys_get_temp_dir() . '/smart-read-path-' . \uniqid();
         \mkdir($this->tmpDir, 0755, true);
 
-        $this->server = new Server(Config::fromDefaults());
+        $this->server = new Server(Config::fromDefaults(), \SugarCraft\GitServer\AccessControl::instance());
 
         // Seed a bare repo with one commit: work repo → push into bare.
         $work = $this->tmpDir . '/work';

@@ -39,6 +39,7 @@ final class LFSHandler
     private ?Stats $stats;
     private int $maxObjectBytes;
     private string $publicBaseUrl;
+    private AccessControl $accessControl;
 
     public const MEDIA_TYPE = 'application/vnd.git-lfs+json';
 
@@ -57,6 +58,7 @@ final class LFSHandler
         ?Stats $stats = null,
         ?int $maxObjectBytes = null,
         string $publicBaseUrl = 'http://localhost:23232',
+        ?AccessControl $accessControl = null,
     ) {
         $this->repo = $repo;
         $this->user = $user;
@@ -66,6 +68,12 @@ final class LFSHandler
         $this->stats = $stats;
         $this->maxObjectBytes = \max(1, $maxObjectBytes ?? self::MAX_OBJECT_BYTES);
         $this->publicBaseUrl = $publicBaseUrl;
+        // Finding 032: the batch gate is the SECOND enforcement site for a
+        // request the HTTP server already checked — it must consult the
+        // same matrix that admitted the connection, not assume the
+        // process-global one. Standalone construction (embedders, fixtures
+        // that opt into one-posture-per-process) keeps the global default.
+        $this->accessControl = $accessControl ?? AccessControl::instance();
     }
 
     /**
@@ -82,6 +90,7 @@ final class LFSHandler
             stats: $this->stats,
             maxObjectBytes: $this->maxObjectBytes,
             publicBaseUrl: $this->publicBaseUrl,
+            accessControl: $this->accessControl,
         );
     }
 
@@ -99,6 +108,7 @@ final class LFSHandler
             stats: $this->stats,
             maxObjectBytes: $this->maxObjectBytes,
             publicBaseUrl: $this->publicBaseUrl,
+            accessControl: $this->accessControl,
         );
     }
 
@@ -174,7 +184,7 @@ final class LFSHandler
             return ['download', ['error' => ['code' => 400, 'message' => 'Unsupported operation']]];
         }
 
-        $ac = AccessControl::instance();
+        $ac = $this->accessControl;
         $allowed = $operation === 'upload'
             ? $ac->canWrite($this->user, $this->repo)
             : $ac->canRead($this->user, $this->repo);

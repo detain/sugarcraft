@@ -147,9 +147,48 @@ final class Server
     /** @var array<string, string> gitDir => last marker composite stamp */
     private array $markerStamps = [];
 
-    public function __construct(Config $config)
+    /**
+     * The access matrix THIS server consults (finding 032, G-6 minimal
+     * instance-scope ruling): a per-instance AccessControl by default, so
+     * a permissive GitDaemon or SSH co-tenant in the same process can no
+     * longer pin a strict HTTP server open through the shared process-
+     * global lever — and this class never WRITES the global posture
+     * either. Embedders that want the old shared-posture world (one
+     * policy per process, by choice and stated in the README) pass
+     * {@see AccessControl::instance()} as the second constructor
+     * argument. The anonymous-read arm is raise-only at construction:
+     * this server's own config can open its posture, nothing the config
+     * parses can close a posture its injected matrix already honoured.
+     */
+    private AccessControl $accessControl;
+
+    public function __construct(Config $config, ?AccessControl $accessControl = null)
     {
         $this->config = $config;
+        $this->accessControl = $accessControl ?? new AccessControl();
+        if ($config->allowAnonymousRead) {
+            $this->accessControl->setAllowAnonymousRead(true);
+        }
+    }
+
+    /**
+     * Runtime arm surface for THIS server's own matrix (fixtures and
+     * embedders): raises or lowers only the instance posture, never the
+     * process-global lever the daemon and SSH transports own.
+     */
+    public function setAllowAnonymousRead(bool $allowed): void
+    {
+        $this->accessControl->setAllowAnonymousRead($allowed);
+    }
+
+    /**
+     * The matrix this server consults: hosts that want to share one
+     * posture across transports pass the same object in at construction,
+     * fixtures can flip the lever without reaching through the server.
+     */
+    public function accessControl(): AccessControl
+    {
+        return $this->accessControl;
     }
 
     /**
@@ -348,7 +387,16 @@ final class Server
 
             return $this->errorResponse(429, 'Too many authentication attempts');
         } catch (\Throwable $e) {
-            \fwrite(\STDERR, (string) $e);
+            // Operator log line, not a frame dump (finding 095): the full
+            // (string) $e trace carries every frame's arguments — query
+            // strings, request bodies, absolute paths of the hosting
+            // box — into whatever collects STDERR. Class, message and
+            // the throw site locate the fault; the arguments of deeper
+            // frames are evidence nobody asked to log.
+            \fwrite(\STDERR, 'candy-git-server: request fault ' . \get_class($e)
+                . ': ' . $e->getMessage()
+                . ' at ' . $e->getFile() . ':' . $e->getLine() . "\n");
+
             return $this->errorResponse(500, 'Internal server error');
         }
     }
@@ -459,17 +507,13 @@ final class Server
         // identity that lacks the
         // right gets 403. Read advertisement rides canRead, push
         // advertisement rides canWrite and always requires an identity.
-        // The access matrix is consulted through AccessControl. The
-        // listener's OWN posture comes from the parsed config (armed by
-        // serve --http at startup); the process-global lever is respected
-        // when a component explicitly raises it (fixture worlds and any
-        // future runtime arm surface), but this method never LOWERS it —
-        // reading via max() keeps the listener honest while leaving the
-        // daemon and SSH transports in charge of their own snapshots.
-        $ac = AccessControl::instance();
-        if ($this->config->allowAnonymousRead) {
-            $ac->setAllowAnonymousRead(true);
-        }
+        // The access matrix consulted here is THIS server's own instance
+        // (finding 032): its posture is armed from the parsed config at
+        // construction and via setAllowAnonymousRead() — the process-
+        // global lever the daemon and SSH transports share is never read
+        // nor written on the HTTP path, so a permissive co-tenant can no
+        // longer pin a strict listener open.
+        $ac = $this->accessControl;
         $user = $this->getUserFromHeaders($headers);
         if ($service === 'git-upload-pack') {
             if (!$ac->canRead($user, $repo)) {
@@ -507,7 +551,7 @@ final class Server
             return $this->errorResponse(404, 'Repository not found');
         }
 
-        $ac = AccessControl::instance();
+        $ac = $this->accessControl;
         $user = $this->getUserFromHeaders($headers);
         if (!$ac->canRead($user, $repo)) {
             return $this->authDenied($user);
@@ -564,7 +608,7 @@ final class Server
             return $this->errorResponse(404, 'Repository not found');
         }
 
-        $ac = AccessControl::instance();
+        $ac = $this->accessControl;
         $user = $this->getUserFromHeaders($headers);
         if (!$ac->canWrite($user, $repo)) {
             return $this->authDenied($user);
@@ -626,6 +670,7 @@ final class Server
             stats: $this->stats,
             maxObjectBytes: (int) ($this->config->maxPackBytes ?? LFSHandler::MAX_OBJECT_BYTES),
             publicBaseUrl: $this->config->httpPublicUrl,
+            accessControl: $this->accessControl,
         );
 
         $target = $parts[3] ?? '';
@@ -672,7 +717,7 @@ final class Server
             return $this->errorResponse(400, 'Invalid JSON body');
         }
 
-        $ac = AccessControl::instance();
+        $ac = $this->accessControl;
         if (($request['operation'] ?? 'download') === 'upload') {
             if (!$ac->canWrite($user, $repo)) {
                 return $this->authDenied($user);
@@ -712,7 +757,7 @@ final class Server
      */
     private function handleLfsDownload(Repo $repo, LFSHandler $handler, ?User $user, string $oid): array
     {
-        if (!AccessControl::instance()->canRead($user, $repo)) {
+        if (!$this->accessControl->canRead($user, $repo)) {
             return $this->authDenied($user);
         }
 
@@ -753,7 +798,7 @@ final class Server
      */
     private function handleLfsUpload(Repo $repo, LFSHandler $handler, ?User $user, string $oid, string $body): array
     {
-        if (!AccessControl::instance()->canWrite($user, $repo)) {
+        if (!$this->accessControl->canWrite($user, $repo)) {
             return $this->authDenied($user);
         }
 
@@ -796,7 +841,7 @@ final class Server
             return $this->errorResponse(405, 'Method not allowed');
         }
 
-        if (!AccessControl::instance()->canWrite($user, $repo)) {
+        if (!$this->accessControl->canWrite($user, $repo)) {
             return $this->authDenied($user);
         }
 
@@ -985,6 +1030,22 @@ final class Server
     }
 
     /**
+     * Registry lookup fallback: an optional read-only surface for hosts
+     * that graft a user registry onto the shared AccessControl (guarded
+     * by method_exists — the shipped class has none, so the fallback
+     * reads null). This is a REGISTRY read, deliberately global: an
+     * embedding host that registers accounts on the process matrix
+     * expects them visible. The POSTURE half of that matrix is never
+     * consulted from here; the HTTP path owns its posture per instance.
+     */
+    private function lookupGlobalUser(string $username): ?User
+    {
+        $ac = AccessControl::instance();
+
+        return method_exists($ac, 'getUser') ? $ac->getUser($username) : null;
+    }
+
+    /**
      * Resolve the user named by the untrusted `X-CandyGitServer-User` header,
      * honoring it only when the configured trust mode's check passes.
      *
@@ -999,18 +1060,6 @@ final class Server
      *
      * @param array<string, string> $headers
      */
-    /**
-     * Registry lookup fallback: the shared AccessControl instance may hold
-     * users registered through it (the daemon and SSH transports share that
-     * registry); the per-server registry above always wins.
-     */
-    private function lookupGlobalUser(string $username): ?User
-    {
-        $ac = AccessControl::instance();
-
-        return method_exists($ac, 'getUser') ? $ac->getUser($username) : null;
-    }
-
     private function resolveTrustedUser(array $headers, ?string $peerIp): ?User
     {
         $headers = \array_change_key_case($headers, \CASE_LOWER);

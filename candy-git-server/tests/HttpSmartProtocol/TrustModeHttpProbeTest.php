@@ -143,7 +143,7 @@ final class TrustModeHttpProbeTest extends TestCase
         $main = \trim((string) \shell_exec('git -C ' . \escapeshellarg($repoPath) . ' hash-object -t tree /dev/null 2>/dev/null'));
         \file_put_contents($repoPath . '/refs/heads/main', $main . "\n");
 
-        $server = new Server(Config::load($dir . '/config.yaml'));
+        $server = new Server(Config::load($dir . '/config.yaml'), \SugarCraft\GitServer\AccessControl::instance());
         $server->registerUser(User::new('alice')->withAdmin(true));
         $server->registerRepo(Repo::new('private.git', $dir . '/private.git')->withPrivate(true));
 

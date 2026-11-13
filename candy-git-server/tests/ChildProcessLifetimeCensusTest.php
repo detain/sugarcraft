@@ -442,7 +442,7 @@ final class ChildProcessLifetimeCensusTest extends TestCase
         $marker = $this->tmpDir . '/upload-spawned';
         $this->withFakeGitOnPath('echo ok > ' . \escapeshellarg($marker) . '; cat >/dev/null');
 
-        $server = new Server($this->config);
+        $server = new Server($this->config, \SugarCraft\GitServer\AccessControl::instance());
         // The route names repos by the full path segment — "X.git" (house
         // convention, cf. ServerTest's testrepo.git).
         $server->registerRepo(Repo::new('http-upload.git', $repo->path())->withPublic(true));
@@ -474,7 +474,7 @@ final class ChildProcessLifetimeCensusTest extends TestCase
         $marker = $this->tmpDir . '/recv-spawned';
         $this->withFakeGitOnPath('echo ok > ' . \escapeshellarg($marker) . '; cat >/dev/null');
 
-        $server = new Server($this->config);
+        $server = new Server($this->config, \SugarCraft\GitServer\AccessControl::instance());
         $server->registerRepo(Repo::new('http-recv.git', $repo->path())->withPublic(true));
         $server->registerUser(User::new('pusher')->withAdmin(true)->withPasswordHash(\password_hash('pushpass', \PASSWORD_DEFAULT)));
 
@@ -531,7 +531,7 @@ final class ChildProcessLifetimeCensusTest extends TestCase
             $dir . '/config.yaml',
             "git: { listen_addr: \"127.0.0.1:0\", allow_anonymous_read: true }\nhttp: { max_pack_bytes: 64 }\n"
         );
-        $server = new Server(Config::load($dir . '/config.yaml'));
+        $server = new Server(Config::load($dir . '/config.yaml'), \SugarCraft\GitServer\AccessControl::instance());
         $server->registerRepo(Repo::new('http-cap.git', $repo->path())->withPublic(true));
 
         $start = \hrtime(true);

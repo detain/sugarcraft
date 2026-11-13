@@ -172,7 +172,7 @@ final class StatelessRpcOutcomeTest extends TestCase
         $config = Config::load($this->tmpDir . '/config.yaml');
 
         AccessControl::instance()->setAllowAnonymousRead(true);
-        $server = new Server($config);
+        $server = new Server($config, \SugarCraft\GitServer\AccessControl::instance());
         $server->registerRepo(Repo::new('outcome.git', $this->tmpDir . '/repositories/outcome.git')->withPublic(true));
 
         $response = $server->handleRequest('POST', '/outcome.git/git-upload-pack', '', [], 'junk-body');

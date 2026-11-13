@@ -456,7 +456,7 @@ final class HttpListenerHardeningTest extends TestCase
 
         $this->lastConfig = Config::load($dir . '/config.yaml');
 
-        return new Server($this->lastConfig);
+        return new Server($this->lastConfig, \SugarCraft\GitServer\AccessControl::instance());
     }
 
     /** @return resource */

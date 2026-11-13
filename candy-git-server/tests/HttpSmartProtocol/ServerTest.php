@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace SugarCraft\GitServer\Tests\HttpSmartProtocol;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\GitServer\AccessControl;
 use SugarCraft\GitServer\Config;
 use SugarCraft\GitServer\HttpSmartProtocol\Server;
 use SugarCraft\GitServer\Repo;
@@ -47,19 +46,19 @@ final class ServerTest extends TestCase
         // These arms model the published world: the anonymous-read lever is
         // raised (config opt-in). The lever-off default is pinned by
         // testAnonymousReadIsFailClosedByDefault below.
-        AccessControl::instance()->setAllowAnonymousRead(true);
+        $this->server->setAllowAnonymousRead(true);
     }
 
     protected function tearDown(): void
     {
-        AccessControl::instance()->setAllowAnonymousRead(false);
+        $this->server->setAllowAnonymousRead(false);
         $this->removeDirectory($this->tmpDir);
         parent::tearDown();
     }
 
     public function testAnonymousReadIsFailClosedByDefault(): void
     {
-        AccessControl::instance()->setAllowAnonymousRead(false);
+        $this->server->setAllowAnonymousRead(false);
 
         $result = $this->server->handleRequest(
             'GET',
@@ -515,7 +514,7 @@ final class ServerTest extends TestCase
     public function testUnknownKnownWrongAndKeyOnlyBasicAuthAnswerIdentically(): void
     {
         // Lever-down: authentication decides the answer, not the lever.
-        AccessControl::instance()->setAllowAnonymousRead(false);
+        $this->server->setAllowAnonymousRead(false);
         $this->server->registerUser(User::new('authtest')
             ->withPasswordHash(\password_hash('correct-password', \PASSWORD_DEFAULT)));
         $this->server->registerUser(User::new('keyonly'));

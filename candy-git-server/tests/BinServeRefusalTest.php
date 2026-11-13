@@ -140,28 +140,37 @@ final class BinServeRefusalTest extends TestCase
     }
 
     /**
-     * n13: the serve-time anonymous-read arm must be RAISE-ONLY, mirroring
-     * Server and GitDaemon. A raw `setAllowAnonymousRead($bool)` call would
-     * let a config-off launch LOWER a lever another component already
-     * honoured; in a fresh CLI process the two shapes are equivalent, so
-     * the law is pinned at the source level (the probe child's counters and
-     * singletons are invisible to this process anyway).
+     * n13 (re-anchored by S12/finding 032): the serve-time anonymous-read
+     * arm is RAISE-ONLY and now lives entirely on the listener's OWN
+     * matrix — the Server constructor raises the posture parsed from
+     * config, and bin never touches the process-global AccessControl
+     * lever. A raw global write re-couples the HTTP listener to co-tenant
+     * posture, the exact seam 032 closed. Pinned at the source level (the
+     * probe child's singletons are invisible to this process anyway).
      */
     public function testServeHttpArmsTheAnonymousReadLeverRaiseOnly(): void
     {
         $source = (string) \file_get_contents($this->bin);
-        $arm = 'if ($config->allowAnonymousRead) {'
-            . "\n        \\SugarCraft\\GitServer\\AccessControl::instance()->setAllowAnonymousRead(true);\n    }";
 
-        $this->assertStringContainsString(
-            $arm,
+        $this->assertStringNotContainsString(
+            'AccessControl::instance()',
             $source,
-            'serve --http must raise the lever only when config says on',
+            'serve --http must not write the process-global access matrix (032)',
         );
         $this->assertStringNotContainsString(
             '->setAllowAnonymousRead($config->allowAnonymousRead)',
             $source,
             'the raw-bool lowering shape must not return to the bin',
+        );
+
+        $server = (string) \file_get_contents(\dirname(__DIR__) . '/src/HttpSmartProtocol/Server.php');
+        $arm = 'if ($config->allowAnonymousRead) {'
+            . "\n            \$this->accessControl->setAllowAnonymousRead(true);";
+
+        $this->assertStringContainsString(
+            $arm,
+            $server,
+            'the Server constructor must raise its own matrix only when config says on',
         );
     }
 }
