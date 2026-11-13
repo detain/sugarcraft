@@ -49,6 +49,13 @@ return [
     'cli.config_unowned'   => 'candy-ssh-launcher: config geweigerd omdat een andere gebruiker eigenaar is: {path} — configs zijn vertrouwde invoer; zie Security in de README.',
     'cli.config_writable'  => 'candy-ssh-launcher: config geweigerd omdat groep of iedereen mag schrijven: {path} — zet op 0644 of 0600, of geef expliciet --config op.',
     'cli.project_local'    => 'candy-ssh-launcher: projectlokale wishlist in gebruik: {path}',
+    'cli.unsafe_option_notice' => 'candy-ssh-launcher: het endpoint vraagt -o {option} — {effect}',
+    'cli.unsafe_option_effect_strict_host_key_checking' => 'de controle van host-sleutels is afgezwakt — de serversleutel blijft mogelijk ongecontroleerd',
+    'cli.unsafe_option_effect_user_known_hosts_file' => 'de vertrouwensdatabase van bekende hosts van de gebruiker is omgeleid',
+    'cli.unsafe_option_effect_global_known_hosts_file' => 'de systeemvertrouwensdatabase is omgeleid',
+    'cli.unsafe_option_effect_log_level' => 'ssh-waarschuwingen en meldingen worden verborgen',
+    'cli.unsafe_option_effect_identity_agent' => 'authenticatie wordt gedelegeerd naar een andere agent-socket',
+    'cli.unsafe_option_effect_certificate_file' => 'er wordt een extra authenticatiecertificaat aangeboden',
 
     // picker chrome
     'picker.title'       => '── wishlist ──',

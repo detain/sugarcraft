@@ -331,6 +331,34 @@ if ($pick === null) {
     exit(130);
 }
 
+// -029: name the host-key-trust-destruction family on the way out. The
+// config is trusted input, but a MITM payload inside a trusted file still
+// looks like a normal login — so every degrading `-o` request gets one
+// stderr line BEFORE the exec, naming the option and what it costs. The
+// {option} column passes the display policy (an escaped CR/LF inside a
+// double-quoted scalar must not forge a second stderr line); the effect
+// clauses are trusted lang.
+$unsafeEffects = [
+    'StrictHostKeyChecking'  => 'cli.unsafe_option_effect_strict_host_key_checking',
+    'UserKnownHostsFile'     => 'cli.unsafe_option_effect_user_known_hosts_file',
+    'GlobalKnownHostsFile'   => 'cli.unsafe_option_effect_global_known_hosts_file',
+    'LogLevel'               => 'cli.unsafe_option_effect_log_level',
+    'IdentityAgent'          => 'cli.unsafe_option_effect_identity_agent',
+    'CertificateFile'        => 'cli.unsafe_option_effect_certificate_file',
+];
+foreach ($pick->unsafeOptions() as $opt) {
+    $eq   = strpos($opt, '=');
+    $key  = $eq === false ? $opt : substr($opt, 0, $eq);
+    $effectKey = $unsafeEffects[$key] ?? null;
+    if ($effectKey === null) {
+        continue; // unreachable: unsafeOptions() only yields the six keys above
+    }
+    fwrite(STDERR, Lang::t('cli.unsafe_option_notice', [
+        'option' => Sanitize::untrustedForDisplay($opt),
+        'effect' => Lang::t($effectKey),
+    ]) . "\n");
+}
+
 // A refused endpoint (leading-dash or empty field) and a failed exec both
 // surface here as a named, sanitized line — they must not escape as a raw
 // stack trace (F-6); exit 3 distinguishes them from config errors (1) and

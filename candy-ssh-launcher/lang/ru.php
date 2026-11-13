@@ -49,6 +49,13 @@ return [
     'cli.config_unowned'   => 'candy-ssh-launcher: отклонена конфигурация, принадлежащая другому пользователю: {path} — конфигурации являются доверенными данными; см. раздел Security в README.',
     'cli.config_writable'  => 'candy-ssh-launcher: отклонена конфигурация, доступная для записи группе или всем: {path} — ужесточите режим до 0644 или 0600 либо передайте её явно через --config.',
     'cli.project_local'    => 'candy-ssh-launcher: используется локальная wishlist проекта: {path}',
+    'cli.unsafe_option_notice' => 'candy-ssh-launcher: эндпоинт запрашивает -o {option} — {effect}',
+    'cli.unsafe_option_effect_strict_host_key_checking' => 'проверка ключей хоста ослаблена — ключ сервера может остаться непроверенным',
+    'cli.unsafe_option_effect_user_known_hosts_file' => 'пользовательская база доверия известных хостов перенаправлена',
+    'cli.unsafe_option_effect_global_known_hosts_file' => 'системная база доверия перенаправлена',
+    'cli.unsafe_option_effect_log_level' => 'предупреждения и уведомления ssh скрыты',
+    'cli.unsafe_option_effect_identity_agent' => 'аутентификация делегирована другому сокету агента',
+    'cli.unsafe_option_effect_certificate_file' => 'предложен дополнительный сертификат аутентификации',
 
     // picker chrome
     'picker.title'       => '── wishlist ──',

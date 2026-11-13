@@ -49,6 +49,13 @@ return [
     'cli.config_unowned'   => 'candy-ssh-launcher：拒绝属于其他用户的配置：{path} —— 配置属于可信输入；见 README 的 Security 一节。',
     'cli.config_writable'  => 'candy-ssh-launcher：拒绝组或其他用户可写的配置：{path} —— 请收紧为 0644 或 0600，或通过 --config 显式传入。',
     'cli.project_local'    => 'candy-ssh-launcher：正在使用项目本地 wishlist：{path}',
+    'cli.unsafe_option_notice' => 'candy-ssh-launcher: 端点请求 -o {option} —— {effect}',
+    'cli.unsafe_option_effect_strict_host_key_checking' => '主机密钥校验被降级——服务器密钥可能未经校验',
+    'cli.unsafe_option_effect_user_known_hosts_file' => '用户的已知主机信任库被重定向',
+    'cli.unsafe_option_effect_global_known_hosts_file' => '系统级信任库被重定向',
+    'cli.unsafe_option_effect_log_level' => 'ssh 警告与提示被隐藏',
+    'cli.unsafe_option_effect_identity_agent' => '身份认证被委托给另一个代理套接字',
+    'cli.unsafe_option_effect_certificate_file' => '提供了额外的身份认证证书',
 
     // picker chrome
     'picker.title'       => '── wishlist ──',

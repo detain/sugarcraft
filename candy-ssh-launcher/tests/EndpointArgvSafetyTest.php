@@ -37,8 +37,7 @@ final class EndpointArgvSafetyTest extends TestCase
             host: 'prod.example.com',
             proxyJump: '-oProxyCommand=calc',
         );
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('unsafe leading-dash');
+        $this->expectException(\InvalidArgumentException::class);        $this->expectExceptionMessage('unsafe leading-dash');
         $e->toSshArgv();
     }
 
@@ -192,5 +191,87 @@ final class EndpointArgvSafetyTest extends TestCase
         // '' has nothing to inject and used to (correctly) pass silently.
         $e = new Endpoint(name: 'id', host: 'i.test', identityFiles: ['', '/k.pem']);
         $this->assertSame(['ssh', '-i', '/k.pem', '--', 'i.test'], $e->toSshArgv());
+    }
+
+    // ------------------------------------------------------------------
+    // sshl-22 / finding -029: the host-key-trust-destruction family,
+    // named per-hit for the stderr notice.
+    // ------------------------------------------------------------------
+
+    public function testUnsafeOptionsNameTheDegradingForms(): void
+    {
+        // The textbook MITM trio plus the delegation pair: every entry
+        // the bin must name before the exec, in order, as written.
+        $e = new Endpoint(name: 'mitm', host: 'm.test', options: [
+            'StrictHostKeyChecking=no',
+            'UserKnownHostsFile=/dev/null',
+            'GlobalKnownHostsFile=/dev/null',
+            'LogLevel=QUIET',
+            'IdentityAgent=/tmp/evil.sock',
+            'CertificateFile=/tmp/evil-cert.pub',
+        ]);
+        $this->assertSame([
+            'StrictHostKeyChecking=no',
+            'UserKnownHostsFile=/dev/null',
+            'GlobalKnownHostsFile=/dev/null',
+            'LogLevel=QUIET',
+            'IdentityAgent=/tmp/evil.sock',
+            'CertificateFile=/tmp/evil-cert.pub',
+        ], $e->unsafeOptions());
+    }
+
+    public function testUnsafeOptionsJudgeEnumValuedKeysByValue(): void
+    {
+        // StrictHostKeyChecking=no/never/accept-new (case-insensitive) and
+        // LogLevel=QUIET/ERROR/FATAL are the degrading settings; the
+        // strengthening and neutral values must never nag. accept-new
+        // counts: auto-trusting first contact is exactly the MITM window.
+        $e = new Endpoint(name: 'x', host: 'x.test', options: [
+            'StrictHostKeyChecking=no',
+            'StrictHostKeyChecking=NEVER',
+            'StrictHostKeyChecking=accept-new',
+            'StrictHostKeyChecking=yes',
+            'StrictHostKeyChecking=ask',
+            'LogLevel=error',
+            'LogLevel=FATAL',
+            'LogLevel=INFO',
+            'LogLevel=VERBOSE',
+        ]);
+        $this->assertSame([
+            'StrictHostKeyChecking=no',
+            'StrictHostKeyChecking=NEVER',
+            'StrictHostKeyChecking=accept-new',
+            'LogLevel=error',
+            'LogLevel=FATAL',
+        ], $e->unsafeOptions());
+    }
+
+    public function testTrustDatabaseOverridesAreNamedWhateverTheValue(): void
+    {
+        // An explicit known-hosts/agent/certificate override IS the payload
+        // shape (the default locations need no spelling out); re-pointing to
+        // the canonical path is still noise worth one line, stated in the
+        // Endpoint docblock policy.
+        $e = new Endpoint(name: 'x', host: 'x.test', options: [
+            'UserKnownHostsFile=~/.ssh/known_hosts',
+            'IdentityAgent=none',
+        ]);
+        $this->assertSame([
+            'UserKnownHostsFile=~/.ssh/known_hosts',
+            'IdentityAgent=none',
+        ], $e->unsafeOptions());
+    }
+
+    public function testUnsafeOptionsIgnoreShapelessAndUnrelatedEntries(): void
+    {
+        // No '=' or an unrelated key is not a family member; the scan
+        // never fires on the option lanes the launcher uses legitimately.
+        $e = new Endpoint(name: 'x', host: 'x.test', options: [
+            'Compression=yes',
+            'ServerAliveInterval=30',
+            'ControlMaster',
+            'ConnectTimeout=10',
+        ]);
+        $this->assertSame([], $e->unsafeOptions());
     }
 }

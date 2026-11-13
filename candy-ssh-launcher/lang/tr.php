@@ -49,6 +49,13 @@ return [
     'cli.config_unowned'   => 'candy-ssh-launcher: başka bir kullanıcının sahip olduğu yapılandırma reddedildi: {path} — yapılandırmalar güvenilen girdidir; README içindeki Güvenlik bölümüne bakın.',
     'cli.config_writable'  => 'candy-ssh-launcher: grup ya da herkes tarafından yazılabilen yapılandırma reddedildi: {path} — 0644 veya 0600 olarak sıkılaştırın ya da --config ile açıkça iletin.',
     'cli.project_local'    => 'candy-ssh-launcher: proje yerel wishlist kullanımda: {path}',
+    'cli.unsafe_option_notice' => 'candy-ssh-launcher: uç nokta -o {option} istiyor — {effect}',
+    'cli.unsafe_option_effect_strict_host_key_checking' => 'ana makine anahtarı denetimi düşürüldü — sunucu anahtarı doğrulanmadan kalabilir',
+    'cli.unsafe_option_effect_user_known_hosts_file' => 'kullanıcının bilinen ana makine güven veritabanı yönlendirildi',
+    'cli.unsafe_option_effect_global_known_hosts_file' => 'sistem geneli güven veritabanı yönlendirildi',
+    'cli.unsafe_option_effect_log_level' => 'ssh uyarıları ve bildirimleri gizleniyor',
+    'cli.unsafe_option_effect_identity_agent' => 'kimlik doğrulama başka bir ajan soketine devredildi',
+    'cli.unsafe_option_effect_certificate_file' => 'ek bir kimlik doğrulama sertifikası sunuluyor',
 
     // picker chrome
     'picker.title'       => '── wishlist ──',

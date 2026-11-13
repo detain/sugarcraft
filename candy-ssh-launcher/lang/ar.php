@@ -49,6 +49,13 @@ return [
     'cli.config_unowned'   => "candy-ssh-launcher: رفض تكوين يملكه مستخدم آخر: \u{2066}{path}\u{2069} — التكوينات مصدر موثوق؛ انظر Security في README.",
     'cli.config_writable'  => "candy-ssh-launcher: رفض تكوين قابل للكتابة من المجموعة أو العالم: \u{2066}{path}\u{2069} — شدد صلاحياته إلى 0644 أو 0600 أو مرره صراحة عبر \u{2066}--config\u{2069}.",
     'cli.project_local'    => "candy-ssh-launcher: يُستخدم wishlist المحلي للمشروع: \u{2066}{path}\u{2069}",
+    'cli.unsafe_option_notice' => "candy-ssh-launcher: نقطة النهاية تطلب -o \u{2066}{option}\u{2069} — \u{2066}{effect}\u{2069}",
+    'cli.unsafe_option_effect_strict_host_key_checking' => "يتم تخفيض التحقق من مفتاح المضيف — قد يبقى مفتاح الخادم دون تحقق",
+    'cli.unsafe_option_effect_user_known_hosts_file' => "يتم تحويل قاعدة بيانات ثقة المضيفين المعروفين للمستخدم",
+    'cli.unsafe_option_effect_global_known_hosts_file' => "يتم تحويل قاعدة بيانات الثقة على مستوى النظام",
+    'cli.unsafe_option_effect_log_level' => "يتم إخفاء تحذيرات ssh وإشعاراتها",
+    'cli.unsafe_option_effect_identity_agent' => "يتم تفويض المصادقة إلى مقبس وكيل آخر",
+    'cli.unsafe_option_effect_certificate_file' => "يتم تقديم شهادة مصادقة إضافية",
 
     // picker chrome
     'picker.title'       => '── wishlist ──',

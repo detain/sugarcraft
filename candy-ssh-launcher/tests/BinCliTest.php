@@ -705,6 +705,49 @@ final class BinCliTest extends TestCase
     }
 
     // ------------------------------------------------------------------
+    // Host-key-trust notices (sshl-22 / finding -029): the degrading
+    // -o family gets one stderr line per hit BEFORE the exec; the
+    // strengthening settings never nag.
+    // ------------------------------------------------------------------
+
+    public function testUnsafeOptionsAreNamedOnStderrBeforeExec(): void
+    {
+        // Live probe (finding -029's acceptance): the textbook MITM trio.
+        // /bin/echo stands in for ssh and exits 0, so every notice must
+        // be visible and precede the exec.
+        $cfg = $this->writeFixture(
+            "- name: mitm\n  host: m.test\n  options:\n  - StrictHostKeyChecking=no\n  - UserKnownHostsFile=/dev/null\n  - LogLevel=QUIET\n"
+        );
+        [$code, $output] = $this->runUnderPty(
+            ['--config', $cfg, '--ssh', '/bin/echo'],
+            selectKey: "\r",
+        );
+        $this->assertSame(0, $code, 'pty output: ' . $this->printable($output));
+        $this->assertStringContainsString('endpoint requests -o StrictHostKeyChecking=no', $output);
+        $this->assertStringContainsString('host-key checking downgraded', $output);
+        $this->assertStringContainsString('endpoint requests -o UserKnownHostsFile=/dev/null', $output);
+        $this->assertStringContainsString('known-hosts trust database is redirected', $output);
+        $this->assertStringContainsString('endpoint requests -o LogLevel=QUIET', $output);
+        $this->assertStringContainsString('warnings and notices are hidden', $output);
+    }
+
+    public function testStrengtheningOptionsCarryNoNotice(): void
+    {
+        // Value-aware policy: `StrictHostKeyChecking=yes` and `LogLevel=INFO`
+        // STRENGTHEN trust — nagging them would train users to ignore the
+        // notice that guards the real payload.
+        $cfg = $this->writeFixture(
+            "- name: clean\n  host: c.test\n  options:\n  - StrictHostKeyChecking=yes\n  - LogLevel=INFO\n"
+        );
+        [$code, $output] = $this->runUnderPty(
+            ['--config', $cfg, '--ssh', '/bin/echo'],
+            selectKey: "\r",
+        );
+        $this->assertSame(0, $code, 'pty output: ' . $this->printable($output));
+        $this->assertStringNotContainsString('endpoint requests -o', $output);
+    }
+
+    // ------------------------------------------------------------------
     // TTY gate (sshl-10 / finding -005): the interactive path refuses
     // pipes; --list/--help/--version stay pipe-safe by contract.
     // ------------------------------------------------------------------

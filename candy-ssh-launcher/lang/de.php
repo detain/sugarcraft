@@ -51,6 +51,13 @@ return [
     'cli.config_unowned'   => 'candy-ssh-launcher: Konfiguration von einem anderen Benutzer verworfen: {path} — Konfigurationen sind vertrauenswürdige Eingaben; siehe Sicherheit im README.',
     'cli.config_writable'  => 'candy-ssh-launcher: Konfiguration verworfen, die Gruppe oder Andere schreiben dürfen: {path} — auf 0644 oder 0600 beschränken oder explizit über --config übergeben.',
     'cli.project_local'    => 'candy-ssh-launcher: projektlokale Wishlist wird verwendet: {path}',
+    'cli.unsafe_option_notice' => 'candy-ssh-launcher: der Endpunkt verlangt -o {option} — {effect}',
+    'cli.unsafe_option_effect_strict_host_key_checking' => 'die Rechnerprüfung des Host-Schlüssels ist herabgestuft — der Serverschlüssel bleibt womöglich ungeprüft',
+    'cli.unsafe_option_effect_user_known_hosts_file' => 'die Vertrauensdatenbank der bekannten Hosts des Benutzers ist umgeleitet',
+    'cli.unsafe_option_effect_global_known_hosts_file' => 'die systemweite Vertrauensdatenbank ist umgeleitet',
+    'cli.unsafe_option_effect_log_level' => 'ssh-Warnungen und Hinweise werden versteckt',
+    'cli.unsafe_option_effect_identity_agent' => 'die Authentifizierung wird an einen anderen Agent-Socket delegiert',
+    'cli.unsafe_option_effect_certificate_file' => 'ein zusätzliches Authentifizierungszertifikat wird angeboten',
 
     // picker chrome
     'picker.title'       => '── wishlist ──',

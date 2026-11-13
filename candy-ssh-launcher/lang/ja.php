@@ -49,6 +49,13 @@ return [
     'cli.config_unowned'   => 'candy-ssh-launcher：他のユーザーが所有する設定は拒否します — {path}。設定は信頼される入力です（README の Security 参照）。',
     'cli.config_writable'  => 'candy-ssh-launcher：グループまたは全員が書き込める設定は拒否します — {path}。0644 か 0600 に絞るか、--config で明示的に指定してください。',
     'cli.project_local'    => 'candy-ssh-launcher：プロジェクトローカルの wishlist を使用中 — {path}',
+    'cli.unsafe_option_notice' => 'candy-ssh-launcher: エンドポイントが -o {option} を要求しています — {effect}',
+    'cli.unsafe_option_effect_strict_host_key_checking' => 'ホスト鍵チェックが緩和されています — サーバー鍵が未検証のままになる可能性があります',
+    'cli.unsafe_option_effect_user_known_hosts_file' => 'ユーザーの既知ホスト信頼データベースがリダイレクトされています',
+    'cli.unsafe_option_effect_global_known_hosts_file' => 'システム全体の信頼データベースがリダイレクトされています',
+    'cli.unsafe_option_effect_log_level' => 'ssh の警告と通知が非表示になります',
+    'cli.unsafe_option_effect_identity_agent' => '認証が別のエージェントソケットに委任されています',
+    'cli.unsafe_option_effect_certificate_file' => '追加の認証証明書が提示されています',
 
     // picker chrome
     'picker.title'       => '── wishlist ──',

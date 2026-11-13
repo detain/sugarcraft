@@ -49,6 +49,13 @@ return [
     'cli.config_unowned'   => 'candy-ssh-launcher: zamítnuta konfigurace patřící jinému uživateli: {path} — konfigurace jsou důvěryhodný vstup; viz Security v README.',
     'cli.config_writable'  => 'candy-ssh-launcher: zamítnuta konfigurace zapisovatelná skupinou nebo všemi: {path} — zpřísněte na 0644 nebo 0600, nebo předejte explicitně přes --config.',
     'cli.project_local'    => 'candy-ssh-launcher: používána lokální wishlist projektu: {path}',
+    'cli.unsafe_option_notice' => 'candy-ssh-launcher: endpoint požaduje -o {option} — {effect}',
+    'cli.unsafe_option_effect_strict_host_key_checking' => 'kontrola hostitelských klíčů je oslabena — klíč serveru nemusí být ověřen',
+    'cli.unsafe_option_effect_user_known_hosts_file' => 'databáze důvěry známých hostů uživatele je přesměrována',
+    'cli.unsafe_option_effect_global_known_hosts_file' => 'systémová databáze důvěry je přesměrována',
+    'cli.unsafe_option_effect_log_level' => 'varování a upozornění ssh jsou skryta',
+    'cli.unsafe_option_effect_identity_agent' => 'ověření je delegováno na jiný socket agenta',
+    'cli.unsafe_option_effect_certificate_file' => 'je nabízen další autentizační certifikát',
 
     // picker chrome
     'picker.title'       => '── wishlist ──',

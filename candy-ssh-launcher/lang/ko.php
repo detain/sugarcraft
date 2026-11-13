@@ -49,6 +49,13 @@ return [
     'cli.config_unowned'   => 'candy-ssh-launcher: 다른 사용자가 소유한 구성은 거부합니다: {path} — 구성은 신뢰되는 입력입니다. README의 Security를 참조하세요.',
     'cli.config_writable'  => 'candy-ssh-launcher: 그룹 또는 모든 사용자가 쓸 수 있는 구성은 거부합니다: {path} — 0644 또는 0600으로 조이거나 --config로 명시적으로 전달하세요.',
     'cli.project_local'    => 'candy-ssh-launcher: 프로젝트 로컬 wishlist 사용 중: {path}',
+    'cli.unsafe_option_notice' => 'candy-ssh-launcher: 엔드포인트가 -o {option}을(를) 요청합니다 — {effect}',
+    'cli.unsafe_option_effect_strict_host_key_checking' => '호스트 키 검증이 완화되었습니다 — 서버 키가 검증되지 않을 수 있습니다',
+    'cli.unsafe_option_effect_user_known_hosts_file' => '사용자의 알려진 호스트 신뢰 데이터베이스가 리디렉션되었습니다',
+    'cli.unsafe_option_effect_global_known_hosts_file' => '시스템 전역 신뢰 데이터베이스가 리디렉션되었습니다',
+    'cli.unsafe_option_effect_log_level' => 'ssh 경고와 알림이 숨겨집니다',
+    'cli.unsafe_option_effect_identity_agent' => '인증이 다른 에이전트 소켓으로 위임됩니다',
+    'cli.unsafe_option_effect_certificate_file' => '추가 인증 자격 증명이 제시됩니다',
 
     // picker chrome
     'picker.title'       => '── wishlist ──',

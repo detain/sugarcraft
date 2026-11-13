@@ -198,6 +198,59 @@ final class Endpoint
     }
 
     /**
+     * The host-key-trust-destruction family (candy-ssh-launcher-029).
+     *
+     * `options:` entries ride to ssh verbatim (trusted-input posture), so
+     * a row can carry `-o StrictHostKeyChecking=no` + `-o UserKnownHostsFile=/dev/null`
+     * + `-o LogLevel=QUIET` and silently accept ANY host key while hiding
+     * every warning — a textbook MITM shape that still looks like a normal
+     * login. The trust gate (sshl-23) judges the FILE; this judges the
+     * well-formed payload inside a permitted file: the bin prints each hit
+     * to stderr, by name, before the exec. Notice only — lab configs
+     * legitimately pin `StrictHostKeyChecking=no`, and refusing them would
+     * break the tool's own documented escape hatch.
+     *
+     * Two policies, stated: keys that only ever carry a degrading form
+     * (`UserKnownHostsFile`, `GlobalKnownHostsFile`, `IdentityAgent`,
+     * `CertificateFile` — an explicit override is the payload shape) are
+     * named whenever set; enum-valued keys are judged by value, so the
+     * strengthening settings (`StrictHostKeyChecking=yes`, `LogLevel=INFO`)
+     * never nag. `accept-new` counts as degrading: it auto-trusts a first
+     * contact, which is exactly the MITM window the warning exists for.
+     *
+     * @return list<string> the option entries as written in the config
+     */
+    public function unsafeOptions(): array
+    {
+        // ssh(1) option names are case-sensitive; values enumerated here
+        // are compared case-insensitively (ssh itself accepts any case).
+        $degradingValues = [
+            'StrictHostKeyChecking' => ['no', 'never', 'accept-new'],
+            'LogLevel' => ['quiet', 'error', 'fatal'],
+        ];
+        $alwaysUnsafe = [
+            'UserKnownHostsFile', 'GlobalKnownHostsFile', 'IdentityAgent', 'CertificateFile',
+        ];
+
+        $hits = [];
+        foreach ($this->options as $opt) {
+            $eq = strpos($opt, '=');
+            if ($eq === false) {
+                continue;
+            }
+            $key   = substr($opt, 0, $eq);
+            $value = strtolower(substr($opt, $eq + 1));
+            if (in_array($key, $alwaysUnsafe, true)) {
+                $hits[] = $opt;
+            } elseif (in_array($value, $degradingValues[$key] ?? [], true)) {
+                $hits[] = $opt;
+            }
+        }
+
+        return $hits;
+    }
+
+    /**
      * The picker row for this endpoint.
      *
      * One visibility rule on every surface (-077): the port is ALWAYS
