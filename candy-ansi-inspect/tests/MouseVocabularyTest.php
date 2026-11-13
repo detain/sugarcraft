@@ -183,4 +183,24 @@ final class MouseVocabularyTest extends TestCase
         $this->assertSame('SGR underline colour truncated 256-color', Inspector::describeCsi('58;5', 'm'));
         $this->assertSame('SGR underline colour default', Inspector::describeCsi('59', 'm'));
     }
+
+    public function testKittyKeyboardMarkersAreNamed(): void
+    {
+        // AIP-13 (finding 015): all four markers plus the digit pop keep
+        // their own names — the old table let `ESC[=5u`/`ESC[1u` answer
+        // "restore cursor". Parameterless `CSI u` remains ECMA-48 SCR.
+        $this->assertSame('set kitty keyboard flags 5', Inspector::describeCsi('=5', 'u'));
+        $this->assertSame('push kitty keyboard flags 3', Inspector::describeCsi('>3', 'u'));
+        $this->assertSame('pop kitty keyboard layers 2', Inspector::describeCsi('<2', 'u'));
+        $this->assertSame('pop kitty keyboard layers 1', Inspector::describeCsi('1', 'u'));
+        $this->assertSame('kitty keyboard query', Inspector::describeCsi('?', 'u'));
+        $this->assertSame('kitty keyboard reply, flags=7', Inspector::describeCsi('?7', 'u'));
+        $this->assertSame('restore cursor', Inspector::describeCsi('', 'u'));
+
+        // Wire shape: the pop travels through the handler intact.
+        $segments = Inspector::parse("\x1b[=5u\x1b[1u");
+        $this->assertSame("\x1b[=5u\x1b[1u", implode('', array_map(static fn($s): string => $s->raw(), $segments)));
+        $this->assertStringContainsString('set kitty keyboard flags 5', $segments[0]->describe());
+        $this->assertStringContainsString('pop kitty keyboard layers 1', $segments[1]->describe());
+    }
 }

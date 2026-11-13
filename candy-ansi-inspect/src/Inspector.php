@@ -170,6 +170,15 @@ final class Inspector
         if ($final === 'u' && str_starts_with($params, '>')) {
             return 'push kitty keyboard flags ' . substr($params, 1);
         }
+        if ($final === 'u' && str_starts_with($params, '=')) {
+            return 'set kitty keyboard flags ' . substr($params, 1);
+        }
+        // `CSI N u` pops N kitty layers; ECMA-48's SCR is the PARAMETERLESS
+        // `CSI u`, which keeps the restore-cursor label above (finding 015:
+        // the digit form was silently answering "restore cursor").
+        if ($final === 'u' && preg_match('/^\d+$/', $params) === 1) {
+            return 'pop kitty keyboard layers ' . $params;
+        }
         // XTVERSION request: `CSI > 0 q` — both the glued spelling and the
         // space spelling (finding 020: the space spelling falls through the
         // DECSCUSR-shaped arm because the intermediate sits between the
