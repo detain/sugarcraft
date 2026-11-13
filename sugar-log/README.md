@@ -483,7 +483,7 @@ never cancel the walk or eat the log line.
 
 ## Hook System
 
-The hook system lets you register callbacks that fire whenever a log entry is emitted at or above a given level. Hooks receive the `Level`, PSR-3 level string, message, and context — useful for dispatching to external services, enriching context, or filtering.
+The hook system lets you register callbacks that fire whenever a log entry is emitted at or above a given level. Hooks receive the `Level`, PSR-3 level string, message, and context — useful for reacting to a completed write: forwarding, counters, alerts. They run *after* the record is written and receive copies, so a hook can never modify or suppress the record it observes.
 
 > **Note:** Hooks fire **only via `PsrBridge`** — they do not fire when calling `Logger->info()` etc. directly. For the plain `Logger` API, hooks are not invoked. To use hooks, wrap your `Logger` in a `PsrBridge` and call methods on the bridge. A record the bridge's level filter drops is neither written nor dispatched to hooks.
 
@@ -498,7 +498,7 @@ $hooks = new HookRegistry();
 
 // Register a callback for all Warn-and-above entries
 $id = $hooks->onLevel(Level::Warn, function (Level $level, string $psrLevel, string $message, array $context) {
-    // Dispatch to external service, enrich context, etc.
+    // React to the completed write: dispatch, count, alert — never mutate.
     file_put_contents(sys_get_temp_dir() . '/sugar-log-warn.log', "[{$level->label()}] {$message}\n", FILE_APPEND);
 });
 
@@ -586,10 +586,12 @@ $log->info('who called me'); // line carries a <file:line> tag
 ## Stdlog adapter
 
 `StandardLogAdapter` mirrors the *shape* of Go's `log.Logger` methods —
-`print()`/`printLn()`/`fatal()`/`panic()` — over a sugar-log `Logger`. Be
-honest about the boundary: PHP has no `*log.Logger` interface and no
-`net/http`, so the adapter implements **no contract**; it is a call-pattern
-bridge (hand it to code written against that method roster):
+`print()`/`printf()`/`printLn()`/`fatal()`/`fatalf()`/`panic()`/`panicf()`,
+plus `errorf()` as the twin of `Logger::errorf()` (Go stdlog never had an
+Errorf) — over a sugar-log `Logger`. Be honest about the boundary: PHP has
+no `*log.Logger` interface and no `net/http`, so the adapter implements **no
+contract**; it is a call-pattern bridge (hand it to code written against
+that method roster):
 
 ```php
 use SugarCraft\Log\Level;
@@ -597,18 +599,28 @@ use SugarCraft\Log\Logger;
 use SugarCraft\Log\StandardLogAdapter;
 
 $logger = Logger::new(level: Level::Debug);
-$stdlog = new StandardLogAdapter($logger);
-$stdlog->printLn('GET /health');     // lands like Logger::print(): INF label, bypasses the minLevel filter
+$stdlog = new StandardLogAdapter($logger);               // un-forced
+$warnlog = new StandardLogAdapter($logger, Level::Warn); // forced above Info
+$stdlog->printLn('GET /health');  // lands like Logger::print(): INF label, bypasses the minLevel filter
+$stdlog->printf('open %s in %dms', 'db', 12);            // vsprintf, then the print() path
+$warnlog->printLn('disk 92% full'); // forced: rides the filter as WRN instead of bypassing
 try {
-    $stdlog->fatal('listen :80 failed'); // writes the record, then throws RuntimeException
+    $stdlog->fatalf('listen %s failed', ':80'); // writes the record, then throws
 } catch (RuntimeException) {
-    // Go's Fatal would exit(1) here
+    // Go's Fatal would exit(1) here; the port's exit is a catchable throw
 }
 ```
 
-An adapter built with a forced level above `Info` keeps the bypass only for
-the un-forced path: once a level above `Info` is forced, `print()` goes
-through the `minLevel` filter like any ordinary call at that level.
+The constructor's second parameter, `$forceLevel`, decides what `print()`
+(and `printf()`) does: with none forced — or with `Level::Info` — the write
+bypasses the `minLevel` filter exactly like `Logger::print()`; with a level
+above `Info` forced, `print()` goes through the filter like any ordinary
+call at that level.
+
+Go separates panic (recoverable unwind) from Fatal (`exit(2)`); in this port
+the exit *is* a throw, so `fatal()` and `panic()` (and their `*f` twins)
+write the same FTL record and throw the same `FatalLoggedException` — a
+`RuntimeException` — which is precisely why catch-and-recover works here.
 
 ## Sample output
 

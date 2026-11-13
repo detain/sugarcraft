@@ -9,8 +9,9 @@ use SugarCraft\Log\Level;
 /**
  * Log hook contract — invoked when a log entry is emitted.
  *
- * Allows intercepting log events for side-effects (dispatching to
- * external services, enriching context, filtering, etc.).
+ * Side-effects only: hooks run after the write with copies of the record
+ * (dispatching to external services, counters, alerts) — they cannot modify
+ * or filter what was already written.
  */
 interface Hook
 {

@@ -5,13 +5,15 @@ declare(strict_types=1);
 namespace SugarCraft\Log\Tests;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Log\FatalLoggedException;
 use SugarCraft\Log\Level;
 use SugarCraft\Log\Logger;
 use SugarCraft\Log\StandardLogAdapter;
 
 /**
  * Tests for StandardLogAdapter.
- * Covers: print, printLn, fatal, panic, logger, forceLevel, and multi-arg stringification.
+ * Covers: print, printLn, fatal, panic, logger, forceLevel, multi-arg
+ * stringification, and the printf family (printf/errorf/fatalf/panicf).
  */
 final class StandardLogAdapterTest extends TestCase
 {
@@ -91,6 +93,87 @@ final class StandardLogAdapterTest extends TestCase
         $this->assertSame('', (string) \file_get_contents($warnPath));
         \unlink($infoPath);
         \unlink($warnPath);
+    }
+
+    public function testPrintfFormatsThenRidesThePrintBypass(): void
+    {
+        $stream = \fopen($this->tempPath, 'w');
+        $logger = Logger::new(stream: $stream, level: Level::Error, reportTimestamp: false);
+        $adapter = new StandardLogAdapter($logger);
+
+        $adapter->printf('open %s in %dms', 'db', 12);
+
+        \fclose($stream);
+        $content = (string) \file_get_contents($this->tempPath);
+        // vsprintf first (one message, not space-joined parts), then print()'s
+        // un-forced bypass: written despite the Error minimum, INF label.
+        $this->assertStringContainsString('open db in 12ms', $content);
+        $this->assertStringContainsString('INF', $content);
+    }
+
+    public function testPrintfFollowsTheForcedFilterLikePrint(): void
+    {
+        $stream = \fopen($this->tempPath, 'w');
+        $logger = Logger::new(stream: $stream, level: Level::Error, reportTimestamp: false);
+        $adapter = new StandardLogAdapter($logger, Level::Warn);
+
+        $adapter->printf('disk %d%% full', 92);
+
+        \fclose($stream);
+        // Forced above Info rides the filter: the Error minimum drops the WRN.
+        $this->assertSame('', (string) \file_get_contents($this->tempPath));
+    }
+
+    public function testErrorfWritesAFilteredErrorRecord(): void
+    {
+        $stream = \fopen($this->tempPath, 'w');
+        $logger = Logger::new(stream: $stream, level: Level::Warn, reportTimestamp: false);
+        $adapter = new StandardLogAdapter($logger);
+
+        $adapter->errorf('bad %s', 'input');
+
+        \fclose($stream);
+        $content = (string) \file_get_contents($this->tempPath);
+        $this->assertStringContainsString('ERR', $content);
+        $this->assertStringContainsString('bad input', $content);
+    }
+
+    public function testFatalfWritesThenThrowsTypedException(): void
+    {
+        $stream = \fopen($this->tempPath, 'w');
+        $logger = Logger::new(stream: $stream, level: Level::Debug, reportTimestamp: false);
+        $adapter = new StandardLogAdapter($logger);
+
+        try {
+            $adapter->fatalf('listen %s failed', ':80');
+            $this->fail('fatalf() must throw after writing the record');
+        } catch (FatalLoggedException $e) {
+            $this->assertStringContainsString('listen :80 failed', $e->getMessage());
+        }
+
+        \fclose($stream);
+        $content = (string) \file_get_contents($this->tempPath);
+        $this->assertStringContainsString('FTL', $content);
+        $this->assertStringContainsString('listen :80 failed', $content);
+    }
+
+    public function testPanicfIsTheAliasArmOfFatalf(): void
+    {
+        $stream = \fopen($this->tempPath, 'w');
+        $logger = Logger::new(stream: $stream, level: Level::Debug, reportTimestamp: false);
+        $adapter = new StandardLogAdapter($logger);
+
+        try {
+            $adapter->panicf('boom %d', 7);
+            $this->fail('panicf() must throw — the port collapses panic into fatal');
+        } catch (FatalLoggedException $e) {
+            $this->assertStringContainsString('boom 7', $e->getMessage());
+        }
+
+        \fclose($stream);
+        $content = (string) \file_get_contents($this->tempPath);
+        $this->assertStringContainsString('FTL', $content);
+        $this->assertStringContainsString('boom 7', $content);
     }
 
     public function testPrintLnDelegatesToPrint(): void
