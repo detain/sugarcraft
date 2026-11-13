@@ -117,27 +117,33 @@ final class SelectionRangeTest extends TestCase
     }
 
     /**
-     * @return array<string, array{0:int,1:int,2:int,3:int,4:int|null,5:int|null}>
+     * @return array<string, array{0:int,1:int,2:int,3:int,4:int|null,5:int|null,6:string}>
      */
     public static function offTerminalCellPairs(): array
     {
         return [
-            'start row 0'        => [0, 4, 2, 5, null, null],
-            'start col 0'        => [2, 0, 4, 5, null, null],
-            'end row negative'   => [2, 4, -1, 5, null, null],
-            'end col 0'          => [2, 4, 5, 0, null, null],
-            'edge from 0'        => [2, 4, 5, 6, 0, 9],
-            'edge to negative'   => [2, 4, 5, 6, 1, -2],
+            'start row 0'        => [0, 4, 2, 5, null, null, 'rowA'],
+            'start col 0'        => [2, 0, 4, 5, null, null, 'colA'],
+            'end row negative'   => [2, 4, -1, 5, null, null, 'rowB'],
+            'end col 0'          => [2, 4, 5, 0, null, null, 'colB'],
+            'edge from 0'        => [2, 4, 5, 6, 0, 9, 'edgeFrom'],
+            'edge to negative'   => [2, 4, 5, 6, 1, -2, 'edgeTo'],
         ];
     }
 
     #[DataProvider('offTerminalCellPairs')]
-    public function testNewRefusesOffTerminalCells(int $rowA, int $colA, int $rowB, int $colB, ?int $edgeFrom, ?int $edgeTo): void
+    public function testNewRefusesOffTerminalCells(int $rowA, int $colA, int $rowB, int $colB, ?int $edgeFrom, ?int $edgeTo, string $param): void
     {
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('1-based terminal cells');
 
-        SelectionRange::new($rowA, $colA, $rowB, $colB, $edgeFrom, $edgeTo);
+        try {
+            SelectionRange::new($rowA, $colA, $rowB, $colB, $edgeFrom, $edgeTo);
+        } catch (\InvalidArgumentException $e) {
+            // SM-S24: the message must name WHICH parameter went off-terminal
+            self::assertStringContainsString('for parameter ' . $param, $e->getMessage());
+            throw $e;
+        }
     }
 
     public function testInvertedEdgesAreNormalisedNotObeyed(): void

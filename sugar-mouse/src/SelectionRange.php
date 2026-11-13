@@ -176,13 +176,24 @@ final class SelectionRange
     /**
      * Fail fast on coordinates no terminal can report: SGR cells start at 1,
      * and a 0 here would silently mis-index {@see extract()}'s lines.
+     * Names the offending parameter in the message — the variadic spelling
+     * this replaced lost the argument identity at the throw site.
      */
-    private static function refuseOffTerminalCells(?int ...$cells): void
-    {
-        foreach ($cells as $cell) {
+    private static function refuseOffTerminalCells(
+        ?int $rowA,
+        ?int $colA,
+        ?int $rowB,
+        ?int $colB,
+        ?int $edgeFrom,
+        ?int $edgeTo,
+    ): void {
+        foreach (
+            ['rowA' => $rowA, 'colA' => $colA, 'rowB' => $rowB, 'colB' => $colB, 'edgeFrom' => $edgeFrom, 'edgeTo' => $edgeTo]
+            as $param => $cell
+        ) {
             if ($cell !== null && $cell < 1) {
                 throw new \InvalidArgumentException(
-                    Lang::t('selection.off_terminal', ['cell' => $cell])
+                    Lang::t('selection.off_terminal', ['cell' => $cell, 'param' => $param])
                 );
             }
         }

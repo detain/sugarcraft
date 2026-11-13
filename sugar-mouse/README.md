@@ -196,7 +196,11 @@ text selection is addressed like a file:
 | `SelectionRange::new($rowA, $colA, $rowB, $colB)`, `extract()` indexing `$lines[$row - 1]` | row, col |
 
 `SelectionRange`'s promoted fields are named (`startRow`, `startCol`, …),
-so construction from a `range()` result is unambiguous.
+so construction from a `range()` result is unambiguous. And every cell is
+1-based: a 0 (or negative) row/col is refused loudly at construction with
+`selection.off_terminal`, whose message names the offending parameter
+("got 0 for parameter colA — clamp or rebase the pointer before building
+a range").
 
 ## Accessibility
 
