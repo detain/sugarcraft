@@ -157,6 +157,21 @@ final class Detect
     private static $probeStdin = null;
 
     /**
+     * Capture channel for the query bytes the probe writes (finding 031).
+     *
+     * Before this seam existed, injecting only stdin left the WRITERS
+     * pointing at the process's real STDOUT: an injected-stdin test on a
+     * runner whose stdout is not a tty still sprayed raw ESC[c/16t/14t/18t
+     * and OSC-10/11 queries into the test harness's byte stream, which
+     * downstream tooling (golden capture, TUI hosts sharing the pipe)
+     * has no way to filter. With a capture stream injected, the bytes
+     * land where the test that caused them can assert on them instead.
+     *
+     * @var resource|null
+     */
+    private static $probeStdout = null;
+
+    /**
      * Stray input: bytes the probe readers pulled off the tty that were NOT
      * part of any reply — the user's own keystrokes, typed while the boot
      * queries were in flight. A slurp takes whatever the kernel queued,
@@ -395,6 +410,20 @@ final class Detect
     public static function setProbeStdin($fd): void
     {
         self::$probeStdin = $fd;
+    }
+
+    /**
+     * Override the stdout sink used for writing the queries.
+     * Use this in tests to capture the query bytes the probe sends
+     * instead of spraying them onto the process's real STDOUT (finding
+     * 031); production code leaves this null. Pass null to restore the
+     * real STDOUT. Like {@see setProbeStdin()}, a test seam, not a knob.
+     *
+     * @param resource|null $stream
+     */
+    public static function setProbeStdout($stream): void
+    {
+        self::$probeStdout = $stream;
     }
 
     /**
@@ -796,12 +825,13 @@ final class Detect
         // and the read only stops on it.  In tests, pre-loading
         // the reply avoids any drain-then-read race condition.
 
-        // Write DA1 query to stdout (terminal receives it as input).
-        $written = @fwrite(STDOUT, self::DA1_QUERY);
+        // Write DA1 query to the stdout sink (terminal receives it as input).
+        $out     = self::stdoutFd();
+        $written = @fwrite($out, self::DA1_QUERY);
         if ($written === false || $written !== strlen(self::DA1_QUERY)) {
             return null;
         }
-        fflush(STDOUT);
+        fflush($out);
 
         // Read the reply from stdin (terminal echoes it back).
         $reply = self::readStdinTimed(self::TIMEOUT_MS, $fd, self::DA1_REPLY_TERMINATOR);
@@ -836,6 +866,17 @@ final class Detect
     private static function drainStdin(int $limitMs, $fd): void
     {
         if (!\is_resource($fd)) {
+            return;
+        }
+
+        // (008) Drain ONLY a terminal. Reaching this site with a pipe on
+        // fd 0 means probe() ran under piped stdin — a real terminal
+        // answers queries on the descriptor, a pipe answers nothing, so
+        // the bytes here are not late replies but the input the caller's
+        // own reader is waiting for. The 50 ms window used to steal
+        // whichever front bytes arrived; a pre-seeded pipe descriptor
+        // must survive probe() unread.
+        if (!\stream_isatty($fd)) {
             return;
         }
 
@@ -1018,27 +1059,57 @@ final class Detect
         return \is_resource($fd) ? $fd : null;
     }
 
+    /**
+     * The sink the query writers use: the {@see setProbeStdout()} capture
+     * channel when one is injected, the real STDOUT otherwise. Always a
+     * resource — STDOUT is one even when it is not a tty, and the
+     * interactivity gate in {@see isInteractiveTty()} is what keeps a
+     * non-tty run from writing at all (finding 031: exactly that gate is
+     * why injection cannot skip it).
+     *
+     * @return resource
+     */
+    private static function stdoutFd()
+    {
+        return self::$probeStdout ?? STDOUT;
+    }
+
     private static function isInteractiveTty(): bool
     {
-        // Test override: when setProbeStdin() injected a mock stdin, skip
-        // the real TTY check (CI environments have no real TTY). The
-        // is_resource() is not redundant with the null check: a caller that
-        // injected a stream and then closed it leaves a non-null handle that
-        // is no longer a stream, and answering "interactive" for it is what
-        // carries a dead descriptor into readStdinTimed().
+        // Test override: when setProbeStdin() injects a mock stdin, the
+        // real-stdin tty check is replaced by the seam's usability — but
+        // the STDOUT leg still has to pass: injected OR captured.
+        // (031) Skipping the real TTY check on STDOUT the way this arm
+        // used to lets an injected-stdin run write its queries to a
+        // non-tty: bytes no terminal will ever answer, sprayed straight
+        // into whatever consumes the process's stdout (a PHPUnit
+        // harness, a golden capture, a parent TUI). An injected capture
+        // stream stands in for the tty exactly as an injected stream
+        // stands in for stdin; the is_resource() legs are not redundant
+        // with the null checks either way — a closed-but-non-null handle
+        // answering "interactive" is what carries a dead descriptor into
+        // readStdinTimed(), the shape the closed-stdin guards were born
+        // for.
         if (self::$probeStdin !== null) {
-            return \is_resource(self::$probeStdin);
+            $stdoutReady = self::$probeStdout !== null
+                ? \is_resource(self::$probeStdout)
+                : TtyDetect::isAtty(STDOUT);
+
+            return \is_resource(self::$probeStdin) && $stdoutReady;
         }
 
-        // Explicitly disabled for testing daemon/CGI environments.
+        // Explicitly disabled for testing daemon/CGI environments — still
+        // answered BEFORE any tty arithmetic, so a lone stdout capture
+        // (a plumbing choice, not a claim of interactivity) cannot
+        // override an explicit refusal.
         if (isset($GLOBALS['__candy_non_interactive'])) {
             return !$GLOBALS['__candy_non_interactive'];
         }
 
-        return (
-            TtyDetect::isAtty(self::stdinFd())
-            && TtyDetect::isAtty(STDOUT)
-        );
+        return TtyDetect::isAtty(self::stdinFd())
+            && (self::$probeStdout !== null
+                ? \is_resource(self::$probeStdout)
+                : TtyDetect::isAtty(STDOUT));
     }
 
     /**
@@ -1181,11 +1252,12 @@ final class Detect
             return [null, null]; // no usable descriptor 0, nothing to read
         }
 
-        $written = @fwrite(STDOUT, self::OSC_COLOR_QUERIES);
+        $out     = self::stdoutFd();
+        $written = @fwrite($out, self::OSC_COLOR_QUERIES);
         if ($written === false || $written !== strlen(self::OSC_COLOR_QUERIES)) {
             return [null, null];
         }
-        fflush(STDOUT);
+        fflush($out);
 
         $buf      = '';
         $deadline = Deadline::in(self::OSC_WINDOW_MS);
@@ -1327,12 +1399,13 @@ final class Detect
      */
     private static function probeXtwino(string $query): ?CellSize
     {
-        // Write the query to stdout.
-        $written = @fwrite(STDOUT, $query);
+        // Write the query to the stdout sink.
+        $out     = self::stdoutFd();
+        $written = @fwrite($out, $query);
         if ($written === false || $written !== strlen($query)) {
             return null;
         }
-        fflush(STDOUT);
+        fflush($out);
 
         // Read the response with a tight timeout (terminal responds fast).
         $reply = self::readStdinTimed(self::TIMEOUT_MS, self::stdinFd(), self::XTWINOPS_REPLY_TERMINATOR);
@@ -1347,11 +1420,12 @@ final class Detect
      */
     private static function probeXtwinoCellCount(): ?CellSize
     {
-        $written = @fwrite(STDOUT, self::XTWINOP_18);
+        $out     = self::stdoutFd();
+        $written = @fwrite($out, self::XTWINOP_18);
         if ($written === false || $written !== strlen(self::XTWINOP_18)) {
             return null;
         }
-        fflush(STDOUT);
+        fflush($out);
 
         $reply = self::readStdinTimed(self::TIMEOUT_MS, self::stdinFd(), self::XTWINOPS_REPLY_TERMINATOR);
 

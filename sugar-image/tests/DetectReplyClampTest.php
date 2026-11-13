@@ -50,6 +50,9 @@ final class DetectReplyClampTest extends TestCase
     /** @var list<resource> */
     private array $open = [];
 
+    /** @var resource|null */
+    private $probeCapture = null;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -62,12 +65,19 @@ final class DetectReplyClampTest extends TestCase
         Detect::clearTmuxTermFeaturesOverride();
         Detect::setTerminfoSixelOverride(false); // no exec from this file
         Detect::setAutoPassthrough(false);
+        $this->probeCapture = fopen('php://temp', 'r+b');
+        Detect::setProbeStdout($this->probeCapture); // SI-07: query bytes need a destination that is not the runner
     }
 
     protected function tearDown(): void
     {
         Detect::reset();
         Detect::setProbeStdin(null);
+        Detect::setProbeStdout(null);
+        if (\is_resource($this->probeCapture)) {
+            fclose($this->probeCapture);
+        }
+        $this->probeCapture = null;
         Detect::clearTmuxTermFeaturesOverride();
         Detect::clearTerminfoSixelOverride();
         Detect::setAutoPassthrough(true);

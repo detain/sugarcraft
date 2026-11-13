@@ -58,6 +58,9 @@ final class DetectClosedStdinTest extends TestCase
     /** @var array<string, string|false> */
     private array $envSnapshot = [];
 
+    /** @var resource|null */
+    private $probeCapture = null;
+
     protected function setUp(): void
     {
         // Made an ambient TMUX load-bearing for the probe: with the
@@ -75,12 +78,19 @@ final class DetectClosedStdinTest extends TestCase
         }
         Detect::clearTmuxTermFeaturesOverride();
         Detect::setTerminfoSixelOverride(false);
+        $this->probeCapture = fopen('php://temp', 'r+b');
+        Detect::setProbeStdout($this->probeCapture); // SI-07: query bytes need a destination that is not the runner
     }
 
     protected function tearDown(): void
     {
         Detect::reset();
         Detect::setProbeStdin(null);
+        Detect::setProbeStdout(null);
+        if (\is_resource($this->probeCapture)) {
+            fclose($this->probeCapture);
+        }
+        $this->probeCapture = null;
         Detect::clearTmuxTermFeaturesOverride();
         Detect::clearTerminfoSixelOverride();
         foreach ($this->envSnapshot as $key => $value) {
@@ -310,18 +320,61 @@ final class DetectClosedStdinTest extends TestCase
         fclose($pair[1]);
         self::assertSame('', $read->invoke(null, 200, $dead, Detect::DA1_REPLY_TERMINATOR), 'readStdinTimed() did not degrade on a dead handle');
 
-        // drainStdin(): void, so the control is the pipe being emptied.
+        // drainStdin(): void, so the pin is what the pipe holds AFTER the
+        // call. Pre-SI-07 the control here was the pipe being emptied —
+        // SI-07 (finding 008) inverted that law on purpose: a pipe is not
+        // a terminal, nobody answers a query through it, so its bytes are
+        // somebody else's input and the drain must leave them alone. The
+        // real-stream_isatty arm of the guard is exercised by every pair
+        // below (socket pairs are not ttys on CI runners).
         $drain = new \ReflectionMethod(Detect::class, 'drainStdin');
         $ctl = stream_socket_pair(\STREAM_PF_UNIX, \STREAM_SOCK_STREAM, 0);
         self::assertIsArray($ctl);
         stream_set_blocking($ctl[0], false);
         fwrite($ctl[1], 'stale probe bytes');
         $drain->invoke(null, 50, $ctl[0]);
-        self::assertSame('', (string) fread($ctl[0], 64), 'the control did not drain, so the treatment says nothing');
+        self::assertSame(
+            'stale probe bytes',
+            (string) fread($ctl[0], 64),
+            'drainStdin() consumed piped input — the 008 door is open again',
+        );
         fclose($ctl[0]);
         fclose($ctl[1]);
         $drain->invoke(null, 50, $dead);
         self::addToAssertionCount(1); // reaching here IS the assertion: no throw.
+    }
+
+    /**
+     * (finding 008, the probe-level pin) With piped stdin — no tty on the
+     * read side, nothing injected on the write side — probe() must not
+     * consume the user's input. The drain used to be the thief: it ran
+     * its 50 ms window even though no query could ever have been
+     * requested, so the first bytes typed (or piped) after probe()
+     * started were silently eaten and never seen by any later reader.
+     */
+    public function testAPreSeededPipeSurvivesProbeUnread(): void
+    {
+        if (\SugarCraft\Core\Util\TtyDetect::isAtty(STDOUT)) {
+            $this->markTestSkipped('needs a non-tty STDOUT to model the headless probe; a real tty answers queries');
+        }
+
+        $pair = stream_socket_pair(\STREAM_PF_UNIX, \STREAM_SOCK_STREAM, 0);
+        self::assertIsArray($pair);
+        [$read, $write] = $pair;
+        $seed = "typed-ahead-of-probe\n";
+        fwrite($write, $seed);
+        stream_set_blocking($read, false);
+
+        Detect::setProbeStdin($read);
+        Detect::setProbeStdout(null); // gate on: STDOUT is a pipe here, so nothing may be written anywhere
+
+        Detect::probe();
+
+        $survivor = fread($read, 64);
+        self::assertSame($seed, $survivor, 'probe() stole piped input the drain was never owed');
+        @fclose($read);
+        @fclose($write);
+        Detect::setProbeStdin(null);
     }
 
     /**

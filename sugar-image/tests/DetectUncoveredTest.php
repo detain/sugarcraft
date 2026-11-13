@@ -15,6 +15,9 @@ final class DetectUncoveredTest extends TestCase
     /** @var array<string,string|false> */
     private array $savedEnv = [];
 
+    /** @var resource|null */
+    private $probeCapture = null;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -27,6 +30,8 @@ final class DetectUncoveredTest extends TestCase
         Detect::reset();
         Detect::clearTmuxTermFeaturesOverride();
         Detect::setTerminfoSixelOverride(false);
+        $this->probeCapture = fopen('php://temp', 'r+b');
+        Detect::setProbeStdout($this->probeCapture); // SI-07: query bytes need a destination that is not the runner
     }
 
     protected function tearDown(): void
@@ -40,6 +45,11 @@ final class DetectUncoveredTest extends TestCase
         }
         Detect::reset();
         Detect::setProbeStdin(null);
+        Detect::setProbeStdout(null);
+        if (\is_resource($this->probeCapture)) {
+            fclose($this->probeCapture);
+        }
+        $this->probeCapture = null;
         Detect::clearTmuxTermFeaturesOverride();
         Detect::clearTerminfoSixelOverride();
         parent::tearDown();

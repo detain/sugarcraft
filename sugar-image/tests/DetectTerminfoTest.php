@@ -66,6 +66,9 @@ final class DetectTerminfoTest extends TestCase
     /** canned reply WITHOUT the sixel bit — the fallthrough control */
     private const DA1_NO_SIXEL_REPLY = "\x1b[?62;0c";
 
+    /** @var resource|null */
+    private $probeCapture = null;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -93,12 +96,19 @@ final class DetectTerminfoTest extends TestCase
         Detect::setTerminfoProbe(null);
         Detect::setAutoPassthrough(false);
         InfocmpBinary::reset();
+        $this->probeCapture = fopen('php://temp', 'r+b');
+        Detect::setProbeStdout($this->probeCapture); // SI-07: query bytes need a destination that is not the runner
     }
 
     protected function tearDown(): void
     {
         Detect::reset();
         Detect::setProbeStdin(null);
+        Detect::setProbeStdout(null);
+        if (\is_resource($this->probeCapture)) {
+            fclose($this->probeCapture);
+        }
+        $this->probeCapture = null;
         Detect::clearTmuxTermFeaturesOverride();
         Detect::clearTerminfoSixelOverride();
         Detect::setTerminfoProbe(null);

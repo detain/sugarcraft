@@ -18,7 +18,9 @@ use SugarCraft\Image\TermDb;
  * answers onto every probe path.
  *
  * Everything here runs against injected stream pairs (the setProbeStdin
- * seam) or injected statics — no real tty, no tmux, no terminfo. Reply
+ * seam) or injected statics — no real tty, no tmux, no terminfo; since
+ * SI-07 the query writers are steered into the setProbeStdout capture
+ * channel the same way, so no test's query bytes reach the runner. Reply
  * bytes are the shapes chafa models (chafa-term-db.c:248-253, narrowing
  * at chafa-term.c:403-409); the '#rrggbb' spelling some emulators answer
  * with is deliberately NOT modelled (triplet-only parse, chafa parity).
@@ -30,6 +32,9 @@ final class DetectQueryTest extends TestCase
 
     /** @var list<array{read: resource, write: resource}> */
     private array $pairs = [];
+
+    /** @var resource|null */
+    private $probeCapture = null;
 
     protected function setUp(): void
     {
@@ -44,6 +49,13 @@ final class DetectQueryTest extends TestCase
         Detect::clearTmuxTermFeaturesOverride();
         Detect::setTerminfoSixelOverride(false);
         Detect::setProbeStdin(null);
+        // SI-07 (finding 031): injecting stdin alone is no longer
+        // "interactive" — the query writers need a destination, and the
+        // capture channel is what keeps those bytes off the runner's
+        // real STDOUT. Arms below may assert on the written queries via
+        // $this->probeCaptureBytes().
+        $this->probeCapture = fopen('php://temp', 'r+b');
+        Detect::setProbeStdout($this->probeCapture);
         unset($GLOBALS['__candy_non_interactive']);
     }
 
@@ -63,10 +75,35 @@ final class DetectQueryTest extends TestCase
         $this->pairs = [];
         Detect::reset();
         Detect::setProbeStdin(null);
+        Detect::setProbeStdout(null);
+        if (\is_resource($this->probeCapture)) {
+            fclose($this->probeCapture);
+        }
+        $this->probeCapture = null;
         Detect::clearTmuxTermFeaturesOverride();
         Detect::clearTerminfoSixelOverride();
         unset($GLOBALS['__candy_non_interactive']);
         parent::tearDown();
+    }
+
+    /**
+     * Bytes the probe has written to the capture channel so far — the
+     * query side of an injected session is now assertable rather than
+     * sprayed (finding 031).
+     */
+    private function probeCaptureBytes(): string
+    {
+        $this->assertIsResource($this->probeCapture);
+        fflush($this->probeCapture);
+        $pos  = ftell($this->probeCapture);
+        rewind($this->probeCapture);
+        $bytes = stream_get_contents($this->probeCapture);
+        $this->assertIsString($bytes);
+        if ($pos !== false) {
+            fseek($this->probeCapture, $pos);
+        }
+
+        return $bytes;
     }
 
     // -------------------------------------------------------------------------
@@ -560,6 +597,30 @@ final class DetectQueryTest extends TestCase
      *
      * @return array{read: resource, write: resource}
      */
+    /**
+     * (finding 031) The capture channel is not decoration: the query
+     * bytes arrive HERE — provably not on the runner's real STDOUT — and
+     * a silent terminal costs the window exactly once. Constants are
+     * pulled by reflection because the wire shapes are private law.
+     */
+    public function testTheQueriesLandInTheCaptureChannelNotTheRunner(): void
+    {
+        $pair = $this->createStreamPair(); // silent: nothing ever answers
+        Detect::setProbeStdin($pair['read']);
+
+        $constants = new \ReflectionClass(Detect::class);
+        $oscQueries = (string) $constants->getConstant('OSC_COLOR_QUERIES');
+        $da1Query   = (string) $constants->getConstant('DA1_QUERY');
+
+        $colors = new \ReflectionMethod(Detect::class, 'probeDefaultColors');
+        $this->assertSame([null, null], $colors->invoke(null));
+        $da1 = new \ReflectionMethod(Detect::class, 'probeDa1');
+        $this->assertNull($da1->invoke(null));
+
+        $captured = $this->probeCaptureBytes();
+        $this->assertSame($oscQueries . $da1Query, $captured, 'the capture must hold exactly the bytes the probe wrote, in call order');
+    }
+
     private function createStreamPair(): array
     {
         $pair = @stream_socket_pair(

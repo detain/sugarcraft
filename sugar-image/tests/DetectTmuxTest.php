@@ -53,6 +53,9 @@ final class DetectTmuxTest extends TestCase
     /** @var list<resource> */
     private array $open = [];
 
+    /** @var resource|null */
+    private $probeCapture = null;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -73,12 +76,19 @@ final class DetectTmuxTest extends TestCase
         Detect::clearTmuxTermFeaturesOverride();
         Detect::setTerminfoSixelOverride(false);
         Detect::setAutoPassthrough(false); // no F-05 transaction from these probes
+        $this->probeCapture = fopen('php://temp', 'r+b');
+        Detect::setProbeStdout($this->probeCapture); // SI-07: query bytes need a destination that is not the runner
     }
 
     protected function tearDown(): void
     {
         Detect::reset();
         Detect::setProbeStdin(null);
+        Detect::setProbeStdout(null);
+        if (\is_resource($this->probeCapture)) {
+            fclose($this->probeCapture);
+        }
+        $this->probeCapture = null;
         Detect::clearTmuxTermFeaturesOverride();
         Detect::clearTerminfoSixelOverride();
         Detect::setAutoPassthrough(true);
