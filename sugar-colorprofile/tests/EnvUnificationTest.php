@@ -342,9 +342,14 @@ final class EnvUnificationTest extends TestCase
             $this->assertSame('1', $resolved['No_Color'] ?? null, 'the odd casing rides the ambient snapshot as its own key');
             $this->assertNull(Env::value($resolved, 'NO_COLOR'), 'the exact-key lookup must not alias-match');
             $this->assertSame(
-                DetectionChain::LEVEL_ANSI,
+                DetectionChain::LEVEL_ASCII,
                 DetectionChain::detect([])->level(),
-                'No_Color suppresses nothing: the NO_COLOR leg stays dark',
+                'No_Color suppresses nothing: the chain answers the CP-10 colorless floor',
+            );
+            $this->assertSame(
+                'fallback:default',
+                DetectionChain::detect([])->source(),
+                'the answer must carry the DEFAULT source, never env:NO_COLOR — an aliasing lookup would have suppressed',
             );
         } finally {
             putenv('No_Color');

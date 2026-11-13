@@ -95,10 +95,11 @@ final class TerminalProbeTest extends TestCase
                 [Capability::NoColor, Capability::BasicAscii],
             ],
             // no-color.org: NO_COLOR="" is UNSET — detection falls through
-            // to the TERM rungs (flipped with the MT2 cure).
+            // (flipped with the MT2 cure; since CP-10 the fall-through lands
+            // on the colorless floor: no TERM means no Color16 promise).
             'no_color empty string is unset' => [
                 ['NO_COLOR' => ''],
-                [Capability::Color16, Capability::BasicAscii],
+                [Capability::BasicAscii],
             ],
 
             // 3. CLICOLOR=0 → NoColor
@@ -202,10 +203,12 @@ final class TerminalProbeTest extends TestCase
                 [Capability::Color16, Capability::BasicAscii],
             ],
 
-            // 11. Default (no TERM set) → Color16
-            'default (no term set) returns Color16' => [
+            // 11. Default (no TERM set) → the colorless floor (CP-10): the
+            //     BasicAscii arm only — no Color16 promise for a terminal
+            //     nobody declared.
+            'default (no term set) floors colorless' => [
                 [],
-                [Capability::Color16, Capability::BasicAscii],
+                [Capability::BasicAscii],
             ],
         ];
     }
@@ -369,9 +372,12 @@ final class TerminalProbeTest extends TestCase
     public function testCheckEscapeQueriesWithHyper(): void
     {
         $this->env('TERM_PROGRAM', 'Hyper');
-        $this->env('TERM', '');
+        // CP-10: an empty TERM now floors colorless and the colorless
+        // floor gates phase 3 (CP-05) — arm a KNOWN prefix so this test keeps
+        // testing what it names: the TERM_PROGRAM identity leg.
+        $this->env('TERM', 'xterm');
 
-        $probe = new class(['TERM_PROGRAM' => 'Hyper', 'TERM' => '']) extends TerminalProbe {
+        $probe = new class(['TERM_PROGRAM' => 'Hyper', 'TERM' => 'xterm']) extends TerminalProbe {
             protected function isInteractive(): bool
             {
                 return true;
@@ -385,9 +391,12 @@ final class TerminalProbeTest extends TestCase
     public function testCheckEscapeQueriesWithWezTerm(): void
     {
         $this->env('TERM_PROGRAM', 'WezTerm');
-        $this->env('TERM', '');
+        // CP-10: an empty TERM now floors colorless and the colorless
+        // floor gates phase 3 (CP-05) — arm a KNOWN prefix so this test keeps
+        // testing what it names: the TERM_PROGRAM identity leg.
+        $this->env('TERM', 'xterm');
 
-        $probe = new class(['TERM_PROGRAM' => 'WezTerm', 'TERM' => '']) extends TerminalProbe {
+        $probe = new class(['TERM_PROGRAM' => 'WezTerm', 'TERM' => 'xterm']) extends TerminalProbe {
             protected function isInteractive(): bool
             {
                 return true;
@@ -401,9 +410,12 @@ final class TerminalProbeTest extends TestCase
     public function testCheckEscapeQueriesWithVscode(): void
     {
         $this->env('TERM_PROGRAM', 'vscode');
-        $this->env('TERM', '');
+        // CP-10: an empty TERM now floors colorless and the colorless
+        // floor gates phase 3 (CP-05) — arm a KNOWN prefix so this test keeps
+        // testing what it names: the TERM_PROGRAM identity leg.
+        $this->env('TERM', 'xterm');
 
-        $probe = new class(['TERM_PROGRAM' => 'vscode', 'TERM' => '']) extends TerminalProbe {
+        $probe = new class(['TERM_PROGRAM' => 'vscode', 'TERM' => 'xterm']) extends TerminalProbe {
             protected function isInteractive(): bool
             {
                 return true;
@@ -417,9 +429,12 @@ final class TerminalProbeTest extends TestCase
     public function testCheckEscapeQueriesWithGhostty(): void
     {
         $this->env('TERM_PROGRAM', 'Ghostty');
-        $this->env('TERM', '');
+        // CP-10: an empty TERM now floors colorless and the colorless
+        // floor gates phase 3 (CP-05) — arm a KNOWN prefix so this test keeps
+        // testing what it names: the TERM_PROGRAM identity leg.
+        $this->env('TERM', 'xterm');
 
-        $probe = new class(['TERM_PROGRAM' => 'Ghostty', 'TERM' => '']) extends TerminalProbe {
+        $probe = new class(['TERM_PROGRAM' => 'Ghostty', 'TERM' => 'xterm']) extends TerminalProbe {
             protected function isInteractive(): bool
             {
                 return true;
@@ -455,13 +470,34 @@ final class TerminalProbeTest extends TestCase
         $this->assertTrue($report->has(Capability::BasicAscii));
     }
 
-    public function testProbeWithEmptyTermInteractive(): void
+    public function testProbeWithEmptyTermInteractiveFloorsColorless(): void
     {
+        // CP-10 restates this scenario: an empty TERM is a terminal nobody
+        // declared, so the probe may not mint the Color16 promise here —
+        // the floor carries decoration only.
         $this->env('TERM', '');
 
         $report = TerminalProbe::run();
 
-        $this->assertTrue($report->has(Capability::Color16));
+        $this->assertFalse($report->has(Capability::Color16), 'the colorless floor must not smuggle Color16 back');
+        $this->assertTrue($report->has(Capability::BasicAscii));
+    }
+
+    public function testEmptyTermFloorsPhaseThreeEvenForKnownTermProgram(): void
+    {
+        // CP-10 x CP-05 interaction pin: the colorless floor gates the
+        // escape-query phase, so TERM_PROGRAM=WezTerm alone does not rescue
+        // a TrueColor advertisement while TERM stays unknown.
+        $probe = new class(['TERM_PROGRAM' => 'WezTerm', 'TERM' => '']) extends TerminalProbe {
+            protected function isInteractive(): bool
+            {
+                return true;
+            }
+        };
+        $report = $probe->runProbe([], true);
+
+        $this->assertFalse($report->has(Capability::TrueColor));
+        $this->assertTrue($report->has(Capability::BasicAscii));
     }
 
     public function testCheckTerminfoWithTcAndRgb(): void

@@ -59,7 +59,11 @@ final class CoreForkDivergencePinTest extends TestCase
 
         return [
             // label => [env, chain answer (this library), core answer (sugar-core)]
-            'empty' => [$row([]), 'Ansi', 'Ascii'],
+            // empty TERM: names CONVERGED on Ascii since CP-10 floored the
+            // unknown/empty default — but the rungs still mean different
+            // things (ours drops color SGR, core repaints the black/white
+            // pair), so this row stays in the table as a same-name divergence.
+            'empty' => [$row([]), 'Ascii', 'Ascii'],
             'TERM=dumb' => [$row(['TERM' => 'dumb']), 'Ascii', 'NoTty'],
             'NO_COLOR=1' => [$row(['NO_COLOR' => '1']), 'Ascii', 'Ascii'],
             'NO_COLOR=1+TERM=dumb' => [$row(['NO_COLOR' => '1', 'TERM' => 'dumb']), 'Ascii', 'NoTty'],
@@ -71,7 +75,10 @@ final class CoreForkDivergencePinTest extends TestCase
             'TERM=xterm-256color' => [$row(['TERM' => 'xterm-256color']), 'Ansi256', 'Ansi256'],
             'TERM_PROGRAM=iTerm' => [$row(['TERM_PROGRAM' => 'iTerm.app']), 'TrueColor', 'TrueColor'],
             'CLICOLOR_FORCE=yes+dumb' => [$row(['CLICOLOR_FORCE' => 'yes', 'TERM' => 'dumb']), 'TrueColor', 'TrueColor'],
-            'CI=true' => [$row(['CI' => 'true']), 'Ansi', 'Ansi'],
+            // CI=true: this library's ladder never reads CI (env only) — with
+            // TERM unset CP-10 floors it Ascii, while the core fork honors its
+            // documented CI leg and stays Ansi. Divergence surfaced by CP-10.
+            'CI=true' => [$row(['CI' => 'true']), 'Ascii', 'Ansi'],
             'GOOGLE_CLOUD_SHELL' => [$row(['GOOGLE_CLOUD_SHELL' => 'true', 'TERM' => 'xterm']), 'TrueColor', 'Ansi'],
         ];
     }

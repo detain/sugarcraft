@@ -156,8 +156,8 @@ drift pin guards this genre yet):
     — modern tmux may honestly forward truecolor; the screen/tmux split is the
     documented answer, pinned by twin tests)
 12. TERM contains `-256color`, or equals `xterm-kitty`/`xterm-ghostty` (case-insensitive) → Ansi256 (termenv promotes kitty/ghostty to TrueColor by NAME; this fork keeps the 256 promise the TERM value carries and defers name-based promotion to Phase-2 terminfo — WezTerm has no TERM-only twin)
-13. TERM begins `xterm`/`screen`/`tmux` (case-insensitive) → Ansi
-14. Default → Ansi
+13. TERM begins `xterm`/`screen`/`tmux`/`vt`/`linux` (case-insensitive) → Ansi (the KNOWN-family set — CP-10)
+14. Default — unknown or empty TERM → Ascii (the colorless floor, CP-10: an unfamiliar family no longer over-detects 16-color support; decoration is kept, color codes are dropped)
 
 Steps 1-2 outrank step 3 **deliberately**: `FORCE_COLOR`/`CLICOLOR_FORCE` are an
 active "give me color anyway" override (the chalk/support-colors convention),
@@ -462,6 +462,8 @@ stream argument):
 |-----|-------------------------------|------------------------|
 | `NO_COLOR=1` | `Ascii` — suppression floors at the black/white pair, decoration kept | `Ascii` colorless rung (source `env:NO_COLOR`) — name converged since CP-05, semantics still divergent: ours drops color SGR entirely, Core repaints the nearest black/white ink |
 | `FORCE_COLOR=1` | `TrueColor` — any truthy force var jumps straight to full color | `Ansi` — the level table is honored (`1` → 16 colors) |
+| TERM unset, nothing else | `Ascii` — since CP-10 the NAME matches ours, the rung does not: core's `Ascii` repaints the black/white pair | `Ascii` colorless floor (`fallback:default`) — unknown or empty TERM claims no color since CP-10 |
+| TERM unset + `CI=true` | `Ansi` — core honors its documented CI leg | `Ascii` — this ladder reads the env TERM rungs only; with no TERM it lands on the CP-10 floor |
 
 The structural roots of those flips: the Core fork has no level table and no
 full-strip rung for suppression — any truthy `FORCE_COLOR` is `TrueColor`, and

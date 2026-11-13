@@ -146,7 +146,7 @@ final class ProbeInfocmpTest extends TestCase
      * neither the host database nor a foreign file's memo decides the
      * verdict.
      */
-    public function testUnresolvableTermFallsBackToAnsi(): void
+    public function testUnresolvableTermFloorsColorless(): void
     {
         $printer = \tempnam(\sys_get_temp_dir(), 'infocmp');
         $this->assertIsString($printer);
@@ -156,7 +156,9 @@ final class ProbeInfocmpTest extends TestCase
         $this->env('TERM', 'this-term-does-not-exist-12345xyz');
 
         try {
-            $this->assertSame(ColorProfile::Ansi, Probe::colorProfile());
+            // The chain rung for an unresolvable TERM is the CP-10 colorless
+            // floor: no infocmp answer, no 16-color promise.
+            $this->assertSame(ColorProfile::Ascii, Probe::colorProfile());
         } finally {
             @\unlink($printer);
             Probe::_reset();

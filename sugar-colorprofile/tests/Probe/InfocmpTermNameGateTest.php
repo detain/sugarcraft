@@ -102,8 +102,10 @@ final class InfocmpTermNameGateTest extends TestCase
 
         // Base (no gate): the temp binary runs regardless of its arguments,
         // prints Tc, and the phase-2 leg upgrades to TrueColor.
-        // Fixed (gate): no exec — the chain rung for '-D' stands.
-        $this->assertSame(ColorProfile::Ansi, Probe::colorProfile());
+        // Fixed (gate): no exec — the chain rung for '-D' stands; since
+        // CP-10 that rung is the colorless floor (an unknown TERM claims
+        // no color).
+        $this->assertSame(ColorProfile::Ascii, Probe::colorProfile());
     }
 
     public function testSyncProbeStillUpgradesAWellFormedTermThroughTheSameFixture(): void
@@ -119,7 +121,7 @@ final class InfocmpTermNameGateTest extends TestCase
         $this->armAmbient('TERM', '-D');
         $this->stuffMemoWithTcPrinter();
 
-        $this->assertSame(ColorProfile::Ansi, $this->driveAsync());
+        $this->assertSame(ColorProfile::Ascii, $this->driveAsync()); // colorless floor — CP-10
     }
 
     public function testAsyncProbeStillPromotesAWellFormedTermThroughTheSameFixture(): void

@@ -63,13 +63,14 @@ final class AsyncProbeTest extends TestCase
         $this->assertInstanceOf(PromiseInterface::class, $promise);
     }
 
-    public function testProbeColorProfileReturnsAnsiByDefault(): void
+    public function testProbeColorProfileFloorsAsciiByDefault(): void
     {
-        // This tests the underlying Probe that AsyncProbe falls back to
-        // Without TERM set, default should be Ansi
+        // This tests the underlying Probe that AsyncProbe falls back to.
+        // Without TERM set, the answer is the colorless floor (CP-10 —
+        // formerly Ansi-by-default over-detection).
         $profile = Probe::colorProfile();
 
-        $this->assertSame(ColorProfile::Ansi, $profile);
+        $this->assertSame(ColorProfile::Ascii, $profile);
     }
 
     public function testProbeColorProfileReturnsTrueColorWhenForced(): void
@@ -201,7 +202,7 @@ final class AsyncProbeTest extends TestCase
             $resolved = $p;
         });
 
-        $this->assertSame(ColorProfile::Ansi, $resolved, 'must be the sync default, not an async probe');
+        $this->assertSame(ColorProfile::Ascii, $resolved, 'must be the sync colorless floor (CP-10), not an async probe');
     }
 
     public function testFreshSlotsAtCapDegradeToSyncDetection(): void

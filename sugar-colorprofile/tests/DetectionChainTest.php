@@ -62,10 +62,12 @@ final class DetectionChainTest extends TestCase
             ],
             // no-color.org: NO_COLOR set to the EMPTY string means UNSET —
             // the chain falls through to the TERM rungs (flipped with the
-            // MT2 cure; the old pin treated "" as "set").
+            // MT2 cure; the old pin treated "" as "set"). Since CP-10 the
+            // fall-through lands on the colorless floor: `unknownterm` is
+            // no longer over-detected as 16-color.
             'no_color empty string is unset' => [
                 ['NO_COLOR' => '', 'TERM' => 'unknownterm'],
-                DetectionChain::LEVEL_ANSI,
+                DetectionChain::LEVEL_ASCII,
                 'fallback:default',
             ],
             // CLICOLOR=0 → ascii (colorless rung — CP-05)
@@ -210,10 +212,29 @@ final class DetectionChainTest extends TestCase
                 DetectionChain::LEVEL_ANSI,
                 'env:TERM=tmux',
             ],
-            // Default (empty TERM) → ansi
-            'default returns ansi' => [
+            // Default (empty TERM) → the colorless floor (CP-10: an unknown
+            // or absent TERM no longer claims 16-color support)
+            'default floors to the colorless rung' => [
                 ['TERM' => ''],
+                DetectionChain::LEVEL_ASCII,
+                'fallback:default',
+            ],
+            // CP-10 known-family set stays colored (the other half of the leg
+            // widening that makes the floor safe): vt and linux were reaching
+            // Ansi only through the old permissive default.
+            'vt100 stays ansi on the known leg' => [
+                ['TERM' => 'vt100'],
                 DetectionChain::LEVEL_ANSI,
+                'env:TERM=vt100',
+            ],
+            'linux console stays ansi on the known leg' => [
+                ['TERM' => 'linux'],
+                DetectionChain::LEVEL_ANSI,
+                'env:TERM=linux',
+            ],
+            'unknown fictional term floors colorless' => [
+                ['TERM' => 'fictional-term'],
+                DetectionChain::LEVEL_ASCII,
                 'fallback:default',
             ],
         ];

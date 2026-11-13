@@ -97,10 +97,11 @@ final class ProbeTest extends TestCase
                 ['NO_COLOR' => '1', 'COLORTERM' => 'truecolor'],
                 ColorProfile::Ascii,
             ],
-            // no-color.org: NO_COLOR="" is UNSET — falls through (flipped with MT2).
+            // no-color.org: NO_COLOR="" is UNSET — falls through (flipped with MT2;
+            // since CP-10 the fall-through lands on the colorless floor).
             'no_color empty string is unset' => [
                 ['NO_COLOR' => ''],
-                ColorProfile::Ansi,
+                ColorProfile::Ascii,
             ],
 
             // 3. CLICOLOR=0 → Ascii (colorless rung — CP-05)
@@ -201,9 +202,14 @@ final class ProbeTest extends TestCase
                 ColorProfile::Ansi,
             ],
 
-            // 11. Default (no TERM set) → Ansi
-            'default (no term set) returns Ansi' => [
+            // 11. Default (no TERM set) → colorless floor (CP-10)
+            'default (no term set) floors colorless' => [
                 [],
+                ColorProfile::Ascii,
+            ],
+            // CP-10 known-family parity: vt/linux ride the widened step-13 leg.
+            'term_vt100 returns Ansi' => [
+                ['TERM' => 'vt100'],
                 ColorProfile::Ansi,
             ],
         ];

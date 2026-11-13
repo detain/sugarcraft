@@ -46,8 +46,12 @@ namespace SugarCraft\ColorProfile;
  *     (case-insensitive) → ansi256 (termenv promotes kitty/ghostty to
  *     truecolor by NAME; this fork keeps the 256 promise and defers name-
  *     based promotion to phase-2 terminfo — WezTerm has no TERM-only twin)
- * 13. TERM begins xterm/screen/tmux (case-insensitive) → ansi
- * 14. Default → ansi
+ * 13. TERM begins xterm/screen/tmux/vt/linux (case-insensitive) → ansi
+ *     (the KNOWN-family set keeps color — CP-10)
+ * 14. Default — unknown or empty TERM → ascii (the colorless floor: this
+ *     fork no longer over-detects 16-color support for a family it has
+ *     never heard of; CP-05 made the colorless-but-decorated rung a
+ *     first-class answer to floor onto)
  *
  * Steps 1-2 outrank step 3 deliberately: FORCE_COLOR/CLICOLOR_FORCE are
  * active "give me color anyway" overrides (chalk/support-colors convention),
@@ -238,17 +242,25 @@ final class DetectionChain
             return new self(self::LEVEL_ANSI256, Env::sanitize('env:TERM=' . $term), $term);
         }
 
-        // 13. TERM=xterm*|screen*|tmux* → ansi
+        // 13. TERM=xterm*|screen*|tmux*|vt*|linux* → ansi. The KNOWN-family
+        //     set keeps color (CP-10): vt100/vt220 and the Linux console are
+        //     genuine ANSI terminals and the old code answered them here via
+        //     the default — widening this leg is what makes step 14 safe.
         if (
             str_starts_with($termLower, 'xterm')
             || str_starts_with($termLower, 'screen')
             || str_starts_with($termLower, 'tmux')
+            || str_starts_with($termLower, 'vt')
+            || str_starts_with($termLower, 'linux')
         ) {
             return new self(self::LEVEL_ANSI, Env::sanitize('env:TERM=' . $term), $term);
         }
 
-        // 14. Default → ansi
-        return new self(self::LEVEL_ANSI, 'fallback:default', $term);
+        // 14. Default → ascii (colorless floor — CP-10, sugar-colorprofile-101):
+        //     termenv/chafa families floor unrecognized TERM below ANSI; this
+        //     fork over-detected 16 colors there until CP-05 made the
+        //     colorless-but-decorated rung a first-class answer to floor onto.
+        return new self(self::LEVEL_ASCII, 'fallback:default', $term);
     }
 
     /**
