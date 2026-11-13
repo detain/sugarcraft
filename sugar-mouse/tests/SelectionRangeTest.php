@@ -193,4 +193,65 @@ final class SelectionRangeTest extends TestCase
         // not an error.
         self::assertSame('', $range->extract(['']), 'a fully off-frame selection extracts to empty');
     }
+
+    /**
+     * Envelope check (sugar-mouse-047): explicit edges may widen the region —
+     * that is what Selection::range() relies on so middle rows sweep whole —
+     * but an edge crossing INSIDE its own row's endpoint is clamped to it, so
+     * a geometrically self-inconsistent range can never ride to the next
+     * frame and silently drop the cell under the pointer.
+     */
+    public function testEdgesWideningBeyondTheEndpointsRideThroughUnclamped(): void
+    {
+        $range = SelectionRange::new(2, 7, 4, 5, 4, 13);
+
+        self::assertSame([4, 13], [$range->edgeFrom, $range->edgeTo], 'a region wider than the drag is the normal shape');
+        self::assertSame([7, 13], $range->spanOnRow(2));
+        self::assertSame([4, 5], $range->spanOnRow(4));
+    }
+
+    public function testEdgeCrossingInsideTheStartCellIsClampedToIt(): void
+    {
+        // The reported shape: new(1,3,3,6, edgeTo:1) — an edge pair sitting
+        // wholly left of the start cell. Pre-fix the first row span inverted
+        // to [3,1]: the anchor cell fell out of its own selection.
+        $range = SelectionRange::new(1, 3, 3, 6, 1, 1);
+
+        self::assertSame([1, 3], [$range->edgeFrom, $range->edgeTo], 'the right edge is clamped up to the start cell');
+        self::assertSame([3, 3], $range->spanOnRow(1), 'the first row covers the start cell, never an inverted span');
+        self::assertTrue($range->cellContains(1, 3), 'the cell the pointer is on is always part of the copy');
+
+        $cells = iterator_to_array($range->cells(), preserve_keys: false);
+        self::assertSame([1, 3], $cells[0], 'the walk starts at the anchor, not nowhere');
+    }
+
+    public function testEdgeCrossingInsideTheEndCellIsClampedToIt(): void
+    {
+        // Mirror shape on the other end: edge pair right of the end cell on a
+        // backward drag across rows (start column 6, end column 3).
+        $range = SelectionRange::new(1, 6, 3, 3, 5, 5);
+
+        self::assertSame([3, 6], [$range->edgeFrom, $range->edgeTo], 'the left edge clamps down to the end cell, the right edge up to the start cell');
+        self::assertSame([6, 6], $range->spanOnRow(1), 'first row collapses onto the start cell');
+        self::assertSame([3, 3], $range->spanOnRow(3), 'the last row still stops at the end cell');
+        self::assertTrue($range->cellContains(3, 3), 'the release cell survives its own crossed edge');
+    }
+
+    public function testClampedEdgesExtractWithoutNegativeWidths(): void
+    {
+        $lines = ['abc', 'def', 'ghi', 'jkl'];
+        $range = SelectionRange::new(1, 3, 3, 1, 1, 1);
+
+        // startCol=3 (first row), endCol=1 (last row): the edge pair [1,1]
+        // crosses right of the end cell and left of the start cell at once.
+        // Clamped: edgeFrom=min(1,endCol=1)=1, edgeTo=max(1,startCol=3)=3.
+        self::assertSame([1, 3], [$range->edgeFrom, $range->edgeTo]);
+        self::assertSame([3, 3], $range->spanOnRow(1), 'first row from the start cell to the right edge');
+        self::assertSame([1, 3], $range->spanOnRow(2), 'middle row sweeps the clamped region');
+        self::assertSame([1, 1], $range->spanOnRow(3), 'last row stops at the end cell');
+
+        // The decisive pin: every row slice is non-negative width — pre-fix
+        // the inverted first row sliced width -1. Cells as laid out:
+        self::assertSame("c\ndef\ng", $range->extract($lines));
+    }
 }

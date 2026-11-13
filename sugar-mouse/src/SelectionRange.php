@@ -63,8 +63,10 @@ final class SelectionRange
      * @param int      $colA    column of the first cell
      * @param int      $rowB    row of the second cell (e.g. the gesture's head)
      * @param int      $colB    column of the second cell
-     * @param int|null $edgeFrom region text-column left edge; null defaults to the left endpoint
-     * @param int|null $edgeTo   region text-column right edge; null defaults to the right endpoint
+     * @param int|null $edgeFrom region text-column left edge; null defaults to the left endpoint,
+     *                           and an explicit edge crossing right of the end cell is clamped to it
+     * @param int|null $edgeTo   region text-column right edge; null defaults to the right endpoint,
+     *                           and an explicit edge crossing left of the start cell is clamped to it
      *
      * @throws \InvalidArgumentException when any coordinate is off-terminal (< 1)
      */
@@ -77,10 +79,16 @@ final class SelectionRange
             ? [$rowB, $colB, $rowA, $colA]
             : [$rowA, $colA, $rowB, $colB];
 
-        $from = $edgeFrom ?? min($colA, $colB);
-        $to   = $edgeTo   ?? max($colA, $colB);
+        $low  = min($edgeFrom ?? min($colA, $colB), $edgeTo ?? max($colA, $colB));
+        $high = max($edgeFrom ?? min($colA, $colB), $edgeTo ?? max($colA, $colB));
 
-        return new self($startRow, $startCol, $endRow, $endCol, min($from, $to), max($from, $to));
+        // The envelope: edges may WIDEN the region (that is what {@see Selection::range()}
+        // passes, so its middle rows sweep whole) but no edge may cross inside its own
+        // row's endpoint — an $edgeTo left of the start cell would invert the first row's
+        // span [startCol, edgeTo] and silently drop the very cell the pointer is on
+        // (extract() would slice it to a negative width). Fail-safe: clamp the edge to
+        // the endpoint it crossed; a cell the drag touched is always copied.
+        return new self($startRow, $startCol, $endRow, $endCol, min($low, $endCol), max($high, $startCol));
     }
 
     /**
