@@ -42,6 +42,11 @@ final class PharBuildScriptTest extends TestCase
             $bin,
             'the require-from-inside identity must be addressed too',
         );
+        self::assertStringContainsString(
+            '\Phar::loadPhar(__FILE__',
+            $bin,
+            'the renamed-phar identity leg must read the magic bytes, not the name (msw-22, candy-tetris-056 lineage)',
+        );
     }
 
     public function testTheBuildScriptRefusesUnknownOptionsWithExitTwo(): void
@@ -78,6 +83,149 @@ final class PharBuildScriptTest extends TestCase
         self::assertNull(Version::versionFromMetadata([]), 'a stamp-less manifest answers null');
         self::assertNull(Version::versionFromMetadata(['version' => 42]), 'a stamp of the wrong type answers null');
         self::assertNull(Version::versionFromMetadata(null), 'getMetadata() answering null is a refusal, not an error');
+    }
+
+    public function testARenamedPharBootsOnItsOwnArchiveIdentityNotItsName(): void
+    {
+        // msw-22: `mv candy-minesweeper.phar minesweeper` answers neither
+        // Phar::running() nor the .phar-suffix probe. The magic-byte leg
+        // (Phar::loadPhar on __FILE__) must. Bounded synthetic mirror of
+        // the real guard — same three identities, same phar:// addressing;
+        // the real bin text is pinned in the stub-shape test above, and
+        // the real artifact is smoke-booted by hand at closeout.
+        $root = sys_get_temp_dir() . '/candy-msw-renamed-' . getmypid() . '-' . uniqid('r', true);
+        self::assertTrue(mkdir($root, 0o755, true));
+        $phar = $root . '/minesweeper.phar';
+        $renamed = $root . '/minesweeper';
+
+        $builder = <<<'PHP'
+<?php
+$p = new Phar($argv[1]);
+$p->setStub(
+    "#!/usr/bin/env php\n<?php\n"
+    . "\$running = \\Phar::running(false);\n"
+    . "\$archive = \$running !== '' ? 'phar://' . \$running"
+    . " : (str_ends_with(__FILE__, '.phar') ? 'phar://' . __FILE__ : '');\n"
+    . "if (\$archive === '') { try { if (@\\Phar::loadPhar(__FILE__, 'candy-minesweeper-synthetic') === true) { \$archive = 'phar://' . __FILE__; } } catch (\\UnexpectedValueException | \\PharException) { \$archive = ''; } }\n"
+    . "if (\$archive !== '' && is_file(\$archive . '/vendor/autoload.php')) { echo 'BOOTED ' . \$archive . PHP_EOL; exit(0); }\n"
+    . "fwrite(STDERR, 'no archive identity' . PHP_EOL); exit(1);\n"
+    . "__HALT_COMPILER();"
+);
+$p->startBuffering();
+$p->addFromString('vendor/autoload.php', "<?php\n");
+$p->stopBuffering();
+PHP;
+        $build = $root . '/build.php';
+        self::assertGreaterThan(0, file_put_contents($build, $builder));
+        @unlink($phar);
+
+        try {
+            [$exit, , $err] = self::runPhp(['-d', 'phar.readonly=0', $build, $phar]);
+            self::assertSame(0, $exit, "synthetic seal must succeed, got: $err");
+            self::assertTrue(copy($phar, $renamed));
+
+            [$exit, $out, $err] = self::runPhp([$renamed]);
+            self::assertSame(0, $exit, "the renamed phar must boot, got: $err");
+            self::assertStringContainsString('BOOTED phar://' . $renamed, $out, 'the archive identity is the invoked path, not a .phar suffix');
+        } finally {
+            @unlink($renamed);
+            @unlink($phar);
+            @unlink($build);
+            @rmdir($root);
+        }
+    }
+
+    public function testTheRealGuardRefusesByNameWhenNoAutoloadExists(): void
+    {
+        // msw-22 / finding 091: a stray copy of bin with no composer tree
+        // anywhere above it must answer the named stderr refusal with a
+        // non-zero exit — never a silent zero, never a PHP fatal.
+        $root = sys_get_temp_dir() . '/candy-msw-iso-' . getmypid() . '-' . uniqid('i', true);
+        self::assertTrue(mkdir($root . '/bin', 0o755, true));
+        $bin = $root . '/bin/candy-minesweeper';
+        self::assertTrue(copy((string) realpath(__DIR__ . '/../bin/candy-minesweeper'), $bin));
+
+        try {
+            if (is_file('/autoload.php')) {
+                self::markTestSkipped('/autoload.php exists on this host; the isolation probe is not hermetic');
+            }
+            [$exit, $out, $err] = self::runPhp([$bin, '--help']);
+            self::assertSame(1, $exit, 'a missing autoload must exit non-zero, stdout was: ' . $out);
+            self::assertSame('', $out, 'the refusal is stderr-only');
+            self::assertStringContainsString('cannot find composer autoload.php', $err);
+        } finally {
+            @unlink($bin);
+            @rmdir($root . '/bin');
+            @rmdir($root);
+        }
+    }
+
+    public function testTheGzArmRefusesFailedCompressionBeforeTouchingTheArtifact(): void
+    {
+        // msw-22 / finding 068: compress() can answer false; the old arm
+        // dereferenced it and unlinked the good artifact on its way out.
+        // Pin the refusal shape in the script text (sealing a real GZ
+        // archive belongs to the by-hand smoke bar, not the suite).
+        $script = file_get_contents(__DIR__ . '/../tools/build-phar.php');
+        self::assertIsString($script);
+        $positions = [
+            'compress call'   => strpos($script, '$phar->compress('),
+            'instanceof arm'  => strpos($script, '$compressed instanceof \Phar'),
+            'refusal exit'    => strpos($script, 'uncompressed artifact kept'),
+            'replacing rename' => strpos($script, "rename(\$outArg . '.gz', \$outArg)"),
+        ];
+        foreach ($positions as $what => $pos) {
+            self::assertIsInt($pos, "the GZ arm must carry: $what");
+        }
+        self::assertLessThan($positions['instanceof arm'], $positions['compress call'], 'compress() runs first, then the refusal checks');
+        self::assertLessThan($positions['refusal exit'], $positions['instanceof arm']);
+        self::assertLessThan($positions['replacing rename'], $positions['refusal exit'], 'a failed compression must refuse before any rename can eat the artifact');
+        self::assertStringNotContainsString(
+            "unlink(\$outArg);\n    rename",
+            $script,
+            'no unlink-before-rename window may exist — rename overwrites atomically on POSIX',
+        );
+    }
+
+    public function testIncludeRootsCarriesTheLangDirectory(): void
+    {
+        // msw-22 / finding 017: an archive sealed without lang/ boots
+        // green and renders English-only forever. The constant is a
+        // build-time script literal, so pin it from the script text —
+        // requiring build-phar.php would seal a real archive.
+        $script = file_get_contents(__DIR__ . '/../tools/build-phar.php');
+        self::assertIsString($script);
+        self::assertSame(
+            1,
+            preg_match('/const INCLUDE_ROOTS = \[([^\]]*)\];/', $script, $m),
+            'INCLUDE_ROOTS must stay a single-line literal for this pin',
+        );
+        self::assertStringContainsString("'lang'", $m[1], 'lang/ must ship inside the archive or every locale dies silently');
+        self::assertStringContainsString("'bin'", $m[1]);
+        self::assertStringContainsString("'src'", $m[1]);
+        self::assertStringContainsString("'vendor'", $m[1]);
+    }
+
+    /**
+     * @param list<string> $args
+     *
+     * @return array{0: int, 1: string, 2: string} exit code, stdout, stderr
+     */
+    private static function runPhp(array $args): array
+    {
+        $proc = proc_open(
+            [PHP_BINARY, ...$args],
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+        );
+        self::assertIsResource($proc);
+        fclose($pipes[0]);
+        $out = (string) stream_get_contents($pipes[1]);
+        $err = (string) stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+
+        return [proc_close($proc), $out, $err];
     }
 
     /**

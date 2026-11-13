@@ -8,18 +8,39 @@ declare(strict_types=1);
     // 8.3.6): when `php candy-minesweeper.phar` runs, THIS file is the archive's
     // stub and the process is NOT inside the archive — Phar::running()
     // answers '' there, and a bare '/x.phar/entry' path fails
-    // is_file()/require for every caller. Two identities cover the two phar
-    // shapes: the stub names itself in __FILE__, and a require-from-inside
-    // names the archive in Phar::running(). Both are addressed the only way
-    // that works, as a phar:// URI. When an archive identity exists, the
-    // archive's own vendor is the ONLY root — a stray vendor beside (or
-    // above) a downloaded phar must never boot the app with code from
-    // outside the frozen archive. In every composer-mode checkout both
-    // probes answer nothing and the filesystem candidates are untouched.
+    // is_file()/require for every caller. Three identities cover the phar
+    // shapes: the stub names itself in __FILE__, a require-from-inside
+    // names the archive in Phar::running(), and the magic-byte leg below
+    // catches either under a renamed (suffixless) file. All are addressed
+    // the only way that works, as a phar:// URI. When an archive identity
+    // exists, the archive's own vendor is the ONLY root — a stray vendor
+    // beside (or above) a downloaded phar must never boot the app with
+    // code from outside the frozen archive. In every composer-mode
+    // checkout all three probes answer nothing and the filesystem
+    // candidates are untouched.
     $candidates = [__DIR__ . '/../vendor/autoload.php', __DIR__ . '/../../../autoload.php'];
     $archive = \Phar::running(false) !== ''
         ? 'phar://' . \Phar::running(false)
         : (str_ends_with(__FILE__, '.phar') ? 'phar://' . __FILE__ : '');
+    // Renamed-phar leg (msw-22, the candy-tetris-056 lineage): `mv
+    // candy-minesweeper.phar minesweeper` answers neither probe above —
+    // the magic bytes do. loadPhar registers this file under a synthetic
+    // alias only when it really is an archive, so a suffixless phar
+    // resolves phar://__FILE__/... and a plain stray file does not.
+    if ($archive === '') {
+        try {
+            if (@\Phar::loadPhar(__FILE__, 'candy-minesweeper-synthetic') === true) {
+                $archive = 'phar://' . __FILE__;
+            }
+        } catch (\UnexpectedValueException | \PharException) {
+            // loadPhar's named refusals: UnexpectedValueException for an
+            // unreadable path, PharException for an ordinary file whose
+            // bytes are no archive ("internal corruption" — measured on
+            // PHP 8.3 against this very plain bin). Nothing broader;
+            // msw-11 catch hygiene holds in bin too.
+            $archive = '';
+        }
+    }
     if ($archive !== '') {
         $candidates = [$archive . '/vendor/autoload.php'];
     }

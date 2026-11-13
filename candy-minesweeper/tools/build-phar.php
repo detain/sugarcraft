@@ -268,12 +268,25 @@ if ($gz) {
         exit(2);
     }
     $compressed = $phar->compress(\Phar::GZ);
+    // compress() answers false when it cannot write or transform the
+    // archive (msw-22 / build-phar-068). Dereferencing that fatal'd
+    // stopBuffering(), and the old unlink-then-rename then ate the good
+    // uncompressed artifact on its way out. Refuse by name instead,
+    // leaving the original untouched.
+    if (!$compressed instanceof \Phar) {
+        fwrite(STDERR, "build-phar: compress(GZ) failed — refusing to touch $outArg (uncompressed artifact kept)\n");
+        exit(2);
+    }
     $compressed->stopBuffering();
     unset($compressed);
-    // compress() writes {$outArg}.gz and leaves the original; the caller
-    // asked for a gz artifact at --out, so replace.
-    unlink($outArg);
-    rename($outArg . '.gz', $outArg);
+    // compress() writes {$outArg}.gz alongside and leaves the original;
+    // rename() overwrites atomically on POSIX, so replacing the original
+    // never needs a window where neither artifact exists. If the rename
+    // itself fails (Windows dev hosts), the original stays — safe refusal.
+    if (!rename($outArg . '.gz', $outArg)) {
+        fwrite(STDERR, "build-phar: cannot rename {$outArg}.gz over {$outArg} — uncompressed artifact kept\n");
+        exit(2);
+    }
 }
 
 $bytes = filesize($outArg);
