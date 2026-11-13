@@ -165,7 +165,7 @@ DECSET 1049), so your normal scrollback is restored untouched on exit.
 | File            | Role                                                                           |
 |-----------------|--------------------------------------------------------------------------------|
 | `Bird.php`          | Wraps a SugarSpring `Projectile` — gravity pulls it down, `flap()` resets vertical velocity to a fixed kick, and fall speed is capped at terminal velocity. |
-| `Pipe.php`          | Single-column pipe pair with a gap centred to one row — for even gap heights the band tilts one row toward the floor (`collides()` anchors `top = gapY - intdiv(h-1,2)`, `bottom = gapY + intdiv(h,2)`). Slides left one cell per tick.     |
+| `Pipe.php`          | Single-column pipe pair; the open band is anchored on one centre row (`gapY`), so for even gap heights it tilts one row toward the floor (`collides()` anchors `top = gapY - intdiv(h-1,2)`, `bottom = gapY + intdiv(h,2)`). Slides left one cell per tick.     |
 | `TickMsg.php`       | Frame-tick message fired by the `game-tick` subscription timer (`Game::TICK_SECONDS`, 1/30 s exactly). |
 | `Game.php` (Model)  | Pure-state world: bird + pipes + score + crashed flag. Injects PRNG closure for deterministic gap placements in tests. |
 | `Renderer.php`      | Pure view — single playfield walk, ANSI-styled glyphs, rounded border.         |
