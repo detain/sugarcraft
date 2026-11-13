@@ -15,10 +15,9 @@ return [
     // Empty state
     'no_data' => 'No data',
 
+    // Empty state reached by filter/search narrowing every row away
+    'no_matches' => 'No rows match your filter',
+
     // Pagination: "Showing {from} to {to} of {total} rows"
     'showing_rows' => 'Showing {from} to {to} of {total} rows',
-
-    // Sort/filter labels (for future UI labels if needed)
-    'sort'   => 'Sort',
-    'filter' => 'Filter',
 ];

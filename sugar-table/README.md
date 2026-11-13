@@ -409,8 +409,10 @@ The degenerate shapes have defined, non-crashing output:
 - **No rows** — columns with no rows render the translatable `No data` line
   (`no_data`, see Internationalization) centered in the content area; it shows
   whether or not the header row is visible, and in borderless and footer-armed
-  tables alike. The same message replaces the body when `Filter()` or `search()`
-  narrows every row away.
+  tables alike. When `Filter()` or `search()` narrows every row away the line
+  is different by design: `No rows match your filter` (`no_matches`) says the
+  rows exist and the needle excludes them — an empty store and an over-strict
+  filter never look identical.
 - **Scrolled past the end** — `withScrollX()` at or beyond the number of scrollable
   (non-frozen) columns leaves none visible: with no frozen prefix the whole table
   renders as the empty string; with one, only the frozen columns paint.
@@ -704,11 +706,7 @@ All translatable strings live in `lang/en.php` under the `'table'` namespace.
 | `page_of`      | `Page {page} of {total}`          | `{page}`, `{total}`   |
 | `no_data`      | `No data`                         | —                     |
 | `showing_rows` | `Showing {from} to {to} of {total} rows` | `{from}`, `{to}`, `{total}` |
-| `sort`         | `Sort`                            | —                     |
-| `filter`       | `Filter`                          | —                     |
-
-The `sort` and `filter` labels are reserved for future UI chrome — no production
-render path uses them today (`lang/en.php` carries the same caveat).
+| `no_matches`   | `No rows match your filter`       | —                     |
 
 To add a locale, copy `lang/en.php` to `lang/<code>.php` and translate the
 values. The lookup chain follows `SugarCraft\Core\I18n\T`:
@@ -722,7 +720,7 @@ exact locale → base language → `en` → the raw namespaced key (the
 // In any source file:
 use SugarCraft\Table\Lang;
 
-$label = Lang::t('sort');                  // 'Sort'
+$label = Lang::t('no_matches');            // 'No rows match your filter'
 $pager = Lang::t('page_of', ['page' => 2, 'total' => 4]); // 'Page 2 of 4'
 ```
 

@@ -2558,7 +2558,14 @@ final class Table
     private function fillNoDataRow(RenderCanvas $canvas, int $row, int $contentWidth): RenderCanvas
     {
         $style = $this->styleFor($this->footerStyle);
-        $content = $this->centeredLabel(Lang::t('no_data'), $contentWidth);
+        // Two empty states are one pixel-identical line without this branch:
+        // an empty store and a filter/search that narrowed every row away
+        // (audit ST-21, finding 021). The filter/search state tells the host
+        // the rows exist — the needle is what excludes them.
+        $label = ($this->filterText !== [] || $this->searchText !== '')
+            ? Lang::t('no_matches')
+            : Lang::t('no_data');
+        $content = $this->centeredLabel($label, $contentWidth);
 
         [$canvas, $col] = $this->writeLeftEdge($canvas, $row, $style);
         $canvas = $this->fillCellContent($canvas, $row, $col, $content, $contentWidth, $style);

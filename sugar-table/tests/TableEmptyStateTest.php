@@ -76,8 +76,30 @@ final class TableEmptyStateTest extends TestCase
         $view = self::plain(
             self::wideTable()->withRows($rows)->Filter('name', 'zzz-miss')->View()
         );
-        self::assertStringContainsString('No data', $view);
+        // ST-21: the narrowed-to-zero state names itself — finding 021's
+        // pixel-identical empty store is exactly what this separates.
+        self::assertStringContainsString('No rows match your filter', $view);
+        self::assertStringNotContainsString('No data', $view);
         self::assertStringNotContainsString('alice', $view);
+    }
+
+    public function testSearchNarrowedToZeroSaysNoMatches(): void
+    {
+        $rows = [
+            Row::new(RowData::from(['name' => 'alice'])),
+            Row::new(RowData::from(['name' => 'bob'])),
+        ];
+        $view = self::plain(
+            self::wideTable()->withRows($rows)->search('zzz-miss')->View()
+        );
+        self::assertStringContainsString('No rows match your filter', $view);
+    }
+
+    public function testEmptyStoreKeepsSayingNoData(): void
+    {
+        $view = self::plain(self::wideTable()->withRows([])->View());
+        self::assertStringContainsString('No data', $view);
+        self::assertStringNotContainsString('match', $view);
     }
 
     public function testHidingEveryColumnRendersNothingInsteadOfCrashing(): void
