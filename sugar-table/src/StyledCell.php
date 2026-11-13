@@ -22,12 +22,12 @@ final class StyledCell
 
     public static function new(mixed $value, string $ansiStyle = ''): self
     {
-        return new self($value, $ansiStyle);
+        return new self(value: $value, ansiStyle: $ansiStyle);
     }
 
     public function withStyle(string $ansiStyle): self
     {
-        return new self($this->value, $ansiStyle);
+        return new self(value: $this->value, ansiStyle: $ansiStyle);
     }
 
     public function __toString(): string

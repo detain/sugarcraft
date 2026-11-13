@@ -80,12 +80,12 @@ final class Column
 
     public static function new(string $key, string $title, int $width): self
     {
-        return new self($key, $title, $width);
+        return new self(key: $key, title: $title, width: $width);
     }
 
     public function withFlexibleWidth(int $share): self
     {
-        return new self($this->key, $this->title, $this->width, $share, $this->maxWidth, $this->filterable, $this->alignLeft, $this->style, $this->columnWidth, $this->percentValue, $this->wrapMode);
+        return new self(key: $this->key, title: $this->title, width: $this->width, flexibleWidth: $share, maxWidth: $this->maxWidth, filterable: $this->filterable, alignLeft: $this->alignLeft, style: $this->style, columnWidth: $this->columnWidth, percentValue: $this->percentValue, wrapMode: $this->wrapMode);
     }
 
     /**
@@ -100,22 +100,22 @@ final class Column
 
     public function withMaxWidth(int $max): self
     {
-        return new self($this->key, $this->title, $this->width, $this->flexibleWidth, $max, $this->filterable, $this->alignLeft, $this->style, $this->columnWidth, $this->percentValue, $this->wrapMode);
+        return new self(key: $this->key, title: $this->title, width: $this->width, flexibleWidth: $this->flexibleWidth, maxWidth: $max, filterable: $this->filterable, alignLeft: $this->alignLeft, style: $this->style, columnWidth: $this->columnWidth, percentValue: $this->percentValue, wrapMode: $this->wrapMode);
     }
 
     public function withFilterable(bool $v = true): self
     {
-        return new self($this->key, $this->title, $this->width, $this->flexibleWidth, $this->maxWidth, $v, $this->alignLeft, $this->style, $this->columnWidth, $this->percentValue, $this->wrapMode);
+        return new self(key: $this->key, title: $this->title, width: $this->width, flexibleWidth: $this->flexibleWidth, maxWidth: $this->maxWidth, filterable: $v, alignLeft: $this->alignLeft, style: $this->style, columnWidth: $this->columnWidth, percentValue: $this->percentValue, wrapMode: $this->wrapMode);
     }
 
     public function withAlignLeft(bool $v = true): self
     {
-        return new self($this->key, $this->title, $this->width, $this->flexibleWidth, $this->maxWidth, $this->filterable, $v, $this->style, $this->columnWidth, $this->percentValue, $this->wrapMode);
+        return new self(key: $this->key, title: $this->title, width: $this->width, flexibleWidth: $this->flexibleWidth, maxWidth: $this->maxWidth, filterable: $this->filterable, alignLeft: $v, style: $this->style, columnWidth: $this->columnWidth, percentValue: $this->percentValue, wrapMode: $this->wrapMode);
     }
 
     public function withStyle(string $ansiStyle): self
     {
-        return new self($this->key, $this->title, $this->width, $this->flexibleWidth, $this->maxWidth, $this->filterable, $this->alignLeft, $ansiStyle, $this->columnWidth, $this->percentValue, $this->wrapMode);
+        return new self(key: $this->key, title: $this->title, width: $this->width, flexibleWidth: $this->flexibleWidth, maxWidth: $this->maxWidth, filterable: $this->filterable, alignLeft: $this->alignLeft, style: $ansiStyle, columnWidth: $this->columnWidth, percentValue: $this->percentValue, wrapMode: $this->wrapMode);
     }
 
     public function withColumnWidth(ColumnWidth $columnWidth, float $percentValue = 0.0): self
@@ -127,12 +127,12 @@ final class Column
         if ($columnWidth === ColumnWidth::Percent && (!\is_finite($percentValue) || $percentValue < 0.0 || $percentValue > 100.0)) {
             throw new \InvalidArgumentException('Percent value must be between 0.0 and 100.0');
         }
-        return new self($this->key, $this->title, $this->width, $this->flexibleWidth, $this->maxWidth, $this->filterable, $this->alignLeft, $this->style, $columnWidth, $percentValue, $this->wrapMode);
+        return new self(key: $this->key, title: $this->title, width: $this->width, flexibleWidth: $this->flexibleWidth, maxWidth: $this->maxWidth, filterable: $this->filterable, alignLeft: $this->alignLeft, style: $this->style, columnWidth: $columnWidth, percentValue: $percentValue, wrapMode: $this->wrapMode);
     }
 
     public function withWrapMode(WrapMode $wrapMode): self
     {
-        return new self($this->key, $this->title, $this->width, $this->flexibleWidth, $this->maxWidth, $this->filterable, $this->alignLeft, $this->style, $this->columnWidth, $this->percentValue, $wrapMode);
+        return new self(key: $this->key, title: $this->title, width: $this->width, flexibleWidth: $this->flexibleWidth, maxWidth: $this->maxWidth, filterable: $this->filterable, alignLeft: $this->alignLeft, style: $this->style, columnWidth: $this->columnWidth, percentValue: $this->percentValue, wrapMode: $wrapMode);
     }
 
     /**

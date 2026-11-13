@@ -32,12 +32,12 @@ final class Row
 
     public static function new(RowData $data): self
     {
-        return new self($data);
+        return new self(data: $data);
     }
 
     public function withStyle(string $ansiStyle): self
     {
-        return new self($this->data, $ansiStyle, $this->zebra, $this->zebraStyleIndex);
+        return new self(data: $this->data, style: $ansiStyle, zebra: $this->zebra, zebraStyleIndex: $this->zebraStyleIndex);
     }
 
     /**
@@ -50,6 +50,6 @@ final class Row
      */
     public function withZebra(int $styleIndex = 0): self
     {
-        return new self($this->data, $this->style, true, $styleIndex);
+        return new self(data: $this->data, style: $this->style, zebra: true, zebraStyleIndex: $styleIndex);
     }
 }
