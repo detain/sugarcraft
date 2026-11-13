@@ -15,6 +15,7 @@ use SugarCraft\Pty\SignalForwarder;
 final class SignalForwarderExtendedTest extends TestCase
 {
     use \SugarCraft\Pty\Tests\Support\RequiresPtyCapability;
+    use \SugarCraft\Pty\Tests\Support\RawWinsizeQuery;
 
     protected function tearDown(): void
     {
@@ -149,7 +150,7 @@ final class SignalForwarderExtendedTest extends TestCase
             // more, the kernel agrees, and onResize sees the final pair.
             $this->assertSame(2, $reads);
             $this->assertSame([100, 30], $applied);
-            $size = \SugarCraft\Pty\SizeIoctl::query($pty->fd());
+            $size = self::queryWinsize($pty->fd());
             $this->assertSame(100, $size['cols']);
             $this->assertSame(30, $size['rows']);
         } finally {

@@ -99,12 +99,26 @@ final class SizeIoctlHardeningTest extends TestCase
         self::assertNotSame(0, $second, 'the identical repeat must NOT be laundered into success');
     }
 
-    public function testQueryNonTtyGateOnlyRunsWhenPosixIsLoaded(): void
+    public function testQueryFrontDoorStaysDeleted(): void
     {
-        $body = self::methodBody('query');
-        self::assertStringNotContainsString("!\\function_exists('posix_isatty') ||", $body,
-            'a missing ext-posix must not be reported as "not a tty" — the ioctl below answers');
-        self::assertStringContainsString("\\function_exists('posix_isatty') && !\\posix_isatty", $body);
+        // PTY-40 (sugar-pty-034): query() had zero src consumers and
+        // threw bare RuntimeException where the package contract is
+        // PtyException-via-Lang. If it ever comes back, it must come
+        // back typed — and this pin makes that a conscious edit.
+        self::assertFalse(
+            \method_exists(SizeIoctl::class, 'query'),
+            'SizeIoctl::query() was deleted for being an untyped, unloved front door; the doors are getSizeViaLibc + unpack (see RawWinsizeQuery)',
+        );
+    }
+
+    public function testGetDoorLeavesTheAnswerToTheIoctl(): void
+    {
+        // Successor of the courtesy-gate pin: with query() gone there is
+        // no surface that pre-checks posix_isatty at all — a missing
+        // ext-posix can never be laundered into a "not a tty" verdict,
+        // because only the ioctl speaks now.
+        $body = self::methodBody('getSizeViaLibc');
+        self::assertStringNotContainsString('posix_isatty', $body);
     }
 
     private function requireFfi(): void

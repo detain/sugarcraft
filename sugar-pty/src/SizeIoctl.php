@@ -82,6 +82,11 @@ final class SizeIoctl
 
     /**
      * Return the platform's `TIOCSWINSZ` request number.
+     *
+     * Naming note (PTY-40): the `get`/`set` prefixes survive the bare-
+     * accessor rule on purpose — these names mirror the `_IOR`/`_IOW`
+     * direction bits of the ioctl request numbers they return (G and S
+     * in `TIOCGWINSZ`/`TIOCSWINSZ`), not property reads.
      */
     public static function setRequest(): int
     {
@@ -145,39 +150,6 @@ final class SizeIoctl
             'xpix' => (int) $ws[2],
             'ypix' => (int) $ws[3],
         ];
-    }
-
-    /**
-     * Query the terminal size for the given fd via TIOCGWINSZ.
-     *
-     * On Darwin a failed ioctl is transparently re-read through
-     * stty(1) — see {@see getSizeViaLibc()} for the arm64 ABI
-     * evidence. Callers get the same shape either way.
-     *
-     * @param int $fd a file descriptor that refers to a TTY
-     * @return array{rows:int, cols:int, xpix:int, ypix:int}
-     * @throws \RuntimeException if fd is not a TTY or ioctl fails
-     * @see creack/pty.GetsizeFull
-     */
-    public static function query(int $fd): array
-    {
-        // The tty gate is a courtesy check, not a source of truth: when
-        // ext-posix is absent the ioctl itself answers (EBADF/ENOTTY on a
-        // non-tty, surfaced as a failing rc below). A missing function
-        // must never be reported as "not a tty".
-        if (\function_exists('posix_isatty') && !\posix_isatty($fd)) {
-            throw new \RuntimeException('Cannot query size of non-tty fd');
-        }
-
-        $libc = self::libc();
-        $ws = self::emptyBuffer();
-        $rc = self::getSizeViaLibc($libc, $fd, $ws);
-        if ($rc !== 0) {
-            throw new \RuntimeException(
-                'TIOCGWINSZ ioctl failed on fd ' . $fd . ' with rc=' . $rc
-            );
-        }
-        return self::unpack($ws);
     }
 
     /**
@@ -352,6 +324,15 @@ final class SizeIoctl
      * by `SizeIoctlExtendedTest::testSetSizeViaLibcRoundTrip`). The
      * subprocess therefore only ever runs where the answer used to be
      * an exception.
+     *
+     * @internal PTY-40: the `query()` front door that wrapped this with
+     *           a RuntimeException was deleted (zero src consumers, and
+     *           its throw type broke the package's PtyException-via-Lang
+     *           contract — sugar-pty-034). Cross-class production users
+     *           (`PosixMasterPty::size()`) keep calling this directly;
+     *           tests route through the `RawWinsizeQuery` support trait.
+     *           It cannot be private while `PosixMasterPty` needs it, so
+     *           the marker is the contract.
      *
      * @param \FFI $libc the same handle the ioctl is attempted with
      * @param \FFI\CData $ws a 4-field winsize buffer (`emptyBuffer()`

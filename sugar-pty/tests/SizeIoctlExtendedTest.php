@@ -17,6 +17,7 @@ use SugarCraft\Pty\SizeIoctl;
 final class SizeIoctlExtendedTest extends TestCase
 {
     use \SugarCraft\Pty\Tests\Support\RequiresPtyCapability;
+    use \SugarCraft\Pty\Tests\Support\RawWinsizeQuery;
 
     // ─────────────────────────────────────────────────────────────
     // pack() edge cases
@@ -187,7 +188,7 @@ final class SizeIoctlExtendedTest extends TestCase
             $master->resize(100, 40);
 
             // Query back.
-            $size = SizeIoctl::query($masterFd);
+            $size = self::queryWinsize($masterFd);
             $this->assertSame(100, $size['cols']);
             $this->assertSame(40, $size['rows']);
         } finally {

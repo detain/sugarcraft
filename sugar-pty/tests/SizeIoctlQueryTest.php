@@ -5,19 +5,22 @@ declare(strict_types=1);
 namespace SugarCraft\Pty\Tests;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Pty\Posix\PosixMasterPty;
+use SugarCraft\Pty\PtyException;
 use SugarCraft\Pty\Posix\PosixPtySystem;
-use SugarCraft\Pty\SizeIoctl;
+use SugarCraft\Pty\Tests\Support\RawWinsizeQuery;
 
 /**
- * Integration tests for SizeIoctl::query().
+ * Integration tests for raw-fd winsize queries.
  *
- * Opens a real PTY, resizes it to a known geometry, then
- * queries the size via SizeIoctl::query() and asserts correctness.
+ * PTY-40 deleted the `SizeIoctl::query()` front door (zero src
+ * consumers, wrong exception type); these tests now go through the
+ * package doors the way production code does, via
+ * {@see RawWinsizeQuery}.
  */
 final class SizeIoctlQueryTest extends TestCase
 {
     use \SugarCraft\Pty\Tests\Support\RequiresPtyCapability;
+    use RawWinsizeQuery;
 
     public function testQueryReturnsCorrectSizeAfterResize(): void
     {
@@ -32,7 +35,7 @@ final class SizeIoctlQueryTest extends TestCase
         try {
             $master->resize(132, 40);
 
-            $size = SizeIoctl::query($masterFd);
+            $size = self::queryWinsize($masterFd);
 
             $this->assertSame(132, $size['cols'], 'cols should be 132');
             $this->assertSame(40, $size['rows'], 'rows should be 40');
@@ -52,7 +55,7 @@ final class SizeIoctlQueryTest extends TestCase
         $masterFd = $master->fd();
 
         try {
-            $size = SizeIoctl::query($masterFd);
+            $size = self::queryWinsize($masterFd);
 
             $this->assertArrayHasKey('cols', $size);
             $this->assertArrayHasKey('rows', $size);
@@ -79,9 +82,9 @@ final class SizeIoctlQueryTest extends TestCase
         }
 
         try {
-            $this->expectException(\RuntimeException::class);
-            $this->expectExceptionMessage('non-tty');
-            SizeIoctl::query($pipeFd);
+            $this->expectException(PtyException::class);
+            $this->expectExceptionMessage('TIOCGWINSZ');
+            self::queryWinsize($pipeFd);
         } finally {
             $libc->close($pipeFd);
         }
