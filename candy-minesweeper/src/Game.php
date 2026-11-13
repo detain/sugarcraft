@@ -340,8 +340,10 @@ final class Game implements Model
         }
         try {
             DifficultyStats::fromStats($this->stats())->save($this->statsPath);
-        } catch (\Throwable) {
-            // Non-fatal: stats persistence is a convenience, not a game invariant.
+        } catch (\RuntimeException | \JsonException) {
+            // Non-fatal: stats persistence is a convenience, not a game
+            // invariant. Scoped to the io/format faults the writer declares —
+            // a genuine code fault inside it must crash loudly, not vanish.
         }
     }
 
@@ -397,8 +399,10 @@ final class Game implements Model
                     'cursorY' => $this->cursorY,
                     'elapsed' => $this->elapsed(),
                 ]);
-        } catch (\Throwable) {
-            // Non-fatal by design; the in-memory game stays fully playable.
+        } catch (\RuntimeException | \JsonException) {
+            // Non-fatal by design — but only for the filesystem and JSON
+            // faults AtomicJsonFile declares; anything else is a code fault
+            // and must surface, not be painted over with save_failed.
             return $this->withNotice(Lang::t('ui.save_failed'));
         }
         return $this->withNotice(Lang::t('ui.saved'));
@@ -442,7 +446,10 @@ final class Game implements Model
         }
         try {
             $payload = $store->read();
-        } catch (\Throwable) {
+        } catch (\RuntimeException | \JsonException) {
+            // Exactly the read faults AtomicJsonFile declares (io failure,
+            // non-array top level, malformed JSON) refuse the load; a code
+            // fault stays a code fault.
             return $this->withNotice(Lang::t('ui.load_refused'));
         }
         if (($payload['v'] ?? null) !== self::SAVE_VERSION

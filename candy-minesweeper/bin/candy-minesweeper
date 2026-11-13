@@ -228,7 +228,7 @@ $stats = null;
 if ($statsPath !== null && is_file($statsPath)) {
     try {
         $stats = DifficultyStats::load($statsPath)?->stats();
-    } catch (\Throwable $e) {
+    } catch (\RuntimeException | \JsonException $e) {
         // The message interpolates FILE CONTENT (the refused
         // persistence version), so the stats file's own bytes must not reach
         // the terminal raw — same scrub the argv echoes use: control bytes

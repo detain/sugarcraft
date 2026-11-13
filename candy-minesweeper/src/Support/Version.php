@@ -85,7 +85,13 @@ final class Version
 
         try {
             $metadata = (new \Phar($path))->getMetadata();
-        } catch (\Throwable) {
+        } catch (\RuntimeException) {
+            // The archive-read fault family (UnexpectedValueException for a
+            // file that is not a readable phar extends RuntimeException;
+            // phar-disabled/readonly paths raise plain RuntimeException):
+            // answering null here is correct — "version unknown, not from a
+            // phar". A TypeError from bad code would NOT wear this hat and
+            // must escape.
             return null;
         }
 
