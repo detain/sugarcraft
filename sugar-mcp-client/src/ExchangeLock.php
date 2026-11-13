@@ -160,7 +160,11 @@ final class ExchangeLock
      * alias-resolution test, and this note carries no survivor's name so it
      * cannot go stale again.)
      *
-     * @deprecated use {@see new()}
+     * @deprecated use {@see new()} — REMOVED-IN: 2.0.0, the next major. The
+     *             lib is published standalone and cannot see its external
+     *             callers, so the shim is scheduled rather than removed on
+     *             sight; the 2.0.0 wave drops it with the major's other
+     *             breaks.
      */
     public static function create(string $label, ?string $dir = null): self
     {

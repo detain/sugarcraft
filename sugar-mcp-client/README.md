@@ -369,9 +369,10 @@ policy to write, not a behaviour to inherit.
   fails (full or read-only temp filesystem); the exchange then fails rather
   than running without its recovery marker, and a failed store leaves the file
   empty, which reads as dirty. The lock's factory is `ExchangeLock::new()`
-  (`create()` remains as a deprecated alias); its file is opened at mode
-  `0600`, verified before any payload lands, and a filesystem that refuses
-  the mode fails the open loudly.
+  (`create()` remains as a deprecated alias, scheduled for removal at the
+  2.0.0 major); its file is opened at mode `0600`, verified before any
+  payload lands, and a filesystem that refuses the mode fails the open
+  loudly.
 - `callTool()`/`callTool(name:, arguments:)`: the concrete parameter names
   match the `McpServer` interface, so named-argument calls written against
   the contract bind here. The three trailing opt-ins (`onWait:`,
