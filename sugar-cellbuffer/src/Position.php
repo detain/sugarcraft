@@ -58,8 +58,27 @@ final class Position implements \JsonSerializable
     {
         // Direct initialization is legal for readonly properties inside
         // __unserialize (the object is fresh); no throwaway instance needed.
-        $this->col = (int) $data['col'];
-        $this->row = (int) $data['row'];
+        // Both keys are required: the silent `(int)`-cast of a missing key
+        // into the origin (0,0) was a zero-cast a named refusal retires.
+        $this->col = (int) self::requireKey($data, 'col', 'Position');
+        $this->row = (int) self::requireKey($data, 'row', 'Position');
+    }
+
+    /**
+     * Shape guard shared by the family's __unserialize hooks: missing keys
+     * are named refusals, never warnings or silent zero-casts.
+     *
+     * @param array<array-key, mixed> $data
+     *
+     * @throws \InvalidArgumentException naming the payload and the key
+     */
+    private static function requireKey(array $data, string $key, string $payload): mixed
+    {
+        if (!array_key_exists($key, $data)) {
+            throw new \InvalidArgumentException("{$payload} payload missing key '{$key}'");
+        }
+
+        return $data[$key];
     }
 
     /**

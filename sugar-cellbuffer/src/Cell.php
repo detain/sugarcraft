@@ -165,11 +165,14 @@ final class Cell implements \JsonSerializable
      */
     public function __unserialize(array $data): void
     {
-        $width = (int) ($data['width'] ?? 1);
+        $rune = self::requireKey($data, 'rune', 'Cell');
+        $style = self::requireKey($data, 'style', 'Cell');
+        $link = self::requireKey($data, 'link', 'Cell');
+        $width = (int) self::requireKey($data, 'width', 'Cell');
         if ($width < 0) {
             throw new \InvalidArgumentException("Cell width must not be negative: {$width}");
         }
-        if ($width > 2 && Width::of((string) ($data['rune'] ?? '')) !== $width) {
+        if ($width > 2 && Width::of((string) $rune) !== $width) {
             // The span law is a constructor invariant, so it is re-applied
             // here: a forged payload cannot mint a desyncing run-length cell.
             throw new \InvalidArgumentException(
@@ -177,18 +180,45 @@ final class Cell implements \JsonSerializable
             );
         }
 
-        $this->rune = $data['rune'];
-        $this->style = $data['style'] !== null ? new Style(
-            $data['style']['fg'],
-            $data['style']['bg'],
-            $data['style']['attrs'],
-            $data['style']['fgSlot'] ?? null,
-            $data['style']['bgSlot'] ?? null,
-            $data['style']['ul'] ?? null,
-            $data['style']['ulSlot'] ?? null,
+        $this->rune = $rune;
+        if ($style !== null && !is_array($style)) {
+            throw new \InvalidArgumentException('Cell style payload must be an array or null');
+        }
+        if ($link !== null && !is_array($link)) {
+            throw new \InvalidArgumentException('Cell link payload must be an array or null');
+        }
+        $this->style = $style !== null ? new Style(
+            self::requireKey($style, 'fg', 'Style'),
+            self::requireKey($style, 'bg', 'Style'),
+            self::requireKey($style, 'attrs', 'Style'),
+            $style['fgSlot'] ?? null,
+            $style['bgSlot'] ?? null,
+            $style['ul'] ?? null,
+            $style['ulSlot'] ?? null,
         ) : null;
-        $this->link = $data['link'] !== null ? new Hyperlink($data['link']['url'], $data['link']['id']) : null;
+        $this->link = $link !== null ? new Hyperlink(
+            self::requireKey($link, 'url', 'Hyperlink'),
+            self::requireKey($link, 'id', 'Hyperlink'),
+        ) : null;
         $this->width = $width;
+    }
+
+    /**
+     * Shape guard shared by the family's __unserialize hooks — a missing
+     * key is a named refusal, not an undefined-key warning or a TypeError
+     * from null into a readonly property.
+     *
+     * @param array<array-key, mixed> $data
+     *
+     * @throws \InvalidArgumentException naming the payload and the key
+     */
+    private static function requireKey(array $data, string $key, string $payload): mixed
+    {
+        if (!array_key_exists($key, $data)) {
+            throw new \InvalidArgumentException("{$payload} payload missing key '{$key}'");
+        }
+
+        return $data[$key];
     }
 
     /**

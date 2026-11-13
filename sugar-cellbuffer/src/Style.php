@@ -783,18 +783,41 @@ final class Style implements \JsonSerializable
 
         // The constructor's full channel law (RGB saturation + belt pairing)
         // re-runs here, not just the slot bounds: a forged payload cannot
-        // mint a style the constructor itself would refuse.
-        $this->fg = self::clampRgb($data['fg']);
-        $this->bg = self::clampRgb($data['bg']);
-        $this->attrs = $data['attrs'];
+        // mint a style the constructor itself would refuse. Shape first —
+        // the keys __serialize always emits must exist (a payload missing
+        // one is foreign or forged, not merely empty).
+        $this->fg = self::clampRgb(self::requireKey($data, 'fg', 'Style'));
+        $this->bg = self::clampRgb(self::requireKey($data, 'bg', 'Style'));
+        $this->attrs = self::requireKey($data, 'attrs', 'Style');
         $this->fgSlot = $fgSlot;
         $this->bgSlot = $bgSlot;
+        // ul rides ?? null: it joined the payload after the three-key
+        // pre-palette-slot shape this hook still restores.
         $this->ul = self::clampRgb($data['ul'] ?? null);
         $this->ulSlot = $ulSlot;
 
         self::checkBelt($this->fg, $fgSlot, 'foreground');
         self::checkBelt($this->bg, $bgSlot, 'background');
         self::checkBelt($this->ul, $ulSlot, 'underline');
+    }
+
+    /**
+     * Shape guard shared by the family's __unserialize hooks: every key
+     * `__serialize` emits is required, and a miss is a NAMED refusal — never
+     * an undefined-key warning, a null-to-typed-readonly TypeError, or a
+     * silent zero-cast (the three historical outcomes of one bad payload).
+     *
+     * @param array<array-key, mixed> $data
+     *
+     * @throws \InvalidArgumentException naming the payload and the key
+     */
+    private static function requireKey(array $data, string $key, string $payload): mixed
+    {
+        if (!array_key_exists($key, $data)) {
+            throw new \InvalidArgumentException("{$payload} payload missing key '{$key}'");
+        }
+
+        return $data[$key];
     }
 
     /**

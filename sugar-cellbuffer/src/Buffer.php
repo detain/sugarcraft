@@ -1029,22 +1029,57 @@ final class Buffer implements \JsonSerializable
         $this->width = $width;
         $this->height = $height;
         $this->grid = array_map(function (array $cellData): Cell {
-            $style = $cellData['style'] !== null
-                ? new Style(
-                    $cellData['style']['fg'],
-                    $cellData['style']['bg'],
-                    $cellData['style']['attrs'],
-                    $cellData['style']['fgSlot'] ?? null,
-                    $cellData['style']['bgSlot'] ?? null,
-                    $cellData['style']['ul'] ?? null,
-                    $cellData['style']['ulSlot'] ?? null,
-                )
-                : null;
-            $link = $cellData['link'] !== null
-                ? new Hyperlink($cellData['link']['url'], $cellData['link']['id'])
-                : null;
-            return new Cell($cellData['rune'], $style, $link, $cellData['width']);
+            // Shape guards for every key Cell::__serialize emits; a
+            // nested style/link must be null or a full payload array.
+            $rune = self::requireKey($cellData, 'rune', 'Buffer cell');
+            $style = self::requireKey($cellData, 'style', 'Buffer cell');
+            $link = self::requireKey($cellData, 'link', 'Buffer cell');
+            $cellWidth = (int) self::requireKey($cellData, 'width', 'Buffer cell');
+            if ($style !== null && !is_array($style)) {
+                throw new \InvalidArgumentException('Buffer cell style payload must be an array or null');
+            }
+            if ($link !== null && !is_array($link)) {
+                throw new \InvalidArgumentException('Buffer cell link payload must be an array or null');
+            }
+            // The span law and width bounds re-run inside new Cell() — the
+            // constructor is the single source, not re-derived here.
+
+            return new Cell(
+                $rune,
+                $style !== null ? new Style(
+                    self::requireKey($style, 'fg', 'Style'),
+                    self::requireKey($style, 'bg', 'Style'),
+                    self::requireKey($style, 'attrs', 'Style'),
+                    $style['fgSlot'] ?? null,
+                    $style['bgSlot'] ?? null,
+                    $style['ul'] ?? null,
+                    $style['ulSlot'] ?? null,
+                ) : null,
+                $link !== null ? new Hyperlink(
+                    self::requireKey($link, 'url', 'Hyperlink'),
+                    self::requireKey($link, 'id', 'Hyperlink'),
+                ) : null,
+                $cellWidth,
+            );
         }, $data['grid']);
+    }
+
+    /**
+     * Shape guard shared by the family's __unserialize hooks: keys the
+     * matching `__serialize` emits are required; a miss is a named
+     * refusal, not a warning or a TypeError deep in the grid walk.
+     *
+     * @param array<array-key, mixed> $data
+     *
+     * @throws \InvalidArgumentException naming the payload and the key
+     */
+    private static function requireKey(array $data, string $key, string $payload): mixed
+    {
+        if (!array_key_exists($key, $data)) {
+            throw new \InvalidArgumentException("{$payload} payload missing key '{$key}'");
+        }
+
+        return $data[$key];
     }
 
     /**

@@ -2245,4 +2245,43 @@ final class BufferTest extends TestCase
         $this->assertSame(7, $restored->cellAt(0, 0)->style()?->fgSlot());
         $this->assertSame(12, $restored->cellAt(0, 0)->style()?->bgSlot());
     }
+
+    public function testUnserializeRefusesMissingKeysInTheCellWalk(): void
+    {
+        $full = ['rune' => 'a', 'style' => null, 'link' => null, 'width' => 1];
+
+        foreach (['rune', 'style', 'link', 'width'] as $missing) {
+            $cellData = $full;
+            unset($cellData[$missing]);
+            $fresh = (new \ReflectionClass(Buffer::class))->newInstanceWithoutConstructor();
+
+            $threw = false;
+            try {
+                $fresh->__unserialize(['width' => 1, 'height' => 1, 'grid' => [$cellData]]);
+            } catch (\InvalidArgumentException $e) {
+                $threw = $e->getMessage() === "Buffer cell payload missing key '{$missing}'";
+                $this->assertTrue($threw, 'unexpected message: ' . $e->getMessage());
+            }
+            $this->assertTrue($threw, "missing '{$missing}' must raise the named Buffer-cell refusal");
+        }
+    }
+
+    public function testUnserializeRefusesNonArrayNestedPayloadsInBothEntryPoints(): void
+    {
+        $fresh = (new \ReflectionClass(Buffer::class))->newInstanceWithoutConstructor();
+        $threw = false;
+        try {
+            $fresh->__unserialize(['width' => 1, 'height' => 1, 'grid' => [
+                ['rune' => 'a', 'style' => 'x', 'link' => null, 'width' => 1],
+            ]]);
+        } catch (\InvalidArgumentException $e) {
+            $threw = $e->getMessage() === 'Buffer cell style payload must be an array or null';
+        }
+        $this->assertTrue($threw, 'string style payload must raise the named refusal');
+
+        $cell = (new \ReflectionClass(Cell::class))->newInstanceWithoutConstructor();
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Cell link payload must be an array or null');
+        $cell->__unserialize(['rune' => 'a', 'style' => null, 'link' => 7, 'width' => 1]);
+    }
 }

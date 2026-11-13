@@ -111,4 +111,35 @@ final class PositionTest extends TestCase
         $this->assertFalse($a->equals(Position::new(3, 5))); // row shifted one
         $this->assertFalse($a->equals(Position::new(4, 5))); // both shifted
     }
+
+    /**
+     * @return array<string, array{0: string}>
+     */
+    public static function missingKeyProvider(): array
+    {
+        return ['col' => ['col'], 'row' => ['row']];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('missingKeyProvider')]
+    public function testUnserializeRefusesEachMissingKey(string $missing): void
+    {
+        $payload = ['col' => 3, 'row' => 4];
+        unset($payload[$missing]);
+        $fresh = (new \ReflectionClass(Position::class))->newInstanceWithoutConstructor();
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("Position payload missing key '{$missing}'");
+        $fresh->__unserialize($payload);
+    }
+
+    public function testUnserializeKeepsNegativeCoordinatesFromCompletePayloads(): void
+    {
+        // A present key is still just an int — negativity is Position law
+        // (relative offsets), so the missing-key guard must not eat it.
+        $fresh = (new \ReflectionClass(Position::class))->newInstanceWithoutConstructor();
+        $fresh->__unserialize(['col' => -2, 'row' => -9]);
+
+        $this->assertSame(-2, $fresh->col());
+        $this->assertSame(-9, $fresh->row());
+    }
 }

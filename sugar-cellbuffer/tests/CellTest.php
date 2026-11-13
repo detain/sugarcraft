@@ -351,4 +351,49 @@ final class CellTest extends TestCase
         $this->assertTrue($a->equals($b));
         $this->assertNotSame($a->style(), $b->style());
     }
+
+    /**
+     * @return array<string, array{0: string}>
+     */
+    public static function missingKeyProvider(): array
+    {
+        return [
+            'rune' => ['rune'],
+            'style' => ['style'],
+            'link' => ['link'],
+            'width' => ['width'],
+        ];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('missingKeyProvider')]
+    public function testUnserializeRefusesEachMissingKey(string $missing): void
+    {
+        $payload = ['rune' => 'x', 'style' => null, 'link' => null, 'width' => 1];
+        unset($payload[$missing]);
+        $fresh = (new \ReflectionClass(Cell::class))->newInstanceWithoutConstructor();
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("Cell payload missing key '{$missing}'");
+        $fresh->__unserialize($payload);
+    }
+
+    public function testUnserializeRefusesMissingNestedStyleAndLinkKeys(): void
+    {
+        foreach ([
+            [['rune' => 'x', 'style' => ['bg' => null, 'attrs' => 0], 'link' => null, 'width' => 1], "Style payload missing key 'fg'"],
+            [['rune' => 'x', 'style' => ['fg' => null, 'attrs' => 0], 'link' => null, 'width' => 1], "Style payload missing key 'bg'"],
+            [['rune' => 'x', 'style' => ['fg' => null, 'bg' => null], 'link' => null, 'width' => 1], "Style payload missing key 'attrs'"],
+            [['rune' => 'x', 'style' => null, 'link' => ['url' => 'https://a.dev'], 'width' => 1], "Hyperlink payload missing key 'id'"],
+        ] as [$payload, $needle]) {
+            $fresh = (new \ReflectionClass(Cell::class))->newInstanceWithoutConstructor();
+            $threw = false;
+            try {
+                $fresh->__unserialize($payload);
+            } catch (\InvalidArgumentException $e) {
+                $threw = str_contains($e->getMessage(), $needle);
+                $this->assertTrue($threw, "expected '{$needle}', got: " . $e->getMessage());
+            }
+            $this->assertTrue($threw, "expected refusal naming '{$needle}'");
+        }
+    }
 }

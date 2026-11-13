@@ -824,4 +824,35 @@ final class StyleTest extends TestCase
             self::assertTrue($on->{$setter}(false)->equals($off), $setter . ' off');
         }
     }
+
+    /**
+     * @return array<string, array{0: string}>
+     */
+    public static function missingKeyProvider(): array
+    {
+        return ['fg' => ['fg'], 'bg' => ['bg'], 'attrs' => ['attrs']];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('missingKeyProvider')]
+    public function testUnserializeRefusesEachMissingKey(string $missing): void
+    {
+        $payload = ['fg' => null, 'bg' => null, 'attrs' => 0];
+        unset($payload[$missing]);
+        $fresh = (new \ReflectionClass(Style::class))->newInstanceWithoutConstructor();
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("Style payload missing key '{$missing}'");
+        $fresh->__unserialize($payload);
+    }
+
+    public function testUnserializeStillRestoresTheThreeKeyLegacyPayload(): void
+    {
+        // fg/bg/attrs are REQUIRED; the five late keys stay optional —
+        // the pre-palette-slot shape must keep restoring (README Install
+        // caveat frozen old providers).
+        $fresh = (new \ReflectionClass(Style::class))->newInstanceWithoutConstructor();
+        $fresh->__unserialize(['fg' => 0x0A0B0C, 'bg' => null, 'attrs' => 1]);
+
+        $this->assertTrue($fresh->equals(new Style(fg: 0x0A0B0C, bg: null, attrs: 1)));
+    }
 }
