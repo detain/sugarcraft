@@ -181,10 +181,10 @@ with its own composer package and PHPUnit suite — while 🟡/🔴 rows list th
 remaining gaps in their Notes. CI publishes per-library coverage to Codecov,
 and the rendering libraries pin their output with snapshot-ANSI tests.
 Artifacts publish from `dev-master` until first version tags are cut: only
-`candy-code` and `candy-top` carry v-tags (v0.1.x) so far. The
-[website](https://sugarcraft.github.io/) library matrix carries live
-per-package status, and each library's `README.md` documents its full public
-API.
+`candy-code` and `candy-top` carry v-tags (v0.1.x) so far. The per-package
+port matrix above lives in this repository — [docs/MATCHUPS.md](./docs/MATCHUPS.md)
+is its single source of truth — and each library's `README.md` documents its
+full public API.
 
 ## Adding a new library or app
 
