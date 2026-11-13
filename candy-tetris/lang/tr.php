@@ -92,6 +92,11 @@ Kullanım: candy-tetris [seçenekler]
     'help.floor' => 'çerçeve en az {cols}x{rows} boyutunda bir terminal ister',
     // candy-tetris-006/-095 (tr): compact sidebar pointer replacing the budgeted-out help card.
     'keys.mini' => 'tuşlar: {keys}',
+    // candy-tetris-092/-025 (tr): game-feel moments and the on-frame slot copy.
+    'moment.lines.one' => '1 satır!',
+    'moment.lines.many' => '{count} satır!',
+    'moment.level' => 'seviye {level}!',
+    'moment.garbage' => 'gelen çöp!',
     'cli.no_tty' => 'candy-tetris etkileşimli bir terminal gerektirir: onu bir boru veya yönlendirme yerine bir TTY\'den, TERM değeri dumb dışında olacak şekilde çalıştırın.',
     'launch.extras' => 'candy-tetris: yalnızca bir argüman kabul edilir, ama {count} fazla: {list}',
     'score.save.failed' => 'candy-tetris: puanlar kaydedilemedi ({problem})',

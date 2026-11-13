@@ -92,6 +92,11 @@ Gebruik: candy-tetris [opties]
     'help.floor' => 'het kader heeft een terminal van minimaal {cols}x{rows} nodig',
     // candy-tetris-006/-095 (nl): compact sidebar pointer replacing the budgeted-out help card.
     'keys.mini' => 'toetsen: {keys}',
+    // candy-tetris-092/-025 (nl): game-feel moments and the on-frame slot copy.
+    'moment.lines.one' => '1 rij!',
+    'moment.lines.many' => '{count} rijen!',
+    'moment.level' => 'niveau {level}!',
+    'moment.garbage' => 'vuilnis komt eraan!',
     'cli.no_tty' => 'candy-tetris heeft een interactieve terminal nodig: start het vanuit een TTY (geen pipe of omleiding) met een TERM anders dan dumb.',
     'launch.extras' => 'candy-tetris: slechts één argument toegestaan, maar {count} te veel: {list}',
     'score.save.failed' => 'candy-tetris: kon scores niet opslaan ({problem})',

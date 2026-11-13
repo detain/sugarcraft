@@ -198,6 +198,21 @@ final class Game implements Model
          * (a fresh Game from the factories) closes it, mutate carries it.
          */
         public readonly bool $helpOpen = false,
+        /**
+         * candy-tetris-025/-092: the pending-frame slot. The game loop
+         * owns the terminal — a mid-loop fwrite(STDERR) scribbled raw
+         * lines across the live alt-screen (the score-save failure did,
+         * twice) and corrupted the very frame the next paint had to
+         * recover from. Failures, line clears, level-ups and incoming
+         * garbage now land HERE and ride the banner machinery as normal
+         * frame lines. Lifetime law: the slot survives ticks (a death-
+         * screen save failure must still be readable) and clears on the
+         * next keypress — the player's own input means their attention
+         * has moved on. Newest kept; at most two lines paint.
+         *
+         * @var list<string>
+         */
+        public readonly array $notices = [],
     ) {
         // One stateful stream feeds this game's garbage holes. Built from
         // the seed so the sequence is run-determined; Game::mutate()
@@ -277,6 +292,7 @@ final class Game implements Model
             $changes['reproducible']  ?? $this->reproducible,
             $changes['clockUs']       ?? $this->clockUs,
             $changes['helpOpen']      ?? $this->helpOpen,
+            $changes['notices']       ?? $this->notices,
         );
         // The live garbage stream rides the update (see ctor note): a
         // re-derived stream would restart the hole sequence on every
@@ -444,13 +460,30 @@ final class Game implements Model
 
     public function update(Msg $msg): array
     {
-        $wasOver = $this->over;
-        $result = $this->stepGame($msg);
+        // candy-tetris-025/-092: the slot's lifetime law — the player's
+        // own next input retires whatever the last frame was showing;
+        // ticks, timers and resizes never clear a notice a death screen
+        // owns (the save failure must still be readable under the banner).
+        $state = $msg instanceof KeyMsg && $this->notices !== []
+            ? $this->mutate(['notices' => []])
+            : $this;
+        $wasOver = $state->over;
+        $result = $state->stepGame($msg);
         if ($wasOver === false && $result[0]->over === true) {
-            $result = $this->settled($result);
+            $result = $state->settled($result);
         }
 
         return $result;
+    }
+
+    /**
+     * candy-tetris-025/-092: the single push point for the pending-frame
+     * slot — never a raw write while the loop owns the terminal. Oldest
+     * line gives way; the two freshest ride the next banner.
+     */
+    public function withNotice(string $line): self
+    {
+        return $this->mutate(['notices' => array_slice([...$this->notices, $line], -2)]);
     }
 
     /**
@@ -482,9 +515,14 @@ final class Game implements Model
             // state and never re-bills a counter another save already paid.
             $pair[0] = $game->mutate(['scores' => $next->save($this->scoresPath)]);
         } catch (\Throwable $problem) {
-            // Loud, and only loud: the session keeps its honest banner and
-            // the untouched old file still holds the true record.
-            fwrite(STDERR, Lang::t('score.save.failed', ['problem' => Support\CliVisible::clamp($problem->getMessage())]) . "\n");
+            // Loud, and only loud — but loud means ON-FRAME now (candy-
+            // tetris-025): the session keeps its honest banner, the
+            // untouched old file still holds the true record, and the
+            // failure line rides the pending slot instead of scribbling
+            // raw bytes across the live alt-screen.
+            $pair[0] = $game->withNotice(
+                Lang::t('score.save.failed', ['problem' => Support\CliVisible::clamp($problem->getMessage())]),
+            );
         }
 
         return $pair;
@@ -500,7 +538,8 @@ final class Game implements Model
      * starts play and marks the record onboarded, and 'quit' leaves
      * UNMARKED — closing the game unseen must not count as having seen
      * it, so the card comes back next launch. A save refusal is announced
-     * on stderr exactly like the settle path's, never silent.
+     * on-frame exactly like the settle path's, never silent (candy-
+     * tetris-025: the slot, not stderr — the card is up when it happens).
      *
      * @return array{0:self,1:?\Closure}
      */
@@ -519,8 +558,13 @@ final class Game implements Model
                         // truth from here: later settles delta from it.
                         $closed = $closed->mutate(['scores' => $next->save($closed->scoresPath)]);
                     } catch (\Throwable $problem) {
-                        $closed = $closed->mutate(['scores' => $next]);
-                        fwrite(STDERR, Lang::t('score.save.failed', ['problem' => Support\CliVisible::clamp($problem->getMessage())]) . "\n");
+                        // candy-tetris-025: on-frame like the settle path —
+                        // the intro card is up, the terminal belongs to the
+                        // game, so the failure rides the slot.
+                        $closed = $closed->mutate(['scores' => $next])
+                            ->withNotice(
+                                Lang::t('score.save.failed', ['problem' => Support\CliVisible::clamp($problem->getMessage())]),
+                            );
                     }
                 }
                 return [$closed, null];
@@ -1075,6 +1119,23 @@ final class Game implements Model
         // Base score from lines cleared (also updates level in $score object)
         $score = $this->score->withLines($count);
 
+        // candy-tetris-092: the game-feel moment the banner machinery was
+        // two lines from delivering. A clear and a level-up now announce
+        // themselves ON-frame through the pending slot (-025's machinery)
+        // — the silent disappearance of rows was the whole complaint.
+        $notices = $this->notices;
+        if ($count > 0) {
+            $notices[] = $count === 1
+                ? Lang::t('moment.lines.one')
+                : Lang::t('moment.lines.many', ['count' => $count]);
+        }
+        if ($score->level > $this->score->level) {
+            $notices[] = Lang::t('moment.level', ['level' => $score->level]);
+        }
+        if ($notices !== $this->notices) {
+            $notices = array_slice($notices, -2);
+        }
+
         // Use the level AT WHICH THE CLEAR WAS PERFORMED for all bonus calculations.
         // Per CALIBER learning b2b-combo-multiplier-stacking, the multiplier is
         // the level when the lines were cleared (the old level), not the
@@ -1133,6 +1194,7 @@ final class Game implements Model
                 'lockWindowGeneration' => null,
                 'lockResets' => 0,
                 'lastAward' => $award,
+                'notices' => $notices,
             ]);
         }
 
@@ -1155,6 +1217,7 @@ final class Game implements Model
             'lockWindowGeneration' => null,
             'lockResets' => 0,
             'lastAward' => $award,
+            'notices' => $notices,
         ]);
     }
 
@@ -1289,6 +1352,13 @@ final class Game implements Model
         $rand ??= static fn(int $max): int => random_int(0, $max);
         $rows = $this->board->rows();
 
+        // candy-tetris-092: an incoming garbage attack announces itself —
+        // the VS hit was completely silent (GC-006). It rides the pending
+        // slot (frame lines, never raw stderr, -025) and survives until
+        // the next press; a lethal row still gets its word under the
+        // death banner.
+        $received = array_slice([...$this->notices, Lang::t('moment.garbage')], -2);
+
         // Overflow check: the lift pushes rows 0..count-1 off the ceiling.
         // If they carry locked cells the stack has nowhere to go → top-out.
         for ($r = 0; $r < $count; $r++) {
@@ -1300,6 +1370,7 @@ final class Game implements Model
                         'canHold' => true,
                         'lockWindowGeneration' => null,
                         'lockResets' => 0,
+                        'notices' => $received,
                     ]);
                 }
             }
@@ -1338,6 +1409,7 @@ final class Game implements Model
                     'canHold' => true,
                     'lockWindowGeneration' => null,
                     'lockResets' => 0,
+                    'notices' => $received,
                 ]);
             }
         }
@@ -1347,6 +1419,7 @@ final class Game implements Model
             'piece' => $piece,
             'lockWindowGeneration' => null,
             'lockResets' => 0,
+            'notices' => $received,
         ]);
     }
 

@@ -92,6 +92,11 @@ Aufruf: candy-tetris [Optionen]
     'help.floor' => 'der Rahmen braucht einen Terminal mit mindestens {cols}x{rows}',
     // candy-tetris-006/-095 (de): compact sidebar pointer replacing the budgeted-out help card.
     'keys.mini' => 'Tasten: {keys} drücken',
+    // candy-tetris-092/-025 (de): game-feel moments and the on-frame slot copy.
+    'moment.lines.one' => '1 Reihe!',
+    'moment.lines.many' => '{count} Reihen!',
+    'moment.level' => 'Level {level}!',
+    'moment.garbage' => 'Garbage kommt rein!',
     'cli.no_tty' => 'candy-tetris braucht ein interaktives Terminal: Starte es in einem TTY (nicht über eine Pipe oder Umleitung) mit einem TERM ungleich dumb.',
     'launch.extras' => 'candy-tetris: nur ein Argument erlaubt, aber {count} zu viel: {list}',
     'score.save.failed' => 'candy-tetris: Punkte konnten nicht gespeichert werden ({problem})',

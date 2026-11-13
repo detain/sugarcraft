@@ -92,6 +92,11 @@ return [
     'help.floor' => '画面至少需要 {cols}x{rows} 的终端',
     // candy-tetris-006/-095 (zh-cn): compact sidebar pointer replacing the budgeted-out help card.
     'keys.mini' => '按 {keys} 查看按键',
+    // candy-tetris-092/-025 (zh-cn): game-feel moments and the on-frame slot copy.
+    'moment.lines.one' => '消去 1 行!',
+    'moment.lines.many' => '消去 {count} 行!',
+    'moment.level' => '等级 {level}!',
+    'moment.garbage' => '垃圾来袭!',
     'cli.no_tty' => 'candy-tetris 需要交互式终端：请在 TTY 中运行（不要通过管道或重定向），并将 TERM 设为 dumb 以外的值。',
     'launch.extras' => 'candy-tetris: 只接受一个参数，多出 {count} 个：{list}',
     'score.save.failed' => 'candy-tetris: 无法保存成绩 ({problem})',

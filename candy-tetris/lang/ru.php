@@ -92,6 +92,11 @@ return [
     'help.floor' => 'рамке нужен терминал не меньше {cols}x{rows}',
     // candy-tetris-006/-095 (ru): compact sidebar pointer replacing the budgeted-out help card.
     'keys.mini' => 'клавиши: {keys}',
+    // candy-tetris-092/-025 (ru): game-feel moments and the on-frame slot copy.
+    'moment.lines.one' => '1 линия!',
+    'moment.lines.many' => '{count} линии!',
+    'moment.level' => 'уровень {level}!',
+    'moment.garbage' => 'входящий мусор!',
     'cli.no_tty' => 'candy-tetris нужен интерактивный терминал: запускайте его из TTY (не через канал или перенаправление) с TERM, отличным от dumb.',
     'launch.extras' => 'candy-tetris: принимается только один аргумент, но на {count} больше: {list}',
     'score.save.failed' => 'candy-tetris: не удалось сохранить рекорды ({problem})',

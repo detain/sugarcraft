@@ -92,6 +92,11 @@ return [
     'help.floor' => 'يحتاج الإطار إلى طرفية {cols}x{rows} على الأقل',
     // candy-tetris-006/-095 (ar): compact sidebar pointer replacing the budgeted-out help card.
     'keys.mini' => 'المفاتيح: {keys}',
+    // candy-tetris-092/-025 (ar): game-feel moments and the on-frame slot copy.
+    'moment.lines.one' => 'سطر واحد!',
+    'moment.lines.many' => '{count} أسطر!',
+    'moment.level' => 'المستوى {level}!',
+    'moment.garbage' => 'قمامة قادمة!',
     'cli.no_tty' => 'يحتاج candy-tetris إلى طرفية تفاعلية: شغّله من TTY (وليس من أنبوب أو إعادة توجيه) مع ضبط TERM على قيمة غير dumb.',
     'launch.extras' => 'candy-tetris: يُقبل وسيط واحد فقط، لكن هناك {count} زائد: {list}',
     'score.save.failed' => 'candy-tetris: تعذر حفظ النتائج ({problem})',

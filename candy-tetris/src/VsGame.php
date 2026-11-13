@@ -94,6 +94,15 @@ final class VsGame implements Model
         public readonly ?int $seed = null,
         /** True when the seed came from `--seed=N` (banner stamp law, {@see Game::$reproducible}). */
         public readonly bool $reproducible = false,
+        /**
+         * The match's pending-frame slot (candy-tetris-025/-092): the
+         * mirror of {@see Game::$notices} for the VS seat — the save
+         * refusal at settle lands here, and the players' own moments ride
+         * their inner slots. Frame lines only; the loop owns the terminal.
+         *
+         * @var list<string>
+         */
+        public readonly array $notices = [],
     ) {}
 
     /**
@@ -189,6 +198,21 @@ final class VsGame implements Model
 
     public function update(Msg $msg): array
     {
+        // candy-tetris-025: the notice lifetime law, mirrored from Game —
+        // a press retires the last frame's slot, ticks never do.
+        if ($msg instanceof KeyMsg && $this->notices !== []) {
+            return $this->mutate(['notices' => []])->update($msg);
+        }
+        // candy-tetris-006 law correction: the key overlay is a SOLO
+        // surface (the VS strip already teaches every binding at width 50
+        // and VsRenderer never paints the card). Forwarded raw, 'h' would
+        // flip the player game's helpOpen and freeze the human board
+        // behind an INVISIBLE overlay — a dead key is the honest answer
+        // here, discovered while wiring this row's slot.
+        if ($msg instanceof KeyMsg && Support\Bindings::actuates($this->keys(), $msg, 'help')) {
+            return [$this, null];
+        }
+
         // Terminal posture first (C-2): a resize or capability report is
         // never gameplay — it lands even on the game-over screen, and the
         // identity short-circuit keeps state from churning per frame.
@@ -531,8 +555,14 @@ final class VsGame implements Model
             // deltas from; a failed save keeps the un-published intent.
             $changes['scores'] = $next->save($this->scoresPath);
         } catch (\Throwable $problem) {
+            // candy-tetris-025: the refusal rides the slot, not the
+            // alt-screen — a raw write here used to scribble over the
+            // live match paint.
             $changes['scores'] = $next;
-            fwrite(STDERR, Lang::t('score.save.failed', ['problem' => Support\CliVisible::clamp($problem->getMessage())]) . "\n");
+            $changes['notices'] = array_slice(
+                [...$this->notices, Lang::t('score.save.failed', ['problem' => Support\CliVisible::clamp($problem->getMessage())])],
+                -2,
+            );
         }
 
         return $this->mutate($changes);
@@ -588,6 +618,7 @@ final class VsGame implements Model
             $changes['computerChain'] ?? $this->computerChain,
             $changes['seed'] ?? $this->seed,
             $changes['reproducible'] ?? $this->reproducible,
+            $changes['notices'] ?? $this->notices,
         );
     }
 }

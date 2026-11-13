@@ -101,6 +101,11 @@ return [
     'help.floor' => 'the frame needs a terminal of at least {cols}x{rows}',
     // candy-tetris-006/-095 (en): compact sidebar pointer replacing the budgeted-out help card.
     'keys.mini' => 'press {keys} for keys',
+    // candy-tetris-092/-025 (en): game-feel moments and the on-frame slot copy.
+    'moment.lines.one' => '1 line!',
+    'moment.lines.many' => '{count} lines!',
+    'moment.level' => 'level {level}!',
+    'moment.garbage' => 'incoming garbage!',
     'cli.no_tty' => 'candy-tetris needs an interactive terminal: run it from a TTY (not a pipe or redirect) with TERM set to something other than dumb.',
     // One key for the surplus-flags refusal (candy-tetris-033): {count}
     // sits after a plural-safe preposition in every locale, so the

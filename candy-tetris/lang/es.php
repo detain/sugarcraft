@@ -92,6 +92,11 @@ Uso: candy-tetris [opciones]
     'help.floor' => 'el marco necesita una terminal de al menos {cols}x{rows}',
     // candy-tetris-006/-095 (es): compact sidebar pointer replacing the budgeted-out help card.
     'keys.mini' => 'teclas: {keys} pulsa',
+    // candy-tetris-092/-025 (es): game-feel moments and the on-frame slot copy.
+    'moment.lines.one' => '1 línea!',
+    'moment.lines.many' => '{count} líneas!',
+    'moment.level' => '¡nivel {level}!',
+    'moment.garbage' => '¡basura entrante!',
     'cli.no_tty' => 'candy-tetris necesita una terminal interactiva: ejecútalo desde una TTY (no una tubería ni una redirección) con TERM distinto de dumb.',
     'launch.extras' => 'candy-tetris: solo se acepta un argumento, pero {count} de más: {list}',
     'score.save.failed' => 'candy-tetris: no se pudieron guardar las puntuaciones ({problem})',

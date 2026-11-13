@@ -92,6 +92,11 @@ return [
     'help.floor' => '枠には最低 {cols}x{rows} の端末が必要',
     // candy-tetris-006/-095 (ja): compact sidebar pointer replacing the budgeted-out help card.
     'keys.mini' => '{keys} でキー',
+    // candy-tetris-092/-025 (ja): game-feel moments and the on-frame slot copy.
+    'moment.lines.one' => '1列消去!',
+    'moment.lines.many' => '{count}列消去!',
+    'moment.level' => 'レベル {level}!',
+    'moment.garbage' => 'ゴミが来る!',
     'cli.no_tty' => 'candy-tetris には対話型ターミナルが必要です。パイプやリダイレクトではなく TTY から、TERM を dumb 以外にして起動してください。',
     'launch.extras' => 'candy-tetris: 引数は1つまでです。超過 {count} 個: {list}',
     'score.save.failed' => 'candy-tetris: スコアを保存できませんでした ({problem})',

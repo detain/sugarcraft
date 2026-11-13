@@ -110,22 +110,29 @@ final class Renderer
 
         if ($game->introPending === true) {
             // MA-24: the on-ramp card overlays the fresh board it teaches.
-            return Support\Paint::banner($body, self::introLines($game));
+            return Support\Paint::banner($body, self::withNotices(self::introLines($game), $game->notices));
         }
         if ($game->helpOpen === true) {
             // candy-tetris-006: the reachable key reference — the FULL
             // derived card painted over the frame, on any posture, even
             // where the sidebar budget had to drop it.
-            return Support\Paint::banner($body, self::helpLines($game));
+            return Support\Paint::banner($body, self::withNotices(self::helpLines($game), $game->notices));
         }
         if ($game->over === true) {
-            return Support\Paint::banner($body, self::overLines($game));
+            return Support\Paint::banner($body, self::withNotices(self::overLines($game), $game->notices));
         }
         if ($game->paused === true) {
             // candy-tetris-005: the overlay names the LIVE pause binding —
             // a remapped table must not strand the player under a key the
             // game no longer answers.
-            return Support\Paint::banner($body, [Lang::t('paused', ['keys' => $game->keyLabel('pause')])]);
+            return Support\Paint::banner($body, self::withNotices([Lang::t('paused', ['keys' => $game->keyLabel('pause')])], $game->notices));
+        }
+        if ($game->notices !== []) {
+            // candy-tetris-025/-092: a plain-play notice (a clear moment,
+            // an incoming row, a save refusal) paints through the SAME
+            // band machinery — the loop owns the terminal, so the frame
+            // is the only honest channel.
+            return Support\Paint::banner($body, $game->notices);
         }
         return $body;
     }
@@ -158,6 +165,25 @@ final class Renderer
      *
      * @return list<string>
      */
+    /**
+     * The pending slot (candy-tetris-025/-092) appended under whatever
+     * banner the posture already paints; the banner machinery centres the
+     * combined band on the visible board, so the row-count contract holds.
+     *
+     * @param list<string> $lines
+     * @param list<string> $notices
+     *
+     * @return list<string>
+     */
+    private static function withNotices(array $lines, array $notices): array
+    {
+        if ($notices === []) {
+            return $lines;
+        }
+
+        return [...$lines, ...$notices];
+    }
+
     private static function helpLines(Game $game): array
     {
         $lines = [Lang::t('help.keys')];

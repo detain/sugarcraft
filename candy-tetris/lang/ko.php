@@ -92,6 +92,11 @@ return [
     'help.floor' => '프레임에는 최소 {cols}x{rows} 터미널이 필요',
     // candy-tetris-006/-095 (ko): compact sidebar pointer replacing the budgeted-out help card.
     'keys.mini' => '{keys} 키 목록',
+    // candy-tetris-092/-025 (ko): game-feel moments and the on-frame slot copy.
+    'moment.lines.one' => '1열!',
+    'moment.lines.many' => '{count}열!',
+    'moment.level' => '레벨 {level}!',
+    'moment.garbage' => '쓰레기 공격!',
     'cli.no_tty' => 'candy-tetris는 대화형 터미널이 필요합니다. 파이프나 리디렉션이 아닌 TTY에서, TERM을 dumb 이외의 값으로 설정해 실행하세요.',
     'launch.extras' => 'candy-tetris: 인수 하나만 허용됩니다. 초과 {count}개: {list}',
     'score.save.failed' => 'candy-tetris: 점수를 저장할 수 없습니다 ({problem})',

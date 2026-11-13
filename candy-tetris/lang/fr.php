@@ -85,6 +85,11 @@ quitter',
     'help.floor' => 'l\'affichage exige un terminal d\'au moins {cols}x{rows}',
     // candy-tetris-006/-095 (fr): compact sidebar pointer replacing the budgeted-out help card.
     'keys.mini' => 'touches : {keys}',
+    // candy-tetris-092/-025 (fr): game-feel moments and the on-frame slot copy.
+    'moment.lines.one' => '1 ligne !',
+    'moment.lines.many' => '{count} lignes !',
+    'moment.level' => 'niveau {level} !',
+    'moment.garbage' => 'attaque en approche !',
     'cli.no_tty' => 'candy-tetris a besoin d\'un terminal interactif : lancez-le depuis un TTY (pas un tube ni une redirection) avec un TERM autre que dumb.',
     'launch.extras' => 'candy-tetris: un seul argument accepté, mais {count} en trop : {list}',
     'score.save.failed' => 'candy-tetris: impossible denregistrer les scores ({problem})',

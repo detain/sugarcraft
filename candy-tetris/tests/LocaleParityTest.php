@@ -211,6 +211,10 @@ final class LocaleParityTest extends TestCase
             // The key-education surfaces (candy-tetris-006/-095): the
             // compact sidebar pointer, the in-frame card, and --help.
             'keys.mini', 'help.keys', 'help.close', 'help.floor',
+            // The on-frame moment slot (candy-tetris-025/-092): clears,
+            // level-ups, incoming garbage and the save refusal ride the
+            // banner machinery instead of raw stderr.
+            'moment.lines.one', 'moment.lines.many', 'moment.level', 'moment.garbage',
             // Launch/CLI diagnostic frame (candy-tetris-028): the first
             // text a user reads is catalogue-owned, not inline English.
             'launch.extras', 'score.save.failed', 'keys.ignored', 'scores.ignored',

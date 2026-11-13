@@ -85,8 +85,9 @@ final class VsRenderer
         $boards = Layout::joinHorizontal(0.0, $playerBoard, $vsDivider, $computerBoard);
         $body   = Layout::joinVertical(0.0, $boards, self::renderStrip($game->player, $game->computer));
 
+        $notices = [...$game->player->notices, ...$game->notices];
         if ($game->over === true) {
-            return Support\Paint::banner($body, self::overLines($game));
+            return Support\Paint::banner($body, [...self::overLines($game), ...$notices]);
         }
 
         // MA-8: the VS pair has a p binding (README promises it) and a
@@ -94,7 +95,14 @@ final class VsRenderer
         // was indistinguishable from a hang: zero on-frame evidence.
         if ($game->player->paused === true) {
             // candy-tetris-005: the overlay names the live pause binding.
-            return Support\Paint::banner($body, [Lang::t('paused', ['keys' => $game->player->keyLabel('pause')])]);
+            return Support\Paint::banner($body, [...[Lang::t('paused', ['keys' => $game->player->keyLabel('pause')])], ...$notices]);
+        }
+
+        if ($notices !== []) {
+            // candy-tetris-092: the incoming-garbage alert (and every
+            // other VS moment) paints through the same band machinery the
+            // banners already own — silent was the complaint.
+            return Support\Paint::banner($body, $notices);
         }
 
         return $body;

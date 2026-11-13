@@ -92,6 +92,11 @@ Použití: candy-tetris [volby]
     'help.floor' => 'rám potřebuje terminál alespoň {cols}x{rows}',
     // candy-tetris-006/-095 (cs): compact sidebar pointer replacing the budgeted-out help card.
     'keys.mini' => 'klávesy: {keys}',
+    // candy-tetris-092/-025 (cs): game-feel moments and the on-frame slot copy.
+    'moment.lines.one' => '1 řada!',
+    'moment.lines.many' => '{count} řady!',
+    'moment.level' => 'úroveň {level}!',
+    'moment.garbage' => 'přicházející odpad!',
     'cli.no_tty' => 'candy-tetris potřebuje interaktivní terminál: spusťte ho z TTY (ne z roury ani přesměrování) a s TERM jiným než dumb.',
     'launch.extras' => 'candy-tetris: je přijímán pouze jeden argument, ale o {count} navíc: {list}',
     'score.save.failed' => 'candy-tetris: nelze uložit skóre ({problem})',
