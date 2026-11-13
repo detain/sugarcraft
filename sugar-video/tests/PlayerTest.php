@@ -2384,6 +2384,12 @@ final class PlayerTest extends TestCase
             $this->assertEqualsWithDelta(3.0, $player->duration(), 0.5, 'probed duration ~3s');
 
             $a = $player->frameAt(0.2);
+            // SV-L86/086: bucket-crossing hovers now respect a one-second
+            // spawn floor. This test is about -ss CONTENT truth, not the
+            // throttle (pinned in PlayerFrameAtMemoTest), so roll the memo's
+            // clock back by hand rather than sleeping the suite.
+            $memo = (new \ReflectionProperty($player, 'frameAtMemo'))->getValue($player);
+            $memo['at'] = (float) $memo['at'] - 2.0;
             $b = $player->frameAt(2.5);
             $this->assertInstanceOf(RgbFrame::class, $a);
             $this->assertInstanceOf(RgbFrame::class, $b);

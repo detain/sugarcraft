@@ -92,6 +92,14 @@ final class Player implements Model
      * 24 fps the picture holds its pre-resize geometry for barely one frame.
      */
     private const RESIZE_DEBOUNCE_SECONDS = 0.05;
+    /**
+     * SV-L86/086: floor on the wall-clock interval between two frameAt()
+     * thumbnail reads. A mouse scrub crosses a whole second of buckets in a
+     * burst of events; without a floor each crossed bucket is one throwaway
+     * ffmpeg spawn (factory players) or one double-reopen walk (in-place
+     * players) — a spawn storm painted by the pointer.
+     */
+    private const FRAME_AT_MIN_SPAWN_SEC = 1.0;
 
     /**
      * @param Decoder                      $decoder      Frame source iterator
@@ -159,6 +167,13 @@ final class Player implements Model
         // view() paints a one-line refusal at the real width instead of
         // emitting lines that are guaranteed wider than the screen.
         private readonly ?int $narrowCols = null,
+        // SV-L86/086: the frameAt() thumbnail memo + spawn throttle, carried
+        // by mutate() for the lifetime of the stream (keyed-and-invalidated by
+        // the geometry signature inside, so a rebuild can never serve a stale
+        // bucket). Mutable state on an immutable model is deliberate — the
+        // $stopped latch above is the precedent: it is a CACHE, not a value
+        // the model is presented with.
+        private readonly \ArrayObject $frameAtMemo = new \ArrayObject(),
     ) {
     }
 
@@ -2089,6 +2104,69 @@ final class Player implements Model
      */
     public function frameAt(float $sec): ?RgbFrame
     {
+        // SV-L86/086: one thumbnail per rounded second of video, and never two
+        // thumbnail walks inside FRAME_AT_MIN_SPAWN_SEC. Every scrub event used
+        // to spawn a THROWAWAY ffmpeg (factory players — one child per hover
+        // event, reaped by the grace ladder inside the call) or reopen the live
+        // decoder TWICE (in-place players); mouse scrubbing was a spawn storm.
+        // The shipped shape is deliberately single-frame memo + throttle: a
+        // strip/batch API would answer a scrubber that displays one frame at a
+        // time with N decodes it throws away — scope creep the finding rejects.
+        // The memo carries the geometry signature, so a resize rebuild
+        // invalidates it with no call-site bookkeeping; the clock is the M20
+        // seam, so the floor is monotonic like everything else here.
+        $sec = max(0.0, $sec);
+        $sig = $this->videoPath . '|' . $this->cellsW . 'x' . $this->cellsH . '|'
+            . $this->mode->name . '|' . $this->cellPxW . 'x' . $this->cellPxH . '|' . $this->fps;
+        $memo = $this->frameAtMemo;
+        if (($memo['sig'] ?? null) !== $sig) {
+            $memo['sig'] = $sig;
+            $memo['bucket'] = null;
+            $memo['frame'] = null;
+            $memo['at'] = null;
+        }
+
+        $bucket = (int) floor($sec);
+        if ($memo['bucket'] === $bucket) {
+            return $memo['frame']; // same second — the walk already answered it
+        }
+
+        if ($memo['at'] !== null && $this->now() - (float) $memo['at'] < self::FRAME_AT_MIN_SPAWN_SEC) {
+            return $memo['frame']; // bucket crossed mid-burst — serve the last thumbnail
+        }
+
+        $frame = $this->frameAtUncached($sec);
+        $memo['bucket'] = $bucket;
+        $memo['frame'] = $frame;
+        $memo['at'] = $this->now();
+
+        return $frame;
+    }
+
+    /**
+     * The actual thumbnail read behind the SV-L86/086 memo.
+     *
+     * Two source kinds, and the read serves both now that the decoder tells the
+     * Player how it reopens (no `'/fake'` string check here):
+     *  - A decoder that reopens in place (an injected test double or a server
+     *    stream) is asked to reopen at $sec, hand back its next frame, then
+     *    reopen again at the current playhead. The restore matters: a
+     *    scrubber-hover grabs thumbnails WHILE playing, and without rewinding
+     *    to $this->videoTime the live stream would keep flowing from $sec while
+     *    the Player still believed it was at frameIndex — silently desynced.
+     *    (Decoders that honour $startSec resume exactly; replay-from-start
+     *    test doubles resume from the head — such doubles ignore absolute
+     *    positions everywhere, so their playhead was always approximate.)
+     *  - A DecoderFactory-owned decoder (ffmpeg/GIF) is snapshotted through a
+     *    throwaway decoder seeked to $sec (fast `-ss`), read once, and closed —
+     *    WITHOUT disturbing the live decoder that keeps playing.
+     *
+     * @throws \LogicException for a factory-owned Player that has no source path
+     *         to spawn the throwaway from (an unbound source), where grabbing a
+     *         frame is impossible rather than merely empty.
+     */
+    private function frameAtUncached(float $sec): ?RgbFrame
+    {
         if ($this->decoder->reopensInPlace()) {
             try {
                 $this->decoder->reopen($this->videoPath, $this->cellsW, $this->cellsH, $this->fps, $this->mode, max(0.0, $sec), $this->headers);
@@ -2359,6 +2437,9 @@ final class Player implements Model
             // arms it with the raw width the host just reported, and every other
             // state change keeps whatever refusal the pane currently owes.
             narrowCols: array_key_exists('narrowCols', $changes) ? $changes['narrowCols'] : $this->narrowCols,
+            // SV-L86/086: pinned — the thumbnail memo belongs to the stream,
+            // not to one state; a tick or seek mid-scrub must not reset it.
+            frameAtMemo: $this->frameAtMemo,
         );
         // Teardown is not a value the model is built with, so it cannot ride the
         // named-argument list — copy the latch forward instead. Every derived
