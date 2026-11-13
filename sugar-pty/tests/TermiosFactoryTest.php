@@ -42,7 +42,7 @@ final class TermiosFactoryTest extends TestCase
     public function testEveryFallbackIsLoggedWithItsOrdinal(): void
     {
         if (PHP_OS_FAMILY === 'Windows') {
-            $this->markTestSkipped('sugar-pty is POSIX-only.');
+            $this->markTestSkipped('sugar-pty is POSIX-only; Windows ConPTY is a separate port.');
         }
 
         $log = \tempnam(\sys_get_temp_dir(), 'termios-fallback-');

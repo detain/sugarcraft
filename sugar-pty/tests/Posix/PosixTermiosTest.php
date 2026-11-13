@@ -119,7 +119,7 @@ final class PosixTermiosTest extends TestCase
     public function testRestoreWithoutSnapshotThrows(): void
     {
         if (PHP_OS_FAMILY === 'Windows') {
-            $this->markTestSkipped('sugar-pty is POSIX-only.');
+            $this->markTestSkipped('sugar-pty is POSIX-only; Windows ConPTY is a separate port.');
         }
         if (!\SugarCraft\Pty\Tests\Support\PtyCapability::ffiUsable()) {
             $this->markTestSkipped('ext-ffi is required to construct PosixTermios.');

@@ -45,7 +45,7 @@ final class RetryOnEintrDeadlineTest extends TestCase
     private function requireSignals(): void
     {
         if (PHP_OS_FAMILY === 'Windows') {
-            $this->markTestSkipped('sugar-pty is POSIX-only.');
+            $this->markTestSkipped('sugar-pty is POSIX-only; Windows ConPTY is a separate port.');
         }
         foreach (['pcntl_signal', 'pcntl_alarm', 'pcntl_signal_dispatch'] as $fn) {
             if (!\function_exists($fn)) {

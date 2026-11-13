@@ -21,7 +21,7 @@ final class SignalForwarderDevTtyTest extends TestCase
     {
         $this->requireFfiOnlyCapability();
         if (PHP_OS_FAMILY === 'Windows') {
-            $this->markTestSkipped('sugar-pty is POSIX-only.');
+            $this->markTestSkipped('sugar-pty is POSIX-only; Windows ConPTY is a separate port.');
         }
         if (!\is_readable('/dev/tty') || !\is_writable('/dev/tty')) {
             $this->markTestSkipped('/dev/tty is not available on this host (headless CI environment).');
