@@ -6,7 +6,7 @@ namespace SugarCraft\Forms\Tests\Field;
 
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
-use SugarCraft\Core\Msg\SuggestionsReadyMsg;
+use SugarCraft\Forms\FormSuggestionsReadyMsg;
 use SugarCraft\Forms\Field\Select;
 use SugarCraft\Forms\Form;
 use PHPUnit\Framework\TestCase;
@@ -99,7 +99,7 @@ final class SelectTest extends TestCase
         $f = Select::new('test')
             ->withOptions('old1', 'old2');
         [$f, ] = $f->focus();
-        [$f, ] = $f->update(new SuggestionsReadyMsg('test', ['new1', 'new2', 'new3']));
+        [$f, ] = $f->update(new FormSuggestionsReadyMsg('test', ['new1', 'new2', 'new3']));
         $view = $f->view();
         $this->assertStringContainsString('new1', $view);
         $this->assertStringContainsString('new2', $view);

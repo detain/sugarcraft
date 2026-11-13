@@ -8,7 +8,7 @@ use React\EventLoop\Loop;
 use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
 use SugarCraft\Async\AsyncOps;
-use SugarCraft\Core\Msg\SuggestionsReadyMsg;
+use SugarCraft\Forms\FormSuggestionsReadyMsg;
 use SugarCraft\Forms\Lang;
 
 /**
@@ -42,14 +42,19 @@ final class AsyncFetcher
      * @param mixed                   $input         value/filter text to fetch for
      * @param string                  $fieldKey      owning field key (error naming)
      * @param float|null              $timeoutSeconds per-fetch ceiling, null = raw await
-     * @param Deferred                $deferred      settles with SuggestionsReadyMsg | null-reject
+     * @param Deferred                $deferred      settles with FormSuggestionsReadyMsg | null-reject
+     * @param int                     $seq           the scheduling field's pendingAsyncSeq at
+     *                                               arm time — stamped onto the envelope so the
+     *                                               ready handler can drop superseded arrivals
+     *                                               (sugar-forms-085; SF-52)
      */
     public static function runAndSettle(
         callable $fetcher,
         mixed $input,
         string $fieldKey,
         ?float $timeoutSeconds,
-        Deferred $deferred
+        Deferred $deferred,
+        int $seq = 0
     ): void {
         try {
             $promise = $fetcher($input);
@@ -72,7 +77,7 @@ final class AsyncFetcher
         }
 
         $promise->then(
-            static function (mixed $suggestions) use ($deferred, $fieldKey): void {
+            static function (mixed $suggestions) use ($deferred, $fieldKey, $seq): void {
                 // The fetcher contract is PromiseInterface<list<string>>;
                 // a non-array fulfillment used to detonate an unconsumed
                 // TypeError (suggestions never appeared, no diagnosis).
@@ -84,7 +89,7 @@ final class AsyncFetcher
                     ])));
                     return;
                 }
-                $deferred->resolve(new SuggestionsReadyMsg($fieldKey, $suggestions));
+                $deferred->resolve(new FormSuggestionsReadyMsg($fieldKey, $suggestions, $seq));
             },
             static function (\Throwable $e) use ($deferred): void {
                 $deferred->reject($e);

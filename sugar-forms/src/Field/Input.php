@@ -14,7 +14,7 @@ use SugarCraft\Core\Cmd;
 use SugarCraft\Core\Msg;
 use SugarCraft\Forms\HasThemeChrome;
 use SugarCraft\Forms\Theme;
-use SugarCraft\Core\Msg\SuggestionsReadyMsg;
+use SugarCraft\Forms\FormSuggestionsReadyMsg;
 use SugarCraft\Core\WorkerPool;
 use SugarCraft\Forms\AsyncValidatable;
 use SugarCraft\Forms\Field;
@@ -73,7 +73,7 @@ final class Input implements \SugarCraft\Forms\Field, \SugarCraft\Forms\AsyncVal
     /** @var int Debounce delay in ms for async suggestions */
     private int $asyncSuggestionsDebounceMs = 150;
 
-    /** @var int Monotonic count of scheduled async fetches along this snapshot chain. Reserved sequence state with no reader today — CancellationSource drives the cancellation (round-90 audit; the old "(for cancellation)" claim was false). Advanced only on the rebuilt instance by withPendingAsyncCancellation(), never in place on the snapshot update() ran on — the seam Phase-6 seq-gating will read. */
+    /** @var int Monotonic count of scheduled async fetches along this snapshot chain. Advanced only on the rebuilt instance by withPendingAsyncCancellation(), never in place on the snapshot update() ran on. Read since SF-52 (sugar-forms-085): every flight stamps its generation onto the settling FormSuggestionsReadyMsg and the ready handler drops arrivals whose seq no longer matches — the CancellationSource still drives the fast path (replaced keystrokes resolve null before any message is produced). */
     private int $pendingAsyncSeq = 0;
 
     /** @var CancellationSource|null Cancellation source for the pending async operation */
@@ -341,7 +341,7 @@ final class Input implements \SugarCraft\Forms\Field, \SugarCraft\Forms\AsyncVal
      *
      * ASYNC DESIGN (E736-F2/6.1-6.2-6.4, round 85): the fetcher promise is
      * single-resolve by contract — suggestions arrive whole via
-     * SuggestionsReadyMsg and only the newest keystroke's settlement is
+     * FormSuggestionsReadyMsg and only the newest keystroke's settlement is
      * honoured (superseded fetches settle quietly with null, 6.6). Streaming
      * partial suggestion lists (6.1) would need a public AsyncCmd extension
      * in sugar-core and stay out of scope for this library. A unified
@@ -535,8 +535,16 @@ final class Input implements \SugarCraft\Forms\Field, \SugarCraft\Forms\AsyncVal
 
     public function update(Msg $msg): array
     {
-        // Handle async suggestions result
-        if ($msg instanceof SuggestionsReadyMsg && $msg->fieldKey === $this->key) {
+        // Handle async suggestions result — SF-52 gates. A superseded
+        // generation (a keystroke re-armed the door after this flight was
+        // scheduled) and a field the user LEFT (081: navigate-away with
+        // unchanged text never fired the cancellation) both DISCARD: least
+        // surprise beats re-showing an overlay nobody is looking at. The
+        // default was a ruling question in the finding; discard shipped.
+        if ($msg instanceof FormSuggestionsReadyMsg && $msg->fieldKey === $this->key) {
+            if ($msg->seq !== $this->pendingAsyncSeq || !$this->isFocused()) {
+                return [$this, null];
+            }
             $next = $this->mutate(
                 input: $this->input
                     ->withSuggestions($msg->suggestions)
@@ -618,10 +626,9 @@ final class Input implements \SugarCraft\Forms\Field, \SugarCraft\Forms\AsyncVal
         $fieldKey = $this->key;
         $workerPool = $this->workerPool;
 
-        // (round-90 audit: the captured $currentSeq was never read by either
-        // closure — the seq VALUE gating is Phase-6 reserved state; the
-        // increment now lands on $field via withPendingAsyncCancellation().)
-        return function () use ($fetcher, $debounceMs, $timeoutSeconds, $fieldKey, $field, $workerPool, $cancellationSource): \SugarCraft\Core\AsyncCmd {
+        $seq = $field->pendingAsyncSeq; // $field is the POST-increment snapshot
+
+        return function () use ($fetcher, $debounceMs, $timeoutSeconds, $fieldKey, $field, $workerPool, $cancellationSource, $seq): \SugarCraft\Core\AsyncCmd {
             $deferred = new Deferred();
             $token = $cancellationSource->token();
 
@@ -638,7 +645,7 @@ final class Input implements \SugarCraft\Forms\Field, \SugarCraft\Forms\AsyncVal
             });
 
             // Schedule the debounce timer
-            Loop::addTimer($debounceMs / 1000.0, function () use ($fetcher, $fieldKey, $field, $deferred, $token, $timeoutSeconds): void {
+            Loop::addTimer($debounceMs / 1000.0, function () use ($fetcher, $fieldKey, $field, $deferred, $token, $timeoutSeconds, $seq): void {
                 // Check if cancelled before proceeding
                 if ($token->isCancelled()) {
                     return;
@@ -651,7 +658,7 @@ final class Input implements \SugarCraft\Forms\Field, \SugarCraft\Forms\AsyncVal
                 // non-promise-returning fetcher rejects the deferred (the
                 // AsyncCmd consumer sees it) instead of unwinding Loop::run()
                 // — SF-004, one definition with the Select twin.
-                AsyncFetcher::runAndSettle($fetcher, $inputValue, $fieldKey, $timeoutSeconds, $deferred);
+                AsyncFetcher::runAndSettle($fetcher, $inputValue, $fieldKey, $timeoutSeconds, $deferred, $seq);
             });
 
             return new \SugarCraft\Core\AsyncCmd($deferred->promise());
@@ -715,7 +722,7 @@ final class Input implements \SugarCraft\Forms\Field, \SugarCraft\Forms\AsyncVal
      */
     public function consumes(Msg $msg): bool
     {
-        return $msg instanceof SuggestionsReadyMsg && $msg->fieldKey === $this->key;
+        return $msg instanceof FormSuggestionsReadyMsg && $msg->fieldKey === $this->key;
     }
 
     private function validate(): self

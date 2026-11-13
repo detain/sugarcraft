@@ -88,7 +88,7 @@ trait HasReadonly
      * open on a supposedly-frozen buffer, which is exactly the round-90 audit
      * finding on {@see \SugarCraft\Forms\Field\Text}. Everything that merely
      * animates (BlinkMsg) or reports the environment is inert and keeps
-     * flowing. Async results ({@see SuggestionsReadyMsg}) are delivered on an
+     * flowing. Async results ({@see FormSuggestionsReadyMsg}) are delivered on an
      * arm that runs BEFORE this door — harmless for a text editor (it only
      * fills the suggestion popup, never the value buffer), but a picker whose
      * value IS the highlighted entry re-points it, so {@see

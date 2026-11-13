@@ -15,7 +15,7 @@ use SugarCraft\Forms\Field\Text;
 use SugarCraft\Forms\Form;
 use SugarCraft\Core\TickRequest;
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Core\Msg\SuggestionsReadyMsg;
+use SugarCraft\Forms\FormSuggestionsReadyMsg;
 
 final class FormTest extends TestCase
 {
@@ -724,14 +724,14 @@ final class FormTest extends TestCase
 
     public function testInFlightSuggestionsAfterSubmitAreDiscarded(): void
     {
-        // E736-F2/6.8 contract: a late SuggestionsReadyMsg whose fetch was
+        // E736-F2/6.8 contract: a late FormSuggestionsReadyMsg whose fetch was
         // still in flight when the form submitted must not resurrect field
         // state — the submitted/aborted early return discards it (the
         // resolution lands nowhere; no cancel bookkeeping is required).
         $form = Form::new(Input::new('a'));
         [$form] = $form->update(new KeyMsg(KeyType::Enter));
         $this->assertTrue($form->isSubmitted());
-        [$form2, $cmd] = $form->update(new SuggestionsReadyMsg('a', ['ghost']));
+        [$form2, $cmd] = $form->update(new FormSuggestionsReadyMsg('a', ['ghost'], seq: 99));
         $this->assertSame($form, $form2);
         $this->assertNull($cmd);
     }

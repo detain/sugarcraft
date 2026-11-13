@@ -13,7 +13,7 @@ use React\Promise\PromiseInterface;
 use SugarCraft\Core\AsyncCmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
-use SugarCraft\Core\Msg\SuggestionsReadyMsg;
+use SugarCraft\Forms\FormSuggestionsReadyMsg;
 use SugarCraft\Forms\Field\Input;
 use SugarCraft\Forms\Field\Select;
 use SugarCraft\Forms\Lang;
@@ -87,9 +87,10 @@ final class AsyncSuggestionsTest extends TestCase
 
     public function testSuggestionsReadyMsgStructure(): void
     {
-        $msg = new SuggestionsReadyMsg('myfield', ['alpha', 'beta']);
+        $msg = new FormSuggestionsReadyMsg('myfield', ['alpha', 'beta'], seq: 7);
         $this->assertSame('myfield', $msg->fieldKey);
         $this->assertSame(['alpha', 'beta'], $msg->suggestions);
+        $this->assertSame(7, $msg->seq, 'the generation rides the envelope (SF-52 gate input)');
     }
 
     public function testSelectWithAsyncSuggestionsSetsFetcher(): void
@@ -461,7 +462,7 @@ final class AsyncSuggestionsTest extends TestCase
         [$fulfilled, $rejected] = self::s02Settle(self::s02AsyncCmdFrom($cmd));
 
         self::assertNull($rejected);
-        self::assertInstanceOf(SuggestionsReadyMsg::class, $fulfilled);
+        self::assertInstanceOf(FormSuggestionsReadyMsg::class, $fulfilled);
         self::assertSame(['alpha', 'beta'], $fulfilled->suggestions);
     }
 

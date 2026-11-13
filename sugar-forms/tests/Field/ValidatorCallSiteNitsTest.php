@@ -6,7 +6,7 @@ namespace SugarCraft\Forms\Tests\Field;
 
 use SugarCraft\Core\Msg\Msg;
 use SugarCraft\Core\Msg\PasteMsg;
-use SugarCraft\Core\Msg\SuggestionsReadyMsg;
+use SugarCraft\Forms\FormSuggestionsReadyMsg;
 use SugarCraft\Forms\Field\Input;
 use SugarCraft\Forms\Field\Select;
 use SugarCraft\Forms\TextArea\TextArea;
@@ -55,8 +55,8 @@ final class ValidatorCallSiteNitsTest extends TestCase
 
     public function testConsumesDeclaresTheAsyncResolutionEnvelope(): void
     {
-        $mine = new SuggestionsReadyMsg('mine', ['a']);
-        $theirs = new SuggestionsReadyMsg('other', ['b']);
+        $mine = new FormSuggestionsReadyMsg('mine', ['a']);
+        $theirs = new FormSuggestionsReadyMsg('other', ['b']);
 
         $input = Input::new('mine');
         $this->assertTrue($input->consumes($mine));

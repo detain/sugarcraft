@@ -14,7 +14,7 @@ use SugarCraft\Core\AsyncCmd;
 use SugarCraft\Core\BatchMsg;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
-use SugarCraft\Core\Msg\SuggestionsReadyMsg;
+use SugarCraft\Forms\FormSuggestionsReadyMsg;
 use SugarCraft\Async\TimeoutException;
 use SugarCraft\Forms\Field\Input;
 use SugarCraft\Forms\Field\Select;
@@ -158,7 +158,7 @@ final class AsyncSuggestionCancelTimeoutTest extends TestCase
         self::f2RunLoopFor(0.4);
 
         $this->assertNull($error);
-        $this->assertInstanceOf(SuggestionsReadyMsg::class, $captured);
+        $this->assertInstanceOf(FormSuggestionsReadyMsg::class, $captured);
         $this->assertSame(['late-arrival'], $captured->suggestions);
     }
 
@@ -229,7 +229,7 @@ final class AsyncSuggestionCancelTimeoutTest extends TestCase
         $inFlight['']->resolve(['fresh-for-empty']);
         self::f2RunLoopFor(0.05);
         self::assertTrue($second['settled']);
-        self::assertInstanceOf(SuggestionsReadyMsg::class, $second['value']);
+        self::assertInstanceOf(FormSuggestionsReadyMsg::class, $second['value']);
         self::assertSame(['fresh-for-empty'], $second['value']->suggestions);
     }
 
@@ -261,7 +261,7 @@ final class AsyncSuggestionCancelTimeoutTest extends TestCase
         $inFlight['a']->resolve(['still-valid']);
         self::f2RunLoopFor(0.05);
         self::assertTrue($box['settled']);
-        self::assertInstanceOf(SuggestionsReadyMsg::class, $box['value'], 'arrival on unchanged text must land');
+        self::assertInstanceOf(FormSuggestionsReadyMsg::class, $box['value'], 'arrival on unchanged text must land');
         self::assertSame(['still-valid'], $box['value']->suggestions);
     }
 

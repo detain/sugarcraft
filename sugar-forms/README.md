@@ -334,8 +334,12 @@ mismatch `-3`, gap open `-5`, gap extend `-1`, adjacent bonus `+5`).
 
 `withAsyncSuggestions(callable $fetcher, int $debounceMs = 150)` (alias
 `async()`) fetches `list<string>` suggestions off the keystroke path with a
-debounce; `SugarCraft\Core\Msg\SuggestionsReadyMsg` (defined in sugar-core)
-arrives via the event loop when fresh results land.
+debounce; `SugarCraft\Forms\FormSuggestionsReadyMsg` (the forms-side
+envelope, SF-52) arrives via the event loop when fresh results land. The
+envelope carries the fetch GENERATION: an arrival whose seq no longer
+matches the field's newest scheduled flight — or whose field is no longer
+focused (you arrowed away while the fetch was in flight) — is discarded
+instead of popping an overlay nobody is looking at.
 
 ### Async validation gate
 

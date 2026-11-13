@@ -18,7 +18,7 @@ use SugarCraft\Core\Msg;
 use SugarCraft\Forms\HasThemeChrome;
 use SugarCraft\Forms\Theme;
 use SugarCraft\Core\Msg\KeyMsg;
-use SugarCraft\Core\Msg\SuggestionsReadyMsg;
+use SugarCraft\Forms\FormSuggestionsReadyMsg;
 use SugarCraft\Core\WorkerPool;
 use SugarCraft\Forms\Field;
 use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
@@ -54,7 +54,7 @@ final class Select implements \SugarCraft\Forms\Field
     /** @var int Debounce delay in ms for async suggestions */
     private int $asyncSuggestionsDebounceMs = 150;
 
-    /** @var int Monotonic count of scheduled async fetches along this snapshot chain. Reserved sequence state with no reader today — CancellationSource drives the cancellation (round-90 audit; Input.php carries the identical note). Advanced only on the rebuilt instance by withPendingAsyncCancellation(), never in place on the snapshot update() ran on — the seam Phase-6 seq-gating will read. */
+    /** @var int Monotonic count of scheduled async fetches along this snapshot chain. Advanced only on the rebuilt instance by withPendingAsyncCancellation(), never in place on the snapshot update() ran on. Read since SF-52 (sugar-forms-085; Input.php carries the identical note): every flight stamps its generation onto the settling FormSuggestionsReadyMsg and the ready handler drops arrivals whose seq no longer matches. */
     private int $pendingAsyncSeq = 0;
 
     /** @var CancellationSource|null Cancellation source for the pending async operation */
@@ -328,7 +328,12 @@ final class Select implements \SugarCraft\Forms\Field
         // buffer freeze the 5.10 ruling enforces. A fetch armed while editable
         // (or a misrouted fieldKey) must not move a frozen picker's value when
         // it lands after the field went read-only (round-90 review follow-up).
-        if ($msg instanceof SuggestionsReadyMsg && $msg->fieldKey === $this->key) {
+        if ($msg instanceof FormSuggestionsReadyMsg && $msg->fieldKey === $this->key) {
+            // SF-52 gates (identical to the Input twin): superseded
+            // generation or unfocused field DISCARDS the arrival.
+            if ($msg->seq !== $this->pendingAsyncSeq || !$this->isFocused()) {
+                return [$this, null];
+            }
             if ($this->isReadonly()) {
                 return [$this, null];
             }
@@ -420,9 +425,9 @@ final class Select implements \SugarCraft\Forms\Field
         // Store the filter text at time of scheduling for sequence tracking
         $scheduledFilterText = $filterText;
 
-        // (round-90 audit: the captured $currentSeq was never read by either
-        // closure — see the identical note in Input::scheduleAsyncSuggestions.)
-        return function () use ($fetcher, $debounceMs, $timeoutSeconds, $fieldKey, $scheduledFilterText, $cancellationSource): \SugarCraft\Core\AsyncCmd {
+        $seq = $field->pendingAsyncSeq; // the POST-increment snapshot (SF-52)
+
+        return function () use ($fetcher, $debounceMs, $timeoutSeconds, $fieldKey, $scheduledFilterText, $cancellationSource, $seq): \SugarCraft\Core\AsyncCmd {
             $deferred = new Deferred();
             $token = $cancellationSource->token();
 
@@ -434,7 +439,7 @@ final class Select implements \SugarCraft\Forms\Field
             });
 
             // Schedule the debounce timer
-            Loop::addTimer($debounceMs / 1000.0, function () use ($fetcher, $fieldKey, $deferred, $token, $scheduledFilterText, $timeoutSeconds): void {
+            Loop::addTimer($debounceMs / 1000.0, function () use ($fetcher, $fieldKey, $deferred, $token, $scheduledFilterText, $timeoutSeconds, $seq): void {
                 // Check if cancelled before proceeding
                 if ($token->isCancelled()) {
                     return;
@@ -445,7 +450,7 @@ final class Select implements \SugarCraft\Forms\Field
                 // failures surface as a rejected deferred, never as a
                 // loop-unwinding throw or an unconsumed TypeError (SF-004;
                 // one definition with the Input twin).
-                AsyncFetcher::runAndSettle($fetcher, $scheduledFilterText, $fieldKey, $timeoutSeconds, $deferred);
+                AsyncFetcher::runAndSettle($fetcher, $scheduledFilterText, $fieldKey, $timeoutSeconds, $deferred, $seq);
             });
 
             return new \SugarCraft\Core\AsyncCmd($deferred->promise());
@@ -517,7 +522,7 @@ final class Select implements \SugarCraft\Forms\Field
     {
         // sugar-forms-056(a) family: the async-resolution envelope is
         // special-handled by update(), so the claim must be honest here.
-        if ($msg instanceof SuggestionsReadyMsg) {
+        if ($msg instanceof FormSuggestionsReadyMsg) {
             return $msg->fieldKey === $this->key;
         }
         if (!$this->list->focused || !$msg instanceof KeyMsg) {
