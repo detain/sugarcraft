@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Pty\Tests\Posix;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Pty\Contract\Termios;
 use SugarCraft\Pty\Libc;
 use SugarCraft\Pty\Posix\PosixPtySystem;
 use SugarCraft\Pty\Posix\PosixTermios;
@@ -239,6 +240,70 @@ final class PosixTermiosTest extends TestCase
             $this->assertTrue(true, 'apply(TCSAFLUSH) must not throw');
         } finally {
             $saved?->restore();
+            $libc->close($slaveFd);
+            $master->close();
+        }
+    }
+
+    public function testContractTypedCallerCanExpressDrain(): void
+    {
+        $this->requirePtySyscalls();
+
+        $system = new PosixPtySystem();
+        $pair = $system->open();
+
+        $master = $pair->master();
+        $slavePath = $pair->slave()->path();
+
+        $libc = Libc::lib();
+
+        $slaveFd = $libc->open($slavePath, self::O_RDWR);
+        if ($slaveFd < 0) {
+            $this->markTestSkipped('Could not open slave PTY path: ' . $slavePath);
+        }
+
+        $saved = null;
+        try {
+            $applyDrain = static function (Termios $t): void {
+                $t->apply(Termios::TCSADRAIN);
+            };
+
+            $termios = new PosixTermios($slaveFd);
+            $saved = $termios->current();
+            $applyDrain($termios->makeRaw());
+
+            $this->assertTrue(true, 'a contract-typed caller can apply the drain action');
+        } finally {
+            $saved?->restore();
+            $libc->close($slaveFd);
+            $master->close();
+        }
+    }
+
+    public function testRestoreWithoutCaptureThrows(): void
+    {
+        $this->requirePtySyscalls();
+
+        $system = new PosixPtySystem();
+        $pair = $system->open();
+
+        $master = $pair->master();
+        $slavePath = $pair->slave()->path();
+
+        $libc = Libc::lib();
+
+        $slaveFd = $libc->open($slavePath, self::O_RDWR);
+        if ($slaveFd < 0) {
+            $this->markTestSkipped('Could not open slave PTY path: ' . $slavePath);
+        }
+
+        try {
+            // PTY-12 restore() truth: the contract promises the
+            // attributes a prior current() captured — a fresh instance
+            // read nothing, so it must refuse rather than pretend.
+            $this->expectException(\LogicException::class);
+            (new PosixTermios($slaveFd))->restore();
+        } finally {
             $libc->close($slaveFd);
             $master->close();
         }

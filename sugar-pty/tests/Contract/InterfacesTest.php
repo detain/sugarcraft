@@ -12,6 +12,7 @@ use SugarCraft\Pty\Contract\PtySystem;
 use SugarCraft\Pty\Contract\Pump;
 use SugarCraft\Pty\Contract\SlavePty;
 use SugarCraft\Pty\Contract\Termios;
+use SugarCraft\Pty\Posix\PosixTermios;
 use SugarCraft\Pty\Windows\ConPtyChild;
 use SugarCraft\Pty\Windows\ConPtyMasterPty;
 use SugarCraft\Pty\Windows\ConPtyPair;
@@ -224,6 +225,31 @@ final class InterfacesTest extends TestCase
     public function testTermiosHasTcsanowConstant(): void
     {
         $this->assertSame(0, Termios::TCSANOW);
+    }
+
+    public function testTermiosDeclaresTheRealTrio(): void
+    {
+        // PTY-12: the contract itself must name every action apply()
+        // accepts — drain and flush included — so a contract-typed
+        // caller can express them without touching an implementation.
+        $constants = (new \ReflectionClass(Termios::class))->getConstants();
+        $this->assertArrayHasKey('TCSADRAIN', $constants);
+        $this->assertArrayHasKey('TCSAFLUSH', $constants);
+        $this->assertSame(1, Termios::TCSADRAIN);
+        $this->assertSame(2, Termios::TCSAFLUSH);
+    }
+
+    public function testPosixTermiosInheritsTheTrioWithoutRedeclaringIt(): void
+    {
+        foreach (['TCSANOW', 'TCSADRAIN', 'TCSAFLUSH'] as $name) {
+            $const = (new \ReflectionClass(PosixTermios::class))->getReflectionConstant($name);
+            $this->assertNotFalse($const, $name . ' must resolve on PosixTermios');
+            $this->assertSame(
+                Termios::class,
+                (string) $const->getDeclaringClass()?->getName(),
+                $name . ' must be declared once — on the contract'
+            );
+        }
     }
 
     public function testPumpHasExpectedMethods(): void

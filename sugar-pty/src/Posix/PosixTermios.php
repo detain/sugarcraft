@@ -21,14 +21,9 @@ final class PosixTermios implements Termios
 {
     use LibcAccess;
 
-    /** Apply changes immediately. */
-    public const TCSANOW = 0;
-
-    /** Drain output before applying. */
-    public const TCSADRAIN = 1;
-
-    /** Drain output and discard input. */
-    public const TCSAFLUSH = 2;
+    // The TCSANOW/TCSADRAIN/TCSAFLUSH trio is declared once on the
+    // Termios contract; redeclaring it here would let the fd-generic
+    // implementation drift from what contract-typed callers see.
 
     /**
      * Opaque termios buffer — ≥80 bytes covers glibc/musl/Darwin.

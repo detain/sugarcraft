@@ -15,6 +15,12 @@ interface Termios
     /** Apply changes immediately. */
     public const TCSANOW = 0;
 
+    /** Flush the output queue (wait for it to drain) before applying. */
+    public const TCSADRAIN = 1;
+
+    /** Flush both input and output queues before applying. */
+    public const TCSAFLUSH = 2;
+
     /**
      * Get current terminal attributes as an immutable snapshot.
      *
@@ -35,13 +41,18 @@ interface Termios
     /**
      * Apply these attributes to the terminal.
      *
-     * @param int $when one of TCSANOW, TCSADRAIN, TCSASOFT (0 = TCSANOW)
+     * @param int $when one of TCSANOW, TCSADRAIN, TCSAFLUSH (0 = TCSANOW).
+     *                  TCSASOFT is a macOS flag modifier, not an action —
+     *                  it is deliberately absent from this trio.
      * @see portable-pty.Termios.Apply()
      */
     public function apply(int $when = self::TCSANOW): void;
 
     /**
-     * Restore the original terminal attributes saved at construction.
+     * Restore the attributes captured by a prior {@see current()} call.
+     *
+     * restore() without a capture throws: a fresh instance never read
+     * the fd's real settings, so there is nothing truthful to put back.
      *
      * @see portable-pty.Termios.Restore()
      */
