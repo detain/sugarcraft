@@ -24,6 +24,7 @@ use Ratchet\RFC6455\Messaging\CloseFrameChecker;
 use Ratchet\RFC6455\Messaging\Frame;
 use Ratchet\RFC6455\Messaging\MessageBuffer;
 use React\EventLoop\LoopInterface;
+use SugarCraft\Code\Attachments\FileMentions;
 use React\Socket\ConnectionInterface;
 use React\Socket\SocketServer;
 use SugarCraft\Code\Protocol\Dispatcher;
@@ -87,6 +88,13 @@ final class FakeServe
     public string $lastDelivery = '';
 
     public bool $lastHasMedia = false;
+
+    /** Attachment counts of the last admitted session.send, and the mime-mismatch refusals the real serve would issue. */
+    public int $lastImageCount = 0;
+
+    public int $lastDocumentCount = 0;
+
+    public int $mimeRefusals = 0;
 
     public bool $refuseMediaOnce = false;
 
@@ -339,6 +347,20 @@ final class FakeServe
                 $this->lastIdempotencyKey = isset($params['idempotencyKey']) ? (string) $params['idempotencyKey'] : null;
                 $this->lastDelivery = (string) ($params['delivery'] ?? '');
                 $this->lastHasMedia = isset($params['images']) || isset($params['documents']);
+                $this->lastImageCount = \is_array($params['images'] ?? null) ? \count($params['images']) : 0;
+                $this->lastDocumentCount = \is_array($params['documents'] ?? null) ? \count($params['documents']) : 0;
+                // The real serve re-sniffs every attachment and refuses a declared
+                // mime that differs from the sniffed one (TurnMethods); mirror it.
+                $mismatch = $this->sniffMismatch((array) ($params['images'] ?? []), true)
+                    ?? $this->sniffMismatch((array) ($params['documents'] ?? []), false);
+                if ($mismatch !== null) {
+                    $this->mimeRefusals++;
+                    $this->emit($id, [
+                        'jsonrpc' => '2.0', 'id' => $rpcId,
+                        'error' => ['code' => -32602, 'message' => 'invalid params', 'data' => (object) ['kind' => $mismatch]],
+                    ]);
+                    break;
+                }
                 if ($this->lastHasMedia && $this->refuseMediaOnce) {
                     $this->refuseMediaOnce = false;
                     $this->emit($id, [
@@ -384,6 +406,23 @@ final class FakeServe
     }
 
     /** @param array<string,mixed> $message */
+    /** @param list<mixed> $entries the kind of the first declared-vs-sniffed mismatch, or null */
+    private function sniffMismatch(array $entries, bool $image): ?string
+    {
+        foreach ($entries as $entry) {
+            if (!\is_array($entry)) {
+                continue;
+            }
+            $bytes = (string) \base64_decode((string) ($entry['data'] ?? ''), true);
+            $sniffed = $image ? FileMentions::sniffImage($bytes) : FileMentions::sniffDocument($bytes);
+            if ($sniffed !== (string) ($entry['mime'] ?? '')) {
+                return $image ? 'image_mime_mismatch' : 'document_mime_mismatch';
+            }
+        }
+
+        return null;
+    }
+
     private function emit(int $connectionId, array $message): void
     {
         $this->framing[$connectionId]?->sendMessage((string) \json_encode($message, \JSON_THROW_ON_ERROR));

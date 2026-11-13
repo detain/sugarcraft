@@ -19,6 +19,7 @@ use CandyCode\Bundles\MsTeams\Support\Keys;
 use CandyCode\Bundles\MsTeams\Support\Log;
 use CandyCode\Bundles\MsTeams\Support\PairingCodes;
 use CandyCode\Bundles\MsTeams\Support\QueueGate;
+use CandyCode\Bundles\MsTeams\Support\RateLimiter;
 use CandyCode\Bundles\MsTeams\Support\SessionMap;
 use CandyCode\Bundles\MsTeams\Support\TextSafety;
 use Psr\Http\Message\ResponseInterface;
@@ -102,6 +103,17 @@ final class MsTeamsChannel implements ChannelInterface, AcceptsHttpRequests
     private string $dialIdentity = '';
 
     private bool $disposed = false;
+
+    /** Per-source budget for the webhook door: 30 requests a minute, checked before any JWKS dial. */
+    private RateLimiter $webhookLimit;
+
+    /** Shutdown window for in-flight Teams posts (dispose law). */
+    private const DRAIN_SECONDS = 5.0;
+
+    public function __construct()
+    {
+        $this->webhookLimit = new RateLimiter(30.0, 0.5);
+    }
 
     public function name(): string
     {
@@ -204,7 +216,7 @@ final class MsTeamsChannel implements ChannelInterface, AcceptsHttpRequests
             $jwt = new Jwt($triple['appId'], $roster);
             $this->validators[$triple['appId']] = ['account' => $account, 'jwt' => $jwt];
             $broker = new TokenBroker($triple, $this->log, $authBase);
-            $rest = new Rest($broker, $this->log, $insecure);
+            $rest = new Rest($broker, $this->log, $insecure, $this->loop, $this->safety);
             $this->faces[] = new MsTeamsAccount(
                 $account,
                 $triple['appId'],
@@ -216,6 +228,7 @@ final class MsTeamsChannel implements ChannelInterface, AcceptsHttpRequests
                 $pairing,
                 $this->safety,
                 $this->loop,
+                $triple['tenantId'],
             );
         }
 
@@ -264,6 +277,12 @@ final class MsTeamsChannel implements ChannelInterface, AcceptsHttpRequests
         if (strlen($body) > self::MAX_BODY_BYTES) {
             // Over-cap BEFORE any parse or comparison (HookWebhooks doctrine).
             return self::json(413, ['error' => 'payload_too_large']);
+        }
+        $remote = (string) ($request->getServerParams()['REMOTE_ADDR'] ?? '');
+        if (!$this->webhookLimit->take($remote)) {
+            $this->log->warn('channels.msteams.webhook_rate_limited');
+
+            return self::json(429, ['error' => 'rate_limited'])->withHeader('Retry-After', '2');
         }
         $bearer = '';
         foreach ($request->getHeader('Authorization') as $header) {
@@ -334,6 +353,11 @@ final class MsTeamsChannel implements ChannelInterface, AcceptsHttpRequests
         $this->pollTimer = null;
         $this->pruneTimer = null;
 
+        // Drain before the router and serve go: a reply already on the wire
+        // should land, and anything still open after the window is cancelled.
+        foreach ($this->faces as $face) {
+            $face->drainDeliveries(self::DRAIN_SECONDS);
+        }
         $this->queueGate?->cancelAll();
         foreach ($this->faces as $face) {
             $face->cancelAllTimers();
@@ -431,9 +455,11 @@ final class MsTeamsChannel implements ChannelInterface, AcceptsHttpRequests
         $this->router->setQueueGate($this->queueGate);
         $this->router->setPairHandler(function (string $key, array $ref, array $args): void {
             $account = Keys::parse($key)['account'];
+            $isDm = \str_starts_with((string) Keys::parse($key)['rest'], 'dm:');
+            $actor = (string) (((array) ($ref['__actor'] ?? []))['userId'] ?? '');
             foreach ($this->faces as $face) {
                 if ($face->accountName() === $account) {
-                    $face->pairCommand($ref, $args);
+                    $face->pairCommand($ref, $args, $actor, $isDm);
 
                     return;
                 }

@@ -201,6 +201,61 @@ final class ApprovalInvokeGateTest extends TestCase
         $serve->stop();
     }
 
+    public function testARedeliveredCardSubmitIsAnsweredOnce(): void
+    {
+        $serve = new FakeServe($this->loop, 'tok-serve');
+        $port = $serve->listen();
+        $bridge = new ServeBridge('ws://127.0.0.1:' . $port . '/', 'tok-serve', 'subprotocol', Log::silent(), $this->loop);
+        $started = false;
+        $bridge->start()->then(static function () use (&$started): void {
+            $started = true;
+        });
+        for ($tick = 0; $tick < 20 && !$started; $tick++) {
+            $this->settle(100);
+        }
+        self::assertTrue($started, 'FakeServe handshake never admitted');
+
+        $this->store->writeMsteamsPairing('default', [], ['u1']);
+        $rest = new Rest(new TokenBroker(
+            ['appId' => self::APP_ID, 'appPassword' => 'p', 'tenantId' => 't'],
+            Log::silent(),
+            'http://127.0.0.1:' . $this->api->port,
+        ), Log::silent(), true);
+        $router = new ConversationRouter($bridge, new SessionMap($this->tempDir . '/sessions-dup.db'), Log::silent(), $this->safety, $this->loop);
+        $this->face = new MsTeamsAccount('default', self::APP_ID, $rest, $router, ['dmPolicy' => 'pairing'], Log::silent(), $this->pairing, $this->safety, $this->loop);
+        $router->addChannel($this->face, 'default');
+
+        $this->face->handleActivity($this->message('u1', 'hello there'));
+        for ($tick = 0; $tick < 40 && $serve->sendSeen < 1; $tick++) {
+            $this->settle(50);
+        }
+        $serve->pushEvent(['sessionId' => 'sess_fixture_1', 'type' => 'permission.requested', 'seq' => 80, 'durable' => true,
+            'data' => ['askId' => 'ask_9', 'tool' => 'Bash', 'arguments' => []]]);
+        for ($tick = 0; $tick < 40; $tick++) {
+            $this->settle(50);
+        }
+        $nonce = '';
+        foreach ($this->api->calls as $call) {
+            $body = (array) \json_decode((string) $call['body'], true);
+            if (($body['attachments'][0]['contentType'] ?? '') === 'application/vnd.microsoft.card.adaptive') {
+                $nonce = (string) ($body['attachments'][0]['content']['actions'][0]['data']['nonce'] ?? '');
+            }
+        }
+        self::assertNotSame('', $nonce, 'the presented card must carry the minted nonce');
+
+        // Teams redelivers the same invoke (same activity id) after a slow answer.
+        $before = $serve->respondSeen;
+        $submit = $this->submit('u1', 'ask_9', 'once', $nonce);
+        $this->face->handleActivity($submit);
+        $this->face->handleActivity($submit);
+        $this->settle(600);
+
+        self::assertSame($before + 1, $serve->respondSeen, 'the redelivered submit must not answer the ask a second time');
+
+        $bridge->stop();
+        $serve->stop();
+    }
+
     // ── harness ──
 
     /** @param array<string,mixed> $cfg */

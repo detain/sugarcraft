@@ -46,6 +46,14 @@ final class MsTeamsAccountTest extends TestCase
     private TextSafety $safety;
     private string $tempDir;
 
+    private ?FakeServe $served = null;
+
+    private ?ServeBridge $bridge = null;
+
+    private const PNG = "\x89PNG\r\n\x1a\nFAKEPNG";
+
+    private const PDF = "%PDF-1.4\nfake";
+
     protected function setUp(): void
     {
         $this->loop = Loop::get();
@@ -61,6 +69,8 @@ final class MsTeamsAccountTest extends TestCase
     protected function tearDown(): void
     {
         $this->face?->cancelAllTimers();
+        $this->bridge?->stop();
+        $this->served?->stop();
         $this->api->stop();
         @\unlink($this->tempDir . '/sessions.db');
         @\rmdir($this->tempDir);
@@ -284,17 +294,188 @@ final class MsTeamsAccountTest extends TestCase
 
     public function testPairApproveAndListSpeakThroughTheChannelSurface(): void
     {
-        $this->buildFace(['dmPolicy' => 'pairing']);
+        $this->buildFace(['dmPolicy' => 'pairing', 'approvalRoster' => ['boss']]);
         $code = (string) $this->pairing->request('default', 'u2')['code'];
-        $this->face->pairCommand(['serviceUrl' => $this->serviceUrl(), 'conversationId' => 'conv-1'], ['approve', $code]);
+        $this->face->pairCommand($this->dmRef(), ['approve', $code], 'boss', true);
         $this->settle();
-        $call = $this->api->lastCallFor('/activities', 'POST');
-        self::assertIsArray($call);
-        self::assertStringContainsString('Paired u2.', (string) ((array) \json_decode((string) $call['body'], true))['text']);
-        $this->face->pairCommand(['serviceUrl' => $this->serviceUrl(), 'conversationId' => 'conv-1'], ['list']);
+        self::assertSame(['Paired u2.'], $this->postedTexts());
+
+        $this->face->pairCommand($this->dmRef(), ['list'], 'boss', true);
         $this->settle();
-        $listBody = (array) \json_decode((string) $this->api->lastCallFor('/activities', 'POST')['body'], true);
-        self::assertStringContainsString('No pending pairings.', (string) $listBody['text']);
+        self::assertSame(['Paired u2.', 'No pending pairings.'], $this->postedTexts());
+    }
+
+    public function testPairingIsAnApproversActAndARefusedApproveLeavesTheCodePending(): void
+    {
+        $this->buildFace(['dmPolicy' => 'pairing', 'approvalRoster' => ['boss']]);
+        $code = (string) $this->pairing->request('default', 'u2')['code'];
+        $this->face->pairCommand($this->dmRef(), ['approve', $code], 'u9', true);
+        $this->face->pairCommand($this->dmRef(), ['list'], 'u9', true);
+        $this->settle();
+
+        self::assertSame(['⛔ Only an approver can manage pairings.', '⛔ Only an approver can manage pairings.'], $this->postedTexts());
+        self::assertFalse($this->pairing->isPaired('default', 'u2'), 'a non-approver must not admit a peer');
+        self::assertCount(1, $this->pairing->pending('default'), 'the code stays pending');
+    }
+
+    public function testAnEmptyApproverRosterAnswersNoPairing(): void
+    {
+        $this->buildFace(['dmPolicy' => 'pairing']);
+        $this->pairing->request('default', 'u2');
+        $this->face->pairCommand($this->dmRef(), ['approve', (string) $this->pairing->pending('default')[0]['code']], 'boss', true);
+        $this->settle();
+
+        self::assertSame(['⛔ Only an approver can manage pairings.'], $this->postedTexts());
+        self::assertFalse($this->pairing->isPaired('default', 'u2'));
+    }
+
+    public function testPairListInAGroupNamesNoCodeEvenForAnApprover(): void
+    {
+        $this->buildFace(['dmPolicy' => 'pairing', 'approvalRoster' => ['boss']]);
+        $code = (string) $this->pairing->request('default', 'u2')['code'];
+        $this->face->pairCommand(['serviceUrl' => $this->serviceUrl(), 'conversationId' => '19:group@thread.v2'], ['list'], 'boss', false);
+        $this->settle();
+
+        self::assertSame(['Use a direct message to list pairing codes.'], $this->postedTexts());
+        self::assertStringNotContainsString($code, $this->postedTexts()[0]);
+    }
+
+    public function testPairListInADirectMessageShowsTheCodeToAnApprover(): void
+    {
+        $this->buildFace(['dmPolicy' => 'pairing', 'approvalRoster' => ['boss']]);
+        $code = (string) $this->pairing->request('default', 'u2')['code'];
+        $this->face->pairCommand($this->dmRef(), ['list'], 'boss', true);
+        $this->settle();
+
+        self::assertStringContainsString($code, (string) ($this->postedTexts()[0] ?? ''));
+    }
+
+    public function testADuplicateCommandDeliveryIsAnsweredOnce(): void
+    {
+        $this->store->writeMsteamsPairing('default', [], ['boss']);
+        $this->buildFace(['dmPolicy' => 'pairing', 'approvalRoster' => ['boss']]);
+        $this->face->handleActivity($this->activity('boss', '/pair list'));
+        $this->face->handleActivity($this->activity('boss', '/pair list'));
+        $this->settle();
+
+        self::assertSame(['No pending pairings.'], $this->postedTexts(), 'Teams retries a slow POST: the second delivery must be claimed away');
+    }
+
+    public function testAForeignTenantIsRefusedBeforeAnyReply(): void
+    {
+        $lines = [];
+        $this->buildFace(['dmPolicy' => 'pairing'], new Log(static function (string $line) use (&$lines): void {
+            $lines[] = $line;
+        }), 'tenant-a');
+        $foreign = $this->activity('u1', 'hello');
+        $foreign['conversation']['tenantId'] = 'tenant-b';
+        $this->face->handleActivity($foreign);
+        $this->settle();
+
+        self::assertSame([], $this->api->calls, 'a foreign tenant must not even earn a pairing notice');
+        self::assertStringContainsString('msteams_tenant_refused', \implode("\n", $lines));
+    }
+
+    public function testTheConfiguredTenantPassesAndAnAbsentTenantFailsClosed(): void
+    {
+        $this->buildFace(['dmPolicy' => 'pairing'], null, 'tenant-a');
+        $mine = $this->activity('u1', 'hello');
+        $mine['conversation']['tenantId'] = 'TENANT-A';
+        $this->face->handleActivity($mine);
+        $this->settle(600);
+        self::assertStringContainsString('Pairing required', (string) ($this->postedTexts()[0] ?? ''), 'the matching tenant reaches the DM gate');
+
+        $this->face->handleActivity($this->activity('u2', 'hello'));
+        $this->settle(300);
+        self::assertCount(1, $this->postedTexts(), 'an activity naming no tenant is refused when one is configured');
+    }
+
+    public function testARequireMentionFalseRowAnswersAPlainPrompt(): void
+    {
+        $this->buildFace(['groups' => ['conv-1' => ['policy' => 'allowlist', 'requireMention' => false]]]);
+        $this->face->handleActivity($this->activity('u1', 'plain question', 'groupChat'));
+        $this->settle(600);
+
+        self::assertStringContainsString('Could not open a session', (string) ($this->postedTexts()[0] ?? ''), 'the admitted group takes plain prompts');
+    }
+
+    public function testDrainDeliveriesLetsAnInFlightReplyLandBeforeItReturns(): void
+    {
+        $this->buildFace([]);
+        $sent = null;
+        $this->face->deliver(['serviceUrl' => $this->serviceUrl(), 'conversationId' => 'conv-1'], 'in flight')->then(static function (array $r) use (&$sent): void {
+            $sent = $r;
+        });
+        $this->face->drainDeliveries(5.0);
+
+        self::assertIsArray($sent, 'the reply must have settled when drain returned');
+        self::assertStringContainsString('in flight', (string) ($this->postedTexts()[0] ?? ''));
+    }
+
+    public function testAnInboundPngIsDeclaredAsPngAndReachesTheServe(): void
+    {
+        $this->api->mediaBytes = self::PNG;
+        $this->serveFace();
+        $this->face->handleActivity($this->withAttachments($this->activity('u1', 'look'), [
+            ['name' => 'pic.png', 'contentType' => 'image/png', 'contentUrl' => $this->serviceUrl() . '/media/pic.png'],
+        ]));
+        $this->awaitSends(1);
+
+        self::assertSame(1, $this->served->sendSeen);
+        self::assertSame(0, $this->served->mimeRefusals, 'the declared mime must match the sniffed bytes');
+        self::assertSame(1, $this->served->lastImageCount);
+    }
+
+    public function testAnInboundPdfIsDeclaredAsPdfAndReachesTheServe(): void
+    {
+        $this->api->mediaBytes = self::PDF;
+        $this->serveFace();
+        $this->face->handleActivity($this->withAttachments($this->activity('u1', 'read this'), [
+            ['name' => 'spec.pdf', 'contentType' => 'application/pdf', 'contentUrl' => $this->serviceUrl() . '/media/spec.pdf'],
+        ]));
+        $this->awaitSends(1);
+
+        self::assertSame(1, $this->served->sendSeen);
+        self::assertSame(0, $this->served->mimeRefusals);
+        self::assertSame(1, $this->served->lastDocumentCount);
+    }
+
+    public function testAnUntypedAttachmentIsSniffedAndReachesTheServe(): void
+    {
+        $this->api->mediaBytes = self::PNG;
+        $this->serveFace();
+        $this->face->handleActivity($this->withAttachments($this->activity('u1', 'untyped'), [
+            ['name' => 'blob', 'contentUrl' => $this->serviceUrl() . '/media/blob'],
+        ]));
+        $this->awaitSends(1);
+
+        self::assertSame(0, $this->served->mimeRefusals, 'a generic or absent contentType is decided by the bytes');
+        self::assertSame(1, $this->served->lastImageCount);
+    }
+
+    public function testOneFailedMediaFetchDropsOnlyItsOwnAttachment(): void
+    {
+        $this->api->mediaBytes = self::PNG;
+        $this->serveFace();
+        $this->face->handleActivity($this->withAttachments($this->activity('u1', 'two pics'), [
+            ['name' => 'ok.png', 'contentType' => 'image/png', 'contentUrl' => $this->serviceUrl() . '/media/ok.png'],
+            ['name' => 'missing.png', 'contentType' => 'image/png', 'contentUrl' => $this->serviceUrl() . '/media/missing.png'],
+        ]));
+        $this->awaitSends(1);
+
+        self::assertSame(1, $this->served->lastImageCount, 'the surviving sibling still rides the prompt');
+        self::assertStringContainsString('missing.png: fetch failed', $this->served->seenText);
+    }
+
+    public function testAnAttachmentWithNonStringContentIsTreatedAsAbsent(): void
+    {
+        $this->serveFace();
+        $this->face->handleActivity($this->withAttachments($this->activity('u1', 'odd one'), [
+            ['name' => 'weird', 'contentType' => 'image/png', 'content' => ['not', 'a', 'url']],
+        ]));
+        $this->awaitSends(1);
+
+        self::assertStringContainsString('weird: no inline content', $this->served->seenText);
     }
 
     public function testACommandActivityReachesTheRouterNotTheModel(): void
@@ -364,7 +545,7 @@ final class MsTeamsAccountTest extends TestCase
 
     // ── harness ──
 
-    private function buildFace(array $cfg, ?Log $faceLog = null): void
+    private function buildFace(array $cfg, ?Log $faceLog = null, string $tenantId = ''): void
     {
         $rest = new Rest(new TokenBroker(
             ['appId' => self::APP_ID, 'appPassword' => 'p', 'tenantId' => 't'],
@@ -379,8 +560,69 @@ final class MsTeamsAccountTest extends TestCase
             $this->loop,
         );
         $this->face = new MsTeamsAccount('default', self::APP_ID, $rest, $router, $cfg, $faceLog ?? Log::silent(),
-            $this->pairing, $this->safety, $this->loop);
+            $this->pairing, $this->safety, $this->loop, $tenantId);
         $router->addChannel($this->face, 'default');
+    }
+
+    /** A face wired to a real FakeServe bridge, with u1 paired. */
+    private function serveFace(array $cfg = ['dmPolicy' => 'pairing']): void
+    {
+        $this->served = new FakeServe($this->loop, 'tok-serve');
+        $port = $this->served->listen();
+        $this->bridge = new ServeBridge('ws://127.0.0.1:' . $port . '/', 'tok-serve', 'subprotocol', Log::silent(), $this->loop);
+        $started = false;
+        $this->bridge->start()->then(static function () use (&$started): void {
+            $started = true;
+        });
+        for ($tick = 0; $tick < 20 && !$started; $tick++) {
+            $this->settle(100);
+        }
+        self::assertTrue($started, 'FakeServe handshake never admitted');
+
+        $this->store->writeMsteamsPairing('default', [], ['u1']);
+        $rest = new Rest(new TokenBroker(
+            ['appId' => self::APP_ID, 'appPassword' => 'p', 'tenantId' => 't'],
+            Log::silent(),
+            'http://127.0.0.1:' . $this->api->port,
+        ), Log::silent(), true);
+        $router = new ConversationRouter($this->bridge, new SessionMap($this->tempDir . '/sessions-served.db'), Log::silent(), $this->safety, $this->loop);
+        $this->face = new MsTeamsAccount('default', self::APP_ID, $rest, $router, $cfg, Log::silent(), $this->pairing, $this->safety, $this->loop);
+        $router->addChannel($this->face, 'default');
+    }
+
+    private function awaitSends(int $count): void
+    {
+        for ($tick = 0; $tick < 60 && $this->served->sendSeen < $count; $tick++) {
+            $this->settle(50);
+        }
+        $this->settle(100);
+    }
+
+    /** @param list<array<string,mixed>> $attachments */
+    private function withAttachments(array $activity, array $attachments): array
+    {
+        $activity['attachments'] = $attachments;
+
+        return $activity;
+    }
+
+    /** @return array{serviceUrl: string, conversationId: string} */
+    private function dmRef(): array
+    {
+        return ['serviceUrl' => $this->serviceUrl(), 'conversationId' => 'conv-1'];
+    }
+
+    /** The text of every activity the face posted, in order. @return list<string> */
+    private function postedTexts(): array
+    {
+        $texts = [];
+        foreach ($this->api->calls as $call) {
+            if ($call['method'] === 'POST' && \str_contains($call['path'], '/activities')) {
+                $texts[] = (string) ((array) \json_decode((string) $call['body'], true))['text'];
+            }
+        }
+
+        return $texts;
     }
 
     private function serviceUrl(): string

@@ -8,6 +8,7 @@ use CandyCode\Bundles\MsTeams\Bridge\ConversationRouter;
 use CandyCode\Bundles\MsTeams\Bridge\PlatformFace;
 use CandyCode\Bundles\MsTeams\Support\Keys;
 use CandyCode\Bundles\MsTeams\Support\Log;
+use CandyCode\Bundles\MsTeams\Support\MediaSniff;
 use CandyCode\Bundles\MsTeams\Support\PairingCodes;
 use CandyCode\Bundles\MsTeams\Support\TextSafety;
 use React\EventLoop\LoopInterface;
@@ -64,6 +65,7 @@ final class MsTeamsAccount implements PlatformFace
         private readonly PairingCodes $pairing,
         private readonly TextSafety $safety,
         private readonly LoopInterface $loop,
+        private readonly string $tenantId = '',
     ) {
     }
 
@@ -297,13 +299,24 @@ final class MsTeamsAccount implements PlatformFace
     public function handleActivity(array $activity): void
     {
         $type = (string) ($activity['type'] ?? '');
+        if ($type !== 'message' && $type !== 'invoke') {
+            return; // conversationUpdate, typing from humans, messageReaction… — not input
+        }
+        if (!$this->tenantAccepted($activity)) {
+            return;
+        }
+        // Teams retries a slow POST: every activity id (commands and card
+        // answers included) is claimed once, before any dispatch.
+        $inboundId = (string) ($activity['id'] ?? '');
+        if ($inboundId !== '' && !$this->router->claimInbound('msteams', $inboundId)) {
+            $this->log->debug('msteams_activity_duplicate', ['type' => $type]);
+
+            return;
+        }
         if ($type === 'invoke') {
             $this->handleInvoke($activity);
 
             return;
-        }
-        if ($type !== 'message') {
-            return; // conversationUpdate, typing from humans, messageReaction… — not input
         }
 
         $from = \is_array($activity['from'] ?? null) ? $activity['from'] : [];
@@ -370,7 +383,7 @@ final class MsTeamsAccount implements PlatformFace
         $command = Commands::parseText($content);
         if ($command !== null) {
             if ($command['name'] === 'pair') {
-                $this->handlePairCommand($ref, (array) $command['args'], null);
+                $this->handlePairCommand($ref, (array) $command['args'], $authorId, $isDm);
 
                 return;
             }
@@ -386,20 +399,19 @@ final class MsTeamsAccount implements PlatformFace
 
         // The door said this conversation is served; the floor says whether
         // THIS message is a prompt for us at all.
-        if (!($isDm || $isMention || $this->boolCfg('respondWithoutMention', false))) {
+        if (!($isDm || $isMention || $this->boolCfg('respondWithoutMention', false) || $this->groupTakesPlainPrompts($conversationId, $degraded))) {
             return;
         }
 
-        $inboundId = (string) ($activity['id'] ?? '');
         if ($rawAttachments === []) {
-            $this->router->inbound('msteams', $key, $ref, $text, $isMention, $inboundId);
+            $this->router->inbound('msteams', $key, $ref, $text, $isMention);
 
             return;
         }
         // §8.7 v1 stance: platform-hosted media rides the settled batch;
         // Graph-hosted content is refused LOUD (a disclosed skip note),
         // never a silent drop, and never a dial with our token.
-        $this->collectMediaAndDispatch($rawAttachments, $key, $ref, $text, $isMention, $inboundId);
+        $this->collectMediaAndDispatch($rawAttachments, $key, $ref, $text, $isMention);
     }
 
     /**
@@ -543,6 +555,57 @@ final class MsTeamsAccount implements PlatformFace
     }
 
     /**
+     * §8.1 tenant floor: with a tenant configured, an activity whose tenant
+     * differs (or names none) is refused before anything reads it. Fail closed.
+     *
+     * @param array<string,mixed> $activity
+     */
+    private function tenantAccepted(array $activity): bool
+    {
+        if ($this->tenantId === '') {
+            return true;
+        }
+        $conversation = \is_array($activity['conversation'] ?? null) ? $activity['conversation'] : [];
+        $channelData = \is_array($activity['channelData'] ?? null) ? $activity['channelData'] : [];
+        $tenant = \is_array($channelData['tenant'] ?? null) ? $channelData['tenant'] : [];
+        $tid = \is_string($conversation['tenantId'] ?? null)
+            ? $conversation['tenantId']
+            : (\is_string($tenant['id'] ?? null) ? $tenant['id'] : '');
+        if ($tid !== '' && \strcasecmp($tid, $this->tenantId) === 0) {
+            return true;
+        }
+        $this->log->warn('msteams_tenant_refused', ['tenantPresent' => $tid !== '']);
+
+        return false;
+    }
+
+    /**
+     * A group row with requireMention:false admits plain prompts once the
+     * door has approved the conversation (§8.3). The degraded floor still
+     * forces mention-only.
+     */
+    private function groupTakesPlainPrompts(string $conversationId, bool $degraded): bool
+    {
+        if ($degraded) {
+            return false;
+        }
+        $groups = $this->mapCfg('groups');
+        $row = \is_array($groups[$conversationId] ?? null) ? $groups[$conversationId] : null;
+
+        return $row !== null
+            && (string) ($row['policy'] ?? 'allowlist') !== 'disabled'
+            && (bool) ($row['requireMention'] ?? true) === false;
+    }
+
+    /** The approver roster (the same list that answers tool asks). An empty roster answers nobody. */
+    private function isApprover(string $actorId): bool
+    {
+        $roster = \array_map('strval', $this->listCfg('approvalRoster'));
+
+        return $actorId !== '' && $roster !== [] && \in_array($actorId, $roster, true);
+    }
+
+    /**
      * §8.3 group door: GROUPS ARE BLOCKED BY DEFAULT — a groupChat or
      * channel conversation is served only when `groupPolicy` says open OR
      * the conversation carries a `groups` row. A row may be 'disabled'
@@ -581,103 +644,138 @@ final class MsTeamsAccount implements PlatformFace
      * ONLY platform-hosted content (Bot Framework media hosts). A
      * Graph/SharePoint url gets a disclosed refusal note — the bytes need
      * delegated consent the bundle does not ask for until P3.5 — never a
-     * silent drop, never a dial. Fetches run concurrently; the settled
-     * batch becomes ONE prompt. Wire shape per entry:
-     * {name, mime, data: strict-base64} (§9 media contract).
+     * silent drop, never a dial. Each fetch settles on its own: a failed
+     * job drops only its own attachment (disclosed) and its siblings still
+     * ride the batch, which becomes ONE prompt. The declared contentType is
+     * a hint; the bytes decide the mime on the wire (the serve re-sniffs and
+     * refuses a mismatch), so absent or generic types are sniffed after the
+     * fetch. Wire shape per entry: {name, mime, data: strict-base64}.
      *
      * @param list<mixed> $raw
      */
-    private function collectMediaAndDispatch(array $raw, string $key, array $ref, string $text, bool $isMention, string $inboundId): void
+    private function collectMediaAndDispatch(array $raw, string $key, array $ref, string $text, bool $isMention): void
     {
         $maxMb = (int) $this->nested('media', 'maxMb', 100);
         $maxBytes = \max(1, $maxMb) * 1048576;
         $notes = [];
-        /** @var list<array{name: string, url: string, kind: string, promise: PromiseInterface}> $jobs */
+        /** @var list<array{name: string, promise: PromiseInterface}> $jobs */
         $jobs = [];
-        $imageSlots = 4;
-        $documentSlots = 2;
+        $declaredImages = 0;
+        $declaredDocuments = 0;
+        $untypedFetches = 0;
         foreach ($raw as $attachment) {
             if (!\is_array($attachment)) {
                 continue;
             }
-            $name = trim((string) ($attachment['name'] ?? '')) ?: 'attachment';
-            $mime = strtolower(trim((string) ($attachment['contentType'] ?? '')));
-            $url = trim((string) ($attachment['contentUrl'] ?? ($attachment['content'] ?? '')));
+            $name = \is_string($attachment['name'] ?? null) ? \trim($attachment['name']) : '';
+            $name = $name === '' ? 'attachment' : $name;
+            $declared = \is_string($attachment['contentType'] ?? null) ? \strtolower(\trim($attachment['contentType'])) : '';
+            $url = self::inlineUrl($attachment);
             if ($url === '') {
                 $notes[] = "{$name}: no inline content (Graph-hosted media is a P3.5 leg)";
                 continue;
             }
-            $isImage = str_starts_with($mime, 'image/');
-            $isPdf = $mime === 'application/pdf';
-            if (!$isImage && !$isPdf) {
-                $notes[] = "{$name}: unsupported type {$mime}";
-                continue;
-            }
-            if ($isImage && $imageSlots <= 0) {
-                $notes[] = "{$name}: beyond the 4-image cap";
-                continue;
-            }
-            if ($isPdf && $documentSlots <= 0) {
-                $notes[] = "{$name}: beyond the 2-document cap";
-                continue;
-            }
-            $declared = (int) ($attachment['size'] ?? 0);
-            if ($declared > $maxBytes) {
-                $notes[] = "{$name}: declared " . (int) ceil($declared / 1048576) . " MB exceeds the {$maxMb} MB cap";
-                continue;
-            }
-            if ($isImage) {
-                $imageSlots--;
+            $untyped = $declared === '' || $declared === 'application/octet-stream';
+            if ($untyped) {
+                if ($untypedFetches >= 2) {
+                    $notes[] = "{$name}: beyond the 2 untyped-attachment budget";
+                    continue;
+                }
+                $untypedFetches++;
+            } elseif (\str_starts_with($declared, 'image/')) {
+                if ($declaredImages >= 4) {
+                    $notes[] = "{$name}: beyond the 4-image cap";
+                    continue;
+                }
+                $declaredImages++;
+            } elseif ($declared === 'application/pdf') {
+                if ($declaredDocuments >= 2) {
+                    $notes[] = "{$name}: beyond the 2-document cap";
+                    continue;
+                }
+                $declaredDocuments++;
             } else {
-                $documentSlots--;
+                $notes[] = "{$name}: unsupported type {$declared}";
+                continue;
+            }
+            $declaredSize = (int) ($attachment['size'] ?? 0);
+            if ($declaredSize > $maxBytes) {
+                $notes[] = "{$name}: declared " . (int) \ceil($declaredSize / 1048576) . " MB exceeds the {$maxMb} MB cap";
+                continue;
             }
             $jobs[] = [
                 'name' => $name,
-                'url' => $url,
-                'kind' => $isImage ? 'image' : 'document',
-                'promise' => $this->rest->fetchBinary($url),
+                'promise' => $this->rest->fetchBinary($url)->then(
+                    static fn (string $bytes): ?string => $bytes,
+                    function (\Throwable $e) use ($name): ?string {
+                        $this->log->warn('msteams_media_fetch_failed', ['name' => $name, 'error' => $e->getMessage()]);
+
+                        return null;
+                    },
+                ),
             ];
         }
 
         if ($jobs === []) {
             // Nothing fetchable — the note leg still speaks (disclosed), and
             // the text alone may be a complete prompt.
-            $this->finishMedia($key, $ref, $text, $isMention, $inboundId, [], [], $notes);
+            $this->finishMedia($key, $ref, $text, $isMention, [], [], $notes);
 
             return;
         }
 
         $promises = \array_map(static fn (array $job): PromiseInterface => $job['promise'], $jobs);
-        \React\Promise\all($promises)->then(function (array $settled) use ($key, $ref, $text, $isMention, $inboundId, $jobs, $notes, $maxBytes): void {
+        \React\Promise\all($promises)->then(function (array $settled) use ($key, $ref, $text, $isMention, $jobs, $notes, $maxBytes): void {
             $images = [];
             $documents = [];
             foreach ($settled as $index => $bytes) {
-                $job = $jobs[$index];
+                $name = $jobs[$index]['name'];
                 if (!\is_string($bytes)) {
+                    $notes[] = "{$name}: fetch failed";
+                    continue;
+                }
+                $mime = MediaSniff::sniff($bytes);
+                if ($mime === null) {
+                    $notes[] = "{$name}: bytes are not a supported image or PDF";
                     continue;
                 }
                 if (\strlen($bytes) > $maxBytes) {
-                    $notes[] = "{$job['name']}: actually " . (int) ceil(\strlen($bytes) / 1048576) . ' MB exceeds the cap';
+                    $notes[] = "{$name}: actually " . (int) \ceil(\strlen($bytes) / 1048576) . ' MB exceeds the cap';
                     continue;
                 }
-                $entry = ['name' => $job['name'], 'mime' => '', 'data' => \base64_encode($bytes)];
-                if ($job['kind'] === 'image') {
+                $isImage = \str_starts_with($mime, 'image/');
+                if ($isImage && \count($images) >= 4) {
+                    $notes[] = "{$name}: beyond the 4-image cap";
+                    continue;
+                }
+                if (!$isImage && \count($documents) >= 2) {
+                    $notes[] = "{$name}: beyond the 2-document cap";
+                    continue;
+                }
+                $entry = ['name' => $name, 'mime' => $mime, 'data' => \base64_encode($bytes)];
+                if ($isImage) {
                     $images[] = $entry;
                 } else {
                     $documents[] = $entry;
                 }
             }
-            $this->finishMedia($key, $ref, $text, $isMention, $inboundId, $images, $documents, $notes);
-        }, function (\Throwable $e) use ($key, $ref, $text, $isMention, $inboundId, $notes): void {
-            // A failed batch NEVER silently eats the prompt: the text rides
-            // on with every fetch named in the disclosed note (§7.8 law).
-            $notes[] = 'media batch failed: ' . $e->getMessage();
-            $this->finishMedia($key, $ref, $text, $isMention, $inboundId, [], [], $notes);
+            $this->finishMedia($key, $ref, $text, $isMention, $images, $documents, $notes);
         });
     }
 
+    /** The inline url of one attachment: contentUrl, else a string content. Non-string content is absent. */
+    private static function inlineUrl(array $attachment): string
+    {
+        $contentUrl = \is_string($attachment['contentUrl'] ?? null) ? \trim($attachment['contentUrl']) : '';
+        if ($contentUrl !== '') {
+            return $contentUrl;
+        }
+
+        return \is_string($attachment['content'] ?? null) ? \trim($attachment['content']) : '';
+    }
+
     /** @param list<string> $notes */
-    private function finishMedia(string $key, array $ref, string $text, bool $isMention, string $inboundId, array $images, array $documents, array $notes): void
+    private function finishMedia(string $key, array $ref, string $text, bool $isMention, array $images, array $documents, array $notes): void
     {
         if ($notes !== []) {
             $disclosed = '[skipped: ' . \implode('; ', $notes) . ']';
@@ -687,33 +785,48 @@ final class MsTeamsAccount implements PlatformFace
         if ($text === '' && $images === [] && $documents === []) {
             return;
         }
-        $this->router->inbound('msteams', $key, $ref, $text, $isMention, $inboundId, $images, $documents);
+        $this->router->inbound('msteams', $key, $ref, $text, $isMention, null, $images, $documents);
     }
 
     /** Public door for the router's /pair text fallback (§7.3). */
-    public function pairCommand(array $ref, array $args): void
+    public function pairCommand(array $ref, array $args, string $actorId, bool $isDm): void
     {
-        $this->handlePairCommand($ref, $args, null);
+        $this->handlePairCommand($ref, $args, $actorId, $isDm);
     }
 
-    /** @param array<string,mixed> $ref */
-    private function handlePairCommand(array $ref, array $args, ?\Closure $reply): void
+    /**
+     * Pairing is an approver's act (§7.3): the roster that answers tool asks
+     * answers pairings too, and an EMPTY roster answers nobody — the gate that
+     * admits a peer to the bot must not default open. Codes are listed only in
+     * a direct message; a group reply names no code.
+     *
+     * @param array<string,mixed> $ref
+     * @param array<mixed>        $args
+     */
+    private function handlePairCommand(array $ref, array $args, string $actorId, bool $isDm): void
     {
-        $action = \strtolower(\trim((string) ($args[0] ?? 'list')));
-        if ($action === 'approve') {
-            $code = \strtoupper(\trim((string) ($args[1] ?? '')));
-            $paired = $code === '' ? null : $this->pairing->approve($this->account, $code);
-            $text = $paired === null ? 'No pending pairing matches that code.' : "Paired {$paired}.";
-            if ($reply !== null) {
-                $reply($text);
-
-                return;
-            }
-            $this->sendRaw((string) ($ref['serviceUrl'] ?? ''), (string) ($ref['conversationId'] ?? ''), $text);
+        $serviceUrl = (string) ($ref['serviceUrl'] ?? '');
+        $conversationId = (string) ($ref['conversationId'] ?? '');
+        if (!$this->isApprover($actorId)) {
+            $this->sendRaw($serviceUrl, $conversationId, '⛔ Only an approver can manage pairings.');
 
             return;
         }
 
+        $action = \strtolower(\trim((string) ($args[0] ?? 'list')));
+        if ($action === 'approve') {
+            $code = \strtoupper(\trim((string) ($args[1] ?? '')));
+            $paired = $code === '' ? null : $this->pairing->approve($this->account, $code);
+            $this->sendRaw($serviceUrl, $conversationId, $paired === null ? 'No pending pairing matches that code.' : "Paired {$paired}.");
+
+            return;
+        }
+
+        if (!$isDm) {
+            $this->sendRaw($serviceUrl, $conversationId, 'Use a direct message to list pairing codes.');
+
+            return;
+        }
         $rows = $this->pairing->pending($this->account);
         $text = $rows === []
             ? 'No pending pairings.'
@@ -721,12 +834,13 @@ final class MsTeamsAccount implements PlatformFace
                 static fn (array $row): string => (string) $row['code'] . ' — user ' . (string) $row['userId'],
                 $rows,
             ));
-        if ($reply !== null) {
-            $reply($text);
+        $this->sendRaw($serviceUrl, $conversationId, $text);
+    }
 
-            return;
-        }
-        $this->sendRaw((string) ($ref['serviceUrl'] ?? ''), (string) ($ref['conversationId'] ?? ''), $text);
+    /** Shutdown leg (dispose law): in-flight activity posts get a bounded window to land. */
+    public function drainDeliveries(float $seconds): void
+    {
+        $this->rest->drain($seconds);
     }
 
     /** The approver-facing answers ride RAW (pairing codes are redacted everywhere else). */

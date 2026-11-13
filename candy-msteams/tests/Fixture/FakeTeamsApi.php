@@ -30,6 +30,15 @@ final class FakeTeamsApi
     /** One-shot failure injection (status code the next matching call gets). */
     public ?int $failNextWith = null;
 
+    /** Budgeted failures for activity posts: the next N POSTs get this status (and Retry-After). */
+    private int $failBudget = 0;
+
+    private int $failStatus = 0;
+
+    private ?string $failRetryAfter = null;
+
+    private string $failBody = '{"error":"throttled"}';
+
     /** @var array<string,mixed>|null JWKS body served at /keys */
     public ?array $keys = null;
 
@@ -78,8 +87,23 @@ final class FakeTeamsApi
         return $this->port;
     }
 
+    /** The next $times activity POSTs answer $status (with an optional Retry-After). */
+    public function failActivityPosts(int $status, int $times, ?string $retryAfter = null, string $body = '{"error":"throttled"}'): void
+    {
+        $this->failStatus = $status;
+        $this->failBudget = $times;
+        $this->failRetryAfter = $retryAfter;
+        $this->failBody = $body;
+    }
+
     private function answer(ConnectionInterface $conn, string $method, string $path, string $body): void
     {
+        if ($this->failBudget > 0 && $method === 'POST' && \str_contains($path, '/activities')) {
+            $this->failBudget--;
+            $conn->end($this->frame($this->failStatus, $this->failBody, 'application/json', $this->failRetryAfter));
+
+            return;
+        }
         if ($this->failNextWith !== null) {
             $status = $this->failNextWith;
             $this->failNextWith = null;
@@ -99,6 +123,11 @@ final class FakeTeamsApi
         }
         if ($method === 'GET' && $path === '/keys') {
             $conn->end($this->frame(200, (string) \json_encode($this->keys ?? ['keys' => []])));
+
+            return;
+        }
+        if ($method === 'GET' && \str_starts_with($path, '/media/') && \str_contains($path, 'missing')) {
+            $conn->end($this->frame(404, '{"error":"no such media"}'));
 
             return;
         }
@@ -149,10 +178,16 @@ final class FakeTeamsApi
         $this->server?->close();
     }
 
-    private function frame(int $status, string $body, string $type = 'application/json'): string
+    private function frame(int $status, string $body, string $type = 'application/json', ?string $retryAfter = null): string
     {
-        $reason = $status === 201 ? 'Created' : ($status === 404 ? 'Not Found' : 'OK');
+        $reason = match ($status) {
+            201 => 'Created',
+            404 => 'Not Found',
+            429 => 'Too Many Requests',
+            default => 'OK',
+        };
+        $retry = $retryAfter === null ? '' : "Retry-After: {$retryAfter}\r\n";
 
-        return "HTTP/1.1 {$status} {$reason}\r\nContent-Type: {$type}\r\nContent-Length: " . strlen($body) . "\r\nConnection: close\r\n\r\n" . $body;
+        return "HTTP/1.1 {$status} {$reason}\r\nContent-Type: {$type}\r\n{$retry}Content-Length: " . strlen($body) . "\r\nConnection: close\r\n\r\n" . $body;
     }
 }

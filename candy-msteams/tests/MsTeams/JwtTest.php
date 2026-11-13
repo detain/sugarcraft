@@ -159,6 +159,43 @@ final class JwtTest extends TestCase
         $this->expectRefusal($head . '.' . $body . '.' . $b64($sig), 'sig');
     }
 
+    public function testAFailedRosterFetchIsNotRepeatedInsideItsNegativeWindow(): void
+    {
+        $dials = 0;
+        $jwt = new Jwt(self::APP_ID, static function () use (&$dials): array {
+            $dials++;
+            throw new JwtException('roster unreachable', 'roster');
+        });
+        for ($i = 0; $i < 5; $i++) {
+            try {
+                $jwt->validate(self::token());
+                self::fail('an unavailable roster must refuse');
+            } catch (JwtException $e) {
+                self::assertSame('roster', $e->reason);
+            }
+        }
+
+        self::assertSame(1, $dials, 'an outage costs one bounded fetch per window, not one per inbound request');
+    }
+
+    public function testAnEmptyRosterCountsAsAFailedFetch(): void
+    {
+        $dials = 0;
+        $jwt = new Jwt(self::APP_ID, static function () use (&$dials): array {
+            $dials++;
+
+            return [];
+        });
+        for ($i = 0; $i < 3; $i++) {
+            try {
+                $jwt->validate(self::token());
+            } catch (JwtException) {
+            }
+        }
+
+        self::assertSame(1, $dials);
+    }
+
     private function expectRefusal(string $compact, string $reason, string $context = ''): void
     {
         try {

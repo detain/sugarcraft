@@ -155,6 +155,25 @@ final class MsTeamsChannelTest extends TestCase
      * polarity leg (a well-formed invoke under the SAME token) proves the
      * door refuses on body SHAPE, not on token presence.
      */
+    public function testTheWebhookDoorShedsAFloodBeforeAnyRosterDial(): void
+    {
+        $keysFile = self::rosterFixturePath();
+        $channel = $this->bootServedChannel($keysFile);
+        try {
+            $bearer = 'Bearer ' . self::signedToken(self::$fixturePem, 'app-p4b');
+            $statuses = [];
+            for ($i = 0; $i < 31; $i++) {
+                $statuses[] = $channel->handleRequest(self::webhook(self::INVOKE_BODY, $bearer))->getStatusCode();
+            }
+
+            self::assertSame(200, $statuses[0]);
+            self::assertSame(429, $statuses[30], 'the 31st request inside the window is shed with 429');
+        } finally {
+            $channel->dispose();
+            @unlink($keysFile);
+        }
+    }
+
     public function testTheActivityParseDoorRefusesMalformedBodiesBehindATrustedToken(): void
     {
         $keysFile = self::rosterFixturePath();

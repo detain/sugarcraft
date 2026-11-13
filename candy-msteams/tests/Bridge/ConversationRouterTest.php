@@ -17,6 +17,7 @@ use CandyCode\Bundles\MsTeams\Tests\Fixture\FakeServe;
 use PHPUnit\Framework\TestCase;
 use React\EventLoop\LoopInterface;
 use React\EventLoop\StreamSelectLoop;
+use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
 
 use function React\Promise\resolve;
@@ -229,6 +230,68 @@ final class ConversationRouterTest extends TestCase
         self::assertStringContainsString('is not an approver', (string) $this->serve->lastNote);
     }
 
+    public function testAlwaysNeedsANamedApproverWhenTheRosterIsEmpty(): void
+    {
+        $this->boot();
+        $this->inboundDm('bind me', false, 'm-1');
+
+        $this->router->answerApproval('sess_fixture_1', 'ask_9', 'always', ['userId' => 'rando', 'name' => 'R'], '', self::DM_KEY, 'text');
+        self::runFor($this->loop, 300);
+
+        self::assertSame(0, $this->serve->respondSeen, 'a persistent grant must not be answered by an open roster');
+    }
+
+    public function testAnEmptyRosterStillAnswersOnceAndDeny(): void
+    {
+        $this->boot();
+        $this->inboundDm('bind me', false, 'm-1');
+
+        $this->router->answerApproval('sess_fixture_1', 'ask_9', 'once', ['userId' => 'rando', 'name' => 'R'], '', self::DM_KEY, 'text');
+        self::runFor($this->loop, 300);
+        self::assertSame(1, $this->serve->respondSeen);
+        self::assertSame('once', $this->serve->lastReply);
+
+        $this->router->answerApproval('sess_fixture_1', 'ask_10', 'reject', ['userId' => 'rando', 'name' => 'R'], '', self::DM_KEY, 'text');
+        self::runFor($this->loop, 300);
+        self::assertSame(2, $this->serve->respondSeen);
+        self::assertSame('reject', $this->serve->lastReply);
+    }
+
+    public function testAReplysChunksGoOutInOrderOneAtATime(): void
+    {
+        $face = $this->deferredFace();
+        $this->boot([], $face);
+        $this->inboundDm('bind me', false, 'm-1');
+
+        $content = \str_repeat('A', 150) . "\n\n" . \str_repeat('B', 150) . "\n\n" . \str_repeat('C', 150);
+        $total = \count(OutboundChunker::split($content, 200, 100));
+        self::assertGreaterThanOrEqual(2, $total, 'the reply must split into several chunks for the order to mean anything');
+        $this->pushSettled($this->envelope('assistant.completed', 90, ['content' => $content]));
+        self::assertCount(1, $face->started, 'the second chunk must wait for the first to settle');
+
+        for ($i = 0; $i < $total - 1; $i++) {
+            $face->pending[$i]->resolve(null);
+            self::runFor($this->loop, 50);
+            self::assertCount($i + 2, $face->started, 'chunk ' . ($i + 2) . ' starts only after chunk ' . ($i + 1) . ' settled');
+        }
+        $joined = \implode('|', $face->started);
+        self::assertLessThan(\strpos($joined, 'B'), \strpos($joined, 'A'), 'chunks go out in reply order');
+        self::assertLessThan(\strrpos($joined, 'C'), \strrpos($joined, 'B'), 'chunks go out in reply order');
+    }
+
+    public function testAFailedChunkDoesNotStopTheRest(): void
+    {
+        $face = $this->deferredFace();
+        $this->boot([], $face);
+        $this->inboundDm('bind me', false, 'm-1');
+
+        $this->pushSettled($this->envelope('assistant.completed', 90, ['content' => \str_repeat('A', 150) . "\n\n" . \str_repeat('B', 150)]));
+        $face->pending[0]->reject(new \RuntimeException('429 after retries'));
+        self::runFor($this->loop, 50);
+
+        self::assertCount(2, $face->started, 'a refused chunk is logged, and the next chunk still goes out');
+    }
+
     public function testTheApproveCommandMapsTheVerdictVocabulary(): void
     {
         $this->boot();
@@ -427,10 +490,10 @@ final class ConversationRouterTest extends TestCase
     }
 
     /** @param array<string,mixed> $policy */
-    private function boot(array $policy = []): void
+    private function boot(array $policy = [], ?PlatformFace $face = null): void
     {
         $this->router = new ConversationRouter($this->bridge, $this->map, Log::silent(), new TextSafety(), $this->loop, $policy);
-        $this->router->addChannel($this->face, 'default');
+        $this->router->addChannel($face ?? $this->face, 'default');
 
         $started = false;
         $this->bridge->start()->then(static function () use (&$started): void {
@@ -442,6 +505,54 @@ final class ConversationRouterTest extends TestCase
         if (!$started) {
             self::fail('serve handshake never admitted');
         }
+    }
+
+    /** A face whose deliveries stay open until the test settles them. */
+    private function deferredFace(): PlatformFace
+    {
+        return new class implements PlatformFace {
+            /** @var list<string> */
+            public array $started = [];
+
+            /** @var list<Deferred> */
+            public array $pending = [];
+
+            public function name(): string
+            {
+                return 'msteams';
+            }
+
+            public function textChunkLimit(): int
+            {
+                return 200;
+            }
+
+            public function maxLinesPerMessage(): int
+            {
+                return 100;
+            }
+
+            public function deliver(array $ref, string $chunk): PromiseInterface
+            {
+                $this->started[] = $chunk;
+                $deferred = new Deferred();
+                $this->pending[] = $deferred;
+
+                return $deferred->promise();
+            }
+
+            public function promptApproval(array $ref, string $sessionId, array $ask, string $nonce = ''): void
+            {
+            }
+
+            public function retireApproval(string $askId, string $line): void
+            {
+            }
+
+            public function typing(array $ref): void
+            {
+            }
+        };
     }
 
     /** @param array<string,mixed> $data */

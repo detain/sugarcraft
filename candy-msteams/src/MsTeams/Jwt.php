@@ -32,6 +32,12 @@ final class Jwt
     public const ISSUERS = ['https://api.botframework.com', 'https://botframework.com'];
     public const CLOCK_LEEWAY_SECONDS = 60;
     public const ROSTER_REFRESH_SECONDS = 300;
+    /**
+     * A failed roster fetch is remembered this long, so a JWKS outage costs
+     * one bounded fetch per window instead of one per inbound request on the
+     * reactor (the webhook handler is synchronous).
+     */
+    public const ROSTER_FAILURE_SECONDS = 60;
 
     /** @var \Closure(): array<string,string> kid => PEM */
     private readonly \Closure $roster;
@@ -40,6 +46,8 @@ final class Jwt
     private ?array $keys = null;
 
     private float $lastFetchAt = 0.0;
+
+    private bool $lastFetchFailed = false;
 
     /** @param \Closure(): array<string,string> $roster kid => PEM public keys */
     public function __construct(
@@ -126,24 +134,43 @@ final class Jwt
         return $decoded;
     }
 
-    /** kid → PEM, through the cache + refresh throttle; unknown kid refuses. */
+    /**
+     * kid → PEM, through the cache + refresh throttle; unknown kid refuses.
+     * Failed fetches count as attempts (lastFetchAt) and open a negative
+     * window: during an outage every request inside it refuses without
+     * dialling the roster again.
+     */
     private function keyFor(string $kid): string
     {
-        $stale = $this->keys === null
-            || (\microtime(true) - $this->lastFetchAt) > self::ROSTER_REFRESH_SECONDS;
-        if ($this->keys === null || !isset($this->keys[$kid])) {
-            if (!$stale && $this->keys !== null) {
-                throw new JwtException('unknown token kid ' . $kid, 'kid');
-            }
+        if ($this->keys !== null && isset($this->keys[$kid])) {
+            return $this->keys[$kid];
+        }
+        $now = \microtime(true);
+        $sinceAttempt = $now - $this->lastFetchAt;
+        if ($this->lastFetchFailed && $sinceAttempt < self::ROSTER_FAILURE_SECONDS) {
+            throw new JwtException('signing-key roster unavailable (recent fetch failed)', 'roster');
+        }
+        if ($this->keys !== null && !$this->lastFetchFailed && $sinceAttempt <= self::ROSTER_REFRESH_SECONDS) {
+            throw new JwtException('unknown token kid ' . $kid, 'kid');
+        }
+
+        $this->lastFetchAt = $now;
+        try {
             $fetched = ($this->roster)();
-            if (!\is_array($fetched) || $fetched === []) {
-                throw new JwtException('signing-key roster unavailable', 'roster');
-            }
-            $this->keys = $fetched;
-            $this->lastFetchAt = \microtime(true);
-            if (!isset($this->keys[$kid])) {
-                throw new JwtException('unknown token kid ' . $kid, 'kid');
-            }
+        } catch (\Throwable $e) {
+            $this->lastFetchFailed = true;
+
+            throw $e;
+        }
+        if (!\is_array($fetched) || $fetched === []) {
+            $this->lastFetchFailed = true;
+
+            throw new JwtException('signing-key roster unavailable', 'roster');
+        }
+        $this->lastFetchFailed = false;
+        $this->keys = $fetched;
+        if (!isset($this->keys[$kid])) {
+            throw new JwtException('unknown token kid ' . $kid, 'kid');
         }
 
         return $this->keys[$kid];

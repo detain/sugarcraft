@@ -171,7 +171,8 @@ final class ApprovalGateTest extends TestCase
     {
         $this->presentAsk();
 
-        $this->router->answerByAskId('ask_9', 'always', ['userId' => 'peer-1', 'name' => 'P'], 'cafebabe01', self::DM_KEY, 'card');
+        // 'once': an empty roster refuses `always` before the binding wall, and this test pins the wall.
+        $this->router->answerByAskId('ask_9', 'once', ['userId' => 'peer-1', 'name' => 'P'], 'cafebabe01', self::DM_KEY, 'card');
         self::runFor($this->loop, 300);
 
         self::assertSame(0, $this->serve->respondSeen, 'a crafted value naming the ask id must never reach the permission wire');
@@ -258,7 +259,7 @@ final class ApprovalGateTest extends TestCase
 
         $this->pushSettled($this->envelope('permission.resolved', 81, ['askId' => 'ask_9', 'reply' => 'once']));
 
-        $this->router->answerApproval('sess_fixture_1', 'ask_9', 'always', ['userId' => 'peer-1', 'name' => 'P'], $nonce, self::DM_KEY, 'card');
+        $this->router->answerApproval('sess_fixture_1', 'ask_9', 'once', ['userId' => 'peer-1', 'name' => 'P'], $nonce, self::DM_KEY, 'card');
         self::runFor($this->loop, 300);
 
         self::assertSame(1, $this->serve->respondSeen, 'retirement must clear the binding — the old card is dead');

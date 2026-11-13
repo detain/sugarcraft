@@ -49,7 +49,10 @@ use React\Promise\PromiseInterface;
  * the ask's own conversation, and the adapter applies the platform's
  * access floor to the answerer first. A card's roster line stays a
  * courtesy display; unbound answers are refused fail-closed and never
- * touch the permission response.
+ * touch the permission response. An EMPTY roster admits any answerer to
+ * approve-once and deny, but never to `always` (a persistent grant): that
+ * answer requires a configured approver, so the open floor cannot widen a
+ * tool's permission for good.
  *
  * MUTABLE ON PURPOSE: it mirrors live session state.
  */
@@ -75,6 +78,9 @@ final class ConversationRouter
 
     /** @var array<string, array<string,mixed>> askId → presentation ref (where refusal lines are delivered) */
     private array $askRef = [];
+
+    /** @var array<string, PromiseInterface<void>> platform → tail of that face's chunk chain (per conversation below) */
+    private array $deliveryTails = [];
 
     private ?QueueGate $queueGate = null;
 
@@ -120,6 +126,16 @@ final class ConversationRouter
         $parts = Keys::parse($conversationKey);
 
         return $this->channels[$parts['platform'] . ':' . $parts['account']] ?? $this->channels[$parts['platform']] ?? null;
+    }
+
+    /**
+     * First-delivery claim for one platform activity id (Teams retries a slow
+     * webhook POST). The adapter claims before dispatch, so commands and card
+     * answers dedupe exactly like prompts.
+     */
+    public function claimInbound(string $platform, string $inboundId): bool
+    {
+        return $this->map->claimInbound($platform, $inboundId);
     }
 
     /** @return list<PlatformFace> */
@@ -471,6 +487,14 @@ final class ConversationRouter
 
             return;
         }
+        if ($approvers === [] && $verdict === 'always') {
+            // A persistent grant needs a named approver; an open roster may
+            // still answer once or deny, and the ask stays open otherwise.
+            $this->log->warn('approval_always_without_approver', ['ask' => $askId, 'actor' => $userId]);
+            $this->refuseAlways($askId);
+
+            return;
+        }
         if (!$this->answerIsBound($sessionId, $askId, $nonce, $conversationKey, $face)) {
             $this->refuseUnbound($askId, $userId, $face);
 
@@ -566,6 +590,24 @@ final class ConversationRouter
         }
 
         return true;
+    }
+
+    /**
+     * `always` without an approver roster: the ask is NOT answered on the
+     * permission wire (it stays open for a once/deny answer or a roster); the
+     * refusal is said in the ask's own presentation conversation.
+     */
+    private function refuseAlways(string $askId): void
+    {
+        $key = $this->askConversation[$askId] ?? null;
+        $ref = $this->askRef[$askId] ?? null;
+        if ($key === null || !\is_array($ref)) {
+            return;
+        }
+        $channel = $this->channelFor($key);
+        if ($channel !== null) {
+            $this->deliver($channel, $ref, '⛔ "always" needs a configured approver (channels.msteams approvals.approvers). Answer once or deny, or ask an approver.');
+        }
     }
 
     /**
@@ -726,11 +768,22 @@ final class ConversationRouter
         $this->map->noteSeqForSession($sessionId, $through);
     }
 
+    /**
+     * Chunks of one reply go out strictly in order: each waits for the one
+     * before it to settle (a 429 retry included), so an out-of-order platform
+     * completion can never reorder the answer. Chains are per conversation,
+     * so unrelated conversations never queue behind each other.
+     */
     private function deliver(PlatformFace $channel, array $ref, string $text): void
     {
+        $chain = $channel->name() . '|' . (string) ($ref['conversationId'] ?? '');
+        $tail = $this->deliveryTails[$chain] ?? \React\Promise\resolve(null);
         foreach (OutboundChunker::split($this->safety->outbound($text), $channel->textChunkLimit(), $channel->maxLinesPerMessage()) as $chunk) {
-            $channel->deliver($ref, $chunk)->then(null, fn (\Throwable $e) => $this->log->warn('deliver_failed', ['error' => $e->getMessage()]));
+            $tail = $tail
+                ->then(static fn () => $channel->deliver($ref, $chunk))
+                ->then(null, fn (\Throwable $e) => $this->log->warn('deliver_failed', ['error' => $e->getMessage()]));
         }
+        $this->deliveryTails[$chain] = $tail;
     }
 
     private function failWith(PlatformFace $channel, array $ref, string $message): void
