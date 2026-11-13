@@ -15,8 +15,10 @@ sugar-table — a customizable data table component for PHP 8.3+ terminal UIs: p
 ## Features
 
 - **Column definitions**: key (the caller owns uniqueness — nothing in the table enforces it), title, width (fixed or flexible), optional style
-- **Row data**: each `Row` carries a key-value map (`RowData`); `withRows()` takes
-  `Row` objects only (passing a raw key-map array is a `TypeError`). A value renders
+- **Row data**: each `Row` carries a key-value map (`RowData`); `withRows()` /
+  `addRows()` take `Row` objects, or plain key-map arrays which are coerced to
+  rows at the entry point (anything else throws `InvalidArgumentException` naming
+  the index). A value renders
   as text when it is scalar or `__toString`-able (booleans print as `1` or nothing),
   and as an empty string otherwise — arrays and resources included; a key the row
   omits shows the missing-data placeholder (see Missing Data Indicator)
@@ -357,6 +359,11 @@ $t = $t->Filter('name', 'alice')  // name must contain "alice"
 | `search()` | Filterable columns (all when none marked) | OR (row matches if ANY scanned column contains text) |
 
 - **Unknown column key**: `Filter()` and `SortBy()` throw `InvalidArgumentException`
+- **Entry-point types**: `fromColumns()` requires every index to hold a `Column`;
+  row setters require `Row` (or a data array, coerced). An offender is named with
+  its index and actual type (`withRows()[2] must be Row or array, got string`)
+  instead of surfacing as a deep `TypeError`; `Column::new()` likewise rejects a
+  negative width at construction (`width must be >= 0`)
 - **Unmarked column**: once any column carries `withFilterable()`, `Filter()` on a
   column that lacks the mark is a silent no-op — mark the column first
 

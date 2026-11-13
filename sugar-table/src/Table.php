@@ -219,8 +219,19 @@ final class Table
 
     public static function fromColumns(array $columns): self
     {
+        // Entry-point type gate (audit ST-09): a bad column is named with its
+        // index here instead of throwing a raw TypeError from a deep render —
+        // the exact failure mode the row factory used to have.
+        foreach ($columns as $i => $col) {
+            if (!$col instanceof Column) {
+                throw new \InvalidArgumentException(
+                    'fromColumns()[' . $i . '] must be Column, got ' . (\is_object($col) ? \get_class($col) : \gettype($col))
+                );
+            }
+        }
+
         $t = new self();
-        $t->columns = $columns;
+        $t->columns = \array_values($columns);
         return $t;
     }
 
@@ -228,8 +239,41 @@ final class Table
     // Fluent configuration
     // -------------------------------------------------------------------------
 
+    /**
+     * Normalize an incoming row list (audit ST-09): Row instances pass
+     * through, plain associative arrays are coerced through
+     * Row::new(RowData::from(...)) — the array shape README quickstarts and
+     * candy-sql call sites already use becomes honored, not a deep TypeError —
+     * and anything else is rejected by name and index at the boundary.
+     *
+     * @param array<array-key, Row|array<array-key, mixed>> $rows
+     *
+     * @return list<Row>
+     */
+    private static function normalizeRows(array $rows, string $method): array    {
+        $out = [];
+        foreach ($rows as $i => $row) {
+            if ($row instanceof Row) {
+                $out[] = $row;
+            } elseif (\is_array($row)) {
+                $out[] = Row::new(RowData::from($row));
+            } else {
+                throw new \InvalidArgumentException(
+                    $method . '[' . $i . '] must be Row or array, got ' . (\is_object($row) ? \get_class($row) : \gettype($row))
+                );
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * @param array<array-key, Row|array<array-key, mixed>> $rows Row objects,
+     *     or plain data arrays coerced to rows at the boundary.
+     */
     public function withRows(array $rows): self
     {
+        $rows  = self::normalizeRows($rows, 'withRows()');
         $clone = clone $this;
         $clone->rows    = $rows;
         // Expansion is tracked by Row object identity: rows swapped out from
@@ -731,6 +775,7 @@ final class Table
 
     public function addRows(array $rows): self
     {
+        $rows  = self::normalizeRows($rows, 'addRows()');
         $clone = clone $this;
         foreach ($rows as $row) {
             $clone->rows[] = $row;

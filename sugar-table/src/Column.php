@@ -56,6 +56,15 @@ final class Column
         float $percentValue = 0.0,
         ?WrapMode $wrapMode = null,
     ) {
+        // Column contract is width >= 0 (audit ST-09): a negative seed used to
+        // sail through the immutable builder and detonate deep inside the
+        // renderer as an OutOfBoundsException — QA's probe now fails loud at
+        // the boundary. The ctor is the choke point every with*() clone
+        // passes through, so the guard covers all entry.
+        if ($width < 0) {
+            throw new \InvalidArgumentException("Column '{$key}' width must be >= 0, got {$width}");
+        }
+
         $this->key           = $key;
         $this->title         = $title;
         $this->width         = $width;

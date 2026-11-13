@@ -473,6 +473,17 @@ final class ColumnTest extends TestCase
      * nullable), and the 8.3 host never emits the deprecation, so the pin is
      * a source scan: every typed param defaulting to null must be written ?T.
      */
+    /**
+     * ST-09: a negative seed width is a boundary error, not a deep
+     * OutOfBoundsException from the renderer (QA probe Column::new('a','A',-5)).
+     */
+    public function testNegativeWidthThrowsAtConstruction(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("Column 'a' width must be >= 0, got -5");
+        Column::new('a', 'A', -5);
+    }
+
     public function testCtorNullableParamsAreExplicitlyNullable(): void
     {
         $source = (string) file_get_contents(\dirname(__DIR__) . '/src/Column.php');

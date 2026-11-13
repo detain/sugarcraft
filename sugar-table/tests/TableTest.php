@@ -1499,4 +1499,52 @@ final class TableTest extends TestCase
         // Verify original unchanged
         $this->assertSame(1, $a->TotalRows());
     }
+
+    /**
+     * ST-09: plain data arrays are honored at the row entry points — the
+     * shape README quickstarts and candy-sql call sites already pass.
+     */
+    public function testWithRowsCoercesPlainDataArrays(): void
+    {
+        $t = Table::fromColumns([Column::new('id', 'ID', 5), Column::new('name', 'Name', 8)])
+            ->withRows([
+                ['id' => '1', 'name' => 'Alice'],
+                Row::new(RowData::from(['id' => '2', 'name' => 'Bob'])),
+            ]);
+
+        $this->assertSame(2, $t->TotalRows());
+        $rows = $t->Rows();
+        $this->assertInstanceOf(Row::class, $rows[0]);
+        $this->assertSame('Alice', $rows[0]->data->get('name'));
+        $this->assertSame('Bob', $rows[1]->data->get('name'));
+    }
+
+    public function testAddRowsCoercesPlainDataArrays(): void
+    {
+        $t = Table::fromColumns([Column::new('id', 'ID', 5)])
+            ->withRows([['id' => '1']])
+            ->addRows([['id' => '2']]);
+
+        $this->assertSame(2, $t->TotalRows());
+    }
+
+    /**
+     * ST-09: an unusable entry names its index and type at the boundary
+     * instead of detonating as a raw TypeError deep in the renderer.
+     */
+    public function testWithRowsRejectsOffendingEntry(): void
+    {
+        $t = Table::fromColumns([Column::new('id', 'ID', 5)]);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('withRows()[1] must be Row or array, got string');
+        $t->withRows([Row::new(RowData::from(['id' => '1'])), 'oops']);
+    }
+
+    public function testFromColumnsRejectsOffendingEntry(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('fromColumns()[1] must be Column, got array');
+        Table::fromColumns([Column::new('id', 'ID', 5), ['id']]);
+    }
 }
