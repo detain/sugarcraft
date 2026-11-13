@@ -23,8 +23,8 @@ use SugarCraft\Style\Style;
  * $help = new Help();
  * echo $help->shortView($keymap);   // "↑/k up • ↓/j down • q quit"
  * echo $help->fullView($keymap);    // multi-column block with aligned key columns
- * echo $help->showAll(true)
- *           ->width(40)
+ * echo $help->withShowAll(true)
+ *           ->withWidth(40)
  *           ->view($keymap);        // unified entry — picks short or full
  * ```
  *
@@ -88,6 +88,7 @@ final class Help
      * @deprecated The `get`-prefixed form breaks the house bare-accessor
      *     convention; kept only as a BC alias for external callers of this
      *     public façade. Read the promoted readonly `styles` property.
+     *     Remove at 2.0.
      */
     public function getStyles(): ?Styles { return $this->styles; }
 
@@ -101,9 +102,19 @@ final class Help
      * rendering. `false` (default) → short row; `true` → full block.
      * Mirrors Bubbles' `Help.ShowAll` field.
      */
-    public function showAll(bool $on = true): self
+    public function withShowAll(bool $on = true): self
     {
         return $this->copy(showAll: $on);
+    }
+
+    /**
+     * BC short form of {@see withShowAll()}.
+     *
+     * @deprecated Use withShowAll(); remove at 2.0.
+     */
+    public function showAll(bool $on = true): self
+    {
+        return $this->withShowAll($on);
     }
 
     /**
@@ -112,7 +123,7 @@ final class Help
      * glyph is appended. Pass `0` (default) to disable truncation.
      * Mirrors Bubbles' `Help.SetWidth` / `Help.Width`.
      */
-    public function width(int $cells): self
+    public function withWidth(int $cells): self
     {
         if ($cells < 0) {
             throw new \InvalidArgumentException(Lang::t('help.width_nonneg'));
@@ -120,10 +131,14 @@ final class Help
         return $this->copy(maxWidth: $cells);
     }
 
-    /** `with`-prefixed alias of {@see width()} matching the family vocabulary. */
-    public function withWidth(int $cells): self
+    /**
+     * BC short form of {@see withWidth()}.
+     *
+     * @deprecated Use withWidth(); remove at 2.0.
+     */
+    public function width(int $cells): self
     {
-        return $this->width($cells);
+        return $this->withWidth($cells);
     }
 
     /** Gap rendered between a binding's key column and its description. */
@@ -145,6 +160,7 @@ final class Help
      * @deprecated The `get`-prefixed form breaks the house bare-accessor
      *     convention; kept only as a BC alias for external callers of this
      *     public façade. Read the promoted readonly `maxWidth` property.
+     *     Remove at 2.0.
      */
     public function getWidth(): int { return $this->maxWidth; }
 
@@ -160,21 +176,31 @@ final class Help
         return $this->copy(fullSeparator: $s);
     }
 
-    // Short-form aliases.
+    // Bubbles short-form setters — BC aliases only. The canonical
+    // vocabulary is the with*() set; each forward is thin, delegating so
+    // zero logic duplicates.
+    /** @deprecated Use withStyles(); remove at 2.0. */
     public function styles(?Styles $styles): self     { return $this->withStyles($styles); }
+    /** @deprecated Use withSeparator(); remove at 2.0. */
     public function separator(string $s): self        { return $this->withSeparator($s); }
+    /** @deprecated Use withEllipsis(); remove at 2.0. */
     public function ellipsis(string $glyph): self     { return $this->withEllipsis($glyph); }
+    /** @deprecated Use withFullSeparator(); remove at 2.0. */
     public function fullSeparator(string $s): self    { return $this->withFullSeparator($s); }
 
     /**
      * Pass-through update — returns `$this` for every message unchanged.
      *
-     * Help-toggle behaviour is available via {@see updateWithBinding()}
-     * which accepts the toggle binding directly. This base implementation
-     * cannot perform the toggle autonomously.
+     * WHY Help is not a Model: it renders state injected per call (every
+     * entry takes the {@see KeyMap}), holds nothing beyond styling, and
+     * cannot know which key toggles it — the Model loop contract
+     * (`update(): [model, cmd]`) has nothing for it to route. Bubbles'
+     * base `Help.Update` is likewise a no-op; the toggle requires an
+     * explicit binding, which {@see updateWithBinding()} accepts.
      *
-     * Mirrors upstream Bubbles' `Help.Update` (which is also a no-op
-     * in the base library; toggle requires an explicit binding).
+     * @deprecated The bare verb shadows the Model contract — a house loop
+     *     treating Help as a Model TypeErrors on the `self` return with no
+     *     compile-time warning. Use {@see updateWithBinding()}; remove at 2.0.
      */
     public function update(Msg $msg): self
     {
@@ -195,7 +221,7 @@ final class Help
         if (!$this->keyMatches($msg, $toggle)) {
             return $this;
         }
-        return $this->showAll(!$this->showAll);
+        return $this->withShowAll(!$this->showAll);
     }
 
     private function keyMatches(KeyMsg $msg, Binding $b): bool

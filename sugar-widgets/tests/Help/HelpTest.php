@@ -282,4 +282,24 @@ final class HelpTest extends TestCase
         $this->assertSame($h, $h3);
         $this->assertFalse($h3->showAll);
     }
+
+    // ─── gap setters behavioural pins (024) ──────────────────────────
+
+    public function testKeyDescGapRendersByteExactly(): void
+    {
+        $map = new FakeKeyMap([$this->b('q', 'quit'), $this->b('a', 'alpha')], []);
+        $help = (new Help())->withKeyDescGap(' :: ');
+        $this->assertSame('q :: quit • a :: alpha', $help->shortView($map));
+    }
+
+    public function testColumnGapRendersByteExactly(): void
+    {
+        $map = new FakeKeyMap([], [
+            [$this->b('↑', 'up')],
+            [$this->b('q', 'quit')],
+        ]);
+        $help = (new Help())->withColumnGap('  |  ');
+        // col1 '↑ up' (4 cells) + gap + col2 'q quit', row rtrimmed.
+        $this->assertSame('↑ up  |  q quit', $help->fullView($map));
+    }
 }

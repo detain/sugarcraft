@@ -26,17 +26,20 @@ Requires PHP ≥ 8.3. No non-bundled extensions are needed (mbstring is
 bundled with PHP). When you depend on this package standalone, its `sugarcraft/*`
 siblings resolve from Packagist.
 
-> The most-used setters have short-form aliases, per class:
-> `TextInput` — `placeholder` / `prompt` / `charLimit` / `width` /
-> `echoMode` / `echoChar` / `suggest` / `validator` / `styles` / `prefix` /
-> `suffix` / `placeholderStyle`; `TextArea` — `placeholder` / `charLimit` /
-> `width` / `height` / `prompt` / `validator`; `Help` — `width` /
-> `styles` / `separator` / `ellipsis` / `fullSeparator`. The `with*` long
-> forms still work side-by-side.
+> The canonical setter vocabulary is `with*()` everywhere. The Bubbles
+> short forms still forward, one line each, and every one is dated for
+> removal at **2.0**: `Help` — `styles()` / `separator()` / `ellipsis()` /
+> `fullSeparator()` / `showAll()` / `width()`; `TextInput` —
+> `placeholder` / `prompt` / `charLimit` / `width` / `echoMode` /
+> `echoChar` / `suggest` / `validator` / `styles` / `prefix` / `suffix` /
+> `placeholderStyle`; `TextArea` — `placeholder` / `charLimit` / `width` /
+> `height` / `prompt` / `validator` (the `TextInput`/`TextArea` short
+> forms live in canonical `sugar-forms` — their deprecation cadence is
+> ruled there, not here). New code: `withShowAll()` / `withWidth()` etc.
 
 > `Help::getStyles()` and `Help::getWidth()` are deprecated BC accessors —
-> the house convention is bare accessors. Read the promoted readonly
-> `styles` / `maxWidth` properties instead.
+> the house convention is bare accessors, and the property names are the
+> readers: the promoted readonly `styles` / `maxWidth`. Removal at 2.0.
 
 ## Components
 
