@@ -5216,7 +5216,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
     {
         $line = trim((string) preg_replace('/[\x00-\x1F\x7F]+/', ' ', $text));
 
-        return mb_strlen($line) > 160 ? mb_substr($line, 0, 157) . '...' : $line;
+        return \SugarCraft\Core\Util\Width::clipCells($line, 160, '...');
     }
 
     /**
@@ -6841,7 +6841,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
     {
         $text = str_replace(["\r", "\n"], ' ', self::itemText($item));
 
-        return strlen($text) > 120 ? substr($text, 0, 117) . '...' : $text;
+        return \SugarCraft\Core\Util\Width::clipCells($text, 120, '...');
     }
 
     /**
@@ -7422,9 +7422,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
         $line = trim((string) preg_replace('/[\x00-\x1F\x7F]/', ' ', $line));
         $line = str_replace('"', '\\"', $line);
 
-        if (mb_strlen($line) > 160) {
-            $line = mb_substr($line, 0, 157) . '...';
-        }
+        $line = \SugarCraft\Core\Util\Width::clipCells($line, 160, '...');
 
         return $line === '' ? '(blank line)' : $line;
     }

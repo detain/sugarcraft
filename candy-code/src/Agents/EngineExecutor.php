@@ -808,7 +808,7 @@ final class EngineExecutor implements ForksAskFreeAgents
     {
         $line = trim((string) preg_replace('/\s+/', ' ', $text));
 
-        return mb_strlen($line) > self::TOOL_LINE_MAX ? mb_substr($line, 0, self::TOOL_LINE_MAX - 1) . '…' : $line;
+        return \SugarCraft\Core\Util\Width::clipCells($line, self::TOOL_LINE_MAX);
     }
 
     /**
@@ -822,7 +822,7 @@ final class EngineExecutor implements ForksAskFreeAgents
         );
         $line = trim((string) preg_replace('/\s+/', ' ', $line));
 
-        return mb_strlen($line) > self::TOOL_LINE_MAX ? mb_substr($line, 0, self::TOOL_LINE_MAX - 1) . '…' : $line;
+        return \SugarCraft\Core\Util\Width::clipCells($line, self::TOOL_LINE_MAX);
     }
 
     /**
