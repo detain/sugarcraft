@@ -68,6 +68,8 @@ return [
     'intro.title' => 'candy-tetris에 오신 것을 환영합니다',
     'intro.goal' => '줄을 지우세요 — 위에 닿으면 끝',
     'intro.press' => '{keys} 눌러 시작',
+    // candy-tetris-006/-095 (ko): the on-ramp advertises the reachable key reference.
+    'intro.keys' => '언제나 {keys}로 키 목록 보기',
     'intro.vs' => '대전 모드: candy-tetris -v',
     'key_or' => ' 또는 ',
 
@@ -81,6 +83,14 @@ return [
   -h, --help 이 도움말 표시
   --version  버전 출력
 ',
+    // candy-tetris-006/-095 (ko): --help keys section header.
+    'help.keys' => '키:',
+    // candy-tetris-006/-095 (ko): the press that closes the key reference.
+    'help.close' => '한 번 더 {keys}로 닫기',
+    // candy-tetris-006/-095 (ko): --help terminal floor, numbers read from the Renderer constants.
+    'help.floor' => '프레임에는 최소 {cols}x{rows} 터미널이 필요',
+    // candy-tetris-006/-095 (ko): compact sidebar pointer replacing the budgeted-out help card.
+    'keys.mini' => '{keys} 키 목록',
     'cli.no_tty' => 'candy-tetris는 대화형 터미널이 필요합니다. 파이프나 리디렉션이 아닌 TTY에서, TERM을 dumb 이외의 값으로 설정해 실행하세요.',
     'launch.extras' => 'candy-tetris: 인수 하나만 허용됩니다. 초과 {count}개: {list}',
     'score.save.failed' => 'candy-tetris: 점수를 저장할 수 없습니다 ({problem})',

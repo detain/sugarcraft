@@ -104,6 +104,12 @@ final class Renderer
             // MA-24: the on-ramp card overlays the fresh board it teaches.
             return self::paintBanner($body, self::introLines($game));
         }
+        if ($game->helpOpen === true) {
+            // candy-tetris-006: the reachable key reference — the FULL
+            // derived card painted over the frame, on any posture, even
+            // where the sidebar budget had to drop it.
+            return self::paintBanner($body, self::helpLines($game));
+        }
         if ($game->over === true) {
             return self::paintBanner($body, self::overLines($game));
         }
@@ -130,8 +136,29 @@ final class Renderer
             Lang::t('intro.title'),
             Lang::t('intro.goal'),
             Lang::t('intro.press', ['keys' => $game->introBeginLabel()]),
+            Lang::t('intro.keys', ['keys' => $game->keyLabel('help')]),
             Lang::t('intro.vs'),
         ];
+    }
+
+    /**
+     * The key reference as plain text lines (candy-tetris-006): the same
+     * derived card the sidebar paints at full height — live key column,
+     * translated verb column — plus the press that closes it. Reachable
+     * from any posture on any terminal at or above the floor, which is
+     * exactly what the budgeted sidebar cannot promise.
+     *
+     * @return list<string>
+     */
+    private static function helpLines(Game $game): array
+    {
+        $lines = [Lang::t('help.keys')];
+        foreach (explode("\n", Support\Bindings::helpCard($game->bindings ?? Support\Bindings::table())) as $row) {
+            $lines[] = $row;
+        }
+        $lines[] = Lang::t('help.close', ['keys' => $game->keyLabel('help')]);
+
+        return $lines;
     }
 
     /**
@@ -344,8 +371,14 @@ final class Renderer
      *
      *  1. the help card — the C-2 compact-reflow casualty, now also the
      *     victim of an armed-badge or --seed expansion at full height;
-     *  2. the SEED stamp — developer replay data, sacrificed only at the
-     *     MIN_ROWS floor where even the stripped column runs out of room.
+     *     where it drops, a one-row compact key line (candy-tetris-006)
+     *     takes its place, so the frame always teaches at least the press
+     *     that re-shows the card;
+     *  2. the SEED stamp — developer replay data, sacrificed one rung
+     *     before the pointer gives way;
+     *  3. the compact key line itself — paid ONLY on a fully armed floor
+     *     terminal (stamped or not), where no badge and no frame row is
+     *     left to give.
      *
      * Score, next, hold and the earned MA-13 badges are never dropped:
      * hold/next/score are the facts play is decided on, and a badge that
@@ -389,6 +422,12 @@ final class Renderer
         // is dropped only at the MIN_ROWS floor), so the stamp is built
         // apart from the card body to keep that rung addressable.
         $seedStamp = $game->reproducible === true ? "\nSEED " . $game->seed : '';
+        // candy-tetris-006: the compact key line — one row, naming the
+        // live 'help' binding — replaces the full card wherever the budget
+        // has to drop it, so a floor-sized terminal always shows at least
+        // one key reference. It rides the score card's tail: a free-standing
+        // box would cost three rows the armed floor terminal does not have.
+        $mini = "\n" . Lang::t('keys.mini', ['keys' => $game->keyLabel('help')]);
         // m27: the key column is DERIVED from the live table, so a remap
         // moves the card text with it — the card can no longer lie.
         $help = Support\Bindings::helpCard($game->bindings ?? Support\Bindings::table());
@@ -427,17 +466,29 @@ final class Renderer
             return $full;
         }
 
-        $untaught = Layout::joinVertical(0.0, ...$column);
-        if (self::height($untaught) <= $budget) {
-            return $untaught;
+        // Below the card's budget (candy-tetris-006) the column keeps a
+        // compact key line instead: the casualty is the CARD, never the
+        // education.
+        $taught = Layout::joinVertical(0.0, $card($hold), $card($nextStr), $card($score . $seedStamp . $mini));
+        if (self::height($taught) <= $budget) {
+            return $taught;
         }
 
-        // Reaching this rung means a floor-sized terminal fully armed AND
-        // stamped: the seed stamp — developer data — is the casualty, so
-        // not one earned badge goes unpainted.
-        $stripped = Layout::joinVertical(0.0, $card($hold), $card($nextStr), $card($score));
-        if (self::height($stripped) <= $budget) {
-            return $stripped;
+        // Seed stamp next: developer replay data sacrificed before the
+        // one-row key pointer.
+        $unstamped = Layout::joinVertical(0.0, $card($hold), $card($nextStr), $card($score . $mini));
+        if (self::height($unstamped) <= $budget) {
+            return $unstamped;
+        }
+
+        // Last rung: a fully armed floor terminal (two or more badge
+        // rows, stamped or not) — every badge must paint, so even the
+        // one-row pointer pays here and the press itself stays reachable
+        // via --help. No other state lands on this rung (measured: the
+        // armed column with the pointer is 25 rows on a 24 floor).
+        $naked = Layout::joinVertical(0.0, $card($hold), $card($nextStr), $card($score));
+        if (self::height($naked) <= $budget) {
+            return $naked;
         }
 
         // Unreachable while tooSmall() refuses below MIN_ROWS and the

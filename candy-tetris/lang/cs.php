@@ -68,6 +68,8 @@ konec',
     'intro.title' => 'vítejte v candy-tetris',
     'intro.goal' => 'maž řádky — nedosáhni na vrchol',
     'intro.press' => 'pro hraní stiskni {keys}',
+    // candy-tetris-006/-095 (cs): the on-ramp advertises the reachable key reference.
+    'intro.keys' => 'stiskněte {keys} kdykoli pro zobrazení kláves',
     'intro.vs' => 'režim proti sobě: candy-tetris -v',
     'key_or' => ' nebo ',
 
@@ -81,6 +83,14 @@ Použití: candy-tetris [volby]
   -h, --help Zobrazí tuto nápovědu
   --version  Vytiskne verzi
 ',
+    // candy-tetris-006/-095 (cs): --help keys section header.
+    'help.keys' => 'klávesy:',
+    // candy-tetris-006/-095 (cs): the press that closes the key reference.
+    'help.close' => 'pro zavření stiskněte znovu {keys}',
+    // candy-tetris-006/-095 (cs): --help terminal floor, numbers read from the Renderer constants.
+    'help.floor' => 'rám potřebuje terminál alespoň {cols}x{rows}',
+    // candy-tetris-006/-095 (cs): compact sidebar pointer replacing the budgeted-out help card.
+    'keys.mini' => 'klávesy: {keys}',
     'cli.no_tty' => 'candy-tetris potřebuje interaktivní terminál: spusťte ho z TTY (ne z roury ani přesměrování) a s TERM jiným než dumb.',
     'launch.extras' => 'candy-tetris: je přijímán pouze jeden argument, ale o {count} navíc: {list}',
     'score.save.failed' => 'candy-tetris: nelze uložit skóre ({problem})',

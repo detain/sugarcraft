@@ -68,6 +68,8 @@ return [
     'intro.title' => '欢迎游玩 candy-tetris',
     'intro.goal' => '消除行 — 别堆到顶部',
     'intro.press' => '按 {keys} 开始',
+    // candy-tetris-006/-095 (zh-cn): the on-ramp advertises the reachable key reference.
+    'intro.keys' => '随时按 {keys} 查看按键',
     'intro.vs' => '对战模式: candy-tetris -v',
     'key_or' => ' 或 ',
 
@@ -81,6 +83,14 @@ return [
   -h, --help 显示此帮助
   --version  显示版本
 ',
+    // candy-tetris-006/-095 (zh-cn): --help keys section header.
+    'help.keys' => '按键:',
+    // candy-tetris-006/-095 (zh-cn): the press that closes the key reference.
+    'help.close' => '再按一次 {keys} 关闭',
+    // candy-tetris-006/-095 (zh-cn): --help terminal floor, numbers read from the Renderer constants.
+    'help.floor' => '画面至少需要 {cols}x{rows} 的终端',
+    // candy-tetris-006/-095 (zh-cn): compact sidebar pointer replacing the budgeted-out help card.
+    'keys.mini' => '按 {keys} 查看按键',
     'cli.no_tty' => 'candy-tetris 需要交互式终端：请在 TTY 中运行（不要通过管道或重定向），并将 TERM 设为 dumb 以外的值。',
     'launch.extras' => 'candy-tetris: 只接受一个参数，多出 {count} 个：{list}',
     'score.save.failed' => 'candy-tetris: 无法保存成绩 ({problem})',

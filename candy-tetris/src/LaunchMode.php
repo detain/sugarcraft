@@ -123,6 +123,26 @@ final class LaunchMode
      */
     public static function helpText(): string
     {
-        return Lang::t('help_text');
+        // candy-tetris-095: flags were the whole story — the game, its
+        // keys and its terminal floor went undocumented. The key column is
+        // the SAME derived card the sidebar paints (live default table:
+        // --help answers before any user keys file is loaded), so help and
+        // registry can never drift apart; the floor numbers are read from
+        // the renderer's own constants for the same reason.
+        $lines = [
+            rtrim(Lang::t('help_text'), "\n"),
+            '',
+            Lang::t('help.keys'),
+        ];
+        foreach (explode("\n", Support\Bindings::helpCard(Support\Bindings::table())) as $row) {
+            $lines[] = '  ' . $row;
+        }
+        $lines[] = '';
+        $lines[] = Lang::t('help.floor', [
+            'cols' => (string) Renderer::MIN_COLS,
+            'rows' => (string) Renderer::MIN_ROWS,
+        ]);
+
+        return implode("\n", $lines) . "\n";
     }
 }

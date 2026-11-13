@@ -66,7 +66,23 @@ final class Bindings
         'rotate-ccw' => ['z'],
         'hard-drop'  => ['space'],
         'begin'      => ['space', 'enter'],
+        // candy-tetris-006: the meta key of the teaching surface itself —
+        // a floor-sized terminal loses the help card to the budget, so
+        // the compact key line (and the intro card) point here: pressing
+        // this id paints the full derived card over the frame.
+        'help'       => ['h'],
     ];
+
+    /**
+     * Ids the GAMEPLAY_ROWS card deliberately does not teach: 'begin'
+     * belongs to the on-ramp sentence (Game::introBeginLabel) and 'help'
+     * is named by the compact key line the card's budgeted absence is
+     * replaced with (candy-tetris-006). Both are still dispatch vocabulary
+     * and still remappable — the derivation pin reads this list.
+     *
+     * @var list<string>
+     */
+    public const META_IDS = ['begin', 'help'];
 
     /** The dispatch ids (candy-tetris-015's completeness pin reads them). */
     public static function mapIds(): array

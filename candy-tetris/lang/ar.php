@@ -68,6 +68,8 @@ return [
     'intro.title' => 'مرحبًا بك في candy-tetris',
     'intro.goal' => 'امسح الأسطر — لا تصل إلى القمة',
     'intro.press' => 'اضغط {keys} للعب',
+    // candy-tetris-006/-095 (ar): the on-ramp advertises the reachable key reference.
+    'intro.keys' => 'اضغط {keys} في أي وقت لعرض المفاتيح',
     'intro.vs' => 'وضع المبارزة: candy-tetris -v',
     'key_or' => ' أو ',
 
@@ -81,6 +83,14 @@ return [
   -h, --help عرض هذه المساعدة
   --version  طباعة الإصدار
 ',
+    // candy-tetris-006/-095 (ar): --help keys section header.
+    'help.keys' => 'المفاتيح:',
+    // candy-tetris-006/-095 (ar): the press that closes the key reference.
+    'help.close' => 'اضغط {keys} مرة أخرى للإغلاق',
+    // candy-tetris-006/-095 (ar): --help terminal floor, numbers read from the Renderer constants.
+    'help.floor' => 'يحتاج الإطار إلى طرفية {cols}x{rows} على الأقل',
+    // candy-tetris-006/-095 (ar): compact sidebar pointer replacing the budgeted-out help card.
+    'keys.mini' => 'المفاتيح: {keys}',
     'cli.no_tty' => 'يحتاج candy-tetris إلى طرفية تفاعلية: شغّله من TTY (وليس من أنبوب أو إعادة توجيه) مع ضبط TERM على قيمة غير dumb.',
     'launch.extras' => 'candy-tetris: يُقبل وسيط واحد فقط، لكن هناك {count} زائد: {list}',
     'score.save.failed' => 'candy-tetris: تعذر حفظ النتائج ({problem})',

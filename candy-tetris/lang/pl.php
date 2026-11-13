@@ -68,6 +68,8 @@ wyjście',
     'intro.title' => 'witamy w candy-tetris',
     'intro.goal' => 'usuwaj linie — nie dotknij góry',
     'intro.press' => 'naciśnij {keys} aby grać',
+    // candy-tetris-006/-095 (pl): the on-ramp advertises the reachable key reference.
+    'intro.keys' => 'naciśnij {keys}, aby zobaczyć klawisze',
     'intro.vs' => 'tryb versus: candy-tetris -v',
     'key_or' => ' lub ',
 
@@ -81,6 +83,14 @@ Użycie: candy-tetris [opcje]
   -h, --help Pokaż tę pomoc
   --version  Wypisz wersję
 ',
+    // candy-tetris-006/-095 (pl): --help keys section header.
+    'help.keys' => 'klawisze:',
+    // candy-tetris-006/-095 (pl): the press that closes the key reference.
+    'help.close' => 'naciśnij ponownie {keys}, aby zamknąć',
+    // candy-tetris-006/-095 (pl): --help terminal floor, numbers read from the Renderer constants.
+    'help.floor' => 'ramka wymaga terminala o rozmiarze co najmniej {cols}x{rows}',
+    // candy-tetris-006/-095 (pl): compact sidebar pointer replacing the budgeted-out help card.
+    'keys.mini' => 'klawisze: {keys}',
     'cli.no_tty' => 'candy-tetris wymaga interaktywnego terminala: uruchom go z TTY (nie przez potok ani przekierowanie), z TERM innym niż dumb.',
     'launch.extras' => 'candy-tetris: akceptowany jest tylko jeden argument, ale o {count} za dużo: {list}',
     'score.save.failed' => 'candy-tetris: nie udało się zapisać wyników ({problem})',

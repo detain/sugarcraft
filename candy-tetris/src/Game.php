@@ -189,6 +189,15 @@ final class Game implements Model
          * without sleeping. Signature: `(): float`, microseconds.
          */
         public readonly ?\Closure $clockUs = null,
+        /**
+         * candy-tetris-006: the on-screen key reference. The live card
+         * ('help' id, default h) is the reachable key education on any
+         * posture — the sidebar help card is the first budget casualty
+         * below natural height, and on an 80x24 terminal nothing else
+         * listed the keys at all. Session-local view state: a restart
+         * (a fresh Game from the factories) closes it, mutate carries it.
+         */
+        public readonly bool $helpOpen = false,
     ) {
         // One stateful stream feeds this game's garbage holes. Built from
         // the seed so the sequence is run-determined; Game::mutate()
@@ -267,6 +276,7 @@ final class Game implements Model
             $changes['seed']          ?? $this->seed,
             $changes['reproducible']  ?? $this->reproducible,
             $changes['clockUs']       ?? $this->clockUs,
+            $changes['helpOpen']      ?? $this->helpOpen,
         );
         // The live garbage stream rides the update (see ctor note): a
         // re-derived stream would restart the hole sequence on every
@@ -665,7 +675,10 @@ final class Game implements Model
                 return [$this, null];
             }
             $consumed = $this->mutate(['gravityPending' => false]);
-            if ($this->paused) {
+            if ($this->paused || $this->helpOpen === true) {
+                // Pause — and the help overlay (candy-tetris-006) — heart-
+                // beats without stepping: nothing moves behind a card the
+                // player is reading.
                 return $this->armGravity($consumed);
             }
             return $consumed->gravityStep($msg->deadlineUs);
@@ -687,9 +700,10 @@ final class Game implements Model
             // Superseded or closed window — inert.
             return [$this, null];
         }
-        if ($this->paused === true) {
-            // Pause extends the window: re-arm the same generation for a
-            // full delay instead of locking.
+        if ($this->paused === true || $this->helpOpen === true) {
+            // Pause — and the help overlay (candy-tetris-006) — extend the
+            // window: re-arm the same generation for a full delay instead
+            // of locking behind a card the player is reading.
             return [$this, $this->scheduleLockDelay($msg->generation)];
         }
         $game = $this->lockAndSpawn();
@@ -716,14 +730,29 @@ final class Game implements Model
             return [$this->withPaused(!$this->paused), null];
         }
         if ($this->paused) {
-            // Nothing mutates game state while paused — hold included.
+            // Nothing mutates game state while paused — hold included —
+            // but the key reference (candy-tetris-006) is the one press
+            // that answers: a paused player may want to check the card.
+            if (Support\Bindings::actuates($this->keys(), $msg, 'help')) {
+                return [$this->mutate(['helpOpen' => !$this->helpOpen]), null];
+            }
+
             return [$this, null];
         }
-        if (Support\Bindings::actuates($this->keys(), $msg, 'hold')) {
-            return $this->tryHold();
+        if ($this->helpOpen === true) {
+            // The world is frozen behind the card (candy-tetris-006):
+            // nothing moves unseen while the player reads. Only the same
+            // press closes it.
+            if (Support\Bindings::actuates($this->keys(), $msg, 'help')) {
+                return [$this->mutate(['helpOpen' => false]), null];
+            }
+
+            return [$this, null];
         }
 
-        return match (true) {
+        $played = match (true) {
+            Support\Bindings::actuates($this->keys(), $msg, 'hold')
+                => $this->tryHold(),
             Support\Bindings::actuates($this->keys(), $msg, 'move-left')
                 => $this->tryMove(-1, 0),
             Support\Bindings::actuates($this->keys(), $msg, 'move-right')
@@ -736,8 +765,18 @@ final class Game implements Model
                 => $this->tryRotate(-1),
             Support\Bindings::actuates($this->keys(), $msg, 'hard-drop')
                 => $this->hardDrop(),
+            // candy-tetris-006: the meta press sits BEHIND the gameplay
+            // arms — an override that hands 'h' to hard-drop keeps the
+            // piece's lock (a remap wins over a shipped default, exactly
+            // as 'begin'/'hard-drop' already share space by screen), and
+            // with an untouched table no gameplay id claims a plain 'h',
+            // so the key reference still answers.
+            Support\Bindings::actuates($this->keys(), $msg, 'help')
+                => [$this->mutate(['helpOpen' => true]), null],
             default => [$this, null],
         };
+
+        return $played;
     }
 
     /**

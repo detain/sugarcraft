@@ -68,6 +68,8 @@ return [
     'intro.title' => 'candy-tetris へようこそ',
     'intro.goal' => '行を消す — 上まで積んだら終わり',
     'intro.press' => '{keys} で開始',
+    // candy-tetris-006/-095 (ja): the on-ramp advertises the reachable key reference.
+    'intro.keys' => 'いつでも {keys} でキーを表示',
     'intro.vs' => '対戦モード: candy-tetris -v',
     'key_or' => ' または ',
 
@@ -81,6 +83,14 @@ return [
   -h, --help このヘルプを表示
   --version  バージョンを表示
 ',
+    // candy-tetris-006/-095 (ja): --help keys section header.
+    'help.keys' => 'キー:',
+    // candy-tetris-006/-095 (ja): the press that closes the key reference.
+    'help.close' => 'もう一度 {keys} で閉じる',
+    // candy-tetris-006/-095 (ja): --help terminal floor, numbers read from the Renderer constants.
+    'help.floor' => '枠には最低 {cols}x{rows} の端末が必要',
+    // candy-tetris-006/-095 (ja): compact sidebar pointer replacing the budgeted-out help card.
+    'keys.mini' => '{keys} でキー',
     'cli.no_tty' => 'candy-tetris には対話型ターミナルが必要です。パイプやリダイレクトではなく TTY から、TERM を dumb 以外にして起動してください。',
     'launch.extras' => 'candy-tetris: 引数は1つまでです。超過 {count} 個: {list}',
     'score.save.failed' => 'candy-tetris: スコアを保存できませんでした ({problem})',

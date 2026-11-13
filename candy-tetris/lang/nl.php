@@ -68,6 +68,8 @@ afsluiten',
     'intro.title' => 'welkom bij candy-tetris',
     'intro.goal' => 'verwijder regels — bereik de top niet',
     'intro.press' => 'druk op {keys} om te spelen',
+    // candy-tetris-006/-095 (nl): the on-ramp advertises the reachable key reference.
+    'intro.keys' => 'druk op {keys} voor de toetsen',
     'intro.vs' => 'versusmodus: candy-tetris -v',
     'key_or' => ' of ',
 
@@ -81,6 +83,14 @@ Gebruik: candy-tetris [opties]
   -h, --help Toon deze hulp
   --version  Toon de versie
 ',
+    // candy-tetris-006/-095 (nl): --help keys section header.
+    'help.keys' => 'toetsen:',
+    // candy-tetris-006/-095 (nl): the press that closes the key reference.
+    'help.close' => 'druk opnieuw op {keys} om te sluiten',
+    // candy-tetris-006/-095 (nl): --help terminal floor, numbers read from the Renderer constants.
+    'help.floor' => 'het kader heeft een terminal van minimaal {cols}x{rows} nodig',
+    // candy-tetris-006/-095 (nl): compact sidebar pointer replacing the budgeted-out help card.
+    'keys.mini' => 'toetsen: {keys}',
     'cli.no_tty' => 'candy-tetris heeft een interactieve terminal nodig: start het vanuit een TTY (geen pipe of omleiding) met een TERM anders dan dumb.',
     'launch.extras' => 'candy-tetris: slechts één argument toegestaan, maar {count} te veel: {list}',
     'score.save.failed' => 'candy-tetris: kon scores niet opslaan ({problem})',

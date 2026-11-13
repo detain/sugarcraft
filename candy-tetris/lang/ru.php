@@ -68,6 +68,8 @@ return [
     'intro.title' => 'добро пожаловать в candy-tetris',
     'intro.goal' => 'удаляйте линии — не достигайте верха',
     'intro.press' => 'нажмите {keys}, чтобы играть',
+    // candy-tetris-006/-095 (ru): the on-ramp advertises the reachable key reference.
+    'intro.keys' => 'нажмите {keys} в любой момент, чтобы увидеть клавиши',
     'intro.vs' => 'дуэльный режим: candy-tetris -v',
     'key_or' => ' или ',
 
@@ -81,6 +83,14 @@ return [
   -h, --help Показать эту справку
   --version  Показать версию
 ',
+    // candy-tetris-006/-095 (ru): --help keys section header.
+    'help.keys' => 'клавиши:',
+    // candy-tetris-006/-095 (ru): the press that closes the key reference.
+    'help.close' => 'нажмите {keys} ещё раз, чтобы закрыть',
+    // candy-tetris-006/-095 (ru): --help terminal floor, numbers read from the Renderer constants.
+    'help.floor' => 'рамке нужен терминал не меньше {cols}x{rows}',
+    // candy-tetris-006/-095 (ru): compact sidebar pointer replacing the budgeted-out help card.
+    'keys.mini' => 'клавиши: {keys}',
     'cli.no_tty' => 'candy-tetris нужен интерактивный терминал: запускайте его из TTY (не через канал или перенаправление) с TERM, отличным от dumb.',
     'launch.extras' => 'candy-tetris: принимается только один аргумент, но на {count} больше: {list}',
     'score.save.failed' => 'candy-tetris: не удалось сохранить рекорды ({problem})',

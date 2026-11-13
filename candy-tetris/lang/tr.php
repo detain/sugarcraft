@@ -68,6 +68,8 @@ yeniden (sonra)
     'intro.title' => 'candy-tetris oyununa hoş geldin',
     'intro.goal' => 'satırları temizle — tepeye ulaşma',
     'intro.press' => 'oynamak için {keys} tuşuna bas',
+    // candy-tetris-006/-095 (tr): the on-ramp advertises the reachable key reference.
+    'intro.keys' => 'tuşlar için istediğiniz zaman {keys} tuşuna basın',
     'intro.vs' => 'dövüş modu: candy-tetris -v',
     'key_or' => ' veya ',
 
@@ -81,6 +83,14 @@ Kullanım: candy-tetris [seçenekler]
   -h, --help Bu yardımı göster
   --version  Sürümü yazdır
 ',
+    // candy-tetris-006/-095 (tr): --help keys section header.
+    'help.keys' => 'tuşlar:',
+    // candy-tetris-006/-095 (tr): the press that closes the key reference.
+    'help.close' => 'kapatmak için tekrar {keys} tuşuna basın',
+    // candy-tetris-006/-095 (tr): --help terminal floor, numbers read from the Renderer constants.
+    'help.floor' => 'çerçeve en az {cols}x{rows} boyutunda bir terminal ister',
+    // candy-tetris-006/-095 (tr): compact sidebar pointer replacing the budgeted-out help card.
+    'keys.mini' => 'tuşlar: {keys}',
     'cli.no_tty' => 'candy-tetris etkileşimli bir terminal gerektirir: onu bir boru veya yönlendirme yerine bir TTY\'den, TERM değeri dumb dışında olacak şekilde çalıştırın.',
     'launch.extras' => 'candy-tetris: yalnızca bir argüman kabul edilir, ama {count} fazla: {list}',
     'score.save.failed' => 'candy-tetris: puanlar kaydedilemedi ({problem})',

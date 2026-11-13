@@ -206,8 +206,11 @@ final class LocaleParityTest extends TestCase
             'label.player', 'label.computer', 'win.player', 'win.computer',
             'vs.garbage_rule', 'vs.record',
             'vs.strip.you', 'vs.strip.computer', 'vs.strip.score', 'vs.strip.lines', 'vs.strip.level',
-            'intro.title', 'intro.goal', 'intro.press', 'intro.vs', 'key_or',
+            'intro.title', 'intro.goal', 'intro.press', 'intro.keys', 'intro.vs', 'key_or',
             'mode.unknown', 'help_text',
+            // The key-education surfaces (candy-tetris-006/-095): the
+            // compact sidebar pointer, the in-frame card, and --help.
+            'keys.mini', 'help.keys', 'help.close', 'help.floor',
             // Launch/CLI diagnostic frame (candy-tetris-028): the first
             // text a user reads is catalogue-owned, not inline English.
             'launch.extras', 'score.save.failed', 'keys.ignored', 'scores.ignored',

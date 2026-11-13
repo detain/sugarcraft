@@ -109,15 +109,16 @@ final class BindingsDerivationTest extends TestCase
     public function testEveryVerbColumnRowIsTaughtOnBothDerivedSurfaces(): void
     {
         // candy-tetris-015's completeness contract: the row table covers
-        // every dispatched gameplay id — 'begin' is excluded on purpose,
-        // it belongs to the on-ramp card, whose sentence names the live
-        // label instead (Game::introBeginLabel). A MAP entry nobody
+        // every dispatched gameplay id — Bindings::META_IDS are excluded
+        // on purpose: 'begin' belongs to the on-ramp sentence, and 'help'
+        // (candy-tetris-006) is taught by the compact key line that
+        // replaces the card where the budget drops it. A MAP entry nobody
         // teaches is how the strip drifted to 5-of-11.
         $taught = array_merge(...Bindings::GAMEPLAY_ROWS);
         sort($taught);
         $gameplay = array_values(array_filter(
             Bindings::mapIds(),
-            static fn(string $id): bool => $id !== 'begin',
+            static fn(string $id): bool => !in_array($id, Bindings::META_IDS, true),
         ));
         sort($gameplay);
 

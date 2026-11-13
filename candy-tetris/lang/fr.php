@@ -68,12 +68,22 @@ quitter',
     'intro.title' => 'bienvenue dans candy-tetris',
     'intro.goal' => 'effacez des lignes — ne pas atteindre le sommet',
     'intro.press' => 'appuyez sur {keys} pour jouer',
+    // candy-tetris-006/-095 (fr): the on-ramp advertises the reachable key reference.
+    'intro.keys' => 'appuyez sur {keys} à tout moment pour les touches',
     'intro.vs' => 'mode duel : candy-tetris -v',
     'key_or' => ' ou ',
 
     // Launch screen
     'mode.unknown' => 'candy-tetris : mode inconnu "{flag}"',
     'help_text'    => "candy-tetris - clone de Tetris\n\nUtilisation : candy-tetris [options]\n  (aucun)    Démarrer une partie solo\n  -v, --vs   Mode contre l'ordinateur\n  -h, --help Afficher cette aide\n  --version  Afficher la version\n",
+    // candy-tetris-006/-095 (fr): --help keys section header.
+    'help.keys' => 'touches :',
+    // candy-tetris-006/-095 (fr): the press that closes the key reference.
+    'help.close' => 'appuyez à nouveau sur {keys} pour fermer',
+    // candy-tetris-006/-095 (fr): --help terminal floor, numbers read from the Renderer constants.
+    'help.floor' => 'l\'affichage exige un terminal d\'au moins {cols}x{rows}',
+    // candy-tetris-006/-095 (fr): compact sidebar pointer replacing the budgeted-out help card.
+    'keys.mini' => 'touches : {keys}',
     'cli.no_tty' => 'candy-tetris a besoin d\'un terminal interactif : lancez-le depuis un TTY (pas un tube ni une redirection) avec un TERM autre que dumb.',
     'launch.extras' => 'candy-tetris: un seul argument accepté, mais {count} en trop : {list}',
     'score.save.failed' => 'candy-tetris: impossible denregistrer les scores ({problem})',

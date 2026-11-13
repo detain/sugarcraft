@@ -73,6 +73,8 @@ return [
     'intro.title' => 'welcome to candy-tetris',
     'intro.goal' => 'clear lines — do not reach the top',
     'intro.press' => 'press {keys} to play',
+    // candy-tetris-006/-095 (en): the on-ramp advertises the reachable key reference.
+    'intro.keys' => 'press {keys} anytime for the keys',
     'intro.vs' => 'versus mode: candy-tetris -v',
     // The intro names its keys like the keycaps read them (candy-tetris-053:
     // "press spc ent to play" read as one impossible chord); {or} is the
@@ -91,6 +93,14 @@ return [
         . "  -v, --vs     Start VS Computer mode\n"
         . "  -h, --help   Show this help\n"
         . "  --version    Print the version\n",
+    // candy-tetris-006/-095 (en): --help keys section header.
+    'help.keys' => 'keys:',
+    // candy-tetris-006/-095 (en): the press that closes the key reference.
+    'help.close' => 'press {keys} again to close',
+    // candy-tetris-006/-095 (en): --help terminal floor, numbers read from the Renderer constants.
+    'help.floor' => 'the frame needs a terminal of at least {cols}x{rows}',
+    // candy-tetris-006/-095 (en): compact sidebar pointer replacing the budgeted-out help card.
+    'keys.mini' => 'press {keys} for keys',
     'cli.no_tty' => 'candy-tetris needs an interactive terminal: run it from a TTY (not a pipe or redirect) with TERM set to something other than dumb.',
     // One key for the surplus-flags refusal (candy-tetris-033): {count}
     // sits after a plural-safe preposition in every locale, so the
