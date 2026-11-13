@@ -10,6 +10,7 @@ use SugarCraft\MdView\RenderCommand;
 use SugarCraft\Markdown\Renderer;
 use SugarCraft\Markdown\Theme;
 use SugarCraft\Core\I18n\T;
+use SugarCraft\Core\Util\Width;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
 use Symfony\Component\Console\Command\Command;
@@ -1321,6 +1322,15 @@ final class RenderCommandTest extends TestCase
         $this->assertFalse($model->isExited());
     }
 
+    public function testBuildPagerModelCarriesTheReflowClosureIntoTheModel(): void
+    {
+        $model = $this->invokeStatic('buildPagerModel', ["l1\nl2", 80, 10, '', static fn (int $c): string => "R{$c}"]);
+
+        [$grown] = $model->update(new \SugarCraft\Core\Msg\WindowSizeMsg(33, 10));
+
+        $this->assertSame(['R33'], $grown->viewport->lines, 'the resize leg must run the render-at-cols closure');
+    }
+
     public function testBuildPagerModelDocumentModeAddsTheHeader(): void
     {
         $method = new \ReflectionMethod(RenderCommand::class, 'buildPagerModel');
@@ -1380,7 +1390,7 @@ final class RenderCommandTest extends TestCase
             'the pager branch must arm the watch behind the local-file gate'
         );
         $this->assertMatchesRegularExpression(
-            '/self::buildPagerModel\([^)]*\$isLocal \? basename\(\$fileArg\) : [\'"]{2}\)/',
+            '/self::buildPagerModel\([^)]*\$isLocal \? basename\(\$fileArg\) : [\'"]{2}[^)]*\);/',
             $body,
             'the status header names a document only in local-file mode'
         );
@@ -1663,6 +1673,70 @@ final class RenderCommandTest extends TestCase
             $this->assertStringContainsString('--width', $msg);
             $this->assertStringContainsString($bad, $msg);
         }
+    }
+
+    public function testOmittedWidthWrapsAtTerminalColumnsMinusTwoInStdoutMode(): void
+    {
+        // glow parity (finding 013): an omitted --width used to mean NO WRAP,
+        // so a piped long paragraph ran off at 299 columns. Auto now means
+        // min(terminal cols − 2, 80); with no tty the canonical Tty size
+        // answers from COLUMNS/LINES, which this test pins to 30.
+        $longLine = str_repeat('word ', 60) . 'end';
+        putenv('COLUMNS=30');
+        putenv('LINES=10');
+        try {
+            [$result, $payload] = $this->runPrint($longLine . "\n", $this->optionMap(['width' => null]));
+        } finally {
+            putenv('COLUMNS');
+            putenv('LINES');
+        }
+
+        $this->assertSame(Command::SUCCESS, $result);
+        $rows = explode("\n", $payload);
+        $this->assertGreaterThan(2, count($rows), 'the auto width must actually wrap the paragraph');
+        foreach ($rows as $row) {
+            $this->assertLessThanOrEqual(28, Width::of($row), 'auto wrap is COLUMNS(30) − 2: ' . var_export($row, true));
+        }
+    }
+
+    public function testExplicitZeroAndOmittedWidthAreDistinctDoorsOnTheRealCli(): void
+    {
+        // Finding 090 in one subprocess pair: with no flag the document
+        // wraps at the terminal-derived column, and `--width 0` still means
+        // exactly one thing — no wrap. The Symfony default change (0→null)
+        // is only observable through the real option parser, hence bin.
+        $longLine = str_repeat('word ', 60) . 'end';
+        putenv('COLUMNS=30');
+        putenv('LINES=10');
+        try {
+            [$rcAuto, $auto]      = $this->runBinWithStdin($longLine . "\n", []);
+            [$rcZero, $zeroPiped] = $this->runBinWithStdin($longLine . "\n", ['--width', '0']);
+        } finally {
+            putenv('COLUMNS');
+            putenv('LINES');
+        }
+
+        $this->assertSame(0, $rcAuto);
+        $this->assertSame(0, $rcZero);
+        $autoRows = array_filter(explode("\n", $auto), static fn(string $r): bool => trim($r) !== '');
+        $this->assertNotEmpty($autoRows);
+        foreach ($autoRows as $row) {
+            $this->assertLessThanOrEqual(28, Width::of($row), 'default width must follow COLUMNS − 2: ' . var_export($row, true));
+        }
+        $this->assertStringContainsString($longLine, $zeroPiped, '--width 0 must never gain a silent 80-column wrap');
+    }
+
+    public function testReflowIsArmedOnlyForAnUnpinnedWidth(): void
+    {
+        // The resize-reflow closure must key off the THREE-state width, not
+        // the effective one: an explicit --width pins the document and a
+        // resize may never silently re-wrap it.
+        $body = (string) file_get_contents(dirname(__DIR__) . '/src/RenderCommand.php');
+        $this->assertMatchesRegularExpression(
+            '/\$reflowAt = \$width === null/',
+            $body,
+            'the reflow arm must test the raw (nullable) width, not the resolved column count'
+        );
     }
 
     public function testUnknownThemeIsUsageErrorNotException(): void

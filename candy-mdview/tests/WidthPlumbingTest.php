@@ -5,10 +5,13 @@ declare(strict_types=1);
 namespace SugarCraft\MdView\Tests;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\MdView\MdViewModel;
+use SugarCraft\MdView\RenderCommand;
 use SugarCraft\Markdown\Renderer;
 use SugarCraft\Markdown\Theme;
+use Symfony\Component\Console\Input\ArrayInput;
 
 /**
  * Width plumbing pins: the pager must measure with the canonical helper.
@@ -105,5 +108,60 @@ final class WidthPlumbingTest extends TestCase
                 $file . ' must use the canonical SugarCraft\Forms Viewport',
             );
         }
+    }
+
+    public function testUnsetWidthResolvesToNullWhileZeroStaysNoWrap(): void
+    {
+        // The three width states (finding 090) must survive parsing:
+        // omitted = null (auto), explicit 0 = no-wrap, explicit N = pinned.
+        // The old single-state default (0) collapsed unset and no-wrap into
+        // one meaning, which is exactly what made auto impossible.
+        $definition = (new RenderCommand())->getDefinition();
+        $resolve    = new \ReflectionMethod(RenderCommand::class, 'resolveWidth');
+
+        self::assertNull($resolve->invoke(null, new ArrayInput([], $definition)), 'omitted --width must read as auto');
+        self::assertSame(0, $resolve->invoke(null, new ArrayInput(['--width' => '0'], $definition)), 'explicit 0 must stay 0');
+        self::assertSame(42, $resolve->invoke(null, new ArrayInput(['--width' => '42'], $definition)));
+    }
+
+    public function testWindowSizeReflowRendersAtTheLiveColumnCount(): void
+    {
+        // Finding 014: the README promised resize reflow since day one;
+        // this is the closure seam that makes the promise real.
+        $calls  = [];
+        $reflow = function (int $cols) use (&$calls): string {
+            $calls[] = $cols;
+
+            return "W{$cols}\nsecond";
+        };
+        $model = MdViewModel::fromContent("seed\nlines\nmore", 80, 10)->withReflow($reflow);
+
+        [$grown, $cmd] = $model->update(new WindowSizeMsg(50, 10));
+
+        self::assertSame([50], $calls, 'the reflow closure must run once with the new columns');
+        self::assertSame(['W50', 'second'], $grown->viewport->lines, 'the document text must be the reflowed render');
+        self::assertSame(50, $grown->viewport->width);
+        self::assertNull($cmd, 'a resize alone arms no command');
+
+        // A height-only change cannot move the wrap column — no re-render.
+        $model->update(new WindowSizeMsg(80, 6));
+        self::assertSame([50], $calls, 'rows-only resizes must not pay the re-render cost');
+
+        // The geometry identity short-circuit still wins (startup duplicate).
+        [$same] = $model->update(new WindowSizeMsg(80, 10));
+        self::assertSame($model, $same);
+    }
+
+    public function testPinnedWidthResizeMovesTheClipWindowOnly(): void
+    {
+        // With --width given, $reflowAt is never armed, and the user's
+        // chosen column count must survive every resize untouched.
+        $model = MdViewModel::fromContent("a\nb\nc", 80, 10);
+
+        [$grown] = $model->update(new WindowSizeMsg(40, 12));
+
+        self::assertSame(['a', 'b', 'c'], $grown->viewport->lines, 'pinned text must not be re-rendered on resize');
+        self::assertSame(40, $grown->viewport->width);
+        self::assertSame(12, $grown->viewport->height);
     }
 }

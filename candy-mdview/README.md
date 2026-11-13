@@ -93,8 +93,11 @@ Flags:
   than silently rendering the stock theme.
 - `--width` / `-w <N>` — word-wrap paragraphs / blockquotes / list bodies at
   N columns (1–9999). `0` disables wrapping; unwrapped lines are truncated by
-  the pager, so scroll horizontally with `h`/`l`. Anything non-numeric is a
-  usage error.
+  the pager, so scroll horizontally with `h`/`l`. Omitted, the wrap follows
+  the terminal: stdout output wraps at `min(terminal width − 2, 80)` and the
+  pager wraps at the live column count — and re-wraps the document when you
+  resize. Naming `--width` pins the column count instead: resizing then only
+  moves the clip window. Anything non-numeric is a usage error.
 - `--no-hyperlinks` — suppresses the OSC 8 envelopes. They are emitted for
   terminal output by default, and also into redirected output when decoration
   is forced (`--ansi` / `CLICOLOR_FORCE` / `FORCE_COLOR`) — forcing decoration

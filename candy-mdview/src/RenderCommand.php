@@ -46,6 +46,9 @@ final class RenderCommand extends Command
      */
     private const MAX_THEME_CONFIG_BYTES = GlamourTheme::MAX_CONFIG_BYTES;
 
+    /** glow's own default document width — the ceiling of the auto ladder. */
+    public const AUTO_WIDTH_MAX = 80;
+
     /** @var callable|null */
     private static $colorProbeCallback = null;
 
@@ -103,7 +106,7 @@ final class RenderCommand extends Command
             ->addOption('theme',         null, InputOption::VALUE_REQUIRED, 'ansi | ascii | plain | dark | light | notty | dracula | tokyo-night | pink | solarized | monokai | github | auto. Aliases: no, auto-no, tokyonight. Names match case-insensitively and _ is accepted in place of -; auto reruns the implicit ladder. Default (omitted): ansi on a color-capable terminal, ascii when color is off, plain when the stream is undecorated (--no-ansi, or a non-terminal without forced decoration).', null)
             ->addOption('style',         's',  InputOption::VALUE_REQUIRED, 'Glamour-compatible alias for --theme: a theme NAME, not a style file (JSON themes load through --theme-config). Overrides --theme when both are given, and a note on stderr names the override.', null)
             ->addOption('theme-config',  null, InputOption::VALUE_REQUIRED, 'Load a custom JSON theme file (overrides --theme).', '')
-            ->addOption('width',         'w',  InputOption::VALUE_REQUIRED, 'Wrap text at this column count (1-9999). 0 = no wrap: longer lines are truncated by the pager, not wrapped.', 0)
+            ->addOption('width',         'w',  InputOption::VALUE_REQUIRED, 'Wrap text at this column count (1-9999). 0 = no wrap: longer lines are truncated by the pager, not wrapped. Omitted = auto: stdout wraps at the terminal width minus two (capped at 80), the pager wraps at the live width and reflows on resize.', null)
             ->addOption('no-hyperlinks', null, InputOption::VALUE_NONE,    'Disable OSC 8 hyperlinks; render links as text + (url) instead.')
             ->addOption('show-front-matter', null, InputOption::VALUE_NONE, 'Print the leading YAML front-matter block (--- fenced) verbatim before the rendered document; it is stripped from rendering either way.')
             ->setHelp(<<<'TXT'
@@ -187,8 +190,21 @@ final class RenderCommand extends Command
             $output->write($frontMatter, false, OutputInterface::OUTPUT_RAW);
         }
 
+        // glow parity (findings 013/090): an omitted --width is AUTO, not
+        // no-wrap. Stdout mode wraps at min(terminal cols − 2, 80) — glow's
+        // own non-tty discipline — and the pager wraps at the live column
+        // count. An explicit 0 still means exactly one thing: no wrap.
+        $ttySize  = null;
+        $docWidth = $width;
+        if ($width === null) {
+            $ttySize  = (new Tty())->size();
+            $docWidth = $input->getOption('pager') === true
+                ? $ttySize['cols']
+                : max(1, min($ttySize['cols'] - 2, self::AUTO_WIDTH_MAX));
+        }
+
         $renderer = (new Renderer($theme))
-            ->withWordWrap($width > 0 ? $width : null)
+            ->withWordWrap($docWidth > 0 ? $docWidth : null)
             // The sanitizer is pinned ON at the construction site (the
             // explicit opposite of the opt-out switch) instead of riding the
             // constructor default: stripControls is the render-safety NET
@@ -222,14 +238,20 @@ final class RenderCommand extends Command
         // reload frame. Stdin input has nothing to watch and never arms
         // the pump. openTty re-opens /dev/tty when STDIN was a pipe, so
         // the keyboard lives even for `git log | candy-mdview -p`.
-        $size    = (new Tty())->size();
+        $size    = $ttySize ?? (new Tty())->size();
         // A remote document has nothing to watch and no stable name worth a
         // status header (finding 008): the URL argument never reaches
         // basename()/armPagerWatch — a "reload" of a fetched URL would
         // silently re-pay (or fail) a network fetch the user did not ask
         // to repeat.
         $isLocal = $fileArg !== '' && HttpFetch::isRemote($fileArg) === false;
-        $model   = self::buildPagerModel($rendered, $size['cols'], $size['rows'], $isLocal ? basename($fileArg) : '');
+        // Finding 014: only an UNPINNED width reflows on resize; with an
+        // explicit --width the user chose the column count and resizing
+        // moves the clip window, nothing else.
+        $reflowAt = $width === null
+            ? static fn (int $cols): string => $renderer->withWordWrap(max(1, $cols))->render($raw)
+            : null;
+        $model   = self::buildPagerModel($rendered, $size['cols'], $size['rows'], $isLocal ? basename($fileArg) : '', $reflowAt);
         if ($isLocal) {
             $model = self::armPagerWatch($model, $fileArg, $renderer);
         }
@@ -248,10 +270,20 @@ final class RenderCommand extends Command
      * `--width` must be a non-negative integer up to four digits. The old
      * `(int)` cast turned `--width=abc` and negatives into a silent 0
      * (= no wrap), so a typo quietly changed layout instead of refusing.
+     *
+     * Three states (finding 090): a positive N pins the wrap column, 0
+     * pins NO wrap — and only 0 does — while an omitted --width returns
+     * null so the caller can apply the terminal-derived default
+     * (finding 013). The Symfony default is null precisely to keep the
+     * unset case distinguishable from an explicit zero.
      */
-    private static function resolveWidth(InputInterface $input): int
+    private static function resolveWidth(InputInterface $input): ?int
     {
-        $value = (string) ($input->getOption('width') ?? '0');
+        $raw = $input->getOption('width');
+        if ($raw === null) {
+            return null;
+        }
+        $value = (string) $raw;
         if (preg_match('/^\d{1,4}$/', $value) !== 1) {
             throw new \InvalidArgumentException(Lang::t('render.width_invalid', ['value' => $value]));
         }
@@ -770,9 +802,12 @@ final class RenderCommand extends Command
      * every remaining control byte — ESC included, killing forged SGR/OSC-8
      * envelopes — replaced by a visible dot.
      */
-    private static function buildPagerModel(string $rendered, int $cols, int $rows, string $document = ''): MdViewModel
+    private static function buildPagerModel(string $rendered, int $cols, int $rows, string $document = '', ?\Closure $reflowAt = null): MdViewModel
     {
         $model = MdViewModel::fromContent($rendered, $cols, $rows);
+        if ($reflowAt !== null) {
+            $model = $model->withReflow($reflowAt);
+        }
 
         return $document === '' ? $model : $model->withDocument(Sanitize::cellValue($document));
     }

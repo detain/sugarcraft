@@ -74,13 +74,15 @@ final class MdViewModel implements Model
         public readonly bool $reloadBlocked = false,
         /** True between change-detection and the deferred read+re-render tick. */
         public readonly bool $pendingReload = false,
+        /** fn(liveCols): renderedText — set ONLY when the width was not pinned (finding 014). */
+        private readonly ?\Closure $reflowAt = null,
     ) {}
 
     /**
      * Structural clone with named overrides — the ONE derivation site, so
      * no state field can be silently zeroed by a hand-rolled copy.
      *
-     * @param array{viewport?:Viewport,exited?:bool,watchPath?:?string,reRender?:?\Closure,watchMtime?:int,watchSize?:int,reloadCount?:int,documentName?:?string,reloadBlocked?:bool,pendingReload?:bool} $overrides
+     * @param array{viewport?:Viewport,exited?:bool,watchPath?:?string,reRender?:?\Closure,watchMtime?:int,watchSize?:int,reloadCount?:int,documentName?:?string,reloadBlocked?:bool,pendingReload?:bool,reflowAt?:?\Closure} $overrides
      */
     private function copy(array $overrides = []): self
     {
@@ -100,6 +102,7 @@ final class MdViewModel implements Model
             $pick('documentName', $this->documentName),
             $pick('reloadBlocked', $this->reloadBlocked),
             $pick('pendingReload', $this->pendingReload),
+            $pick('reflowAt', $this->reflowAt),
         );
     }
 
@@ -139,6 +142,20 @@ final class MdViewModel implements Model
         return $this->watchPath !== null;
     }
 
+    /**
+     * Arm the resize-reflow path (finding 014). The closure receives the
+     * live column count on every geometry-changing WindowSizeMsg and returns
+     * the fully re-rendered document text; the viewport re-clips scroll
+     * offsets against it. Armed ONLY for an unpinned width — an explicit
+     * --width is a user decision the resize leg must never override.
+     *
+     * @param \Closure(int):string $reflowAt
+     */
+    public function withReflow(\Closure $reflowAt): self
+    {
+        return $this->copy(['reflowAt' => $reflowAt]);
+    }
+
     public function init(): ?\Closure
     {
         return $this->watchPath === null ? null : $this->armReloadTick();
@@ -159,7 +176,16 @@ final class MdViewModel implements Model
             if ($msg->cols === $this->viewport->width && $height === $this->viewport->height) {
                 return [$this, null];
             }
-            return [$this->copy(['viewport' => $this->viewport->withSize($msg->cols, $height)]), null];
+            $viewport = $this->viewport->withSize($msg->cols, $height);
+            if ($this->reflowAt !== null && $msg->cols !== $this->viewport->width) {
+                // glow parity (finding 014): with --width omitted the document
+                // REFLOWS at the live column count — the README has promised
+                // this since day one while the code only ever moved the clip
+                // window. With --width given, $reflowAt is null and reflow is
+                // refused exactly as the user pinned it.
+                $viewport = $viewport->setContent(($this->reflowAt)($msg->cols));
+            }
+            return [$this->copy(['viewport' => $viewport]), null];
         }
         if ($msg instanceof ReloadTickMsg && $msg->id === ReloadTickMsg::ID && $this->watchPath !== null) {
             $next = $this->sweepForReload();
