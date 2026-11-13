@@ -1056,6 +1056,71 @@ final class ReelTest extends TestCase
         $liveCode = preg_replace('#/\*.*?\*/#s', '', $example) ?? $example;
         $this->assertStringNotContainsString('pcntl_signal(', $liveCode, 'play.php wires no handler of its own');
     }
+
+    // -------------------------------------------------------------------------
+    // SV-L64/064: the preset trio is shorthand — pinned prop-for-prop against
+    // the explicit wither chains they compose
+    // -------------------------------------------------------------------------
+
+    /**
+     * Every stored prop of a Reel, by name. Reels are value objects; comparing
+     * the full field set is the exact form of "preset == explicit chain".
+     *
+     * @return array<string,mixed>
+     */
+    private static function reelProps(Reel $reel): array
+    {
+        $props = [];
+        foreach ((new \ReflectionClass(Reel::class))->getProperties() as $property) {
+            $property->setAccessible(true);
+            $props[$property->getName()] = $property->getValue($reel);
+        }
+
+        return $props;
+    }
+
+    /**
+     * @testdox SV-L64: Reel::preview() IS open()->withMode(Ansi256)->withSize(40,12)->withAudio(false) — every stored prop equal, and the three promise props (rung, size, silence) named at the accessor level too
+     */
+    public function testPreviewPresetEqualsItsExplicitChain(): void
+    {
+        $preset = Reel::preview('clip.mp4');
+        $chain = Reel::open('clip.mp4')
+            ->withMode(Mode::Ansi256)
+            ->withSize(40, 12)
+            ->withAudio(false);
+
+        $this->assertEquals(self::reelProps($chain), self::reelProps($preset));
+        $this->assertSame(Mode::Ansi256, $preset->mode());
+        $this->assertSame([40, 12], [$preset->cols(), $preset->rows()]);
+        $this->assertSame('clip.mp4', $preset->path());
+    }
+
+    /**
+     * @testdox SV-L64: Reel::captioned() IS open()->withSubtitles() — same props, same deferred read (nothing opens until play/toPlayer)
+     */
+    public function testCaptionedPresetEqualsItsExplicitChain(): void
+    {
+        $preset = Reel::captioned('clip.mp4', 'clip.vtt');
+        $chain = Reel::open('clip.mp4')->withSubtitles('clip.vtt');
+
+        $this->assertEquals(self::reelProps($chain), self::reelProps($preset));
+    }
+
+    /**
+     * @testdox SV-L64: Reel::ambient() IS open()->withLoop(true)->withAudio(false) — same props; mode stays null so the auto ladder still owns the rung
+     */
+    public function testAmbientPresetEqualsItsExplicitChain(): void
+    {
+        $preset = Reel::ambient('clip.mp4');
+        $chain = Reel::open('clip.mp4')
+            ->withLoop(true)
+            ->withAudio(false);
+
+        $this->assertEquals(self::reelProps($chain), self::reelProps($preset));
+        $this->assertTrue($preset->loop());
+        $this->assertNull($preset->mode(), 'ambient must not pin a rung');
+    }
 }
 
 /**

@@ -229,6 +229,50 @@ final class Reel
     }
 
     /**
+     * A glance-sized, silent Ansi256 preview (SV-L64/064).
+     *
+     * The composition idiom for "show me a clip in passing": small cells so it
+     * fits beside a prompt, the Ansi256 rung because it is the text-family mode
+     * every seat can paint (transport-safe SGR + the ladder-safe LumaRamp), and
+     * audio off because a preview that startles is a bug. Composed PURELY from
+     * the public withers — {@see ReelTest} pins the result against the explicit
+     * chain, so this is shorthand, never a second source of truth.
+     */
+    public static function preview(string $path): self
+    {
+        return self::open($path)
+            ->withMode(Mode::Ansi256)
+            ->withSize(40, 12)
+            ->withAudio(false);
+    }
+
+    /**
+     * A clip paired with its caption track (SV-L64/064).
+     *
+     * The README subtitle recipe as one call; the track is read (bounded and
+     * loud) only when play()/toPlayer() builds the Player, exactly as through
+     * {@see withSubtitles()} itself.
+     */
+    public static function captioned(string $path, string $subtitlePath): self
+    {
+        return self::open($path)->withSubtitles($subtitlePath);
+    }
+
+    /**
+     * A silent looping wall piece (SV-L64/064).
+     *
+     * The behaviour-table pair — open-time loop plus no audio — that ambient
+     * background playback needs; mode stays auto so the ladder still picks the
+     * best rung the seat honestly supports.
+     */
+    public static function ambient(string $path): self
+    {
+        return self::open($path)
+            ->withLoop(true)
+            ->withAudio(false);
+    }
+
+    /**
      * The source video path this player was opened with ('' when unbound).
      */
     public function path(): string

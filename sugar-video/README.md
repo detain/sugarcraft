@@ -101,6 +101,16 @@ SUGAR_VIDEO_COLS=120 SUGAR_VIDEO_ROWS=40 php examples/play.php synthetic
 
 These demos resolve the autoloader from a repo checkout (the library's own `vendor/` or the monorepo root) and exit with an actionable error elsewhere — when sugar-video is consumed as a Composer dependency, `examples/` ships inside `vendor/sugarcraft/sugar-video/` and works the same way only if that copy's own dependencies are installed; for your project, script the API below instead.
 
+### Ready-made compositions
+
+Three static presets (SV-L64), each one line of this README and each nothing but shorthand for the public wither chain it composes — `ReelTest` pins them prop-for-prop:
+
+```php
+Reel::preview('clip.mp4')->play();                // glance: small cells, Ansi256 rung, silent
+Reel::captioned('clip.mp4', 'clip.vtt')->play();  // clip paired with its caption track
+Reel::ambient('art.mp4')->play();                 // silent open-time loop, auto ladder picks the rung
+```
+
 ### Rendering modes
 
 | Mode | Description | Terminal requirement |
