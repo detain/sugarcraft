@@ -448,6 +448,134 @@ final class RateLimitTest extends TestCase
         fclose($err);
     }
 
+    public function testMalformedConsultedEntryIsAnnouncedInsteadOfSilentlyRefilling(): void
+    {
+        // Audit 039: the file decodes cleanly, so the corrupt-file guard
+        // never fires — and refill()'s absent-means-full default read the
+        // garbage entry as a freshly refilled bucket. The M5 policy has to
+        // hold at entry granularity too: LOUD, decided by failClosed.
+        $this->assertNotFalse(file_put_contents($this->statePath, '{"ip:6.6.6.6":"dead"}'));
+        $this->planted[] = $this->statePath;
+
+        $err = fopen('php://memory', 'w+');
+        $this->assertNotFalse($err);
+        $ok = 0;
+        (new RateLimit($this->statePath, 5, 0.5, $err, failClosed: true))
+            ->handle(Context::background(), $this->session('6.6.6.6'), function () use (&$ok): void { $ok++; });
+
+        $this->assertSame(0, $ok, 'a malformed consulted bucket must not grant a silent full burst');
+        rewind($err);
+        $out = (string) stream_get_contents($err);
+        $this->assertStringContainsString('malformed state entry', $out);
+        $this->assertStringContainsString('denying connection', $out);
+        // Path-free, same law as the corrupt-file announcement (audit K3).
+        $this->assertStringNotContainsString($this->statePath, $out);
+        fclose($err);
+    }
+
+    public function testMalformedConsultedEntryFollowsTheFailOpenPolicyUnderDefault(): void
+    {
+        // An array entry whose fields are not numeric is just as malformed
+        // as the string arm — and under the DEFAULT policy the documented
+        // outcome is allow-plus-notice, matching what an unreadable file
+        // already means here (a filesystem problem must not lock everyone
+        // out; the announcement is the operator's cue to look).
+        $this->assertNotFalse(file_put_contents(
+            $this->statePath,
+            '{"ip:6.6.6.6":{"tokens":"lots","last":1.0}}',
+        ));
+        $this->planted[] = $this->statePath;
+
+        $err = fopen('php://memory', 'w+');
+        $this->assertNotFalse($err);
+        $ok = 0;
+        (new RateLimit($this->statePath, 5, 0.5, $err))
+            ->handle(Context::background(), $this->session('6.6.6.6'), function () use (&$ok): void { $ok++; });
+
+        $this->assertSame(1, $ok, 'fail-open policy decides a malformed entry, same as a corrupt file');
+        rewind($err);
+        $out = (string) stream_get_contents($err);
+        $this->assertStringContainsString('malformed state entry', $out);
+        $this->assertStringContainsString('degraded, allowing connection', $out);
+        fclose($err);
+    }
+
+    public function testNonNumericLastFieldIsMalformedEvenWithNumericTokens(): void
+    {
+        // refill() reads `last` too: a garbage stamp (float)"last" casts to
+        // 0 and inflates elapsed time to refill-everything — the same
+        // silent restart through the other field. The token is only
+        // CONSUMED in fail-open, so the distinguishing proof here is the
+        // announcement itself.
+        $this->assertNotFalse(file_put_contents(
+            $this->statePath,
+            '{"ip:6.6.6.6":{"tokens":2,"last":"never"}}',
+        ));
+        $this->planted[] = $this->statePath;
+
+        $err = fopen('php://memory', 'w+');
+        $this->assertNotFalse($err);
+        $ok = 0;
+        (new RateLimit($this->statePath, 5, 0.5, $err))
+            ->handle(Context::background(), $this->session('6.6.6.6'), function () use (&$ok): void { $ok++; });
+
+        $this->assertSame(1, $ok);
+        rewind($err);
+        $this->assertStringContainsString(
+            'malformed state entry',
+            (string) stream_get_contents($err),
+            'a garbage `last` stamp must be announced, not silently refilled',
+        );
+        fclose($err);
+    }
+
+    public function testMalformedEntryUnderANeverConsultedKeyStaysPrunedOrPreserved(): void
+    {
+        // The guard speaks only for buckets the decision consults. Under
+        // any other key, a garbage entry is pruneIdle()'s business exactly
+        // as before: its is_array skip preserves it (an entry refill never
+        // reads cannot be judged full, so it round-trips untouched).
+        $this->assertNotFalse(file_put_contents($this->statePath, '{"ip:9.9.9.9":"dead"}'));
+        $this->planted[] = $this->statePath;
+
+        $err = fopen('php://memory', 'w+');
+        $this->assertNotFalse($err);
+        $ok = 0;
+        (new RateLimit($this->statePath, 5, 0.5, $err, failClosed: true))
+            ->handle(Context::background(), $this->session('6.6.6.6'), function () use (&$ok): void { $ok++; });
+
+        // Own bucket absent (legitimately) = full burst; the stranger's
+        // garbage neither grants nor refuses anything.
+        $this->assertSame(1, $ok);
+        rewind($err);
+        $this->assertStringNotContainsString('malformed', (string) stream_get_contents($err));
+        fclose($err);
+
+        $stored = json_decode((string) file_get_contents($this->statePath), true);
+        $this->assertIsArray($stored);
+        $this->assertSame('dead', $stored['ip:9.9.9.9'] ?? null, 'never-consulted garbage round-trips untouched');
+    }
+
+    public function testPenalizeAnnouncesAMalformedConsultedEntryWithoutThrowing(): void
+    {
+        // The penalty path consults the same buckets, so it carries the
+        // same loud policy — and stays best-effort: it announces through
+        // the state-error path and never throws (its documented contract).
+        $this->assertNotFalse(file_put_contents($this->statePath, '{"ip:6.6.6.6":"dead"}'));
+        $this->planted[] = $this->statePath;
+
+        $err = fopen('php://memory', 'w+');
+        $this->assertNotFalse($err);
+        (new RateLimit($this->statePath, 5, 0.5, $err))
+            ->penalize($this->session('6.6.6.6'), 2.0);
+
+        rewind($err);
+        $out = (string) stream_get_contents($err);
+        $this->assertStringContainsString('malformed state entry', $out);
+        $this->assertStringContainsString('degraded, allowing connection', $out);
+        fclose($err);
+    }
+
     public function testIdleBucketsFromOtherSessionsArePrunedWhileLiveOnesSurvive(): void
     {
         $now = microtime(true);

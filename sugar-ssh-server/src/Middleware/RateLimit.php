@@ -39,10 +39,14 @@ use SugarCraft\SshServer\StreamHelper;
  * evaluated before the username bucket.
  *
  * **Fail-open vs fail-closed.** If the state file cannot be opened,
- * locked or decoded, the limiter cannot make a decision. By default it
- * FAILS OPEN (allows the connection) so a transient filesystem problem
- * does not lock every user out — and it ANNOUNCES the degradation on
- * `$stderr`. Read that announcement for what it is: under
+ * locked or decoded — or if the bucket being consulted has lost its
+ * persisted shape (audit 039: a decoded JSON payload can be ANY shape,
+ * and `refill()`'s "absent means full" default silently handed a fresh
+ * burst to a garbage entry) — the limiter cannot make a decision. By
+ * default it FAILS OPEN (allows the connection) so a transient
+ * filesystem problem does not lock every user out — and it ANNOUNCES
+ * the degradation on `$stderr`. Read that announcement for what it is:
+ * under
  * `ForceCommand` the child's stderr is delivered back to the CONNECTING
  * CLIENT, not to the operator (see {@see \SugarCraft\SshServer\Middleware\Logger}'s
  * sink note), so the notice deliberately carries no path and no detail
@@ -75,6 +79,13 @@ use SugarCraft\SshServer\StreamHelper;
  */
 final class RateLimit implements Middleware
 {
+    /**
+     * The path-free state-error reason for a consulted bucket whose
+     * persisted entry no longer has the bucket shape (audit 039). One
+     * constant so take() and penalize() announce the same condition.
+     */
+    private const MALFORMED_WHY = 'malformed state entry for a consulted bucket';
+
     /** @var resource */
     private $stderr;
 
@@ -131,6 +142,9 @@ final class RateLimit implements Middleware
         $this->underLock(function (array &$data) use ($specs, $tokens): bool {
             $now = \microtime(true);
             foreach ($specs as [$key, $burst, $rate]) {
+                if (isset($data[$key]) && !self::validEntry($data[$key])) {
+                    return $this->onStateError(self::MALFORMED_WHY);
+                }
                 $current = self::refill($data, $key, $burst, $rate, $now);
                 $data[$key] = self::entry(\max(0.0, $current - $tokens), $now, $burst, $rate);
             }
@@ -179,6 +193,17 @@ final class RateLimit implements Middleware
             $now      = \microtime(true);
             $refilled = [];
             foreach ($specs as [$key, $burst, $rate]) {
+                // Audit 039: a consulted entry that lost its shape is a
+                // state-layer error with the SAME loud policy as an
+                // undecodable file — refill()'s "absent means full"
+                // default must not be allowed to read garbage as a fresh
+                // burst. Malformed entries under never-consulted keys are
+                // pruneIdle()'s jurisdiction (its is_array-skip keeps or
+                // drops them as before); this guard only speaks for the
+                // buckets this decision actually reads.
+                if (isset($data[$key]) && !self::validEntry($data[$key])) {
+                    return $this->onStateError(self::MALFORMED_WHY);
+                }
                 $refilled[$key] = self::refill($data, $key, $burst, $rate, $now);
             }
             // Reject if ANY bucket is exhausted. Persist the refilled
@@ -281,6 +306,11 @@ final class RateLimit implements Middleware
      * Refill a bucket to `min(burst, tokens + elapsed * rate)` without
      * mutating `$data`.
      *
+     * The "absent means full" default is the whole contract for a key
+     * that was never written — and the whole hazard for a key written by
+     * something that lost its shape, which is why consulted entries pass
+     * {@see validEntry()} before they reach this method (audit 039).
+     *
      * @param array<string,array{tokens:float,last:float}> $data
      */
     private static function refill(array $data, string $key, int $burst, float $rate, float $now): float
@@ -289,6 +319,27 @@ final class RateLimit implements Middleware
         $tokens = (float) ($entry['tokens'] ?? $burst);
         $last   = (float) ($entry['last'] ?? $now);
         return \min((float) $burst, $tokens + ($now - $last) * $rate);
+    }
+
+    /**
+     * The shape contract of a persisted bucket, as checked at the JSON
+     * boundary (audit 039).
+     *
+     * The state file decodes to whatever JSON it contains: a consulted
+     * entry that is not an array, or whose `tokens`/`last` (the fields
+     * {@see refill()} reads) are not numeric, would be read by that
+     * method's absent-means-full default as a freshly refilled bucket —
+     * the silent restart M5 made whole-file corruption loud, smuggled
+     * through at entry granularity. Such an entry is therefore a
+     * state-layer error, decided by the same fail-open/fail-closed
+     * policy. `burst`/`rate` need not be present: {@see limitsFor()}
+     * already has the documented fallback for older writes.
+     */
+    private static function validEntry(mixed $entry): bool
+    {
+        return \is_array($entry)
+            && \is_numeric($entry['tokens'] ?? null)
+            && \is_numeric($entry['last'] ?? null);
     }
 
     /**
