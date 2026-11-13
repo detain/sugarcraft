@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\CellBuffer;
 
+use SugarCraft\CellBuffer\Support\WidePairPlacement;
+
 /**
  * A 2-D grid of terminal cells with immutable mutation semantics.
  *
@@ -21,6 +23,8 @@ namespace SugarCraft\CellBuffer;
  */
 final class Buffer implements \JsonSerializable
 {
+    use WidePairPlacement;
+
     /**
      * @param list<Cell> $grid Flat grid: index = $row * $width + $col
      */
@@ -242,11 +246,22 @@ final class Buffer implements \JsonSerializable
      * (each O(n) → O(n²) overall), this wraps an already-built grid in a
      * single step, enabling O(n) bulk construction.
      *
+     * Validation is strict about TYPE and LAYOUT — every entry must be a
+     * Cell (a stray string/array used to sail through and detonate at the
+     * first reader), and the array must be a list so index = row*width+col
+     * holds by construction — and deliberately silent about wide-pair
+     * ALIGNMENT: {@see copy()} crops can legitimately begin on a
+     * continuation or end on a stranded lead (slice geometry, not a bug),
+     * so alignment is the caller's contract; the lenient read-back of
+     * misaligned grids is pinned behaviour (WideCellPairingTest and the
+     * BufferTest orphan pins), not a validated state.
+     *
      * @param list<Cell> $grid Flat grid of exactly width*height cells, index = $row*$width + $col.
      *
-     * @throws \InvalidArgumentException when dimensions are non-positive or
+     * @throws \InvalidArgumentException when dimensions are non-positive,
      *                                   $grid does not contain exactly
-     *                                   width*height cells.
+     *                                   width*height cells, the grid is not
+     *                                   a list, or any entry is not a Cell.
      */
     public static function fromGrid(int $width, int $height, array $grid): self
     {
@@ -261,8 +276,31 @@ final class Buffer implements \JsonSerializable
                 "Buffer grid must contain exactly {$expected} cells ({$width}x{$height}), got " . count($grid)
             );
         }
+        if (!array_is_list($grid)) {
+            throw new \InvalidArgumentException(
+                'Buffer grid must be a list (row-major keys 0..width*height-1); a keyed array desyncs every index computation'
+            );
+        }
+        foreach ($grid as $idx => $cell) {
+            if (!$cell instanceof Cell) {
+                throw new \InvalidArgumentException(
+                    'Buffer grid entry ' . $idx . ' must be a Cell, got ' . get_debug_type($cell)
+                );
+            }
+        }
 
         return new self($width, $height, $grid);
+    }
+
+    /**
+     * Fresh mutable scratch for bulk painting (CB-34): setCellAt()/fillRect()
+     * write in place under the identical pair law as the fluent with*()
+     * paths, and toBuffer() freezes the result through {@see fromGrid()}.
+     * One allocation per cell, not one Buffer clone per write.
+     */
+    public static function builder(int $width, int $height): BufferBuilder
+    {
+        return new BufferBuilder($width, $height);
     }
 
     // ─── Accessors ─────────────────────────────────────────────────────
@@ -340,8 +378,9 @@ final class Buffer implements \JsonSerializable
      * column DEGRADES to a blank — the same placement-time degrade
      * applyDiff() performs); replacing a wide lead, or writing
      * onto a continuation, sweeps the partner so no orphaned half-pair can
-     * survive the mutation. {@see fromGrid()} stays the unvalidated bulk
-     * escape hatch for callers that build grids themselves.
+     * survive the mutation. {@see fromGrid()} stays the bulk wrap for
+     * callers that build grids themselves — it validates type and layout
+     * but not wide-pair alignment (see its docblock).
      *
      * @throws \OutOfRangeException when coordinates are outside the grid
      */
@@ -920,63 +959,6 @@ final class Buffer implements \JsonSerializable
     // ─── Internals ─────────────────────────────────────────────────────
 
     /**
-     * Write one cell into a working grid, keeping the wide-cell pair
-     * invariant of the Cell docblock structurally true afterwards:
-     *
-     *  - a width-2 lead gets its width-0 continuation in the right
-     *    neighbour; a straddle at the last column DEGRADES to a blank —
-     *    the lead would otherwise paint two columns of rune into one
-     *    slot and overrun the row past the frame (auto-wrap then shifts
-     *    every following row in raw mode); applyDiff() mirrors the
-     *    degrade so grid, diff, encoder and text() stay within the width
-     *    by construction;
-     *  - replacing a lead with a real cell blanks a left-behind continuation
-     *    so the cleared column repaints instead of ghosting;
-     *  - writing a real cell onto a continuation blanks the stranded lead
-     *    to its left instead of leaving a half-open pair;
-     *  - a width-2 lead landing on a partner slot that is itself the lead of
-     *    another pair blanks that pair's continuation one column further
-     *    right, so overwriting a wide cell never orphans half a pair.
-     *
-     * Continuation-to-continuation writes pass through untouched, so a
-     * well-formed source pair blits byte-identically.
-     *
-     * @param non-empty-array<int, Cell> $grid working grid, mutated in place
-     */
-    private function placeWithPair(array &$grid, int $col, int $row, Cell $cell): void
-    {
-        $idx = $row * $this->width + $col;
-        $previous = $grid[$idx];
-
-        if ($cell->width() === 2 && $col + 1 >= $this->width) {
-            $cell = Cell::new(); // straddle degrade — see docblock
-        }
-
-        $grid[$idx] = $cell;
-
-        if ($cell->width() === 2) {
-            $displaced = $grid[$idx + 1];
-            $grid[$idx + 1] = Cell::continuation();
-            if ($displaced->width() === 2 && $col + 2 < $this->width) {
-                $grid[$idx + 2] = Cell::new();
-            }
-        } elseif ($cell->width() !== 0
-            && $previous->width() === 2
-            && $col + 1 < $this->width
-            && $grid[$idx + 1]->width() === 0
-        ) {
-            $grid[$idx + 1] = Cell::new();
-        }
-
-        if ($cell->width() !== 0 && $previous->width() === 0 && $col > 0) {
-            $left = $grid[$idx - 1];
-            if ($left->width() === 2) {
-                $grid[$idx - 1] = Cell::new();
-            }
-        }
-    }
-
-    /**
      * @return static
      */
     private function mutate(array $changes): static
@@ -985,18 +967,6 @@ final class Buffer implements \JsonSerializable
             ['width' => $this->width, 'height' => $this->height, 'grid' => $this->grid],
             $changes,
         ));
-    }
-
-    /**
-     * @throws \OutOfRangeException
-     */
-    private function assertInBounds(int $col, int $row): void
-    {
-        if ($col < 0 || $col >= $this->width || $row < 0 || $row >= $this->height) {
-            throw new \OutOfRangeException(
-                "Cell ({$col}, {$row}) is out of buffer bounds ({$this->width}x{$this->height})"
-            );
-        }
     }
 
     /**
