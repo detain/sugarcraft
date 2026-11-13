@@ -80,6 +80,10 @@ return [
     'ui.activity_minutes_heading' => '일별 활동(분)',
     'ui.activity_heading' => '일별 활동',
     'ui.no_data' => '(데이터 없음)',
+    'ui.getting_started_heading' => '아직 기록이 없습니다',
+    'ui.getting_started_push' => 'candy-codetime push <project> <language> <file> [seconds]',
+    'ui.getting_started_plugin' => '에디터 플러그인이 하트비트를 직접 추가할 수 있습니다 — README의 수집 자동화 참조.',
+    'ui.getting_started_reload' => '이 대시보드에서 r을 눌러 새 데이터를 불러오세요.',
     'ui.diagnostics_dropped' => '일별 파일에서 손상된 줄 {count}개를 건너뜀',
     'ui.diagnostics_unreadable' => '일별 파일 {count}개를 읽을 수 없음',
 ];

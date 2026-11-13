@@ -376,4 +376,9 @@ final class SqliteBackend implements HeartbeatReader
         }
         return $rows;
     }
+    /** CT-S46: one indexed existence probe, never a row walk. */
+    public function hasAnyHeartbeat(): bool
+    {
+        return @$this->db->querySingle('SELECT 1 FROM heartbeats LIMIT 1') !== null;
+    }
 }

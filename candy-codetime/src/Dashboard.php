@@ -90,6 +90,13 @@ final class Dashboard implements Model
         public readonly ?int $goalSeconds = null,
         /** CT-S33/34: the palette this frame paints with. */
         ?Theme $theme = null,
+        /**
+         * CT-S46: true when the store holds no heartbeat anywhere — the
+         * first-run state that swaps the panes for a getting-started block.
+         * Recomputed on every load; a failed load proves nothing and keeps
+         * the previous answer.
+         */
+        public readonly bool $storeEmpty = false,
     ) {
         $this->theme = $theme ?? Theme::default();
         // CT-S16 parse-at-boundary honesty: before this door, days=0 silently
@@ -135,6 +142,7 @@ final class Dashboard implements Model
                 $this->byTags,
                 $this->goalSeconds,
                 $this->theme,
+                $this->storeEmpty,
             ), null];
         }
         if ($msg instanceof ColorProfileMsg) {
@@ -156,6 +164,7 @@ final class Dashboard implements Model
                 $this->byTags,
                 $this->goalSeconds,
                 $this->theme,
+                $this->storeEmpty,
             ), null];
         }
         if (!$msg instanceof KeyMsg) {
@@ -197,6 +206,7 @@ final class Dashboard implements Model
                 !$this->byTags,
                 $this->goalSeconds,
                 $this->theme,
+                $this->storeEmpty,
             ), null];
         }
         return [$this, null];
@@ -243,6 +253,7 @@ final class Dashboard implements Model
                 $this->byTags,
                 $this->goalSeconds,
                 $this->theme,
+                !$this->source->hasAnyHeartbeat(),
             );
         } catch (\Throwable $error) {
             if ($this->source instanceof Store) {
@@ -263,6 +274,7 @@ final class Dashboard implements Model
                 $this->byTags,
                 $this->goalSeconds,
                 $this->theme,
+                $this->storeEmpty,
             );
         }
     }
@@ -284,7 +296,7 @@ final class Dashboard implements Model
         // The width has to ride the shift: without it the next frame is laid
         // out for an unknown terminal and the rows we sized to the window
         // (panes, timeline) silently stop being clipped.
-        return (new self($this->source, $next, $this->days, $this->stats, $this->width, $this->colorProfile, $this->height, $this->backendLabel, byTags: $this->byTags, goalSeconds: $this->goalSeconds, theme: $this->theme))->recompute();
+        return (new self($this->source, $next, $this->days, $this->stats, $this->width, $this->colorProfile, $this->height, $this->backendLabel, byTags: $this->byTags, goalSeconds: $this->goalSeconds, theme: $this->theme, storeEmpty: $this->storeEmpty))->recompute();
     }
 
     /**
@@ -311,6 +323,7 @@ final class Dashboard implements Model
             byTags: $this->byTags,
             goalSeconds: $this->goalSeconds,
             theme: $this->theme,
+            storeEmpty: $this->storeEmpty,
         ))->recompute();
     }
 

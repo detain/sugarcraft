@@ -574,4 +574,18 @@ final class Store implements HeartbeatReader
             );
         }
     }
+    /** CT-S46: any non-empty day file answers yes without parsing contents. */
+    public function hasAnyHeartbeat(): bool
+    {
+        // append() touches its own file while it is still zero bytes (seed +
+        // chmod), and PHP caches that stat for the request — a dashboard in
+        // the same process would keep seeing "empty" after its first beat.
+        clearstatcache();
+        foreach (glob($this->dir . '/*.jsonl') ?: [] as $file) {
+            if ((int) @filesize($file) > 0) {
+                return true;
+            }
+        }
+        return false;
+    }
 }

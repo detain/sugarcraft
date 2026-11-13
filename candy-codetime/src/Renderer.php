@@ -86,6 +86,7 @@ final class Renderer
             $d->byTags,
             $d->goalSeconds,
             $d->theme,
+            $d->storeEmpty,
         ), 0);
         $lines = array_slice(explode("\n", rtrim($joined, "\n")), 0, max(1, $d->height));
         return self::clipRows(implode("\n", $lines), $d->width) . "\n";
@@ -106,25 +107,36 @@ final class Renderer
         $stats = $d->stats;
 
         $header = self::clip(self::header($d), $d->width);
-        $projects = self::ranking(Lang::t('ui.top_projects'), $stats->perProject(), self::palette($d)->projects, $d->width, $d->colorProfile, $entries, $d->theme);
-        // CT-S30: the lower pane answers the `t` toggle — By tag folds the
-        // labels the store has always carried; By language remains the default.
-        $languages = $d->byTags
-            ? self::ranking(Lang::t('ui.by_tags'), $stats->perTag(), self::palette($d)->ranking, $d->width, $d->colorProfile, $entries, $d->theme)
-            : self::ranking(Lang::t('ui.by_language'), $stats->perLanguage(), self::palette($d)->ranking, $d->width, $d->colorProfile, $entries, $d->theme);
+        if ($d->storeEmpty) {
+            // CT-S46: install-then-run must not land on three politely empty
+            // frames. When the store holds nothing anywhere — not merely
+            // nothing in this window — the panes give way to a short block
+            // naming the next action: the push command, the plugin door,
+            // and the r reload that picks the first data up.
+            $projects = self::gettingStarted($d);
+            $top = $projects;
+            $timeline = '';
+        } else {
+            $projects = self::ranking(Lang::t('ui.top_projects'), $stats->perProject(), self::palette($d)->projects, $d->width, $d->colorProfile, $entries, $d->theme);
+            // CT-S30: the lower pane answers the `t` toggle — By tag folds the
+            // labels the store has always carried; By language remains the default.
+            $languages = $d->byTags
+                ? self::ranking(Lang::t('ui.by_tags'), $stats->perTag(), self::palette($d)->ranking, $d->width, $d->colorProfile, $entries, $d->theme)
+                : self::ranking(Lang::t('ui.by_language'), $stats->perLanguage(), self::palette($d)->ranking, $d->width, $d->colorProfile, $entries, $d->theme);
 
-        // Side by side only once two frames plus the gutter actually fit. The
-        // threshold is derived from the numbers above, because the old literal
-        // 56 was 6 cells short of the geometry it was guarding — the join
-        // landed on terminals that could not hold it and the right pane lost
-        // its border.
-        $sideBySide = self::SIDE_BY_SIDE;
-        $stacked = $d->width !== null && $d->width < $sideBySide;
-        $top = $stacked
-            ? $projects . "\n" . $languages
-            : Layout::joinHorizontal(Position::TOP, $projects, str_repeat(' ', self::PANE_GAP), $languages);
+            // Side by side only once two frames plus the gutter actually fit. The
+            // threshold is derived from the numbers above, because the old literal
+            // 56 was 6 cells short of the geometry it was guarding — the join
+            // landed on terminals that could not hold it and the right pane lost
+            // its border.
+            $sideBySide = self::SIDE_BY_SIDE;
+            $stacked = $d->width !== null && $d->width < $sideBySide;
+            $top = $stacked
+                ? $projects . "\n" . $languages
+                : Layout::joinHorizontal(Position::TOP, $projects, str_repeat(' ', self::PANE_GAP), $languages);
 
-        $timeline = self::timeline($d);
+            $timeline = self::timeline($d);
+        }
 
         // CT-S19: the in-frame diagnostics channel. The banner (a load that
         // threw — previous Stats keep the rest of the frame honest) rides
@@ -158,7 +170,43 @@ final class Renderer
         $help = self::clip(self::tint(Style::new(), self::palette($d)->muted, $d->colorProfile)
             ->render($helpText), $d->width);
 
-        return self::clipRows($header . "\n" . $banner . $top . "\n" . $timeline . "\n" . $notes . $help, $d->width) . "\n";
+        return self::clipRows($header . "\n" . $banner . $top . ($timeline === "" ? "" : "\n" . $timeline) . "\n" . $notes . $help, $d->width) . "\n";
+    }
+
+    /**
+     * CT-S46: the first-run block — a single framed card, four rows, in
+     * place of the empty-state pair. The command syntax stays English
+     * (they are CLI arguments), the prose rides the locale.
+     */
+    private static function gettingStarted(Dashboard $d): string
+    {
+        $width = $d->width ?? 62;
+        $inner = max(6, $width - 4);
+        $muted = self::palette($d)->muted;
+        $border = static fn(string $open, string $fill, string $close): string => self::tint(
+            Style::new(),
+            $muted,
+            $d->colorProfile,
+        )->render($open . str_repeat($fill, $inner - 2) . $close);
+        $rows = [$border('╭', '─', '╮')];
+        $paint = [
+            [Lang::t('ui.getting_started_heading'), self::palette($d)->title],
+            [Lang::t('ui.getting_started_push'), self::palette($d)->projects],
+            [Lang::t('ui.getting_started_plugin'), $muted],
+            [Lang::t('ui.getting_started_reload'), $muted],
+        ];
+        foreach ($paint as [$text, $colour]) {
+            $rows[] = self::clip(
+                self::tint(Style::new(), $muted, $d->colorProfile)->render('│')
+                . self::tint(Style::new(), $colour, $d->colorProfile)->render(
+                    Width::padRight(' ' . self::clean($text), $inner - 1),
+                )
+                . self::tint(Style::new(), $muted, $d->colorProfile)->render('│'),
+                $width,
+            );
+        }
+        $rows[] = $border('╰', '─', '╯');
+        return implode("\n", $rows);
     }
 
     /**

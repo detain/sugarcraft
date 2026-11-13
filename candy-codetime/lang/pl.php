@@ -80,6 +80,10 @@ return [
     'ui.activity_minutes_heading' => 'Dzienna aktywność (minuty)',
     'ui.activity_heading' => 'Dzienna aktywność',
     'ui.no_data' => '(brak danych)',
+    'ui.getting_started_heading' => 'Nic jeszcze nie zarejestrowano',
+    'ui.getting_started_push' => 'candy-codetime push <project> <language> <file> [seconds]',
+    'ui.getting_started_plugin' => 'Wtyczki edytora mogą dopisywać pulsy bezpośrednio — zobacz README, Automatyzacja zbierania.',
+    'ui.getting_started_reload' => 'Naciśnij r w tym panelu, aby wczytać nowe dane.',
     'ui.diagnostics_dropped' => 'pominięto {count} uszkodzonych linii z plików dziennych',
     'ui.diagnostics_unreadable' => 'nie można odczytać {count} plików dziennych',
 ];

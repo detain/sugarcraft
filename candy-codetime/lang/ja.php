@@ -80,6 +80,10 @@ return [
     'ui.activity_minutes_heading' => '日次アクティビティ（分）',
     'ui.activity_heading' => '日次アクティビティ',
     'ui.no_data' => '(データなし)',
+    'ui.getting_started_heading' => 'まだ記録がありません',
+    'ui.getting_started_push' => 'candy-codetime push <project> <language> <file> [seconds]',
+    'ui.getting_started_plugin' => 'エディタプラグインはハートビートを直接追記できます — README の「収集の自動化」を参照。',
+    'ui.getting_started_reload' => 'このダッシュボードで r を押すと新しいデータを読み込みます。',
     'ui.diagnostics_dropped' => '日次ファイルから破損行を {count} 行除外しました',
     'ui.diagnostics_unreadable' => '日次ファイルを {count} 件読み込めませんでした',
 ];

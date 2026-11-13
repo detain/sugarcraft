@@ -27,4 +27,13 @@ final class NullReader implements HeartbeatReader
     public function invalidate(): void
     {
     }
+    /**
+     * Stands in for a real store in view-layer tests: answering "maybe
+     * there is data" keeps the getting-started block out of goldens that
+     * pin ordinary panes over precomputed Stats (CT-S46).
+     */
+    public function hasAnyHeartbeat(): bool
+    {
+        return true;
+    }
 }

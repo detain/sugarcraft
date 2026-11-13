@@ -80,6 +80,10 @@ return [
     'ui.activity_minutes_heading' => 'Actividad diaria (minutos)',
     'ui.activity_heading' => 'Actividad diaria',
     'ui.no_data' => '(sin datos)',
+    'ui.getting_started_heading' => 'Aún no hay nada registrado',
+    'ui.getting_started_push' => 'candy-codetime push <project> <language> <file> [seconds]',
+    'ui.getting_started_plugin' => 'Los complementos del editor pueden añadir latidos directamente — vea README, Automatización de la recogida.',
+    'ui.getting_started_reload' => 'Pulse r en este panel para cargar los datos nuevos.',
     'ui.diagnostics_dropped' => 'se descartaron {count} líneas dañadas de los archivos diarios',
     'ui.diagnostics_unreadable' => 'no se pudieron leer {count} archivos diarios',
 ];

@@ -80,6 +80,10 @@ return [
     'ui.activity_minutes_heading' => 'Attività giornaliera (minuti)',
     'ui.activity_heading' => 'Attività giornaliera',
     'ui.no_data' => '(nessun dato)',
+    'ui.getting_started_heading' => 'Niente registrato per ora',
+    'ui.getting_started_push' => 'candy-codetime push <project> <language> <file> [seconds]',
+    'ui.getting_started_plugin' => 'I plugin dell\'editor possono aggiungere heartbeat direttamente — vedi README, Automatizzare la raccolta.',
+    'ui.getting_started_reload' => 'Premi r in questa dashboard per raccogliere i nuovi dati.',
     'ui.diagnostics_dropped' => 'scartate {count} righe danneggiate dai file giornalieri',
     'ui.diagnostics_unreadable' => 'impossibile leggere {count} file giornalieri',
 ];

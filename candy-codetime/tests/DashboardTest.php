@@ -640,4 +640,28 @@ final class DashboardTest extends TestCase
         [$moved] = $flipped->update(new \SugarCraft\Core\Msg\KeyMsg(\SugarCraft\Core\KeyType::Right, ''));
         $this->assertSame('#ff79c6', $moved->theme->title);
     }
+
+    // CT-S46: the getting-started gate is the store's own emptiness probe,
+    // recomputed on every load — data appearing must clear it.
+    public function testAStoreThatFillsUpClearsTheGettingStartedFlag(): void
+    {
+        $dir = $this->tmp . '/ct-s46-' . uniqid();
+        mkdir($dir, 0700);
+        $store = new \SugarCraft\CodeTime\Store($dir);
+        try {
+            $start = \SugarCraft\CodeTime\Dashboard::start($store);
+            $this->assertTrue($start->storeEmpty, 'a brand-new data dir is first-run state');
+
+            $store->append(new \SugarCraft\CodeTime\Heartbeat(time: time(), project: 'p', language: 'php', file: 'a.php', duration: 60));
+            $reloaded = $start->reload();
+            $this->assertFalse($reloaded->storeEmpty, 'the first heartbeat retires the getting-started block');
+        } finally {
+            foreach (array_merge(glob($dir . '/*') ?: [], glob($dir . '/.*') ?: []) as $f) {
+                if (is_file($f)) {
+                    unlink($f);
+                }
+            }
+            @rmdir($dir);
+        }
+    }
 }

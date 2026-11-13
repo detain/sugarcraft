@@ -80,6 +80,10 @@ return [
     'ui.activity_minutes_heading' => 'Dagelijkse activiteit (minuten)',
     'ui.activity_heading' => 'Dagelijkse activiteit',
     'ui.no_data' => '(geen gegevens)',
+    'ui.getting_started_heading' => 'Nog niets vastgelegd',
+    'ui.getting_started_push' => 'candy-codetime push <project> <language> <file> [seconds]',
+    'ui.getting_started_plugin' => 'Editor-plugins kunnen hartslagen direct toevoegen — zie README, Verzameling automatiseren.',
+    'ui.getting_started_reload' => 'Druk op r in dit dashboard om nieuwe gegevens op te halen.',
     'ui.diagnostics_dropped' => '{count} beschadigde regels uit dagsbestanden genegeerd',
     'ui.diagnostics_unreadable' => 'kon {count} dagsbestand(en) niet lezen',
 ];

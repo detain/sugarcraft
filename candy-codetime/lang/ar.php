@@ -80,6 +80,10 @@ return [
     'ui.activity_minutes_heading' => 'النشاط اليومي (دقائق)',
     'ui.activity_heading' => 'النشاط اليومي',
     'ui.no_data' => '(لا بيانات)',
+    'ui.getting_started_heading' => 'لم يُسجَّل شيء بعد',
+    'ui.getting_started_push' => 'candy-codetime push <project> <language> <file> [seconds]',
+    'ui.getting_started_plugin' => 'يمكن لإضافات المحرر إضافة النبضات مباشرة - راجع README، قسم الأتمتة.',
+    'ui.getting_started_reload' => 'اضغط r في هذه اللوحة لالتقاط البيانات الجديدة.',
     'ui.diagnostics_dropped' => 'تم إسقاط {count} سطرًا تالفًا من ملفات اليوم',
     'ui.diagnostics_unreadable' => 'لم يمكن قراءة {count} ملف يوم',
 ];

@@ -80,6 +80,10 @@ return [
     'ui.activity_minutes_heading' => 'Activité quotidienne (minutes)',
     'ui.activity_heading' => 'Activité quotidienne',
     'ui.no_data' => '(aucune donnée)',
+    'ui.getting_started_heading' => 'Rien d\'enregistré pour le moment',
+    'ui.getting_started_push' => 'candy-codetime push <project> <language> <file> [seconds]',
+    'ui.getting_started_plugin' => 'Les plugins de l\'éditeur peuvent ajouter des signalements directement — voir README, Automatiser la collecte.',
+    'ui.getting_started_reload' => 'Appuyez sur r dans ce tableau pour récupérer les nouvelles données.',
     'ui.diagnostics_dropped' => '{count} lignes corrompues ignorées dans les fichiers du jour',
     'ui.diagnostics_unreadable' => 'lecture impossible de {count} fichier(s) du jour',
 ];

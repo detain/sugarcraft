@@ -80,6 +80,10 @@ return [
     'ui.activity_minutes_heading' => 'Daily activity (minutes)',
     'ui.activity_heading' => 'Daily activity',
     'ui.no_data' => '(no data)',
+    'ui.getting_started_heading' => 'Nothing recorded yet',
+    'ui.getting_started_push' => 'candy-codetime push <project> <language> <file> [seconds]',
+    'ui.getting_started_plugin' => 'Editor plugins can append heartbeats directly - see README, Automating collection.',
+    'ui.getting_started_reload' => 'Press r in this dashboard to pick up new data.',
     'ui.diagnostics_dropped' => 'dropped {count} corrupt line(s) from the day files',
     'ui.diagnostics_unreadable' => 'could not read {count} day file(s)',
 ];

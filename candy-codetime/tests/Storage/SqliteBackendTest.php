@@ -501,4 +501,11 @@ final class SqliteBackendTest extends TestCase
             $this->assertStringContainsString('needs a filter', $error->getMessage());
         }
     }
+
+    public function testTheEmptinessProbeFollowsTheRows(): void
+    {
+        $this->assertFalse($this->backend->hasAnyHeartbeat(), 'a fresh table is first-run state');
+        $this->backend->insert(new \SugarCraft\CodeTime\Heartbeat(time: time(), project: 'p', language: 'php', file: 'a.php', duration: 60));
+        $this->assertTrue($this->backend->hasAnyHeartbeat());
+    }
 }

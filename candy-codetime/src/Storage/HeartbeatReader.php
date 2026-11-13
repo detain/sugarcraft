@@ -30,4 +30,12 @@ interface HeartbeatReader
      * implements this as the honest no-op the interface demands.
      */
     public function invalidate(): void;
+    /**
+     * Does this store hold ANY heartbeat at all, anywhere (CT-S46)? The
+     * dashboard swaps its panes for a getting-started block exactly when
+     * the answer is no — a first-run user must see the next action, not
+     * three politely empty frames. Distinct from an empty WINDOW: old
+     * records elsewhere keep the normal panes.
+     */
+    public function hasAnyHeartbeat(): bool;
 }

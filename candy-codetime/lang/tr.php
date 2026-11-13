@@ -80,6 +80,10 @@ return [
     'ui.activity_minutes_heading' => 'Günlük etkinlik (dakika)',
     'ui.activity_heading' => 'Günlük etkinlik',
     'ui.no_data' => '(veri yok)',
+    'ui.getting_started_heading' => 'Henüz hiçbir şey kaydedilmedi',
+    'ui.getting_started_push' => 'candy-codetime push <project> <language> <file> [seconds]',
+    'ui.getting_started_plugin' => 'Editör eklentileri kalp atışlarını doğrudan ekleyebilir — README\'ye bakın, Toplamanın otomatikleştirilmesi.',
+    'ui.getting_started_reload' => 'Yeni verileri almak için bu panoda r tuşuna basın.',
     'ui.diagnostics_dropped' => 'günlük dosyalardan {count} bozuk satır atlandı',
     'ui.diagnostics_unreadable' => '{count} günlük dosya okunamadı',
 ];

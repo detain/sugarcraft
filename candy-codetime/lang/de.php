@@ -80,6 +80,10 @@ return [
     'ui.activity_minutes_heading' => 'Tägliche Aktivität (Minuten)',
     'ui.activity_heading' => 'Tägliche Aktivität',
     'ui.no_data' => '(keine Daten)',
+    'ui.getting_started_heading' => 'Noch nichts aufgezeichnet',
+    'ui.getting_started_push' => 'candy-codetime push <project> <language> <file> [seconds]',
+    'ui.getting_started_plugin' => 'Editor-Plugins können Herzschläge direkt anhängen — siehe README, Automatisierung der Erfassung.',
+    'ui.getting_started_reload' => 'Drücken Sie r in diesem Dashboard, um neue Daten abzuholen.',
     'ui.diagnostics_dropped' => '{count} beschädigte Zeilen aus Tagesdateien verworfen',
     'ui.diagnostics_unreadable' => '{count} Tagesdatei(en) konnten nicht gelesen werden',
 ];

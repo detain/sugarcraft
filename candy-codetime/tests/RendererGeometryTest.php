@@ -663,4 +663,48 @@ final class RendererGeometryTest extends TestCase
             preg_split('/\s+/', trim($roomy), -1, PREG_SPLIT_NO_EMPTY),
         );
     }
+
+    // CT-S46: first run shows the next action, not three empty frames.
+    public function testAFreshStoreTradesThePanesForGettingStarted(): void
+    {
+        $end = new \DateTimeImmutable(self::END);
+        $empty = new class implements \SugarCraft\CodeTime\Storage\HeartbeatReader {
+            public function loadRange(\DateTimeImmutable $f, \DateTimeImmutable $t): array
+            {
+                return [];
+            }
+
+            public function invalidate(): void
+            {
+            }
+
+            public function hasAnyHeartbeat(): bool
+            {
+                return false;
+            }
+        };
+
+        $view = Renderer::render(
+            new \SugarCraft\CodeTime\Dashboard($empty, $end, 7, new \SugarCraft\CodeTime\Stats([], []), 62, null, null, null, 0, 0, null, false, null, null, true),
+        );
+        $rows = self::plain($view);
+        $text = implode("\n", $rows);
+
+        self::assertStringContainsString('Nothing recorded yet', $text);
+        self::assertStringContainsString('candy-codetime push <project> <language> <file> [seconds]', $text, 'the command survives the frame whole');
+        self::assertStringContainsString('Press r in this dashboard', $text);
+        self::assertStringNotContainsString('Top projects', $text, 'the empty panes give way');
+        self::assertStringNotContainsString('Daily activity', $text);
+        foreach ($rows as $row) {
+            self::assertLessThanOrEqual(62, Width::string($row), 'no getting-started row may outgrow the frame');
+        }
+
+        // A store that merely looks empty IN THIS WINDOW keeps the normal
+        // panes: the block is about first run, not about quiet weeks.
+        $quiet = \SugarCraft\CodeTime\Renderer::render(
+            new \SugarCraft\CodeTime\Dashboard($empty, $end, 7, new \SugarCraft\CodeTime\Stats([], []), 62, null, null, null, 0, 0, null, false, null, null, false),
+        );
+        self::assertStringContainsString('Top projects', implode("\n", self::plain($quiet)));
+        self::assertStringNotContainsString('Nothing recorded yet', implode("\n", self::plain($quiet)));
+    }
 }

@@ -80,6 +80,10 @@ return [
     'ui.activity_minutes_heading' => '每日活动（分钟）',
     'ui.activity_heading' => '每日活动',
     'ui.no_data' => '（无数据）',
+    'ui.getting_started_heading' => '尚未记录任何内容',
+    'ui.getting_started_push' => 'candy-codetime push <project> <language> <file> [seconds]',
+    'ui.getting_started_plugin' => '编辑器插件可以直接追加心跳记录——见 README 的“自动化采集”一节。',
+    'ui.getting_started_reload' => '在此仪表盘按 r 读取新数据。',
     'ui.diagnostics_dropped' => '从日文件中丢弃了 {count} 个损坏行',
     'ui.diagnostics_unreadable' => '无法读取 {count} 个日文件',
 ];

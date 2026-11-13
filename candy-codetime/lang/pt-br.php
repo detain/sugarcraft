@@ -80,6 +80,10 @@ return [
     'ui.activity_minutes_heading' => 'Atividade diária (minutos)',
     'ui.activity_heading' => 'Atividade diária',
     'ui.no_data' => '(sem dados)',
+    'ui.getting_started_heading' => 'Nada registrado até agora',
+    'ui.getting_started_push' => 'candy-codetime push <project> <language> <file> [seconds]',
+    'ui.getting_started_plugin' => 'Plugins do editor podem adicionar batimentos diretamente — veja README, Automatizando a coleta.',
+    'ui.getting_started_reload' => 'Pressione r neste painel para buscar dados novos.',
     'ui.diagnostics_dropped' => '{count} linhas corrompidas descartadas dos arquivos diários',
     'ui.diagnostics_unreadable' => 'não foi possível ler {count} arquivos diários',
 ];

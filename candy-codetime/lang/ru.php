@@ -80,6 +80,10 @@ return [
     'ui.activity_minutes_heading' => 'Дневная активность (минуты)',
     'ui.activity_heading' => 'Дневная активность',
     'ui.no_data' => '(нет данных)',
+    'ui.getting_started_heading' => 'Пока ничего не записано',
+    'ui.getting_started_push' => 'candy-codetime push <project> <language> <file> [seconds]',
+    'ui.getting_started_plugin' => 'Плагины редактора могут добавлять heartbeat напрямую — см. README, Автоматизация сбора.',
+    'ui.getting_started_reload' => 'Нажмите r в этой панели, чтобы загрузить новые данные.',
     'ui.diagnostics_dropped' => 'отброшено {count} повреждённых строк из дневных файлов',
     'ui.diagnostics_unreadable' => 'не удалось прочитать {count} дневных файлов',
 ];
