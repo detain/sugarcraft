@@ -289,6 +289,10 @@ final class Mosaic implements IncrementalRenderer
      *
      * $intensity threads through to the renderer's dither bias
      * (null = chafa config default 1.0 — the byte-frozen legacy shape).
+     * The palette budget has no factory dial: tune it through the
+     * builder ({@see MosaicBuilder::withSixelMaxColors()} /
+     * {@see MosaicBuilder::withSixelIntensity()}), which applies in any
+     * call order and honours explicit or auto-detected Sixel backends.
      */
     public static function sixel(Dither $dither = Dither::FloydSteinberg, ?float $intensity = null): self
     {

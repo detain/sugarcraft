@@ -11,6 +11,7 @@ use SugarCraft\Image\ImageSource;
 use SugarCraft\Image\Mosaic;
 use SugarCraft\Image\MosaicBuilder;
 use SugarCraft\Image\Renderer\HalfBlockRenderer;
+use SugarCraft\Image\Renderer\QuarterBlockRenderer;
 use SugarCraft\Image\Renderer\SixelRenderer;
 use SugarCraft\Image\Scale;
 use SugarCraft\Image\TmuxPassthroughDecorator;
@@ -298,5 +299,136 @@ final class MosaicBuilderTest extends TestCase
         // chain's scale still rides into the built mosaic.
         $this->assertSame('symbols', $mosaic->protocol());
         $this->assertSame(Scale::Fit, $mosaic->scale());
+    }
+
+    public function testBuilderTunesSixelEndToEndWithoutARawConstructor(): void
+    {
+        $mosaic = Mosaic::builder()
+            ->sixel(Dither::Stucki)
+            ->withSixelIntensity(0.8)
+            ->withSixelMaxColors(64)
+            ->build();
+
+        $renderer = $mosaic->renderer();
+        $this->assertInstanceOf(SixelRenderer::class, $renderer);
+        $this->assertSame(Dither::Stucki, $renderer->dither());
+        $this->assertSame(0.8, $renderer->intensity());
+        $this->assertSame(64, $renderer->maxColors());
+    }
+
+    public function testSixelDialsApplyInAnyCallOrder(): void
+    {
+        // The dials live on the builder, not on whichever renderer object
+        // happens to exist at call time — so tuning before or after the
+        // backend is pinned (or swapped) must land identically.
+        $before = Mosaic::builder()
+            ->withSixelMaxColors(64)
+            ->withSixelIntensity(0.8)
+            ->sixel(Dither::Stucki)
+            ->build()
+            ->renderer();
+        $after = Mosaic::builder()
+            ->sixel(Dither::Stucki)
+            ->withSixelMaxColors(64)
+            ->withSixelIntensity(0.8)
+            ->build()
+            ->renderer();
+
+        $this->assertInstanceOf(SixelRenderer::class, $before);
+        $this->assertInstanceOf(SixelRenderer::class, $after);
+        $this->assertSame($after->configFingerprint(), $before->configFingerprint());
+        $this->assertSame(64, $before->maxColors());
+        $this->assertSame(0.8, $before->intensity());
+    }
+
+    public function testSixelDialsWitherOnNonSixelBackends(): void
+    {
+        $mosaic = Mosaic::builder()
+            ->withRenderer(new QuarterBlockRenderer())
+            ->withSixelIntensity(0.5)
+            ->withSixelMaxColors(32)
+            ->build();
+
+        // Same law the builder dither already lives by: the dial is a
+        // no-op off Sixel, the backend passes through untouched, nothing
+        // throws (SI-30 gives callers a predicate to ask about it).
+        $this->assertInstanceOf(QuarterBlockRenderer::class, $mosaic->renderer());
+    }
+
+    public function testSixelDialsRefuseBadLaddersAtTheSetter(): void
+    {
+        $builder = Mosaic::builder();
+
+        foreach ([0, 257, -5] as $budget) {
+            try {
+                $builder->withSixelMaxColors($budget);
+                $this->fail("maxColors {$budget} must be refused at the dial");
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString((string) $budget, $e->getMessage());
+            }
+        }
+
+        foreach ([-0.1, \NAN] as $bias) {
+            try {
+                $builder->withSixelIntensity($bias);
+                $this->fail('bias ' . var_export($bias, true) . ' must be refused at the dial');
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString('intensity', $e->getMessage());
+            }
+        }
+    }
+
+    public function testSixelIntensityAboveFullClampsAtTheDial(): void
+    {
+        $renderer = Mosaic::builder()
+            ->sixel(Dither::Noise)
+            ->withSixelIntensity(2.0)
+            ->build()
+            ->renderer();
+
+        $this->assertInstanceOf(SixelRenderer::class, $renderer);
+        $this->assertSame(1.0, $renderer->intensity());
+    }
+
+    public function testUnsetDialsLeaveExplicitBackendTuningIntact(): void
+    {
+        // A tuned raw renderer must survive a dial-free build — the dials
+        // default to "not saying anything", not to the class defaults.
+        $renderer = Mosaic::builder()
+            ->withRenderer(new SixelRenderer(Dither::Atkinson, 16, 10, 20, 0.5))
+            ->build()
+            ->renderer();
+
+        $this->assertSame(16, $renderer->maxColors());
+        $this->assertSame(0.5, $renderer->intensity());
+    }
+
+    public function testSixelDialsRewriteATmuxWrappedSixelInPlace(): void
+    {
+        $wrapped = new TmuxPassthroughDecorator(new SixelRenderer(Dither::None, 256, 12, 24));
+
+        $renderer = Mosaic::builder()
+            ->withRenderer($wrapped)
+            ->withSixelMaxColors(64)
+            ->build()
+            ->renderer();
+
+        $this->assertInstanceOf(TmuxPassthroughDecorator::class, $renderer);
+        $inner = $renderer->inner();
+        $this->assertInstanceOf(SixelRenderer::class, $inner);
+        $this->assertSame(64, $inner->maxColors());
+        $this->assertSame(12, $this->readProperty($inner, 'cellWidth'));
+        $this->assertSame(Dither::None, $inner->dither());
+    }
+
+    /**
+     * @return mixed
+     */
+    private function readProperty(object $subject, string $name)
+    {
+        $property = new \ReflectionProperty($subject, $name);
+        $property->setAccessible(true);
+
+        return $property->getValue($subject);
     }
 }

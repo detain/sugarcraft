@@ -201,4 +201,44 @@ final class SixelIntensityTest extends TestCase
 
         return $method->invoke($mosaic);
     }
+
+    public function testWithIntensityDoorKeepsEveryOtherKnob(): void
+    {
+        $tuned = new SixelRenderer(Dither::Ordered, 16, 12, 24, 0.25);
+        $retuned = $tuned->withIntensity(0.8);
+
+        $this->assertNotSame($tuned, $retuned);
+        $this->assertSame(0.8, $retuned->intensity());
+        // The fingerprint carries dither, budget and geometry too — equal
+        // prefixes prove none of them moved.
+        $this->assertStringContainsString('|maxColors=16|cellWidth=12|cellHeight=24|intensity=0.8', $retuned->configFingerprint());
+        $this->assertStringStartsWith('dither=' . Dither::Ordered->value, $retuned->configFingerprint());
+    }
+
+    public function testWithIntensityNullReleasesTheTuning(): void
+    {
+        $renderer = (new SixelRenderer())->withIntensity(0.5)->withIntensity(null);
+
+        $this->assertNull($renderer->intensity());
+        // Byte-frozen default fingerprint: no intensity segment at all.
+        $this->assertStringNotContainsString('intensity=', $renderer->configFingerprint());
+    }
+
+    public function testWithMaxColorsDoorGuardsAndKeeps(): void
+    {
+        $renderer = (new SixelRenderer(Dither::Noise, 256, 10, 20, 0.4))->withMaxColors(32);
+
+        $this->assertSame(32, $renderer->maxColors());
+        $this->assertSame(Dither::Noise, $renderer->dither());
+        $this->assertSame(0.4, $renderer->intensity());
+
+        foreach ([0, 257] as $budget) {
+            try {
+                $renderer->withMaxColors($budget);
+                $this->fail("maxColors {$budget} must be refused by the door");
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString((string) $budget, $e->getMessage());
+            }
+        }
+    }
 }

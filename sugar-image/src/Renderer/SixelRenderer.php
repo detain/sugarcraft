@@ -542,6 +542,56 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
     }
 
     /**
+     * A copy of this renderer using $intensity as its dither bias, keeping
+     * the dither algorithm, color budget and cell geometry. Refusals come
+     * from the constructor's own grammar (NaN and negatives rejected by
+     * name); values above 1.0 clamp to full bias, and null releases the
+     * tuning entirely — back to the chafa-config default ladder, the
+     * byte-frozen legacy shape.
+     */
+    public function withIntensity(?float $intensity): self
+    {
+        return new self(
+            $this->dither,
+            $this->maxColors,
+            $this->cellWidth,
+            $this->cellHeight,
+            $intensity,
+            $this->alphaThreshold,
+            $this->flattenBackground,
+            $this->serpentine,
+            $this->mltermEdgeRows,
+            $this->quality,
+            $this->autoLevels,
+            $this->quirks,
+        );
+    }
+
+    /**
+     * A copy of this renderer quantising its palette to at most
+     * $maxColors entries — same keep-everything-else contract as
+     * {@see withDither()}; out-of-range budgets are refused by the
+     * constructor ladder before any copy exists.
+     */
+    public function withMaxColors(int $maxColors): self
+    {
+        return new self(
+            $this->dither,
+            $maxColors,
+            $this->cellWidth,
+            $this->cellHeight,
+            $this->intensity,
+            $this->alphaThreshold,
+            $this->flattenBackground,
+            $this->serpentine,
+            $this->mltermEdgeRows,
+            $this->quality,
+            $this->autoLevels,
+            $this->quirks,
+        );
+    }
+
+    /**
      * The GD-alpha hole cut-off in force (0..127; 127 = only fully
      * transparent pixels are holes, the older behaviour).
      */
@@ -868,6 +918,15 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
     public function maxColors(): int
     {
         return $this->maxColors;
+    }
+
+    /**
+     * The Ordered/Noise dither bias in force (0.0..1.0), or null when the
+     * renderer runs the chafa-config default ladder untouched.
+     */
+    public function intensity(): ?float
+    {
+        return $this->intensity;
     }
 
     // ─── Pixel extraction ─────────────────────────────────────────────────────

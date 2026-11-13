@@ -103,10 +103,14 @@ $ansi = $mosaic->render($image, 60);      // explicit width wins; height from as
 // and renderWithOptions() additionally takes the nullable height positionally
 // (pass null); the null-width fallback to the builder box is Mosaic-only.
 
-// Sixel palette budget: maxColors (1–256) is a SixelRenderer constructor
-// knob, so it rides the builder, not Mosaic::sixel().
+// The builder holds every Sixel dial — dither, bias intensity, palette
+// budget — and applies them at build() to any Sixel backend (explicit or
+// auto-detected, bare or tmux-wrapped), in any call order. A raw
+// SixelRenderer constructor is never needed for full sixel tuning:
 $mosaic = Mosaic::builder()
-    ->withRenderer(new SixelRenderer(maxColors: 64))
+    ->sixel(Dither::Stucki)        // Sixel + Stucki dithering
+    ->withSixelIntensity(0.8)      // ordered/noise bias at 80%
+    ->withSixelMaxColors(64)       // 64-color palette budget
     ->build();
 
 // Kitty: virtual-image placement — store once, place at many offsets.
@@ -544,8 +548,10 @@ misinterprets those sequences. The explicit escape hatches:
   the median-cut quantiser for limited-truecolour terminals, and `intensity`
   (0.0–1.0; null leaves the chafa config default 1.0) scales the
   `Dither::Ordered` / `Dither::Noise` bias — `intensity` arrives through
-  `Mosaic::sixel(dither, intensity)`, `maxColors` only through the builder's
-  renderer constructor.
+  `Mosaic::sixel(dither, intensity)` or the builder dial
+  `MosaicBuilder::withSixelIntensity()`, and `maxColors` through the
+  builder dial `MosaicBuilder::withSixelMaxColors()` (or a raw renderer
+  passed to `withRenderer()`).
 
 `NO_COLOR` is **not** honoured by any renderer: the variable influences only
 `Detect`'s terminfo sixel-detection ladder, changing which protocol is
