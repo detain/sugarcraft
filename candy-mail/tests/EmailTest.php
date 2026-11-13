@@ -40,6 +40,43 @@ final class EmailTest extends TestCase
         $this->assertSame('other@example.com', $email->to[1]);
     }
 
+    /**
+     * CM-19 (closes 020): the bare addr-spec must be a dot-atom grammar, not
+     * just "exactly one @". Space, quote, comma and colon in the bare spec
+     * once rode to the wire and failed later as silent bounces.
+     */
+    public function testRefusesBareAddrSpecOutsideTheDotAtomGrammar(): void
+    {
+        $bad = [
+            'a b@example.com',
+            'a"b@example.com',
+            'a,b@example.com',
+            'a:b@example.com',
+            'a@b c.example',
+            'plain-address-no-at',
+        ];
+        foreach ($bad as $addr) {
+            try {
+                new Email(from: ['me@example.com'], to: [$addr]);
+                $this->fail("expected a construction refusal for '{$addr}'");
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString('Invalid email address', $e->getMessage());
+            }
+        }
+    }
+
+    /**
+     * The grammar keeps the documented happy paths: display-name wrapping and
+     * the full RFC 5322 atext character set in the local part.
+     */
+    public function testAcceptsDisplayNamesAndDotAtomSpecialCharacters(): void
+    {
+        foreach (['Ada <ada@example.com>', "o'brien+tag@sub.example.co", 'a!b#c$d@e-f.g'] as $addr) {
+            $email = new Email(from: ['me@example.com'], to: [$addr]);
+            $this->assertSame($addr, $email->to[0]);
+        }
+    }
+
     public function testWithFrom(): void
     {
         $email = (new Email(['old@example.com'], ['you@example.com']))

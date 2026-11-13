@@ -175,8 +175,15 @@ final class Email
             $bareAddr = $matches[1];
         }
 
-        // Structural validation: must have exactly one @ and non-empty local part
-        if (\substr_count($bareAddr, '@') !== 1 || \str_starts_with($bareAddr, '@') || \str_ends_with($bareAddr, '@')) {
+        // Structural validation is a real grammar, not an @-count:
+        // the bare addr-spec must be a dot-atom on both sides. 'a b@example.com'
+        // once passed the three-clause @ check and rode to the wire, failing
+        // later as a silent bounce. The grammar subsumes exactly-one-@ and
+        // non-empty parts (anchored classes exclude @ on both sides).
+        // Local-part comments and quoted strings stay out of scope — refusing
+        // them is the deliberate posture (the same anchor CM-29's non-ASCII
+        // refusal will sit on).
+        if (\preg_match('/^[!#$%&\'*+\/=?^_`{|}~0-9A-Za-z.-]+@[0-9A-Za-z.-]+$/', $bareAddr) !== 1) {
             throw new \InvalidArgumentException(Lang::t('email.invalid_address', ['addr' => $bareAddr]));
         }
         return $trimmed;
