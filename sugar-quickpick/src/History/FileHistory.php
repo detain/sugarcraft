@@ -43,11 +43,15 @@ use SugarCraft\QuickPick\Item;
  *    than unlinking, so a concurrent writer's new file cannot be swapped
  *    underneath the clear.
  *  - One lock policy class-wide (-033): write-side operations (append(),
- *    clear()) HARD-REQUIRE their exclusive lock — a failed flock throws
- *    before any byte changes, so the destructive ftruncate never runs
- *    unlocked racing appends. The read-side LOCK_SH in all() is ADVISORY by
- *    design: tolerating its failure costs at most one torn line, which the
- *    JSON-shape gate drops anyway.
+ *    appendDistinct(), clear()) HARD-REQUIRE their exclusive lock — a failed
+ *    flock throws before any byte changes, so the destructive ftruncate
+ *    never runs unlocked racing appends. The read-side LOCK_SH in all() is
+ *    ADVISORY by design: tolerating its failure costs at most one torn line,
+ *    which the JSON-shape gate drops anyway.
+ *  - Growth is the host's choice: append() is a raw one-row-per-selection
+ *    journal (byte-behavior fixed), while {@see self::appendDistinct()} is
+ *    the managed rewrite — same value keeps only its newest row, and the
+ *    optional constructor cap trims to the newest N (-030).
  *
  * On shared hosts pass a private $baseDir (e.g. your home directory) so the
  * confinement jail also applies: see {@see self::__construct()}.
@@ -81,26 +85,43 @@ class FileHistory
     /** @var string */
     private string $path;
 
-    /** @var int rows the last all() dropped as oversized (see droppedOversizedLines()) */
+    /** @var int rows the last read pass (all() or appendDistinct()) dropped as oversized (see droppedOversizedLines()) */
     private int $droppedOversized = 0;
 
+    /** @var int|null newest-entry cap enforced by appendDistinct(); null = unbounded (-030) */
+    private ?int $maxEntries = null;
+
     /**
-     * @param string      $path    Path to the history file (created lazily on first append(),
-     *                             exclusive-open then a best-effort chmod to 0600 before
-     *                             payload; a symlink at this path is refused).
-     * @param string|null $baseDir When non-null, $path is confined beneath this
-     *                             directory: any path that resolves outside it
-     *                             (via `..` traversal, an absolute path elsewhere,
-     *                             or a symlinked parent) is rejected, as is a
-     *                             symlink standing AT the leaf path. Pass null to
-     *                             keep the legacy unconfined behaviour.
+     * @param string      $path       Path to the history file (created lazily on first append(),
+     *                                exclusive-open then a best-effort chmod to 0600 before
+     *                                payload; a symlink at this path is refused).
+     * @param string|null $baseDir    When non-null, $path is confined beneath this
+     *                               directory: any path that resolves outside it
+     *                               (via `..` traversal, an absolute path elsewhere,
+     *                               or a symlinked parent) is rejected, as is a
+     *                               symlink standing AT the leaf path. Pass null to
+     *                               keep the legacy unconfined behaviour.
+     * @param int|null    $maxEntries Growth bound for {@see self::appendDistinct()}:
+     *                               after each managed rewrite the file keeps at most
+     *                               this many NEWEST rows. Null (the default) is
+     *                               unbounded — append() and all() never consult it,
+     *                               so passing it changes nothing today.
      *
      * @throws \InvalidArgumentException when $baseDir is set and $path escapes it
-     *                                  or the confined leaf is a symlink
+     *                                  or the confined leaf is a symlink, or when
+     *                                  $maxEntries is below 1 (a cap that keeps
+     *                                  nothing is a mis-set setting, not a policy)
      */
-    public function __construct(string $path, ?string $baseDir = null)
+    public function __construct(string $path, ?string $baseDir = null, ?int $maxEntries = null)
     {
+        if ($maxEntries !== null && $maxEntries < 1) {
+            throw new \InvalidArgumentException(
+                \sprintf('QuickPick history entry cap must be >= 1 or null for unbounded, got: %d', $maxEntries),
+            );
+        }
+
         $this->path = $baseDir === null ? $path : self::confine($path, $baseDir);
+        $this->maxEntries = $maxEntries;
     }
 
     /**
@@ -258,19 +279,90 @@ class FileHistory
     }
 
     /**
-     * Write seam: the payload fwrite() of append() runs through here.
+     * Write seam: the payload fwrite() of append() and the rewrite payload
+     * of appendDistinct() run through here.
      *
      * Production behaviour is a plain fwrite(). The method exists so a test
      * can deterministically simulate a disk-full short write — the
      * rollback-on-truncated-append contract was otherwise unpinnable (-034).
      *
-     * @param resource $handle locked, positioned for append
+     * @param resource $handle locked, positioned for writing
      *
      * @return int|false bytes written, or false on total failure
      */
     protected function writeLine($handle, string $line): int|false
     {
         return \fwrite($handle, $line);
+    }
+
+    /**
+     * Open a handle for the write-side operations, under the trust contract.
+     *
+     * Shared by append() and appendDistinct(): exclusive 'x' create + chmod
+     * 0600 before payload when the file is absent, the given read/write mode
+     * when it exists, and {@see self::verifyHandle()} on whichever inode the
+     * open actually landed on.
+     *
+     * @param string $existingMode fopen mode for the already-present case ('a' or 'a+')
+     *
+     * @return array{0: resource, 1: bool} the open handle and whether this call created the file
+     *
+     * @throws \RuntimeException when the open is refused or the handle fails verification
+     */
+    private function openWriteHandle(string $existingMode, string $op): array
+    {
+        $creating = !\file_exists($this->path);
+        $handle = false;
+        if ($creating) {
+            // Exclusive create: 'x' refuses (returns false) if anything
+            // raced us to the path. What it cannot promise is WHICH inode
+            // a later fopen lands on — that is verifyHandle's job.
+            $handle = @\fopen($this->path, 'x');
+            if ($handle === false && \is_link($this->path)) {
+                throw new \RuntimeException(
+                    \sprintf('Refusing to follow symlinked QuickPick history file: %s', $this->path),
+                );
+            }
+        }
+        if ($handle === false) {
+            $creating = false;
+            $handle = @\fopen($this->path, $existingMode);
+        }
+        if ($handle === false) {
+            throw new \RuntimeException(
+                \sprintf('Cannot open QuickPick history file for %s: %s', $op, $this->path),
+            );
+        }
+
+        try {
+            if ($creating) {
+                // Tighten the freshly created inode BEFORE any payload rides
+                // it; rename/chmod-after-publish windows are exactly what a
+                // shared /tmp must not offer.
+                @\chmod($this->path, 0600);
+            }
+            $this->verifyHandle($handle, $op);
+        } catch (\Throwable $why) {
+            \fclose($handle);
+            throw $why;
+        }
+
+        return [$handle, $creating];
+    }
+
+    /**
+     * Serialize one item to its on-disk row (schema: {@see self::FORMAT_VERSION}).
+     *
+     * The ONLY writer of row bytes — append() and appendDistinct() share it,
+     * so a managed rewrite cannot silently change the format an honest
+     * append would have produced.
+     */
+    private static function lineFor(Item $item): string
+    {
+        return \json_encode(
+            ['n' => $item->number(), 'v' => $item->value(), 'f' => self::FORMAT_VERSION],
+            \JSON_THROW_ON_ERROR | \JSON_INVALID_UTF8_SUBSTITUTE,
+        ) . "\n";
     }
 
     /**
@@ -287,6 +379,10 @@ class FileHistory
      * crashing the writer — history is best-effort storage, the frame must
      * not die over one malformed byte.
      *
+     * Raw journal semantics: one row per selection, forever. Hosts that want
+     * dedupe and a growth bound call {@see self::appendDistinct()} instead
+     * (-030).
+     *
      * @throws \RuntimeException when the path is a symlink, the file cannot
      *                           be opened, the opened handle fails
      *                           {@see self::verifyHandle()}, the exclusive
@@ -302,42 +398,10 @@ class FileHistory
     {
         $this->rejectSymlink();
 
-        $line = \json_encode(
-            ['n' => $item->number(), 'v' => $item->value(), 'f' => self::FORMAT_VERSION],
-            \JSON_THROW_ON_ERROR | \JSON_INVALID_UTF8_SUBSTITUTE,
-        ) . "\n";
-
-        $creating = !\file_exists($this->path);
-        $handle = false;
-        if ($creating) {
-            // Exclusive create: 'x' refuses (returns false) if anything
-            // raced us to the path. What it cannot promise is WHICH inode
-            // a later fopen('a') lands on — that is verifyHandle's job.
-            $handle = @\fopen($this->path, 'x');
-            if ($handle === false && \is_link($this->path)) {
-                throw new \RuntimeException(
-                    \sprintf('Refusing to follow symlinked QuickPick history file: %s', $this->path),
-                );
-            }
-        }
-        if ($handle === false) {
-            $creating = false;
-            $handle = @\fopen($this->path, 'a');
-        }
-        if ($handle === false) {
-            throw new \RuntimeException(
-                \sprintf('Cannot open QuickPick history file for append: %s', $this->path),
-            );
-        }
+        $line = self::lineFor($item);
+        [$handle] = $this->openWriteHandle('a', 'append');
 
         try {
-            if ($creating) {
-                // Tighten the freshly created inode BEFORE any payload rides
-                // it; rename/chmod-after-publish windows are exactly what a
-                // shared /tmp must not offer.
-                @\chmod($this->path, 0600);
-            }
-            $this->verifyHandle($handle, 'append');
             if ($this->lockHandle($handle, \LOCK_EX) === false) {
                 throw new \RuntimeException(
                     \sprintf('Cannot lock QuickPick history file: %s', $this->path),
@@ -363,6 +427,69 @@ class FileHistory
                         $this->path,
                         $rolledBack ? '' : ' (rollback also failed — the file may hold a torn line)',
                     ),
+                );
+            }
+            \flock($handle, \LOCK_UN);
+        } finally {
+            \fclose($handle);
+        }
+    }
+
+    /**
+     * Append with last-wins dedupe, then trim to the newest cap: the managed
+     * row set for hosts that treat history as a MRU list (-030).
+     *
+     * Under one held LOCK_EX the existing rows are read, the new row rides at
+     * the end, earlier rows whose READ VALUE equals the newer row's are
+     * dropped (the newest occurrence keeps its position), unparseable and
+     * unknown-format rows are dropped exactly as all() ignores them at read
+     * time, and the result is trimmed (when a $maxEntries cap was given) to
+     * the newest N. The file is then rewritten whole. Row BYTES of surviving
+     * rows are preserved, not re-serialized: appendDistinct manages which
+     * rows exist, never what honest rows say.
+     *
+     * append() stays the raw journal — plain one-row-per-call with unchanged
+     * byte behavior; hosts that never want repeats choose THIS method.
+     *
+     * @throws \RuntimeException when the path is a symlink, the file cannot
+     *                           be opened, the opened handle fails
+     *                           {@see self::verifyHandle()}, the exclusive
+     *                           lock cannot be taken, or the rewrite cannot
+     *                           be fully written — a truncated rewrite may
+     *                           leave the file holding only the front of the
+     *                           new row set; surviving rows stay parseable
+     *                           and the next rewrite (or all()) skips the
+     *                           ragged tail, so the state is degraded, never
+     *                           poisonous
+     */
+    public function appendDistinct(Item $item): void
+    {
+        $this->rejectSymlink();
+
+        [$handle, $creating] = $this->openWriteHandle('a+', 'append-distinct');
+
+        try {
+            if ($this->lockHandle($handle, \LOCK_EX) === false) {
+                throw new \RuntimeException(
+                    \sprintf('Cannot lock QuickPick history file: %s', $this->path),
+                );
+            }
+
+            $rows = $creating ? [] : $this->readRowsForRewrite($handle);
+            $rows[] = ['key' => $item->value(), 'row' => self::lineFor($item)];
+
+            $kept = self::keepNewestDistinct($rows);
+            if ($this->maxEntries !== null && \count($kept) > $this->maxEntries) {
+                $kept = \array_slice($kept, \count($kept) - $this->maxEntries);
+            }
+
+            $payload = \implode('', $kept);
+            \ftruncate($handle, 0);
+            \rewind($handle);
+            if ($payload !== '' && $this->writeLine($handle, $payload) !== \strlen($payload)) {
+                \flock($handle, \LOCK_UN);
+                throw new \RuntimeException(
+                    \sprintf('Short write while rewriting QuickPick history file: %s (surviving rows stay parseable; the next rewrite repairs the tail)', $this->path),
                 );
             }
             \flock($handle, \LOCK_UN);
@@ -421,48 +548,14 @@ class FileHistory
         }
 
         $items = [];
-        $this->droppedOversized = 0;
         try {
             $this->verifyHandle($handle, 'read');
             $this->lockHandle($handle, \LOCK_SH); // advisory: failure tolerated by policy (class docblock, -033)
-            while (($line = \fgets($handle, self::READ_CHUNK_BYTES)) !== false) {
-                if (\strlen($line) === self::READ_CHUNK_BYTES - 1 && \substr($line, -1) !== "\n") {
-                    // Cap hit: the line does not fit the read buffer. An
-                    // unbounded fgets let one hostile 200 MB "history row"
-                    // be slurped whole into memory while a live frame
-                    // waited (-011); we refuse the row outright and drain
-                    // its remainder so the NEXT line starts clean.
-                    self::drainRemainder($handle);
-                    ++$this->droppedOversized;
-                    continue;
+            foreach ($this->readableLines($handle) as $line) {
+                $item = self::parseRow($line);
+                if ($item !== null) {
+                    $items[] = $item;
                 }
-                $line = \trim($line);
-                if ($line === '') {
-                    continue;
-                }
-                try {
-                    $decoded = \json_decode($line, true, 512, \JSON_THROW_ON_ERROR);
-                } catch (\JsonException) {
-                    continue; // not JSON at all
-                }
-                if (\is_array($decoded) === false || \array_key_exists('v', $decoded) === false) {
-                    continue; // decodable but never a written entry shape
-                }
-                $value = $decoded['v'];
-                if (\is_string($value) === false && \is_int($value) === false) {
-                    continue; // objects/arrays/null/bool are not item values
-                }
-                $format = $decoded['f'] ?? self::FORMAT_VERSION;
-                if ($format !== self::FORMAT_VERSION) {
-                    continue; // a format this build does not know: not interpreted, not guessed (-067)
-                }
-                // (int)-coercion invented ordinals out of garbage: a string
-                // "7px" or float 7.9 became a plausible-looking number. The
-                // ordinal is honest int or nothing (-040).
-                $ordinal = \array_key_exists('n', $decoded) && \is_int($decoded['n'])
-                    ? $decoded['n']
-                    : 0;
-                $items[] = new FilteredItem($ordinal, (string) $value);
             }
             \flock($handle, \LOCK_UN);
         } finally {
@@ -470,6 +563,129 @@ class FileHistory
         }
 
         return $items;
+    }
+
+    /**
+     * Iterate the readable lines of a positioned handle, bounded.
+     *
+     * Shared by all() and the appendDistinct rewrite so both apply the SAME
+     * oversized-drop + drain law: an unbounded fgets let one hostile 200 MB
+     * "history row" be slurped whole into memory while a live frame waited
+     * (-011). Such a row is refused outright and its remainder drained so
+     * the NEXT fgets starts at the next row; the drop is counted for
+     * {@see self::droppedOversizedLines()} (the counter resets per pass).
+     *
+     * @param resource $handle positioned at a read start
+     *
+     * @return \Generator<int, string> trimmed, non-empty lines
+     */
+    private function readableLines($handle): \Generator
+    {
+        $this->droppedOversized = 0;
+        while (($line = \fgets($handle, self::READ_CHUNK_BYTES)) !== false) {
+            if (\strlen($line) === self::READ_CHUNK_BYTES - 1 && \substr($line, -1) !== "\n") {
+                self::drainRemainder($handle);
+                ++$this->droppedOversized;
+                continue;
+            }
+            $line = \trim($line);
+            if ($line === '') {
+                continue;
+            }
+            yield $line;
+        }
+    }
+
+    /**
+     * Parse one trimmed line into an item, or null when it is not a row.
+     *
+     * The shape/format/ordinal gate — "visible to all()" and "survives an
+     * appendDistinct() rewrite" are deliberately the SAME test, so a row the
+     * reader already ignores is never laundered back onto disk by a managed
+     * rewrite.
+     */
+    private static function parseRow(string $line): ?FilteredItem
+    {
+        try {
+            $decoded = \json_decode($line, true, 512, \JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            return null; // not JSON at all
+        }
+        if (\is_array($decoded) === false || \array_key_exists('v', $decoded) === false) {
+            return null; // decodable but never a written entry shape
+        }
+        $value = $decoded['v'];
+        if (\is_string($value) === false && \is_int($value) === false) {
+            return null; // objects/arrays/null/bool are not item values
+        }
+        $format = $decoded['f'] ?? self::FORMAT_VERSION;
+        if ($format !== self::FORMAT_VERSION) {
+            return null; // a format this build does not know: not interpreted, not guessed (-067)
+        }
+        // (int)-coercion invented ordinals out of garbage: a string
+        // "7px" or float 7.9 became a plausible-looking number. The
+        // ordinal is honest int or nothing (-040).
+        $ordinal = \array_key_exists('n', $decoded) && \is_int($decoded['n'])
+            ? $decoded['n']
+            : 0;
+
+        return new FilteredItem($ordinal, (string) $value);
+    }
+
+    /**
+     * Surviving rows of the locked handle, as [value key, raw row] pairs.
+     *
+     * The read side of the appendDistinct rewrite. Rows the reader would
+     * ignore are not carried forward: a managed rewrite doubles as the
+     * housekeeping pass that finally removes them. Raw row bytes are kept
+     * verbatim (plus the newline) — the rewrite manages the ROW SET, never
+     * the contents of honest rows.
+     *
+     * @param resource $handle locked 'a+' handle at any position
+     *
+     * @return list<array{key: string, row: string}> in file order
+     */
+    private function readRowsForRewrite($handle): array
+    {
+        \rewind($handle);
+        $rows = [];
+        foreach ($this->readableLines($handle) as $line) {
+            $item = self::parseRow($line);
+            if ($item === null) {
+                continue;
+            }
+            $rows[] = ['key' => $item->value(), 'row' => $line . "\n"];
+        }
+
+        return $rows;
+    }
+
+    /**
+     * Dedupe [key,row] rows by value, newest occurrence winning (-030).
+     *
+     * Earlier equal-value rows are dropped and the survivor keeps the NEWER
+     * row's position (a repeat is a re-selection: the list should read like
+     * it just happened).
+     *
+     * @param list<array{key: string, row: string}> $rows file order, newest last
+     *
+     * @return list<string> surviving raw rows, file order
+     */
+    private static function keepNewestDistinct(array $rows): array
+    {
+        $kept = [];
+        $where = []; // value key => position in $kept (monotone: unsets never renumber)
+        $next = 0;
+        foreach ($rows as $row) {
+            if (\array_key_exists($row['key'], $where)) {
+                unset($kept[$where[$row['key']]]);
+            }
+            $where[$row['key']] = $next;
+            $kept[$next] = $row['row'];
+            ++$next;
+        }
+
+        return \array_values($kept);
     }
 
     /**
@@ -498,11 +714,12 @@ class FileHistory
     }
 
     /**
-     * How many rows the last all() call dropped as oversized.
+     * How many rows the last read pass (all() or appendDistinct()) dropped
+     * as oversized.
      *
      * Observability seam, not telemetry: a host that shows "history loaded"
      * can add "…N entries ignored (unreadably large)" instead of silently
-     * short-listing. Zero until all() has run.
+     * short-listing. Zero until one of them has run.
      */
     public function droppedOversizedLines(): int
     {
