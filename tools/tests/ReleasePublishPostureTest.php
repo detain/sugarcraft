@@ -268,4 +268,51 @@ final class ReleasePublishPostureTest extends TestCase
             );
         }
     }
+
+    /**
+     * RT-05 (owner ruling OG-1 arm (a)): the five CI-green polls must read the
+     * LATEST-COMPLETED run's conclusion, not the alphabetically-worst of every
+     * historical run at the SHA. The old filter (`sort_by(.conclusion)`) made a
+     * stale cancelled/failure outrank a fresh success, so a successful re-run
+     * could never unlock the gate; it now guts nothing on a genuinely-red head
+     * because the newest run still governs. Byte-identity across the five
+     * copies is the guard - the snippet is copy-paste by design, so ANY drift
+     * reddens this tripwire (the divergence the finding cites).
+     */
+    public function testCiVerdictReadsLatestCompletedRun(): void
+    {
+        $canonical = '[.[] | select(.status == "completed")] | if length == 0 then "PENDING" else (first(.[]) | .conclusion) end';
+        $old = 'sort_by(.conclusion)';
+        $files = [
+            'phar-dev.yml',
+            'release-phar.yml',
+            'release-app-phar.yml',
+            'release-candy-top-phar.yml',
+            'sync-sugarcraft.yml',
+        ];
+        foreach ($files as $file) {
+            $text = $this->workflow($file);
+            self::assertSame(
+                1,
+                substr_count($text, $canonical),
+                "$file carries the latest-completed jq filter byte-identically (OG-1 (a), five-copy roster)"
+            );
+            self::assertStringNotContainsString($old, $text, "$file never re-sorts by alphabetical worst-conclusion");
+        }
+
+        // Fabricated run-list fixture in the API's natural newest-first order:
+        // a green head run over a stale cancellation must read "success" under
+        // (a). The same list under the old alphabetical policy read
+        // "cancelled" - that mismatch is the defect being cured.
+        $runs = [
+            ['status' => 'completed', 'conclusion' => 'success'],
+            ['status' => 'completed', 'conclusion' => 'cancelled'],
+        ];
+        $completed = array_values(array_filter($runs, static fn (array $r): bool => 'completed' === $r['status']));
+        self::assertSame('success', $completed[0]['conclusion'], 'latest-completed arm lets the re-run through');
+
+        $alphabetical = $completed;
+        usort($alphabetical, static fn (array $a, array $b): int => strcmp($a['conclusion'], $b['conclusion']));
+        self::assertSame('cancelled', $alphabetical[0]['conclusion'], 'the old worst-conclusion policy is what we replaced');
+    }
 }

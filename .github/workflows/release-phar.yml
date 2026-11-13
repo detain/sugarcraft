@@ -133,7 +133,7 @@ jobs:
           for attempt in $(seq 1 240); do
             run_line="$(gh run list --workflow CI --branch master --commit "$TAG_SHA" \
               --limit 5 --json status,conclusion \
-              --jq '[.[] | select(.status == "completed")] | if length == 0 then "PENDING" else (sort_by(.conclusion) | .[0].conclusion) end')"
+              --jq '[.[] | select(.status == "completed")] | if length == 0 then "PENDING" else (first(.[]) | .conclusion) end')"
             if [ "$run_line" = 'success' ]; then
               echo "CI is green at $TAG_SHA — releasing"
               exit 0
