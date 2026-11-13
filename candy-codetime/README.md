@@ -265,7 +265,7 @@ Each line of a day file is one JSON object:
 `{"time": <unix seconds>, "project": <string>, "language": <string>, "file":
 <path as supplied>, "duration": <seconds>, "tags": <array>}`. The CLI never
 sets tags; a plugin-written tag is honored on read and export. Readers should
-ignore unknown keys. Timestamps are part of the payload, not the envelope: a
+ignore unknown keys — `editor` is exactly such a key: upstream TakaTime heartbeats carry it, this schema deliberately omits it, so a plugin-written `editor` value survives the JSONL round-trip untouched but nothing here reads it (no per-editor view exists). Timestamps are part of the payload, not the envelope: a
 line fed through the `push --` stdin door **without** `time` gets stamped at
 the moment it is read *in*, so a batch pushed after the fact files every beat
 under batch-time. A raw line placed in a day file with no `time` is a corrupt
@@ -450,6 +450,15 @@ hosts that want abortable writers.
 composer install
 vendor/bin/phpunit
 ```
+
+## Parity vs TakaTime
+
+Position against the design antecedent, [Rtarun3606k/TakaTime](https://github.com/Rtarun3606k/TakaTime):
+
+- **Ported:** the heartbeat model, project/language/file tracking, the dashboard, an ignore file.
+- **Replaced:** the always-on daemon became an explicit `push` (nothing watches you); MongoDB became JSONL day files plus an optional embedded-SQLite backend; `:TakaInit` setup ceremony became zero-config storage.
+- **Redone:** the upstream dashboard theme picker became named palettes (`--theme`); its tags became a stored field with a `t` toggle and a `--tag` filter.
+- **Not ported:** the `.takatrack` allowlist (the `.sugartrackallow` rescue file plays that role), the separate `taka-report` binary (the `summary` command folds instead), and the heartbeat's `editor` field (see Data layout above).
 
 ## Credits & inspiration
 
