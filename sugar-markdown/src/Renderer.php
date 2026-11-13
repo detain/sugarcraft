@@ -126,18 +126,28 @@ final class Renderer
      * @var list<ReferenceInterface>|null
      */
     private ?array $seedReferences = null;
-    private readonly ?int $wrapWidth;
-    private readonly bool $emitHyperlinks;
-    private readonly ?string $baseUrl;
-    private readonly bool $tableWrap;
-    private readonly bool $inlineTableLinks;
-    private readonly bool $tableColumnBudget;
+    /**
+     * The options in effect, readable after construction (SM-S12): the
+     * constructor normalises them once (a non-positive wrapWidth becomes
+     * null) and every `with*()` builder rebuilds through the same gate,
+     * so these properties answer "what will this renderer actually do".
+     * They are public readonly instead of bare accessors because the
+     * short-form builder aliases already occupy the bare names
+     * (`wordWrap()`, `sanitize()`, … are setters), and PHP method names
+     * are case-insensitive regardless.
+     */
+    public readonly ?int $wrapWidth;
+    public readonly bool $emitHyperlinks;
+    public readonly ?string $baseUrl;
+    public readonly bool $tableWrap;
+    public readonly bool $inlineTableLinks;
+    public readonly bool $tableColumnBudget;
 
     /** Clip rendered fence lines at the available width ({@see withFenceColumnBudget()}). */
-    private readonly bool $fenceColumnBudget;
-    private readonly bool $preservedNewLines;
-    private readonly bool $expandEmoji;
-    private readonly bool $sanitize;
+    public readonly bool $fenceColumnBudget;
+    public readonly bool $preservedNewLines;
+    public readonly bool $expandEmoji;
+    public readonly bool $sanitize;
     private readonly bool $textIsPlain;
     private bool $inTableCell = false;
 

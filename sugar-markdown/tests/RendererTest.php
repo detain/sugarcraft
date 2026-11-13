@@ -918,4 +918,57 @@ MD;
         $this->assertStringContainsString('Term', $out);
         $this->assertStringContainsString('definition', $out);
     }
+
+    public function testTheOptionPropertiesReadBackTheEffectiveValues(): void
+    {
+        // SM-S12: builders are one-way (they return a new instance); until
+        // the options were public there was no way to ask a Renderer what
+        // it would actually do. Reading back must equal the constructor
+        // input INCLUDING its normalisation, and survive the builder chain.
+        $bare = new Renderer();
+        self::assertNull($bare->wrapWidth);
+        self::assertTrue($bare->emitHyperlinks);
+        self::assertNull($bare->baseUrl);
+        self::assertFalse($bare->tableWrap);
+        self::assertTrue($bare->inlineTableLinks);
+        self::assertFalse($bare->tableColumnBudget);
+        self::assertFalse($bare->fenceColumnBudget);
+        self::assertFalse($bare->preservedNewLines);
+        self::assertFalse($bare->expandEmoji);
+        self::assertTrue($bare->sanitize);
+
+        $full = new Renderer(
+            wrapWidth: 72,
+            emitHyperlinks: false,
+            baseUrl: 'https://example.test/',
+            tableWrap: true,
+            inlineTableLinks: false,
+            tableColumnBudget: true,
+            preservedNewLines: true,
+            expandEmoji: true,
+            sanitize: false,
+            fenceColumnBudget: true,
+        );
+        self::assertSame(72, $full->wrapWidth);
+        self::assertFalse($full->emitHyperlinks);
+        self::assertSame('https://example.test/', $full->baseUrl);
+        self::assertTrue($full->tableWrap);
+        self::assertFalse($full->inlineTableLinks);
+        self::assertTrue($full->tableColumnBudget);
+        self::assertTrue($full->fenceColumnBudget);
+        self::assertTrue($full->preservedNewLines);
+        self::assertTrue($full->expandEmoji);
+        self::assertFalse($full->sanitize);
+        self::assertTrue($full->defersStreaming(), 'preservedNewLines reads through to the stream law');
+
+        // The constructor's one clamp: a non-positive width is no wrap.
+        self::assertNull((new Renderer(wrapWidth: -5))->wrapWidth);
+
+        // Builders rebuild through the same gate; the readback follows.
+        $chained = $bare->withWordWrap(80)->withHyperlinks(false)->withSanitize(false);
+        self::assertSame(80, $chained->wrapWidth);
+        self::assertNull($bare->wrapWidth, 'the source instance is untouched');
+        self::assertFalse($chained->emitHyperlinks);
+        self::assertFalse($chained->sanitize);
+    }
 }
