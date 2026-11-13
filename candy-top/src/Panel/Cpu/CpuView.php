@@ -387,7 +387,7 @@ final class CpuView
         foreach ($p->load() as $load) {
             $values .= ' ' . ($load < 0 ? Lang::t('value.unavailable') : sprintf('%.2f', $load));
         }
-        $pre = Lang::t('cpu.load_avg_label');
+        $pre = Lang::t('cpu.load_avg');
         $len = Width::string($pre) + strlen($values);
         $x = $c->x + 1;
         $row = $c->y + $cy;

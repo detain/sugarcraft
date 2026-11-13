@@ -166,7 +166,7 @@ final class CpuPanelTest extends TestCase
         $panel = PanelPaint::feed(CpuPanel::new(new ScriptedSource([CpuSnapshot::unmeasured([-1.0, -1.0, -1.0], -1.0)])), $config, $layout, 2);
         $this->assertSame([], $panel->history()->series('total'));
         $grid = PanelPaint::grid(PanelPaint::surface($panel, $config, $layout, $host), $layout->box('cpu'));
-        $this->assertStringContainsString('Load avg: n/a n/a n/a', $grid);
+        $this->assertStringContainsString('Load average: n/a n/a n/a', $grid);
         $this->assertStringNotContainsString(' up ', $grid);
 
         $cpuRow = null;

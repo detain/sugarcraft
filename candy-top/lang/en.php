@@ -261,7 +261,7 @@ return [
     'mem.free' => 'Free:',
     'mem.swap' => 'Swap:',
     'mem.io' => 'io',
-    'cpu.load_avg' => 'Load AVG:',
+    'cpu.load_avg' => 'Load average:',
     'cpu.uptime' => 'up {uptime}',
     'cpu.upper' => 'Upper',
     'cpu.lower' => 'Lower',
@@ -340,7 +340,6 @@ return [
     // and help.net_* above. Button labels are held to btop's four cells.
     // ---- cpu/mem panels (phase P-B) ----
     'cpu.up' => 'up',
-    'cpu.load_avg_label' => 'Load avg:',
     'cpu.gpu' => 'GPU',
     'mem.title.used' => 'Used',
     'mem.title.available' => 'Available',
