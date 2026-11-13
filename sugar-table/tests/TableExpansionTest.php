@@ -345,4 +345,22 @@ final class TableExpansionTest extends TestCase
         // Row 0 (User1) should not be expanded
         $this->assertFalse($t->isExpanded(0));
     }
+
+    /**
+     * Audit ST-25: the expandedRows field docblock used to advertise
+     * `@var list<int>` while every writer pushed Row objects and every
+     * reader compared identity. Pin the doc to the truth so the lie cannot
+     * come back.
+     */
+    public function testExpandedRowsDocblockMatchesIdentitySemantics(): void
+    {
+        $src = (string) \file_get_contents(\dirname(__DIR__) . '/src/Table.php');
+        $pos = \strpos($src, 'private array $expandedRows');
+        $this->assertNotFalse($pos);
+
+        $docblock = \substr($src, \max(0, $pos - 900), $pos - \max(0, $pos - 900));
+        $this->assertStringContainsString('@var list<Row>', $docblock);
+        $this->assertStringNotContainsString('@var list<int>', $docblock, 'the index-set lie is back');
+        $this->assertStringContainsString('OBJECT IDENTITY', $docblock);
+    }
 }

@@ -138,9 +138,19 @@ final class Table
     private bool $multilineMode = false;
 
     /**
-     * Row indexes rendered as expanded detail lines: one full-width row
-     * carrying every visible column's content, clipped at the table edge.
-     * @var list<int>
+     * Rows rendered as expanded detail lines: one full-width row carrying
+     * every visible column's content, clipped at the table edge.
+     *
+     * The set is keyed by Row OBJECT IDENTITY, not by index (audit ST-25 —
+     * the old index-set annotation was a lie: the writers below push Row
+     * instances and every reader compares with strict in_array). The public
+     * entry points accept PAGE-RELATIVE indices, resolve them against
+     * pagedRows() (throwing OutOfBoundsException on a miss), and store the
+     * resolved identities; withRows() prunes identities that leave the data
+     * set. Expansion thus follows a Row across page turns while the input
+     * numbers address the current page.
+     *
+     * @var list<Row>
      */
     private array $expandedRows = [];
 

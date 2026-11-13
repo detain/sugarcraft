@@ -967,6 +967,17 @@ $t->isExpanded(1);   // false — row 1 is not expanded
 
   `isExpanded`) use page-relative indices via `pagedRows()`
 
+### Row index domains
+
+The library runs three different row-index domains side by side — mixing them
+is the classic off-by-one-page bug. Pick by call site:
+
+| Domain | Used by | Meaning |
+|--------|---------|---------|
+| **Page-global** | `withSelectedIndex()`, `SelectedIndex()`, cursor keys | Absolute index into the full row list; stays valid across page turns and scrolling (the highlight follows the data row). |
+| **Page-relative** | `withExpandedRows()`, `toggleExpanded()`, `isExpanded()` | 0-based index into `pagedRows()` — the current page only. Validated against the live page; out-of-page indices throw `OutOfBoundsException`. Expansion itself is stored by `Row` object identity. |
+| **Render slot** | `withStyleFunc()` callback `$row` | Index within the rows rendered in this frame (window slot after paging and scrolling). Stable contract of the callback signature; do not confuse it with the cursor domain. |
+
 - **Multiline mode**: In `multilineMode=true`, expanded rows also bypass column
 
   width constraints so all wrapped content is visible
