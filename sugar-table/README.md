@@ -636,7 +636,7 @@ echo $t->View();
 // Column 4 (Tags):        visible (index 4 >= 3)
 ```
 
-The visibility formula: a column is visible when its index is in `frozenCols` OR `index >= count(frozenCols) + scrollX`.
+Visibility follows that same formula — stated once under Visibility Logic above.
 
 ## Column Visibility Toggle
 
@@ -711,7 +711,7 @@ foreach ($t->Columns() as $i => $col) {
 }
 ```
 
-Uses multi-pass computation:
+The resolver computes widths in several passes:
 
 1. **Pass 1**: Collect Fixed/Percent widths, count Dynamic/Content columns
 2. **Pass 2**: Distribute the remaining space across the flex slots
@@ -818,7 +818,7 @@ What the renderer does for you:
   `withSelectable(false)`.
 - **Zebra striping is a fixed black-on-white inversion** (`30;47` on even
   stripes, odd stripes plain) rather than a dimmed grey — again readable
-  without a colour vocabulary. Enable it with `Table::withZebra(true)`.
+  without a colour vocabulary. Enable it with `$table->withZebra(true)`.
 - **The empty-state message is translatable** (`no_data`, see
   Internationalization) instead of a silent blank box.
 
@@ -845,17 +845,25 @@ use SugarCraft\Style\Border;
 
 $t = Table::fromColumns([...])
     ->withRows([...])
-    ->withBorder(Border::rounded());   // ─ │ ╭ ╮ ╰ ╯
-    // ->withBorder(Border::thick())  // ━ ┃ ┏ ┓ ┗ ┛
-    // ->withBorder(Border::double())  // ═ ║ ╔ ╗ ╚ ╝
-    // ->withBorder(Border::block())  // █ all eight position glyphs
-    // ->withBorder(Border::ascii())  // - | + + + +
-    // ->withBorder(Border::hidden())  // all spaces
-    // ->withBorder(Border::markdownBorder())  // | - | ... visual style only
+    ->withBorder(Border::rounded());
 
 // Or style the default border with ANSI colors:
 $t = $t->withBorderStyle('1;32');       // bold green
 ```
+
+Border variants, by the glyphs they paint at the eight frame positions
+(corners, horizontal edges, vertical edges):
+
+- `Border::normal()` — box-drawing single lines: ┌ ┐ └ ┘ corners, ─ edges, │ sides
+- `Border::rounded()` — the same single lines with ╭ ╮ ╰ ╯ rounded corners
+- `Border::thick()` — heavy box-drawing: ┏ ┓ ┗ ┛, ━, ┃
+- `Border::double()` — double lines: ╔ ╗ ╚ ╝, ═, ║
+- `Border::block()` — the full block █ at all eight positions
+- `Border::ascii()` — pure ASCII: `+` corners, `-` edges, `|` sides
+- `Border::hidden()` — spaces everywhere; the frame occupies its cells but
+  paints no glyph
+- `Border::markdownBorder()` — `|`/`-` pipes for Markdown-compatible output;
+  visual style only, no SGR frame
 
 Header cells default to `1;37` (bold + ANSI colour slot 7). Slot colours resolve
 through a fixed TrueColor table — slot 7 renders as `#E5E5E5`, which can vanish on
@@ -878,7 +886,7 @@ frame:
 ████████
 ```
 
-Available border factories: `Border::normal()`, `rounded()`, `thick()`, `double()`, `block()`, `ascii()`, `hidden()`, `markdownBorder()`.
+Available border factories: `Border::normal()`, `Border::rounded()`, `Border::thick()`, `Border::double()`, `Border::block()`, `Border::ascii()`, `Border::hidden()`, `Border::markdownBorder()`.
 
 Note: `Border::markdownBorder()` is a visual style only — rendered tables are NOT
 parseable as GitHub-flavoured markdown (the rules are full-width single-cell
@@ -904,8 +912,10 @@ $t = Table::fromColumns([
     // ->withCellPadding(0);            // no padding (flush with borders)
 
 echo $t->View();
-// With padding 1 (right-aligned default): "│  1  │             Alice  │          NYC  │"
-// Without padding:              "│    1│               Alice│            NYC│"
+// With padding 1 (right-aligned default):
+//   "│  1  │             Alice  │          NYC  │"
+// Without padding:
+//   "│    1│               Alice│            NYC│"
 ```
 
 ### How It Works
