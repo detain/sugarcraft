@@ -216,8 +216,12 @@ final class ImageSourceWebpAnimDetectTest extends TestCase
         // First chunk CLAIMS 2 GB of payload. The walk clamps to the RIFF size
         // field, sees the claim run past the container, and gives up with the
         // fail-safe null — no accusation, no desync into reading a fourcc out
-        // of the middle of a lied-about payload. GD judges the bytes exactly
-        // as it did before E-05 existed (generic corruption refusal here).
+        // of the middle of a lied-about payload. The magic names it webp so the
+        // format refusal is not ours either; SI-32 moved the generic-corruption
+        // death from GD's decode to the header law: this fixture's zeroed VP8
+        // payload sizes as 0x0, which the public ctor's positive-dimensions
+        // door refuses at intake — same plain-InvalidArgumentException posture
+        // the pre-E-05 world had.
         $lied  = 'VP8 ' . pack('V', 0x7FFFFF00) . str_repeat("\x00", 16);
         $bytes = 'RIFF' . pack('V', 4 + strlen('WEBP' . $lied)) . 'WEBP' . $lied;
         $walk  = new \ReflectionMethod(ImageSource::class, 'webpCarriesAnimation');
@@ -229,7 +233,7 @@ final class ImageSourceWebpAnimDetectTest extends TestCase
         } catch (UnsupportedFormatException $e) {
             self::fail('oversized claim must fail safe, not refuse: ' . $e->getMessage());
         } catch (\InvalidArgumentException $e) {
-            self::assertStringContainsString('GD failed to load image', $e->getMessage());
+            self::assertStringContainsString('must be positive', $e->getMessage());
         }
     }
 
@@ -245,7 +249,7 @@ final class ImageSourceWebpAnimDetectTest extends TestCase
         } catch (UnsupportedFormatException $e) {
             self::fail('undecidable structure must not be refused as animated: ' . $e->getMessage());
         } catch (\InvalidArgumentException $e) {
-            self::assertStringContainsString('GD failed to load image', $e->getMessage());
+            self::assertStringContainsString('Unsupported image format', $e->getMessage());
         }
     }
 
@@ -291,8 +295,9 @@ final class ImageSourceWebpAnimDetectTest extends TestCase
         $walk->setAccessible(true);
         self::assertNull($walk->invoke(null, $bytes));
 
-        // Public outcome: no refusal fires (GD decides, as pre-E-05). The
-        // synthetic container itself is unlabelled garbage to GD either way;
+        // Public outcome: no refusal fires from the walk (SI-32: the header
+        // dimension gate decides, as GD's decode did pre-E-05 — neither says
+        // "animated"). The synthetic container itself is unlabelled garbage;
         // fromString throws its generic InvalidArgumentException, never ours.
         try {
             ImageSource::fromString($bytes);

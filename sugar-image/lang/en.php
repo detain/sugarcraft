@@ -16,7 +16,6 @@ return [
     'image_source.anim_webp'         => 'Animated WebP ({format}) needs chafa or the sugar-video AnimatedWebpDecoder; sugar-image does not decode it',
     'image_source.exotic_format'     => 'Format "{brand}" needs the chafa CLI for a static preview; sugar-image does not decode it',
     'image_source.no_gd'             => 'ext-gd is required but is not available',
-    'image_source.gd_load_failed'    => 'GD failed to load image: {path}',
     'image_source.temp_failed'       => 'Failed to create temporary file for in-memory image',
     'image_source.url_fetch_failed'  => 'Failed to fetch image from URL: {url}',
     'image_source.url_bad_status'    => 'Unexpected HTTP status {status} while fetching image from URL',

@@ -196,15 +196,15 @@ final class ImageSourceTest extends TestCase
     }
 
     /**
-     * MAJOR-3 (structural twin): the decoded bytes must be the bytes the
-     * ceiling measured. Routing GD through the PATH meant the file was opened
-     * three separate times — measure, header sniff, decode — so a rename
-     * between them swapped what GD saw for what was bounded (and a reader race
-     * could feed GD a larger file than the one that passed the size check).
-     * A source-slice pin, per the house structural pattern: the only route
-     * back to the caller's path is now the single bounded read.
+     * MAJOR-3 (structural twin), re-anchored for SI-32: the bytes the header
+     * walk measures must be the bytes the ceiling bounded. Routing checks
+     * through the PATH meant the file was opened three separate times —
+     * measure, header sniff, decode — so a rename between them swapped what
+     * the later legs saw for what was bounded. Since SI-32 there is no
+     * intake decode at all: the single bounded read plus one sniff is the
+     * whole route. A source-slice pin, per the house structural pattern.
      */
-    public function testTheFileRouteSniffsAndDecodesFromTheValidatedBytes(): void
+    public function testTheFileRouteSniffsFromTheValidatedBytesAndNeverDecodes(): void
     {
         $src = (string) file_get_contents(__DIR__ . '/../src/ImageSource.php');
         $start = strpos($src, 'public static function fromFile(');
@@ -219,7 +219,7 @@ final class ImageSourceTest extends TestCase
 
         self::assertStringContainsString('readBoundedRegularFile($path)', $code, 'the ceiling must guard this route');
         self::assertStringContainsString('getimagesizefromstring($bytes)', $code, 'the sniff must ride the validated bytes');
-        self::assertStringContainsString('imagecreatefromstring($bytes)', $code, 'the decode must ride the validated bytes');
+        self::assertStringNotContainsString('imagecreatefromstring(', $code, 'intake must not pay a pixel decode for dimensions (SI-32)');
 
         self::assertStringNotContainsString('file_get_contents($path', $code, 'no unbounded slurp');
         self::assertStringNotContainsString('getimagesize($path', $code, 'the path is not opened a second time');
@@ -229,9 +229,12 @@ final class ImageSourceTest extends TestCase
     }
 
     /**
-     * MAJOR-3: switching the decode to the string route must not change a
+     * MAJOR-3: switching the read to the string route must not change a
      * byte of what a valid file produces — the buffer stored on the source is
-     * exactly the file's contents, and the geometry still comes from GD.
+     * exactly the file's contents. (SI-32: the geometry now comes from the
+     * header both routes already parsed, which the corpus parity arms in
+     * ImageSourceDimsTest prove equals the old GD answer wherever GD
+     * succeeds — so the dimensions this test asserts are unchanged law.)
      */
     public function testAValidFileStillYieldsTheSameBytesAndGeometry(): void
     {
@@ -289,12 +292,20 @@ final class ImageSourceTest extends TestCase
         }
     }
 
-    public function testBothByteRoutesReGuardDecodedDimensionsBeforeConstruction(): void
+    /**
+     * Structural pin for the SI-32 header law (RE-ANCHOR, disclosed: this
+     * row replaced the old "decoded-dimensions re-guard before construction"
+     * pin, which pinned the intake decode this step deliberately removed).
+     * The new order: the header sniff measures, the declared guard refuses
+     * oversized canvases, construction carries the header numbers — and no
+     * byte route pays a GD decode here. Removal of the declared guard could
+     * not go red behaviourally on honest fixtures (the corpus parity arms
+     * in ImageSourceDimsTest prove header dims equal GD dims wherever GD
+     * succeeds), so this walks the source text and pins ORDER, not just
+     * presence.
+     */
+    public function testBothByteRoutesGuardDeclaredDimensionsBeforeConstruction(): void
     {
-        // Structural pin for the post-decode re-guard: no fixture on any
-        // honest build declares small dimensions that GD then decodes large,
-        // so removal of the guard could never go red behaviourally — this
-        // walks the source text instead and pins ORDER, not just presence.
         $src = (string) file_get_contents(__DIR__ . '/../src/ImageSource.php');
 
         foreach (['fromFile', 'fromString'] as $route) {
@@ -303,22 +314,29 @@ final class ImageSourceTest extends TestCase
             $end = strpos($src, "\n    }\n", $start);
             self::assertIsInt($end, "no method end found for {$route}");
             $slice = substr($src, $start, $end - $start);
+            // The SI-32 law comments name the calls they forbade; run the
+            // census on the comment-stripped slice so prose cannot poison it.
+            $code = (string) preg_replace('~/\*.*?\*/~s', '', $slice);
+            $code = (string) preg_replace('~(?m)^[ \t]*(?://|#)[^\n]*$~', '', $code);
 
-            $decode = strpos($slice, 'imagesy($img)');
-            $guard  = strpos($slice, 'self::guardPixelCount($width, $height, $maxPixels);');
-            $ctor   = strpos($slice, 'return new self($bytes, $format, $width, $height, $maxPixels);');
-            self::assertIsInt($decode, "{$route}: decoded-dimension read vanished");
-            self::assertIsInt($guard, "{$route}: decoded-dimensions re-guard removed");
+            $sniff = strpos($code, '@getimagesizefromstring($bytes)');
+            $guard = strpos($code, 'self::guardPixelCount(');
+            $ctor  = strpos($code, 'return new self($bytes, $format, $width, $height, $maxPixels);');
+            self::assertIsInt($sniff, "{$route}: header sniff vanished");
+            self::assertIsInt($guard, "{$route}: declared-dimensions guard vanished");
             self::assertIsInt($ctor, "{$route}: construction seam vanished");
-            self::assertLessThan($guard, $decode, "{$route}: re-guard must run after the decode reads dimensions");
-            self::assertLessThan($ctor, $guard, "{$route}: re-guard must run before the source is constructed");
+            self::assertLessThan($guard, $sniff, "{$route}: the guard must measure header dimensions");
+            self::assertLessThan($ctor, $guard, "{$route}: the guard must run before the source is constructed");
+            self::assertStringNotContainsString('imagecreatefromstring(', $code, "{$route}: intake must not decode pixels for dimensions (SI-32)");
+            self::assertStringNotContainsString('imagesx(', $code, "{$route}: no GD dimension read may live at intake (SI-32)");
 
             if ($route === 'fromString') {
-                $refuse = strpos($slice, "=== 'application/octet-stream'");
-                $askGd  = strpos($slice, '@imagecreatefromstring($bytes)');
+                $refuse  = strpos($code, "=== 'application/octet-stream'");
+                $unsized = strpos($code, 'if ($info === false) {');
                 self::assertIsInt($refuse, 'fromString: unnamed-format refusal removed');
-                self::assertIsInt($askGd, 'fromString: GD decode seam vanished');
-                self::assertLessThan($askGd, $refuse, 'fromString: refusal must precede the GD allocation');
+                self::assertIsInt($unsized, 'fromString: named-but-unsized refusal removed (SI-32)');
+                self::assertLessThan($unsized, $refuse, 'fromString: container refusals must fire before the dims-missing arm');
+                self::assertLessThan($ctor, $unsized, 'fromString: unsized bytes must be refused before construction');
             }
         }
     }
@@ -361,12 +379,17 @@ final class ImageSourceTest extends TestCase
 
     /**
      * Structural ordering pin, per the house source-slice precedent (see
-     * testTheFileRouteSniffsAndDecodesFromTheValidatedBytes and
-     * testBothByteRoutesReGuardDecodedDimensionsBeforeConstruction): the
-     * strlen guard must sit ahead of BOTH GD seams inside fromString(), so
-     * no input size buys a sniff or an allocation before the refusal.
+     * testTheFileRouteSniffsFromTheValidatedBytesAndNeverDecodes and
+     * testBothByteRoutesGuardDeclaredDimensionsBeforeConstruction): the
+     * strlen guard must sit ahead of BOTH byte-consuming seams inside
+     * fromString() — the header sniff and the construction — so no input
+     * size buys a sniff (or anything after it) before the refusal.
+     * Re-anchored for SI-32: the GD allocation seam this pin used to watch
+     * no longer exists on the string route; the sniff is now the first
+     * consumer of the buffer, and the refusal-before-construction arm took
+     * over the guard's teeth.
      */
-    public function testTheStringCeilingIsCheckedBeforeAnyDecodeSeam(): void
+    public function testTheStringCeilingIsCheckedBeforeAnyByteConsumingSeam(): void
     {
         $src = (string) file_get_contents(__DIR__ . '/../src/ImageSource.php');
         $start = strpos($src, 'public static function fromString(');
@@ -377,12 +400,13 @@ final class ImageSourceTest extends TestCase
 
         $ceiling = strpos($slice, 'strlen($bytes) > self::MAX_BYTES');
         $sniff   = strpos($slice, '@getimagesizefromstring($bytes)');
-        $decode  = strpos($slice, '@imagecreatefromstring($bytes)');
+        $ctor    = strpos($slice, 'return new self(');
         self::assertIsInt($ceiling, 'the byte ceiling guard vanished from the string route');
         self::assertIsInt($sniff, 'the header sniff seam vanished from the string route');
-        self::assertIsInt($decode, 'the GD allocation seam vanished from the string route');
+        self::assertIsInt($ctor, 'the construction seam vanished from the string route');
         self::assertLessThan($sniff, $ceiling, 'fromString: ceiling must precede the header sniff');
-        self::assertLessThan($decode, $ceiling, 'fromString: ceiling must precede the GD allocation');
+        self::assertLessThan($ctor, $sniff, 'fromString: the sniff must precede construction');
+        self::assertStringNotContainsString('@imagecreatefromstring($bytes)', $slice, 'fromString: intake must not decode pixels (SI-32)');
     }
 
     public function testFromGdInternalHandoffKeepsEveryPixelLossless(): void

@@ -154,7 +154,7 @@ final class ImageSource
     /**
      * Return a copy with a different decompression-bomb pixel ceiling.
      *
-     * Re-validates the already-decoded dimensions against the new ceiling so
+     * Re-validates the header-declared dimensions against the new ceiling so
      * lowering it below the current image size fails fast, and threads the
      * ceiling into subsequent crop()/resize() re-decodes.
      *
@@ -188,21 +188,25 @@ final class ImageSource
         // slurped a path of ANY size (a 2 GB junk file was fully read into memory
         // before GD was even asked about it) and then `getimagesize($path)` plus the
         // format-specific `imagecreatefrom*($path)` call opened the same path two
-        // more times, so the bytes GD decoded need not be the bytes measured.
-        // Routing the decode through the captured string closes both holes: the
-        // MAX_BYTES ceiling refuses an oversized read up front (README's Limits row
-        // — "oversized files are refused before GD ever sees them" — is now true of
-        // this route too), and every check below sees one immutable byte string.
+        // more times. Routing every check through the captured string closes both
+        // holes: the MAX_BYTES ceiling refuses an oversized read up front (README's
+        // Limits row — "oversized files are refused before GD ever sees them" — is
+        // now true of this route too), and every leg below sees one immutable byte
+        // string.
         $bytes = self::readBoundedRegularFile($path);
 
+        // Decompression-bomb guard: getimagesize() reads only the header, so
+        // the oversized image is refused here — and after SI-32 this is not
+        // merely a pre-flight for a decode intake was about to do anyway, it
+        // IS the dimension verdict: the guarded header numbers below become
+        // what the constructed source carries.
         $info = @getimagesizefromstring($bytes);
         if ($info === false) {
             throw new \InvalidArgumentException(Lang::t('image_source.unsupported_format', ['path' => $path]));
         }
 
-        // Decompression-bomb guard: getimagesize() reads only the header, so
-        // reject an oversized image here before imagecreatefrom* allocates
-        // the full truecolor pixel buffer.
+        // Decompression-bomb guard: reject an oversized declared canvas
+        // before it can exhaust memory.
         self::guardPixelCount((int) $info[0], (int) $info[1], $maxPixels);
 
         $format = match ($info['mime']) {
@@ -214,34 +218,34 @@ final class ImageSource
             ),
         };
 
-        // Read dimensions from GD so palette PNGs are already converted. Suppressed
-        // (like `@getimagesizefromstring` above): a corrupt PNG/JPEG/GIF makes libpng
-        // emit "fatal libpng error" warnings that a TUI would spray across the user's
-        // screen — and this repo runs PHPUnit with failOnWarning=true. The `=== false`
-        // guard below turns the suppressed failure into a clean, translated throw.
-        // Dispatch is on the captured bytes rather than the path, so GD decodes
-        // exactly what the size guard measured; the mime match above already picked
-        // between these three formats, and imagecreatefromstring sniffs the same
-        // signatures.
-        $img = @imagecreatefromstring($bytes);
-
-        if ($img === false) {
-            throw new \RuntimeException(Lang::t('image_source.gd_load_failed', ['path' => $path]));
-        }
-
-        // Palette PNG → truecolor so PixelGrid always sees 24-bit pixels.
-        ForceTrueColor::convert($img);
-
-        $width  = imagesx($img);
-        $height = imagesy($img);
-        imagedestroy($img);
-
-        // The header is a hint; the decode is the truth about the buffer that
-        // was actually built. Re-guard the decoded dimensions before handing
-        // the source on, so a declared/small-decoded/large mismatch cannot
-        // carry an over-ceiling canvas into crop()/resize()/renderers.
-        // (fromString() carries the matching re-guard after its decode.)
-        self::guardPixelCount($width, $height, $maxPixels);
+        // SI-32: the dimensions come from the header that was just parsed —
+        // NOT from a full GD decode. The old intake paid a complete pixel
+        // allocation (libpng decodes every row before `imagesx()` could
+        // answer a two-integer question) and destroyed the resource, only for
+        // every renderer to decode the same bytes again at its own door:
+        // ≥2 full decodes per display. The law that makes the header
+        // authoritative instead of "a hint": libpng/libjpeg/giflib ALLOCATE
+        // from the very fields getimagesizefromstring() reports (IHDR, SOFn,
+        // Logical Screen Descriptor), so a decode that succeeds can never be
+        // larger than what the declared-pixel guard above already measured,
+        // and every payload GD manages to decode is also sized by the header
+        // parser on this build (both halves pinned by
+        // tests/ImageSourceDimsTest.php across the fixture corpus plus
+        // adversarial header mutations).
+        //
+        // What moved, honestly: bytes that carry a real header but a broken
+        // body (a truncated PNG, a corrupt JPEG stream) used to be refused
+        // HERE with `image_source.gd_load_failed`. They are now accepted at
+        // intake — sized, guarded and labelled from the header — and refused
+        // the first time a consumer decodes them: crop()/resize()/raw-pixels
+        // and every renderer's own `=== false` leg, in that door's existing
+        // grammar. A caller that only reads metadata stops paying a decode it
+        // can never observe; a caller that paints still gets a typed refusal
+        // before it paints garbage. Bytes the header cannot size never get
+        // this far: the unsupported_format refusal above is where they always
+        // died, and where they still do.
+        $width  = (int) $info[0];
+        $height = (int) $info[1];
 
         return new self($bytes, $format, $width, $height, $maxPixels);
     }
@@ -255,9 +259,11 @@ final class ImageSource
     /**
      * Load from raw bytes in memory.
      *
-     * Detects image format from magic bytes and uses GD to validate and
-     * read dimensions — avoids the temp-file overhead of the previous
-     * implementation which wrote bytes to disk and re-read via fromFile().
+     * Detects the image format from magic bytes and takes the dimensions
+     * from the parsed header — no full GD decode at intake (SI-32; the law
+     * and the measured evidence are in fromFile()). Also avoids the
+     * temp-file overhead of the previous implementation which wrote bytes
+     * to disk and re-read via fromFile().
      *
      * The same {@see self::MAX_BYTES} ceiling that bounds the fromFile()
      * read and the URL body bounds these in-memory bytes too, so no intake
@@ -271,8 +277,8 @@ final class ImageSource
     {
         if (strlen($bytes) > self::MAX_BYTES) {
             // Measured before anything else touches the buffer: the header
-            // sniff and the GD decode below are exactly what this ceiling
-            // exists to keep an over-size payload away from.
+            // sniff and the container walk below are exactly what this
+            // ceiling exists to keep an over-size payload away from.
             throw new \InvalidArgumentException(Lang::t('image_source.string_too_large', [
                 'size' => strlen($bytes),
                 'max'  => self::MAX_BYTES,
@@ -284,16 +290,19 @@ final class ImageSource
         }
 
         // Decompression-bomb guard: read dimensions from the header (no full
-        // decode) and reject oversized images BEFORE imagecreatefromstring
-        // allocates the pixel buffer. The header is a hint, not a verdict:
-        // inputs getimagesizefromstring cannot size are NOT thereby safe —
-        // measured on this build, 128 bytes of "\x00\xff" repeat declare no
-        // dimensions at all yet libgd materialises a 16256×16256 canvas
-        // (264 Mpx) from them. So bytes that name no format AND declare no
-        // dimensions are refused before GD is asked (the structural refusals
-        // inside detectImageFormat() still fire first for containers it
-        // recognises), and for everything else the DECODED dimensions are
-        // re-guarded below before construction.
+        // decode) and reject oversized images BEFORE any pixel buffer is
+        // ever allocated. The header is a hint only to a reader who plans to
+        // decode; intake does not (SI-32 — see fromFile() for the full law),
+        // so after the guard passes these same numbers become the source's
+        // dimensions and no allocation happens here at all. Inputs that
+        // getimagesizefromstring cannot size are NOT thereby safe — measured
+        // on this build, 128 bytes of "\x00\xff" repeat declare no dimensions
+        // at all yet libgd materialises a 16256×16256 canvas (264 Mpx) from
+        // them. So bytes that name no format AND declare no dimensions are
+        // refused below (the structural refusals inside detectImageFormat()
+        // still fire first for containers it recognises), and the pixel
+        // ceiling holds regardless of the $maxPixels value (disabled
+        // ceilings included).
         $info = @getimagesizefromstring($bytes);
         if ($info !== false) {
             self::guardPixelCount((int) $info[0], (int) $info[1], $maxPixels);
@@ -313,28 +322,26 @@ final class ImageSource
             );
         }
 
-        // Validate the bytes are a supported image and read dimensions.
-        $img = @imagecreatefromstring($bytes);
-        if ($img === false) {
+        // SI-32: no validation decode, no palette conversion, no re-guard —
+        // intake reads the dimensions the header already declared (the law
+        // and the measured evidence for that are written out in fromFile()).
+        // The one case the old GD leg used to have an answer for and the
+        // header walk does not is a payload the magic list names but the
+        // header parser cannot size. Measured on this build, GD cannot
+        // decode those bytes either (a container whose dimensions are not
+        // parseable is a container with nothing to allocate), so this arm
+        // only converts an attempted decode-and-refuse into an immediate
+        // refusal — same InvalidArgumentException family the file route has
+        // always thrown for unsized bytes, same `[memory-bytes]` label the
+        // octet-stream refusal above uses.
+        if ($info === false) {
             throw new \InvalidArgumentException(
-                Lang::t('image_source.gd_load_failed', ['path' => '[memory-bytes]']),
+                Lang::t('image_source.unsupported_format', ['path' => '[memory-bytes]']),
             );
         }
 
-        // Palette PNGs need truecolor conversion so PixelGrid always sees
-        // 24-bit pixels (matching fromFile() behavior).
-        ForceTrueColor::convert($img);
-
-        $width  = imagesx($img);
-        $height = imagesy($img);
-        imagedestroy($img);
-
-        // The header is a hint; the decode is the truth about the buffer that
-        // was actually built. Re-guard the decoded dimensions before handing
-        // the source on, so a declared/small-decoded/large mismatch cannot
-        // carry an over-ceiling canvas into crop()/resize()/renderers.
-        // (fromFile() carries the matching re-guard after its decode.)
-        self::guardPixelCount($width, $height, $maxPixels);
+        $width  = (int) $info[0];
+        $height = (int) $info[1];
 
         return new self($bytes, $format, $width, $height, $maxPixels);
     }
@@ -409,8 +416,9 @@ final class ImageSource
         }
 
         // Not one of the named formats, but getimagesizefromstring() sniffed a
-        // MIME for it: fromString() still lets GD validate the bytes via
-        // imagecreatefromstring(), and the label must stay truthful. Bytes with
+        // MIME for it: those bytes keep the sniffed label, and intake no
+        // longer asks GD to second-guess the header (SI-32), so the sniffed
+        // MIME is the only name they ever get. Bytes with
         // no name AND no sniffed MIME return the octet-stream sentinel below,
         // which fromString() refuses before GD sees them — an unnamed,
         // unsized canvas is precisely what a headerless decompression bomb
@@ -434,8 +442,9 @@ final class ImageSource
      * Fail-safe posture, deliberately mirroring detectImageFormat()'s existing
      * behavior for structures it cannot name: a malformed/truncated container,
      * or a walk that exhausts {@see self::MAX_RIFF_CHUNKS}, returns null — NOT
-     * a refusal — and the bytes keep today's fate (GD validates and refuses
-     * them, or decodes them, exactly as before the walk existed). Only
+     * a refusal — and the bytes keep today's fate (the header walk decides
+     * their dimensions and the pixel doors decide their decodability, exactly
+     * as before this walk existed). Only
      * affirmative animation proof refuses. A static WebP therefore stays
      * accepted byte-for-byte unchanged (the negative-polarity pin).
      *
