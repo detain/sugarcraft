@@ -540,12 +540,19 @@ final class Renderer
      */
     private static function marks(array $weekdays, array $slots, ?ColorProfile $profile, Theme $theme): string
     {
+        // CT-S45: a single initial collides — Tuesday/Thursday both paint T
+        // and Saturday/Sunday both paint S, so the row meant to interpret the
+        // bars goes ambiguous exactly when the timeline is squeezed. Two
+        // columns are unique across the whole week and fit slots of 2-3; at a
+        // one-cell slot there is no room for a distinction, so the initial
+        // keeps that (unavoidably blind) lane.
         $narrow = $slots !== [] && min($slots) < 4;
+        $cut = $narrow && $slots !== [] && min($slots) >= 2 ? 2 : ($narrow ? 1 : 0);
         $line = '';
         foreach ($slots as $index => $width) {
             $label = (string) ($weekdays[$index] ?? '');
             $line .= Width::padRight(
-                Width::truncate($narrow ? substr($label, 0, 1) : $label, $width),
+                Width::truncate($cut > 0 ? substr($label, 0, $cut) : $label, $width),
                 $width,
             );
         }

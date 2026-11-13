@@ -641,4 +641,26 @@ final class RendererGeometryTest extends TestCase
         $strip = static fn (string $view): string => (string) preg_replace('/\x1b\[[0-9;]*m/', '', $view);
         $this->assertSame($strip($default), $strip($light));
     }
+
+    // CT-S45: the squeezed label row must stay interpretable — single
+    // initials let Tue/Thu and Sat/Sun collide; two columns stay unique for
+    // the whole week.
+    public function testSqueezedWeekdayMarksStayUnique(): void
+    {
+        [$bars, $marks] = self::timelineRows(self::frame(26, self::everyDay()));
+
+        self::assertSame(
+            ['Sa', 'Su', 'Mo', 'Tu', 'We', 'Th', 'Fr'],
+            preg_split('/\s+/', trim($marks), -1, PREG_SPLIT_NO_EMPTY),
+            'no two printed weekday labels collide when both days show',
+        );
+        self::assertSame(Width::string($bars), Width::string($marks), 'the label row keeps the bars grid');
+
+        // The comfortable lane keeps the full three-column labels untouched.
+        [, $roomy] = self::timelineRows(self::frame(54, self::everyDay()));
+        self::assertSame(
+            ['Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
+            preg_split('/\s+/', trim($roomy), -1, PREG_SPLIT_NO_EMPTY),
+        );
+    }
 }
