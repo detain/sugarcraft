@@ -3036,10 +3036,71 @@ final class LaunchContext
         }
 
         try {
-            return DockLayout::fromArray($raw);
+            return self::renormalizeDock(DockLayout::fromArray($raw));
         } catch (\Throwable) {
             return null;
         }
+    }
+
+    /**
+     * Boot-time validation of a restored dock manifest (candy-code-once-007):
+     * a layout saved at one terminal size is applied at another, so drop
+     * slots naming a pane that cannot dock here and renormalize the column
+     * shares of the ACTIVE sides so they never claim more than half the
+     * usable columns together (the pair rule withColumnShare() enforces live
+     * but a restored manifest bypasses). Which panes are shown is NOT
+     * touched by width: a too-narrow terminal is handled at render time by
+     * {@see DockLayout::resolve()}'s degradation ladder, so the persisted
+     * choice survives a visit to a small window.
+     */
+    public static function renormalizeDock(DockLayout $dock): DockLayout
+    {
+        $manifest = $dock->toArray();
+
+        foreach (['left', 'right'] as $key) {
+            $manifest['sides'][$key] = array_values(array_filter(
+                $manifest['sides'][$key],
+                static function (array $slot) use ($manifest): bool {
+                    $pane = Pane::tryFrom((string) $slot['id']);
+
+                    return $pane !== null && $pane->dockable() && $slot['id'] !== $manifest['center'];
+                },
+            ));
+        }
+
+        $gcd = static function (int $a, int $b): int {
+            while ($b !== 0) {
+                [$a, $b] = [$b, $a % $b];
+            }
+
+            return max(1, $a);
+        };
+        $active = array_values(array_filter(
+            ['left', 'right'],
+            static fn(string $k): bool => $manifest['sides'][$k] !== [],
+        ));
+        if ($active !== []) {
+            // sum of active shares as one fraction n/d
+            $n = 0;
+            $d = 1;
+            foreach ($active as $k) {
+                [$a, $b] = $manifest['columnShare'][$k];
+                $n = $n * $b + $a * $d;
+                $d *= $b;
+            }
+            if ($n * 2 > $d) {
+                // Scale every active share by (1/2) / sum so they total 1/2.
+                foreach ($active as $k) {
+                    [$a, $b] = $manifest['columnShare'][$k];
+                    $num = $a * intdiv($d, $b);
+                    $den = 2 * $n;
+                    $g = $gcd($num, $den);
+                    $manifest['columnShare'][$k] = [max(1, intdiv($num, $g)), intdiv($den, $g)];
+                }
+            }
+        }
+
+        return DockLayout::fromArray($manifest);
     }
 
     /**
