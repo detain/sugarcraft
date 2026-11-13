@@ -479,7 +479,7 @@ The Performance Reports pages (`[5]` Query Stats / `[7]` Table Stats in admin) d
 
 The Performance Schema Setup page (`[8]` in admin) provides a tabbed interface for configuring MySQL's `performance_schema`. It is version-aware and adapts its queries and editable fields to the detected MySQL version.
 
-**EasySetupDetector:** The page uses `EasySetupDetector` (created via `EasySetupDetector::fromContext($context)` when not explicitly provided) to detect the current PS setup state as one of four values shown in the header badge:
+**EasySetupDetector:** The page uses `EasySetupDetector` to detect the current PS setup state as one of four values shown in the header badge. Per arrival the verdict comes from `classifyFromData()` — the same four-state ladder evaluated over the `setup_instruments`/`setup_consumers` rows the page already loaded, with zero extra queries; the server-side aggregate ladder `detect()` (up to seven full-table COUNT/SUM scans) remains the classifier's oracle and an embedder utility:
 
 | State | Badge | Meaning |
 |-------|-------|---------|
@@ -489,6 +489,8 @@ The Performance Schema Setup page (`[8]` in admin) provides a tabbed interface f
 | `disabled` | red DISABLED | Performance Schema is inaccessible |
 
 The detector is wired from `App::adminPage()` into the `PerfSchemaPage` constructor. If no detector is provided, `detectSetupState()` (which uses loaded instrument data only, without checking TIMED or consumers) serves as a fallback — less accurate but sufficient for backward compatibility.
+
+**Frame economics:** the page's data path is arrival-scoped, not per-frame. One `ReloadReportMsg` (the App's admin load/drain signal) re-arms a single batch: access probe, six setup-table pulls, setup classification from those rows, and the instrument tree re-parse — navigation frames and keystrokes reuse the parsed snapshot and the memoized tree. Uncommitted toggles survive frames and arrivals (an arrival while dirty is held; commit/revert reload explicitly). The confirmed commit and the Easy Setup presets run their statements synchronously — they are writes, and the async cache serves reads — but each rides a bounded `StatementTimeout` leg (injectable budget) with stop-position reporting, so a stalled `UPDATE` costs one named timeout instead of a frozen UI, and a mid-batch failure says exactly how much was applied.
 
 **Version-gated default profiles (Appendix C):**
 

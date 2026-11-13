@@ -141,7 +141,14 @@ final class EasySetupDetector
     }
 
     /**
-     * Detect the current PS setup state.
+     * Detect the current PS setup state via server-side aggregates.
+     *
+     * SQL-P07 (adminpages-008) note: this ladder issues up to seven
+     * full-table COUNT/SUM scans — the PerfSchema pane no longer calls it
+     * per arrival; it classifies the rows it already loaded via
+     * {@see classifyFromData()}, which mirrors these verdicts exactly.
+     * detect() remains the direct/embedder utility (and the behavioural
+     * oracle the classifier's pins quote against).
      *
      * @return string One of: 'fully', 'default', 'custom', 'disabled'
      */
@@ -160,6 +167,114 @@ final class EasySetupDetector
         }
 
         return 'custom';
+    }
+
+    /**
+     * The zero-query twin of {@see detect()}: classify from row lists the
+     * page has ALREADY paid for, instead of re-asking the server up to seven
+     * aggregate scans (several recomputing exactly what the loaded
+     * setup_instruments/setup_consumers rows carry).
+     *
+     * Verdict equivalence against the query ladder:
+     *  - 'disabled' — no instrument rows: the page's loaders swallow the
+     *    access/connection error into an empty list, the same evidence
+     *    isDisabled() probes for;
+     *  - 'fully' — enabled percentage 100 AND no disabled consumer AND no
+     *    disabled-or-untimed instrument (isFullyEnabled()'s three counts);
+     *  - 'default' — every default consumer enabled, no extra consumer
+     *    enabled, every default instrument enabled+timed, no extra
+     *    instrument enabled (the two SUM(IF) profiles; the escaped-LIKE
+     *    default lists are exact literals, so set membership is the
+     *    same test, and memory/% is excluded by the loaders just as both
+     *    server-side IFs exclude it);
+     *  - 'custom' — everything else.
+     *
+     * @param list<SetupInstruments> $instruments
+     * @param list<SetupConsumers>   $consumers
+     */
+    public function classifyFromData(array $instruments, array $consumers): string
+    {
+        if ($instruments === []) {
+            return 'disabled';
+        }
+
+        $enabledCount = 0;
+        $disabledOrUntimed = 0;
+        foreach ($instruments as $instrument) {
+            if ($instrument->enabled) {
+                $enabledCount++;
+            }
+            if (!$instrument->enabled || !$instrument->timed) {
+                $disabledOrUntimed++;
+            }
+        }
+
+        $disabledConsumers = 0;
+        foreach ($consumers as $consumer) {
+            if (!$consumer->enabled) {
+                $disabledConsumers++;
+            }
+        }
+
+        // isFullyEnabled(): enabledPercentage() === 100 (rounding included —
+        // the same round() the percentage query's PHP-side twin performs) and
+        // both detail counts zero.
+        if (
+            (int) round(($enabledCount / count($instruments)) * 100) === 100
+            && $disabledConsumers === 0
+            && $disabledOrUntimed === 0
+        ) {
+            return 'fully';
+        }
+
+        if (
+            $this->consumersMatchDefaultData($consumers)
+            && $this->instrumentsMatchDefaultData($instruments)
+        ) {
+            return 'default';
+        }
+
+        return 'custom';
+    }
+
+    /**
+     * Client-side twin of consumersMatchDefault() over loaded rows.
+     *
+     * @param list<SetupConsumers> $consumers
+     */
+    private function consumersMatchDefaultData(array $consumers): bool
+    {
+        $defaults = array_flip($this->getDefaultConsumers());
+        foreach ($consumers as $consumer) {
+            if (isset($defaults[$consumer->name])) {
+                if (!$consumer->enabled) {
+                    return false;
+                }
+            } elseif ($consumer->enabled) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Client-side twin of instrumentsMatchDefault() over loaded rows.
+     *
+     * @param list<SetupInstruments> $instruments
+     */
+    private function instrumentsMatchDefaultData(array $instruments): bool
+    {
+        $defaults = array_flip($this->getDefaultInstruments());
+        foreach ($instruments as $instrument) {
+            if (isset($defaults[$instrument->name])) {
+                if (!$instrument->enabled || !$instrument->timed) {
+                    return false;
+                }
+            } elseif ($instrument->enabled) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**

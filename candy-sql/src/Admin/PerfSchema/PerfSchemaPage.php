@@ -15,8 +15,11 @@ use SugarCraft\Dashboard\Components\Card\Divider;
 use SugarCraft\Forms\ItemList\ItemList;
 use SugarCraft\Forms\ItemList\StringItem;
 use SugarCraft\Sql\Admin\PageBase;
+use SugarCraft\Sql\Admin\Resilience\StatementTimeout;
+use SugarCraft\Sql\Admin\Resilience\StatementTimeoutException;
 use SugarCraft\Sql\Admin\RowNavigable;
 use SugarCraft\Sql\Admin\ServerContextInterface;
+use SugarCraft\Sql\Core\Msg\ReloadReportMsg;
 use SugarCraft\Sql\Db\DatabaseInterface;
 use SugarCraft\Style\Style;
 use SugarCraft\Table\Column;
@@ -37,11 +40,16 @@ use SugarCraft\Sql\CellValue;
  * - Options: Timer configuration (read-only)
  *
  * **EasySetupDetector wiring**: When an `EasySetupDetector` is provided
- * at construction, it is used to detect the current PS setup state via four-state
- * detection: `fully` (all instruments enabled+timed, all consumers enabled),
- * `disabled` (PS inaccessible), `default` (matches MySQL 5.6 or 5.7 Appendix C
- * profile), or `custom` (user-modified). The detector is created via
- * `EasySetupDetector::fromContext($context)` when not explicitly provided.
+ * at construction it classifies the current PS setup state four-state —
+ * `fully` (all instruments enabled+timed, all consumers enabled),
+ * `disabled` (PS inaccessible), `default` (matches the MySQL 5.6 or 5.7
+ * Appendix C profile), `custom` — via `classifyFromData()` on the rows this
+ * page already loaded (SQL-P07: zero extra queries per arrival; the query
+ * ladder `detect()` remains the classifier's oracle, not the render path).
+ * The page never mints the detector itself: the App wires
+ * `EasySetupDetector::fromContext($context)`, an omitted parameter keeps the
+ * cruder instrument-only fallback (see below) — the old text claiming
+ * fromContext happens here was never true.
  *
  * When no detector is wired (backward-compatibility fallback), `detectSetupState()`
  * uses loaded instrument data only — it cannot check TIMED status or consumers,
@@ -141,6 +149,34 @@ final class PerfSchemaPage extends PageBase implements RowNavigable
     private ?bool $updatePrivilegeMemo = null;
 
     /**
+     * SQL-P07 (adminpages-007): arrival-scoped data gate. build() used to run
+     * the FULL loadData() batch — six setup/digest table pulls, the setup
+     * detection and the ChangeTracker/CommitPlanner rebuild — on EVERY render
+     * frame, so tab-switching and arrow navigation re-paid for byte-identical
+     * snapshots, and (worse) silently rolled back uncommitted toggles whose
+     * rows the per-frame rebuild overwrote with server truth. Now the batch
+     * runs once per async-cache arrival: ReloadReportMsg re-arms the gate
+     * (the App forwards it on every admin load/drain completion, mirroring
+     * ConnectionsPage), navigation keys do not.
+     */
+    private bool $snapshotLoaded = false;
+
+    /**
+     * SQL-P07: the access probe rode the same per-frame path as the data
+     * batch (one COUNT query per render). Valid once per arrival; ReloadReportMsg
+     * re-arms (a reconnect can change PROCESS-grant visibility).
+     */
+    private ?bool $accessMemo = null;
+
+    /**
+     * SQL-P07: the instrument tree (~1,500 nodes parsed from the row list)
+     * was rebuilt per frame. Memoized like the rows it renders: the writers of
+     * $instruments (loadData, toggleInstrument) are enumerated in this class
+     * and clear the memo, so it is exact without diffing the arrays.
+     */
+    private ?InstrumentTree $treeMemo = null;
+
+    /**
      * D-M27: statements staged by [c] and awaiting an explicit [y]
      * confirmation. These are UPDATEs against performance_schema (and, from
      * the variable editor's genre, durable server config) — the commit used
@@ -154,10 +190,21 @@ final class PerfSchemaPage extends PageBase implements RowNavigable
     /** In-page feedback line (commit cancelled / armed), rendered in build(). */
     private ?string $actionMessage = null;
 
+    /**
+     * @param StatementTimeout|null $commitTimeout SQL-P07 (adminpages-028):
+     *        per-statement budget for the confirmed commit and Easy Setup
+     *        loops — both run SYNCHRONOUSLY against performance_schema
+     *        (they are writes; the async cache serves reads only), so an
+     *        UPDATE stalled on a metadata lock used to freeze the entire UI
+     *        indefinitely, and an error mid-list left a partial commit with
+     *        no record of where it stopped. Null builds the default budget;
+     *        injection exists for tests and embedders that want a tighter cap.
+     */
     public function __construct(
         ServerContextInterface $context,
         ?EasySetupDetector $detector = null,
         ?CommitPlanner $commitPlanner = null,
+        private readonly ?StatementTimeout $commitTimeout = null,
     ) {
         parent::__construct($context);
         $this->detector = $detector;
@@ -171,24 +218,31 @@ final class PerfSchemaPage extends PageBase implements RowNavigable
         ServerContextInterface $context,
         ?EasySetupDetector $detector = null,
         ?CommitPlanner $commitPlanner = null,
+        ?StatementTimeout $commitTimeout = null,
     ): self {
-        return new self($context, $detector, $commitPlanner);
+        return new self($context, $detector, $commitPlanner, $commitTimeout);
     }
 
     /**
-     * Verify we can access Performance Schema before rendering.
+     * Verify we can access Performance Schema before rendering. SQL-P07
+     * (adminpages-007): memoized per arrival — this probe is a live COUNT
+     * round trip, and the old every-frame call kept a real query in flight
+     * every render regardless of the data gate below.
      */
     protected function validate(): bool
     {
+        if ($this->accessMemo !== null) {
+            return $this->accessMemo;
+        }
         try {
             // Try to query setup_instruments to verify PS is accessible
             $result = $this->context->connection()->query(
                 'SELECT COUNT(*) FROM `performance_schema`.`setup_instruments` WHERE `NAME` NOT LIKE \'memory/%\''
             );
-            return is_array($result);
+            return $this->accessMemo = is_array($result);
         } catch (\PDOException $e) {
             $this->errorMessage = $this->getErrorMessage($e);
-            return false;
+            return $this->accessMemo = false;
         }
     }
 
@@ -197,7 +251,11 @@ final class PerfSchemaPage extends PageBase implements RowNavigable
      */
     protected function build(): string
     {
-        $this->loadData();
+        // SQL-P07: the whole batch is arrival-scoped (snapshotLoaded gate);
+        // navigation frames reuse the parsed snapshot.
+        if (!$this->snapshotLoaded) {
+            $this->loadData();
+        }
 
         $lines = [];
 
@@ -242,12 +300,33 @@ final class PerfSchemaPage extends PageBase implements RowNavigable
      */
     public function update(Msg $msg): array
     {
+        if ($msg instanceof ReloadReportMsg) {
+            // SQL-P07: an async-cache arrival is the ONLY thing that re-arms
+            // the data batch (App forwards this on admin load/drain
+            // completion). Held while the page carries uncommitted toggles:
+            // the old per-frame reload silently evaporated them (server truth
+            // overwrote the edited rows before [c] could plan from them), and
+            // the same bug in miniature is an arrival mid-edit — so a dirty
+            // page keeps its snapshot until commit/revert, which each reload
+            // explicitly.
+            if ($this->isDirty()) {
+                return [$this, null];
+            }
+            $clone = clone $this;
+            $clone->snapshotLoaded = false;
+            $clone->accessMemo = null;
+            return [$clone, null];
+        }
+
         if (!$msg instanceof KeyMsg) {
             return [$this, null];
         }
 
-        // Ensure data is loaded for navigation operations
-        if ($this->instruments === [] && $this->consumers === []) {
+        // Ensure data is loaded for navigation operations (SQL-P07: this is
+        // the cold-start leg only — the per-frame batch is gated by
+        // snapshotLoaded in build(); a re-armed page re-fetches at render,
+        // not here, so keystrokes never sync-load stale-surviving state).
+        if (!$this->snapshotLoaded && $this->instruments === [] && $this->consumers === []) {
             $this->loadData();
         }
 
@@ -499,40 +578,68 @@ final class PerfSchemaPage extends PageBase implements RowNavigable
     /**
      * Execute a confirmed statement batch, then reload (was handleCommit()).
      *
+     * SQL-P07 (adminpages-028): every statement rides its own bounded leg
+     * (C11's alarm seam). Writes cannot ride the async cache — they ARE the
+     * write path — so the honesty delivered here is the bound plus the
+     * stop-position report: an UPDATE stalled on a metadata lock used to
+     * freeze the UI forever, and a mid-list failure said only 'Commit
+     * failed', hiding how much of the batch was already applied. Per-item
+     * progress painting would need a write-drain the Admin layer does not
+     * have; this is the bound arm of the row. The Easy Setup presets run
+     * through this same seam (handleEasySetupAction), not a copy.
+     *
      * @param list<array{sql:string,params:array<mixed>}> $statements
      * @return array{0: self, 1: ?\Closure}
      */
-    private function executeCommit(array $statements): array
+    private function executeCommit(array $statements, string $label = 'Commit'): array
     {
-        try {
-            $db = $this->context->connection();
+        $db = $this->context->connection();
+        $guard = $this->commitTimeout ?? new StatementTimeout();
+        $position = 0;
 
+        try {
             foreach ($statements as $stmt) {
+                $position++;
                 $sql = $stmt['sql'];
                 $params = $stmt['params'];
 
                 // Use prepared statement with bound parameters for safety
-                $prepared = $db->prepare($sql);
-                if ($prepared === null) {
-                    throw new \PDOException('Failed to prepare statement: ' . $sql);
-                }
-                $prepared->execute($params);
+                $guard->run(function () use ($db, $sql, $params): void {
+                    $prepared = $db->prepare($sql);
+                    if ($prepared === null) {
+                        throw new \PDOException('Failed to prepare statement: ' . $sql);
+                    }
+                    $prepared->execute($params);
+                });
             }
 
             // Reload data after commit
             $clone = clone $this;
             $clone->pendingCommit = null;
-            $clone->actionMessage = sprintf('Committed %d statement%s', count($statements), count($statements) === 1 ? '' : 's');
+            $clone->actionMessage = $label === 'Commit'
+                ? sprintf('Committed %d statement%s', count($statements), count($statements) === 1 ? '' : 's')
+                : sprintf('%s applied — %d statement%s', $label, count($statements), count($statements) === 1 ? '' : 's');
             $clone->loadData();
             if ($clone->changeTracker !== null) {
                 $clone->changeTracker->commit();
             }
 
             return [$clone, null];
-        } catch (\PDOException $e) {
+        } catch (\PDOException | StatementTimeoutException $e) {
             $clone = clone $this;
             $clone->pendingCommit = null;
-            $clone->errorMessage = 'Commit failed: ' . $e->getMessage();
+            $clone->errorMessage = sprintf(
+                '%s failed at statement %d of %d: %s — earlier statements were applied, server state is partial.',
+                $label,
+                $position,
+                count($statements),
+                $e->getMessage(),
+            );
+            // The applied prefix moved server truth: re-arm the arrival gate
+            // so the next render shows what actually got through, not the
+            // pre-commit snapshot the failed batch was planned from.
+            $clone->snapshotLoaded = false;
+            $clone->accessMemo = null;
             return [$clone, null];
         }
     }
@@ -552,32 +659,29 @@ final class PerfSchemaPage extends PageBase implements RowNavigable
             return [$this, null];
         }
 
-        try {
-            $statements = match ($action) {
-                1 => EasySetup::new()->enableStatements(),
-                2 => EasySetup::new()->disableStatements(),
-                3 => EasySetup::new()->resetToDefaultStatements(),
-                default => [],
-            };
+        $statements = match ($action) {
+            1 => EasySetup::new()->enableStatements(),
+            2 => EasySetup::new()->disableStatements(),
+            3 => EasySetup::new()->resetToDefaultStatements(),
+            default => [],
+        };
 
-            if ($statements === []) {
-                return [$this, null];
-            }
-
-            $db = $this->context->connection();
-            foreach ($statements as $sql) {
-                $db->exec($sql);
-            }
-
-            // Reload data after executing Easy Setup action
-            $clone = clone $this;
-            $clone->loadData();
-
-            return [$clone, null];
-        } catch (\PDOException $e) {
-            $this->errorMessage = 'Easy Setup action failed: ' . $e->getMessage();
+        if ($statements === []) {
             return [$this, null];
         }
+
+        // SQL-P07 (adminpages-028): the presets run through the SAME bounded,
+        // stop-position-reported seam as a confirmed [c]/[y] commit — they
+        // used to be a second, copy-maintenance loop of raw exec() calls.
+        // The statements are fully-literal UPDATEs (params: empty), so the
+        // prepared seam applies them verbatim.
+        return $this->executeCommit(
+            array_map(
+                static fn (string $sql): array => ['sql' => $sql, 'params' => []],
+                $statements,
+            ),
+            'Easy Setup',
+        );
     }
 
     private function toggleInstrument(): array
@@ -594,6 +698,9 @@ final class PerfSchemaPage extends PageBase implements RowNavigable
         $key = array_search($instrument, $clone->instruments, true);
         if ($key !== false) {
             $clone->instruments[$key] = $toggled;
+            // SQL-P07: the tree embeds the VOs — a toggle replaces one, so
+            // the memo rebuilds (this is the writer enumeration's other arm).
+            $clone->treeMemo = null;
         }
 
         return [$clone, null];
@@ -680,12 +787,17 @@ final class PerfSchemaPage extends PageBase implements RowNavigable
         // Load timers
         $this->timers = $this->loadTimers($db);
 
-        // Detect setup state using the wired detector, or fallback for backward compatibility
-        if ($this->detector !== null) {
-            $this->setupState = $this->detector->detect();
-        } else {
-            $this->setupState = $this->detectSetupState();
-        }
+        // SQL-P07 (adminpages-008): classify client-side from the rows just
+        // loaded. The wired detector previously ran detect() — up to SEVEN
+        // full-table aggregate scans (COUNT/SUM over setup_instruments and
+        // setup_consumers, several recomputing exactly what loadInstruments()
+        // and loadConsumers() already delivered) that the async cache re-armed
+        // server-side every TTL window while the pane stayed open.
+        // classifyFromData mirrors the identical ladder from these arrays with
+        // zero queries.
+        $this->setupState = $this->detector !== null
+            ? $this->detector->classifyFromData($this->instruments, $this->consumers)
+            : $this->detectSetupState();
 
         // Check privileges for read-only mode
         $this->readOnlyMode = !$this->hasUpdatePrivilege();
@@ -702,6 +814,11 @@ final class PerfSchemaPage extends PageBase implements RowNavigable
             $this->actors,
             $this->objects
         );
+
+        // SQL-P07: fresh server truth landed — the tree memo is stale by
+        // definition, and the arrival gate closes until the next ReloadReportMsg.
+        $this->treeMemo = null;
+        $this->snapshotLoaded = true;
     }
 
     /**
@@ -982,10 +1099,16 @@ final class PerfSchemaPage extends PageBase implements RowNavigable
      * SQL-P01 invalidation hook: drop the memoized privilege probe so the
      * next frame re-checks. Call on any context/session identity change
      * (a fresh page already re-probes because the memo is page-local).
+     * SQL-P07: a session identity change changes far more than the probe —
+     * rows, access visibility and the tree are all last-session facts — so
+     * the hook now re-arms the whole arrival-scoped state, not just the memo.
      */
     public function forgetPrivilegeProbe(): void
     {
         $this->updatePrivilegeMemo = null;
+        $this->snapshotLoaded = false;
+        $this->accessMemo = null;
+        $this->treeMemo = null;
     }
 
     private function getErrorMessage(\PDOException $e): string
@@ -1146,7 +1269,13 @@ final class PerfSchemaPage extends PageBase implements RowNavigable
         // flattened with depth info. Group nodes (non-leaf) show tri-state badges.
         $rows = [];
         if ($this->instruments !== []) {
-            $tree = InstrumentTree::fromInstruments($this->instruments);
+            // SQL-P07: the parse (~1,500 group+leaf nodes) ran every render
+            // frame; memoized until a writer of $instruments runs (loadData,
+            // toggleInstrument both clear it — exact, no diffing needed).
+            if ($this->treeMemo === null) {
+                $this->treeMemo = InstrumentTree::fromInstruments($this->instruments);
+            }
+            $tree = $this->treeMemo;
             foreach ($this->flattenTree($tree) as [$nodeOrInstrument, $depth, $isGroup]) {
                 if ($isGroup) {
                     // Group node — show tri-state badge with group name

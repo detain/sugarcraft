@@ -260,11 +260,20 @@ final class PerfSchemaPageTest extends TestCase
             ']' => \SugarCraft\Sql\Admin\PerfSchema\EasySetup::new()->disableStatements(),
             '.' => \SugarCraft\Sql\Admin\PerfSchema\EasySetup::new()->resetToDefaultStatements(),
         ];
+        // SQL-P07 migration (disclosed): the presets run through the same
+        // bounded PREPARED seam as a confirmed commit — the statements are
+        // byte-identical literals, but they now land on the executions
+        // ledger instead of the raw exec log. The guarantee is unchanged:
+        // exactly the preset list, in order, nothing extra.
         foreach ($expected as $key => $statements) {
-            $before = count($this->db->execLog());
+            $before = count($this->db->getExecutions());
             [$next] = $page->update($this->charKey($key));
             $this->assertNotSame($page, $next, "key {$key} must return a reloaded clone");
-            $this->assertSame($statements, $this->execLogSince($before), "key {$key} must fire exactly its preset statements");
+            $applied = array_map(
+                static fn (array $e): string => (string) $e['sql'],
+                array_slice($this->db->getExecutions(), $before),
+            );
+            $this->assertSame($statements, $applied, "key {$key} must fire exactly its preset statements");
             $page = $next;
         }
     }

@@ -45,6 +45,8 @@ interface DatabaseInterface
      * the caller should retry the query.
      *
      * @return list<array<string,mixed>>|null
+     * @throws \PDOException on server/driver failure (the implementations
+     *         are PDO-backed and surface the driver's exceptions verbatim)
      */
     public function query(string $sql): array|null;
 
@@ -68,6 +70,7 @@ interface DatabaseInterface
      *
      * @param string $sql SQL statement to execute
      * @return int Number of affected rows
+     * @throws \PDOException on server/driver failure
      */
     public function exec(string $sql): int;
 
@@ -114,6 +117,7 @@ interface DatabaseInterface
      *
      * @param string $sql The SQL statement to prepare
      * @return PreparedStatementInterface|null A prepared statement or null on failure
+     * @throws \PDOException on server/driver failure
      */
     public function prepare(string $sql): ?PreparedStatementInterface;
 
