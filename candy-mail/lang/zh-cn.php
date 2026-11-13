@@ -82,4 +82,6 @@ return [
     'smtp.size_exceeded' => '组装后的消息为 {bytes} 字节；中继通告的 SIZE 上限为 {limit} 字节 — 在 DATA 前拒绝',
     'attachment.wrapper_refused' => '拒绝读取 {path}：流包装器协议（phar://、data:// 等）不是附件来源 - phar 归档一被触碰就会反序列化其元数据。请提供本地文件路径，可带 file:// 前缀。',
     'resend.invalid_api_key' => 'Resend API 密钥的格式无法放入 Authorization 头：必须是不含空格或控制字符的可打印 ASCII。',
+    'email.header_too_long' => '邮件头 {field} 包含一个 998 字节行装不下的无空格词元；本客户端仅在空格处换行，因此拒发而非输出损坏的行。',
+    'attachment.filename_too_long' => '附件文件名超过 {limit} 字节上限（Content-Disposition 参数无法拆分，文件系统也将名称限制在 255 字节）。',
 ];

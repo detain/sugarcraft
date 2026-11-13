@@ -82,4 +82,6 @@ return [
     'smtp.size_exceeded' => 'Het samengestelde bericht is {bytes} bytes; de relay adverteert een SIZE-plafond van {limit} bytes - geweigerd vóór DATA',
     'attachment.wrapper_refused' => 'Lezen van {path} geweigerd: streamwrapper-protocollen (phar://, data://, ...) zijn geen bijlagebronnen - een phar-archief wordt metadata-gedeserialiseerd zodra het aangeraakt wordt. Geef een natief pad op, optioneel met file://-voorvoegsel.',
     'resend.invalid_api_key' => 'De Resend API-sleutel heeft een vorm die niet in een Authorization-header past: printbare ASCII zonder spaties of controletekens is vereist.',
+    'email.header_too_long' => 'Header {field} bevat een token zonder spaties dat langer is dan een regel van 998 octetten; deze client vouwt alleen op spaties, dus weigeren vooraleer een bedorven regel te zenden.',
+    'attachment.filename_too_long' => 'De bijlagenamen overschrijdt het plafond van {limit} octetten (een Content-Disposition-parameter is niet op te splitsen en bestandssystemen beperken namen tot 255 bytes).',
 ];

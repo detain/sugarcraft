@@ -82,4 +82,6 @@ return [
     'smtp.size_exceeded' => 'A mensagem composta tem {bytes} bytes; o relay anunciou um teto SIZE de {limit} bytes - recusado antes de DATA',
     'attachment.wrapper_refused' => 'Leitura de {path} recusada: protocolos de contêiner de fluxo (phar://, data://, ...) não são fontes de anexo - um arquivo phar tem seus metadados desserializados no momento em que é tocado. Passe um caminho de arquivo nativo, opcionalmente com prefixo file://.',
     'resend.invalid_api_key' => 'A chave de API Resend tem um formato que não cabe num cabeçalho Authorization: deve ser ASCII imprimível, sem espaços nem caracteres de controle.',
+    'email.header_too_long' => 'O cabecalho {field} traz um token sem espacos maior do que uma linha de 998 octetos suporta; este cliente so quebra em espacos, recusando antes do envio para nao emitir linha corrompida.',
+    'attachment.filename_too_long' => 'O nome do arquivo anexo excede o teto de {limit} octetos (um parametro Content-Disposition nao pode ser dividido e os sistemas de arquivos limitam nomes a 255 bytes).',
 ];

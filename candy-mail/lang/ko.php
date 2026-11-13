@@ -82,4 +82,6 @@ return [
     'smtp.size_exceeded' => '작성된 메시지는 {bytes}바이트입니다. 중계기가 SIZE 상한 {limit}바이트를 공지했습니다 — DATA前に 거부됨',
     'attachment.wrapper_refused' => '{path} 읽기 거부: 스트림 래퍼 프로토콜(phar://, data:// 등)은 첨부 소스가 아닙니다 - phar 아카이브는 만지는 순간 메타데이터가 역직렬화됩니다. 네이티브 파일 경로를 지정하세요(file:// 접두사 허용).',
     'resend.invalid_api_key' => 'Resend API 키 형식이 Authorization 헤더에 실릴 수 없습니다 - 공백이나 제어문자 없는 인쇄용 ASCII여야 합니다.',
+    'email.header_too_long' => '헤더 {field}는 한 줄 998옥텟에 담기지 않는 공백 없는 토큰을 포함합니다 - 이 클라이언트는 공백에서만 접으므로 손상된 줄 대신 전송 전에 거부합니다.',
+    'attachment.filename_too_long' => '첨부 파일 이름이 {limit}옥텟 상한을 초과합니다(Content-Disposition 매개변수는 나눌 수 없고 파일시스템도 이름을 255바이트로 제한합니다).',
 ];

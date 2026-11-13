@@ -89,4 +89,6 @@ return [
     'smtp.size_exceeded' => 'Die zusammengesetzte Nachricht ist {bytes} Bytes groß; der Relay bewirbt eine SIZE-Grenze von {limit} Bytes - vor DATA abgelehnt',
     'attachment.wrapper_refused' => 'Lesen von {path} verweigert: Stream-Wrapper-Protokolle (phar://, data://, ...) sind keine Anlagequellen - ein phar-Archiv wird beim ersten Antasten als Metadaten deserialisiert. Geben Sie einen nativen Dateipfad an, optional mit file://-Präfix.',
     'resend.invalid_api_key' => 'Der Resend-API-Schluessel hat eine Form, die keinen Authorization-Header passieren kann: druckbares ASCII ohne Leer- oder Steuerzeichen ist erforderlich.',
+    'email.header_too_long' => 'Der Header {field} trägt ein Token ohne Leerzeichen, das länger als eine 998-Oktett-Zeile ist; dieser Client faltet nur an Leerzeichen - daher Ablehnung vor dem Senden statt einer beschädigten Zeile.',
+    'attachment.filename_too_long' => 'Der Dateiname der Anlage überschreitet die Grenze von {limit} Oktetten (ein Content-Disposition-Parameter ist nicht teilbar, und Dateisysteme begrenzen Namen auf 255 Bytes).',
 ];

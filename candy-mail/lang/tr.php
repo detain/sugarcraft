@@ -82,4 +82,6 @@ return [
     'smtp.size_exceeded' => 'Olusturulan mesaj {bytes} bayt; aktarici {limit} baytluk SIZE tavani ilan etti — DATA oncesinde reddedildi',
     'attachment.wrapper_refused' => '{path} okunamadı: akış sarmalayıcı protokolleri (phar://, data://, ...) ek kaynağı değildir - bir phar arşivi dokunulduğu anda üstverisi geri ayrıştırılır. Yerel bir dosya yolu verin, isteğe bağlı olarak file:// önekiyle.',
     'resend.invalid_api_key' => 'Resend API anahtarının Authorization başlığına taşınamayacak bir biçimi var: yazılabilir ASCII olmalı, boşluk veya kontrol karakteri içermemeli.',
+    'email.header_too_long' => '{field} başlığı, tek 998-oktetlik satırın taşıyamayacağı kadar uzun, boşluksuz bir simge içeriyor; bu istemci yalnızca boşluklarda katlar, bozuk satır çıkarmaktansa önceden reddedilir.',
+    'attachment.filename_too_long' => 'Ek dosya adı {limit} oktet tavanını aşıyor (bir Content-Disposition parametresi bölünemez ve dosya sistemleri adları 255 baytla sınırlar).',
 ];

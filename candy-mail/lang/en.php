@@ -89,4 +89,6 @@ return [
     'smtp.size_exceeded' => 'The composed message is {bytes} bytes; the relay advertised a SIZE ceiling of {limit} bytes - refused before DATA',
     'attachment.wrapper_refused' => 'Refusing to read {path}: stream wrapper protocols (phar://, data://, ...) are not attachment sources - a phar archive is metadata-unserialized the moment it is touched. Pass a native file path, optionally with a file:// prefix.',
     'resend.invalid_api_key' => 'The Resend API key has a shape that cannot ride an Authorization header: it must be printable ASCII with no spaces or control characters.',
+    'email.header_too_long' => 'Header {field} carries a whitespace-free token longer than one 998-octet line can hold; this client folds only at spaces, so refuse before the wire rather than emit a corrupt line.',
+    'attachment.filename_too_long' => 'Attachment filename exceeds the {limit}-octet ceiling (a Content-Disposition parameter cannot be split and filesystems cap names at 255 bytes).',
 ];

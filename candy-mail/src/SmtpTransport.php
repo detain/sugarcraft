@@ -814,6 +814,18 @@ final class SmtpTransport implements Transport
             return "{$field}: {$value}";
         }
 
+        // CM-69: folding happens at spaces only, so a whitespace-free token
+        // longer than one line's budget cannot be represented — the old bytes
+        // passed it through as a knowingly over-long line (obs-fold cannot
+        // resplit it either). Refuse at build time, naming the field, before
+        // anything reaches the wire. Splittable values keep the documented
+        // soft-wrap behaviour. Budget 997 = 998 minus the continuation WSP.
+        foreach (\explode(' ', $value) as $token) {
+            if (\strlen($token) > 997) {
+                throw new \InvalidArgumentException(Lang::t('email.header_too_long', ['field' => $field]));
+            }
+        }
+
         $lines   = [];
         $current = $field . ':';
         foreach (\explode(' ', $value) as $word) {

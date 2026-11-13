@@ -89,4 +89,6 @@ return [
     'smtp.size_exceeded' => 'Le message composé pèse {bytes} octets ; le relais annonce un plafond SIZE de {limit} octets - refusé avant DATA',
     'attachment.wrapper_refused' => 'Lecture de {path} refusée : les protocoles conteneur de flux (phar://, data://, ...) ne sont pas des sources de pièce jointe — une archive phar est désérialisée en métadonnées dès qu\'on la touche. Indiquez un chemin de fichier natif, éventuellement préfixé file://.',
     'resend.invalid_api_key' => 'La clé API Resend a une forme incapable de transiter dans un en-tête Authorization : de l\'ASCII imprimable, sans espaces ni caractères de contrôle.',
+    'email.header_too_long' => 'L\'en-tete {field} porte un jeton sans espace plus long qu\'une ligne de 998 octets ; ce client ne plie qu\'aux espaces, refus avant emission plutot qu\'une ligne corrompue.',
+    'attachment.filename_too_long' => 'Le nom du fichier joint depasse le plafond de {limit} octets (un parametre Content-Disposition ne se scinde pas et les systemes de fichiers limitent les noms a 255 octets).',
 ];

@@ -82,4 +82,6 @@ return [
     'smtp.size_exceeded' => 'Složená zpráva má {bytes} B; relé inzerovalo strop SIZE {limit} B - zamítnuto před DATA',
     'attachment.wrapper_refused' => 'Čtení {path} zamítnuto: stream wrapper protokoly (phar://, data://, ...) nejsou zdrojem příloh - metadata phar archivu se deserializují okamžikem dotyku. Zadejte nativní cestu k souboru, volitelně s prefixem file://.',
     'resend.invalid_api_key' => 'Klíč Resend API má tvar, který neprojde hlavičkou Authorization: musí to tisknutelné ASCII bez mezer a řídicích znaků.',
+    'email.header_too_long' => 'Hlavička {field} obsahuje token bez mezer delší než řádek 998 oktetů; tento klient láme pouze na mezerách, proto odmítnutí před odesláním místo poškozeného řádku.',
+    'attachment.filename_too_long' => 'Název přílohy přesahuje strop {limit} oktetů (parametr Content-Disposition nelze dělit a souborové systémy omezují názvy na 255 bajtů).',
 ];

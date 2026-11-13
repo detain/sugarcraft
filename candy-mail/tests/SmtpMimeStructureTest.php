@@ -184,6 +184,29 @@ final class SmtpMimeStructureTest extends TestCase
         $this->assertSame('Subject: ' . $subject, \str_replace("\r\n ", ' ', $block));
     }
 
+    /**
+     * CM-69 acceptance: a 3000-octet whitespace-free subject token used to be
+     * emitted as one knowingly over-long header line (the documented
+     * soft-wrap pass-through); it is now refused at build time, naming the
+     * field, before any socket exists.
+     */
+    public function testUnsplittableOversizedHeaderTokenRefusesBeforeTheWire(): void
+    {
+        $email = new Email(
+            from: ['a@example.com'],
+            to: ['b@example.com'],
+            subject: \str_repeat('x', 3000),
+            body: 'x',
+        );
+        try {
+            $this->render($email);
+            $this->fail('a 3000-octet unbroken token must not be emitted as one header line');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('Subject', $e->getMessage(), 'the refusal names the field');
+            $this->assertStringContainsString('998', $e->getMessage());
+        }
+    }
+
     public function testCjkSubjectSplitsIntoBoundedEncodedWords(): void
     {
         $subject = \str_repeat("\u{65e5}\u{672c}\u{8a9e}", 40); // 360 bytes, no spaces

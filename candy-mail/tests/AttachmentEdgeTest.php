@@ -52,6 +52,34 @@ final class AttachmentEdgeTest extends TestCase
      * (a RuntimeException about a missing file); the refusal now names the
      * wrapper and its class - InvalidArgumentException, caller-input taxonomy.
      */
+    /**
+     * CM-69: the filename ceiling shares the ctor choke with the size gates,
+     * so even fromContent (no filesystem involved) refuses a megabyte name;
+     * 255 octets is a legal byte budget and the byte (not code point) reading
+     * is pinned with a 128-character two-byte string.
+     */
+    public function testFilenamesAreCappedAt255Octets(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        Attachment::fromContent('x', \str_repeat('n', 4096));
+    }
+
+    public function testFilenameCapIsCountedInOctetsNotCodePoints(): void
+    {
+        $boundary = Attachment::fromContent('x', \str_repeat('n', 255));
+        $this->assertSame('x', $boundary->content());
+
+        $multibyte = \str_repeat("\u{00e9}", 128); // 256 octets, 128 code points
+        $thrown = null;
+        try {
+            Attachment::fromContent('x', $multibyte);
+        } catch (\InvalidArgumentException $e) {
+            $thrown = $e;
+        }
+        $this->assertNotNull($thrown, '256 octets in two-byte code points still breaches the byte ceiling');
+        $this->assertStringContainsString('255', $thrown->getMessage());
+    }
+
     public function testStreamWrapperPathsAreRefusedNotStatTouched(): void
     {
         foreach (['phar:///tmp/evil.phar/x.txt', 'data://text/plain;base64,AAAA', 'glob://nope'] as $wrapper) {

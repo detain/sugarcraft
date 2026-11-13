@@ -82,4 +82,6 @@ return [
     'smtp.size_exceeded' => 'Il messaggio composto pesa {bytes} byte; il relay pubblicizza un limite SIZE di {limit} byte: rifiutato prima di DATA',
     'attachment.wrapper_refused' => 'Lettura di {path} rifiutata: i protocolli stream wrapper (phar://, data://, ...) non sono sorgenti di allegati: un archivio phar viene deserializzato nei metadati non appena toccato. Passare un percorso di file nativo, eventualmente con prefisso file://.',
     'resend.invalid_api_key' => 'La chiave API Resend ha una forma che non può viaggiare in un header Authorization: deve essere ASCII stampabile, senza spazi o caratteri di controllo.',
+    'email.header_too_long' => 'L\'header {field} contiene un token privo di spazi piu lungo di una riga da 998 ottetti; questo client ripiega solo agli spazi, rifiuto prima del filo invece di emettere una riga corrotta.',
+    'attachment.filename_too_long' => 'Il nome del file allegato supera il limite di {limit} ottetti (un parametro Content-Disposition non e separabile e i filesystem limitano i nomi a 255 byte).',
 ];

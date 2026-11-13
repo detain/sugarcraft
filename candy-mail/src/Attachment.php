@@ -34,6 +34,16 @@ final class Attachment
     public const MAX_BYTES = 26_214_400;
 
     /**
+     * Filename ceiling (CM-69): a Content-Disposition parameter is a single
+     * unsplittable token in the header block (see the foldHeader refusal -
+     * nothing in a quoted-string filename can be soft-wrapped here), and
+     * filesystems themselves cap basenames at 255 bytes, so longer names
+     * cannot round-trip anyway. Octets, not code points: the header budget is
+     * counted in bytes and multi-byte names exhaust it sooner.
+     */
+    public const MAX_FILENAME_BYTES = 255;
+
+    /**
      * Create from a file path.
      *
      * The file is read eagerly here: an unreadable or missing path fails
@@ -186,6 +196,13 @@ final class Attachment
         string $encoding,
         ?string $cid,
     ) {
+        if (\strlen($filename) > self::MAX_FILENAME_BYTES) {
+            // CM-69: refuse over-long names at the choke every factory shares
+            // (fromContent included - a megabyte name would otherwise ride an
+            // unfolded Content-Disposition line past the 998-octet budget).
+            throw new \InvalidArgumentException(Lang::t('attachment.filename_too_long', ['limit' => (string) self::MAX_FILENAME_BYTES]));
+        }
+
         // Filename and mimeType are interpolated into MIME
         // part headers at send time. The package already refuses CR/LF in
         // subjects and addresses (Email::sanitizeHeader); attachments rode the

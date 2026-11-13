@@ -82,4 +82,6 @@ return [
     'smtp.size_exceeded' => '合成されたメッセージは {bytes} バイトです。リレーは SIZE 上限 {limit} バイトを通告しています — DATA 前に拒否されました',
     'attachment.wrapper_refused' => '{path} の読み取りを拒否しました: ストリームラッパープロトコル (phar://, data:// など) は添付ファイルの入力元ではありません — phar アーカイブは触れた瞬間にメタデータがデシリアライズされます。ファイルパスはネイティブなものを指定してください (file:// 接頭辞は可)。',
     'resend.invalid_api_key' => 'Resend API キーの形式が Authorization ヘッダーに載せられるものではありません: スペースや制御文字を含まない印字可能 ASCII である必要があります。',
+    'email.header_too_long' => 'ヘッダー {field} は 1 行 998 オクテットに収まらない空白なしトークンを含みます。このクライアントは空白位置でしか折り返さないため、壊れた行を出す前に送信拒否します。',
+    'attachment.filename_too_long' => '添付ファイル名が {limit} オクテットの上限を超えています (Content-Disposition 参数は分割できず、ファイルシステムも名前を 255 バイトに制限します)。',
 ];
