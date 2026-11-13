@@ -164,7 +164,7 @@
 
     <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer create-project sugarcraft/candy-starter my-app --stability=dev</code></pre>
-    <p>Packagist carries only <code>dev-master</code> today, so <code>create-project</code> needs <code>--stability=dev</code> (or pinning the package as <code>sugarcraft/candy-starter:"@dev"</code>) until a <code>candy-starter/*</code> release tag exists.</p>
+    <p>Packagist carries <code>dev-master</code> (plus read-only <code>dev-legacy/*</code> branches frozen at the pre-rename candy-mold era) today, so the quickstart passes <code>--stability=dev</code> — <code>create-project</code> refuses a dev-only package unless told to accept it. The equivalent command shape is <code>composer create-project sugarcraft/candy-starter:dev-master my-app</code>. Until the first release tag is cut and synced, <code>dev-master</code> plus the committed <code>composer.lock</code> are the only reproducibility lever.</p>
     <p>This package is <code>type: project</code> — <code>composer create-project</code> is the only install verb that works the way you mean it to. Composer does not refuse a <code>composer require</code> of a project-type package — it is simply the wrong tool: the skeleton would land in <code>vendor/</code> and merge its <code>App\</code> autoload map into your host app.</p>
 
     <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
@@ -186,7 +186,7 @@ cd my-app
 │   └── Counter.php       # demo Model: up/down/quit, styled border
 ├── tests/
 │   ├── BinStartExitTailTest.php           # pins the bin's stopSignal() exit tail (128+N)
-│   ├── CounterTest.php                    # pinned behavior matrix — the test-shape reference
+│   ├── CounterTest.php                    # pinned behaviour matrix — the test-shape reference
 │   ├── ModelContractDocumentationTest.php # README fence vs interface drift guard
 │   ├── ReadmeSnippetsTest.php             # lint+execute every README php fence
 │   └── SiteBodyTruthTest.php              # docs site body matches the README's claims
@@ -199,7 +199,7 @@ cd my-app
       <div class="feature"><strong>composer create-project</strong><span>Three commands and you're running. <code>composer create-project sugarcraft/candy-starter my-app --stability=dev && cd my-app && ./bin/start</code>.</span></div>
       <div class="feature"><strong>Demo Counter</strong><span><code>src/Counter.php</code> — a minimal Model with up/down/quit and a styled border.</span></div>
       <div class="feature"><strong>Tests in place</strong><span>PHPUnit 10 wired to <code>tests/</code>. Replace, don't reconfigure.</span></div>
-      <div class="feature"><strong>Entry point + exit tail</strong><span><code>bin/start</code> is autoload + Model + <code>Program::run()</code> + the <code>stopSignal()</code> tail that exits <code>128+N</code> on signals.</span></div>
+      <div class="feature"><strong>Entry point + exit tail</strong><span><code>bin/start</code> is autoload + <code>new Program(new Counter())</code> + <code>run()</code> + the <code>stopSignal()</code> tail that exits <code>128+N</code> on signals.</span></div>
       <div class="feature"><strong>Pure-Model anatomy</strong><span>Demonstrates all four required Model methods — init / update / view / subscriptions — plus readonly props.</span></div>
       <div class="feature"><strong>Common-next-steps table</strong><span>README points at <code>sugarcraft/sugar-core</code> (its <code>Lang::t()</code>), <code>sugar-forms</code>, <code>sugar-markdown</code>, <code>sugar-charts</code>, <code>sugar-style</code> and <code>sugar-ssh-server</code> — six packages you're likely to reach for next — and flags which of them are not plain renderers.</span></div>
     </div>
@@ -225,7 +225,7 @@ cd my-app
 <tr><td>Counter</td><td>view()</td><td>Render the current frame</td></tr>
 <tr><td>Counter</td><td>subscriptions()</td><td>Live Msg sources (null = none) — required method</td></tr>
 <tr><td>Program <em>(sugar-core)</em></td><td>run()</td><td>Start the app — provided by the sugar-core dependency, not shipped by the starter</td></tr>
-<tr><td>Program <em>(sugar-core)</em></td><td>send(msg)</td><td>Inject a Msg into a running loop — out-of-band ingress, beside the <code>Cmd::promise()</code> resolution and <code>subscriptions()</code> paths that reach <code>update()</code> (see the README's "Getting Msgs in")</td></tr>
+<tr><td>Program <em>(sugar-core)</em></td><td>send(msg)</td><td>Inject a Msg into a running loop — out-of-band ingress, besides the <code>Cmd::promise()</code> resolution and <code>subscriptions()</code> paths that reach <code>update()</code> (see the README's "Getting Msgs in")</td></tr>
 </tbody>
 </table>
     </div>
@@ -238,7 +238,7 @@ cd my-app
         <p class="lede">A VHS-recorded GIF of the demo app as it runs from the skeleton. Regenerated automatically on every push that touches the source.</p>
         <div class="demo-grid">
             <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-starter/.vhs/start.gif" alt="Terminal recording: the counter app runs from the skeleton — Up/Down change the count, q quits" onerror="this.parentElement.style.display='none'">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-starter/.vhs/start.gif" alt="Terminal recording: the counter app runs from the skeleton — Up/Down change the count, q/Esc/Ctrl+C quits" onerror="this.parentElement.style.display='none'">
                 <h3 id="counter-from-scratch">Counter from scratch</h3>
                 <span class="demo-caption">Live drive of the demo Model that ships in the skeleton — watch the framed count tick up and down before the app quits.</span>
             </div>
