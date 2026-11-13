@@ -20,6 +20,9 @@ final class PollCadenceCensusTest extends TestCase
             'Backend/EngineBackend.php',
             'Backend/CommandBackend.php',
             'Backend/StreamingCommandBackend.php',
+            'Runtime.php',
+            'Chat.php',
+            'Support/Keychain.php',
         ];
         foreach ($files as $f) {
             $src = (string) file_get_contents(__DIR__ . '/../../src/' . $f);

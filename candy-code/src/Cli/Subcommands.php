@@ -1659,14 +1659,14 @@ final class Subcommands
 
     /**
      * `gc analyze`: the janitor overview — top sessions by real bytes,
-     * a labeled growth rate, per-table and per-storage bars, the
+     * a labelled growth rate, per-table and per-storage bars, the
      * root-vs-subagent split, and the ORPHAN census (report-only).
      *
      * Deliberate asymmetry with `gc sessions`: analyze shows EVERY
      * session, archives included — a janitor deciding what to purge must
      * see the whole floor, and the archived flag is right there in the
      * FLAGS column. The growth line measures ONLY the bytes the
-     * usage_records and session_events tables carry (the labeled scope)
+     * usage_records and session_events tables carry (the labelled scope)
      * and needs at least two distinct active days, or it says honestly
      * that growth is not measurable. The orphan sections mirror the
      * tombstone law of {@see GcOrphanCensus}: a row whose session died
@@ -1914,7 +1914,7 @@ final class Subcommands
      * `gc vacuum`: reclaim free pages.
      *
      * The no-force shape is the report the user needs to decide: how many
-     * bytes are free, what `auto_vacuum` is set to, and an ESTIMATE (labeled
+     * bytes are free, what `auto_vacuum` is set to, and an ESTIMATE (labelled
      * as one) of the file size after a rewrite — computed as db bytes minus
      * the free pages, the dbstat-free heuristic. Without `--force` nothing is
      * rewritten, whatever flags came along, and the exit is 0: the report is

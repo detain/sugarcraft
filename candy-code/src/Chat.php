@@ -487,7 +487,7 @@ final class Chat implements Model
     private const REAP_BUDGET_SECONDS = 0.1;
 
     /** How often {@see reapKilledToolChildren()} re-asks. */
-    private const REAP_POLL_MICROSECONDS = 5_000;
+    private const REAP_POLL_MICROSECONDS = \SugarCraft\Code\Support\ProcessReaper::POLL_INTERVAL_US;
 
     /**
      * How often {@see driveWorkflowFiber()} resumes a suspended workflow.

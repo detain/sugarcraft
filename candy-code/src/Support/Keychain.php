@@ -77,7 +77,7 @@ final class Keychain
      * Poll slice for the exit-await loop, mirroring
      * {@see ProcessReaper::POLL_INTERVAL_US}.
      */
-    private const POLL_INTERVAL_US = 5000;
+    private const POLL_INTERVAL_US = ProcessReaper::POLL_INTERVAL_US;
 
     /** @var array<string,string|null> memoised hits and misses by entry name */
     private static array $memo = [];

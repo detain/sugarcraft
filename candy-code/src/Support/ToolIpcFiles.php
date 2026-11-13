@@ -346,10 +346,13 @@ final class ToolIpcFiles
     /**
      * Remove abandoned payloads from $dir, returning how many were unlinked.
      *
-     * All three prefixes, and the `.partial` siblings of the two this class
-     * writes, because a cancel strands either dispatcher's shape and a killed
-     * process strands a hook's. Deliberately conservative: only regular files, only ones
-     * this uid owns, only ones older than $olderThanSeconds — a sweep that
+     * All five prefixes — the three tool-result/hook ones (an hour) and the two
+     * provider spill ones (a >64 KiB system prompt, a Codex output schema; a
+     * day) — and the `.partial` siblings of the two this class writes, because
+     * a cancel strands either dispatcher's shape and a killed process strands a
+     * hook's. Deliberately conservative: only regular files, only ones this uid
+     * owns, only ones older than $olderThanSeconds (default: the prefix's own
+     * age above) — a sweep that
      * deleted a live run's payload would turn a leak into a lost tool result.
      *
      * The uid compared is the EFFECTIVE one, because that is the uid the kernel
