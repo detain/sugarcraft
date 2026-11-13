@@ -72,4 +72,24 @@ final class TerminalReplyEventTest extends TestCase
 
         $this->assertInstanceOf(Event::class, $event);
     }
+
+    public function testEveryRosterFamilyConstructs(): void
+    {
+        foreach (TerminalReplyEvent::FAMILIES as $family) {
+            $event = new TerminalReplyEvent($family);
+
+            $this->assertSame($family, $event->family);
+        }
+    }
+
+    public function testUnknownFamilyThrowsNamingOffenderAndRoster(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage(
+            'Unknown terminal reply family "cursor"; expected one of '
+            . implode(', ', TerminalReplyEvent::FAMILIES) . '.',
+        );
+
+        new TerminalReplyEvent('cursor');
+    }
 }

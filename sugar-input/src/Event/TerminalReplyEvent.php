@@ -84,7 +84,9 @@ final readonly class TerminalReplyEvent implements Event
     public readonly int $paramsDropped;
 
     /**
-     * @param string        $family    One of the FAMILY_* constants above.
+     * @param string        $family    The reply family — must be a member of
+     *                                 {@see self::FAMILIES}; anything else is
+     *                                 invented vocabulary and throws.
      * @param list<int>     $params    Numeric CSI parameters, in wire order (private-mode
      *                                 prefixes and intermediate bytes are not params).
      * @param string        $raw       The exact bytes consumed from the stream,
@@ -107,6 +109,17 @@ final readonly class TerminalReplyEvent implements Event
         public string $body = '',
         public bool $truncated = false,
     ) {
+        // Parse-don't-validate at the boundary: an unknown family means the
+        // caller invented vocabulary the decoder roster does not model — the
+        // same census MouseEvent applies to actions.
+        if (!in_array($family, self::FAMILIES, true)) {
+            throw new \InvalidArgumentException(sprintf(
+                'Unknown terminal reply family "%s"; expected one of %s.',
+                $family,
+                implode(', ', self::FAMILIES),
+            ));
+        }
+
         $this->paramsDropped = max(0, count($params) - self::MAX_PARAMS);
         $this->params = $this->paramsDropped > 0
             ? array_slice($params, 0, self::MAX_PARAMS)
