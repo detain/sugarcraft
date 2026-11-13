@@ -67,6 +67,8 @@ echo TimeSeries::new($points, 60, 12)
 use SugarCraft\Charts\Heatmap\Heatmap;
 use SugarCraft\Core\Util\Color;
 
+$grid = [[1, 5, 9], [4, 2, 7], [8, 6, 3]];
+
 echo Heatmap::new($grid, 60, 16)
     ->withPalette([
         Color::hex('#0a0a55'),
@@ -78,7 +80,7 @@ echo Heatmap::new($grid, 60, 16)
     ->view();
 ```
 
-### Sub-cell scatter with `BrailleGrid`
+### Sub-cell dot plot on a `BrailleGrid`
 
 ```php
 use SugarCraft\Charts\Canvas\{Canvas, BrailleGrid, Graph};

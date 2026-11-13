@@ -17,4 +17,6 @@ for ($i = 0; $i < 60; $i++) {
     $values[] = sin($i * 0.2) * 50 + 50 + cos($i * 0.5) * 10;
 }
 
-echo Sparkline::new($values, 60)->withMin(0.0)->withMax(110.0)->view() . "\n";
+// Pinned range spans the data (sin/cos swings roughly -10..110): samples below
+// the floor would clamp to the blank cell and read as missing data.
+echo Sparkline::new($values, 60)->withMin(-10.0)->withMax(110.0)->view() . "\n";

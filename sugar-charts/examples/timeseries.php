@@ -22,4 +22,6 @@ for ($h = 0; $h <= 23; $h++) {
     ];
 }
 
-echo TimeSeries::new($points, width: 60, height: 12)->view() . "\n";
+echo TimeSeries::new($points, width: 60, height: 12)
+    ->withTimeFormat('H:i')
+    ->view() . "\n";
