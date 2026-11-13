@@ -52,7 +52,7 @@ use SugarCraft\Core\Util\Sanitize;
  *  - {@see sanitize()} — coerce, for a caller holding bytes it cannot vouch for
  *    and would rather lose a colour than risk a cursor move.
  *
- * @see PosterCard::withStyledTitle() for the guard option on the widget side
+ * The guard option on the widget side lives at {@see PosterCard::withStyledTitle()}.
  */
 final class AnsiGuard
 {

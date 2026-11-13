@@ -11,7 +11,7 @@ use SugarCraft\Core\I18n\Lang as BaseLang;
  *
  * Wraps the shared {@see \SugarCraft\Core\I18n\T} registry with the
  * `'gallery'` namespace baked in. Translated strings live in
- * {@see ../lang/en.php} (source of truth) plus the 15 non-English locales;
+ * `lang/en.php` (source of truth) plus the 15 non-English locales;
  * sugar-gallery is an original component, so these entry points are the
  * lib's own — they are not inherited from any Go project (the old
  * "mirrors charmbracelet/gum" line in lang/en.php was false and was retired).
