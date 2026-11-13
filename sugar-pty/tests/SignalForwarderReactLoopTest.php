@@ -7,6 +7,7 @@ namespace SugarCraft\Pty\Tests;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Pty\Pty;
 use SugarCraft\Pty\SignalForwarder;
+use SugarCraft\Pty\Tests\Support\SharedLoopResidue;
 
 /**
  * Confirms `SignalForwarder::attachSigwinch` does not double-handle the
@@ -44,6 +45,21 @@ final class SignalForwarderReactLoopTest extends TestCase
         if (\defined('SIGWINCH')) {
             SignalForwarder::reset(SIGWINCH);
         }
+
+        // Same obligation PtyPoolReactLoopTest carries: this is one of the
+        // two files that drives the SHARED Loop:: facade, so anything still
+        // armed here hijacks the next Loop::run() in the suite — a leaked
+        // one-shot ends it for the wrong reason, a leaked periodic or
+        // signal watcher never lets it end at all (the $timeout=null
+        // stream_select leg, the E490 candidate). See SharedLoopResidue.
+        $residue = SharedLoopResidue::census();
+
+        $this->assertSame(
+            ['timers' => 0, 'readStreams' => 0, 'writeStreams' => 0, 'signals' => 0, 'futureTicks' => 0],
+            $residue,
+            'this test left something armed on the SHARED loop: ' . SharedLoopResidue::describe()
+                . ' — see the ledger in SharedLoopResidue and PtyPoolReactLoopTest.',
+        );
     }
 
     public function testAttachSigwinchFiresExactlyOnceInsideReactLoop(): void
