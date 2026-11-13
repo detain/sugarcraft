@@ -192,4 +192,73 @@ final class ZoneGeometryTest extends TestCase
         self::assertSame('Home › Settings', $out);
         self::assertStringNotContainsString("\u{E000}", $out);
     }
+
+    // ─── NS-08: generation stamp — cross-generation dispatch throws ──────────
+
+    public function testHitItemRefusesStackMutatedAfterRender(): void
+    {
+        // TUI-M2 class: only a re-render flips `scanned`, so a push after
+        // scan used to resolve the OLD zones against NEW contents silently.
+        $stack = $this->stackWith('Home', 'Settings');
+        $bc    = (new Breadcrumb())->withScanner(new Scanner());
+        $bc->scan($bc->render($stack));
+
+        $stack->push('Mutated'); // no re-render follows
+
+        $this->expectException(\LogicException::class);
+        $this->expectExceptionMessage('not the generation this breadcrumb rendered');
+        $bc->hitItem($stack, 1, 1);
+    }
+
+    public function testHitItemRefusesFilteredCopyConfusion(): void
+    {
+        // The renumber trap, now load-bearing: zones painted from a
+        // filtered() copy dispatched against the ORIGINAL throw (and the
+        // reverse pairing too) instead of misrouting.
+        $original = $this->stackWith('Home', 'QA', 'Reports');
+        $filtered = $original->filtered('QA');
+        self::assertSame(1, $filtered->depth()); // QA alone; renumbered to crumb-0
+
+        $bc = (new Breadcrumb())->withScanner(new Scanner());
+        $bc->scan($bc->render($filtered));
+
+        $this->expectException(\LogicException::class);
+        $bc->hitItem($original, 1, 1);
+    }
+
+    public function testHitItemHappyPathStillResolvesSameGeneration(): void
+    {
+        $stack = $this->stackWith('Home', 'Settings', 'Display');
+        $bc    = (new Breadcrumb())->withScanner(new Scanner());
+        $bc->scan($bc->render($stack));
+
+        self::assertSame('Home', $bc->hitItem($stack, 1, 1)?->title);
+        // Untouched-stack repeat dispatch keeps working (no false refusal):
+        self::assertSame('Settings', $bc->hitItem($stack, 8, 1)?->title);
+    }
+
+    public function testHitItemOutsideEveryCrumbStaysQuietUnderStaleState(): void
+    {
+        // Generation refusal is for DISPATCH; a dead-cell click is the
+        // existing quiet-null contract even when the stack has moved on.
+        $stack = $this->stackWith('Home', 'Settings');
+        $bc    = (new Breadcrumb())->withScanner(new Scanner());
+        $bc->scan($bc->render($stack));
+        $stack->push('Later');
+
+        self::assertNull($bc->hitItem($stack, 100, 1));
+    }
+
+    public function testRenderTitlesLeavesDispatchUntampedLegacyShape(): void
+    {
+        // Host-owned bare titles carry no stack identity: hitItem keeps the
+        // pre-NS-08 POSITIONAL resolution for them (documented door) — the
+        // clicked zone maps to the passed-in stack's own items, on the
+        // host's honor.
+        $stack = $this->stackWith('Home', 'Settings');
+        $bc    = (new Breadcrumb())->withScanner(new Scanner());
+        $bc->scan($bc->renderTitles(['Alpha', 'Beta']));
+
+        self::assertSame('Home', $bc->hitItem($stack, 1, 1)?->title);
+    }
 }

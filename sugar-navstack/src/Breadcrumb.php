@@ -95,6 +95,17 @@ final class Breadcrumb
     /** True between a scan() of the current output and the next render. */
     private bool $scanned = false;
 
+    /**
+     * Render stamp (NS-08): identity of the exact stack object the LAST
+     * render() consumed, plus its generation at that moment. Weak on
+     * purpose — a breadcrumb outliving its stack holds no anchor. Renders
+     * with no stack to validate against (renderTitles(), empty renders)
+     * clear it, and {@see hitItem()} refuses dispatches whose stack has
+     * since mutated or is a different object (e.g. a filtered() copy).
+     */
+    private ?\WeakReference $stampedStack = null;
+    private int $stampedGeneration = 0;
+
     /** Row the last scan() was told the breadcrumb occupies (1-based). */
     private int $scanRowOffset = 0;
 
@@ -305,6 +316,18 @@ final class Breadcrumb
      * Zone ids carry full-stack indices, so the returned item matches the
      * stack position regardless of left-elision; use the caller's own
      * stack (the one rendered) for the lookup.
+     *
+     * NS-08 makes "your own stack" EXECUTABLE: the render stamped the
+     * stack object and its mutation generation, and a dispatch whose stack
+     * has since mutated — or is a different object (the renumber trap:
+     * `filtered()` renumbers, so zones painted from a filtered copy must
+     * never resolve against the original, nor vice versa) — THROWS instead
+     * of misrouting silently. Clicks landing outside every crumb still
+     * return null quietly (that's the hit() contract, not staleness).
+     *
+     * @throws \LogicException When the stack handed in is not the one (or
+     *                         the un-mutated same generation of the one)
+     *                         the current zones were rendered from
      */
     public function hitItem(NavStack $stack, int $col, int $row): ?NavigationItem
     {
@@ -316,6 +339,16 @@ final class Breadcrumb
         if (preg_match($pattern, $zone->id, $m) !== 1) {
             return null;
         }
+        if ($this->stampedStack !== null
+            && ($this->stampedStack->get() !== $stack
+                || $stack->generation() !== $this->stampedGeneration)) {
+            throw new \LogicException(
+                'hitItem() dispatched against a stack that is not the generation this '
+                . 'breadcrumb rendered — the clicked zone cannot resolve honestly here. '
+                . 'Re-render and re-scan the SAME stack you dispatch on (mutations and '
+                . 'filtered() copies both change what crumb-N points at).'
+            );
+        }
         return $stack->items()[(int) $m[1]] ?? null;
     }
 
@@ -323,7 +356,10 @@ final class Breadcrumb
      * Stack indices made visible by the most recent render (empty before
      * the first render, and after a render of an empty stack). When
      * {@see setMaxWidth()} elides older crumbs, these are the survivors'
-     * true positions — exactly the indices zone ids carry.
+     * true positions — exactly the indices zone ids carry. Positions are
+     * meaningful ONLY for the stack that render() consumed — `filtered()`
+     * renumbers, and {@see hitItem()} refuses dispatches against a
+     * different stack or a since-mutated generation (NS-08).
      *
      * @return list<int>
      */
@@ -343,6 +379,7 @@ final class Breadcrumb
         if ($items === []) {
             $this->lastVisible = [];
             $this->scanned     = false;
+            $this->clearStamp();
             return '';
         }
 
@@ -362,7 +399,12 @@ final class Breadcrumb
             $titles[] = $title ?? TitleSanitizer::sanitize($item->title);
         }
 
-        return $this->doRender($titles);
+        $out = $this->doRender($titles);
+        // Stamp AFTER doRender: the generation the painted zones were
+        // resolved against is the stack's state at render time.
+        $this->stampedStack      = \WeakReference::create($stack);
+        $this->stampedGeneration = $stack->generation();
+        return $out;
     }
 
     /**
@@ -382,9 +424,20 @@ final class Breadcrumb
         if ($titles === []) {
             $this->lastVisible = [];
             $this->scanned     = false;
+            $this->clearStamp();
             return '';
         }
-        return $this->doRender(\array_map([TitleSanitizer::class, 'sanitize'], $titles));
+        $out = $this->doRender(\array_map([TitleSanitizer::class, 'sanitize'], $titles));
+        // No stack was consumed: nothing to validate future dispatches
+        // against — clear any previous render stamp (NS-08).
+        $this->clearStamp();
+        return $out;
+    }
+
+    private function clearStamp(): void
+    {
+        $this->stampedStack      = null;
+        $this->stampedGeneration = 0;
     }
 
     /**

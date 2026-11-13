@@ -218,7 +218,14 @@ current render unscanned, both lookups throw too: every `set*` mutation only
 takes effect on the NEXT `render()`, and each render clears the scanned flag
 — render, then scan, then hit, and never trust zones across a re-render.
 
-Two guarantees make that recipe safe under truncation:
+Three guarantees make that recipe safe under truncation:
+
+- `hitItem()` refuses CROSS-GENERATION dispatch (NS-08): the render stamps
+  the stack's identity and mutation counter, so handing it a stack that has
+  changed since render/scan — or a DIFFERENT object, including a
+  `filtered()` copy — throws `LogicException` instead of silently
+  misresolving the clicked crumb. Clicks outside every crumb stay quiet
+  nulls.
 
 - Zone ids carry the crumb's position in the **full stack**, never a
   renumbered visible-list index — after `"… Settings › Display"`, the left

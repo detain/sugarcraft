@@ -63,6 +63,29 @@ final class NavStack
     private array $items = [];
 
     /**
+     * Monotonic MUTATION LEDGER (NS-08): every mutator that actually
+     * changes the item list bumps it (documented no-ops — empty pop,
+     * empty updateTop/clear, clamp-with-nothing-to-cut — do not), and
+     * `Breadcrumb::render()` stamps the value it rendered. A hitItem()
+     * dispatch whose stack has moved on since that render (or is a
+     * *different* stack object altogether, e.g. a `filtered()` copy) can
+     * no longer misroute silently — the generation mismatch throws.
+     */
+    private int $generation = 0;
+
+    /**
+     * The mutation ledger of this exact stack object. Compare against the
+     * value a breadcrumb stamped at render time (see
+     * {@see Breadcrumb::hitItem()}'s cross-generation refusal); a fresh
+     * `filtered()` copy deliberately carries parent+1 so original/filtered
+     * confusion is caught on both axes (identity AND count).
+     */
+    public function generation(): int
+    {
+        return $this->generation;
+    }
+
+    /**
      * Push a new navigation item onto the stack.
      *
      * The title passes through {@see NavigationItem}'s constructor guards:
@@ -84,6 +107,7 @@ final class NavStack
             );
         }
         $this->items[] = new NavigationItem($title, $data);
+        ++$this->generation;
         return $this;
     }
 
@@ -98,6 +122,7 @@ final class NavStack
         if ($this->items === []) {
             return null;
         }
+        ++$this->generation;
         return \array_pop($this->items);
     }
 
@@ -133,7 +158,10 @@ final class NavStack
                 'popTo index must be >= 0; use popToRoot() to keep only the root'
             );
         }
-        $this->items = \array_slice($this->items, 0, $index + 1);
+        if (\count($this->items) > $index + 1) {
+            $this->items = \array_slice($this->items, 0, $index + 1);
+            ++$this->generation;
+        }
         return $this;
     }
 
@@ -213,6 +241,7 @@ final class NavStack
         }
         $top = $this->items[\count($this->items) - 1];
         $this->items[\count($this->items) - 1] = new NavigationItem($top->title, $data);
+        ++$this->generation;
         return $this;
     }
 
@@ -221,7 +250,10 @@ final class NavStack
      */
     public function clear(): self
     {
-        $this->items = [];
+        if ($this->items !== []) {
+            $this->items = [];
+            ++$this->generation;
+        }
         return $this;
     }
 
@@ -248,6 +280,7 @@ final class NavStack
             }
         }
         $this->items = \array_values($items);
+        ++$this->generation;
         return $this;
     }
 
@@ -424,14 +457,18 @@ final class NavStack
         );
         $new = new self();
         $new->items = \array_values($kept);
+        // Seed parent+1 (NS-08): the copy's ledger deliberately differs from
+        // the receiver's so a render of one can never validate a dispatch
+        // against the other, even before object identity is consulted.
+        $new->generation = $this->generation + 1;
         return $new;
     }
 
     /**
-     * @deprecated Renamed to {@see filtered()} — the verb-style name read as
-     *             a mutator while it in fact returns a fresh stack (the one
-     *             non-with* copy in the library). The forwarder is behavior-
-     *             identical, including the Unicode fold.
+     * @deprecated REMOVED-IN: 2.0.0. Renamed to {@see filtered()} — the verb-style
+     *             name read as a mutator while it in fact returns a fresh stack
+     *             (the one non-with* copy in the library). The forwarder is
+     *             behavior-identical, including the Unicode fold.
      */
     public function filter(string $term): self
     {

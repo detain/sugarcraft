@@ -515,6 +515,46 @@ final class NavStackTest extends TestCase
         $this->assertSame(0, $s->filtered("\xC3\xA")->depth());
     }
 
+    // ─── NS-08: the mutation ledger ──────────────────────────────────────────
+
+    public function testGenerationBumpsOnEveryRealMutationOnly(): void
+    {
+        $s = new NavStack();
+        $g0 = $s->generation();
+        $s->push('Home');
+        $this->assertSame($g0 + 1, $s->generation());
+        $s->pop();
+        $this->assertSame($g0 + 2, $s->generation());
+        // NO-OP mutators must NOT bump (empty pop, empty updateTop):
+        $this->assertNull($s->pop());
+        $s->updateTop('ignored');
+        $this->assertSame($g0 + 2, $s->generation());
+        $s->push('A')->push('B');
+        $s->setItems([]);
+        $this->assertSame($g0 + 5, $s->generation(), 'setItems bumps once per call');
+        $s->push('C');
+        $s->clear();
+        $this->assertSame($g0 + 7, $s->generation(), 'push + real clear');
+        $s->popToRoot(); // already empty: the clamp no-ops and does NOT bump
+        $this->assertSame($g0 + 7, $s->generation());
+        $s->push('D');
+        $s->popTo(99); // oversized clamp removes nothing: no bump
+        $this->assertSame($g0 + 8, $s->generation());
+    }
+
+    public function testFilteredCopySeedsParentGenerationPlusOne(): void
+    {
+        $s = new NavStack();
+        $s->push('Home')->push('QA');
+        $this->assertSame(2, $s->generation());
+        $this->assertSame(3, $s->filtered('QA')->generation());
+        // Siblings of the SAME parent seed identically (parent+1); the
+        // WEAK-REFERENCE identity axis in Breadcrumb refuses cross-sibling
+        // dispatch, and a second filter chain bumps again at depth.
+        $this->assertSame(3, $s->filtered('')->generation());
+        $this->assertSame(4, $s->filtered('QA')->filtered('')->generation());
+    }
+
     // ─── NS-12: safeTitle — the published display facade ─────────────────────
 
     public function testSafeTitleIsByteIdenticalToTheSurfaceSweep(): void
