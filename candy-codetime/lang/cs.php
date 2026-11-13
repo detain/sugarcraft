@@ -48,6 +48,7 @@ return [
     'ui.top_projects' => 'Nejaktivnější projekty',
     'ui.by_language' => 'Podle jazyka',
     'ui.help_row' => '  ←  předchozí den  ·  →  další den  ·  r  obnovit  ·  q/Esc  konec',
+    'ui.help_row_compact' => '  ← prev  ·  → next  ·  r  reload  ·  q/Esc  quit',
     'ui.total' => 'celkem:',
     'ui.range_format' => 'M j',
     'ui.weekday_format' => 'D',

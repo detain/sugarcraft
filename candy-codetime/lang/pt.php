@@ -48,6 +48,7 @@ return [
     'ui.top_projects' => 'Principais projetos',
     'ui.by_language' => 'Por idioma',
     'ui.help_row' => '  ←  dia anterior  ·  →  dia seguinte  ·  r  recarregar  ·  q/Esc  sair',
+    'ui.help_row_compact' => '  ← prev  ·  → next  ·  r  reload  ·  q/Esc  quit',
     'ui.total' => 'total:',
     'ui.range_format' => 'M j',
     'ui.weekday_format' => 'D',

@@ -48,6 +48,7 @@ return [
     'ui.top_projects' => 'Лучшие проекты',
     'ui.by_language' => 'По языку',
     'ui.help_row' => '  ←  пред. день  ·  →  след. день  ·  r  обновить  ·  q/Esc  выход',
+    'ui.help_row_compact' => '  ← prev  ·  → next  ·  r  reload  ·  q/Esc  quit',
     'ui.total' => 'всего:',
     'ui.range_format' => 'M j',
     'ui.weekday_format' => 'D',

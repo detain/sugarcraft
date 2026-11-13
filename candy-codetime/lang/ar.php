@@ -48,6 +48,7 @@ return [
     'ui.top_projects' => 'أبرز المشاريع',
     'ui.by_language' => 'حسب اللغة',
     'ui.help_row' => '  ←  اليوم السابق  ·  →  اليوم التالي  ·  r  إعادة التحميل  ·  q/Esc  خروج',
+    'ui.help_row_compact' => '  ← prev  ·  → next  ·  r  reload  ·  q/Esc  quit',
     'ui.total' => 'الإجمالي:',
     'ui.range_format' => 'M j',
     'ui.weekday_format' => 'D',

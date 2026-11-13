@@ -11,6 +11,7 @@ use SugarCraft\CodeTime\Heartbeat;
 use SugarCraft\CodeTime\Renderer;
 use SugarCraft\CodeTime\Stats;
 use SugarCraft\CodeTime\Store;
+use SugarCraft\Core\I18n\T;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Width;
 
@@ -435,5 +436,37 @@ final class RendererGeometryTest extends TestCase
             }
         }
         $this->fail('no timeline heading row in the frame');
+    }
+
+    /**
+     * CT-S13 acceptance: under a German locale every chrome label is the
+     * translation, none is the English original, and the translated rows
+     * (German is the longest of the 16 catalogues) still obey the one rule
+     * the whole file exists for - no row outgrows the terminal.
+     */
+    public function testGermanLocalePaintsTranslatedPanesInsideTheFrame(): void
+    {
+        $previous = T::locale();
+        T::setLocale('de');
+        try {
+            $frame = self::frame(62, self::busy());
+            foreach (['Top-Projekte', 'Nach Sprache', 'Tägliche Aktivität', 'gesamt:'] as $needle) {
+                self::assertStringContainsString($needle, $frame, 'German pane missing: ' . $needle);
+            }
+            foreach (['Top projects', 'By language', 'Daily activity', 'total:'] as $english) {
+                self::assertStringNotContainsString($english, $frame, 'English chrome survived: ' . $english);
+            }
+            // The German help row needs 67 cells; at 62 the frame trades it
+            // for the key-only variant instead of clipping words away. A
+            // window wide enough gets the translated full row back.
+            self::assertStringContainsString('q/Esc  quit', $frame, 'compact help fallback missing at 62');
+            $wide = self::frame(80, self::busy());
+            self::assertStringContainsString('beenden', $wide, 'full translated help row missing at 80');
+            foreach (self::plain($frame) as $line) {
+                self::assertLessThanOrEqual(62, Width::string($line), 'row overflows under de: ' . $line);
+            }
+        } finally {
+            T::setLocale($previous);
+        }
     }
 }

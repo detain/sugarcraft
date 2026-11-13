@@ -48,6 +48,7 @@ return [
     'ui.top_projects' => 'En çok projeler',
     'ui.by_language' => 'Dile göre',
     'ui.help_row' => '  ←  önceki gün  ·  →  sonraki gün  ·  r  yeniden yükle  ·  q/Esc  çık',
+    'ui.help_row_compact' => '  ← prev  ·  → next  ·  r  reload  ·  q/Esc  quit',
     'ui.total' => 'toplam:',
     'ui.range_format' => 'M j',
     'ui.weekday_format' => 'D',

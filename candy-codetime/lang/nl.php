@@ -48,6 +48,7 @@ return [
     'ui.top_projects' => 'Topprojecten',
     'ui.by_language' => 'Per taal',
     'ui.help_row' => '  ←  vorige dag  ·  →  volgende dag  ·  r  herladen  ·  q/Esc  afsluiten',
+    'ui.help_row_compact' => '  ← prev  ·  → next  ·  r  reload  ·  q/Esc  quit',
     'ui.total' => 'totaal:',
     'ui.range_format' => 'M j',
     'ui.weekday_format' => 'D',

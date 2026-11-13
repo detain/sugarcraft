@@ -97,8 +97,8 @@ final class Renderer
         $stats = $d->stats;
 
         $header = self::clip(self::header($d), $d->width);
-        $projects = self::ranking('Top projects', $stats->perProject(), '#fde68a', $d->width, $d->colorProfile, $entries);
-        $languages = self::ranking('By language', $stats->perLanguage(), '#7dd3fc', $d->width, $d->colorProfile, $entries);
+        $projects = self::ranking(Lang::t('ui.top_projects'), $stats->perProject(), '#fde68a', $d->width, $d->colorProfile, $entries);
+        $languages = self::ranking(Lang::t('ui.by_language'), $stats->perLanguage(), '#7dd3fc', $d->width, $d->colorProfile, $entries);
 
         // Side by side only once two frames plus the gutter actually fit. The
         // threshold is derived from the numbers above, because the old literal
@@ -113,8 +113,17 @@ final class Renderer
 
         $timeline = self::timeline($d);
 
+        // CT-S13: the translated help row is longer than English in most
+        // locales (German/pl fill 67-75 cells). A row that does not fit falls
+        // back to the key-only variant, which is identical in every locale
+        // and names every binding; clip() then only ever fires for terminals
+        // narrower than even that, exactly as before.
+        $helpText = Lang::t('ui.help_row');
+        if ($d->width !== null && Width::string($helpText) > $d->width) {
+            $helpText = Lang::t('ui.help_row_compact');
+        }
         $help = self::clip(self::tint(Style::new(), '#7d6e98', $d->colorProfile)
-            ->render('  ←  prev day  ·  →  next day  ·  r  reload  ·  q/Esc  quit'), $d->width);
+            ->render($helpText), $d->width);
 
         return self::clipRows($header . "\n" . $top . "\n" . $timeline . "\n" . $help, $d->width) . "\n";
     }
@@ -176,8 +185,8 @@ final class Renderer
 
     private static function header(Dashboard $d): string
     {
-        $end = $d->endDay->format('M j');
-        $start = $d->endDay->modify('-' . ($d->days - 1) . ' days')->format('M j');
+        $end = $d->endDay->format(Lang::t('ui.range_format'));
+        $start = $d->endDay->modify('-' . ($d->days - 1) . ' days')->format(Lang::t('ui.range_format'));
         $total = Stats::formatHours($d->stats->totalSeconds());
         $title = self::tint(Style::new()->bold(), '#ff5f87', $d->colorProfile)
             ->render(' CandyCodetime ');
@@ -193,7 +202,7 @@ final class Renderer
             $badge = self::tint(Style::new(), '#7d6e98', $d->colorProfile)
                     ->render('[' . self::clean($d->backendLabel) . ']') . ' ';
         }
-        return $title . '  ' . $badge . $range . '   total: ' . $tot;
+        return $title . '  ' . $badge . $range . '   ' . Lang::t('ui.total') . ' ' . $tot;
     }
 
     /**
@@ -229,12 +238,12 @@ final class Renderer
 
         $lines = [Width::truncate($title, $text)];
         if ($rows === []) {
-            $lines[] = self::tint(Style::new(), '#7d6e98', $profile)->render(Width::truncate('  (no activity)', $text));
+            $lines[] = self::tint(Style::new(), '#7d6e98', $profile)->render(Width::truncate('  ' . Lang::t('ui.no_activity'), $text));
         } elseif ($shown === []) {
             // A cap of zero entries is not "no activity" — a screen short
             // enough to starve the pane must name how much it hides.
             $lines[] = self::tint(Style::new(), '#7d6e98', $profile)
-                ->render(Width::truncate('  +' . count($rows) . ' more', $text));
+                ->render(Width::truncate('  ' . Lang::t('ui.more_suffix', ['count' => count($rows)]), $text));
         } else {
             $durationWidth = 4;
             foreach ($shown as [, $duration]) {
@@ -254,7 +263,7 @@ final class Renderer
             if (count($rows) > $entries) {
                 // The hard cap used to hide projects silently; say how many are missing.
                 $lines[] = self::tint(Style::new(), '#7d6e98', $profile)
-                    ->render(Width::truncate('  +' . (count($rows) - $entries) . ' more', $text));
+                    ->render(Width::truncate('  ' . Lang::t('ui.more_suffix', ['count' => count($rows) - $entries]), $text));
             }
         }
         return Style::new()
@@ -323,24 +332,24 @@ final class Renderer
         $labels = $count === 0 ? [] : array_slice($days, -$area);
         $hidden = $count - count($shown);
         $slotWidths = self::slots($area, count($shown));
-        $suffix = $hidden > 0 ? '  +' . $hidden . ' earlier' : '';
+        $suffix = $hidden > 0 ? '  ' . Lang::t('ui.earlier_suffix', ['count' => $hidden]) : '';
 
         // The heading gives up '(minutes)' before it gives up the count of days
         // that fell off the left: the count is information, the word is not.
-        $full = ' Daily activity (minutes)' . $suffix;
-        $short = ' Daily activity' . $suffix;
+        $full = ' ' . Lang::t('ui.activity_minutes_heading') . $suffix;
+        $short = ' ' . Lang::t('ui.activity_heading') . $suffix;
         $body = Style::new()->bold()->render(
-            self::heading([$full, $short, ' Daily activity'], $heading),
+            self::heading([$full, $short, ' ' . Lang::t('ui.activity_heading')], $heading),
         );
 
         if ($shown === []) {
-            return Style::new()->border(Border::rounded())->padding(0, 1)->render($body . "\n(no data)");
+            return Style::new()->border(Border::rounded())->padding(0, 1)->render($body . "\n" . Lang::t('ui.no_data'));
         }
 
         $flat = max($shown) === 0;
         $bars = self::bars($shown, $slotWidths, $flat);
         $weekdays = array_map(
-            static fn(\DateTimeImmutable $day): string => $day->format('D'),
+            static fn(\DateTimeImmutable $day): string => $day->format(Lang::t('ui.weekday_format')),
             $labels,
         );
         $marks = self::marks($weekdays, $slotWidths, $d->colorProfile);

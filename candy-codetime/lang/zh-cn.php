@@ -48,6 +48,7 @@ return [
     'ui.top_projects' => '热门项目',
     'ui.by_language' => '按语言',
     'ui.help_row' => '  ←  前一天  ·  →  后一天  ·  r  重新加载  ·  q/Esc  退出',
+    'ui.help_row_compact' => '  ← prev  ·  → next  ·  r  reload  ·  q/Esc  quit',
     'ui.total' => '总计：',
     'ui.range_format' => 'M j',
     'ui.weekday_format' => 'D',
