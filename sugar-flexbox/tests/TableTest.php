@@ -81,7 +81,52 @@ final class TableTest extends TestCase
         $method->setAccessible(true);
 
         $result = $method->invoke($t, 'HelloWorld', 5, 'left');
-        $this->assertLessThanOrEqual(5, \strlen($result));
+        // finding-043: the old leg asserted an INEQUALITY on strlen; the
+        // contract is an exact cell landing (truncate on a width boundary,
+        // then pad to the requested budget).
+        $this->assertSame(5, \SugarCraft\Core\Util\Width::string($result));
+    }
+
+    public function testPadHeaderWideTitlesLandOnExactCellWidth(): void
+    {
+        // finding-043: every padHeader pin so far was ASCII, where strlen and
+        // cell-count agree by accident — a wide-title regression (double-width
+        // glyphs measured as bytes, or truncated mid-grapheme) sailed through.
+        // CJK and emoji titles must land on EXACTLY $width measured cells, in
+        // equality form, for all three alignments.
+        $t = (new Table())
+            ->addColumn(Column::make('X', 10));
+        $method = (new \ReflectionClass($t))->getMethod('padHeader');
+        $method->setAccessible(true);
+
+        $cases = [
+            ['東京東京東京', 5, 'left', '東京 '],
+            ['東京東京東京', 5, 'center', '東京 '],
+            ['🙂🙂🙂🙂', 5, 'right', ' 🙂🙂'],
+            ['日本語テスト', 12, 'center', '日本語テスト'],
+            ['ÄrgerÜ', 6, 'left', 'ÄrgerÜ'],
+        ];
+        foreach ($cases as [$title, $width, $align, $expected]) {
+            $result = $method->invoke($t, $title, $width, $align);
+            $this->assertSame(
+                $expected,
+                $result,
+                \sprintf('padHeader(%s, %d, %s) must land on exactly %d cells', $title, $width, $align, $width)
+            );
+            $this->assertSame(
+                $width,
+                \SugarCraft\Core\Util\Width::string($result),
+                \sprintf('padHeader(%s, %d, %s) measured-cell equality', $title, $width, $align, $width)
+            );
+            // No mid-grapheme split: byte-based truncation would leave a
+            // dangling continuation byte that the cell measurement above
+            // happily papers over with padding — UTF-8 validity cannot.
+            $this->assertSame(
+                1,
+                preg_match('//u', $result),
+                \sprintf('padHeader(%s, %d, %s) must not split a grapheme', $title, $width, $align)
+            );
+        }
     }
 
     // ---- withSeparator ----------------------------------------------------

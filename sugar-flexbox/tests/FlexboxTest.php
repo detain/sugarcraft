@@ -542,18 +542,20 @@ final class FlexboxTest extends TestCase
         // First frame is full output (baseline)
         $this->assertGreaterThan(50, $bytes1, 'Frame 1 should be full output');
 
-        // Subsequent frames should be delta. With proper SGR→Style tracking,
-        // style-only changes produce real SetCellOp diff ops (correct behavior).
-        // The old null-style behavior produced near-empty diffs (bug).
-        // Deltas are larger now but still much smaller than full frames:
-        //   frame 1: 74 bytes (full), frame 2: ~76 bytes (cursor style delta)
-        //   frame 3: ~146 bytes (header + cursor style delta)
-        $this->assertLessThanOrEqual(120, $bytes2, 'Frame 2 delta should be ≤120 bytes');
-        $this->assertLessThanOrEqual(200, $bytes3, 'Frame 3 delta should be ≤200 bytes');
+        // Subsequent frames should be delta. finding-044: the old caps were
+        // magic numbers (120/200/320) whose quoted sizes had already drifted
+        // from reality. Each cap is now DERIVED IN-TEST as 115% of the full
+        // frame that a FRESH renderer would emit for the same table state —
+        // the honest ceiling is "beat the re-render by a safety margin", and
+        // it re-anchors automatically when styles/fixtures change.
+        $cap2 = (int) ceil(strlen((new TableRenderer())->render($t2)) * 1.15);
+        $cap3 = (int) ceil(strlen((new TableRenderer())->render($t3)) * 1.15);
+        $this->assertLessThanOrEqual($cap2, $bytes2, \sprintf('Frame 2 delta %d bytes must fit 115%% of full frame %d', $bytes2, $cap2));
+        $this->assertLessThanOrEqual($cap3, $bytes3, \sprintf('Frame 3 delta %d bytes must fit 115%% of full frame %d', $bytes3, $cap3));
 
-        // Total delta bytes for 2 frames should be ≤320
+        // Total delta bytes for both frames stay under the summed derived caps.
         $totalDelta = $bytes2 + $bytes3;
-        $this->assertLessThanOrEqual(320, $totalDelta, 'Total delta bytes for 2 frames should be ≤320');
+        $this->assertLessThanOrEqual($cap2 + $cap3, $totalDelta, 'Total delta bytes for 2 frames should fit the summed derived caps');
     }
 
     // ---- SEC: style setters reject SGR injection ---------------------------
