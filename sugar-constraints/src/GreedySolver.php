@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace SugarCraft\Constraints;
 
+use SugarCraft\Constraints\Constraint\Constraint;
 use SugarCraft\Constraints\Constraint\Fill;
 use SugarCraft\Constraints\Constraint\Length;
 use SugarCraft\Constraints\Constraint\Max;
 use SugarCraft\Constraints\Constraint\Min;
 use SugarCraft\Constraints\Constraint\Percentage;
 use SugarCraft\Constraints\Constraint\Ratio;
-use SugarCraft\Constraints\Constraint\Constraint;
 use SugarCraft\Constraints\Direction;
 use SugarCraft\Constraints\Region;
 
@@ -167,7 +167,7 @@ final class GreedySolver implements LayoutSolver
      */
     public function withRoundSplit(bool $on = true): self
     {
-        return new self($on, $this->remainderToLast, $this->truncateOverflow, $this->minShare, $this->reserveGap, $this->reserveLead);
+        return $this->mutate(['roundSplit' => $on]);
     }
 
     /**
@@ -176,7 +176,7 @@ final class GreedySolver implements LayoutSolver
      */
     public function withRemainderToLast(bool $on = true): self
     {
-        return new self($this->roundSplit, $on, $this->truncateOverflow, $this->minShare, $this->reserveGap, $this->reserveLead);
+        return $this->mutate(['remainderToLast' => $on]);
     }
 
     /**
@@ -185,7 +185,7 @@ final class GreedySolver implements LayoutSolver
      */
     public function withoutOverflowTruncation(): self
     {
-        return new self($this->roundSplit, $this->remainderToLast, false, $this->minShare, $this->reserveGap, $this->reserveLead);
+        return $this->mutate(['truncateOverflow' => false]);
     }
 
     /**
@@ -193,7 +193,7 @@ final class GreedySolver implements LayoutSolver
      */
     public function withOverflowTruncation(bool $on = true): self
     {
-        return new self($this->roundSplit, $this->remainderToLast, $on, $this->minShare, $this->reserveGap, $this->reserveLead);
+        return $this->mutate(['truncateOverflow' => $on]);
     }
 
     /**
@@ -215,7 +215,20 @@ final class GreedySolver implements LayoutSolver
      */
     public function withMinShare(int $cells = 1, int $reserveGap = 0, int $reserveLead = 0): self
     {
-        return new self($this->roundSplit, $this->remainderToLast, $this->truncateOverflow, $cells, $reserveGap, $reserveLead);
+        return $this->mutate(['minShare' => $cells, 'reserveGap' => $reserveGap, 'reserveLead' => $reserveLead]);
+    }
+
+    /**
+     * Copy-on-write door for the flag mutators. Every field is a ctor-promoted
+     * readonly property, so `get_object_vars($this)` returns exactly the ctor
+     * argument set — a seventh field then costs one line here, not five site
+     * touches. Mirrors {@see DockLayout::mutate()} in the same package.
+     *
+     * @param array<string, mixed> $changes
+     */
+    private function mutate(array $changes): self
+    {
+        return new self(...array_merge(get_object_vars($this), $changes));
     }
 
     /**
