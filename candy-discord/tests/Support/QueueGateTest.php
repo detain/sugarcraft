@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace CandyCode\Bundles\Discord\Tests\Support;
 
 use CandyCode\Bundles\Discord\Support\QueueGate;
+use CandyCode\Bundles\Discord\Tests\Support\Settle;
 use PHPUnit\Framework\TestCase;
 use React\EventLoop\LoopInterface;
 use React\EventLoop\StreamSelectLoop;
@@ -35,7 +36,9 @@ final class QueueGateTest extends TestCase
         self::assertSame(0, $gate->push('k', 'one', $flush));
         self::assertSame(0, $gate->push('k', 'two', $flush));
         self::assertSame(2, $gate->waiting('k'));
-        self::settleGate($this->gateLoop, 1000, static fn (): bool => $flushed === null);
+        Settle::await($this->gateLoop, 1000, static function () use (&$flushed): bool {
+            return $flushed !== null;
+        });
 
         self::assertSame(['one', 'two'], $flushed);
         self::assertSame(0, $gate->waiting('k'));
@@ -69,20 +72,13 @@ final class QueueGateTest extends TestCase
         };
 
         $gate->push('k', 'x', $flush);
-        self::settleGate($this->gateLoop, 1000, static fn (): bool => $count === 0);
+        Settle::await($this->gateLoop, 1000, static function () use (&$count): bool {
+            return $count >= 1;
+        });
         $gate->push('k', 'y', $flush);
-        self::settleGate($this->gateLoop, 1000, static fn (): bool => $count < 2);
+        Settle::await($this->gateLoop, 1000, static fn (): bool => $count >= 2);
 
         self::assertSame(2, $count);
     }
 
-    private static function settleGate(LoopInterface $loop, int $capMs, callable $stillWaiting): void
-    {
-        $deadline = microtime(true) + $capMs / 1000.0;
-        while ($stillWaiting() && microtime(true) < $deadline) {
-            $loop->addTimer(0.01, static function (): void {
-            });
-            $loop->run();
-        }
-    }
 }

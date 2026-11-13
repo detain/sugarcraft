@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace CandyCode\Bundles\Discord\Tests\Bridge;
 
 use CandyCode\Bundles\Discord\Bridge\ConversationRouter;
+use CandyCode\Bundles\Discord\Tests\Support\Settle;
 use CandyCode\Bundles\Discord\Bridge\PlatformFace;
 use CandyCode\Bundles\Discord\Candy\ServeBridge;
 use CandyCode\Bundles\Discord\Support\Keys;
@@ -665,11 +666,7 @@ final class ConversationRouterTest extends TestCase
 
     private static function runFor(LoopInterface $loop, int $ms): void
     {
-        $timer = $loop->addTimer($ms / 1000.0, static function () use ($loop): void {
-            $loop->stop();
-        });
-        $loop->run();
-        $loop->cancelTimer($timer);
+        Settle::window($loop, $ms);
     }
 
     private function removeTree(string $dir): void

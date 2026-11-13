@@ -72,6 +72,12 @@ final class FakeDiscordApi
         return null;
     }
 
+    /** Number of logged calls whose path ends with $suffix. */
+    public function callsTo(string $suffix): int
+    {
+        return \count(\array_filter($this->calls, static fn (array $c): bool => \str_ends_with($c['path'], $suffix)));
+    }
+
     public function stop(): void
     {
         $this->server?->close();

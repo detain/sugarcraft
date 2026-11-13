@@ -14,6 +14,7 @@ use CandyCode\Bundles\Discord\Support\CredentialStore;
 use CandyCode\Bundles\Discord\Support\Keys;
 use CandyCode\Bundles\Discord\Support\Log;
 use CandyCode\Bundles\Discord\Support\PairingCodes;
+use CandyCode\Bundles\Discord\Tests\Support\Settle;
 use CandyCode\Bundles\Discord\Support\SessionMap;
 use CandyCode\Bundles\Discord\Support\TextSafety;
 use CandyCode\Bundles\Discord\Tests\Fixture\FakeDiscordApi;
@@ -72,7 +73,7 @@ final class DiscordAccountTest extends TestCase
     {
         $this->buildFace(['dmPolicy' => 'pairing']);
         $this->intake(self::dmMessage('u1', 'hello there'));
-        $this->settle();
+        $this->settled(1000, fn(): bool => $this->api->callsTo('/messages') >= 1);
         $call = $this->api->lastCallFor('/messages');
         self::assertNotNull($call);
         self::assertStringContainsString('Pairing required.', (string) $call['body']['content']);
@@ -85,7 +86,7 @@ final class DiscordAccountTest extends TestCase
         $this->store->writeDiscordPairing('default', [], ['u1']);
         $this->buildFace(['dmPolicy' => 'pairing']);
         $this->intake(self::dmMessage('u1', 'hello there'));
-        $this->settle(600);
+        $this->settled(1500, fn(): bool => $this->api->callsTo('/messages') >= 1);
         $call = $this->api->lastCallFor('/messages');
         self::assertNotNull($call);
         self::assertStringContainsString('Could not open a session', (string) $call['body']['content']);
@@ -118,7 +119,7 @@ final class DiscordAccountTest extends TestCase
         self::assertSame([], $this->api->calls);
         $this->intake(['id' => 'm3', 'channel_id' => 'c9', 'guild_id' => 'g1',
             'author' => ['id' => 'u1'], 'content' => '<@bot-9> hello', 'mentions' => [['id' => 'bot-9']]]);
-        $this->settle(600);
+        $this->settled(1500, fn(): bool => $this->api->callsTo('/messages') >= 1);
         $call = $this->api->lastCallFor('/messages');
         self::assertNotNull($call);
         self::assertStringContainsString('Could not open a session', (string) $call['body']['content']);
@@ -128,7 +129,7 @@ final class DiscordAccountTest extends TestCase
     {
         $this->buildFace(['suppressEmbeds' => true]);
         $this->face->deliver(['channelId' => 'c1', 'messageId' => 'm1'], 'hi');
-        $this->settle();
+        $this->settled(1000, fn(): bool => $this->api->callsTo('/messages') >= 1);
         $call = $this->api->lastCallFor('/messages');
         self::assertNotNull($call);
         self::assertSame('hi', $call['body']['content']);
@@ -136,7 +137,7 @@ final class DiscordAccountTest extends TestCase
         self::assertSame(4, (int) $call['body']['flags'] & 4);
         self::assertSame(['message_id' => 'm1', 'fail_if_not_exists' => false], $call['body']['message_reference']);
         $this->face->deliver(['channelId' => 'c1', 'messageId' => ''], 'again');
-        $this->settle();
+        $this->settled(1000, fn(): bool => $this->api->callsTo('/messages') >= 2);
         $second = $this->api->lastCallFor('/messages');
         self::assertArrayNotHasKey('message_reference', $second['body']);
     }
@@ -146,7 +147,7 @@ final class DiscordAccountTest extends TestCase
         $this->buildFace(['approvalRoster' => ['boss'], 'approvals' => ['ttlMinutes' => 30]]);
         $this->face->promptApproval(['channelId' => 'c1', 'messageId' => 'm1'], 'sess_1',
             ['askId' => 'ask_1', 'tool' => 'Bash', 'arguments' => ['cmd' => 'ls']]);
-        $this->settle();
+        $this->settled(1000, fn(): bool => $this->api->callsTo('/messages') >= 1);
         $call = $this->api->lastCallFor('/messages');
         self::assertNotNull($call);
         self::assertSame(17, (int) $call['body']['components'][0]['type']);
@@ -160,7 +161,7 @@ final class DiscordAccountTest extends TestCase
         }
         self::assertSame(['ap:ask_1:once', 'ap:ask_1:always', 'ap:ask_1:deny'], $ids);
         $this->face->retireApproval('ask_1', 'Resolved.');
-        $this->settle();
+        $this->settled(1000, fn(): bool => $this->api->callsTo('/channels/c1/messages/msg_out') >= 1);
         $patch = $this->api->lastCallFor('/channels/c1/messages/msg_out');
         self::assertNotNull($patch);
         self::assertSame('PATCH', $patch['method']);
@@ -178,7 +179,7 @@ final class DiscordAccountTest extends TestCase
             'reason' => 'reading with s3cr3t-token',
             'arguments' => ['cmd' => 'ls -la /home/s3cr3t-token'],
         ]);
-        $this->settle();
+        $this->settled(1000, fn(): bool => $this->api->callsTo('/messages') >= 1);
         $call = $this->api->lastCallFor('/messages');
         self::assertNotNull($call);
         $wire = (string) \json_encode($call['body']);
@@ -196,7 +197,7 @@ final class DiscordAccountTest extends TestCase
         ));
         $this->face->promptApproval(['channelId' => 'c1', 'messageId' => 'm1'], 'sess_1',
             ['askId' => 'ask_clamp', 'tool' => 'Bash', 'arguments' => []]);
-        $this->settle();
+        $this->settled(1000, fn(): bool => $this->approvalArmed('ask_clamp'));
         self::assertSame((float) PendingAsk::EXPIRY_SECONDS, $this->armedApprovalInterval('ask_clamp'),
             'the card window must never outlive the core expiry that governs the answer');
         $clamps = \array_values(\array_filter($lines,
@@ -218,7 +219,7 @@ final class DiscordAccountTest extends TestCase
         ));
         $this->face->promptApproval(['channelId' => 'c1', 'messageId' => 'm1'], 'sess_1',
             ['askId' => 'ask_default', 'tool' => 'Bash', 'arguments' => []]);
-        $this->settle();
+        $this->settled(1000, fn(): bool => $this->approvalArmed('ask_default'));
         self::assertSame((float) PendingAsk::EXPIRY_SECONDS, $this->armedApprovalInterval('ask_default'));
         self::assertSame([], \array_filter($lines,
             static fn (string $line): bool => \str_contains($line, 'approval_ttl_clamped')),
@@ -235,7 +236,7 @@ final class DiscordAccountTest extends TestCase
         ));
         $this->face->promptApproval(['channelId' => 'c1', 'messageId' => 'm1'], 'sess_1',
             ['askId' => 'ask_floor', 'tool' => 'Bash', 'arguments' => []]);
-        $this->settle();
+        $this->settled(1000, fn(): bool => $this->approvalArmed('ask_floor'));
         self::assertSame(60.0, $this->armedApprovalInterval('ask_floor'));
         self::assertSame([], \array_filter($lines,
             static fn (string $line): bool => \str_contains($line, 'approval_ttl_clamped')));
@@ -245,6 +246,15 @@ final class DiscordAccountTest extends TestCase
      * The interval the ask's retirement timer was armed with — the clock
      * law is pinned at arm time, no waiting on wall clock.
      */
+    /** Is the expiry timer for this ask armed yet? (await predicate) */
+    private function approvalArmed(string $askId): bool
+    {
+        $timers = new \ReflectionProperty(DiscordAccount::class, 'approvalTimers');
+        $timers->setAccessible(true);
+
+        return ($timers->getValue($this->face)[$askId] ?? null) !== null;
+    }
+
     private function armedApprovalInterval(string $askId): float
     {
         $timers = new \ReflectionProperty(DiscordAccount::class, 'approvalTimers');
@@ -264,7 +274,7 @@ final class DiscordAccountTest extends TestCase
         $map->bind(Keys::channelKey('discord', 'default', 'th1'), 'sess-th');
         self::assertSame(['discord:default:th1'], $map->bindingsOfSession('sess-th'));
         $this->face->archiveThread('th1');
-        $this->settle();
+        $this->settled(1000, static fn (): bool => $map->bindingsOfSession('sess-th') === []);
         self::assertSame([], $map->bindingsOfSession('sess-th'), 'the archived thread released its binding');
     }
 
@@ -292,7 +302,7 @@ final class DiscordAccountTest extends TestCase
         $seen->setValue($this->face, ['th1' => \time() - 99999, 'c9' => \time() - 99999]);
         self::assertSame(['th1', 'c9'], $this->face->idleThreads(\time()));
         $this->face->archiveThread('th1');
-        $this->settle();
+        $this->settled(1000, fn(): bool => $this->api->callsTo('/channels/th1') >= 1);
         $patch = $this->api->lastCallFor('/channels/th1');
         self::assertNotNull($patch);
         self::assertSame('PATCH', $patch['method']);
@@ -313,7 +323,7 @@ final class DiscordAccountTest extends TestCase
         $mint = $this->pairing->request('default', 'u2');
         $code = (string) $mint['code'];
         $this->face->pairCommand(['channelId' => 'c1', 'messageId' => ''], ['grant', $code], 'boss', true);
-        $this->settle();
+        $this->settled(1000, fn(): bool => $this->api->callsTo('/messages') >= 1);
         $said = (string) $this->api->lastCallFor('/messages')['body']['content'];
         self::assertStringContainsString('Paired u2.', $said);
         self::assertStringNotContainsString('deprecated', $said, 'the canonical spelling carries no notice');
@@ -327,7 +337,7 @@ final class DiscordAccountTest extends TestCase
         $this->buildFace(['dmPolicy' => 'pairing', 'approvalRoster' => ['boss']]);
         $code = (string) $this->pairing->request('default', 'u2')['code'];
         $this->face->pairCommand(['channelId' => 'c1', 'messageId' => ''], ['approve', $code], 'boss', true);
-        $this->settle();
+        $this->settled(1000, fn(): bool => $this->api->callsTo('/messages') >= 1);
         $said = (string) $this->api->lastCallFor('/messages')['body']['content'];
         self::assertStringContainsString('Paired u2.', $said);
         self::assertStringContainsString('/pair approve` is deprecated; use `/pair grant', $said);
@@ -344,7 +354,7 @@ final class DiscordAccountTest extends TestCase
             'NOREQ111' => ['userId' => '', 'createdAt' => $now, 'expiresAt' => $now + 3600, 'lastReminderAt' => $now],
         ], []);
         $this->face->pairCommand(['channelId' => 'c1', 'messageId' => ''], ['grant', 'NOREQ111'], 'boss', true);
-        $this->settle();
+        $this->settled(1000, fn(): bool => $this->api->callsTo('/messages') >= 1);
         $said = (string) $this->api->lastCallFor('/messages')['body']['content'];
         self::assertStringContainsString('incomplete', $said, 'the notice names the real state');
         self::assertStringNotContainsString('No pending pairing matches', $said, 'it is not the no-match lie');
@@ -358,18 +368,18 @@ final class DiscordAccountTest extends TestCase
         $this->buildFace(['dmPolicy' => 'pairing', 'approvalRoster' => ['boss']]);
         $code = (string) $this->pairing->request('default', 'u2')['code'];
         $this->face->pairCommand(['channelId' => 'c1', 'messageId' => ''], ['grant', $code], 'u3', true);
-        $this->settle();
+        $this->settled(1000, fn(): bool => $this->api->callsTo('/messages') >= 1);
         self::assertStringContainsString('Only an approver can manage pairings', (string) $this->api->lastCallFor('/messages')['body']['content']);
         self::assertCount(1, $this->pairing->pending('default'), 'a refused grant must leave the code pending');
 
         $this->face->pairCommand(['channelId' => 'c1', 'messageId' => ''], ['list'], 'boss', false);
-        $this->settle();
+        $this->settled(1000, fn(): bool => $this->api->callsTo('/messages') >= 1);
         self::assertStringContainsString('Use a direct message to list pairing codes', (string) $this->api->lastCallFor('/messages')['body']['content']);
         self::assertStringNotContainsString($code, (string) $this->api->lastCallFor('/messages')['body']['content']);
 
         $this->buildFace(['dmPolicy' => 'pairing']);
         $this->face->pairCommand(['channelId' => 'c1', 'messageId' => ''], ['approve', $code], 'boss', true);
-        $this->settle();
+        $this->settled(1000, fn(): bool => $this->api->callsTo('/messages') >= 1);
         self::assertStringContainsString('Only an approver can manage pairings', (string) $this->api->lastCallFor('/messages')['body']['content'], 'an empty roster answers nobody');
         self::assertCount(1, $this->pairing->pending('default'));
     }
@@ -382,7 +392,7 @@ final class DiscordAccountTest extends TestCase
         $stop = self::dmMessage('u1', '/stop');
         $this->intake($stop);
         $this->intake($stop);
-        $this->settle();
+        $this->settled(1000, fn(): bool => $this->api->callsTo('/messages') >= 1);
         $answers = \array_filter($this->api->calls, static fn (array $c): bool => \str_contains((string) ($c['body']['content'] ?? ''), 'Nothing is running here.'));
         self::assertCount(1, $answers, 'the replayed /stop must not answer twice');
     }
@@ -396,7 +406,7 @@ final class DiscordAccountTest extends TestCase
         $gather->invoke($this->face,
             [['id' => 'a1', 'filename' => 'big.bin', 'content_type' => 'image/png', 'url' => 'https://media.discordapp.net/attachments/1/2/big.bin', 'size' => 999999999]],
             'discord:default:dm:u1', ['channelId' => 'c1', 'messageId' => 'm1'], 'look', false, 'm1');
-        $this->settle(600);
+        $this->settled(1500, fn(): bool => $this->api->callsTo('/messages') >= 1);
         $notice = null;
         foreach ($this->api->calls as $call) {
             if (\str_contains((string) ($call['body']['content'] ?? ''), 'Skipped 1 attachment(s)')) {
@@ -423,7 +433,7 @@ final class DiscordAccountTest extends TestCase
         $gather = new \ReflectionMethod(DiscordAccount::class, 'collectMediaAndDispatch');
         $gather->setAccessible(true);
         $gather->invoke($this->face, $this->threeImages('one'), 'discord:default:dm:u1', ['channelId' => 'c1', 'messageId' => 'm1'], 'look one', false, 'm1');
-        $this->settle(1200);
+        $this->settled(1200, fn(): bool => $this->api->callsTo('/messages') >= 1);
         $gather->invoke($this->face, $this->threeImages('two'), 'discord:default:dm:u1', ['channelId' => 'c1', 'messageId' => 'm2'], 'look two', false, 'm2');
         $this->settle(1200);
         $cdn->stop();
@@ -524,7 +534,7 @@ final class DiscordAccountTest extends TestCase
         $gateway->applicationId = 'app-9';
 
         $this->face->stop();
-        $this->settle();
+        $this->settled(1000, fn(): bool => $this->api->callsTo('/commands/cmd2') >= 1);
 
         $deletes = [];
         $listedGlobal = false;
@@ -555,7 +565,7 @@ final class DiscordAccountTest extends TestCase
         $gateway->applicationId = 'app-9';
 
         $this->face->stop();
-        $this->settle();
+        $this->settled(1000, fn(): bool => $this->api->callsTo('/commands/cmd2') >= 1);
 
         $deletes = [];
         foreach ($this->api->calls as $call) {
@@ -623,7 +633,15 @@ final class DiscordAccountTest extends TestCase
         $this->api->failNextWith = 503;
 
         $this->face->stop();
-        $this->settle();
+        $this->settled(1000, static function () use (&$lines): bool {
+            foreach ($lines as $line) {
+                if (str_contains($line, 'discord_slash_undeploy_failed')) {
+                    return true;
+                }
+            }
+
+            return false;
+        });
 
         $notices = \array_filter($lines, static fn (string $l): bool => \str_contains($l, 'discord_slash_undeploy_failed'));
         self::assertCount(1, $notices, 'the failure notices exactly once: ' . \implode(' | ', $lines));
@@ -659,7 +677,15 @@ final class DiscordAccountTest extends TestCase
         $this->api->failAllWith = 500;
 
         $this->face->stop();
-        $this->settle();
+        $this->settled(1000, static function () use (&$lines): bool {
+            foreach ($lines as $line) {
+                if (str_contains($line, 'discord_slash_undeploy_failed')) {
+                    return true;
+                }
+            }
+
+            return false;
+        });
 
         $notices = \array_filter($lines, static fn (string $l): bool => \str_contains($l, 'discord_slash_undeploy_failed'));
         self::assertCount(1, $notices, 'two dead legs must still notice once: ' . \implode(' | ', $lines));
@@ -722,9 +748,12 @@ final class DiscordAccountTest extends TestCase
 
     private function settle(int $ms = 300): void
     {
-        $this->loop->addTimer($ms / 1000.0, function (): void {
-            $this->loop->stop();
-        });
-        $this->loop->run();
+        Settle::window($this->loop, $ms);
+    }
+
+    /** Run the loop until the awaited delivery lands (cap, not window). */
+    private function settled(int $capMs, callable $done): void
+    {
+        Settle::await($this->loop, $capMs, $done);
     }
 }

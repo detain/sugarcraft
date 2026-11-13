@@ -29,6 +29,7 @@ use CandyCode\Bundles\Discord\Support\PairingCodes;
 use CandyCode\Bundles\Discord\Support\SessionMap;
 use CandyCode\Bundles\Discord\Support\TextSafety;
 use CandyCode\Bundles\Discord\Tests\Fixture\FakeDiscordApi;
+use CandyCode\Bundles\Discord\Tests\Support\Settle;
 use PHPUnit\Framework\TestCase;
 use React\EventLoop\Loop;
 use React\EventLoop\LoopInterface;
@@ -323,9 +324,6 @@ final class ApprovalInteractionGateTest extends TestCase
 
     private function settle(int $ms = 300): void
     {
-        $this->loop->addTimer($ms / 1000.0, function (): void {
-            $this->loop->stop();
-        });
-        $this->loop->run();
+        Settle::window($this->loop, $ms);
     }
 }

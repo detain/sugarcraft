@@ -27,6 +27,7 @@ use CandyCode\Bundles\Discord\Support\OutboundChunker;
 use CandyCode\Bundles\Discord\Support\SessionMap;
 use CandyCode\Bundles\Discord\Support\TextSafety;
 use CandyCode\Bundles\Discord\Tests\Fixture\FakeServe;
+use CandyCode\Bundles\Discord\Tests\Support\Settle;
 use PHPUnit\Framework\TestCase;
 use React\EventLoop\LoopInterface;
 use React\EventLoop\StreamSelectLoop;
@@ -387,11 +388,7 @@ final class ApprovalGateTest extends TestCase
 
     private static function runFor(LoopInterface $loop, int $ms): void
     {
-        $timer = $loop->addTimer($ms / 1000.0, static function () use ($loop): void {
-            $loop->stop();
-        });
-        $loop->run();
-        $loop->cancelTimer($timer);
+        Settle::window($loop, $ms);
     }
 
     private function removeTree(string $dir): void

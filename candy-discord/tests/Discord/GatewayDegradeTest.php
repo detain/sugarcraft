@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace CandyCode\Bundles\Discord\Tests\Discord;
 
 use CandyCode\Bundles\Discord\Discord\Gateway;
+use CandyCode\Bundles\Discord\Tests\Support\Settle;
 use CandyCode\Bundles\Discord\Support\Log;
 use CandyCode\Bundles\Discord\Tests\Fixture\FakeGateway;
 use PHPUnit\Framework\TestCase;
@@ -58,9 +59,6 @@ final class GatewayDegradeTest extends TestCase
 
     private function runFor(StreamSelectLoop $loop, int $ms): void
     {
-        $loop->addTimer($ms / 1000.0, static function () use ($loop): void {
-            $loop->stop();
-        });
-        $loop->run();
+        Settle::window($loop, $ms);
     }
 }

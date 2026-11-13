@@ -8,6 +8,7 @@ use CandyCode\Bundles\Discord\Discord\Rest;
 use CandyCode\Bundles\Discord\Discord\RestException;
 use CandyCode\Bundles\Discord\Support\Log;
 use CandyCode\Bundles\Discord\Tests\Fixture\FakeDiscordApi;
+use CandyCode\Bundles\Discord\Tests\Support\Settle;
 use PHPUnit\Framework\TestCase;
 use React\EventLoop\Loop;
 use React\EventLoop\LoopInterface;
@@ -139,12 +140,8 @@ final class RestStatusTest extends TestCase
         return new Rest('tok', Log::silent(), 'http://127.0.0.1:' . $this->port);
     }
 
-    private function settle(int $ms = 400): void
+    private function settle(int $ms = 300): void
     {
-        $timer = $this->loop->addTimer($ms / 1000.0, function (): void {
-            $this->loop->stop();
-        });
-        $this->loop->run();
-        $this->loop->cancelTimer($timer);
+        Settle::window($this->loop, $ms);
     }
 }

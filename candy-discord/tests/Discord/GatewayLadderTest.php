@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace CandyCode\Bundles\Discord\Tests\Discord;
 
 use CandyCode\Bundles\Discord\Discord\Gateway;
+use CandyCode\Bundles\Discord\Tests\Support\Settle;
 use CandyCode\Bundles\Discord\Support\Log;
 use CandyCode\Bundles\Discord\Tests\Fixture\FakeGateway;
 use PHPUnit\Framework\TestCase;
@@ -55,7 +56,7 @@ final class GatewayLadderTest extends TestCase
     {
         $this->connect(true);
         $this->fake->dropConnection();
-        $this->settle(2200);
+        $this->settled(2200, fn(): bool => $this->fake->resumeCount >= 1);
         self::assertSame(1, $this->fake->resumeCount);
         self::assertSame('gsess', $this->fake->lastResume['session_id'] ?? null);
         self::assertSame(1, $this->fake->lastResume['seq'] ?? null);
@@ -66,7 +67,7 @@ final class GatewayLadderTest extends TestCase
     {
         $this->connect(true);
         $this->fake->sendInvalidSession(false);
-        $this->settle(2900);
+        $this->settled(2900, fn(): bool => $this->fake->identifyCount >= 2);
         self::assertSame(2, $this->fake->identifyCount);
         self::assertSame(0, $this->fake->resumeCount);
     }
@@ -78,7 +79,7 @@ final class GatewayLadderTest extends TestCase
         // 41250 ms and never beat inside the settle window.
         $this->fake->hbMs = 120;
         $this->connect(true);
-        $this->settle(1500);
+        $this->settled(1500, fn(): bool => $this->fake->beatCount >= 2);
         self::assertGreaterThanOrEqual(2, $this->fake->beatCount);
     }
 
@@ -89,7 +90,7 @@ final class GatewayLadderTest extends TestCase
         $this->fake->hbMs = 120;
         $this->fake->legacyHelloKey = true;
         $this->connect(true);
-        $this->settle(1500);
+        $this->settled(1500, fn(): bool => $this->fake->beatCount >= 2);
         self::assertGreaterThanOrEqual(2, $this->fake->beatCount);
     }
 
@@ -97,7 +98,7 @@ final class GatewayLadderTest extends TestCase
     {
         $this->connect(true);
         $this->fake->sendClose(4004);
-        $this->settle(800);
+        $this->settled(800, fn(): bool => $this->gateway->stopped());
         self::assertTrue($this->gateway->stopped());
         self::assertFalse($this->gateway->connected());
     }
@@ -128,7 +129,7 @@ final class GatewayLadderTest extends TestCase
         // trusted shape, and the drop-resume leg proves it is walked.
         $this->connect(true);
         $this->fake->dropConnection();
-        $this->settle(2200);
+        $this->settled(2200, fn(): bool => $this->fake->resumeCount >= 1);
         self::assertSame(1, $this->fake->resumeCount);
         self::assertStringContainsString('127.0.0.1', $this->gateway->resumeUrl);
     }
@@ -146,7 +147,15 @@ final class GatewayLadderTest extends TestCase
         $this->fake->pushRaw('not-json{{');
         $this->fake->pushRaw('42');
         $this->fake->pushRaw('{"no_op":1}');
-        $this->settle(400);
+        $this->settled(400, static function () use (&$lines): bool {
+            foreach ($lines as $line) {
+                if (str_contains($line, "discord_malformed_frame")) {
+                    return true;
+                }
+            }
+
+            return false;
+        });
         $traced = \array_values(array_filter($lines, static fn (string $l): bool => str_contains($l, 'discord_malformed_frame"') || str_contains($l, 'discord_malformed_frame\'')));
         self::assertCount(1, $traced, 'one bounded trace for three drops');
         self::assertStringContainsString('undecodable', $traced[0]);
@@ -165,7 +174,15 @@ final class GatewayLadderTest extends TestCase
         }));
         $this->fake->pushRaw(\str_repeat('x', Gateway::MAX_INBOUND_MESSAGE_BYTES + 1));
         $this->fake->pushRaw('not-json{{');
-        $this->settle(600);
+        $this->settled(600, static function () use (&$lines): bool {
+            foreach ($lines as $line) {
+                if (str_contains($line, 'oversize')) {
+                    return true;
+                }
+            }
+
+            return false;
+        });
         $traced = \array_values(array_filter($lines, static fn (string $l): bool => str_contains($l, 'discord_malformed_frame"') || str_contains($l, 'discord_malformed_frame\'')));
         self::assertCount(1, $traced, 'the ceiling trip opens the window; the junk drop rides the count');
         self::assertStringContainsString('oversize', $traced[0]);
@@ -177,14 +194,16 @@ final class GatewayLadderTest extends TestCase
         $port = $this->fake->listen();
         $this->gateway = new Gateway('tok', $log ?? Log::silent(), $this->loop, $this->fake->wsUrl(), $wantContent);
         $this->gateway->start();
-        $this->settle(700);
+        $this->settled(700, fn(): bool => $this->fake->identifyCount >= 1);
     }
 
     private function settle(int $ms): void
     {
-        $this->loop->addTimer($ms / 1000.0, function (): void {
-            $this->loop->stop();
-        });
-        $this->loop->run();
+        Settle::window($this->loop, $ms);
+    }
+
+    private function settled(int $capMs, callable $done): void
+    {
+        Settle::await($this->loop, $capMs, $done);
     }
 }
