@@ -218,8 +218,12 @@ $email2 = new Email(
 - **Message integrity.** Attachment filenames and MIME types pass the same CR/LF gate as
   subjects and addresses; MIME part parameters are RFC 2045-quoted.
 - **Secret masking.** `__debugInfo()` masks the SMTP password and the Resend API key.
-- **Credentials are unexportable via `serialize()`/`var_export()` re-import.**
-  Transports refuse re-import (`__serialize`/`__set_state` throw); construct a
+- **Credential export is refused at two distinct hooks, and neither is a redaction.**
+  `serialize()` throws (`__serialize` refuses), and a `var_export()` file cannot be
+  re-imported (`__set_state` refuses) — but `var_export()` does not consult
+  `__serialize()`, so the generated **text still carries the secret as a plain string**.
+  The export path is the one to keep shut; never cast a credential-holding transport
+  with `(array)`, and never dump it through reflection. Construct a
   credential-holding transport where it is used.
 - **Attachment ceilings.** 25 MiB (`Attachment::MAX_BYTES`) per attachment, regular files
   only — character devices like `/dev/zero` are refused before any read.
