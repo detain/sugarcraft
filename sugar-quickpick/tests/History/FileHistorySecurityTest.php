@@ -430,4 +430,71 @@ final class FileHistorySecurityTest extends TestCase
             fclose($handle);
         }
     }
+
+    /**
+     * S-20/-034: a short fwrite must not leave torn bytes on the inode. The
+     * double lands 5 bytes of the row; append() must throw AND roll the
+     * prefix back to the pre-write boundary — pinned by the NEXT honest
+     * append still parsing as its own row (without the rollback the two
+     * lines fuse into one unreadable mega-row).
+     */
+    public function testShortWriteRollsBackTheTornPrefix(): void
+    {
+        $path = $this->tempPath();
+        (new FileHistory($path))->append(new FilteredItem(1, 'legacy-row'));
+        \clearstatcache(true, $path);
+        $sizeBefore = \filesize($path);
+
+        $tornWriter = new class ($path) extends FileHistory {
+            /** writes the first 5 bytes, reports them — the disk-full shape */
+            protected function writeLine($handle, string $line): int|false
+            {
+                return \fwrite($handle, \substr($line, 0, 5));
+            }
+        };
+
+        try {
+            $tornWriter->append(new FilteredItem(2, 'never-lands'));
+            self::fail('expected RuntimeException for a short write');
+        } catch (RuntimeException $e) {
+            self::assertStringContainsString('Short write to QuickPick history file', $e->getMessage());
+        }
+
+        \clearstatcache(true, $path);
+        self::assertSame($sizeBefore, \filesize($path), 'the torn prefix must be truncated away');
+
+        (new FileHistory($path))->append(new FilteredItem(3, 'after-rollback'));
+
+        self::assertSame(
+            ['legacy-row', 'after-rollback'],
+            array_map(static fn($i) => $i->value(), (new FileHistory($path))->all()),
+            'a rolled-back file must keep taking clean rows',
+        );
+    }
+
+    /**
+     * S-20/-034 creation arm: the short write happens on the FIRST row of a
+     * brand-new file — rollback boundary is size 0, and the row the user
+     * tried to save simply is not there (honest absence beats a half row).
+     */
+    public function testShortWriteOnFreshFileLeavesNoTornBytes(): void
+    {
+        $path = $this->tempPath();
+
+        $tornWriter = new class ($path) extends FileHistory {
+            protected function writeLine($handle, string $line): int|false
+            {
+                return \fwrite($handle, \substr($line, 0, 5));
+            }
+        };
+
+        try {
+            $tornWriter->append(new FilteredItem(1, 'first-ever'));
+            self::fail('expected RuntimeException for a short write');
+        } catch (RuntimeException $e) {
+            self::assertStringContainsString('Short write to QuickPick history file', $e->getMessage());
+        }
+
+        self::assertSame([], (new FileHistory($path))->all());
+    }
 }

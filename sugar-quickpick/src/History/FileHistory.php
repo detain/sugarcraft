@@ -52,9 +52,10 @@ use SugarCraft\QuickPick\Item;
  * On shared hosts pass a private $baseDir (e.g. your home directory) so the
  * confinement jail also applies: see {@see self::__construct()}.
  *
- * The class is not final for exactly one reason: the lock seam {@see
- * self::lockHandle()} must be overridable so a test can inject a
- * deterministic flock failure instead of racing a second process.
+ * The class is not final for exactly one reason: its protected test seams
+ * ({@see self::lockHandle()} and {@see self::writeLine()}) must be
+ * overridable so tests can inject deterministic flock/fwrite failures
+ * instead of racing a second process or a full disk.
  */
 class FileHistory
 {
@@ -246,6 +247,22 @@ class FileHistory
     }
 
     /**
+     * Write seam: the payload fwrite() of append() runs through here.
+     *
+     * Production behaviour is a plain fwrite(). The method exists so a test
+     * can deterministically simulate a disk-full short write — the
+     * rollback-on-truncated-append contract was otherwise unpinnable (-034).
+     *
+     * @param resource $handle locked, positioned for append
+     *
+     * @return int|false bytes written, or false on total failure
+     */
+    protected function writeLine($handle, string $line): int|false
+    {
+        return \fwrite($handle, $line);
+    }
+
+    /**
      * Append an item to the history file.
      *
      * Creates the file exclusively when it does not exist yet and chmod's it
@@ -260,8 +277,12 @@ class FileHistory
      *                           be opened, the opened handle fails
      *                           {@see self::verifyHandle()}, the exclusive
      *                           lock cannot be taken, or the line cannot be
-     *                           fully written (silent loss was the old
-     *                           failure mode)
+     *                           fully written — on a short write the torn
+     *                           prefix is rolled back with ftruncate under
+     *                           the still-held lock before the throw, so the
+     *                           file never keeps a half row (silent loss and
+     *                           torn-line fusion were the old failure modes,
+     *                           -034)
      */
     public function append(Item $item): void
     {
@@ -308,13 +329,29 @@ class FileHistory
                     \sprintf('Cannot lock QuickPick history file: %s', $this->path),
                 );
             }
-            $written = \fwrite($handle, $line);
-            \flock($handle, \LOCK_UN);
+            // Capture the pre-write size UNDER the held lock: a short write
+            // must be rolled back to exactly the boundary the file had when
+            // we acquired exclusivity, never to some stale cached figure (-034).
+            $stat = \fstat($handle);
+            $preSize = $stat === false ? 0 : (int) $stat['size'];
+            $written = $this->writeLine($handle, $line);
             if ($written !== \strlen($line)) {
+                // The torn prefix must not stay on the inode: a half line is
+                // either a corrupt row every later all() drops (silently
+                // losing the row the user DID pick) or, worse, it fuses with
+                // the next append into one unreadable mega-line. Roll back
+                // while the lock is still ours, then fail loud (-034).
+                $rolledBack = \ftruncate($handle, $preSize);
+                \flock($handle, \LOCK_UN);
                 throw new \RuntimeException(
-                    \sprintf('Short write to QuickPick history file: %s', $this->path),
+                    \sprintf(
+                        'Short write to QuickPick history file: %s%s',
+                        $this->path,
+                        $rolledBack ? '' : ' (rollback also failed — the file may hold a torn line)',
+                    ),
                 );
             }
+            \flock($handle, \LOCK_UN);
         } finally {
             \fclose($handle);
         }
