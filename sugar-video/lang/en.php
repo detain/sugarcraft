@@ -51,6 +51,15 @@ return [
     'header.ignored_local_source.audio' => 'sugar-video: ignoring {count} HTTP request header(s) — the audio companion plays "{source}" without an HTTP request of its own, so there is nothing for them to ride on',
     'ssrf.no_allowlist' => 'sugar-video: openUrl() to remote host "{host}" without a host allowlist — the URL is handed to ffmpeg, which resolves DNS and follows redirects and can reach internal/link-local hosts (SSRF surface). Restrict it via openUrl($url, allowedHosts: [...]) or withAllowedHosts([...]).',
 
+    // SV-M35: the support() verdict notices (branded diagnostics per the
+    // header rule — they reach the host's log/CLI, never the status row).
+    'render.support_supported' => 'sugar-video: {mode} renders on this seat',
+    'render.support_needs_protocol' => 'sugar-video: {mode} needs a terminal that declares the {protocol} protocol — this seat never claimed it',
+    'render.support_needs_gd' => 'sugar-video: {mode} encodes through ext-gd, which this PHP build lacks',
+    'render.support_needs_block_glyphs' => 'sugar-video: {mode} draws Unicode block glyphs this seat cannot render safely — the ladder steps down instead',
+    'render.support_geometry_too_small' => 'sugar-video: a {cols}x{rows} cell grid is below the {min} floor',
+    'render.support_geometry_too_large' => 'sugar-video: a {cols}x{rows} cell grid is above the {max} ceiling',
+
     // Player status messages
     'player.no_source_for_embedding' => 'sugar-video: Reel::toPlayer() needs a bound source; call Reel::open(path) or Reel::openUrl(url, headers) first',
     'player.cellpx_non_positive' => 'sugar-video: Cell pixel size must be positive, got {w}x{h}',

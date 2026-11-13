@@ -13,6 +13,8 @@ use SugarCraft\Video\Render\HalfBlockRenderer;
 use SugarCraft\Video\Render\LumaRamp;
 use SugarCraft\Video\Render\Mode;
 use SugarCraft\Video\Render\RendererFactory;
+use SugarCraft\Video\Render\Support;
+use SugarCraft\Video\Player;
 
 /**
  * Unit tests for RendererFactory — creates FrameRenderer instances by Mode.
@@ -401,6 +403,53 @@ final class RendererFactoryTest extends TestCase
                 $this->assertLessThan(128, ord($ramp[$i]), "non-ASCII byte in luma ramp at offset {$i}");
             }
         }
+    }
+
+    /**
+     * @testdox SV-M35/035: supportShape() folds every verdict arm — protocol claim, ext-gd, block glyphs, the SV-H7 window — caller geometry errors first
+     */
+    public function testSupportShapeFoldsEveryVerdictArm(): void
+    {
+        $this->assertSame(Support::NeedsProtocol, RendererFactory::supportShape(Mode::Sixel, false, true, true));
+        $this->assertSame(Support::Supported, RendererFactory::supportShape(Mode::Sixel, true, true, true));
+        $this->assertSame(Support::NeedsGd, RendererFactory::supportShape(Mode::Iterm2, true, false, true));
+
+        // The glyphs arm belongs to the block rungs; pure-SGR text never gates on them.
+        $this->assertSame(Support::NeedsBlockGlyphs, RendererFactory::supportShape(Mode::HalfBlock, true, true, false));
+        $this->assertSame(Support::NeedsBlockGlyphs, RendererFactory::supportShape(Mode::QuarterBlock, true, true, false));
+        $this->assertSame(Support::Supported, RendererFactory::supportShape(Mode::TrueColor, true, true, false));
+        $this->assertSame(Support::Supported, RendererFactory::supportShape(Mode::Ascii, false, false, false));
+
+        // Geometry arms ride the single-sourced SV-H7 window (rows < 5 refuse),
+        // and a caller's illegal grid is reported ahead of the seat's fortune.
+        $this->assertSame(Support::GeometryTooSmall, RendererFactory::supportShape(Mode::TrueColor, true, true, true, Player::MIN_COLS, Player::MIN_ROWS - 1));
+        $this->assertSame(Support::GeometryTooSmall, RendererFactory::supportShape(Mode::HalfBlock, true, true, false, Player::MIN_COLS - 1, 40));
+        $this->assertSame(Support::GeometryTooLarge, RendererFactory::supportShape(Mode::HalfBlock, true, true, true, Player::MAX_COLS, Player::MAX_ROWS + 1));
+        $this->assertSame(Support::Supported, RendererFactory::supportShape(Mode::HalfBlock, true, true, true, Player::MIN_COLS, Player::MIN_ROWS), 'the window floor itself renders');
+        $this->assertSame(Support::GeometryTooSmall, RendererFactory::supportShape(Mode::Kitty, false, true, true, 1, 1));
+    }
+
+    /**
+     * @testdox SV-M35/035: support()/canRender() read the scripted seams (H9-era WezTerm lesson as data; notice() speaks the branded diagnostic voice)
+     */
+    public function testSupportAndCanRenderReadTheScriptedDoors(): void
+    {
+        RendererFactory::setDiagnoseForTesting(new \SugarCraft\ColorProfile\Probe\ProbeReport([
+            \SugarCraft\ColorProfile\Probe\Capability::Sixel->value => true,
+        ]));
+        RendererFactory::setGraphicsGateForTesting(static fn (): bool => true);
+        $this->assertTrue(RendererFactory::canRender(Mode::Sixel, 80, 24));
+        $this->assertSame(Support::Supported, RendererFactory::support(Mode::Sixel, 80, 24));
+
+        RendererFactory::setGraphicsGateForTesting(static fn (): bool => false);
+        $this->assertSame(Support::NeedsGd, RendererFactory::support(Mode::Sixel, 80, 24));
+        $this->assertFalse(RendererFactory::canRender(Mode::Sixel, 80, 24));
+
+        $this->assertSame(Support::NeedsProtocol, RendererFactory::support(Mode::Iterm2, 80, 24), 'a seat that only claimed Sixel gets the verdict, not an exception');
+        $this->assertSame(Support::GeometryTooSmall, RendererFactory::support(Mode::Sixel, 80, 4), 'rows < 5 refuses even with every claim true');
+
+        $this->assertStringStartsWith('sugar-video: ', RendererFactory::support(Mode::Iterm2)->notice(['mode' => 'iterm2', 'protocol' => 'OSC 1337']));
+        RendererFactory::setGraphicsGateForTesting(null);
     }
 
     /**

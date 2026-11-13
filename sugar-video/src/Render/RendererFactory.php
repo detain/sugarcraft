@@ -6,6 +6,7 @@ namespace SugarCraft\Video\Render;
 
 use SugarCraft\Image\Mosaic;
 use SugarCraft\Video\Lang;
+use SugarCraft\Video\Player;
 use SugarCraft\Image\TermDb;
 use SugarCraft\Image\TermInfo;
 use SugarCraft\ColorProfile\ColorProfile;
@@ -129,6 +130,95 @@ final class RendererFactory
             Mode::Iterm2 => self::diagnose()->has(Capability::ITerm2),
             default => true,
         };
+    }
+
+    /**
+     * The FULL honest verdict for one mode at one geometry (SV-M35/035).
+     *
+     * Where {@see supports()} answers only "would the seat RECEIVE these
+     * bytes" (the transport law that every construction door obeys), this
+     * answers the question a host actually holds — "can I hand this terminal
+     * this mode at this size?" — folding the protocol claim, the ext-gd
+     * requirement (SV-L66/066), the block-glyph safety gate the auto ladder
+     * alone used to own, and the SV-H7/007 cell window into one inspectable
+     * {@see Support} case. Pass no geometry to ask capability only.
+     *
+     * Nothing throws for a plain "not here"; the refusal is data.
+     */
+    public static function support(Mode $mode, ?int $cols = null, ?int $rows = null): Support
+    {
+        $claimsProtocol = match ($mode) {
+            Mode::Sixel => self::diagnose()->has(Capability::Sixel),
+            Mode::Kitty => self::diagnose()->has(Capability::KittyKeyboard),
+            Mode::Iterm2 => self::diagnose()->has(Capability::ITerm2),
+            default => true,
+        };
+
+        return self::supportShape(
+            $mode,
+            claimsProtocol: $claimsProtocol,
+            gdPresent: self::graphicsRenderable(),
+            blockGlyphsSafe: TermDb::matchChain(TermDb::snapshotEnv())->symbolIsSafe(TermInfo::SYMBOL_BLOCK),
+            cols: $cols,
+            rows: $rows,
+        );
+    }
+
+    /**
+     * The pure decision behind {@see support()} — resolved facts in, verdict
+     * out, no probing (the autoModeFrom() pattern: pins drive every arm
+     * without poisoning the process environment).
+     */
+    public static function supportShape(
+        Mode $mode,
+        bool $claimsProtocol,
+        bool $gdPresent,
+        bool $blockGlyphsSafe,
+        ?int $cols = null,
+        ?int $rows = null,
+    ): Support {
+        // Geometry is the CALLER'S input error; report it before the seat's
+        // fortune. The window is the single-sourced SV-H7/007 clamp constants
+        // — read off Player, never re-typed here.
+        if ($cols !== null && ($cols < Player::MIN_COLS || ($rows !== null && $rows < Player::MIN_ROWS))) {
+            return Support::GeometryTooSmall;
+        }
+
+        if ($cols !== null && ($cols > Player::MAX_COLS || ($rows !== null && $rows > Player::MAX_ROWS))) {
+            return Support::GeometryTooLarge;
+        }
+
+        if ($rows !== null && ($rows < Player::MIN_ROWS || $rows > Player::MAX_ROWS)) {
+            return $rows < Player::MIN_ROWS ? Support::GeometryTooSmall : Support::GeometryTooLarge;
+        }
+
+        if ($mode->isGraphics()) {
+            if (!$claimsProtocol) {
+                return Support::NeedsProtocol;
+            }
+
+            return $gdPresent ? Support::Supported : Support::NeedsGd;
+        }
+
+        // The block rungs paint Unicode ▀▄ glyphs; on a seat that cannot draw
+        // them safely the auto ladder steps down (the truecolor rung law) and
+        // the explicit door owes the host the same truth.
+        if (($mode === Mode::HalfBlock || $mode === Mode::QuarterBlock) && !$blockGlyphsSafe) {
+            return Support::NeedsBlockGlyphs;
+        }
+
+        // Ascii/Ansi256/TrueColor are SGR-and-glyphs transport-safe text rungs.
+        return Support::Supported;
+    }
+
+    /**
+     * The boolean the consumer loop wants: would {@see support()} say
+     * Supported at this exact seat+size? (SV-M35/035 — candy-code can delete
+     * its hand-rolled graphics-mode matrix on top of this door.)
+     */
+    public static function canRender(Mode $mode, int $cols, int $rows): bool
+    {
+        return self::support($mode, $cols, $rows)->isRenderable();
     }
 
     /**
