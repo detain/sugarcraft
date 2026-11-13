@@ -11,8 +11,8 @@ use SugarCraft\Core\Util\Sanitize;
  *
  * Both Mark (encoder) and Scan (decoder) must agree on these values.
  * U+E000 / U+E001 are in the Unicode Private Use Area and cannot
- * appear in ANSI escape sequences (CSI starts ESC [, OSC starts
- * ESC]). They are NOT reserved from all text, though: pasted foreign
+ * appear in ANSI escape sequences (CSI begins ESC-[; OSC begins ESC-]).
+ * Private use is not the same as reserved, though: pasted foreign
  * frames and Nerd Font / powerline glyph runs legitimately carry
  * private-use codepoints — which is why the lone-sentinel rule in
  * {@see Scan} and the consumer sweep below exist, not a collision
@@ -35,7 +35,10 @@ use SugarCraft\Core\Util\Sanitize;
  *   U+E000 = EE 80 80  (open sentinel)
  *   U+E001 = EE 80 81  (close sentinel)
  *
- * Mirrors bubblezone's sentinel values.
+ * Replaces bubblezone's APC marker framing (`\x1b_`…`\x1b\\`) with
+ * sugar-core's reserved PUA sentinel pair — a security-motivated divergence
+ * (APC bytes collide with the escape stream itself), documented in the
+ * README's Sentinel design section.
  */
 final class Sentinel
 {
