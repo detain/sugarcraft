@@ -18,7 +18,12 @@ use SugarCraft\Core\Util\Sanitize;
  * deadline-bounded (write and read), unparsable or out-of-order wire lines
  * disable the plugin for the session instead of throwing into the host
  * loop, disabled panels name themselves and say why, and the child gets a
- * small environment allow-list rather than the parent's whole env.
+ * small environment allow-list rather than the parent's whole env. Reply
+ * state is additionally normalised at the store seam (invalid UTF-8 bytes
+ * substituted) and any payload still unencodable at the send seam disables
+ * the panel ('state not encodable') — on PHP ≥ 8.3 the JSON parser itself
+ * refuses malformed wire bytes, but a stored state must never be able to
+ * brick the host loop by throwing out of it (sugar-dashboard-008).
  *
  * Mirrors the lattice ExternalModule pattern.
  *
@@ -144,7 +149,8 @@ final class ExternalModule implements LegacyModule
         $response = $this->readResponse();
 
         if ($response->type === 'update') {
-            return $response->data['state'] ?? $state;
+            $nextState = $response->data['state'] ?? $state;
+            return is_array($nextState) ? self::sanitizeEncodedState($nextState) : $state;
         }
 
         // Protocol error: unexpected response type or error from plugin.
@@ -268,7 +274,16 @@ final class ExternalModule implements LegacyModule
             return false;
         }
 
-        $payload = $request->toJson() . "\n";
+        try {
+            $payload = $request->toJson() . "\n";
+        } catch (\JsonException $e) {
+            // json_encode rejects invalid UTF-8 and inf/nan payloads. That
+            // byte never reaches the child, and the panel says why instead
+            // of the exception climbing into the host update loop — the
+            // trust-boundary contract above.
+            $this->disable('state not encodable: ' . $e->getMessage());
+            return false;
+        }
         $length = strlen($payload);
         $offset = 0;
         $deadline = hrtime(true) / 1_000_000_000 + self::WRITE_TIMEOUT_SECS;
@@ -445,6 +460,39 @@ final class ExternalModule implements LegacyModule
             fclose($this->stdout);
             $this->stdout = null;
         }
+    }
+
+    /**
+     * Normalise a plugin reply state so the host can always send it back.
+     *
+     * json_decode happily hands back lone-surrogate bytes (\ud800 decodes
+     * to raw \xED\xA0\x80), which no JSON_THROW_ON_ERROR encoder will
+     * re-accept — an unguarded store here would make every later
+     * round-trip throw inside the host loop. Substituting the bad bytes
+     * once, at the trust boundary they enter through, keeps the state
+     * permanently re-encodable; anything else that cannot be encoded
+     * (inf/nan floats) is left for sendRequest()'s guard to disable on.
+     *
+     * @param array<array-key, mixed> $state
+     * @return array<array-key, mixed>
+     */
+    private static function sanitizeEncodedState(array $state): array
+    {
+        try {
+            json_encode($state, JSON_THROW_ON_ERROR);
+            return $state;
+        } catch (\JsonException) {
+            // fall through to the substitute round-trip below
+        }
+
+        $substituted = json_decode(
+            (string) json_encode($state, JSON_INVALID_UTF8_SUBSTITUTE),
+            true,
+            512,
+            JSON_THROW_ON_ERROR,
+        );
+
+        return is_array($substituted) ? $substituted : [];
     }
 
     /**

@@ -49,6 +49,76 @@ final class ExternalModuleProtocolTest extends TestCase
         $this->assertSame(0, preg_match('/[^\x20-\x7E\n]/', $view), 'refusal chrome stays printable');
     }
 
+    public function testMalformedUtf8WireLineIsRefusedBoundedly(): void
+    {
+        // sugar-dashboard-008 reproduction, retried against the live PHP.
+        // A reply line carrying RAW invalid-UTF-8 bytes is refused by the
+        // JSON parser itself (PHP ≥ 8.3, the library's floor), so the
+        // poisoned state never reaches the store seam — the bounded,
+        // visible disable IS the cure now. Pin that the brick cannot
+        // return: prior state kept, panel disabled, no throw.
+        $module = $this->module('poison');
+        $module->init();
+
+        $state = $module->update(['note' => 'host']);
+        $this->assertSame(['note' => 'host'], $state, 'refused bytes must not enter host state');
+
+        $view = $module->view($state, 80, 24);
+        $this->assertStringContainsString('disabled:', $view);
+        $this->assertStringContainsString('protocol error', $view);
+    }
+
+    public function testLoneSurrogateEscapeReplyIsRefusedAtDecode(): void
+    {
+        // The finding's literal probe vector (a \ud800 escape in an
+        // otherwise-ASCII line). json_decode on supported PHP rejects
+        // unpaired surrogates, so the reply never yields an
+        // un-re-encodable string.
+        $module = $this->module('surrogate');
+        $module->init();
+
+        $state = $module->update(['note' => 'host']);
+        $this->assertSame(['note' => 'host'], $state);
+
+        $view = $module->view($state, 80, 24);
+        $this->assertStringContainsString('disabled:', $view);
+    }
+
+    public function testStoreSeamSanitiserSubstitutesInvalidBytes(): void
+    {
+        // Whitebox pin of the belt leg: IF bytes ever arrive past the
+        // parser (patch-version drift, a future ingestion path), the
+        // store seam must hand back a permanently re-encodable state —
+        // never the landmine that bricked every later round-trip.
+        $poisoned = ['note' => "pre\xED\xA0\x80post", 'deep' => ['x' => "\xF4\x90\x80\x80"]];
+
+        $sanitize = new \ReflectionMethod(ExternalModule::class, 'sanitizeEncodedState');
+        $sanitize->setAccessible(true);
+        $clean = $sanitize->invoke(null, $poisoned);
+
+        $this->assertTrue(mb_check_encoding((string) $clean['note'], 'UTF-8'));
+        $this->assertTrue(mb_check_encoding((string) $clean['deep']['x'], 'UTF-8'));
+        $encoded = json_encode($clean, JSON_THROW_ON_ERROR);
+        $this->assertStringContainsString("\u{FFFD}", (string) $clean['note']);
+        $this->assertIsString($encoded);
+    }
+
+    public function testUnencodableSendDisablesThePanelInsteadOfThrowing(): void
+    {
+        $module = $this->module('counter');
+        $module->init();
+
+        // inf/nan cannot be JSON-encoded at all — the sanitiser has no
+        // bytes to substitute. The send-seam guard must catch the throw,
+        // disable the panel, and keep update()/view() exception-free.
+        $state = ['v' => INF];
+        $returned = $module->update($state);
+        $this->assertSame($state, $returned, 'update() keeps the host state and must not throw');
+
+        $view = $module->view($state, 80, 24);
+        $this->assertStringContainsString('disabled: state not encodable', $view);
+    }
+
     public function testFloodLineTriggersTheOverflowGuard(): void
     {
         // The old fgets() cap made this guard unreachable: strlen() could

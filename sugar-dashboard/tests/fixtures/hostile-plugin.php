@@ -16,6 +16,12 @@
  *  counter   honest handshake; each view response carries a render counter
  *            ("render #K") that increments per wire round-trip, so callers
  *            can see whether a view() was served from the host's cache.
+ *  poison    honest handshake; every update reply carries raw invalid-UTF-8
+ *            bytes (a lone surrogate \xED\xA0\x80) in the wire line — the
+ *            finding-008 landmine, refused by the PHP ≥ 8.3 JSON parser.
+ *  surrogate honest handshake; every update reply carries the ASCII
+ *            \ud800 ESCAPE form — the finding's literal probe vector,
+ *            likewise refused at decode on supported PHP.
  */
 
 declare(strict_types=1);
@@ -72,6 +78,52 @@ if ($mode === 'counter') {
                 'type' => 'view',
                 'data' => ['content' => 'render #' . $renders . ' tick:' . ($data['state']['tick'] ?? 0)],
             ]) . "\n");
+        }
+    }
+    exit(0);
+}
+
+if ($mode === 'poison') {
+    // sdx-008: reply with raw invalid-UTF-8 bytes in the state. A
+    // json_encode of that state throws under JSON_THROW_ON_ERROR on the
+    // next send — unless the store seam sanitises it at the trust
+    // boundary. Emitted as raw bytes because the child's own encoder
+    // (correctly) refuses to build such a string.
+    while (($line = fgets(STDIN)) !== false) {
+        $request = json_decode(trim($line), true);
+        $type = $request['type'] ?? '';
+        if ($type === 'init') {
+            greet();
+            continue;
+        }
+        if ($type === 'update') {
+            fwrite(STDOUT, '{"type":"update","data":{"state":{"note":"pre\xED\xA0\x80post"}}}' . "\n");
+            continue;
+        }
+        if ($type === 'view') {
+            fwrite(STDOUT, json_encode(['type' => 'view', 'data' => ['content' => 'poison survived']]) . "\n");
+        }
+    }
+    exit(0);
+}
+
+if ($mode === 'surrogate') {
+    // sdx-008 literal probe vector: an ASCII-only wire line carrying the
+    // \ud800 escape. json_decode refuses unpaired surrogates on supported
+    // PHP, so the line is a protocol error — bounded, not a brick.
+    while (($line = fgets(STDIN)) !== false) {
+        $request = json_decode(trim($line), true);
+        $type = $request['type'] ?? '';
+        if ($type === 'init') {
+            greet();
+            continue;
+        }
+        if ($type === 'update') {
+            fwrite(STDOUT, '{"type":"update","data":{"state":{"note":"pre\\ud800post"}}}' . "\n");
+            continue;
+        }
+        if ($type === 'view') {
+            fwrite(STDOUT, json_encode(['type' => 'view', 'data' => ['content' => 'survived']]) . "\n");
         }
     }
     exit(0);
