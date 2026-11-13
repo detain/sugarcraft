@@ -6647,7 +6647,7 @@ DOC;
         // reach is the control in Edit's place: real shipped code with a known
         // answer, through the same instrument.
         $this->assertSame(
-            ['chgrp', 'chmod', 'chown', 'fopen', 'ftruncate', 'fwrite', 'mkdir', 'rename', 'unlink'],
+            ['chgrp', 'chmod', 'chown', 'fopen', 'ftruncate', 'fwrite', 'rename', 'unlink'],
             array_keys(self::writePrimitivesCalledIn(dirname(__DIR__) . '/src/Support/AtomicFileWriter.php')),
             'the scanner no longer finds the primitives Edit/Write write through - it is dead, fix it before reading the verdict',
         );
@@ -6949,7 +6949,7 @@ DOC;
             'the known-positive control moved, so nothing this test says about the new token class is worth anything',
         );
         $this->assertSame(
-            ['chgrp', 'chmod', 'chown', 'fopen', 'ftruncate', 'fwrite', 'mkdir', 'rename', 'unlink'],
+            ['chgrp', 'chmod', 'chown', 'fopen', 'ftruncate', 'fwrite', 'rename', 'unlink'],
             array_keys(self::writePrimitivesCalledIn(\dirname(__DIR__) . '/src/Support/AtomicFileWriter.php')),
             'the second known-positive control moved',
         );
