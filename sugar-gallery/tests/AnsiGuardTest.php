@@ -79,6 +79,8 @@ final class AnsiGuardTest extends TestCase
             'C1 PM (raw 0x9E)' => ["\x9e8;;https://evil\x9c", '8-bit privacy message — ESC ^'],
             'C1 APC (raw 0x9F)' => ["\x9f8;;https://evil\x9c", '8-bit application control — ESC _'],
             'C1 SCI is not a string form' => ["a\x9ab", '0x9A is SCI: it goes, the text behind it stays'],
+            'C1 SS2 (raw 0x8E)' => ["a\x8eXb", '0x8E is SS2: it goes, the text behind it stays'],
+            'C1 SS3 (raw 0x8F)' => ["a\x8fXb", '0x8F is SS3: it goes, the text behind it stays'],
             'over-long ESC (E0 81 9B)' => ["\xe0\x81\x9b2J", 'a lenient decoder sees ESC here'],
             'surrogate-encoded ESC' => ["\xed\xa0\x9b2J", 'U+D800 cannot be encoded; do not read it as text'],
             'encoded above U+10FFFF' => ["\xf4\x90\x80\x80", 'invalid lead/continuation pairing'],
