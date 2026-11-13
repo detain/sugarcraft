@@ -28,6 +28,7 @@
     },
     "require": {
         "php": "^8.3",
+        "ext-mbstring": "*",
         "sugarcraft/sugar-cellbuffer": "dev-master",
         "sugarcraft/sugar-core": "dev-master",
         "sugarcraft/sugar-constraints": "dev-master",
