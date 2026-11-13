@@ -5326,4 +5326,6 @@ Generierungsformular-Entwurf. Bereits im Entwurf vorhandene Werte werden nie
     'host.agent_resume.feed_degraded' => 'Der Live-Fortschrittsfeed dieses Folgelaufs war gestört: {count} Aktualisierung(en) sind nie angekommen. Der Lauf selbst ist beendet; sein Ergebnis folgt.',
     'host.agent_resume.feed_broke' => 'Der Fortschrittsfeed des Folgelaufs brach ab, bevor er ein Ergebnis meldete; sein Ausgang ist unbekannt. Prüfen Sie das Transkriptprotokoll des Laufs.',
     'host.agent_resume.no_fork' => 'Dieser Folgelauf konnte nicht geforkt werden und lief daher in diesem Prozess ohne Live-Fortschrittsfeed.',
+    'hooks.subagent_grant.denied' => 'Der Berechtigungsmodus \'{mode}\' des Agenten "{agent}" erlaubt {tool} nicht.',
+    'hooks.subagent_grant.ask' => '{tool} ausführen lassen? (Agent "{agent}" läuft im Berechtigungsmodus: {mode})',
 ];

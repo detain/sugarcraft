@@ -5326,4 +5326,6 @@ sobrescritos (a lei onlyUnset).',
     'host.agent_resume.feed_degraded' => 'O feed de progresso ao vivo desta execução de acompanhamento degradou: {count} atualização(ões) nunca chegaram. A execução em si terminou; o resultado segue.',
     'host.agent_resume.feed_broke' => 'O feed de progresso da execução de acompanhamento quebrou antes de informar um resultado, então o desfecho é desconhecido. Confira o log de transcrição da execução.',
     'host.agent_resume.no_fork' => 'Esta execução de acompanhamento não pôde ser bifurcada, então rodou neste processo sem feed de progresso ao vivo.',
+    'hooks.subagent_grant.denied' => 'O modo de permissão \'{mode}\' do agente "{agent}" não permite {tool}.',
+    'hooks.subagent_grant.ask' => 'Permitir a execução de {tool}? (o agente "{agent}" roda no modo de permissão: {mode})',
 ];

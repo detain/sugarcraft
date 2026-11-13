@@ -10,6 +10,7 @@ use SugarCraft\Code\Hooks\HookContext;
 use SugarCraft\Code\Hooks\HookEvent;
 use SugarCraft\Code\Hooks\HookInterface;
 use SugarCraft\Code\Hooks\HookResult;
+use SugarCraft\Code\Lang;
 use SugarCraft\Code\Permissions\PermissionDecision;
 use SugarCraft\Code\Permissions\PermissionGate;
 use SugarCraft\Code\ToolCall;
@@ -141,10 +142,10 @@ final readonly class SubAgentGrantHook implements HookInterface
         return match ($this->modeGate->evaluate($call, $root)) {
             PermissionDecision::Allow => HookResult::allow(),
             PermissionDecision::Deny => HookResult::deny(
-                "Permission mode '{$mode}' of agent \"{$agent}\" does not allow {$context->toolName}.",
+                Lang::t('hooks.subagent_grant.denied', ['mode' => $mode, 'agent' => $agent, 'tool' => $context->toolName]),
             ),
             PermissionDecision::Ask => HookResult::ask(
-                "Allow {$context->toolName} to run? (agent \"{$agent}\" runs in permission mode: {$mode})",
+                Lang::t('hooks.subagent_grant.ask', ['tool' => $context->toolName, 'agent' => $agent, 'mode' => $mode]),
             ),
         };
     }

@@ -5326,4 +5326,6 @@ sobrescriben (la ley onlyUnset).',
     'host.agent_resume.feed_degraded' => 'La transmisión de progreso en vivo de esta ejecución de seguimiento se degradó: {count} actualización(es) nunca llegaron. La ejecución terminó; su resultado sigue.',
     'host.agent_resume.feed_broke' => 'La transmisión de progreso de la ejecución de seguimiento se rompió antes de informar un resultado, así que se desconoce el desenlace. Revise el registro de transcripción de la ejecución.',
     'host.agent_resume.no_fork' => 'Esta ejecución de seguimiento no pudo bifurcarse, así que se ejecutó en este proceso sin transmisión de progreso en vivo.',
+    'hooks.subagent_grant.denied' => 'El modo de permisos \'{mode}\' del agente "{agent}" no permite {tool}.',
+    'hooks.subagent_grant.ask' => '¿Permitir que {tool} se ejecute? (el agente "{agent}" se ejecuta en modo de permisos: {mode})',
 ];

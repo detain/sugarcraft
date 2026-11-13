@@ -5401,4 +5401,6 @@ overwritten (the onlyUnset law).',
     'host.agent_resume.feed_degraded' => 'The live progress feed from this follow-up run degraded: {count} update(s) never arrived. The run itself finished; its result follows.',
     'host.agent_resume.feed_broke' => 'The progress feed from the follow-up run broke before it reported a result, so its outcome is unknown. Check the run\'s transcript log.',
     'host.agent_resume.no_fork' => 'This follow-up run could not be forked, so it ran in this process without a live progress feed.',
+    'hooks.subagent_grant.denied' => 'Permission mode \'{mode}\' of agent "{agent}" does not allow {tool}.',
+    'hooks.subagent_grant.ask' => 'Allow {tool} to run? (agent "{agent}" runs in permission mode: {mode})',
 ];

@@ -5327,4 +5327,6 @@ brouillon du formulaire de génération. Les valeurs déjà présentes dans le b
     'host.agent_resume.feed_degraded' => 'Le flux de progression en direct de cette exécution de suivi s\'est dégradé : {count} mise(s) à jour ne sont jamais arrivées. L\'exécution elle-même est terminée ; son résultat suit.',
     'host.agent_resume.feed_broke' => 'Le flux de progression de l\'exécution de suivi s\'est interrompu avant de rapporter un résultat ; son issue est donc inconnue. Consultez le journal de transcription de l\'exécution.',
     'host.agent_resume.no_fork' => 'Cette exécution de suivi n\'a pas pu être forkée ; elle s\'est donc exécutée dans ce processus, sans flux de progression en direct.',
+    'hooks.subagent_grant.denied' => 'Le mode de permission \'{mode}\' de l\'agent "{agent}" n\'autorise pas {tool}.',
+    'hooks.subagent_grant.ask' => 'Autoriser l\'exécution de {tool} ? (l\'agent "{agent}" s\'exécute en mode de permission : {mode})',
 ];

@@ -5321,4 +5321,6 @@ TXT,
     'host.agent_resume.feed_degraded' => '此後續執行的即時進度串流已降級：有 {count} 則更新未能送達。執行本身已完成，結果如下。',
     'host.agent_resume.feed_broke' => '後續執行的進度串流在回報結果之前中斷，因此其結果未知。請查看該執行的逐字稿記錄。',
     'host.agent_resume.no_fork' => '此後續執行無法分岔子行程，因此在目前行程中執行，沒有即時進度串流。',
+    'hooks.subagent_grant.denied' => '代理 "{agent}" 的權限模式 \'{mode}\' 不允許 {tool}。',
+    'hooks.subagent_grant.ask' => '允許執行 {tool} 嗎？（代理 "{agent}" 處於權限模式：{mode}）',
 ];
