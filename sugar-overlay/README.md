@@ -458,9 +458,11 @@ Notes:
 `composite()` is stateful through a `RenderSession`: the first frame (or
 any frame whose canvas dimensions changed) is emitted in FULL and
 remembered; later frames at the same dimensions are compared against the
-remembered output and emitted as a **diff** — cursor-move sequences
-touching only changed cells. An unchanged re-composite emits the empty
-string: nothing changed, nothing is sent.
+remembered output and emitted as a **diff** — a frame-open home anchor
+(`\e[1;1H`) plus cursor-move sequences touching only changed cells. An
+unchanged re-composite emits only that anchor: the sugar-cellbuffer
+`DiffEncoder` frames every encoded output with the same unconditional
+home-CUP open, so “nothing changed” is anchor-only, never zero bytes.
 
 Direct session drivers get one extra cold-start rule: the first
 `RenderSession::diff()` call returns the empty string — the frame is
@@ -489,7 +491,7 @@ full again.
 
 Over an SSH link a full frame is what costs: the Quick Start's frame is
 89 bytes undimmed (209 once a 50% scrim wraps every row), while a
-one-character change diffs down to 8 bytes. A diff whose cursor position
+one-character change diffs down to 14 bytes. A diff whose cursor position
 could not be trusted is what `resetPreviousFrame()` exists to recover
 from. (These three figures are pinned live by `tests/ReadmeByteFigureTest.php`
 — change the fixture, change the prose.)

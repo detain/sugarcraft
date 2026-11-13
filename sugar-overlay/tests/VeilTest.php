@@ -948,8 +948,10 @@ final class VeilTest extends TestCase
      * handle multibyte UTF-8 lines correctly. A box-drawing/UTF-8 overlay runs through
      * bufferFromOutput where each multibyte rune occupies one byte-index but several
      * bytes, exercising the byte-tail edge ($col < strlen($line) but past the rune
-     * count -> ''). An identical second frame must produce an EMPTY delta; a changed
-     * multibyte second frame must produce a non-empty delta without error.
+     * count -> ''). An identical second frame must produce an anchor-only delta (the
+     * sugar-cellbuffer DiffEncoder frames every encoded output with its unconditional
+     * home-CUP open); a changed multibyte second frame must produce a delta carrying
+     * the changed cells without error.
      */
     public function testMultibyteLineThroughDiffBuffer(): void
     {
@@ -959,9 +961,9 @@ final class VeilTest extends TestCase
         // First frame: full output, remembered as the previous buffer source.
         $this->veil->composite($fg, $bg, Position::CENTER, Position::CENTER);
 
-        // Identical second frame at same dims -> reused diff path -> empty delta.
+        // Identical second frame at same dims -> reused diff path -> anchor-only delta.
         $same = $this->veil->composite($fg, $bg, Position::CENTER, Position::CENTER);
-        $this->assertSame('', $same, 'Identical multibyte frame yields an empty delta');
+        $this->assertSame("\e[1;1H", $same, 'Identical multibyte frame yields the frame-open anchor and nothing else');
 
         // Changed multibyte second frame -> non-empty delta, no errors, still UTF-8.
         $fg2 = "┌──────────┐\n│ thé ☕ │\n└──────────┘";
@@ -991,9 +993,9 @@ final class VeilTest extends TestCase
         $cjk->composite("日本語テスト\nコンポジット", $bg, Position::CENTER, Position::CENTER);
         $cjkDelta = $cjk->composite("日本語テスト\nコンポジッX", $bg, Position::CENTER, Position::CENTER);
         $this->assertSame(
-            "\e[4;19HXd",
+            "\e[1;1H\e[4;19HXd",
             $cjkDelta,
-            'Wide-CJK delta must repair only the changed head+continuation columns, not the shifted phantom tail',
+            'Wide-CJK delta must open with the frame anchor, then repair only the changed head+continuation columns, not the shifted phantom tail',
         );
 
         // ASCII overlay: single-character change between frames.
@@ -1001,18 +1003,19 @@ final class VeilTest extends TestCase
         $ascii->composite("overlay-one\noverlay-two", $bg, Position::CENTER, Position::CENTER);
         $asciiDelta = $ascii->composite("overlay-one\noverlay-tXo", $bg, Position::CENTER, Position::CENTER);
         $this->assertSame(
-            "\e[4;18HX",
+            "\e[1;1H\e[4;18HX",
             $asciiDelta,
-            'ASCII diff-path bytes must be byte-identical to the pre-refactor mb_substr() output',
+            'ASCII diff-path bytes must be the frame anchor plus the pre-refactor mb_substr() addressing, byte-identical',
         );
 
-        // An identical CJK frame still yields an empty delta (no spurious churn).
+        // An identical CJK frame still yields only the frame-open anchor
+        // (no spurious churn beyond the DiffEncoder's unconditional home-CUP).
         $same = Veil::new();
         $same->composite("日本語テスト\nコンポジット", $bg, Position::CENTER, Position::CENTER);
         $this->assertSame(
-            '',
+            "\e[1;1H",
             $same->composite("日本語テスト\nコンポジット", $bg, Position::CENTER, Position::CENTER),
-            'An unchanged multibyte frame must produce an empty delta',
+            'An unchanged multibyte frame must produce the frame-open anchor only',
         );
     }
 

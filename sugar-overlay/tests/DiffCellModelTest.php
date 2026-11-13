@@ -33,7 +33,7 @@ final class DiffCellModelTest extends TestCase
         $delta = $veil->composite("日本語テスト\nXンポジット", $bg, Position::CENTER, Position::CENTER);
 
         // X replaces the width-2 head at display column 8 (CUP is 1-based).
-        $this->assertStringStartsWith("\e[4;9HX", $delta, 'wide-head change must be addressed at the real terminal column');
+        $this->assertStringStartsWith("\e[1;1H\e[4;9HX", $delta, 'the delta opens with the frame anchor, then the wide-head change is addressed at the real terminal column');
         // The pre-fix width-blind model shifted every following glyph one
         // phantom cell left and sprayed the background tail to compensate.
         $this->assertStringNotContainsString('ding here', $delta, 'corrupted width-blind spray must not return');
@@ -56,7 +56,7 @@ final class DiffCellModelTest extends TestCase
 
         // The frame after a link must still diff: END -> ENS at column 2.
         $delta = $veil->composite($link . "\nENS", $bg, Position::TOP, Position::LEFT);
-        $this->assertSame("\e[2;3HS", $delta, 'update after a hyperlink must land at the real column');
+        $this->assertSame("\e[1;1H\e[2;3HS", $delta, 'update after a hyperlink must land at the real column, behind the frame-open anchor');
     }
 
     public function testStyleOnlyFrameChangeEmitsDelta(): void

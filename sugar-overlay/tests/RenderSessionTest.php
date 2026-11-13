@@ -261,7 +261,7 @@ final class RenderSessionTest extends TestCase
 
         $this->assertNotSame('', $delta, 'frame 1 must be rebuilt from previousOutput so its painted cell is erased, not ghosted');
         $this->assertStringContainsString(' ', $delta, 'the erase is a blank written over the ghosted cell');
-        $this->assertSame('', $session->diff('', 10, 2, $factory), 'two genuinely blank frames must still diff to nothing');
+        $this->assertSame("\e[1;1H", $session->diff('', 10, 2, $factory), 'two genuinely blank frames still ship only the frame-open anchor (sugar-cellbuffer DiffEncoder frames every encoded output with home-CUP)');
     }
 
     public function testResetClearsTheFullFrame(): void

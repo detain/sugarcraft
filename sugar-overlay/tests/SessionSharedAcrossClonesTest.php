@@ -54,8 +54,9 @@ final class SessionSharedAcrossClonesTest extends TestCase
         $this->assertNotSame('', $full);
 
         // The clone paints the same state on the SHARED session: the
-        // original already remembered this frame, so nothing new ships.
-        $this->assertSame('', $clone->composite("Hi", self::BG, Position::TOP, Position::LEFT));
+        // original already remembered this frame, so the only thing left to
+        // ship is the DiffEncoder frame-open anchor.
+        $this->assertSame("\e[1;1H", $clone->composite("Hi", self::BG, Position::TOP, Position::LEFT));
     }
 
     public function testResetPreviousFrameInvalidatesEveryClone(): void
@@ -64,7 +65,7 @@ final class SessionSharedAcrossClonesTest extends TestCase
         $clone = $base->withZIndex(3);
 
         $full = $base->composite("Hi", self::BG, Position::TOP, Position::LEFT);
-        $this->assertSame('', $base->composite("Hi", self::BG, Position::TOP, Position::LEFT));
+        $this->assertSame("\e[1;1H", $base->composite("Hi", self::BG, Position::TOP, Position::LEFT));
 
         $clone->resetPreviousFrame();
 

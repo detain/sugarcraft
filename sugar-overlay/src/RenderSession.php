@@ -134,7 +134,9 @@ final class RenderSession
      * @param int      $width         Frame width in cells
      * @param int      $height        Frame height in rows
      * @param callable $bufferFactory Factory to build a Buffer from (output, width, height)
-     * @return string Encoded diff bytes, or empty string if no changes
+     * @return string Encoded diff bytes; a no-change diff still carries the encoder's
+     *                unconditional frame-open home anchor (\e[1;1H), never a zero-byte
+     *                string — only the cold prime below returns ''
      */
     public function diff(string $output, int $width, int $height, callable $bufferFactory): string
     {
