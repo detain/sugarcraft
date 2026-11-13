@@ -54,7 +54,7 @@ candy-top reads btop's config format and btop's `.theme` files, and its keys, me
 composer require sugarcraft/candy-top
 ```
 
-Add `:@dev` (`composer require sugarcraft/candy-top:@dev`) while your project's `minimum-stability` is `stable` and no tagged release exists. Composer installs the launcher as `vendor/bin/candy-top`. For a global tool, use `composer global require sugarcraft/candy-top` and put Composer's global `vendor/bin` on your `PATH`.
+Add `:@dev` (`composer require sugarcraft/candy-top:@dev`) while your project's `minimum-stability` is `stable` and you want a commit newer than the newest tag — `candy-top/v0.1.0` (2026-10-20) covers that release line, and everything merged to master since is dev-only until the next tag. Composer installs the launcher as `vendor/bin/candy-top`. For a global tool, use `composer global require sugarcraft/candy-top` and put Composer's global `vendor/bin` on your `PATH`.
 
 The two GitHub locations are intentional and describe one codebase: development happens in the [detain/sugarcraft](https://github.com/detain/sugarcraft) monorepo — issues, tags and the phar releases all live there — and CI syncs each library's tree to the standalone [sugarcraft/candy-top](https://github.com/sugarcraft/candy-top) repository, which is what the `sugarcraft/candy-top` package installs from Packagist and what this package's homepage points at.
 
