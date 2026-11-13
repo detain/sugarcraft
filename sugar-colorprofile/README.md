@@ -37,9 +37,16 @@ sugar-colorprofile — terminal color profile detection and color degradation fo
 composer require sugarcraft/sugar-colorprofile
 ```
 
-Requires PHP 8.3+ and no PHP extensions — the probes' optional `posix_*` calls
-are feature-detected, and an absent/unreadable `infocmp` child degrades the
-phase-2 answer instead of failing.
+Requires PHP 8.3+ and the `ext-mbstring` extension — `Env::sanitize`'s
+UTF-8 sweep and the `TERM` cap run through `mb_convert_encoding` /
+`mb_strcut` unguarded, and until this was declared the dependency was
+satisfied only transitively via sugar-core while the text here claimed the
+opposite. The probes' optional `posix_*` calls remain feature-detected, and
+an absent/unreadable `infocmp` child degrades the phase-2 answer instead of
+failing. The package's direct dependencies are `sugarcraft/sugar-core`
+(foundational utilities) and the ReactPHP trio `react/event-loop`,
+`react/child-process`, `react/promise` — the last three back the
+`AsyncProbe` infocmp child.
 
 **Supported targets: POSIX terminals.** The phase-2 `infocmp` consult is
 POSIX-only by design — it queries the compiled terminfo database. The env

@@ -28,6 +28,7 @@
     },
     "require": {
         "php": "^8.3",
+        "ext-mbstring": "*",
         "react/child-process": "^0.6",
         "react/event-loop": "^1.2",
         "react/promise": "^3.3",
