@@ -10,7 +10,7 @@
 ││          x         Toggle CTR     │  │        s, S        Next/previous  ││%│
 ││                    (containers)   │  │                    VM card order  ││8│
 ││                    box.           │  │                    (VM dashboard).││0│
-││        [, ]        Select         │  │      shift + i     Toggle the ipmi││6│
+││        [, ]        Select         │  │       Shift+I      Toggle the ipmi││6│
 ││                    previous/next  │  │                    box (BMC power,││5│
 ││                    container in   │  │                    fans, temps;   ││9│
 ││                    CTR box.       │  │                    root).         ││2│

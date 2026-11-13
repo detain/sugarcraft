@@ -9,11 +9,11 @@
 │╭─┐General┌─────────────────────────╮  ╭─┐Panels & views┌──────────────────╮│─╮
 ││       Esc, m       Toggles main   │  │          p         Cycle view     ││%│
 ││                    menu.          │  │                    presets        ││8│
-││      ctrl + r      Reloads config │  │                    forwards.      ││0│
-││                    file from disk.│  │      shift + p     Cycle view     ││6│
-││     q, ctrl + c    Quits program. │  │                    presets        ││5│
+││       Ctrl+R       Reloads config │  │                    forwards.      ││0│
+││                    file from disk.│  │       Shift+P      Cycle view     ││6│
+││      q, Ctrl+C     Quits program. │  │                    presets        ││5│
 ││       +, -, =      Add/Subtract   │  │                    backwards.     ││9│
-││                    100ms to/from  │  │          1         Toggle CPU box.││2│
+││                    100 ms to/from │  │          1         Toggle CPU box.││2│
 ││                    update timer.  │  │          2         Toggle MEM box.││6│
 │╰───────────────────────────────────╯  │          3         Toggle NET box.││6│
 │                                       │          4         Toggle PROC    ││ │

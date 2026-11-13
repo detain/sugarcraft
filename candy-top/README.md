@@ -338,7 +338,7 @@ Context rules, following btop's input handling:
 | `Mouse scroll` | Scrolls any scrollable list/text under cursor. | `mouse_scroll_up`, `mouse_scroll_down` |
 | `Esc, m` | Toggles main menu. | `escape`, `m` |
 | `p` | Cycle view presets forwards. | `p` |
-| `shift + p` | Cycle view presets backwards. | `P` |
+| `Shift+P` | Cycle view presets backwards. | `P` |
 | `1` | Toggle CPU box. | `1` |
 | `2` | Toggle MEM box. | `2` |
 | `3` | Toggle NET box. | `3` |
@@ -348,13 +348,13 @@ Context rules, following btop's input handling:
 | `[, ]` | Select previous/next container in CTR box. | `[`, `]` |
 | `v` | Toggle the VM dashboard (hides mem, net, proc, ctr). | — (candy-top only) |
 | `s, S` | Next/previous VM card order (VM dashboard). | — (candy-top only) |
-| `shift + i` | Toggle the ipmi box (BMC power, fans, temps; root). | — (candy-top only) |
+| `Shift+I` | Toggle the ipmi box (BMC power, fans, temps; root). | — (candy-top only) |
 | `d` | Toggle disks view in MEM box. | `d` |
 | `F2, o` | Shows options. | `f2`, `o` |
 | `F1, ?, h` | Shows this window. | `f1`, `?`, `h` |
-| `ctrl + r` | Reloads config file from disk. | `ctrl+r` |
-| `q, ctrl + c` | Quits program. | `q`, `ctrl+c` |
-| `+, -, =` | Add/Subtract 100ms to/from update timer. | `+`, `-`, `=` |
+| `Ctrl+R` | Reloads config file from disk. | `ctrl+r` |
+| `q, Ctrl+C` | Quits program. | `q`, `ctrl+c` |
+| `+, -, =` | Add/Subtract 100 ms to/from update timer. | `+`, `-`, `=` |
 | `Up, Down` | Select in process list. | `up`, `down` |
 | `Enter` | Show detailed information for selected process. | `enter` |
 | `Spacebar` | Expand/collapse the selected process in tree view. | `space` |
@@ -364,7 +364,7 @@ Context rules, following btop's input handling:
 | `Left, Right` | Select previous/next sorting column. | `left`, `right` |
 | `b, n` | Select previous/next network device. | `b`, `n` |
 | `i` | Toggle disks io mode with big graphs. | `i` |
-| `z` | Toggle totals reset for current network device | `z` |
+| `z` | Toggle totals reset for current network device. | `z` |
 | `a` | Toggle auto scaling for the network graphs. | `a` |
 | `y` | Toggle synced scaling mode for network graphs. | `y` |
 | `f, /` | To enter a process filter. Start with ! for regex. | `f`, `/` |
@@ -377,13 +377,13 @@ Context rules, following btop's input handling:
 | `E` | Collapse/expand all processes in tree view. | `E` |
 | `%` | Toggles memory display mode in processes box. | `%` |
 | `O` | Toggle hiding containers and VMs in process list. | `O` |
-| `g, ctrl + g` | Toggle GPU-only process filter (vim_keys: ctrl + g). | `g`, `ctrl+g` |
+| `g, Ctrl+G` | Toggle GPU-only process filter (vim_keys: Ctrl+G). | `g`, `ctrl+g` |
 | `Selected +, -` | Expand/collapse the selected process in tree view. | `+`, `-`, `=` |
 | `Selected t` | Terminate selected process with SIGTERM - 15. | `t` |
 | `Selected k (vim K)` | Kill selected process with SIGKILL - 9. | `k` |
 | `Selected s` | Select or enter signal to send to process. | `s` |
 | `Selected N` | Select new nice value for selected process. | `N` |
-| `Shift + Left, Right` | Adjust the proc box width by 1% (mem or net shown). | `shift_left`, `shift_right` |
+| `Shift+Left, Right` | Adjust the proc box width by 1% (mem or net shown). | `shift_left`, `shift_right` |
 | `Alt+Shift+Left/Right` | Adjust the proc box width by 10% (mem or net shown). | `alt_shift_left`, `alt_shift_right` |
 | `Ctrl+Shift+Left` | Proc box to max width (min with proc_left). | `ctrl_shift_left` |
 | `Ctrl+Shift+Right` | Proc box to min width (max with proc_left). | `ctrl_shift_right` |

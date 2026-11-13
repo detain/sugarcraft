@@ -8,9 +8,9 @@
 │        Key:        Description:                                                                                    │││
 │╭─┐General┌─────────────────────────────────────────────╮  ╭─┐Panels & views┌──────────────────────────────────────╮│││
 ││       Esc, m       Toggles main menu.                 │  │          p         Cycle view presets forwards.       ││││
-││      ctrl + r      Reloads config file from disk.     │  │      shift + p     Cycle view presets backwards.      ││╯│
-││     q, ctrl + c    Quits program.                     │  │          1         Toggle CPU box.                    ││ │
-││       +, -, =      Add/Subtract 100ms to/from update  │  │          2         Toggle MEM box.                    ││─╯
+││       Ctrl+R       Reloads config file from disk.     │  │       Shift+P      Cycle view presets backwards.      ││╯│
+││      q, Ctrl+C     Quits program.                     │  │          1         Toggle CPU box.                    ││ │
+││       +, -, =      Add/Subtract 100 ms to/from update │  │          2         Toggle MEM box.                    ││─╯
 ││                    timer.                             │  │          3         Toggle NET box.                    ││─╮
 │╰───────────────────────────────────────────────────────╯  │          4         Toggle PROC box.                   ││%│
 │                                                           │  5, 6, 7, 8, 9, 0  Toggle GPU box.                    ││8│
@@ -21,15 +21,15 @@
 ││                    processes.                         │  │                    net, proc, ctr).                   ││2│
 ││          r         Reverse sorting order in processes │  │        s, S        Next/previous VM card order (VM    ││6│
 ││                    box.                               │  │                    dashboard).                        ││6│
-││          e         Toggle processes tree view.        │  │      shift + i     Toggle the ipmi box (BMC power,    ││ │
+││          e         Toggle processes tree view.        │  │       Shift+I      Toggle the ipmi box (BMC power,    ││ │
 ││          E         Collapse/expand all processes in   │  ╰───────────────────────────────────────────────────────╯│ │
 ││                    tree view.                         │                                                           │ │
 ││          %         Toggles memory display mode in     │  ╭─┐Navigation & scrolling┌──────────────────────────────╮│ │
 ││                    processes box.                     │  │      Up, Down      Select in process list.            ││ │
 ││          O         Toggle hiding containers and VMs in│  │   Pg Up, Pg Down   Jump 1 page in process list.       ││ │
 ││                    process list.                      │  │      Home, End     Jump to first or last page in      ││ │
-││     g, ctrl + g    Toggle GPU-only process filter     │  │                    process list.                      ││ │
-││                    (vim_keys: ctrl + g).              │  │     h, j, k, l     With vim_keys: left, down, up,     ││ │
+││      g, Ctrl+G     Toggle GPU-only process filter     │  │                    process list.                      ││ │
+││                    (vim_keys: Ctrl+G).                │  │     h, j, k, l     With vim_keys: left, down, up,     ││ │
 │╰───────────────────────────────────────────────────────╯  │                    right in lists.                    ││ │
 │                                                           │        g, G        With vim_keys: first / last process││ │
 │                                                           │                    in the list.                       ││ │

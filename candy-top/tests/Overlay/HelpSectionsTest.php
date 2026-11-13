@@ -85,13 +85,13 @@ final class HelpSectionsTest extends OverlayTestCase
             $ladder[Lang::t($heading)] = array_map(static fn (KeyRow $r): string => $r->keyLabel(), $rows);
         }
         $this->assertSame([
-            'General' => ['Esc, m', 'ctrl + r', 'q, ctrl + c', '+, -, ='],
-            'Panels & views' => ['p', 'shift + p', '1', '2', '3', '4', '5, 6, 7, 8, 9, 0', 'x', '[, ]', 'v', 's, S', 'shift + i', 'd', 'c', 'r', 'e', 'E', '%', 'O', 'g, ctrl + g'],
+            'General' => ['Esc, m', 'Ctrl+R', 'q, Ctrl+C', '+, -, ='],
+            'Panels & views' => ['p', 'Shift+P', '1', '2', '3', '4', '5, 6, 7, 8, 9, 0', 'x', '[, ]', 'v', 's, S', 'Shift+I', 'd', 'c', 'r', 'e', 'E', '%', 'O', 'g, Ctrl+G'],
             'Navigation & scrolling' => ['Up, Down', 'Pg Up, Pg Down', 'Home, End', 'h, j, k, l', 'g, G'],
             'Process list' => ['Enter', 'Spacebar', 'C', 'Left, Right'],
             'Search & filter' => ['f, /', 'F', 'u', 'delete'],
             'Net & io' => ['b, n', 'i', 'z', 'a', 'y'],
-            'Process actions' => ['Selected +, -', 'Selected t', 'Selected k (vim K)', 'Selected s', 'Selected N', 'Shift + Left, Right', 'Alt+Shift+Left/Right', 'Ctrl+Shift+Left', 'Ctrl+Shift+Right', 'Ctrl+Shift+Down', 'H, K'],
+            'Process actions' => ['Selected +, -', 'Selected t', 'Selected k (vim K)', 'Selected s', 'Selected N', 'Shift+Left, Right', 'Alt+Shift+Left/Right', 'Ctrl+Shift+Left', 'Ctrl+Shift+Right', 'Ctrl+Shift+Down', 'H, K'],
             'Overlays' => ['F2, o', 'F1, ?, h'],
             'Mouse' => ['Mouse 1', 'Mouse scroll'],
             'Info' => ['', '', ''],

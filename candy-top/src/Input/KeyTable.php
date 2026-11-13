@@ -11,16 +11,16 @@ namespace SugarCraft\Top\Input;
  * ({@see bindings()}).
  *
  * Rows follow btop's `help_text` (src/btop_menu.cpp:172-218) minus what
- * candy-top does not do (yet): `ctrl + z` (no suspend). btop's `5` row
+ * candy-top does not do (yet): `Ctrl+Z` (no suspend). btop's `5` row
  * lists every gpu slot key, 5 through 0 (btop PR #1730); btop PR #1873
  * adds `x` and `[, ]` (the containers box) right after it. btop PR #1476 adds the proc-width rows after `Selected N`;
  * `O` is candy-top's #1873 extension; the vim_keys rows (btop documents
  * those only in its options text) are listed so the roster is complete.
- * The `v`, `s, S` and `shift + i` rows have no btop counterpart at all
+ * The `v`, `s, S` and `Shift+I` rows have no btop counterpart at all
  * (btop has no VM dashboard, and its `s` is the signal chooser) — they
  * carry `candyTopOnly: true` so the generated README table names them as
  * candy-top's own instead of presenting them under "btop key names".
- * `g, ctrl + g` is btop #1552's gpu-only filter (`ctrl + g` because
+ * `g, Ctrl+G` is btop #1552's gpu-only filter (`Ctrl+G` because
  * vim_keys keeps `g` for "top").
  *
  * {@see bindings()} is pinned against the handlers by KeyTableTest, which
@@ -65,7 +65,7 @@ final class KeyTable
             new KeyRow('keys.mouse_scroll', 'help.mouse_scroll', ['mouse_scroll_up', 'mouse_scroll_down'], true),
             new KeyRow('Esc, m', 'help.menu', ['escape', 'm']),
             new KeyRow('p', 'help.preset_next', ['p']),
-            new KeyRow('shift + p', 'help.preset_prev', ['P']),
+            new KeyRow('Shift+P', 'help.preset_prev', ['P']),
             new KeyRow('1', 'help.toggle_cpu', ['1']),
             new KeyRow('2', 'help.toggle_mem', ['2']),
             new KeyRow('3', 'help.toggle_net', ['3']),
@@ -77,12 +77,12 @@ final class KeyTable
             new KeyRow('v', 'help.toggle_vms', ['v'], candyTopOnly: true),
             new KeyRow('s, S', 'help.vms_sort', ['s', 'S'], candyTopOnly: true),
             // candy-top's BMC box (`i` is io_mode, so shift).
-            new KeyRow('shift + i', 'help.toggle_ipmi', ['I'], candyTopOnly: true),
+            new KeyRow('Shift+I', 'help.toggle_ipmi', ['I'], candyTopOnly: true),
             new KeyRow('d', 'help.toggle_disks', ['d']),
             new KeyRow('F2, o', 'help.options', ['f2', 'o']),
             new KeyRow('F1, ?, h', 'help.help', ['f1', '?', 'h']),
-            new KeyRow('ctrl + r', 'help.reload', ['ctrl+r']),
-            new KeyRow('q, ctrl + c', 'help.quit', ['q', 'ctrl+c']),
+            new KeyRow('Ctrl+R', 'help.reload', ['ctrl+r']),
+            new KeyRow('q, Ctrl+C', 'help.quit', ['q', 'ctrl+c']),
             new KeyRow('+, -, =', 'help.update_ms', ['+', '-', '=']),
             new KeyRow('Up, Down', 'help.select', ['up', 'down']),
             new KeyRow('Enter', 'help.detailed', ['enter']),
@@ -106,13 +106,13 @@ final class KeyTable
             new KeyRow('E', 'help.collapse_all', ['E']),
             new KeyRow('%', 'help.mem_mode', ['%']),
             new KeyRow('O', 'help.omit_containers', ['O']),
-            new KeyRow('g, ctrl + g', 'help.gpu_only', ['g', 'ctrl+g']),
+            new KeyRow('g, Ctrl+G', 'help.gpu_only', ['g', 'ctrl+g']),
             new KeyRow('keys.selected_plus_minus', 'help.expand', ['+', '-', '='], true),
             new KeyRow('keys.selected_t', 'help.terminate', ['t'], true),
             new KeyRow('keys.selected_k', 'help.kill', ['k'], true),
             new KeyRow('keys.selected_s', 'help.signal', ['s'], true),
             new KeyRow('keys.selected_n', 'help.renice', ['N'], true),
-            new KeyRow('Shift + Left, Right', 'help.proc_width', ['shift_left', 'shift_right']),
+            new KeyRow('Shift+Left, Right', 'help.proc_width', ['shift_left', 'shift_right']),
             new KeyRow('Alt+Shift+Left/Right', 'help.proc_width10', ['alt_shift_left', 'alt_shift_right']),
             new KeyRow('Ctrl+Shift+Left', 'help.proc_width_max', ['ctrl_shift_left']),
             new KeyRow('Ctrl+Shift+Right', 'help.proc_width_min', ['ctrl_shift_right']),
