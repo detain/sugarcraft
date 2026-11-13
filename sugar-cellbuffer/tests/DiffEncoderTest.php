@@ -30,7 +30,7 @@ final class DiffEncoderTest extends TestCase
     {
         $bytes = $this->encoder->encode([]);
 
-        $this->assertSame('', $bytes);
+        $this->assertSame("\x1b[1;1H", $bytes);
     }
 
     public function testEncodeMoveCursorOp(): void
@@ -38,7 +38,7 @@ final class DiffEncoderTest extends TestCase
         $ops = [new MoveCursorOp(4, 2)];
         $bytes = $this->encoder->encode($ops);
 
-        $this->assertSame("\x1b[3;5H", $bytes);
+        $this->assertSame("\x1b[1;1H\x1b[3;5H", $bytes);
     }
 
     public function testEncodeMoveCursorSamePositionIsNoOp(): void
@@ -49,7 +49,7 @@ final class DiffEncoderTest extends TestCase
         ];
         $bytes = $this->encoder->encode($ops);
 
-        $this->assertSame('', $bytes);
+        $this->assertSame("\x1b[1;1H", $bytes);
     }
 
     public function testEncodeMoveCursorAlreadyAtPositionFromDifferentCursor(): void
@@ -60,7 +60,7 @@ final class DiffEncoderTest extends TestCase
         $encoder->encode([new MoveCursorOp(3, 2)]);
         $bytes = $encoder->encode([new MoveCursorOp(3, 2)]);
 
-        $this->assertSame("\x1b[3;4H", $bytes);
+        $this->assertSame("\x1b[1;1H\x1b[3;4H", $bytes);
     }
 
     public function testEncodeRepeatRunOp(): void
@@ -73,7 +73,7 @@ final class DiffEncoderTest extends TestCase
 
         // A-02: count 3 of a 1-byte rune is below the byte break-even
         // ("\x1b[3b" costs 4, "AAA" costs 3) — the run stays literal.
-        $this->assertSame("AAAA", $bytes);
+        $this->assertSame("\x1b[1;1H" . "AAAA", $bytes);
     }
 
     public function testEncodeRepeatRunOpZeroCount(): void
@@ -84,7 +84,7 @@ final class DiffEncoderTest extends TestCase
         ];
         $bytes = $this->encoder->encode($ops);
 
-        $this->assertSame("X", $bytes);
+        $this->assertSame("\x1b[1;1H" . "X", $bytes);
     }
 
     public function testEncodeRepeatRunFallbackWhenRuneMismatch(): void
@@ -97,7 +97,7 @@ final class DiffEncoderTest extends TestCase
         // shape lands on the literal arm — which paints the op's OWN rune,
         // strictly more faithful than REP (REP would have repeated the stale
         // 'A' sitting under the cursor while only relabelling bookkeeping).
-        $this->assertSame("XX", $bytes);
+        $this->assertSame("\x1b[1;1H" . "XX", $bytes);
     }
 
     public function testEncodeRepeatRunEmitsRepSequence(): void
@@ -110,7 +110,7 @@ final class DiffEncoderTest extends TestCase
 
         // A-02: count 5 is the first strict win for a 1-byte rune
         // ("\x1b[5b" costs 4 bytes, "AAAAA" costs 5) — REP is emitted.
-        $this->assertSame("A\x1b[5b", $bytes);
+        $this->assertSame("\x1b[1;1H" . "A\x1b[5b", $bytes);
     }
 
     public function testEncodeSetStyleOp(): void
@@ -120,7 +120,7 @@ final class DiffEncoderTest extends TestCase
 
         // B1 (lane A3a): a frame that ENDS styled is closed with an SGR
         // reset so the next raw write cannot inherit the ghost colour.
-        $this->assertSame("\x1b[0;1m\x1b[0m", $bytes);
+        $this->assertSame("\x1b[1;1H\x1b[0;1m\x1b[0m", $bytes);
     }
 
     public function testEncodeSetStyleOpNullResets(): void
@@ -128,7 +128,7 @@ final class DiffEncoderTest extends TestCase
         $ops = [new SetStyleOp(null)];
         $bytes = $this->encoder->encode($ops);
 
-        $this->assertSame("\x1b[0m", $bytes);
+        $this->assertSame("\x1b[1;1H\x1b[0m", $bytes);
     }
 
     public function testEncodeSetHyperlinkOpOpen(): void
@@ -137,7 +137,7 @@ final class DiffEncoderTest extends TestCase
         $ops = [new SetHyperlinkOp($link)];
         $bytes = $this->encoder->encode($ops);
 
-        $this->assertSame("\x1b]8;;https://example.com\x1b\\\x1b]8;;\x1b\\", $bytes);
+        $this->assertSame("\x1b[1;1H\x1b]8;;https://example.com\x1b\\\x1b]8;;\x1b\\", $bytes);
     }
 
     public function testEncodeSetHyperlinkOpOpenWithId(): void
@@ -146,7 +146,7 @@ final class DiffEncoderTest extends TestCase
         $ops = [new SetHyperlinkOp($link)];
         $bytes = $this->encoder->encode($ops);
 
-        $this->assertSame("\x1b]8;id=myid;https://example.com\x1b\\\x1b]8;;\x1b\\", $bytes);
+        $this->assertSame("\x1b[1;1H\x1b]8;id=myid;https://example.com\x1b\\\x1b]8;;\x1b\\", $bytes);
     }
 
     public function testEncodeSetHyperlinkOpCloseWithNoOpenLinkIsNoOp(): void
@@ -154,7 +154,7 @@ final class DiffEncoderTest extends TestCase
         $ops = [new SetHyperlinkOp(null)];
         $bytes = $this->encoder->encode($ops);
 
-        $this->assertSame('', $bytes);
+        $this->assertSame("\x1b[1;1H", $bytes);
     }
 
     public function testEncodeClosesHyperlinkAtEnd(): void
@@ -167,7 +167,7 @@ final class DiffEncoderTest extends TestCase
         ];
         $bytes = $this->encoder->encode($ops);
 
-        $this->assertSame("\x1b]8;;https://example.com\x1b\\\x1b]8;;\x1b\\X", $bytes);
+        $this->assertSame("\x1b[1;1H\x1b]8;;https://example.com\x1b\\\x1b]8;;\x1b\\X", $bytes);
     }
 
     public function testEncodeSgrTransitionIsMinimal(): void
@@ -182,7 +182,7 @@ final class DiffEncoderTest extends TestCase
         $bytes = $this->encoder->encode($ops);
 
         // Trailing reset per B1 — the stream must end at default rendition.
-        $this->assertSame("\x1b[0;1mAB\x1b[0m", $bytes);
+        $this->assertSame("\x1b[1;1H\x1b[0;1mAB\x1b[0m", $bytes);
     }
 
     public function testEncodeSgrDifferentiatesBoldItalic(): void
@@ -196,7 +196,7 @@ final class DiffEncoderTest extends TestCase
         $bytes = $this->encoder->encode($ops);
 
         // Trailing reset per B1 — italic was live at end of stream.
-        $this->assertSame("\x1b[0;1mB\x1b[0;3mI\x1b[0m", $bytes);
+        $this->assertSame("\x1b[1;1H\x1b[0;1mB\x1b[0;3mI\x1b[0m", $bytes);
     }
 
     public function testEncodeWideCharAdvancesCursorByWidth2(): void
@@ -205,7 +205,7 @@ final class DiffEncoderTest extends TestCase
         $ops = [new SetCellOp([$cell])];
         $bytes = $this->encoder->encode($ops);
 
-        $this->assertSame('中', $bytes);
+        $this->assertSame("\x1b[1;1H" . '中', $bytes);
     }
 
     public function testEncodeCompositeStyle(): void
@@ -216,7 +216,7 @@ final class DiffEncoderTest extends TestCase
         $bytes = $this->encoder->encode($ops);
 
         // Trailing reset per B1 — composite style was live at end of stream.
-        $this->assertSame("\x1b[0;38;2;18;52;86;48;2;171;205;239;1;4mS\x1b[0m", $bytes);
+        $this->assertSame("\x1b[1;1H\x1b[0;38;2;18;52;86;48;2;171;205;239;1;4mS\x1b[0m", $bytes);
     }
 
     public function testRepeatRunWideAdvancesCursorByWidth(): void
@@ -237,7 +237,7 @@ final class DiffEncoderTest extends TestCase
         // at col 7 after the wide REP (col 3 + 2*2 = 7).  If width were ignored,
         // the encoder would be at col 5 and the move would be a no-op.
         // Note: row=0 → 1-based row=1, so full CUP form is \x1b[1;6H.
-        $this->assertSame("\x1b[1;6H", $bytes);
+        $this->assertSame("\x1b[1;1H\x1b[1;6H", $bytes);
     }
 
     public function testEncodeSetHyperlinkCloseWhenLinkAlreadyClosed(): void
@@ -246,7 +246,7 @@ final class DiffEncoderTest extends TestCase
         $ops = [new SetHyperlinkOp(null)];
         $bytes = $this->encoder->encode($ops);
 
-        $this->assertSame('', $bytes);
+        $this->assertSame("\x1b[1;1H", $bytes);
     }
 
     public function testEncodeOpenThenCloseHyperlink(): void
@@ -272,7 +272,7 @@ final class DiffEncoderTest extends TestCase
         $ops = [new MoveCursorOp(0, 0)];
         $bytes = $this->encoder->encode($ops);
 
-        $this->assertSame('', $bytes);
+        $this->assertSame("\x1b[1;1H", $bytes);
     }
 
     public function testEncodeEraseRunPositiveCount(): void
@@ -280,7 +280,7 @@ final class DiffEncoderTest extends TestCase
         $ops = [new EraseRunOp(3)];
         $bytes = $this->encoder->encode($ops);
 
-        $this->assertSame("\x1b[3X", $bytes);
+        $this->assertSame("\x1b[1;1H\x1b[3X", $bytes);
     }
 
     public function testEncodeEncodeStateIsResetBetweenCalls(): void
@@ -294,11 +294,11 @@ final class DiffEncoderTest extends TestCase
         // Second encode should start fresh with cursor at (1,1) 1-based
         // MoveCursorOp(0,0) is a no-op when starting from reset state
         $bytes = $this->encoder->encode([new MoveCursorOp(0, 0)]);
-        $this->assertSame('', $bytes);
+        $this->assertSame("\x1b[1;1H", $bytes);
 
         // But moving to a different position should emit CUP
         $bytes2 = $this->encoder->encode([new MoveCursorOp(4, 3)]);
-        $this->assertSame("\x1b[4;5H", $bytes2); // 5,4 0-based = 4,5 1-based
+        $this->assertSame("\x1b[1;1H\x1b[4;5H", $bytes2); // 5,4 0-based = 4,5 1-based
     }
 
     public function testEncodeCompositeOpsWithHyperlinkTransition(): void
@@ -332,7 +332,7 @@ final class DiffEncoderTest extends TestCase
             new SetCellOp([Cell::new('X', Style::new(0xFF0000))]),
         ]);
 
-        $this->assertSame("\x1b[1;3H\x1b[0;38;2;255;0;0mX\x1b[0m", $bytes);
+        $this->assertSame("\x1b[1;1H\x1b[1;3H\x1b[0;38;2;255;0;0mX\x1b[0m", $bytes);
     }
 
     public function testUnstyledFrameCarriesNoTrailingReset(): void
@@ -341,7 +341,7 @@ final class DiffEncoderTest extends TestCase
         // never activated a style stays byte-identical to the rune alone.
         $bytes = $this->encoder->encode([new SetCellOp([Cell::new('x')])]);
 
-        $this->assertSame('x', $bytes);
+        $this->assertSame("\x1b[1;1H" . 'x', $bytes);
     }
 
     public function testExplicitStyleClearIsNotFollowedByASecondReset(): void
@@ -351,7 +351,7 @@ final class DiffEncoderTest extends TestCase
             new SetStyleOp(null),
         ]);
 
-        $this->assertSame("\x1b[0;1mX\x1b[0m", $bytes);
+        $this->assertSame("\x1b[1;1H\x1b[0;1mX\x1b[0m", $bytes);
     }
 
     public function testConsumerShapedConcatenationDoesNotBleedStyleIntoTheNextFrame(): void
@@ -369,7 +369,8 @@ final class DiffEncoderTest extends TestCase
         $clear = $this->encoder->encode([new EraseRunOp(1)]);
 
         $this->assertSame(
-            "\x1b[1;3H\x1b[0;38;2;255;0;0mX\x1b[0m\x1b[1X",
+            "\x1b[1;1H\x1b[1;3H\x1b[0;38;2;255;0;0mX\x1b[0m"
+            . "\x1b[1;1H\x1b[1X",
             $frame . $clear,
             'the erase frame must start at default rendition',
         );
@@ -383,7 +384,7 @@ final class DiffEncoderTest extends TestCase
         // home position, so step away first to observe the emitted CUP.
         $bytes = $this->encoder->encode([new MoveCursorOp(4, 2), new MoveCursorOp(-3, -2)]);
 
-        $this->assertSame("\x1b[3;5H\x1b[1;1H", $bytes);
+        $this->assertSame("\x1b[1;1H\x1b[3;5H\x1b[1;1H", $bytes);
     }
 
     public function testTheEmittersSpellTheHyperlinkOpenThroughOneHelper(): void
@@ -417,7 +418,7 @@ final class DiffEncoderTest extends TestCase
                 new SetCellOp([Cell::new('L', null, $link)]),
             ]);
             $this->assertStringContainsString($link->toAnsi(), $painted);
-            $this->assertStringStartsWith($link->toAnsi(), $delta);
+            $this->assertStringStartsWith("\x1b[1;1H" . $link->toAnsi(), $delta);
         }
 
         // Neither emitter hand-rolls OSC 8 frames any more — the literals
@@ -431,5 +432,26 @@ final class DiffEncoderTest extends TestCase
             $source = (string) file_get_contents($file);
             $this->assertStringNotContainsString('\x1b]8', $source, "an emitter re-spells OSC 8 bytes in {$file}");
         }
+    }
+
+    public function testEveryFrameOpensWithTheHomeAnchorIncludingAnOriginOnlyPaint(): void
+    {
+        // TUI-01 cure: the frame is self-anchored. Before the prologue a
+        // delta whose only change sits at (0,0) carried ZERO positioning
+        // bytes — sugar-overlay/sugar-dashboard return encode() verbatim to
+        // a live terminal, so the paint landed wherever the previous frame
+        // left the cursor (whole-frame mis-paint class). The unconditional
+        // \x1b[1;1H matches the contract the README always promised.
+        $bytes = $this->encoder->encode([new SetCellOp([Cell::new('X')])]);
+
+        $this->assertSame("\x1b[1;1HX", $bytes);
+    }
+
+    public function testThePrologueRidesEvenOnAnEmptyOpStream(): void
+    {
+        // Unconditional means unconditional: an empty frame still anchors
+        // home, so a consumer that skips painting but flushes the stream
+        // cannot leave the terminal mid-screen for the next writer.
+        $this->assertSame("\x1b[1;1H", $this->encoder->encode([]));
     }
 }

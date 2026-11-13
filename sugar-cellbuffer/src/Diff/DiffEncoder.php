@@ -17,7 +17,11 @@ use SugarCraft\CellBuffer\Style;
  * at (5, 2), a MoveCursorOp for (5, 2) is a no-op and is skipped.
  *
  * ANSI sequences emitted (per xterm ctlseqs):
- *   - CUP  \x1b[row;colH  (cursor position, 1-based)
+ *   - CUP  \x1b[row;colH  (cursor position, 1-based; the stream always OPENS
+ *                          with an unconditional home anchor \x1b[1;1H so a
+ *                          frame never depends on where the terminal was
+ *                          left — the same promise sugar-panels used to
+ *                          patch in from outside)
  *   - ECH  \x1b[N X        (erase N chars)
  *   - REP  \x1b[N b        (repeat preceding char N times — emitted only
  *                          when RepeatGate::worth() says it beats the
@@ -53,8 +57,18 @@ final class DiffEncoder
     /** Last emitted rune (used to validate REP sequences). */
     private ?string $lastRune = null;
 
+    /** Home anchor every encoded frame opens with (1-based CUP to (1,1)). */
+    private const HOME_CUP = "\x1b[1;1H";
+
     /**
      * Encode a list of DiffOps to a raw ANSI byte string.
+     *
+     * Every frame starts with an unconditional home CUP: consumers return
+     * these bytes verbatim to a live terminal (sugar-overlay, sugar-
+     * dashboard), and a frame whose first change is (0,0) used to carry no
+     * positioning at all — mis-painting whole frames wherever the terminal
+     * had been left. The logical cursor starts home, so the anchor costs one
+     * 6-byte CUP and buys the self-contained contract the README promises.
      *
      * @param list<DiffOp> $ops
      */
@@ -68,7 +82,7 @@ final class DiffEncoder
         $this->currentLink = null;
         $this->lastRune = null;
 
-        $out = '';
+        $out = self::HOME_CUP;
 
         foreach ($ops as $op) {
             $out .= $this->encodeOp($op);

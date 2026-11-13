@@ -103,7 +103,8 @@ final class RepeatGateTest extends TestCase
             new RepeatRunOp('▀', 2, 1),
         ]);
 
-        self::assertSame('▀▀', $below, 'count 1 of a 3-byte rune: 3 literal beats 4 framed');
-        self::assertSame("▀\x1b[2b", $above, 'count 2 of a 3-byte rune: 6 literal loses to 4 framed');
+        $home = "\x1b[1;1H"; // CB-02 prologue rides every frame (DiffEncoder::encode).
+        self::assertSame($home . '▀▀', $below, 'count 1 of a 3-byte rune: 3 literal beats 4 framed');
+        self::assertSame($home . "▀\x1b[2b", $above, 'count 2 of a 3-byte rune: 6 literal loses to 4 framed');
     }
 }

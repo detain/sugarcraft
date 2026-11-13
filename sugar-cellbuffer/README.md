@@ -128,7 +128,7 @@ $manual = Buffer::fromGrid(2, 1, [Cell::new('中', null, null, 2), $cont]);
 
 ## Diffing & delta ANSI
 
-`Buffer::diff(Buffer $previous)` compares two frames and returns a minimal list of `DiffOp` objects. Passing those ops through `DiffEncoder::encode()` produces a tight ANSI byte stream — no full repaint, just the cells that changed. `encode()` resets its cursor, style and hyperlink state to home on every call, so one encoder instance reused across frames is safe: each emitted frame is self-contained — absolute-position ops with `CUP` as needed, no dependence on what a previous frame left on screen.
+`Buffer::diff(Buffer $previous)` compares two frames and returns a minimal list of `DiffOp` objects. Passing those ops through `DiffEncoder::encode()` produces a tight ANSI byte stream — no full repaint, just the cells that changed. `encode()` resets its cursor, style and hyperlink state to home on every call and opens every frame with an unconditional home `CUP` (`\x1b[1;1H`), so one encoder instance reused across frames is safe: each emitted frame is self-contained — anchored at home before the first paint, no dependence on what a previous frame left on screen.
 
 **DiffOp types**
 
@@ -172,7 +172,8 @@ $bytes = (new DiffEncoder())->encode($ops);
 Emitted bytes (annotated):
 
 ```text
-\x1b[0;38;2;255;0;0m  # SGR → red fg            (first MoveCursorOp skipped: encoder is already at the home position)
+\x1b[1;1H             # home anchor — the unconditional prologue every frame opens with
+\x1b[0;38;2;255;0;0m  # SGR → red fg            (first MoveCursorOp skipped: the prologue parked the cursor at home)
 A                   # SetCellOp 'A'
 \x1b[0;38;2;0;0;255;1m  # SGR → blue fg + bold  (second MoveCursorOp skipped: cursor advanced past 'A')
 BBB                 # 'B' + RepeatRunOp encoded LITERAL: RepeatGate::worth(2,1)
@@ -181,7 +182,7 @@ BBB                 # 'B' + RepeatRunOp encoded LITERAL: RepeatGate::worth(2,1)
                     # always closes a styled stream, so stale colour never bleeds into the next frame
 ```
 
-Total: 44 bytes vs 51 bytes for the same 5×2 frame repainted via `toAnsi()` (which pays the reset too, walks every cell including the blanks row-by-row, and joins rows with bare `\n`). Cell styles in the example are equal-by-value instances; the stream is instance-independent — sharing one `Style` object across the three `B` cells yields the identical bytes. The diff is round-trip verified: `$prev->applyDiff($curr->diff($prev))` renders byte-identically to `$curr` via `toAnsi()`, hyperlinks (ids included) surviving intact.
+Total: 50 bytes vs 51 bytes for the same 5×2 frame repainted via `toAnsi()` (which pays the reset too, walks every cell including the blanks row-by-row, and joins rows with bare `\n`). Cell styles in the example are equal-by-value instances; the stream is instance-independent — sharing one `Style` object across the three `B` cells yields the identical bytes. The diff is round-trip verified: `$prev->applyDiff($curr->diff($prev))` renders byte-identically to `$curr` via `toAnsi()`, hyperlinks (ids included) surviving intact.
 
 ## Security & trust boundaries
 

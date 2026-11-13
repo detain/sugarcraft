@@ -619,7 +619,7 @@ final class BufferTest extends TestCase
         $this->assertCount(3, $ops[1]->cells);
 
         $bytes = (new DiffEncoder())->encode($ops);
-        $this->assertSame('X中X', $bytes);
+        $this->assertSame("\x1b[1;1H" . 'X中X', $bytes);
         $this->assertStringNotContainsString("\x1b[1;4H", $bytes);
     }
 
