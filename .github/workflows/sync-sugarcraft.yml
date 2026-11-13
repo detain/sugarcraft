@@ -44,7 +44,7 @@ jobs:
         # the attempt budget burns out and REFUSES the sync.
         run: |
           set -euo pipefail
-          for attempt in $(seq 1 240); do
+          for attempt in $(seq 1 960); do
             run_line="$(gh run list --workflow CI --branch master --commit "$TARGET_SHA" \
               --limit 5 --json status,conclusion \
               --jq '[.[] | select(.status == "completed")] | if length == 0 then "PENDING" else (first(.[]) | .conclusion) end')"
@@ -54,14 +54,17 @@ jobs:
             fi
             case "$run_line" in
               PENDING)
-                echo "CI at $TARGET_SHA not concluded yet (attempt $attempt/240)"
+                echo "CI at $TARGET_SHA not concluded yet (attempt $attempt/960)"
                 ;;
               *)
                 echo "refusing sync: CI at $TARGET_SHA concluded '$run_line'" >&2
                 exit 1
                 ;;
             esac
-            sleep 60
+            # 15s ticks × 960 attempts = the same 4h wall budget as the old
+            # 60s × 240; the tax after CI flips green is now ≤15s, not ≤60s.
+            # Do not coarsen: OD-7 fail-close semantics ride this loop.
+            sleep 15
           done
           echo "refusing sync: no green CI at $TARGET_SHA within the poll budget (fail-closed)" >&2
           exit 1
