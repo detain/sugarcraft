@@ -162,6 +162,14 @@ rides outside the clickable zones), while the lone `…` that
 surviving crumb — a mid-word trim, not an elision announcement. The default
 stays `…` regardless of the truncator setting (byte stability; the values
 merely agree by default).
+A depth-0 trail renders `''` unless you opt in: `setEmptyLabel($text)`
+paints the label through the same pipeline a crumb runs — sanitizer sweep,
+`setMaxWidth()` cap, truncator vocabulary — so a fixed-row bar can tell a
+cold app from a deliberately blank one. The label is never a clickable
+zone: no item sits behind it, so a scanned empty render carries zero zones
+and `hit()`/`hitItem()` answer `null` over its cells (NS-15). The HTML
+surfaces take no label state; pass screen-reader copy to `viewHtml()`'s
+`$label` instead.
 `renderTitles(list<string>)` renders a bare title list without a stack — each
 title is bound by `MAX_TITLE_BYTES` here as well (an oversized one throws just
 as on the stack path), but the list LENGTH stays the host's duty: N capped

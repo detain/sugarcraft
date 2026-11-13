@@ -70,6 +70,13 @@ final class Breadcrumb
      */
     private string $zonePrefix = 'crumb';
 
+    /**
+     * Depth-0 render label (NS-15). '' preserves the legacy empty bytes;
+     * a set label runs through the same width pipeline as a crumb but
+     * never carries a clickable zone (there is no item to dispatch).
+     */
+    private string $emptyLabel = '';
+
     /** @var \Closure(NavigationItem, int): ?string */
     private ?\Closure $itemRenderer = null;
 
@@ -165,6 +172,28 @@ final class Breadcrumb
             throw new \InvalidArgumentException('Breadcrumb truncator must be single-line');
         }
         $this->truncator = $s;
+        return $this;
+    }
+
+    /**
+     * Label painted when the stack is empty (NS-15).
+     *
+     * A fixed-row bar otherwise cannot distinguish "cold app" from
+     * "deliberately blank" — depth 0 rendered '' everywhere. When a label
+     * is set, the EMPTY render emits it through the same pipeline a title
+     * runs: {@see TitleSanitizer}'s sweep at the boundary, then the
+     * {@see setMaxWidth()} cap with the {@see setTruncator()} vocabulary.
+     * It is never a clickable zone: with no item behind it, a scanned
+     * empty render carries zero zones and {@see hit()}/{@see hitItem()}
+     * answer null over the label's cells. Mirrors nothing upstream —
+     * bubbleo's Breadcrumb has no empty state; this is a SugarCraft
+     * affordance for host chrome. The HTML surface takes no label state
+     * (NavStack owns none); screen-reader hosts pass their own copy to
+     * `viewHtml()`'s `$label`.
+     */
+    public function setEmptyLabel(string $label): self
+    {
+        $this->emptyLabel = $label;
         return $this;
     }
 
@@ -511,12 +540,7 @@ final class Breadcrumb
     {
         $items = $stack->items();
         if ($items === []) {
-            $this->lastVisible    = [];
-            $this->scanned        = false;
-            $this->focusedVisible = null;
-            $this->clearStamp();
-            $this->elidedPrefixCells = 0;
-            return '';
+            return $this->renderEmptyLabel();
         }
 
         $titles = [];
@@ -569,12 +593,7 @@ final class Breadcrumb
     public function renderTitles(array $titles): string
     {
         if ($titles === []) {
-            $this->lastVisible    = [];
-            $this->scanned        = false;
-            $this->focusedVisible = null;
-            $this->clearStamp();
-            $this->elidedPrefixCells = 0;
-            return '';
+            return $this->renderEmptyLabel();
         }
 
         foreach ($titles as $index => $title) {
@@ -601,14 +620,46 @@ final class Breadcrumb
     }
 
     /**
+     * The depth-0 render shared by render() and renderTitles() (NS-15):
+     * the legacy '' while no label is set (byte-stable default), else the
+     * sanitized label through the same width pipeline as a real crumb —
+     * including elision truncator and cap — but never zone-wrapped. The
+     * state ledger is the empty render's: no visible indices, nothing
+     * scanned, no focus, no stamp — and no elision span either, since
+     * there is nothing an expansion gesture could reveal.
+     */
+    private function renderEmptyLabel(): string
+    {
+        $this->lastVisible       = [];
+        $this->scanned           = false;
+        $this->focusedVisible    = null;
+        $this->elidedPrefixCells = 0;
+        $this->clearStamp();
+
+        if ($this->emptyLabel === '') {
+            return '';
+        }
+
+        $out = $this->doRender([TitleSanitizer::sanitize($this->emptyLabel)], false);
+        // doRender recorded the pseudo-crumb (range(0,0)) and possibly a
+        // marker; a depth-0 stack has no visible indices and no elision.
+        $this->lastVisible       = [];
+        $this->elidedPrefixCells = 0;
+        return $out;
+    }
+
+    /**
      * Shared render logic — handles truncate then zone-wrap.
      *
      * Titles arrive already sanitized (render()/renderTitles() boundaries);
      * re-sanitizing here would destroy a custom renderer's ANSI styling.
      *
      * @param list<string> $titles  Items in display order (oldest→newest), sanitized
+     * @param bool         $clickable When false the scanner wrap is SKIPPED — the
+     *                                NS-15 empty-label pseudo-crumb has no item to
+     *                                dispatch, so it must never own a zone.
      */
-    private function doRender(array $titles): string
+    private function doRender(array $titles, bool $clickable = true): string
     {
         $this->scanned = false;
 
@@ -674,7 +725,7 @@ final class Breadcrumb
         // clickable crumb) (bind it via elisionSpan(), NS-21) and the zones carry stack indices, so a
         // "crumb-N" hit always dispatches to stack position N even after
         // left-elision renumbers what is visible.
-        if ($this->scanner !== null) {
+        if ($clickable && $this->scanner !== null) {
             $result = $prefix . $this->wrapAllCrumbs($titles, $visibleFrom);
         }
 

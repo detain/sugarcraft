@@ -787,4 +787,69 @@ final class BreadcrumbTest extends TestCase
             $this->assertCount($kept, $bc->visibleIndices(), "survivor count drifted at cap {$cap}");
         }
     }
+
+    // ─── NS-15: empty-trail affordance ─────────────────────────────────────
+
+    public function testEmptyRenderIsByteStableEmptyByDefault(): void
+    {
+        $bc = new Breadcrumb();
+        $this->assertSame('', $bc->render(NavStack::new()));
+        $this->assertSame('', $bc->renderTitles([]));
+    }
+
+    public function testSetEmptyLabelPaintsThroughTheSanitizerSweep(): void
+    {
+        $bc = new Breadcrumb();
+        $bc->setEmptyLabel("  Ho\u{200B}me  ");
+
+        $this->assertSame('  Home  ', $bc->render(NavStack::new()));
+        $this->assertSame('  Home  ', $bc->renderTitles([]));
+    }
+
+    public function testEmptyLabelHonoursWidthCapWithoutBreachingIt(): void
+    {
+        $bc = new Breadcrumb();
+        $bc->setEmptyLabel('Alpha Bravo Charlie');
+        $bc->setMaxWidth(10);
+
+        // The single pseudo-crumb SURVIVES the cap, so the elision
+        // truncator never announces — only the byte-budget cut marker
+        // applies (the two vocabularies stay independent, NS-19).
+        $this->assertSame('Alpha Bra…', $bc->render(NavStack::new()));
+
+        $bc->setTruncator('[more] ');
+        $this->assertSame('Alpha Bra…', $bc->render(NavStack::new()));
+    }
+
+    public function testEmptyLabelCarriesNoZones(): void
+    {
+        $bc = (new Breadcrumb())->withScanner(Scanner::new());
+        $bc->setEmptyLabel('Home');
+
+        // Never zone-wrapped: there is no item to dispatch, so the label
+        // renders as bare bytes even with a scanner attached.
+        $out = $bc->render(NavStack::new());
+        $this->assertSame('Home', $out);
+
+        $bc->scan($out, 10_000);
+        $this->assertNull($bc->hit(1, 1));
+        $this->assertNull($bc->hitItem(NavStack::new(), 2, 1));
+        $this->assertSame([], $bc->visibleIndices());
+        $this->assertNull($bc->elisionSpan());
+    }
+
+    public function testLabelledEmptyRenderClearsStaleGeometry(): void
+    {
+        $bc = new Breadcrumb();
+        $stack = NavStack::new();
+        $stack->push('Alpha')->push('Bravo');
+        $bc->setMaxWidth(8);
+        $this->assertSame('… Bravo', $bc->render($stack));
+        $this->assertSame([1], $bc->visibleIndices());
+
+        $bc->setEmptyLabel('Idle');
+        $this->assertSame('Idle', $bc->render(NavStack::new()));
+        $this->assertSame([], $bc->visibleIndices());
+        $this->assertNull($bc->elisionSpan());
+    }
 }
