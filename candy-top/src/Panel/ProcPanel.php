@@ -43,6 +43,7 @@ use SugarCraft\Top\Panel\Proc\ProcTable;
 use SugarCraft\Top\Panel\Proc\ProcTree;
 use SugarCraft\Top\Panel\Proc\ProcView;
 use SugarCraft\Top\Panel\Proc\TreeAncestry;
+use SugarCraft\Top\Source\AsyncSource;
 use SugarCraft\Top\Source\CollectorSource;
 use SugarCraft\Top\Source\Fake\FakeProcessControl;
 use SugarCraft\Top\Source\Fake\FakeProcList;
@@ -365,10 +366,17 @@ final class ProcPanel implements Panel, ClickCapture
             : null;
         $demand = GpuDemand::of($context->config, true);
 
-        $joined = static function (GpuSnapshot|null $gpu) use ($source, $feed): Msg {
+        $wrap = static fn (object $snapshot, Source $next, ?GpuSnapshot $gpu): Msg
+            => new SampledMsg('proc', $gpu !== null && $feed !== null && $snapshot instanceof ProcSnapshot ? new ProcGpuSample($snapshot, $gpu, $feed) : $snapshot, $next);
+        // S-P02: ps/procstat run on the loop on a live FreeBSD host, never on the update path.
+        $async = $source instanceof AsyncSource && $source->isAsync();
+        $joined = static function (GpuSnapshot|null $gpu) use ($source, $wrap, $async): Msg {
+            if ($async) {
+                return Cmd::promise(static fn () => $source->sampleAsync()->then(static fn (array $r): Msg => $wrap($r[0], $r[1], $gpu)))();
+            }
             [$snapshot, $next] = $source->sample();
 
-            return new SampledMsg('proc', $gpu !== null && $feed !== null && $snapshot instanceof ProcSnapshot ? new ProcGpuSample($snapshot, $gpu, $feed) : $snapshot, $next);
+            return $wrap($snapshot, $next, $gpu);
         };
 
         return static function () use ($feed, $demand, $freshGpu, $joined): Msg {

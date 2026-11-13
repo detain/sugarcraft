@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Top\Collect\FreeBsd;
 
+use SugarCraft\Top\Collect\AsyncSampling;
 use SugarCraft\Top\Collect\ProcDetail;
 use SugarCraft\Top\Collect\Process;
 use SugarCraft\Top\Collect\ProcList as LinuxProcList;
@@ -59,8 +60,10 @@ use SugarCraft\Top\Collect\TunableProcList;
  * total) are static, read by one sysctl with the first sample and carried
  * forward.
  */
-final class ProcList implements TunableProcList
+final class ProcList implements TunableProcList, AsyncSampling
 {
+    use ProbedAsyncSampling;
+
     /** `ps -o` keywords in parse order; `=` suppresses the header. */
     public const array KEYWORDS = ['pid', 'ppid', 'uid', 'state', 'nlwp', 'nice', 'rss', '%cpu', 'time', 'etimes', 'comm', 'args'];
 

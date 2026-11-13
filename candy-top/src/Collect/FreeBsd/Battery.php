@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Top\Collect\FreeBsd;
 
+use SugarCraft\Top\Collect\AsyncSampling;
 use SugarCraft\Top\Collect\BatterySnapshot;
 use SugarCraft\Top\Collect\SelectableBattery;
 use SugarCraft\Top\Collect\Sentinel;
@@ -32,8 +33,10 @@ use SugarCraft\Top\Collect\Sentinel;
  * battery named "acpi"; `selected_battery` is accepted (withSelected) and
  * has nothing to choose between. One sysctl child per sample. Stateless.
  */
-final class Battery implements SelectableBattery
+final class Battery implements SelectableBattery, AsyncSampling
 {
+    use ProbedAsyncSampling;
+
     public const string NAME = 'acpi';
 
     private function __construct(
