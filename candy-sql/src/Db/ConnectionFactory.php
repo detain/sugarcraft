@@ -41,19 +41,19 @@ final class ConnectionFactory
     public static function fromDsn(string $dsn): ConnectionConfig
     {
         if ($dsn === '') {
-            throw new \InvalidArgumentException('DSN cannot be empty');
+            throw new \InvalidArgumentException(Lang::t('err.dsn_empty'));
         }
 
         // parse_url() requires a valid URL scheme — must have '://'
         if (!str_contains($dsn, '://')) {
-            throw new \InvalidArgumentException('Invalid DSN: missing "://" separator');
+            throw new \InvalidArgumentException(Lang::t('err.dsn_no_separator'));
         }
 
         // Extract driver from scheme (first part before '://')
         $driver = explode('://', $dsn, 2)[0];
 
         if (!in_array($driver, self::SUPPORTED_DRIVERS, true)) {
-            throw new \InvalidArgumentException('Unsupported driver: ' . $driver);
+            throw new \InvalidArgumentException(Lang::t('err.driver_unsupported', ['driver' => $driver]));
         }
 
         // SQLite: parse_url() handles :memory: and /// paths inconsistently.
@@ -116,18 +116,18 @@ final class ConnectionFactory
                 );
             }
 
-            throw new \InvalidArgumentException('Invalid SQLite DSN');
+            throw new \InvalidArgumentException(Lang::t('err.dsn_sqlite_invalid'));
         }
 
         // Non-SQLite drivers
         $parsed = parse_url($dsn);
 
         if ($parsed === false) {
-            throw new \InvalidArgumentException('Invalid DSN: parse_url() failed');
+            throw new \InvalidArgumentException(Lang::t('err.dsn_parse_failed'));
         }
 
         if (!isset($parsed['host'])) {
-            throw new \InvalidArgumentException('Invalid DSN: missing host');
+            throw new \InvalidArgumentException(Lang::t('err.dsn_no_host'));
         }
 
         // Strip IPv6 brackets from host (parse_url keeps them)
@@ -198,7 +198,7 @@ final class ConnectionFactory
             'mysql' => MysqlDatabase::connect($config),
             'pgsql' => PostgresDatabase::connect($config),
             default => throw new \InvalidArgumentException(
-                'Unsupported driver: ' . $config->driver,
+                Lang::t('err.driver_unsupported', ['driver' => $config->driver]),
             ),
         };
     }
@@ -229,15 +229,14 @@ final class ConnectionFactory
         $driver = $args['driver'] ?? null;
         if ($driver !== null && !in_array($driver, self::SUPPORTED_DRIVERS, true)) {
             throw new \InvalidArgumentException(
-                "Unsupported driver: {$driver} — choose one of "
-                . implode(', ', self::SUPPORTED_DRIVERS),
+                Lang::t('err.driver_choose', ['driver' => $driver, 'list' => implode(', ', self::SUPPORTED_DRIVERS)]),
             );
         }
 
         // Otherwise build from individual arguments
         if (!isset($args['driver'], $args['db'])) {
             throw new \InvalidArgumentException(
-                'Missing required arguments: pass both --driver and --db (or use --dsn)',
+                Lang::t('err.args_missing'),
             );
         }
 
@@ -287,14 +286,14 @@ final class ConnectionFactory
 
             if (!str_contains($arg, '=')) {
                 if (in_array($arg, self::ARGV_OPTIONS, true)) {
-                    throw new \InvalidArgumentException("Option --{$arg} requires a value");
+                    throw new \InvalidArgumentException(Lang::t('err.opt_needs_value', ['name' => $arg]));
                 }
-                throw new \InvalidArgumentException("Unknown option: --{$arg}");
+                throw new \InvalidArgumentException(Lang::t('err.opt_unknown', ['name' => $arg]));
             }
 
             [$key, $value] = explode('=', $arg, 2);
             if (!in_array($key, self::ARGV_OPTIONS, true)) {
-                throw new \InvalidArgumentException("Unknown option: --{$key}");
+                throw new \InvalidArgumentException(Lang::t('err.opt_unknown', ['name' => $key]));
             }
             $args[$key] = $value;
         }

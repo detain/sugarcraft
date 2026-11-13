@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Sql\Db;
 
+use SugarCraft\Sql\Lang;
+
 /**
  * Runs one {@see DmlStatement} with transaction semantics (SQL-O03).
  *
@@ -27,13 +29,13 @@ final class DmlRunner
     {
         $stmt = $db->prepare($s->sql);
         if ($stmt === null) {
-            throw new \RuntimeException('this connection cannot execute prepared statements');
+            throw new \RuntimeException(Lang::t('err.dml_no_prepare'));
         }
 
         $db->exec('BEGIN');
         try {
             if (!$stmt->execute($s->params)) {
-                throw new \RuntimeException('the server refused the statement');
+                throw new \RuntimeException(Lang::t('err.dml_refused'));
             }
             $touched = $stmt->rowCount();
             $benign = $touched === $s->expect || ($s->allowZero && $touched === 0);

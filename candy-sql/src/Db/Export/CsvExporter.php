@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Sql\Db\Export;
 
+use SugarCraft\Sql\Lang;
 use SugarCraft\Sql\Db\DatabaseInterface;
 use SugarCraft\Sql\Db\Flavor;
 use SugarCraft\Sql\Db\Identifier;
@@ -72,12 +73,12 @@ final class CsvExporter
     public function importCsv(string $path, string $table): void
     {
         if (!is_file($path)) {
-            throw new \RuntimeException("CSV file not found: " . $path);
+            throw new \RuntimeException(Lang::t('err.csv_not_found', ['path' => $path]));
         }
 
         $handle = fopen($path, 'r');
         if ($handle === false) {
-            throw new \RuntimeException("The CSV file '{$path}' cannot be read: check that it exists and is readable");
+            throw new \RuntimeException(Lang::t('err.csv_unreadable', ['path' => $path]));
         }
 
         // A mid-file failure used to leave the already-inserted rows
@@ -89,13 +90,13 @@ final class CsvExporter
         try {
             $headers = fgetcsv($handle);
             if ($headers === false) {
-                throw new \RuntimeException("Cannot read CSV headers from: " . $path);
+                throw new \RuntimeException(Lang::t('err.csv_no_headers', ['path' => $path]));
             }
 
             $headers = array_map('trim', $headers);
             $columnCount = count($headers);
             if ($columnCount === 0) {
-                throw new \RuntimeException("CSV file has no columns: " . $path);
+                throw new \RuntimeException(Lang::t('err.csv_no_columns', ['path' => $path]));
             }
 
             // Build column list with identifier quoting for the actual driver flavor
@@ -150,7 +151,7 @@ final class CsvExporter
     {
         $handle = fopen($path, 'w');
         if ($handle === false) {
-            throw new \RuntimeException("The destination '{$path}' cannot be opened for writing: check that the directory exists and is writable");
+            throw new \RuntimeException(Lang::t('err.dest_unwritable', ['path' => $path]));
         }
 
         try {
@@ -174,7 +175,7 @@ final class CsvExporter
     {
         $handle = fopen('php://memory', 'w');
         if ($handle === false) {
-            throw new \RuntimeException("The export buffer could not be created");
+            throw new \RuntimeException(Lang::t('err.export_buffer'));
         }
 
         try {
@@ -205,7 +206,7 @@ final class CsvExporter
 
         $handle = fopen($path, 'w');
         if ($handle === false) {
-            throw new \RuntimeException("The destination '{$path}' cannot be opened for writing: check that the directory exists and is writable");
+            throw new \RuntimeException(Lang::t('err.dest_unwritable', ['path' => $path]));
         }
 
         $complete = false;
@@ -236,9 +237,7 @@ final class CsvExporter
                 && ($expected === null || $written < $expected));
             if ($expected !== null && $written !== $expected) {
                 throw new \RuntimeException(
-                    "CSV export of {$table} wrote {$written} of {$expected} rows — the table"
-                    . " changed mid-export or the driver ignored the paging window; refusing"
-                    . " to present a partial file as complete",
+                    Lang::t('err.csv_partial', ['table' => $table, 'written' => $written, 'expected' => $expected]),
                 );
             }
             $complete = true;
@@ -339,7 +338,7 @@ final class CsvExporter
             // client-017: a lost connection used to answer "table not found" —
             // carry the driver's own fault message and chain the cause.
             throw new \RuntimeException(
-                "Table not found or unreadable: {$table} ({$e->getMessage()})",
+                Lang::t('err.table_unreadable', ['table' => $table, 'message' => $e->getMessage()]),
                 0,
                 $e,
             );
@@ -356,7 +355,7 @@ final class CsvExporter
             // client-017: a lost connection used to answer "table not found" —
             // carry the driver's own fault message and chain the cause.
             throw new \RuntimeException(
-                "Table not found or unreadable: {$table} ({$e->getMessage()})",
+                Lang::t('err.table_unreadable', ['table' => $table, 'message' => $e->getMessage()]),
                 0,
                 $e,
             );
@@ -370,7 +369,7 @@ final class CsvExporter
             // client-017: a lost connection used to answer "table not found" —
             // carry the driver's own fault message and chain the cause.
             throw new \RuntimeException(
-                "Table not found or unreadable: {$table} ({$e->getMessage()})",
+                Lang::t('err.table_unreadable', ['table' => $table, 'message' => $e->getMessage()]),
                 0,
                 $e,
             );

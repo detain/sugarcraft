@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Sql\Db\Export;
 
+use SugarCraft\Sql\Lang;
 use SugarCraft\Sql\Db\DatabaseInterface;
 use SugarCraft\Sql\Db\Flavor;
 use SugarCraft\Sql\Db\Identifier;
@@ -60,7 +61,7 @@ final class SqlExporter
     {
         $handle = fopen($path, 'w');
         if ($handle === false) {
-            throw new \RuntimeException("The destination '{$path}' cannot be opened for writing: check that the directory exists and is writable");
+            throw new \RuntimeException(Lang::t('err.dest_unwritable', ['path' => $path]));
         }
 
         $complete = false;
@@ -105,9 +106,7 @@ final class SqlExporter
                     && ($expected === null || $written < $expected));
                 if ($expected !== null && $written !== $expected) {
                     throw new \RuntimeException(
-                        "SQL dump of {$table} wrote {$written} of {$expected} rows — the table"
-                        . " changed mid-dump or the driver ignored the paging window; refusing"
-                        . " to present a partial file as complete",
+                        Lang::t('err.sql_partial', ['table' => $table, 'written' => $written, 'expected' => $expected]),
                     );
                 }
                 fwrite($handle, "\n");
