@@ -257,8 +257,8 @@ prefix.
 | Text | every printable character (`a`… `Z`, digits, punctuation, Unicode runes as the character itself), `Space` (Kitty `32u` only — legacy 0x20 and modifyOtherKeys keysym 32 surface as the literal space character (U+0020)) |
 | Editing/whitespace | `Tab`, `Enter`, `Backspace`, `Escape`, `Backtab`, `Insert`, `Delete`, `Home`, `End`, `PageUp`, `PageDown` |
 | Arrows | `ArrowUp`, `ArrowDown`, `ArrowLeft`, `ArrowRight` |
-| Function | `F1`–`F24` (legacy families), up to `F35` via Kitty |
-| Keypad | `KP0`–`KP9`, `KPDecimal`, `KPDivide`, `KPMultiply`, `KPSubtract`, `KPAdd`, `KPEnter`, `KPEqual`, `KPSeparator`, `KPBegin`, `KPLeft`, `KPRight`, `KPUp`, `KPDown`, `KPPageUp`, `KPPageDown`, `KPHome`, `KPEnd`, `KPInsert`, `KPDelete` |
+| Function | `F1`–`F24` (legacy families), up to `F35` via Kitty — one legacy hole: modified `F3` is structurally unreachable, because `CSI 1;<mods> R` is indistinguishable from a cursor position report and always drains as one (unmodified `F3` still decodes; bubbletea faces the same ambiguity) |
+| Keypad | `KP0`–`KP9`, `KPDecimal`, `KPDivide`, `KPMultiply`, `KPSubtract`, `KPAdd`, `KPEnter`, `KPEqual`, `KPSeparator`, `KPBegin`, `KPLeft`, `KPRight`, `KPUp`, `KPDown`, `KPPageUp`, `KPPageDown`, `KPHome`, `KPEnd`, `KPInsert`, `KPDelete` (keypad Enter is the one-name law's exception: legacy DECKPAM `ESC O M` predates the KP vocabulary and surfaces as `Enter`, so match both names) |
 | Locks/navigation state | `CapsLock`, `ScrollLock`, `NumLock`, `PrintScreen`, `Pause`, `Menu` |
 | Media (Kitty) | `MediaPlay`, `MediaPause`, `MediaPlayPause`, `MediaReverse`, `MediaStop`, `MediaFastForward`, `MediaRewind`, `MediaNext`, `MediaPrev`, `MediaRecord`, `LowerVolume`, `RaiseVolume`, `MuteVolume` |
 | Modifier-as-key (Kitty) | `LeftShift`, `RightShift`, `LeftCtrl`, `RightCtrl`, `LeftAlt`, `RightAlt`, `LeftSuper`, `RightSuper`, `LeftHyper`, `RightHyper`, `LeftMeta`, `RightMeta`, `IsoLevel3Shift`, `IsoLevel5Shift` |
