@@ -31,6 +31,13 @@ final class LanguageDetector
         'html', 'css', 'json', 'yaml', 'markdown',
     ];
 
+    /**
+     * Bytes of the head a content scan reads. Structural signatures cluster at
+     * the top of a file (the shebang is handled separately above), so a full
+     * megabyte scan per signature was pure waste (-044, PERF-07).
+     */
+    private const CONTENT_SCAN_BYTES = 8192;
+
     private const CONTENT_SIGNATURES = [
         'php' => [
             '<?php',
@@ -75,7 +82,7 @@ final class LanguageDetector
         ],
         'markdown' => [
             '# ', '## ', '### ', '- ', '* ', '```',
-            '[', '](', '![',
+            '](', '![',
         ],
     ];
 
@@ -203,14 +210,21 @@ final class LanguageDetector
 
     private static function detectFromContent(string $content): string
     {
+        // -044 (PERF-07): signatures live at the head of a real file; scanning
+        // a whole megabyte per signature was pure waste. Cap the haystack.
+        $haystack = substr($content, 0, self::CONTENT_SCAN_BYTES);
         $scores = [];
 
         foreach (self::CONTENT_SIGNATURES as $lang => $signatures) {
             $score = 0;
             foreach ($signatures as $sig) {
-                if (str_contains($content, $sig)) {
-                    $score++;
-                }
+                // -012 (PHP-CS-03): match at word boundaries, not raw substring.
+                // A bare str_contains let `fi` score bash inside "con-FI-g" (so
+                // `config: true` won the priority tiebreak as bash) and let a
+                // single `[` flag markdown for "[a, b, c]". signaturePattern()
+                // guards the alnum edges of every token; repeated signatures
+                // (a `<?php<?php…` blob) still count, one hit per occurrence.
+                $score += (int) preg_match_all(self::signaturePattern($sig), $haystack);
             }
             if ($score > 0) {
                 $scores[$lang] = $score;
@@ -233,5 +247,26 @@ final class LanguageDetector
         }
 
         return $top;
+    }
+
+    /** @var array<string,string> */
+    private static array $patternCache = [];
+
+    /**
+     * Literal regex for a content signature, with lookarounds added only on the
+     * edges that are word characters. `fi` -> `(?<!\w)fi(?!\w)` (so it stops
+     * matching inside "config"); punctuation-only tokens like `: `, `[` or `  - `
+     * have no alnum edges and stay verbatim. This is the "line-start/word-boundary"
+     * arm chosen for -012; the bare-`[` markdown token was the one edge case word
+     * boundaries cannot guard (it IS punctuation), so it was dropped from the
+     * signature list rather than trusted.
+     */
+    private static function signaturePattern(string $sig): string
+    {
+        return self::$patternCache[$sig] ??= '/'
+            . (preg_match('/^\w/', $sig) === 1 ? '(?<!\w)' : '')
+            . preg_quote($sig, '/')
+            . (preg_match('/\w$/', $sig) === 1 ? '(?!\w)' : '')
+            . '/';
     }
 }

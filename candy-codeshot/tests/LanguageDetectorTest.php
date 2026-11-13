@@ -259,6 +259,40 @@ final class LanguageDetectorTest extends TestCase
         $this->assertSame('php', LanguageDetector::detect($content));
     }
 
+    // -------------------------------------------------------------------------
+    // cs-09 (-012 anchored signatures, -044 haystack cap)
+    // -------------------------------------------------------------------------
+
+    public function testArrayLiteralIsNotMarkdown(): void
+    {
+        // Pre-cure the bare `[` signature matched anywhere: "[a, b, c]" scored
+        // markdown 1 and won by default. The token is dropped (punctuation has
+        // no word edges to guard), so nothing scores and this is plain text.
+        $this->assertSame('text', LanguageDetector::detect('[a, b, c]'));
+    }
+
+    public function testConfigAssignmentIsNotBash(): void
+    {
+        // Pre-cure `fi` matched inside "con-FI-g" -> bash=1, winning the
+        // bash-over-yaml priority tiebreak. Word-boundary matching stops the
+        // substring hit; what remains genuinely IS a one-line YAML scalar
+        // mapping (`: ` scores 1), so the fix yields yaml — the honest answer.
+        $this->assertSame('yaml', LanguageDetector::detect('config: true'));
+    }
+
+    public function testSignatureScanIsCappedAtTheLeadingBytes(): void
+    {
+        // -044: structural signatures live at file heads. Junk past the 8 KiB
+        // scan window must not be inspected at all (pre-cure the full-content
+        // str_contains scan found the trailing php block AND cost O(content)).
+        $content = str_repeat('x', 20_000) . "<?php\nnamespace Test;\ndeclare(strict_types=1);\n";
+        $this->assertSame('text', LanguageDetector::detect($content));
+
+        // Head-positioned signatures are still fully analysed.
+        $head = "<?php\nnamespace Test;\n" . str_repeat('x', 20_000);
+        $this->assertSame('php', LanguageDetector::detect($head));
+    }
+
     public function testDetectsFromShebangWithBinSh(): void
     {
         $this->assertSame('sh', LanguageDetector::detect("#!/bin/sh\necho hello\n"));
