@@ -38,7 +38,7 @@ declare(strict_types=1);
  * Stable Packagist constraints (`^1.0`, `~2.3`, etc.) are skipped — those
  * resolve via VCS/Packagist and don't need a path-repo.
  *
- * @see plans/sugarcraft-is-a-mono-logical-twilight.md (P4.5)
+ * @see docs/plans/sugarcraft-is-a-mono-logical-twilight.md (P4.5)
  */
 
 // Allow override via env for testing scenarios (e.g. fixture dirs).

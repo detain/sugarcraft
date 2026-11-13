@@ -31,9 +31,10 @@ const WINDOWS_LIBS = [
     'sugar-core', 'sugar-forms', 'sugar-widgets', 'candy-scriptui', 'sugar-markdown', 'sugar-pty',
 ];
 const MACOS_LIBS = [
-    // sugar-pty held out of the macOS pool. The split-job debug
-    // workflow (see .github/workflows/macos-debug.yml + branch
-    // `debug/macos-candy-pty` PR #_) narrowed the failure mode to: // @rename-keep historical branch name
+    // sugar-pty held out of the macOS pool. A throwaway split-job debug
+    // workflow on the historical `debug/macos-candy-pty` branch (since // @rename-keep historical branch name
+    // deleted — no workflow artifact survives on master) narrowed the
+    // failure mode to:
     // TIOCSWINSZ ioctl returns -1 on macOS arm64 master fds via PHP
     // FFI, independent of slave-anchor / resize-ordering workarounds.
     // Hypothesised root cause is the variadic-vs-fixed-arg ABI

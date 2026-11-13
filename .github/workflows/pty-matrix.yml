@@ -10,7 +10,7 @@ name: PTY integration matrix
 # master + manual dispatch + PRs that touched sugar-pty/, so macOS
 # minutes stay bounded.
 #
-# @see plans/sugarcraft-is-a-mono-logical-twilight.md (P5.6)
+# @see docs/plans/sugarcraft-is-a-mono-logical-twilight.md (P5.6)
 
 on:
   push:

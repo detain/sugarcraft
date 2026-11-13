@@ -99,7 +99,7 @@ final class SignalResizeDriver implements InputDriver
     /**
      * @var callable(string): (string|null|false) Executes one built command;
      *      internal seam so tests can capture the command string without a
-     *      shell. Defaults to @shell_exec.
+     *      shell. Defaults to `shell_exec()`.
      */
     private $commandRunner;
 
