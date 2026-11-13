@@ -914,7 +914,7 @@ final class Buffer implements \JsonSerializable
      */
     private function emitSgr(?Style $style): string
     {
-        return Diff\SgrEmitter::emit($style);
+        return Support\SgrEmitter::emit($style);
     }
 
     // ─── Internals ─────────────────────────────────────────────────────

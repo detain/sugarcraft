@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace SugarCraft\CellBuffer\Diff;
+namespace SugarCraft\CellBuffer\Support;
 
 /**
  * Byte-cost gate deciding whether a REP sequence actually pays for itself.

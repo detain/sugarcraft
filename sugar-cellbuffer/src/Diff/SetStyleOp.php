@@ -12,7 +12,7 @@ use SugarCraft\CellBuffer\Style;
  *
  * When $style is null, emits SGR reset (\x1b[0m).
  * The emitted SGR is a full reset plus restatement of the pen
- * (SgrEmitter policy), not a minimal delta; the encoder skips the op
+ * (Support\SgrEmitter policy), not a minimal delta; the encoder skips the op
  * entirely when the active style has not changed.
  *
  * @readonly

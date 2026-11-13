@@ -7,7 +7,7 @@ namespace SugarCraft\CellBuffer\Tests;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\CellBuffer\Cell;
 use SugarCraft\CellBuffer\Diff\DiffEncoder;
-use SugarCraft\CellBuffer\Diff\RepeatGate;
+use SugarCraft\CellBuffer\Support\RepeatGate;
 use SugarCraft\CellBuffer\Diff\RepeatRunOp;
 use SugarCraft\CellBuffer\Diff\SetCellOp;
 

@@ -19,7 +19,7 @@ namespace SugarCraft\CellBuffer;
  * xterm colour-slot space the {@see \SugarCraft\Core\Util\Ansi}
  * family spells as 3x/9x/38;5/n). Slot identity lets theme-following
  * colours round-trip through diff frames without baking in a hex
- * value; {@see SgrEmitter} prefers the slot when one is set. The
+ * value; {@see \SugarCraft\CellBuffer\Support\SgrEmitter} prefers the slot when one is set. The
  * with*() builders keep the two representations mutually exclusive;
  * they may coexist only as the slot plus its canonical hex belt — the
  * constructor refuses any other pairing, and clamps RGB saturating

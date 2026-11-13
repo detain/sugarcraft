@@ -7,6 +7,8 @@ namespace SugarCraft\CellBuffer\Diff;
 use SugarCraft\CellBuffer\Cell;
 use SugarCraft\CellBuffer\Hyperlink;
 use SugarCraft\CellBuffer\Style;
+use SugarCraft\CellBuffer\Support\RepeatGate;
+use SugarCraft\CellBuffer\Support\SgrEmitter;
 
 /**
  * Encodes a list of DiffOp objects into a minimal ANSI byte stream.

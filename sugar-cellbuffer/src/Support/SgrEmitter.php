@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace SugarCraft\CellBuffer\Diff;
+namespace SugarCraft\CellBuffer\Support;
 
 use SugarCraft\CellBuffer\Style;
 use SugarCraft\Core\Util\Ansi;

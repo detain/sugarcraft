@@ -8,14 +8,14 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\CellBuffer\Buffer;
 use SugarCraft\CellBuffer\Cell;
 use SugarCraft\CellBuffer\Diff\DiffEncoder;
-use SugarCraft\CellBuffer\Diff\SgrEmitter;
+use SugarCraft\CellBuffer\Support\SgrEmitter;
 use SugarCraft\CellBuffer\Diff\MoveCursorOp;
 use SugarCraft\CellBuffer\Diff\SetCellOp;
 use SugarCraft\CellBuffer\Diff\SetStyleOp;
 use SugarCraft\CellBuffer\Style;
 
 /**
- * @covers \SugarCraft\CellBuffer\Diff\SgrEmitter
+ * @covers \SugarCraft\CellBuffer\Support\SgrEmitter
  */
 final class SgrEmitterTest extends TestCase
 {
