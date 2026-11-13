@@ -147,6 +147,55 @@ final class MsTeamsChannelTest extends TestCase
         self::assertStringContainsString('channel_not_started', (string) $response->getBody());
     }
 
+    public function testAnEnabledApprovalsDoorWithAnEmptyRosterAnnouncesItselfOnceAtBoot(): void
+    {
+        // msteams-08 CODE half: approvals default ON, roster default EMPTY
+        // means any paired user in the ask's target conversation can answer.
+        // The shipped default is the footgun; boot must say so once, loud,
+        // content-free (account label only — never ids, never secrets).
+        $this->writeUserConfig(['channels.msteams' => ['enabled' => true]]);
+        $store = new CredentialStore(CredentialStore::defaultPath());
+        $store->writeMsteamsPairing('default', [], [], [
+            'appId' => 'app-open', 'appPassword' => 'open-roster-secret', 'tenantId' => '0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d',
+        ]);
+
+        $lines = [];
+        $channel = new MsTeamsChannel();
+        $channel->start($this->context(static function (string $line) use (&$lines): void {
+            $lines[] = $line;
+        }));
+        $joined = \implode("\n", $lines);
+
+        self::assertSame(['default'], $channel->faceNames(), 'the sanity leg: the face booted');
+        self::assertSame(1, \substr_count($joined, 'channels.msteams.approvals_open_roster'), 'exactly once per boot');
+        self::assertStringNotContainsString('open-roster-secret', $joined, 'content-free');
+        $channel->dispose();
+    }
+
+    public function testANamedApproverRosterAndTheDisabledDoorBothBootQuietly(): void
+    {
+        foreach ([['approvers' => ['u1']], ['enabled' => false]] as $arm => $approvals) {
+            $this->writeUserConfig(['channels.msteams' => ['enabled' => true, 'approvals' => $approvals]]);
+            $store = new CredentialStore(CredentialStore::defaultPath());
+            $store->writeMsteamsPairing('default', [], [], [
+                'appId' => 'app-quiet-' . $arm, 'appPassword' => 'quiet-secret', 'tenantId' => '0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d',
+            ]);
+
+            $lines = [];
+            $channel = new MsTeamsChannel();
+            $channel->start($this->context(static function (string $line) use (&$lines): void {
+                $lines[] = $line;
+            }));
+            $channel->dispose();
+
+            self::assertSame(
+                0,
+                \substr_count(\implode("\n", $lines), 'approvals_open_roster'),
+                'arm ' . $arm . ': roster named or door closed, nothing to warn',
+            );
+        }
+    }
+
     public function testEveryRefusalBeforeCryptoCostsTheLoudCodeNotTheQuietOne(): void
     {
         $this->writeUserConfig(['channels.msteams' => ['enabled' => true]]);

@@ -92,6 +92,15 @@ final class MsTeamsChannel implements ChannelInterface, AcceptsHttpRequests
     /** @var array<string, array{account: string, jwt: Jwt}> appId => validator */
     private array $validators = [];
 
+    /**
+     * Accounts whose open-roster footgun warning already fired this process
+     * (msteams-08 CODE half): faceConfig may run more than once per account
+     * across rebuilds; the warning is a boot announcement, not a litany.
+     *
+     * @var array<string, true>
+     */
+    private array $openRosterWarned = [];
+
     private string $mountPath = '/channels/msteams/api/messages';
 
     private ?TimerInterface $pollTimer = null;
@@ -625,6 +634,19 @@ final class MsTeamsChannel implements ChannelInterface, AcceptsHttpRequests
         $row = (array) (((array) ($cfg['accounts'] ?? []))[$account] ?? []);
         foreach ($row as $key => $value) {
             $face[$key] = $value;
+        }
+
+        // Footgun warning, boot-time, once per account: approvals ENABLED
+        // with an EMPTY roster means any paired user in the ask's target
+        // conversation may answer it (always/deny gating aside, the roster
+        // is not consulted). The settings help carries the sentence on the
+        // host side; the log says it here so the shape is announced at
+        // startup rather than discovered by accident during an ask.
+        if ((bool) (((array) ($face['approvals'] ?? []))['enabled'] ?? true)
+            && $face['approvalRoster'] === []
+            && !isset($this->openRosterWarned[$account])) {
+            $this->openRosterWarned[$account] = true;
+            $this->log->warn('channels.msteams.approvals_open_roster', ['account' => $account]);
         }
 
         return $face;
