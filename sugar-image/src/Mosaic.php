@@ -638,7 +638,8 @@ final class Mosaic implements IncrementalRenderer
      *                            (auto-derived from aspect ratio when null)
      * @return string             Raw ANSI escape bytes
      * @throws \InvalidArgumentException when `$width` is null and no default
-     *                                   cell box was configured
+     *                                   cell box was configured, or when an
+     *                                   explicit `$width`/`$height` is <= 0
      */
     public function render(ImageSource $image, ?int $width = null, ?int $height = null): string
     {
@@ -663,7 +664,7 @@ final class Mosaic implements IncrementalRenderer
      * behavioural surprise, bytes identical to render().
      *
      * @return \Generator<int, string>
-     * @throws \InvalidArgumentException the same no-width throw as render()
+     * @throws \InvalidArgumentException the same width/height refusals as render()
      */
     public function renderRows(ImageSource $image, int $width, ?int $height = null): \Generator
     {
@@ -694,7 +695,26 @@ final class Mosaic implements IncrementalRenderer
             $height ??= $this->forcedHeight;
         }
 
-        $w = $width > 0 ? $width : 1;
+        // An explicit box is never silently truncated. A zero or negative
+        // width used to decay to a 1-column sliver at this very line —
+        // a caller whose terminal measured zero columns (the candy-code
+        // pane route finding 037 names) got a confident single-column
+        // rendering instead of a loud refusal, and a bogus height rode
+        // down the scale pipeline unchecked. Same refusal grammar as the
+        // missing-width throw; null (ask-for-the-default) still falls back.
+        if ($width <= 0) {
+            throw new \InvalidArgumentException(
+                Lang::t('mosaic.invalid_render_width', ['width' => $width])
+            );
+        }
+
+        if ($height !== null && $height <= 0) {
+            throw new \InvalidArgumentException(
+                Lang::t('mosaic.invalid_render_height', ['height' => $height])
+            );
+        }
+
+        $w = $width;
         $h = $height;
 
         // Apply scale transformation before rendering.

@@ -83,6 +83,8 @@ return [
 
     // Mosaic
     'mosaic.no_render_width' => 'render() needs a width: pass one, or configure a default cell box with MosaicBuilder::withResize()',
+    'mosaic.invalid_render_width' => 'render width must be a positive cell count, got {width}',
+    'mosaic.invalid_render_height' => 'render height must be a positive cell count when given, got {height}',
 
     // tmux passthrough
     'tmux.stream_not_sixel' => 'Band streaming is only available for the Sixel renderer, not {name}',

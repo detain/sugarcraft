@@ -288,14 +288,79 @@ final class MosaicTest extends TestCase
 
     // ─── Render edge cases ─────────────────────────────────────────────────────
 
-    public function testRenderWithZeroWidthClampedToOne(): void
+    public function testRenderWithNonPositiveWidthRefusedNotSlivered(): void
     {
-        $m = Mosaic::halfBlock();
+        // Old behavior (finding 037): width 0 decayed to a silent 1-column
+        // sliver. A caller with a zero-column pane must fail loudly.
+        $m   = Mosaic::halfBlock();
         $img = ImageSource::fromFile($this->fixture4x2);
 
-        // Width 0 should be clamped to 1
-        $out = $m->render($img, 0, 4);
-        $this->assertNotEmpty($out);
+        foreach ([0, -1] as $bogus) {
+            try {
+                $m->render($img, $bogus, 4);
+                $this->fail("width {$bogus} must be refused, not clamped");
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString((string) $bogus, $e->getMessage());
+            }
+        }
+    }
+
+    public function testRenderWithNonPositiveHeightRefused(): void
+    {
+        $m   = Mosaic::halfBlock();
+        $img = ImageSource::fromFile($this->fixture4x2);
+
+        foreach ([0, -3] as $bogus) {
+            try {
+                $m->render($img, 8, $bogus);
+                $this->fail("height {$bogus} must be refused");
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString('height', $e->getMessage());
+            }
+        }
+    }
+
+    public function testRenderRowsRefusesNonPositiveWidthToo(): void
+    {
+        // The row-lazy twin shares resolveRenderBox, so it carries the
+        // exact same refusal before its first yield.
+        $m   = Mosaic::halfBlock();
+        $img = ImageSource::fromFile($this->fixture4x2);
+
+        $this->expectException(\InvalidArgumentException::class);
+        iterator_to_array($m->renderRows($img, 0));
+    }
+
+    public function testZeroColumnBuilderBoxRefusedAtRenderTime(): void
+    {
+        // The candy-code route: a pane measured at zero columns got baked
+        // into the builder box — that box must fail loud, not sliver.
+        $img = ImageSource::fromFile($this->fixture4x2);
+        $m   = Mosaic::builder()
+            ->withRenderer(new HalfBlockRenderer())
+            ->withResize(0, 4)
+            ->build();
+
+        try {
+            $m->render($img);
+            $this->fail('a forced zero-width box must be refused');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('positive cell count', $e->getMessage());
+        }
+    }
+
+    public function testNullSizingStillFallsBackToBoxAndAspect(): void
+    {
+        // The green path the throws must NOT touch: null width takes the
+        // builder box, null height derives from aspect.
+        $img = ImageSource::fromFile($this->fixture4x2);
+        $m   = Mosaic::builder()
+            ->withRenderer(new HalfBlockRenderer())
+            ->withResize(8)
+            ->build();
+
+        $this->assertNotEmpty($m->render($img));
+        $this->assertNotEmpty($m->render($img, 6, null));
     }
 
     public function testRenderWithExplicitNullHeight(): void

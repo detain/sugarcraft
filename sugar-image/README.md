@@ -102,6 +102,10 @@ $ansi = $mosaic->render($image, 60);      // explicit width wins; height from as
 // At renderer level the contract is stricter: width is a mandatory argument,
 // and renderWithOptions() additionally takes the nullable height positionally
 // (pass null); the null-width fallback to the builder box is Mosaic-only.
+// Explicitly passing width or height <= 0 (including a withResize(0) box)
+// throws InvalidArgumentException — a zero-column pane fails loudly, it is
+// never silently clamped to a 1-column sliver; null still means "use the
+// default box / derive from the aspect ratio".
 
 // The builder holds every Sixel dial — dither, bias intensity, palette
 // budget — and applies them at build() to any Sixel backend (explicit or
