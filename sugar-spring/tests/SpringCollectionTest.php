@@ -68,6 +68,76 @@ final class SpringCollectionTest extends TestCase
         $this->assertEqualsWithDelta(0.0, $collection->get('spring1'), 1e-9);
     }
 
+    /**
+     * SPR-13 (finding 006): a fully-settled collection ticks to IDENTITY —
+     * the per-frame rebuild (and with it the constructor revalidation of
+     * finding 004) only happens while something moves.
+     */
+    public function testSettledCollectionTicksToTheSameInstance(): void
+    {
+        $spring = new Spring(1.0 / 60.0, 6.0, 1.0);
+        $collection = (new SpringCollection())->withSpring('a', $spring, 100.0, 0.0, 100.0);
+
+        $this->assertTrue($collection->settled());
+        $this->assertSame($collection, $collection->tick(), 'settled tick must be identity');
+        $this->assertSame($collection, $collection->tick()->tick(), 'and stay identity across frames');
+    }
+
+    /**
+     * SPR-13 (finding 006): settled MEMBERS are copied, not re-integrated.
+     * A member parked 5e-5 under the settling threshold must keep that exact
+     * float; re-integrating it (the old behaviour) multiplies the offset by
+     * the decay coefficient and visibly shrinks it.
+     */
+    public function testSettledMembersKeepTheirFloatsUntouched(): void
+    {
+        $spring = new Spring(1.0 / 60.0, 6.0, 1.0);
+        $collection = (new SpringCollection())
+            ->withSpring('parked', $spring, 100.00005, 0.0, 100.0) // under 1e-4 threshold: settled
+            ->withSpring('running', $spring, 0.0, 0.0, 50.0);
+
+        $ticked = $collection->tick();
+
+        $this->assertSame(100.00005, $ticked->get('parked'), 'settled member must ride through byte-identical');
+        $this->assertGreaterThan(0.0, $ticked->get('running'), 'unsettled member still integrates');
+    }
+
+    /**
+     * SPR-13 (findings 004/006): the two doors DIFFER. The constructor
+     * (cold door) fully validates and refuses misaligned planes; tick() (hot
+     * door) never re-enters it — pinned at source level in the spirit of the
+     * house source-scan tests, so re-wiring tick() through mutate() reddens
+     * this instead of silently re-entering full validation per frame.
+     */
+    public function testHotDoorBypassesTheColdDoorByDesign(): void
+    {
+        // Cold door still refuses garbage:
+        try {
+            new SpringCollection(
+                ['a' => new Spring(1.0 / 60.0, 6.0, 1.0)],
+                ['a' => 0.0],           // velocities/targets missing -> misaligned
+                [],
+                [],
+            );
+            $this->fail('constructor must still validate planes');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('is missing', $e->getMessage());
+        }
+
+        // Hot door never calls the constructor on the rebuild path:
+        $tick = new \ReflectionMethod(SpringCollection::class, 'tick');
+        $lines = array_slice(
+            file($tick->getFileName()),
+            $tick->getStartLine() - 1,
+            $tick->getEndLine() - $tick->getStartLine() + 1,
+        );
+        $body = implode('', $lines);
+
+        $this->assertStringNotContainsString('$this->mutate(', $body, 'tick() must not re-enter the validating rebuild');
+        $this->assertStringNotContainsString('new SpringCollection(', $body, 'nor construct through the cold door');
+        $this->assertStringContainsString('self::fromParsed(', $body, 'the hot path is the pre-validated rebuild');
+    }
+
     public function testAllReturnsAllPositions(): void
     {
         $spring = new Spring(1.0 / 60.0, 6.0, 1.0);

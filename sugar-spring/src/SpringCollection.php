@@ -214,32 +214,82 @@ final class SpringCollection
     }
 
     /**
-     * Advance all springs by one step.
+     * Advance every UNSETTLED spring by one step; settled members keep their
+     * floats untouched (finding 006 — cost follows motion, not collection
+     * size). Returns a NEW SpringCollection when anything advanced, leaving
+     * the original instance unchanged; a fully-settled collection returns
+     * `$this` identity.
      *
-     * Returns a NEW SpringCollection with updated positions/velocities,
-     * leaving the original instance unchanged (immutable pattern).
+     * The rebuild bypasses the validating constructor via {@see fromParsed()}
+     * (finding 004): this hot path only ever sees (a) plane values that
+     * already passed constructor validation, and (b) Spring::update()
+     * outputs — whose non-finite INPUT door plus finite coefficient belt
+     * make re-checking them redundant. No foreign input can ride through
+     * unexamined: every value reaches the planes via the constructor or the
+     * with-prefix mutators (full validation), or via a deprecated in-place
+     * shim whose write is then refused one frame later by update()'s
+     * non-finite door — loud at first use, never silent.
      *
-     * @return self New SpringCollection with updated state
+     * @return self New collection when motion happened; the same collection
+     *              once nothing can move.
      */
     public function tick(): self
     {
-        $newPositions = [];
-        $newVelocities = [];
+        $movedPositions = null;
+        $movedVelocities = null;
 
         foreach ($this->springs as $id => $spring) {
-            [$pos, $vel] = $spring->update(
-                $this->positions[$id],
-                $this->velocities[$id],
-                $this->targets[$id]
-            );
-            $newPositions[$id] = $pos;
-            $newVelocities[$id] = $vel;
+            $pos = $this->positions[$id];
+            $vel = $this->velocities[$id];
+            $target = $this->targets[$id];
+
+            if (Spring::settled($pos, $vel, $target)) {
+                continue; // settled is the documented stop predicate — the
+                          // same test the driving loop makes, applied per member
+            }
+
+            $state = $spring->update($pos, $vel, $target);
+
+            if ($movedPositions === null) {
+                $movedPositions = $this->positions;
+                $movedVelocities = $this->velocities;
+            }
+            $movedPositions[$id] = $state['position'];
+            $movedVelocities[$id] = $state['velocity'];
         }
 
-        return $this->mutate([
-            'positions' => $newPositions,
-            'velocities' => $newVelocities,
-        ]);
+        if ($movedPositions === null) {
+            return $this;
+        }
+
+        return self::fromParsed($this->springs, $movedPositions, $movedVelocities, $this->targets);
+    }
+
+    /**
+     * Pre-validated rebuild for {@see tick()} — fields land raw, with no
+     * second pass of constructor checks, BECAUSE the only caller feeds
+     * already-validated planes and finite-by-construction update() outputs.
+     * Cold paths (constructor, with*()) keep the full door; nothing outside
+     * this class can reach this one.
+     *
+     * @param array<string, Spring> $springs
+     * @param array<string, float> $positions
+     * @param array<string, float> $velocities
+     * @param array<string, float> $targets
+     */
+    private static function fromParsed(
+        array $springs,
+        array $positions,
+        array $velocities,
+        array $targets,
+    ): self {
+        $collection = new self();
+        $collection->springs = $springs;
+        $collection->positions = $positions;
+        $collection->velocities = $velocities;
+        $collection->targets = $targets;
+
+        return $collection;
     }
 
     /**
