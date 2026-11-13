@@ -211,6 +211,23 @@ final class TimerTest extends TestCase
         $this->assertNotSame($original, $updated);
     }
 
+    public function testRunningStateChangesRenderedBytes(): void
+    {
+        // 074: $isRunning was stored and withered but render() never read
+        // it — and no test ever compared the two renders. Now the states
+        // are byte-distinguishable (Stopwatch's precedent).
+        $stopped = Timer::new(60)->withRunning(false);
+        $running = Timer::new(60)->withRunning(true);
+
+        $this->assertStringContainsString('▶', $running->render());
+        $this->assertStringNotContainsString('▶', $stopped->render());
+        $this->assertNotSame($running->render(), $stopped->render());
+
+        [$rw] = $running->innerSize();
+        [$sw] = $stopped->innerSize();
+        $this->assertSame($sw + 2, $rw);
+    }
+
     public function testWithColorReturnsNewInstance(): void
     {
         $original = Timer::new(60);

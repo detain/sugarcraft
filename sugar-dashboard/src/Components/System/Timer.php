@@ -84,6 +84,13 @@ final class Timer implements \SugarCraft\Dashboard\Foundation\SizedItem
             $timeStr = sprintf('%02d:%02d', $minutes, $seconds);
         }
 
+        // 074: $isRunning was stored and withered but render never read
+        // it — mirror Stopwatch's contract and show the running marker,
+        // so withRunning(true)/(false) render DIFFERENT bytes.
+        if ($this->isRunning) {
+            $timeStr .= ' ▶';
+        }
+
         // Choose color based on remaining time
         $color = $this->color;
         if ($this->warningColor !== null && $remaining <= $this->warningThreshold && $remaining > 0) {
@@ -107,8 +114,12 @@ final class Timer implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function innerSize(): array
     {
-        // Format: "59:59" or "1:59:59" = max 8 chars
-        return [$this->totalSeconds >= 3600 ? 8 : 5, 1];
+        // Format: "59:59" or "1:59:59" = max 8 chars, plus the running marker
+        $width = $this->totalSeconds >= 3600 ? 8 : 5;
+        if ($this->isRunning) {
+            $width += 2;
+        }
+        return [$width, 1];
     }
 
     /**
