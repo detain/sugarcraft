@@ -231,4 +231,38 @@ final class HslTest extends TestCase
         $negativeHue = Hsl::parse('hsl(-10, 50%, 50%)');
         $this->assertNotNull($negativeHue);
     }
+
+    public function testColorClampsSaturationAndLightnessIntoScale(): void
+    {
+        // finding 055's documented edge: out-of-range components clamp —
+        // negative saturation lands on 0, lightness above 100 on 100.
+        $this->assertSame('#ffffff', Hsl::color(240, -10, 150)->toHex());
+    }
+
+    public function testColorWrapsHueModuloThreeSixZero(): void
+    {
+        $this->assertSame('#0000ff', Hsl::color(600, 100, 50)->toHex());
+        $this->assertSame(Hsl::color(350, 100, 50)->toHex(), Hsl::color(-10, 100, 50)->toHex());
+    }
+
+    public function testZeroSaturationMakesHueIrrelevant(): void
+    {
+        $this->assertSame('#808080', Hsl::color(240, 0, 50)->toHex());
+        $this->assertSame(Hsl::color(0, 0, 50)->toHex(), Hsl::color(240, 0, 50)->toHex());
+    }
+
+    public function testUnitlessComponentsReadAsPercentNotFractions(): void
+    {
+        // Documented interpretation (finding 055): 0.5 without a suffix is
+        // half a PERCENT — near-black, not mid-grey. Same reading as CSS.
+        // Fraction callers belong on Color::hsl() directly.
+        $this->assertSame('#010101', Hsl::parse('hsl(120, 0.5, 0.5)')->toHex());
+        $this->assertSame('#40bf40', Hsl::parse('hsl(120, 50, 50)')->toHex());
+    }
+
+    public function testParseSingleComponentIsRejected(): void
+    {
+        $this->assertNull(Hsl::parse('hsl(120%)'));
+        $this->assertNull(Hsl::parse('hsl(120)'));
+    }
 }

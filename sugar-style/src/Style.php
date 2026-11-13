@@ -1647,7 +1647,7 @@ final class Style
 
         $available = $contentWidth;
 
-        $leftTitle = $this->renderTitlesAtAnchor($leftList, TitleSgr::Left, $titleSgr, $titleReset, $available, $fill, $junctions);
+        $leftTitle = $this->renderTitlesAtAnchor($leftList, TitlePlacement::Left, $titleSgr, $titleReset, $available, $fill, $junctions);
         $leftWidth = Width::string($leftTitle);
         if ($leftWidth > $available) {
             $leftTitle = Width::truncateAnsi($leftTitle, $available);
@@ -1655,7 +1655,7 @@ final class Style
         }
         $available -= $leftWidth;
 
-        $rightTitle = $this->renderTitlesAtAnchor($rightList, TitleSgr::Right, $titleSgr, $titleReset, $available, $fill, $junctions);
+        $rightTitle = $this->renderTitlesAtAnchor($rightList, TitlePlacement::Right, $titleSgr, $titleReset, $available, $fill, $junctions);
         $rightWidth = Width::string($rightTitle);
         if ($rightWidth > $available) {
             $rightTitle = Width::truncateAnsi($rightTitle, $available);
@@ -1664,7 +1664,7 @@ final class Style
         $available -= $rightWidth;
 
         $centerTitle = $available > 0
-            ? $this->renderTitlesAtAnchor($centerList, TitleSgr::Center, $titleSgr, $titleReset, $available, $fill, $junctions)
+            ? $this->renderTitlesAtAnchor($centerList, TitlePlacement::Center, $titleSgr, $titleReset, $available, $fill, $junctions)
             : '';
 
         if ($available <= 0) {
@@ -1727,7 +1727,7 @@ final class Style
      */
     private function renderTitlesAtAnchor(
         array $titleList,
-        TitleSgr $position,
+        TitlePlacement $position,
         string $titleSgr,
         string $titleReset,
         int $budget,
@@ -1758,8 +1758,8 @@ final class Style
         // btop insets an edge-anchored embed by one edge rune from its corner.
         $first = $titleList[0];
         $last  = $titleList[count($titleList) - 1];
-        $leadInset  = $position === TitleSgr::Left && $first->embedded;
-        $trailInset = $position === TitleSgr::Right && $last->embedded;
+        $leadInset  = $position === TitlePlacement::Left && $first->embedded;
+        $trailInset = $position === TitlePlacement::Right && $last->embedded;
         $remaining = $budget - ($leadInset ? 1 : 0) - ($trailInset ? 1 : 0);
 
         $rendered = '';

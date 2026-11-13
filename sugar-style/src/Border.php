@@ -265,7 +265,14 @@ final class Border
     /**
      * Attach multiple titles in bulk, replacing any previously set.
      *
-     * @param array<TitleAnchor|string, list<string>|string> $map Map of anchor → title text(s)
+     * Keys are anchor-name strings ('TopLeft', 'BottomCenter', …); PHP
+     * casts numeric keys to string before the lookup. A TitleAnchor
+     * enum instance is NOT a legal key — pure enums have no implicit
+     * string form, so PHP raises a TypeError before this body runs
+     * (pass `TitleAnchor::TopLeft->name`). The runtime still accepts an
+     * enum that arrives some other way as a defensive no-op.
+     *
+     * @param array<string, list<string>|string> $map Map of anchor name → title text(s)
      */
     public function withTitles(array $map): self
     {

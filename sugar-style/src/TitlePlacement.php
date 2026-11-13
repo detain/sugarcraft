@@ -7,9 +7,12 @@ namespace SugarCraft\Style;
 /**
  * Horizontal alignment of a border title within its allocated space.
  *
- * @internal Used by Style to position titles on the border line.
+ * Named for what it chooses — where a title is placed, not the SGR bytes
+ * it carries (finding 052: the old name TitleSgr suggested ANSI escape
+ * codes, which this enum never produces). @internal — Style.php keeps
+ * this from leaking into public signatures.
  */
-enum TitleSgr
+enum TitlePlacement
 {
     case Left;
     case Center;

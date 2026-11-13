@@ -406,8 +406,8 @@ echo Tree::new()
   holds left/center/right `Segment` lists with separator/style/width knobs;
   HelpBar binds key→label pairs (`fromMap`) with key/label styles (see
   [StatusBar example](#statusbar-example) below).
-- **`TitleSgr`** — `@internal` border-title alignment enum; not part of the
-  public surface.
+- **`TitlePlacement`** — `@internal` border-title placement enum; not part of
+  the public surface.
 
 ### StatusBar example
 

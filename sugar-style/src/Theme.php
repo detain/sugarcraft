@@ -16,6 +16,20 @@ use SugarCraft\Core\Util\Palettes;
 final class Theme
 {
     /**
+     * Memo of {@see adaptive()} results keyed by the raw COLORFGBG value
+     * plus the requested fallback polarity (finding 058's repeated
+     * getenv()/palette cost). Keyed rather than a single `??=` slot:
+     * callers — tests included — legitimately flip the environment
+     * between calls, and a value-keyed memo simply recomputes for the
+     * new value while reusing the identical immutable Theme for a
+     * repeated one. The key space is bounded by whatever a host exports
+     * (one variable), so no cap is needed.
+     *
+     * @var array<string, self>
+     */
+    private static array $adaptiveMemo = [];
+
+    /**
      * @param Color $foreground  Primary text colour
      * @param Color $background  Canvas colour
      * @param Color $primary     Main interactive / brand colour
@@ -276,9 +290,23 @@ final class Theme
      */
     public static function adaptive(bool $fallbackDark = true): self
     {
+        $raw = getenv('COLORFGBG');
+        $key = ($raw === false ? "\0unset" : $raw) . '|' . ($fallbackDark ? 'dark' : 'light');
+        if (isset(self::$adaptiveMemo[$key])) {
+            return self::$adaptiveMemo[$key];
+        }
+
+        return self::$adaptiveMemo[$key] = self::resolveAdaptive($raw, $fallbackDark);
+    }
+
+    /**
+     * Uncached adaptive resolution — the COLORFGBG state machine itself
+     * ({@see adaptive()} for the memo and the format documentation).
+     */
+    private static function resolveAdaptive(string|false $raw, bool $fallbackDark): self
+    {
         $fallback = $fallbackDark ? self::dark() : self::light();
 
-        $raw = getenv('COLORFGBG');
         if ($raw === false || trim($raw) === '') {
             return $fallback;
         }

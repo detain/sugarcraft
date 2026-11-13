@@ -643,4 +643,31 @@ final class ThemeTest extends TestCase
         $this->assertTrue(Theme::adaptive(fallbackDark: false)->background->isDark());
         putenv('COLORFGBG');
     }
+
+    public function testAdaptiveMemoisesPerEnvironmentValue(): void
+    {
+        putenv('COLORFGBG=15;0');
+        $dark = Theme::adaptive();
+        // Same environment value → the identical immutable Theme, with no
+        // second palette construction.
+        $this->assertSame($dark, Theme::adaptive());
+
+        putenv('COLORFGBG=0;15');
+        $light = Theme::adaptive();
+        // A changed environment recomputes instead of reusing a stale slot.
+        $this->assertNotSame($dark, $light);
+        $this->assertFalse($light->background->isDark());
+
+        putenv('COLORFGBG=15;0');
+        $this->assertSame($dark, Theme::adaptive());
+
+        putenv('COLORFGBG=nonsense');
+        $fallback = Theme::adaptive();
+        // Different key (unparseable value) — equal palette, own instance,
+        // then memoised for repeats.
+        $this->assertEquals($dark, $fallback);
+        $this->assertSame($fallback, Theme::adaptive());
+        // The requested fallback polarity is part of the memo key.
+        $this->assertNotSame($fallback, Theme::adaptive(fallbackDark: false));
+    }
 }

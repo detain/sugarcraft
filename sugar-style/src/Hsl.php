@@ -7,10 +7,17 @@ namespace SugarCraft\Style;
 /**
  * Factory for creating Color instances via HSL values.
  *
- * Mirrors charmbracelet/lipgloss's color factory pattern where HSL
- * values are expressed as hue 0-360, saturation 0-100, lightness 0-100
- * (the conventional CSS-style notation rather than the raw 0-1 fractions
- * that Color::hsl() accepts).
+ * Mirrors charmbracelet/lipgloss's color factory pattern: hue 0-360,
+ * saturation 0-100, lightness 0-100 (the conventional CSS-style
+ * notation rather than the raw 0-1 fractions that Color::hsl() accepts).
+ *
+ * Scale honesty (finding 055): a component WITHOUT a `%` suffix is still
+ * read on the 0-100 percent scale — `Hsl::parse('hsl(120, 0.5, 0.5)')`
+ * means half a percent, not fifty (same reading as CSS, where a unitless
+ * saturation below the implicit scale can only mean 0.5%). Callers who
+ * hold 0-1 fractions want {@see \SugarCraft\Core\Util\Color::hsl()},
+ * which takes fractions directly. Out-of-range components are clamped
+ * into scale by {@see color()}; hue wraps modulo 360.
  *
  * @see \SugarCraft\Core\Util\Color::hsl()
  */
@@ -18,6 +25,10 @@ final class Hsl
 {
     /**
      * Create a Color from HSL values.
+     *
+     * Hue wraps modulo 360 (negative hues rotate the other way);
+     * saturation and lightness are clamped into [0, 100]. See the class
+     * note for what a unitless component means (percent scale).
      *
      * @param float $h Hue in degrees [0, 360)
      * @param float $s Saturation percentage [0, 100]
