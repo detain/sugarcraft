@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Flexbox\Tests;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Widgets\Timer\TickMsg;
+use SugarCraft\Forms\Viewport\ViewportTickMsg;
 use SugarCraft\Flexbox\Viewport;
 
 /**
@@ -201,16 +201,16 @@ final class ViewportQueryTest extends TestCase
     }
 
     /**
-     * Type polarity: the shadowed widgets import made the
+     * Type polarity: the shadowed widgets import once made the
      * signature accept the FOREIGN scrollbar and reject the lib's own. The
-     * trap is now inverted — passing the widgets type directly is a TypeError;
-     * wrap it in SugarCraft\Flexbox\Scrollbar instead.
+     * trap is now inverted — passing the canonical forms type directly is
+     * a TypeError; wrap it in SugarCraft\Flexbox\Scrollbar instead.
      */
     public function testWithVerticalScrollbarRefusesTheForeignScrollbarType(): void
     {
         $vp = Viewport::fromContent("a\nb\nc", 20, 3);
         $this->expectException(\TypeError::class);
-        $vp->withVerticalScrollbar(\SugarCraft\Widgets\Scrollbar\Scrollbar::vertical());
+        $vp->withVerticalScrollbar(\SugarCraft\Forms\Scrollbar\Scrollbar::vertical());
     }
 
     // ---- Model contract: init/update ------------------------------------
@@ -227,7 +227,7 @@ final class ViewportQueryTest extends TestCase
     public function testUpdateReturnsArrayWithModel(): void
     {
         $vp = Viewport::fromContent("content\nmore", 20, 3);
-        $msg = new TickMsg(0);
+        $msg = new ViewportTickMsg(); // inert at rest: no animation frame armed
         [$model, $cmd] = $vp->update($msg);
         $this->assertInstanceOf(Viewport::class, $model);
     }

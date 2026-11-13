@@ -46,7 +46,8 @@ The library carries the house i18n plumbing (`src/Lang.php` plus locale files un
 
 ### Viewport
 - **Scrollable viewport** — composes the canonical `sugar-forms` `Viewport`
-  (the `sugar-widgets` symbol is a deprecated `class_alias` façade onto it)
+  directly (FBX-20: the lib's require and imports name Forms, not the
+  deprecated `sugar-widgets` `class_alias` façade)
 - **Keyboard navigation** — line-up/down, page-up/down, half-page-up/down (`halfPageUp()`/`halfPageDown()`), goto-top/bottom
 - **Sticky regions** — `withStickyHeader($rows)` / `withStickyFooter($rows)` pin lines across scrolling; a row can never appear
   in both regions (the footer is clamped when the document is shorter than header + footer), and a document that FITS the box —

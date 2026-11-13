@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Flexbox\Tests;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Widgets\Scrollbar\ScrollbarState;
+use SugarCraft\Forms\Scrollbar\ScrollbarState;
 use SugarCraft\Flexbox\Scrollbar;
 
 /**

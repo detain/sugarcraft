@@ -28,7 +28,7 @@
     "require": {
         "php": "^8.3",
         "sugarcraft/sugar-core": "@dev",
-        "sugarcraft/sugar-widgets": "@dev",
+        "sugarcraft/sugar-forms": "@dev",
         "sugarcraft/sugar-cellbuffer": "@dev"
     },
     "require-dev": {

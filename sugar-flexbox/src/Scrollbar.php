@@ -4,23 +4,24 @@ declare(strict_types=1);
 
 namespace SugarCraft\Flexbox;
 
-use SugarCraft\Widgets\Scrollbar\Scrollbar as WidgetsScrollbar;
-use SugarCraft\Widgets\Scrollbar\ScrollbarState;
+use SugarCraft\Forms\Scrollbar\Scrollbar as FormsScrollbar;
+use SugarCraft\Forms\Scrollbar\ScrollbarState;
 
 /**
- * Immutable scrollbar wrapper over the canonical {@see WidgetsScrollbar}.
+ * Immutable scrollbar wrapper over the canonical {@see FormsScrollbar}.
  *
- * Composes the sugar-forms Scrollbar rather than reimplementing it: the
- * `SugarCraft\Widgets\Scrollbar\Scrollbar` symbol this file imports is a
- * deprecated class_alias façade onto `SugarCraft\Forms\Scrollbar\Scrollbar`.
+ * Composes the sugar-forms Scrollbar directly (FBX-20): the lib once
+ * imported the deprecated `SugarCraft\Widgets\…` class_alias façade;
+ * the require and these imports now name the canonical classes, so the
+ * wrapper hands the forms viewport the same class it wraps.
  *
  * @see \SugarCraft\Forms\Scrollbar\Scrollbar
  */
 final readonly class Scrollbar
 {
-    private WidgetsScrollbar $inner;
+    private FormsScrollbar $inner;
 
-    private function __construct(WidgetsScrollbar $inner)
+    private function __construct(FormsScrollbar $inner)
     {
         $this->inner = $inner;
     }
@@ -28,13 +29,13 @@ final readonly class Scrollbar
     /** Vertical scrollbar with defaults (░ track, █ thumb, ▲▼ arrows). */
     public static function vertical(): self
     {
-        return new self(WidgetsScrollbar::vertical());
+        return new self(FormsScrollbar::vertical());
     }
 
     /** Horizontal scrollbar with defaults (░ track, █ thumb, no arrows). */
     public static function horizontal(): self
     {
-        return new self(WidgetsScrollbar::horizontal());
+        return new self(FormsScrollbar::horizontal());
     }
 
     public function withTrackChar(string $char): self
@@ -53,12 +54,14 @@ final readonly class Scrollbar
     }
 
     /**
-     * The canonical forms scrollbar (reached through the widgets alias) this
-     * wrapper delegates to. Needed so {@see Viewport::withVerticalScrollbar()}
-     * (which hands the forms viewport the same canonical class) can accept
-     * THIS lib's Scrollbar and unwrap it — the wrapper is opaque otherwise.
+     * The canonical forms scrollbar this wrapper delegates to (FBX-20:
+     * named directly, no alias hop). Needed so
+     * {@see Viewport::withVerticalScrollbar()} can accept THIS lib's
+     * Scrollbar and unwrap it — the wrapper is opaque to the forms
+     * delegate otherwise. The method name keeps its historical spelling:
+     * renaming a public accessor is vocabulary-owner territory.
      */
-    public function widgetScrollbar(): WidgetsScrollbar
+    public function widgetScrollbar(): FormsScrollbar
     {
         return $this->inner;
     }

@@ -6,35 +6,36 @@ namespace SugarCraft\Flexbox;
 
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Util\Width;
-use SugarCraft\Widgets\Scrollbar\ScrollbarState;
-use SugarCraft\Widgets\Viewport\Viewport as WidgetsViewport;
+use SugarCraft\Forms\Scrollbar\ScrollbarState;
+use SugarCraft\Forms\Viewport\Viewport as FormsViewport;
 
 /**
- * Immutable viewport wrapper over the canonical {@see WidgetsViewport}.
+ * Immutable viewport wrapper over the canonical {@see FormsViewport}.
  *
- * Composes the sugar-forms Viewport rather than reimplementing it: the
- * `SugarCraft\Widgets\Viewport\Viewport` symbol this file imports is a
- * deprecated class_alias façade onto `SugarCraft\Forms\Viewport\Viewport`.
- * Adds sticky header/footer positioning and a decorative sync-partner
+ * Composes the sugar-forms Viewport directly (FBX-20): the lib once
+ * imported the deprecated `SugarCraft\Widgets\…` class_alias façade;
+ * the require and these imports now name the canonical classes, so no
+ * alias hop remains anywhere in this lib's dependency graph. Adds
+ * sticky header/footer positioning and a decorative sync-partner
  * reference ({@see self::withLinkedViewport()} stores it; it propagates nothing).
  *
  * @see \SugarCraft\Forms\Viewport\Viewport
  */
 final readonly class Viewport
 {
-    private WidgetsViewport $inner;
+    private FormsViewport $inner;
     private int $stickyHeader;
     private int $stickyFooter;
     private ?Viewport $syncedViewport;
 
     /**
-     * @param WidgetsViewport        $inner        canonical forms viewport (via the widgets alias) holding content + dimensions
+     * @param FormsViewport        $inner        canonical forms viewport (via the widgets alias) holding content + dimensions
      * @param int                 $stickyHeader rows pinned to the top
      * @param int                 $stickyFooter rows pinned to the bottom
      * @param Viewport|null       $syncedViewport scroll-sync partner
      */
     private function __construct(
-        WidgetsViewport $inner,
+        FormsViewport $inner,
         int $stickyHeader = 0,
         int $stickyFooter = 0,
         ?Viewport $syncedViewport = null,
@@ -48,7 +49,7 @@ final readonly class Viewport
     /** Construct with default dimensions (80×24). */
     public static function new(int $width = 80, int $height = 24): self
     {
-        return new self(WidgetsViewport::new($width, $height));
+        return new self(FormsViewport::new($width, $height));
     }
 
     /**
@@ -61,7 +62,7 @@ final readonly class Viewport
      */
     public static function fromContent(string $content, int $width = 80, int $height = 24): self
     {
-        return new self(WidgetsViewport::new($width, $height)->setContent($content));
+        return new self(FormsViewport::new($width, $height)->setContent($content));
     }
 
     /**

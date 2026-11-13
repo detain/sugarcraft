@@ -122,7 +122,7 @@ final class ViewportDelegatorTest extends TestCase
     public function testScrollbarWrapsAndUnwrapsTheCanonicalWidget(): void
     {
         $sb = \SugarCraft\Flexbox\Scrollbar::vertical();
-        $this->assertInstanceOf(\SugarCraft\Widgets\Scrollbar\Scrollbar::class, $sb->widgetScrollbar());
+        $this->assertInstanceOf(\SugarCraft\Forms\Scrollbar\Scrollbar::class, $sb->widgetScrollbar());
         $this->assertSame($sb->widgetScrollbar(), $sb->widgetScrollbar());
     }
 

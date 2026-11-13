@@ -2,13 +2,16 @@
 
 ## [pattern:ssot-composition] — SSOT composition via wrapper classes
 
-Viewport and Scrollbar are composed from sugar-widgets rather than reimplemented.
-The sugar-flexbox namespace (`SugarCraft\Flexbox`) wraps canonical
-`SugarCraft\Widgets` types as immutable value objects. This keeps sticker-level
-customisation options open without duplicating scroll/viewport logic.
+Viewport and Scrollbar are composed from the canonical sugar-forms classes
+rather than reimplemented. The sugar-flexbox namespace (`SugarCraft\Flexbox`)
+wraps `SugarCraft\Forms` types as immutable value objects. This keeps
+sticker-level customisation options open without duplicating scroll/viewport
+logic. (FBX-20: the lib formerly routed through the deprecated
+`sugar-widgets` class_alias façade; the require and imports now name Forms
+directly.)
 
-- Viewport: `SugarCraft\Flexbox\Viewport` wraps `SugarCraft\Widgets\Viewport\Viewport`
-- Scrollbar: `SugarCraft\Flexbox\Scrollbar` wraps `SugarCraft\Widgets\Scrollbar\Scrollbar`
+- Viewport: `SugarCraft\Flexbox\Viewport` wraps `SugarCraft\Forms\Viewport\Viewport`
+- Scrollbar: `SugarCraft\Flexbox\Scrollbar` wraps `SugarCraft\Forms\Scrollbar\Scrollbar`
 
 Viewport sticky positioning (sticky headers/footers that appear/disappear
 as the user scrolls) is implemented in the Viewport wrapper at
