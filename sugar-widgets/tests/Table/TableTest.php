@@ -200,6 +200,21 @@ final class TableTest extends TestCase
         Table::new(['x'], [['a']])->setSize(-1, 10);
     }
 
+    public function testSetForwardsAreByteIdenticalToWithCanonicals(): void
+    {
+        // The deprecated set* verbs must be pure delegations — zero logic
+        // duplication (W-09 acceptance).
+        $base = Table::new(['A'], [['x']]);
+        $this->assertSame(
+            $base->withColumns([new Column('B', 4)])->view(),
+            $base->setColumns([new Column('B', 4)])->view(),
+        );
+        $this->assertSame($base->withRows([['n']])->view(), $base->setRows([['n']])->view());
+        $this->assertSame($base->withHeaders(['H'])->view(), $base->setHeaders(['H'])->view());
+        $this->assertSame($base->withSize(60, 5)->view(), $base->setSize(60, 5)->view());
+        $this->assertSame($base->withCursor(1)->cursor(), $base->setCursor(1)->cursor());
+    }
+
     public function testGotoTopAndBottom(): void
     {
         $t = $this->focused();

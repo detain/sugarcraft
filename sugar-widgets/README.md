@@ -36,6 +36,11 @@ siblings resolve from Packagist.
 > `height` / `prompt` / `validator` (the `TextInput`/`TextArea` short
 > forms live in canonical `sugar-forms` — their deprecation cadence is
 > ruled there, not here). New code: `withShowAll()` / `withWidth()` etc.
+> Likewise `Table`'s `set*` verbs — `setColumns()` / `setCursor()` /
+> `setRows()` / `setHeaders()` / `setSize()` — are dated BC aliases (they
+> always returned new instances; the `with*()` spellings are canonical),
+> and `Progress`, `Help` and `Tabs` carry deprecated public constructors
+> beside their `::new()` factories. Same removal: **2.0**.
 
 > `Help::getStyles()` and `Help::getWidth()` are deprecated BC accessors —
 > the house convention is bare accessors, and the property names are the
@@ -53,7 +58,7 @@ The counted inventory lives once, in the intro at the top of this file.
 | Component | What it does | Notable msgs |
 |---|---|---|
 | `Cursor\Cursor` | Animated text cursor _(deprecated alias — re-exported from `SugarCraft\Forms\Cursor`)_ | `BlinkMsg` |
-| `Help\Help` | Render short / full key-help footer from a `KeyMap`; `Help::updateWithBinding($msg, $toggle)` flips show-all in response to a key. `Help::new(...)` is the house factory (all eight styling params optional; the public constructor stays for BC); gap knobs via `withKeyDescGap()` / `withColumnGap()` / `withWidth()` | — |
+| `Help\Help` | Render short / full key-help footer from a `KeyMap`; `Help::updateWithBinding($msg, $toggle)` flips show-all in response to a key. `Help::new(...)` is the house factory (all eight styling params optional; the public constructor is deprecated BC — removal at 2.0); gap knobs via `withKeyDescGap()` / `withColumnGap()` / `withWidth()` | — |
 | `Key\Binding` | One key + label + help row; `Binding::new(...)`, `Binding::withDisabled(...)` factories | — |
 | `Key\KeyMap` | Interface — implement it so `Help` can render your bindings: `shortHelp(): list<Binding>` for the inline row, `fullHelp(): list<list<Binding>>` for the expanded pane (one inner list per column); `Tabs\TabsKeyMap` is the shipped example. Note `Key\Help` — the small `{key, desc}` value object bindings render through — is a *different* type from the `Help\Help` component | — |
 | `Spinner\Spinner` | Animated loading glyph — 12 built-in styles _(deprecated alias — re-exported from `SugarCraft\Forms\Spinner` in `sugarcraft/sugar-forms`)_ | `Spinner\TickMsg` |

@@ -100,7 +100,7 @@ final class Table implements Model
      *
      * @param list<Column> $columns
      */
-    public function setColumns(array $columns): self
+    public function withColumns(array $columns): self
     {
         $titles = [];
         $widths = [];
@@ -114,6 +114,16 @@ final class Table implements Model
         return $this->mutate(headers: $titles, colWidths: $widths)
             ->reconcileSort(count($titles))
             ->reclamp();
+    }
+
+    /**
+     * @deprecated The `set`-prefixed name suggests mutation; this class is
+     *     immutable and returns a new instance. Use {@see withColumns()}.
+     *     Kept as a BC alias for external callers. Removal at 2.0.
+     */
+    public function setColumns(array $columns): self
+    {
+        return $this->withColumns($columns);
     }
 
     /** @return list<Column> */
@@ -289,7 +299,14 @@ final class Table implements Model
     public function cursor(): int { return $this->cursor; }
 
     /** Move the cursor to a specific row, clamped. */
-    public function setCursor(int $row): self { return $this->moveCursor($row); }
+    public function withCursor(int $row): self { return $this->moveCursor($row); }
+
+    /**
+     * @deprecated The `set`-prefixed name suggests mutation; this class is
+     *     immutable and returns a new instance. Use {@see withCursor()}.
+     *     Kept as a BC alias for external callers. Removal at 2.0.
+     */
+    public function setCursor(int $row): self { return $this->withCursor($row); }
 
     /**
      * Apply the supplied {@see Styles} to header / cell / selected
@@ -363,13 +380,23 @@ final class Table implements Model
     }
 
     /** @param list<list<string>> $rows */
-    public function setRows(array $rows): self
+    public function withRows(array $rows): self
     {
         return $this->mutate(rows: array_values(array_map('array_values', $rows)))->reclamp();
     }
 
+    /**
+     * @deprecated The `set`-prefixed name suggests mutation; this class is
+     *     immutable and returns a new instance. Use {@see withRows()}.
+     *     Kept as a BC alias for external callers. Removal at 2.0.
+     */
+    public function setRows(array $rows): self
+    {
+        return $this->withRows($rows);
+    }
+
     /** @param list<string> $headers */
-    public function setHeaders(array $headers): self
+    public function withHeaders(array $headers): self
     {
         $headers = array_values($headers);
         return $this->mutate(headers: $headers)
@@ -377,12 +404,32 @@ final class Table implements Model
             ->reclamp();
     }
 
-    public function setSize(int $width, int $height): self
+    /**
+     * @deprecated The `set`-prefixed name suggests mutation; this class is
+     *     immutable and returns a new instance. Use {@see withHeaders()}.
+     *     Kept as a BC alias for external callers. Removal at 2.0.
+     */
+    public function setHeaders(array $headers): self
+    {
+        return $this->withHeaders($headers);
+    }
+
+    public function withSize(int $width, int $height): self
     {
         if ($width < 0 || $height < 0) {
             throw new \InvalidArgumentException(Lang::t('table.dim_nonneg'));
         }
         return $this->mutate(width: $width, height: $height)->reclamp();
+    }
+
+    /**
+     * @deprecated The `set`-prefixed name suggests mutation; this class is
+     *     immutable and returns a new instance. Use {@see withSize()}.
+     *     Kept as a BC alias for external callers. Removal at 2.0.
+     */
+    public function setSize(int $width, int $height): self
+    {
+        return $this->withSize($width, $height);
     }
 
     /** Move the cursor to row 0. Mirrors Bubbles' `GotoTop`. */

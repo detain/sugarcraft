@@ -32,6 +32,12 @@ use SugarCraft\Style\Style;
  */
 final class Help
 {
+    /**
+     * @deprecated Prefer {@see self::new()} — every styling param is optional
+     *     there too, and the factory spells the house convention. Direct
+     *     construction keeps working (BC); privatization is scheduled for
+     *     the next major. e.g. `Help::new()->withSeparator(' | ')`.
+     */
     public function __construct(
         public readonly string $separator = ' • ',
         public readonly string $keyDescGap = ' ',

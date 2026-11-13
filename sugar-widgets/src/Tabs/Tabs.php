@@ -59,6 +59,10 @@ final class Tabs implements Model
     public readonly int $scrollEnd;
 
     /**
+     * @deprecated Prefer {@see self::new()} (named args). The public ctor
+     *     sits beside the factory only for BC; privatization is scheduled
+     *     for the next major.
+     *
      * @param list<string> $labels
      */
     public function __construct(
