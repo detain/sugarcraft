@@ -21,6 +21,13 @@ candy-sql, candy-mail, candy-git-server, and candy-codetime — with the full
 upstream-to-port mapping in
 [`docs/MATCHUPS.md`](../docs/MATCHUPS.md).
 
+**Terms used in this README.** *Spent handle* — a subscription that is done
+and whose `unsubscribe()` is a no-op. *Answers null* — a suppressed or
+superseded call resolves to `null`: a quiet hand-off, not an error. *Slot
+frees on settle* — a coalescing (single-flight) entry is released when its
+promise settles, so the next call may start a fresh flight. *Drain* — run the
+event loop to quiescence; tests assert scheduled state, never wall-clock.
+
 ### Why async in a terminal app
 
 A TUI cannot block: blocking is a frozen screen. Every render tick needs the
@@ -84,9 +91,9 @@ further guarantees:
   accumulate closures.
 - A callback that throws is **logged, never propagated** — teardown paths cannot
   surprise the canceller. "Logged" means `error_log()` by default: under the
-  default PHP configuration the line lands on stderr, and a TUI tearing down
-  mid-frame may see a stray interleaved line corrupt the in-progress render —
-  so `AsyncOps::setLogSink($callable)` exists to redirect those notices into
+  default PHP configuration the line lands on stderr, where a stray interleaved
+  line may corrupt an in-progress render — so
+  `AsyncOps::setLogSink($callable)` exists to redirect those notices into
   the host's own diagnostics instead, and `setLogSink(null)` restores the
   default. The hook-failure sites are the cancellation callbacks
   (`CancellationToken`), the `retry` `onRetry:` and `pendingNotice` hooks
@@ -95,10 +102,10 @@ further guarantees:
   `CancellationToken::none()` is a shared never-cancelled
   sentinel for "no token here" plumbing: its `onCancel()` hands back an
   already-spent handle and nothing is ever retained.
-- Late registration never misses: calling `onCancel()` on an already-cancelled
+- Registering after cancellation: calling `onCancel()` on an already-cancelled
   token fires the callback immediately — synchronously, before the call
-  returns — and hands back an already-spent handle, so nothing is retained for
-  a cancellation that has already happened. A callback that throws on this
+  returns — and the handle is born spent, so nothing is retained for a
+  cancellation that has already happened. A callback that throws on this
   immediate path is logged through the same seam as `cancel()` — registration
   cannot surface what cancellation contains.
 
@@ -260,7 +267,7 @@ Effects that span multiple update cycles (animations, debounced input, async
 handlers) therefore never execute eagerly: an effect runs when — and only
 when — the runtime resumes it, once per resume. `resume()` **returns** the paused Cmd closure (or
 `null` if there is nothing to resume); dispatching it is the caller's job. The
-handle is **fire-once by law**: the resumed latch flips on the first call, so a
+handle is **fire-once**: the resumed latch flips on the first call, so a
 second `resume()` always returns `null` — even when the first call handed back a
 live closure that was never dispatched. A handle shared across two schedulers
 can therefore never double-fire its command. In code:
@@ -439,7 +446,7 @@ echo $result, "\n";
 
 Bad arguments are refused **synchronously at the call site** with an
 `InvalidArgumentException` — no promise is ever produced to carry the error, so
-these throws escape a bare `->then()` chain. Verified guard set:
+these throws escape a bare `->then()` chain. Guards verified by tests:
 
 - `withTimeout`, `withDeadline`, `pendingNotice`, `boundWait`, `debounce`, and
   `throttle` refuse
@@ -486,8 +493,9 @@ per-load timeout stays the caller's concern (compose with `withDeadline`).
 - `fetch(string $key, callable $loader)` — fresh hit resolves immediately; a load
   already in flight for the key is joined (ONE loader run serves all concurrent
   callers); otherwise the loader starts a flight whose result is stored and
-  returned. The key is the only partition: the cache does not know *which*
-  caller asked, so a load started for one caller answers every caller that
+  returned. Coalescing is keyed on the string alone — callers are not
+  partitioned: the cache does not know *which* caller asked, so a load started
+  for one caller answers every caller that
   shares the key. If the backing load is per-caller authorized, fold the caller
   identity into the key. The loader MUST return a `PromiseInterface` — anything
   else fails the load with an explicit `InvalidArgumentException` naming the
@@ -503,7 +511,8 @@ per-load timeout stays the caller's concern (compose with `withDeadline`).
   viewing the SAME store (configuration is immutable; the data is shared).
 - `peek()` / `has()` / `isFresh()` / `invalidate()` / `clear()` — last-known-value
   reads for render paths that must never block, TTL probe, and scoped drops. A
-  cached `null` is *present* (`has` true), disambiguated from *absent*.
+  cached `null` is *present*: `has()` returns true for it, which is how a
+  cached null is disambiguated from a key that was never stored.
 - `count()` / `keys()` / `isLoaded($key)` / `ageSeconds($key)` / `maxEntries()` /
   `ttlSeconds()` / `servesStaleOnError()` — introspection: stored-entry census
   (fresh and stale alike), stored keys in insertion order, in-flight-or-fresh
@@ -512,7 +521,7 @@ per-load timeout stays the caller's concern (compose with `withDeadline`).
   policy).
 - `serveStaleOnError` — on a failed load with an existing (expired) entry, the
   caller resolves with the stale value WITHOUT re-stamping its age, so a blip
-  cannot latch the key and polling keeps retrying every tick. Read that as
+  cannot mark the key fresh and polling keeps retrying every tick. Read that as
   *freshness suspended, never extended*: the answer's real-world validity is
   bounded by the last successful load, and a failing authority does not renew
   it. Wrong trade for data whose freshness IS the authorization — permission
@@ -589,7 +598,7 @@ green run intentionally prints a few `sugar-async: cancellation callback
 failed:` and `sugar-async: subscription disposal failed:` lines — these are
 throw-logged probes pinning the hook-failure invariant, not breakage. For
 the two timer handles, `isPending()` is the obvious assertion seam for drain
-tests — assert scheduled state, never wall-clock. Two laws learned the hard
+tests — assert scheduled state, never wall-clock. Two rules learned the hard
 way:
 
 - **Arm-time clock staleness.** Under ext-uv, deadlines are computed against a
@@ -597,7 +606,9 @@ way:
   idle is already overdue. `sugar-testing`'s `LoopPin::pinStableClock()` (called
   from `tests/bootstrap.php`) keeps that impossible; if you add a `retry`-shaped
   test that arms its first timer after synchronous setup, keep the idle below
-  the armed bound (or the pin below `bound − largest later-armed delay`).
+  the armed bound — or size the guard pin lower than the armed bound by at
+  least the largest delay armed after it, so the stale-clock overshoot cannot
+  reach the pin first.
 - **`ProgramSimulator` does not drive timers.** It pumps stdin only; promises
   waiting on `Loop::get()` never settle under it. For async TUI flows, run a real
   loop with a guard stop-timer, or resolve fixtures synchronously:
@@ -619,8 +630,8 @@ $loop->run();
 ## Troubleshooting
 
 - **A rejected promise exits 0 with no message.** ReactPHP does not print
-  unhandled rejections. Attach a rejection handler (`.then(null, ...)`) or an
-  `otherwise()` arm in examples and tests, always.
+  unhandled rejections. In examples and tests, always attach a rejection
+  handler (`.then(null, ...)`) or an `otherwise()` arm.
 - **A timeout that never fires.** The loop must actually run: `Loop::run()` (or
   your host program's loop) drives every timer this library arms.
 - **`composer` resolves an old `candy-async`.** The package was renamed to
