@@ -240,11 +240,20 @@ final class DetectionChain
      * value is clamped to the ceiling here rather than exported raw —
      * the accessor is where TERM leaves the chain, and detection itself
      * already matched it by equality before any consumer could see it.
+     *
+     * The clamp is boundary-safe (mb_strcut, not substr) because the
+     * clamped value is exported as the child's TERM and a raw substr cut
+     * through a multibyte sequence would emit invalid UTF-8. Env owns the
+     * repo's single sanitize rule, but its helper also strips controls and
+     * caps at SOURCE_MAX_BYTES (128, a different ceiling), so calling it
+     * here would change the contract — the same boundary-safe primitive it
+     * uses is applied directly. The exec path itself never sees a split
+     * name: isSafeTermName rejects before command build (verified).
      */
     public function term(): string
     {
         return \strlen($this->term) > self::TERM_MAX_BYTES
-            ? \substr($this->term, 0, self::TERM_MAX_BYTES)
+            ? \mb_strcut($this->term, 0, self::TERM_MAX_BYTES, 'UTF-8')
             : $this->term;
     }
 

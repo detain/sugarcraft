@@ -287,6 +287,23 @@ final class DetectionChainTest extends TestCase
         $this->assertSame(str_repeat('q', 256), $term);
     }
 
+    public function testTermClampsOnACharacterBoundaryNeverMidSequence(): void
+    {
+        // PROC-007: the clamped TERM is exported as the child's environment
+        // value. 'éa' units are 3 bytes with the 2-byte é first, so a raw
+        // substr cut at 256 lands INSIDE é (lead byte C3 kept, tail A9
+        // orphaned) and emits invalid UTF-8; mb_strcut steps back to the
+        // character edge (255 bytes, eight full 85-unit rows ending on 'a').
+        $chain = DetectionChain::detect(['TERM' => str_repeat('éa', 86)]);
+        $term = $chain->term();
+
+        $this->assertLessThanOrEqual(256, strlen($term));
+        $this->assertSame(255, strlen($term), 'the boundary cut lands one byte under the ceiling here');
+        $this->assertSame(1, preg_match('//u', $term), 'the exported TERM must be valid UTF-8');
+        $this->assertSame(str_repeat('éa', 85), $term);
+        $this->assertNotSame(\substr(str_repeat('éa', 86), 0, 256), $term, 'the byte cut must NOT be the answer');
+    }
+
     public function testShortTermExposesByteIdentical(): void
     {
         $chain = DetectionChain::detect(['TERM' => 'xterm-256color']);
