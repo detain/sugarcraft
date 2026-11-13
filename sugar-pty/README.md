@@ -12,8 +12,13 @@ child, and forward host resizes into the child via `TIOCSWINSZ`.
 **Status**: Linux + macOS, and Windows ConPTY through `Windows\ConPtySystem`
 (FFI — Windows 10 1809 or newer, PHP 8.4 or newer; see Backend selection).
 BSD and Solaris are accepted by `PtySystemFactory::forPlatform()` and route to
-the same `PosixPtySystem` path on a best-effort basis — CI never exercises
-them, so treat the quartet assumptions there as unverified.
+the same `PosixPtySystem` path. As of PTY-27 the FFI primitives carry
+per-family maps — Linux and macOS measured on runners, FreeBSD
+value-correct from public headers (`ttydefaults.h`/`fcntl.h`) but never
+exercised by CI — and every unmapped family (Solaris included) throws
+at the constant, soname, or flag lookup rather than issuing Linux
+numbers on alien kernels. Treat the FreeBSD leg as field-test-only
+until a BSD CI seat exists.
 
 ## Install
 

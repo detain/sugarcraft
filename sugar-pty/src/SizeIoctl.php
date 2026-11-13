@@ -44,15 +44,48 @@ final class SizeIoctl
     /** macOS TIOCGWINSZ — get window size. */
     public const DARWIN_TIOCGWINSZ = 0x40087468;
 
+    /**
+     * FreeBSD TIOCSWINSZ — _IOW('t', 105, struct winsize). Same shape as
+     * Darwin's but a different number: 105 ('i'), not 103 (PTY-27).
+     */
+    public const FREEBSD_TIOCSWINSZ = 0x80087469;
+
+    /** FreeBSD TIOCGWINSZ — _IOR('t', 104, struct winsize); shares Darwin's value. */
+    public const FREEBSD_TIOCGWINSZ = 0x40087468;
+
     /** Number of unsigned-short fields in a `struct winsize` (rows, cols, xpix, ypix). */
     public const WINSIZE_FIELDS = 4;
+
+    /**
+     * Per-family winsize request pair (PTY-27, sugar-pty-025's ioctl
+     * sibling). Linux and Darwin were the only names behind the old
+     * ternary — every other family silently got Linux numbers. The
+     * FreeBSD leg is value-correct from the public `ttydefaults.h`
+     * `_IOW/_IOR('t', 105/104)` encodings but UNEXERCISED until a BSD
+     * CI seat exists (same disclosure class as the Darwin legs before
+     * PTY-09); Solaris and anything else throw instead of guessing.
+     *
+     * @return array{set:int, get:int}
+     * @throws PtyException for unmapped families
+     */
+    public static function requestsFor(string $family): array
+    {
+        return match ($family) {
+            'Linux' => ['set' => self::LINUX_TIOCSWINSZ, 'get' => self::LINUX_TIOCGWINSZ],
+            'Darwin' => ['set' => self::DARWIN_TIOCSWINSZ, 'get' => self::DARWIN_TIOCGWINSZ],
+            'BSD' => ['set' => self::FREEBSD_TIOCSWINSZ, 'get' => self::FREEBSD_TIOCGWINSZ],
+            default => throw new PtyException(
+                "sugar-pty has no validated winsize request numbers for platform family '{$family}'",
+            ),
+        };
+    }
 
     /**
      * Return the platform's `TIOCSWINSZ` request number.
      */
     public static function setRequest(): int
     {
-        return PHP_OS_FAMILY === 'Darwin' ? self::DARWIN_TIOCSWINSZ : self::LINUX_TIOCSWINSZ;
+        return self::requestsFor(\PHP_OS_FAMILY)['set'];
     }
 
     /**
@@ -60,7 +93,7 @@ final class SizeIoctl
      */
     public static function getRequest(): int
     {
-        return PHP_OS_FAMILY === 'Darwin' ? self::DARWIN_TIOCGWINSZ : self::LINUX_TIOCGWINSZ;
+        return self::requestsFor(\PHP_OS_FAMILY)['get'];
     }
 
     /**

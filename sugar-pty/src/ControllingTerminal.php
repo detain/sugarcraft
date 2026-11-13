@@ -25,11 +25,40 @@ final class ControllingTerminal
 {
     use LibcAccess;
 
-    /** Linux TIOCSCTTY request code (defined in sys/ioctl.h). */
+    /** Linux TIOCSCTTY request code (asm-generic/ioctls.h: _IO(0x54, 14)). */
     private const TIOCSCTTY_LINUX = 0x540E;
 
-    /** macOS TIOCSCTTY request code (_IOWR('t', 1, int) encoding). */
+    /** macOS TIOCSCTTY request code (_IO('t', 97) encoding). */
     private const TIOCSCTTY_DARWIN = 0x20007461;
+
+    /**
+     * FreeBSD TIOCSCTTY — _IO('t', 97) in the shared BSD `_IOC` bit
+     * layout, so the wire value matches Darwin's (PTY-27).
+     * UNEXERCISED until a BSD CI seat; Linux and Darwin values above
+     * are measured on runners (0x540E pinned by
+     * ControllingTerminalTest's live claim).
+     */
+    private const TIOCSCTTY_FREEBSD = 0x20007461;
+
+    /**
+     * Per-family TIOCSCTTY request number (PTY-27). The old tail was a
+     * ternary: Solaris (where TIOCSCTTY is 0x40006463, a different
+     * `_IO` lineage entirely) would have quietly issued the Linux or
+     * macOS number. Unmapped families throw.
+     *
+     * @throws PtyException for unmapped families
+     */
+    public static function cttyRequestFor(string $family): int
+    {
+        return match ($family) {
+            'Linux' => self::TIOCSCTTY_LINUX,
+            'Darwin' => self::TIOCSCTTY_DARWIN,
+            'BSD' => self::TIOCSCTTY_FREEBSD,
+            default => throw new PtyException(
+                "sugar-pty has no validated TIOCSCTTY request number for platform family '{$family}'",
+            ),
+        };
+    }
 
     /**
      * Claim the given file descriptor as the controlling terminal of
@@ -57,9 +86,7 @@ final class ControllingTerminal
             );
         }
 
-        $tioCSctty = PHP_OS_FAMILY === 'Darwin'
-            ? self::TIOCSCTTY_DARWIN
-            : self::TIOCSCTTY_LINUX;
+        $cttyRequest = self::cttyRequestFor(\PHP_OS_FAMILY);
 
         // Third arg is read by the kernel as unsigned long — NOT as a
         // dereferenced pointer. Passing PHP null through FFI void *
@@ -68,7 +95,7 @@ final class ControllingTerminal
         // session". Allocating an int and passing FFI::addr($int) with
         // $int=0 would pass a pointer-to-zero, which the kernel would
         // misinterpret. See [gotcha:ioctl-third-arg-ulong-not-pointer].
-        if ($libc->ioctl($fd, $tioCSctty, null) !== 0) {
+        if ($libc->ioctl($fd, $cttyRequest, null) !== 0) {
             throw new PtyException(
                 "ControllingTerminal::claim ioctl({$fd}, TIOCSCTTY, 0) failed",
             );

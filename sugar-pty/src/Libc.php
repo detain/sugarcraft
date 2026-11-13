@@ -10,8 +10,10 @@ namespace SugarCraft\Pty;
  * The cdef is loaded lazily on first {@see lib()} call and cached for
  * the lifetime of the process. Library lookup honours
  * `SUGARCRAFT_LIBC` (env override) before falling back to the
- * platform default — `libc.so.6` on Linux, `/usr/lib/libSystem.B.dylib`
- * on macOS.
+ * per-family default — `libc.so.6` on Linux, `/usr/lib/libSystem.B.dylib`
+ * on macOS, the first existing soname candidate on FreeBSD; families
+ * without a validated map (Solaris included) throw instead of
+ * inheriting the Linux name (PTY-27, see {@see libraryPathFor()}).
  *
  * SECURITY: `SUGARCRAFT_LIBC` feeds directly into `FFI::cdef($cdef, $lib)`,
  * which loads and RUNS native code from the named shared object — i.e. it
@@ -34,6 +36,17 @@ final class Libc
 
     /** Default macOS libc shared object. */
     public const DEFAULT_DARWIN = '/usr/lib/libSystem.B.dylib';
+
+    /**
+     * FreeBSD base-libc soname candidates, newest era first. The soname
+     * has tracked the major version (libc.so.7 through the 11.x-14.x
+     * era, libc.so.8 on 15+); none of these names exist on Linux, so
+     * the resolver picks the first real file and refuses to guess
+     * further (PTY-27).
+     *
+     * @var list<string>
+     */
+    public const FREEBSD_LIBRARY_CANDIDATES = ['/lib/libc.so.8', '/lib/libc.so.7'];
 
     /** Lazily-loaded FFI handle, shared per-process. */
     private static ?\FFI $ffi = null;
@@ -118,9 +131,51 @@ final class Libc
             return $override;
         }
 
-        return PHP_OS_FAMILY === 'Darwin'
-            ? self::DEFAULT_DARWIN
-            : self::DEFAULT_LINUX;
+        return self::libraryPathFor(\PHP_OS_FAMILY);
+    }
+
+    /**
+     * Per-family default shared object (PTY-27, sugar-pty-024). Before
+     * this the tail was a ternary: anything not literally "Darwin" got
+     * `libc.so.6` — a FreeBSD or Solaris host would fail to load with
+     * a message about a file that has never existed there, and the
+     * README's "best-effort" prose was the only thing telling the
+     * truth about it.
+     *
+     * Linux: `libc.so.6` (musl/Alpine needs the `SUGARCRAFT_LIBC`
+     * override). Darwin: the libSystem stub. FreeBSD: the first
+     * existing soname candidate. Every other family — Solaris
+     * included — throws instead of guessing: an unmapped family gets a
+     * loud refusal, never a Linux-shaped load attempt.
+     *
+     * @throws PtyException for unmapped families or an unfound FreeBSD soname
+     */
+    public static function libraryPathFor(string $family): string
+    {
+        return match ($family) {
+            'Linux' => self::DEFAULT_LINUX,
+            'Darwin' => self::DEFAULT_DARWIN,
+            'BSD' => self::resolveFreebsdLibrary(),
+            default => throw new PtyException(
+                "sugar-pty has no validated libc soname for platform family '{$family}'"
+                . ' (mapped: Linux, Darwin, FreeBSD; set SUGARCRAFT_LIBC if you know better)',
+            ),
+        };
+    }
+
+    private static function resolveFreebsdLibrary(): string
+    {
+        foreach (self::FREEBSD_LIBRARY_CANDIDATES as $candidate) {
+            if (\is_file($candidate)) {
+                return $candidate;
+            }
+        }
+
+        throw new PtyException(
+            'sugar-pty found none of the known FreeBSD libc sonames ('
+            . \implode(', ', self::FREEBSD_LIBRARY_CANDIDATES)
+            . '); set SUGARCRAFT_LIBC to the real one',
+        );
     }
 
     /**
@@ -212,12 +267,32 @@ CPROTO;
     /**
      * The platform's thread-local errno accessor symbol.
      *
-     * glibc and musl both export `__errno_location`; Darwin's libSystem
-     * exports `__error` instead (same `int *` contract).
+     * Linux (glibc and musl both) exports `__errno_location`; Darwin's
+     * libSystem and FreeBSD's libc export `__error` (same `int *`
+     * contract). PTY-27 (sugar-pty-025): the old ternary handed every
+     * non-Darwin family `__errno_location`, so a FreeBSD host would
+     * bind a symbol its libc does not export. Solaris uses `___errno`
+     * but stays unmapped — the load itself refuses first.
      */
     public static function errnoSymbol(): string
     {
-        return \PHP_OS_FAMILY === 'Darwin' ? '__error' : '__errno_location';
+        return self::errnoSymbolFor(\PHP_OS_FAMILY);
+    }
+
+    /**
+     * Pure errno-accessor map, testable for any family (PTY-27 seam).
+     *
+     * @throws PtyException for unmapped families
+     */
+    public static function errnoSymbolFor(string $family): string
+    {
+        return match ($family) {
+            'Linux' => '__errno_location',
+            'Darwin', 'BSD' => '__error',
+            default => throw new PtyException(
+                "sugar-pty has no validated errno accessor for platform family '{$family}'",
+            ),
+        };
     }
 
     /**

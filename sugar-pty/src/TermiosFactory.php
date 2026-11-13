@@ -48,16 +48,41 @@ final class TermiosFactory
     /**
      * Platform-specific `O_NOCTTY` flag for `posix_openpt()` / `open()`.
      *
-     * Linux: 0o400 (octal), macOS: 0x20000 (hex).
-     * This flag prevents the PTY from becoming the process's controlling
-     * terminal when `setsid()` + `TIOCSCTTY` are called explicitly via
+     * Per-family numbers come from {@see oNoCttyFor()}: Linux 0o400,
+     * macOS 0x20000, FreeBSD 0o200; unmapped families throw. This flag
+     * prevents the PTY from becoming the process's controlling terminal
+     * when `setsid()` + `TIOCSCTTY` are called explicitly via
      * `ControllingTerminal::claim()`.
      *
      * @see ControllingTerminal::claim()
+     * @see oNoCttyFor()
      */
     public static function oNoCtty(): int
     {
-        return \PHP_OS_FAMILY === 'Darwin' ? 0x20000 : 0o400;
+        return self::oNoCttyFor(\PHP_OS_FAMILY);
+    }
+
+    /**
+     * Per-family O_NOCTTY (PTY-27, sugar-pty-026). These numbers are
+     * NOT portable: Linux 0o400, FreeBSD 0o200 (it collides with
+     * nothing there), Darwin 0x20000, Solaris 0x10000. The old ternary
+     * gave every unmapped family the Linux octal — on a FreeBSD host
+     * 0o400 is O_NOFOLLOW, so the "prevent a stray ctty" flag would
+     * instead have silently changed symlink semantics on the PTY
+     * master open. Unmapped families now throw rather than mis-open.
+     *
+     * @throws PtyException for unmapped families
+     */
+    public static function oNoCttyFor(string $family): int
+    {
+        return match ($family) {
+            'Linux' => 0o400,
+            'Darwin' => 0x20000,
+            'BSD' => 0o200,
+            default => throw new PtyException(
+                "sugar-pty has no validated O_NOCTTY for platform family '{$family}'",
+            ),
+        };
     }
 
     /**
