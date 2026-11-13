@@ -76,6 +76,23 @@ jobs:
           # GH_REPO gives every gh call here its target explicitly.
           GH_REPO: detain/sugarcraft
 
+  channel-freshness:
+    name: 'Probe: published channel echoes repo bytes'
+    runs-on: ubuntu-latest
+    # candy-starter-001 (CS-01): the sync channel to sugarcraft/candy-starter,
+    # Packagist and the docs site went silent on 2026-11-03 and nobody on the
+    # repo side noticed — newcomers installed the stale public copy. This job
+    # measures the live surfaces against HEAD bytes on every push. It runs
+    # ADVISORY (--advisory prints FAIL, exits 0) while owner gate OG-1
+    # (republish current green bytes) is open, so the known-stalled channel
+    # does not red every unrelated push; the flip to fail-closed is to drop
+    # the flag in the same commit that clears OG-1. Independent of ci-gate:
+    # it measures, it does not publish.
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - name: Published-channel freshness probe (advisory until OG-1 lands)
+        run: php tools/check-published-channel.php --advisory
+
   sync-libs:
     name: Split-push affected libs to sugarcraft/<lib>
     runs-on: ubuntu-latest
