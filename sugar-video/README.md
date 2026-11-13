@@ -286,7 +286,8 @@ $player = Player::open('clip.mp4', cellsW: 80, cellsH: 24);
 
 **Host contract** — the caller that owns the loop is responsible for:
 
-- **Resize:** forward terminal resizes to the player as a `WindowSizeMsg`.
+- **Resize:** forward terminal resizes to the player as a
+  `SugarCraft\Core\Msg\WindowSizeMsg`.
   A player mounted in sugar-core's `Program` gets this forwarding for free —
   `Program` installs the `SIGWINCH` handler and dispatches the live size —
   which is why `Reel::play()` rescales without any wiring in the caller; only
@@ -306,8 +307,10 @@ $player = Player::open('clip.mp4', cellsW: 80, cellsH: 24);
   or `Ctrl-C` and each of those paths calls `Player::stop()` first; a host
   embedding the player may route different keys but must still call `stop()` on
   teardown so no `ffmpeg`/audio child is orphaned.
-- **Tick:** the player self-schedules with `Cmd::tick()` while playing; do not
-  poll it from a separate timer. `toPlayer()` returns it **paused** — start it
+- **Tick:** the player self-schedules with `Cmd::tick()`
+  (`SugarCraft\Core\Cmd`) while playing; when the timer fires the host's loop
+  feeds the player a `SugarCraft\Video\Msg\TickMsg` through `update()` — do
+  not poll it from a separate timer. `toPlayer()` returns it **paused** — start it
   with `$player = $player->play()` (re-bind: `play()` returns a new Player; the
   statement form would leave the mounted model paused while the shared audio
   companion resumes) or send `Space` through `update()`.
@@ -583,13 +586,21 @@ three terminal-video projects, credited here:
 The rendering stack is reused from the SugarCraft ecosystem rather than
 reinvented:
 
-- [sugar-image](../sugar-image) — image → cell renderers
-- [sugar-animation](../sugar-animation) — downsampling / dithering
+- [sugar-image](../sugar-image) — image → cell renderers and the dithering
+  they apply
+- [sugar-animation](../sugar-animation) — the pure-PHP GIF decoder that
+  `GifDecoder` wraps (frame downsampling is NOT its doing: ffmpeg pre-scales
+  video frames, and text-mode packing goes through `Player::areaAverageRgb()`)
 - [sugar-colorprofile](../sugar-colorprofile) — color mapping
 - [sugar-core](../sugar-core) — Model–Update–View runtime, frame pacing, and
   the row-diffing renderer
 - [sugar-cellbuffer](../sugar-cellbuffer) — the cell grid the text-mode
   renderer assembles each frame onto
+
+**Where this fits.** The known in-ecosystem dependent is candy-code, which
+mounts the player as its video screen. There is no sibling video library to
+choose instead: for still images use sugar-image, for GIF primitives without
+playback use sugar-animation.
 
 **Sixel encoding is pure PHP (no external accelerator).** `sixel` mode
 encodes through sugar-image's `SixelRenderer`. The former preference for an
