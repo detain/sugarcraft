@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace SugarCraft\Files;
 
+use SugarCraft\Core\I18n\T;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Style\Border;
 use SugarCraft\Style\Layout;
 use SugarCraft\Style\Style;
+use SugarCraft\Files\Support\Bidi;
 use SugarCraft\Files\Support\GlyphSet;
 
 /**
@@ -19,12 +21,15 @@ final class Renderer
 {
     public static function render(Manager $m): string
     {
-        // CF-35 (closes 048): one tier decision per frame; every chrome
+        // CF-35: one tier decision per frame; every chrome
         // glyph below comes from it. The unicode tier reproduces the
         // historical bytes exactly.
         $glyphs = GlyphSet::current();
+        // CF-47 (closes 094): RTL catalogues need their chrome joins pinned;
+        // LTR locales render byte-identically (Bidi is a pure no-op there).
+        $rtl = Bidi::isRtl(T::locale());
         $active = self::activeIdx($m);
-        $tabBar = self::renderTabBar($m, $glyphs);
+        $tabBar = self::renderTabBar($m, $glyphs, $rtl);
         $search = self::renderSearch($m);
 
         // CF-02: the entry list is windowed to the live height. Frame
@@ -53,7 +58,12 @@ final class Renderer
         // CF-35: key-help (pure catalogue chrome) rides the tier; the live
         // status does NOT — it interpolates {name}/{dir} filesystem data,
         // and chrome tiers never rewrite user bytes (same law as pane rows).
-        $status = $focus . ' ' . $glyphs->sep . ' ' . ($m->status === '' ? self::keyHelp($m->termCols, Width::of($focus), $glyphs) : $m->status);
+        // CF-47: the join separator is bidi-pinned for RTL locales; the
+        // interpolated live status keeps its own data bytes untouched.
+        $rest = $m->status === ''
+            ? self::keyHelp($m->termCols, Width::of($focus), $glyphs, $rtl)
+            : $m->status;
+        $status = $focus . ' ' . Bidi::pinSeparator($glyphs->sep, $rtl) . ' ' . $rest;
         $frame = $search . $tabBar . $body . "\n" . self::statusBar($status);
         if ($m->termCols > 0) {
             // CF-01 belt: once a live width is known, no composed line may
@@ -100,7 +110,7 @@ final class Renderer
         return (int) (($m->tabs[$m->tabIndex]['activeIdx'] ?? 0));
     }
 
-    private static function renderTabBar(Manager $m, GlyphSet $glyphs): string
+    private static function renderTabBar(Manager $m, GlyphSet $glyphs, bool $rtl): string
     {
         if ($m->tabs === [] || count($m->tabs) <= 1) {
             return '';
@@ -111,7 +121,10 @@ final class Renderer
             $label = self::truncate(Entry::sanitizeName($tab['left']->cwd), 20, $glyphs);
             $prefix = $i === $m->tabIndex ? '[' : ' ';
             $suffix = $i === $m->tabIndex ? ']' : ' ';
-            $parts[] = "{$prefix}{$label}{$suffix}";
+            // CF-47: each tab cell is one bidi island (CF-02's Latin paths
+            // inside bracket neutrals must not drift across neighbours in
+            // RTL paragraphs).
+            $parts[] = Bidi::isolate("{$prefix}{$label}{$suffix}", $rtl);
         }
         return implode(' ', $parts) . "\n";
     }
@@ -235,17 +248,28 @@ final class Renderer
      * minimal (open/quit/search). With no live width the historical full
      * line is preserved (unit shape, pre-WindowSizeMsg frames).
      *
-     * @param int $termCols    live terminal width, 0 when unknown
-     * @param int $focusCells  cells the focus prefix + separator already took
+     * CF-47: the tiers are joined chord rosters — pure chrome — so their
+     * internal ` sep ` joins are bidi-pinned for RTL locales BEFORE the
+     * tier budget measures them (pins count one cell each in the core
+     * width math, so a pinned roster can fall to a narrower tier earlier).
+     *
+     * @param int  $termCols    live terminal width, 0 when unknown
+     * @param int  $focusCells  cells the focus prefix + separator already took
+     * @param bool $rtl         active catalogue is a right-to-left language
      */
-    private static function keyHelp(int $termCols, int $focusCells, GlyphSet $glyphs): string
+    private static function keyHelp(int $termCols, int $focusCells, GlyphSet $glyphs, bool $rtl): string
     {
-        $default = $glyphs->substitute(Lang::t('keyhelp.default'));
+        $default = Bidi::pinRuns($glyphs->substitute(Lang::t('keyhelp.default')), $glyphs->sep, $rtl);
         if ($termCols <= 0) {
             return $default;
         }
         $budget = $termCols - $focusCells - 3;
-        foreach ([$default, $glyphs->substitute(Lang::t('keyhelp.terse')), $glyphs->substitute(Lang::t('keyhelp.minimal'))] as $tier) {
+        // Literal key strings per tier — the LangCoverageTest no-unused
+        // guard greps for them (even in comments), so tiers must not be
+        // looped over key names held in variables.
+        $terse = Bidi::pinRuns($glyphs->substitute(Lang::t('keyhelp.terse')), $glyphs->sep, $rtl);
+        $minimal = Bidi::pinRuns($glyphs->substitute(Lang::t('keyhelp.minimal')), $glyphs->sep, $rtl);
+        foreach ([$default, $terse, $minimal] as $tier) {
             if (Width::of($tier) <= $budget) {
                 return $tier;
             }
@@ -253,7 +277,7 @@ final class Renderer
 
         // Even minimal overflows (comically narrow terminal): the frame
         // clamp in render() cuts the tail, status stays a single row.
-        return $glyphs->substitute(Lang::t('keyhelp.minimal'));
+        return $minimal;
     }
 
     private static function renderSearch(Manager $m): string
