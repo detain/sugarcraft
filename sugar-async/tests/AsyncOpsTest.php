@@ -752,6 +752,55 @@ final class AsyncOpsTest extends TestCase
         $this->assertSame([0.01, 0.02], $delays, 'the base backoff doubles per stage (un-jittered schedule)');
     }
 
+    public function testRetryBackoffPlateausAtTheCap(): void
+    {
+        // An 80-attempt failure storm on an immediate-firing mock loop: the
+        // 60 s ladder (60, 120, 240, ...) must never schedule past
+        // MAX_BACKOFF_SECONDS — a beyond-horizon timer is a silently-stuck
+        // cycle, in exactly the outage context retry runs in. onRetry must
+        // see the capped seconds, not the fantasy exponent.
+        $delays = [];
+        $reported = [];
+        $loop = $this->createMock(\React\EventLoop\LoopInterface::class);
+        $loop->method('addTimer')->willReturnCallback(
+            function (float $interval, callable $cb) use (&$delays): \React\EventLoop\TimerInterface {
+                $delays[] = $interval;
+                $cb(); // Invoke immediately — no real time passes.
+                return $this->createStub(\React\EventLoop\TimerInterface::class);
+            },
+        );
+
+        $attempts = 0;
+        $error = null;
+        AsyncOps::retry(
+            function () use (&$attempts): PromiseInterface {
+                $attempts++;
+                return \React\Promise\reject(new \RuntimeException("fail $attempts"));
+            },
+            attempts: 80,
+            baseBackoffSeconds: 60.0,
+            loop: $loop,
+            onRetry: static function (int $attempt, float $delay) use (&$reported): void {
+                $reported[] = $delay;
+            },
+        )->then(null, static function (\Throwable $e) use (&$error): void {
+            $error = $e;
+        });
+
+        $this->assertSame(80, $attempts);
+        $this->assertInstanceOf(\RuntimeException::class, $error);
+        $this->assertCount(79, $delays);
+        foreach ($delays as $delay) {
+            $this->assertLessThanOrEqual(AsyncOps::MAX_BACKOFF_SECONDS, $delay);
+        }
+        // The historical doubling survives up to the cap, then stays flat.
+        $this->assertSame([60.0, 120.0, 240.0, 480.0, 960.0, 1920.0], \array_slice($delays, 0, 6));
+        $this->assertSame(AsyncOps::MAX_BACKOFF_SECONDS, $delays[6]);
+        $this->assertSame(AsyncOps::MAX_BACKOFF_SECONDS, $delays[78]);
+        // The operator's view matches the armed schedule (reported = clamped).
+        $this->assertSame($delays, $reported);
+    }
+
     /**
      * Drives the defensive catch around the recursive retryAttempt() call in
      * the backoff timer callback: an operation that returns a non-promise

@@ -33,6 +33,18 @@ use function React\Promise\resolve;
 final class AsyncOps
 {
     /**
+     * Hard ceiling on a single retry backoff delay (seconds).
+     *
+     * The 2^n ladder plateaus here instead of growing unbounded: past this
+     * horizon a timer is no longer a long wait but a silently-stuck cycle
+     * (StreamSelectLoop clamps one tick to ~2.56 h; ext-uv casts float
+     * intervals toward ints), and the doubling itself outlives every real
+     * outage. onRetry() reports the capped value, so an operator sees the
+     * plateau rather than a fantasy exponent.
+     */
+    public const MAX_BACKOFF_SECONDS = 3600.0;
+
+    /**
      * Sink for swallowed-failure notices; null means the PHP default.
      *
      * @var (callable(string): void)|null
@@ -511,7 +523,10 @@ final class AsyncOps
      * fleet of clients retrying in lockstep produces a thundering herd. Pass
      * $maxTotalSeconds to cap total elapsed time across attempts, and $jitter
      * to randomize each backoff. Both default to the historical behavior
-     * (no cap, no jitter).
+     * (no cap, no jitter). The ladder itself plateaus at
+     * {@see self::MAX_BACKOFF_SECONDS}: a delay past that ceiling is clamped
+     * to it (and reported to $onRetry clamped), so the cycle can never arm a
+     * beyond-the-horizon forever-timer.
      *
      * @param callable(): PromiseInterface $operation  The operation to retry
      * @param int $attempts  Maximum number of attempts (must be >= 1)
@@ -729,6 +744,13 @@ final class AsyncOps
                 // never armed past the cutoff with the stop checked only after
                 // the failure that the overshoot caused.
                 $delay = self::jitteredBackoff($backoff, $jitter);
+                if ($delay > self::MAX_BACKOFF_SECONDS) {
+                    // Ladder plateau (see MAX_BACKOFF_SECONDS): clamp before
+                    // the budget so the reported and armed delay carry both
+                    // bounds — the doubling stops at the horizon, the cycle
+                    // still ends via the attempt cap or $maxTotalSeconds.
+                    $delay = self::MAX_BACKOFF_SECONDS;
+                }
                 if ($remainingBudget !== null && $delay > $remainingBudget) {
                     $delay = $remainingBudget;
                 }
