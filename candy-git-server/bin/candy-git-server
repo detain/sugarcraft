@@ -7,7 +7,7 @@ declare(strict_types=1);
  * CandyGitServer — Self-hostable Git Server
  *
  * Usage:
- *   candy-git-server serve [--config path]        Refuses: server assembly not implemented
+ *   candy-git-server serve [--config path]        Refuses: ssh/git listeners not wired (use serve --http)
  *   candy-git-server serve --http --repo-root DIR  Smart-HTTP clone/fetch/push + LFS listener (--http-port N [--http-host H] [--config path])
  *   candy-git-server init                          Initialize a new data directory
  *   candy-git-server user add <username>           Add a user
@@ -285,6 +285,19 @@ function cmdServeHttp(array $args): int
         \fwrite(\STDERR, 'candy-git-server: ' . Lang::t('cli.warn_tmp_data_path', ['path' => $config->dataPath]) . "\n");
     }
 
+    // 108: stats history is volatile unless the operator parks a persist
+    // file. When configured, the shared Stats instance hydrates from it
+    // (monotonic merge on every flush, so restarts and per-worker
+    // counters both move history forward only). The setInstance shape
+    // is the documented injection channel this lib already shares with
+    // AccessControl.
+    if ($config->statsPersistPath !== '') {
+        \SugarCraft\GitServer\Stats::setInstance(new \SugarCraft\GitServer\Stats(
+            $config->statsPersistPath,
+            $config->statsFlushIntervalSeconds,
+        ));
+    }
+
     // Authz wiring: the anonymous-read lever comes from config (default
     // OFF); accounts come from the persisted store so `user add` and
     // `user key` actually reach the wire. A corrupt store refuses the
@@ -426,6 +439,9 @@ function cmdServeHttp(array $args): int
     if (\function_exists('pcntl_signal')) {
         $stop = static function () use ($listener): void {
             $listener->stop();
+            // 108: the last few seconds of counters are the cheapest
+            // history to keep — one merge-write before the loop exits.
+            \SugarCraft\GitServer\Stats::instance()->flushNow();
             \React\EventLoop\Loop::stop();
         };
         \pcntl_signal(2, $stop);

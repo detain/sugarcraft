@@ -257,6 +257,8 @@ nothing.
 | `lfs.ssh_enabled` | yes | **dead** |
 | `jobs.mirror_pull` | yes | `Jobs\MirrorPuller` schedule |
 | `stats.listen_addr` | yes | `StatsServer` bind (hostless `:PORT` resolves to loopback) |
+| `stats.persist_path` | yes | opt-in counter history file; empty (default) = volatile, zeroed on every restart |
+| `stats.flush_interval_seconds` | yes | cadence of the persist flush, integer 1-86400 (default 60); `'30s'`, `true`, `0`, `90000` are refused |
 | `db` | **no** | `Config` has no database concept; a `db:` block in the YAML is silently ignored |
 
 ```yaml
@@ -595,6 +597,21 @@ server itself runs only on a ReactPHP loop — there is deliberately no
 blocking mode, since a blocking stats listener would starve the servers
 it reports on; hosts running only the blocking `GitDaemon::serve()`
 loop simply don't get a stats endpoint.
+
+### Stats persistence
+
+By default counters are volatile: every restart zeroes them. Set
+`stats.persist_path` to keep history across restarts. When set, `serve
+--http` hydrates the shared `Stats` from the file at boot and flushes
+every `stats.flush_interval_seconds` (the interval is anchored at boot,
+so nothing is written until a full interval has passed), plus one last
+merge on SIGINT/SIGTERM before the loop exits. Every write is a
+per-counter **monotonic merge**: the file's higher value wins and pulls
+the live counter up, so neither a restart nor a second worker process
+flushing to the same file can move history backwards. Writes are atomic
+(`AtomicWriter`); a failed flush is dropped rather than crashing the
+server, and a corrupt or foreign file floors at zero and heals on the
+first write. Snapshot keys are unchanged and `uptime` stays per-process.
 
 ## OSC 52 Clipboard
 
