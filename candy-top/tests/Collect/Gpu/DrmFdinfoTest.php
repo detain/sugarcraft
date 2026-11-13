@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Top\Tests\Collect\Gpu;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Top\Collect\Gpu\DrmClient;
+use SugarCraft\Top\Collect\Gpu\DrmScan;
 use SugarCraft\Top\Collect\Gpu\DrmFdinfo;
 use SugarCraft\Top\Collect\Sentinel;
 
@@ -101,6 +103,56 @@ final class DrmFdinfoTest extends TestCase
         $this->assertSame(0.0, $rows[1]->utilization, 'gfx counter flat');
         $this->assertSame(6 * 1048576, $rows[1]->usedMemory, 'drm-resident-vram wins over drm-total');
         $this->assertSame([], $scan->processes(['0000:00:02.0' => 0]), 'only the requested devices');
+    }
+
+    public function testProcessRowsFoldMemoryPerPidAndDeviceAndCapBusiestAt100(): void
+    {
+        $a = '0000:03:00.0';
+        $b = '0000:04:00.0';
+        // Two rated clients of one process on one device: engine rates sum
+        // before the 100 % cap (btop's max_util over summed engine classes)
+        // and device-local memory aggregates across them. An unrated client
+        // (UNMEASURED_INT memory) rides along absorbed: it neither adds to
+        // the sum nor poisons it toward the sentinel.
+        $scan = new DrmScan([
+            new DrmClient(4242, $a, '7', 'amdgpu', ['compute' => 60.0, 'gfx' => 10.0], 100, true),
+            new DrmClient(4242, $a, '8', 'amdgpu', ['compute' => 60.0], 200, true),
+            new DrmClient(4242, $a, '9', 'amdgpu', [], Sentinel::UNMEASURED_INT, false),
+            new DrmClient(4242, $b, '10', 'amdgpu', ['gfx' => 5.0], 50, true),
+            new DrmClient(99, $a, '11', 'i915', [], Sentinel::UNMEASURED_INT, false),
+        ], true);
+        $rows = $scan->processes([$a => 0, $b => 1]);
+
+        $this->assertCount(3, $rows, 'one row per (pid, device)');
+        $this->assertSame([99, 4242, 4242], array_map(static fn ($r): int => $r->pid, $rows), 'sorted by pid, then index');
+        $busy = $rows[1];
+        $this->assertSame(0, $busy->gpuIndex);
+        $this->assertSame(300, $busy->usedMemory, '100 + 200, the unmeasured client absorbed');
+        $this->assertEqualsWithDelta(100.0, $busy->utilization, 1e-9, '60 + 60 compute sums to 120 then caps at 100');
+        $this->assertSame(50, $rows[2]->usedMemory, 'the other device keeps its own row');
+        $this->assertEqualsWithDelta(5.0, $rows[2]->utilization, 1e-9);
+        $ghost = $rows[0];
+        $this->assertSame(Sentinel::UNMEASURED_INT, $ghost->usedMemory, 'every client unmeasured: the row reports UNMEASURED');
+        $this->assertSame(Sentinel::UNMEASURED, $ghost->utilization, 'no measured client: no rate to fold');
+    }
+
+    public function testBusiestEngineWinsAndMeasuredWithoutEnginesReadsIdle(): void
+    {
+        $pdev = '0000:03:00.0';
+        // Per-engine sums race for the busiest class: copy totals 90 against
+        // compute's 80, so the row reads 90 — under the cap, un-capped.
+        $scan = new DrmScan([
+            new DrmClient(7, $pdev, '1', 'amdgpu', ['compute' => 50.0, 'copy' => 40.0], 0, true),
+            new DrmClient(7, $pdev, '2', 'amdgpu', ['compute' => 30.0, 'copy' => 50.0], 0, true),
+        ], true);
+        $rows = $scan->processes([$pdev => 0]);
+        $this->assertEqualsWithDelta(90.0, $rows[0]->utilization, 1e-9, 'busiest summed engine, not the sum of sums');
+        $this->assertSame(0, $rows[0]->usedMemory, 'zero memory is a measurement, not the sentinel');
+
+        // A rated client with no engine keys contributes an empty engine
+        // class list: the fold reads exact idle rather than UNMEASURED.
+        $idle = new DrmScan([new DrmClient(7, $pdev, '1', 'amdgpu', [], 1, true)], true);
+        $this->assertEqualsWithDelta(0.0, $idle->utilization($pdev), 1e-9);
     }
 
     public function testSharedClientCountsOnceAcrossFdsAndProcesses(): void
