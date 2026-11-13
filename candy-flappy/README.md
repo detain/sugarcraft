@@ -256,6 +256,12 @@ and key bindings are NOT configurable. The leaderboard and the difficulty
 curve are one coherent game; knobs would let a session claim scores the
 defaults could not produce.
 
+Scroll speed and pipe-spawn cadence are frozen by that ruling — classic
+Flappy parity: pipes always slide exactly one cell per tick and always join
+every `PIPE_EVERY` ticks. The single progressive-difficulty lever is the
+shrinking gap; the score-scaled speed and spacing multipliers research §5.3
+proposed stay deferred (see its shipped/frozen stamp).
+
 ## High scores, config, and environment
 
 On any finish — crash, `q` quit, or `r` restart — a score that earns a slot
