@@ -27,7 +27,7 @@ final class PositionTest extends TestCase
 
     public function testYOffsetCenterReturnsFlooredHalf(): void
     {
-        // (20 - 5) / 2 = 7.5 → floor = 7
+        // (20 - 5) / 2 = 7.5 → truncated = 7
         $this->assertSame(7, Position::CENTER->yOffset(5, 20));
         $this->assertSame(7, Position::LEFT->yOffset(5, 20));
         $this->assertSame(7, Position::RIGHT->yOffset(5, 20));
@@ -63,7 +63,7 @@ final class PositionTest extends TestCase
 
     public function testXOffsetCenterReturnsFlooredHalf(): void
     {
-        // (20 - 5) / 2 = 7.5 → floor = 7
+        // (20 - 5) / 2 = 7.5 → truncated = 7
         $this->assertSame(7, Position::CENTER->xOffset(5, 20));
         $this->assertSame(7, Position::TOP->xOffset(5, 20));
         $this->assertSame(7, Position::BOTTOM->xOffset(5, 20));
@@ -103,5 +103,16 @@ final class PositionTest extends TestCase
             $this->assertIsInt($case->yOffset(5, 20));
             $this->assertIsInt($case->xOffset(5, 20));
         }
+    }
+
+    public function testCenterTruncatesTowardZeroForNegativeOddDifference(): void
+    {
+        // upstream Go integer division truncates: (10 - 11) / 2 = 0, not floor's -1
+        $this->assertSame(0, Position::CENTER->xOffset(11, 10));
+        $this->assertSame(0, Position::CENTER->yOffset(11, 10));
+        $this->assertSame(-1, Position::CENTER->xOffset(12, 10));
+        $this->assertSame(-2, Position::CENTER->yOffset(14, 10));
+        $this->assertSame(-1, Position::TOP->xOffset(14, 11));
+        $this->assertSame(0, Position::BOTTOM->xOffset(5, 4));
     }
 }

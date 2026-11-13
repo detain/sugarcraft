@@ -118,14 +118,14 @@ final class DiffCellModelTest extends TestCase
 
     public function testNegativeXClipsForegroundHead(): void
     {
-        // 7-wide fg centered on a 4-wide bg ⇒ x = floor((4-7)/2) = -2.
+        // 7-wide fg centered on a 4-wide bg ⇒ x = intdiv(4-7, 2) = -1 (truncates toward zero, upstream parity).
         $out = Veil::new()->composite("1234567", "abcd\nefgh", Position::TOP, Position::CENTER);
         $lines = \explode("\n", $out);
 
         foreach ($lines as $line) {
             $this->assertLessThanOrEqual(4, Width::string($line), 'no row may exceed the background width');
         }
-        $this->assertSame("3456", $lines[0], 'the off-screen head must be clipped, tail never duplicated');
+        $this->assertSame("2345", $lines[0], 'the off-screen head must be clipped, tail never duplicated');
         $this->assertSame("efgh", $lines[1]);
     }
 

@@ -809,7 +809,7 @@ Enum of anchors: `TOP`, `RIGHT`, `BOTTOM`, `LEFT`, `CENTER`,
 | Method | Description |
 |---|---|
 | `yOffset(int $fgHeight, int $bgHeight): int` | vertical base offset of an overlay of `$fgHeight` rows inside `$bgHeight` rows (corner cases centre on the other axis) |
-| `xOffset(int $fgWidth, int $bgWidth): int` | horizontal base offset (negative when the overlay is wider — ragged blocks fold at the clipped extent) |
+| `xOffset(int $fgWidth, int $bgWidth): int` | horizontal base offset (negative when the overlay is wider; centering truncates toward zero like upstream — ragged blocks fold at the clipped extent) |
 
 ### RenderSession
 

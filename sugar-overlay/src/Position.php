@@ -35,7 +35,9 @@ enum Position
 
     /**
      * Resolve the vertical cell offset (rows from the top) for this position
-     * given the foreground and background heights.
+     * given the foreground and background heights. Centering truncates toward
+     * zero (upstream Go integer division); the result is deliberately unclamped
+     * (SO-11), so an overlay larger than the backdrop yields a negative offset.
      */
     public function yOffset(int $fgHeight, int $bgHeight): int
     {
@@ -48,7 +50,7 @@ enum Position
             self::BOTTOM_LEFT     => $bgHeight - $fgHeight,
             self::CENTER,
             self::LEFT,
-            self::RIGHT           => (int) \floor(($bgHeight - $fgHeight) / 2),
+            self::RIGHT           => intdiv($bgHeight - $fgHeight, 2),
         };
     }
 
@@ -67,7 +69,7 @@ enum Position
             self::BOTTOM_RIGHT    => $bgWidth - $fgWidth,
             self::CENTER,
             self::TOP,
-            self::BOTTOM          => (int) \floor(($bgWidth - $fgWidth) / 2),
+            self::BOTTOM          => intdiv($bgWidth - $fgWidth, 2),
         };
     }
 }
