@@ -16,7 +16,7 @@ use SugarCraft\Panels\Tests\Support\ReadsFrames;
 
 /**
  * Load-bearing pins for the distribute()/distributeFlex() → sugar-constraints
- * delegation (plan_missing.md W12 / sugar-constraints #1372 + #1386).
+ * delegation (sugar-constraints #1372 + #1386).
  *
  * BOTH sugar-panels distribution paths now delegate to sugar-constraints (fork-b dedup
  * complete): distributeFlex() maps each child to a Constraint (fixed → Length,
