@@ -272,12 +272,16 @@ final class TerminalPostureTest extends TestCase
         // cannot fit (a seven-digit score eating the budget), the hint is
         // OMITTED whole, never re-joined and re-clipped mid-word. The old
         // behaviour leaked exactly this: '💥 splat — r retry · q q'.
+        // flappy-36 rebalanced this budget: the shorter 'NEW BEST' noun and
+        // the longer 'restart' verb nearly cancelled, leaving just enough
+        // room for the floor tier at the old fixture — the best now carries
+        // ten digits so the omit branch is genuinely exercised again.
         $g = new Game(
             bird: $this->sized(62, 24)->bird,
             pipes: [],
             score: 9999999,
             crashed: true,
-            highScores: [9999999],
+            highScores: [9999999999],
             newRecord: true,
             configDir: $this->hermeticConfigDir(),
         );

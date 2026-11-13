@@ -1416,13 +1416,14 @@ final class GameTest extends TestCase
         $this->assertStringContainsString('best: 42', $g->view());
     }
 
-    public function testCrashCopySaysTryAgainNotFlapAgain(): void
+    public function testCrashCopySaysRestartNotFlapAgain(): void
     {
-        // M24: 'r' restarts, it does not flap — the copy must match the key.
+        // M24 (verb wording unified by flappy-36): 'r' restarts, it does
+        // not flap — the copy must match the key.
         $g = Game::start(static fn(int $_max): int => 0, $this->hermeticConfigDir())->tickN(80);
         $this->assertTrue($g->crashed);
         $view = $g->view();
-        $this->assertStringContainsString('press r to try again', $view);
+        $this->assertStringContainsString('press r to restart', $view);
         $this->assertStringNotContainsString('flap again', $view);
     }
 

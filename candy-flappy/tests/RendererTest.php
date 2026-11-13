@@ -89,13 +89,13 @@ final class RendererTest extends TestCase
             newRecord: true,
         );
         $out = Renderer::render($withScore);
-        $this->assertStringContainsString('NEW HIGH SCORE', $out);
+        $this->assertStringContainsString('NEW BEST', $out);
         $this->assertStringContainsString('🏆', $out);
     }
 
     public function testRenderShowsBestLineWhenNotARecord(): void
     {
-        // Crashed with score below existing best — shows "best:" not "NEW HIGH SCORE".
+        // Crashed with score below existing best — shows "best:" not "NEW BEST".
         $g = new Game(
             bird:  $this->game()->bird,
             pipes: [],
@@ -106,7 +106,7 @@ final class RendererTest extends TestCase
         );
         $out = Renderer::render($g);
         $this->assertStringContainsString('best:', $out);
-        $this->assertStringNotContainsString('NEW HIGH SCORE', $out);
+        $this->assertStringNotContainsString('NEW BEST', $out);
     }
 
     public function testRenderTieDoesNotShowNewRecord(): void
@@ -122,7 +122,7 @@ final class RendererTest extends TestCase
             newRecord: false,
         );
         $out = Renderer::render($g);
-        $this->assertStringNotContainsString('NEW HIGH SCORE', $out);
+        $this->assertStringNotContainsString('NEW BEST', $out);
         $this->assertStringContainsString('best:', $out);
     }
 
@@ -137,7 +137,7 @@ final class RendererTest extends TestCase
     {
         $cases = [
             [true, 'space/⏎/↑/w flap · r restart · q quit', 'space flap · q quit'],
-            [false, 'press space/⏎/↑/w to start · r restart · q quit', 'space to start · q quit'],
+            [false, 'press space/⏎/↑/w to start · q quit', 'space to start · q quit'],
         ];
         foreach ($cases as [$started, $full, $short]) {
             for ($cols = Game::MIN_COLS; $cols <= Game::MIN_COLS + 19; $cols++) {
@@ -184,7 +184,7 @@ final class RendererTest extends TestCase
             $status = $rows[count($rows) - 2];
             $this->assertLessThanOrEqual($cols, Width::of($status), "crash record row overran {$cols} cols");
             $plain = (string) preg_replace('/\e\[[0-9;]*m/', '', $status);
-            $this->assertStringContainsString('💥 splat — press r to try again, q to quit', $plain);
+            $this->assertStringContainsString('💥 splat — press r to restart · q to quit', $plain);
         }
     }
 
