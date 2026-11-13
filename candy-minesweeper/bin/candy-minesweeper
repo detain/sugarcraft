@@ -115,7 +115,8 @@ foreach (\SugarCraft\Core\Util\LegacyEnv::import([
 // launch was classified by TERM alone. The deeper in-session renegotiation
 // via ColorProfileMsg is a separate seam (the Model discards that message
 // today).
-$profile = ColorProfile::detect(null, STDOUT);
+// CP-22: detectTerminal() keeps TERM=dumb => NoTty (the chain says Ascii).
+$profile = ColorProfile::detectTerminal(null, STDOUT);
 if ($profile === ColorProfile::Ascii || $profile === ColorProfile::NoTty) {
     Style::setDefaultProfile($profile);
 }

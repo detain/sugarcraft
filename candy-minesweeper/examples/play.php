@@ -22,7 +22,7 @@ use SugarCraft\Style\Style;
 
 T::setLocale(T::detect());
 
-$profile = ColorProfile::detect(null, STDOUT);
+$profile = ColorProfile::detectTerminal(null, STDOUT);
 if ($profile === ColorProfile::Ascii || $profile === ColorProfile::NoTty) {
     Style::setDefaultProfile($profile);
 }

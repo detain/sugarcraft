@@ -155,6 +155,31 @@ enum ColorProfile: int
         return self::Ascii;
     }
 
+    /**
+     * {@see detect()} plus the dumb-terminal full-screen veto.
+     *
+     * CP-22 moved the env ladder into sugar-colorprofile's chain, which
+     * answers `TERM=dumb` as `Ascii` (a colour refusal) where the legacy
+     * ladder answered `NoTty`. Apps that gate the alt screen, mouse and mode
+     * switches on `NoTty` ("this device cannot honor addressing") must ask
+     * THIS method: it maps an unforced dumb terminal back to `NoTty` whichever
+     * ladder answered, so the veto does not depend on which siblings happen
+     * to be installed. A force variable lifts the answer above `Ascii` and is
+     * left alone, exactly as in the legacy ladder.
+     *
+     * @param array<string,string>|null $env
+     * @param resource|null             $stdout
+     */
+    public static function detectTerminal(?array $env = null, $stdout = null): self
+    {
+        $env ??= self::defaultEnv();
+        $profile = self::detect($env, $stdout);
+        if ($profile === self::Ascii && strtolower($env['TERM'] ?? '') === 'dumb') {
+            return self::NoTty;
+        }
+        return $profile;
+    }
+
     public function supportsAnsi(): bool
     {
         return $this->value >= self::Ansi->value;

@@ -35,7 +35,7 @@ final class NoColorTest extends TestCase
         // tolerates. STDOUT is passed so detect() can see a pipe/redirect
         // (candy-minesweeper-002): without the handle its isatty rung never
         // runs and a redirected launch was classified by TERM alone.
-        $this->assertStringContainsString('ColorProfile::detect(null, STDOUT)', $source,
+        $this->assertStringContainsString('ColorProfile::detectTerminal(null, STDOUT)', $source,
             'the boot path must consult sugar-core ColorProfile with the stdout handle');
         $this->assertStringContainsString('Style::setDefaultProfile($profile)', $source,
             'a downgrade answer must arm the process-global style profile');
@@ -52,7 +52,7 @@ final class NoColorTest extends TestCase
             'NO_COLOR is the no-color.org ask: colour off, escapes kept');
         $this->assertSame(ColorProfile::Ascii, ColorProfile::detect(['CLICOLOR' => '0']),
             'the BSD-family opt-out means the same');
-        $this->assertSame(ColorProfile::NoTty, ColorProfile::detect(['TERM' => 'dumb']),
+        $this->assertSame(ColorProfile::NoTty, ColorProfile::detectTerminal(['TERM' => 'dumb']),
             'a dumb terminal gets no escapes at all');
     }
 

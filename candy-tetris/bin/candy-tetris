@@ -164,7 +164,8 @@ $game = match ($mode) {
 // the alt-screen and full frames into the file. ColorProfile::detect() also
 // folds NO_COLOR/CLICOLOR into Ascii, which Program delivers to the model as
 // ColorProfileMsg so the view drops every escape as well.
-$profile = ColorProfile::detect(null, STDOUT);
+// CP-22: detectTerminal() keeps TERM=dumb => NoTty (the chain says Ascii).
+$profile = ColorProfile::detectTerminal(null, STDOUT);
 
 // A game nobody can see or steer is refused before the Program starts,
 // with plain text on stderr and exit 1. The loop's gravity timer never lets

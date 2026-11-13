@@ -194,13 +194,9 @@ if ($legacyConfigBase !== '') {
     }
 }
 
-$profile = ColorProfile::detect(null, STDOUT);
-// CP-22: the delegated chain answers TERM=dumb as Ascii (colour refusal), not
-// NoTty. The no-alt-screen / refusal-frame contract is a capability fact, so
-// read TERM itself; a force rung lifts the answer above Ascii and still plays.
-if ($profile === ColorProfile::Ascii && getenv('TERM') === 'dumb') {
-    $profile = ColorProfile::NoTty;
-}
+// CP-22: detectTerminal() keeps TERM=dumb on the NoTty refusal posture (the
+// chain alone answers Ascii); a force rung still lifts it and plays.
+$profile = ColorProfile::detectTerminal(null, STDOUT);
 
 // flappy-66 (finding -039): Game::start() fail-closes with a
 // RuntimeException when no config base resolves at all ($HOME and
