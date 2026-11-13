@@ -1785,6 +1785,43 @@ final class ModelTest extends TestCase
     }
 
     /**
+     * treelist-002: a custom gutter whose variants are wider than the stock
+     * single-cell separators must still keep every emitted row inside the
+     * viewport — the reservation now covers max over firstSep/separator/
+     * lastSep/separatorWrap and max(currentMarker, emptyMarker), so the
+     * content budget shrinks to pay for the widest thing prefix() can emit.
+     */
+    public function testMultiCellGutterVariantsNeverOverflowViewport(): void
+    {
+        $prefixer = new DefaultPrefixer();
+        $prefixer->firstSep      = '╭──'; // 3 cells
+        $prefixer->separator     = '├─';  // 2 cells
+        $prefixer->lastSep       = '╰───';// 4 cells — the widest join
+        $prefixer->separatorWrap = '│─';  // 2 cells
+        $prefixer->currentMarker = '▶';   // Wide-stable single cell
+        $prefixer->emptyMarker   = '·─';  // 2 cells — the widest marker column
+
+        $model = $this->model
+            ->withViewport(30, 6)
+            ->withPrefixer($prefixer)
+            ->withItemsFromArray([
+                str_repeat('x', 60),
+                str_repeat('y', 60),
+                str_repeat('z', 60),
+            ]);
+
+        $rows = $model->lines();
+        $this->assertNotEmpty($rows);
+        foreach ($rows as $i => $row) {
+            $this->assertLessThanOrEqual(
+                30,
+                \SugarCraft\Core\Util\Width::string($row),
+                "row {$i} overflowed the 30-cell viewport with a 4-cell gutter variant: {$row}"
+            );
+        }
+    }
+
+    /**
      * @return list<\Stringable>
      */
     private function valuesOf(Model $m): array

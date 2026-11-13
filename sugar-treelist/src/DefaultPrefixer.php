@@ -82,9 +82,24 @@ final class DefaultPrefixer implements Prefixer
             $this->numWidth = \max(1, \strlen((string) \max(0, $totalItems - 1)));
         }
 
-        // Separator widths
-        $this->sepWidth     = Width::string($this->separator);
-        $this->markWidth    = Width::string($this->currentMarker);
+        // Separator widths. The reservation must cover the WIDEST glyph each
+        // emitted column can actually carry: the line-0 join varies with item
+        // position (firstSep/separator/lastSep), wrap continuations add
+        // separatorWrap, and the marker column alternates currentMarker with
+        // emptyMarker. Counting only separator + currentMarker — the old math —
+        // let a multi-cell custom variant (e.g. firstSep='╭─') overflow the
+        // viewport silently, because the Model honours the declared width
+        // verbatim. Stock defaults are all single-cell: bytes unchanged.
+        $this->sepWidth  = \max(
+            Width::string($this->firstSep),
+            Width::string($this->separator),
+            Width::string($this->lastSep),
+            Width::string($this->separatorWrap),
+        );
+        $this->markWidth = \max(
+            Width::string($this->currentMarker),
+            Width::string($this->emptyMarker),
+        );
 
         // The prefix = [sep] [number] [mark] + 2 spaces
         $this->prefixWidth  = $this->sepWidth

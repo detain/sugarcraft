@@ -50,6 +50,37 @@ final class DefaultPrefixerTest extends TestCase
         $this->assertSame(4, $p->initPrefixer(new StringItem('i'), 42, 0, 5, 80, 24, 999));
     }
 
+    /**
+     * treelist-002: the reservation counts the WIDEST join glyph across
+     * firstSep/separator/lastSep/separatorWrap and the widest marker column
+     * across currentMarker/emptyMarker — not just separator + currentMarker.
+     */
+    public function testReservationCoversEveryGlyphFieldVariant(): void
+    {
+        $p = new DefaultPrefixer();
+        $p->firstSep = '╭─';        // 2 cells
+        $p->lastSep  = '╰───';      // 4 cells — widest join
+        $p->emptyMarker = '·─';     // 2 cells — widest marker column
+        // sepMax(4) + number(1)+space(1) + markMax(2) + trailing(2) = 10
+        $this->assertSame(10, $p->initPrefixer(new StringItem('i'), 0, 0, 5, 80, 24, 5));
+
+        // The reservation is pass-invariant: every item of the pass pays for
+        // the widest variant, so position never changes the content budget.
+        $p->lastSep = '╰'; // back to 1 cell
+        $this->assertSame(
+            8, // sepMax(firstSep '╭─' = 2) + number(1)+1 + markMax(2) + 2
+            $p->initPrefixer(new StringItem('i'), 0, 0, 5, 80, 24, 5)
+        );
+    }
+
+    public function testStockDefaultReservationUnchanged(): void
+    {
+        // All six stock glyph fields are single-cell: the widened max() math
+        // must reproduce the old separator+currentMarker figure byte-for-byte.
+        $p = new DefaultPrefixer();
+        $this->assertSame(6, $p->initPrefixer(new StringItem('i'), 0, 0, 5, 80, 24, 5));
+    }
+
     public function testPrefixShapeFirstLineOfCurrentItem(): void
     {
         $p = new DefaultPrefixer();
