@@ -190,6 +190,10 @@ php candy-files.phar [LEFT_DIR] [RIGHT_DIR]
 # Flags (answered before the positional directory scan):
 #   --version  build stamp — phar-aware via Support\Version
 #   --help/-h  usage
+#   --print-cd cd-on-quit handshake: the interface rides /dev/tty
+#              and stdout carries ONLY the final active-pane
+#              directory at exit — capture it in a shell function
+#              (candy-files-cd, see the README handshake section)
 # A missing/unreadable start directory fail-fasts with exit 1
 # ("left/right directory does not exist: <dir>").
 # Default: left = cwd, right = $HOME.

@@ -107,7 +107,8 @@ return [
   candy-files [left] [right]   指定したディレクトリでペインを開きます
                                (既定: 左=現在の作業ディレクトリ、右=HOME)
   candy-files --version        バージョンを表示します
-  candy-files --help           このヘルプを表示します',
+  candy-files --help           このヘルプを表示します
+  candy-files --print-cd       終了時に最終作業ディレクトリを表示',
     'cli.dir_missing' => '{side}のディレクトリ {dir} {reason}',
     'cli.reason_missing' => 'が存在しません',
     'cli.reason_unreadable' => 'を読み取れません',

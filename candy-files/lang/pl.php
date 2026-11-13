@@ -107,7 +107,8 @@ Użycie:
   candy-files [left] [right]   Otwiera panele w podanych katalogach
                                (domyślnie: cwd po lewej, HOME po prawej)
   candy-files --version        Wypisuje wersję
-  candy-files --help           Wyświetla tę pomoc',
+  candy-files --help           Wyświetla tę pomoc
+  candy-files --print-cd       wypisuje katalog roboczy z chwili zamkniecia',
     'cli.dir_missing' => 'katalog ({side}) {reason}: {dir}',
     'cli.reason_missing' => 'nie istnieje',
     'cli.reason_unreadable' => 'nie jest czytelny',

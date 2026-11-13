@@ -53,6 +53,11 @@ T::setLocale(T::detect());
 // bug report runs these first, possibly from a directory that is not meant
 // to be opened at all.
 $flags = array_slice($argv ?? [], 1);
+// CF-34 (closes 047): the cd-on-quit handshake reserves stdout for the
+// final working directory, so the interface itself must ride /dev/tty
+// (ProgramOptions openTty). Absent a controlling terminal that split is
+// impossible — the refusal below keeps the CF-19 soup guarantee intact.
+$printCd = in_array('--print-cd', $flags, true);
 if (in_array('--version', $flags, true)) {
     fwrite(STDOUT, Version::line());
     exit(0);
@@ -69,9 +74,21 @@ if (in_array('--help', $flags, true) || in_array('-h', $flags, true)) {
 // non-terminating shape as CF-13's live-loop class). The candy-git
 // launcher gate is the house mirror; --version/--help stay piped-safe
 // above because packaging scripts and bug reports need them headless.
-if (!stream_isatty(STDOUT)) {
+if (!stream_isatty(STDOUT) && !$printCd) {
     fwrite(STDERR, "candy-files: this program needs an interactive terminal (stdout is not a TTY); --version and --help work when piped\n");
     exit(1);
+}
+if ($printCd && !stream_isatty(STDOUT)) {
+    // The wrapper shape: stdout is the shell's capture pipe, so the UI has
+    // nowhere to live unless /dev/tty answers. openTty itself falls back
+    // silently to the piped pair — probe here, or a session-less launch
+    // would re-mint exactly the escape soup CF-19 banished.
+    $probe = @fopen('/dev/tty', 'r+');
+    if ($probe === false) {
+        fwrite(STDERR, "candy-files: --print-cd needs a controlling terminal (/dev/tty) while stdout carries the directory; run it from an interactive shell\n");
+        exit(1);
+    }
+    fclose($probe);
 }
 
 $cwd = getcwd() ?: '/';
@@ -79,8 +96,13 @@ $cwd = getcwd() ?: '/';
 // pane at the drive root on Windows shells without MSYS — the cascade lives in
 // Support\Home where the unit can pin it.
 $home = Home::resolve();
-$leftCwd  = $argv[1] ?? $cwd;
-$rightCwd = $argv[2] ?? $home;
+// The --print-cd handshake flag is consumed above; drop it from the
+// positional scan so `candy-files --print-cd /tmp` opens /tmp rather than
+// refusing a path named '--print-cd' (same flag-before-scan design the
+// --version/--help paragraph documents).
+$positional = array_values(array_filter($flags, static fn (string $arg): bool => $arg !== '--print-cd'));
+$leftCwd  = $positional[0] ?? $cwd;
+$rightCwd = $positional[1] ?? $home;
 
 // Fail fast with a clear message instead of launching a TUI over an empty
 // pane list (the CF-22 lister contract answers null here, which would
@@ -98,4 +120,15 @@ foreach (['left' => $leftCwd, 'right' => $rightCwd] as $side => $dir) {
     }
 }
 
-(new Program(Manager::start($leftCwd, $rightCwd), new ProgramOptions(useAltScreen: true, bracketedPaste: true)))->run();
+$program = new Program(
+    Manager::start($leftCwd, $rightCwd),
+    new ProgramOptions(useAltScreen: true, bracketedPaste: true, openTty: $printCd)
+);
+$final = $program->run();
+
+// CF-34: the shell wrapper does `cd "$(candy-files --print-cd)"`, so the
+// printed line is the ACTIVE pane's home at exit — nothing else may ever
+// reach stdout once the flag is set, which is why the UI rode /dev/tty.
+if ($printCd && $final instanceof Manager) {
+    fwrite(STDOUT, $final->activePane()->cwd . "\n");
+}

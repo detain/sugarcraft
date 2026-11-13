@@ -107,7 +107,8 @@ Kullanım:
   candy-files [left] [right]   Panelleri verilen dizinlerde açar
                                (varsayılan: solda cwd, sağda HOME)
   candy-files --version        Sürümü yazar
-  candy-files --help           Bu yardımı gösterir',
+  candy-files --help           Bu yardımı gösterir
+  candy-files --print-cd       cikista son calisma dizinini yazar',
     'cli.dir_missing' => '{side} dizini {reason}: {dir}',
     'cli.reason_missing' => 'mevcut değil',
     'cli.reason_unreadable' => 'okunamıyor',

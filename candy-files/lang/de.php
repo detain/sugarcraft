@@ -107,7 +107,8 @@ Verwendung:
   candy-files [left] [right]   öffnet die Panele mit den angegebenen Verzeichnissen
                                (Standard: links das aktuelle Verzeichnis, rechts das HOME)
   candy-files --version        gibt die Version aus
-  candy-files --help           zeigt diese Hilfe',
+  candy-files --help           zeigt diese Hilfe
+  candy-files --print-cd       gibt beim Beenden das letzte Arbeitsverzeichnis aus',
     'cli.dir_missing' => 'Verzeichnis ({side}) {reason}: {dir}',
     'cli.reason_missing' => 'existiert nicht',
     'cli.reason_unreadable' => 'ist nicht lesbar',

@@ -107,7 +107,8 @@ Uso:
   candy-files [left] [right]   Apre i pannelli nelle directory indicate
                                (predefinito: cwd a sinistra, HOME a destra)
   candy-files --version        Stampa la versione
-  candy-files --help           Mostra questa guida',
+  candy-files --help           Mostra questa guida
+  candy-files --print-cd       stampa la directory di lavoro finale alluscita',
     'cli.dir_missing' => 'directory ({side}) {reason}: {dir}',
     'cli.reason_missing' => 'non esiste',
     'cli.reason_unreadable' => 'non è leggibile',

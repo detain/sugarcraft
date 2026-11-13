@@ -107,7 +107,8 @@ Utilisation :
   candy-files [left] [right]   Ouvre les volets sur les répertoires donnés
                                (par défaut : cwd à gauche, HOME à droite)
   candy-files --version        Affiche la version
-  candy-files --help           Affiche cette aide',
+  candy-files --help           Affiche cette aide
+  candy-files --print-cd       affiche le répertoire de travail final à la sortie',
     'cli.dir_missing' => 'répertoire ({side}) {reason} : {dir}',
     'cli.reason_missing' => 'n\'existe pas',
     'cli.reason_unreadable' => 'n\'est pas lisible',

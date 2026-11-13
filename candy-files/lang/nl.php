@@ -107,7 +107,8 @@ Gebruik:
   candy-files [left] [right]   Opent panelen met de gegeven mappen
                                (standaard: cwd links, HOME rechts)
   candy-files --version        Toont de versie
-  candy-files --help           Toont deze hulp',
+  candy-files --help           Toont deze hulp
+  candy-files --print-cd       drukt bij het afsluiten de uiteindelijke werkmap af',
     'cli.dir_missing' => 'map ({side}) {reason}: {dir}',
     'cli.reason_missing' => 'bestaat niet',
     'cli.reason_unreadable' => 'is niet leesbaar',

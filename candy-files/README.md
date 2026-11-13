@@ -77,6 +77,33 @@ rather than opening a mysteriously empty pane. One honest consequence of matchin
 flags anywhere in argv: a directory literally named `--version` prints the version —
 flag-before-scan ordering is the documented design.
 
+### cd on quit (`--print-cd`)
+
+`--print-cd` re-homes your shell where the active pane ended up — the most-requested
+workflow from the file-manager tradition. While the flag is set the interface rides
+`/dev/tty` and **stdout carries nothing but the final directory** on exit, so a shell
+function can capture it. Add to `~/.bashrc` / `~/.zshrc`:
+
+```bash
+candy-files-cd() {
+    local dir
+    dir=$(candy-files --print-cd "$@") || return $?
+    if [[ -n "$dir" && -d "$dir" ]]; then
+        builtin cd "$dir"
+    fi
+}
+```
+
+Positional directories pass through — `--print-cd` itself is consumed and dropped
+from the scan, so `candy-files-cd /srv` opens as expected (a directory literally
+named `--print-cd` activates the handshake instead, the same flag-before-scan
+design as above). The wrapper's exit status is candy-files' own, so a `^C` abort
+leaves the shell where it was. With tabs open, the handshake reports the **active
+pane** of the tab that was on screen at exit. Refusing to run headless is
+deliberate: with no controlling terminal there is nowhere for the interface to
+live while stdout is a capture pipe, and candy-files says so at the door instead
+of emitting escape soup.
+
 Default: left pane = current directory, right pane = `$HOME`.
 
 **Requirements:** PHP `^8.3` with `ext-intl` and `ext-mbstring`. Both extensions are

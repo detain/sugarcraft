@@ -107,7 +107,8 @@ return [
   candy-files [left] [right]   지정된 디렉터리에서 패널을 엽니다
                                (기본: 왼쪽은 현재 디렉터리, 오른쪽은 HOME)
   candy-files --version        버전을 출력합니다
-  candy-files --help           이 도움말을 표시합니다',
+  candy-files --help           이 도움말을 표시합니다
+  candy-files --print-cd       종료 시 최종 작업 디렉터리를 출력',
     'cli.dir_missing' => '{side} 디렉터리 {dir} {reason}',
     'cli.reason_missing' => '존재하지 않음',
     'cli.reason_unreadable' => '읽을 수 없음',

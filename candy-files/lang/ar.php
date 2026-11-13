@@ -107,7 +107,8 @@ return [
   candy-files [left] [right]   يفتح اللوحتين في الدلائل المحددة
                                (افتراضي: cwd في اليسار، HOME في اليمين)
   candy-files --version        يطبع الإصدار
-  candy-files --help           يعرض هذه المساعدة',
+  candy-files --help           يعرض هذه المساعدة
+  candy-files --print-cd       يطبع دليل العمل النهائي عند الخروج',
     'cli.dir_missing' => 'الدليل ({side}) {reason}: {dir}',
     'cli.reason_missing' => 'غير موجود',
     'cli.reason_unreadable' => 'غير قابل للقراءة',

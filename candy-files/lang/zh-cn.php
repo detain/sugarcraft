@@ -107,7 +107,8 @@ return [
   candy-files [left] [right]   在给定目录上打开面板
                                (默认：左为当前目录，右为主目录)
   candy-files --version        打印版本
-  candy-files --help           显示此帮助',
+  candy-files --help           显示此帮助
+  candy-files --print-cd       退出时打印最终工作目录',
     'cli.dir_missing' => '{side}目录 {reason}：{dir}',
     'cli.reason_missing' => '不存在',
     'cli.reason_unreadable' => '不可读',

@@ -107,7 +107,8 @@ return [
   candy-files [left] [right]   Открывает панели в указанных каталогах
                                (по умолчанию: слева текущий каталог, справа HOME)
   candy-files --version        Показывает версию
-  candy-files --help           Показывает эту справку',
+  candy-files --help           Показывает эту справку
+  candy-files --print-cd       печатает конечный рабочий каталог при выходе',
     'cli.dir_missing' => 'каталог ({side}) {reason}: {dir}',
     'cli.reason_missing' => 'не существует',
     'cli.reason_unreadable' => 'не читается',

@@ -107,7 +107,8 @@ Použití:
   candy-files [left] [right]   Otevírá panely ve zadaných adresářích
                                (výchozí: cwd vlevo, HOME vpravo)
   candy-files --version        Vytiskne verzi
-  candy-files --help           Zobrazí tuto nápovědu',
+  candy-files --help           Zobrazí tuto nápovědu
+  candy-files --print-cd       pri ukonceni vypise posledni pracovni adresar',
     'cli.dir_missing' => 'adresář ({side}) {reason}: {dir}',
     'cli.reason_missing' => 'neexistuje',
     'cli.reason_unreadable' => 'nelze číst',

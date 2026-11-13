@@ -118,7 +118,8 @@ Usage:
   candy-files [left] [right]   Open panes on the given directories
                                (default: cwd on the left, HOME on the right)
   candy-files --version        Print the version
-  candy-files --help           Show this help',
+  candy-files --help           Show this help
+  candy-files --print-cd       Print the final working directory on exit',
     'cli.dir_missing' => '{side} directory {reason}: {dir}',
     'cli.reason_missing' => 'does not exist',
     'cli.reason_unreadable' => 'is not readable',

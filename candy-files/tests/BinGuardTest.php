@@ -60,6 +60,45 @@ final class BinGuardTest extends TestCase
     }
 
     /**
+     * CF-34 (closes 047): the cd-on-quit handshake must be discoverable
+     * from the headless usage block, and it must never lie — with stdout
+     * captured by the wrapper, the UI has nowhere to live unless /dev/tty
+     * answers, so a session-less launch is refused at the door rather
+     * than emitting the escape soup (or a path line nobody sees).
+     */
+    public function testUsageListsThePrintCdHandshake(): void
+    {
+        [$exit, $out] = self::spawn(['--help']);
+
+        self::assertSame(0, $exit);
+        self::assertStringContainsString('--print-cd', $out);
+    }
+
+    public function testPrintCdRefusesWithoutAControllingTerminal(): void
+    {
+        if (PHP_OS_FAMILY !== 'Linux' || !is_executable('/usr/bin/setsid')) {
+            self::markTestSkipped('the session-less launch probe needs Linux setsid');
+        }
+
+        $bin = realpath(__DIR__ . '/../bin/candy-files');
+        self::assertIsString($bin);
+        $spec = [0 => ['file', '/dev/null', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
+        // setsid strips the controlling terminal, so /dev/tty is provably
+        // unreachable — the exact shape a cron job or a CI pipe presents.
+        $proc = proc_open(['/usr/bin/setsid', PHP_BINARY, $bin, '--print-cd'], $spec, $pipes, sys_get_temp_dir());
+        self::assertIsResource($proc);
+        $out = (string) stream_get_contents($pipes[1]);
+        $err = (string) stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $exit = proc_close($proc);
+
+        self::assertSame(1, $exit);
+        self::assertStringContainsString('controlling terminal', $err);
+        self::assertSame('', $out, 'no path line may escape a refused launch');
+    }
+
+    /**
      * CF-16 (closes 060): a German terminal must be refused AND served in
      * German — locale detection hoisted to right-after-autoload means the
      * usage block rides the catalogue. --help stays piped-safe, so the
