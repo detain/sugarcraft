@@ -88,13 +88,21 @@ final class RootModelWithScreenStack implements Model, ScreenStackCapable
         return [$this, null];
     }
 
-    public function view(): string
+    public function view(): string|View
     {
         // Delegate to the live top of the stack — currentModel is a
         // convenience mirror, and after a write-back (C6) the stack is
         // the authority.
+        //
+        // sugar-core-008: a screen may render a View (cursor placement,
+        // window title, progress, image layer). The old (string) cast
+        // fatal'd EVERY frame while such a screen was pushed — View
+        // implements no __toString (house law, deliberately). The render
+        // path consumes the union directly: renderFrame() reads
+        // `$rendered->body` and runs applyViewSideEffects() for the
+        // optional fields, so the View now survives intact to the wire.
         if (!$this->screens->isEmpty()) {
-            return (string) $this->screens->current()->model->view();
+            return $this->screens->current()->model->view();
         }
         return $this->currentModel?->view() ?? '';
     }

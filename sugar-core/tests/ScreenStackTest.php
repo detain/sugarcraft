@@ -4,11 +4,17 @@ declare(strict_types=1);
 
 namespace SugarCraft\Core\Tests;
 
+use React\EventLoop\StreamSelectLoop;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
+use SugarCraft\Core\Msg\ScreenStackPushedMsg;
+use SugarCraft\Core\Program;
+use SugarCraft\Core\ProgramOptions;
+use SugarCraft\Core\RootModelWithScreenStack;
 use SugarCraft\Core\Screen;
 use SugarCraft\Core\ScreenStack;
 use SugarCraft\Core\SubscriptionCapable;
+use SugarCraft\Core\View;
 use PHPUnit\Framework\TestCase;
 
 final class DummyScreenModel implements Model
@@ -30,6 +36,28 @@ final class DummyScreenModel implements Model
     public function view(): string
     {
         return "screen: {$this->id}";
+    }
+}
+
+/**
+ * A screen that renders a rich View — the sugar-core-008 shape the old
+ * RootModelWithScreenStack::view() (string) cast fatal'd every frame.
+ */
+final class ViewScreenModel implements Model
+{
+    use SubscriptionCapable;
+
+    public function init(): ?\Closure
+    {
+        return null;
+    }
+    public function update(Msg $msg): array
+    {
+        return [$this, null];
+    }
+    public function view(): string|View
+    {
+        return new View(body: 'rich-view-body-008', windowTitle: 'rich-title-008');
     }
 }
 
@@ -140,5 +168,70 @@ final class ScreenStackTest extends TestCase
 
         $this->assertSame($model, $screen->model);
         $this->assertSame('Test Screen', $screen->title);
+    }
+
+    // ─── sugar-core-008 (sc-11): View-returning screens render ───────────
+
+    public function testAPushedViewScreenDelegatesUncast(): void
+    {
+        $stack = (new ScreenStack())->push(new Screen(new ViewScreenModel(), title: 'V'));
+        $root  = new RootModelWithScreenStack(screens: $stack);
+
+        // The old (string) cast here threw: View has no __toString.
+        $rendered = $root->view();
+
+        $this->assertInstanceOf(View::class, $rendered);
+        $this->assertSame('rich-view-body-008', $rendered->body);
+        $this->assertSame('rich-title-008', $rendered->windowTitle);
+    }
+
+    public function testABaseModelViewStillDelegatesUncast(): void
+    {
+        $root = new RootModelWithScreenStack(currentModel: new ViewScreenModel());
+
+        $rendered = $root->view();
+
+        $this->assertInstanceOf(View::class, $rendered, 'the currentModel leg carried the same (string) trap');
+        $this->assertSame('rich-view-body-008', $rendered->body);
+    }
+
+    public function testTheRenderPathPaintsAPushedViewScreenWithoutFatal(): void
+    {
+        $sockets = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+        $this->assertNotFalse($sockets);
+        [$in, $writer] = $sockets;
+        $out = fopen('php://memory', 'w+');
+        $this->assertNotFalse($out);
+        $loop = new StreamSelectLoop();
+
+        $program = new Program(
+            new RootModelWithScreenStack(),
+            new ProgramOptions(
+                useAltScreen: false,
+                catchInterrupts: false,
+                hideCursor: false,
+                input: $in,
+                output: $out,
+                loop: $loop,
+            ),
+        );
+
+        $dispatch = new \ReflectionMethod(Program::class, 'dispatch');
+        $dispatch->invoke($program, new ScreenStackPushedMsg(
+            new Screen(new ViewScreenModel(), title: 'V')
+        ));
+
+        // One deterministic frame — no loop entry needed. Pre-cure this
+        // died in view()'s cast before a single byte reached the wire.
+        (new \ReflectionMethod(Program::class, 'renderFrame'))->invoke($program);
+
+        rewind($out);
+        $bytes = stream_get_contents($out);
+        $this->assertStringContainsString('rich-view-body-008', $bytes, 'the View body must reach the terminal');
+        $this->assertStringContainsString('rich-title-008', $bytes, 'View side effects ride the same frame');
+
+        fclose($writer);
+        fclose($in);
+        fclose($out);
     }
 }
