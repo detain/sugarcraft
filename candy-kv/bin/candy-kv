@@ -4,7 +4,7 @@
 declare(strict_types=1);
 
 /**
- * CandyKv CLI — charmbracelet/skate equivalent.
+ * CandyKv CLI — a PHP take on charmbracelet/skate.
  *
  * Usage:
  *   candy-kv set <key> [value] [--ttl SECONDS] [--binary|--text]

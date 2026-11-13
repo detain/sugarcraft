@@ -16,9 +16,16 @@ Accumulated patterns and gotchas discovered during porting and auditing.
 
 ## Levenshtein typo suggestions
 
-- `suggestSimilar()` is private and called only from `get()` when a key is missing.
-- Distance threshold: `strlen(key) / 2` — long keys allow more drift before suggestion is suppressed.
-- Suggestion is written to `STDERR` to keep stdout clean for the value output. Since D4 the line is localised (`Lang::t('store.did_you_mean')`); it used to be a hardcoded English `fwrite` bypassing i18n.
+- `Store::suggestionFor()` (public) is what the CLI calls on a `get` miss;
+  the library itself never prints. The private `suggestSimilar()` underneath
+  excludes expired keys and delegates the distance walk to `bestSimilar()`.
+- Distance threshold: half the query's length measured in UTF-8 codepoints
+  (`mb_strlen`), floored at one edit — long queries allow proportionally more
+  drift, short ones still clear one typo. (The old byte-`strlen` rule was
+  replaced in the 2026-11 wave; see CHANGELOG.)
+- The CLI writes the suggestion to `STDERR` to keep stdout clean for the
+  value output. Since D4 the line is localised (`Lang::t('store.did_you_mean')`);
+  it used to be a hardcoded English `fwrite` bypassing i18n.
 
 ## YAML envelope / YamlDialect
 
@@ -37,7 +44,7 @@ Accumulated patterns and gotchas discovered during porting and auditing.
 ## Data directory resolution
 
 - `Store::resolveDataDir()` (public static): `XDG_CONFIG_HOME/skate` → `$HOME/.config/skate` → passwd home (`posix_getpwuid`) → `RuntimeException`. The pre-D4 fallback `dirname(__DIR__, 2)` wrote databases into the INSTALL (vendor/web-served) tree when `HOME` was unset — never fall back into the code tree.
-- The directory keeps the legacy `skate` name (back-compat with existing installs and upstream skate); the `skate_ttl_`/`skate_binary_` YAML prefixes share that fate and stay.
+- The directory keeps the legacy `skate` name for candy-kv's own (née sugar-skate) install continuity only — upstream Go skate stores BadgerDB data elsewhere and shares nothing with us (migration = export there, import here); the `skate_ttl_`/`skate_binary_` YAML prefixes ride that same history and stay.
 
 ## Atomic transactions
 

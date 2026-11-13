@@ -531,8 +531,11 @@ backup can never miss a half-written values database; reading a planted
 `key@settings` still works.
 
 The directory keeps the pre-rename **skate** name on disk so existing
-installs (and upstream skate itself) keep working; new code can point
-`$XDG_CONFIG_HOME` anywhere. If neither `XDG_CONFIG_HOME` nor `$HOME` is set,
+candy-kv (née sugar-skate) installs keep working; new code can point
+`$XDG_CONFIG_HOME` anywhere. Upstream Go skate keeps its own data elsewhere,
+in a BadgerDB layout this store cannot read — moving data from skate means
+exporting it there and `candy-kv import`ing it here (JSON/YAML is the only
+bridge), never a shared directory. If neither `XDG_CONFIG_HOME` nor `$HOME` is set,
 candy-kv falls back to the passwd home and throws loudly when even that is
 unavailable — it never writes into the install tree.
 
@@ -542,7 +545,9 @@ CLI diagnostics and success lines are localized: the binary selects a locale
 from `LC_ALL` → `LC_MESSAGES` → `LANG` at start-up (16 shipped locales, see
 `lang/`). The missing-argument usage line is part of that translated surface —
 `usage()` emits `Lang::t('cli.usage_*')` before exit 2, so `LANG=fr candy-kv
-get` answers `Usage : candy-kv get <clé> [--sanitize]`. The translated set is the CLI's
+get` answers `Usage : candy-kv get <clé> [--sanitize]` — provided no
+higher-precedence `LC_ALL`/`LC_MESSAGES` is set in your environment, since
+that is exactly the chain just named. The translated set is the CLI's
 own answers: usage lines, the key/database miss diagnostics and their
 suggestions, and the success counts (`Deleted …`, `Imported … Overwrote …`,
 `pruned …`, `Deleted database …`). Four surfaces stay English by

@@ -5,8 +5,8 @@ change landed in the monorepo.
 
 ## 2026-11-03 — CLI & storage contract hardening
 
-A full audit round (multi-persona review + fix wave). Behavior changes that
-consumers can observe:
+A full audit round (multi-persona review + fix wave). Changes consumers can
+observe:
 
 ### Fixed — CLI contract
 

@@ -29,8 +29,10 @@ use SugarCraft\Kv\Support\Ttl;
  * Provides a store-wide API that routes operations to the appropriate
  * database. Each distinct database maps to its own SQLite file in the
  * data directory (default: $XDG_CONFIG_HOME/skate or ~/.config/skate —
- * the 'skate' name is the upstream port's directory and is kept for
- * users migrating from Go skate; the files themselves live 0600).
+ * the 'skate' name continues the pre-rename sugar-skate installs only:
+ * upstream Go skate keeps BadgerDB data elsewhere, so arriving from it
+ * means a manual export/import, not a shared directory; the files
+ * themselves live 0600).
  *
  * @example
  * ```php
@@ -44,8 +46,10 @@ final class Store
 {
     // Factories: Store/Database deliberately have no `::new()` convenience
     // constructor (unlike the value-object libs) — both are constructor-arg
-    // service classes where the constructor IS the only sensible entry point,
-    // mirroring upstream's `skate.New()` usage shape. @rename-keep
+    // service classes where the constructor IS the only sensible entry point;
+    // this is the shape upstream's own service construction takes (main.go
+    // handing a prepared store handle around), NOT a claim that skate exposes
+    // an importable New() — it does not. @rename-keep
 
     /** Default data directory relative to home. */
     public const DEFAULT_SUBDIR = '.config/skate';
@@ -192,9 +196,12 @@ final class Store
      * near enough to help. Backs the CLI's "did you mean" line.
      *
      * Distance is Levenshtein over UTF-8 codepoints; a candidate must lie
-     * within half the query's codepoint length, floored at one edit (a
-     * deliberate skate tolerance — long queries get proportionally more
-     * slack, short ones still clear one typo). Every non-expired key of
+     * within half the query's codepoint length, floored at one edit. That
+     * half-the-query rule is OUR tolerance, chosen for codepoint key names —
+     * upstream's recorded rule ran distance over database names with a
+     * length-difference shape, so do not read parity into it (long queries
+     * get proportionally more slack, short ones still clear one typo).
+     * Every non-expired key of
      * the target database is considered, but a candidate whose codepoint
      * length differs by more than the tolerance is dismissed by that gap
      * — a lower bound on the distance — instead of a full comparison.
