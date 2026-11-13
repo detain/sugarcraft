@@ -18,6 +18,7 @@ return [
     'custom.max_cols' => 'kolommen mogen maximaal 50 zijn',
     'custom.min_mines' => 'minimaal 1 mijn vereist',
     'custom.max_mines' => 'te veel mijnen — laat een veilig startgebied over',
+    'custom.min_area'            => 'een eigen bord heeft minstens 10 vakjes nodig (rijen × kolommen)',
     'ui.status' => 'mijnen: {mines}  ·  vlaggen: {flags}  ·  over: {remaining}  ·  tijd: {time}',
     'ui.status_stats' => '{preset}  ·  vlaggen: {flags}  ·  over: {remaining}  ·  tijd: {time}  ·  beste: {best}',
     'ui.preset_easy' => 'makkelijk',

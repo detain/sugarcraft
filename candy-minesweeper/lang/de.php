@@ -18,6 +18,7 @@ return [
     'custom.max_cols' => 'Spalten dürfen höchstens 50 sein',
     'custom.min_mines' => 'mindestens 1 Mine erforderlich',
     'custom.max_mines' => 'zu viele Minen — lassen Sie einen sicheren Startbereich',
+    'custom.min_area'            => 'ein eigenes Feld braucht mindestens 10 Zellen (Zeilen × Spalten)',
     'ui.status' => 'Minen: {mines}  ·  Flaggen: {flags}  ·  verbleibend: {remaining}  ·  Zeit: {time}',
     'ui.status_stats' => '{preset}  ·  Flaggen: {flags}  ·  verbleibend: {remaining}  ·  Zeit: {time}  ·  Bestzeit: {best}',
     'ui.preset_easy' => 'einfach',

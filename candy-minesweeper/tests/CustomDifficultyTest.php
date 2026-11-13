@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Minesweeper\Tests;
 
+use SugarCraft\Core\I18n\T;
+use SugarCraft\Minesweeper\Lang;
 use SugarCraft\Minesweeper\Ui\CustomDifficulty;
 use PHPUnit\Framework\TestCase;
 
@@ -77,6 +79,46 @@ final class CustomDifficultyTest extends TestCase
         // 10×10 = 100 cells, leaving 9-cell safe area → max 91 mines.
         $cd = CustomDifficulty::fromInput(10, 10, 91);
         $this->assertSame(91, $cd->mines);
+    }
+
+    public function testSubTenCellBoardRefusesWithTheAreaRuleNotMineBlame(): void
+    {
+        // msw-18/-020 (UXD repro `candy-minesweeper 3 3`): the CLI derives
+        // mines = 1 for a 3×3 — the refusal must name the 10-cell floor,
+        // never the mine-count message that blames a number nobody typed.
+        $prior = T::locale();
+        T::setLocale('en');
+        try {
+            foreach ([[3, 3, 1], [3, 3, 2], [2, 2, 1], [2, 4, 1]] as [$r, $c, $m]) {
+                try {
+                    CustomDifficulty::fromInput($r, $c, $m);
+                    $this->fail("{$r}×{$c} must refuse with the area rule");
+                } catch (\InvalidArgumentException $e) {
+                    $this->assertSame(Lang::t('custom.min_area'), $e->getMessage(),
+                        "{$r}×{$c} refused with the wrong message: {$e->getMessage()}");
+                }
+            }
+
+            // The floor itself is legal: exactly 10 cells, one mine.
+            $cd = CustomDifficulty::fromInput(2, 5, 1);
+            $this->assertSame(1, $cd->mines);
+            $transposed = CustomDifficulty::fromInput(5, 2, 1);
+            $this->assertSame(5, $transposed->rows);
+            $this->assertSame(2, $transposed->cols);
+
+            // Side-length rules still lead (a 1×10 board is a side problem,
+            // not an area one — messages stay antecedent-faithful).
+            foreach ([[1, 10, 1, 'custom.min_rows'], [10, 1, 1, 'custom.min_cols']] as [$r, $c, $m, $key]) {
+                try {
+                    CustomDifficulty::fromInput($r, $c, $m);
+                    $this->fail("{$r}×{$c} must refuse");
+                } catch (\InvalidArgumentException $e) {
+                    $this->assertSame(Lang::t($key), $e->getMessage());
+                }
+            }
+        } finally {
+            T::setLocale($prior);
+        }
     }
 
     public function testLabelReflectsCurrentValues(): void

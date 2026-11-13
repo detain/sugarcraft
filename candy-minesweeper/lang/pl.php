@@ -18,6 +18,7 @@ return [
     'custom.max_cols' => 'kolumn może być co najwyżej 50',
     'custom.min_mines' => 'wymagana jest co najmniej 1 mina',
     'custom.max_mines' => 'za dużo min — zostaw bezpieczne pole startowe',
+    'custom.min_area'            => 'własna plansza wymaga co najmniej 10 pól (wiersze × kolumny)',
     'ui.status' => 'miny: {mines}  ·  flagi: {flags}  ·  pozostało: {remaining}  ·  czas: {time}',
     'ui.status_stats' => '{preset}  ·  flagi: {flags}  ·  pozostało: {remaining}  ·  czas: {time}  ·  rekord: {best}',
     'ui.preset_easy' => 'łatwy',

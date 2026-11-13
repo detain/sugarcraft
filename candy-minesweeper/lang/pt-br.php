@@ -18,6 +18,7 @@ return [
     'custom.max_cols' => 'as colunas devem ser no máximo 50',
     'custom.min_mines' => 'pelo menos 1 mina é necessária',
     'custom.max_mines' => 'minas demais — deixe uma área inicial segura',
+    'custom.min_area'            => 'um tabuleiro precisa de pelo menos 10 células (linhas × colunas)',
     'ui.status' => 'minas: {mines}  ·  bandeiras: {flags}  ·  restantes: {remaining}  ·  tempo: {time}',
     'ui.status_stats' => '{preset}  ·  bandeiras: {flags}  ·  restantes: {remaining}  ·  tempo: {time}  ·  recorde: {best}',
     'ui.preset_easy' => 'fácil',

@@ -18,6 +18,7 @@ return [
     'custom.max_cols' => '列数は50以下である必要があります',
     'custom.min_mines' => '地雷は1つ以上必要です',
     'custom.max_mines' => '地雷が多すぎます — 安全な開始領域を残してください',
+    'custom.min_area'            => 'カスタム盤は最低10マス必要（行 × 列）',
     'ui.status' => '地雷: {mines}  ·  フラグ: {flags}  ·  残り: {remaining}  ·  時間: {time}',
     'ui.status_stats' => '{preset}  ·  フラグ: {flags}  ·  残り: {remaining}  ·  時間: {time}  ·  最高: {best}',
     'ui.preset_easy' => '初級',

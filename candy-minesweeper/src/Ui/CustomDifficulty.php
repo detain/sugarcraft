@@ -15,10 +15,14 @@ use SugarCraft\Minesweeper\Lang;
  *   - Maximum 50 rows and 50 columns
  *   - At least 1 mine, at most (rows × cols) − 9 (leaving a safe 3×3 on first click)
  *
- * Note on the advertised minimum: the mine cap makes the two rules interact —
- * any board of fewer than 10 cells (2×2 … 3×3) passes the side-length checks
- * but can never satisfy "1 … rows×cols−9 mines", so it is rejected with the
- * mine-count message rather than a dimension one.
+ * Note on the advertised minimum: boards of fewer than 10 cells (2×2 … 3×3)
+ * satisfy the side-length checks yet can never satisfy "1 … rows×cols−9
+ * mines", so msw-18/-020 refuses them with a dedicated minimum-area message
+ * naming the 10-cell floor — never the mine-count blame, which for a derived
+ * default (the CLI omits mines) would cite a count the player never typed.
+ * The CLI door and this engine cap stay distinct by design (G4c ruling):
+ * Board's own invariant is the looser ≤ w·h−1, and the −9 safe-zone cap is
+ * this form's product rule.
  */
 final class CustomDifficulty
 {
@@ -59,6 +63,12 @@ final class CustomDifficulty
         }
         if ($cols > 50) {
             throw new \InvalidArgumentException(Lang::t('custom.max_cols'));
+        }
+        // msw-18/-020: the honest floor, stated as its own rule before any
+        // mine logic — a sub-10-cell board cannot host a safe 3×3 plus a
+        // mine, no matter what mine count (typed or derived) is offered.
+        if ($rows * $cols < 10) {
+            throw new \InvalidArgumentException(Lang::t('custom.min_area'));
         }
         $maxMines = $rows * $cols - 9;
         if ($mines < 1) {

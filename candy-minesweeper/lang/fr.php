@@ -18,6 +18,7 @@ return [
     'custom.max_cols' => 'les colonnes doivent être au plus 50',
     'custom.min_mines' => 'au moins 1 mine est requise',
     'custom.max_mines' => 'trop de mines — laissez une zone de départ sûre',
+    'custom.min_area'            => 'une grille personnalisée exige au moins 10 cases (lignes × colonnes)',
     'ui.status' => 'mines : {mines}  ·  drapeaux : {flags}  ·  restants : {remaining}  ·  temps : {time}',
     'ui.status_stats' => '{preset}  ·  drapeaux : {flags}  ·  restants : {remaining}  ·  temps : {time}  ·  record : {best}',
     'ui.preset_easy' => 'facile',
