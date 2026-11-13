@@ -148,10 +148,61 @@ final class RenderSafeTest extends TestCase
             "\x1b[1;31mBold\x1b[0m",
             'a' . chr(0x00) . 'b' . chr(0x1B) . 'X',
             "tab\tnewline\nkept",
+            "carriage\rreturn\r\nkept\n",
+            "eight-bit\x9b[2Jname",
+            "unicode é and C1 continuation byte",
         ];
         foreach ($inputs as $in) {
             $once = RenderSafe::clean($in);
             $this->assertSame($once, RenderSafe::clean($once), 'clean(clean(x)) must equal clean(x)');
         }
+    }
+
+    /**
+     * SF-033: CR (0x0D) sat in the pass-1 class gap between \x0C and
+     * \x0E — it overwrites the rendered line back to column 0, forging
+     * display content on every cleaned surface. It must be stripped while
+     * TAB/LF keep their documented exemption.
+     */
+    public function testCleanStripsCarriageReturn(): void
+    {
+        $this->assertSame('abb', RenderSafe::clean("a\rbb"));
+        $this->assertSame("a\nb", RenderSafe::clean("a\r\nb"), 'LF survives, CR goes');
+        $this->assertSame('', RenderSafe::clean("\r"));
+        $this->assertSame(
+            "\x1b[1mXY\x1b[0m",
+            RenderSafe::clean("\x1b[1mX\rY\x1b[0m"),
+            'CR goes even between preserved SGR sequences'
+        );
+    }
+
+    /**
+     * SF-034: scandir delivers raw bytes, so a crafted name can carry a
+     * lone 0x9B — 8-bit CSI on terminals that parse it — while the C1
+     * exemption let it through untouched. Pass 0 normalization must leave
+     * zero raw 0x80-0x9F bytes for non-UTF-8 input.
+     */
+    public function testCleanRemovesLoneEightBitCsiByte(): void
+    {
+        $out = RenderSafe::clean("evil\x9b[2Jname");
+        $this->assertStringNotContainsString(chr(0x9B), $out, 'raw 8-bit CSI must not survive');
+
+        // C1-range bytes as trailing/leading raw bytes of a non-UTF-8 name.
+        foreach ([0x80, 0x85, 0x9B, 0x9D] as $c1) {
+            $out = RenderSafe::clean("dir-" . chr($c1) . "-end");
+            $this->assertStringNotContainsString(chr($c1), $out, 'byte 0x' . dechex($c1) . ' must not survive raw');
+        }
+    }
+
+    /**
+     * The exemption's good half: inside VALID UTF-8, a 0x80-0xBF byte is a
+     * continuation byte of a legal sequence and must never be stripped.
+     */
+    public function testCleanKeepsC1RangeBytesInsideValidUtf8(): void
+    {
+        $this->assertSame('ś', RenderSafe::clean('ś'), 'U+015B is C5 9B — 0x9B is a continuation byte here');
+        $this->assertSame('é', RenderSafe::clean('é'));
+        $wide = '中文字';
+        $this->assertSame($wide, RenderSafe::clean($wide));
     }
 }

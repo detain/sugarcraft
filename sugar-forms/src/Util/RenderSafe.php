@@ -21,11 +21,18 @@ namespace SugarCraft\Forms\Util;
  *     NOT match the SGR pattern because 'J'/'H'/'K' are not digits/';'.
  *   - OSC sequences (`\x1b]…`), bare ESC, and any ESC + single following byte.
  *
- * Preserves TAB (\x09) and LF (\x0A) and valid UTF-8 text.
+ * Preserves TAB (\x09) and LF (\x0A) — and ONLY those two C0 bytes — and
+ * valid UTF-8 text. CR (\x0D) is stripped: it falls in the C0 gap between
+ * the kept bytes and forges display content (overwrite-back) on every
+ * cleaned surface.
  *
- * C1 control bytes (0x80-0x9F) are NOT stripped because they overlap with
- * UTF-8 continuation byte range and stripping them from valid UTF-8 text
- * would corrupt multi-byte characters.
+ * C1 bytes (0x80-0x9F) inside VALID UTF-8 are never raw controls — every
+ * byte in that range is a multi-byte continuation byte there — so they are
+ * exempt from stripping. For INVALID UTF-8 (crafted dir names arrive as
+ * raw bytes via scandir) the exemption would fail: a lone 0x9B is 8-bit
+ * CSI in terminals that accept it. The sanitizer therefore normalizes
+ * non-UTF-8 input through mb_convert_encoding first, so every surviving
+ * 0x80-0xBF byte provably belongs to a legal sequence.
  *
  * Prevents untrusted content — FilePicker entries and paths, option
  * strings, labels and descriptions, validation-error messages, echoed
@@ -41,8 +48,15 @@ final class RenderSafe
     /**
      * Strip dangerous control bytes from an untrusted string.
      *
+     * Pass 0 — encoding normalization:
+     *   strings that are not valid UTF-8 are converted through
+     *   mb_convert_encoding() (invalid sequences replaced per the mbstring
+     *   substitution policy) so the C1 exemption in the class doc holds
+     *   provably: no raw 8-bit control byte survives outside a legal
+     *   multi-byte sequence.
+     *
      * Pass 1 — C0 (except TAB/LF) + DEL:
-     *   0x00–0x08, 0x0B, 0x0C, 0x0E–0x1A, 0x1C–0x1F, 0x7F
+     *   0x00–0x08, 0x0B–0x0D, 0x0E–0x1A, 0x1C–0x1F, 0x7F
      *
      * Pass 2 — strip every ESC-introduced sequence except true SGR:
      *   True SGR (ESC '[' + digits/';' + 'm') is kept intact; every other
@@ -59,10 +73,18 @@ final class RenderSafe
      */
     public static function clean(string $s): string
     {
-        // Pass 1: strip C0/DEL bytes (TAB and LF intentionally kept;
-        // ESC 0x1B intentionally kept so SGR sequences survive this pass).
+        // Pass 0: invalid UTF-8 carries raw 8-bit control bytes (lone 0x9B
+        // == CSI on 8-bit-parsing terminals) that pass 1/2 cannot see as
+        // controls. Normalize first; the C1 exemption is then sound.
+        if (!mb_check_encoding($s, 'UTF-8')) {
+            $s = (string) mb_convert_encoding($s, 'UTF-8', 'UTF-8');
+        }
+
+        // Pass 1: strip C0/DEL bytes (TAB and LF intentionally kept; CR is
+        // NOT — display-forging; ESC 0x1B intentionally kept so SGR
+        // sequences survive this pass).
         $s = preg_replace(
-            '/[\x00-\x08\x0B\x0C\x0E-\x1A\x1C-\x1F\x7F]/',
+            '/[\x00-\x08\x0B\x0C\x0D\x0E-\x1A\x1C-\x1F\x7F]/',
             '',
             $s,
         ) ?? $s;
