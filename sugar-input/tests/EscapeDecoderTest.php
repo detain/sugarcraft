@@ -1919,19 +1919,35 @@ final class EscapeDecoderTest extends TestCase
 
     public function testLargeAsciiPasteIsLinear(): void
     {
-        // ~500KB of printable ASCII. The old byte-by-byte substr loop was O(n²)
-        // (~0.8s at 160KB → ~8s extrapolated to 500KB); the offset walk is O(n)
-        // and finishes in a fraction of a second. A generous 2.0s bound cleanly
-        // separates fixed from broken without CI flakiness.
+        // ~500KB of printable ASCII, measured against an 8 KiB warm-up
+        // decode on the SAME machine. A ratio (not a wall-clock ceiling)
+        // is the honest linear pin: the old fixed 2.0 s bound passed on
+        // fast CI and flaked on slow CI without ever seeing the quadratic
+        // era's actual signature. O(n) costs 61x for 61x the bytes; 150x
+        // absorbs GC and noisy neighbours while a re-slicing regression
+        // would blow the ratio by ~2000x (the substr loop measured 0.8 s
+        // at 160 KB — a 2.5 s+ large leg against a 2 ms small leg).
+        // The 10 s absolute backstop exists only to catch a runaway.
+        $small = str_repeat('x', 8192);
+        $start = microtime(true);
+        $smallEvents = $this->decoder->decode($small);
+        $elapsedSmall = microtime(true) - $start;
+        $this->assertCount(8192, $smallEvents);
+
         $n = 500000;
         $input = str_repeat('x', $n);
 
         $start = microtime(true);
         $events = $this->decoder->decode($input);
-        $elapsed = microtime(true) - $start;
+        $elapsedLarge = microtime(true) - $start;
 
         $this->assertCount($n, $events);
-        $this->assertLessThan(2.0, $elapsed, "decode of {$n} ASCII bytes took {$elapsed}s (expected O(n))");
+        $this->assertLessThan(
+            150 * $elapsedSmall,
+            $elapsedLarge,
+            "decode of {$n} ASCII bytes took {$elapsedLarge}s against a {$elapsedSmall}s 8 KiB baseline (expected O(n))"
+        );
+        $this->assertLessThan(10.0, $elapsedLarge, "decode of {$n} ASCII bytes ran away at {$elapsedLarge}s");
     }
 
     // ─── CSI trailing-byte regression (handleCsiKey suffix isolation) ─────────
