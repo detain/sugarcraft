@@ -32,7 +32,7 @@ final class MaxWidthMarginTest extends TestCase
      */
     private function rows(SugarPanels $panels, Node $layout, int $w, int $h): array
     {
-        return \explode("\n", Ansi::strip(self::body($panels->render($layout, $w, $h))));
+        return self::rowsOf($panels->render($layout, $w, $h), strip: true);
     }
 
     private function bareLeaf(string $content): Node

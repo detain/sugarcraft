@@ -85,8 +85,12 @@ final class SugarPanelsTest extends TestCase
     public function testNodeTotalWidth(): void
     {
         $leaf = Node::leaf('hello')->withMinWidth(5);
+        // Each bordered leaf claims minWidth(5) + 2 frame = 7; the bordered
+        // horizontal container sums the children (14) and adds its own frame
+        // pair → 16. Pinned as a value: a bare "> 0" leg passes for any bug.
+        $this->assertSame(7, $leaf->totalWidth());
         $h = Node::horizontal($leaf, Node::leaf('world')->withMinWidth(5))->withBorder(true);
-        $this->assertGreaterThan(0, $h->totalWidth());
+        $this->assertSame(16, $h->totalWidth());
     }
 
     public function testNodeTotalHeight(): void
@@ -96,7 +100,10 @@ final class SugarPanelsTest extends TestCase
             Node::leaf('b')->withMinHeight(1),
         )->withBorder(true);
 
-        $this->assertGreaterThan(0, $v->totalHeight());
+        // Each bordered 1-row leaf stands 3 tall (content 1 + 2 frame rows);
+        // the stacked container sums them (6) and adds its own top and bottom
+        // rows → 8.
+        $this->assertSame(8, $v->totalHeight());
     }
 
     public function testTotalWidthIncludesLeftRightMargin(): void

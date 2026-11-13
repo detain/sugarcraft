@@ -29,7 +29,7 @@ final class FlexLayoutTest extends TestCase
     /** @return list<string> rendered rows (rtrimmed) */
     private function rows(Node $layout, int $w, int $h): array
     {
-        return array_map('rtrim', explode("\n", self::body($this->panels->render($layout, $w, $h))));
+        return self::rowsOf($this->panels->render($layout, $w, $h), rtrim: true);
     }
 
     /** Count rows whose first non-space content matches /^c\d/ (content body lines). */
@@ -79,19 +79,29 @@ final class FlexLayoutTest extends TestCase
 
     public function testTwoFlexChildrenSplitRemainderByWeight(): void
     {
-        // weight 3 : 1 over a tall region → the first panel gets ~3x the rows.
+        // weight 3 : 1 over a tall region → the first panel gets 3x the rows.
         $layout = $this->panels->vertical(
             $this->panels->leaf("a1\na2\na3\na4\na5\na6\na7\na8\na9")->withBorder(false)->withFlex(3),
             $this->panels->leaf("b1\nb2\nb3\nb4\nb5\nb6\nb7\nb8\nb9")->withBorder(false)->withFlex(1),
         )->withBorder(false)->withSpacing(1);
 
-        $rows = array_map('rtrim', explode("\n", self::body($this->panels->render($layout, 12, 13))));
+        // The solver's own contract, at the exact arguments this render feeds
+        // distributeFlex(): 13 rows, two 9-row fixed bases, weights 3:1, one
+        // spacing gap, no border pad → offsets [0, 10] — child a gets rows
+        // 0..8 (9 rows) and b takes the 3-row remainder below the gap.
+        $distributeFlex = new \ReflectionMethod(SugarPanels::class, 'distributeFlex');
+        $this->assertSame(
+            [0, 10],
+            $distributeFlex->invoke(SugarPanels::new(), 13, [9, 9], [3, 1], 1, 0),
+        );
+
+        $rows = $this->rows($layout, 12, 13);
         $a = count(array_filter($rows, static fn (string $r): bool => str_starts_with(ltrim($r), 'a')));
         $b = count(array_filter($rows, static fn (string $r): bool => str_starts_with(ltrim($r), 'b')));
 
-        // 12 content rows split 3:1 → ~9 and ~3.
-        $this->assertGreaterThan($b, $a);
-        $this->assertGreaterThanOrEqual(2, $b);
+        // 12 content rows split 3:1 → exactly 9 and 3.
+        $this->assertSame(9, $a);
+        $this->assertSame(3, $b);
     }
 
     public function testHorizontalFlexContentTakesLeftoverWidth(): void

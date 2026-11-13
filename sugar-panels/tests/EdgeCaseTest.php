@@ -576,17 +576,38 @@ final class EdgeCaseTest extends TestCase
 
     public function testPlaceLineManyZeroWidthGraphemesAccumulatesCarry(): void
     {
-        // Many combining marks that accumulate into the carry buffer.
-        // The MAX_CARRY limit (100) should cap accumulation.
-        $chars = [];
-        for ($i = 0; $i < 150; $i++) {
-            $chars[] = "\u{0300}"; // combining grave accent (zero width)
+        // The carry budgets are observable at their exact values, not just at
+        // "something bounded":
+        //  - base-cell payload cap = MAX_CARRY + 64 = 164 bytes → an A + n marks
+        //    cluster keeps floor((164 - 1) / 2) = 81 of the 2-byte marks;
+        //  - pre-base carry cap = MAX_CARRY = 100 bytes → 50 marks ride onto the
+        //    following base.
+        // A fresh renderer per leg: one instance diffing two near-identical
+        // frames would emit an empty delta and mask the assertions below.
+        $mark     = "\u{0300}"; // combining grave accent (zero width)
+        $trailing = static fn (int $n): string => Ansi::strip(
+            self::body(SugarPanels::new()->render(Node::leaf('A' . \str_repeat($mark, $n) . 'B')->withBorder(false), 10, 1)),
+        );
+        $leading = static fn (int $n): string => Ansi::strip(
+            self::body(SugarPanels::new()->render(Node::leaf(\str_repeat($mark, $n) . 'y')->withBorder(false), 10, 1)),
+        );
+
+        foreach ([99, 100, 101] as $n) {
+            $this->assertSame(
+                'A' . \str_repeat($mark, 81) . 'B' . \str_repeat(' ', 8),
+                $trailing($n),
+                "trailing-mark run of {$n} must clip at the 164-byte cell budget (81 marks)",
+            );
         }
-        $text = 'A' . \implode('', $chars) . 'B';
-        $layout = Node::leaf($text)->withBorder(false);
-        $result = self::body($this->panels->render($layout, 10, 1));
-        // Should render 'A' and 'B' with the combining marks attached.
-        $this->assertStringContainsString('B', $result);
+
+        $this->assertSame(\str_repeat($mark, 49) . 'y' . \str_repeat(' ', 9), $leading(49));
+        foreach ([50, 51] as $n) {
+            $this->assertSame(
+                \str_repeat($mark, 50) . 'y' . \str_repeat(' ', 9),
+                $leading($n),
+                "leading-mark run of {$n} must clip at the MAX_CARRY budget (50 marks)",
+            );
+        }
     }
 
     public function testPlaceLineTrailingStyleResetIsApplied(): void
@@ -923,12 +944,13 @@ final class EdgeCaseTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
-    // strWidth / nextGrapheme fallback when intl extension absent
+    // ASCII baseline placement through the render path
     // -------------------------------------------------------------------------
 
-    public function testStrWidthAsciiFallback(): void
+    public function testAsciiBaselinePlacementRenders(): void
     {
-        // Width::string with ASCII uses mb_strlen.
+        // A plain-ASCII leaf lands on the grid byte-honest — the baseline the
+        // combining-mark and wide-char cases below measure themselves against.
         $layout = Node::leaf('HELLO')->withBorder(false);
         $result = self::body($this->panels->render($layout, 10, 1));
         $this->assertStringContainsString('HELLO', $result);

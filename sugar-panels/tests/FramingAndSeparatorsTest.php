@@ -20,10 +20,6 @@ use PHPUnit\Framework\TestCase;
  */
 final class FramingAndSeparatorsTest extends TestCase
 {
-    private const HOME = "\x1b[H";
-
-    private const ERASE = "\x1b[2J";
-
     use ReadsFrames;
 
     /**
@@ -361,14 +357,7 @@ final class FramingAndSeparatorsTest extends TestCase
     /** Strip the frame protocol and trailing blanks, keeping empty rows. */
     private function rows(string $frame): array
     {
-        $body = $frame;
-        foreach ([self::ERASE, self::HOME] as $prefix) {
-            if (\str_starts_with($body, $prefix)) {
-                $body = \substr($body, \strlen($prefix));
-            }
-        }
-
-        return \array_map('\rtrim', \explode("\n", Ansi::strip($body)));
+        return self::rowsOf($frame, strip: true, rtrim: true);
     }
 
     /**
