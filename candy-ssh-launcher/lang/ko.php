@@ -46,6 +46,9 @@ return [
     'cli.missing_value'  => 'candy-ssh-launcher: {arg} 값이 필요합니다',
     'cli.no_endpoints'   => 'candy-ssh-launcher: {path}에 엔드포인트 없음',
     'cli.not_a_terminal' => '픽커에는 대화형 터미널이 필요합니다 — stdin과 stdout은 TTY여야 합니다. 기계 가독 출력에는 --list를 사용하십시오.',
+    'cli.config_unowned'   => 'candy-ssh-launcher: 다른 사용자가 소유한 구성은 거부합니다: {path} — 구성은 신뢰되는 입력입니다. README의 Security를 참조하세요.',
+    'cli.config_writable'  => 'candy-ssh-launcher: 그룹 또는 모든 사용자가 쓸 수 있는 구성은 거부합니다: {path} — 0644 또는 0600으로 조이거나 --config로 명시적으로 전달하세요.',
+    'cli.project_local'    => 'candy-ssh-launcher: 프로젝트 로컬 wishlist 사용 중: {path}',
 
     // picker chrome
     'picker.title'       => '── wishlist ──',

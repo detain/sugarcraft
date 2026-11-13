@@ -46,6 +46,9 @@ return [
     'cli.missing_value'  => 'candy-ssh-launcher: {arg} vyžaduje hodnotu',
     'cli.no_endpoints'   => 'candy-ssh-launcher: žádné endpointy v {path}',
     'cli.not_a_terminal' => 'výběr vyžaduje interaktivní terminál — stdin a stdout musí být TTY. Pro strojově čitelný výstup použijte --list.',
+    'cli.config_unowned'   => 'candy-ssh-launcher: zamítnuta konfigurace patřící jinému uživateli: {path} — konfigurace jsou důvěryhodný vstup; viz Security v README.',
+    'cli.config_writable'  => 'candy-ssh-launcher: zamítnuta konfigurace zapisovatelná skupinou nebo všemi: {path} — zpřísněte na 0644 nebo 0600, nebo předejte explicitně přes --config.',
+    'cli.project_local'    => 'candy-ssh-launcher: používána lokální wishlist projektu: {path}',
 
     // picker chrome
     'picker.title'       => '── wishlist ──',

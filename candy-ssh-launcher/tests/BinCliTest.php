@@ -53,6 +53,17 @@ final class BinCliTest extends TestCase
         return $dir;
     }
 
+    /**
+     * Write a config file the trust gate must ACCEPT: 0644, this user.
+     * The ambient umask here is 0002, so bare file_put_contents would land
+     * 0664 — group-writable, and the -006 gate would (rightly) refuse it.
+     */
+    private function scratchConfig(string $path, string $contents): void
+    {
+        file_put_contents($path, $contents);
+        chmod($path, 0o644);
+    }
+
     private static function removeTree(string $dir): void
     {
         foreach (scandir($dir) ?: [] as $entry) {
@@ -211,8 +222,8 @@ final class BinCliTest extends TestCase
         $cwd = $this->makeTempDir('ladder-a-cwd');
         $home = $this->makeTempDir('ladder-a-home');
         mkdir($home . '/.config');
-        file_put_contents($cwd . '/wishlist.yml', "- name: cwdbox\n  host: c.test\n");
-        file_put_contents($home . '/.config/wishlist.json', json_encode([
+        $this->scratchConfig($cwd . '/wishlist.yml', "- name: cwdbox\n  host: c.test\n");
+        $this->scratchConfig($home . '/.config/wishlist.json', json_encode([
             ['name' => 'homebox', 'host' => 'h.test'],
         ]) . "\n");
 
@@ -236,7 +247,7 @@ final class BinCliTest extends TestCase
         $cwd = $this->makeTempDir('ladder-b-cwd');
         $home = $this->makeTempDir('ladder-b-home');
         mkdir($home . '/.config');
-        file_put_contents($home . '/.config/wishlist.yaml', "- name: yamltier\n  host: y.test\n");
+        $this->scratchConfig($home . '/.config/wishlist.yaml', "- name: yamltier\n  host: y.test\n");
 
         [$code, $out, $err] = $this->runBin(
             ['--ssh', '/bin/true', '--list'],
@@ -259,6 +270,178 @@ final class BinCliTest extends TestCase
         $this->assertSame(1, $code, 'stderr: ' . $err);
         $this->assertStringContainsString('no config', $err);
         $this->assertStringNotContainsString('/./config', $err, 'the refusal may teach ~/.config/… (a path), never interpolate an empty HOME into a probe path');
+    }
+
+    public function testXdgConfigHomeRelocatesTheHomeTier(): void
+    {
+        // -030: $XDG_CONFIG_HOME overrides the $HOME/.config base, exactly
+        // like every sibling bin; the un-relocated decoy must NOT be read.
+        $cwd = $this->makeTempDir('xdg-cwd');
+        $home = $this->makeTempDir('xdg-home');
+        $xdg = $this->makeTempDir('xdg-base');
+        mkdir($home . '/.config', 0o755, true);
+        $this->scratchConfig($home . '/.config/wishlist.yml', "- name: decoy\n  host: no.test\n");
+        $this->scratchConfig($xdg . '/wishlist.yml', "- name: xdgbox\n  host: x.test\n");
+
+        [$code, $out, $err] = $this->runBin(
+            ['--ssh', '/bin/true', '--list'],
+            ['HOME' => $home, 'XDG_CONFIG_HOME' => $xdg],
+            cwd: $cwd,
+        );
+
+        $this->assertSame(0, $code, 'stderr: ' . $err);
+        $this->assertStringContainsString("xdgbox\tx.test:22\t-\n", $out);
+        $this->assertStringNotContainsString('decoy', $out);
+    }
+
+    public function testEmptyXdgFallsBackToHomeConfig(): void
+    {
+        // XDG set-but-empty behaves as unset ($base = getenv() ?: home/.config).
+        $cwd = $this->makeTempDir('xdg-empty-cwd');
+        $home = $this->makeTempDir('xdg-empty-home');
+        mkdir($home . '/.config', 0o755, true);
+        $this->scratchConfig($home . '/.config/wishlist.yml', "- name: homebox\n  host: h.test\n");
+
+        [$code, $out, $err] = $this->runBin(
+            ['--ssh', '/bin/true', '--list'],
+            ['HOME' => $home, 'XDG_CONFIG_HOME' => ''],
+            cwd: $cwd,
+        );
+
+        $this->assertSame(0, $code, 'stderr: ' . $err);
+        $this->assertStringContainsString("homebox\th.test:22\t-\n", $out);
+    }
+
+    public function testWorldWritableAutoConfigRefusedByTrustGate(): void
+    {
+        // -006 (HIGH): the CWD tier is the plantable one; a group/world-
+        // writable auto-discovered config must be refused by name, not read.
+        $cwd = $this->makeTempDir('trust-writable');
+        file_put_contents($cwd . '/wishlist.yml', "- name: planted\n  host: p.test\n");
+        chmod($cwd . '/wishlist.yml', 0o666);
+
+        [$code, , $err] = $this->runBin(['--ssh', '/bin/true', '--list'], cwd: $cwd);
+
+        $this->assertSame(1, $code, 'stderr: ' . $err);
+        $this->assertStringContainsString('writable', $err);
+        $this->assertStringNotContainsString('planted', $err, 'refusal names the path, the endpoints are never listed');
+    }
+
+    public function testGroupWritableAutoConfigRefusedByTrustGate(): void
+    {
+        $cwd = $this->makeTempDir('trust-group');
+        file_put_contents($cwd . '/wishlist.yml', "- name: planted\n  host: p.test\n");
+        chmod($cwd . '/wishlist.yml', 0o660);
+
+        [$code, , $err] = $this->runBin(['--ssh', '/bin/true', '--list'], cwd: $cwd);
+
+        $this->assertSame(1, $code, 'stderr: ' . $err);
+        $this->assertStringContainsString('writable', $err);
+    }
+
+    public function testConfigFlagSkipsTheTrustGate(): void
+    {
+        // Opt-in is consent: the SAME 0666 file arrives via --config and runs.
+        $cwd = $this->makeTempDir('trust-consent');
+        $path = $cwd . '/chosen-wishlist.yml';
+        file_put_contents($path, "- name: consented\n  host: c.test\n");
+        chmod($path, 0o660);
+
+        [$code, $out, $err] = $this->runBin(['--config', $path, '--ssh', '/bin/true', '--list'], cwd: $cwd);
+
+        $this->assertSame(0, $code, 'stderr: ' . $err);
+        $this->assertStringContainsString("consented\tc.test:22\t-\n", $out);
+    }
+
+    public function testUnownedAutoConfigRefusedByTrustGate(): void
+    {
+        // The ownership arm of the gate, exercised only where chown can be
+        // performed at all (root); skipped elsewhere with the dated note.
+        if (!function_exists('posix_geteuid') || posix_geteuid() !== 0) {
+            $this->markTestSkipped('chown(2) needs root — ownership arm untestable as an ordinary user (2026-11)');
+        }
+        $cwd = $this->makeTempDir('trust-unowned');
+        file_put_contents($cwd . '/wishlist.yml', "- name: planted\n  host: p.test\n");
+        chown($cwd . '/wishlist.yml', 65534);
+
+        [$code, , $err] = $this->runBin(['--ssh', '/bin/true', '--list'], cwd: $cwd);
+
+        $this->assertSame(1, $code, 'stderr: ' . $err);
+        $this->assertStringContainsString('another user', $err);
+    }
+
+    public function testProjectLocalNoticeMarksCwdTierWins(): void
+    {
+        $cwd = $this->makeTempDir('notice-cwd');
+        $home = $this->makeTempDir('notice-home');
+        mkdir($home . '/.config', 0o755, true);
+        $this->scratchConfig($home . '/.config/wishlist.json', json_encode([['name' => 'homebox', 'host' => 'h.test']]));
+        $this->scratchConfig($cwd . '/wishlist.yml', "- name: localbox\n  host: l.test\n");
+
+        [$code, $out, $err] = $this->runBin(
+            ['--ssh', '/bin/true', '--list'],
+            ['HOME' => $home],
+            cwd: $cwd,
+        );
+
+        $this->assertSame(0, $code, 'stderr: ' . $err);
+        $this->assertStringContainsString("localbox\tl.test:22\t-\n", $out);
+        $this->assertStringContainsString('project-local wishlist in use', $err);
+        $this->assertStringContainsString($cwd . '/wishlist.yml', $err, 'the notice names the resolved absolute path');
+    }
+
+    public function testHomeTierWinCarriesNoProjectLocalNotice(): void
+    {
+        $cwd = $this->makeTempDir('notice-none-cwd');
+        $home = $this->makeTempDir('notice-none-home');
+        mkdir($home . '/.config', 0o755, true);
+        $this->scratchConfig($home . '/.config/wishlist.yml', "- name: homebox\n  host: h.test\n");
+
+        [$code, $out, $err] = $this->runBin(
+            ['--ssh', '/bin/true', '--list'],
+            ['HOME' => $home],
+            cwd: $cwd,
+        );
+
+        $this->assertSame(0, $code, 'stderr: ' . $err);
+        $this->assertStringContainsString("homebox\th.test:22\t-\n", $out);
+        $this->assertStringNotContainsString('project-local', $err);
+    }
+
+    public function testSshLauncherSshEnvIsHonoredThenGated(): void
+    {
+        // -075: no --ssh flag, SSH_LAUNCHER_SSH names a NON-executable file —
+        // the env value must reach the executability gate verbatim and die
+        // there by name (proving the env arm won over the candidates).
+        $cwd = $this->makeTempDir('sshenv-cwd');
+        $home = $this->makeTempDir('sshenv-home');
+        mkdir($home . '/.config', 0o755, true);
+        $this->scratchConfig($home . '/.config/wishlist.yml', "- name: envbox\n  host: e.test\n");
+
+        [$code, , $err] = $this->runBin(
+            [],
+            ['HOME' => $home, 'SSH_LAUNCHER_SSH' => '/etc/shadow'],
+            cwd: $cwd,
+        );
+
+        $this->assertSame(1, $code, 'stderr: ' . $err);
+        $this->assertStringContainsString('/etc/shadow', $err);
+    }
+
+    public function testSshLauncherSshEnvWinsAndPassesTheGate(): void
+    {
+        $cwd = $this->makeTempDir('sshenv-ok-cwd');
+        $home = $this->makeTempDir('sshenv-ok-home');
+        mkdir($home . '/.config', 0o755, true);
+        $this->scratchConfig($home . '/.config/wishlist.yml', "- name: envbox\n  host: e.test\n");
+
+        [$code, , $err] = $this->runBin(
+            [],
+            ['HOME' => $home, 'SSH_LAUNCHER_SSH' => '/bin/echo'],
+            cwd: $cwd,
+        );
+
+        $this->assertSame(2, $code, 'stderr: ' . $err, 'the ssh gate passed on the env value; the non-TTY picker refusal answers next');
     }
 
     public function testConfigWithoutValueIsRefused(): void

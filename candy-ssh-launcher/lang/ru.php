@@ -46,6 +46,9 @@ return [
     'cli.missing_value'  => 'candy-ssh-launcher: {arg} требует значение',
     'cli.no_endpoints'   => 'candy-ssh-launcher: нет эндпоинтов в {path}',
     'cli.not_a_terminal' => 'для выбора требуется интерактивный терминал: stdin и stdout должны быть TTY. Используйте --list для машинного вывода.',
+    'cli.config_unowned'   => 'candy-ssh-launcher: отклонена конфигурация, принадлежащая другому пользователю: {path} — конфигурации являются доверенными данными; см. раздел Security в README.',
+    'cli.config_writable'  => 'candy-ssh-launcher: отклонена конфигурация, доступная для записи группе или всем: {path} — ужесточите режим до 0644 или 0600 либо передайте её явно через --config.',
+    'cli.project_local'    => 'candy-ssh-launcher: используется локальная wishlist проекта: {path}',
 
     // picker chrome
     'picker.title'       => '── wishlist ──',

@@ -95,7 +95,7 @@ candy-ssh-launcher [--config <path>] [--ssh <ssh-binary>] [--list] [-h|--help] [
 | Argument | Meaning |
 |----------|---------|
 | `--config <path>` | Read this config file and skip the search. Accepts `--config <path>` and `--config=<path>`; a missing value is refused. |
-| `--ssh <path>` | ssh binary to exec (default `/usr/bin/ssh`). Must be an **existing executable path** — `pcntl_exec` performs no `$PATH` search, so a bare `ssh` is rejected; relative paths resolve against the current directory. Accepts `--ssh <path>` and `--ssh=<path>`. |
+| `--ssh <path>` | ssh binary to exec. Must be an **existing executable path** — `pcntl_exec` performs no `$PATH` search, so a bare `ssh` is rejected; relative paths resolve against the current directory. Accepts `--ssh <path>` and `--ssh=<path>`. Without the flag the binary resolves through the environment variable `SSH_LAUNCHER_SSH`, then the candidate list (`/usr/bin/ssh`, `/run/current-system/sw/bin/ssh`, `/opt/homebrew/bin/ssh` — first existing executable wins), then the default `/usr/bin/ssh`. |
 | `--list` | Print the resolved endpoints to stdout as TAB-joined `name`, `host:port`, `user` columns (an unset or empty user prints as a literal `-`; a name that occurs more than once is suffixed with its 1-based config index, `dup#1`/`dup#3`), and exit `0` — no terminal, no ssh, no picker, and no `--ssh` executability check. Control and line bytes in every column are folded to spaces, so the output is exactly one physical row per endpoint and safe to `awk -F'\t'`. |
 | `-h`, `--help` | Print the usage line and exit `0`. |
 | `-v`, `--version` | Print `candy-ssh-launcher <version>` and exit `0` — reads no config, touches no terminal. |
@@ -119,9 +119,11 @@ Unrecognized flags **or arguments**, and options given without their value, exit
 
 1. `--config <path>` (CLI flag) — wins outright
 2. `wishlist.yml` / `wishlist.yaml` / `wishlist.json` in the **current directory** (first that exists) <!-- @rename-keep -->
-3. `~/.config/wishlist.yml` / `.yaml` / `.json` (only when `$HOME` is set; again first that exists)
+3. `$XDG_CONFIG_HOME/wishlist.yml` / `.yaml` / `.json` — or `~/.config/…` when `XDG_CONFIG_HOME` is unset (this tier is skipped entirely when neither `$HOME` nor XDG is set; again first that exists)
 
 So a config in the directory you launch from takes precedence over your home config. (The `wishlist.{yml,yaml,json}` file names predate the product rename and are kept for config-file compatibility.) Hosts are managed by **editing that file** — the launcher never rewrites your config. List ordering and navigation live under [Keybindings](#keybindings).
+
+Auto-discovered configs (tiers 2 and 3) face a trust gate in the OpenSSH `StrictModes` spirit: a config **owned by another user** or **writable by the group or the world** is refused by name and the run exits `1` — a planted repo file is the easiest attack in, and it must not win silently. Whenever the current-directory tier wins, a one-line notice marks the run on stderr (`project-local wishlist in use: <path>`). A config named explicitly via `--config` skips the gate on purpose: pointing at a file is consent.
 
 ## Config format
 

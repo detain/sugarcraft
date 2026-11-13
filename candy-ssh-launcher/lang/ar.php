@@ -46,6 +46,9 @@ return [
     'cli.missing_value'  => "candy-ssh-launcher: \u{2066}{arg}\u{2069} يتطلب قيمة",
     'cli.no_endpoints'   => "candy-ssh-launcher: لا توجد نقاط نهاية في \u{2066}{path}\u{2069}",
     'cli.not_a_terminal' => 'يحتاج المحدد إلى طرفية تفاعلية؛ يجب أن يكون stdin وstdout من نوع TTY. استخدم --list للحصول على مخرج قابل للقراءة آليًا.',
+    'cli.config_unowned'   => "candy-ssh-launcher: رفض تكوين يملكه مستخدم آخر: \u{2066}{path}\u{2069} — التكوينات مصدر موثوق؛ انظر Security في README.",
+    'cli.config_writable'  => "candy-ssh-launcher: رفض تكوين قابل للكتابة من المجموعة أو العالم: \u{2066}{path}\u{2069} — شدد صلاحياته إلى 0644 أو 0600 أو مرره صراحة عبر \u{2066}--config\u{2069}.",
+    'cli.project_local'    => "candy-ssh-launcher: يُستخدم wishlist المحلي للمشروع: \u{2066}{path}\u{2069}",
 
     // picker chrome
     'picker.title'       => '── wishlist ──',

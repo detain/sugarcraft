@@ -37,6 +37,37 @@ final class Launcher
      */
     public const DEFAULT_SSH = '/usr/bin/ssh';
 
+    /**
+     * Resolution order when neither `--ssh` nor `SSH_LAUNCHER_SSH` names a
+     * binary (-075: Linux, NixOS, Apple-Silicon Homebrew). No `$PATH`
+     * search is performed — `pcntl_exec` must receive exactly the path the
+     * CLI gate vetted, so a hostile PATH cannot swap the binary mid-lane.
+     *
+     * @var list<string>
+     */
+    public const SSH_CANDIDATES = [
+        '/usr/bin/ssh',
+        '/run/current-system/sw/bin/ssh',
+        '/opt/homebrew/bin/ssh',
+    ];
+
+    /**
+     * First candidate that is an existing executable file, or null when
+     * none is — the caller then falls back to {@see DEFAULT_SSH} and the
+     * honest exit-1 refusal names the default.
+     *
+     * @param list<string> $candidates
+     */
+    public static function firstExecutableSsh(array $candidates = self::SSH_CANDIDATES): ?string
+    {
+        foreach ($candidates as $path) {
+            if (is_file($path) && is_executable($path)) {
+                return $path;
+            }
+        }
+        return null;
+    }
+
     /** @var callable(string,list<string>): void */
     private $executor;
 

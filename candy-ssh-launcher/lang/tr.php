@@ -46,6 +46,9 @@ return [
     'cli.missing_value'  => 'candy-ssh-launcher: {arg} bir değer gerektirir',
     'cli.no_endpoints'   => 'candy-ssh-launcher: {path} içinde uç nokta yok',
     'cli.not_a_terminal' => 'seçici etkileşimli bir terminal gerektirir — stdin ve stdout birer TTY olmalıdır. Makinece okunabilir çıktı için --list kullanın.',
+    'cli.config_unowned'   => 'candy-ssh-launcher: başka bir kullanıcının sahip olduğu yapılandırma reddedildi: {path} — yapılandırmalar güvenilen girdidir; README içindeki Güvenlik bölümüne bakın.',
+    'cli.config_writable'  => 'candy-ssh-launcher: grup ya da herkes tarafından yazılabilen yapılandırma reddedildi: {path} — 0644 veya 0600 olarak sıkılaştırın ya da --config ile açıkça iletin.',
+    'cli.project_local'    => 'candy-ssh-launcher: proje yerel wishlist kullanımda: {path}',
 
     // picker chrome
     'picker.title'       => '── wishlist ──',

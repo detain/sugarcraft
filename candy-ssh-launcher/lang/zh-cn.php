@@ -46,6 +46,9 @@ return [
     'cli.missing_value'  => 'candy-ssh-launcher：{arg} 需要值',
     'cli.no_endpoints'   => 'candy-ssh-launcher：{path} 中没有端点',
     'cli.not_a_terminal' => '选择器需要交互式终端 —— stdin 和 stdout 必须是 TTY。如需机器可读输出，请使用 --list。',
+    'cli.config_unowned'   => 'candy-ssh-launcher：拒绝属于其他用户的配置：{path} —— 配置属于可信输入；见 README 的 Security 一节。',
+    'cli.config_writable'  => 'candy-ssh-launcher：拒绝组或其他用户可写的配置：{path} —— 请收紧为 0644 或 0600，或通过 --config 显式传入。',
+    'cli.project_local'    => 'candy-ssh-launcher：正在使用项目本地 wishlist：{path}',
 
     // picker chrome
     'picker.title'       => '── wishlist ──',

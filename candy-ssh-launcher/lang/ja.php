@@ -46,6 +46,9 @@ return [
     'cli.missing_value'  => 'candy-ssh-launcher：{arg} には値が必要です',
     'cli.no_endpoints'   => 'candy-ssh-launcher：{path} にエンドポイントがありません',
     'cli.not_a_terminal' => 'ピッカーには対話型ターミナルが必要です — stdin と stdout は TTY である必要があります。機械可読の出力には --list を使用してください。',
+    'cli.config_unowned'   => 'candy-ssh-launcher：他のユーザーが所有する設定は拒否します — {path}。設定は信頼される入力です（README の Security 参照）。',
+    'cli.config_writable'  => 'candy-ssh-launcher：グループまたは全員が書き込める設定は拒否します — {path}。0644 か 0600 に絞るか、--config で明示的に指定してください。',
+    'cli.project_local'    => 'candy-ssh-launcher：プロジェクトローカルの wishlist を使用中 — {path}',
 
     // picker chrome
     'picker.title'       => '── wishlist ──',

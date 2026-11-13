@@ -114,4 +114,29 @@ final class LauncherTest extends TestCase
             $this->assertStringContainsString('No such file or directory', $ex->getMessage());
         }
     }
+
+    public function testFirstExecutableSshWalksTheCandidateList(): void
+    {
+        // -075: first existing EXECUTABLE candidate wins; non-files and
+        // non-executables are passed over.
+        $this->assertSame(
+            PHP_BINARY,
+            Launcher::firstExecutableSsh(['/definitely-not-here/ssh', '/etc/shadow', PHP_BINARY]),
+            'a non-executable data file must not count as the binary'
+        );
+    }
+
+    public function testFirstExecutableSshReturnsNullWhenNothingResolves(): void
+    {
+        $this->assertNull(Launcher::firstExecutableSsh(['/definitely-not-here/ssh', '/etc/shadow']));
+    }
+
+    public function testSshCandidateListCoversTheDocumentedHosts(): void
+    {
+        $this->assertSame(
+            ['/usr/bin/ssh', '/run/current-system/sw/bin/ssh', '/opt/homebrew/bin/ssh'],
+            Launcher::SSH_CANDIDATES,
+            'the README --ssh row names exactly this list in this order'
+        );
+    }
 }

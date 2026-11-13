@@ -47,6 +47,9 @@ return [
     'cli.missing_value'  => 'candy-ssh-launcher: {arg} requires a value',
     'cli.no_endpoints'   => 'candy-ssh-launcher: no endpoints in {path}',
     'cli.not_a_terminal' => 'candy-ssh-launcher: the picker needs an interactive terminal — stdin and stdout must be TTYs. Use --list for machine-readable output.',
+    'cli.config_unowned'   => 'candy-ssh-launcher: refusing a config owned by another user: {path} — configs are trusted input; see Security in the README.',
+    'cli.config_writable'  => 'candy-ssh-launcher: refusing a config writable by the group or the world: {path} — tighten it to 0644 or 0600, or pass it explicitly via --config.',
+    'cli.project_local'    => 'candy-ssh-launcher: project-local wishlist in use: {path}',
 
     // picker chrome
     'picker.title'       => '── wishlist ──',
