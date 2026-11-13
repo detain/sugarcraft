@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Minesweeper\Tests;
 
+use SugarCraft\Core\Cmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\MouseClickMsg;
@@ -14,6 +15,7 @@ use SugarCraft\Minesweeper\Board;
 use SugarCraft\Minesweeper\Cell;
 use SugarCraft\Minesweeper\Difficulty;
 use SugarCraft\Minesweeper\Game;
+use SugarCraft\Minesweeper\Lang;
 use SugarCraft\Minesweeper\Renderer;
 use SugarCraft\Minesweeper\Stats;
 use SugarCraft\Minesweeper\Stats\DifficultyStats;
@@ -886,5 +888,33 @@ final class GameTest extends TestCase
         $this->assertSame(9.0, $frozen->elapsed(), 'elapsed() reads the frozen end time, not null');
         $this->assertStringContainsString('💥 boom', $frozen->view(), 'end screen still paints the boom line');
         $this->assertSame(0, $frozen->stats()->gamesPlayed(Difficulty::STANDARD), 'but custom games still tally nothing');
+    }
+
+    public function testCapsLockUppercaseRunesStillPlayTheGame(): void
+    {
+        // msw-13: the gameplay bindings are lowercase, so a CapsLock-on
+        // player's J/K/F/R/Q all fell through to the default arm — the game
+        // silently stopped answering. The fold accepts them; the genuinely
+        // case-significant keys (S save, L load, l move) stay split.
+        $g = Game::withDifficulty(Difficulty::EASY, static fn(int $max): int => 0);
+
+        [$g, ] = $g->update(self::key(KeyType::Char, 'J'));
+        $this->assertSame(1, $g->cursorY, 'J moves down like j');
+        [$g, ] = $g->update(self::key(KeyType::Char, 'K'));
+        $this->assertSame(0, $g->cursorY, 'K moves back up');
+
+        // 'L' is the LOAD key, never right-movement: the fold must not eat it.
+        [$g, ] = $g->update(self::key(KeyType::Char, 'L'));
+        $this->assertSame(0, $g->cursorX, 'L is load, not l — the cursor never moves right');
+
+        [$g, ] = $g->update(self::key(KeyType::Char, 'F'));
+        $this->assertTrue($g->board->cell(0, 0)?->flagged === true, 'F flags like f');
+
+        [$g, ] = $g->update(self::key(KeyType::Char, 'R'));
+        $this->assertFalse($g->board->cell(0, 0)->flagged, 'R restarts like r');
+        $this->assertSame(Lang::t('ui.restarted'), $g->notice);
+
+        [$g, $cmd] = $g->update(self::key(KeyType::Char, 'Q'));
+        $this->assertEquals(Cmd::quit(), $cmd, 'Q quits like q');
     }
 }

@@ -223,12 +223,26 @@ final class Game implements Model
             && !($msg->ctrl && $msg->rune === 'c')) {
             return [$this, null];
         }
+        // Gameplay runes fold to lowercase: the binding table is not uniform
+        // (q/r/f/c/h/j/k/l are lowercase keys while save/load ride uppercase
+        // S/L), so a CapsLock-on player arrives as 'Q','R','F'… and every
+        // press used to die in the default arm — the game silently stopped
+        // existing. The fold covers only runes whose uppercase form carries
+        // no separate meaning; S and L stay case-sensitive because their
+        // lowercase twins are taken ('l' moves the cursor, 's' is unbound
+        // so plain-lowercase never saves by accident).
+        $char = $msg->type === KeyType::Char
+            ? match ($msg->rune) {
+                'S', 'L' => $msg->rune,
+                default  => strtolower($msg->rune),
+            }
+            : $msg->rune;
         if ($msg->type === KeyType::Escape
-            || ($msg->type === KeyType::Char && $msg->rune === 'q')
+            || ($msg->type === KeyType::Char && $char === 'q')
             || ($msg->ctrl && $msg->rune === 'c')) {
             return [$this, Cmd::quit()];
         }
-        if ($msg->type === KeyType::Char && $msg->rune === 'r') {
+        if ($msg->type === KeyType::Char && $char === 'r') {
             // Restart carries the accumulated stats + persistence path forward so
             // a session's tally survives replays.
             return [$this->mutate([
@@ -241,7 +255,7 @@ final class Game implements Model
                 'notice'         => Lang::t('ui.restarted'),
             ]), null];
         }
-        if ($msg->type === KeyType::Char && $msg->rune === 'L') {
+        if ($msg->type === KeyType::Char && $char === 'L') {
             // Load deliberately sits ABOVE the over-gate: the point of loading
             // a save is often to step away from a board you just lost.
             return [$this->loadSaved(), null];
@@ -251,7 +265,7 @@ final class Game implements Model
             // board would only overwrite a live savegame with a dead one.
             return [$this, null];
         }
-        if ($msg->type === KeyType::Char && $msg->rune === 'S') {
+        if ($msg->type === KeyType::Char && $char === 'S') {
             return [$this->saveGame(), null];
         }
         if ($this->tooSmall()) {
@@ -263,19 +277,19 @@ final class Game implements Model
             return [$this, null];
         }
         $next = match (true) {
-            $msg->type === KeyType::Up    || ($msg->type === KeyType::Char && $msg->rune === 'k')
+            $msg->type === KeyType::Up    || ($msg->type === KeyType::Char && $char === 'k')
                 => $this->moveCursor(0, -1),
-            $msg->type === KeyType::Down  || ($msg->type === KeyType::Char && $msg->rune === 'j')
+            $msg->type === KeyType::Down  || ($msg->type === KeyType::Char && $char === 'j')
                 => $this->moveCursor(0, +1),
-            $msg->type === KeyType::Left  || ($msg->type === KeyType::Char && $msg->rune === 'h')
+            $msg->type === KeyType::Left  || ($msg->type === KeyType::Char && $char === 'h')
                 => $this->moveCursor(-1, 0),
-            $msg->type === KeyType::Right || ($msg->type === KeyType::Char && $msg->rune === 'l')
+            $msg->type === KeyType::Right || ($msg->type === KeyType::Char && $char === 'l')
                 => $this->moveCursor(+1, 0),
             $msg->type === KeyType::Space || $msg->type === KeyType::Enter
                 => $this->reveal(),
-            $msg->type === KeyType::Char && $msg->rune === 'f'
+            $msg->type === KeyType::Char && $char === 'f'
                 => $this->flag(),
-            $msg->type === KeyType::Char && $msg->rune === 'c'
+            $msg->type === KeyType::Char && $char === 'c'
                 => $this->chord(),
             default => $this,
         };
