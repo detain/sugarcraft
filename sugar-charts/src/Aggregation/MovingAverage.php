@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Charts\Aggregation;
 
+use SugarCraft\Charts\Lang;
 use SugarCraft\Charts\Support\Finite;
 
 /**
@@ -38,7 +39,7 @@ final class MovingAverage
     private static function assertWindow(int $windowSize): void
     {
         if ($windowSize <= 0) {
-            throw new \InvalidArgumentException('Window size must be > 0, got ' . $windowSize);
+            throw new \InvalidArgumentException(Lang::t('movingaverage.window_positive', ['given' => (string) $windowSize]));
         }
     }
 
@@ -49,7 +50,7 @@ final class MovingAverage
     private static function assertAlpha(float $alpha): void
     {
         if ($alpha <= 0.0 || $alpha > 1.0) {
-            throw new \InvalidArgumentException('EMA alpha must be in (0, 1], got ' . $alpha);
+            throw new \InvalidArgumentException(Lang::t('movingaverage.alpha_range', ['given' => (string) $alpha]));
         }
     }
 

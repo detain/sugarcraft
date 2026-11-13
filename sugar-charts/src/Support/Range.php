@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Charts\Support;
 
+use SugarCraft\Charts\Lang;
+
 /**
  * Range-pin ingestion guard shared by every axis-range setter.
  *
@@ -38,12 +40,11 @@ final class Range
             Finite::assert($max);
         }
         if ($min !== null && $max !== null && $min > $max) {
-            throw new \InvalidArgumentException(sprintf(
-                'Invalid %s range: min (%s) must not exceed max (%s)',
-                $axis,
-                (string) $min,
-                (string) $max,
-            ));
+            throw new \InvalidArgumentException(Lang::t('range.min_exceeds_max', [
+                'axis' => $axis,
+                'min' => (string) $min,
+                'max' => (string) $max,
+            ]));
         }
     }
 
@@ -65,12 +66,11 @@ final class Range
         $min = $pinMin ?? $scanMin;
         $max = $pinMax ?? $scanMax;
         if ($min > $max) {
-            throw new \InvalidArgumentException(sprintf(
-                'Invalid %s range: min (%s) must not exceed max (%s) — a lone pinned end that excludes the whole data set leaves no drawable domain',
-                $axis,
-                (string) $min,
-                (string) $max,
-            ));
+            throw new \InvalidArgumentException(Lang::t('range.pinned_min_exceeds_max', [
+                'axis' => $axis,
+                'min' => (string) $min,
+                'max' => (string) $max,
+            ]));
         }
         return [$min, $max];
     }

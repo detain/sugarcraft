@@ -30,7 +30,7 @@ final class BucketByTime
         public readonly int $offsetSeconds = 0,
     ) {
         if ($intervalSeconds <= 0) {
-            throw new \InvalidArgumentException('Bucket interval must be > 0, got ' . $intervalSeconds);
+            throw new \InvalidArgumentException(Lang::t('bucketbytime.interval_positive', ['given' => (string) $intervalSeconds]));
         }
     }
 

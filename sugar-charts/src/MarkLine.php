@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Charts;
 
+use SugarCraft\Charts\Lang;
+
 use SugarCraft\Charts\Support\Finite;
 use SugarCraft\Charts\Support\UntrustedText;
 
@@ -81,12 +83,13 @@ final class MarkLine
     public static function fromDataset(array $data, string $type, string|LineStyle $style = LineStyle::Dashed): self
     {
         if ($data === []) {
-            throw new \InvalidArgumentException('Cannot derive MarkLine from empty dataset');
+            throw new \InvalidArgumentException(Lang::t('markline.empty_dataset'));
         }
         if (!in_array($type, [self::MIN, self::MAX, self::AVERAGE], true)) {
-            throw new \InvalidArgumentException(
-                "Invalid MarkLine type: {$type} (expected one of: " . implode(', ', [self::MIN, self::MAX, self::AVERAGE]) . ')',
-            );
+            throw new \InvalidArgumentException(Lang::t('markline.invalid_type', [
+                'type' => $type,
+                'allowed' => implode(', ', [self::MIN, self::MAX, self::AVERAGE]),
+            ]));
         }
 
         $values = array_values($data);
@@ -141,9 +144,10 @@ final class MarkLine
 
         $case = LineStyle::tryFrom($style);
         if ($case === null) {
-            throw new \InvalidArgumentException(
-                "Invalid MarkLine style: {$style} (expected one of: " . implode(', ', self::STYLES) . ')',
-            );
+            throw new \InvalidArgumentException(Lang::t('markline.invalid_style', [
+                'style' => $style,
+                'allowed' => implode(', ', self::STYLES),
+            ]));
         }
 
         return $case;

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Charts\OHLC;
 
+use SugarCraft\Charts\Lang;
+
 use SugarCraft\Charts\Support\Finite;
 
 /**
@@ -34,11 +36,10 @@ final class Bar
         // enforced: coarse real-world feeds legitimately emit bodies poking
         // past recorded wicks, and the renderer clamps those anyway.
         if ($high < $low) {
-            throw new \InvalidArgumentException(sprintf(
-                'Invalid OHLC bar: high (%s) must not be below low (%s)',
-                (string) $high,
-                (string) $low,
-            ));
+            throw new \InvalidArgumentException(Lang::t('ohlc.high_below_low', [
+                'high' => (string) $high,
+                'low' => (string) $low,
+            ]));
         }
     }
 
