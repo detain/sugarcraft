@@ -375,10 +375,22 @@ clickable until something replaces it under the same id, `clear($id)`
 removes it, or `close()` wipes the registry — so re-scan every frame you
 want authoritative, and clear ids you retire. Manager hit-testing resolves
 the SMALLEST covering area first (nested components: innermost wins), ties
-between equal areas go to the first-recorded zone — matching the
-primitive's registration-order rule. Use `allInBounds($msg)` for the full
+between equal areas go to the first-recorded zone — the one point where it
+agrees with the primitive's registration-order rule. Use `allInBounds($msg)`
+for the full
 stack (smallest first) and `zoneAt($col, $row)` to hit-test cells without a
 mouse message (scroll wheel landed here, tooltip anchor, etc.).
+
+**Overlay contract (no stacking primitive).** Neither layer has a z-order:
+no priority stamp, no layer field, no modal state. Because the `Manager`
+resolves by smallest covering area, a full-screen modal scanned into the
+same registry loses every hit to any smaller zone painted underneath it —
+clicks land on invisible controls. Do not overlay layers inside one
+registry: retire the base ids (`clear($id)` / `clear()`) before a modal
+opens, or give each layer its own `Manager` (`newGlobal()` / `newPrefix()`)
+and route events to the top layer first. A stacking primitive (zone
+priority / paint-order stamp, area demoted to tiebreak) is an open owner
+decision; until it ships, the retire-or-split rule above is the contract.
 
 **Id format:** the marked id — including any manager prefix, i.e.
 `prefix() . $id` — must match `\A[A-Za-z0-9._:-]+\z` (ASCII letters, digits,

@@ -108,7 +108,10 @@ final class Scanner
      *
      * "First zone" is preserved verbatim: buckets are populated in zone
      * insertion order, so among overlapping zones the earliest-registered
-     * still wins — identical to the old linear scan.
+     * still wins. Registration order is the whole rule here — unlike
+     * {@see \SugarCraft\Mouse\Zones\Manager::anyInBounds()}, which resolves
+     * by smallest area first, so one frame can have different hit owners in
+     * the two layers (see the README overlay contract).
      *
      * @param int $col Terminal column (1-based).
      * @param int $row Terminal row (1-based).

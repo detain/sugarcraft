@@ -269,11 +269,15 @@ final class Manager
     /**
      * Walk the recorded zones and return the innermost (smallest-area) one
      * whose bounds contain `$mouse`. When zones nest, the smallest one wins;
-     * on equal area the FIRST recorded zone wins (matching the primitive
-     * {@see \SugarCraft\Mouse\Scanner} earliest-registered rule). Returns
-     * null if no zone matches (or if the Msg isn't a {@see MouseMsg} to
-     * begin with — handy when models blanket-route every Msg through this
-     * helper).
+     * on equal area the first-recorded zone wins. That tie rule is the only
+     * part the primitive {@see \SugarCraft\Mouse\Scanner} `hit()` shares:
+     * the Scanner resolves purely by earliest registration, so the two
+     * layers can disagree about who owns one painted frame. This registry
+     * has no stacking concept — no priority, layer, or modal state — see the
+     * overlay contract in README's Zones section before scanning a
+     * full-screen modal over a live registry. Returns null if no zone
+     * matches (or if the Msg isn't a {@see MouseMsg} to begin with — handy
+     * when models blanket-route every Msg through this helper).
      *
      * Mirrors bubblezone's `Manager::AnyInBounds()`.
      */
