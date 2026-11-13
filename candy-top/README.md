@@ -797,7 +797,7 @@ vendor/bin/phpunit
 
 - **Golden fixtures.** Goldens live under `tests/fixtures/` (frames, panels, overlays). The legacy banner the menus fall back to is a byte-identical golden: with the logo off or unavailable, the pinned frame is exactly the pre-logo banner. Regenerate them with `CANDY_TOP_UPDATE_GOLDENS=1 vendor/bin/phpunit <test>` and review the diff.
 - **README tables.** The key, config and theme blocks above are generated. After a deliberate roster change, run `CANDY_TOP_UPDATE_DOCS=1 vendor/bin/phpunit tests/Docs` and review the README diff.
-- **i18n.** User-facing strings are `Lang::t()` keys in `lang/en.php`; `en` is currently the only shipped locale.
+- **i18n.** User-facing strings are `Lang::t()` keys in `lang/en.php`; `en` plus 12 translations ship (de, es, fr, it, pt, pt-br, nl, ja, ko, zh-cn, zh-tw, ru), each pinned to `en` key and placeholder parity by `tests/LangPackParityTest.php`.
 - **Architecture.** For the architecture (Model–Update–View runtime, panel seam, input precedence, overlays) and implementation notes, read `candy-top/CALIBER_LEARNINGS.md` (shipped with this package).
 
 ## License
