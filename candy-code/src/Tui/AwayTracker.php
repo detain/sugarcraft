@@ -106,10 +106,27 @@ final class AwayTracker
             return false;
         }
 
+        return self::userTierPermits(
+            static fn(): array => Bootstrap::readUserConfigWithoutProjectTier(),
+        );
+    }
+
+    /**
+     * The user tier's word on the recap. An absent key means enabled (the
+     * shipped default); a tier that cannot be READ at all means INERT: this
+     * is a narrowing key, so an unreadable file may be the very one holding
+     * `false`, and guessing "on" would re-enable a recap the user switched
+     * off. Same inert posture as the other swallows in this layer.
+     *
+     * @internal exposed so the failure arm is testable without a corrupt tier.
+     * @param \Closure():array<string,mixed> $read
+     */
+    public static function userTierPermits(\Closure $read): bool
+    {
         try {
-            $userTier = Bootstrap::readUserConfigWithoutProjectTier()[self::SETTING_KEY] ?? true;
+            $userTier = $read()[self::SETTING_KEY] ?? true;
         } catch (\Throwable) {
-            $userTier = true;
+            return false;
         }
 
         return $userTier !== false;

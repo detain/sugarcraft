@@ -62,6 +62,19 @@ final class AwayTrackerTest extends TestCase
         self::assertTrue(AwayTracker::recapEnabled(), 'the kill is gone when the variable is');
     }
 
+    public function testUserTierAbsentIsOnFalseIsOffUnreadableIsInert(): void
+    {
+        self::assertTrue(AwayTracker::userTierPermits(static fn(): array => []), 'absent = shipped default on');
+        self::assertTrue(AwayTracker::userTierPermits(static fn(): array => [AwayTracker::SETTING_KEY => true]));
+        self::assertFalse(AwayTracker::userTierPermits(static fn(): array => [AwayTracker::SETTING_KEY => false]));
+        self::assertFalse(
+            AwayTracker::userTierPermits(static function (): array {
+                throw new \RuntimeException('corrupt tier');
+            }),
+            'an unreadable tier fails toward inert, never toward re-enabling',
+        );
+    }
+
     public function testARegainWithNoStampClosesNothing(): void
     {
         self::assertNull(AwayTracker::focusGained(self::T0 + 10));
