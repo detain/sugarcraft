@@ -82,16 +82,39 @@ function fail(string $msg): never
     exit(2);
 }
 
+/**
+ * SEC-01 (ci-matrix script injection): every discovered dir name becomes
+ * `${{ matrix.lib }}` pasted into downstream `run:` bodies. A name that is
+ * not strict kebab-ASCII can never be a legitimate slug, so it is dropped
+ * from the candidate list AND the whole discovery fails loud — a planted
+ * `sugar-x$(touch /tmp/pwned)/` directory must redden build-matrix, never
+ * execute on a runner.
+ */
+function is_safe_lib_slug(string $slug): bool
+{
+    return preg_match('/^[a-z0-9][a-z0-9-]*$/', $slug) === 1;
+}
+
 /** @return list<string> Sorted list of lib slugs discovered on disk. */
 function discover_libs(): array
 {
     $libs = [];
+    $offenders = [];
     foreach (glob(ROOT . '/*/composer.json') ?: [] as $path) {
         $dir = basename(dirname($path));
         // Skip anything that isn't a testable lib — phpunit.xml is the marker.
-        if (is_file(dirname($path) . '/phpunit.xml')) {
-            $libs[] = $dir;
+        if (!is_file(dirname($path) . '/phpunit.xml')) {
+            continue;
         }
+        if (!is_safe_lib_slug($dir)) {
+            $offenders[] = $dir;
+            continue;
+        }
+        $libs[] = $dir;
+    }
+    if ($offenders !== []) {
+        fail('rejected lib dir name(s) failing slug grammar: ' . implode(', ', $offenders)
+            . ' (lib slugs must match ^[a-z0-9][a-z0-9-]*$)');
     }
     sort($libs);
     return $libs;

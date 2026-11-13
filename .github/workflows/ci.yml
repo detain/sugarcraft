@@ -118,6 +118,29 @@ jobs:
           JSON=$(php scripts/affected-libs.php $MODE)
           echo "$JSON" | jq -r '. | "force_all=\(.force_all) changed=\(.changed_libs | length) affected=\(.affected | length)"' >&2
 
+          # SEC-01 (ci-matrix script injection): defense-in-depth slug gate.
+          # Every lib slug that is about to be exported — the .lib arrays and
+          # include[].lib of each matrix, plus the flat coverage_libs list —
+          # must be strict kebab-ASCII. affected-libs.php already refuses to
+          # emit anything else; this gate guarantees no future generator can
+          # regress that and let a crafted name reach a `run:` body.
+          while IFS= read -r SLUG; do
+            if ! printf '%s' "$SLUG" | grep -Eq '^[a-z0-9][a-z0-9-]*$'; then
+              echo "::error::build-matrix: lib slug rejected (must match ^[a-z0-9][a-z0-9-]*\$): '$SLUG'"
+              exit 1
+            fi
+          done < <(echo "$JSON" | jq -r '[
+              (.test_matrix.lib // []),
+              ((.test_matrix.include // []) | map(.lib? // empty)),
+              (.coverage_libs // []),
+              (.phpstan_matrix.lib // []),
+              ((.phpstan_matrix.include // []) | map(.lib? // empty)),
+              (.windows_matrix.lib // []),
+              ((.windows_matrix.include // []) | map(.lib? // empty)),
+              (.macos_matrix.lib // []),
+              ((.macos_matrix.include // []) | map(.lib? // empty))
+            ] | add | .[] | select(. != null)')
+
           # Coverage only runs on push-to-master (cost gate kept).
           if [ "$IS_MASTER_PUSH" != "true" ]; then
             JSON=$(echo "$JSON" | jq '.coverage_libs = []')
@@ -494,7 +517,9 @@ jobs:
         run: php tools/check-path-repos.php --fix --strict-closure
 
       - name: Install dependencies
-        run: cd ${{ matrix.lib }} && composer install --prefer-dist --no-progress -n
+        env:
+          MAT_LIB: ${{ matrix.lib }}
+        run: cd "$MAT_LIB" && composer install --prefer-dist --no-progress -n
 
       # The channel bundles (candy-msteams, candy-discord) are tested against the
       # host tree: tests/bootstrap.php loads ../candy-code/vendor/autoload.php
@@ -595,7 +620,9 @@ jobs:
 
       - name: Run tests (serial)
         if: matrix.lib != 'candy-code'
-        run: php ${{ matrix.lib }}/vendor/bin/phpunit -c ${{ matrix.lib }}/phpunit.xml --colors=never
+        env:
+          MAT_LIB: ${{ matrix.lib }}
+        run: php "$MAT_LIB/vendor/bin/phpunit" -c "$MAT_LIB/phpunit.xml" --colors=never
 
   # Windows test job — verifies Windows-native TTY paths (FFI/kernel32 paths
   # in sugar-core) pass on windows-latest. Uses a small matrix of the most
@@ -643,7 +670,9 @@ jobs:
         run: php tools/check-path-repos.php --fix --strict-closure
 
       - name: Install dependencies
-        run: cd ${{ matrix.lib }} && composer install --prefer-dist --no-progress -n --ignore-platform-req=ext-pcntl --ignore-platform-req=ext-shmop
+        env:
+          MAT_LIB: ${{ matrix.lib }}
+        run: cd "$env:MAT_LIB" && composer install --prefer-dist --no-progress -n --ignore-platform-req=ext-pcntl --ignore-platform-req=ext-shmop
 
       # sugar-core: run TTY subsystem tests (where WindowsBackend / kernel32 FFI
       # lives).  sugar-pty: run only tests\Windows — the rest of its suite is
@@ -654,13 +683,15 @@ jobs:
       # full suite — any failures there are pre-existing and
       # unrelated to the x/windows changes.
       - name: Run tests
+        env:
+          MAT_LIB: ${{ matrix.lib }}
         run: |
-          if (Test-Path ${{ matrix.lib }}\tests\Util\Tty) {
-            php ${{ matrix.lib }}\vendor\bin\phpunit -c ${{ matrix.lib }}\phpunit.xml ${{ matrix.lib }}\tests\Util\Tty\ --colors=never
-          } elseif (Test-Path ${{ matrix.lib }}\tests\Windows) {
-            php ${{ matrix.lib }}\vendor\bin\phpunit -c ${{ matrix.lib }}\phpunit.xml ${{ matrix.lib }}\tests\Windows\ --colors=never
+          if (Test-Path "$env:MAT_LIB\tests\Util\Tty") {
+            php "$env:MAT_LIB\vendor\bin\phpunit" -c "$env:MAT_LIB\phpunit.xml" "$env:MAT_LIB\tests\Util\Tty\" --colors=never
+          } elseif (Test-Path "$env:MAT_LIB\tests\Windows") {
+            php "$env:MAT_LIB\vendor\bin\phpunit" -c "$env:MAT_LIB\phpunit.xml" "$env:MAT_LIB\tests\Windows\" --colors=never
           } else {
-            php ${{ matrix.lib }}\vendor\bin\phpunit -c ${{ matrix.lib }}\phpunit.xml --colors=never
+            php "$env:MAT_LIB\vendor\bin\phpunit" -c "$env:MAT_LIB\phpunit.xml" --colors=never
           }
 
   # macOS test job — verifies POSIX PTY paths (sugar-pty's libc FFI:
@@ -710,13 +741,17 @@ jobs:
         run: php tools/check-path-repos.php --fix --strict-closure
 
       - name: Install dependencies
-        run: cd ${{ matrix.lib }} && composer install --prefer-dist --no-progress -n
+        env:
+          MAT_LIB: ${{ matrix.lib }}
+        run: cd "$MAT_LIB" && composer install --prefer-dist --no-progress -n
 
       - name: List Modules
         run: php -m
 
       - name: Run tests
-        run: php ${{ matrix.lib }}/vendor/bin/phpunit -c ${{ matrix.lib }}/phpunit.xml --colors=never
+        env:
+          MAT_LIB: ${{ matrix.lib }}
+        run: php "$MAT_LIB/vendor/bin/phpunit" -c "$MAT_LIB/phpunit.xml" --colors=never
 
   # rv-devops-5 (crush-review-1014): candy-code macOS SMOKE — install, lint
   # sweep, boot. Deliberately NOT in the macos test matrix: candy-code stays
@@ -977,17 +1012,21 @@ jobs:
         run: php tools/check-path-repos.php --fix --strict-closure
 
       - name: Install dependencies
+        env:
+          MAT_LIB: ${{ matrix.lib }}
         run: |
           set -e
           for i in 1 2 3; do
-            cd ${{ matrix.lib }} && composer install --prefer-dist --no-progress -n && break
+            cd "$MAT_LIB" && composer install --prefer-dist --no-progress -n && break
             echo "Composer install failed, retry $i/3 in 10s..."
             sleep 10
           done
 
       - name: Run tests with coverage (serial)
         if: matrix.lib != 'candy-code'
-        run: php ${{ matrix.lib }}/vendor/bin/phpunit -c ${{ matrix.lib }}/phpunit.xml --colors=never --coverage-clover=${{ matrix.lib }}/coverage.xml
+        env:
+          MAT_LIB: ${{ matrix.lib }}
+        run: php "$MAT_LIB/vendor/bin/phpunit" -c "$MAT_LIB/phpunit.xml" --colors=never --coverage-clover="$MAT_LIB/coverage.xml"
 
       # E691 (2026-09-11): candy-code coverage shards through the E671 harness
       # (same never-oversubscribe K = cores capped at 4 — 2x oversubscription
@@ -1150,7 +1189,11 @@ jobs:
         run: php tools/check-path-repos.php --fix --strict-closure
 
       - name: Install dependencies
-        run: cd ${{ matrix.lib }} && composer install --prefer-dist --no-progress -n
+        env:
+          MAT_LIB: ${{ matrix.lib }}
+        run: cd "$MAT_LIB" && composer install --prefer-dist --no-progress -n
 
       - name: Run PHPStan
-        run: php ${{ matrix.lib }}/vendor/bin/phpstan analyse --level=5 --no-progress -c ${{ matrix.lib }}/phpstan.neon
+        env:
+          MAT_LIB: ${{ matrix.lib }}
+        run: php "$MAT_LIB/vendor/bin/phpstan" analyse --level=5 --no-progress -c "$MAT_LIB/phpstan.neon"
