@@ -151,6 +151,40 @@ final class AsyncCacheBoundedTest extends TestCase
         $this->resolveWith($cache->fetch('k', self::loader('good')), 'good');
     }
 
+    public function test_shrink_below_size_drains_at_the_setter(): void
+    {
+        // finding-035: the old evictOverflow() recursed once per excess
+        // entry, so a shrink past the cap cost O(entries - cap) stack depth
+        // on the next write. Drain loop + setter-time eviction: the shrink
+        // itself brings the store to the cap, and a constant one evicts per
+        // later write.
+        $clock = new FakeClock(1000.0);
+        $cache = AsyncCache::new(ttlSeconds: 100.0, clock: $clock, maxEntries: 1000);
+
+        for ($i = 0; $i < 1000; $i++) {
+            $clock->advance(0.001);
+            $this->resolveWith($cache->fetch("k$i", self::loader("v$i")), "v$i");
+        }
+        self::assertCount(1000, $cache->keys());
+
+        $shrunk = $cache->withMaxEntries(10);
+        self::assertCount(10, $shrunk->keys(), 'the drain lands on the setter, not lazily across later writes');
+        // Order/tie logic unchanged: the ten most-recently-STORED survive,
+        // in storage order.
+        self::assertSame(
+            ['k990', 'k991', 'k992', 'k993', 'k994', 'k995', 'k996', 'k997', 'k998', 'k999'],
+            $shrunk->keys(),
+        );
+
+        $clock->advance(0.001);
+        $this->resolveWith($shrunk->fetch('fresh', self::loader('vf')), 'vf');
+        self::assertSame(
+            ['k991', 'k992', 'k993', 'k994', 'k995', 'k996', 'k997', 'k998', 'k999', 'fresh'],
+            $shrunk->keys(),
+            'a write after the shrink evicts exactly one, at the cap',
+        );
+    }
+
     /** @return callable(): PromiseInterface */
     private static function loader(mixed $value): callable
     {

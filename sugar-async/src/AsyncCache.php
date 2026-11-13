@@ -150,7 +150,13 @@ final class AsyncCache
     {
         self::guardMaxEntries($maxEntries);
 
-        return new self($this->ttlSeconds, $this->serveStaleOnError, $this->store, $maxEntries);
+        $next = new self($this->ttlSeconds, $this->serveStaleOnError, $this->store, $maxEntries);
+        // A shrink below the current size drains on the setter — the cap is
+        // a promise about the handle, not a deferred cleanup for later
+        // writes to discover.
+        $next->evictOverflow();
+
+        return $next;
     }
 
     /**
@@ -262,28 +268,31 @@ final class AsyncCache
 
     /**
      * Cap enforcement at adoption time: evict least-recently-stored keys
-     * (equal stamps break insertion-first via a strict '<' scan). The
-     * just-adopted key carries the newest stamp, so it is never a candidate.
-     * Flights are untouched — a coalescing load is not a stored value.
+     * (equal stamps break insertion-first via a strict '<' scan) until the
+     * store sits at or below the cap. A drain loop, never self-recursion:
+     * a shrink below size would otherwise cost stack depth per excess entry.
+     * The just-adopted key carries the newest stamp, so it is never a
+     * candidate. Flights are untouched — a coalescing load is not a stored
+     * value.
      */
     private function evictOverflow(): void
     {
-        if ($this->maxEntries === null || count($this->store->values) <= $this->maxEntries) {
+        if ($this->maxEntries === null) {
             return;
         }
 
-        $oldest = array_key_first($this->store->values);
-        $oldestStamp = $this->store->storedAt[$oldest];
-        foreach ($this->store->values as $candidate => $_) {
-            if ($this->store->storedAt[$candidate] < $oldestStamp) {
-                $oldest = $candidate;
-                $oldestStamp = $this->store->storedAt[$candidate];
+        while (count($this->store->values) > $this->maxEntries) {
+            $oldest = array_key_first($this->store->values);
+            $oldestStamp = $this->store->storedAt[$oldest];
+            foreach ($this->store->values as $candidate => $_) {
+                if ($this->store->storedAt[$candidate] < $oldestStamp) {
+                    $oldest = $candidate;
+                    $oldestStamp = $this->store->storedAt[$candidate];
+                }
             }
+
+            unset($this->store->values[$oldest], $this->store->storedAt[$oldest]);
         }
-
-        unset($this->store->values[$oldest], $this->store->storedAt[$oldest]);
-
-        $this->evictOverflow();
     }
 
     private function adopt(string $key, PromiseInterface $flight, Deferred $deferred, mixed $value): void
