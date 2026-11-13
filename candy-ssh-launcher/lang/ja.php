@@ -22,6 +22,8 @@ return [
     'config.unknown_key_nearmiss' => '不明なフィールド `{key}` を無視しました — `{field}` のことですか?',
     'config.duplicate_name' => 'エンドポイント名 `{name}` が重複 — 全行を読み込みます; 名前は識別子です',
     'config.field_not_scalar'  => 'wishlist エントリー: フィールド [{field}] はスカラーである必要があります。取得型: {type}',
+    'config.too_large'          => '\u30a6\u30a3\u30c3\u30b7\u30e5\u30ea\u30b9\u30c8\u8a2d\u5b9a\u30d5\u30a1\u30a4\u30eb\u304c\u4e0a\u9650 {limit} \u30d0\u30a4\u30c8\u3092\u8d85\u3048\u3066\u3044\u307e\u3059: {path}',
+    'config.list_too_long'      => '\u30a6\u30a3\u30c3\u30b7\u30e5\u30ea\u30b9\u30c8\u30a8\u30f3\u30c8\u30ea: \u30d5\u30a3\u30fc\u30eb\u30c9 [{field}] \u306f\u30ed\u30fc\u30c0\u30fc\u304c\u8a31\u53ef\u3059\u308b\u4e0a\u9650 {limit} \u4ef6\u3092\u8d85\u3048\u3066\u3044\u307e\u3059',
     'config.unreadable'       => 'wishlist 設定を読み込めません：{path}',
     'config.home_unset'       => 'HOME がないため ~ を展開できません：{path}',
     'config.yaml_inline_flow' => 'wishlist yaml: インラインフロウコレクションは未対応: {value}（ネストされたリストを使用）',

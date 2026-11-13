@@ -286,11 +286,20 @@ final class SshConfigParser
     private function appendList(array &$options, string $key, string $value): void
     {
         if (!isset($options[$key])) {
+            /** @var array<string, list<string>> $options */
             $options[$key] = [];
         }
-        /** @var list<string> $bucket */
-        $bucket = $options[$key];
+        // -016: same in-place append + shared cap as the wishlist reader.
+        // A thousand repeated IdentityFile lines is a broken file, and the
+        // old copy-per-item write-back made collecting one key quadratic.
+        $bucket = &$options[$key];
+        if (count($bucket) >= Config::MAX_LIST_ITEMS) {
+            throw new \RuntimeException(Lang::t('config.list_too_long', [
+                'field' => $key,
+                'limit' => (string) Config::MAX_LIST_ITEMS,
+            ]));
+        }
         $bucket[] = $value;
-        $options[$key] = $bucket;
+        unset($bucket);
     }
 }

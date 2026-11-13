@@ -59,6 +59,23 @@ final class Config
     ];
 
     /**
+     * -016: read ceiling for every file this class ingests. A config past
+     * this size is a wrong path (a device, a redirect of someone else's
+     * log), not a wishlist — and the loader refuses BEFORE slurping the
+     * bytes into memory.
+     */
+    private const MAX_CONFIG_BYTES = 4 * 1024 * 1024;
+
+    /**
+     * -016: cap on items collected into one value-less list field
+     * (options:, flags:, repeated ssh_config keys). Past this the file
+     * has stopped being a hosts directory; a silent multi-thousand-entry
+     * argv is not worth building, so the loader refuses by name instead.
+     * Shared with {@see SshConfigParser::appendList()}.
+     */
+    public const MAX_LIST_ITEMS = 1000;
+
+    /**
      * Documented alternative spellings, resolved BEHIND their canonical key
      * (canonical wins when both are present): `proxy_jump`/`identity_files`
      * are the upstream array spellings (-004's migration footgun),
@@ -152,6 +169,17 @@ final class Config
      */
     private static function readOrThrow(string $path): string
     {
+        // -016: ceiling first. file_get_contents has no length contract,
+        // and a misconfigured --config /dev/zero (or a log redirected into
+        // the wishlist name) would have the parser malloc the whole file
+        // before the first line could error. Fail fast, naming the limit.
+        $size = @filesize($path);
+        if ($size !== false && $size > self::MAX_CONFIG_BYTES) {
+            throw new \RuntimeException(Lang::t('config.too_large', [
+                'path'  => $path,
+                'limit' => (string) self::MAX_CONFIG_BYTES,
+            ]));
+        }
         $raw = @file_get_contents($path);
         if ($raw === false) {
             throw new \RuntimeException(Lang::t('config.unreadable', ['path' => $path]));
@@ -278,10 +306,25 @@ final class Config
             // `    - ServerAliveInterval=30`
             if ($listKey !== null && $current !== null
                 && preg_match('/^\s{2,}-\s+(\S.*?)\s*$/', $line, $m)) {
-                /** @var list<mixed> $bucket */
-                $bucket = is_array($current[$listKey] ?? null) ? $current[$listKey] : [];
+                // -016: append in place. The per-item read-copy/write-back
+                // memcpy'd the whole bucket on every line — quadratic work
+                // on the hot parse path for one long options: block.
+                if (!is_array($current[$listKey] ?? null)) {
+                    /** @var list<mixed> $current[$listKey] */
+                    $current[$listKey] = [];
+                }
+                $bucket = &$current[$listKey];
+                // Cap first, append second: the refusal must be deterministic
+                // (a 1001st item names the field and the limit, never a
+                // silently huge argv).
+                if (count($bucket) >= self::MAX_LIST_ITEMS) {
+                    throw new \RuntimeException(Lang::t('config.list_too_long', [
+                        'field' => (string) $listKey,
+                        'limit' => (string) self::MAX_LIST_ITEMS,
+                    ]));
+                }
                 $bucket[] = self::yamlScalar($m[1]);
-                $current[$listKey] = $bucket;
+                unset($bucket);
                 continue;
             }
             // Any other line ends list-collection mode — but remember the

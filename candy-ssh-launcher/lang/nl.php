@@ -22,6 +22,8 @@ return [
     'config.unknown_key_nearmiss' => 'onbekend veld `{key}` genegeerd — bedoelde je `{field}`?',
     'config.duplicate_name' => 'dubbele endpointnaam `{name}` — alle regels laden; namen zijn identificatoren',
     'config.field_not_scalar'  => 'wishlist-invoer: veld [{field}] moet een scalair zijn, ontvangen {type}',
+    'config.too_large'          => 'wishlist-configuratie is groter dan de limiet van {limit} bytes: {path}',
+    'config.list_too_long'      => 'wishlist-item: veld [{field}] bevat meer dan de {limit} items die de lader toestaat',
     'config.unreadable'       => 'wishlist-configuratie kon niet worden gelezen: {path}',
     'config.home_unset'       => 'kan ~ niet uitvouwen zonder $HOME: {path}',
     'config.yaml_inline_flow' => 'wishlist yaml: inline flow-verzameling niet ondersteund: {value} (gebruik een geneste lijst)',

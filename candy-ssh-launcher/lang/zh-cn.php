@@ -22,6 +22,8 @@ return [
     'config.unknown_key_nearmiss' => '未知字段 `{key}` 已忽略 — 是否指 `{field}`？',
     'config.duplicate_name' => '端点名称 `{name}` 重复 — 所有行仍会加载；名称是标识符',
     'config.field_not_scalar'  => 'wishlist 条目：字段 [{field}] 必须是标量，实际为 {type}',
+    'config.too_large'          => '\u5fc3\u613f\u5355\u914d\u7f6e\u6587\u4ef6\u8d85\u8fc7 {limit} \u5b57\u8282\u4e0a\u9650\uff1a{path}',
+    'config.list_too_long'      => '\u5fc3\u613f\u5355\u9879\uff1a\u5b57\u6bb5 [{field}] \u5305\u542b\u7684\u6761\u76ee\u8d85\u8fc7\u52a0\u8f7d\u5668\u5141\u8bb8\u7684 {limit} \u9879\u4e0a\u9650',
     'config.unreadable'       => '无法读取 wishlist 配置：{path}',
     'config.home_unset'       => '没有 HOME 无法展开 ~：{path}',
     'config.yaml_inline_flow' => 'wishlist yaml：不支持内联流集合：{value}（使用嵌套列表）',

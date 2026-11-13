@@ -22,6 +22,8 @@ return [
     'config.unknown_key_nearmiss' => 'neznámé pole `{key}` ignorováno — mysleli jste `{field}`?',
     'config.duplicate_name' => 'duplicitní název endpointu `{name}` — všechny řádky se načtou; názvy jsou identifikátory',
     'config.field_not_scalar'  => 'položka wishlist: pole [{field}] musí být skalár, získáno {type}',
+    'config.too_large'          => 'konfigurace wishlistu je větší než limit {limit} bajtů: {path}',
+    'config.list_too_long'      => 'položka wishlistu: pole [{field}] obsahuje více než {limit} položek, které zástupce umožňuje',
     'config.unreadable'       => 'konfiguraci wishlist nelze načíst: {path}',
     'config.home_unset'       => 'nelze rozbalit ~ bez $HOME: {path}',
     'config.yaml_inline_flow' => 'wishlist yaml: řádková flow kolekce není podporována: {value} (použijte vnořený seznam)',

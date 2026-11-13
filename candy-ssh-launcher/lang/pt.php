@@ -22,6 +22,8 @@ return [
     'config.unknown_key_nearmiss' => 'campo desconhecido `{key}` ignorado — quis dizer `{field}`?',
     'config.duplicate_name' => 'nome de endpoint duplicado `{name}` — todas as linhas são carregadas; nomes são identificadores',
     'config.field_not_scalar'  => 'entrada do wishlist: o campo [{field}] deve ser um escalar, obtido {type}',
+    'config.too_large'          => 'a configura\u00e7\u00e3o da lista excede o limite de {limit} bytes: {path}',
+    'config.list_too_long'      => 'item da lista: o campo [{field}] cont\u00e9m mais dos {limit} itens permitidos pelo carregador',
     'config.unreadable'       => 'não foi possível ler a configuração wishlist: {path}',
     'config.home_unset'       => 'não é possível expandir ~ sem $HOME: {path}',
     'config.yaml_inline_flow' => 'wishlist yaml: coleção de fluxo em linha não suportada: {value} (use uma lista aninhada)',

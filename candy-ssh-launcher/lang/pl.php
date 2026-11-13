@@ -22,6 +22,8 @@ return [
     'config.unknown_key_nearmiss' => 'nieznane pole `{key}` zignorowane — chodziło o `{field}`?',
     'config.duplicate_name' => 'zdublowana nazwa endpointu `{name}` — wszystkie wiersze się ładują; nazwy są identyfikatorami',
     'config.field_not_scalar'  => 'wpis wishlist: pole [{field}] musi być skalarem, otrzymano {type}',
+    'config.too_large'          => 'plik konfiguracji wishlistu przekracza limit {limit} bajt\u00f3w: {path}',
+    'config.list_too_long'      => 'wpis wishlistu: pole [{field}] zawiera wi\u0119cej ni\u017e {limit} element\u00f3w dozwolonych przez loader',
     'config.unreadable'       => 'nie można odczytać konfiguracji wishlist: {path}',
     'config.home_unset'       => 'nie można rozwinąć ~ bez $HOME: {path}',
     'config.yaml_inline_flow' => 'wishlist yaml: kolekcja flow w linii nie jest obsługiwana: {value} (użyj listy zagnieżdżonej)',

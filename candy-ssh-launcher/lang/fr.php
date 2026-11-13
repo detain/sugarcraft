@@ -22,6 +22,8 @@ return [
     'config.unknown_key_nearmiss' => 'champ inconnu `{key}` ignoré — vouliez-vous dire `{field}` ?',
     'config.duplicate_name' => "wishlist : nom d'endpoint dupliqué `{name}` — toutes les lignes sont chargées ; les noms sont des identifiants",
     'config.field_not_scalar'  => 'entrée wishlist : le champ [{field}] doit être un scalaire, obtenu {type}',
+    'config.too_large'          => 'le fichier de configuration dépasse la limite de {limit} octets : {path}',
+    'config.list_too_long'      => 'entrée de la liste : le champ [{field}] contient plus des {limit} éléments autorisés par le chargeur',
     'config.unreadable'       => 'impossible de lire la configuration wishlist : {path}',
     'config.home_unset'       => 'impossible de développer ~ sans $HOME : {path}',
     'config.yaml_inline_flow' => 'wishlist yaml : collection de flux en ligne non prise en charge : {value} (utilisez une liste imbriquée)',

@@ -22,6 +22,8 @@ return [
     'config.unknown_key_nearmiss' => 'Wishlist-Eintrag: unbekanntes Feld `{key}` ignoriert — meinten Sie `{field}`?',
     'config.duplicate_name' => 'Wishlist: doppelter Endpoint-Name `{name}` — alle Zeilen werden geladen; Namen sind Identifikatoren',
     'config.field_not_scalar'  => 'wishlist-Eintrag: Feld [{field}] muss ein Skalar sein, erhalten {type}',
+    'config.too_large'          => 'Wishlist-Konfiguration ist größer als das Limit von {limit} Bytes: {path}',
+    'config.list_too_long'      => 'Wishlist-Eintrag: Feld [{field}] enthält mehr als die {limit} Einträge, die der Lader erlaubt',
     'config.unreadable'       => 'Wishlist-Konfiguration konnte nicht gelesen werden: {path}',
     'config.home_unset'       => '~ kann ohne $HOME nicht expandiert werden: {path}',
     'config.yaml_inline_flow' => 'Wishlist-YAML: Inline-Flow-Sammlung nicht unterstützt: {value} (verschachtelte Liste verwenden)',

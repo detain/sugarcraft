@@ -22,6 +22,8 @@ return [
     'config.unknown_key_nearmiss' => 'wishlist entry: unknown field `{key}` ignored — did you mean `{field}`?',
     'config.duplicate_name' => 'wishlist: duplicate endpoint name `{name}` — all rows load; names are identifiers',
     'config.field_not_scalar'  => 'wishlist entry: field [{field}] must be a scalar, got {type}',
+    'config.too_large'          => 'wishlist config file is larger than the {limit}-byte limit: {path}',
+    'config.list_too_long'      => 'wishlist entry: field [{field}] carries more than the {limit} list items the loader allows',
     'config.unreadable'       => 'wishlist config could not be read: {path}',
     'config.home_unset'       => 'cannot expand ~ without $HOME: {path}',
     'config.yaml_inline_flow' => 'wishlist yaml: inline flow collection not supported: {value} (use a nested list)',
