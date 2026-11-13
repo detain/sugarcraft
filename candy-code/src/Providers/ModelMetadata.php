@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Providers;
 
 use GuzzleHttp\HandlerStack;
 use SugarCraft\Code\Providers\Concerns\HttpClientDefaults;
+use SugarCraft\Code\Providers\Concerns\JsonFetch;
 use SugarCraft\Code\Support\AtomicFileWriter;
 use SugarCraft\Code\Support\ForkedChild;
 use SugarCraft\Code\Support\HomeDirectory;
@@ -133,6 +134,7 @@ final class ModelMetadata
         return null;
     }
     use HttpClientDefaults;
+    use JsonFetch;
 
     /** LiteLLM's model database, the file Aider downloads. */
     public const SOURCE_URL = 'https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json';
@@ -569,9 +571,15 @@ final class ModelMetadata
         }
 
         $body = @file_get_contents($path);
-        $decoded = \is_string($body) ? json_decode($body, true) : null;
+        if (!\is_string($body)) {
+            return [];
+        }
 
-        return \is_array($decoded) ? self::project($decoded) : [];
+        try {
+            return self::project(self::decodeJsonArray($body));
+        } catch (\JsonException) {
+            return [];
+        }
     }
 
     /**
@@ -667,8 +675,8 @@ final class ModelMetadata
 
         try {
             $body = $this->fetch === null ? null : ($this->fetch)();
-            $decoded = \is_string($body) ? json_decode($body, true) : null;
-            $table = \is_array($decoded) ? self::project($decoded) : [];
+            // A junk body throws JsonException into the keep-what-is-there arm.
+            $table = \is_string($body) ? self::project(self::decodeJsonArray($body)) : [];
 
             if ($table !== []) {
                 AtomicFileWriter::write($path, (string) json_encode($table, JSON_UNESCAPED_SLASHES), 0600);
@@ -726,7 +734,7 @@ final class ModelMetadata
                 'headers' => ['Accept' => 'application/json'],
             ]);
 
-            return (string) $client->get($url)->getBody();
+            return self::fetchBody($client, $url);
         } catch (\Throwable) {
             return null;
         }

@@ -10,6 +10,7 @@ use React\Http\Browser;
 use React\Promise\PromiseInterface;
 use React\Socket\Connector;
 use SugarCraft\Code\Providers\Concerns\HttpClientDefaults;
+use SugarCraft\Code\Providers\Concerns\JsonFetch;
 use SugarCraft\Code\Tui\Components\PaneLabel;
 
 use function React\Promise\resolve;
@@ -47,6 +48,7 @@ use function React\Promise\resolve;
 final class OpenAiModelsEndpoint
 {
     use HttpClientDefaults;
+    use JsonFetch;
 
     /**
      * The listing route relative to the configured base, exactly as
@@ -90,7 +92,7 @@ final class OpenAiModelsEndpoint
                 'http_errors' => true,
             ]);
 
-            return self::decode((string) $client->get(self::MODELS_PATH)->getBody());
+            return self::project(self::fetchJson($client, self::MODELS_PATH));
         } catch (\Throwable) {
             return null;
         }
@@ -191,10 +193,23 @@ final class OpenAiModelsEndpoint
      */
     public static function decode(string $body): ?array
     {
-        /** @var mixed $decoded */
-        $decoded = json_decode($body, true);
+        try {
+            $decoded = self::decodeJsonArray($body);
+        } catch (\JsonException) {
+            return null;
+        }
 
-        if (!\is_array($decoded) || !isset($decoded['data']) || !\is_array($decoded['data'])) {
+        return self::project($decoded);
+    }
+
+    /**
+     * @param array<array-key, mixed> $decoded
+     *
+     * @return list<string>|null
+     */
+    private static function project(array $decoded): ?array
+    {
+        if (!isset($decoded['data']) || !\is_array($decoded['data'])) {
             return null;
         }
 

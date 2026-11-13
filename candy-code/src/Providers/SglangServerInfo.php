@@ -8,6 +8,7 @@ use GuzzleHttp\HandlerStack;
 use GuzzleHttp\Promise\Utils;
 use Psr\Http\Message\ResponseInterface;
 use SugarCraft\Code\Providers\Concerns\HttpClientDefaults;
+use SugarCraft\Code\Providers\Concerns\JsonFetch;
 
 /**
  * What a live SGLang server says about itself: the limits and parsers it was
@@ -46,6 +47,7 @@ use SugarCraft\Code\Providers\Concerns\HttpClientDefaults;
 final readonly class SglangServerInfo
 {
     use HttpClientDefaults;
+    use JsonFetch;
 
     /**
      * Connect AND total bound on each discovery GET.
@@ -277,9 +279,11 @@ final readonly class SglangServerInfo
             return null;
         }
 
-        $decoded = json_decode((string) $response->getBody(), true);
-
-        return is_array($decoded) ? $decoded : null;
+        try {
+            return self::decodeJsonArray((string) $response->getBody());
+        } catch (\JsonException) {
+            return null;
+        }
     }
 
     /**
