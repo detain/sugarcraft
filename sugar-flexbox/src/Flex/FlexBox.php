@@ -17,7 +17,7 @@ use SugarCraft\Flexbox\Support\CellPad;
  *
  * @see https://github.com/76creates/stickers
  */
-final class FlexBox
+final readonly class FlexBox
 {
     use Mutable;
 
@@ -28,7 +28,7 @@ final class FlexBox
         public readonly Direction $direction = Direction::Row,
         public readonly Align $align = Align::Stretch,
         public readonly int $gap = 0,
-        private array $items = [],
+        private readonly array $items = [],
     ) {}
 
     // -------------------------------------------------------------------------
