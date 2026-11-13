@@ -490,6 +490,18 @@ final class ConversationRouter
         $userId = (string) ($actor['userId'] ?? '');
         if ($approvers !== [] && !\in_array($userId, \array_map('strval', $approvers), true)) {
             $this->log->warn('approval_by_non_approver', ['ask' => $askId]);
+            // Both refusal doors answer alike (candy-discord-045): the same
+            // ephemeral ⛔ line the binding wall delivers, at the ask's own
+            // conversation. No ask content and no approver list is echoed —
+            // only the posture is made visible.
+            $askKey = $this->askConversation[$askId] ?? null;
+            $askRef = $this->askRef[$askId] ?? null;
+            if ($askKey !== null && \is_array($askRef)) {
+                $channel = $this->channelFor($askKey);
+                if ($channel !== null) {
+                    $this->deliver($channel, $askRef, Lang::t('channels.discord.approval.not_yours'));
+                }
+            }
             $this->serve->respondPermission($sessionId, $askId, 'reject', "refused: {$userId} is not an approver")
                 ->then(null, fn (\Throwable $e) => $this->log->warn('approval_refuse_failed', ['error' => $e->getMessage()]));
 

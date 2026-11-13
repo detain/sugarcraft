@@ -247,6 +247,10 @@ final class ApprovalGateTest extends TestCase
         self::assertSame(1, $this->serve->respondSeen, 'the pre-existing roster wall keeps its ask-resolving reject shape');
         self::assertSame('reject', $this->serve->lastReply);
         self::assertStringContainsString('is not an approver', (string) $this->serve->lastNote);
+        self::assertNotEmpty(
+            \array_filter($this->face->delivered, static fn (string $d): bool => \str_contains($d, 'This approval is not yours to answer.')),
+            'the roster wall must answer visibly (candy-discord-045): same ephemeral posture as the binding wall',
+        );
     }
 
     public function testARosteredInsiderStillNeedsNonceAndBinding(): void
