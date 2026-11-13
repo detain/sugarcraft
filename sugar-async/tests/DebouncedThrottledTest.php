@@ -284,6 +284,91 @@ final class DebouncedThrottledTest extends TestCase
         self::assertSame('b', $outcome);
     }
 
+    public function testTrailingFireConsumesAFreshWindow(): void
+    {
+        // The double-fire repro (finding sugar-async-029): pre-fix the
+        // cooldown callback cleared `cooling` and ran the trailing WITHOUT
+        // re-arming, so a call at w+epsilon LED a second fire inside the
+        // interval both docblocks promise caps at once per $seconds.
+        $loop = $this->clockwork();
+        $calls = [];
+        $handle = AsyncOps::throttle(
+            static function (string $v) use (&$calls): string {
+                $calls[] = $v;
+                return $v;
+            },
+            0.05,
+            $loop,
+            trailing: true,
+        );
+
+        $handle('lead');
+        $handle('x');
+        $this->step(); // edge w: 'x' fires as trailing, fresh window armed
+        self::assertSame(['lead', 'x'], $calls);
+
+        $y = $handle('y'); // lands at w+epsilon — must NOT lead a second fire
+        self::assertSame(['lead', 'x'], $calls, 'the trailing fire consumed a fresh window');
+        self::assertTrue($handle->isPending(), 'the w+epsilon call joins the trailing queue');
+
+        $this->step(); // edge 2w: 'y' fires
+        self::assertSame(['lead', 'x', 'y'], $calls);
+        self::assertSame('y', $this->outcome($y));
+    }
+
+    public function testFlushRunsQueuedTrailingNowAndEndsTheCooldown(): void
+    {
+        $loop = $this->clockwork();
+        $calls = [];
+        $handle = AsyncOps::throttle(
+            static function (string $v) use (&$calls): string {
+                $calls[] = $v;
+                return $v;
+            },
+            0.05,
+            $loop,
+            trailing: true,
+        );
+
+        $handle('lead');
+        $queued = $handle('t');
+
+        $handle->flush();
+
+        self::assertSame(['lead', 't'], $calls);
+        self::assertSame('t', $this->outcome($queued), 'the outcome arrives on the suppressed call promise');
+        self::assertFalse($handle->isPending());
+        self::assertSame([], $this->live, 'flush must release the armed cooldown timer');
+
+        // The cooldown ended: the next call leads immediately.
+        $handle('fresh');
+        self::assertSame(['lead', 't', 'fresh'], $calls);
+    }
+
+    public function testFlushOnIdleStartsNothing(): void
+    {
+        $loop = $this->clockwork();
+        $calls = [];
+        $handle = AsyncOps::throttle(
+            static function (string $v) use (&$calls): string {
+                $calls[] = $v;
+                return $v;
+            },
+            0.05,
+            $loop,
+            trailing: true,
+        );
+
+        $handle->flush(); // nothing queued, nothing cooling
+        self::assertSame([], $calls);
+        self::assertSame([], $this->live, 'an idle flush arms nothing');
+
+        $handle('lead');
+        $handle->flush(); // leading already fired; nothing was superseded
+        self::assertSame(['lead'], $calls);
+        self::assertSame([], $this->live, 'flush ends the cooldown even with nothing queued');
+    }
+
     private function clockwork(): LoopInterface
     {
         $this->intervals = [];
@@ -331,11 +416,17 @@ final class DebouncedThrottledTest extends TestCase
     private function fireAll(): void
     {
         while ($this->live !== []) {
-            $id = array_key_first($this->live);
-            $timer = $this->live[$id];
-            unset($this->live[$id]);
-            ($timer->getCallback())();
+            $this->step();
         }
+    }
+
+    /** Fire the earliest armed timer exactly once (a single window edge). */
+    private function step(): void
+    {
+        $id = array_key_first($this->live);
+        $timer = $this->live[$id];
+        unset($this->live[$id]);
+        ($timer->getCallback())();
     }
 
     private function outcome(PromiseInterface $promise): mixed

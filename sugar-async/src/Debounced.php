@@ -114,6 +114,7 @@ final class Debounced implements Subscription
     /**
      * Run the scheduled call now instead of waiting out the window.
      * With nothing pending this answers null and starts nothing.
+     * Paired by {@see Throttled::flush()} on the throttle handle.
      */
     public function flush(): PromiseInterface
     {

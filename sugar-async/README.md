@@ -316,14 +316,21 @@ wait ends, and what happens when the caller cancels the wrapper:
 - `debounce(fn, seconds, ?loop:, source:)` → `Debounced` — only the last call in a
   burst fires. Each call returns a promise: the scheduled call resolves with the
   result (rejects if the work throws), superseded calls resolve `null`. `flush()`
-  runs the pending burst immediately; `unsubscribe()` drops it (its promise
+  returns that PromiseInterface and runs the pending burst immediately — give it
+  the same `->then(null, fn($e) => …)` rejection handler any promise here needs
+  (see the unhandled-rejection note below), or a rejecting burst dies silently on
+  the discard pile; `unsubscribe()` drops it (its promise
   resolves `null`) and spends the handle — later calls answer `null` without
   arming timers. A `source:` cancels the handle alongside its pending burst.
 - `throttle(fn, seconds, ?loop:, trailing: false)` → `Throttled` — fires at most
   once per window. Suppressed calls resolve `null` (they are visible in the
   promise chain, not silently ignored). With `trailing: true` the LAST suppressed
-  call fires at window end (earlier suppressed ones stay superseded to `null`).
-  `unsubscribe()` drops any queued trailing call — its promise resolves `null`.
+  call fires at window end (earlier suppressed ones stay superseded to `null`),
+  and that trailing fire consumes a fresh window — the once-per-window cap holds
+  at every edge, not only at the first. `flush()` runs a queued trailing call
+  immediately and ends the cooldown (its outcome arrives on the suppressed
+  call's own promise, so flush itself returns void); `unsubscribe()` drops any
+  queued trailing call — its promise resolves `null`.
 - `all(promises)` / `race(promises)` — fan-in with keys preserved: `all` resolves
   a keyed list (`[]` resolves immediately) and rejects with the first error;
   `race` settles with the first outcome — on empty input it THROWS

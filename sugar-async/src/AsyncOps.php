@@ -1214,10 +1214,12 @@ final class AsyncOps
      * Wrap a callable with throttle — the function fires at most once every
      * $seconds, regardless of call frequency. Leading-edge by default: calls
      * inside the window answer null. With $trailing true, the LAST suppressed
-     * call fires when the window closes instead.
+     * call fires when the window closes instead, and that fire consumes a
+     * fresh window — the cap holds at every edge.
      *
      * The returned handle is an invokable {@see Throttled} Subscription;
-     * unsubscribe() cancels the cooldown and drops any queued trailing call.
+     * unsubscribe() cancels the cooldown and drops any queued trailing call,
+     * flush() runs it immediately instead.
      *
      * @param callable(mixed...): mixed $fn  The function to throttle
      * @param float $seconds  Minimum interval between fires (positive finite seconds)

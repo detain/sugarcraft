@@ -18,10 +18,14 @@ use function React\Promise\resolve;
  * calls landing inside the window are suppressed — each answers NULL (the
  * drop is a quiet hand-off, not an error) — until the window ends. With
  * `trailing: true` the LAST suppressed call is instead kept and fired the
- * moment the window closes (earlier suppressed calls answer null).
+ * moment the window closes (earlier suppressed calls answer null); that
+ * trailing fire consumes a fresh window, so the handle fires at most once
+ * every $seconds on every edge, not once per second-and-a-half.
  *
  * Implements {@see Subscription}: unsubscribe() cancels the cooldown and
- * drops any queued trailing call as null.
+ * drops any queued trailing call as null. flush() runs that queued call
+ * immediately and ends the cooldown — the paired shutdown affordance of
+ * {@see Debounced::flush()}.
  */
 final class Throttled implements Subscription
 {
@@ -134,12 +138,42 @@ final class Throttled implements Subscription
         return $this->trailingDeferred !== null;
     }
 
+    /**
+     * Run a pending trailing call now instead of waiting for the window to
+     * close, and end the cooldown. With nothing pending this starts nothing.
+     * The call's outcome reaches whoever the suppressed call answered — the
+     * promise returned by that call — so flush() itself returns void.
+     */
+    public function flush(): void
+    {
+        if ($this->active === false) {
+            return;
+        }
+
+        if ($this->cooldownTimer !== null) {
+            $this->loop->cancelTimer($this->cooldownTimer);
+            $this->cooldownTimer = null;
+        }
+        $this->cooling = false;
+
+        $this->runTrailing();
+    }
+
     private function startWindow(): void
     {
         $this->cooling = true;
         $this->cooldownTimer = $this->loop->addTimer($this->seconds, function (): void {
+            $hadTrailing = $this->trailingDeferred !== null;
             $this->cooldownTimer = null;
             $this->cooling = false;
+            if ($hadTrailing) {
+                // The trailing fire CONSUMES a fresh window: re-arm before
+                // running it, so a call at w+ε is suppressed inside the new
+                // interval instead of leading a second fire — that is what
+                // keeps the docblocks' "at most once every $seconds" true
+                // (lodash semantics: each window edge fires at most once).
+                $this->startWindow();
+            }
             $this->runTrailing();
         });
     }
