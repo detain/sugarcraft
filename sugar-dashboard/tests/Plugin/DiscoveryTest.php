@@ -173,4 +173,155 @@ final class DiscoveryTest extends TestCase
 
         $this->assertIsArray($result);
     }
+
+    /**
+     * Run a closure with error_log redirected to a capture file so
+     * fail-closed refusal reasons are observable, not folklore.
+     */
+    private function withErrorLogCaptured(callable $with): string
+    {
+        $file = tempnam(sys_get_temp_dir(), 'dashboard-discovery-log-');
+        $previous = ini_get('error_log');
+        ini_set('error_log', $file);
+        try {
+            $with();
+        } finally {
+            ini_set('error_log', $previous === false ? '' : $previous);
+        }
+        $log = (string) file_get_contents($file);
+        unlink($file);
+        return $log;
+    }
+
+    /**
+     * Finding sugar-dashboard-090: with HOME unset the old code answered
+     * '/tmp' — a world-writable plugin source is arbitrary code execution
+     * as the dashboard user. Now: null plus a logged reason.
+     */
+    public function testHomeUnsetRefusesTmpFallback(): void
+    {
+        $vars = ['HOME', 'XDG_CONFIG_HOME', 'CANDY_DASHBOARD_PLUGINS_DIR'];
+        $saved = [];
+        foreach ($vars as $name) {
+            $saved[$name] = getenv($name);
+            putenv($name);
+        }
+
+        try {
+            $directory = null;
+            $log = $this->withErrorLogCaptured(function () use (&$directory) {
+                $directory = Discovery::defaultDirectory();
+            });
+            $this->assertNull($directory);
+            $this->assertStringContainsString('refusing the world-writable /tmp fallback', $log);
+
+            $plugins = [];
+            $log2 = $this->withErrorLogCaptured(function () use (&$plugins) {
+                $plugins = Discovery::scanDefault();
+            });
+            $this->assertSame([], $plugins);
+            $this->assertStringContainsString('discovery skipped', $log2);
+        } finally {
+            foreach ($vars as $name) {
+                $value = $saved[$name];
+                if ($value === false) {
+                    putenv($name);
+                } else {
+                    putenv("{$name}={$value}");
+                }
+            }
+        }
+    }
+
+    public function testExplicitPluginsDirOverridesHome(): void
+    {
+        $saved = ['CANDY_DASHBOARD_PLUGINS_DIR' => getenv('CANDY_DASHBOARD_PLUGINS_DIR')];
+        putenv('CANDY_DASHBOARD_PLUGINS_DIR=/opt/custom/plugins');
+        try {
+            $this->assertSame('/opt/custom/plugins', Discovery::defaultDirectory());
+        } finally {
+            $value = $saved['CANDY_DASHBOARD_PLUGINS_DIR'];
+            $value === false ? putenv('CANDY_DASHBOARD_PLUGINS_DIR') : putenv("CANDY_DASHBOARD_PLUGINS_DIR={$value}");
+        }
+    }
+
+    /**
+     * A world-writable directory is refused even when it is full of
+     * legitimate-looking executables (the /tmp attack shape, owned or not).
+     */
+    public function testWorldWritableDirectoryRefused(): void
+    {
+        $tmpDir = sys_get_temp_dir() . '/sugar-dashboard-0777-' . uniqid();
+        mkdir($tmpDir, 0700, true);
+        file_put_contents($tmpDir . '/evil.php', "#!/usr/bin/env php\n");
+        chmod($tmpDir . '/evil.php', 0755);
+        chmod($tmpDir, 0777);
+
+        try {
+            if ((fileperms($tmpDir) & 0o022) === 0) {
+                $this->markTestSkipped('umask strips the group/world write bits on this host');
+            }
+
+            $log = '';
+            $plugins = [];
+            $log = $this->withErrorLogCaptured(function () use ($tmpDir, &$plugins) {
+                $plugins = Discovery::scan($tmpDir);
+            });
+            $this->assertSame([], $plugins);
+            $this->assertStringContainsString('group/world-writable', $log);
+        } finally {
+            @unlink($tmpDir . '/evil.php');
+            @chmod($tmpDir, 0700);
+            @rmdir($tmpDir);
+        }
+    }
+
+    /**
+     * Group-writable is refused with the same reasoning: a shared group is
+     * another author for the dropped-executable attack.
+     */
+    public function testGroupWritableDirectoryRefused(): void
+    {
+        $tmpDir = sys_get_temp_dir() . '/sugar-dashboard-0775-' . uniqid();
+        mkdir($tmpDir, 0700, true);
+        file_put_contents($tmpDir . '/maybe.php', "#!/usr/bin/env php\n");
+        chmod($tmpDir . '/maybe.php', 0755);
+        chmod($tmpDir, 0775);
+
+        try {
+            if ((fileperms($tmpDir) & 0o020) === 0) {
+                $this->markTestSkipped('umask strips the group write bit on this host');
+            }
+
+            $plugins = [];
+            $log = $this->withErrorLogCaptured(function () use ($tmpDir, &$plugins) {
+                $plugins = Discovery::scan($tmpDir);
+            });
+            $this->assertSame([], $plugins);
+            $this->assertStringContainsString('group/world-writable', $log);
+        } finally {
+            @unlink($tmpDir . '/maybe.php');
+            @chmod($tmpDir, 0700);
+            @rmdir($tmpDir);
+        }
+    }
+
+    /**
+     * The trustworthy shape still works: own dir, 0755, exec files found.
+     */
+    public function testOwnTrustedDirectoryStillScans(): void
+    {
+        $tmpDir = sys_get_temp_dir() . '/sugar-dashboard-trusted-' . uniqid();
+        mkdir($tmpDir, 0755, true);
+        file_put_contents($tmpDir . '/ok.php', "#!/usr/bin/env php\n");
+        chmod($tmpDir . '/ok.php', 0755);
+
+        try {
+            $plugins = Discovery::scan($tmpDir);
+            $this->assertSame([$tmpDir . '/ok.php'], $plugins);
+        } finally {
+            unlink($tmpDir . '/ok.php');
+            rmdir($tmpDir);
+        }
+    }
 }
