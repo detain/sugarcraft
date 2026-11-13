@@ -626,8 +626,16 @@ final class SugarPanels
             // Horizontal separator between stacked children, in the previous
             // child's last row — see drawVLine() for why the divider declines to
             // paint over cells that already carry a glyph.
+            //
+            // It spans the container's FULL inner width ($availableW), not the
+            // previous child's (possibly maxWidth-capped) width: the vertical
+            // divider between columns already spans the full inner height, so a
+            // horizontal seam that stopped at a narrow child read as an
+            // unfinished rule (sugar-panels-020). drawVLine()/drawHLine()'s
+            // all-or-nothing dividerSpanIsFree() check still stands the seam down
+            // whole wherever the wider span would run over an occupied cell.
             if ($i < $n - 1 && $sp === 0 && $noFrames === false) {
-                $this->drawHLine($node->borderStyle, $x + $b, $y + $offsets[$i + 1] - 1, $ow, $cells);
+                $this->drawHLine($node->borderStyle, $x + $b, $y + $offsets[$i + 1] - 1, $availableW, $cells);
             }
         }
     }

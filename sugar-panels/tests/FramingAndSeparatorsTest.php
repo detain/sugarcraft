@@ -321,6 +321,43 @@ final class FramingAndSeparatorsTest extends TestCase
             'a divider may not eat a neighbour\'s glyph');
     }
 
+    /**
+     * sugar-panels-020: a stacked divider spans the container's FULL inner width,
+     * not the previous child's (possibly maxWidth-capped) width. The vertical
+     * divider between columns already spans the full inner height, so a short
+     * horizontal seam under a narrow child read as an unfinished rule.
+     */
+    public function testAStackedDividerSpansTheContainerNotTheCappedChild(): void
+    {
+        // A maxWidth-6 child whose last row is free (minHeight 3 leaves it blank),
+        // stacked over a grown child in a 12-wide borderless container.
+        $rows = self::rows(SugarPanels::new()->render(
+            Node::vertical(
+                Node::leaf('TOP')->withBorder(false)->withMaxWidth(6)->withMinHeight(3),
+                Node::leaf('bottom')->withBorder(false)->withGrow(),
+            )->withBorder(false),
+            12,
+            5,
+        ));
+
+        // The seam is the full 12-column width, not the child's capped 6.
+        $this->assertSame('────────────', $rows[2], 'a stacked seam spans the container, mirroring the full-height column divider');
+
+        // And the free-span rule still stands down a seam that would cut painted
+        // cells: cap the child's row so it carries text on the divider row.
+        $occupied = self::rows(SugarPanels::new()->render(
+            Node::vertical(
+                Node::leaf('TOP')->withBorder(false)->withMaxWidth(6),
+                Node::leaf('bottom')->withBorder(false)->withGrow(),
+            )->withBorder(false),
+            12,
+            2,
+        ));
+        // Two rows, no blank divider row to claim — no half rule is painted.
+        $this->assertSame('TOP', $occupied[0]);
+        $this->assertSame('bottom', \rtrim($occupied[1], '─ '));
+    }
+
     /** Strip the frame protocol and trailing blanks, keeping empty rows. */
     private function rows(string $frame): array
     {
