@@ -106,7 +106,7 @@ jobs:
             exit 0
           fi
           if [ "$app" = 'candy-starter' ] \
-             || [ "$(php -r '$j = json_decode(file_get_contents($argv[1]), true); echo $j["type"] ?? "";' "$app/composer.json" 2>/dev/null || true)" = 'project' ]; then
+             || [ "$(php -r '$j = json_decode(file_get_contents($argv[1]), true); echo $j["type"] ?? "";' "$app/composer.json" 2>/dev/null)" = 'project' ]; then
             # CS-02 (candy-starter-002): a create-project template is not a
             # phar — its release vehicle is the tagged dist Composer itself
             # downloads. Before this skip existed, minting the first
