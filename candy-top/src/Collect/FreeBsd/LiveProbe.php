@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Top\Collect\FreeBsd;
 
+use SugarCraft\Top\Collect\Process\AbsoluteSearchPath;
+
 /**
  * The live FreeBSD host: sysctl(8) and the base-system tools, each run as
  * a bounded child.
@@ -23,7 +25,8 @@ namespace SugarCraft\Top\Collect\FreeBsd;
  * rebuilt by {@see childEnvFor()} plus LC_ALL=C — never the parent's
  * whole environment — so decimal points are '.', and are bounded end to
  * end:
- *  - stdout is read until EOF or TIMEOUT; an overrun is SIGKILLed;
+ *  - stdout is read until EOF, TIMEOUT or MAX_OUTPUT bytes; an overrun
+ *    of either is SIGKILLed;
  *  - after EOF the exit is polled with proc_get_status for at most
  *    REAP_WAIT (a child can close stdout and keep running), and a child
  *    still alive then is SIGKILLed too — proc_close is only ever called
@@ -36,6 +39,12 @@ final class LiveProbe implements Probe
 {
     private const float TIMEOUT = 2.0;
     private const float REAP_WAIT = 0.5;
+
+    /** Stdout cap in bytes; past it the child is SIGKILLed and the result is null (mirrors AsyncCommand's TooLarge). */
+    public const int MAX_OUTPUT = 8 * 1024 * 1024;
+
+    /** @var array<string, string> tool name => resolved path; positives only, per process */
+    private static array $resolved = [];
 
     /** Base-system locations, tried before PATH (a sanitised PATH may lack /sbin). */
     private const array DIRS = ['/sbin', '/bin', '/usr/sbin', '/usr/bin'];
@@ -113,14 +122,19 @@ final class LiveProbe implements Probe
         stream_set_blocking($pipes[1], false);
         $output = '';
         $deadline = microtime(true) + self::TIMEOUT;
+        $tooLarge = false;
         while (!feof($pipes[1]) && ($left = $deadline - microtime(true)) > 0) {
             $read = [$pipes[1]];
             $write = $except = null;
             if (@stream_select($read, $write, $except, 0, (int) min(200000, $left * 1e6)) > 0) {
                 $output .= (string) fread($pipes[1], 65536);
+                if (\strlen($output) > self::MAX_OUTPUT) {
+                    $tooLarge = true;
+                    break;
+                }
             }
         }
-        $timedOut = !feof($pipes[1]);
+        $timedOut = $tooLarge || !feof($pipes[1]);
         fclose($pipes[1]);
 
         // proc_get_status reports the exit code only on the first call that
@@ -202,18 +216,33 @@ final class LiveProbe implements Probe
         return microtime(true);
     }
 
+    /**
+     * Cached per tool name for the life of the process (a TUI re-resolved
+     * `ps` and friends with up to ~90 stats per tick); only hits are
+     * cached so a tool installed later is still found. Search directories
+     * are the base DIRS then the ABSOLUTE PATH entries only: a relative
+     * entry would resolve against wherever the monitor happens to run.
+     */
     private static function resolve(string $tool): ?string
     {
         if (str_contains($tool, '/')) {
             return is_file($tool) && is_executable($tool) ? $tool : null;
         }
-        $path = (string) getenv('PATH');
-        foreach ([...self::DIRS, ...explode(PATH_SEPARATOR, $path)] as $dir) {
-            if ($dir !== '' && is_file($dir . '/' . $tool) && is_executable($dir . '/' . $tool)) {
-                return $dir . '/' . $tool;
+        if (isset(self::$resolved[$tool])) {
+            return self::$resolved[$tool];
+        }
+        foreach ([...self::DIRS, ...AbsoluteSearchPath::directories()] as $dir) {
+            if (is_file($dir . '/' . $tool) && is_executable($dir . '/' . $tool)) {
+                return self::$resolved[$tool] = $dir . '/' . $tool;
             }
         }
 
         return null;
+    }
+
+    /** Test seam: drop the resolve cache. */
+    public static function forgetResolved(): void
+    {
+        self::$resolved = [];
     }
 }
