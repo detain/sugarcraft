@@ -242,6 +242,14 @@ final readonly class Rail
         return max(1, intdiv(max(1, $railWidth) + max(0, $spacing), max(4, $cardWidth) + max(0, $spacing)));
     }
 
+    /**
+     * Paint the rail: the heading line, then the windowed cards joined at
+     * $spacing. The heading is swept by AnsiGuard::stripControls(); the card
+     * bodies are NOT swept — if zones mark the same frame, run the rail's
+     * output through AnsiGuard::stripSentinels() before composing it
+     * (sugar-gallery-033: a forged C1 zone sentinel in un-trusted poster art
+     * would otherwise ride the join into the owner's marker scan).
+     */
     public function render(int $railWidth, bool $focused, int $cardWidth, int $posterHeight, int $spacing = 2): string
     {
         // Clamp the degenerate edges ONCE, at the method head, and let every

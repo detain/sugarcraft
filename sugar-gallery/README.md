@@ -200,7 +200,10 @@ plus a rail-width clamp — and the empty state is localised
 e.g. returning to a remembered position — construct via `Rail::new(...)`: its
 third and fourth arguments are that pair. A stale pair is clamped on
 construction, not restored verbatim: the cursor lands inside the card list and
-the scroll at or below it (`[0, cursor]`).
+the scroll at or below it (`[0, cursor]`). The rail composes card bodies
+raw — the heading is swept, the joined cards are not — so if zones mark the
+same frame, run `render()`'s output through `AnsiGuard::stripSentinels()`
+before composing it.
 
 ## PosterCard — one tile
 
