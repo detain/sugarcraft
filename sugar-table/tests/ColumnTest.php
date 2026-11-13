@@ -109,7 +109,8 @@ final class ColumnTest extends TestCase
         $col = Column::new('desc', 'Description', 5);
         $header = $col->renderHeader();
 
-        $this->assertSame('Descr', $header);
+        // ST-17: the clip is announced — a silent 'Descr' erased the loss.
+        $this->assertSame('Desc…', $header);
     }
 
     public function testRenderHeaderAlignLeft(): void

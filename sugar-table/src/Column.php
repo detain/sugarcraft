@@ -185,6 +185,15 @@ final class Column
         $lineCount = \count($lines);
         $lastIdx = $lineCount - 1;
         foreach ($lines as $idx => $line) {
+            // Audit ST-17: a wrapped line never leaves this method over-wide
+            // and never over-wide silently — an atomic cluster (or an
+            // unbreakable word) that exceeds the column is announced with
+            // the shared clip marker. The pad() backstop below used to cut
+            // such a line without a trace, and the skipPad last-line path
+            // let it through to desync the frame.
+            if (Width::of($line) > $w) {
+                $line = self::clipToWidth($line, $w);
+            }
             // For character wrap, don't pad the last line if wrapping actually happened
             // (i.e., there were multiple lines and the last one is shorter by design)
             $wrappingOccurred = $lineCount > 1;
@@ -312,11 +321,7 @@ final class Column
             return [$text];
         }
 
-        $clusters = \function_exists('grapheme_str_split')
-            ? \grapheme_str_split($text)
-            : (\function_exists('mb_str_split')
-                ? \mb_str_split($text, 1, 'UTF-8')
-                : (\preg_split('//u', $text, -1, PREG_SPLIT_NO_EMPTY) ?: []));
+        $clusters = self::splitClusters($text);
 
         $lines = [];
         $currentLine = '';
@@ -324,6 +329,20 @@ final class Column
 
         foreach ($clusters as $cluster) {
             $clusterWidth = Width::of($cluster);
+            if ($clusterWidth > $width) {
+                // Audit ST-17: an atomic cluster wider than the column (a CJK
+                // glyph in a 1-cell slot) no longer survives as-is — graphemes
+                // cannot decompose, so the fit arm is the announcing clip: the
+                // old code flushed the line and parked the over-budget cluster
+                // on it alone, emitting a line wider than the column.
+                if ($currentLine !== '') {
+                    $lines[] = $currentLine;
+                    $currentLine = '';
+                    $currentWidth = 0;
+                }
+                $lines[] = self::clipToWidth($cluster, $width);
+                continue;
+            }
             if ($currentWidth + $clusterWidth > $width) {
                 if ($currentLine !== '') {
                     $lines[] = $currentLine;
@@ -345,8 +364,12 @@ final class Column
 
     private function pad(string $text, int $width, bool $leftAlign): string
     {
-        // Truncate to display width first, then pad to fill the target width
-        $text = Width::truncate($text, $width);
+        // Clip to display width first — announcing the cut with '…' (audit
+        // ST-17: the silent Width::truncate backstop here was how a CJK
+        // header in a narrow column vanished into blank padding; callers
+        // keep a silent backstop only for text that can no longer arrive
+        // over-wide), then pad to fill the target width.
+        $text = self::clipToWidth($text, $width);
         return $leftAlign
             ? Width::padRight($text, $width)
             : Width::padLeft($text, $width);

@@ -2444,12 +2444,19 @@ final class Table
                 continue;
             }
 
-            // Clamp to remaining width
+            // Audit ST-17: a cluster that cannot fit the remaining cell space
+            // used to be clamped to it and placed anyway — the glyph painted
+            // half off-canvas (a 10-cell line on a 9-cell frame) and the
+            // buffer's cell count desynced from the frame that sized it.
+            // The cluster is atomic, so the fit arm is the announcing '…':
+            // visible mark when there is a slot for it, then the fill stops
+            // and the space-padding below completes the frame.
             $remaining = $cellWidth - ($col - $startCol);
-            if ($gw > $remaining) {
-                $gw = $remaining;
-            }
-            if ($gw <= 0) {
+            if ($gw > $remaining || $remaining <= 0) {
+                if ($gw > $remaining && $remaining >= 1) {
+                    $canvas->put($col, $row, new Cell('…', $style, null, 1));
+                    $col++;
+                }
                 break;
             }
 

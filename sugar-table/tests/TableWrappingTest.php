@@ -94,8 +94,8 @@ final class TableWrappingTest extends TestCase
 
         $view = $t->View();
         $this->assertIsString($view);
-        // Header is truncated to column width of 10
-        $this->assertStringContainsString('Descriptio', $view);
+        // ST-17: header truncation to the 10-cell column is announced
+        $this->assertStringContainsString('Descripti…', $view);
     }
 
     public function testWrapModePreservesStyle(): void
