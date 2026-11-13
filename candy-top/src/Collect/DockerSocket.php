@@ -23,8 +23,19 @@ final class DockerSocket
     /** btop's SO_RCVTIMEO / SO_SNDTIMEO, used here as the whole exchange's deadline. */
     public const TIMEOUT_SEC = 1.0;
 
-    /** sizeof(sockaddr_un::sun_path) on Linux; btop refuses a path that does not fit. */
-    public const SUN_PATH = 108;
+    /**
+     * sizeof(sockaddr_un::sun_path) per OS (candy-top-054). Linux carries
+     * 108 bytes; macOS and FreeBSD carry 104, so the old Linux-only
+     * constant accepted a 104-107 byte DOCKER_HOST on those platforms and
+     * let bind() launder the real ENAMETOOLONG into a bare "no Docker".
+     */
+    public const SUN_PATHS = ['Linux' => 108, 'Darwin' => 104, 'FreeBSD' => 104];
+
+    /** The sun_path budget for the running OS; unknown platforms keep Linux's 108. */
+    public static function sunPath(string $os = PHP_OS): int
+    {
+        return self::SUN_PATHS[$os] ?? 108;
+    }
 
     public const MAX_BYTES = 8 * 1024 * 1024;
 
@@ -45,7 +56,7 @@ final class DockerSocket
     {
         $env = getenv('DOCKER_HOST');
         $path ??= self::path($env === false ? null : $env);
-        if ($path === '' || \strlen($path) >= self::SUN_PATH || !file_exists($path)) {
+        if ($path === '' || \strlen($path) >= self::sunPath() || !file_exists($path)) {
             return '';
         }
         // One deadline for the whole exchange, connect included: btop's
