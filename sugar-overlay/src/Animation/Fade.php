@@ -56,7 +56,7 @@ final class Fade
             return 1.0;
         }
 
-        return \max(0.0, \min(1.0, $this->easing()->evaluate($progress)));
+        return \max(0.0, \min(1.0, $this->easing()->ease($progress)));
     }
 
     /** Memoized default curve (sugar-overlay-077): animation ticks news a

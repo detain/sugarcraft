@@ -63,7 +63,7 @@ final class Slide
             return 1.0;
         }
 
-        return \max(0.0, \min(1.0, $this->easing()->evaluate($progress)));
+        return \max(0.0, \min(1.0, $this->easing()->ease($progress)));
     }
 
     /**
@@ -94,7 +94,7 @@ final class Slide
         Position $vertical,
         Position $horizontal,
     ): AnimationFrame {
-        $eased = $this->easing()->evaluate($progress);
+        $eased = $this->easing()->ease($progress);
 
         // Measure exactly as Veil::composite() does, so a trailing "\n"
         // does not add a phantom row to the travel distance.

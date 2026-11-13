@@ -44,7 +44,7 @@ final class Scale
             return 1.0;
         }
 
-        return \max(0.0, \min(1.0, $this->easing()->evaluate($progress)));
+        return \max(0.0, \min(1.0, $this->easing()->ease($progress)));
     }
 
     /**
@@ -76,7 +76,7 @@ final class Scale
             return $foreground;
         }
 
-        $eased = $this->easing()->evaluate($progress);
+        $eased = $this->easing()->ease($progress);
 
         // Count lines exactly as Veil::composite() does, so a trailing "\n"
         // does not add a phantom row to the reveal budget.

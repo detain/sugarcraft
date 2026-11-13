@@ -395,7 +395,7 @@ final class VeilAnimationTest extends TestCase
             ->withAnimation(AnimationKind::FADE)
             ->animate($fg, $bg, Position::TOP, Position::LEFT, 0.3);
 
-        $eased  = \max(0.0, \min(1.0, CubicBezier::easeInOut()->evaluate(0.3)));
+        $eased  = \max(0.0, \min(1.0, CubicBezier::easeInOut()->ease(0.3)));
         $dimmed = (int) \round(50 * $eased);
         $level  = (int) \round(255 * (100 - $dimmed) / 100);
         $linear = (int) \round(50 * 0.3);
