@@ -29,6 +29,30 @@ final class ListTest extends TestCase
         $this->assertInstanceOf(Item::class, $list);
     }
 
+    public function testTruncateToWidthFitsUndecoratedAndCutsDecorated(): void
+    {
+        // 053: the old helper appended '…' even when nothing truncated,
+        // and a width-1 request could come back two columns wide.
+        $list = ListComponent::new(['x']);
+        $truncate = \Closure::bind(
+            fn (string $s, int $width): string => $this->truncateToWidth($s, $width),
+            $list,
+            ListComponent::class,
+        );
+
+        foreach (range(1, 20) as $width) {
+            $fits = str_repeat('a', $width);
+            $this->assertSame($fits, $truncate($fits, $width));
+
+            $cut = $truncate(str_repeat('a', $width + 1), $width);
+            $this->assertSame($width, Width::string($cut));
+            $this->assertStringEndsWith('…', $cut);
+        }
+
+        $this->assertSame('…', $truncate('ab', 1));
+        $this->assertSame('…', $truncate('名x', 2));
+    }
+
     // ═══════════════════════════════════════════════════════════════
     // Basic rendering
     // ═══════════════════════════════════════════════════════════════

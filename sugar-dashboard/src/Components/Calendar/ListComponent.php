@@ -240,17 +240,24 @@ final class ListComponent implements \SugarCraft\Dashboard\Foundation\SizedItem
 
     /**
      * Truncate a string to fit within the given width.
-     * Budgets 1 character for the ellipsis.
+     *
+     * A line that FITS is returned undecorated; only genuinely cut lines
+     * carry the ellipsis, and the ellipsis is budgeted INSIDE the width
+     * (the pre-fix code appended '…' on the fits path and could return
+     * two columns for a width-1 request — finding 053).
      */
     private function truncateToWidth(string $s, int $width): string
     {
         if ($width <= 0) {
             return '';
         }
-        // Budget 1 column for the ellipsis
-        $maxContentWidth = max(1, $width - 1);
-        if (Width::string($s) <= $maxContentWidth) {
-            return $s . '…';
+        if (Width::string($s) <= $width) {
+            return $s;
+        }
+        // Budget 1 column for the ellipsis (truncation is certain here)
+        $maxContentWidth = $width - 1;
+        if ($maxContentWidth <= 0) {
+            return '…';
         }
         $lo = 0;
         $hi = mb_strlen($s, 'UTF-8');
@@ -264,7 +271,10 @@ final class ListComponent implements \SugarCraft\Dashboard\Foundation\SizedItem
             }
         }
         if ($lo === 0) {
-            return '';
+            // Not even the first glyph fits beside the ellipsis: the
+            // honest 1-cell answer is the ellipsis alone (finding 053's
+            // old bare '' silently dropped the truncation notice).
+            return '…';
         }
         $result = mb_substr($s, 0, $lo, 'UTF-8');
         return $result . '…';
