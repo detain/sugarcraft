@@ -12,7 +12,7 @@ declare(strict_types=1);
  * - StandardColors::fromIndex() (lookup by index)
  * - Rendering each color as a foreground + background swatch
  *
- * The writable StandardColors::$red-style static constants are DEPRECATED —
+ * The writable StandardColors::$red-style static properties are DEPRECATED —
  * this demo deliberately names only the read-only all()/fromIndex() catalog.
  */
 

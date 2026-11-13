@@ -90,7 +90,9 @@ $writer = ProfileWriter::wrap(STDOUT);
 $writer->write("\x1b[38;2;107;80;255mFancy text\x1b[0m\n");
 ```
 
-**Expected output.** Run with `STDOUT` piped (CI, `php demo.php | cat`), the two
+**Expected output.** Run with `STDOUT` piped (CI,
+`php examples/detect.php | cat` — that demo ends with exactly the statements
+above), the two
 `echo` lines print exactly `Your terminal supports: No TTY` and
 `Converted: #000000` — the step-0 stream gate forces `NoTTY`, and `NoTTY`
 degrades the TrueColor test color to black. On a real terminal both lines depend
@@ -539,13 +541,17 @@ SugarCraft\ColorProfile\
 ├── NearestColor    — nearest-palette matcher (key-guarded memoized Lab, error-compensation carrier)
 ├── PaletteIndex    — PCA-bucketed exact accelerator for repeated lookups
 ├── StandardColors  — the 16 ANSI colors (mutable statics deprecated in favour of all()/fromIndex()/catalog(); see the deprecation window below)
-├── ProfileWriter   — stream wrapper for automatic color degradation
+├── ProfileWriter   — stream wrapper for automatic color degradation (write() and printf() both emit at the stream's level)
 └── Lang            — i18n strings
 ```
 
 ## Terminal capability probes
 
-Beyond the env ladder above, the library exposes a richer capability surface:
+Beyond the env ladder above, the library exposes a richer capability surface
+(exercised end-to-end by `php examples/probe-report.php` — hermetic env maps,
+the sourced capability table, the `toColorProfile()` bridge and the
+`degradedTo()` walk, all offline and exiting 0 with or without an `infocmp`
+binary on PATH):
 
 - **`Probe\TerminalProbe`** — phased probe returning a **`Probe\ProbeReport`**:
   phase 1 runs the shared `DetectionChain` for the color-depth rung (so the
@@ -581,7 +587,9 @@ Beyond the env ladder above, the library exposes a richer capability surface:
   `Loop::run()`). Env suppression, a missing infocmp binary, an unset or
   `dumb` TERM, a TERM whose shape infocmp would read as an option, a chain
   rung other than Ansi/Ansi256, the cap being reached, or a timeout/kill all
-  settle to the chain's answer. Results are advisory only.
+  settle to the chain's answer. Results are advisory only. Both shapes are
+  executable: `php examples/async-probe.php` demonstrates the explicit-loop
+  spawn and the in-place no-loop resolve side by side.
 
   Every child is bounded: a 5 s wall-clock ceiling sends SIGTERM, a 1 s grace
   escalates to SIGKILL, and the exit handler cancels the SIGKILL timer when
