@@ -248,11 +248,17 @@ final class QuickPickTest extends TestCase
         ])->show()
             ->setItemFormatter(fn($item, $sel) => "[$sel] $item");
 
-        // Hidden view result — but custom formatter is applied in view()
+        // The custom formatter's marker must LAND IN THE RENDERED BYTES — not
+        // merely "produce a string" (-079). Cursor 0 is selected, so the chosen
+        // row carries "[1] apple"; the sibling carries "[] banana" (bool false
+        // interpolates as the empty string).
         $bg = str_repeat("....................\n", 5);
         $result = $h->view($bg);
 
         $this->assertIsString($result);
+        $this->assertStringContainsString('[1] apple', $result, 'custom formatter marker missing from selected row bytes');
+        $this->assertStringContainsString('[] banana', $result, 'custom formatter marker missing from sibling row bytes');
+        $this->assertStringNotContainsString('● apple', $result, 'default decoration survived a custom formatter');
     }
 
     public function testImmutability(): void
