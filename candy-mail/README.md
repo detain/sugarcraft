@@ -474,6 +474,13 @@ a `zh-tw` catalog of their own.
 - `ResendTransport` — sends via Resend REST API (HTTPS)
 - `SmtpTransport` — sends via direct SMTP (TCP/TLS)
 - `Mailer` — high-level API wrapping a Transport
+- `MissingTransportConfig` — the typed `RuntimeException` for "no transport is
+  configured": the CLI's `--render` path catches exactly this type to keep the
+  offline preview reachable for a genuinely unconfigured send, while every other
+  transport-build fault (a typo in a security switch, a broken relay setting)
+  stays a loud error instead of being text-matched into the preview. Library
+  callers catch it by type to separate unconfigured from misconfigured — the
+  class exists precisely so no comparison against a translated message can drift.
 - `Lang` — per-library translation facade over the shared sugar-core registry
 
 ## Shared foundations

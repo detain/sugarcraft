@@ -168,7 +168,8 @@
     <pre class="code"><code class="language-php">use SugarCraft\Mail\{Email, ResendTransport, SmtpTransport};
 
 // Immutable: every with*() returns a new Email
-// Same headers as named arguments — new Email(from: ..., to: ..., subject: ..., body: ...) — read better when headers are optional
+// The fields double as named arguments — new Email(from: ..., to: ..., subject: ..., body: ...) —
+// a partial build stays readable without counting positional slots
 $email = Email::new('noreply@example.com', 'user@example.com', 'Deployment complete', 'Your app was deployed successfully.')
     -&gt;withHtmlBody('&lt;p&gt;Your app was deployed &lt;strong&gt;successfully&lt;/strong&gt;.&lt;/p&gt;')
     -&gt;withCc('ops@example.com')
@@ -223,6 +224,7 @@ $transport-&gt;send($email);
 <tr><td>Email</td><td>bodyWithSignature() / allRecipients()</td><td>Body with signature applied; combined to/cc/bcc list</td></tr>
 <tr><td>Transport</td><td>send(Email, ?token = null)</td><td>Delivery interface — implement to add a custom transport</td></tr>
 <tr><td>Mailer</td><td>__construct(Transport) / send(Email, ?token = null)</td><td>Transport-agnostic sender; validates the envelope before dialing</td></tr>
+<tr><td>MissingTransportConfig</td><td>extends RuntimeException — catch by type, never by message text</td><td>The typed "no transport is configured" refusal; the CLI --render fallback catches exactly this so a broken config stays a loud error</td></tr>
 <tr><td>SmtpTransport</td><td>__construct(host, port = 587, username = '', password = '', timeout = 30, heloHost = '') / send(Email, ?token = null)</td><td>SMTP delivery</td></tr>
 <tr><td>SmtpTransport</td><td>withRequireTls() / withImplicitTls() / withCaFile(caFile)</td><td>TLS policy and custom CA trust anchor</td></tr>
 <tr><td>SmtpTransport</td><td>buildMimeMessage(Email, allow8Bit = true)</td><td>Render the full MIME message without sending</td></tr>
