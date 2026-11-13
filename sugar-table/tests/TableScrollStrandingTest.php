@@ -63,7 +63,9 @@ final class TableScrollStrandingTest extends TestCase
      */
     public function testEndKeyStaysInsideTheCurrentPage(): void
     {
-        $t = $this->table(pageSize: 10, viewport: 5)->handleKey(Table::KEY_END);
+        $t = $this->table(pageSize: 10, viewport: 5)
+            ->withSelectedIndex(9) // ST-15 law: END can only reach the tail through the cursor
+            ->handleKey(Table::KEY_END);
 
         $this->assertSame(5, $t->maxScrollY());
         $this->assertSame(5, $this->dataLineCount($t), 'viewport stays full of data rows');
@@ -134,7 +136,7 @@ final class TableScrollStrandingTest extends TestCase
      */
     public function testFilterAfterDeepScrollShowsMatches(): void
     {
-        $t = $this->table(viewport: 5)->withScrollY(12)->Filter('n', 'row1');
+        $t = $this->table(viewport: 5)->withSelectedIndex(15)->withScrollY(12)->Filter('n', 'row1');
 
         $this->assertSame(0, (new \ReflectionProperty(Table::class, 'scrollY'))->getValue($t));
         $this->assertGreaterThanOrEqual(5, $this->dataLineCount($t));
@@ -147,10 +149,54 @@ final class TableScrollStrandingTest extends TestCase
      */
     public function testStaleScrollClampsAtRender(): void
     {
-        $t = $this->table(viewport: 5)->withScrollY(500);
+        $t = $this->table(viewport: 5)->withSelectedIndex(19)->withScrollY(500);
 
         $this->assertSame(15, $t->maxScrollY());
         $this->assertSame(5, $this->dataLineCount($t));
         $this->assertStringContainsString('row19', $t->View());
+    }
+
+    /**
+     * ST-15 (a) / audit M9 page-turn half: gotoPage snapped the cursor to the
+     * page head but left scrollY behind, so CurrentRow() was off-screen after
+     * NextPage. The page turn now re-anchors the window on the cursor.
+     */
+    public function testPageTurnKeepsCursorOnScreen(): void
+    {
+        $t = $this->table(pageSize: 4, viewport: 2)->withSelectedIndex(6);
+
+        $scroll = new \ReflectionProperty(Table::class, 'scrollY');
+        $this->assertSame(1, $scroll->getValue($t), 'window [1..2] of the page follows the cursor');
+
+        $back = $t->withPage(0);
+
+        $this->assertSame(0, $scroll->getValue($back), 'page turn re-anchors scroll on the snapped cursor');
+        $this->assertSame(0, $back->SelectedIndex());
+        $this->assertStringContainsString('row0', $back->View(), 'the highlight is inside the turned frame');
+    }
+
+    /**
+     * ST-15 (b) / UXD zero-reverse probe: END used to park the window at the
+     * page tail while the highlight stayed behind; the cursor now keeps its
+     * reverse video inside every key-driven frame.
+     */
+    public function testEndKeyKeepsHighlightOnScreen(): void
+    {
+        $t = $this->table(viewport: 3)->withSelectedIndex(1)->handleKey(Table::KEY_END);
+
+        $this->assertSame(1, (new \ReflectionProperty(Table::class, 'scrollY'))->getValue($t),
+            'END cannot jump the window past the cursor — it parks on it');
+
+        $cursorLine = null;
+        foreach (\explode("\n", $t->View()) as $line) {
+            if (\str_contains(self::plain($line), 'row1')) {
+                $cursorLine = $line;
+                break;
+            }
+        }
+
+        $this->assertNotNull($cursorLine, 'cursor row stays rendered after END');
+        $this->assertStringContainsString('7m', (string) $cursorLine,
+            'cursor row keeps its reverse video (selection silently lost pre-fix)');
     }
 }

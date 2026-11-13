@@ -426,7 +426,8 @@ final class Table
      * SelectPage(). One page means one semantic: the page clamps to
      * [0, TotalPages-1] and the selection snaps to the page's first row in
      * the filtered/sorted view (page-global index = page * pageSize, itself
-     * clamped when the last page is short).
+     * clamped when the last page is short). The viewport follows the snapped
+     * cursor (ST-15 / audit M9): a stale scrollY never strands the highlight.
      */
     private function gotoPage(int $page): self
     {
@@ -441,6 +442,9 @@ final class Table
         $clone = clone $this;
         $clone->page          = $clamped;
         $clone->selectedIndex = $snapTo;
+        // ST-15 (audit M9 law): the snapped cursor must be on-screen after the
+        // page turn — a stale scrollY used to strand CurrentRow off the frame.
+        $clone->followCursor();
         return $clone;
     }
 
@@ -511,6 +515,11 @@ final class Table
     {
         $clone = clone $this;
         $clone->scrollY = \max(0, $offset);
+        // ST-15 default arm: scroll follows the cursor always. The window may
+        // move toward the cursor but never past it, so the highlighted row is
+        // on-screen after every scroll (UXD's END-key zero-reverse probe).
+        // The free-scroll + off-screen-marker alternative stays in OG-3's family.
+        $clone->followCursor();
         return $clone;
     }
 
@@ -1014,10 +1023,14 @@ final class Table
      *
      *   $table = $table->handleKey($key);
      *
+     * The applied window is cursor-preserving (ST-15): keys move the viewport
+     * toward the highlight, never past it. Use withSelectedIndex()/SelectNext()
+     * to travel — cursor travel scrolls the window to reveal itself.
+     *
      * @param string $key One of the KEY_* constants
      * @return self New Table instance with adjusted scrollY
      *
-     * @see scrollYForKey()  For the raw scrollY calculation
+     * @see scrollYForKey()  For the raw (uncoupled) scrollY calculation
      */
     public function handleKey(string $key): self
     {

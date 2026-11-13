@@ -44,7 +44,8 @@ final class TableViewportTest extends TestCase
 
     public function testScrollYSlicesVisibleRows(): void
     {
-        $t = $this->makeLargeTable()->withViewportHeight(5)->withScrollY(10);
+        $t = $this->makeLargeTable()->withViewportHeight(5)
+            ->withSelectedIndex(12)->withScrollY(10);
         $view = $t->View();
 
         // Rows 10-14 should be visible (User10, User11, User12, User13, User14)
@@ -61,10 +62,14 @@ final class TableViewportTest extends TestCase
 
     public function testScrollYAboveRowCountIsSafe(): void
     {
-        $t = $this->makeLargeTable()->withViewportHeight(5)->withScrollY(200);
-        $view = $t->View();
+        // ST-15 law: scroll cannot strand the cursor, so an absurd offset
+        // parks the window at maxScroll around a tail cursor — never a blank box.
+        $t = $this->makeLargeTable()->withViewportHeight(5)
+            ->withSelectedIndex(99)->withScrollY(200);
 
-        // Should not render anything when scrollY exceeds row count
+        $this->assertSame(95, $t->scrollY(), 'window parks with the cursor at its top edge');
+        $view = $t->View();
+        $this->assertStringContainsString('User95', $view);
         $this->assertStringNotContainsString('User0', $view);
     }
 
@@ -85,7 +90,7 @@ final class TableViewportTest extends TestCase
     public function testWithScrollYReturnsNewInstance(): void
     {
         $a = $this->makeLargeTable()->withViewportHeight(10);
-        $b = $a->withScrollY(5);
+        $b = $a->withSelectedIndex(5)->withScrollY(5);
         $this->assertNotSame($a, $b);
         $this->assertSame(0, $a->scrollY());
         $this->assertSame(5, $b->scrollY());
@@ -120,7 +125,7 @@ final class TableViewportTest extends TestCase
 
     public function testScrollYForKeyArrowUp(): void
     {
-        $t = $this->makeLargeTable()->withViewportHeight(10)->withScrollY(5);
+        $t = $this->makeLargeTable()->withViewportHeight(10)->withSelectedIndex(5)->withScrollY(5);
         $this->assertSame(4, $t->scrollYForKey(Table::KEY_ARROW_UP));
     }
 
@@ -132,58 +137,58 @@ final class TableViewportTest extends TestCase
 
     public function testScrollYForKeyArrowDown(): void
     {
-        $t = $this->makeLargeTable()->withViewportHeight(10)->withScrollY(5);
+        $t = $this->makeLargeTable()->withViewportHeight(10)->withSelectedIndex(5)->withScrollY(5);
         // maxScrollY = 100 - 10 = 90
         $this->assertSame(6, $t->scrollYForKey(Table::KEY_ARROW_DOWN));
     }
 
     public function testScrollYForKeyArrowDownAtMax(): void
     {
-        $t = $this->makeLargeTable()->withViewportHeight(10)->withScrollY(90);
+        $t = $this->makeLargeTable()->withViewportHeight(10)->withSelectedIndex(90)->withScrollY(90);
         $this->assertSame(90, $t->scrollYForKey(Table::KEY_ARROW_DOWN));
     }
 
     public function testScrollYForKeyPageUp(): void
     {
-        $t = $this->makeLargeTable()->withViewportHeight(10)->withScrollY(50);
+        $t = $this->makeLargeTable()->withViewportHeight(10)->withSelectedIndex(50)->withScrollY(50);
         $this->assertSame(40, $t->scrollYForKey(Table::KEY_PAGE_UP));
     }
 
     public function testScrollYForKeyPageUpAtZero(): void
     {
-        $t = $this->makeLargeTable()->withViewportHeight(10)->withScrollY(5);
+        $t = $this->makeLargeTable()->withViewportHeight(10)->withSelectedIndex(5)->withScrollY(5);
         $this->assertSame(0, $t->scrollYForKey(Table::KEY_PAGE_UP));
     }
 
     public function testScrollYForKeyPageDown(): void
     {
-        $t = $this->makeLargeTable()->withViewportHeight(10)->withScrollY(50);
+        $t = $this->makeLargeTable()->withViewportHeight(10)->withSelectedIndex(50)->withScrollY(50);
         $this->assertSame(60, $t->scrollYForKey(Table::KEY_PAGE_DOWN));
     }
 
     public function testScrollYForKeyPageDownAtMax(): void
     {
-        $t = $this->makeLargeTable()->withViewportHeight(10)->withScrollY(85);
+        $t = $this->makeLargeTable()->withViewportHeight(10)->withSelectedIndex(85)->withScrollY(85);
         // maxScrollY = 90, so pageDown should clamp to 90
         $this->assertSame(90, $t->scrollYForKey(Table::KEY_PAGE_DOWN));
     }
 
     public function testScrollYForKeyHome(): void
     {
-        $t = $this->makeLargeTable()->withViewportHeight(10)->withScrollY(50);
+        $t = $this->makeLargeTable()->withViewportHeight(10)->withSelectedIndex(50)->withScrollY(50);
         $this->assertSame(0, $t->scrollYForKey(Table::KEY_HOME));
     }
 
     public function testScrollYForKeyEnd(): void
     {
-        $t = $this->makeLargeTable()->withViewportHeight(10)->withScrollY(50);
+        $t = $this->makeLargeTable()->withViewportHeight(10)->withSelectedIndex(50)->withScrollY(50);
         // maxScrollY = 100 - 10 = 90
         $this->assertSame(90, $t->scrollYForKey(Table::KEY_END));
     }
 
     public function testScrollYForKeyUnknownKeyReturnsCurrent(): void
     {
-        $t = $this->makeLargeTable()->withViewportHeight(10)->withScrollY(25);
+        $t = $this->makeLargeTable()->withViewportHeight(10)->withSelectedIndex(25)->withScrollY(25);
         $this->assertSame(25, $t->scrollYForKey('unknownKey'));
     }
 
@@ -198,7 +203,7 @@ final class TableViewportTest extends TestCase
 
     public function testHandleKeyReturnsNewInstance(): void
     {
-        $a = $this->makeLargeTable()->withViewportHeight(10)->withScrollY(5);
+        $a = $this->makeLargeTable()->withViewportHeight(10)->withSelectedIndex(5)->withScrollY(5);
         $b = $a->handleKey(Table::KEY_ARROW_UP);
         $this->assertNotSame($a, $b);
         $this->assertSame(5, $a->scrollY());
@@ -207,61 +212,75 @@ final class TableViewportTest extends TestCase
 
     public function testHandleKeyArrowDown(): void
     {
-        $t = $this->makeLargeTable()->withViewportHeight(10)->withScrollY(5);
+        // Cursor on row 6 (window [5..14]) legally slides down to [6..15].
+        $t = $this->makeLargeTable()->withViewportHeight(10)->withSelectedIndex(6)->withScrollY(5);
         $t2 = $t->handleKey(Table::KEY_ARROW_DOWN);
         $this->assertSame(6, $t2->scrollY());
     }
 
     public function testHandleKeyPageDown(): void
     {
-        $t = $this->makeLargeTable()->withViewportHeight(10)->withScrollY(50);
+        // ST-15 law: the window may never jump past the cursor — a page-down
+        // that would strand the cursor on row 50 parks the window ON it instead.
+        $t = $this->makeLargeTable()->withViewportHeight(10)->withSelectedIndex(50)->withScrollY(45);
         $t2 = $t->handleKey(Table::KEY_PAGE_DOWN);
-        $this->assertSame(60, $t2->scrollY());
+        $this->assertSame(50, $t2->scrollY());
     }
 
     public function testHandleKeyHome(): void
     {
-        $t = $this->makeLargeTable()->withViewportHeight(10)->withScrollY(50);
+        // Home with the cursor on row 50 parks the window with the cursor at
+        // its bottom edge (41..50) rather than stranding it.
+        $t = $this->makeLargeTable()->withViewportHeight(10)->withSelectedIndex(50)->withScrollY(50);
         $t2 = $t->handleKey(Table::KEY_HOME);
-        $this->assertSame(0, $t2->scrollY());
+        $this->assertSame(41, $t2->scrollY());
     }
 
     public function testHandleKeyEnd(): void
     {
-        $t = $this->makeLargeTable()->withViewportHeight(10)->withScrollY(50);
+        // UXD's zero-reverse probe (finding 015b): END with the cursor on row
+        // 50 must NOT park the window at rows 90-99 with the highlight lost —
+        // it clamps to the cursor.
+        $t = $this->makeLargeTable()->withViewportHeight(10)->withSelectedIndex(50)->withScrollY(50);
         $t2 = $t->handleKey(Table::KEY_END);
-        $this->assertSame(90, $t2->scrollY());
+        $this->assertSame(50, $t2->scrollY());
+
+        // With a tail cursor END still reaches the true bottom.
+        $u = $this->makeLargeTable()->withViewportHeight(10)->withSelectedIndex(99);
+        $this->assertSame(90, $u->handleKey(Table::KEY_END)->scrollY());
     }
 
     public function testHandleKeyUnknownKeyReturnsUnchangedScrollY(): void
     {
-        $t = $this->makeLargeTable()->withViewportHeight(10)->withScrollY(25);
+        $t = $this->makeLargeTable()->withViewportHeight(10)->withSelectedIndex(25)->withScrollY(25);
         $t2 = $t->handleKey('unknownKey');
         $this->assertSame(25, $t2->scrollY());
     }
 
     public function testKeyboardScrollingIntegration(): void
     {
-        // Simulate a user pressing keys to scroll through the table
-        $t = $this->makeLargeTable()->withViewportHeight(10)->withScrollY(0);
+        // ST-15 coupled law: keys move the window toward the cursor; travel
+        // moves the cursor (and the window follows). Down-arrow at the top of
+        // a cursor-anchored window cannot leave the highlight behind.
+        $t = $this->makeLargeTable()->withViewportHeight(10);
 
-        // Press arrow down a few times
         $t = $t->handleKey(Table::KEY_ARROW_DOWN);
-        $this->assertSame(1, $t->scrollY());
-        $t = $t->handleKey(Table::KEY_ARROW_DOWN);
-        $this->assertSame(2, $t->scrollY());
+        $this->assertSame(0, $t->scrollY(), 'no stranding: cursor row 0 pins the window top');
 
-        // Press home to go back to top
-        $t = $t->handleKey(Table::KEY_HOME);
-        $this->assertSame(0, $t->scrollY());
+        $t = $t->withSelectedIndex(50);
+        $this->assertSame(41, $t->scrollY(), 'cursor travel scrolls the window to reveal it');
 
-        // Press page down to jump ahead
         $t = $t->handleKey(Table::KEY_PAGE_DOWN);
-        $this->assertSame(10, $t->scrollY());
+        $this->assertSame(50, $t->scrollY(), 'page-down parks on the cursor instead of jumping past it');
 
-        // Press end to go to the bottom
-        $t = $t->handleKey(Table::KEY_END);
+        $t = $t->withSelectedIndex(99);
         $this->assertSame(90, $t->scrollY());
+
+        $t = $t->handleKey(Table::KEY_END);
+        $this->assertSame(90, $t->scrollY(), 'tail cursor keeps END at the true bottom');
+
+        $t = $t->handleKey(Table::KEY_HOME);
+        $this->assertSame(90, $t->scrollY(), 'home cannot strand the tail cursor');
     }
 
     public function testScrollYForKeyWithFilteredRows(): void
