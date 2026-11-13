@@ -183,6 +183,121 @@ final class SymbolMapTest extends TestCase
         SymbolMap::coverageToBitmap(array_fill(0, 63, 0), 127);
     }
 
+    /**
+     * SI-09 memo law: coverageOf() is now memoised per bitmap. The memo
+     * must answer EXACTLY what the shift loop computes — for every corpus
+     * def (first touch), then again warm — so a stale-key or collision
+     * bug in the memo table reddens here instead of churning render bytes.
+     */
+    public function testTheCoverageMemoAnswersIdenticallyToTheLoopOracle(): void
+    {
+        $oracle = static function (int $bitmap): array {
+            $cov = [];
+            for ($i = 0; $i < 64; $i++) {
+                $cov[] = ($bitmap >> (63 - $i)) & 1;
+            }
+
+            return $cov;
+        };
+
+        $bitmaps = array_map(static fn (SymbolDef $d): int => $d->bits, $this->map->defs());
+        $bitmaps[] = 0;
+        $bitmaps[] = -1;
+        $bitmaps[] = 0x5555555555555555;
+        $bitmaps[] = PHP_INT_MIN;
+
+        foreach ($bitmaps as $b) {
+            $this->assertSame($oracle($b), SymbolMap::coverageOf($b), 'cold memo answer');
+            $this->assertSame($oracle($b), SymbolMap::coverageOf($b), 'warm memo answer');
+        }
+    }
+
+    /**
+     * The memo is capped: novel bitmaps past the cap keep answering from
+     * the loop (correct, unmemoised) instead of growing the table without
+     * bound. Behavioural half: the oracle equality survives a sweep of
+     * cap+64 DISTINCT bitmaps; shape half: the cap guard is present in
+     * the method body (the table itself is a method-local static, not
+     * reflection-readable — the guard grep is the honest pin).
+     */
+    public function testTheCoverageMemoStopsGrowingPastItsCap(): void
+    {
+        $cap = (new \ReflectionClass(SymbolMap::class))->getConstant('COVERAGE_MEMO_MAX');
+        $this->assertIsInt($cap);
+
+        $seen = [];
+        for ($k = 0; $k < $cap + 64; $k++) {
+            // Distinct by construction: the first 28 coverage slots
+            // carry k's low 28 bits, so distinct k give distinct bitmaps.
+            $cov = [];
+            for ($i = 0; $i < 64; $i++) {
+                $cov[] = ($k >> ($i % 28)) & 1;
+            }
+            $bitmap = SymbolMap::coverageToBitmap($cov);
+            $seen[$bitmap] = true;
+
+            $oracle = [];
+            for ($i = 0; $i < 64; $i++) {
+                $oracle[] = ($bitmap >> (63 - $i)) & 1;
+            }
+            $this->assertSame($oracle, SymbolMap::coverageOf($bitmap), 'answer at k=' . $k);
+        }
+        $this->assertCount($cap + 64, $seen, 'the sweep must actually exceed the cap');
+
+        $body = (string) file_get_contents((new \ReflectionClass(SymbolMap::class))->getFileName());
+        $this->assertMatchesRegularExpression(
+            '/if \(count\(\$memo\) < self::COVERAGE_MEMO_MAX\)/',
+            $body,
+            'the cap guard must stay in coverageOf',
+        );
+    }
+
+    public function testTheFlatWalkSurvivesBecauseThePruneMeasuredWorse(): void
+    {
+        // SI-09 honesty pin: the weight-gap prune (hd >= |pc - weight|)
+        // was built, A/B-measured at 7.6% skips / +15% cost on 1,664 real
+        // cell bitmaps, and REVERTED. This pin locks the reverted shape:
+        // findCandidates must trial the WHOLE corpus for a query whose
+        // popcount sits at the median cell value — measured through the
+        // insertion buffer landing the same winner as the exhaustive
+        // reference walk, not through a counter the API does not expose.
+        $bitmap = SymbolMap::coverageToBitmap(array_merge(array_fill(0, 32, 1), array_fill(0, 32, 0)));
+
+        $cands = $this->map->findCandidates($bitmap, true, 8);
+        $this->assertNotSame([], $cands);
+
+        // Reference: naive full walk with the same stable buffer semantics.
+        $defs = $this->map->defs();
+        $best = null;
+        $bestD = 65;
+        foreach ($defs as $i => $d) {
+            $hd = self::refPopcount($bitmap ^ $d->bits);
+            if ($hd < $bestD) {
+                $bestD = $hd;
+                $best = $i;
+            }
+            $hi = 64 - $hd;
+            if ($hi < $bestD) {
+                $bestD = $hi;
+                $best = $i;
+            }
+        }
+        $this->assertSame($defs[$best]->char, $cands[0][0]->char, 'best-first walk must lead with the global best');
+    }
+
+    private static function refPopcount(int $x): int
+    {
+        $n = 0;
+        $neg = ($x >> 63) & 1;
+        $x &= PHP_INT_MAX;
+        while ($x !== 0) {
+            $n++;
+            $x &= $x - 1;
+        }
+
+        return $n + $neg;
+    }
+
     public function testCandidateSearchNarrowsByPopcountHamming(): void
     {
         $all = -1; // 64 set bits

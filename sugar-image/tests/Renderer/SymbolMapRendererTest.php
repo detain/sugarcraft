@@ -236,6 +236,27 @@ final class SymbolMapRendererTest extends TestCase
         return ImageSource::fromGd($img, 'image/png');
     }
 
+    public function testTheSamplerIsBandedNotFullGrid(): void
+    {
+        // SI-09 streaming law (finding 004): render() consumes cell bands
+        // strictly row by row, so at most ONE row of 64-pixel cells is
+        // materialised per frame instead of the whole grid (220x110 cells
+        // ≈ 1.5M pixel arrays pre-fix). Shape half of the pin: the
+        // full-grid sampler is gone and a per-row sampler exists;
+        // behaviour half: every byte-frozen digest above proves the
+        // banded path emits identical bytes on multi-row content.
+        $ref = new \ReflectionClass(SymbolMapRenderer::class);
+        $this->assertFalse($ref->hasMethod('sampleCells'), 'the full-grid sampler must not return');
+        $this->assertTrue($ref->hasMethod('sampleRow'), 'the banded sampler must exist');
+
+        $render = (string) file_get_contents($ref->getFileName());
+        $this->assertMatchesRegularExpression(
+            '/for \(\$cy = 0; \$cy < \$effectiveHeight; \$cy\+\+\)/',
+            $render,
+            'render() must iterate bands, not a materialised grid',
+        );
+    }
+
     public function testTheRendererIsDeterministicAcrossRendersAndInstances(): void
     {
         $image = ImageSource::fromFile(self::GRADIENT);

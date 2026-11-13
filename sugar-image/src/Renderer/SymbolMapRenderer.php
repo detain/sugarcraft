@@ -235,34 +235,43 @@ final class SymbolMapRenderer implements Renderer, AcceptsOptimization, ConfigFi
         imagesavealpha($img, true);
 
         try {
-            $cells = $this->sampleCells($img, $width, $effectiveHeight);
+            $canvas = $this->resampleCanvas($img, $width, $effectiveHeight);
         } finally {
             imagedestroy($img);
         }
 
-        $pen = new OutputOptimizer(repeatCells: $this->emitsRepeatCells());
-        $widePass = $this->map->wideDefs() !== [];
-        $lines = [];
-        foreach ($cells as $row) {
-            $painted = [];
-            foreach ($row as $cell) {
-                $painted[] = $this->paintCell($cell);
-            }
-            if ($widePass) {
-                $this->applyWidePass($painted, $row);
-            }
-            foreach ($painted as [$glyph, $fg, $bg]) {
-                if ($glyph === null) {
-                    // Continuation half of a committed wide pair:
-                    // chafa's printer emits zero bytes for c == 0.
-                    continue;
+        // (finding 004 streaming law) The cell bands are consumed
+        // strictly row by row — paint, wide trial, emit — so exactly one
+        // row's 64-pixel cells are materialised at a time instead of the
+        // whole 220x110 grid (1.5M pixel arrays) up front.
+        try {
+            $pen = new OutputOptimizer(repeatCells: $this->emitsRepeatCells());
+            $widePass = $this->map->wideDefs() !== [];
+            $lines = [];
+            for ($cy = 0; $cy < $effectiveHeight; $cy++) {
+                $row = $this->sampleRow($canvas, $width, $cy);
+                $painted = [];
+                foreach ($row as $cell) {
+                    $painted[] = $this->paintCell($cell);
                 }
-                $pen->cell($glyph, $this->canvasMode->fgSgr($fg), $this->canvasMode->bgSgr($bg));
+                if ($widePass) {
+                    $this->applyWidePass($painted, $row);
+                }
+                foreach ($painted as [$glyph, $fg, $bg]) {
+                    if ($glyph === null) {
+                        // Continuation half of a committed wide pair:
+                        // chafa's printer emits zero bytes for c == 0.
+                        continue;
+                    }
+                    $pen->cell($glyph, $this->canvasMode->fgSgr($fg), $this->canvasMode->bgSgr($bg));
+                }
+                $lines[] = $pen->finishRow();
             }
-            $lines[] = $pen->finishRow();
-        }
 
-        return implode("\n", $lines);
+            return implode("\n", $lines);
+        } finally {
+            imagedestroy($canvas);
+        }
     }
 
     public function name(): string
@@ -289,13 +298,12 @@ final class SymbolMapRenderer implements Renderer, AcceptsOptimization, ConfigFi
     }
 
     /**
-     * Resample to 8 px per cell and hand back one 64-entry pixel list per
-     * cell (position index = y*8+x), each entry [r, g, b, ?int] with
-     * alpha null on transparent pixels (lib-wide >= 127 rule).
-     *
-     * @return list<list<list<array{int,int,int,?int}>>> rows of cells
+     * Resample to the 8 px per cell grid into one GD canvas — the single
+     * full-surface allocation the render path keeps. Cell pixels are read
+     * from it band by band ({@see sampleRow()}); the caller owns the
+     * destroy.
      */
-    private function sampleCells(\GdImage $img, int $cellW, int $cellH): array
+    private function resampleCanvas(\GdImage $img, int $cellW, int $cellH): \GdImage
     {
         $srcW = imagesx($img);
         $srcH = imagesy($img);
@@ -306,30 +314,39 @@ final class SymbolMapRenderer implements Renderer, AcceptsOptimization, ConfigFi
         imagealphablending($canvas, true);
         imagecopyresampled($canvas, $img, 0, 0, 0, 0, $cellW * 8, $cellH * 8, $srcW, $srcH);
 
-        $cells = [];
-        for ($cy = 0; $cy < $cellH; $cy++) {
-            $row = [];
-            for ($cx = 0; $cx < $cellW; $cx++) {
-                $pixels = [];
-                for ($y = 0; $y < 8; $y++) {
-                    for ($x = 0; $x < 8; $x++) {
-                        $rgba = imagecolorat($canvas, $cx * 8 + $x, $cy * 8 + $y);
-                        $a = ((int) ($rgba >> 24)) & 0x7F;
-                        $pixels[] = [
-                            (int) (($rgba >> 16) & 0xFF),
-                            (int) (($rgba >> 8) & 0xFF),
-                            (int) ($rgba & 0xFF),
-                            $a >= 127 ? null : $a,
-                        ];
-                    }
-                }
-                $row[] = $pixels;
-            }
-            $cells[] = $row;
-        }
-        imagedestroy($canvas);
+        return $canvas;
+    }
 
-        return $cells;
+    /**
+     * One cell row of the resampled canvas as 64-entry pixel lists
+     * (position index = y*8+x), each entry [r, g, b, ?int] with alpha
+     * null on transparent pixels (lib-wide >= 127 rule) — the banded
+     * half of the split sampleCells, so only a single row of cells is
+     * ever materialised (finding 004).
+     *
+     * @return list<list<array{int,int,int,?int}>>
+     */
+    private function sampleRow(\GdImage $canvas, int $cellW, int $cy): array
+    {
+        $row = [];
+        for ($cx = 0; $cx < $cellW; $cx++) {
+            $pixels = [];
+            for ($y = 0; $y < 8; $y++) {
+                for ($x = 0; $x < 8; $x++) {
+                    $rgba = imagecolorat($canvas, $cx * 8 + $x, $cy * 8 + $y);
+                    $a = ((int) ($rgba >> 24)) & 0x7F;
+                    $pixels[] = [
+                        (int) (($rgba >> 16) & 0xFF),
+                        (int) (($rgba >> 8) & 0xFF),
+                        (int) ($rgba & 0xFF),
+                        $a >= 127 ? null : $a,
+                    ];
+                }
+            }
+            $row[] = $pixels;
+        }
+
+        return $row;
     }
 
     /**
