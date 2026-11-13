@@ -149,6 +149,79 @@ final class ArgvGoldenTest extends TestCase
     }
 
     /**
+     * SV-L56/056: the mpv goldens are a HAND transcription (mpv was absent on
+     * the capture host — and it is absent on this one too: `command -v mpv`
+     * exits 1, so a recapture is impossible here; the dual-oracle landing is
+     * the finding's sanctioned alternative). The existing arm compares live
+     * builder output against that transcription — both descend from the same
+     * human reading, which is exactly the blind spot. This oracle derives the
+     * expected argv a SECOND way, from the case scalars through the
+     * documented flag vocabulary, and checks token-set equality against the
+     * README's own mpv sentence, so a single transcription typo trips one of
+     * the two oracles no matter which side the typo lived on.
+     */
+    #[DataProvider('mpvCases')]
+    public function testTheMpvGoldensSurviveAnIndependentDerivation(array $case): void
+    {
+        $seekMs = (int) $case['seekMs'];
+        $derived = [$case['binary'], '--no-video', '--really-quiet'];
+        if ($seekMs > 0) {
+            // The documented shape, spelled by hand on purpose: reusing the
+            // builder's own formatter here would make the second oracle a
+            // copy of the first, not a witness against it.
+            $derived[] = '--start=' . sprintf('%.3f', $seekMs / 1000) . 's';
+        }
+        $derived[] = $case['source'];
+
+        self::assertSame(
+            $derived,
+            $case['argv'],
+            "the golden for {$case['name']} is not reproducible from the documented mpv vocabulary",
+        );
+
+        // Vocab equality vs the README sentence (the two independent texts
+        // must agree on WHICH flags exist, not merely on the argv bytes).
+        $readme = (string) file_get_contents(__DIR__ . '/../../README.md');
+        self::assertStringContainsString('`mpv` (`--no-video --really-quiet`', $readme, 'the documented mpv audio flags must still be the emitted ones');
+        self::assertStringContainsString('--start=…s', $readme, 'the resume-seek flag is documented');
+
+        foreach ($case['argv'] as $token) {
+            if (is_string($token) && str_starts_with($token, '--')) {
+                $flag = strtok($token, '=');
+                self::assertContains(
+                    $flag,
+                    ['--no-video', '--really-quiet', '--start', '--stream-lavf-o', '--http-header-fields'],
+                    "undocumented mpv flag {$flag} in golden {$case['name']} — the transcription and the docs have diverged",
+                );
+            }
+        }
+    }
+
+    /**
+     * SV-L56/056 companion: the header dialect the goldens never captured
+     * (every fixture case has empty headers) — mpv gets exactly one
+     * --http-header-fields per pair and, per the README, never also
+     * --user-agent. Structural, so it needs no live mpv to be honest.
+     */
+    public function testTheMpvHeaderDialectIsStructurallyPinned(): void
+    {
+        $argv = FfmpegCommandBuilder::mpvAudioCommand(
+            '/usr/bin/mpv',
+            'https://host.test/clip.mp4',
+            0,
+            HttpHeaders::parse(['X-Auth: yes', 'User-Agent: sugar-video/1']),
+        );
+
+        $fieldFlags = array_values(array_filter($argv, static fn (string $t): bool => str_starts_with($t, '--http-header-fields=')));
+        self::assertCount(2, $fieldFlags, 'one --http-header-fields per pair');
+        self::assertContains('--http-header-fields=X-Auth: yes', $fieldFlags);
+        self::assertContains('--http-header-fields=User-Agent: sugar-video/1', $fieldFlags, 'User-Agent rides the fields, not a rival flag');
+
+        $rivalFlags = array_filter($argv, static fn (string $t): bool => $t === '--user-agent' || str_starts_with($t, '--user-agent='));
+        self::assertSame([], array_values($rivalFlags), 'the README promise: mpv is never also given --user-agent');
+    }
+
+    /**
      * Call-site checks that NEVER skip (round-1 review m2): PATH points at a
      * private directory of inert ffplay/mpv stubs, so `Probe` resolves
      * deterministically on any host — including one without either binary, where

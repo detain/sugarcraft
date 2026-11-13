@@ -461,7 +461,9 @@ video file (mp4/gif/avi/webm)
   NTP step or a laptop-suspend resume can no longer fast-forward thousands of
   frames or freeze playback, and one tick charges at most
   `Player::MAX_TICK_DELTA_SEC` of content time whatever the clock claims.
-- **Audio:** `AudioPlayer` shells out to `ffplay` or `mpv --no-video` as the audio output companion; the Player's own (monotonic) clock stays master (audio may drift; it is never the pacing source).
+- **Audio:** `AudioPlayer` shells out to `ffplay` (`-nodisp -autoexit`) or
+  `mpv` (`--no-video --really-quiet`, plus `--start=…s` on a banked resume)
+  as the audio output companion; the Player's own (monotonic) clock stays master (audio may drift; it is never the pacing source).
 
 ## Prior art
 
