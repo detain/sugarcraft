@@ -733,7 +733,7 @@ final class PosterGrid
     }
 
     /**
-     * Normalize a card render to exactly cardWidth × cellHeight *visual* cells:
+     * Normalise a card render to exactly cardWidth × cellHeight *visual* cells:
      * clip/pad the line count to cellHeight and every line (ANSI-aware) to
      * cardWidth, so an over- or under-sized poster can never inflate its column
      * and break grid alignment.
