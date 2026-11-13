@@ -1,6 +1,6 @@
 <img src=".assets/icon.png" alt="candy-flappy" width="160" align="right">
 
-# CandyFlappy
+# candy-flappy
 
 <!-- BADGES:BEGIN -->
 [![CI](https://github.com/detain/sugarcraft/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/detain/sugarcraft/actions/workflows/ci.yml)
@@ -13,7 +13,7 @@
 
 ![demo](.vhs/play.gif)
 
-candy-flappy — a Flappy-Bird-style terminal game on the SugarCraft stack (PHP 8.3+). The bird's vertical motion is a SugarSpring projectile (gravity + an upward velocity kick on each tap), pipes scroll left at a fixed cell rate, collision is per-cell.
+candy-flappy — a Flappy-Bird-style terminal game on the SugarCraft stack (PHP 8.3+). The bird's vertical motion is a SugarSpring projectile (gravity + an upward velocity kick on each tap), pipes scroll left at a fixed cell rate, collision is per-cell. Development happens in the [`detain/sugarcraft`](https://github.com/detain/sugarcraft) monorepo; the `sugarcraft/candy-flappy` package on Packagist is a split mirror of this directory — file issues against the monorepo.
 
 *Formerly published as `sugarcraft/honey-flap` (renamed 2026-10; namespace `SugarCraft\Flap\` → `SugarCraft\Flappy\`). The first run of `bin/candy-flappy` migrates a pre-rename `.honey-flap` high-score directory automatically, under the same config base the game itself uses: `$XDG_CONFIG_HOME` first, `$HOME/.config` as fallback (see "High scores, config, and environment").*
 
@@ -36,7 +36,8 @@ stay English so they remain parseable even when the locale is broken.
 
 ```bash
 # From a clone of the monorepo (each lib carries its own vendor):
-cd candy-flappy
+git clone https://github.com/detain/sugarcraft.git
+cd sugarcraft/candy-flappy
 composer install
 ./bin/candy-flappy      # or: php examples/play.php — interactive use only, no migration
 
