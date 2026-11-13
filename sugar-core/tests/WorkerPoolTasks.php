@@ -96,6 +96,21 @@ final class WorkerPoolTasks
         return ProgramException::class;
     }
 
+    /**
+     * sc-32 ladder pin: wedges the CHILD for five seconds inside a task —
+     * it never reads stdin again, so the polite EOF-leave is dead and only
+     * the TERM rung releases it. With four of these in flight, a serial
+     * per-worker ladder pays the 1.5 s grace four times; the shared ladder
+     * pays it once.
+     */
+    public static function wedged(): void
+    {
+        $end = hrtime(true) + 5_000_000_000;
+        while (hrtime(true) < $end) {
+            usleep(20_000);
+        }
+    }
+
     public function __invoke(): string
     {
         return $this->blob === '' ? 'invoked' : 'big:' . strlen($this->blob);

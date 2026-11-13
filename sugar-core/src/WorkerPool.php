@@ -189,8 +189,28 @@ final class WorkerPool
             $this->tickTimer = null;
         }
 
+        // sc-32: the old stop() ran one FULL reap ladder per worker, serially
+        // — four wedged workers meant up to 4 × (1.5 + 1 + 1) ≈ 14 s of dead
+        // time in a destructor. The ladders are now concurrent: every stdin
+        // closes first (all healthy children see EOF at once), then ONE
+        // shared TERM→KILL ladder polls the whole set. Worst case is the
+        // width of a single ladder regardless of pool size.
+        $processes = [];
         foreach ($this->workers as $worker) {
-            $this->closeWorker($worker);
+            if ($worker->process !== null && is_resource($worker->process)) {
+                $processes[] = $worker->process;
+            }
+            $this->closeWorkerStreams($worker);
+        }
+        $this->reapAllBounded($processes);
+        foreach ($processes as $process) {
+            proc_close($process);
+        }
+        // sc-32: script unlink + any still-open pipe fds go AFTER the reap
+        // (see closeWorkerStreams) — proc_close has already invalidated the
+        // pipes it made; this pass is the once-exact cleanup point.
+        foreach ($this->workers as $worker) {
+            $this->releaseWorkerAfterReap($worker);
         }
         $this->workers = [];
         $this->queue = [];
@@ -766,14 +786,48 @@ PHP;
 
     private function closeWorker(WorkerState $worker): void
     {
-        // Only a live stderr pipe was ever registered; a synthetic WorkerState
-        // (spawn failed before any pipe existed) carries null. Stock React
-        // loops cast that null to key 0 and unset unconditionally — but their
-        // readStreams are keyed by PHP resource ID (≥1, never fd), so key 0
-        // cannot hold any registration and the pre-guard cast was a silent
-        // no-op. The guard is prophylaxis: it forecloses fd-keyed/custom
-        // LoopInterface implementations and closed-resource-ID-reuse shapes
-        // where the collision WOULD be live.
+        $this->closeWorkerStreams($worker);
+        if ($worker->process !== null && is_resource($worker->process)) {
+            // Closing stdin above is the polite "leave" for a healthy worker —
+            // its read loop hits EOF and exits. A worker wedged INSIDE a task
+            // never notices, so bound the wait and escalate; without this the
+            // bare proc_close() handed the event loop (or PHP shutdown via
+            // __destruct) to whoever the task was, forever.
+            $this->reapAllBounded([$worker->process]);
+            proc_close($worker->process);
+        }
+        $this->releaseWorkerAfterReap($worker);
+    }
+
+    /**
+     * Release the resources the pool polls: the stderr watcher and the
+     * child's STDIN write end.
+     *
+     * sc-32 keeps STDOUT/STDERR read ends OPEN here, and the temp script
+     * unlink is deferred past the reap, because of what stream-close timing
+     * does to a child still in its boot window (measured): a pooled child
+     * whose script file is unlinked before PHP finished opening it dies with
+     * exit code 1, and a child that finishes its task and echoes the response
+     * into a stdout pipe that has lost its last reader takes a shutdown
+     * flush fatal (exit 255). Both deaths land inside the grace window and
+     * would be reported as phantom 'died unexpectedly' rejections — the pool
+     * would be killing children it is trying to let exit politely. proc_close()
+     * closes the remaining pipes itself, so nothing leaks; the watcher must
+     * still go NOW (a dead child's stderr on a live loop is a busy fd), and
+     * a chatty child could in theory fill the unread 64 KiB stderr buffer
+     * during the bounded ladder — those children are one TERM away anyway.
+     *
+     * Only a live stderr pipe was ever registered; a synthetic WorkerState
+     * (spawn failed before any pipe existed) carries null. Stock React
+     * loops cast that null to key 0 and unset unconditionally — but their
+     * readStreams are keyed by PHP resource ID (≥1, never fd), so key 0
+     * cannot hold any registration and the pre-guard cast was a silent
+     * no-op. The guard is prophylaxis: it forecloses fd-keyed/custom
+     * LoopInterface implementations and closed-resource-ID-reuse shapes
+     * where the collision WOULD be live.
+     */
+    private function closeWorkerStreams(WorkerState $worker): void
+    {
         if ($worker->stderr !== null && is_resource($worker->stderr)) {
             $this->loop->removeReadStream($worker->stderr);
         }
@@ -781,23 +835,24 @@ PHP;
         if ($worker->stdin !== null && is_resource($worker->stdin)) {
             @fclose($worker->stdin);
         }
+    }
+
+    /**
+     * Final release of one worker's leftovers AFTER proc_close (sc-32): the
+     * temp script is unlinked only once the child can no longer be inside
+     * its open, and the surviving stdout/stderr resources are closed
+     * defensively (proc_close has invalidated them; the is_resource guard
+     * makes the call a no-op in that normal case and a leak-plug in any
+     * exotic one, e.g. the sc-30 deadline test's swapped-stdin worker).
+     */
+    private function releaseWorkerAfterReap(WorkerState $worker): void
+    {
         if ($worker->stdout !== null && is_resource($worker->stdout)) {
             @fclose($worker->stdout);
         }
         if ($worker->stderr !== null && is_resource($worker->stderr)) {
             @fclose($worker->stderr);
         }
-        if ($worker->process !== null && is_resource($worker->process)) {
-            // Closing stdin above is the polite "leave" for a healthy worker —
-            // its read loop hits EOF and exits. A worker wedged INSIDE a task
-            // never notices, so bound the wait and escalate; without this the
-            // bare proc_close() handed the event loop (or PHP shutdown via
-            // __destruct) to whoever the task was, forever.
-            $this->reapBounded($worker->process);
-            proc_close($worker->process);
-        }
-
-        // Unlink the worker's temp script exactly once.
         if ($worker->scriptPath !== null && is_file($worker->scriptPath)) {
             @unlink($worker->scriptPath);
         }
@@ -816,19 +871,68 @@ PHP;
      *
      * @param resource $process
      */
-    private function reapBounded($process): void
+    /**
+     * One bounded TERM→KILL ladder over a SET of children (sc-32): the whole
+     * set shares each rung's budget instead of paying a fresh ladder per
+     * worker. The poll only ever touches children still running, so healthy
+     * exits shrink the set immediately and the TERM/KILL rungs are aimed at
+     * whoever is actually left.
+     *
+     * @param list<resource> $processes
+     */
+    private function reapAllBounded(array $processes): void
     {
-        if ($this->hasExited($process, self::REAP_GRACE_SECONDS)) {
+        if ($processes === []) {
             return;
         }
 
-        // @: the kill can race the child's own exit (ESRCH); the poll below is
-        // the authority on whether the rung took, not the warning.
-        @proc_terminate($process, self::SIGTERM);
-        if (!$this->hasExited($process, self::REAP_TERM_SECONDS)) {
-            @proc_terminate($process, self::SIGKILL);
-            $this->hasExited($process, self::REAP_KILL_SECONDS);
+        if ($this->allExited($processes, self::REAP_GRACE_SECONDS)) {
+            return;
         }
+
+        foreach ($processes as $process) {
+            if (proc_get_status($process)['running']) {
+                @proc_terminate($process, self::SIGTERM);
+            }
+        }
+        if ($this->allExited($processes, self::REAP_TERM_SECONDS)) {
+            return;
+        }
+        foreach ($processes as $process) {
+            if (proc_get_status($process)['running']) {
+                @proc_terminate($process, self::SIGKILL);
+            }
+        }
+        $this->allExited($processes, self::REAP_KILL_SECONDS);
+    }
+
+    /** Poll the whole set until every child is gone or the rung budget ends. */
+    private function allExited(array $processes, float $seconds): bool
+    {
+        $deadline = microtime(true) + $seconds;
+        do {
+            $running = false;
+            foreach ($processes as $process) {
+                if (proc_get_status($process)['running']) {
+                    $running = true;
+                    break;
+                }
+            }
+            if (!$running) {
+                return true;
+            }
+            usleep(self::REAP_TICK_MICROS);
+        } while (microtime(true) < $deadline);
+
+        // Fresh snapshot under its own name, not a repeat of the loop's
+        // expression: the tick budget expired and a child may have exited
+        // inside exactly that window, so this answer must be re-read.
+        foreach ($processes as $process) {
+            if (proc_get_status($process)['running']) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
@@ -845,23 +949,6 @@ PHP;
      *
      * @param resource $process
      */
-    private function hasExited($process, float $seconds): bool
-    {
-        $deadline = microtime(true) + $seconds;
-        do {
-            if (!proc_get_status($process)['running']) {
-                return true;
-            }
-            usleep(self::REAP_TICK_MICROS);
-        } while (microtime(true) < $deadline);
-
-        // Fresh snapshot under its own name, not a repeat of the loop's
-        // expression: the tick budget expired and the child may have exited
-        // inside exactly that window, so this answer must be re-read.
-        $finalStatus = proc_get_status($process);
-
-        return !$finalStatus['running'];
-    }
 
     public function __destruct()
     {

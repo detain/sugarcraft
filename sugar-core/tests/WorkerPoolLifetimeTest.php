@@ -161,6 +161,28 @@ final class WorkerPoolLifetimeTest extends TestCase
         $this->assertLessThan(5.0, $elapsed, 'grace+TERM+KILL ladder must finish in bounded time');
     }
 
+    public function testStopReapsTheWholePoolOnOneSharedLadder(): void
+    {
+        // sc-32: the per-worker reap ladders in stop() used to run SERIALLY —
+        // four children wedged inside tasks meant four full grace windows
+        // (4 × 1.5 s floor, ≈6 s minimum, ~14 s worst-case). The ladders are
+        // concurrent now: all stdins fall first, then one TERM→KILL ladder
+        // polls the whole set, so wall time is the width of a single ladder.
+        $pool = new WorkerPool($this->loop, 4);
+        for ($i = 0; $i < 4; $i++) {
+            $pool->dispatch([WorkerPoolTasks::class, 'wedged'])
+                ->then(null, static function (): void {
+                });
+        }
+
+        $started = microtime(true);
+        $pool->stop();
+        $elapsed = microtime(true) - $started;
+
+        $this->assertGreaterThanOrEqual(1.4, $elapsed, 'the grace rung is genuinely waited out once');
+        $this->assertLessThan(5.0, $elapsed, 'a serial per-worker ladder would floor at ~6 s; the shared ladder must not');
+    }
+
     private function writeProbeChild(): string
     {
         $autoload = escapeshellarg(dirname(__DIR__) . '/vendor/autoload.php');
