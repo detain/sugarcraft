@@ -12,7 +12,8 @@ declare(strict_types=1);
 
 require __DIR__ . '/../vendor/autoload.php';
 
-use SugarCraft\Overlay\{Position, Veil};
+use SugarCraft\Overlay\Position;
+use SugarCraft\Overlay\Veil;
 
 // Build a simple background panel
 $bg = "┌────────────────────────────────────────┐\n" .

@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\Overlay\Tests;
 
-use SugarCraft\Overlay\{MarkedFrame, Position, Veil};
+use SugarCraft\Overlay\MarkedFrame;
+use SugarCraft\Overlay\Position;
+use SugarCraft\Overlay\Veil;
 use PHPUnit\Framework\TestCase;
 
 /**

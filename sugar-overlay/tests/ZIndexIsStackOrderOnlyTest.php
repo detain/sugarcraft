@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\Overlay\Tests;
 
-use SugarCraft\Overlay\{Position, Veil, VeilStack};
+use SugarCraft\Overlay\Position;
+use SugarCraft\Overlay\Veil;
+use SugarCraft\Overlay\VeilStack;
 use PHPUnit\Framework\TestCase;
 
 /**

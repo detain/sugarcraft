@@ -6,9 +6,12 @@ namespace SugarCraft\Overlay\Tests;
 
 use SugarCraft\CellBuffer\Buffer;
 use SugarCraft\Core\Util\Width;
-use SugarCraft\Core\{MouseAction, MouseButton, Msg\MouseMsg};
+use SugarCraft\Core\MouseAction;
+use SugarCraft\Core\MouseButton;
+use SugarCraft\Core\Msg\MouseMsg;
 use SugarCraft\Style\Border;
-use SugarCraft\Overlay\{Position, Veil};
+use SugarCraft\Overlay\Position;
+use SugarCraft\Overlay\Veil;
 use PHPUnit\Framework\TestCase;
 
 final class VeilTest extends TestCase
@@ -527,16 +530,16 @@ final class VeilTest extends TestCase
 
     public function testPositionYOffset(): void
     {
-        $this->assertSame(0,                           Position::TOP->yOffset(5, 20));
-        $this->assertSame(15,                          Position::BOTTOM->yOffset(5, 20));
-        $this->assertSame(7,                           Position::CENTER->yOffset(6, 20));
+        $this->assertSame(0, Position::TOP->yOffset(5, 20));
+        $this->assertSame(15, Position::BOTTOM->yOffset(5, 20));
+        $this->assertSame(7, Position::CENTER->yOffset(6, 20));
     }
 
     public function testPositionXOffset(): void
     {
-        $this->assertSame(0,       Position::LEFT->xOffset(10, 40));
-        $this->assertSame(30,      Position::RIGHT->xOffset(10, 40));
-        $this->assertSame(15,      Position::CENTER->xOffset(10, 40));
+        $this->assertSame(0, Position::LEFT->xOffset(10, 40));
+        $this->assertSame(30, Position::RIGHT->xOffset(10, 40));
+        $this->assertSame(15, Position::CENTER->xOffset(10, 40));
     }
 
     // ─── z-index ─────────────────────────────────────────────────────────────

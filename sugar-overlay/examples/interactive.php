@@ -24,7 +24,8 @@ use SugarCraft\Core\Msg\MouseMsg;
 use SugarCraft\Core\MouseButton;
 use SugarCraft\Core\MouseAction;
 use SugarCraft\Overlay\Animation\AnimationKind;
-use SugarCraft\Overlay\{Position, Veil};
+use SugarCraft\Overlay\Position;
+use SugarCraft\Overlay\Veil;
 
 $background = implode("\n", [
     str_repeat('~', 60),

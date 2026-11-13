@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace SugarCraft\Overlay\Tests;
 
-use SugarCraft\Overlay\{Animation\AnimationKind, Animation\Fade, Position, Veil};
+use SugarCraft\Overlay\Animation\AnimationKind;
+use SugarCraft\Overlay\Animation\Fade;
+use SugarCraft\Overlay\Position;
+use SugarCraft\Overlay\Veil;
 use SugarCraft\Spring\Easing\CubicBezier;
 use PHPUnit\Framework\TestCase;
 

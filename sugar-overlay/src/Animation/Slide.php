@@ -110,15 +110,15 @@ final class Slide
         // A LEFT-anchored overlay's final column is the left edge, so it must
         // START left of there (negative = off-screen left) and travel right.
         // A RIGHT anchor mirrors it. TOP/BOTTOM do the same on the row axis.
-        if ($this->isLeftAnchor($horizontal) === true) {
+        if ($this->isLeftAnchor($horizontal)) {
             $hOffset = -(int) \round($factor * $fgWidth);
-        } elseif ($this->isRightAnchor($horizontal) === true) {
+        } elseif ($this->isRightAnchor($horizontal)) {
             $hOffset = (int) \round($factor * $fgWidth);
         }
 
-        if ($this->isTopAnchor($vertical) === true) {
+        if ($this->isTopAnchor($vertical)) {
             $vOffset = -(int) \round($factor * $fgHeight);
-        } elseif ($this->isBottomAnchor($vertical) === true) {
+        } elseif ($this->isBottomAnchor($vertical)) {
             $vOffset = (int) \round($factor * $fgHeight);
         }
 
@@ -190,7 +190,9 @@ final class Slide
         $max = 0;
         foreach ($lines as $line) {
             $w = $this->strWidth($line);
-            if ($w > $max) $max = $w;
+            if ($w > $max) {
+                $max = $w;
+            }
         }
         return $max;
     }

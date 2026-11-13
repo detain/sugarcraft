@@ -73,7 +73,7 @@ final class VeilStack implements \Countable
     public function removeWhere(\Closure $predicate): self
     {
         $next = clone $this;
-        $next->veils = array_values(array_filter($next->veils, static fn(Veil $v): bool => !$predicate($v)));
+        $next->veils = array_values(array_filter($next->veils, static fn (Veil $v): bool => !$predicate($v)));
         $next->sortedCache = null;
         return $next;
     }
@@ -198,7 +198,7 @@ final class VeilStack implements \Countable
             return $this->sortedCache;
         }
         $veils = $this->veils;
-        \usort($veils, static fn(Veil $a, Veil $b): int => $a->zIndex() <=> $b->zIndex());
+        \usort($veils, static fn (Veil $a, Veil $b): int => $a->zIndex() <=> $b->zIndex());
         $this->sortedCache = $veils;
         return $veils;
     }

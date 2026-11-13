@@ -6,7 +6,9 @@ namespace SugarCraft\Overlay\Tests;
 
 use SugarCraft\Overlay\Animation\AnimationKind;
 use SugarCraft\Style\Border;
-use SugarCraft\Overlay\{Position, Veil, VeilStack};
+use SugarCraft\Overlay\Position;
+use SugarCraft\Overlay\Veil;
+use SugarCraft\Overlay\VeilStack;
 use PHPUnit\Framework\TestCase;
 
 final class VeilStackTest extends TestCase
@@ -42,10 +44,10 @@ final class VeilStackTest extends TestCase
         $v3 = Veil::new()->withZIndex(3);
 
         $stack = VeilStack::new()->add($v1)->add($v2)->add($v3);
-        $stack = $stack->removeWhere(fn(Veil $v): bool => $v->zIndex() === 2);
+        $stack = $stack->removeWhere(fn (Veil $v): bool => $v->zIndex() === 2);
 
         $this->assertCount(2, $stack);
-        $zIndexes = array_map(fn(Veil $v): int => $v->zIndex(), $stack->all());
+        $zIndexes = array_map(fn (Veil $v): int => $v->zIndex(), $stack->all());
         $this->assertNotContains(2, $zIndexes);
     }
 
@@ -141,7 +143,7 @@ final class VeilStackTest extends TestCase
         $v3 = Veil::new()->withZIndex(3)->withClickOutsideDismiss(true);
 
         $stack = VeilStack::new()->add($v1)->add($v2)->add($v3);
-        $filtered = $stack->filter(fn(Veil $v): bool => $v->clickOutsideDismiss());
+        $filtered = $stack->filter(fn (Veil $v): bool => $v->clickOutsideDismiss());
 
         $this->assertCount(2, $filtered);
     }
@@ -150,7 +152,7 @@ final class VeilStackTest extends TestCase
     {
         $v1 = Veil::new()->withZIndex(1);
         $stack = VeilStack::new()->add($v1);
-        $filtered = $stack->filter(fn(Veil $v): bool => false);
+        $filtered = $stack->filter(fn (Veil $v): bool => false);
 
         $this->assertCount(1, $stack);
         $this->assertCount(0, $filtered);
@@ -307,7 +309,7 @@ final class VeilStackTest extends TestCase
         $v2 = Veil::new()->withZIndex(2);
 
         $stack = VeilStack::new()->add($v1)->add($v2);
-        $filtered = $stack->removeWhere(fn(Veil $v): bool => $v->zIndex() === 99);
+        $filtered = $stack->removeWhere(fn (Veil $v): bool => $v->zIndex() === 99);
 
         $this->assertCount(2, $filtered);
     }
@@ -479,7 +481,7 @@ final class VeilStackTest extends TestCase
         $stack = VeilStack::new()->add($low)->add($high)->add($mid);
         $this->assertSame(9, $stack->maxZIndex());
 
-        $trimmed = $stack->removeWhere(fn(Veil $v): bool => $v->zIndex() === 9);
+        $trimmed = $stack->removeWhere(fn (Veil $v): bool => $v->zIndex() === 9);
         $this->assertSame(5, $trimmed->maxZIndex());
         $sorted = $trimmed->sorted();
         $this->assertSame(5, $sorted[$trimmed->count() - 1]->zIndex(), 'Next-highest veil is topmost after removal');
@@ -508,7 +510,7 @@ final class VeilStackTest extends TestCase
         for ($i = 0; $i < VeilStack::MAX_LAYERS; $i++) {
             $stack = $stack->add(Veil::new());
         }
-        $this->assertCount(1, $stack->removeWhere(fn(Veil $v): bool => true)->add(Veil::new()), 'a cleared stack accepts new layers again');
+        $this->assertCount(1, $stack->removeWhere(fn (Veil $v): bool => true)->add(Veil::new()), 'a cleared stack accepts new layers again');
     }
 
     // ─── m7: the stack reads content verbatim — sweep is a per-veil duty ────────

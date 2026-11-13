@@ -5,7 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Overlay\Tests;
 
 use SugarCraft\Style\Border;
-use SugarCraft\Overlay\{Position, Veil};
+use SugarCraft\Overlay\Position;
+use SugarCraft\Overlay\Veil;
 use PHPUnit\Framework\TestCase;
 
 /**

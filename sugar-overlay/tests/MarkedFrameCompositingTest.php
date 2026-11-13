@@ -21,7 +21,8 @@ namespace SugarCraft\Overlay\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\Msg\MouseMsg;
-use SugarCraft\Core\{MouseAction, MouseButton};
+use SugarCraft\Core\MouseAction;
+use SugarCraft\Core\MouseButton;
 use SugarCraft\Overlay\MarkedFrame;
 use SugarCraft\Overlay\Position;
 use SugarCraft\Overlay\Veil;

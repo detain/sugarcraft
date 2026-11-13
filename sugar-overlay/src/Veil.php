@@ -581,7 +581,7 @@ final class Veil
      */
     public function isClickOutside(\SugarCraft\Core\Msg\MouseMsg $mouse): bool
     {
-        if ($this->clickOutsideDismiss === false) {
+        if (!$this->clickOutsideDismiss) {
             return false;
         }
         if ($this->lastRendered === null) {
@@ -1229,7 +1229,7 @@ final class Veil
             return $fullOutput;
         }
 
-        if ($this->session->shouldEmitFull($width, $height) === true) {
+        if ($this->session->shouldEmitFull($width, $height)) {
             $this->session->rememberFull($fullOutput, $width, $height);
             return $fullOutput;
         }
@@ -1634,7 +1634,7 @@ final class Veil
      */
     private static function linkFromOsc(string $body, ?Hyperlink $carry): ?Hyperlink
     {
-        if (\str_starts_with($body, '8;') === false) {
+        if (!\str_starts_with($body, '8;')) {
             return $carry;
         }
         $rest = \substr($body, 2);

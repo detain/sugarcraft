@@ -274,7 +274,7 @@ final class SgrWalker
             return ($gray << 16) | ($gray << 8) | $gray;
         }
         $cube = $n - 16;
-        $step = static fn(int $v): int => $v === 0 ? 0 : 55 + $v * 40;
+        $step = static fn (int $v): int => $v === 0 ? 0 : 55 + $v * 40;
         return ($step(intdiv($cube, 36)) << 16)
             | ($step(intdiv($cube % 36, 6)) << 8)
             | $step($cube % 6);

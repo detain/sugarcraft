@@ -56,7 +56,7 @@ final class RenderSessionTest extends TestCase
     public function testRememberFullClearsPreviousFrame(): void
     {
         $session = new RenderSession();
-        $factory = fn(string $out, int $w, int $h): Buffer => Buffer::fromString($out, $w, $h);
+        $factory = fn (string $out, int $w, int $h): Buffer => Buffer::fromString($out, $w, $h);
 
         // Trigger diff state
         $session->diff("first", 80, 24, $factory);
@@ -84,7 +84,7 @@ final class RenderSessionTest extends TestCase
     public function testDiffOnFirstCallReturnsEmptyString(): void
     {
         $session = new RenderSession();
-        $factory = fn(string $out, int $w, int $h): Buffer => Buffer::fromString($out, $w, $h);
+        $factory = fn (string $out, int $w, int $h): Buffer => Buffer::fromString($out, $w, $h);
 
         // First call uses lazy previousFrame init but returns encoded diff
         $result = $session->diff("frame1", 80, 24, $factory);
@@ -96,7 +96,7 @@ final class RenderSessionTest extends TestCase
     public function testDiffReturnsEncodedOps(): void
     {
         $session = new RenderSession();
-        $factory = fn(string $out, int $w, int $h): Buffer => Buffer::fromString($out, $w, $h);
+        $factory = fn (string $out, int $w, int $h): Buffer => Buffer::fromString($out, $w, $h);
 
         // First call builds previousFrame
         $session->diff("frame1", 80, 24, $factory);
@@ -110,7 +110,7 @@ final class RenderSessionTest extends TestCase
     public function testDiffPreservesPreviousOutput(): void
     {
         $session = new RenderSession();
-        $factory = fn(string $out, int $w, int $h): Buffer => Buffer::fromString($out, $w, $h);
+        $factory = fn (string $out, int $w, int $h): Buffer => Buffer::fromString($out, $w, $h);
 
         $session->diff("frame1", 80, 24, $factory);
 
@@ -123,7 +123,7 @@ final class RenderSessionTest extends TestCase
     public function testResetClearsAllState(): void
     {
         $session = new RenderSession();
-        $factory = fn(string $out, int $w, int $h): Buffer => Buffer::fromString($out, $w, $h);
+        $factory = fn (string $out, int $w, int $h): Buffer => Buffer::fromString($out, $w, $h);
 
         $session->rememberFull("output", 80, 24);
         $session->diff("change", 80, 24, $factory);
@@ -160,7 +160,7 @@ final class RenderSessionTest extends TestCase
         // rememberFull() after shouldEmitFull() said true, which already
         // cleared diffWasCalled), so drive the session directly.
         $session = new RenderSession();
-        $factory = fn(string $out, int $w, int $h): Buffer => Buffer::fromString($out, $w, $h);
+        $factory = fn (string $out, int $w, int $h): Buffer => Buffer::fromString($out, $w, $h);
 
         $session->rememberFull('frame1', 10, 2);
         $session->diff('frame2', 10, 2, $factory);
@@ -176,7 +176,7 @@ final class RenderSessionTest extends TestCase
         // used to compare after overwriting them, so it was always true and a
         // resize-time rememberFull() forced a redundant second full frame.
         $session = new RenderSession();
-        $factory = fn(string $out, int $w, int $h): Buffer => Buffer::fromString($out, $w, $h);
+        $factory = fn (string $out, int $w, int $h): Buffer => Buffer::fromString($out, $w, $h);
 
         $session->rememberFull('frame1', 10, 2);
         $session->diff('frame2', 10, 2, $factory);
@@ -197,7 +197,7 @@ final class RenderSessionTest extends TestCase
     public function testResetDisarmsThePendingGrant(): void
     {
         $session = new RenderSession();
-        $factory = fn(string $out, int $w, int $h): Buffer => Buffer::fromString($out, $w, $h);
+        $factory = fn (string $out, int $w, int $h): Buffer => Buffer::fromString($out, $w, $h);
 
         $session->rememberFull('frame1', 10, 2);
         $session->diff('frame2', 10, 2, $factory);
@@ -225,7 +225,7 @@ final class RenderSessionTest extends TestCase
     public function testDiffKeepsTheFullFrameBehindTheDelta(): void
     {
         $session = new RenderSession();
-        $factory = fn(string $out, int $w, int $h): Buffer => Buffer::fromString($out, $w, $h);
+        $factory = fn (string $out, int $w, int $h): Buffer => Buffer::fromString($out, $w, $h);
         $session->rememberFull('first', 10, 2);
 
         $delta = $session->diff('second', 10, 2, $factory);
@@ -240,7 +240,7 @@ final class RenderSessionTest extends TestCase
         // nothing) yet REMEMBERS the frame — direct session drivers must
         // read lastFullFrame() to print their own initial full frame.
         $session = new RenderSession();
-        $factory = fn(string $out, int $w, int $h): Buffer => Buffer::fromString($out, $w, $h);
+        $factory = fn (string $out, int $w, int $h): Buffer => Buffer::fromString($out, $w, $h);
 
         $this->assertSame('', $session->diff('cold-frame', 10, 2, $factory));
         $this->assertSame('cold-frame', $session->lastFullFrame());
@@ -254,7 +254,7 @@ final class RenderSessionTest extends TestCase
         // judged blank->blank and NEVER erased: persistent on-screen ghosts
         // for direct session drivers. The frame-2 delta must carry the erase.
         $session = new RenderSession();
-        $factory = fn(string $out, int $w, int $h): Buffer => Buffer::fromString($out, $w, $h);
+        $factory = fn (string $out, int $w, int $h): Buffer => Buffer::fromString($out, $w, $h);
 
         $this->assertSame('', $session->diff('A', 10, 2, $factory));
         $delta = $session->diff('', 10, 2, $factory);
