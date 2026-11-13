@@ -346,8 +346,41 @@ CDEF;
 
     // ─── Pseudo-console ─────────────────────────────────────────────────────
 
+    /**
+     * Validate the geometry once, for every COORD the binding packs.
+     *
+     * COORD is a pair of SIGNED shorts. Out-of-range values do not fail on
+     * assignment — measured on PHP 8.3.6, a width of 100000 arrives at the
+     * kernel as X=-31072 (the wrap of the finding), so without this guard a
+     * fat request silently resizes the console to garbage that still looks
+     * like success. Failing up front closes the asymmetry with the POSIX
+     * side, where {@see \SugarCraft\Pty\SizeIoctl::pack()} refuses any
+     * value outside the 0..65535 its unsigned shorts can carry: both
+     * backends now refuse geometry that cannot fit its wire type instead of
+     * shipping a wrapped lie. The lower bound is 1 (not 0 like the POSIX
+     * pack) because a pseudo console with zero columns is not a usable
+     * surface even where the type would hold it — CreatePseudoConsole itself
+     * rejects such sizes.
+     */
+    public static function checkGeometry(int $width, int $height): void
+    {
+        if ($width < 1 || $width > 32767 || $height < 1 || $height > 32767) {
+            throw new PtyException(\sprintf(
+                'ConPTY geometry %dx%d is out of range: COORD is a pair of signed shorts, '
+                . 'so 1..32767 is all a pseudo console can carry; packing these numbers would '
+                . 'silently become %dx%d',
+                $width,
+                $height,
+                ($width + 32768) % 65536 - 32768,
+                ($height + 32768) % 65536 - 32768,
+            ));
+        }
+    }
+
     public function createPseudoConsole(int $width, int $height, int $input, int $output): int
     {
+        self::checkGeometry($width, $height);
+
         $ffi = $this->ffi();
         $size = $ffi->new('COORD');
         $size->X = $width;
@@ -371,6 +404,8 @@ CDEF;
 
     public function resizePseudoConsole(int $pseudoConsole, int $width, int $height): void
     {
+        self::checkGeometry($width, $height);
+
         $ffi = $this->ffi();
         $size = $ffi->new('COORD');
         $size->X = $width;

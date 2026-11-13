@@ -139,6 +139,7 @@ final class FakeConPtyApi implements ConPtyApi
 
     public function createPseudoConsole(int $width, int $height, int $input, int $output): int
     {
+        \SugarCraft\Pty\Windows\Kernel32ConPty::checkGeometry($width, $height);
         $this->guardLive($input, 'pipe');
         $this->guardLive($output, 'pipe');
         $handle = $this->issue('createPseudoConsole', \sprintf('%dx%d', $width, $height));
@@ -149,6 +150,7 @@ final class FakeConPtyApi implements ConPtyApi
 
     public function resizePseudoConsole(int $pseudoConsole, int $width, int $height): void
     {
+        \SugarCraft\Pty\Windows\Kernel32ConPty::checkGeometry($width, $height);
         $this->guard($this->pseudoConsoles, $pseudoConsole, 'pseudo-console', 'resizePseudoConsole');
         $this->pseudoConsoles[$pseudoConsole] = ['width' => $width, 'height' => $height];
     }
