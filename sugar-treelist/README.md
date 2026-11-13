@@ -576,8 +576,10 @@ The three refusal strings raised by `lines()` — `list.no_items` (which
 `cursorItem()` reuses for its own empty-list refusal),
 `list.zero_viewport`, and `list.no_content_width` (the prefix/suffix
 reservations consumed every viewport column, sugar-treelist-008) — are live
-`Lang::t()` lookups across the 16 shipped
-locales under `lang/`. Locale selection is the host application's concern; the
+`Lang::t()` lookups across the 17 shipped
+locales under `lang/` (regional codes ride the file-name match — `zh-tw.php`
+for Traditional Chinese, alongside `zh-cn.php`; an unlisted variant falls
+through the base→`en` chain). Locale selection is the host application's concern; the
 renderer only formats through `SugarCraft\TreeList\Lang`.
 
 ## License
