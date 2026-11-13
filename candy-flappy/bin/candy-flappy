@@ -175,8 +175,20 @@ if ($legacyConfigBase !== '') {
 
 $profile = ColorProfile::detect(null, STDOUT);
 
+// flappy-66 (finding -039): Game::start() fail-closes with a
+// RuntimeException when no config base resolves at all ($HOME and
+// $XDG_CONFIG_HOME both absent). That used to surface as a raw 255 trace —
+// internals on display, contradicting this bin's own one-line exit-2 shape.
+// Catch at the call site; library consumers keep the exception.
+try {
+    $game = Game::start();
+} catch (\RuntimeException $e) {
+    fwrite(STDERR, 'candy-flappy: ' . $e->getMessage() . "\n");
+    exit(2);
+}
+
 $program = new Program(
-    Game::start(),
+    $game,
     // flappy-13 (finding -011): one capability profile, probed once, gates
     // both the alt-screen contract and the model's colour posture — the
     // candy-tetris bin shape. A TERM=dumb terminal is never switched to the

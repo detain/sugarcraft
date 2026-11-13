@@ -35,7 +35,6 @@ final class BinNoTtyPreflightTest extends TestCase
             'HOME' => $home,
             'TERM' => 'xterm-256color',
         ], $extraEnv);
-        unset($env['XDG_CONFIG_HOME'], $env['CLICOLOR_FORCE'], $env['FORCE_COLOR']);
 
         $proc = proc_open(
             [PHP_BINARY, self::BIN],
@@ -180,6 +179,26 @@ final class BinNoTtyPreflightTest extends TestCase
         self::assertSame('', $stdout);
         self::assertStringContainsString('extension', $stderr);
         self::assertStringContainsString('intl', $stderr, 'the refusal must name what is missing');
+    }
+
+    public function testUnresolvableConfigBaseRefusesCleanlyWithExitTwo(): void
+    {
+        // flappy-66 (finding -039): no $HOME, no $XDG_CONFIG_HOME — Game's
+        // fail-closed throw must land as ONE stderr line and exit 2, not a
+        // 255 trace. The force rung is the documented way to draw into a
+        // pipe on purpose, which gets this past the -01 stdout preflight to
+        // the construction site that used to explode.
+        [$exit, $stdout, $stderr] = self::drive([
+            'HOME' => '',
+            'CLICOLOR_FORCE' => '1',
+        ]);
+        unset($stdout);
+
+        self::assertSame(2, $exit, 'a config-fatal is an invocation error, never 255: ' . $stderr);
+        self::assertStringContainsString('config directory', $stderr);
+        self::assertStringNotContainsString('#0', $stderr, 'no trace frames may reach the terminal');
+        self::assertStringNotContainsString('SugarCraft\\', $stderr, 'no internal class names');
+        self::assertSame(1, substr_count(trim($stderr), "\n") + 1, 'exactly one refusal line');
     }
 
     public function testDiagnosticFlagsStillAnswerWhilePiped(): void    {
