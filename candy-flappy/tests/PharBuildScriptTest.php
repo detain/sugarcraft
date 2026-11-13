@@ -24,6 +24,20 @@ use SugarCraft\Flappy\Support\Version;
  */
 final class PharBuildScriptTest extends TestCase
 {
+    /** @var list<string> temp dirs holding synthetic stamped archives */
+    private static array $stampDirs = [];
+
+    public static function tearDownAfterClass(): void
+    {
+        foreach (self::$stampDirs as $dir) {
+            foreach (glob($dir . '/*') ?: [] as $file) {
+                @unlink($file);
+            }
+            @rmdir($dir);
+        }
+        self::$stampDirs = [];
+    }
+
     public function testTheBinaryCarriesTheStubShapeAndThePharGuard(): void
     {
         $bin = file_get_contents(__DIR__ . '/../bin/candy-flappy');
@@ -78,6 +92,106 @@ final class PharBuildScriptTest extends TestCase
         self::assertNull(Version::versionFromMetadata([]), 'a stamp-less manifest answers null');
         self::assertNull(Version::versionFromMetadata(['version' => 42]), 'a stamp of the wrong type answers null');
         self::assertNull(Version::versionFromMetadata(null), 'getMetadata() answering null is a refusal, not an error');
+    }
+
+    public function testAStampedArchiveDrivesCurrentFromInsideIt(): void
+    {
+        // flappy-30 (finding -033): the positive arm of current(). Every
+        // other leg asserts Version from OUTSIDE an archive — the exact
+        // shape where it must answer CURRENT — so the one branch the class
+        // exists to serve (a stamped archive overrides CURRENT) was never
+        // executed. A synthetic child build (gifview's precedent) stamps
+        // candy-flappy's REAL Version.php into a minimal archive; a second
+        // child loads the class from the phar:// stream, where
+        // Phar::running() answers the archive path, and current() must
+        // report the stripped stamp — not CURRENT, not the raw tag.
+        $built = self::stampArchive('candy-flappy/v9.9.9');
+        if ($built === null) {
+            $this->markTestSkipped('phar.readonly=0 unavailable even in a child — archive stamp legs cannot run here');
+        }
+
+        // In-process read: opening an archive is allowed under phar.readonly,
+        // so the metadata leg round-trips without a second boot. The tag
+        // prefix strips; the 'v' is kept (the grammar versionFromMetadata
+        // already pins above).
+        self::assertSame('v9.9.9', Version::fromPharMetadata($built), 'the release namespace must strip on the round trip');
+
+        // From inside: require the packed class and let current() discover
+        // its host archive itself. A current() that ignored the stamp (the
+        // DST-1 lie) answers 'dev-master' here and reddens this assert.
+        $child = proc_open(
+            [PHP_BINARY, '-r', 'require ' . var_export('phar://' . $built . '/version.php', true)
+                . '; echo \\SugarCraft\\Flappy\\Support\\Version::current();'],
+            [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+        );
+        self::assertIsResource($child);
+        $out = (string) stream_get_contents($pipes[1]);
+        $err = (string) stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $code = proc_close($child);
+
+        self::assertSame(0, $code, 'the from-inside child must boot cleanly, got: ' . $err);
+        self::assertSame('v9.9.9', $out, 'inside a stamped phar, current() must report the stamp');
+    }
+
+    /**
+     * Build a throwaway archive whose metadata carries $version and whose
+     * single entry is the real src/Support/Version.php, via a child
+     * (`php -d phar.readonly=0`), or return null when this host refuses.
+     * The archive is registered for cleanup by the caller's parent test.
+     */
+    private static function stampArchive(string $version): ?string
+    {
+        $dir = tempnam(sys_get_temp_dir(), 'flappy-stamp-');
+        if ($dir === false) {
+            return null;
+        }
+        @unlink($dir);
+        if (!mkdir($dir, 0o755, true)) {
+            return null;
+        }
+        self::$stampDirs[] = $dir;
+
+        $target = $dir . '/stamped.phar';
+        $versionFile = realpath(__DIR__ . '/../src/Support/Version.php');
+        if ($versionFile === false) {
+            return null;
+        }
+        $maker = $dir . '/make.php';
+        file_put_contents($maker, implode("\n", [
+            '<?php',
+            '$phar = new Phar(' . var_export($target, true) . ', 0, \'candy-flappy.phar\');',
+            '$phar->startBuffering();',
+            '$phar->addFromString(\'version.php\', file_get_contents(' . var_export($versionFile, true) . '));',
+            '$phar->setMetadata([\'version\' => ' . var_export($version, true) . ']);',
+            '$phar->setStub("<?php __HALT_COMPILER();");',
+            '$phar->stopBuffering();',
+            'echo "BUILT\\n";',
+        ]));
+
+        $proc = proc_open(
+            ['timeout', '30', PHP_BINARY, '-d', 'phar.readonly=0', $maker],
+            [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+        );
+        if (!is_resource($proc)) {
+            return null;
+        }
+        // Drain both pipes to EOF before judging (pipe-EOF law).
+        stream_get_contents($pipes[1]);
+        stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $code = proc_close($proc);
+
+        if ($code !== 0 || !is_file($target)) {
+            // Host cannot write archives: the caller's skip is the disclosure.
+            return null;
+        }
+
+        return $target;
     }
 
     /**
