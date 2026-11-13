@@ -48,6 +48,8 @@ store, or manage an inbox.
 - **Inline attachments (CID)** — `withInlineAttachment()` embeds images addressed as
   `cid:…`; honoured by the SMTP transport's MIME builder. The Resend API payload does not
   carry `cid`, so inline references break there — use SMTP for CID embedding.
+  The CLI has no inline door: `--attach` produces ordinary attachments only —
+  `cid:` embedding is library-only.
 - **CC/BCC support** — full carbon-copy / blind carbon-copy routing (envelope RCPT for all,
   headers for visible sets)
 - **Header-injection defense** — CR/LF in subjects, addresses, attachment names, and MIME
@@ -359,6 +361,11 @@ export CANDY_MAIL_SIGNATURE="Sent with CandyMail"  # Appended to the plain-text 
 # names that successor; the new name still wins if both are set.
 ```
 <!-- @rename-keep -->
+
+> **Secret hygiene:** these are credential-shaped values. For real secrets, inject from
+> your secrets store or a `chmod 600` EnvironmentFile rather than the inline
+> `VAR=value cmd` form — it persists in shell history and is readable in the child's
+> process environment (and an `export` line pasted into a dotfile persists too).
 
 ### Running unattended
 

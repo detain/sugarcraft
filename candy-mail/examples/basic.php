@@ -13,6 +13,7 @@ declare(strict_types=1);
 require __DIR__ . '/../vendor/autoload.php';
 
 use SugarCraft\Mail\{Email, Mailer, ResendTransport, SmtpTransport};
+use SugarCraft\Core\Util\Sanitize;
 
 /** Read an env var, treating unset and empty alike. */
 function envNonEmpty(string $name): ?string
@@ -48,6 +49,6 @@ try {
     $mailer->send($email);
     echo "✓ Email sent successfully.\n";
 } catch (\Throwable $e) {
-    echo "✗ Send failed: {$e->getMessage()}\n";
+    echo '✗ Send failed: ' . Sanitize::untrusted($e->getMessage()) . "\n";
     exit(1);
 }
