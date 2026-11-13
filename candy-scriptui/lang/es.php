@@ -51,4 +51,5 @@ return [
     'hints.pager' => 'space/PgDn abajo · PgUp/b arriba · g inicio · G fin · q salir',
     'format.template_unresolved' => 'plantilla: {count} marcador(es) expandido(s) a vacío: {names} — una variable debe estar definida y permitida con --allow-env.',
     'runtime.empty_input' => 'La entrada no contenía líneas; nada que hacer.',
+    'runtime.conflicting_flags' => 'Las opciones {first} y {second} no se pueden combinar con valores diferentes.',
 ];

@@ -38,4 +38,5 @@ return [
     'hints.pager' => 'space/PgDn omlaag · PgUp/b omhoog · g begin · G einde · q afsluiten',
     'format.template_unresolved' => 'sjabloon: {count} tijdelijke aanduiding(en) uitgebreid naar leeg: {names} — een variabele moet zijn ingesteld en toegestaan via --allow-env.',
     'runtime.empty_input' => 'De invoer bevatte geen regels; niets te doen.',
+    'runtime.conflicting_flags' => 'De opties {first} en {second} kunnen niet worden gecombineerd met verschillende waarden.',
 ];

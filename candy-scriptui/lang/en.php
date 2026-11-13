@@ -53,4 +53,5 @@ return [
     'hints.pager' => 'space/PgDn down · PgUp/b up · g top · G end · q quit',
     'format.template_unresolved' => 'template: {count} placeholder(s) expanded to empty: {names} — a variable must be set and permitted via --allow-env.',
     'runtime.empty_input' => 'input produced no lines; nothing to do.',
+    'runtime.conflicting_flags' => 'Flags {first} and {second} cannot be combined with different values.',
 ];

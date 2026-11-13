@@ -38,4 +38,5 @@ return [
     'hints.pager' => 'space/PgDn dolů · PgUp/b nahoru · g začátek · G konec · q quit',
     'format.template_unresolved' => 'šablona: {count} zástupných symbolů se rozbalilo na prázdné: {names} — proměnnou je třeba nastavit a povolit přes --allow-env.',
     'runtime.empty_input' => 'Vstup neobsahoval žádné řádky; nic k dispozici.',
+    'runtime.conflicting_flags' => 'Příznaky {first} a {second} nelze kombinovat s různými hodnotami.',
 ];

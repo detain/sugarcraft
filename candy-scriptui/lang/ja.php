@@ -38,4 +38,5 @@ return [
     'hints.pager' => 'space/PgDn ページ 下 · PgUp/b ページ 上 · g 最初 · G 最後 · q 終了',
     'format.template_unresolved' => 'テンプレート: {count} 個のプレースホルダーが空に展開されました: {names} — 変数を設定し --allow-env で許可する必要があります。',
     'runtime.empty_input' => '入力行がありません。操作何もしません。',
+    'runtime.conflicting_flags' => 'フラグ {first} と {second} は異なる値と同時に指定できません。',
 ];

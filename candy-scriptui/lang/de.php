@@ -51,4 +51,5 @@ return [
     'hints.pager' => 'Space/PgDn abwärts · PgUp/b aufwärts · g Anfang · G Ende · q beenden',
     'format.template_unresolved' => 'Vorlage: {count} Platzhalter wurde(n) als leer expandiert: {names} — eine Variable muss gesetzt und über --allow-env erlaubt sein.',
     'runtime.empty_input' => 'Die Eingabe enthielt keine Zeilen; nichts zu tun.',
+    'runtime.conflicting_flags' => 'Die Optionen {first} und {second} können nicht mit unterschiedlichen Werten kombiniert werden.',
 ];

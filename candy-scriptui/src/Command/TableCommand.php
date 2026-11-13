@@ -18,11 +18,12 @@ use Symfony\Component\Console\Output\OutputInterface;
  * Render CSV / TSV from a file or stdin as a styled
  * {@see \SugarCraft\Style\Table\Table}.
  *
- *   $ ps -axo pid,comm | candy-scriptui table --header --separator $'\t'
+ *   $ ps -axo pid,comm | candy-scriptui table --has-header --delimiter $'\t'
  *
- * The first row is treated as the header when `--header` is set. The
- * border style is selectable via `--border`; pass `none` to skip the
- * border entirely.
+ * The first row is treated as the header when `--header` (gum alias
+ * `--has-header`) is set. Column separator is `--separator` (gum alias
+ * `--delimiter`). The border style is selectable via `--border`; pass
+ * `none` to skip the border entirely.
  */
 #[AsCommand(name: 'table', description: 'Render CSV / TSV input as a styled table.')]
 final class TableCommand extends Command
@@ -34,8 +35,10 @@ final class TableCommand extends Command
     {
         $this
             ->addOption('file',      'f', InputOption::VALUE_REQUIRED, 'Input file. Default: stdin.')
-            ->addOption('separator', 's', InputOption::VALUE_REQUIRED, 'Column separator. Default: comma.', ',')
-            ->addOption('header',     null, InputOption::VALUE_NONE, 'Treat the first row as a header.')
+            ->addOption('separator', 's', InputOption::VALUE_REQUIRED, 'Column separator (gum alias: --delimiter). Default: comma.', ',')
+            ->addOption('delimiter', null, InputOption::VALUE_REQUIRED, 'gum-compat alias for --separator.')
+            ->addOption('header',     null, InputOption::VALUE_NONE, 'Treat the first row as a header (gum alias: --has-header).')
+            ->addOption('has-header', null, InputOption::VALUE_NONE, 'gum-compat alias for --header.')
             ->addOption('border',     null, InputOption::VALUE_REQUIRED,
                 'normal|rounded|thick|double|ascii|hidden|none', 'rounded')
             ->addOption('columns',    'c',  InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY,
@@ -70,13 +73,28 @@ final class TableCommand extends Command
             return Command::SUCCESS;
         }
 
+        // scriptui-28: gum spells these --delimiter/--has-header; both
+        // spellings parse, the gum names being pure aliases. Explicit
+        // --separator plus a different --delimiter is refused rather
+        // than silently last-wins.
         $sep = (string) $input->getOption('separator');
+        $delim = $input->getOption('delimiter');
+        if (is_string($delim) && $delim !== '') {
+            if (
+                $input->hasParameterOption(['--separator', '-s'], true)
+                && $sep !== $delim
+            ) {
+                fwrite(STDERR, Lang::t('runtime.conflicting_flags', ['first' => '--separator', 'second' => '--delimiter']) . "\n");
+                return Command::FAILURE;
+            }
+            $sep = $delim;
+        }
         $rows = self::parseRows($raw, $sep);
         if ($rows === []) {
             return Command::SUCCESS;
         }
 
-        $hasHeader = (bool) $input->getOption('header');
+        $hasHeader = (bool) $input->getOption('header') || (bool) $input->getOption('has-header');
         $headers   = $hasHeader ? array_shift($rows) : [];
 
         // --columns overrides header titles entirely.

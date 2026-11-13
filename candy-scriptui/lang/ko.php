@@ -38,4 +38,5 @@ return [
     'hints.pager' => 'space/PgDn 아래 · PgUp/b 위 · g 처음 · G 끝 · q 종료',
     'format.template_unresolved' => '템플릿: 자리 표시자 {count}개가 비어 있는 값으로 확장됨: {names} — 변수를 설정하고 --allow-env로 허용해야 합니다.',
     'runtime.empty_input' => '입력에 줄이 없습니다. 작업을 수행하지 않습니다.',
+    'runtime.conflicting_flags' => '{first} 및 {second} 플래그는 다른 값과 함께 사용할 수 없습니다.',
 ];

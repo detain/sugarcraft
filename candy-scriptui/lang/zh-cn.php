@@ -38,4 +38,5 @@ return [
     'hints.pager' => 'space/PgDn 下翻 · PgUp/b 上翻 · g 开头 · G 结尾 · q 退出',
     'format.template_unresolved' => '模板：{count} 个占位符已展开为空：{names} — 必须设置变量并通过 --allow-env 允许。',
     'runtime.empty_input' => '输入没有产生任何行；不执行操作。',
+    'runtime.conflicting_flags' => '不能将 {first} 与 {second} 以不同的值同时使用。',
 ];
