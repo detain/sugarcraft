@@ -1074,22 +1074,42 @@ parse) — never visible state.
 `Table::withStyleFunc()` accepts a callable with the signature:
 
 ```php
-function(int $row, int $col, string $value): SugarCraft\CellBuffer\Style|string
+function(int $row, int $col, string $value): SugarCraft\CellBuffer\Style|SugarCraft\Style\Style|string
 ```
 
-- **Returns `Style`** — new preferred style (PHP 8.3+ typed return, immutable)
-- **Returns `string`** — legacy ANSI SGR string. It is NOT echoed verbatim: every
-  style string is parsed at render time into a restricted attribute set (bold,
-  faint, italic, underline, blink, reverse, strike, overline, the 16 base colour
-  codes, and `38;2`/`38;5`/`48;2`/`48;5` colours); unrecognised tokens are dropped
-  silently, `38;5`/`48;5` codes expand to 24-bit through the fixed xterm cube
-  (levels 0/51/102/153/204/255), and the frame emits canonicalised 24-bit SGR —
-  golden byte comparisons must never assume the input codes survive to output.
-  SGR strings remain valid input; `Table::normalizeStyleResult()` folds them into
-  the internal representation.
+- **Returns `string`** — an ANSI SGR code string such as `'1;31'`. It is NOT
+  echoed verbatim: every style string is parsed at render time into a
+  restricted attribute set (see the cheat table below); unrecognised tokens
+  are dropped, `38;5`/`48;5` codes expand to 24-bit through the fixed xterm
+  cube (levels 0/51/102/153/204/255), and the frame emits canonicalised
+  24-bit SGR — golden byte comparisons must never assume the input codes
+  survive to output.
+- **Returns `SugarCraft\CellBuffer\Style`** — the buffer-level style value;
+  converted to its SGR codes and folded through the same parser.
+- **Returns `SugarCraft\Style\Style`** — the declarative sugar-style object;
+  flattened to its opening attribute codes (adaptive/complete colour pairs
+  resolve through the active colour profile first).
 
-Anything else returned (e.g. a `SugarCraft\Style\Style` object) falls back to the inherited
-cell style. Prefer `SugarCraft\CellBuffer\Style`.
+One rule covers all three: **anything else throws** `InvalidArgumentException`
+naming the `(row, col)` cell (audit ST-23) — an int, a bool, an array, or a
+forgotten `return` is announced at the first frame, never silently inherited.
+
+#### SGR cheat table
+
+| Code | Effect | Code | Effect |
+|------|--------|------|--------|
+| `0`  | reset (no-op today: the parsed style starts clean anyway; mid-string `0` becomes honoured by the ST-51 fix) | `53` | overline |
+| `1`  | bold | `30`–`37` | foreground: black, red, green, yellow, blue, magenta, cyan, white |
+| `2`  | faint | `40`–`47` | background: same eight |
+| `3`  | italic | `90`–`97` | foreground: bright black … bright white |
+| `4`  | underline | `100`–`107` | background: bright eight |
+| `5`  | blink | `38;2;r;g;b` | 24-bit foreground |
+| `7`  | reverse | `48;2;r;g;b` | 24-bit background |
+| `9`  | strikethrough | `38;5;n` / `48;5;n` | xterm-256 fg/bg (expanded to 24-bit) |
+
+Anything outside this table's vocabulary is dropped at parse time — the
+recognised set is what `Style` carries, and `Table::normalizeStyleResult()`
+funnels every styleFunc return into it.
 
 ## Snapshot tests
 

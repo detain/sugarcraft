@@ -670,6 +670,12 @@ final class Table
      * When not set, existing baseStyle/column style/row style/cell style
      * precedence is used as before.
      *
+     * The return is funnelled by exactly one rule (audit ST-23): an ANSI SGR
+     * string, a SugarCraft\CellBuffer\Style, or a declarative
+     * SugarCraft\Style\Style — anything else throws InvalidArgumentException
+     * naming the (row, col) cell, so a mistyped or forgotten return is
+     * announced at the first frame instead of silently inheriting styles.
+     *
      * @param callable|null $fn (int $row, int $col, string $value): Style|string — $col is the 0-based column index, not the key
      */
     public function withStyleFunc(?callable $fn): self
@@ -2281,7 +2287,7 @@ final class Table
 
             if ($this->styleFunc !== null) {
                 $rawResult = ($this->styleFunc)($rowIndex, $ci, $cellStr);
-                $cellStyle = $this->normalizeStyleResult($rawResult, $cellStyle);
+                $cellStyle = $this->normalizeStyleResult($rawResult, $rowIndex, $ci);
             }
 
             // Selection rides on top of the winning cell style (audit M3).
@@ -2448,7 +2454,7 @@ final class Table
 
             if ($this->styleFunc !== null) {
                 $rawResult = ($this->styleFunc)($rowIndex, $ci, $cellStr);
-                $cellStyle = $this->normalizeStyleResult($rawResult, $cellStyle);
+                $cellStyle = $this->normalizeStyleResult($rawResult, $rowIndex, $ci);
             }
 
             // Selection rides on top of the winning cell style (audit M3).
@@ -2732,20 +2738,50 @@ final class Table
     }
 
     /**
-     * Normalize a styleFunc result to an ANSI SGR string: a CellBuffer Style
-     * is converted via styleToAnsi(), a string passes through verbatim, and
-     * anything else (including a SugarCraft\Style\Style object, which has no
-     * conversion path here) falls back to the inherited style.
+     * The single type funnel for styleFunc results (audit ST-23, finding
+     * 023): an ANSI SGR string passes through, a SugarCraft\CellBuffer\Style
+     * converts via styleToAnsi(), and a declarative SugarCraft\Style\Style
+     * is flattened to its opening attribute codes — every other type THROWS
+     * naming the offending cell, so a typo'd return (int, bool, array,
+     * forgotten return) can no longer be silently swallowed into the
+     * inherited style (the trap this replaces: garbage read as "no opinion").
      */
-    private function normalizeStyleResult(mixed $result, string $fallback): string
+    private function normalizeStyleResult(mixed $result, int $row, int $col): string
     {
-        if ($result instanceof Style) {
-            return $this->styleToAnsi($result);
-        }
         if (\is_string($result)) {
             return $result;
         }
-        return $fallback;
+
+        if ($result instanceof Style) {
+            return $this->styleToAnsi($result);
+        }
+
+        if ($result instanceof \SugarCraft\Style\Style) {
+            // render('') exposes the per-attribute opening sequences and a
+            // trailing reset; keep every attribute sequence and drop only
+            // whole-sequence resets — digit 0 is a legitimate payload value
+            // inside 38;2/48;2 colour parameters and must survive verbatim.
+            // The table composes bare code strings itself (mergeStyle owns
+            // the ordering). Adaptive/complete colour pairs resolve through
+            // the caller's active profile, the same reading render() uses.
+            \preg_match_all('/\e\[([0-9;]*)m/', $result->render(''), $groups);
+            $codes = [];
+            foreach ($groups[1] as $chunk) {
+                if ($chunk === '0' || $chunk === '') {
+                    continue;
+                }
+                $codes[] = $chunk;
+            }
+
+            return $codes === [] ? '' : \implode(';', $codes);
+        }
+
+        throw new \InvalidArgumentException(\sprintf(
+            'styleFunc(%d, %d) must return an ANSI SGR string or a Style object, got %s',
+            $row,
+            $col,
+            \get_debug_type($result)
+        ));
     }
 
     /**
