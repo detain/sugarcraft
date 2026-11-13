@@ -44,6 +44,15 @@ final class Expect
     public const DEFAULT_READ_CHUNK = 4096;
 
     /**
+     * Default tail bound on the read buffer (PTY-31): 1 MiB, so a
+     * chatty child cannot grow it without limit. The finding merge
+     * picked this over ASYNC-004's 64 KiB because real build-log
+     * tails run past 64 KiB. `maxBuffer: null` is the explicit
+     * opt-out for full capture.
+     */
+    public const DEFAULT_MAX_BUFFER = 1048576;
+
+    /**
      * How long {@see send()} keeps retrying a non-blocking master that
      * accepts nothing before it gives up, in seconds. It is a NO-PROGRESS
      * window: every accepted byte restarts it, so a long send into a child
@@ -64,7 +73,9 @@ final class Expect
      *                               scripting.  When set, {@see send()} calls
      *                               {@see Recorder::recordInputBytes()} and
      *                               each successful match calls {@see Recorder::recordOutput()}.
-     * @param int|null      $maxBuffer   Cap on buffer size in bytes; null = unbounded.
+     * @param int|null      $maxBuffer   Cap on buffer size in bytes; defaults to
+     *                                   {@see self::DEFAULT_MAX_BUFFER} (1 MiB).
+     *                                   null = explicit opt-OUT: unbounded capture.
      *                                   When set, the buffer is trimmed to this size after
      *                                   each read to prevent unbounded growth.
      * @param int|null       $searchWindow Number of bytes at the buffer tail to search;
@@ -78,7 +89,7 @@ final class Expect
         public readonly ?string $before = null,
         public readonly int $readChunk = self::DEFAULT_READ_CHUNK,
         public readonly ?Recorder $recorder = null,
-        public readonly ?int $maxBuffer = null,
+        public readonly ?int $maxBuffer = self::DEFAULT_MAX_BUFFER,
         public readonly ?int $searchWindow = null,
     ) {
         if ($readChunk <= 0) {
@@ -232,12 +243,13 @@ final class Expect
     /**
      * Return a new Expect with a buffer size cap applied.
      *
-     * When set, the buffer is trimmed to at most `$maxBuffer` bytes after
-     * each read, keeping enough trailing bytes to still match the longest
-     * needle. Null removes the cap — HAZARD: the buffer then grows without
-     * bound for the life of the session (the pre-cap behaviour), which is
-     * only safe for short scripted conversations you intend to finish.
-     * Zero and negative caps are refused at construction.
+     * Fresh instances arrive capped at 1 MiB (DEFAULT_MAX_BUFFER); this
+     * sets a different bound. When set, the buffer is trimmed to at most
+     * `$maxBuffer` bytes after each read, keeping enough trailing bytes
+     * to still match the longest needle. Null removes the cap — HAZARD:
+     * the buffer then grows without bound for the life of the session,
+     * which is only safe for short scripted conversations you intend to
+     * finish. Zero and negative caps are refused at construction.
      */
     public function withMaxBuffer(?int $maxBuffer): self
     {

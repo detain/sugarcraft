@@ -261,6 +261,43 @@ final class ExpectTest extends TestCase
             $pair->master()->close();
         }
     }
+
+    // ─────────────────────────────────────────────────────────────
+    // PTY-31 — bounded default maxBuffer, explicit null opt-out
+    // ─────────────────────────────────────────────────────────────
+
+    public function testFreshInstancesArriveCappedAtTheDefaultBound(): void
+    {
+        $expect = Expect::on(new FixtureMaster(''));
+
+        $this->assertSame(Expect::DEFAULT_MAX_BUFFER, $expect->maxBuffer);
+        $this->assertSame(1048576, $expect->maxBuffer, 'the documented default is 1 MiB');
+    }
+
+    public function testChattyChildCannotGrowTheBufferPastTheDefaultBound(): void
+    {
+        // 40 chunks of 64 KiB = 2.5 MiB of input before EOF — well
+        // past the 1 MiB default. The retained tail must respect it.
+        $chunks = \array_fill(0, 40, \str_repeat('x', 65536));
+        $chunks[] = '';
+        $expect = Expect::on(new FixtureMaster('', $chunks));
+
+        $final = $expect->expectEof(5.0);
+
+        $this->assertLessThanOrEqual(Expect::DEFAULT_MAX_BUFFER, \strlen((string) $final->before));
+    }
+
+    public function testExplicitNullMaxBufferStaysUnboundedForFullCapture(): void
+    {
+        $payload = \array_fill(0, 40, \str_repeat('x', 65536));
+        $chunks = $payload;
+        $chunks[] = '';
+        $expect = new Expect(new FixtureMaster('', $chunks), maxBuffer: null);
+
+        $final = $expect->expectEof(5.0);
+
+        $this->assertSame(40 * 65536, \strlen((string) $final->before), 'the opt-out must capture everything');
+    }
 }
 
 /**

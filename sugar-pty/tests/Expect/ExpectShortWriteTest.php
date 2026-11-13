@@ -32,7 +32,9 @@ final class ExpectShortWriteTest extends TestCase
 
         $this->assertNotSame($expect, $expect2);
         $this->assertSame(4096, $expect2->maxBuffer);
-        $this->assertNull($expect->maxBuffer);
+        // PTY-31 moved the fresh default from null (unbounded) to the
+        // 1 MiB bound; the opt-out is now the explicit withMaxBuffer(null).
+        $this->assertSame(Expect::DEFAULT_MAX_BUFFER, $expect->maxBuffer);
     }
 
     public function testWithSearchWindowReturnsNewInstance(): void

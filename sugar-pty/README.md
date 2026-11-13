@@ -261,7 +261,10 @@ stream yields them, returning a new instance that exposes the matched
 | `expectEof(float $timeoutSec = 5.0)` | master EOF |
 
 Timeouts raise `ExpectTimeoutException`; EOF before a content match
-raises `ExpectEofException`. `withMaxBuffer(?int)` /
+raises `ExpectEofException`. Fresh instances retain at most the last
+1 MiB of input (`DEFAULT_MAX_BUFFER`) — a chatty child cannot grow the
+buffer without limit; pass `maxBuffer: null` to opt out into unbounded
+capture. `withMaxBuffer(?int)` /
 `withSearchWindow(?int)` bound retained input on chatty long-running
 sessions (buffer growth and needle window respectively). A send whose
 bytes the master refuses to accept for the whole `SEND_STALL_BUDGET_SEC`
