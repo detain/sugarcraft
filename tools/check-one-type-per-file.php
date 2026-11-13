@@ -50,7 +50,12 @@ final class CheckOneTypePerFile
                 foreach (self::phpFiles($dir) as $file) {
                     $files++;
                     $expected = basename($file, '.php');
-                    foreach (self::declaredTypes((string) file_get_contents($file)) as $name) {
+                    $raw = @file_get_contents($file);
+                    if (false === $raw) {
+                        fwrite(STDERR, "check-one-type-per-file: cannot read $file\n");
+                        exit(2);
+                    }
+                    foreach (self::declaredTypes($raw) as $name) {
                         if ($name !== $expected) {
                             $problems[] = sprintf(
                                 '%s declares %s besides its PSR-4 symbol %s — move it to %s.php',

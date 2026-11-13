@@ -236,7 +236,11 @@ final class CheckRenameResidue
             if (!is_file($file)) {
                 continue;
             }
-            $contents = (string) file_get_contents($file);
+            $contents = @file_get_contents($file);
+            if (false === $contents) {
+                fwrite(STDERR, "check-rename-residue: cannot read $file\n");
+                exit(2);
+            }
             if (RenameLib::isContentExcluded($path, $contents)) {
                 continue;
             }

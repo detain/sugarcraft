@@ -312,7 +312,12 @@ final class CheckChildLifetimes
             foreach (self::autoloadRoots("$root/$lib", $manifest) as $absolute) {
                 foreach (self::phpFiles($absolute) as $file) {
                     $files++;
-                    $scan = ChildLifetimeScanner::scan((string) file_get_contents($file));
+                    $raw = @file_get_contents($file);
+                    if (false === $raw) {
+                        fwrite(STDERR, "check-child-lifetimes: cannot read $file\n");
+                        exit(2);
+                    }
+                    $scan = ChildLifetimeScanner::scan($raw);
                     $relative = ltrim(substr($file, strlen($root)), '/');
 
                     foreach ($scan['sites'] as $site) {
@@ -447,7 +452,12 @@ final class CheckChildLifetimes
                 continue;
             }
 
-            $manifest = json_decode((string) file_get_contents("$root/$entry/composer.json"), true);
+            $raw = @file_get_contents("$root/$entry/composer.json");
+            if (false === $raw) {
+                fwrite(STDERR, "check-child-lifetimes: cannot read $entry/composer.json\n");
+                exit(2);
+            }
+            $manifest = json_decode($raw, true);
             if (is_array($manifest) && isset($manifest['autoload']) && is_array($manifest['autoload'])) {
                 $libs[] = $entry;
             }

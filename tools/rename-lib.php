@@ -409,7 +409,11 @@ final class RenameLib
             if (!is_file($file)) {
                 continue;
             }
-            $contents = (string) file_get_contents($file);
+            $contents = @file_get_contents($file);
+            if (false === $contents) {
+                fwrite(STDERR, "rename-lib: cannot read $file\n");
+                exit(2);
+            }
             // R6 is path-gated, not token-gated: a Lang.php whose NAMESPACE
             // domain is lowercase (e.g. 'ansi') may hold none of the needle
             // spellings, so the cheap prefilter must never hide it.

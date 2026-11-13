@@ -271,6 +271,30 @@ final class CheckRenameResidueTest extends TestCase
         $this->assertStringContainsString('check-rename-residue:', $result['out']);
     }
 
+    public function testUnreadableTrackedFileFailsLoudNotSilentSkip(): void
+    {
+        // RT-11: the scan read was (string) file_get_contents - a false
+        // return silently became '' and the file vanished from the census,
+        // so an unreadable file masqueraded as residue-free.
+        if (0 === \posix_geteuid()) {
+            self::markTestSkipped('chmod 000 does not block root');
+        }
+
+        $root = $this->makeRepo([
+            'notes.md' => "clean\n",
+            'src/Hidden.php' => "<?php // sugarcraft/candy-foo\n",
+        ]);
+        chmod("$root/src/Hidden.php", 0o000);
+
+        try {
+            $result = $this->runTool($root, ['--old=candy-foo']);
+            $this->assertSame(2, $result['rc'], $result['out']);
+            $this->assertStringContainsString('check-rename-residue: cannot read', $result['out']);
+        } finally {
+            chmod("$root/src/Hidden.php", 0o644);
+        }
+    }
+
     public function testUnknownArgumentIsARefusal(): void
     {
         $result = $this->runTool($this->makeRepo(['notes.md' => "clean\n"]), ['--nope']);
