@@ -37,6 +37,11 @@ final class Application extends SymfonyApplication
 {
     private const ENV_PREFIX = 'CANDY_SCRIPTUI_';
 
+    /** Composer identity of THIS package — {@see findRootComposerJson()} only
+     *  accepts a manifest bearing this name, so a source checkout of the
+     *  monorepo never reports the host root's version as the tool's own. */
+    private const PACKAGE_NAME = 'sugarcraft/candy-scriptui';
+
     /**
      * Option names permitted to be sourced from `CANDY_SCRIPTUI_<NAME>`
      * environment variables. This is an ALLOW-LIST, deliberately narrow.
@@ -221,9 +226,17 @@ final class Application extends SymfonyApplication
     }
 
     /**
-     * Finds the root composer.json and returns its decoded JSON.
+     * Finds this PACKAGE's composer.json (scriptui-39, finding 039) and
+     * returns its decoded JSON.
      *
-     * @return array<string, mixed>|null Decoded composer.json, or null if not found.
+     * The old shape accepted the FIRST manifest with a non-empty version —
+     * in a monorepo checkout the package manifest carries no version field,
+     * so the walk rode past candy-scriptui/ and answered the ROOT's 1.0.0:
+     * `candy-scriptui --version` reported a release of the whole monorepo
+     * as if it were this tool's own version. Identity-gating on the package
+     * NAME keeps the answer scoped to what was actually published.
+     *
+     * @return array<string, mixed>|null Decoded manifest, or null if not found.
      */
     private static function findRootComposerJson(): ?array
     {
@@ -240,7 +253,10 @@ final class Application extends SymfonyApplication
                     continue;
                 }
                 $json = json_decode($contents, true);
-                if (is_array($json) && ($json['version'] ?? '') !== '') {
+                if (
+                    is_array($json)
+                    && ($json['name'] ?? '') === self::PACKAGE_NAME
+                ) {
                     return $json;
                 }
             }

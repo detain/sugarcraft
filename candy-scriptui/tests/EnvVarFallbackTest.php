@@ -64,17 +64,37 @@ final class EnvVarFallbackTest extends TestCase
         $this->assertMatchesRegularExpression('/^\d+\.\d+\.\d+/', $version);
     }
 
-    public function testVersionFromComposerParsesMonorepoRoot(): void
+    /**
+     * scriptui-39 [gate G6 default leg]: the manifest walk is identity-gated
+     * to `sugarcraft/candy-scriptui`, so a source checkout of the monorepo
+     * answers with THIS package's manifest (no version field → 0.0.0), never
+     * with the host root's release version. Re-pinned from the old
+     * "parses monorepo root" contract, which was the bug being cured.
+     */
+    public function testVersionFromComposerIsBoundedToThisPackage(): void
     {
         $app = new Application();
         $version = $app->versionFromComposer();
 
-        $rootComposer = dirname(dirname(__DIR__)) . '/composer.json';
-        $this->assertFileExists($rootComposer);
-        $json = json_decode(file_get_contents($rootComposer), true);
+        $packageComposer = dirname(__DIR__) . '/composer.json';
+        $this->assertFileExists($packageComposer);
+        $json = json_decode(file_get_contents($packageComposer), true);
+        $this->assertSame('sugarcraft/candy-scriptui', $json['name']);
         $expectedVersion = is_array($json) ? ($json['version'] ?? '0.0.0') : '0.0.0';
-
         $this->assertSame($expectedVersion, $version);
+
+        // The host root's version must never surface as the tool's own.
+        $rootJson = json_decode(file_get_contents(dirname(__DIR__, 2) . '/composer.json'), true);
+        if (is_array($rootJson) && isset($rootJson['version'])) {
+            $this->assertNotSame($rootJson['version'], $version);
+        }
+
+        // The walk stopped at the package manifest, not beyond it.
+        $method = new \ReflectionMethod(Application::class, 'findRootComposerJson');
+        $method->setAccessible(true);
+        $found = $method->invoke(null);
+        $this->assertIsArray($found);
+        $this->assertSame('sugarcraft/candy-scriptui', $found['name']);
     }
 
     /**
