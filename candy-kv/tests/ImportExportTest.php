@@ -44,7 +44,7 @@ final class ImportExportTest extends TestCase
         \file_put_contents($path, '{"color":"blue","size":"large"}');
 
         $importer = new JsonImporter($this->store);
-        $count = $importer->importFromFile($path, false);
+        $count = $importer->importFromFile($path, false)->imported;
 
         $this->assertSame(2, $count);
         $this->assertSame('blue', $this->store->get('color'));
@@ -83,7 +83,7 @@ final class ImportExportTest extends TestCase
         \chdir($this->tmpDir);
 
         try {
-            $this->assertSame(1, (new JsonImporter($this->store))->importFromFile('rel.json', false));
+            $this->assertSame(1, (new JsonImporter($this->store))->importFromFile('rel.json', false)->imported);
             $this->assertSame('ok', $this->store->get('rel'));
             $this->store->setFile('rel-blob', 'rel.bin');
             $this->assertSame('bytes', $this->store->get('rel-blob'));
@@ -95,7 +95,7 @@ final class ImportExportTest extends TestCase
     public function testJsonImporterFromString(): void
     {        $json = '{"a":"1","b":"2"}';
         $importer = new JsonImporter($this->store);
-        $count = $importer->importFromString($json, false);
+        $count = $importer->importFromString($json, false)->imported;
 
         $this->assertSame(2, $count);
     }
@@ -135,7 +135,7 @@ final class ImportExportTest extends TestCase
         \file_put_contents($path, '{"token@pw":"secret","user@meta":"alice"}');
 
         $importer = new JsonImporter($this->store);
-        $count = $importer->importFromFile($path, false);
+        $count = $importer->importFromFile($path, false)->imported;
 
         $this->assertSame(2, $count);
         $this->assertSame('secret', $this->store->get('token@pw'));
@@ -345,7 +345,7 @@ final class ImportExportTest extends TestCase
         // the digits are destroyed: this literal used to import as
         // '1.844674407371E+19'. The flag keeps the exact digit string.
         $importer = new JsonImporter($this->store);
-        $count = $importer->importFromString('{"big":18446744073709551615,"neg":-18446744073709551616}', false);
+        $count = $importer->importFromString('{"big":18446744073709551615,"neg":-18446744073709551616}', false)->imported;
 
         $this->assertSame(2, $count);
         $this->assertSame('18446744073709551615', $this->store->get('big'));
@@ -357,7 +357,7 @@ final class ImportExportTest extends TestCase
         // Positive control for the fidelity law: a float whose canonical
         // repr is the very literal the document spelled stays legal.
         $importer = new JsonImporter($this->store);
-        $count = $importer->importFromString('{"pi":3.14159,"half":0.5,"neg":-2.25,"whole":-7}', false);
+        $count = $importer->importFromString('{"pi":3.14159,"half":0.5,"neg":-2.25,"whole":-7}', false)->imported;
 
         $this->assertSame(4, $count);
         $this->assertSame('3.14159', $this->store->get('pi'));
@@ -432,7 +432,7 @@ final class ImportExportTest extends TestCase
         \file_put_contents($path, "color: blue\nsize: large\n");
 
         $importer = new YamlImporter($this->store);
-        $count = $importer->importFromFile($path, false);
+        $count = $importer->importFromFile($path, false)->imported;
 
         $this->assertSame(2, $count);
         $this->assertSame('blue', $this->store->get('color'));
@@ -443,7 +443,7 @@ final class ImportExportTest extends TestCase
     {
         $yaml = "a: 1\nb: 2\n";
         $importer = new YamlImporter($this->store);
-        $count = $importer->importFromString($yaml, false);
+        $count = $importer->importFromString($yaml, false)->imported;
 
         $this->assertSame(2, $count);
     }
@@ -506,7 +506,7 @@ final class ImportExportTest extends TestCase
         $count = $importer->importFromString(
             "bin: QUJD\nskate_binary_bin: 1\ntxt: hello\nskate_binary_txt: 0\n",
             false,
-        );
+        )->imported;
         $this->assertSame(2, $count);
         $this->assertTrue($this->store->entry('bin')->binary);
         $this->assertSame('ABC', $this->store->entry('bin')->rawValue());
@@ -560,7 +560,7 @@ final class ImportExportTest extends TestCase
         $dirB = $this->tmpDir . '/roundtrip';
         \mkdir($dirB, 0o700, true);
         $storeB = new Store($dirB, 'testdb');
-        $count = (new JsonImporter($storeB))->importFromString($json, false);
+        $count = (new JsonImporter($storeB))->importFromString($json, false)->imported;
         $this->assertSame(2, $count);
         $this->assertSame('1', $storeB->get('x'));
         $this->assertSame('2', $storeB->get('y'));
@@ -676,7 +676,7 @@ final class ImportExportTest extends TestCase
         $dirB = $this->tmpDir . '/escaped-roundtrip';
         \mkdir($dirB, 0o700, true);
         $storeB = new Store($dirB, 'testdb');
-        $count = (new JsonImporter($storeB))->importFromString($json, false);
+        $count = (new JsonImporter($storeB))->importFromString($json, false)->imported;
         $this->assertSame(1, $count);
         $this->assertSame('v', $storeB->get('p\\@q'));
         // The phantom database must never be minted by the reimport, and
@@ -781,7 +781,7 @@ final class ImportExportTest extends TestCase
         // and close with ...
         $yaml = "---\nkey1: value1\n...\n";
         $importer = new YamlImporter($this->store);
-        $count = $importer->importFromString($yaml, false);
+        $count = $importer->importFromString($yaml, false)->imported;
 
         $this->assertSame(1, $count);
         $this->assertSame('value1', $this->store->get('key1'));
@@ -791,7 +791,7 @@ final class ImportExportTest extends TestCase
     {
         $yaml = "# This is a comment\nkey: value\n# Another comment";
         $importer = new YamlImporter($this->store);
-        $count = $importer->importFromString($yaml, false);
+        $count = $importer->importFromString($yaml, false)->imported;
 
         $this->assertSame(1, $count);
         $this->assertSame('value', $this->store->get('key'));
@@ -851,7 +851,7 @@ final class ImportExportTest extends TestCase
         \file_put_contents($path, '{"a":"1","b":"2","c":"3"}');
 
         $importer = new JsonImporter($this->store);
-        $count = $importer->importFromFile($path, true);
+        $count = $importer->importFromFile($path, true)->imported;
 
         $this->assertSame(3, $count);
         $this->assertSame('1', $this->store->get('a'));
@@ -867,7 +867,7 @@ final class ImportExportTest extends TestCase
         \file_put_contents($path, "x: 1\ny: 2\n");
 
         $importer = new YamlImporter($this->store);
-        $count = $importer->importFromFile($path, true);
+        $count = $importer->importFromFile($path, true)->imported;
 
         $this->assertSame(2, $count);
         $this->assertSame('1', $this->store->get('x'));
@@ -1040,5 +1040,122 @@ final class ImportExportTest extends TestCase
         // A row without expiry metadata is also never laundered: assert the
         // document simply does not carry a naked TTL-less copy of it.
         $this->assertArrayNotHasKey('_ttl', $decoded ?? []);
+    }
+
+    // ─── candy-kv-051: clobber policy (ImportCommit, both formats) ───────────
+
+    public function testReimportReportsExactlyWhichRowsWereClobbered(): void
+    {
+        $importer = new JsonImporter($this->store);
+        $first = $importer->importFromString('{"a":"1","b":"2"}');
+        $this->assertSame(2, $first->imported);
+        $this->assertSame(0, $first->overwritten);
+
+        // Second pass: b changes, a re-lands unchanged, c is new. Only the
+        // rows that PROVABLY replaced live data count as overwritten.
+        $second = $importer->importFromString('{"a":"1","b":"9","c":"3"}');
+        $this->assertSame(3, $second->imported);
+        $this->assertSame(2, $second->overwritten);
+        $this->assertSame(0, $second->skipped);
+        $this->assertSame('9', $this->store->get('b'));
+    }
+
+    public function testSkipPolicyLeavesLiveEntriesUntouchedAndCountsThem(): void
+    {
+        $importer = new JsonImporter($this->store);
+        $importer->importFromString('{"live":"original"}');
+        $report = $importer->importFromString('{"live":"poisoned","fresh":"new"}', true, 'skip');
+
+        $this->assertSame(1, $report->imported);
+        $this->assertSame(0, $report->overwritten);
+        $this->assertSame(1, $report->skipped);
+        $this->assertSame('original', $this->store->get('live'));
+        $this->assertSame('new', $this->store->get('fresh'));
+    }
+
+    public function testFailPolicyRefusesNamingTheKeyAndCommitsNothing(): void
+    {
+        $importer = new JsonImporter($this->store);
+        $importer->importFromString('{"bump":"old"}');
+
+        try {
+            $importer->importFromString('{"fresh1":"a","bump":"new","fresh2":"b"}', true, 'fail');
+            $this->fail('collision must refuse under fail policy');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString("'bump'", $e->getMessage());
+            $this->assertStringContainsString('--if-exists=replace', $e->getMessage());
+        }
+        // Atomic default: the fresh rows written before the collision are
+        // rolled back with it — the store is byte-for-byte the old snapshot.
+        // entry(), not get(): get() answers '' for both a stored '' and an
+        // absent key, so only the raw Entry probe proves absence.
+        $this->assertSame('old', $this->store->get('bump'));
+        $this->assertNull($this->store->entry('fresh1'));
+        $this->assertNull($this->store->entry('fresh2'));
+    }
+
+    public function testUnknownPolicyRefusesAtTheLibraryDoor(): void
+    {
+        // The policy gate lives in ImportCommit, not only in the argv layer:
+        // automation calling the library directly gets the same refusal.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Unknown import policy');
+        (new JsonImporter($this->store))->importFromString('{"a":"1"}', true, 'clobber');
+    }
+
+    public function testYamlImporterSharesTheClobberPolicy(): void
+    {
+        $importer = new YamlImporter($this->store);
+        $importer->importFromString("live: original\n");
+
+        $replaced = $importer->importFromString("live: new\n");
+        $this->assertSame(1, $replaced->imported);
+        $this->assertSame(1, $replaced->overwritten);
+
+        $kept = $importer->importFromString("live: ignored\n", true, 'skip');
+        $this->assertSame(0, $kept->imported);
+        $this->assertSame(1, $kept->skipped);
+
+        try {
+            $importer->importFromString("live: nope\n", true, 'fail');
+            $this->fail('collision must refuse under fail policy');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString("'live'", $e->getMessage());
+        }
+        $this->assertSame('new', $this->store->get('live'));
+    }
+
+    public function testRoutedKeysAreJudgedAgainstTheirOwnDatabase(): void
+    {
+        // The existence read and the write must route through the same '@db'
+        // law: a key colliding in db2 must not be judged against the default
+        // db (where it is absent) and silently counted as fresh.
+        $importer = new JsonImporter($this->store);
+        $importer->importFromString('{"k@other":"stored"}');
+        $report = $importer->importFromString('{"k":"default-db"}');
+        $this->assertSame(1, $report->imported);
+        $this->assertSame(0, $report->overwritten, 'k (default) never existed; only k@other was live');
+
+        $collide = null;
+        try {
+            $collide = $importer->importFromString('{"k@other":"clobber"}', true, 'fail');
+            $this->fail('a collision inside its routed db must refuse even when the bare key is free');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString("'k@other'", $e->getMessage());
+        }
+        $this->assertNull($collide);
+    }
+
+    public function testNeitherImporterKeepsAPrivateWriteLoop(): void
+    {
+        // Structural drift pin (candy-kv-051): both importers must hand
+        // their rows to the shared ImportCommit kernel. The old shape was
+        // two byte-identical private closures — one gaining a policy while
+        // the other stayed silent is exactly the bug this pins out.
+        foreach (['JsonImporter', 'YamlImporter'] as $class) {
+            $source = (string) \file_get_contents(__DIR__ . '/../src/Import/' . $class . '.php');
+            $this->assertSame(1, \substr_count($source, 'ImportCommit::run'), "{$class} must commit through ImportCommit exactly once");
+            $this->assertSame(0, \preg_match('/foreach\s*\(\s*\$rows[^;]*store->set/s', $source), "{$class} must not keep a private row-writing loop");
+        }
     }
 }

@@ -106,11 +106,12 @@ final class YamlImporter
     /**
      * Import entries from a YAML file path.
      *
-     * @param string $path   Path to the YAML file.
-     * @param bool   $atomic Whether to wrap all sets in a single transaction.
-     * @return int Number of entries imported.
+     * @param string $path      Path to the YAML file.
+     * @param bool   $atomic    Whether to wrap all sets in a single transaction.
+     * @param string $ifExists  Clobber policy: replace, skip or fail.
+     * @return ImportReport Imported/overwritten/skipped triple.
      */
-    public function importFromFile(string $path, bool $atomic = true): int
+    public function importFromFile(string $path, bool $atomic = true, string $ifExists = 'replace'): ImportReport
     {
         // kv-019: this is a PUBLIC library door — the path may come from
         // config or uploads in wrapping automation, never a terminal argv.
@@ -120,18 +121,19 @@ final class YamlImporter
         if ($yaml === false) {
             throw new \RuntimeException("Cannot read YAML file: {$path}");
         }
-        return $this->importFromString($yaml, $atomic);
+        return $this->importFromString($yaml, $atomic, $ifExists);
     }
 
     /**
      * Import entries from a YAML string.
      *
-     * @param string $yaml   Raw YAML string.
-     * @param bool   $atomic Whether to wrap all sets in a single transaction.
-     * @return int Number of entries imported.
+     * @param string $yaml      Raw YAML string.
+     * @param bool   $atomic    Whether to wrap all sets in a single transaction.
+     * @param string $ifExists  Clobber policy: replace, skip or fail.
+     * @return ImportReport Imported/overwritten/skipped triple.
      * @throws \RuntimeException when the document shape cannot round-trip.
      */
-    public function importFromString(string $yaml, bool $atomic = true): int
+    public function importFromString(string $yaml, bool $atomic = true, string $ifExists = 'replace'): ImportReport
     {
         $data = $this->parseYaml($yaml);
 
@@ -258,14 +260,11 @@ final class YamlImporter
             $rows[] = [$key, $value, $binary, $ttl];
         }
 
-        $import = function () use ($rows): int {
-            $count = 0;
-            foreach ($rows as [$key, $value, $binary, $ttl]) {
-                $this->store->set($key, $value, $binary, $ttl);
-                $count++;
-            }
-            return $count;
-        };
+        // candy-kv-051: the live-store meeting point — existence check,
+        // clobber policy and the count triple all live in ImportCommit,
+        // shared verbatim with JsonImporter (a structural pin forbids a
+        // private copy of that loop in either class).
+        $import = fn(): ImportReport => ImportCommit::run($this->store, $rows, $ifExists);
 
         if ($atomic && $rows !== []) {
             // Zero-entry documents skip the transaction entirely: opening a

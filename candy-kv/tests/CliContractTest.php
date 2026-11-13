@@ -58,7 +58,7 @@ final class CliContractTest extends TestCase
         $this->assertSame(0, $run['exit']);
         $this->assertStringContainsString('candy-kv', $run['stdout']);
         // The rewritten help lists every flag the parser actually accepts.
-        foreach (['--binary', '--text', '--sanitize', '--dry-run', '--no-atomic', 'prune'] as $needle) {
+        foreach (['--binary', '--text', '--sanitize', '--dry-run', '--no-atomic', '--if-exists', 'prune'] as $needle) {
             $this->assertStringContainsString($needle, $run['stdout'], "help must document {$needle}");
         }
         $this->assertFalse(\is_dir($this->configHome . '/.config'));
@@ -507,6 +507,39 @@ final class CliContractTest extends TestCase
         $many = $this->runKvFeeding(['import', 'json', '-'], '{"a":"1","b":"2"}');
         $this->assertSame(0, $many['exit']);
         $this->assertStringContainsString('Imported 2 entries.', $many['stdout']);
+    }
+
+    public function testReimportOverTheSameKeysAnnouncesTheOverwrites(): void
+    {
+        // candy-kv-051 user-visible contract: a silent clobber is how a
+        // stale dump quietly rewrites a live store; the second answer must
+        // carry the overwrite sentence.
+        $dump = '{"a":"1","b":"2"}';
+        $this->runKvFeeding(['import', 'json', '-'], $dump);
+        $again = $this->runKvFeeding(['import', 'json', '-'], $dump);
+        $this->assertSame(0, $again['exit'], $again['stderr']);
+        $this->assertStringContainsString('Imported 2 entries.', $again['stdout']);
+        $this->assertStringContainsString('Overwrote 2 entries.', $again['stdout']);
+    }
+
+    public function testIfExistsFlagIsHonouredThroughTheBinary(): void
+    {
+        $first = '{"live":"original"}';
+        $this->runKvFeeding(['import', 'json', '-'], $first);
+
+        $skip = $this->runKvFeeding(['import', 'json', '-', '--if-exists=skip'], '{"live":"poisoned"}');
+        $this->assertSame(0, $skip['exit'], $skip['stderr']);
+        $get = $this->runKv(['get', 'live']);
+        $this->assertSame('original', \trim($get['stdout']));
+
+        $fail = $this->runKvFeeding(['import', 'json', '-', '--if-exists=fail'], '{"live":"poisoned","fresh":"v"}');
+        $this->assertSame(1, $fail['exit'], $fail['stdout']);
+        $this->assertStringContainsString("'live'", $fail['stderr']);
+        $this->assertSame(1, $this->runKv(['get', 'fresh'])['exit'], 'the rolled-back prefix must not exist');
+
+        $bogus = $this->runKvFeeding(['import', 'json', '-', '--if-exists=clobber'], '{}');
+        $this->assertSame(2, $bogus['exit'], 'unknown mode is a usage-class refusal');
+        $this->assertStringContainsString('Unknown --if-exists mode', $bogus['stderr']);
     }
 
     public function testCliRefusesStreamWrapperImportPathNamingScheme(): void

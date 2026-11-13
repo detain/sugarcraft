@@ -143,6 +143,41 @@ final class CliArgParserTest extends TestCase
         $this->assertFalse($result['atomic']);
     }
 
+    public function testImportOptsIfExistsDefaultsToReplace(): void
+    {
+        // candy-kv-051: the documented default must be the parse default,
+        // not a lucky coincidence downstream.
+        $result = ArgParser::import(['candy-kv', 'import', 'json', 'data.json'], 2);
+        $this->assertSame('replace', $result['ifExists']);
+    }
+
+    public function testImportOptsAcceptsEveryIfExistMode(): void
+    {
+        foreach (['skip', 'fail', 'replace'] as $mode) {
+            $result = ArgParser::import(['candy-kv', 'import', 'json', 'd.json', '--if-exists=' . $mode], 2);
+            $this->assertSame($mode, $result['ifExists']);
+        }
+    }
+
+    public function testImportOptsUnknownIfExistModeRefuses(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Unknown --if-exists mode "delete". Use skip, fail or replace.');
+        ArgParser::import(['candy-kv', 'import', 'json', 'd.json', '--if-exists=delete'], 2);
+    }
+
+    public function testImportOptsIfExistModeIsScrubbedInRefusal(): void
+    {
+        // kv-004 law: the echoed bytes are argv-chosen; the refusal must not
+        // carry a raw ESC through to the terminal.
+        try {
+            ArgParser::import(['candy-kv', 'import', 'json', 'd.json', "--if-exists=\x1b[31mX"], 2);
+            $this->fail('unknown mode must refuse');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringNotContainsString("\x1b", $e->getMessage());
+        }
+    }
+
     public function testImportOptsYamlFormat(): void
     {
         $result = ArgParser::import(['candy-kv', 'import', 'yaml', 'data.yaml'], 2);

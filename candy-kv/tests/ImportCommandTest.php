@@ -328,4 +328,90 @@ final class ImportCommandTest extends TestCase
         // argv-fed commands must never wait on a terminal: spawnKv closes stdin.
         return self::spawnKv($args, $this->childConfigHome);
     }
+
+    // ─── candy-kv-051: the success line reports clobbering, not just counts ──
+
+    public function testOverwritingImportSaysSoOnTheSuccessLine(): void
+    {
+        $path = $this->tmpDir . '/dump.json';
+        \file_put_contents($path, '{"a":"1","b":"2"}');
+        $this->assertSame(0, $this->cmd->run('json', $path, false));
+
+        \file_put_contents($path, '{"a":"9","b":"8"}');
+        $mark = \ftell($this->outStream); // slice the second answer only
+        $this->assertSame(0, $this->cmd->run('json', $path, false));
+
+        $expected = \SugarCraft\Kv\Lang::t('cli.imported_n', ['count' => 2])
+            . ' ' . \SugarCraft\Kv\Lang::t('cli.overwrote_n', ['count' => 2]) . "\n";
+        $this->assertSame($expected, $this->capturedFrom($mark));
+    }
+
+    public function testSingularClobberReadsAsOneEntry(): void
+    {
+        \file_put_contents($this->tmpDir . '/one.json', '{"k":"first"}');
+        $this->cmd->run('json', $this->tmpDir . '/one.json', false);
+        \file_put_contents($this->tmpDir . '/one.json', '{"k":"second"}');
+        $mark = \ftell($this->outStream);
+        $this->cmd->run('json', $this->tmpDir . '/one.json', false);
+
+        $expected = \SugarCraft\Kv\Lang::t('cli.imported_one')
+            . ' ' . \SugarCraft\Kv\Lang::t('cli.overwrote_one') . "\n";
+        $this->assertSame($expected, $this->capturedFrom($mark));
+    }
+
+    public function testSkipPolicyKeepsThePlainSuccessLine(): void
+    {
+        // skipped == 1, overwritten == 0: the sentence would be a LIE if it
+        // appeared — silence on the second half is the correct report.
+        \file_put_contents($this->tmpDir . '/live.json', '{"k":"stored"}');
+        $this->cmd->run('json', $this->tmpDir . '/live.json', false);
+        \file_put_contents($this->tmpDir . '/live.json', '{"k":"ignored"}');
+        $mark = \ftell($this->outStream);
+        $this->assertSame(0, $this->cmd->run('json', $this->tmpDir . '/live.json', false, 'skip'));
+
+        $this->assertSame(
+            \SugarCraft\Kv\Lang::t('cli.imported_n', ['count' => 0]) . "\n",
+            $this->capturedFrom($mark),
+        );
+        $this->assertSame('stored', $this->store->get('k'));
+    }
+
+    public function testFailPolicySurfacesAsTheImportFailedRefusal(): void
+    {
+        \file_put_contents($this->tmpDir . '/fail.json', '{"dup":"live"}');
+        $this->cmd->run('json', $this->tmpDir . '/fail.json', false);
+        \file_put_contents($this->tmpDir . '/fail.json', '{"dup":"clash"}');
+        $mark = \ftell($this->errStream);
+
+        $this->assertSame(1, $this->cmd->run('json', $this->tmpDir . '/fail.json', false, 'fail'));
+        $err = $this->capturedFrom($mark, $this->errStream);
+        $this->assertStringStartsWith('Import failed: ', $err);
+        $this->assertStringContainsString("'dup'", $err);
+        $this->assertSame('live', $this->store->get('dup'));
+    }
+
+    public function testUnknownPolicyIsRefusedAsFailureNotSilentReplace(): void
+    {
+        \file_put_contents($this->tmpDir . '/bad.json', '{"k":"v"}');
+        // The argv grammar guards this first; the library door must too
+        // (ImportCommit owns the check), and the command reports rc 1.
+        $this->assertSame(1, $this->cmd->run('json', $this->tmpDir . '/bad.json', false, 'clobber'));
+        $this->assertStringContainsString('Unknown import policy', $this->captured($this->errStream));
+    }
+
+    /**
+     * Slice everything written to a memory sink since an ftell mark — the
+     * project stream law (ftell/fseek/stream_get_contents, never rewind-
+     * and-hope) so two-phase tests read only the second phase's bytes.
+     *
+     * @param resource $stream
+     */
+    private function capturedFrom(int $mark, $stream = null): string
+    {
+        $stream ??= $this->outStream;
+        \fseek($stream, $mark);
+        $text = \stream_get_contents($stream);
+        \fseek($stream, 0, \SEEK_END); // next write appends, never overwrites
+        return $text === false ? '' : $text;
+    }
 }

@@ -394,7 +394,7 @@ final class YamlDialectTest extends TestCase
             $importer = $format === 'json'
                 ? new JsonImporter($fresh)
                 : new YamlImporter($fresh);
-            $count = $importer->importFromFile($path, false);
+            $count = $importer->importFromFile($path, false)->imported;
 
             $this->assertSame(2, $count, "import lost entries via {$format}");
             $chaos = $fresh->entry('chaos');

@@ -13,7 +13,7 @@ declare(strict_types=1);
  *   candy-kv delete <key> [--dry-run]
  *   candy-kv list-dbs
  *   candy-kv prune
- *   candy-kv import <format> <path> [--no-atomic]
+ *   candy-kv import <format> <path> [--no-atomic] [--if-exists=MODE]
  *   candy-kv export <format> [db] [pattern]
  *   candy-kv --help | --version
  *
@@ -336,6 +336,7 @@ function run(Store $store, string $cmd, array $argv, string $bin): void
             $opts['format'],
             $opts['path'],
             $opts['atomic'],
+            $opts['ifExists'],
         );
         exit($exitCode);
 
@@ -395,7 +396,7 @@ function help(string $bin): void
       {$bin} delete <key> [--dry-run]  Delete a key or glob pattern
       {$bin} list-dbs                  List all databases
       {$bin} prune                     Remove expired entries from the default db
-      {$bin} import <format> <path> [--no-atomic]
+      {$bin} import <format> <path> [--no-atomic] [--if-exists=MODE]
                                       Import entries (json|yaml|yml, path=- for stdin)
       {$bin} export <format> [db] [pattern]
                                       Export entries (json|yaml|yml)
@@ -419,6 +420,9 @@ function help(string $bin): void
       --dry-run                       `delete`: report match count, write
                                       nothing.
       --no-atomic                     `import`: skip the wrapping transaction.
+      --if-exists=MODE                `import`: what a key that is already
+                                      stored does — replace it (default),
+                                      skip it, or refuse the import.
       --                              End option processing; later tokens are
                                       data (`set backup -- --ttl=60` stores
                                       the literal value --ttl=60).

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Kv\Cli;
 
+use SugarCraft\Kv\Import\ImportCommit;
 use SugarCraft\Kv\Store;
 use SugarCraft\Kv\Support\Ttl;
 
@@ -241,11 +242,27 @@ final class ArgParser
     {
         [$tokens, $tail] = self::splitPositional($argv, $offset);
         $atomic = true;
+        $ifExists = 'replace';
         $out = [];
 
         foreach ($tokens as $arg) {
             if ($arg === '--no-atomic') {
                 $atomic = false;
+            } elseif (\str_starts_with($arg, '--if-exists=')) {
+                // kv-051: clobber policy. Grammar lives here, the policy
+                // itself in ImportCommit — an unknown MODE is a usage-class
+                // refusal (exit 2 with the import usage line), the same
+                // class as an unknown option.
+                $mode = substr($arg, strlen('--if-exists='));
+                if (!in_array($mode, ImportCommit::POLICIES, true)) {
+                    // Unlike unknownOption's withheld payload, the MODE is
+                    // the information the operator needs — sanitize instead
+                    // of hiding (kv-004 law still holds on egress bytes).
+                    throw new \InvalidArgumentException(
+                        \sprintf('Unknown --if-exists mode "%s". Use skip, fail or replace.', Store::sanitizeForTty($mode))
+                    );
+                }
+                $ifExists = $mode;
             } elseif (self::isOptionLike($arg)) {
                 throw self::unknownOption($arg, 'import');
             } else {
@@ -256,7 +273,7 @@ final class ArgParser
 
         self::refuseSurplus($out, 2, 'import');
 
-        return ['format' => $out[0] ?? null, 'path' => $out[1] ?? null, 'atomic' => $atomic];
+        return ['format' => $out[0] ?? null, 'path' => $out[1] ?? null, 'atomic' => $atomic, 'ifExists' => $ifExists];
     }
 
     /**

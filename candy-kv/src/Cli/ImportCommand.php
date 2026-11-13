@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Kv\Cli;
 
+use SugarCraft\Kv\Import\ImportReport;
 use SugarCraft\Kv\Import\JsonImporter;
 use SugarCraft\Kv\Import\YamlImporter;
 use SugarCraft\Kv\Lang;
@@ -15,7 +16,9 @@ use SugarCraft\Kv\Support\InputPath;
  *
  * i18n scope (intentional): this class straddles both surfaces. The ONE
  * catalogued emitter is the success line — `Lang::t('cli.imported_one')` /
- * `Lang::t('cli.imported_n')` on stdout — joining the usage lines that
+ * `Lang::t('cli.imported_n')` (plus the kv-051 `Lang::t('cli.overwrote_one')` /
+ * `Lang::t('cli.overwrote_n')` sentence when entries were replaced) on
+ * stdout — joining the usage lines that
  * `bin/candy-kv` routes through `Lang::t('cli.usage_*')`. Everything else
  * stays plain English by design: the usage- and failure-class stderr
  * diagnostics (unknown format, failed STDIN read, missing file, and the
@@ -48,12 +51,13 @@ final class ImportCommand
     /**
      * Run the import command.
      *
-     * @param string $format 'json', 'yaml' or 'yml'
-     * @param string $path   File path to import from (use '-' for STDIN)
-     * @param bool   $atomic Whether to use an atomic transaction.
+     * @param string $format   'json', 'yaml' or 'yml'
+     * @param string $path     File path to import from (use '-' for STDIN)
+     * @param bool   $atomic   Whether to use an atomic transaction.
+     * @param string $ifExists Clobber policy: replace, skip or fail (kv-051).
      * @return int Exit code (0 = success, 1 = failure, 2 = bad usage).
      */
-    public function run(string $format, string $path, bool $atomic = true): int
+    public function run(string $format, string $path, bool $atomic = true, string $ifExists = 'replace'): int
     {
         $importer = match ($format) {
             'json' => new JsonImporter($this->store),
@@ -81,7 +85,7 @@ final class ImportCommand
                     \fwrite($this->stderr, "Failed to read from STDIN.\n");
                     return 1;
                 }
-                $count = $importer->importFromString($document, $atomic);
+                $report = $importer->importFromString($document, $atomic, $ifExists);
             } else {
                 // kv-019: refuse wrapper URLs BEFORE file_exists — the stat
                 // itself deserializes phar archive metadata inside us.
@@ -91,10 +95,10 @@ final class ImportCommand
                     \fwrite($this->stderr, "File not found: " . Store::sanitizeForTty($path) . "\n");
                     return 1;
                 }
-                $count = $importer->importFromFile($path, $atomic);
+                $report = $importer->importFromFile($path, $atomic, $ifExists);
             }
 
-            \fwrite($this->stdout, Lang::t($count === 1 ? 'cli.imported_one' : 'cli.imported_n', ['count' => $count]) . "\n");
+            \fwrite($this->stdout, self::successLine($report) . "\n");
             return 0;
         } catch (\Throwable $e) {
             // Sanitize-on-egress: importer failure texts name file-chosen keys
@@ -103,5 +107,25 @@ final class ImportCommand
             \fwrite($this->stderr, "Import failed: " . Store::sanitizeForTty($e->getMessage()) . "\n");
             return 1;
         }
+    }
+
+    /**
+     * The one stdout line an import answers with (kv-051): the plain
+     * imported count when nothing was clobbered, and the compound
+     * imported-overwrote sentence — plural on both halves — when live
+     * entries were replaced. The four catalog keys are selected by the
+     * same hand-rolled ternaries the rest of the CLI uses until the kv-040
+     * plural chooser lands.
+     */
+    private static function successLine(ImportReport $report): string
+    {
+        $line = Lang::t($report->imported === 1 ? 'cli.imported_one' : 'cli.imported_n', ['count' => $report->imported]);
+        if ($report->overwritten === 0) {
+            return $line;
+        }
+
+        // Second sentence, own plural — the same _one/_n pair shape the
+        // kv-040 chooser will route, so no compound key matrix to translate.
+        return $line . ' ' . Lang::t($report->overwritten === 1 ? 'cli.overwrote_one' : 'cli.overwrote_n', ['count' => $report->overwritten]);
     }
 }

@@ -52,7 +52,7 @@ final class YamlFallbackTest extends TestCase
         // The fallback parser strips surrounding quotes, so "value" → value
         $yaml = "key1: \"quoted value\"\nkey2: 'single quoted'\n";
         $importer = new YamlImporter($this->store);
-        $count = $importer->importFromString($yaml, false);
+        $count = $importer->importFromString($yaml, false)->imported;
 
         $this->assertSame(2, $count);
         $this->assertSame('quoted value', $this->store->get('key1'));
@@ -105,7 +105,7 @@ final class YamlFallbackTest extends TestCase
     {
         $yaml = "token@pw: secret\nuser@meta: alice\n";
         $importer = new YamlImporter($this->store);
-        $count = $importer->importFromString($yaml, false);
+        $count = $importer->importFromString($yaml, false)->imported;
 
         $this->assertSame(2, $count);
         $this->assertSame('secret', $this->store->get('token@pw'));
@@ -263,7 +263,7 @@ final class YamlFallbackTest extends TestCase
         // Keys can legally contain dots (regex allows A-Za-z0-9_\-.@)
         $yaml = "user.name: alice\napi.v2: stable\n";
         $importer = new YamlImporter($this->store);
-        $count = $importer->importFromString($yaml, false);
+        $count = $importer->importFromString($yaml, false)->imported;
 
         $this->assertSame(2, $count);
         $this->assertSame('alice', $this->store->get('user.name'));
