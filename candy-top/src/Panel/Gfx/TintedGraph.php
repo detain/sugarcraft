@@ -7,6 +7,7 @@ namespace SugarCraft\Top\Panel\Gfx;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Dashboard\Plot\Braille\DualSampleGraph;
+use SugarCraft\Top\Theme\Palette;
 use SugarCraft\Top\View\Ink;
 
 /**
@@ -36,6 +37,21 @@ final class TintedGraph
     /** @var list<Color>|null */
     private static ?array $markers = null;
 
+    /**
+     * Rendered lines by content signature (graph data + size + family/invert
+     * flags + gradient + underlay + theme + profile). Paints at update_ms
+     * routinely redraw identical graphs — a clock tick or menu repaint used
+     * to re-render and re-tint every graph on screen (27-38 ms of full-frame
+     * margin, S-N17). The held Palette pins the entry against a recycled
+     * object id: an entry only serves the very theme it was rendered for.
+     *
+     * @var array<string, array{Palette, list<string>}>
+     */
+    private static array $cache = [];
+
+    /** Generous for one frame's graph population; eviction drops the oldest half. */
+    private const CACHE_MAX = 256;
+
     private function __construct()
     {
     }
@@ -48,6 +64,12 @@ final class TintedGraph
      */
     public static function lines(DualSampleGraph $graph, Ink $ink, string $gradient, bool $underlay = false): array
     {
+        $key = self::cacheKey($graph, $ink, $gradient, $underlay);
+        $hit = self::$cache[$key] ?? null;
+        if ($hit !== null && $hit[0] === $ink->palette()) {
+            return $hit[1];
+        }
+
         $g = $graph->withGradient(self::markers());
         if ($underlay) {
             $g = $g->withUnderlay(Color::rgb(0, 0, 1));
@@ -60,7 +82,29 @@ final class TintedGraph
             $raw,
         ) ?? $raw;
 
-        return explode("\n", $tinted);
+        $lines = explode("\n", $tinted);
+        if (count(self::$cache) >= self::CACHE_MAX) {
+            self::$cache = array_slice(self::$cache, intdiv(self::CACHE_MAX, 2), null, true);
+        }
+        unset(self::$cache[$key]);
+        self::$cache[$key] = [$ink->palette(), $lines];
+
+        return $lines;
+    }
+
+    /**
+     * The tint depends on nothing else the graph carries: width/height, the
+     * data, the shape flags, and the resolved theme bytes. samples() is a
+     * copy — serializing it costs far less than the render and the swap it
+     * guards.
+     */
+    private static function cacheKey(DualSampleGraph $graph, Ink $ink, string $gradient, bool $underlay): string
+    {
+        return $graph->width() . 'x' . $graph->height() . '|' . $graph->family()
+            . ($graph->inverted() ? '|inv' : '') . ($graph->noZero() ? '|nz' : '')
+            . '|' . $graph->maxValue() . '|' . ($underlay ? 'u' : '-')
+            . '|' . $gradient . '|' . spl_object_id($ink->palette()) . ':' . $ink->profile()->name
+            . '|' . md5(serialize($graph->samples()));
     }
 
     /**

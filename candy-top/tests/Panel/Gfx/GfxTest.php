@@ -201,6 +201,32 @@ final class GfxTest extends TestCase
         $this->assertSame('cpu', TintedGraph::gradientName($ink, ['nope']));
     }
 
+    /**
+     * S-N17: rendered lines are content-cached, but every request axis must
+     * key its own entry — theme, profile, samples, size, gradient and the
+     * underlay flag — or a frame wears another request's bytes.
+     */
+    public function testTintedGraphCacheSeparatesEveryRequestAxis(): void
+    {
+        $ink = Ink::new(ThemeConfig::new(), ColorProfile::TrueColor);
+        $graph = DualSampleGraph::new(10, 2, 'braille')->withData(0, 30, 60, 90);
+
+        $first = TintedGraph::lines($graph, $ink, 'cpu');
+        $this->assertSame($first, TintedGraph::lines($graph, $ink, 'cpu'), 'the same request answers the same bytes');
+
+        $this->assertNotSame($first, TintedGraph::lines($graph, $ink, 'temp'), 'the gradient is a key');
+        $flat = DualSampleGraph::new(10, 1, 'braille')->withData(0, 30, 60, 90);
+        $this->assertNotSame(TintedGraph::lines($flat, $ink, 'cpu'), TintedGraph::lines($flat, $ink, 'cpu', true), 'the underlay is a key');
+        $this->assertNotSame($first, TintedGraph::lines(DualSampleGraph::new(10, 2, 'braille')->withData(0, 30, 60, 90, 45), $ink, 'cpu'), 'the samples are a key');
+        $this->assertNotSame($first, TintedGraph::lines(DualSampleGraph::new(11, 2, 'braille')->withData(0, 30, 60, 90), $ink, 'cpu'), 'the width is a key');
+
+        $ansi = Ink::new(ThemeConfig::new(), ColorProfile::Ansi);
+        $this->assertStringNotContainsString('38;2;', TintedGraph::lines($graph, $ansi, 'cpu')[0], 'the profile is a key — ANSI ink never wears TrueColor bytes');
+
+        $tty = Ink::new(TtyTheme::new(), ColorProfile::TrueColor);
+        $this->assertNotSame($first, TintedGraph::lines($graph, $tty, 'cpu'), 'the palette is a key');
+    }
+
     public function testNamedSourcesSampleAndRecompose(): void
     {
         $set = NamedSources::of(['freq' => FakeFreq::new(2), 'temp' => FakeTemp::new(1), 'none' => null]);
