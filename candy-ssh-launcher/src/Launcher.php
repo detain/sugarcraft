@@ -18,6 +18,12 @@ namespace SugarCraft\SshLauncher;
  * composer requirement, so there is no runtime feature probe here —
  * an absent extension fails at install time, not at dispatch time.
  *
+ * Invariant (-081, pinned by ExecHandoffTest): at dispatch time no
+ * open resource above fd 2 survives except the PHP main-script handle
+ * (config bytes arrive through file_get_contents, closed at read). Do
+ * not add long-lived streams to the boot path — whatever is open here
+ * is inherited by the user's ssh session.
+ *
  * For tests, `executor` is a callable receiving the argv list —
  * defaults to `pcntl_exec` but tests can swap it for a recorder.
  */
