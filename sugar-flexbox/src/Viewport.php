@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Flexbox;
 
 use SugarCraft\Core\Msg;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Widgets\Scrollbar\ScrollbarState;
 use SugarCraft\Widgets\Viewport\Viewport as WidgetsViewport;
 
@@ -190,6 +191,20 @@ final readonly class Viewport
         $middleLines = $scrollableHeight > 0
             ? array_slice($lines, $middleStart, min($scrollableHeight, $middleCapacity))
             : [];
+
+        // Horizontal window law (mirrors the delegate's xOffset>0 branch,
+        // sugar-forms Viewport::view()): a view scrolled right must drop the
+        // same number of left cells from EVERY region — header, middle and
+        // footer — before padding, otherwise the sticky frame keeps painting
+        // column zero and xOffset()/atLeftmost()/atRightmost()/
+        // horizontalScrollPercent() disagree with the pixels on screen.
+        $xOffset = $this->inner->xOffset;
+        if ($xOffset > 0) {
+            $drop = static fn(string $line): string => Width::dropAnsi($line, $xOffset);
+            $headerLines = array_map($drop, $headerLines);
+            $middleLines = array_map($drop, $middleLines);
+            $footerLines = array_map($drop, $footerLines);
+        }
 
         // Fill each region to full width with padding. When the scrollbar is
         // shown its column is reserved (paintScrollbar appends it) — padding

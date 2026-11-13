@@ -441,4 +441,104 @@ final class StickyViewportTest extends TestCase
             'the scrollbar column stays inside the requested width',
         );
     }
+
+    // ---- FBX-02: horizontal offset must slice EVERY sticky region -----
+
+    /** Five 20-cell lines; digits ride both ends so every window offset
+     *  paints bytes identifying WHICH line (and which cells) it shows. */
+    private static function horizontalContent(): string
+    {
+        return implode("\n", array_map(
+            static fn (int $i): string => sprintf('%d%s%d', $i, str_repeat('-', 17), $i),
+            range(0, 4),
+        ));
+    }
+
+    public function testStickyOffsetZeroPaintsLeadingWindows(): void
+    {
+        $vp = Viewport::withContent(self::horizontalContent(), 10, 4)
+            ->withStickyHeader(1)
+            ->withStickyFooter(1);
+        $this->assertSame(
+            "0---------\n1---------\n2---------\n4---------",
+            $vp->view(),
+        );
+        $this->assertTrue($vp->atLeftmost());
+        $this->assertSame(0, $vp->xOffset());
+    }
+
+    public function testStickyMidOffsetDropsLeftCellsFromEveryRegion(): void
+    {
+        $vp = Viewport::withContent(self::horizontalContent(), 10, 4)
+            ->withStickyHeader(1)
+            ->withStickyFooter(1)
+            ->setXOffset(9);
+        // Header, middle AND footer all shift by 9 cells — pre-fix the
+        // sticky frame kept painting column zero at any offset.
+        $this->assertSame(
+            "---------0\n---------1\n---------2\n---------4",
+            $vp->view(),
+        );
+        foreach (explode("\n", $vp->view()) as $i => $line) {
+            $this->assertSame(10, \SugarCraft\Core\Util\Width::string($line), "row $i");
+        }
+    }
+
+    public function testStickyRightmostOffsetPinsTailWindowsAndQueryState(): void
+    {
+        $vp = Viewport::withContent(self::horizontalContent(), 10, 4)
+            ->withStickyHeader(1)
+            ->withStickyFooter(1)
+            ->scrollRight(10);
+        $this->assertSame(
+            "---------0\n---------1\n---------2\n---------4",
+            $vp->view(),
+            'the tail windows are the rightmost pixels',
+        );
+        $this->assertSame(9, $vp->xOffset(), 'offset clamps to maxXOffset');
+        $this->assertTrue($vp->atRightmost(), 'content wider than the viewport, scrolled fully right');
+        $this->assertFalse($vp->atLeftmost());
+        $this->assertSame(1.0, $vp->horizontalScrollPercent());
+    }
+
+    public function testStickyQueryStateAgreesWithPaintedPixelsMidScroll(): void
+    {
+        $mid = Viewport::withContent(self::horizontalContent(), 10, 4)
+            ->withStickyHeader(1)
+            ->withStickyFooter(1)
+            ->setXOffset(5);
+        $this->assertFalse($mid->atLeftmost());
+        $this->assertFalse($mid->atRightmost());
+        $this->assertEqualsWithDelta(5 / 9, $mid->horizontalScrollPercent(), 0.0001);
+        $edge = $mid->setXOffset(9);
+        // The first painted row is header line 0 starting exactly at cell 9.
+        $this->assertSame('---------0', explode("\n", $edge->view())[0]);
+    }
+
+    public function testStickyHeaderOnlyAndFooterOnlySliceToo(): void
+    {
+        $headerOnly = Viewport::withContent(self::horizontalContent(), 10, 4)
+            ->withStickyHeader(1)
+            ->setXOffset(9);
+        $this->assertSame(
+            "---------0\n---------1\n---------2\n---------3",
+            $headerOnly->view(),
+        );
+
+        $footerOnly = Viewport::withContent(self::horizontalContent(), 10, 3)
+            ->withStickyFooter(1)
+            ->setXOffset(9);
+        $this->assertSame(
+            "---------0\n---------1\n---------4",
+            $footerOnly->view(),
+        );
+    }
+
+    public function testNonStickyPathKeepsDelegateHorizontalLaw(): void
+    {
+        // The plain path answers through the delegate, which drops the left
+        // cells without a right clamp; the sticky fix must not regress it.
+        $vp = Viewport::withContent('0123456789abcdefghij', 10, 1)->setXOffset(4);
+        $this->assertSame('456789abcdefghij', $vp->view());
+    }
 }
