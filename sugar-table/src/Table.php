@@ -21,6 +21,13 @@ namespace SugarCraft\Table;
  * cursor APIs for a host to call from its own keyboard loop, and it has no
  * mouse handling at all.
  *
+ * Render caches — the per-column content-width measurements, the width
+ * solve, the filter/sort rebuild — live inside this value and ride along
+ * with every wither that does not change what is measured. The supported
+ * usage is therefore to hold ONE Table in application state and wither it
+ * per frame; rebuilding from fromColumns() inside a render loop forfeits
+ * that work (audit ST-33 — see README "Keeping a Table across frames").
+ *
  * Port of Evertras/bubble-table.
  *
  * @see https://github.com/Evertras/bubble-table

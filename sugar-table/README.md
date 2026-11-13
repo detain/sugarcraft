@@ -35,7 +35,7 @@ sugar-table — a customizable data table component for PHP 8.3+ terminal UIs: p
 - **Borderless mode**: `withBorderless()` — render NO outer box (no top/bottom border rows, no left/right border columns; a single space separates columns) so the table composes inside another bordered shell (e.g. a sugar-panels content box) without a double border. A selected row's reverse-video highlight stays continuous across the column gaps
 - **Width control**: `withWidth(int $cols)` pins the total render width and `ColumnWidth::Flex` columns split the leftover room by weight. The pin is honoured both ways: pinning BELOW the declared widths scales the visible columns down proportionally (their content clips with a visible `…` rather than vanishing), and pinning ABOVE the natural width with no `Flex`/`Percent` column to absorb the surplus throws rather than silently rendering narrower than `$cols`. Lines are clamped at the frame edge, never padded past it. Default `cellPadding` is 0 (flush) — chosen for width economy; `withCellPadding(1)` buys readability when columns run together
 - **Viewport virtualization**: render only visible rows via `withViewportHeight()` + `withScrollY()`
-- **Render cost**: O(visible cells) per frame (flat-grid pass); the Content/Dynamic width solve scans the full row set once per width memo — keep large datasets viewport-scoped
+- **Render cost**: O(visible cells) per frame (flat-grid pass); the Content/Dynamic width solve scans the full row set once per width memo — keep large datasets viewport-scoped and hold one `Table` across frames (see Keeping a Table across frames)
 - **Column width modes**: `ColumnWidth` enum — Fixed, Percent, Dynamic, Content, Flex
 - **Cell text wrapping**: `WrapMode` enum — None, WordWrap, Character
 - **Multi-line row rendering**: `withMultilineMode(bool $multiline)` — when enabled, rows expand to the maximum height of any cell; when disabled (default), cells are clamped to one line (backward compatible)
@@ -668,6 +668,25 @@ Uses multi-pass computation:
    column absorbs the rounding slack so the sum is exact
 4. **Dynamic**: `max(contentWidth, one-share baseline)`
 5. **Content**: exact content width (min 1)
+
+## Keeping a Table across frames
+
+The render path memoizes its expensive work — the per-column content-width
+scan, the width solve, the filter/sort rebuild — inside the `Table` value
+itself, and every wither that does not change the data carries those caches
+into the new value. The immutable builder is therefore a *persistent* object,
+not a disposable one: hold **one** `Table` in your application state and
+update it per frame with `withRows()`, `SelectNext()`, `Filter()`,
+`withWidth()` and friends. Only the setters that change what is measured or
+in which frame — rows, columns, width, cell padding, hidden columns —
+discard the cached work; a cursor move or a style change carries it through.
+
+Rebuilding per frame — `Table::fromColumns(...)->withRows(...)` inside a
+render loop — forfeits all of that: every rebuild re-scans every cell for
+content widths and re-runs the filter/sort pass, turning the O(visible
+cells) frame back into O(rows × columns). The cache fields are internal
+layout plumbing, not public API; the supported surface is "keep the value,
+call withers".
 
 ## Internationalization
 
