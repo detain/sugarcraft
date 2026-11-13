@@ -839,15 +839,23 @@ Usage:
   {$bin} --from <addr> --to <addr> --attach file.pdf < message.txt
   cat message.txt | {$bin} --from <addr> --to <addr>
   {$bin} --from <addr> --to <addr> --render        (print MIME, send nothing)
+  {$bin} --from <addr> -- a@b.com c@d.com          (a bare -- ends option parsing)
 
   Flags accept --name value and --name=value. Body is read from STDIN if no
   --body flag is given. Unknown options are rejected, not ignored. Error
   messages follow the LC_ALL/LC_MESSAGES/LANG locale (16 locales); this
   help is English.
 
+  Arguments after a bare -- are positional recipients, used only when no
+  --to flag appears; mixing --to with positionals drops the positionals.
+  Address values may carry a display name - `Name <a@b>` - and the address
+  inside the angle brackets must pass the envelope grammar: mis-shaped
+  forms are refused, not repaired.
+
 Options:
-  --from <addr>        Sender email address
-  --to <addr>          Recipient email address (may be repeated)
+  --from <addr>        Sender email address (Name <a@b> form accepted)
+  --to <addr>          Recipient email address (may be repeated;
+                       Name <a@b> form accepted)
   --cc <addr>          CC recipient (may be repeated)
   --bcc <addr>         BCC recipient (may be repeated)
   --subject <s>        Email subject
@@ -889,7 +897,8 @@ Environment variables:
   CANDY_MAIL_SMTP_CA_FILE          PEM bundle path (same checks as --ca-file)
   CANDY_MAIL_SMTP_TIMEOUT          Wire timeout seconds (same bounds as --timeout)
   CANDY_MAIL_FROM                  Default sender address
-  CANDY_MAIL_SIGNATURE             Appended to email body
+  CANDY_MAIL_SIGNATURE             Appended to the plain-text body (dropped
+                                   for HTML-only mail - put it in --html)
 
 Examples:
   {$bin} --from me@example.com --to you@example.com --subject "Hello"

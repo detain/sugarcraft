@@ -306,7 +306,11 @@ zero-flag recipe for a one-off is `env -u RESEND_API_KEY candy-mail …`. A valu
 dash needs the inline form, shell-quoted so the rest of the value stays one argv token
 (`--subject="-50% off"`) — a switch is never stolen as another switch's value. The CLI
 requires a `--to` recipient: cc/bcc alone ends in a loud refusal (the library itself
-permits cc/bcc-only sends over SMTP; the Resend API needs at least one `to`).
+permits cc/bcc-only sends over SMTP; the Resend API needs at least one `to`). Address
+flags and positionals accept a `Name <a@b>` display name — the address inside the
+angle brackets must pass the grammar (mis-shapes are refused, not repaired); display
+names may be non-ASCII (RFC 2047-encoded), the address itself must stay ASCII
+(SMTPUTF8 is not supported).
 
 Embedding behind another bin? `require` the bootstrap and call
 `exit(\SugarCraft\Mail\main($argv));` to keep exit codes honest.

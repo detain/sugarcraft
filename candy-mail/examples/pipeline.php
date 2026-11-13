@@ -5,8 +5,8 @@ declare(strict_types=1);
 /**
  * CandyMail CLI pipeline demo — pipe markdown → email.
  *
- * Run: cat message.md | php examples/pipeline.php
- * Or:  echo "Hello world" | php examples/pipeline.php
+ * Run: cat message.md | php examples/pipeline.php [to] [subject]
+ * Or:  echo "Hello world" | php examples/pipeline.php you@example.com "Hi there"
  * Prints an offline MIME preview unless RESEND_API_KEY is set.
  */
 
