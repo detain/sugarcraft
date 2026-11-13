@@ -5,7 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Async;
 
 /**
- * Owns the mutable cancellation state and exposes a read-only token.
+ * Owns the mutable cancellation state and hands consumers the token view;
+ * triggering belongs by convention to this source's cancel().
  *
  * Create via CancellationSource::new(). Call cancel() to request cancellation
  * of all consumers holding the token.
@@ -62,7 +63,7 @@ final class CancellationSource implements Cancellable
 
     /**
      * Register a cancellation callback on this source's token.
-     * Part of the Cancellable contract — public, as the README shows.
+     * Part of the Cancellable contract — the contract makes it public.
      * Returns the removal handle; see CancellationToken::onCancel().
      *
      * @param callable(): void $callback

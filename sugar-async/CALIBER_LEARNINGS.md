@@ -6,7 +6,7 @@
 
 - **ReactPHP event loop is shared** — do not construct multiple loops. Pass `Loop::get()` or accept a `LoopInterface` parameter. Creating a new `StreamSelectLoop` singleton inside a library breaks consumers who already own the loop.
 
-- **CancellationToken is read-only from outside** — consumers receive only the token, not the source. Only `CancellationSource::cancel()` can flip the flag. This is intentional: it prevents consumers from accidentally cancelling shared tokens.
+- **CancellationToken's trigger restriction is by convention, not by visibility** — consumers receive the token, not the source, and only `CancellationSource::cancel()` is meant to flip the flag. The guard is discipline, not encapsulation: `notifyCancellation()` and `fireCallbacks()` are public `@internal` seams, so a consumer holding the token *can* fire it — do not hand tokens to untrusted code.
 
 - **`onCancel` callbacks fire exactly once** — even if `cancel()` is called multiple times. The implementation uses a `callbacksFired` sentinel to ensure this invariant.
 

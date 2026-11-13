@@ -8,8 +8,11 @@ namespace SugarCraft\Async;
  * Read-only view of a cancellation state.
  *
  * Instances are created by CancellationSource. Consumers receive only the
- * token — they cannot trigger cancellation, only observe it and register
- * callbacks.
+ * token and treat it as observe-only: the trigger restriction is by
+ * convention, not by visibility — {@see self::notifyCancellation()} and
+ * {@see self::fireCallbacks()} are public `@internal` seams, so a consumer
+ * holding the token can fire it. Register callbacks, never trigger them,
+ * and do not hand tokens to untrusted code.
  *
  * Mirrors Go's context.Context.Done channel pattern.
  */
@@ -22,7 +25,6 @@ final class CancellationToken
 
     private int $nextCallbackId;
 
-    /** @var bool */
     private bool $callbacksFired;
 
     /** Shared never-cancelled token (see {@see self::none()}). */
@@ -95,7 +97,8 @@ final class CancellationToken
 
     /**
      * Register a callback to fire when cancellation is requested.
-     * Public contract (mirrors Cancellable::onCancel; the README shows it).
+     * Public contract (mirrors {@see Cancellable::onCancel()} — the contract
+     * itself makes it public, no visibility games).
      * Fires immediately if the token is already cancelled, otherwise runs at
      * most once, when cancel() happens.
      *
