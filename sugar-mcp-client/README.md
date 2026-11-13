@@ -264,7 +264,11 @@ checkout the launch stood in.
 ## Limits
 
 Every wall is a constant on `StdioMcpServer` and none is configurable — each
-is a guard against a pathological server, not a working budget:
+is a guard against a pathological server, not a working budget. Two rows below
+are public (`PROTOCOL_VERSION`, `DEFAULT_START_TIMEOUT_SECONDS` — marked);
+every other const in the table is private, so its value is a published fact of
+this table, not a symbol to reference: sizing anything under one of those caps
+means hardcoding the number on the caller side.
 
 | Limit | Value | Why |
 |---|---|---|
