@@ -430,6 +430,41 @@ final class PermissionGateHookTest extends TestCase
     /**
      * @param array<string, mixed> $args
      */
+    public function testAThrowingPreToolUseHookBecomesANamedDenyAndLaterHooksNeverRun(): void
+    {
+        // S-O44: parity with postToolUse() — a throw is a refusal naming the
+        // hook, not an exception escaping the gate and ending the turn.
+        $registry = new HookRegistry();
+        $registry->register(new class () implements \SugarCraft\Code\Hooks\HookInterface {
+            public function name(): string
+            {
+                return 'buggy-guard';
+            }
+
+            public function event(): HookEvent
+            {
+                return HookEvent::PreToolUse;
+            }
+
+            public function matcher(): string
+            {
+                return '.*';
+            }
+
+            public function execute(HookContext $context): \SugarCraft\Code\Hooks\HookResult
+            {
+                throw new \RuntimeException('boom');
+            }
+        });
+
+        $result = (new HookManager($registry))->preToolUse($this->context('Bash', ['command' => 'ls']));
+
+        $this->assertTrue($result->isDenied());
+        $this->assertFalse($result->permitsExecution());
+        $this->assertSame('buggy-guard', $result->refusingHook());
+        $this->assertStringContainsString('hook failed: RuntimeException: boom', $result->message);
+    }
+
     private function context(string $tool, array $args): HookContext
     {
         return new HookContext(

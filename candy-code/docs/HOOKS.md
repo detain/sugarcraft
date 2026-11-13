@@ -333,9 +333,10 @@ the action has already happened:
   exit, a timeout, an exit-3 ask (there is nobody to ask after the call ran).
   A hook that *throws* counts too: it has vetted nothing, and the
   hooks queued behind it never run, so its reason reads
-  `hook failed: <exception class>: <message>`. Only `PostToolUse` contains a
-  throw this way; a `PreToolUse` hook that throws still ends the turn before
-  the call can run. On the Chat path a failed call's withheld text stays in its
+  `hook failed: <exception class>: <message>`. A `PreToolUse` hook that throws
+  is contained the same way: the call is refused (`Hook denied: hook failed:
+  ...`, naming the hook), never runs, and the turn continues with that refusal
+  as the tool result. On the Chat path a failed call's withheld text stays in its
   error slot, and the hook is shown the error text, as `Runtime` shows it
   `ToolResult::content()`.
 

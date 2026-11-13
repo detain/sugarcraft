@@ -206,18 +206,21 @@ final class PostToolUseAttributionTest extends TestCase
     }
 
     /**
-     * Only PostToolUse contains a throw: a PreToolUse chain that throws still
-     * propagates, as before, so the call is never dispatched.
+     * S-O44: a PreToolUse chain that throws is contained like PostToolUse's —
+     * a DENY naming the hook, so the call is never dispatched and the turn
+     * continues with the refusal.
      */
-    public function testAPreToolUseThrowStillPropagates(): void
+    public function testAPreToolUseThrowBecomesANamedDeny(): void
     {
         $this->registry->register(self::hook('broken-guard', static function (): HookResult {
             throw new \LogicException('guard crashed');
         }, HookEvent::PreToolUse));
 
-        $this->expectException(\LogicException::class);
-        $this->expectExceptionMessage('guard crashed');
-        (new HookManager($this->registry))->preToolUse(self::context());
+        $result = (new HookManager($this->registry))->preToolUse(self::context());
+
+        $this->assertTrue($result->isDenied());
+        $this->assertSame('broken-guard', $result->refusingHook());
+        $this->assertStringContainsString('guard crashed', $result->message);
     }
 
     // ---- C-TOOL-1: the failure bit rides to the chain -----------------------

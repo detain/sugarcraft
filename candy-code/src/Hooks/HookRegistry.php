@@ -505,9 +505,9 @@ final class HookRegistry
      * A HOOK THAT THROWS propagates out of this method — unless the caller
      * passes $failClosedOnThrow, in which case it is the refusal it amounts
      * to: a DENY whose message names the exception and whose
-     * {@see HookResult::$refusedBy} names the hook (audit R6). Only
-     * {@see HookManager::postToolUse()} asks for that; see the note in
-     * {@see scan()}.
+     * {@see HookResult::$refusedBy} names the hook (audit R6).
+     * {@see HookManager::preToolUse()} and {@see HookManager::postToolUse()}
+     * both ask for that; see the note in {@see scan()}.
      */
     public function executeHooks(string $event, HookContext $context, bool $failClosedOnThrow = false): HookResult
     {
@@ -982,9 +982,9 @@ final class HookRegistry
                 // already ran, so there is nothing to unwind and only what the
                 // model READS is left to decide) the throw is therefore the
                 // refusal it amounts to, stamped below with the name of the
-                // hook that threw. Every other event keeps propagating it: a
-                // PreToolUse throw stops the turn before the call can happen,
-                // and a lifecycle caller owns what its own failure means.
+                // hook that threw. PreToolUse asks for it too (the call is
+                // refused by name and the turn continues); the remaining
+                // lifecycle events keep propagating it unless they ask.
                 $result = HookResult::deny(HookResult::failureReason($e));
             }
 

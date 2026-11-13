@@ -371,7 +371,12 @@ final class HookManager
      */
     public function preToolUse(HookContext $context): HookResult
     {
-        return $this->noteHalt($this->registry->executeHooks(HookEvent::PreToolUse->value, $context));
+        // FAIL-CLOSED ON A THROW, like postToolUse(): a hook that throws has
+        // vetted nothing, so the call is refused with a named DENY
+        // (`hook failed: <class>: <message>`, refusedBy = the hook) and the
+        // user turn continues with that refusal as the tool result, instead of
+        // the exception escaping the gate and killing the turn.
+        return $this->noteHalt($this->registry->executeHooks(HookEvent::PreToolUse->value, $context, failClosedOnThrow: true));
     }
 
     /**

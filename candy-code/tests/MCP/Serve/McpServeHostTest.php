@@ -345,12 +345,10 @@ final class McpServeHostTest extends TestCase
         self::assertStringNotContainsString('hello serve', $reply['result']['content'][0]['text'], 'the originals the rewrite replaced must not run');
     }
 
-    public function testAThrowingHookAnswersInternalErrorAndTheStreamKeepsServing(): void
+    public function testAThrowingHookRefusesTheCallByNameAndTheStreamKeepsServing(): void
     {
-        // NIT-1: the -32603 keep-serving arm. preToolUse keeps a hook throw
-        // propagating (failClosedOnThrow is false for this chain), so the
-        // host's catch must answer JSON-RPC internal error ONCE and survive —
-        // a dead stream on a buggy hook is the DoS this arm exists against.
+        // S-O44: preToolUse is fail-closed on a throw, so the host answers a
+        // named DENY tool result (isError) rather than -32603, and survives.
         $this->chain->register(new class () implements HookInterface {
             public function name(): string
             {
@@ -374,8 +372,8 @@ final class McpServeHostTest extends TestCase
         });
 
         $reply = $this->serveAsk('t1', 'tools/call', ['name' => 'Read', 'arguments' => ['file_path' => $this->root . '/hello.txt']]);
-        self::assertSame(-32603, $reply['error']['code']);
-        self::assertStringContainsString('injected serve-chain explosion', $reply['error']['message']);
+        self::assertTrue($reply['result']['isError']);
+        self::assertStringContainsString('injected serve-chain explosion', $reply['result']['content'][0]['text']);
 
         // Still serving: the next request on the same host draws a normal frame.
         $after = $this->serveAsk('t2', 'ping');
