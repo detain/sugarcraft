@@ -80,11 +80,16 @@ use SugarCraft\Flappy\Support\Version;
 // Diagnostic flags answer before anything else runs — notably before the
 // one-time legacy migration below, which moves directories under $HOME and
 // must never be a side effect of asking a version.
-$usage = "candy-flappy — terminal flappy-bird clone\n\n"
+// flappy-10 (finding -060): the tagline never said what the game IS beyond a
+// clone (positioning contradicted README/composer/MATCHUPS), and --help
+// (GAP-08) never revealed how to play. Tagline + one how-to-play line.
+$usage = "candy-flappy — a Flappy-Bird-style game for the terminal\n\n"
     . "Usage:\n"
     . "  candy-flappy            Play\n"
     . "  candy-flappy --version  Print the version\n"
-    . "  candy-flappy -h, --help Show this help\n";
+    . "  candy-flappy -h, --help Show this help\n"
+    . "\n"
+    . "space/Enter/up/w flap · r restart · q/Esc quit — needs a 62x21 terminal\n";
 
 $flags = array_slice($argv ?? [], 1);
 if (in_array('--version', $flags, true)) {

@@ -51,6 +51,11 @@ final class BinFlagsTest extends TestCase
             self::assertStringContainsString('--version', $out);
             // M13: -h was a working flag the usage text never mentioned.
             self::assertStringContainsString('-h, --help', $out);
+            // flappy-10 (finding -060): help must position the game (no bare
+            // "clone" tagline) and teach the controls (GAP-08).
+            self::assertStringNotContainsString('clone', $out, 'the usage must not call the game a clone');
+            self::assertStringContainsString('62x21', $out, 'usage must state the terminal size it needs');
+            self::assertStringContainsString('flap', $out, 'usage must say how to play');
         }
     }
 
