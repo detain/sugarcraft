@@ -10,7 +10,7 @@ declare(strict_types=1);
  * inherited verbatim, so read those files' headers for the full reasoning.
  * The short form:
  *
- *   php -d phar.readonly=0 tools/build-phar.php [--out dist/candy-mail.phar] [--gz]
+ *   php -d phar.readonly=0 tools/build-phar.php [--out=dist/candy-mail.phar] [--gz]
  *
  * `-d phar.readonly=0` is BUILD-ONLY, never a runtime requirement.
  *
