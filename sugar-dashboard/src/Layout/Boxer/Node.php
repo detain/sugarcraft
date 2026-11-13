@@ -456,7 +456,7 @@ final class Node implements Item
      * @param array<string, Item> $modelMap
      * @return list<string>|SizeError
      */
-    private function renderVertical(array $modelMap): array|string
+    private function renderVertical(array $modelMap): array|string|SizeError
     {
         $childCount = count($this->children);
         if ($childCount === 0) {
@@ -510,7 +510,7 @@ final class Node implements Item
      * @param array<string, Item> $modelMap
      * @return list<string>|SizeError
      */
-    private function renderHorizontal(array $modelMap): array|string
+    private function renderHorizontal(array $modelMap): array|string|SizeError
     {
         $childCount = count($this->children);
         if ($childCount === 0) {
