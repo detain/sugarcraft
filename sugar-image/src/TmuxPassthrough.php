@@ -33,9 +33,27 @@ use SugarCraft\Image\Support\TmuxBinary;
  *    left alone (chicle-options.c:1811-1814 "don't mess with it if we
  *    don't have to"); anything else gets `set-option -p allow-passthrough on`
  *    and the prior value remembered.
- *  - {@see retire()} restores the remembered value, or `set-option -pu` —
- *    UNSET is restored with `-u` ONLY when the option was previously unset,
- *    never by writing a literal that tmux would keep as an explicit value.
+ *  - The child's EXIT CODE is part of the answer (SI-39): `0` is a current
+ *    value, `3` is tmux's `-q` grammar for a known-but-unset option, and
+ *    anything else (an unknown option, an unresolvable pane target, a dead
+ *    server) is NOT-INFORMATIVE — never silently misread as "unset".
+ *  - On a non-informative pane answer, ensure() makes ONE documented
+ *    fallback attempt at the session-GLOBAL scope (`show-options -gqv` /
+ *    `set-option -g`), for servers and attach contexts where the pane
+ *    scope is unusable but the option itself is alive. The fallback is a
+ *    wider blast radius — every window of the server, for the life of the
+ *    render — so it runs only after the pane scope refuses to answer,
+ *    and {@see retire()} restores it under exactly the same ledger law
+ *    (`-gu` clears a previously-unset global, a remembered value is
+ *    re-`set` on the same scope it was read from). A DEAD TRANSPORT (no
+ *    binary, deadline overrun, flood) is scope-agnostic — one socket
+ *    serves both scopes — so it is never retried. If neither scope can
+ *    answer, ensure() returns false WITHOUT attempting any write:
+ *    exit-aware silence, not a fabricated set-and-fail dance.
+ *  - {@see retire()} restores the remembered value on the scope the
+ *    transaction landed, or unsets it with `-u` — UNSET is restored with
+ *    `-u` ONLY when the option was previously unset, never by writing a
+ *    literal that tmux would keep as an explicit value.
  *  - A process-lifetime restore is registered with `register_shutdown_function()`
  *    the first time a change lands, so a caller that forgets to retire still
  *    leaves the pane as it found it (chicle keeps the same guarantee via its
@@ -67,6 +85,18 @@ final class TmuxPassthrough
 
     /** Hard cap on captured stdout before the child is killed (answers are short). */
     private const MAX_OUTPUT_BYTES = 65536;
+
+    /** Scope flag of a pane-targeted transaction (the primary, least-surprise scope). */
+    private const SCOPE_PANE = 'p';
+
+    /** Scope flag of the documented global fallback (wider blast radius, SI-39). */
+    private const SCOPE_GLOBAL = 'g';
+
+    /** tmux `-q` grammar: exit code for a KNOWN option that is currently unset. */
+    private const EXIT_KNOWN_UNSET = 3;
+
+    /** Which scope the open transaction actually owns; reset when it closes. */
+    private static string $scope = self::SCOPE_PANE;
 
     /** True once ensure() has completed for this process (idempotence latch). */
     private static bool $applied = false;
@@ -108,12 +138,29 @@ final class TmuxPassthrough
             return true;
         }
 
-        $shown = self::runTmux(['show-options', '-pqv', self::OPTION]);
-        if ($shown === null) {
-            return false; // exec-level failure: the tmux binary or server is unusable
+        // Exit-aware answer legs (SI-39): the pane child's exit code is part
+        // of the answer — 0 carries the value, 3 is tmux's `-q` grammar for
+        // a KNOWN-but-unset option, anything else (unknown option,
+        // unresolvable target, dead server) is NOT-INFORMATIVE and earns ONE
+        // documented global-scope retry instead of being misread as "was
+        // unset" and paying a fabricated set-write. A dead transport (null:
+        // binary refused, deadline, flood) is scope-agnostic — the same
+        // socket would serve both — so it ends the story with zero writes.
+        $answer = self::showOption(self::SCOPE_PANE);
+        if ($answer === null) {
+            return false;
+        }
+        if ($answer[0]) {
+            self::$scope = self::SCOPE_PANE;
+        } else {
+            $answer = self::showOption(self::SCOPE_GLOBAL);
+            if ($answer === null || !$answer[0]) {
+                return false; // neither scope can answer: no write is even tried
+            }
+            self::$scope = self::SCOPE_GLOBAL;
         }
 
-        $value = trim($shown['stdout']);
+        $value = $answer[1];
         $wasUnset = $value === '';
         if (!$wasUnset && !in_array($value, self::KNOWN_VALUES, true)) {
             return false; // an answer we cannot restore faithfully — hands off
@@ -123,7 +170,9 @@ final class TmuxPassthrough
             return true; // already fine; leave the option exactly as found
         }
 
-        $set = self::runTmux(['set-option', '-p', self::OPTION, 'on']);
+        $set = self::$scope === self::SCOPE_PANE
+            ? self::runTmux(['set-option', '-p', self::OPTION, 'on'])
+            : self::runTmux(['set-option', '-g', self::OPTION, 'on']);
         if ($set === null || $set['exit'] !== 0) {
             return false;
         }
@@ -160,9 +209,15 @@ final class TmuxPassthrough
             return true;
         }
 
-        $restore = self::$original === null
-            ? ['set-option', '-pu', self::OPTION]
-            : ['set-option', '-p', self::OPTION, self::$original];
+        $restore = match (true) {
+            self::$scope === self::SCOPE_GLOBAL && self::$original === null
+                => ['set-option', '-gu', self::OPTION],
+            self::$scope === self::SCOPE_GLOBAL
+                => ['set-option', '-g', self::OPTION, self::$original],
+            self::$original === null
+                => ['set-option', '-pu', self::OPTION],
+            default => ['set-option', '-p', self::OPTION, self::$original],
+        };
 
         $done = self::runTmux($restore);
         if ($done === null || $done['exit'] !== 0) {
@@ -172,6 +227,7 @@ final class TmuxPassthrough
         self::$applied = false;
         self::$changed = false;
         self::$original = null;
+        self::$scope = self::SCOPE_PANE;
 
         return true;
     }
@@ -183,6 +239,34 @@ final class TmuxPassthrough
     public static function isApplied(): bool
     {
         return self::$applied;
+    }
+
+    /**
+     * Ask one scope for the option value, honouring tmux's exit grammar.
+     *
+     * @return array{0:bool,1:string}|null [informative, value]; null when
+     *     the transport itself is dead (exec refused, deadline, flood) —
+     *     that failure is scope-agnostic and must not be retried. The
+     *     [false,''] arm is an INFORMED refusal: the child ran and answered
+     *     with an exit that is neither 0 (value) nor 3 (known-but-unset
+     *     under -q), which is what makes SI-39's global fallback sound.
+     */
+    private static function showOption(string $scope): ?array
+    {
+        $shown = self::runTmux($scope === self::SCOPE_PANE
+            ? ['show-options', '-pqv', self::OPTION]
+            : ['show-options', '-gqv', self::OPTION]);
+        if ($shown === null) {
+            return null;
+        }
+        if ($shown['exit'] === 0) {
+            return [true, trim($shown['stdout'])];
+        }
+        if ($shown['exit'] === self::EXIT_KNOWN_UNSET) {
+            return [true, ''];
+        }
+
+        return [false, ''];
     }
 
     /**

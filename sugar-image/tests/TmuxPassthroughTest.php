@@ -30,6 +30,9 @@ final class TmuxPassthroughTest extends TestCase
     /** One show-options query, as the product emits it. */
     private const SHOW_CALL = 'show-options -pqv allow-passthrough';
 
+    /** The documented global-scope fallback query, as the product emits it. */
+    private const GLOBAL_SHOW_CALL = 'show-options -gqv allow-passthrough';
+
     /** One pane-scoped flip-on, as the product emits it. */
     private const SET_CALL = 'set-option -p allow-passthrough on';
 
@@ -39,6 +42,7 @@ final class TmuxPassthroughTest extends TestCase
     private string $dir;
     private string $log;
     private string $state;
+    private string $gstate;
     private ?string $pathBackup = null;
     private ?string $tmuxBackup = null;
     private ?string $kittyBackup = null;
@@ -58,6 +62,7 @@ final class TmuxPassthroughTest extends TestCase
         mkdir($this->dir, 0700);
         $this->log = $this->dir . '/calls.log';
         $this->state = $this->dir . '/option';
+        $this->gstate = $this->dir . '/option-g';
 
         $this->plantFakeTmux($this->quietFakeScript());
         putenv('TMUX=/tmp/fake.sock,1.0');
@@ -82,9 +87,13 @@ final class TmuxPassthroughTest extends TestCase
         $this->restoreEnv(\SugarCraft\Image\Support\TmuxBinary::ENV_OVERRIDE, $this->binaryBackup);
         putenv('FAKE_TMUX_LOG');
         putenv('FAKE_TMUX_STATE');
+        putenv('FAKE_TMUX_GSTATE');
         putenv('FAKE_TMUX_DIR');
         putenv('FAKE_TMUX_SHOW_EXIT');
         putenv('FAKE_TMUX_SET_EXIT');
+        putenv('FAKE_TMUX_PANE_SHOW_EXIT');
+        putenv('FAKE_TMUX_GLOBAL_SHOW_EXIT');
+        putenv('FAKE_TMUX_GLOBAL_SET_EXIT');
 
         foreach ((array) scandir($this->dir) as $entry) {
             if ($entry !== '.' && $entry !== '..' && is_file($this->dir . '/' . $entry)) {
@@ -201,14 +210,80 @@ final class TmuxPassthroughTest extends TestCase
 
     public function testADeadServerAttemptsTheSetThenStopsWithoutHoldingState(): void
     {
-        // show answers exit!=0 with EMPTY output (no current pane / dead
-        // server): the transaction may still try the set — when THAT also
-        // answers failure, the fail-soft law ends the story with no state.
+        // SI-39 re-anchor (disclosed contract flip this row owns): show
+        // answers exit=1, the NOT-INFORMATIVE error arm — NOT the tmux -q
+        // "known-but-unset" (exit 3). The fabricated set-write this leg
+        // used to perform on pre-pane-option and unresolvable-target
+        // servers is gone: the global fallback answers the same story and
+        // the fail-soft law ends with no write at all. Same honest false,
+        // one fewer child.
         putenv('FAKE_TMUX_SHOW_EXIT=1');
         putenv('FAKE_TMUX_SET_EXIT=1');
         $this->assertFalse(TmuxPassthrough::ensure());
         $this->assertFalse(TmuxPassthrough::isApplied());
-        $this->assertCount(2, $this->calls(), 'show, then one rejected set — and no retry storm');
+        $this->assertSame([self::SHOW_CALL, self::GLOBAL_SHOW_CALL], $this->calls(),
+            'both exit-aware show legs are asked, and NO set-option write lands against a server that cannot answer');
+    }
+
+    public function testAPaneScopeErrorFallsBackToTheGlobalOptionOnce(): void
+    {
+        // The scenario SI-39 exists for: pane scope refuses (unknown flag
+        // or unresolvable target) while the option itself is alive at
+        // global scope. One documented fallback, restore under the same
+        // ledger law on the SAME scope it was read from.
+        putenv('FAKE_TMUX_PANE_SHOW_EXIT=1');
+        file_put_contents($this->gstate, 'off');
+
+        $this->assertTrue(TmuxPassthrough::ensure());
+        $this->assertSame([self::SHOW_CALL, self::GLOBAL_SHOW_CALL, 'set-option -g allow-passthrough on'], $this->calls());
+
+        $this->assertTrue(TmuxPassthrough::retire());
+        $this->assertSame('set-option -g allow-passthrough off', $this->calls()[3], 'remembered value re-sets on the global scope');
+        $this->assertSame('off', file_get_contents($this->gstate));
+        $this->assertFalse(TmuxPassthrough::isApplied());
+    }
+
+    public function testTheGlobalFallbackClearsOnlyAGlobalItFoundUnset(): void
+    {
+        // Exit 3 under -q is tmux for "known option, not set": the unset
+        // polarity law travels with the scope — a previously-UNSET global
+        // restores with -gu, never a literal.
+        putenv('FAKE_TMUX_PANE_SHOW_EXIT=1');
+        putenv('FAKE_TMUX_GLOBAL_SHOW_EXIT=3');
+
+        $this->assertTrue(TmuxPassthrough::ensure());
+        $this->assertSame([self::SHOW_CALL, self::GLOBAL_SHOW_CALL, 'set-option -g allow-passthrough on'], $this->calls());
+
+        $this->assertTrue(TmuxPassthrough::retire());
+        $this->assertSame('set-option -gu allow-passthrough', $this->calls()[3]);
+        $this->assertFileDoesNotExist($this->gstate);
+    }
+
+    public function testBothScopesRefusingToAnswerWriteNothingAtAll(): void
+    {
+        // The fabricated-failure arm, exit-aware: pane errors AND global
+        // errors — zero writes, zero held state, one honest false.
+        putenv('FAKE_TMUX_PANE_SHOW_EXIT=1');
+        putenv('FAKE_TMUX_GLOBAL_SHOW_EXIT=1');
+        $this->assertFalse(TmuxPassthrough::ensure());
+        $this->assertFalse(TmuxPassthrough::isApplied());
+        $this->assertSame([self::SHOW_CALL, self::GLOBAL_SHOW_CALL], $this->calls());
+    }
+
+    public function testAGlobalAlreadyPassingValueIsLeftAloneToo(): void
+    {
+        // "Don't mess with it if we don't have to" applies on the fallback
+        // scope identically: an already-all global ends the transaction at
+        // two reads with nothing to restore.
+        putenv('FAKE_TMUX_PANE_SHOW_EXIT=1');
+        file_put_contents($this->gstate, 'all');
+
+        $this->assertTrue(TmuxPassthrough::ensure());
+        $this->assertSame([self::SHOW_CALL, self::GLOBAL_SHOW_CALL], $this->calls());
+
+        $this->assertTrue(TmuxPassthrough::retire());
+        $this->assertCount(2, $this->calls());
+        $this->assertSame('all', file_get_contents($this->gstate));
     }
 
     public function testAHangingChildIsKilledAndTheEnsureFailsSoftWithinBudget(): void
@@ -269,23 +344,42 @@ final class TmuxPassthroughTest extends TestCase
 
     private function quietFakeScript(): string
     {
+        // Scope-aware fake: -p arms read/write the pane sidecar, -g arms the
+        // global one, each with its own exit override (defaulting to the
+        // shared knob so every pre-SI-39 pin keeps its exact scenario).
         return <<<'SH'
 #!/bin/sh
 echo "$*" >> "$FAKE_TMUX_LOG"
 case "$1" in
   show-options)
+    scope=p
+    for arg in "$@"; do
+      case "$arg" in -g*) scope=g ;; esac
+    done
+    if [ "$scope" = g ]; then
+      if [ -f "$FAKE_TMUX_GSTATE" ]; then cat "$FAKE_TMUX_GSTATE"; fi
+      exit ${FAKE_TMUX_GLOBAL_SHOW_EXIT:-${FAKE_TMUX_SHOW_EXIT:-0}}
+    fi
     if [ -f "$FAKE_TMUX_STATE" ]; then cat "$FAKE_TMUX_STATE"; fi
-    exit ${FAKE_TMUX_SHOW_EXIT:-0}
+    exit ${FAKE_TMUX_PANE_SHOW_EXIT:-${FAKE_TMUX_SHOW_EXIT:-0}}
     ;;
   set-option)
     shift
+    scope=p
     cleared=0
     while [ "${1#-}" != "$1" ]; do
       case "$1" in
         *-u*) cleared=1 ;;
+        -g*) scope=g ;;
       esac
       shift
     done
+    target="$FAKE_TMUX_STATE"
+    if [ "$scope" = g ]; then
+      target="$FAKE_TMUX_GSTATE"
+      if [ "$cleared" = 1 ] || [ -z "$2" ]; then rm -f "$target"; else printf '%s' "$2" > "$target"; fi
+      exit ${FAKE_TMUX_GLOBAL_SET_EXIT:-${FAKE_TMUX_SET_EXIT:-0}}
+    fi
     if [ "$cleared" = 1 ] || [ -z "$2" ]; then
       rm -f "$FAKE_TMUX_STATE"
     else
@@ -330,6 +424,7 @@ SH;
         putenv('FAKE_TMUX_DIR=' . $this->dir);
         putenv('FAKE_TMUX_LOG=' . $this->log);
         putenv('FAKE_TMUX_STATE=' . $this->state);
+        putenv('FAKE_TMUX_GSTATE=' . $this->gstate);
         putenv(\SugarCraft\Image\Support\TmuxBinary::ENV_OVERRIDE . '=' . $this->dir . '/tmux');
     }
 
