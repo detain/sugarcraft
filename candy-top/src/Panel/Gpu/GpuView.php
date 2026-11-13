@@ -132,7 +132,7 @@ final class GpuView
             $x += $box->ansi($x, $row, PositionMeter::render($ink, max(1, $bw - ($pstate !== null ? 25 : 12)), $pwr, 'cached'), $mainFg . Symbols::BOLD);
             $precision = $device->watts < 10 ? 2 : ($device->watts < 100 ? 1 : 0);
             $x += $box->put($x, $row, sprintf('%5.' . $precision . 'f', $device->watts), $ink->gradient('cached', self::pct($pwr)));
-            $x += $box->put($x, $row, 'W', $mainFg);
+            $x += $box->put($x, $row, ltrim(Lang::t('unit.watts')), $mainFg);
             if ($pstate !== null) {
                 $x += $box->put($x, $row, ' ' . Lang::t('gpu.pstate') . ' ' . ($pstate > 9 ? '' : ' ') . 'P', $mainFg);
                 $box->put($x, $row, (string) $pstate, $ink->gradient('cached', self::pct($pstate)));

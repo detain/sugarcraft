@@ -804,7 +804,7 @@ final class ProcView
         if (str_ends_with($memStr, '.')) {
             $memStr = substr($memStr, 0, -1);
         }
-        $label = self::rjust(($fit > 4 ? Lang::t('proc.detail.memory') . ' ' : Lang::t('proc.detail.memory_short')) . self::rjust($memStr, 4) . '% ', max(0, $third - 2));
+        $label = self::rjust(($fit > 4 ? Lang::t('proc.detail.memory') . ' ' : Lang::t('proc.detail.memory_short')) . self::rjust($memStr, 4) . Lang::t('unit.percent') . ' ', max(0, $third - 2));
         $mx = $lx + $r->put($lx, 4, $label, $title . self::BOLD);
         $bg = DualSampleGraph::SYMBOLS[$family . '_up'][6];
         $cells = array_fill(0, $third, null);

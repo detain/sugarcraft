@@ -482,7 +482,7 @@ final class CpuView
                 $precision = $g->watts < 10 ? 2 : ($g->watts < 100 ? 1 : 0);
                 $write(' ');
                 $write(sprintf('%4.' . $precision . 'f', $g->watts), $ink->gradient('cached', max(0, min(100, $pwr))));
-                $write('W', $mainFg);
+                $write(ltrim(Lang::t('unit.watts')), $mainFg);
             }
             if ($cy > $c->height - 1) {
                 break;
