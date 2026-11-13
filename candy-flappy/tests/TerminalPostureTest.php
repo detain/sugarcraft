@@ -13,6 +13,7 @@ use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Flappy\Game;
+use SugarCraft\Flappy\Pipe;
 use SugarCraft\Flappy\Tests\Support\UsesHermeticConfig;
 
 /**
@@ -372,6 +373,34 @@ final class TerminalPostureTest extends TestCase
                 substr($en['ui.plain_crash_floor'], 0, -2),
                 $plainStatus,
                 'a clipped hint remnant must not ride the plain row',
+            );
+        }
+    }
+
+    public function testPlainBoardWallsMapBlockedAndGapRows(): void
+    {
+        // flappy-86 integrity pin (surfaced by mutation probing): the plain
+        // cell loop moved onto the wallRows precompute, yet NOTHING
+        // asserted that a pipe column draws '#' on blocked rows and stays
+        // open on gap rows in the Ascii posture — the goldens all run the
+        // colour path, and an inverted blocked/gap lookup slipped through
+        // the whole suite. This reddens that inversion (and any other drift
+        // of the map, column by column, against the single source
+        // collides()).
+        $pipe = new Pipe(20, 9, 5);
+        $g = new Game(
+            bird: $this->sized(80, 24)->bird,
+            pipes: [$pipe],
+            configDir: $this->hermeticConfigDir(),
+        );
+        [$plain,] = $g->update(new ColorProfileMsg(ColorProfile::Ascii));
+        $lines = explode("\n", $plain->view());
+        for ($y = 0; $y < Game::HEIGHT; $y++) {
+            $cell = substr((string) $lines[1 + $y], 21, 1);
+            $this->assertSame(
+                $pipe->collides(20, $y) === true ? '#' : ' ',
+                $cell,
+                "plain board row $y at the pipe column",
             );
         }
     }

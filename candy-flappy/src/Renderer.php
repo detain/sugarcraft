@@ -210,6 +210,20 @@ final class Renderer
         $birdX = $g->bird->x;
         $birdRow = $g->bird->row();
 
+        // flappy-86 (finding -078): mechanical port of M23's wallRows
+        // precompute — one collides() pass per pipe per row instead of a
+        // pipe rescan inside every cell (~4.3k checks/frame saved), the
+        // shape renderColor already runs. Pure internal reshape: the bytes
+        // per cell are decided exactly as before.
+        $wallRows = [];
+        foreach ($g->pipes as $p) {
+            $blocked = [];
+            for ($y = 0; $y < $h; $y++) {
+                $blocked[$y] = $p->collides($p->x, $y);
+            }
+            $wallRows[$p->x] = $blocked;
+        }
+
         $rows = [];
         $rows[] = '+' . str_repeat('-', $w) . '+';
         for ($y = 0; $y < $h; $y++) {
@@ -219,14 +233,7 @@ final class Renderer
                     $line .= $g->crashed === true ? 'x' : '>';
                     continue;
                 }
-                $cell = ' ';
-                foreach ($g->pipes as $p) {
-                    if ($p->x !== $x) {
-                        continue;
-                    }
-                    $cell = $p->collides($x, $y) === true ? '#' : ' ';
-                    break;
-                }
+                $cell = isset($wallRows[$x]) && $wallRows[$x][$y] === true ? '#' : ' ';
                 if ($cell === ' ' && ($x + $g->tickIndex) % 12 === 0 && ($y % 5) === 2) {
                     $cell = '.';
                 }
