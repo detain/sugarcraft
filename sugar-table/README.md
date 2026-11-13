@@ -1108,8 +1108,8 @@ forgotten `return` is announced at the first frame, never silently inherited.
 | `9`  | strikethrough | `38;5;n` / `48;5;n` | xterm-256 fg/bg (expanded to 24-bit) |
 
 Anything outside this table's vocabulary is dropped at parse time — the
-recognised set is what `Style` carries, and `Table::normalizeStyleResult()`
-funnels every styleFunc return into it.
+recognised set is what `Style` carries; `withStyleFunc()` returns are folded
+into it whatever their accepted form.
 
 ## Snapshot tests
 
