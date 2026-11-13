@@ -288,8 +288,8 @@ final class FlexboxTest extends TestCase
         // ('Bob') through the sort to index 1 (FBX-26 follow law), and
         // asking explicitly is how you get the head row.
         $this->assertSame(1, $t->cursor());
-        $this->assertSame('Bob', $t->currentRow()[0]);
-        $this->assertSame('Alice', $t->withCursor(0)->currentRow()[0]);
+        $this->assertSame('Bob', $t->rawCurrentRow()[0]);
+        $this->assertSame('Alice', $t->withCursor(0)->rawCurrentRow()[0]);
     }
 
     public function testTableSortByNumeric(): void
@@ -303,7 +303,7 @@ final class FlexboxTest extends TestCase
 
         $rows = [];
         for ($i = 0; $i < $t->rowCount(); $i++) {
-            $rows[] = $t->setCursor($i)->currentCell(0);
+            $rows[] = $t->setCursor($i)->rawCurrentCell(0);
         }
 
         $this->assertSame('15', $rows[0]);
@@ -344,9 +344,9 @@ final class FlexboxTest extends TestCase
             ->addRow(['Bob'])
             ->addRow(['Carol']);
 
-        $this->assertSame('Alice', $t->currentRow()[0]);
+        $this->assertSame('Alice', $t->rawCurrentRow()[0]);
         $t = $t->setCursor(1);
-        $this->assertSame('Bob', $t->currentRow()[0]);
+        $this->assertSame('Bob', $t->rawCurrentRow()[0]);
     }
 
     public function testTableRender(): void
@@ -386,11 +386,11 @@ final class FlexboxTest extends TestCase
         // row ('Bob', the default index 0) through the sort to index 1
         // (FBX-26 follow law).
         $this->assertSame(1, $t->cursor());
-        $this->assertSame('Bob', $t->currentRow()[0]);
+        $this->assertSame('Bob', $t->rawCurrentRow()[0]);
 
         $t = $t->sortByNext(0);  // toggle to desc: Bob, Alice — 'Bob' heads it
         $this->assertSame(0, $t->cursor());
-        $this->assertSame('Bob', $t->currentRow()[0]);
+        $this->assertSame('Bob', $t->rawCurrentRow()[0]);
     }
 
     /**
@@ -429,8 +429,8 @@ final class FlexboxTest extends TestCase
             ->addColumn(Column::make('City', 10))
             ->addRow(['Alice', 'NYC']);
 
-        $this->assertSame('Alice', $t->currentCell(0));
-        $this->assertSame('NYC', $t->currentCell(1));
+        $this->assertSame('Alice', $t->rawCurrentCell(0));
+        $this->assertSame('NYC', $t->rawCurrentCell(1));
     }
 
     public function testTableWithCursorStyle(): void
@@ -493,7 +493,7 @@ final class FlexboxTest extends TestCase
         // An empty view is the one honest null source.
         $t = (new Table())->addColumn(Column::make('Name', 10));
 
-        $this->assertNull($t->currentCell(0));
+        $this->assertNull($t->rawCurrentCell(0));
     }
 
     // ---- Column sort accessor tests ----------------------------------------

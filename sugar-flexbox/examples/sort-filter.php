@@ -57,10 +57,10 @@ echo "=== After sortByNext() (Name asc) then setCursor(2) ===\n";
 echo $table->render();
 echo "\n";
 
-// currentRow()/currentCell() hand back the STORED strings raw — the
+// rawCurrentRow()/rawCurrentCell() hand back the STORED strings — the
 // sanitize sweep belongs to render(), not the accessors. This demo only
 // echoes its own program-generated rows, which is exactly the trusted
 // case the README trust-boundary section describes; with user-supplied
 // cells, sweep the values (or render() instead) before printing them.
-echo "cursor row: " . json_encode($table->currentRow()) . ", col0: {$table->currentCell(0)}\n";
+echo "cursor row: " . json_encode($table->rawCurrentRow()) . ", col0: {$table->rawCurrentCell(0)}\n";
 echo "total rows: {$table->rowCount()}, cols: {$table->colCount()}\n";

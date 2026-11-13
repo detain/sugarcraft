@@ -187,7 +187,7 @@ final class TableTest extends TestCase
             ->sortBy(0, false); // descending: 'B' moves to the top
 
         $this->assertSame(0, $t->cursor());
-        $this->assertSame(['B'], $t->currentRow());
+        $this->assertSame(['B'], $t->rawCurrentRow());
     }
 
     // ---- filter -----------------------------------------------------------
@@ -285,7 +285,7 @@ final class TableTest extends TestCase
             ->filter('lice');
 
         $this->assertSame(0, $t->cursor());
-        $this->assertSame(['Alice'], $t->currentRow());
+        $this->assertSame(['Alice'], $t->rawCurrentRow());
     }
 
     public function testFilterFallsBackToRowZeroWhenSelectionIsFilteredAway(): void
@@ -298,7 +298,7 @@ final class TableTest extends TestCase
             ->filter('A');
 
         $this->assertSame(0, $t->cursor());
-        $this->assertSame(['A'], $t->currentRow());
+        $this->assertSame(['A'], $t->rawCurrentRow());
     }
 
     // ---- withRow arity ---------------------------------------------------
@@ -341,7 +341,7 @@ final class TableTest extends TestCase
             ->addColumn(Column::make('City', 10))
             ->withRow(['Alice']);
 
-        $this->assertSame(['Alice'], $t->currentRow());
+        $this->assertSame(['Alice'], $t->rawCurrentRow());
 
         $lines = $t->buildLines();
         $this->assertSame(
@@ -351,7 +351,7 @@ final class TableTest extends TestCase
         );
     }
 
-    // ---- currentRow / currentCell ----------------------------------------
+    // ---- rawCurrentRow / rawCurrentCell ----------------------------------------
 
     public function testCursorAnswersNullOnlyForAnEmptyView(): void
     {
@@ -361,7 +361,7 @@ final class TableTest extends TestCase
         $t = (new Table())->addColumn(Column::make('Name', 10));
 
         $this->assertNull($t->cursor());
-        $this->assertNull($t->currentRow());
+        $this->assertNull($t->rawCurrentRow());
     }
 
     public function testCursorDoorRefusesAnIndexPastTheEnd(): void
@@ -407,31 +407,31 @@ final class TableTest extends TestCase
             ->addRow(['C']);
 
         $this->assertSame(2, $t->withCursor(2)->cursor());
-        $this->assertSame(['C'], $t->withCursor(2)->currentRow());
+        $this->assertSame(['C'], $t->withCursor(2)->rawCurrentRow());
         // The accessor answers about the receiver too — pending state is
         // settled before the answer, same law as currentRow().
         $filtered = $t->withFilter('B'); // one row survives: 'B' at index 0
         $this->assertSame(0, $filtered->cursor());
     }
 
-    public function testCurrentCellReturnsNullForInvalidColumn(): void
+    public function testRawCurrentCellAnswersNullForInvalidColumn(): void
     {
         $t = (new Table())
             ->addColumn(Column::make('Name', 10))
             ->addRow(['Alice']);
 
-        $this->assertNull($t->currentCell(99));
+        $this->assertNull($t->rawCurrentCell(99));
     }
 
-    public function testCurrentCellReturnsValue(): void
+    public function testRawCurrentCellReturnsValue(): void
     {
         $t = (new Table())
             ->addColumn(Column::make('Name', 10))
             ->addColumn(Column::make('City', 10))
             ->addRow(['Alice', 'NYC']);
 
-        $this->assertSame('Alice', $t->currentCell(0));
-        $this->assertSame('NYC', $t->currentCell(1));
+        $this->assertSame('Alice', $t->rawCurrentCell(0));
+        $this->assertSame('NYC', $t->rawCurrentCell(1));
     }
 
     // ---- withCursorStyle / withHeaderStyle -------------------------------
@@ -618,14 +618,14 @@ final class TableTest extends TestCase
             ->addRow(['bo'])
             ->setCursor(1)          // 'bo'
             ->addRow(['cy']);       // streaming append: index untouched
-        $this->assertSame(['bo'], $t->currentRow(), 'append must not move the selection');
+        $this->assertSame(['bo'], $t->rawCurrentRow(), 'append must not move the selection');
 
         $sorted = $t->withSort(0, false); // desc: cy, bo, ann — 'bo' moves to 1? it's already 1
         $this->assertSame(1, $sorted->cursor());
-        $this->assertSame(['bo'], $sorted->currentRow());
+        $this->assertSame(['bo'], $sorted->rawCurrentRow());
 
         $flipped = $t->withSort(0, true); // asc: ann, bo, cy — 'bo' at 1 both ways; pick a moving case
-        $this->assertSame(['bo'], $flipped->currentRow());
+        $this->assertSame(['bo'], $flipped->rawCurrentRow());
 
         $moved = Table::new()
             ->addColumn(Column::new('Name', 8))
@@ -634,11 +634,11 @@ final class TableTest extends TestCase
             ->setCursor(0)              // 'ann' at 0
             ->withSort(0, false);       // desc: bo, ann — 'ann' moved to 1
         $this->assertSame(1, $moved->cursor(), 'the selection must travel with its row');
-        $this->assertSame(['ann'], $moved->currentRow());
+        $this->assertSame(['ann'], $moved->rawCurrentRow());
 
         $dropped = $moved->withFilter('bo'); // 'ann' gone — selection falls to 0
         $this->assertSame(0, $dropped->cursor());
-        $this->assertSame(['bo'], $dropped->currentRow());
+        $this->assertSame(['bo'], $dropped->rawCurrentRow());
     }
 
     public function testSortByOutOfRangeIndexIsRefused(): void
@@ -683,7 +683,7 @@ final class TableTest extends TestCase
             ->addRow([42])
             ->addRow([true]);
         $this->assertSame(3, $t->rowCount());
-        $this->assertSame(['typed'], $t->currentRow());
+        $this->assertSame(['typed'], $t->rawCurrentRow());
     }
 
     public function testHeaderTitlesCannotCarryTerminalControlSequences(): void
@@ -718,8 +718,8 @@ final class TableTest extends TestCase
         // FBX-26 follow law: the standing selection rode its row ('10')
         // through the whole mixed chain — after desc sort + filter the
         // view is ['100'], ['10'], so the cursor sits at index 1.
-        $this->assertSame(['10'], $t->currentRow());
-        $this->assertSame('100', $t->withCursor(0)->currentCell(0), 'the settled view still heads with 100');
+        $this->assertSame(['10'], $t->rawCurrentRow());
+        $this->assertSame('100', $t->withCursor(0)->rawCurrentCell(0), 'the settled view still heads with 100');
     }
 
     // ---- no-match vs no-data (FBX-41) -----------------------------------
@@ -915,7 +915,7 @@ final class TableTest extends TestCase
         // fall to Region DESC — 'south' before 'north'.
         $this->assertSame(
             [['Berlin', 'north', 'x'], ['Paris', 'south', 'x'], ['Paris', 'north', 'x']],
-            array_map(static fn(int $i): array => $t->currentRow() ?? [], [])
+            array_map(static fn(int $i): array => $t->rawCurrentRow() ?? [], [])
                 ?: array_values(array_map(
                     static fn(string $line): array => array_map('trim', explode(' │ ', $line)),
                     array_slice($t->buildLines(), 2)

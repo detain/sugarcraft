@@ -166,7 +166,7 @@ $atCursor = $filtered
     ->withCursor(0);             // cursor row of the materialized view
 
 echo $atCursor->render();
-echo $atCursor->currentCell(0), "\n";
+echo $atCursor->rawCurrentCell(0), "\n";
 ```
 
 The cursor is guarded at its door: `withCursor()` throws unless the index
@@ -174,8 +174,8 @@ addresses the settled materialized view (a pending sort or filter is resolved
 first). Sorting and filtering carry the selection with the row it stood on —
 matched by stored cell values, the first identical row wins — and a selection
 whose row a filter drops lands back at row 0. `cursor()` answers the raw index
-(`null` only while the view holds no rows); `currentRow()` and `currentCell()`
-answer that row's stored values or `null`.
+(`null` only while the view holds no rows); `rawCurrentRow()` and
+`rawCurrentCell()` answer that row's stored values or `null`.
 
 ## Viewport Quick Start
 
@@ -221,11 +221,13 @@ the render-time sweep replaces control characters. Control bytes inside
 content therefore still consume measured cells even though the printed frame
 carries the swept text.
 
-The cursor reads break the sweep the other way: `Table::currentRow()` and
-`Table::currentCell()` answer with the stored strings **as given** — the
-sanitize pass belongs to `render()`, not to the accessors — so a value that
-came from an untrusted row must be cleaned by you before it is echoed or
-logged.
+The cursor reads break the sweep the other way: `Table::rawCurrentRow()` and
+`Table::rawCurrentCell()` answer with the stored strings **as given** — the
+sanitize pass belongs to `render()`, not to the accessors — which is exactly
+why the `raw` word sits in their names (they used to be the benign
+`currentRow()`/`currentCell()`; those remain as pinned deprecated forwarders
+until 2.0.0). A value that came from an untrusted row must be cleaned by you
+before it is echoed or logged.
 
 ## Buffer diffing (TableRenderer)
 
@@ -297,6 +299,8 @@ sugar-flexbox v2.0.0. Migrating is a name swap with no behavior change:
 | `Flexbox\Table` | `Table` | `sortBy()` | `withSort()` |
 | `Flexbox\Table` | `Table` | `filter()` | `withFilter()` |
 | `Flexbox\Table` | `Table` | `setCursor()` | `withCursor()` |
+| `Flexbox\Table` | `Table` | `currentRow()` | `rawCurrentRow()` |
+| `Flexbox\Table` | `Table` | `currentCell()` | `rawCurrentCell()` |
 
 ## License
 

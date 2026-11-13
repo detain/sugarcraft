@@ -45,6 +45,10 @@ final class AccessorDeprecationTest extends TestCase
             'Table::sortBy' => [Table::class, 'sortBy', 'withSort', [0, true], 'equal'],
             'Table::filter' => [Table::class, 'filter', 'withFilter', ['li'], 'equal'],
             'Table::setCursor' => [Table::class, 'setCursor', 'withCursor', [0], 'equal'],
+            // The trust-renamed pair (FBX-49): forwarders answer with the
+            // exact stored strings, structurally identical to the raw* twins.
+            'Table::currentRow' => [Table::class, 'currentRow', 'rawCurrentRow', [], 'same'],
+            'Table::currentCell' => [Table::class, 'currentCell', 'rawCurrentCell', [0], 'same'],
         ];
     }
 
@@ -165,7 +169,7 @@ final class AccessorDeprecationTest extends TestCase
         sort($found);
         sort($expected);
         $this->assertSame($expected, $found, 'src/ census drifted from the tested pairs');
-        $this->assertCount(8, $found);
+        $this->assertCount(10, $found);
     }
 
     /**
@@ -188,7 +192,7 @@ final class AccessorDeprecationTest extends TestCase
             $rows,
             PREG_SET_ORDER
         );
-        $this->assertCount(8, $rows, 'README Accessor-deprecation table must list exactly the swept pairs');
+        $this->assertCount(10, $rows, 'README Accessor-deprecation table must list exactly the swept pairs');
         $tabled = [];
         foreach ($rows as $row) {
             $tabled[$row['class'] . '::' . $row['legacy']] = $row['bare'];

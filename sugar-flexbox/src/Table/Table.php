@@ -93,7 +93,7 @@ final class Table
     /**
      * Paint window: view rows below $visibleFrom or at/above $visibleTo
      * are never emitted (header and ruler always paint). Data semantics
-     * are untouched — rowCount(), currentRow() and the cursor index all
+     * are untouched — rowCount(), rawCurrentRow() and the cursor index all
      * address the FULL settled view. Default (0, null) renders everything.
      */
     private int $visibleFrom = 0;
@@ -322,7 +322,7 @@ final class Table
      * The view is settled FIRST (a pending sort or filter is applied),
      * then the index must address a visible row: out-of-range refuses
      * with the row count it checked. Silent acceptance used to let a
-     * typo'd index park the selection on nothing — currentRow() answered
+     * typo'd index park the selection on nothing — rawCurrentRow() answered
      * null and every keyboard interaction looked broken with no error
      * to point at. The one legal null-answer state is an empty view
      * holding the default index 0; cursor() names it.
@@ -437,7 +437,7 @@ final class Table
      * viewport never renders the cells of 20k rows, only its window.
      *
      * Header and ruler always paint; the cursor is unaffected in the data
-     * sense — currentRow() and rowCount() still address the FULL view, so
+     * sense — rawCurrentRow() and rowCount() still address the FULL view, so
      * a windowed frame is byte-identical to the slice of a full frame at
      * the same indices (pinned in TableTest). Out-of-range $to simply
      * renders fewer rows; $from < 0 or a closed range that does not
@@ -527,7 +527,7 @@ final class Table
 
     /**
      * The cursor's index in the materialized view, settling any pending
-     * sort/filter first — the same law as currentRow(). Null means the
+     * sort/filter first — the same law as rawCurrentRow(). Null means the
      * index addresses no visible row: with FBX-26's refused out-of-range
      * cursors and the follow-its-row re-sort, the only reachable case is
      * an empty view holding the default index 0.
@@ -541,8 +541,8 @@ final class Table
     }
 
     /**
-     * The cursor row of the MATERIALIZED view: a pending sort or filter
-     * is settled first, so this always answers about what render() would
+     * The cursor row of the MATERIALIZED view, RAW: a pending sort or
+     * filter is settled first, so this always answers about what render() would
      * show, not about the stale last-settled frame. Null when the view
      * has no rows at all — an out-of-range cursor cannot exist to fall
      * off (withCursor() refuses it, and re-sorts carry the selection
@@ -554,7 +554,7 @@ final class Table
      * bypasses every guard the table owns. Clean untrusted values first;
      * the README "Trust boundary" section carries the user-facing rule.
      */
-    public function currentRow(): ?array
+    public function rawCurrentRow(): ?array
     {
         $this->ensureView();
         $idx = $this->cursorRow;
@@ -565,15 +565,30 @@ final class Table
     }
 
     /**
-     * One cell under the cursor, RAW like {@see self::currentRow()} —
+     * One cell under the cursor, RAW like {@see self::rawCurrentRow()} —
      * the stored string with no sweep applied — or null when the cursor
      * is off the view or the column index is out of range.
      */
-    public function currentCell(int $colIndex): ?string
+    public function rawCurrentCell(int $colIndex): ?string
     {
-        $row = $this->currentRow();
+        $row = $this->rawCurrentRow();
         return $row[$colIndex] ?? null;
     }
+
+    /**
+     * @deprecated Renamed to {@see self::rawCurrentRow()} (FBX-49) — the
+     *             benign name hiddenly answered with RAW unsanitized
+     *             stored strings; the raw* spelling says so at every
+     *             call site. REMOVED-IN: 2.0.0
+     */
+    public function currentRow(): ?array { return $this->rawCurrentRow(); }
+
+    /**
+     * @deprecated Renamed to {@see self::rawCurrentCell()} (FBX-49);
+     *             see rawCurrentRow() for the trust-disclosure law.
+     *             REMOVED-IN: 2.0.0
+     */
+    public function currentCell(int $colIndex): ?string { return $this->rawCurrentCell($colIndex); }
 
     // -------------------------------------------------------------------------
     // Rendering
