@@ -218,11 +218,25 @@ final class SpinCommand extends Command
             // A TERM-ignoring child must not spin this loop forever: the
             // grace timer stops it, and close() escalates to KILL after the
             // same grace the spinner arm's reap ladder uses.
+            // scriptui-05 (candy-scriptui-037): every statement of the
+            // callback is individually exception-proof — a terminate() that
+            // throws must still arm the stop timer, and the whole deadline
+            // must settle as 124 with a reap instead of unwinding the loop.
             function () use ($process, $loop): void {
-                $process->terminate();
-                $loop->addTimer(RealProcess::TERM_GRACE_SECONDS + 0.5, static function () use ($loop): void {
-                    $loop->stop();
-                });
+                try {
+                    $process->terminate();
+                } catch (\Throwable) {
+                    // Signalling the child failed; the loop stop and the
+                    // finally-ladder close() below still bound the reap.
+                }
+                try {
+                    $loop->addTimer(RealProcess::TERM_GRACE_SECONDS + 0.5, static function () use ($loop): void {
+                        $loop->stop();
+                    });
+                } catch (\Throwable) {
+                    // A dead loop cannot receive the stop; the watch poll
+                    // settles once the child verdict (or close()) lands.
+                }
             },
         );
         $process->attachPump($loop);
@@ -234,9 +248,35 @@ final class SpinCommand extends Command
             }
         });
 
-        $loop->run();
-        $loop->cancelTimer($watch);
-        $process->detachPump();
+        try {
+            $loop->run();
+        } finally {
+            // scriptui-05 (candy-scriptui-035): the reap ladder runs on
+            // EVERY exit path, including a Throwable that unwinds the loop
+            // while the child is still alive. All steps are idempotent and
+            // individually exception-proof: a broken rung must not skip
+            // the rest of the settle.
+            try {
+                $loop->cancelTimer($watch);
+            } catch (\Throwable) {
+            }
+            try {
+                $process->detachPump();
+            } catch (\Throwable) {
+            }
+            try {
+                $guard->disarm();
+            } catch (\Throwable) {
+            }
+            try {
+                $process->terminate();
+            } catch (\Throwable) {
+            }
+            try {
+                $process->close();
+            } catch (\Throwable) {
+            }
+        }
 
         $fired = $guard->fired();
         $guard->disarm();
@@ -259,31 +299,67 @@ final class SpinCommand extends Command
      */
     private function runSpinner(Process $process, LoopInterface $loop, float $timeoutSeconds, string $title, SpinStyle $style, string $align): int
     {
-        $model   = SpinModel::spawn($process, $title, $style, $align);
-        $program = ($this->programFactory)($model, $loop);
-        // Two statements on fire, so a real closure (not an arrow fn): the
-        // deadline must both signal the child AND stop the loop — killing
-        // the Program alone would orphan the still-running command.
-        $guard = TimeoutGuard::arm(
-            $loop,
-            $timeoutSeconds,
-            function () use ($process, $program): void {
+        $model = SpinModel::spawn($process, $title, $style, $align);
+        $guard = null;
+        try {
+            $program = ($this->programFactory)($model, $loop);
+            // Two statements on fire, so a real closure (not an arrow fn): the
+            // deadline must both stop the UI AND signal the child — killing
+            // the Program alone would orphan the still-running command.
+            // scriptui-05 (candy-scriptui-037): the kill now leads and every
+            // statement is exception-proof, so a terminate() that throws can
+            // no longer unwind the loop past the 124 verdict — the UI stops
+            // painting, the guard records fired, and the finally ladder reaps.
+            $guard = TimeoutGuard::arm(
+                $loop,
+                $timeoutSeconds,
+                function () use ($process, $program): void {
+                    try {
+                        $program->kill();
+                    } catch (\Throwable) {
+                    }
+                    try {
+                        $process->terminate();
+                    } catch (\Throwable) {
+                    }
+                },
+            );
+
+            // scriptui-02 (the 64KiB cure): the capture pipes ride the run
+            // loop as read streams, so a child writing more than the OS pipe
+            // buffer keeps moving bytes instead of blocking while the spinner
+            // polls an exit verdict that can never arrive. With no capture
+            // pipes (--show-output/--show-error unset) the attach is a no-op.
+            $process->attachPump($loop);
+
+            /** @var SpinModel $final */
+            $final = $program->run();
+        } finally {
+            // scriptui-05 (candy-scriptui-035): any Throwable between spawn
+            // and settle — factory blowup, renderer crash, pump death — used
+            // to unwind to Symfony's exit-1 with the child STILL RUNNING (and
+            // wedged at 64KiB, the pump having died with the loop). The ladder
+            // below runs on every path; each rung is idempotent and bounded.
+            try {
+                $guard?->disarm();
+            } catch (\Throwable) {
+            }
+            try {
+                $process->detachPump();
+            } catch (\Throwable) {
+            }
+            try {
                 $process->terminate();
-                $program->kill();
-            },
-        );
-
-        // scriptui-02 (the 64KiB cure): the capture pipes ride the run
-        // loop as read streams, so a child writing more than the OS pipe
-        // buffer keeps moving bytes instead of blocking while the spinner
-        // polls an exit verdict that can never arrive. With no capture
-        // pipes (--show-output/--show-error unset) the attach is a no-op.
-        $process->attachPump($loop);
-
-        /** @var SpinModel $final */
-        $final = $program->run();
-        $guard->disarm();
-        $process->detachPump();
+            } catch (\Throwable) {
+            }
+            try {
+                $process->close();
+            } catch (\Throwable) {
+            }
+        }
+        // (the finally ladder above already disarmed the guard and detached
+        // the pump on every path — $guard is non-null here because run()
+        // returned only after the arm above)
 
         // Decide the exit code with the deadline checked FIRST: a timed-out
         // run also leaves exitCode() null, so any other order would

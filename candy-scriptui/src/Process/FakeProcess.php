@@ -75,8 +75,18 @@ final class FakeProcess implements Process
         $this->terminated = true;
     }
     public function exitCode(): ?int    { return $this->exitCode; }
-    /** Mirrors RealProcess: terminate() == SIGTERM to the child, recorded. */
-    public function terminate(): void  { $this->kill(\defined('SIGTERM') ? \SIGTERM : 15); }
+    /** Mirrors RealProcess: terminate() == SIGTERM to the child, recorded. scriptui-05: an already-exited child is never signalled, and the throw seam arms the exception-proofing tests. */
+    public bool $throwOnTerminate = false;
+    public function terminate(): void
+    {
+        if ($this->exitCode !== null) {
+            return;
+        }
+        if ($this->throwOnTerminate) {
+            throw new \RuntimeException('injected terminate() failure');
+        }
+        $this->kill(\defined('SIGTERM') ? \SIGTERM : 15);
+    }
     public function close(): int      { $this->closed = true; return $this->exitCode ?? 0; }
     public function stdout(): string    { $this->stdoutRead = true; return $this->bufferedStdout; }
     public function stderr(): string    { $this->stderrRead = true; return $this->bufferedStderr; }

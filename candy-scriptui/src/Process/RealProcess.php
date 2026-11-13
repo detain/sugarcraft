@@ -664,6 +664,28 @@ final class RealProcess implements Process
         return $kids;
     }
 
+    /**
+     * scriptui-05 (candy-scriptui-035): the zombie-reaper safety net,
+     * mirroring sugar-pty's PosixChild::pollDestruct policy — an already
+     * exited child gets its zombie reaped and its handles let go when the
+     * object dies without close(); a still-running child is NOT signalled
+     * from a destructor (destructors must not throw, and killing a live
+     * tree during GC could fire long after the owner stopped intending
+     * it). The command-level finally ladder is the real guarantee; this
+     * only cleans the process-table residue of abandoned handles.
+     */
+    public function __destruct()
+    {
+        if (!\is_resource($this->process)) {
+            return;
+        }
+        $status = @\proc_get_status($this->process);
+        if (\is_array($status) && ($status['running'] ?? true) === false) {
+            @\proc_close($this->process);
+            $this->process = null;
+        }
+    }
+
     private function closeCapturePipes(): void
     {
         foreach ([0, 1] as $slot) {
