@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\SshServer;
 
 use SugarCraft\Core\I18n\T;
+use SugarCraft\SshServer\Middleware\ClosureMiddleware;
 use SugarCraft\SshServer\Middleware\Keepalive;
 use SugarCraft\SshServer\Transport\InProcessTransport;
 use SugarCraft\SshServer\Transport\KeepaliveArming;
@@ -152,6 +153,24 @@ final class Server
             $new->stack[] = $m;
         }
         return $new;
+    }
+
+    /**
+     * Append a session hook to the stack without writing a class.
+     *
+     * Audit 075's door, clone-and-return like every other mutator on
+     * this class. The closure gets `($ctx, $session, $next)`: return
+     * without calling `$next` to refuse the session, call `$next` to
+     * continue it, return a promise to be awaited at the shared settle
+     * point — the full {@see Middleware} contract, minus the class tax.
+     * Ordering is `use()`'s ordering: the hook lands wherever this call
+     * sits in the chain, after earlier doors and before later ones.
+     *
+     * @param callable(Context, Session, callable): mixed $fn
+     */
+    public function onSession(callable $fn): self
+    {
+        return $this->use(new ClosureMiddleware($fn));
     }
 
     /**

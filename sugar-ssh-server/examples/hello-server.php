@@ -54,6 +54,12 @@ final class Banner implements Middleware
     }
 }
 
+// The same hook, without the class tax: Server::onSession($closure)
+// appends the identical stack position (a ClosureMiddleware wrapping
+// the callable). Keep whichever door matches the body's size — the
+// named class below for a body with logic worth naming, a closure for
+// a true one-liner. See the README's Server doors section.
+
 // HostSshdTransport pinned explicitly because Banner reads STDIN
 // directly via fread(STDIN, 1). Under the new InProcessTransport
 // default, that STDIN is the supervisor's input pipe (already

@@ -77,6 +77,56 @@ final class ServerTest extends TestCase
         $this->assertSame(['gate-blocked'], $log);
     }
 
+    public function testOnSessionRunsTheClosureInTheStackOrderWithoutAClass(): void
+    {
+        // Audit 075's door: the same wiring testStackInvokedInRegistration
+        // proves for three hand-written classes, with one closure.
+        $log = [];
+        Server::new()
+            ->onSession(function (Context $ctx, Session $s, callable $next) use (&$log): void {
+                $log[] = 'hook-pre';
+                $next($ctx, $s);
+                $log[] = 'hook-post';
+            })
+            ->use(new class($log) implements Middleware {
+                public function __construct(private array &$log) {}
+                public function handle(Context $ctx, Session $s, callable $next): void
+                {
+                    $this->log[] = 'terminal';
+                }
+            })
+            ->serve($this->fakeSession());
+
+        $this->assertSame(['hook-pre', 'terminal', 'hook-post'], $log);
+    }
+
+    public function testOnSessionIsCloneAndReturnLikeEveryOtherDoor(): void
+    {
+        $log = [];
+        // Terminal that walks $next too, so a hook appended AFTER it is
+        // still observable — this test is about which server runs the
+        // hook, not about ordering (the previous test pins that).
+        $terminal = new class($log) implements Middleware {
+            public function __construct(private array &$log) {}
+            public function handle(Context $ctx, Session $s, callable $next): void
+            {
+                $this->log[] = 'served';
+                $next($ctx, $s);
+            }
+        };
+        $base  = Server::new()->use($terminal);
+        $armed = $base->onSession(function (Context $ctx, Session $s, callable $next) use (&$log): void {
+            $log[] = 'hook';
+        });
+
+        $armed->serve($this->fakeSession());
+        $this->assertSame(['served', 'hook'], $log);
+
+        $log = [];
+        $base->serve($this->fakeSession());
+        $this->assertSame(['served'], $log, 'branching a shared base arms only the returned clone');
+    }
+
     public function testEmptyStackIsNoop(): void
     {
         $this->assertSame(0, Server::new()->serve($this->fakeSession()));

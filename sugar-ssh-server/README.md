@@ -352,6 +352,7 @@ ssh wishuser@your-host
 | `BubbleTea`          | HostSshd only   | Terminal — mounts a SugarCraft Program inline reading STDIN, writing STDOUT.                         |
 | `Subsystem`          | both            | Terminal — parses `subsystem <name>` from `Session::command`, dispatches to a registered `SubsystemHandler`. Non-subsystem requests pass through to `$next`. |
 | `AsyncMiddleware`    | both            | Abstract base for middleware that needs async I/O (LDAP, OAuth, database auth) — return a `PromiseInterface` from `handleAsync()`. The transport waits for the promise to settle before continuing the chain. |
+| `ClosureMiddleware`  | both            | A bare callable as middleware — appended for you by `Server::onSession()` (below). The closure's return value passes through untouched: nothing means sync, a `PromiseInterface` is awaited at the shared settle point, and any stray value dies loudly in the dispatcher (the one enforcement point, unchanged by this door). |
 
 ### Server doors (not middleware)
 
@@ -372,6 +373,12 @@ middleware would hide when they actually run.
   [Language](#language-nothing-selects-it-for-you).
 - **Transport** — installed by `Server::withTransport($t)`; see
   [Architecture](#architecture).
+- **Session hook** — installed by `Server::onSession($fn)`; appends a
+  `ClosureMiddleware` at exactly the stack position of the call, the
+  class-tax-free spelling of the middleware contract below (the closure
+  receives `($ctx, $session, $next)` and its return value passes
+  through untouched — same `void`/`PromiseInterface` law as any
+  hand-written middleware).
 
 All middleware receives a {@see Context} as the first argument, along with
 the {@see Session} and a `$next` continuation. Implement `SugarCraft\SshServer\Middleware`:
@@ -880,7 +887,11 @@ target, so treat it as input, not as configuration.
 
 The `InProcessTransport` dispatches SSH channel-level messages through a
 `ChannelHandler` rather than handling them inline. This lets you replace the
-default PTY/shell wiring with a custom implementation.
+default PTY/shell wiring with a custom implementation. To override only
+*some* verbs, extend `DelegatingChannelHandler`: hand it a delegate (e.g.
+`new DefaultChannelHandler()`), override just the verb you care about, and
+every other member — `cols()`/`rows()` included — forwards verbatim, so
+`DefaultChannelHandler` itself stays `final`.
 
 **Which messages actually arrive.** The library mints exactly one
 channel message itself: `WindowChangeMsg`, from a `SIGWINCH` observed while
