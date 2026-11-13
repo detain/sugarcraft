@@ -71,8 +71,13 @@ final class VsCodeThemeLoader
      */
     public static function fromArray(array $data): Theme
     {
-        $colors = $data['colors'] ?? [];
-        $tokenColors = $data['tokenColors'] ?? [];
+        // cs-11 (FUZZ-03): a VS Code theme is third-party JSON and scalar
+        // shapes were live TypeErrors past the documented @throws —
+        // {"colors":42} crashed resolveColor's array parameter. Mirror the
+        // Chroma loader's total-function behaviour: a section that is not
+        // an array carries no colours, and the documented fallbacks answer.
+        $colors = is_array($data['colors'] ?? null) ? $data['colors'] : [];
+        $tokenColors = is_array($data['tokenColors'] ?? null) ? $data['tokenColors'] : [];
 
         $background = self::resolveColor($colors, [
             'editor.background',
@@ -158,10 +163,16 @@ final class VsCodeThemeLoader
     {
         $map = [];
         foreach ($tokenColors as $entry) {
+            // cs-11: tokenColors entries are third-party too — a scalar
+            // element would fatal on $entry['scope'].
+            if (!is_array($entry)) {
+                continue;
+            }
+
             $scope = $entry['scope'] ?? null;
             $settings = $entry['settings'] ?? [];
 
-            if ($scope === null || $settings === []) {
+            if ($scope === null || !is_array($settings) || $settings === []) {
                 continue;
             }
 
@@ -174,6 +185,10 @@ final class VsCodeThemeLoader
                     continue;
                 }
                 foreach ($scopes as $s) {
+                    if (!is_string($s)) {
+                        // cs-11: a scalar inside a scope array (e.g. scope:[42]).
+                        continue;
+                    }
                     $root = self::scopeRoot($s);
                     if (isset(self::SCOPE_MAP[$root])) {
                         $prop = self::SCOPE_MAP[$root];

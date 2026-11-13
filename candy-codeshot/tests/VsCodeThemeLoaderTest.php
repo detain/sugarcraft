@@ -242,4 +242,41 @@ final class VsCodeThemeLoaderTest extends TestCase
             );
         }
     }
+
+    // -------------------------------------------------------------------------
+    // cs-11 (FUZZ-03): scalar doors — third-party JSON shapes that used to
+    // escape as live TypeErrors past the documented @throws.
+    // -------------------------------------------------------------------------
+
+    /**
+     * @return array<string, array{0:array<string,mixed>}>
+     */
+    public static function scalarSectionShapes(): array
+    {
+        return [
+            'colors int'                => [['colors' => 42]],
+            'colors string'             => [['colors' => 'x']],
+            'tokenColors string'        => [['tokenColors' => 'x']],
+            'tokenColors int'           => [['tokenColors' => 42]],
+            'entry scalar'              => [['tokenColors' => [42]]],
+            'entry string'              => [['tokenColors' => ['oops']]],
+            'scope scalar'              => [['tokenColors' => [['scope' => 42, 'settings' => ['foreground' => '#112233']]]]],
+            'scope element scalar'      => [['tokenColors' => [['scope' => [42, 43], 'settings' => ['foreground' => '#112233']]]]],
+            'settings scalar'           => [['tokenColors' => [['scope' => 'keyword', 'settings' => 42]]]],
+        ];
+    }
+
+    /**
+     * @dataProvider scalarSectionShapes
+     * @param array<string,mixed> $shape
+     */
+    public function testScalarShapesFallBackInsteadOfTypingError(array $shape): void
+    {
+        // No TypeError may escape: a non-array section carries no colours
+        // and the documented defaults answer (Chroma loader semantics).
+        $theme = VsCodeThemeLoader::fromArray($shape);
+
+        $this->assertSame('#0d1117', $theme->background);
+        $this->assertSame('#ff5f56', $theme->windowRed, 'junk scopes must not repaint chrome');
+    }
 }
