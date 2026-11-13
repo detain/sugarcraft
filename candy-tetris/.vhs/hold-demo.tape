@@ -1,5 +1,5 @@
 # VHS tape — Tetris hold-slot demo
-# Render with: `vhs candy-tetris/.vhs/hold-demo.tape`
+# Render with (from the candy-tetris directory): vhs .vhs/hold-demo.tape
 Output .vhs/hold-demo.gif
 
 Set FontSize 14
@@ -11,6 +11,11 @@ Set Theme "TokyoNight"
 Type "./bin/candy-tetris"
 Enter
 Sleep 2s
+
+# The first-run card (candy-tetris-038) owns the opening press — 'begin'
+# answers Space and Enter — and only then does the demo body drive the game.
+Space
+Sleep 1200ms
 
 Space Sleep 800ms
 Type "c"

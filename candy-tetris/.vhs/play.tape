@@ -1,5 +1,6 @@
-# VHS tape — short Tetris play session: a few drops and rotations.
-# Render with: `vhs candy-tetris/.vhs/play.tape`
+# VHS tape — short Tetris play session: the first-run card opens, then a
+# few drops and rotations.
+# Render with (from the candy-tetris directory): vhs .vhs/play.tape
 Output .vhs/play.gif
 
 Set FontSize 14
@@ -11,6 +12,11 @@ Set Theme "TokyoNight"
 Type "./bin/candy-tetris"
 Enter
 Sleep 1s
+
+# The first-run card (candy-tetris-038) owns the opening press — 'begin'
+# answers Space and Enter — and only then does the session below play.
+Space
+Sleep 1200ms
 
 Left  Sleep 200ms
 Left  Sleep 200ms

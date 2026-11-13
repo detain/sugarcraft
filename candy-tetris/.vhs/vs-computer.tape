@@ -1,5 +1,5 @@
 # VHS tape — Tetris VS Computer mode demo
-# Render with: `vhs candy-tetris/.vhs/vs-computer.tape`
+# Render with (from the candy-tetris directory): vhs .vhs/vs-computer.tape
 Output .vhs/vs-computer.gif
 
 Set FontSize 14
