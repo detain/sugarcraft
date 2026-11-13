@@ -102,6 +102,77 @@ final class AtomicFileWriter
     }
 
     /**
+     * Streaming variant of {@see self::write()}: reserve, restrict to 0600,
+     * then hand an open handle to $emit so writers can land one line at a
+     * time instead of materialising the whole body first (finding 081 —
+     * the same atomic placement and cleanup contract, bytes produced
+     * incrementally).
+     *
+     * @param string $path    Destination path.
+     * @param callable(resource): void $emit Writes into the temp handle; a
+     *                   throw from here discards the temp, destination untouched.
+     * @param string $subject Noun woven into error messages.
+     * @throws \RuntimeException on any failure step; the temp is always removed.
+     */
+    public static function writeStream(string $path, callable $emit, string $subject = 'file'): void
+    {
+        $tmp = self::reserve($path, $subject);
+
+        try {
+            self::restrictToOwner($tmp);
+            $handle = @fopen($tmp, 'wb');
+            if ($handle === false) {
+                throw new \RuntimeException("cannot write {$subject} bytes to temporary file for {$path}");
+            }
+            try {
+                $emit($handle);
+                if (@fflush($handle) === false) {
+                    throw new \RuntimeException("cannot flush {$subject} bytes to temporary file for {$path}");
+                }
+            } finally {
+                fclose($handle);
+            }
+            self::commit($tmp, $path, $subject);
+        } catch (\Throwable $e) {
+            self::discard($tmp);
+            throw $e;
+        }
+    }
+
+    /**
+     * Streaming variant of {@see self::writeGzipped()}: $emit writes plain
+     * bytes into a gzip stream opened on the reserved temp; compression
+     * flushes as lines arrive instead of taking a whole string at once.
+     *
+     * @param string $path    Destination path (must end `.gz` in practice).
+     * @param callable(resource): void $emit Writes plain bytes into the gz stream.
+     * @param int $compressionLevel 1..9, woven into the zlib mode string.
+     * @param string $subject Noun woven into error messages.
+     * @throws \RuntimeException on any failure step; the temp is always removed.
+     */
+    public static function writeGzippedStream(string $path, callable $emit, int $compressionLevel, string $subject = 'gzip cassette'): void
+    {
+        $tmp = self::reserve($path, $subject);
+
+        try {
+            self::restrictToOwner($tmp);
+            $gz = @gzopen($tmp, 'wb' . $compressionLevel);
+            if ($gz === false) {
+                throw new \RuntimeException("cannot open gzip stream for temporary file of {$path}");
+            }
+            try {
+                $emit($gz);
+            } finally {
+                gzclose($gz);
+            }
+            self::commit($tmp, $path, $subject);
+        } catch (\Throwable $e) {
+            self::discard($tmp);
+            throw $e;
+        }
+    }
+
+    /**
      * Reserve an exclusive temp path in the destination directory and
      * return it — for callers whose bytes are produced by a third party
      * (the GIF encoders) rather than a string in hand. The name keeps the

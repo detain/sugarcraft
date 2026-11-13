@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Vcr\Format;
 
 use SugarCraft\Vcr\Cassette;
+use SugarCraft\Vcr\Support\LineIo;
 
 /**
  * Gzip-compressed JSONL cassette format. Wraps JsonlFormat with streaming
@@ -45,7 +46,7 @@ final class CompressedJsonlFormat implements Format
     ) {
         // Fail fast at the boundary: a zero/negative ceiling would either
         // reject every cassette or let the guard arithmetic wrap — nonsense
-        // dies here, by name, instead of haunting readAll().
+        // dies here, by name, instead of haunting the streamed reader.
         if ($maxExpandedBytes < 1) {
             throw new \InvalidArgumentException(
                 "maxExpandedBytes must be at least 1 byte, got {$maxExpandedBytes}",
@@ -55,23 +56,31 @@ final class CompressedJsonlFormat implements Format
 
     public function write(Cassette $cassette, string $path): void
     {
-        $contents = $this->encode($cassette);
-
         if (!self::isGzipPath($path)) {
-            // Write as plain JSONL
-            try {
-                AtomicFileWriter::write($path, $contents, 'cassette');
-            } catch (\RuntimeException $e) {
-                throw new \RuntimeException("cannot write cassette to {$path}: {$e->getMessage()}", previous: $e);
-            }
+            // Write as plain JSONL — same atomic streaming placement (the
+            // whole-body string copy this path used to make is finding 081
+            // territory: inner.format now streams line by line).
+            $this->inner->write($cassette, $path);
             return;
         }
 
         try {
             // gzip into a reserved temp and rename (finding 018): the old
             // direct gzopen meant a stream that died mid-deflate left a
-            // corrupt archive in place of the last good recording.
-            AtomicFileWriter::writeGzipped($path, $contents, $this->compressionLevel);
+            // corrupt archive in place of the last good recording. Lines
+            // deflate as they are produced instead of after a full encode
+            // (finding 081).
+            AtomicFileWriter::writeGzippedStream(
+                $path,
+                function ($gz) use ($cassette, $path): void {
+                    foreach ($this->inner->encodeLines($cassette) as $line) {
+                        if (@gzwrite($gz, $line . "\n") === false) {
+                            throw new \RuntimeException("cannot write gzip cassette bytes to temporary file for {$path}");
+                        }
+                    }
+                },
+                $this->compressionLevel,
+            );
         } catch (\RuntimeException $e) {
             throw new \RuntimeException("cannot open gzip stream for {$path}: {$e->getMessage()}", previous: $e);
         }
@@ -79,11 +88,17 @@ final class CompressedJsonlFormat implements Format
 
     public function read(string $path): Cassette
     {
-        $raw = $this->readAll($path);
-        if ($raw === false) {
-            throw new \RuntimeException("cannot read cassette from {$path}");
+        if (!self::isGzipPath($path)) {
+            return $this->inner->read($path);
         }
-        return $this->decode($raw);
+
+        // Streamed decompression with the expansion ceiling (finding 012)
+        // now feeding the line decoder directly (finding 081): the old
+        // shape held the full decompressed body AND the split lines AND
+        // the decoded cassette at once.
+        return $this->inner->decodeTuples(
+            LineIo::gzLines($path, "cannot read cassette from {$path}", $this->maxExpandedBytes),
+        );
     }
 
     public function encode(Cassette $cassette): string
@@ -104,43 +119,4 @@ final class CompressedJsonlFormat implements Format
         return str_ends_with($path, '.gz');
     }
 
-    /**
-     * Read entire gzip file into a string.
-     *
-     * @return string|false The decompressed contents, or false on failure.
-     */
-    private function readAll(string $path): string|false
-    {
-        if (!self::isGzipPath($path)) {
-            return @file_get_contents($path);
-        }
-
-        $gz = @gzopen($path, 'rb');
-        if ($gz === false) {
-            return false;
-        }
-
-        try {
-            $contents = '';
-            while (!gzeof($gz)) {
-                $chunk = gzread($gz, 8192);
-                if ($chunk === false) {
-                    return false;
-                }
-                // The expansion ceiling: judge BEFORE the concat so the
-                // over-cap bytes never join the live string, then name the
-                // door the bomb died at (finding 012).
-                if (strlen($contents) + strlen($chunk) > $this->maxExpandedBytes) {
-                    throw new \RuntimeException(
-                        'gzip cassette ' . $path . ' expands beyond ' . $this->maxExpandedBytes
-                        . ' byte cap - refusing to decompress further',
-                    );
-                }
-                $contents .= $chunk;
-            }
-            return $contents;
-        } finally {
-            gzclose($gz);
-        }
-    }
 }

@@ -8,6 +8,7 @@ use SugarCraft\Vcr\Cassette;
 use SugarCraft\Vcr\CassetteHeader;
 use SugarCraft\Vcr\Event;
 use SugarCraft\Vcr\EventKind;
+use SugarCraft\Vcr\Support\LineIo;
 use SugarCraft\Vcr\Support\ObjectMap;
 use SugarCraft\Vcr\Support\Scalars;
 
@@ -29,11 +30,17 @@ final class RelativeFormat implements Format
 
     public function write(Cassette $cassette, string $path): void
     {
-        $contents = $this->encode($cassette);
         try {
             // Atomic placement + 0600 before content (finding 018), same as
             // JsonlFormat; see AtomicFileWriter for the full contract.
-            AtomicFileWriter::write($path, $contents, 'cassette');
+            // Lines stream one at a time (finding 081).
+            AtomicFileWriter::writeStream($path, function ($handle) use ($cassette, $path): void {
+                foreach ($this->encodeLines($cassette) as $line) {
+                    if (@fwrite($handle, $line . "\n") === false) {
+                        throw new \RuntimeException("cannot write cassette bytes to temporary file for {$path}");
+                    }
+                }
+            }, 'cassette');
         } catch (\RuntimeException $e) {
             throw new \RuntimeException("cannot write cassette to {$path}: {$e->getMessage()}", previous: $e);
         }
@@ -41,47 +48,61 @@ final class RelativeFormat implements Format
 
     public function read(string $path): Cassette
     {
-        $raw = @file_get_contents($path);
-        if ($raw === false) {
-            throw new \RuntimeException("cannot read cassette from {$path}");
-        }
-        return $this->decode($raw);
+        return $this->decodeTuples(LineIo::lines($path, "cannot read cassette from {$path}"));
     }
 
     public function encode(Cassette $cassette): string
     {
-        $lines = [$this->encodeHeader($cassette->header)];
-        foreach ($this->encodeEvents($cassette->events) as $eventLine) {
-            $lines[] = $eventLine;
+        $contents = '';
+        foreach ($this->encodeLines($cassette) as $line) {
+            $contents .= $line . "\n";
         }
-        return implode("\n", $lines) . "\n";
+        return $contents;
+    }
+
+    /**
+     * One dt line per frame (header first), newline NOT included.
+     *
+     * @return \Generator<int, string>
+     */
+    public function encodeLines(Cassette $cassette): \Generator
+    {
+        yield $this->encodeHeader($cassette->header);
+        yield from $this->encodeEvents($cassette->events);
     }
 
     public function decode(string $contents): Cassette
     {
-        $lines = preg_split('/\r?\n/', $contents) ?: [];
+        return $this->decodeTuples(self::tuplesFromString($contents));
+    }
+
+    /**
+     * Assemble a Cassette from `[lineNumber, text, isTornLast]` tuples.
+     *
+     * Torn-tail contract identical to JsonlFormat: a final line cut by
+     * a kill -9 (file has no trailing newline) is dropped, everything
+     * before it decodes; malformed anywhere else still throws.
+     *
+     * @param \Traversable<int, array{0: int, 1: string, 2: bool}> $lines
+     */
+    public function decodeTuples(\Traversable $lines): Cassette
+    {
         $header = null;
         $eventsText = [];
-        // Torn-tail contract identical to JsonlFormat: a final line cut by
-        // a kill -9 (file has no trailing newline) is dropped, everything
-        // before it decodes; malformed anywhere else still throws.
-        $lastLineIsTorn = $contents !== '' && !str_ends_with($contents, "\n");
-        $lastIndex = count($lines) - 1;
 
-        foreach ($lines as $i => $line) {
+        foreach ($lines as [$lineNo, $line, $isTornLast]) {
             if ($line === '') {
                 continue;
             }
             $data = json_decode($line, true);
             if (!is_array($data)) {
-                $lineNo = $i + 1;
-                if ($lastLineIsTorn && $i === $lastIndex && $header !== null) {
+                if ($isTornLast && $header !== null) {
                     continue;
                 }
                 throw new \RuntimeException("invalid JSON on line {$lineNo}");
             }
             if ($header === null) {
-                $header = $this->decodeHeader($data, $i + 1);
+                $header = $this->decodeHeader($data, $lineNo);
                 continue;
             }
             $eventsText[] = $data;
@@ -97,29 +118,39 @@ final class RelativeFormat implements Format
     }
 
     /**
+     * @return \Generator<int, array{0: int, 1: string, 2: bool}>
+     */
+    private static function tuplesFromString(string $contents): \Generator
+    {
+        $lines = preg_split('/\r?\n/', $contents) ?: [];
+        $lastLineIsTorn = $contents !== '' && !str_ends_with($contents, "\n");
+        $lastIndex = count($lines) - 1;
+        foreach ($lines as $i => $line) {
+            yield [$i + 1, $line, $lastLineIsTorn && $i === $lastIndex];
+        }
+    }
+
+    /**
      * Encode events as delta-time (dt) lines.
      *
      * @param list<Event> $events
-     * @return list<string>
+     * @return \Generator<int, string>
      */
-    private function encodeEvents(array $events): array
+    private function encodeEvents(array $events): \Generator
     {
         if (empty($events)) {
-            return [];
+            return;
         }
 
-        $lines = [];
         $prevT = 0.0;
 
         foreach ($events as $event) {
             $dt = round($event->t - $prevT, self::T_PRECISION);
             // Reserved keys win and stay first (see JsonlFormat's contract);
             // a payload carrying literal `dt`/`k` entries is shadowed.
-            $lines[] = $this->jsonEncode(['dt' => $dt, 'k' => $event->kind->value] + $event->payload);
+            yield $this->jsonEncode(['dt' => $dt, 'k' => $event->kind->value] + $event->payload);
             $prevT = $event->t;
         }
-
-        return $lines;
     }
 
     /**

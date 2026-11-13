@@ -11,14 +11,16 @@ use SugarCraft\Vcr\Event;
 use SugarCraft\Vcr\EventKind;
 use SugarCraft\Vcr\Format\CompressedJsonlFormat;
 use SugarCraft\Vcr\Format\JsonlFormat;
+use SugarCraft\Vcr\Support\LineIo;
 
 /**
  * Finding 012 — the gzip cassette door had no ceiling on TOTAL DECOMPRESSED
  * bytes: the gzread loop concat'd until the process ran out of memory, and
  * file size is no signal for expanded size (that is the whole point of
- * compression). readAll() now judges every chunk against a constructor-backed
- * ceiling BEFORE the concat and dies with a named error, so a few-KB bomb
- * becomes an exit message instead of an OOM.
+ * compression). The chunk judge now rides in {@see LineIo::gzLines()}
+ * (streaming reader since VCR-S26) BEFORE bytes reach the caller, and dies
+ * with a named error, so a few-KB bomb becomes an exit message instead of
+ * an OOM.
  */
 final class GzipBombTest extends TestCase
 {
@@ -131,18 +133,18 @@ final class GzipBombTest extends TestCase
     public function testExpansionExactlyAtTheCapPassesTheGate(): void
     {
         // The check is '>', not '>=': honest bytes up to and including the
-        // ceiling land whole; the first byte over is what trips it.
+        // ceiling land whole; the first byte over is what trips it. The
+        // ceiling now lives in the streaming reader the format's gz branch
+        // feeds from (VCR-S26 made the read path line-streamed).
         $path = $this->dir . '/exact.gz';
         $cap = 81920; // ten gzread chunks exactly
         $this->bomb($path, $cap);
 
-        $reader = new CompressedJsonlFormat(new JsonlFormat(), 6, $cap);
-        $readAll = new \ReflectionMethod(CompressedJsonlFormat::class, 'readAll');
-        $readAll->setAccessible(true);
-
-        $out = $readAll->invoke($reader, $path);
-        $this->assertIsString($out);
-        $this->assertSame($cap, strlen($out));
+        $expanded = 0;
+        foreach (LineIo::gzLines($path, 'cannot read cassette', $cap) as [, $line]) {
+            $expanded += strlen($line);
+        }
+        $this->assertSame($cap, $expanded);
     }
 
     public function testHonestCassetteRoundTripsUnderTheDefaultCap(): void

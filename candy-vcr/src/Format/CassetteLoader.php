@@ -15,8 +15,8 @@ use SugarCraft\Vcr\Tape\Parser;
  * Detection rules (in order):
  *
  * 1. **Extension sniff** — `.tape` (VHS DSL), `.cas`/`.jsonl`/`.cassette`
- *    (JSONL cassette, possibly relative-timestamp), `.cast` (asciinema v3),
- *    `.yaml`/`.yml` (YAML cassette), `.gz` suffix triggers
+ *    (JSONL cassette, possibly relative-timestamp), `.cast` (asciinema
+ *    v2/v3 cast), `.yaml`/`.yml` (YAML cassette), `.gz` suffix triggers
  *    {@see CompressedJsonlFormat}.
  * 2. **Content sniff** — when the extension is missing or ambiguous, peek
  *    at the first non-blank, non-comment line: a leading `{` is JSON; an

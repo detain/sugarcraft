@@ -8,6 +8,7 @@ use SugarCraft\Vcr\Cassette;
 use SugarCraft\Vcr\CassetteHeader;
 use SugarCraft\Vcr\Event;
 use SugarCraft\Vcr\EventKind;
+use SugarCraft\Vcr\Support\LineIo;
 use SugarCraft\Vcr\Support\ObjectMap;
 use SugarCraft\Vcr\Support\Scalars;
 
@@ -60,13 +61,23 @@ final class JsonlFormat implements Format
 
     public function write(Cassette $cassette, string $path): void
     {
-        $contents = $this->encode($cassette);
         try {
             // Atomic placement: temp + 0600-before-content + rename in the
             // destination directory (finding 018). A crash can no longer
             // leave a half-written cassette in place of a good one, and the
             // recorded keystrokes never exist in a umask-open file.
-            AtomicFileWriter::write($path, $contents, 'cassette');
+            //
+            // Lines land one at a time (finding 081): the whole-body string
+            // the old writer materialised was a third full-size copy of the
+            // recording alive at once; the stream keeps only the event being
+            // encoded in flight.
+            AtomicFileWriter::writeStream($path, function ($handle) use ($cassette, $path): void {
+                foreach ($this->encodeLines($cassette) as $line) {
+                    if (@fwrite($handle, $line . "\n") === false) {
+                        throw new \RuntimeException("cannot write cassette bytes to temporary file for {$path}");
+                    }
+                }
+            }, 'cassette');
         } catch (\RuntimeException $e) {
             throw new \RuntimeException("cannot write cassette to {$path}: {$e->getMessage()}", previous: $e);
         }
@@ -74,55 +85,71 @@ final class JsonlFormat implements Format
 
     public function read(string $path): Cassette
     {
-        $raw = @file_get_contents($path);
-        if ($raw === false) {
-            throw new \RuntimeException("cannot read cassette from {$path}");
-        }
-        return $this->decode($raw);
+        return $this->decodeTuples(LineIo::lines($path, "cannot read cassette from {$path}"));
     }
 
     public function encode(Cassette $cassette): string
     {
-        $lines = [$this->encodeHeader($cassette->header)];
+        $contents = '';
+        foreach ($this->encodeLines($cassette) as $line) {
+            $contents .= $line . "\n";
+        }
+        return $contents;
+    }
+
+    /**
+     * One JSONL line per frame (header first), newline NOT included.
+     *
+     * @return \Generator<int, string>
+     */
+    public function encodeLines(Cassette $cassette): \Generator
+    {
+        yield $this->encodeHeader($cassette->header);
         $events = $cassette->events;
         if ($cassette->header->timestampMode === CassetteHeader::TIMESTAMP_MODE_RELATIVE) {
             $events = $this->toRelativeTimestamps($events);
         }
         foreach ($events as $event) {
-            $lines[] = $this->encodeEvent($event);
+            yield $this->encodeEvent($event);
         }
-        return implode("\n", $lines) . "\n";
     }
 
     public function decode(string $contents): Cassette
     {
-        $lines = preg_split('/\r?\n/', $contents) ?: [];
+        return $this->decodeTuples(self::tuplesFromString($contents));
+    }
+
+    /**
+     * Assemble a Cassette from `[lineNumber, text, isTornLast]` tuples —
+     * the shared shape produced by {@see LineIo} (file stream) and
+     * {@see self::tuplesFromString()} (whole-buffer API).
+     *
+     * @param \Traversable<int, array{0: int, 1: string, 2: bool}> $lines
+     */
+    public function decodeTuples(\Traversable $lines): Cassette
+    {
         $header = null;
         $events = [];
         // A file whose last byte is not a newline was cut mid-write (the
         // kill -9 / disk-full shape). Its trailing partial line is a torn
         // event, not corruption of recorded data — drop it so the session
         // before it stays replayable. Anything else stays strict.
-        $lastLineIsTorn = $contents !== '' && !str_ends_with($contents, "\n");
-        $lastIndex = count($lines) - 1;
-
-        foreach ($lines as $i => $line) {
+        foreach ($lines as [$lineNo, $line, $isTornLast]) {
             if ($line === '') {
                 continue;
             }
             $data = json_decode($line, true);
             if (!is_array($data)) {
-                $lineNo = $i + 1;
-                if ($lastLineIsTorn && $i === $lastIndex && $header !== null) {
+                if ($isTornLast && $header !== null) {
                     continue;
                 }
                 throw new \RuntimeException("invalid JSON on line {$lineNo}");
             }
             if ($header === null) {
-                $header = $this->decodeHeader($data, $i + 1);
+                $header = $this->decodeHeader($data, $lineNo);
                 continue;
             }
-            $events[] = $this->decodeEvent($data, $i + 1);
+            $events[] = $this->decodeEvent($data, $lineNo);
         }
 
         if ($header === null) {
@@ -134,6 +161,23 @@ final class JsonlFormat implements Format
         }
 
         return new Cassette($header, $events);
+    }
+
+    /**
+     * Split a whole-buffer body into the tuple shape the decoders share,
+     * numbering every physical line exactly like `preg_split` so error
+     * text is identical to the streamed path's.
+     *
+     * @return \Generator<int, array{0: int, 1: string, 2: bool}>
+     */
+    private static function tuplesFromString(string $contents): \Generator
+    {
+        $lines = preg_split('/\r?\n/', $contents) ?: [];
+        $lastLineIsTorn = $contents !== '' && !str_ends_with($contents, "\n");
+        $lastIndex = count($lines) - 1;
+        foreach ($lines as $i => $line) {
+            yield [$i + 1, $line, $lastLineIsTorn && $i === $lastIndex];
+        }
     }
 
     /**
