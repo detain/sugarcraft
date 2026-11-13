@@ -104,7 +104,7 @@ returns a new instance.
 | `setItems(array $items): self` | Replace the whole list (used by `Shell` for its immutable ops) |
 | `clear(): self` | Remove everything |
 | `view(string $separator = ' › '): string` | Plain-text crumb trail; titles sanitized for terminal safety |
-| `viewHtml(?callable $href = null, string $label = 'Breadcrumb'): string` | Semantic `<nav>` HTML; last crumb gets `aria-current="page"`, titles HTML-escaped |
+| `viewHtml(?callable $href = null, string $label = 'Breadcrumb', ?list<string> $allowSchemes = null): string` | Semantic `<nav>` HTML; last crumb gets `aria-current="page"`, titles HTML-escaped; `$allowSchemes` gates callback-returned URLs (null = trusted legacy bytes) |
 | `filter(string $term): self` | New stack of items whose title **or** payload matches a case-insensitive substring (array payloads match when any nested scalar/Stringable value does); payloads nested deeper than 64 levels throw |
 | `static safeTitle(string $title): string` | The published display-sweep facade — byte-identical to what every library render path applies to titles; use it when echoing an untrusted title outside those surfaces |
 
@@ -323,7 +323,10 @@ design — they are yours to feed safely:
 - `viewHtml($href)`: your callback's URL lands in `href="..."` with only
   quote-escaping applied, so a returned `javascript:` or `data:` URL passes
   straight through — `$href` MUST return a validated absolute path or an
-  allow-listed scheme.
+  allow-listed scheme, **or** pass the library's `$allowSchemes` gate: a
+  list of scheme tokens (case-insensitive) plus `'/'` to admit scheme-less
+  paths; a rejected URL renders its crumb as plain text (title kept, anchor
+  dropped). `null` (default) keeps the trusted legacy bytes.
 - `view($separator)`: the separator string is interpolated RAW (control
   bytes and newlines survive into the output) — treat it as a host-chosen
   constant, never a carrier for user data.

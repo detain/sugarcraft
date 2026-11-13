@@ -206,4 +206,91 @@ final class NavStackHtmlTest extends TestCase
         $html = $stack->viewHtml();
         $this->assertStringContainsString('&quot;Hello&quot;', $html);
     }
+
+    // ─── NS-06: $allowSchemes gate on callback URLs ──────────────────────────
+
+    private function threeDeep(): NavStack
+    {
+        return (new NavStack())->push('Home')->push('Docs')->push('Now');
+    }
+
+    public function testViewHtmlAllowListNullKeepsLegacyBytes(): void
+    {
+        $stack = $this->threeDeep();
+        $href  = static fn ($item): string => '/p/' . $item->title;
+
+        // The two-arg call and an explicit null are byte-identical, and
+        // even a javascript: URL passes through untouched (trust intact).
+        $this->assertSame(
+            $stack->viewHtml($href),
+            $stack->viewHtml($href, 'Breadcrumb', null),
+        );
+        $evil = $stack->viewHtml(static fn ($item): string => 'javascript:alert(1)');
+        $this->assertStringContainsString('href="javascript:alert(1)"', $evil);
+    }
+
+    public function testViewHtmlRejectsHostileSchemesAsPlainText(): void
+    {
+        $stack = $this->threeDeep();
+        $html  = $stack->viewHtml(
+            static fn ($item): string => $item->title === 'Docs'
+                ? 'javascript:alert(1)'
+                : 'data:text/html,<script>1</script>',
+            'Breadcrumb',
+            ['http', 'https'],
+        );
+
+        // Rejected crumbs keep their TITLE as plain text, lose only the anchor.
+        $this->assertStringNotContainsString('<a ', $html);
+        $this->assertStringContainsString('<li>Docs</li>', $html);
+        $this->assertStringContainsString('<li>Home</li>', $html);
+        $this->assertStringContainsString('aria-current="page"', $html, 'last crumb unaffected');
+    }
+
+    public function testViewHtmlAdmitsAllowListedSchemesCaseInsensitively(): void
+    {
+        $stack = $this->threeDeep();
+        $html  = $stack->viewHtml(
+            static fn ($item): string => 'HTTPS://example.test/' . $item->title,
+            'Breadcrumb',
+            ['https'],
+        );
+
+        $this->assertStringContainsString('<a href="HTTPS://example.test/Home">', $html);
+        $this->assertStringContainsString('<a href="HTTPS://example.test/Docs">', $html);
+    }
+
+    public function testViewHtmlPathDoorIsTheSlashToken(): void
+    {
+        $stack = $this->threeDeep();
+
+        // With '/' in the list, derive()-style absolute paths link...
+        $ok = $stack->viewHtml(static fn ($item): string => '/x/' . $item->title, 'Breadcrumb', ['/', 'https']);
+        $this->assertStringContainsString('<a href="/x/Home">', $ok);
+
+        // ...without it, scheme-less paths are rejected (the classic
+        // relative-URL mistake cannot silently link).
+        $no = $stack->viewHtml(static fn ($item): string => '/x/' . $item->title, 'Breadcrumb', ['https']);
+        $this->assertStringNotContainsString('<a ', $no);
+
+        // A colon after a slash is path content, not a scheme:
+        $edge = $stack->viewHtml(static fn ($item): string => '/a/b:c', 'Breadcrumb', ['/']);
+        $this->assertStringContainsString('<a href="/a/b:c">', $edge);
+    }
+
+    public function testViewHtmlPerItemGateKeepsGoodAnchorsAndBlanksBadOnes(): void
+    {
+        $stack = $this->threeDeep();
+        $html  = $stack->viewHtml(
+            static fn ($item): string => $item->title === 'Home'
+                ? '/keep/me'
+                : 'vbscript:kill',
+            'Breadcrumb',
+            ['/'],
+        );
+
+        $this->assertStringContainsString('<a href="/keep/me">Home</a>', $html);
+        $this->assertStringContainsString('<li>Docs</li>', $html);
+        $this->assertStringNotContainsString('vbscript', $html);
+    }
 }

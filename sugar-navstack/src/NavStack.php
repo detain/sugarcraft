@@ -301,14 +301,24 @@ final class NavStack
      * Titles run through {@see TitleSanitizer} FIRST (terminal controls,
      * zone sentinels, invisible formatting) and then htmlspecialchars, so
      * the TITLE text is HTML-safe and free of escape bytes a copy-paste
-     * into a terminal would otherwise reanimate. The $href callback's URL
-     * is quote-escaped but NOT scheme-filtered: javascript:/data: URLs you
-     * return pass through.
+     * into a terminal would otherwise reanimate.
      *
      * Pass `$href` to wrap every non-final crumb in an anchor:
      * `fn(NavigationItem $item): ?string` returning the URL, or null to
      * leave that crumb as plain text (unlinked ancestor). The callback MUST
-     * return a validated absolute path or allow-listed-scheme URL.
+     * return a validated absolute path or allow-listed-scheme URL — or you
+     * can make the library enforce it: pass `$allowSchemes` (NS-06).
+     *
+     * `$allowSchemes` gates the URL STRINGS the callback returns:
+     *  - `null` (default): today's byte-stable behavior — the callback is
+     *    fully trusted, every returned string becomes an href (quote-
+     *    escaping only). A returned `javascript:`/`data:` URL passes.
+     *  - a list: each URL is classified — a `scheme:` prefix (case-
+     *    insensitive) must appear in the list, and a scheme-less URL
+     *    (absolute or relative path, e.g. `Url::derive()` output) is
+     *    allowed only when the list contains `'/'`. A REJECTED URL renders
+     *    the crumb as PLAIN TEXT (the same shape a null return takes) —
+     *    the title is never lost, only the anchor.
      *
      * Example output (with `$href = fn($i) => Url::derive(...)` style links):
      * <nav class="breadcrumb" aria-label="Breadcrumb">
@@ -316,8 +326,9 @@ final class NavStack
      * </nav>
      *
      * @param (callable(NavigationItem): ?string)|null $href
+     * @param list<string>|null                        $allowSchemes scheme tokens ('http','https', …) plus '/' for paths; null = trust the callback (legacy bytes)
      */
-    public function viewHtml(?callable $href = null, string $label = 'Breadcrumb'): string
+    public function viewHtml(?callable $href = null, string $label = 'Breadcrumb', ?array $allowSchemes = null): string
     {
         $items = $this->items;
         if ($items === []) {
@@ -334,6 +345,9 @@ final class NavStack
                 continue;
             }
             $url  = $href !== null ? $href($item) : null;
+            if (\is_string($url) && !self::schemeAllowed($url, $allowSchemes)) {
+                $url = null; // rejected by the allow-list: plain-text crumb (NS-06)
+            }
             $body = \is_string($url)
                 ? '<a href="' . \htmlspecialchars($url, \ENT_QUOTES, 'UTF-8') . '">' . $escaped . '</a>'
                 : $escaped;
@@ -344,6 +358,34 @@ final class NavStack
             . \htmlspecialchars($label, \ENT_QUOTES, 'UTF-8') . '">'
             . '<ol>' . \implode('', $parts) . '</ol>'
             . '</nav>';
+    }
+
+    /**
+     * Classify a callback-returned URL against the viewHtml allow-list.
+     *
+     * Rules (deliberately simple — this is a deny-door for hostile return
+     * values, not a RFC parser):
+     *  - `$allowSchemes === null` → always allowed (legacy trust).
+     *  - text before the first ':' that matches scheme syntax
+     *    `[A-Za-z][A-Za-z0-9+.-]*` (and ':' appears before any '/') →
+     *    case-insensitive membership in the list.
+     *  - anything else (no scheme, e.g. '/home/settings' from Url::derive()
+     *    or a bare relative) → allowed only when the list contains '/'.
+     */
+    private static function schemeAllowed(string $url, ?array $allowSchemes): bool
+    {
+        if ($allowSchemes === null) {
+            return true;
+        }
+
+        $firstSlash = \strpos($url, '/');
+        if (\preg_match('#^([a-zA-Z][a-zA-Z0-9+.\-]*):#', $url, $m) === 1
+            && ($firstSlash === false || $firstSlash > \strlen($m[0]) - 1)) {
+            // genuine scheme: prefix (colon appears before any slash)
+            return \in_array(\strtolower($m[1]), \array_map('strtolower', $allowSchemes), true);
+        }
+
+        return \in_array('/', $allowSchemes, true);
     }
 
     /**
