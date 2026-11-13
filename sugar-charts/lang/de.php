@@ -46,6 +46,9 @@ return [
     'scatter.point_numeric'    => 'Streudiagrammpunkt muss [numerisches x, numerisches y] sein, {given} übergeben',
     'chart.dim_nonneg'         => 'Diagrammbreite/-höhe muss >= 0 sein',
     'chart.duration_nonneg'     => 'Animationsdauer des Diagramms muss >= 0 Millisekunden sein',
+    'resample.row_shape' => 'Resample erwartet eine Liste von [\'ts\'=>..,\'value\'=>..]-Zeilen oder [ts,value]-Tupeln; Zeile #{index} hat eine nicht unterstuetzte Form ({given})',
+    'bucket.row_shape' => 'Binning erwartet eine Liste von [\'ts\'=>..,\'value\'=>..]-Zeilen oder [ts,value]-Tupeln; Zeile #{index} hat eine nicht unterstuetzte Form ({given})',
+    'legend.item_shape' => 'Legend erwartet Eintraege der Form [\'label\'=>string,\'color\'=>string]; Eintrag #{index} hat eine nicht unterstuetzte Form ({given})',
     'finite.non_finite'        => 'Diagrammwert muss endlich sein, erhalten: {value}',
 // Support/Rune.php
     'rune.empty'               => '{name} muss eine einzelne sichtbare Zelle sein, nicht leer',

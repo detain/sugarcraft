@@ -29,6 +29,9 @@ return [
     'scatter.point_numeric'    => '산점도 점은 [숫자 x, 숫자 y]여야 합니다. 입력: {given}',
     'chart.dim_nonneg'         => '차트 너비/높이는 0 이상이어야 합니다',
     'chart.duration_nonneg'     => '차트 애니메이션 시간은 0 밀리초 이상이어야 합니다',
+    'resample.row_shape' => 'Resample expects a list of [\'ts\'=>..,\'value\'=>..] rows or [ts,value] tuples; row #{index} has unsupported shape ({given})',
+    'bucket.row_shape' => 'Binning expects a list of [\'ts\'=>..,\'value\'=>..] rows or [ts,value] tuples; row #{index} has unsupported shape ({given})',
+    'legend.item_shape' => 'Legend expects items shaped [\'label\'=>string,\'color\'=>string]; item #{index} has unsupported shape ({given})',
     'finite.non_finite'        => '차트 값은 유한해야 하며, 다음 값을 받았습니다: {value}',
 // Support/Rune.php
     'rune.empty'               => '{name}은(는) 단일 표시 셀이어야 하며 비워 둘 수 없습니다',

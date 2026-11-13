@@ -46,6 +46,9 @@ return [
     'scatter.point_numeric'    => 'el punto de dispersión debe ser [x numérico, y numérico], {given} recibido',
     'chart.dim_nonneg'         => 'el ancho/alto del gráfico debe ser >= 0',
     'chart.duration_nonneg'     => 'la duración de animación del gráfico debe ser >= 0 milisegundos',
+    'resample.row_shape' => 'Resample expects a list of [\'ts\'=>..,\'value\'=>..] rows or [ts,value] tuples; row #{index} has unsupported shape ({given})',
+    'bucket.row_shape' => 'Binning expects a list of [\'ts\'=>..,\'value\'=>..] rows or [ts,value] tuples; row #{index} has unsupported shape ({given})',
+    'legend.item_shape' => 'Legend expects items shaped [\'label\'=>string,\'color\'=>string]; item #{index} has unsupported shape ({given})',
     'finite.non_finite'        => 'el valor del gráfico debe ser finito, se obtuvo {value}',
 // Support/Rune.php
     'rune.empty'               => '{name} debe ser una sola celda visible, no vacía',

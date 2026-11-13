@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Charts\Aggregation;
 
+use SugarCraft\Charts\Lang;
 use SugarCraft\Charts\Support\Finite;
 
 /**
@@ -112,7 +113,7 @@ final class Resample
      */
     public function addMany(array $timestampedValues): self
     {
-        self::assertPoints($timestampedValues);
+        $timestampedValues = self::normalized($timestampedValues);
         $clone = clone $this;
         foreach ($timestampedValues as $pt) {
             $clone->points[] = $pt;
@@ -131,6 +132,45 @@ final class Resample
     }
 
     /**
+     * Row-shape door (sugar-charts-028): validate the shape once, at
+     * ingestion, and normalise [ts,value] tuples to the canonical
+     * ['ts'=>..,'value'=>..] form the maths paths read. A malformed row
+     * becomes a domain error naming its position instead of an
+     * undefined-array-key warning that leaks into the suite (failOnWarning)
+     * and a TypeError from deep inside a private pass.
+     *
+     * @param array<array-key, mixed> $rows
+     * @return list<array<string, mixed>>
+     */
+    private static function normalized(array $rows): array
+    {
+        $out = [];
+        foreach ($rows as $index => $row) {
+            if (is_array($row)) {
+                $keys = array_keys($row);
+                if ($keys === [0, 1] && is_numeric($row[0]) && is_numeric($row[1])) {
+                    $row = ['ts' => $row[0], 'value' => $row[1]];
+                } elseif (isset($row['ts']) && isset($row['value']) && is_numeric($row['ts'])) {
+                    // canonical form, stored untouched (typed pairs keep their bytes)
+                } else {
+                    throw new \InvalidArgumentException(Lang::t('resample.row_shape', [
+                        'index' => (string) $index,
+                        'given' => get_debug_type($row),
+                    ]));
+                }
+            } else {
+                throw new \InvalidArgumentException(Lang::t('resample.row_shape', [
+                    'index' => (string) $index,
+                    'given' => get_debug_type($row),
+                ]));
+            }
+            Finite::assert($row['value']);
+            $out[] = $row;
+        }
+        return $out;
+    }
+
+    /**
      * Auto-detect whether to upsample or downsample based on ratio.
      *
      * @param list<array{ts: int, value: int|float}> $timestampedValues
@@ -141,6 +181,8 @@ final class Resample
         if ($timestampedValues === []) {
             return [];
         }
+
+        $timestampedValues = self::normalized($timestampedValues);
 
         // Determine dominant direction by examining average spacing
         $totalInterval = $timestampedValues[count($timestampedValues) - 1]['ts'] - $timestampedValues[0]['ts'];
@@ -163,7 +205,7 @@ final class Resample
             return [];
         }
 
-        self::assertPoints($timestampedValues);
+        $timestampedValues = self::normalized($timestampedValues);
         usort($timestampedValues, fn(array $a, array $b) => $a['ts'] <=> $b['ts']);
 
         $result = [];
@@ -204,7 +246,7 @@ final class Resample
             return [];
         }
 
-        self::assertPoints($timestampedValues);
+        $timestampedValues = self::normalized($timestampedValues);
         usort($timestampedValues, fn(array $a, array $b) => $a['ts'] <=> $b['ts']);
 
         $result = [];
@@ -249,7 +291,7 @@ final class Resample
             return $timestampedValues;
         }
 
-        self::assertPoints($timestampedValues);
+        $timestampedValues = self::normalized($timestampedValues);
         usort($timestampedValues, fn(array $a, array $b) => $a['ts'] <=> $b['ts']);
 
         $result = [];
@@ -292,7 +334,7 @@ final class Resample
             return [];
         }
 
-        self::assertPoints($timestampedValues);
+        $timestampedValues = self::normalized($timestampedValues);
         usort($timestampedValues, fn(array $a, array $b) => $a['ts'] <=> $b['ts']);
 
         $result = [];

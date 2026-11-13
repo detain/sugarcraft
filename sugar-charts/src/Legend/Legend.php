@@ -5,9 +5,10 @@ declare(strict_types=1);
 namespace SugarCraft\Charts\Legend;
 
 use SugarCraft\Charts\Chart\Position;
+use SugarCraft\Charts\Lang;
+use SugarCraft\Charts\Support\ColorLadder;
 use SugarCraft\Charts\Support\Rune;
 use SugarCraft\Charts\Support\UntrustedText;
-use SugarCraft\Charts\Support\ColorLadder;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Width;
@@ -55,7 +56,7 @@ final class Legend
         // sugar-charts-097: default Bottom + no border keeps a bare
         // Legend inside the fixed-width pane; the sidecar overshoot is
         // opt-in via withPosition(Position::Left|Right) / withShowBorder(true).
-        return new self(UntrustedText::guardItems($items), Position::Bottom, '█', false);
+        return new self(UntrustedText::guardItems(self::assertItems($items)), Position::Bottom, '█', false);
     }
 
     /**
@@ -63,7 +64,7 @@ final class Legend
      */
     public function withItems(array $items): self
     {
-        return new self(UntrustedText::guardItems($items), $this->position, $this->indicatorChar, $this->showBorder);
+        return new self(UntrustedText::guardItems(self::assertItems($items)), $this->position, $this->indicatorChar, $this->showBorder);
     }
 
     public function withPosition(Position $position): self
@@ -79,6 +80,30 @@ final class Legend
     public function withShowBorder(bool $show): self
     {
         return new self($this->items, $this->position, $this->indicatorChar, $show);
+    }
+
+    /**
+     * Item-shape door (sugar-charts-028): every entry must be an assoc row
+     * carrying both string keys 'label' and 'color' — the render paths read
+     * $item['color'] raw, so a missing key would surface as a PHP Warning
+     * plus a coloredIndicator(): argument TypeError instead of one clear
+     * domain error at the ingress point.
+     *
+     * @param array<array-key, mixed> $items
+     * @return list<array<string, string>>
+     */
+    private static function assertItems(array $items): array
+    {
+        foreach ($items as $index => $item) {
+            if (!is_array($item) || !isset($item['label'], $item['color'])
+                || !is_string($item['label']) || !is_string($item['color'])) {
+                throw new \InvalidArgumentException(Lang::t('legend.item_shape', [
+                    'index' => (string) $index,
+                    'given' => get_debug_type($item),
+                ]));
+            }
+        }
+        return array_values($items);
     }
 
     // Short-form aliases.

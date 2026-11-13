@@ -29,6 +29,9 @@ return [
     'scatter.point_numeric'    => '散点必须为 [数值 x, 数值 y]，收到 {given}',
     'chart.dim_nonneg'         => '图表宽度/高度必须 >= 0',
     'chart.duration_nonneg'     => '图表动画时长必须 >= 0 毫秒',
+    'resample.row_shape' => 'Resample expects a list of [\'ts\'=>..,\'value\'=>..] rows or [ts,value] tuples; row #{index} has unsupported shape ({given})',
+    'bucket.row_shape' => 'Binning expects a list of [\'ts\'=>..,\'value\'=>..] rows or [ts,value] tuples; row #{index} has unsupported shape ({given})',
+    'legend.item_shape' => 'Legend expects items shaped [\'label\'=>string,\'color\'=>string]; item #{index} has unsupported shape ({given})',
     'finite.non_finite'        => '图表值必须是有限值，实际为 {value}',
 // Support/Rune.php
     'rune.empty'               => '{name} 必须是单个可见单元格，不能为空',

@@ -29,6 +29,9 @@ return [
     'scatter.point_numeric'    => 'точка диаграммы должна быть [числовые x, числовые y], передано {given}',
     'chart.dim_nonneg'         => 'ширина/высота диаграммы должны быть >= 0',
     'chart.duration_nonneg'     => 'длительность анимации графика должна быть >= 0 миллисекунд',
+    'resample.row_shape' => 'Resample expects a list of [\'ts\'=>..,\'value\'=>..] rows or [ts,value] tuples; row #{index} has unsupported shape ({given})',
+    'bucket.row_shape' => 'Binning expects a list of [\'ts\'=>..,\'value\'=>..] rows or [ts,value] tuples; row #{index} has unsupported shape ({given})',
+    'legend.item_shape' => 'Legend expects items shaped [\'label\'=>string,\'color\'=>string]; item #{index} has unsupported shape ({given})',
     'finite.non_finite'        => 'значение диаграммы должно быть конечным, получено {value}',
 // Support/Rune.php
     'rune.empty'               => '{name} должен быть одной видимой ячейкой, а не пустым',

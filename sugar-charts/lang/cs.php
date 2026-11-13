@@ -29,6 +29,9 @@ return [
     'scatter.point_numeric'    => 'bod grafu musí být [číselné x, číselné y], zadáno {given}',
     'chart.dim_nonneg'         => 'šířka/výška grafu musí být >= 0',
     'chart.duration_nonneg'     => 'doba animace grafu musí být >= 0 milisekund',
+    'resample.row_shape' => 'Resample expects a list of [\'ts\'=>..,\'value\'=>..] rows or [ts,value] tuples; row #{index} has unsupported shape ({given})',
+    'bucket.row_shape' => 'Binning expects a list of [\'ts\'=>..,\'value\'=>..] rows or [ts,value] tuples; row #{index} has unsupported shape ({given})',
+    'legend.item_shape' => 'Legend expects items shaped [\'label\'=>string,\'color\'=>string]; item #{index} has unsupported shape ({given})',
     'finite.non_finite'        => 'hodnota grafu musí být konečná, získáno {value}',
 // Support/Rune.php
     'rune.empty'               => '{name} musí být jeden viditelný symbol, ne prázdný',

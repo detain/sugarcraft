@@ -48,6 +48,9 @@ return [
     // Chart/Chart.php
     'chart.dim_nonneg'         => 'chart width/height must be >= 0',
     'chart.duration_nonneg'     => 'chart animation duration must be >= 0 milliseconds',
+    'resample.row_shape' => 'Resample expects a list of [\'ts\'=>..,\'value\'=>..] rows or [ts,value] tuples; row #{index} has unsupported shape ({given})',
+    'bucket.row_shape' => 'Binning expects a list of [\'ts\'=>..,\'value\'=>..] rows or [ts,value] tuples; row #{index} has unsupported shape ({given})',
+    'legend.item_shape' => 'Legend expects items shaped [\'label\'=>string,\'color\'=>string]; item #{index} has unsupported shape ({given})',
 
     // Support/Finite.php
     'finite.non_finite'        => 'chart value must be finite, got {value}',

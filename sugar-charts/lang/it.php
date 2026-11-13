@@ -29,6 +29,9 @@ return [
     'scatter.point_numeric'    => 'il punto del grafico a dispersione deve essere [x numerico, y numerico], {given} fornito',
     'chart.dim_nonneg'         => 'larghezza/altezza del grafico devono essere >= 0',
     'chart.duration_nonneg'     => 'la durata di animazione del grafico deve essere >= 0 millisecondi',
+    'resample.row_shape' => 'Resample expects a list of [\'ts\'=>..,\'value\'=>..] rows or [ts,value] tuples; row #{index} has unsupported shape ({given})',
+    'bucket.row_shape' => 'Binning expects a list of [\'ts\'=>..,\'value\'=>..] rows or [ts,value] tuples; row #{index} has unsupported shape ({given})',
+    'legend.item_shape' => 'Legend expects items shaped [\'label\'=>string,\'color\'=>string]; item #{index} has unsupported shape ({given})',
     'finite.non_finite'        => 'il valore del grafico deve essere finito, ottenuto {value}',
 // Support/Rune.php
     'rune.empty'               => '{name} deve essere una sola cella visibile, non vuota',

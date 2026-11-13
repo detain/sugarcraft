@@ -29,6 +29,9 @@ return [
     'scatter.point_numeric'    => 'punkt wykresu musi być [numeryczne x, numeryczne y], podano {given}',
     'chart.dim_nonneg'         => 'szerokość/wysokość wykresu musi wynosić >= 0',
     'chart.duration_nonneg'     => 'czas animacji wykresu musi wynosić >= 0 milisekund',
+    'resample.row_shape' => 'Resample expects a list of [\'ts\'=>..,\'value\'=>..] rows or [ts,value] tuples; row #{index} has unsupported shape ({given})',
+    'bucket.row_shape' => 'Binning expects a list of [\'ts\'=>..,\'value\'=>..] rows or [ts,value] tuples; row #{index} has unsupported shape ({given})',
+    'legend.item_shape' => 'Legend expects items shaped [\'label\'=>string,\'color\'=>string]; item #{index} has unsupported shape ({given})',
     'finite.non_finite'        => 'wartość wykresu musi być skończona, otrzymano {value}',
 // Support/Rune.php
     'rune.empty'               => '{name} musi być pojedynczą widoczną komórką, nie pustą',

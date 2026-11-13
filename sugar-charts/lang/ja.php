@@ -29,6 +29,9 @@ return [
     'scatter.point_numeric'    => '散布図の点は [数値 x, 数値 y] である必要があります。指定された型: {given}',
     'chart.dim_nonneg'         => 'チャートの幅/高さは >= 0 である必要があります',
     'chart.duration_nonneg'     => 'チャートのアニメーション長は 0 ミリ秒以上である必要があります',
+    'resample.row_shape' => 'Resample expects a list of [\'ts\'=>..,\'value\'=>..] rows or [ts,value] tuples; row #{index} has unsupported shape ({given})',
+    'bucket.row_shape' => 'Binning expects a list of [\'ts\'=>..,\'value\'=>..] rows or [ts,value] tuples; row #{index} has unsupported shape ({given})',
+    'legend.item_shape' => 'Legend expects items shaped [\'label\'=>string,\'color\'=>string]; item #{index} has unsupported shape ({given})',
     'finite.non_finite'        => 'チャートの値は有限である必要があります。取得値: {value}',
 // Support/Rune.php
     'rune.empty'               => '{name} は単一の表示セルである必要があります（空にできません）',

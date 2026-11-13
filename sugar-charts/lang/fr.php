@@ -46,6 +46,9 @@ return [
     'scatter.point_numeric'    => 'le point du nuage de points doit être [x numérique, y numérique], {given} fourni',
     'chart.dim_nonneg'         => 'la largeur/hauteur du graphique doit être >= 0',
     'chart.duration_nonneg'     => 'la durée d\'animation du graphique doit être >= 0 millisecondes',
+    'resample.row_shape' => 'Resample attend une liste de lignes [\'ts\'=>..,\'value\'=>..] ou de tuples [ts,valeur] ; la ligne #{index} a une forme non prise en charge ({given})',
+    'bucket.row_shape' => 'Binning attend une liste de lignes [\'ts\'=>..,\'value\'=>..] ou de tuples [ts,valeur] ; la ligne #{index} a une forme non prise en charge ({given})',
+    'legend.item_shape' => 'Legend attend des entrees de forme [\'label\'=>string,\'color\'=>string] ; l\'entree #{index} a une forme non prise en charge ({given})',
     'finite.non_finite'        => 'la valeur du graphique doit être finie, valeur reçue : {value}',
 // Support/Rune.php
     'rune.empty'               => '{name} doit être une seule cellule visible, et non vide',

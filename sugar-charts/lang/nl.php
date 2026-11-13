@@ -29,6 +29,9 @@ return [
     'scatter.point_numeric'    => 'spreidingsdiagram-punt moet [numeriek x, numeriek y] zijn, {given} opgegeven',
     'chart.dim_nonneg'         => 'breedte/hoogte van de grafiek moet >= 0 zijn',
     'chart.duration_nonneg'     => 'de animatieduur van de grafiek moet >= 0 milliseconden zijn',
+    'resample.row_shape' => 'Resample expects a list of [\'ts\'=>..,\'value\'=>..] rows or [ts,value] tuples; row #{index} has unsupported shape ({given})',
+    'bucket.row_shape' => 'Binning expects a list of [\'ts\'=>..,\'value\'=>..] rows or [ts,value] tuples; row #{index} has unsupported shape ({given})',
+    'legend.item_shape' => 'Legend expects items shaped [\'label\'=>string,\'color\'=>string]; item #{index} has unsupported shape ({given})',
     'finite.non_finite'        => 'de grafiekwaarde moet eindig zijn, gekregen {value}',
 // Support/Rune.php
     'rune.empty'               => '{name} moet één zichtbare cel zijn, niet leeg',

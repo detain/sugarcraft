@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Charts\Aggregation;
 
 use DateTimeImmutable;
+use SugarCraft\Charts\Lang;
 use SugarCraft\Charts\Support\Finite;
 
 /**
@@ -117,7 +118,7 @@ final class BucketByTime
      */
     public function addMany(array $timestampedValues): self
     {
-        self::assertPoints($timestampedValues);
+        $timestampedValues = self::normalized($timestampedValues);
         $clone = clone $this;
         foreach ($timestampedValues as $pt) {
             $clone->points[] = $pt;
@@ -133,6 +134,42 @@ final class BucketByTime
         foreach ($timestampedValues as $pt) {
             Finite::assert($pt['value']);
         }
+    }
+
+    /**
+     * Row-shape door (sugar-charts-028): see Resample::normalized for the
+     * contract — shape validated once here, [ts,value] tuples canonicalised,
+     * malformed rows throw a domain error naming the position.
+     *
+     * @param array<array-key, mixed> $rows
+     * @return list<array<string, mixed>>
+     */
+    private static function normalized(array $rows): array
+    {
+        $out = [];
+        foreach ($rows as $index => $row) {
+            if (is_array($row)) {
+                $keys = array_keys($row);
+                if ($keys === [0, 1] && is_numeric($row[0]) && is_numeric($row[1])) {
+                    $row = ['ts' => $row[0], 'value' => $row[1]];
+                } elseif (isset($row['ts']) && isset($row['value']) && is_numeric($row['ts'])) {
+                    // canonical form, stored untouched
+                } else {
+                    throw new \InvalidArgumentException(Lang::t('bucket.row_shape', [
+                        'index' => (string) $index,
+                        'given' => get_debug_type($row),
+                    ]));
+                }
+            } else {
+                throw new \InvalidArgumentException(Lang::t('bucket.row_shape', [
+                    'index' => (string) $index,
+                    'given' => get_debug_type($row),
+                ]));
+            }
+            Finite::assert($row['value']);
+            $out[] = $row;
+        }
+        return $out;
     }
 
     /**
@@ -155,7 +192,7 @@ final class BucketByTime
             return [];
         }
 
-        self::assertPoints($timestampedValues);
+        $timestampedValues = self::normalized($timestampedValues);
 
         /** @var array<int, list<array{ts: int, value: int|float}>> */
         $buckets = [];
