@@ -137,6 +137,31 @@ final class LocaleParityTest extends TestCase
         }
     }
 
+    /**
+     * pt is European Portuguese and pt-br Brazilian: each keeps its own
+     * vocabulary, so a copy-sweep that "fixes" one toward the other (the
+     * two catalogs started as near-twins) reddens here.
+     */
+    public function testPortugueseVariantsKeepTheirOwnVocabulary(): void
+    {
+        $locales = self::allLocales();
+        $pt = \implode("\n", $locales['pt']);
+        $br = \implode("\n", $locales['pt-br']);
+
+        foreach (['Banco de dados', 'arquivo', 'excluíd', 'sobrescrit', 'Você', 'você', 'mais legível'] as $brazilianism) {
+            $this->assertStringNotContainsString($brazilianism, $pt, "pt carries the Brazilian form '{$brazilianism}'");
+        }
+        foreach (['Base de dados', 'ficheiro', 'eliminad', 'Queria dizer', 'substituíd'] as $europeanism) {
+            $this->assertStringNotContainsString($europeanism, $br, "pt-br carries the European form '{$europeanism}'");
+        }
+        foreach (['Base de dados', 'ficheiro', 'eliminad', 'substituíd'] as $needle) {
+            $this->assertStringContainsString($needle, $pt, "pt lost its European '{$needle}'");
+        }
+        foreach (['Banco de dados', 'arquivo', 'excluíd', 'sobrescrit', 'você'] as $needle) {
+            $this->assertStringContainsString($needle, $br, "pt-br lost its Brazilian '{$needle}'");
+        }
+    }
+
     public function testEveryValueIsANonEmptyString(): void
     {
         foreach (self::allLocales() as $code => $data) {
