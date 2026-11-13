@@ -987,4 +987,95 @@ final class FlexboxTest extends TestCase
 
         $this->assertSame('AAA', $box->render(3, 1));
     }
+
+    // -------------------------------------------------------------------------
+    // FBX-15: per-instance measured-geometry memo + bulk construction path
+    // -------------------------------------------------------------------------
+
+    public function testMeasuredGeometryMemoizesOnTheItemInstance(): void
+    {
+        $item = FlexItem::new("abc\n東京\nx"); // widths 3, 4, 1
+
+        $widthMemo  = new \ReflectionProperty(FlexItem::class, 'widthMemo');
+        $heightMemo = new \ReflectionProperty(FlexItem::class, 'heightMemo');
+        $lineMemo   = new \ReflectionProperty(FlexItem::class, 'lineMemo');
+
+        $this->assertNull($widthMemo->getValue($item), 'nothing is computed before the first ask');
+        $this->assertNull($heightMemo->getValue($item));
+        $this->assertNull($lineMemo->getValue($item));
+
+        $this->assertSame(4, $item->measuredWidth());
+        $this->assertSame(3, $item->measuredHeight());
+
+        $this->assertSame(4, $widthMemo->getValue($item), 'the answer landed in the memo');
+        $this->assertSame(3, $heightMemo->getValue($item));
+        $this->assertSame(['abc', '東京', 'x'], $lineMemo->getValue($item));
+
+        // The strict proof of measure-once: poison the memo — if measuredWidth()
+        // recomputed from content it would answer 4 again, not the sentinel.
+        $widthMemo->setValue($item, 99);
+        $this->assertSame(99, $item->measuredWidth(), 'measuredWidth answers the memo, never re-walks');
+    }
+
+    public function testDerivedItemCarriesFreshMemos(): void
+    {
+        $base    = FlexItem::new('first');
+        $derived = $base->withContent("two\nlines");
+
+        $widthMemo = new \ReflectionProperty(FlexItem::class, 'widthMemo');
+        $this->assertNull($widthMemo->getValue($base));
+        $this->assertNull($widthMemo->getValue($derived));
+
+        $this->assertSame(5, $base->measuredWidth());    // 'first'
+        $this->assertSame(5, $derived->measuredWidth()); // 'lines'
+
+        // Independent memos: the base cache must not be shared by reference.
+        $this->assertSame(5, $widthMemo->getValue($base));
+        $widthMemo->setValue($derived, 1);
+        $this->assertSame(1, $derived->measuredWidth());
+        $this->assertSame(5, $base->measuredWidth(), 'with* clones never inherit a live memo object');
+    }
+
+    public function testFrameRenderFillsTheItemMemos(): void
+    {
+        // The renderer now measures THROUGH the item — a single frame must
+        // leave every memo populated (zero byte moves are pinned by the
+        // exact-cell tests above; this pins the wiring).
+        $item = FlexItem::new("L1\nL2\nLONGER");
+        FlexBox::row($item)->render(10, 3);
+
+        $this->assertSame(6, (new \ReflectionProperty(FlexItem::class, 'widthMemo'))->getValue($item));
+        $this->assertSame(3, (new \ReflectionProperty(FlexItem::class, 'heightMemo'))->getValue($item));
+    }
+
+    public function testLinesAnswersTheRawUnsanitizedSplit(): void
+    {
+        // Measurement discipline (documented asymmetry): lines() carries the
+        // raw bytes — sanitize stays per PRINTED line inside the renderer.
+        $item = FlexItem::new("keep\x1b[31mred\nsecond");
+
+        $this->assertSame(["keep\x1b[31mred", 'second'], $item->lines());
+    }
+
+    public function testWithItemsIsTheBulkEquivalentOfChainedAdds(): void
+    {
+        $chain = FlexBox::row(FlexItem::new('A'))
+            ->addItem(FlexItem::new('B'))
+            ->addItem(FlexItem::new('C'));
+        $bulk = FlexBox::row()->withItems(
+            FlexItem::new('A'),
+            FlexItem::new('B'),
+            FlexItem::new('C'),
+        );
+
+        $this->assertSame(
+            $chain->render(20, 1),
+            $bulk->render(20, 1),
+            'one-copy bulk construction paints exactly what the O(n²) chain paints',
+        );
+
+        // and it REPLACES the list rather than appending to it:
+        $replaced = FlexBox::row(FlexItem::new('GHOST'))->withItems(FlexItem::new('B'));
+        $this->assertSame('B                   ', $replaced->render(20, 1));
+    }
 }

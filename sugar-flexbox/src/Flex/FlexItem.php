@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Flexbox\Flex;
 
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Flexbox\Support\Sgr;
 
 /**
@@ -11,6 +12,12 @@ use SugarCraft\Flexbox\Support\Sgr;
  *
  * Holds content + layout constraints (ratio, basis).
  * Uses ratio-based sizing (like CSS flex-grow) for space distribution.
+ *
+ * The content is fixed at construction (every `with*` answers a fresh
+ * instance), so measured geometry is derivation over immutable input:
+ * the split lines and both axis measures memoize themselves once and
+ * every later frame reads the cache — a reused item inside a hot
+ * render loop costs one explode per INSTANCE, not per frame.
  */
 final class FlexItem
 {
@@ -29,6 +36,22 @@ final class FlexItem
     /** Style applied to this item (ANSI string). */
     public readonly string $style;
 
+    /**
+     * Memo of the raw explode("\n") split of content — content is fixed at
+     * construction so the split is derivable once per instance and reused by
+     * every measure and every frame. Not readonly: PHP forbids a readonly
+     * property being written lazily, but the value is immutable-by-contract.
+     *
+     * @var list<string>|null
+     */
+    private ?array $lineMemo = null;
+
+    /** Memo of measuredWidth() for this instance. */
+    private ?int $widthMemo = null;
+
+    /** Memo of measuredHeight() for this instance. */
+    private ?int $heightMemo = null;
+
     private function __construct(
         string $content,
         int $ratio = 1,
@@ -39,6 +62,41 @@ final class FlexItem
         $this->ratio   = $ratio;
         $this->basis   = $basis;
         $this->style   = $style;
+    }
+
+    /**
+     * The raw content split on newlines, once per instance.
+     *
+     * @return list<string>
+     */
+    public function lines(): array
+    {
+        return $this->lineMemo ??= explode("\n", $this->content);
+    }
+
+    /**
+     * Natural content width — the widest raw line, measured on the UNSWEPT
+     * string (the renderer sanitizes per line later; see the "Trust boundary"
+     * disclosure). Cached: content is fixed at construction, so this is pure
+     * derivation with a safe memo.
+     */
+    public function measuredWidth(): int
+    {
+        if ($this->widthMemo !== null) {
+            return $this->widthMemo;
+        }
+        $widths = array_map(Width::string(...), $this->lines());
+
+        return $this->widthMemo = $widths === [] ? 0 : max($widths);
+    }
+
+    /**
+     * Natural content height — the raw line count (same raw-measurement ingress
+     * as measuredWidth()). Cached.
+     */
+    public function measuredHeight(): int
+    {
+        return $this->heightMemo ??= count($this->lines());
     }
 
     public static function new(string $content = ''): self

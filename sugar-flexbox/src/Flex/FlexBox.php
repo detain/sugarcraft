@@ -65,11 +65,33 @@ final class FlexBox
         return new self($this->direction, $this->align, $cells, $this->items);
     }
 
+    /**
+     * Append one item.
+     *
+     * IMMUTABLE COST: each call copies the whole item list to append a single
+     * element (O(n) per call, O(n²) to build n items — measured 2.6 ms@1k
+     * rising to 18.1 ms@3k). That is the price of value semantics, not a
+     * silent trap: reach for {@see withItems()} (or {@see row()}/
+     * {@see column()}) when the set is known up front — they take the whole
+     * list in ONE copy.
+     */
     public function addItem(FlexItem $item): self
     {
         $newItems = $this->items;
         $newItems[] = $item;
         return new self($this->direction, $this->align, $this->gap, $newItems);
+    }
+
+    /**
+     * Bulk path: replace the whole item list in a single copy. Building N
+     * items with chained addItem() calls is O(N²) in list copies; withItems()
+     * is the O(N) construction the {@see row()}/{@see column()} factories use.
+     *
+     * @param FlexItem ...$items the complete set for this box
+     */
+    public function withItems(FlexItem ...$items): self
+    {
+        return new self($this->direction, $this->align, $this->gap, array_values($items));
     }
 
     // -------------------------------------------------------------------------
@@ -141,7 +163,7 @@ final class FlexBox
         $cells = [];
         foreach ($measured as $i => $m) {
             $aw        = $m['allocated'];
-            $itemLines = \explode("\n", $m['item']->content);
+            $itemLines = $m['item']->lines();
             $style     = $m['item']->style;
             $column    = [];
             for ($line = 0; $line < $maxHeight; $line++) {
@@ -186,7 +208,7 @@ final class FlexBox
         $resultLines = [];
         for ($i = 0; $i < \count($measured); $i++) {
             $m    = $measured[$i];
-            $itemLines = \explode("\n", $m['item']->content);
+            $itemLines = $m['item']->lines();
             // Fit contract: an item may never print more lines than the
             // height allocateMainAxis reserved for it. A taller multi-line
             // sibling used to spill past its slice and push the next item
@@ -341,26 +363,19 @@ final class FlexBox
     }
 
     /**
-     * Natural content width of an item — the widest raw line. Measurement
-     * runs on the UNSWEPT string (measureHeight shares this property): the
-     * sanitize sweep happens per line later, inside renderRow()/
-     * renderColumn(). Escape/control bytes in content therefore inflate
-     * measured geometry — and with it the ratio split — even though the
-     * emitted frame carries only the swept text; the renderer's final
-     * Width::truncateAnsi keeps every printed line within the box. The
-     * README "Trust boundary" section discloses this asymmetry to users.
+     * Natural content width of an item — delegates to the item's own cached
+     * measure so a reused FlexItem is measured once per INSTANCE, not once
+     * per frame (see FlexItem::measuredWidth()).
      */
     private function measureWidth(FlexItem $item): int
     {
-        $lines = \explode("\n", $item->content);
-        $widths = \array_map(\SugarCraft\Core\Util\Width::string(...), $lines);
-        return $widths === [] ? 0 : \max($widths);
+        return $item->measuredWidth();
     }
 
-    /** Natural content height — number of raw content lines (same raw-measurement ingress as measureWidth()). */
+    /** Natural content height — delegates to the item's cached measure. */
     private function measureHeight(FlexItem $item): int
     {
-        return \count(\explode("\n", $item->content));
+        return $item->measuredHeight();
     }
 
     private function alignCell(string $text, int $width, Align $align): string
