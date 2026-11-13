@@ -801,6 +801,18 @@ final class Buffer implements \JsonSerializable
         return $this->mutate(['grid' => $grid]);
     }
 
+    /**
+     * Diff against $previous and encode the delta in one step — the
+     * canonical two-liner (`$curr->diff($prev)` fed to a fresh
+     * `DiffEncoder`) collapsed for the frame-loop call sites that
+     * hand-wired it (sugar-flexbox, sugar-panels, sugar-overlay,
+     * sugar-dashboard, examples/diff_frames.php all repeat the pattern).
+     */
+    public function diffToAnsi(self $previous): string
+    {
+        return (new Diff\DiffEncoder())->encode($this->diff($previous));
+    }
+
     // ─── ANSI rendering ─────────────────────────────────────────────────
 
     /**

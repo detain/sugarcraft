@@ -526,4 +526,28 @@ final class DiffEncoderTest extends TestCase
         $this->assertStringContainsString("\x1b[2X", $bytes);
         $this->assertStringContainsString("\x1b]8;id=pinned;https://example.com\x1b\\", $bytes);
     }
+
+    // ─── One-step diff encoding (sugar-cellbuffer-019) ──────────────────
+
+    public function testDiffToAnsiIsByteIdenticalToTheHandWiredPair(): void
+    {
+        $prev = Buffer::new(6, 2);
+        $curr = $prev
+            ->withCellAt(1, 0, Cell::new('X', Style::fromSgr('1;31'), new Hyperlink('https://example.com')))
+            ->withCellAt(4, 1, Cell::new('Y', Style::fromSgr('4')));
+
+        $handWired = (new DiffEncoder())->encode($curr->diff($prev));
+
+        self::assertSame($handWired, $curr->diffToAnsi($prev));
+        // The canonical flow is still real bytes, not an empty stub.
+        self::assertStringStartsWith("\x1b[1;1H", $handWired);
+        self::assertStringContainsString('X', $handWired);
+    }
+
+    public function testDiffToAnsiOfAnUnchangedFrameIsTheBarePrologue(): void
+    {
+        $buf = Buffer::new(3, 1);
+
+        self::assertSame("\x1b[1;1H", $buf->diffToAnsi($buf));
+    }
 }
