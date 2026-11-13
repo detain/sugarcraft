@@ -249,15 +249,39 @@ final class MsTeamsChannel implements ChannelInterface, AcceptsHttpRequests
             $placeholder->addChannel($face, $face->accountName());
         }
 
+        // Timer-law guard (§9.5's shape): an escaping throw inside a periodic
+        // closure kills the shared loop for EVERYONE, so both housekeeping
+        // ticks swallow at the door and log — a broken db or a half-written
+        // discovery must cost one tick, never the process.
         $this->pollTimer = $this->loop->addPeriodicTimer(5.0, function (): void {
-            $this->pollServe();
+            $this->pollServeGuarded();
         });
         $this->pollServe();
         // The dedupe ledger stays bounded without a platform-side sweep
         // (§9.5); 6 h is amply frequent for a 7-day keep.
         $this->pruneTimer = $this->loop->addPeriodicTimer(21600.0, function (): void {
-            $this->map?->pruneSeen(7);
+            $this->pruneSeenGuarded();
         });
+    }
+
+    /** msteams-18: the poll tick, fenced — a throw costs one tick, not the loop. */
+    private function pollServeGuarded(): void
+    {
+        try {
+            $this->pollServe();
+        } catch (\Throwable $e) {
+            $this->log?->warn('channels.msteams.poll_tick_failed', ['error' => $e->getMessage()]);
+        }
+    }
+
+    /** msteams-18: the prune tick, fenced (a corrupt session db must not kill the loop). */
+    private function pruneSeenGuarded(): void
+    {
+        try {
+            $this->map?->pruneSeen(7);
+        } catch (\Throwable $e) {
+            $this->log?->warn('channels.msteams.prune_tick_failed', ['error' => $e->getMessage()]);
+        }
     }
 
     /**

@@ -390,6 +390,55 @@ final class MsTeamsChannelTest extends TestCase
         }
     }
 
+    /**
+     * msteams-18: the periodic ticks are fenced. With the session ledger
+     * corrupted under a live connection, the prune tick must swallow at the
+     * door, name itself in the log, and still be callable the next tick —
+     * an escaping throw here would kill the SHARED loop.
+     */
+    public function testACorruptSessionDbCostsThePruneTickNotTheLoop(): void
+    {
+        $lines = [];
+        $this->writeUserConfig(['channels.msteams' => ['enabled' => true]]);
+        $store = new CredentialStore(CredentialStore::defaultPath());
+        $store->writeMsteamsPairing('default', [], [], [
+            'appId' => 'app-fence', 'appPassword' => 'fence-secret', 'tenantId' => '2b3c4d5e-6f70-4182-93a4-b5c6d7e8f901',
+        ]);
+        $channel = new MsTeamsChannel();
+        $channel->start($this->context(static function (string $line) use (&$lines): void {
+            $lines[] = $line;
+        }));
+
+        try {
+            $mapProp = new \ReflectionProperty(MsTeamsChannel::class, 'map');
+            $mapProp->setAccessible(true);
+            $map = $mapProp->getValue($channel);
+            self::assertNotNull($map, 'the boot must have minted the session ledger');
+
+            // Rot the database under the live handle: settle the WAL into
+            // the main file first (probe-proven — without the checkpoint the
+            // cached pages never re-read the rot), then overwrite it.
+            $settler = new \PDO('sqlite:' . $map->path);
+            $settler->exec('PRAGMA wal_checkpoint(TRUNCATE)');
+            $settler = null;
+            file_put_contents($map->path, str_repeat('rot', 4000));
+
+            $prune = new \ReflectionMethod(MsTeamsChannel::class, 'pruneSeenGuarded');
+            $prune->setAccessible(true);
+            $prune->invoke($channel);
+            $prune->invoke($channel); // the next tick still runs
+            $warned = \array_values(\array_filter($lines, static fn (string $l): bool => \str_contains($l, 'prune_tick_failed')));
+            self::assertGreaterThanOrEqual(2, count($warned), 'each failed tick must name itself');
+
+            // The poll fence holds the same contract on a clean tick.
+            $poll = new \ReflectionMethod(MsTeamsChannel::class, 'pollServeGuarded');
+            $poll->setAccessible(true);
+            $poll->invoke($channel);
+        } finally {
+            $channel->dispose();
+        }
+    }
+
     /** Run the shared loop for $ms of wall time (timer stops it). */
     private function pump(int $ms): void
     {
