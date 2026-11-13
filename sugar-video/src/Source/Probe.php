@@ -121,11 +121,18 @@ class Probe
     /**
      * Locate a binary by name using the host OS conventions.
      *
-     * Windows: "where <cmd>" — returns the first match from PATH.
+     * Windows: "where.exe <cmd>" — returns the first match from PATH, and the
+     * lookup is only consulted under a cmd-family ComSpec (SV-X94: on
+     * PowerShell-default hosts the `2>NUL` redirection is not cmd semantics
+     * and misfires, so a non-cmd family refuses the probe instead).
      * Unix:    "command -v <cmd>" — returns the full path from PATH.
      *
-     * If the command already contains a path separator, only verifies
-     * that it is an existing executable file (no PATH lookup).
+     * If the command already contains a path separator, only verifies that it
+     * is an existing executable file (no PATH lookup). On Windows
+     * executability is an EXTENSION property — SV-X94: the extension-blind
+     * stat bit made an `ffmpeg.txt` pass as a binary, so `.exe/.bat/.cmd` is
+     * required there. The Windows gate runs through {@see isWindows()} (a
+     * subclass seam) so both arms are unit-testable on any host.
      *
      * @see sugar-core/src/Util/Editor.php:154
      */
@@ -135,15 +142,28 @@ class Probe
             return null;
         }
 
-        $hasSep = str_contains($cmd, DIRECTORY_SEPARATOR)
-            || (DIRECTORY_SEPARATOR === '\\' && str_contains($cmd, '/'));
+        $windows = static::isWindows();
+        $hasSep = str_contains($cmd, DIRECTORY_SEPARATOR) || ($windows && str_contains($cmd, '/'));
         if ($hasSep) {
+            if ($windows && preg_match('~\.(exe|bat|cmd)$~i', $cmd) !== 1) {
+                return null;
+            }
+
             return is_file($cmd) && is_executable($cmd) ? $cmd : null;
         }
 
-        $shell = DIRECTORY_SEPARATOR === '\\'
-            ? 'where ' . escapeshellarg($cmd) . ' 2>NUL'
-            : 'command -v ' . escapeshellarg($cmd) . ' 2>/dev/null';
+        if ($windows) {
+            $comspec = (string) getenv('ComSpec');
+            if (preg_match('~cmd\.exe$~i', $comspec) !== 1) {
+                // Documented refuse (SV-X94): without cmd semantics the probe
+                // would emit PowerShell noise, and `where.exe` itself may be
+                // shadowed by an alias. "No binary answer" is the honest value.
+                return null;
+            }
+            $shell = 'where.exe ' . escapeshellarg($cmd) . ' 2>NUL';
+        } else {
+            $shell = 'command -v ' . escapeshellarg($cmd) . ' 2>/dev/null';
+        }
 
         // TTL memo: fresh entries answer without forking a shell at all;
         // expired ones re-lookup and overwrite. Path-separator commands above
@@ -185,6 +205,17 @@ class Probe
     protected static function runShellLookup(string $shell): ?string
     {
         return @shell_exec($shell);
+    }
+
+    /**
+     * The OS-shape seam (SV-X94): true on Windows hosts. Subclass-overridable
+     * so the Windows detection arms — extension gate, cmd-family refusal —
+     * are unit-testable on a Linux/CI host without lying about the platform
+     * anything else sees.
+     */
+    protected static function isWindows(): bool
+    {
+        return DIRECTORY_SEPARATOR === '\\';
     }
 
     /**
