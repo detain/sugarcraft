@@ -59,4 +59,5 @@ return [
     'player.restart_hint' => '0 restart  q quit',
     'player.quit_hint' => 'q quit',
     'player.frame_budget_negative' => 'frame budget must not be negative, got {ms} ms',
+    'player.terminal_too_small' => 'terminal too small ({cols} cols, {min} min)',
 ];

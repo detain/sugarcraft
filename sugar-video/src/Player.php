@@ -153,6 +153,12 @@ final class Player implements Model
         // fromDecoder/openForTest — the precedent is $autoModeChooser). null
         // keeps the library default: the monotonic hrtime base in now().
         private readonly ?\Closure $clock = null,
+        // SV-PGEO/068: the host's REAL column count when the last window it
+        // reported sits below the MIN_COLS floor, null otherwise. A below-floor
+        // terminal cannot hold even one pane row without soft-wrapping it, so
+        // view() paints a one-line refusal at the real width instead of
+        // emitting lines that are guaranteed wider than the screen.
+        private readonly ?int $narrowCols = null,
     ) {
     }
 
@@ -270,6 +276,7 @@ final class Player implements Model
         // at EVERY entry, not just the resize path — an unclamped open() is a
         // multi-megabyte view() per frame (QA measured 100,000,056 bytes at
         // 9999x9999) and a memory DoS one constructor call deep.
+        $narrowCols = $cellsW < self::MIN_COLS ? $cellsW : null; // SV-PGEO/068
         [$cellsW, $cellsH] = self::clampCells($cellsW, $cellsH);
 
         // Null mode = auto-detect, resolved once here at the boundary so every
@@ -404,6 +411,7 @@ final class Player implements Model
             hostRestricted: $hostRestricted,
             frameBudgetMs: $frameBudgetMs,
             failure: $posterFailure,
+            narrowCols: $narrowCols, // SV-PGEO/068
         );
     }
 
@@ -505,6 +513,7 @@ final class Player implements Model
         // SV-H7/007: the pane window binds here too — fromDecoder is the
         // entry every Reel build and the test seams walk through, so the
         // 9999x9999 DoS constructor is refused at the same door as open().
+        $narrowCols = $cellsW < self::MIN_COLS ? $cellsW : null; // SV-PGEO/068
         [$cellsW, $cellsH] = self::clampCells($cellsW, $cellsH);
 
         // The header map is validated HERE, at this public boundary: every other entry point — Reel::open/openUrl, the ffmpeg
@@ -546,6 +555,7 @@ final class Player implements Model
             headers: $headers,
             frameBudgetMs: $frameBudgetMs,
             clock: $clock,
+            narrowCols: $narrowCols, // SV-PGEO/068
         );
     }
 
@@ -830,6 +840,7 @@ final class Player implements Model
             return [$this, null];
         }
 
+        $narrowCols = $cols < self::MIN_COLS ? $cols : null; // SV-PGEO/068
         [$cols, $rows] = self::clampCells($cols, $rows);
 
         // Compare against the *pending* geometry, not just the applied one: during a
@@ -843,21 +854,34 @@ final class Player implements Model
             // still in flight. Cancelling here is what makes that timer harmless —
             // otherwise it fires and rebuilds the decoder at a geometry the host no
             // longer has, and nothing later corrects it.
-            if ($pending === null) {
+            //
+            // SV-PGEO/068: the floor state still refreshes on this path — a 6-col
+            // terminal clamps to the pane's 10 but genuinely CANNOT hold a line,
+            // and an 8-col event must restate the refusal with the real number.
+            if ($pending === null && $narrowCols === $this->narrowCols) {
                 return [$this, null];
             }
 
-            return [$this->mutate(['pendingResize' => null]), null];
+            return [$this->mutate(['pendingResize' => null, 'narrowCols' => $narrowCols]), null];
         }
 
         if ($pending !== null && $pending->cols === $cols && $pending->rows === $rows) {
-            return [$this, null];
+            if ($narrowCols === $this->narrowCols) {
+                return [$this, null];
+            }
+
+            return [$this->mutate(['narrowCols' => $narrowCols]), null];
         }
 
         // Stash the clamped target so the rebuild honours the same bounds a
         // synchronous path would have, and so `view()` keeps painting the current
         // (slightly stale) frame instead of a black box while the burst settles.
-        $nextPlayer = $this->mutate(['pendingResize' => new WindowSizeMsg($cols, $rows)]);
+        // The refusal answers the host NOW (its screen is already too small for
+        // the stale frame on it), not after the debounce lands.
+        $nextPlayer = $this->mutate([
+            'pendingResize' => new WindowSizeMsg($cols, $rows),
+            'narrowCols' => $narrowCols,
+        ]);
 
         return [$nextPlayer, Cmd::tick(self::RESIZE_DEBOUNCE_SECONDS, static fn (): Msg => ResizeRebuildMsg::instance())];
     }
@@ -1186,6 +1210,16 @@ final class Player implements Model
      */
     public function view(): string
     {
+        // SV-PGEO/068: a below-floor terminal cannot hold even one pane row —
+        // every line this model can emit soft-wraps and corrupts the whole
+        // picture. Refuse in one honest line at the REAL width instead.
+        if ($this->narrowCols !== null) {
+            return self::clipToCells(Lang::t('player.terminal_too_small', [
+                'cols' => (string) $this->narrowCols,
+                'min' => (string) self::MIN_COLS,
+            ]), $this->narrowCols);
+        }
+
         $frame = $this->currentFrame;
 
         // If no frame yet (initial render before first tick), show a
@@ -1317,6 +1351,32 @@ final class Player implements Model
         $bufW = (int)ceil($w / $cellW);
         $bufH = (int)ceil($h / $cellH);
 
+        // SV-PGEO/069: the Decoder interface constrains no frame geometry — an
+        // injected or lying decoder can hand us pixels wider/taller than the
+        // pane, and emitting ceil(frame/cell) columns anyway is over-wide paint
+        // no clamp catches. The pane is the contract: the grid is clipped to
+        // cellsW×cellsH. Dev builds (SUGAR_VIDEO_DEBUG=1, or the testing seam
+        // below) hear about the offender loudly instead of silently losing the
+        // overflow — production degrades honestly by clipping.
+        if ($bufW > $this->cellsW || $bufH > $this->cellsH) {
+            if (self::geometryAsserts()) {
+                throw new \LogicException(sprintf(
+                    'decoder emitted %dx%d pixels into a %dx%d-cell pane (cell %dx%d): grid %dx%d exceeds the pane',
+                    $w,
+                    $h,
+                    $this->cellsW,
+                    $this->cellsH,
+                    $cellW,
+                    $cellH,
+                    $bufW,
+                    $bufH
+                ));
+            }
+
+            $bufW = min($bufW, $this->cellsW);
+            $bufH = min($bufH, $this->cellsH);
+        }
+
         // Accumulate a flat row-major cell grid (index = cy*bufW + cx) and wrap
         // it in a single Buffer::fromGrid() call below. The previous per-cell
         // Buffer::withCellAt() loop copy-on-write duplicated the whole grid on
@@ -1438,6 +1498,23 @@ final class Player implements Model
         }
 
         return Buffer::fromGrid($bufW, $bufH, $grid);
+    }
+
+    /**
+     * SV-PGEO/069: dev-build door for the pane-geometry assert. null follows
+     * the environment (SUGAR_VIDEO_DEBUG), true/false forces it. Production
+     * never forces it, so the shipped default path is the clamped one.
+     */
+    private static ?bool $geometryAsserts = null;
+
+    public static function setGeometryAssertsForTesting(?bool $on): void
+    {
+        self::$geometryAsserts = $on;
+    }
+
+    private static function geometryAsserts(): bool
+    {
+        return self::$geometryAsserts ?? (getenv('SUGAR_VIDEO_DEBUG') !== false);
     }
 
     /**
@@ -2278,6 +2355,10 @@ final class Player implements Model
             pendingResize: array_key_exists('pendingResize', $changes) ? $changes['pendingResize'] : $this->pendingResize,
             audioMuted: array_key_exists('audioMuted', $changes) ? $changes['audioMuted'] : $this->audioMuted,
             clock: $this->clock, // the seam belongs to the player, not to one state
+            // SV-PGEO/068: carried like the geometry it annotates — updateResize
+            // arms it with the raw width the host just reported, and every other
+            // state change keeps whatever refusal the pane currently owes.
+            narrowCols: array_key_exists('narrowCols', $changes) ? $changes['narrowCols'] : $this->narrowCols,
         );
         // Teardown is not a value the model is built with, so it cannot ride the
         // named-argument list — copy the latch forward instead. Every derived
