@@ -64,11 +64,22 @@ final class InteractiveRuntime
             ));
         }
 
-        $paint = self::paintStream();
-        $tty   = Tty::openTty();
+        // scriptui-34 (finding 054): with BOTH streams redirected under a
+        // real terminal, /dev/tty restores the KEYS — but the old code still
+        // handed the whole frame to paintStream() == the redirected STDERR
+        // FILE (a `confirm >out 2>trace.log` probe wrote 62 DEC bytes into
+        // the log while the user stared at a blank prompt: corrupted data
+        // and invisible UI at once). The frame now goes where a human can
+        // actually see it: STDERR only when STDERR itself is the terminal,
+        // otherwise the write side of the open /dev/tty handle. With neither
+        // available the shape refuses (null) exactly like a headless run —
+        // callers already print runtime.no_terminal for that.
+        $tty = self::ttyPair();
         if ($tty !== null) {
-            // Only the READ side comes from /dev/tty: the write side must be
-            // the user's stderr, never the archive-captured stdout.
+            // Only the READ side comes from /dev/tty unless STDERR cannot
+            // display anything: the write side is the paint handle.
+            $paint = self::stderrIsTerminal() ? STDERR : $tty[1];
+
             return self::warnIfPcntlAbsent(new ProgramOptions(
                 useAltScreen:    $useAltScreen,
                 hideCursor:      $hideCursor,
@@ -80,15 +91,17 @@ final class InteractiveRuntime
             ));
         }
 
-        if (self::stdinIsTerminal()) {
-            // stdout redirected but stdin is the terminal — still viable:
-            // keys from STDIN, frame to STDERR.
+        if (self::stdinIsTerminal() && self::stderrIsTerminal()) {
+            // stdout redirected but stdin AND stderr are the terminal —
+            // still viable: keys from STDIN, frame to STDERR. When STDERR is
+            // a redirected file there is nowhere honest to paint (scriptui-
+            // 34): refuse instead of corrupting the capture.
             return self::warnIfPcntlAbsent(new ProgramOptions(
                 useAltScreen:    $useAltScreen,
                 hideCursor:      $hideCursor,
                 inlineMode:      $dumb,
                 catchInterrupts: true,
-                output:          $paint,
+                output:          STDERR,
                 loop:            \React\EventLoop\Loop::get(),
             ));
         }
@@ -163,26 +176,97 @@ final class InteractiveRuntime
 
     /**
      * Write UI text (never result data) to the stream the interactive frame
-     * belongs on: STDOUT when it is the terminal, STDERR otherwise.
+     * belongs on, per the {@see paintStream()} ladder. When nothing can
+     * display (every stream redirected, no /dev/tty) the text is dropped —
+     * corrupting a captured data file with chrome is worse than silence,
+     * and callers refuse the whole run in that shape anyway.
      */
     public static function paint(string $text): void
     {
-        fwrite(self::paintStream(), $text);
+        $stream = self::paintStream();
+        if ($stream === null) {
+            return;
+        }
+        fwrite($stream, $text);
     }
 
-    /** @return resource */
+    /**
+     * Where the frame belongs: STDOUT when it is the terminal, STDERR when
+     * that is the terminal, else the /dev/tty write handle — and null only
+     * when no human could ever see the bytes (scriptui-34: the old `: STDERR`
+     * fallback fed DEC sequences into redirected capture files).
+     *
+     * @return resource|null
+     */
     private static function paintStream()
     {
-        return self::stdoutIsTerminal() ? STDOUT : STDERR;
+        if (self::stdoutIsTerminal()) {
+            return STDOUT;
+        }
+        if (self::stderrIsTerminal()) {
+            return STDERR;
+        }
+        $tty = self::ttyPair();
+
+        return $tty[1] ?? null;
     }
+
+    /**
+     * Test seam (scriptui-34): fabricate the terminal-shape census without
+     * a real controlling terminal — keys {@see setTerminalProbesForTesting()}
+     * to null restores the honest probes.
+     *
+     * @param array{stdout?:bool,stderr?:bool,stdin?:bool,tty?:mixed}|null $probes
+     */
+    public static function setTerminalProbesForTesting(?array $probes): void
+    {
+        self::$probesForTesting = $probes;
+    }
+
+    /** @var array<string, mixed>|null */
+    private static ?array $probesForTesting = null;
 
     public static function stdoutIsTerminal(): bool
     {
+        if (self::$probesForTesting !== null && array_key_exists('stdout', self::$probesForTesting)) {
+            return (bool) self::$probesForTesting['stdout'];
+        }
+
         return defined('STDOUT') && is_resource(STDOUT) && @stream_isatty(STDOUT);
+    }
+
+    public static function stderrIsTerminal(): bool
+    {
+        if (self::$probesForTesting !== null && array_key_exists('stderr', self::$probesForTesting)) {
+            return (bool) self::$probesForTesting['stderr'];
+        }
+
+        return defined('STDERR') && is_resource(STDERR) && @stream_isatty(STDERR);
     }
 
     public static function stdinIsTerminal(): bool
     {
+        if (self::$probesForTesting !== null && array_key_exists('stdin', self::$probesForTesting)) {
+            return (bool) self::$probesForTesting['stdin'];
+        }
+
         return defined('STDIN') && is_resource(STDIN) && @stream_isatty(STDIN);
+    }
+
+    /**
+     * The /dev/tty read/write pair, or null when there is no controlling
+     * terminal. The probe seam may hand in a substitute pair.
+     *
+     * @return array{0:resource,1:resource}|null
+     */
+    private static function ttyPair(): ?array
+    {
+        if (self::$probesForTesting !== null && array_key_exists('tty', self::$probesForTesting)) {
+            $pair = self::$probesForTesting['tty'];
+
+            return is_array($pair) ? $pair : null;
+        }
+
+        return Tty::openTty();
     }
 }
