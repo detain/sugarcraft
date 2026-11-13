@@ -35,6 +35,15 @@ use SugarCraft\Kv\Support\Ttl;
  */
 final class Database
 {
+    /**
+     * Schema stamp persisted in `PRAGMA user_version` (kv-028). The stamp
+     * records which one-time migrations this file has paid: opens at the
+     * current version skip every detection scan, so a completed migration
+     * never turns into a forever-repeating O(rows) heuristic walk. Future
+     * schema changes append a numbered step and raise this ceiling.
+     */
+    public const SCHEMA_VERSION = 1;
+
     private \SQLite3 $db;
     private string $name;
     private bool $closed = false;
@@ -108,6 +117,12 @@ final class Database
 
     private function init(): void
     {
+        // Does the table exist BEFORE this open? Fresh creates pay schema
+        // construction only — never the legacy detection scans (kv-028).
+        $wasPresent = (bool) $this->db->querySingle(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'entries'"
+        );
+
         $this->db->exec('
             CREATE TABLE IF NOT EXISTS entries (
                 key         TEXT PRIMARY KEY,
@@ -118,16 +133,27 @@ final class Database
                 expires_at  INTEGER
             )
         ');
-        // Migrate legacy schema (no expires_at column)
-        $result = $this->db->query("PRAGMA table_info(entries)");
-        $columns = [];
-        while ($row = $result->fetchArray(\SQLITE3_ASSOC)) {
-            $columns[] = $row['name'];
+
+        if (!$wasPresent) {
+            // Born current: stamp immediately, no migration work exists.
+            $this->db->exec('PRAGMA user_version = ' . self::SCHEMA_VERSION);
+        } elseif ($this->schemaVersion() < self::SCHEMA_VERSION) {
+            // Legacy lineage (pre-versioning databases arrive unstamped).
+            // Migrate legacy schema (no expires_at column) first.
+            $result = $this->db->query('PRAGMA table_info(entries)');
+            $columns = [];
+            while ($row = $result->fetchArray(\SQLITE3_ASSOC)) {
+                $columns[] = $row['name'];
+            }
+            if (!\in_array('expires_at', $columns, true)) {
+                $this->db->exec('ALTER TABLE entries ADD COLUMN expires_at TEXT');
+            }
+            $this->migrateExpiryColumn();
+            // Stamp after the commit: a crash between the two costs one
+            // idempotent rescan, never a skipped step.
+            $this->db->exec('PRAGMA user_version = ' . self::SCHEMA_VERSION);
         }
-        if (!\in_array('expires_at', $columns, true)) {
-            $this->db->exec('ALTER TABLE entries ADD COLUMN expires_at TEXT');
-        }
-        $this->migrateExpiryColumn();
+
         $this->db->exec('PRAGMA journal_mode = WAL');
         // 64,000 KiB (62.5 MiB) page-cache cap per connection (negative spelling is KiB):
         // list/glob/pattern walks on large stores reread the same pages, and
@@ -148,68 +174,55 @@ final class Database
     }
 
     /**
-     * Convert legacy offset-string expiries to integer epoch seconds once.
+     * Current schema stamp of the open file (`PRAGMA user_version`).
+     */
+    private function schemaVersion(): int
+    {
+        return (int) $this->db->querySingle('PRAGMA user_version');
+    }
+
+    /**
+     * Convert legacy offset-string expiries to epoch seconds exactly once.
      *
      * Legacy databases stored expires_at as a DATE_ATOM string; SQLite's
-     * dynamic typing means the column may hold a mix. Rows whose value is
-     * non-numeric text are parsed (offset-aware) and rewritten as epoch
-     * seconds — an integer in fresh INTEGER-affinity columns, numeric text
-     * in legacy TEXT-affinity columns (SQLite column affinity); the read
-     * predicates CAST either shape to the same integer comparison.
-     * Unparseable garbage is refused loudly — silently leaving
-     * it would resurrect the lexicographic comparison for that row.
-     * The rewrite runs inside a transaction: a crash mid-migration leaves
-     * the old values intact, and every read predicate already tolerates
-     * unmigrated text via CAST, so the migration is safe to re-run.
+     * dynamic typing means the column may hold a mix. Rows whose text is
+     * not already canonical integer spelling are parsed and rewritten —
+     * an integer in fresh INTEGER-affinity columns, numeric text in legacy
+     * TEXT-affinity columns (SQLite column affinity); the read predicates
+     * CAST either shape to the same integer comparison.
+     *
+     * The whole pass runs inside one `BEGIN IMMEDIATE`: the snapshot is
+     * taken AFTER the write lock (kv-027), so no concurrent commit can
+     * land between reading and rewriting a cell, and every per-row rewrite
+     * additionally carries the value it was read with as a compare-
+     * and-set guard (an optimistic belt: a row that changed under us is
+     * skipped, never clobbered). A failure to take the lock surfaces as
+     * the library's domain sentence, not a bare SQLite3Exception.
+     *
+     * Unparseable garbage no longer bricks the vault at open (kv-022):
+     * signed-digit text — the shape `Entry::parseExpiry` already accepts
+     * — converts to that epoch, and genuine garbage is quarantined to the
+     * epoch-0 (definitively expired) cell with a loud sanitized stderr
+     * warning. Quarantine deliberately does NOT mean NULL: a NULL expiry
+     * would launder a cell that today reads dead into a forever entry —
+     * the same laundering the export boundary law (kv-026) refuses. The
+     * row stays on disk, reads as expired, and clears through prune.
      */
     private function migrateExpiryColumn(): void
     {
-        // SQLite GLOB negates a set with [^…] (NOT [!…] — that brackets the
-        // literal characters ! 0-9 and would match every migrated digit row,
-        // re-selecting it forever). A pure-digit TEXT cell is already a
-        // numeric epoch that CAST compares correctly, so skip it.
-        $select = $this->db->prepare(
-            "SELECT key, expires_at FROM entries
-             WHERE typeof(expires_at) = 'text'
-               AND (expires_at NOT GLOB '[0-9]*' OR expires_at GLOB '*[^0-9]*')"
-        );
-        $rows = $select->execute();
-        $pending = [];
-        while ($row = $rows->fetchArray(\SQLITE3_ASSOC)) {
-            $pending[] = [$row['key'], $row['expires_at']];
-        }
-        $select->close();
-
-        if ($pending === []) {
-            return;
-        }
-
-        $update = $this->db->prepare('UPDATE entries SET expires_at = :epoch WHERE key = :key');
-        $this->db->exec('BEGIN IMMEDIATE');
         try {
-            foreach ($pending as [$key, $raw]) {
-                if ($raw === '') {
-                    // An empty-string expiry means "never"; normalise to NULL
-                    // (new DateTimeImmutable('') would silently mean "now").
-                    $update->bindValue(':epoch', null, \SQLITE3_NULL);
-                    $update->bindValue(':key', $key, \SQLITE3_TEXT);
-                    $update->execute();
-                    $update->reset();
-                    continue;
-                }
-                try {
-                    $instant = new \DateTimeImmutable((string) $raw);
-                } catch (\Exception $e) {
-                    throw new \RuntimeException(
-                        \sprintf('Cannot migrate expiry "%s" for key "%s" to epoch seconds: %s', $raw, $key, $e->getMessage()),
-                        0,
-                        $e
-                    );
-                }
-                $update->bindValue(':epoch', $instant->getTimestamp(), \SQLITE3_INTEGER);
-                $update->bindValue(':key', $key, \SQLITE3_TEXT);
-                $update->execute();
-                $update->reset();
+            $this->db->exec('BEGIN IMMEDIATE');
+        } catch (\Throwable $e) {
+            throw new \RuntimeException(
+                \sprintf("Cannot start the expiry migration for database '%s': %s", $this->name, $e->getMessage()),
+                0,
+                $e
+            );
+        }
+
+        try {
+            foreach ($this->collectLegacyExpiryRows() as [$key, $raw]) {
+                $this->rewriteLegacyExpiryRow($key, (string) $raw);
             }
             $this->db->exec('COMMIT');
         } catch (\Throwable $e) {
@@ -219,10 +232,106 @@ final class Database
                 $this->db->exec('ROLLBACK');
             } catch (\Throwable) {
             }
-            $update->close();
             throw $e;
         }
+    }
+
+    /**
+     * Snapshot the cells that still carry non-epoch text expiries.
+     *
+     * The scan predicate is CAST-identity: a text cell already spelling
+     * its own canonical integer (unsigned OR signed digits — the negative
+     * shape parseExpiry reads as a true past epoch) needs no rewrite and
+     * must not re-enter the loop forever. Anything else — DATE_ATOM text,
+     * zero-padded digits, garbage — is collected. Runs inside the
+     * migration transaction; never call it unlocked.
+     *
+     * @return list<array{0: string, 1: string|null}>
+     */
+    private function collectLegacyExpiryRows(): array
+    {
+        $select = $this->db->prepare(
+            "SELECT key, expires_at FROM entries
+             WHERE typeof(expires_at) = 'text'
+               AND expires_at <> CAST(CAST(expires_at AS INTEGER) AS TEXT)"
+        );
+        $rows = $select->execute();
+        $pending = [];
+        while ($row = $rows->fetchArray(\SQLITE3_ASSOC)) {
+            $pending[] = [$row['key'], $row['expires_at']];
+        }
+        $select->close();
+
+        return $pending;
+    }
+
+    /**
+     * Rewrite one snapshotted legacy expiry cell, CAS-guarded.
+     *
+     * @return bool false when the cell changed under the snapshot (the
+     *     concurrent commit wins — the rewrite is skipped, not faked).
+     */
+    private function rewriteLegacyExpiryRow(string $key, string $raw): bool
+    {
+        $update = $this->db->prepare(
+            'UPDATE entries SET expires_at = :epoch
+             WHERE key = :key AND expires_at = :raw'
+        );
+        $update->bindValue(':key', $key, \SQLITE3_TEXT);
+        $update->bindValue(':raw', $raw, \SQLITE3_TEXT);
+
+        if ($raw === '') {
+            // An empty-string expiry means "never"; normalise to NULL
+            // (new DateTimeImmutable('') would silently mean "now").
+            $update->bindValue(':epoch', null, \SQLITE3_NULL);
+            $update->execute();
+            $changed = $this->db->changes() > 0;
+            $update->close();
+
+            return $changed;
+        }
+
+        if (\preg_match('/^-?[0-9]+$/', $raw) === 1) {
+            // Signed or zero-padded digit text: mirror parseExpiry and
+            // store the epoch it already means ((int) spelling).
+            $update->bindValue(':epoch', (int) $raw, \SQLITE3_INTEGER);
+            $update->execute();
+            $changed = $this->db->changes() > 0;
+            $update->close();
+
+            return $changed;
+        }
+
+        try {
+            $instant = new \DateTimeImmutable($raw);
+        } catch (\Exception) {
+            // kv-022b quarantine: dead-epoch stamp + loud warning instead
+            // of bricking every future open of the whole database.
+            $update->bindValue(':epoch', 0, \SQLITE3_INTEGER);
+            $update->execute();
+            $changed = $this->db->changes() > 0;
+            $update->close();
+            \fwrite(
+                \STDERR,
+                \sprintf(
+                    "%s\n",
+                    Store::sanitizeForTty(\sprintf(
+                        "candy-kv: key '%s' carries an unreadable expiry '%s'; quarantined it as expired — run `prune` to drop it or set a new expiry to keep it.",
+                        $key,
+                        $raw,
+                    ))
+                )
+            );
+
+            return $changed;
+        }
+
+        $update->bindValue(':epoch', $instant->getTimestamp(), \SQLITE3_INTEGER);
+        $update->execute();
+        $changed = $this->db->changes() > 0;
         $update->close();
+
+        return $changed;
     }
 
     /**

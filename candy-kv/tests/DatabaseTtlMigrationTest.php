@@ -181,15 +181,152 @@ final class DatabaseTtlMigrationTest extends TestCase
         $db->close();
     }
 
-    public function testUnparseableLegacyExpiryIsRefusedLoudly(): void
+    public function testUnparseableLegacyExpiryIsQuarantinedNotBricked(): void
     {
+        // kv-022b: the old code threw from the constructor, so the WHOLE
+        // vault was unreadable forever, no repair path. G5 default: the
+        // row is quarantined to the definitively-expired epoch and the
+        // user is warned loudly; the data and every other row survive.
+        $future = (new \DateTimeImmutable('+1 hour'))->format(\DATE_ATOM);
         $path = $this->createLegacyDb('garbage', [
             ['key' => 'junk', 'expires' => 'not-a-date'],
+            ['key' => 'alive', 'expires' => $future],
         ]);
 
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('Cannot migrate expiry');
-        new Database($path, 'garbage');
+        $db = new Database($path, 'garbage');
+
+        // The vault opens: healthy rows read normally.
+        $this->assertNotNull($db->get('alive'));
+        // The quarantined row reads as expired (epoch 0 is universally
+        // past) — it is NOT laundered into a forever entry.
+        $this->assertNull($db->get('junk'));
+
+        // And it is prunable: prune drops it.
+        $this->assertSame(1, $db->pruneExpired());
+        $this->assertSame(['alive'], \array_values($db->allKeys()));
+        $db->close();
+    }
+
+    public function testQuarantineWarningReachesCliStderr(): void
+    {
+        // "loud" is part of the law: the CLI open surfaces the quarantine
+        // on stderr, sanitized like every other untrusted-bytes egress.
+        $path = $this->createLegacyDb('default', [
+            ['key' => 'junk', 'expires' => "not\x1ba-date"],
+        ]);
+        $xdg = $this->tmpDir . '/xdg-warn';
+        \mkdir($xdg . '/skate', 0o700, true);
+        \rename($path, $xdg . '/skate/default.db');
+
+        $run = self::spawnKv(['list'], $xdg);
+
+        $this->assertSame(0, $run['exit'], 'the vault must open: ' . $run['stderr']);
+        $this->assertStringContainsString("key 'junk'", $run['stderr']);
+        $this->assertStringContainsString('quarantined it as expired', $run['stderr']);
+        $this->assertStringNotContainsString("\x1b", $run['stderr'], 'the warning carries no raw control bytes (kv-004 egress law)');
+    }
+
+    public function testSignedDigitLegacyCellOpensAsTrueEpoch(): void
+    {
+        // kv-022a: '-86400' passes Entry::parseExpiry's /^-?[0-9]+$/ but
+        // died in the migration's unsigned GLOB + DateTimeImmutable leg.
+        // Mirror the reader: signed digit text IS an epoch.
+        $path = $this->createLegacyDb('signed', [
+            ['key' => 'ancient', 'expires' => '-86400'],
+            ['key' => 'other', 'expires' => (new \DateTimeImmutable('+1 hour'))->format(\DATE_ATOM)],
+        ]);
+
+        $db = new Database($path, 'signed');
+
+        $this->assertNull($db->get('ancient'), 'epoch -86400 is a true past instant');
+        $this->assertNotNull($db->get('other'), 'the rest of the vault stays reachable');
+
+        // Canonical signed spelling is already correct: no rewrite was
+        // needed and none happened (CAST compares it numerically as-is).
+        $prop = new \ReflectionProperty(Database::class, 'db');
+        $prop->setAccessible(true);
+        /** @var \SQLite3 $sqlite */
+        $sqlite = $prop->getValue($db);
+        $this->assertSame('-86400', $sqlite->querySingle("SELECT expires_at FROM entries WHERE key = 'ancient'"));
+        $this->assertSame(1, $db->pruneExpired(), 'and the expired signed row prunes');
+        $db->close();
+    }
+
+    public function testStampShortCircuitsTheScanOnEveryLaterOpen(): void
+    {
+        // kv-028: first open pays and stamps; later opens pay nothing.
+        // The observable proof: after stamping, plant a fresh text-garbage
+        // cell through a raw handle. An unstamped open would quarantine
+        // it; the stamped open must not even look.
+        $path = $this->createLegacyDb('stamp', [
+            ['key' => 'alive', 'expires' => (new \DateTimeImmutable('+1 hour'))->format(\DATE_ATOM)],
+        ]);
+        $db = new Database($path, 'stamp');
+        $prop = new \ReflectionProperty(Database::class, 'db');
+        $prop->setAccessible(true);
+        /** @var \SQLite3 $sqlite */
+        $sqlite = $prop->getValue($db);
+        $this->assertSame(
+            Database::SCHEMA_VERSION,
+            (int) $sqlite->querySingle('PRAGMA user_version'),
+            'a migrated open stamps the schema version'
+        );
+
+        $sqlite->exec("UPDATE entries SET expires_at = 'never-parses' WHERE key = 'alive'");
+        $db->close();
+
+        $again = new Database($path, 'stamp');
+        /** @var \SQLite3 $sqlite2 */
+        $sqlite2 = $prop->getValue($again);
+        $this->assertSame(
+            'never-parses',
+            $sqlite2->querySingle("SELECT expires_at FROM entries WHERE key = 'alive'"),
+            'at the current stamp the detection scan does not run — the planted cell is untouched'
+        );
+        $again->close();
+    }
+
+    public function testCasSkipsACellThatChangedUnderTheSnapshot(): void
+    {
+        // kv-027 belt: the per-rewrite compare-and-set. Drive the exact
+        // lost-update shape the old unlocked snapshot allowed: take the
+        // snapshot, let another connection commit over the cell, then run
+        // the rewrite with the stale value — it must report false and
+        // leave the concurrent commit intact.
+        $stale = '2026-01-01T00:00:00+00:00';
+        $path = $this->createLegacyDb('race', [
+            ['key' => 'raced', 'expires' => $stale],
+        ]);
+        $db = new Database($path, 'race'); // migrates + stamps
+
+        $prop = new \ReflectionProperty(Database::class, 'db');
+        $prop->setAccessible(true);
+        /** @var \SQLite3 $sqlite */
+        $sqlite = $prop->getValue($db);
+
+        // Return the cell to legacy text shape so the scan sees it again.
+        $sqlite->exec("UPDATE entries SET expires_at = '{$stale}' WHERE key = 'raced'");
+
+        $collect = new \ReflectionMethod(Database::class, 'collectLegacyExpiryRows');
+        $collect->setAccessible(true);
+        $pending = $collect->invoke($db);
+        $this->assertCount(1, $pending);
+
+        // A concurrent writer commits a newer value.
+        $sqlite->exec("UPDATE entries SET expires_at = '2030-06-06T00:00:00+00:00' WHERE key = 'raced'");
+
+        $rewrite = new \ReflectionMethod(Database::class, 'rewriteLegacyExpiryRow');
+        $rewrite->setAccessible(true);
+        $this->assertFalse(
+            $rewrite->invoke($db, 'raced', $stale),
+            'a rewrite built on a stale snapshot must lose to the concurrent commit'
+        );
+        $this->assertSame(
+            '2030-06-06T00:00:00+00:00',
+            (string) $sqlite->querySingle("SELECT expires_at FROM entries WHERE key = 'raced'"),
+            'the concurrent value stands untouched'
+        );
+        $db->close();
     }
 
     /**
