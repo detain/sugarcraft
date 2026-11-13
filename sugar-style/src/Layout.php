@@ -198,6 +198,119 @@ final class Layout
     }
 
     /**
+     * Stitch blocks side by side with a divider column between each
+     * adjacent pair. Empty blocks (`''`, zero width) are dropped together
+     * with their divider, so a collapsed pane leaves no orphan rule.
+     * A single-line `$divider` is repeated on every row; a multi-line one
+     * is laid out row by row (missing rows blank). An empty `$divider`
+     * degrades to {@see joinHorizontal()}.
+     *
+     * The generalisation of a split pane's "left, rule, right" row
+     * composition; the rational resize algebra that decides pane widths
+     * stays with the caller.
+     */
+    public static function joinHorizontalWithDivider(float $pos, string $divider, string ...$blocks): string
+    {
+        $blocks = array_values(array_filter($blocks, static fn (string $b): bool => $b !== ''));
+        if ($blocks === [] || count($blocks) === 1 || $divider === '') {
+            return self::joinHorizontal($pos, ...$blocks);
+        }
+        $rows = 1;
+        foreach ($blocks as $b) {
+            $rows = max($rows, self::height($b));
+        }
+        $dividerBlock = self::height($divider) === 1
+            ? implode("\n", array_fill(0, $rows, $divider))
+            : $divider;
+        $parts = [];
+        foreach ($blocks as $i => $b) {
+            if ($i > 0) {
+                $parts[] = $dividerBlock;
+            }
+            $parts[] = $b;
+        }
+        return self::joinHorizontal($pos, ...$parts);
+    }
+
+    /**
+     * Stack blocks top-to-bottom with a rule line between each adjacent
+     * pair, the rule tiled (repeated, then cut on a cell boundary) to the
+     * widest block. Empty blocks are dropped together with their rule.
+     * An empty `$divider` degrades to {@see joinVertical()}.
+     */
+    public static function joinVerticalWithDivider(float $pos, string $divider, string ...$blocks): string
+    {
+        $blocks = array_values(array_filter($blocks, static fn (string $b): bool => $b !== ''));
+        if ($blocks === [] || count($blocks) === 1 || $divider === '') {
+            return self::joinVertical($pos, ...$blocks);
+        }
+        $width = 0;
+        foreach ($blocks as $b) {
+            $width = max($width, self::width($b));
+        }
+        $rule = self::tile($divider, $width);
+        $parts = [];
+        foreach ($blocks as $i => $b) {
+            if ($i > 0) {
+                $parts[] = $rule;
+            }
+            $parts[] = $b;
+        }
+        return self::joinVertical($pos, ...$parts);
+    }
+
+    /** Repeat `$unit` until it covers `$width` cells, then cut to exactly that. */
+    public static function tile(string $unit, int $width): string
+    {
+        $unitW = WidthUtil::string($unit);
+        if ($width <= 0 || $unitW <= 0) {
+            return '';
+        }
+        $out = str_repeat($unit, intdiv($width + $unitW - 1, $unitW));
+        return WidthUtil::string($out) > $width ? WidthUtil::truncateAnsi($out, $width) : $out;
+    }
+
+    /** Keep at most `$rows` lines from the top of `$block`. */
+    public static function clipHead(string $block, int $rows): string
+    {
+        $lines = explode("\n", $block);
+        return count($lines) <= $rows ? $block : implode("\n", array_slice($lines, 0, max(0, $rows)));
+    }
+
+    /** Keep at most `$rows` lines from the bottom of `$block`. */
+    public static function clipTail(string $block, int $rows): string
+    {
+        $lines = explode("\n", $block);
+        if (count($lines) <= $rows) {
+            return $block;
+        }
+        return $rows <= 0 ? '' : implode("\n", array_slice($lines, -$rows));
+    }
+
+    /**
+     * Keep at most `$cols` visible cells of every line. The cut is
+     * ANSI-aware (escapes carry no width, a trailing reset survives) and
+     * lands on a grapheme boundary. With `$ellipsis` set an overlong line
+     * keeps `$cols - width(ellipsis)` cells and gains the ellipsis.
+     */
+    public static function clipWidth(string $block, int $cols, string $ellipsis = ''): string
+    {
+        if ($cols <= 0) {
+            return '';
+        }
+        $ellW = WidthUtil::string($ellipsis);
+        $lines = explode("\n", $block);
+        foreach ($lines as $i => $line) {
+            if (WidthUtil::string($line) > $cols) {
+                $lines[$i] = $ellipsis === '' || $ellW >= $cols
+                    ? WidthUtil::truncateAnsi($line, $cols)
+                    : WidthUtil::truncateAnsi($line, $cols - $ellW) . $ellipsis;
+            }
+        }
+        return implode("\n", $lines);
+    }
+
+    /**
      * Position `$block` within a `$width × $height` rectangle. `$hPos`
      * and `$vPos` are 0.0-1.0 anchors (use the {@see Position}
      * constants). The fill character defaults to a space; passing a

@@ -87,6 +87,14 @@ echo Layout::joinVerticalWithSpacing(Position::LEFT, 1, $header, $body, $footer)
 
 // Place inside a fixed rectangle
 echo Layout::place(40, 10, Position::CENTER, Position::CENTER, 'centered text');
+
+// Split panes: a divider column / tiled rule between blocks (empty blocks
+// are dropped together with their divider)
+echo Layout::joinHorizontalWithDivider(Position::TOP, '│', $left, $right);
+echo Layout::joinVerticalWithDivider(Position::LEFT, '─', $top, $bottom);
+
+// Block clips (ANSI-aware): clipHead/clipTail by rows, clipWidth by cells
+echo Layout::clipWidth($block, 40, '…');
 ```
 
 Only lowercase method names are defined (`joinHorizontal`, `place`, …);
@@ -298,7 +306,9 @@ echo Tree::new()
 - **`LightDark`** — pick helper for dark-bg vs light-bg colour schemes.
 - **`Layout`** (package-level) — `place`, `placeHorizontal`, `placeVertical`,
   `joinHorizontal`, `joinVertical`, `joinHorizontalWithSpacing`,
-  `joinVerticalWithSpacing`, `width`, `height`, `size` (all plain-string
+  `joinVerticalWithSpacing`, `joinHorizontalWithDivider`,
+  `joinVerticalWithDivider`, `tile`, `clipHead`, `clipTail`, `clipWidth`,
+  `width`, `height`, `size` (all plain-string
   layout primitives from lipgloss). The lowercase spellings are canonical;
   capitalized calls resolve identically per the case-insensitivity note
   under **Layout helpers**.
