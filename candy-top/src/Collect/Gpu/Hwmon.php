@@ -8,7 +8,8 @@ use SugarCraft\Top\Collect\Read;
 use SugarCraft\Top\Collect\Sentinel;
 
 /**
- * hwmon attribute helpers shared by the sysfs GPU backends
+ * Mirrors the hwmon attribute reads of aristocratos/btop's sysfs GPU
+ * backends (src/linux/btop_collect.cpp) — helpers shared by them
  * (Documentation/hwmon/sysfs-interface: temperatures in millidegrees,
  * power in microwatts, energy in microjoules, frequencies in Hz).
  */

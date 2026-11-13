@@ -7,7 +7,9 @@ namespace SugarCraft\Top\Collect\Gpu;
 use SugarCraft\Top\Collect\Sentinel;
 
 /**
- * One DRM client (one open of a /dev/dri node, `drm-client-id`) as one
+ * Mirrors the per-client record of aristocratos/btop #1552/#1888's
+ * process-GPU accounting (src/linux/btop_collect.cpp). One DRM client
+ * (one open of a /dev/dri node, `drm-client-id`) as one
  * fdinfo scan saw it, with its engine use already turned into rates.
  *
  * `engines` maps an engine class (render, video, copy, compute, gfx,

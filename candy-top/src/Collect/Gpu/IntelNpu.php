@@ -13,8 +13,9 @@ use SugarCraft\Top\Collect\Read;
 use SugarCraft\Top\Collect\Sentinel;
 
 /**
- * Intel NPUs through the intel_vpu (ivpu) driver's sysfs — btop #985
- * (and its successor fork PR #1789's frequency read). Pure sysfs:
+ * Mirrors aristocratos/btop #985's intel_vpu NPU detection (and its
+ * successor fork PR #1789's frequency read; src/linux/btop_collect.cpp):
+ * Intel NPUs through the intel_vpu (ivpu) driver's sysfs. Pure sysfs:
  *  - utilization = Δ`npu_busy_time_us` / Δwall µs × 100 (a cumulative
  *    counter, so the first sample is UNMEASURED);
  *  - memory = `npu_memory_utilization` (bytes in use; no total exists);

@@ -13,7 +13,8 @@ use SugarCraft\Top\Collect\Read;
 use SugarCraft\Top\Collect\Sentinel;
 
 /**
- * Intel GPUs (i915 and xe) from sysfs + DRM fdinfo — btop #1888's
+ * Mirrors aristocratos/btop Gpu::Intel (src/linux/btop_collect.cpp,
+ * #1888) — Intel GPUs (i915 and xe) from sysfs + DRM fdinfo, the
  * multi-device idea without its mechanism: btop vendors intel_gpu_top and
  * reads the i915 PMU through perf_event_open (one card only before
  * #1888), which PHP cannot call.

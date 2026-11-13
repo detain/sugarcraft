@@ -7,7 +7,9 @@ namespace SugarCraft\Top\Collect\Gpu;
 use SugarCraft\Top\Collect\Paths;
 
 /**
- * libdrm's amdgpu.ids marketing-name table (btop #1854): Strix Halo /
+ * Mirrors aristocratos/btop #1854's amdgpu.ids name lookup
+ * (Gpu::Asysfs, src/linux/btop_collect.cpp). libdrm's amdgpu.ids
+ * marketing-name table: Strix Halo /
  * Strix Point and other APUs share one PCI device id across tiers, so
  * pci.ids gives "[Radeon Graphics / 8050S / 8060S]" and only the
  * (device, revision) pair names the part. Lines are

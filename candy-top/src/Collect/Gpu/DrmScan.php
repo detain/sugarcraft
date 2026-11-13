@@ -10,8 +10,9 @@ use SugarCraft\Top\Collect\Sentinel;
 /**
  * One DRM fdinfo scan's result ({@see DrmFdinfo}).
  *
- * Device utilization follows btop's Intel collector (`max_util` over the
- * engines): per engine class the client rates are summed (capped at 100),
+ * Mirrors aristocratos/btop Gpu::Intel's `max_util` fold over the engines
+ * (src/linux/btop_collect.cpp): per engine class the client rates are
+ * summed (capped at 100),
  * and the device reads as its busiest engine class. A process reads the
  * same way over its own clients.
  */

@@ -12,7 +12,9 @@ use SugarCraft\Top\Collect\Process\CommandOutcome;
 use SugarCraft\Top\Collect\Process\CommandResult;
 
 /**
- * One bounded `nvidia-smi` child: the GPU collectors' view of
+ * Mirrors aristocratos/btop Gpu::Nvml's bounded `nvidia-smi` child
+ * (the process-list fallback, src/linux/btop_collect.cpp) — as the GPU
+ * collectors' view of
  * {@see AsyncCommand}, which owns the spawn, the timeout, the reaping, the
  * registry and the shutdown hook (shared with every other helper child,
  * ipmitool included). This adapter only maps a {@see CommandResult} onto

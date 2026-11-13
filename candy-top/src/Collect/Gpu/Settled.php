@@ -7,7 +7,9 @@ namespace SugarCraft\Top\Collect\Gpu;
 use React\Promise\PromiseInterface;
 
 /**
- * Reads a react/promise that may already be settled. The GPU collectors
+ * No upstream counterpart (btop collects synchronously inside
+ * Gpu::collect): this is PHP-only plumbing for the promise-shaped
+ * runners. Reads a react/promise that may already be settled. The GPU collectors
  * are written once, as promise chains: with a blocking runner every link
  * settles synchronously (react/promise runs then() callbacks of a settled
  * promise at once), so {@see value()} unwraps the result on the spot;

@@ -18,9 +18,9 @@ use function React\Promise\all;
 use function React\Promise\resolve;
 
 /**
- * The multi-vendor GPU/NPU collector: btop Gpu::collect
- * (src/linux/btop_collect.cpp), which runs Nvml, Rsmi, Asysfs and Intel
- * over consecutive slices of one `gpus[]`. Several vendors at once are
+ * Mirrors aristocratos/btop Gpu::collect (src/linux/btop_collect.cpp) —
+ * the multi-vendor GPU/NPU collector, which runs Nvml, Rsmi, Asysfs and
+ * Intel over consecutive slices of one `gpus[]`. Several vendors at once are
  * normal (an Intel iGPU next to an NVIDIA or AMD card).
  *
  * Backends present on this host are chosen on the first sample (not at

@@ -7,8 +7,10 @@ namespace SugarCraft\Top\Collect\Gpu;
 use SugarCraft\Top\Collect\Paths;
 
 /**
- * Device names from the system's pci.ids database (the hwdata / pciutils
- * file) — #1888's Intel naming source and #1854's second AMD fallback.
+ * Mirrors the pci.ids name lookup of aristocratos/btop's GPU backends
+ * (src/linux/btop_collect.cpp) — #1888's Intel naming source and #1854's
+ * second AMD fallback: device names from the system's pci.ids database
+ * (the hwdata / pciutils file).
  *
  * The file is ~1.4 MB, so it is never loaded whole: name() streams it
  * line by line, stops at the end of the vendor's block, and backends call

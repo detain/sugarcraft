@@ -12,7 +12,9 @@ use SugarCraft\Top\Collect\Paths;
 use SugarCraft\Top\Collect\Sentinel;
 
 /**
- * AMD Ryzen AI NPUs (XDNA, driver amdxdna) — btop #1839, detection only.
+ * Mirrors aristocratos/btop #1839's amdxdna NPU detection
+ * (src/linux/btop_collect.cpp): AMD Ryzen AI NPUs (XDNA, driver amdxdna),
+ * detection only.
  *
  * Detection is pure sysfs: `/sys/class/accel/accelN` whose PCI vendor is
  * 0x1022 and driver amdxdna. #1839 reads per-AIE-column utilization and

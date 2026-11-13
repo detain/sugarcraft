@@ -9,9 +9,10 @@ use SugarCraft\Top\Collect\GpuSnapshot;
 use SugarCraft\Top\Collect\GpuVendor;
 
 /**
- * One vendor's accelerator collector — btop's per-library namespaces
- * (Gpu::Nvml, Gpu::Rsmi, Gpu::Asysfs, Gpu::Intel in
- * src/linux/btop_collect.cpp), each filling its own slice of `gpus[]`.
+ * Mirrors aristocratos/btop's per-library namespaces (Gpu::Nvml,
+ * Gpu::Rsmi, Gpu::Asysfs, Gpu::Intel in src/linux/btop_collect.cpp),
+ * each filling its own slice of `gpus[]` — one vendor's accelerator
+ * collector.
  * {@see Accelerators} polls every present backend and merges the slices
  * in btop's order (NVIDIA, AMD, Intel; NPUs in their own list).
  *

@@ -13,9 +13,10 @@ use SugarCraft\Top\Collect\Read;
 use SugarCraft\Top\Collect\Sentinel;
 
 /**
- * AMD GPUs from amdgpu's DRM sysfs nodes — a port of btop Gpu::Asysfs
- * (src/linux/btop_collect.cpp, "AMD sysfs (consumer GPU / iGPU) data
- * collection"), no ROCm and no FFI. btop's Rsmi backend has no PHP
+ * Mirrors aristocratos/btop Gpu::Asysfs (src/linux/btop_collect.cpp,
+ * "AMD sysfs (consumer GPU / iGPU) data collection") — AMD GPUs from
+ * amdgpu's DRM sysfs nodes, no ROCm and no FFI. btop's Rsmi backend has
+ * no PHP
  * equivalent, so this is the only AMD path and never self-skips.
  *
  * Discovery (btop Asysfs::init): every `/sys/class/drm/cardN` whose

@@ -8,7 +8,9 @@ use SugarCraft\Top\Collect\Read;
 use SugarCraft\Top\Collect\Sentinel;
 
 /**
- * One PCI accelerator as sysfs shows it: a `/sys/class/drm/cardN`,
+ * Mirrors aristocratos/btop Gpu::Asysfs::init's PCI device resolution
+ * (src/linux/btop_collect.cpp). One PCI accelerator as sysfs shows it: a
+ * `/sys/class/drm/cardN`,
  * `/sys/class/accel/accelN` or `/sys/bus/pci/drivers/<drv>/<slot>` entry
  * resolved to its PCI device directory.
  *

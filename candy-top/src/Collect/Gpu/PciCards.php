@@ -9,7 +9,9 @@ use SugarCraft\Top\Collect\Read;
 use SugarCraft\Top\Collect\Sentinel;
 
 /**
- * Enumerates PCI accelerators from sysfs. Each list is de-duplicated by
+ * Mirrors the sysfs enumeration of aristocratos/btop Gpu::Asysfs::init /
+ * Gpu::Intel::init (src/linux/btop_collect.cpp). Enumerates PCI
+ * accelerators from sysfs. Each list is de-duplicated by
  * PCI slot and ordered by the class entry's natural order (card0, card1,
  * …), so device order is deterministic across hosts.
  */

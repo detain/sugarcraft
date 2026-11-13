@@ -9,10 +9,11 @@ use SugarCraft\Top\Collect\Read;
 use SugarCraft\Top\Collect\Sentinel;
 
 /**
- * DRM fdinfo scanner — the PHP-feasible source for Intel GPU utilization
- * (btop #1888 vendors intel_gpu_top's PMU reader, which needs
- * perf_event_open) and for per-process GPU use on amdgpu / i915 / xe
- * (btop #1552's fallback). Kernel ABI: Documentation/gpu/drm-usage-stats.rst.
+ * Mirrors aristocratos/btop #1888's vendored intel_gpu_top reader and
+ * #1552's fdinfo fallback (src/linux/btop_collect.cpp) — the PHP-feasible
+ * source for Intel GPU utilization (btop's PMU reader needs
+ * perf_event_open) and for per-process GPU use on amdgpu / i915 / xe.
+ * Kernel ABI: Documentation/gpu/drm-usage-stats.rst.
  *
  * Every `/proc/<pid>/fdinfo/<fd>` of an fd open on `/dev/dri/*` carries
  * `drm-pdev` (PCI slot), `drm-client-id`, `drm-driver` and per engine
