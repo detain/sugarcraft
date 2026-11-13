@@ -138,7 +138,12 @@ final class ChafaRenderer implements Renderer, ConfigFingerprintProvider
 
         $proc = @proc_open(
             [$binary, '--version'],
-            [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            // fd 0 anchored to /dev/null (finding 012, house law per
+            // TmuxPassthrough/Detect): an unspecified stdin leg inherits
+            // THIS process's fd 0, so a chafa build that touches stdin
+            // could consume user input — or block forever waiting for an
+            // EOF the TUI never sends — from a mere availability probe.
+            [0 => ['file', '/dev/null', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
             $pipes,
         );
         if (!is_resource($proc)) {
@@ -174,16 +179,22 @@ final class ChafaRenderer implements Renderer, ConfigFingerprintProvider
     {
         $effectiveHeight = $this->prepareRender($image, $width, $height);
 
-        // Resolved once up front: argv[0] is an absolute, gate-passing
-        // path (never a bare `chafa` left to the OS PATH search —
-        // {@see ChafaBinary}). When nothing resolves we skip the spawn
-        // and ride the exact same `proc_open() === false` settle the
-        // missing-binary path has always taken: scratch file written,
-        // stderr sink created, not_found thrown, sink released.
+        // Resolved once up front and REFUSED before anything is built
+        // (finding 046): the old `$binary ?? ''` planted an empty argv[0]
+        // into every command line the binary could not serve, and only a
+        // distant `? false :` stand-in at the spawn kept it from reaching
+        // the OS — a landmine for any future call site that trusts $cmd.
+        // The refusal still throws exactly what it always threw for a
+        // missing chafa (same class, same message); what changes is that
+        // it no longer first pays the scratch write and sink creation
+        // for a spawn that can never happen.
         $binary = ChafaBinary::path();
+        if ($binary === null) {
+            throw new \RuntimeException(Lang::t('chafa.not_found'));
+        }
 
         $size = "{$width}x{$effectiveHeight}";
-        $cmd = [$binary ?? '', '--size=' . $size];
+        $cmd = [$binary, '--size=' . $size];
         if ($this->format !== null) {
             $cmd[] = '--format=' . $this->format;
         }
@@ -203,20 +214,23 @@ final class ChafaRenderer implements Renderer, ConfigFingerprintProvider
             throw new \RuntimeException(Lang::t('chafa.sink_failed'));
         }
 
-        $descriptorSpec = [1 => ['pipe', 'w'], 2 => ['file', $errPath, 'w']];
-        // An unresolved binary must NEVER reach proc_open with a bare
-        // 'chafa' argv[0]: false here is the deliberate, gated stand-in
-        // for the spawn that the OS is no longer allowed to make.
-        $process = $binary === null ? false : @proc_open($cmd, $descriptorSpec, $pipes);
+        $descriptorSpec = [
+            // fd 0 on /dev/null (finding 012): a render child inherits
+            // our stdin otherwise, and a chafa that reads it would eat
+            // user input or wait for an EOF that never comes.
+            0 => ['file', '/dev/null', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['file', $errPath, 'w'],
+        ];
+        $process = @proc_open($cmd, $descriptorSpec, $pipes);
+        $reaped = false;
 
         try {
             if ($process === false) {
-                foreach ($pipes ?? [] as $pipe) {
-                    if (is_resource($pipe)) {
-                        fclose($pipe);
-                    }
-                }
-
+                // argv[0] is gate-verified, so a false here means the
+                // spawn itself was refused (fork pressure, execve
+                // failure); settleLeave below releases any partial
+                // pipes, and not_found stays the caller-visible answer.
                 throw new \RuntimeException(Lang::t('chafa.not_found'));
             }
 
@@ -228,6 +242,7 @@ final class ChafaRenderer implements Renderer, ConfigFingerprintProvider
             fclose($pipes[1]);
 
             $exitCode = self::reap($process);
+            $reaped = true;
 
             if ($exitCode !== 0) {
                 $tail = self::stderrTail($errPath);
@@ -238,12 +253,42 @@ final class ChafaRenderer implements Renderer, ConfigFingerprintProvider
                 );
             }
         } finally {
-            // Every settle path — success, failure, or a throw between the
-            // spawn and here — releases the sink file.
+            // Every settle path — success, failure, or a throw between
+            // the spawn and here — releases the sink file, and since
+            // finding 010 also the pipe and the child: a throw inside
+            // drainStdout()/reap() used to abandon a LIVE child with an
+            // open fd, unaccounted in the child-lifetime ledger.
+            // settleLeave() is idempotent, so the normal paths pay
+            // nothing for the insurance.
+            self::settleLeave($process, $pipes ?? [], $reaped);
             @unlink($errPath);
         }
 
         return $stdout;
+    }
+
+    /**
+     * Close-side settle for every departure from render() (finding 010):
+     * release the pipes, and unless the normal path already reaped, walk
+     * the child through the SAME TERM→KILL ladder {@see reap()} defines.
+     * Safe to call twice and safe to call after the normal path — every
+     * leg is guarded, so re-settling a settled leave is silent (the
+     * failOnWarning suite is the pin that it really is).
+     *
+     * @param resource|false $process
+     * @param array<int,resource> $pipes
+     */
+    private static function settleLeave($process, array $pipes, bool $reaped): void
+    {
+        foreach ($pipes as $pipe) {
+            if (is_resource($pipe)) {
+                fclose($pipe);
+            }
+        }
+
+        if ($process !== false && is_resource($process) && !$reaped) {
+            self::reap($process);
+        }
     }
 
     /**

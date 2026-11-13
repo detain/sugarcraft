@@ -211,10 +211,15 @@ final class ChafaRendererChildTest extends TestCase
     {
         $source = (string) file_get_contents(__DIR__ . '/../src/Renderer/ChafaRenderer.php');
 
-        $this->assertStringContainsString(
-            "\$descriptorSpec = [1 => ['pipe', 'w'], 2 => ['file', \$errPath, 'w']];",
+        $this->assertMatchesRegularExpression(
+            // Post-SI-03 the spec is multi-line and carries the fd 0
+            // /dev/null anchor; the PIPED-stdout/FILED-stderr law it
+            // pins is unchanged. (Re-anchored in this lane: the old
+            // single-line literal was the shape SI-03 grew.) The #
+            // delimiter keeps the literal /dev/null path readable.
+            '#0 => \[\'file\', \'/dev/null\', \'r\'\],\s*1 => \[\'pipe\', \'w\'\],\s*2 => \[\'file\', \$errPath, \'w\'\],\s*\];#',
             $source,
-            'render() must hold exactly one pipe (stdout) plus a file sink on fd 2',
+            'render() must anchor fd 0 on /dev/null and hold exactly one pipe (stdout) plus a file sink on fd 2',
         );
         $this->assertStringNotContainsString(
             '$pipes[2]',
@@ -295,6 +300,87 @@ final class ChafaRendererChildTest extends TestCase
     }
 
     // ---------------------------------------------------------------------
+
+    /**
+     * @testdox every spawn spec anchors fd 0 to /dev/null and no command line is built from a defaulted argv[0]
+     */
+    public function testEverySpawnSpecAnchorsFdZeroAndCarriesAGatedArgv0(): void
+    {
+        $src = (string) file_get_contents(__DIR__ . '/../src/Renderer/ChafaRenderer.php');
+
+        $this->assertSame(
+            2,
+            substr_count($src, "0 => ['file', '/dev/null', 'r']"),
+            'finding 012: both proc_open sites (probe + render) anchor stdin — an unspecified fd 0 leg hands the child OUR terminal input',
+        );
+        $this->assertStringNotContainsString(
+            '$cmd = [$binary ??',
+            $src,
+            'finding 046: argv[0] is refused before the command line is built, never defaulted to an empty token',
+        );
+    }
+
+    /**
+     * @testdox the render-path not_found refusal spawns nothing and defaults nothing (broken override is final)
+     */
+    public function testAnUnresolvableBinaryRefusesWithoutSpawning(): void
+    {
+        $armed = getenv(ChafaBinary::ENV_OVERRIDE);
+        $this->overrideBackup = $armed === false ? null : $armed;
+        putenv(ChafaBinary::ENV_OVERRIDE . '=' . sys_get_temp_dir() . '/no-such-chafa-' . uniqid());
+
+        $log = $this->touch('chafa-spawn-counter');
+        putenv('FAKE_CHAFA_LOG=' . $log);
+
+        try {
+            (new ChafaRenderer())->render($this->source(), 10, 10);
+            $this->fail('a broken override must refuse outright, not fall back to any roster');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('chafa', strtolower($e->getMessage()));
+        }
+
+        $this->assertSame(
+            '',
+            (string) file_get_contents($log),
+            'the refusal pre-dates the spawn, so even the sidecar counter must never see a start',
+        );
+    }
+
+    /**
+     * @testdox settleLeave() releases the pipes and walks an UNREAPED child through the ladder — silently, twice
+     */
+    public function testSettleLeaveClosesPipesAndReapsAnUnwaitedChild(): void
+    {
+        if (!is_file('/bin/sleep')) {
+            $this->markTestSkipped('POSIX /bin/sleep fixture');
+        }
+
+        $proc = proc_open(
+            ['/bin/sleep', '30'],
+            [0 => ['file', '/dev/null', 'r'], 1 => ['pipe', 'w'], 2 => ['file', '/dev/null', 'w']],
+            $pipes,
+        );
+        $this->assertIsResource($proc);
+        $pid = proc_get_status($proc)['pid'];
+
+        $settle = new \ReflectionMethod(ChafaRenderer::class, 'settleLeave');
+        $settle->setAccessible(true);
+
+        $settle->invoke(null, $proc, $pipes, false);
+
+        $this->assertFalse(is_resource($pipes[1]), 'the stdout pipe must be released by the settle');
+
+        $deadline = microtime(true) + 2.0;
+        while (is_dir('/proc/' . $pid) && microtime(true) < $deadline) {
+            usleep(10_000);
+        }
+        $this->assertDirectoryDoesNotExist('/proc/' . $pid, 'finding 010: an abandoned child must not outlive the finally that settles it');
+
+        // Re-settling a settled leave is SILENT — every leg is guarded, and
+        // failOnWarning turns any "already closed" warning into a red.
+        $settle->invoke(null, $proc, $pipes, false);
+        $settle->invoke(null, false, [], true);
+    }
 
     /**
      * Write an executable fake `chafa` into a private dir and arm it as

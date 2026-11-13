@@ -6,10 +6,53 @@ namespace SugarCraft\Image\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Image\ImageSource;
+use SugarCraft\Image\Renderer\ChafaBinary;
 use SugarCraft\Image\Renderer\ChafaRenderer;
 
 final class ChafaRendererTest extends TestCase
 {
+    private ?string $overrideBackup = null;
+
+    private ?string $stubDir = null;
+
+    protected function tearDown(): void
+    {
+        if ($this->stubDir !== null) {
+            foreach (glob($this->stubDir . '/*') ?: [] as $file) {
+                @unlink($file);
+            }
+            @rmdir($this->stubDir);
+            $this->stubDir = null;
+        }
+        if ($this->overrideBackup !== null) {
+            putenv(ChafaBinary::ENV_OVERRIDE . '=' . $this->overrideBackup);
+            $this->overrideBackup = null;
+        } else {
+            putenv(ChafaBinary::ENV_OVERRIDE);
+        }
+    }
+
+    /**
+     * Plant an executable STUB chafa so the resolve-before-refuse guard
+     * (SI-03) passes and the scratch leg runs: post-SI-03 a scratch file
+     * is written only for a spawn that can actually happen. The stub
+     * always exits 3, so render() throws command_failed — which
+     * silentRender() swallows; these assertions read the scratch
+     * bookkeeping, never the output.
+     */
+    private function plantStubBinary(): void
+    {
+        $armed = getenv(ChafaBinary::ENV_OVERRIDE);
+        $this->overrideBackup = $armed === false ? null : $armed;
+
+        $this->stubDir = sys_get_temp_dir() . '/chafa-stub-' . getmypid() . '-' . uniqid();
+        mkdir($this->stubDir, 0700);
+        $stub = $this->stubDir . '/chafa';
+        file_put_contents($stub, "#!/bin/sh\nexit 3\n");
+        chmod($stub, 0700);
+        putenv(ChafaBinary::ENV_OVERRIDE . '=' . $stub);
+    }
+
     public function testChafaRendererName(): void
     {
         $renderer = new ChafaRenderer();
@@ -57,8 +100,10 @@ final class ChafaRendererTest extends TestCase
     {
         // PERF: an animation renders many frames; the input image must reuse
         // ONE per-process temp file (keyed by content hash) instead of a fresh
-        // tempnam() each frame. scratchFile() runs before proc_open(), so the
-        // reuse is observable whether or not chafa is installed.
+        // tempnam() each frame. Post-SI-03 the scratch leg only runs for a
+        // resolvable binary, so the pin plants an always-refused stub.
+        $this->plantStubBinary();
+        ChafaRenderer::reset();
         ChafaRenderer::resetScratch();
 
         $gifBytes = base64_decode('R0lGODlhAQABAIAAAMLCwgAAACH5BAAAAAAALAAAAAABAAEAAAICRAEAOw==');
@@ -79,6 +124,9 @@ final class ChafaRendererTest extends TestCase
     public function testScratchFileHoldsTheImageBytes(): void
     {
         // Parity: chafa must read the exact source bytes from the scratch file.
+        // Post-SI-03 the scratch leg needs a resolvable binary — stub armed.
+        $this->plantStubBinary();
+        ChafaRenderer::reset();
         ChafaRenderer::resetScratch();
 
         $gifBytes = base64_decode('R0lGODlhAQABAIAAAMLCwgAAACH5BAAAAAAALAAAAAABAAEAAAICRAEAOw==');
