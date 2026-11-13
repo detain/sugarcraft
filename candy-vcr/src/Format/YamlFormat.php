@@ -33,6 +33,13 @@ use SugarCraft\Vcr\Support\Scalars;
  *     - { t: 1.500, k: quit }
  * ```
  *
+ * When the header declares `timestampMode: relative`, event rows carry
+ * `dt` (seconds since the previous event; first row 0) instead of `t` —
+ * the same spelling the JSONL dt-family (`RelativeFormat`, CASSETTE.md)
+ * uses — and decoding restores the cumulative absolute timestamps. The
+ * mode is honoured in both directions; before it was parsed but ignored,
+ * silently rewriting a relative tape as absolute-corrupt.
+ *
  * Round-trips with {@see JsonlFormat} via the shared `Cassette` value
  * object — modulo `t` rounding (both formats round to ms precision).
  *
@@ -74,11 +81,17 @@ final class YamlFormat implements Format
 
     public function encode(Cassette $cassette): string
     {
+        $relative = $cassette->header->timestampMode === CassetteHeader::TIMESTAMP_MODE_RELATIVE;
         $eventsArray = [];
+        $prevT = 0.0;
         foreach ($cassette->events as $event) {
             // Reserved keys win and stay first (JsonlFormat contract): a
-            // payload carrying literal `t`/`k` entries is shadowed.
-            $row = ['t' => round($event->t, self::T_PRECISION), 'k' => $event->kind->value] + $event->payload;
+            // payload carrying literal `t`/`dt`/`k` entries is shadowed.
+            $stamp = $relative
+                ? ['dt' => round($event->t - $prevT, self::T_PRECISION)]
+                : ['t' => round($event->t, self::T_PRECISION)];
+            $prevT = $event->t;
+            $row = $stamp + ['k' => $event->kind->value] + $event->payload;
             $eventsArray[] = $row;
         }
 
@@ -109,13 +122,17 @@ final class YamlFormat implements Format
         if (!is_array($eventsRaw)) {
             throw new \RuntimeException("YAML cassette 'events' must be a list");
         }
+        $relative = $header->timestampMode === CassetteHeader::TIMESTAMP_MODE_RELATIVE;
         $events = [];
+        $cumulative = 0.0;
         foreach ($eventsRaw as $i => $row) {
             if (!is_array($row)) {
                 $line = $i + 1;
                 throw new \RuntimeException("YAML cassette event #{$line} is not a map");
             }
-            $events[] = $this->decodeEvent($row, $i + 1);
+            $event = $this->decodeEvent($row, $i + 1, $relative, $cumulative);
+            $cumulative = $event->t;
+            $events[] = $event;
         }
 
         return new Cassette($header, $events);
@@ -181,18 +198,32 @@ final class YamlFormat implements Format
     }
 
     /** @param array<array-key, mixed> $data */
-    private function decodeEvent(array $data, int $eventNo): Event
+    private function decodeEvent(array $data, int $eventNo, bool $relative, float $cumulative): Event
     {
-        if (!array_key_exists('t', $data) || !array_key_exists('k', $data)) {
-            throw new \RuntimeException("YAML event #{$eventNo} missing 't' or 'k'");
+        // Relative mode is strict on its spelling: a `t`-keyed row under a
+        // relative header is an authoring mistake, not a legacy shape to
+        // tolerate (the legacy `t`-interval tolerance lives in JsonlFormat).
+        $stampKey = $relative ? 'dt' : 't';
+        if (!array_key_exists($stampKey, $data) || !array_key_exists('k', $data)) {
+            throw new \RuntimeException("YAML event #{$eventNo} missing '{$stampKey}' or 'k'");
         }
         $kind = EventKind::tryFrom(Scalars::string($data['k'], 'YAML event k'));
         if ($kind === null) {
             $bad = Scalars::string($data['k'], 'YAML event k');
             throw new \RuntimeException("YAML event #{$eventNo} has unknown kind '{$bad}'");
         }
-        $t = Scalars::seconds($data['t'], "YAML event t #{$eventNo}");
-        unset($data['t'], $data['k']);
+        $stamp = Scalars::seconds($data[$stampKey], "YAML event {$stampKey} #{$eventNo}");
+        $t = $relative ? round($cumulative + $stamp, self::T_PRECISION) : $stamp;
+        // The cumulative sum is the real blast radius of a stack of legal-
+        // looking deltas: no single dt breaches the door, yet the running
+        // total slides off the edge of the tape (RelativeFormat finding 001
+        // door leg, mirrored here).
+        if ($t > Event::MAX_TIMESTAMP_SECONDS) {
+            throw new \RuntimeException(
+                "YAML event #{$eventNo} '{$stampKey}' pushes the tape past the 24h ceiling ({$t}s)"
+            );
+        }
+        unset($data[$stampKey], $data['k']);
 
         return new Event(t: $t, kind: $kind, payload: ObjectMap::of($data, "YAML event #{$eventNo} payload"));
     }
