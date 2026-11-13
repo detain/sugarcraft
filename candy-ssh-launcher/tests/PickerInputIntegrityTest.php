@@ -401,8 +401,96 @@ PHP;
         }
     }
 
-    public function testPagingKeysNeverEnterTheFilter(): void
+    public function testBracketedPasteLandsInTheFilterAndNeverDispatches(): void
     {
+        // -09: a real terminal wraps the paste in ESC [ 200 ~ … 201 ~.
+        // The payload (including the pasted newline) must reach the
+        // filter — Enter folded to a space — and the session must stay
+        // alive for the explicit cancel that follows.
+        [$p, $reader, $writer, $out] = $this->makeSocketPicker();
+        fwrite($writer, "\x1b[200~stag\r\x1b[201~\x1b");
+        fclose($writer);
+        try {
+            $picked = $p->pick($this->threeEndpoints());
+            $this->assertNull($picked, 'a pasted newline must never connect');
+            $this->assertSame('stag ', $this->filterOf($p));
+        } finally {
+            fclose($reader);
+        }
+        rewind($out);
+        $frame = (string) stream_get_contents($out);
+        $this->assertSame(1, substr_count($frame, "\x1b[?2004h"), 'paste mode armed once');
+        $this->assertSame(1, substr_count($frame, "\x1b[?2004l"), 'paste mode unwound once');
+        $this->assertStringContainsString("\x1b[?2004l\x1b[?1049l\n", $frame, 'paste unwinds before the buffer leaves');
+    }
+
+    public function testBracketPathOwnsAnEnterTheBeltCannotSee(): void
+    {
+        // Decisive leg for the ?2004 recognizer: the payload's first
+        // Enter follows the START marker, so the belt's previous-keystroke
+        // flags are both false — only bracket handling can keep this
+        // Enter out of the dispatch path. Without the case, the empty
+        // filter would pick 'production' on this very keystroke.
+        [$p, $reader, $writer] = $this->makeSocketPicker();
+        fwrite($writer, "\x1b[200~\rprod\r\x1b[201~\x1b");
+        fclose($writer);
+        try {
+            $picked = $p->pick($this->threeEndpoints());
+            $this->assertNull($picked, 'the leading pasted Enter must not pick row 0');
+            $this->assertSame(' prod ', $this->filterOf($p));
+        } finally {
+            fclose($reader);
+        }
+    }
+
+    public function testBeltFoldsAnEnterRidingTheSameBatch(): void    {
+        // -09 belt: terminals without ?2004 support hand us the raw
+        // burst. An Enter still buffered behind the last keystroke is
+        // paste tail; the explicit lone Esc that follows cancels.
+        [$p, $reader, $writer] = $this->makeSocketPicker();
+        fwrite($writer, "prod\r\x1b");
+        fclose($writer);
+        try {
+            $picked = $p->pick($this->threeEndpoints());
+            $this->assertNull($picked, 'burst Enter must not dispatch');
+            $this->assertSame('prod ', $this->filterOf($p));
+        } finally {
+            fclose($reader);
+        }
+    }
+
+    public function testControlEnterOnARealStreamStillConnects(): void
+    {
+        // -09 belt negative leg: once the batch has drained, the next
+        // Enter is fresh intent and connects as before. The child holds
+        // the Enter 120 ms back, so the stream is provably empty when
+        // the last letter is consumed.
+        if (!function_exists('pcntl_fork') || !function_exists('pcntl_waitpid')) {
+            $this->markTestSkipped('the slow-enter control needs pcntl_fork');
+        }
+        [$p, $reader, $writer] = $this->makeSocketPicker();
+        $pid = pcntl_fork();
+        $this->assertGreaterThanOrEqual(0, $pid);
+        if ($pid === 0) {
+            fclose($reader);
+            fwrite($writer, 'prod');
+            usleep(120_000);
+            fwrite($writer, "\r");
+            fclose($writer);
+            exit(0);
+        }
+        try {
+            fclose($writer);
+            $picked = $p->pick($this->threeEndpoints());
+            $this->assertNotNull($picked, 'a deliberate Enter after a drained batch connects');
+            $this->assertSame('production', $picked->name);
+        } finally {
+            pcntl_waitpid($pid, $status);
+            fclose($reader);
+        }
+    }
+
+    public function testPagingKeysNeverEnterTheFilter(): void    {
         // F-25 belt: Home/End are navigation, not intake (they were dropped
         // before, so this stays green across the change by design).
         [, , $p] = $this->drive("\x1b[H\x1b[F");
@@ -743,7 +831,8 @@ PHP;
             /** @param unused */
             protected function setRawMode(bool $_on): void { /* noop in tests */ }
         };
-        return [$p, $pair[0], $pair[1]];
+        // -09: callers that need the frame bytes use slot 3.
+        return [$p, $pair[0], $pair[1], $out];
     }
 
     /**

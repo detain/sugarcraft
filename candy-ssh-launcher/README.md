@@ -182,6 +182,7 @@ Limits of the embedded YAML reader: flat entries only, and a nested list is writ
 | Enter     | Connect to highlighted endpoint |
 | Esc / ^C  | Quit without connecting (exit 130; on a real terminal ^C raises SIGINT, which the picker traps to restore the terminal first) |
 | (typing)  | Type to filter — every letter, `j`/`k` included, joins the query; Backspace deletes one filter codepoint (a compound emoji or flag-emoji such as 🇺🇸 may need two presses) |
+| (paste)   | Pasted text goes to the filter, newlines and all — a pasted Enter never connects (bracketed paste, with a same-batch fallback for older terminals) |
 
 Arrow keys arrive as an `ESC [ A`-style byte burst; the decoder waits 150 ms for follow-on bytes so a burst fragmented by latency (tmux under load, a WAN hop) still reads as one keypress. Set `ESCDELAY` (milliseconds) to tune that window.
 
@@ -195,7 +196,7 @@ read config → render picker → read keys → choose → pcntl_exec(ssh, argv)
 
 That last `pcntl_exec` is the critical line: it **replaces** the PHP process with `ssh`. File descriptors, environment, and the controlling tty all flow through unchanged, so the user sees a normal `ssh` session — host-key prompts, agent forwarding, MOTD, exit status, all native. We never proxy bytes; we get out of the way.
 
-The interactive picker owns the **alternate screen buffer** — it enters on the first draw (`CSI ?1049h`) and leaves on every exit path (pick, cancel, or trapped signal, `CSI ?1049l`). The shell's screen is restored exactly: a cancelled session leaves nothing behind because the frame never touched the main screen. `--list` (no-terminal mode) is a plain line printer and performs no buffer switching.
+The interactive picker owns the **alternate screen buffer** — it enters on the first draw (`CSI ?1049h`) and leaves on every exit path (pick, cancel, or trapped signal, `CSI ?1049l`). The shell's screen is restored exactly: a cancelled session leaves nothing behind because the frame never touched the main screen. Pasted text is captured, never executed. The picker arms **bracketed paste mode** (`CSI ?2004h`) for the session and folds a pasted payload into the filter, newlines included. On a terminal too old to bracket, an Enter that rides in on the same input batch as the text before it is still treated as paste tail, not a connect intent. `--list` (no-terminal mode) is a plain line printer and performs no buffer switching.
 
 ## Import from ssh config
 

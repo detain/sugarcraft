@@ -86,6 +86,20 @@ class Picker
      */
     private const ESC_FOLLOWUP_MICROSECONDS = 150_000;
 
+    /**
+     * Bracketed paste (-09). While the picker owns the screen it asks
+     * the terminal to wrap pasted blocks in ESC [ 200 ~ … ESC [ 201 ~;
+     * the payload then goes to the filter as text (CR/LF folded to
+     * spaces) and NEVER dispatches an Enter. The belt catches the older
+     * shape too: an Enter still riding a batch whose bytes are buffered
+     * behind the last keystroke is paste tail, not intent — a
+     * zero-timeout select, deterministic and immune to draw latency.
+     */
+    private const PASTE_ON  = "\x1b[?2004h";
+    private const PASTE_OFF = "\x1b[?2004l";
+    private const PASTE_START = "\x1b[200~";
+    private const PASTE_END   = "\x1b[201~";
+
     /** @var resource */
     protected $in;
     /** @var resource */
@@ -104,6 +118,14 @@ class Picker
      * armCancelSignal() is strictly picker-scoped.
      */
     private ?bool $asyncSignalsBeforeArm = null;
+    /**
+     * -09 belt state: whether the last keystroke was filter text / an
+     * Enter, and whether the real input stream still held bytes behind
+     * it (batch-write shape). Reset per pick() session.
+     */
+    private bool $lastKeyWasText = false;
+    private bool $lastKeyWasEnter = false;
+    private bool $burstPending = false;
     /** Terminal geometry in cells; re-probed at the top of every draw()
      * (-013: the old one-shot latch held the first size forever, so a
      * mid-pick resize re-stranded the frame). null = not probed yet.
@@ -149,6 +171,9 @@ class Picker
         // state it had fresh, not mid-query from the previous session.
         $this->filter = '';
         $this->cursor = 0;
+        $this->lastKeyWasText = false;
+        $this->lastKeyWasEnter = false;
+        $this->burstPending = false;
         // Arm BEFORE raw mode: setRawMode shells out to stty (fork+exec+
         // reap), and a Ctrl+C landing in that window would hit SIG_DFL —
         // process dies, finally never runs, echo stays off. A SIGINT
@@ -164,6 +189,9 @@ class Picker
             // inside the try means the finally's leave covers every
             // return, throw and cancel shape.
             fwrite($this->out, Ansi::altScreenEnter());
+            // -09: ask the terminal to bracket pasted blocks while we own
+            // the screen; PASTE_OFF rides every exit path below.
+            fwrite($this->out, self::PASTE_ON);
             while (true) {
                 $matches = $this->filterMatches($endpoints);
                 if ($this->cursor >= count($matches)) {
@@ -175,12 +203,25 @@ class Picker
                 $this->draw($matches);
 
                 $key = $this->readKey();
+                // -09 belt input: is this keystroke the tail of a burst?
+                $burstEnter = ($key === "\r" || $key === "\n")
+                    && $this->enterLooksLikePasteTail();
+                $this->noteKeystroke($key);
                 switch ($key) {
                     case "\x03": /* cancel byte: stdin EOF, or ^C where SIGINT is blocked */
                     case "\x1b": /* ESC */
                         return null;
                     case "\r":
                     case "\n":
+                        if ($burstEnter) {
+                            // -09 belt: this Enter rode in behind the last
+                            // keystroke's batch — it is the newline of a
+                            // pasted line, not a connect intent. Fold it
+                            // into the filter like the bracketed path does.
+                            $this->filter .= ' ';
+                            $this->cursor = 0;
+                            continue 2;
+                        }
                         if ($matches === []) {
                             continue 2;
                         }
@@ -258,6 +299,15 @@ class Picker
                             $this->cursor = 0;
                         }
                         break;
+                    case self::PASTE_START:
+                        // -09: bracketed payload. Consume everything up to
+                        // the terminator as text (CR/LF folded to spaces,
+                        // navigation fragments swallowed); never dispatch.
+                        if ($this->readPasteBurst()) {
+                            return null; // EOF mid-paste: cancel, don't hang
+                        }
+                        $this->cursor = 0;
+                        continue 2;
                     default:
                         // Text intake. readKey() delivers whole UTF-8
                         // codepoints for typed characters and complete
@@ -282,6 +332,9 @@ class Picker
             // the frame was never on the main screen at all. After a pick
             // ssh takes the screen over; after a cancel the shell prompt
             // returns untouched.
+            // -09: paste bracketing unwinds before the buffer switch, on
+            // the same every-exit contract as the alt screen.
+            fwrite($this->out, self::PASTE_OFF);
             fwrite($this->out, Ansi::altScreenLeave());
             fwrite($this->out, "\n");
         }
@@ -339,6 +392,7 @@ class Picker
     private function restoreTerminalForSignal(): void
     {
         $this->setRawMode(false);
+        fwrite($this->out, self::PASTE_OFF);
         fwrite($this->out, Ansi::altScreenLeave());
         fwrite($this->out, "\n");
     }
@@ -686,6 +740,80 @@ class Picker
         // Reject encoded C1 controls (U+0080-U+009F); C0/DEL were already
         // refused byte-wise above.
         return !($first >= 0x80 && $first <= 0x9f);
+    }
+
+    /**
+     * -09 belt inputs: did the last delivered keystroke come from a still
+     * draining batch (bytes buffered behind it), and was it filter text or
+     * an Enter we already folded? An Enter that lands with those flags is
+     * the newline of a pasted line, not a connect intent. Memory streams
+     * never set the flags — canned test drives deliver whole sessions at
+     * once and stay on the dispatch path by construction.
+     */
+    private function enterLooksLikePasteTail(): bool
+    {
+        return $this->burstPending && ($this->lastKeyWasText || $this->lastKeyWasEnter);
+    }
+
+    /**
+     * Record the keystroke for the -09 belt: what it was, and whether the
+     * stream still holds bytes behind it (a zero-timeout select — the
+     * shape of a batch write, immune to draw latency and CI load).
+     */
+    private function noteKeystroke(string $key): void
+    {
+        $this->lastKeyWasText = $this->isTextKey($key);
+        $this->lastKeyWasEnter = $key === "\r" || $key === "\n";
+        $this->refreshBurstTail();
+    }
+
+    private function refreshBurstTail(): void
+    {
+        if (!$this->isRealInputStream()) {
+            $this->burstPending = false;
+            return;
+        }
+        $r = [$this->in];
+        $w = null;
+        $e = null;
+        $this->burstPending = @stream_select($r, $w, $e, 0, 0) > 0;
+    }
+
+    private function isRealInputStream(): bool
+    {
+        return (stream_get_meta_data($this->in)['stream_type'] ?? '') !== 'MEMORY';
+    }
+
+    /**
+     * Drain a bracketed paste payload (-09). Text keys append to the
+     * filter, CR/LF fold to spaces, and every other event (arrow
+     * fragments, chords) is swallowed — inside a burst the picker is a
+     * text pipe, not a navigator. Returns true when the stream ended
+     * before the terminator (pick() maps that to cancel, never hang).
+     */
+    private function readPasteBurst(): bool
+    {
+        while (true) {
+            $key = $this->readKey();
+            if ($key === self::PASTE_END) {
+                // A genuine Enter microseconds behind the terminator can
+                // still be paste tail; re-probe the stream for it.
+                $this->lastKeyWasText = true;
+                $this->lastKeyWasEnter = false;
+                $this->refreshBurstTail();
+                return false;
+            }
+            if ($key === "\x03") {
+                return true;
+            }
+            if ($key === "\r" || $key === "\n") {
+                $this->filter .= ' ';
+                continue;
+            }
+            if ($this->isTextKey($key)) {
+                $this->filter .= $key;
+            }
+        }
     }
 
     /**
