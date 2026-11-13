@@ -565,10 +565,11 @@ $cache->fetch('weather', static fn (): PromiseInterface => resolve('ignored'))->
   `AsyncCache` store and its coalesced flights, a `Debounced` handle's pending
   burst, a `Throttled` handle's cooldown and queued trailing call, and a
   `CancellationSource`'s registered callbacks. Sharing one of these across a
-  fork boundary means settles in one process never propagate to the other —
-  the parent's flight slot leaks waiting on a child's completion, and a
-  callback registered before the fork fires in whichever process cancels.
-  Mint these objects after forking, in the process that will use them.
+  fork boundary is unsafe: promises settled in one process never propagate to
+  the other — the parent's flight slot leaks waiting on a child's completion,
+  and a callback registered before the fork fires in whichever process
+  cancels. Mint these objects after forking, in the process that will use
+  them.
 
 ## Development
 
