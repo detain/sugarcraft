@@ -7,7 +7,9 @@ namespace SugarCraft\Overlay;
 /**
  * Overlay position constants.
  *
- * Matches rmhubbert/bubbletea-overlay Position values.
+ * Mirrors rmhubbert/bubbletea-overlay Position values (superset: the four
+ * corner anchors are sugar-overlay additions — upstream has only the five
+ * edge/center values).
  *
  * Composite placement is TWO-AXIS (vertical + horizontal). The corner and
  * side cases carry a projection on each axis independently: the vertical
