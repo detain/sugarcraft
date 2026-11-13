@@ -648,6 +648,39 @@ final class VeilTest extends TestCase
         $this->assertNull($rescanned->hit(1, 2), 'the markerless frame registers nothing — scan replaces wholesale');
     }
 
+    /**
+     * SO-15 (sugar-overlay-030): focus geometry is PUBLISHED — a scanned
+     * clone answers zoneRects() (current scan, scan order, 1-based paint
+     * rects) and lastZoneRect($id) (null for unknown ids), the same cell
+     * space hit() reads, so a keyboard layer draws its ring from the one
+     * geometry the pointer already uses. A markerless scan publishes
+     * nothing (the SO-14 hazard, seen from the ring side).
+     */
+    public function testScannedClonePublishesZoneGeometryForFocusRings(): void
+    {
+        $v = Veil::new();
+        $fg = $v->mark('ok', 'OK') . "\n" . $v->mark('cancel', 'Cancel');
+        $frame = $v->composite($fg, str_repeat("..............\n", 4), Position::TOP, Position::LEFT);
+
+        $scanned = $v->scan($frame);
+        $this->assertSame([
+            ['id' => 'ok',     'x' => 1, 'y' => 1, 'w' => 2, 'h' => 1],
+            ['id' => 'cancel', 'x' => 1, 'y' => 2, 'w' => 6, 'h' => 1],
+        ], $scanned->zoneRects());
+        $this->assertSame(['x' => 1, 'y' => 1, 'w' => 2, 'h' => 1], $scanned->lastZoneRect('ok'));
+        $this->assertNull($scanned->lastZoneRect('nope'));
+
+        // one geometry, two readers: the click-side Zone and the ring rect agree
+        $zone = $scanned->hit(1, 1);
+        $this->assertNotNull($zone);
+        $this->assertSame($zone->id, 'ok');
+        $this->assertSame(['x' => $zone->startCol, 'y' => $zone->startRow, 'w' => $zone->width(), 'h' => $zone->height()], $scanned->lastZoneRect('ok'));
+
+        $plain = Veil::new()->withoutZoneMarkers();
+        $markerless = $plain->composite($plain->mark('z', 'X'), '..........\n..........', Position::TOP, Position::LEFT);
+        $this->assertSame([], $plain->scan($markerless)->zoneRects());
+    }
+
     public function testIsClickOutsideReturnsFalseWhenDismissDisabled(): void
     {
         // Mark content covering coordinate (1,1) and scan it so click at (1,1) is inside the zone

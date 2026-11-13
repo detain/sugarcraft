@@ -641,8 +641,18 @@ Dismissal by click is only the pointer half of a modal. sugar-overlay
 deliberately ships no key handling — wire the keyboard side in your app:
 bind Esc/Enter to the same dismiss action `isClickOutside()` answers, and
 keep focus movement inside sugar-focus / sugar-navstack so the overlay's
-buttons are reachable without a mouse. When an overlay opens, announce it:
-the **text** you emit (a title line) is the screen-reader cue; a
+buttons are reachable without a mouse.
+
+The geometry your keyboard layer needs is published, not private: the
+clone returned by `scan()` answers `zoneRects()` — every zone in scan
+order as `{id, x, y, w, h}` — and `lastZoneRect($id)` — one zone's rect in
+the same 1-based cell space `hit()` uses. The focus-ring recipe: carry a
+focused zone id in your model, advance it across Tab/arrows by walking
+`zoneRects()`, and after each render draw the ring the host's own way (an
+inverse span or thin box over that rect) from `lastZoneRect()`. `hit()` is
+the click-side reading of the same rect, so pointer and keyboard agree on
+one geometry by construction. When an overlay opens, announce it: the
+**text** you emit (a title line) is the screen-reader cue; a
 `withBorder()` frame is a sighted-user affordance that only adds
 box-glyph noise for terminal screen readers, so never treat it as the
 announcement. Return focus to the underlying pane when it closes.

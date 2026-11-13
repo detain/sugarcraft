@@ -572,10 +572,68 @@ final class Veil
      *
      * Requires scan() to have been called after the last render — of
      * {@see lastFullFrame()} when the session is diffing.
+     *
+     * @see lastZoneRect() for the same zone as a paint rect (focus rings).
      */
     public function hit(int $col, int $row): ?Zone
     {
         return $this->scanner->hit($col, $row);
+    }
+
+    /**
+     * The rect the current scan registered for $id — the focus-ring door
+     * (sugar-overlay-030): a host that carries a focused zone id can paint
+     * its ring from published geometry without owning the Scanner.
+     *
+     * Converted from the Zone's 1-based inclusive corners to a paint rect:
+     * x/y stay 1-based (same space as {@see hit()}), w/h are cell counts.
+     * Null when no scan has registered that id.
+     *
+     * @return null|array{x: int, y: int, w: int, h: int}
+     *
+     * @see zoneRects()
+     * @see scan()
+     */
+    public function lastZoneRect(string $id): ?array
+    {
+        $zone = $this->scanner->get($id);
+        if ($zone === null) {
+            return null;
+        }
+
+        return [
+            'x' => $zone->startCol,
+            'y' => $zone->startRow,
+            'w' => $zone->width(),
+            'h' => $zone->height(),
+        ];
+    }
+
+    /**
+     * Every zone the current scan registered, in the Scanner's scan order,
+     * as {id, x, y, w, h} paint rects (the same 1-based space as
+     * {@see lastZoneRect()}). Tab/arrow cycling walks this list; the ring
+     * of the selected entry is drawn from lastZoneRect(). Empty on a
+     * markerless scan.
+     *
+     * @return list<array{id: string, x: int, y: int, w: int, h: int}>
+     *
+     * @see lastZoneRect()
+     */
+    public function zoneRects(): array
+    {
+        $rects = [];
+        foreach ($this->scanner->all() as $zone) {
+            $rects[] = [
+                'id' => $zone->id,
+                'x'  => $zone->startCol,
+                'y'  => $zone->startRow,
+                'w'  => $zone->width(),
+                'h'  => $zone->height(),
+            ];
+        }
+
+        return $rects;
     }
 
     /**
