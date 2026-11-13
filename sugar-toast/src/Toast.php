@@ -1176,7 +1176,7 @@ final class Toast
         $stackedBefore = 0;
         foreach ($boxes as $index => $placed) {
             $box = $placed['buffer'];
-            $boxes[$index]['x'] = max(0, $this->position->xOffset($box->width(), $frameWidth));
+            $boxes[$index]['x'] = $this->position->xOffsetClamped($box->width(), $frameWidth);
             $boxes[$index]['y'] = max(0, $this->position->yOffset($box->height(), $contentHeight, $stackedBefore));
             $stackedBefore += $box->height();
         }

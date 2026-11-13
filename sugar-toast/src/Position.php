@@ -26,7 +26,10 @@ enum Position
      *
      * Right/centre arms return a NEGATIVE offset when $alertWidth exceeds
      * $viewportWidth; view() clamps it via max(0) — hosts calling this
-     * accessor directly must clamp the same way.
+     * accessor directly must clamp the same way — or call
+     * {@see xOffsetClamped()}, which does it for them. The negative return
+     * stays pinned (a convenience clamp here would silently flip public
+     * semantics for hosts that read the overshoot).
      */
     public function xOffset(int $alertWidth, int $viewportWidth): int
     {
@@ -35,6 +38,16 @@ enum Position
             self::TopCenter, self::BottomCenter, self::MiddleCenter  => (int) \floor(($viewportWidth - $alertWidth) / 2),
             self::TopRight, self::BottomRight, self::MiddleRight     => $viewportWidth - $alertWidth,
         };
+    }
+
+    /**
+     * {@see xOffset()} clamped to column 0 — exactly the value view() paints
+     * at, so hosts stop hand-clamping. Additive: xOffset() keeps its
+     * documented negative semantics.
+     */
+    public function xOffsetClamped(int $alertWidth, int $viewportWidth): int
+    {
+        return \max(0, $this->xOffset($alertWidth, $viewportWidth));
     }
 
     /**

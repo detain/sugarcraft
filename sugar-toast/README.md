@@ -632,6 +632,7 @@ already over the new cap survive until the next push evicts them.
 | `HistoryLog` | `all(): list<Alert>` | Return all entries |
 | `HistoryLog` | `count(): int` | Entry count |
 | `Position` | `xOffset(int $alertWidth, int $viewportWidth): int` | X offset of a box in a viewport (left 0, centre floored, right flush) — **negative** when the box outgrows the viewport, clamp like `view()` — see Stacking & The Frame |
+| `Position` | `xOffsetClamped(int $alertWidth, int $viewportWidth): int` | `xOffset()` floored at column 0 — the exact column `view()` paints at; use it instead of hand-clamping |
 | `Position` | `yOffset(int $alertHeight, int $viewportHeight, int $stackedHeightBefore = 0): int` | Y offset; top families stack downward, bottom/middle upward against `$stackedHeightBefore`, clamped to row 0 |
 | `ToastType` | `label(): string` | Translated severity word (`Lang::t('type.*')`) — surfaced by `withAccessibleText()` |
 | `ToastType` | `icon(SymbolSet $set): string` | Icon glyph for this type under the given symbol set |

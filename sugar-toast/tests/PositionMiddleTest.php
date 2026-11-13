@@ -147,4 +147,15 @@ final class PositionMiddleTest extends TestCase
         // Also verify normal case still works (non-negative)
         $this->assertSame(3, Position::MiddleCenter->yOffset(3, 10, 0));
     }
+
+    public function testXOffsetClampedMatchesRawWhenFitsAndFloorsAtZeroWhenOversize(): void
+    {
+        // TST-XOFF arm (b): additive clamped accessor — view() paints here.
+        foreach (Position::cases() as $position) {
+            $this->assertSame($position->xOffset(20, 80), $position->xOffsetClamped(20, 80), $position->name . ' fits');
+            $this->assertSame(0, $position->xOffsetClamped(100, 80), $position->name . ' oversize');
+            $this->assertLessThanOrEqual(0, $position->xOffset(100, 80), $position->name . ' raw stays pinned');
+        }
+        $this->assertSame(-20, Position::BottomRight->xOffset(100, 80));
+    }
 }
