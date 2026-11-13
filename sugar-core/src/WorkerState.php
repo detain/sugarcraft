@@ -6,6 +6,15 @@ namespace SugarCraft\Core;
 
 /**
  * @internal
+ *
+ * Pool-side bookkeeping for one subprocess worker (sc-29 contract doc):
+ * the child speaks the two-stage envelope protocol written at
+ * {@see WorkerPool::sendToWorker()} and in WorkerPool's script heredoc;
+ * `buffer` holds a partial response line between polls, `idle` +
+ * `currentJobId` are the pool's sole scheduling truth, and `scriptPath`
+ * names the temp bootstrap the child runs (unlinked exactly once on
+ * close). Streams are `resource|nullable` because failed-spawn synthetic
+ * states exist by design (see the closeWorker guard).
  */
 final class WorkerState
 {

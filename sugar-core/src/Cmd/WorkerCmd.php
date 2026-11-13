@@ -14,10 +14,7 @@ use SugarCraft\Core\WorkerPool;
  *
  * Usage in a model:
  * ```php
- * return [$model, WorkerCmd::run($pool, function () {
- *     // heavy computation
- *     return $result;
- * })];
+ * return [$model, WorkerCmd::run($pool, [Heavy::class, 'compute'])];
  * ```
  *
  * The returned Msg will be a {@see WorkerResultMsg} with the result
@@ -36,10 +33,14 @@ final class WorkerCmd
      * Create a Cmd that dispatches `$task` to the worker pool.
      *
      * @param WorkerPool $pool
-     * @param callable|string $task Named function or callable; serialized via
-     *                              PHP's serialize() for cross-process transport.
-     *                              Note: PHP closures cannot be serialized; use
-     *                              named functions or static method arrays.
+     * @param callable|string $task Serializable callable. Strings are REJECTED
+     *                              by the pool with a named
+     *                              InvalidArgumentException (the sc-29 string
+     *                              channel is removed — this door keeps the
+     *                              old signature only so the refusal message
+     *                              is the pool's, not a PHP TypeError).
+     *                              Closures cannot serialize: they reject the
+     *                              promise, named.
      * @return \Closure A closure that, when executed, returns an AsyncCmd whose
      *             promise resolves to WorkerResultMsg
      */

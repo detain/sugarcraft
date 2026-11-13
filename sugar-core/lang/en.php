@@ -67,4 +67,6 @@ return [
     'raw_mode.stream_not_mappable' => 'raw mode was requested on stream {stream}, but its descriptor names no stty-targetable device — pass a terminal stream that resolves to a path, or a non-tty stream, and the toggle no-ops',
     'raw_mode.stty_failed' => 'stty rejected mode {mode} with exit {status} — the terminal discipline was not changed',
 'modifiers.unknown_bit' => 'unknown modifier bit {modifier}: expected one of Modifiers::SHIFT, Modifiers::ALT or Modifiers::CTRL',
+'worker.string_task_removed' => 'string worker task `{name}` is not supported: the global-function channel was removed (sc-29) — pass a serializable callable such as [Class::class, method] or an invokable object',
+'worker.malformed_response' => 'malformed worker response: {length} bytes, digest {digest} (frame contents withheld: response lines embed serialized task data)',
 ];

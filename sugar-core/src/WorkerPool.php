@@ -17,14 +17,24 @@ use SugarCraft\Core\Msg\WorkerResultMsg;
  * callables written to stdin and results read from stdout. The pool
  * is non-blocking: I/O is driven by the supplied ReactPHP event loop.
  *
- * Tasks cross the process boundary through PHP's {@see serialize()}:
- * a string task names a global function the worker calls, any other
- * callable (e.g. `[Foo::class, 'bar']`, an invokable object) is
- * serialized and reconstructed in the subprocess. A `Closure` — directly
- * or captured anywhere inside the callable — cannot be serialized; such
- * a dispatch() still returns a promise, already REJECTED with a
- * RuntimeException naming the serialization failure, rather than
- * throwing or hanging.
+ * Task transport (sc-29, finding sugar-core-007): the ONLY task surface
+ * is a serializable PHP callable — `[Foo::class, 'bar']`, an invokable
+ * object, or similar. A `Closure` — directly or captured anywhere inside
+ * the callable — cannot be serialized; such a dispatch() still returns a
+ * promise, already REJECTED with a RuntimeException naming the
+ * serialization failure, rather than throwing or hanging. The former
+ * string-task channel (`dispatch('some_global')` → the child calls
+ * `function_exists($name) && $name()`) is REMOVED: it handed every
+ * globally-defined function to the child as an execution surface with no
+ * relationship to the caller's code, and the autoloader leg below made
+ * it redundant (class callables resolve in-child now). A string task
+ * throws a named InvalidArgumentException at the door.
+ *
+ * The child bootstraps the library's own autoloader (path passed
+ * explicitly via argv), merges the parent environment instead of
+ * replacing it, and unserializes through a two-stage envelope so the
+ * task's class allow-list travels WITH the task rather than being
+ * guessed at.
  *
  * Mirrors the worker-pool pattern of charmbracelet/bubbletea, the machinery for offloading heavy
  * computation off the UI thread.
@@ -91,16 +101,24 @@ final class WorkerPool
      * Enqueue a callable for execution in the worker pool.
      * Returns a promise that resolves with the worker's result when done.
      *
-     * @param callable|non-empty-string $task Named function or callable.
-     *                                         PHP closures cannot be serialized;
-     *                                         use named functions for cross-process work.
-     *                                         String tasks must be the name of a globally-
-     *                                         callable function; the worker validates via
-     *                                         function_exists() before invoking.
+     * @param callable|non-empty-string $task Serializable callable — a static
+     *                                         method array `[Class::class, 'm']`
+     *                                         or an invokable object. Strings
+     *                                         (the removed global-function
+     *                                         channel) throw a named
+     *                                         InvalidArgumentException;
+     *                                         Closures reject the promise.
      * @return PromiseInterface<WorkerResultMsg>
      */
     public function dispatch(callable|string $task): PromiseInterface
     {
+        if (is_string($task)) {
+            // sc-29: the string channel is removed. Fail at the door with
+            // the replacement contract in the message — before any Deferred
+            // is parked, so nothing can hang on the refusal.
+            throw new \InvalidArgumentException(Lang::t('worker.string_task_removed', ['name' => $task]));
+        }
+
         if (!$this->started) {
             $this->start();
         }
@@ -208,21 +226,42 @@ final class WorkerPool
         }
 
         // The peer is a local child process; allowed_classes is defense-in-depth
-        // against pipe corruption. We allow Throwable and common subclasses to
-        // support error round-trips from worker subprocesses.
-        $data = @unserialize(base64_decode($line, true), [
+        // against pipe corruption. sc-29 widened the list to the library's own
+        // throwable surface (the concrete Exception/* classes, matched EXACTLY —
+        // PHP allow-lists are by-name, not by-lineage) so a task failure that
+        // crosses back as a ProgramException arrives as the real class instead
+        // of a __PHP_Incomplete_Class shrug. The full result-envelope decision
+        // (values-as-objects, JSON alternative) is sc-33's; this is the
+        // error-shape floor, written at both ends.
+        $decoded = base64_decode($line, true);
+        // The child always writes strict-mode-valid base64; a frame that
+        // fails even base64_decode is corruption and must travel the SAME
+        // redacted malformed path, not TypeError out of unserialize(false).
+        $data = $decoded === false ? false : @unserialize($decoded, [
             'allowed_classes' => [
                 \Throwable::class,
                 \Exception::class,
                 \Error::class,
                 \RuntimeException::class,
                 \InvalidArgumentException::class,
+                \SugarCraft\Core\Exception\ProgramException::class,
+                \SugarCraft\Core\Exception\RenderException::class,
+                \SugarCraft\Core\Exception\TerminalException::class,
+                \SugarCraft\Core\Exception\SemaphoreClosedException::class,
             ],
         ]);
         if (!is_array($data)) {
+            // Raw protocol bytes never ride into an exception message
+            // (sc-29): a response line embeds serialized user task data,
+            // and exceptions travel to logs/UIs that must not see it.
+            // Length + crc32 digest identify the frame without leaking
+            // its contents.
             $result = new WorkerResultMsg(
                 result: null,
-                error: new \RuntimeException('Malformed worker response: ' . $line),
+                error: new \RuntimeException(Lang::t('worker.malformed_response', [
+                    'length' => strlen($line),
+                    'digest' => sprintf('%08x', crc32($line)),
+                ])),
                 workerId: $worker->id,
             );
             $this->resolveJob($worker, $result);
@@ -274,11 +313,18 @@ final class WorkerPool
         $worker->currentJobId = $jobId;
 
         try {
-            if (is_string($task)) {
-                $payload = ['type' => 'function', 'name' => $task];
-            } else {
-                $payload = ['type' => 'callable', 'callable' => $task];
-            }
+            // Two-stage envelope (sc-29): the OUTER array is scalars only —
+            // the child unserializes it with allowed_classes=false — and it
+            // carries both the task blob and the EXACT class list the task
+            // needs. An allow-list cannot be decided after the objects it
+            // guards have already been instantiated, so the parent (which
+            // holds the real callable) computes the list from that callable
+            // instead of the child guessing.
+            $payload = [
+                'v'        => 1,
+                'callable' => base64_encode(serialize($task)),
+                'allowed'  => self::taskClasses($task),
+            ];
             $serialized = base64_encode(serialize($payload));
         } catch (\Throwable $e) {
             // \Throwable, not \Error: serialize() of a Closure (directly, or
@@ -310,6 +356,42 @@ final class WorkerPool
         // catches, rejecting this job through the death path. Checking fflush's
         // bool here would only race the same condition twice.
         @fflush($worker->stdin);
+    }
+
+    /**
+     * The classes an unserialize of this callable needs, exactly.
+     *
+     * `[Class::class, 'm']` arrays are pure strings — they instantiate
+     * nothing (the method resolves via the autoloader at CALL time, not
+     * at unserialize time). Only object-carrying callables (invokables,
+     * `[$obj, 'm']`) materialise a class during unserialize, and then it
+     * is exactly that one object's class. Computing this from the REAL
+     * callable at the trusted parent end is what lets the child keep an
+     * `allowed_classes` list without inventing one.
+     *
+     * @return list<string>
+     */
+    private static function taskClasses(callable $task): array
+    {
+        if (is_object($task)) {
+            return [get_class($task)];
+        }
+        if (is_array($task) && isset($task[0]) && is_object($task[0])) {
+            return [get_class($task[0])];
+        }
+        return [];
+    }
+
+    /**
+     * Absolute path of this library's autoloader, handed to every worker
+     * child as argv[1] (sc-29). The child's whole class-visibility surface
+     * comes from here: without it, a task naming ANY library class died
+     * in-child with a bare "Class not found". dirname(__DIR__) is the
+     * library root because this file lives in src/ — cwd-independent.
+     */
+    private static function autoloadPath(): string
+    {
+        return dirname(__DIR__) . '/vendor/autoload.php';
     }
 
     private function handleWorkerDeath(WorkerState $worker, string $reason, ?string $jobIdOverride = null): void
@@ -345,10 +427,19 @@ final class WorkerPool
             return;
         }
 
-        $env = ['HOME' => getenv('HOME') ?: '/tmp'];
+        // MERGE, not replace (sc-29): proc_open's env array is the child's
+        // WHOLE environment, so the old ['HOME' => ...] literal stripped
+        // PATH (and everything else) — any task that shelled out or
+        // resolved a binary died in-child with no clue why. getenv() hands
+        // us the parent's actual block; HOME keeps its old floor because
+        // some harnesses run with it unset and PHP's own startup wants it.
+        $env = getenv();
+        if (($env['HOME'] ?? '') === '') {
+            $env['HOME'] = '/tmp';
+        }
 
         $process = proc_open(
-            [PHP_BINARY, $scriptPath],
+            [PHP_BINARY, $scriptPath, self::autoloadPath()],
             [
                 0 => ['pipe', 'r'],
                 1 => ['pipe', 'w'],
@@ -400,6 +491,15 @@ final class WorkerPool
     {
         $code = <<<'PHP'
 <?php
+// Worker child for SugarCraft\Core\WorkerPool (sc-29 contract): one
+// base64 envelope per stdin line, one base64 response per stdout line.
+// argv[1] is the library autoloader the parent names — required FIRST,
+// before anything else touches a class: a task naming any library class
+// died in-child with a bare "Class not found" until this line existed.
+$autoload = isset($argv[1]) && is_file($argv[1]) ? $argv[1] : null;
+if ($autoload !== null) {
+    require $autoload;
+}
 $fd = fopen('php://fd/0', 'rb');
 if ($fd === false) {
     exit(1);
@@ -421,31 +521,34 @@ while (!feof($fd)) {
         fflush(STDOUT);
         continue;
     }
-    // Note: the peer is a local child process; allowed_classes is defense-in-depth
-    // against pipe corruption rather than an untrusted network peer.
-    $payload = unserialize($decoded);
-    if (!is_array($payload)) {
-        $response = base64_encode(serialize(['result' => null, 'error' => new \RuntimeException('Malformed payload')]));
+    // Outer envelope: scalars only, so allowed_classes=false is the
+    // COMPLETE policy for this stage — nothing object-shaped may be
+    // constructed before we have read (and honoured) the allow-list.
+    $envelope = @unserialize($decoded, ['allowed_classes' => false]);
+    if (!is_array($envelope) || ($envelope['v'] ?? null) !== 1
+        || !isset($envelope['callable']) || !is_string($envelope['callable'])
+        || !isset($envelope['allowed']) || !is_array($envelope['allowed'])) {
+        $response = base64_encode(serialize(['result' => null, 'error' => new \RuntimeException('Malformed worker envelope')]));
         echo $response . "\n";
         fflush(STDOUT);
         continue;
     }
     try {
-        if (($payload['type'] ?? '') === 'callable') {
-            $callable = $payload['callable'] ?? null;
-            if ($callable === null) {
-                throw new \RuntimeException('Missing callable in payload');
-            }
-            $result = $callable();
-        } else {
-            // String form is a function name — validated in the worker
-            // so the parent process does not need the function defined.
-            $name = $payload['name'] ?? null;
-            if (!is_string($name) || !function_exists($name)) {
-                throw new \RuntimeException('Unknown worker function: ' . var_export($name, true));
-            }
-            $result = $name();
+        $inner = base64_decode($envelope['callable'], true);
+        if ($inner === false) {
+            throw new \RuntimeException('Invalid task encoding');
         }
+        // The task object materialises ONLY from the class list the
+        // parent computed from the real callable — not from a guess,
+        // and not unlimited. (The string-task/function_exists channel
+        // that once lived here is removed; closures were never
+        // serializable and array/object callables resolve through the
+        // autoloader.)
+        $callable = unserialize($inner, ['allowed_classes' => $envelope['allowed']]);
+        if (!is_callable($callable)) {
+            throw new \RuntimeException('Worker payload is not callable');
+        }
+        $result = $callable();
         $response = base64_encode(serialize(['result' => $result, 'error' => null]));
     } catch (\Throwable $e) {
         $response = base64_encode(serialize(['result' => null, 'error' => $e]));

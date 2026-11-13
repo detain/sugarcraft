@@ -27,7 +27,7 @@ final class WorkerPoolRemediationTest extends TestCase
         $pool = new WorkerPool($this->loop, 1);
 
         // Dispatch first job — gets worker id 0.
-        $promise1 = $pool->dispatch('getmypid');
+        $promise1 = $pool->dispatch([WorkerPoolTasks::class, 'pid']);
         $id1 = $this->waitForResult($promise1);
         $this->assertSame(0, $id1->workerId);
 
@@ -49,7 +49,7 @@ final class WorkerPoolRemediationTest extends TestCase
         $this->assertSame([], $prop->getValue($pool), 'pool must reap the killed worker');
 
         // The replacement worker gets a fresh id — ids are never reused.
-        $promise2 = $pool->dispatch('time');
+        $promise2 = $pool->dispatch([WorkerPoolTasks::class, 'pid']);
         $id2 = $this->waitForResult($promise2);
         $this->assertNotSame($id1->workerId, $id2->workerId);
 
@@ -65,7 +65,7 @@ final class WorkerPoolRemediationTest extends TestCase
         $pool = new WorkerPool($this->loop, 1);
 
         // Dispatch a job to force worker spawning.
-        $promise = $pool->dispatch('getmypid');
+        $promise = $pool->dispatch([WorkerPoolTasks::class, 'pid']);
         $this->waitForResult($promise);
 
         $pool->stop();
@@ -78,27 +78,25 @@ final class WorkerPoolRemediationTest extends TestCase
         );
     }
 
-    public function testUnknownFunctionNameRejects(): void
+    public function testNonCallableArrayRefusedAtTheDoor(): void
     {
+        // sc-29 makes the old "unknown function name" family observable at
+        // the parent instead of the pipe: PHP's own `callable|string`
+        // signature refuses a [Class, 'missingMethod'] pair with a TypeError
+        // before any Deferred is parked, and a plain string task throws the
+        // named InvalidArgumentException (pinned in WorkerPoolTest). The
+        // child keeps its is_callable/envelope guards as defense-in-depth
+        // against corrupted frames, not as a user-facing contract.
         $pool = new WorkerPool($this->loop, 1);
 
-        $promise = $pool->dispatch('this_function_does_not_exist_anywhere');
-        $thrown = null;
-        $promise->otherwise(function (\Throwable $e) use (&$thrown): void {
-            $thrown = $e;
-            $this->loop->stop();
-        });
-
-        $this->loop->addTimer(5.0, function (): void {
-            $this->fail('Test timed out waiting for rejection');
-        });
-
-        $this->loop->run();
-
-        $this->assertNotNull($thrown);
-        $this->assertInstanceOf(\RuntimeException::class, $thrown);
-        $this->assertStringContainsString('Unknown worker function', $thrown->getMessage());
-        $pool->stop();
+        $this->expectException(\TypeError::class);
+        try {
+            $pool->dispatch([WorkerPoolTasks::class, 'thisMethodDoesNotExistAnywhere']);
+        } finally {
+            $pending = new \ReflectionProperty(WorkerPool::class, 'pending');
+            $this->assertSame([], $pending->getValue($pool), 'a refused task parks nothing');
+            $pool->stop();
+        }
     }
 
     /**
@@ -113,13 +111,13 @@ final class WorkerPoolRemediationTest extends TestCase
         $pool = new WorkerPool($this->loop, 1);
 
         // Job A fails inside the worker (concurrency 1, so the worker is busy).
-        $pool->dispatch('this_function_does_not_exist_anywhere')
+        $pool->dispatch([WorkerPoolTasks::class, 'boom'])
             ->catch(static function (): void {
             });
 
         // Job B queues behind A and must run the moment A's worker frees up.
         $resolved = null;
-        $pool->dispatch('php_sapi_name')
+        $pool->dispatch([WorkerPoolTasks::class, 'sapiName'])
             ->then(function (WorkerResultMsg $msg) use (&$resolved): void {
                 $resolved = $msg;
                 $this->loop->stop();
@@ -151,12 +149,12 @@ final class WorkerPoolRemediationTest extends TestCase
     public function testDispatchAfterStopRestartsThePool(): void
     {
         $pool = new WorkerPool($this->loop, 1);
-        $pool->dispatch('php_sapi_name')->catch(static function (): void {
+        $pool->dispatch([WorkerPoolTasks::class, 'sapiName'])->catch(static function (): void {
         });
         $pool->stop();
 
         $resolved = null;
-        $pool->dispatch('php_sapi_name')
+        $pool->dispatch([WorkerPoolTasks::class, 'sapiName'])
             ->then(function (WorkerResultMsg $msg) use (&$resolved): void {
                 $resolved = $msg;
                 $this->loop->stop();
@@ -209,7 +207,7 @@ final class WorkerPoolRemediationTest extends TestCase
         $this->assertSame([], $pending->getValue($pool), 'no Deferred may be orphaned in $pending');
 
         // The worker never received anything — it stays alive and serves the next job.
-        $next = $this->waitForResult($pool->dispatch('php_sapi_name'));
+        $next = $this->waitForResult($pool->dispatch([WorkerPoolTasks::class, 'sapiName']));
         $this->assertSame('cli', $next->result);
         $this->assertSame(0, $next->workerId, 'the same worker must be reused, not killed');
 
@@ -224,12 +222,12 @@ final class WorkerPoolRemediationTest extends TestCase
     {
         $pool = new WorkerPool($this->loop, 1);
 
-        $first = $pool->dispatch('php_sapi_name');
+        $first = $pool->dispatch([WorkerPoolTasks::class, 'sapiName']);
         $closureRejected = null;
         $pool->dispatch(static fn (): int => 2)->then(null, function (\Throwable $e) use (&$closureRejected): void {
             $closureRejected = $e;
         });
-        $last = $pool->dispatch('php_sapi_name');
+        $last = $pool->dispatch([WorkerPoolTasks::class, 'sapiName']);
 
         $this->waitForResult($first);
         $this->assertSame('cli', $this->waitForResult($last)->result);

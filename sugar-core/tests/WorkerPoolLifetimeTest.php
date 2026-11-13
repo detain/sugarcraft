@@ -54,8 +54,8 @@ final class WorkerPoolLifetimeTest extends TestCase
         // No loop run between dispatch and stop: both jobs are still pending
         // (one in flight on the just-spawned child, one queued) and neither
         // can have been polled.
-        $pool->dispatch('php_sapi_name')->otherwise($capture);
-        $pool->dispatch('php_sapi_name')->otherwise($capture);
+        $pool->dispatch([\SugarCraft\Core\Tests\WorkerPoolTasks::class, 'sapiName'])->otherwise($capture);
+        $pool->dispatch([\SugarCraft\Core\Tests\WorkerPoolTasks::class, 'sapiName'])->otherwise($capture);
 
         $pool->stop();
 
@@ -173,7 +173,7 @@ if (!function_exists('posix_kill') || !defined('SIGSTOP')) {
 }
 $loop = new React\EventLoop\StreamSelectLoop();
 $pool = new SugarCraft\Core\WorkerPool($loop, 1);
-$pool->dispatch('getmypid')->otherwise(static function (): void {});
+$pool->dispatch([SugarCraft\Core\Tests\WorkerPoolTasks::class, 'pid'])->otherwise(static function (): void {});
 
 $workers = (new ReflectionProperty(SugarCraft\Core\WorkerPool::class, 'workers'))->getValue($pool);
 $worker = reset($workers);
