@@ -11,19 +11,20 @@ use PHPUnit\Framework\TestCase;
 
 final class CustomDifficultyTest extends TestCase
 {
-    // ─── defaults ─────────────────────────────────────────────────────────────
+    // ─── new (msw-09/-032: renamed from defaults() — the fleet factory
+    //     spelling; the picker form seeds from it) ───────────────────────────
 
-    public function testDefaultsReturnsSensibleValues(): void
+    public function testNewReturnsSensibleValues(): void
     {
-        $cd = CustomDifficulty::defaults();
+        $cd = CustomDifficulty::new();
         $this->assertSame(9, $cd->rows);
         $this->assertSame(9, $cd->cols);
         $this->assertSame(10, $cd->mines);
     }
 
-    public function testDefaultsLabelIsReadable(): void
+    public function testNewLabelIsReadable(): void
     {
-        $cd = CustomDifficulty::defaults();
+        $cd = CustomDifficulty::new();
         $this->assertSame('9×9 · 10 mines', $cd->label());
     }
 

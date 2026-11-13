@@ -57,7 +57,7 @@ final class LocaleParityTest extends TestCase
         }
         // The ui.* family is what makes MAJOR-2 (i18n dormant) stay fixed:
         // every visible game string must live here, never inline in code.
-        foreach (['status', 'boom', 'cleared', 'help_rules', 'help_moves', 'help_board', 'help_session'] as $suffix) {
+        foreach (['status', 'boom', 'cleared', 'help_rules', 'help_moves', 'help_board', 'help_session', 'picker_title', 'picker_custom', 'picker_hint', 'form_width', 'form_height', 'form_mines', 'form_hint'] as $suffix) {
             $this->assertArrayHasKey("ui.$suffix", $en);
         }
     }

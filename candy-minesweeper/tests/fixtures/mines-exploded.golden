@@ -9,7 +9,7 @@
 │           │
 │          [0m │
 ╰───────────╯
-  [1m[38;2;255;95;135m💥 boom — press r to restart · 0:00[0m
+  [1m[38;2;255;95;135m💥 boom — press r to restart · n new game · 0:00[0m
   [38;2;125;110;152ma number counts nearby mines · flag suspected mines · open safe cells to win[0m
 [38;2;125;110;152m  ↑ ↓ ← → / hjkl  move  ·  space / enter  reveal                            [0m
 [38;2;125;110;152m  ✗ wrong flag · * missed mine                                              [0m

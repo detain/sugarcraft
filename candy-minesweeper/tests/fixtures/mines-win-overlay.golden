@@ -9,7 +9,7 @@
 │           │
 │          [0m │
 ╰───────────╯
-  [1m[38;2;110;231;183m★ cleared — press r to play again · 0:00[0m
+  [1m[38;2;110;231;183m★ cleared — press r to play again · n new game · 0:00[0m
   [38;2;125;110;152ma number counts nearby mines · flag suspected mines · open safe cells to win    [0m
 [38;2;125;110;152m  ↑ ↓ ← → / hjkl  move  ·  space / enter  reveal                                [0m
 [38;2;125;110;152m  left-click  open · f / right-click  flag · c / middle-click  open around flags[0m

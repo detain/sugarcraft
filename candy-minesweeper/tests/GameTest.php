@@ -19,6 +19,9 @@ use SugarCraft\Minesweeper\Lang;
 use SugarCraft\Minesweeper\Renderer;
 use SugarCraft\Minesweeper\Stats;
 use SugarCraft\Minesweeper\Stats\DifficultyStats;
+use SugarCraft\Core\I18n\T;
+use SugarCraft\Minesweeper\Ui\CustomDifficulty;
+use SugarCraft\Minesweeper\Ui\CustomForm;
 use PHPUnit\Framework\TestCase;
 
 final class GameTest extends TestCase
@@ -1046,5 +1049,239 @@ final class GameTest extends TestCase
 
         [$g, $cmd] = $g->update(self::key(KeyType::Char, 'Q'));
         $this->assertEquals(Cmd::quit(), $cmd, 'Q quits like q');
+    }
+
+    // ─── msw-09 / G5-b: new-game picker + custom-board form ─────────────────
+
+    private static function picker(Game $g): Game
+    {
+        return $g->update(self::key(KeyType::Char, 'n'))[0];
+    }
+
+    public function testNOpensThePickerAndEscWalksBackUnharmed(): void
+    {
+        $g = Game::start(5, 5, 3, static fn(int $_): int => 0);
+        [$g] = $g->update(self::key(KeyType::Space));  // start the clock
+        [$g] = $g->update(self::key(KeyType::Right));
+        $board = $g->board;
+
+        $picker = self::picker($g);
+        $this->assertTrue($picker->picking, 'n raises the overlay');
+        $this->assertSame($board, $picker->board, 'the overlay shows a choice, not a new board');
+        $this->assertStringContainsString(Lang::t('ui.picker_title'), $picker->view());
+
+        [$back] = $picker->update(self::key(KeyType::Escape));
+        $this->assertFalse($back->picking, 'Esc closes the overlay');
+        $this->assertSame($board, $back->board, 'walking back leaves the game exactly where it was');
+        $this->assertSame(1, $back->cursorX, 'the cursor never moved while picking');
+        $this->assertNotNull($back->startedAt, 'the live clock survived the round trip');
+    }
+
+    public function testNOpensThePickerEvenFromTheNoticeScreenAndCapsLock(): void
+    {
+        // The n branch routes ABOVE the tooSmall gate (an overlay needs a
+        // handful of rows, not the board budget), and the msw-13 fold makes
+        // 'N' answer like 'n'.
+        $tiny = Game::start(30, 16, 99)->withFrame(80, 10);
+        $this->assertTrue($tiny->tooSmall(), 'sanity: a notice screen');
+        $this->assertTrue(self::picker($tiny)->picking, 'the escape hatch stays reachable');
+
+        [$upper] = Game::start(5, 5, 3)->update(self::key(KeyType::Char, 'N'));
+        $this->assertTrue($upper->picking);
+    }
+
+    public function testPickerDigitsStartPresetsCarryingStatsAndResettingBoard(): void
+    {
+        $stats = new Stats(easyGames: 7);
+        $g = Game::withDifficulty(Difficulty::EXPERT, static fn(int $_): int => 0, stats: $stats, statsPath: '/tmp/msw09-stats.json');
+        [$g] = $g->update(self::key(KeyType::Space));  // live clock, dirty board
+        $picker = self::picker($g);
+        [$g] = $picker->update(self::key(KeyType::Char, '1'));
+
+        $this->assertSame(9, $g->board->width);
+        $this->assertSame(9, $g->board->height);
+        $this->assertSame(10, $g->board->mineCount, 'key 1 starts the EASY row the picker printed');
+        $this->assertFalse($g->picking);
+        $this->assertSame(0, $g->cursorX);
+        $this->assertNull($g->startedAt, 'a new board starts with no clock');
+        $this->assertFalse($g->dirty, 'a fresh board has nothing to lose');
+        $this->assertSame($stats, $g->stats, 'the session tally rides the switch');
+        $this->assertSame('/tmp/msw09-stats.json', $g->statsPath);
+        $this->assertNull($g->notice);
+
+        // And key 4 names the widest preset (single digit→preset table).
+        [$expert] = self::picker($g)->update(self::key(KeyType::Char, '4'));
+        $this->assertSame(30, $expert->board->width);
+        $this->assertSame(16, $expert->board->height);
+        $this->assertSame(99, $expert->board->mineCount);
+    }
+
+    public function testPostGameSwitchNeedsNoShellRoundTrip(): void
+    {
+        // Finding 011's live complaint: after the boom, r replays the SAME
+        // shape and switching meant quitting to the shell. A hand-built
+        // exploded 3×3 (the FooterWidthGuard idiom) proves n answers on a
+        // finished board too.
+        $rows = [];
+        for ($y = 0; $y < 3; $y++) {
+            $row = [];
+            for ($x = 0; $x < 3; $x++) {
+                $row[] = new Cell(mine: $x === 1 && $y === 1, revealed: $x === 1 && $y === 1);
+            }
+            $rows[] = $row;
+        }
+        $lost = new Game(
+            board: Board::fromRows(3, 3, 1, $rows, minesPlaced: true, exploded: true, revealedCount: 1, flaggedCount: 0),
+        );
+        $this->assertTrue($lost->board->exploded, 'sanity: finished board');
+
+        $picker = self::picker($lost);
+        $this->assertTrue($picker->picking);
+        [$fresh] = $picker->update(self::key(KeyType::Char, '3'));
+        $this->assertFalse($fresh->board->exploded, 'the switch lands a live MEDIUM board');
+        $this->assertSame(16, $fresh->board->width);
+        $this->assertFalse($fresh->picking);
+    }
+
+    public function testCustomFormSeedsFromTheValidatorDefaultAndSubmitsAnAsymmetricBoard(): void
+    {
+        $picker = self::picker(Game::start(5, 5, 3));
+        [$g] = $picker->update(self::key(KeyType::Char, 'c'));
+        $form = $g->form;
+        $this->assertNotNull($form, 'c opens the digit form');
+        $default = CustomDifficulty::new();
+        $this->assertSame((string) $default->cols, $form->width, 'seeded from the validator default (-032 rename earns its caller here)');
+        $this->assertSame((string) $default->rows, $form->height);
+        $this->assertSame((string) $default->mines, $form->mines);
+
+        // Retype to 12 wide × 8 tall, mines stay 10: the asymmetric shape
+        // is the mutation proof for the width=cols / height=rows bridge —
+        // a swapped mapping would start 8×12 and this pin goes red.
+        $press = static fn(Game $x, KeyType $t, string $rune = ''): Game => $x->update(new KeyMsg($t, $rune))[0];
+        $g = $press($g, KeyType::Backspace);
+        $g = $press($g, KeyType::Char, '1');
+        $g = $press($g, KeyType::Char, '2');
+        $g = $press($g, KeyType::Enter);          // width → height
+        $g = $press($g, KeyType::Backspace);
+        $g = $press($g, KeyType::Char, '8');
+        $g = $press($g, KeyType::Enter);          // height → mines
+        $this->assertSame(2, $g->form?->field);
+        $g = $press($g, KeyType::Enter);          // mines → submit
+
+        $this->assertNull($g->form);
+        $this->assertFalse($g->picking);
+        $this->assertSame(12, $g->board->width);
+        $this->assertSame(8, $g->board->height);
+        $this->assertSame(10, $g->board->mineCount);
+    }
+
+    public function testRefusedSubmitKeepsTheDigitsNamesItsRuleAndWalksBackToWidth(): void
+    {
+        // 3×3 with 1 mine: msw-18's area floor (the -09 form teaches the
+        // same law the CLI door enforces — one validator, not two).
+        $press = static fn(Game $x, KeyType $t, string $rune = ''): Game => $x->update(new KeyMsg($t, $rune))[0];
+        $g = $press(self::picker(Game::start(5, 5, 3)), KeyType::Char, 'c');
+        $board = $g->board;
+        $g = $press($g, KeyType::Backspace);
+        $g = $press($g, KeyType::Char, '3');
+        $g = $press($g, KeyType::Enter);
+        $g = $press($g, KeyType::Backspace);
+        $g = $press($g, KeyType::Char, '3');
+        $g = $press($g, KeyType::Enter);
+        $g = $press($g, KeyType::Backspace);
+        $g = $press($g, KeyType::Backspace);
+        $g = $press($g, KeyType::Char, '1');
+        $g = $press($g, KeyType::Enter);          // submit
+
+        $this->assertTrue($g->picking, 'a refusal keeps the form open');
+        $this->assertNotNull($g->form);
+        $this->assertSame(Lang::t('custom.min_area'), $g->form->error);
+        $this->assertStringContainsString(Lang::t('custom.min_area'), $g->view(), 'the rule the player tripped is on screen');
+        $this->assertSame($board, $g->board, 'a refused submit starts nothing');
+        $this->assertSame(CustomForm::FIELD_WIDTH, $g->form->field, 'the cursor parks where the fix begins');
+
+        // Any edit clears the blame line.
+        $g = $press($g, KeyType::Backspace);
+        $this->assertNull($g->form?->error, 'an edit answers the refusal');
+    }
+
+    public function testFormDigitCapsStopBeforeNonsenseAndNameTheRightAxis(): void
+    {
+        $press = static fn(Game $x, KeyType $t, string $rune = ''): Game => $x->update(new KeyMsg($t, $rune))[0];
+        $g = $press(self::picker(Game::start(5, 5, 3)), KeyType::Char, 'c');
+        // Seeded width '9': typing 1 rides to '91', a third digit is inert.
+        $g = $press($g, KeyType::Char, '1');
+        $g = $press($g, KeyType::Char, '2');
+        $this->assertSame('91', $g->form?->width, 'sides are 50 at most — typing past 2 digits is a dead keypress');
+        $g = $press($g, KeyType::Enter);
+        $g = $press($g, KeyType::Enter);
+        $g = $press($g, KeyType::Enter);          // submit 91×9/10
+        $this->assertStringContainsString(Lang::t('custom.max_cols'), $g->form?->error ?? '', 'the width axis blames columns, not rows (-07 law, form door)');
+    }
+
+    public function testPickerKeepsCtrlCAndSilencesMouseAndMovement(): void
+    {
+        $picker = self::picker(Game::start(5, 5, 3, static fn(int $_): int => 0));
+        [, $cmd] = $picker->update(new KeyMsg(KeyType::Char, 'c', ctrl: true));
+        $this->assertEquals(Cmd::quit(), $cmd, 'the terminal interrupt contract outranks the overlay');
+
+        $board = $picker->board;
+        [$idle] = $picker->update(new MouseClickMsg(4, 3, MouseButton::Left, MouseAction::Press));
+        $this->assertSame($board, $idle->board, 'clicks are inert while the overlay owns the screen');
+        [$moved] = $picker->update(self::key(KeyType::Char, 'j'));
+        $this->assertTrue($moved->picking, 'unbound keys stay unbound inside the picker');
+        $this->assertSame($picker->form, $moved->form, 'and never steer the form from the preset list');
+    }
+
+    public function testPickerAndFormAreFullyTranslated(): void
+    {
+        $prior = T::locale();
+        T::setLocale('de');
+        try {
+            $picker = self::picker(Game::start(5, 5, 3));
+            $view = $picker->view();
+            $this->assertStringContainsString('Spielfeld', $view);
+            $this->assertStringContainsString('Minen', $view, 'preset rows print the translated shape label');
+            $this->assertStringNotContainsString('choose a board', $view);
+            $this->assertStringNotContainsString('mines', $view, 'no English may bleed through the picker screen');
+
+            [$form] = $picker->update(self::key(KeyType::Char, 'c'));
+            $formView = $form->view();
+            $this->assertStringContainsString('Breite', $formView);
+            $this->assertStringContainsString('Ziffern', $formView, 'the form hint translates too');
+            $this->assertStringNotContainsString('width', $formView);
+        } finally {
+            T::setLocale($prior);
+        }
+    }
+
+    public function testQuitArmingAndRestoreHistoryRideThePicker(): void
+    {
+        // msw-15's confirm is an answer about the board, not the overlay:
+        // entering and leaving the picker neither disarms it nor spends it.
+        $g = Game::start(5, 5, 3, static fn(int $_): int => 0);
+        [$g] = $g->update(self::key(KeyType::Space));   // dirty + live
+        [$g] = $g->update(self::key(KeyType::Char, 'q'));
+        $this->assertTrue($g->confirmQuit, 'sanity: armed');
+
+        $picker = self::picker($g);
+        $this->assertTrue($picker->confirmQuit, 'the arming rides into the overlay');
+        [$back] = $picker->update(self::key(KeyType::Escape));
+        $this->assertTrue($back->confirmQuit, 'and back out, still armed');
+
+        // A started board from the picker resets per-board state…
+        [$chosen] = self::picker($back)->update(self::key(KeyType::Char, '1'));
+        $this->assertFalse($chosen->confirmQuit);
+        $this->assertFalse($chosen->dirty);
+
+        // …but the session's restored-clock stigma is monotonic (-08 law).
+        $restored = new Game(
+            board: Board::blank(9, 9, 10),
+            restoredGame: true,
+            picking: true,
+        );
+        [$kept] = $restored->update(self::key(KeyType::Char, '2'));
+        $this->assertTrue($kept->restoredGame, 'a picker start cannot launder a restored session');
+        $this->assertFalse($kept->picking);
     }
 }

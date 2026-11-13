@@ -16,6 +16,8 @@ use SugarCraft\Core\Msg\MouseMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Core\Util\AtomicJsonFile;
 use SugarCraft\Minesweeper\Stats\DifficultyStats;
+use SugarCraft\Minesweeper\Ui\CustomDifficulty;
+use SugarCraft\Minesweeper\Ui\CustomForm;
 
 /**
  * Minesweeper as a SugarCraft Model. Keys:
@@ -29,6 +31,8 @@ use SugarCraft\Minesweeper\Stats\DifficultyStats;
  *   - L                    → load that save — works even after game over,
  *                            so a lost board can step back to the saved one
  *   - r                    → restart
+ *   - n                    → new-game picker: 1-4 start a preset, c opens
+ *                            the custom-board digit form, q/Esc walk back
  *   - q / esc / Ctrl+C     → quit (q/Esc ask twice on a live unsaved board)
  * Mouse: left-click reveals, right-click flags, middle-click chords.
  *
@@ -118,6 +122,21 @@ final class Game implements Model
          * (ruling G3(a)).
          */
         public readonly bool $confirmQuit = false,
+        /**
+         * True while the new-game picker overlay (msw-09/G5-b) is on
+         * screen — the `n` shortcut's destination, reached from a live or
+         * finished board. The overlay owns the keyboard: q/Esc walk back
+         * out (form → picker → game) instead of quitting, while Ctrl+C
+         * keeps the terminal's immediate-exit contract even here.
+         */
+        public readonly bool $picking = false,
+        /**
+         * The custom-board digit form while `c` has been pressed inside
+         * the picker; null while the plain preset list shows. Riding the
+         * model (not the renderer) keeps the form's typed digits alive
+         * across frames like every other piece of game state.
+         */
+        public readonly ?CustomForm $form = null,
     ) {
         $this->rand = $rand ?? static fn(int $max): int => random_int(0, $max);
     }
@@ -263,6 +282,16 @@ final class Game implements Model
                 default  => strtolower($msg->rune),
             }
             : $msg->rune;
+        // The picker overlay (msw-09/G5-b) owns the keyboard while it is
+        // up: q/Esc walk back out rather than quit (the quit branch below
+        // is unreachable from here), Ctrl+C still quits on the spot, and
+        // every board key the overlay does not name is inert. Routing
+        // AFTER the fold means CapsLock players arrive as lowercase, and
+        // AFTER the Ctrl/Alt gate means a browser Ctrl+R cannot steer a
+        // preset (finding: modified runes are never gameplay).
+        if ($this->picking) {
+            return $this->onPicker($msg, $char);
+        }
         if ($msg->type === KeyType::Escape
             || ($msg->type === KeyType::Char && $char === 'q')
             || ($msg->ctrl && $msg->rune === 'c')) {
@@ -299,6 +328,17 @@ final class Game implements Model
                 'confirmQuit'    => false,
                 'notice'         => Lang::t('ui.restarted'),
             ]), null];
+        }
+        if ($msg->type === KeyType::Char && $char === 'n') {
+            // msw-09/G5-b: the new-game shortcut opens the difficulty
+            // picker from a live OR finished board (the post-game banner
+            // names it), so switching shape needs no shell round-trip
+            // (finding 011). It sits with r/L — above the over-gate and
+            // the tooSmall gate — because opening an overlay is not a
+            // board action: nothing is discarded yet, the quit-confirm
+            // arming rides through untouched, and the notice screen
+            // cannot strand a player who wants a smaller board.
+            return [$this->mutate(['picking' => true, 'form' => null]), null];
         }
         if ($msg->type === KeyType::Char && $char === 'L') {
             // Load deliberately sits ABOVE the over-gate: the point of loading
@@ -339,6 +379,118 @@ final class Game implements Model
             default => $this,
         };
         return [$this->afterAction($next, $wasOver), null];
+    }
+
+    /**
+     * The picker's digit → preset table in display order (msw-09). One
+     * source for both the renderer's rows and the model's key handling:
+     * a re-ordered enum can never make key `2` start what the screen
+     * labelled `3` (finding 058's same-table-different-meaning class).
+     *
+     * @return array<string,Difficulty> digit key => preset
+     */
+    public static function presetKeys(): array
+    {
+        return [
+            '1' => Difficulty::EASY,
+            '2' => Difficulty::STANDARD,
+            '3' => Difficulty::MEDIUM,
+            '4' => Difficulty::EXPERT,
+        ];
+    }
+
+    /**
+     * Keyboard handling while the picker overlay is up. Returns the same
+     * [Game, ?Cmd] contract as update(); Ctrl+C keeps the terminal's
+     * immediate-exit promise inside the overlay too.
+     */
+    private function onPicker(KeyMsg $msg, string $char): array
+    {
+        if ($msg->ctrl && $msg->rune === 'c') {
+            return [$this, Cmd::quit()];
+        }
+        if ($this->form !== null) {
+            return [$this->onForm($msg, $char), null];
+        }
+        if ($msg->type === KeyType::Escape || $char === 'q') {
+            // Back to the game — the board underneath was never touched.
+            return [$this->mutate(['picking' => false]), null];
+        }
+        $preset = self::presetKeys()[$char] ?? null;
+        if ($msg->type === KeyType::Char && $preset !== null) {
+            return [$this->startBoard($preset->width(), $preset->height(), $preset->mines()), null];
+        }
+        if ($msg->type === KeyType::Char && $char === 'c') {
+            // The digit form opens seeded from CustomDifficulty::new()
+            // (-032's rename lands with this, its first production caller).
+            return [$this->mutate(['form' => CustomForm::seeded()]), null];
+        }
+        return [$this, null];
+    }
+
+    /**
+     * Digit entry inside the custom-board form. Esc/q retreat one step
+     * (form → picker), digits and Backspace edit the active field,
+     * Enter/Tab advance — and on the mines field, submit. A refused
+     * submit keeps every typed digit and shows the translated rule that
+     * blamed it (msw-18's law is the same validator the CLI door uses).
+     */
+    private function onForm(KeyMsg $msg, string $char): self
+    {
+        $form = $this->form;
+        if ($form === null) {
+            return $this;
+        }
+        if ($msg->type === KeyType::Escape || $char === 'q') {
+            return $this->mutate(['form' => null]);
+        }
+        if ($msg->type === KeyType::Backspace) {
+            return $this->mutate(['form' => $form->withBackspace()]);
+        }
+        if ($msg->type === KeyType::Enter || $msg->type === KeyType::Tab) {
+            if (!$form->atSubmitField()) {
+                return $this->mutate(['form' => $form->advanced()]);
+            }
+            try {
+                $custom = $form->submit();
+            } catch (\InvalidArgumentException $e) {
+                // Translated by the validator itself — the form carries
+                // the message verbatim, never a second English copy.
+                return $this->mutate(['form' => $form->withError($e->getMessage())]);
+            }
+            // cols=width, rows=height: the bridge CustomForm documented.
+            return $this->startBoard($custom->cols, $custom->rows, $custom->mines);
+        }
+        if ($msg->type === KeyType::Char && ctype_digit($char)) {
+            return $this->mutate(['form' => $form->withDigit($char)]);
+        }
+        return $this;
+    }
+
+    /**
+     * Start a fresh board of the given shape from the picker. The carry-
+     * forward law matches `r` exactly — session stats and the restore
+     * history persist (a loaded-clock session stays record-ineligible,
+     * one-way), and everything per-board resets: a new board has no
+     * progress the quit-confirm could lose, so dirty and its arming
+     * clear, and the overlay closes with the board it chose.
+     */
+    private function startBoard(int $width, int $height, int $mines): self
+    {
+        return $this->mutate([
+            'board'          => Board::blank($width, $height, $mines),
+            'cursorX'        => 0,
+            'cursorY'        => 0,
+            'startedAt'      => null,
+            'elapsedSeconds' => null,
+            'newBest'        => false,
+            'beatenRecord'   => null,
+            'dirty'          => false,
+            'confirmQuit'    => false,
+            'picking'        => false,
+            'form'           => null,
+            'notice'         => null,
+        ]);
     }
 
     /**
@@ -670,6 +822,11 @@ final class Game implements Model
     {
         // Only handle press events to avoid double-firing on release.
         if (!$msg instanceof MouseClickMsg) {
+            return $this;
+        }
+        if ($this->picking) {
+            // The picker overlay paints no board zones (msw-09): clicks
+            // are inert here by construction, never guessed at.
             return $this;
         }
         if ($this->tooSmall()) {

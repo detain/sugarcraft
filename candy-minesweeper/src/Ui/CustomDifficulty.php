@@ -7,8 +7,16 @@ namespace SugarCraft\Minesweeper\Ui;
 use SugarCraft\Minesweeper\Lang;
 
 /**
- * Custom difficulty form — lets the player specify rows, columns, and
- * mine count for a custom game instead of a preset {@see Difficulty}.
+ * Board-shape validator + the backing store of the in-game custom-board
+ * form (msw-09/G5-b): the picker's {@see CustomForm} collects the digits
+ * and submits through {@see fromInput()}, so the player-specified rows,
+ * columns and mine count of a custom game really are validated here —
+ * the CLI positional door and the interactive door share one law.
+ *
+ * Vocabulary bridge (msw-09/-033): the CLI, README and every on-screen
+ * shape speak WIDTH then HEIGHT; this object stores rows/cols.
+ * rows = height, cols = width — the translation happens at those doors
+ * ({@see CustomForm::submit()} and the bin), never in between.
  *
  * Validation enforces:
  *   - Minimum 2 rows and 2 columns
@@ -38,9 +46,11 @@ final class CustomDifficulty
     }
 
     /**
-     * Build with defaults appropriate for a new custom game.
+     * The default custom shape (msw-09/-032: the fleet factory spelling is
+     * `new()`, and the forbidden-by-name `defaults()` earns its keep only
+     * through real callers — the picker form seeds from this).
      */
-    public static function defaults(): self
+    public static function new(): self
     {
         return new self(9, 9, 10);
     }

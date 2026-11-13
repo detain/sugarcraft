@@ -55,8 +55,14 @@ The board renders in full — there is no scrolling viewport — and the help fo
 | `S`                | Save the live game to the slot   |
 | `L`                | Load the saved game              |
 | `r`                | Restart with new mines           |
+| `n`                | New game — pick a preset (1-4) or type a custom board (c) |
 | `q` / `Esc`  | Quit (asks once on a live, unsaved board — see below)  |
 | `Ctrl+C`     | Quit — always immediate (the terminal contract)        |
+
+A plain launch plays the classic 10×10/12 board without a pre-launch picker
+(owner ruling G5-b): the first frame stays one keypress away on any working
+terminal, while every other shape — presets and a custom digit form — is one
+`n` away, live or after the banner, with no shell round-trip.
 
 **Win**: reveal every cell that is not a mine. Flags are survival notes — the
 win check counts revealed safe cells only, so a board can be won with zero
@@ -94,7 +100,7 @@ Colour degrades gracefully: with `NO_COLOR` set, `CLICOLOR=0`, or `TERM=dumb`, t
 
 ## Language
 
-The interface follows your locale. The binary arms `T::setLocale(T::detect())` before the program starts (`LC_ALL` → `LC_MESSAGES` → `LANG`, `C`/POSIX falling back to English), and every visible string — the mines/flags/remaining/time status line, the win and lose banners, the help footer — routes through `Lang::t`. Sixteen locales ship in `lang/` (ar, cs, de, en, es, fr, it, ja, ko, nl, pl, pt, pt-br, ru, tr, zh-cn); the English file is the source of truth and `LocaleParityTest` fails if any locale drifts in key set or order.
+The interface follows your locale. The binary arms `T::setLocale(T::detect())` before the program starts (`LC_ALL` → `LC_MESSAGES` → `LANG`, `C`/POSIX falling back to English), and every visible string — the mines/flags/remaining/time status line, the win and lose banners, the help footer, the new-game picker and its custom-board form — routes through `Lang::t`. Sixteen locales ship in `lang/` (ar, cs, de, en, es, fr, it, ja, ko, nl, pl, pt, pt-br, ru, tr, zh-cn); the English file is the source of truth and `LocaleParityTest` fails if any locale drifts in key set or order.
 
 ## Architecture
 

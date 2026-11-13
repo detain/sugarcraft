@@ -12,6 +12,7 @@ use SugarCraft\Core\Util\Width;
 use SugarCraft\Mouse\Mark;
 use SugarCraft\Mouse\Scanner;
 use SugarCraft\Minesweeper\Ui\CustomDifficulty;
+use SugarCraft\Minesweeper\Ui\CustomForm;
 use SugarCraft\Style\Border;
 use SugarCraft\Style\Style as SugarStyle;
 
@@ -76,6 +77,11 @@ final class Renderer
 
     public static function render(Game $g): string
     {
+        if ($g->picking) {
+            // The picker overlay (msw-09) replaces the whole frame: no
+            // board, no zones, nothing spoiled — just the choice.
+            return self::pickerFrame($g);
+        }
         return self::frame($g, self::interior($g, mark: false));
     }
 
@@ -279,6 +285,127 @@ final class Renderer
     }
 
     /**
+     * The new-game picker overlay (msw-09/G5-b ruling (b): a `n` shortcut
+     * and post-game banner, never a pre-launch gate — plain boot keeps the
+     * documented 10×10/12 contract). Four labelled presets, the custom
+     * form door, and a walk-back hint. Zero hardcoded English: every word
+     * is a Lang::t key and the shapes ride the same translated
+     * {@see CustomDifficulty::labelShape()} the status head uses. Wrapped
+     * into the live columns exactly like the footer (finding 001 clamp).
+     */
+    private static function pickerFrame(Game $g): string
+    {
+        if ($g->form !== null) {
+            return self::formFrame($g);
+        }
+        $titleStyle = SugarStyle::new()
+            ->foreground(Color::hex(self::ink('#a78bfa', '#6d28d9')))
+            ->bold();
+        $lineStyle = SugarStyle::new()
+            ->foreground(Color::hex(self::ink('#d6cdea', '#4c3d63')));
+        $hintStyle = SugarStyle::new()
+            ->foreground(Color::hex(self::ink('#7d6e98', '#5b4a7f')));
+
+        $budget = max(20, $g->frameCols);
+        $lines  = [
+            [Lang::t('ui.picker_title'), $titleStyle],
+        ];
+        foreach (Game::presetKeys() as $key => $preset) {
+            $lines[] = [
+                $key . ' · ' . Lang::t('ui.preset_' . strtolower($preset->name))
+                    . ' · ' . CustomDifficulty::labelShape($preset->width(), $preset->height(), $preset->mines()),
+                $lineStyle,
+            ];
+        }
+        $lines[] = ['c · ' . Lang::t('ui.picker_custom'), $lineStyle];
+        $lines[] = [Lang::t('ui.picker_hint'), $hintStyle];
+
+        $out = '';
+        foreach ($lines as [$plain, $style]) {
+            foreach (self::wrapPlain($plain, $budget) as $piece) {
+                $out .= $style->render($piece) . "\n";
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * The custom-board digit form (msw-09): three fields, the active one
+     * led by the same » marker the toast uses, the typed digits verbatim,
+     * and — after a refusal — the validator's own translated message and
+     * a live shape label of what is currently on screen. Enter advances,
+     * Enter on mines submits; the rules the submit enforces are msw-18's,
+     * unchanged.
+     */
+    private static function formFrame(Game $g): string
+    {
+        $form = $g->form;
+        if ($form === null) {
+            return self::pickerFrame($g);
+        }
+        $titleStyle = SugarStyle::new()
+            ->foreground(Color::hex(self::ink('#a78bfa', '#6d28d9')))
+            ->bold();
+        $fieldStyle = SugarStyle::new()
+            ->foreground(Color::hex(self::ink('#d6cdea', '#4c3d63')));
+        $activeStyle = SugarStyle::new()
+            ->foreground(Color::hex(self::ink('#fde68a', '#854d0e')))
+            ->bold();
+        $hintStyle = SugarStyle::new()
+            ->foreground(Color::hex(self::ink('#7d6e98', '#5b4a7f')));
+        $errorStyle = SugarStyle::new()
+            ->foreground(Color::hex(self::ink('#ff5f87', '#be123c')))
+            ->bold();
+
+        $budget = max(20, $g->frameCols);
+        $labels = [
+            CustomForm::FIELD_WIDTH  => Lang::t('ui.form_width'),
+            CustomForm::FIELD_HEIGHT => Lang::t('ui.form_height'),
+            CustomForm::FIELD_MINES  => Lang::t('ui.form_mines'),
+        ];
+
+        $lines = [[Lang::t('ui.picker_title') . ' — ' . Lang::t('ui.picker_custom'), $titleStyle]];
+        foreach ($labels as $field => $label) {
+            $marker  = $form->field === $field ? '» ' : '  ';
+            $lines[] = [$marker . $label . ': ' . $form->value($field), $form->field === $field ? $activeStyle : $fieldStyle];
+        }
+        // Live shape preview (width-first, translated): the player sees the
+        // notation the README/CLI use while they type it. Zeros render as
+        // dashes because an unfinished field is not a 2-wide board.
+        $lines[] = [
+            '  ' . self::shapePreview($form),
+            $hintStyle,
+        ];
+        if ($form->error !== null) {
+            $lines[] = ['! ' . $form->error, $errorStyle];
+        }
+        $lines[] = [Lang::t('ui.form_hint'), $hintStyle];
+
+        $out = '';
+        foreach ($lines as [$plain, $style]) {
+            foreach (self::wrapPlain($plain, $budget) as $piece) {
+                $out .= $style->render($piece) . "\n";
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * A human-readable shape for the form as typed so far. Blank or
+     * zero fields fall back to the validator's own default (9×9·10) so
+     * the preview never reads as an impossible board the player did not
+     * ask for.
+     */
+    private static function shapePreview(CustomForm $form): string
+    {
+        $default = CustomDifficulty::new();
+        $width   = $form->width === '' ? $default->cols : (int) $form->width;
+        $height  = $form->height === '' ? $default->rows : (int) $form->height;
+        $mines   = $form->mines === '' ? $default->mines : (int) $form->mines;
+        return CustomDifficulty::labelShape($width, $height, $mines);
+    }
+
+    /**
      * Plain-text notice replacing the whole frame while the terminal is
      * below the board's row budget — zero board painting, zero spoilers,
      * wrapped so it stays readable on the very terminal that cannot host
@@ -472,6 +599,12 @@ final class Renderer
      */
     public static function renderWithScanner(Game $g): array
     {
+        if ($g->picking) {
+            // Overlay frame: the Scanner still maps the (hidden) board,
+            // but Game::onMouse refuses clicks while picking, so its
+            // zones can never steer anything from this frame.
+            return [self::pickerFrame($g), self::scanner($g)];
+        }
         return [self::frame($g, self::interior($g, mark: false)), self::scanner($g)];
     }
 

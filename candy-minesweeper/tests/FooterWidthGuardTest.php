@@ -6,6 +6,8 @@ namespace SugarCraft\Minesweeper\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\I18n\T;
+use SugarCraft\Core\KeyType;
+use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Minesweeper\Board;
 use SugarCraft\Minesweeper\Cell;
@@ -125,7 +127,40 @@ final class FooterWidthGuardTest extends TestCase
                     $rows[] = $row;
                 }
                 return Board::fromRows(3, 3, 2, $rows, minesPlaced: true, exploded: false, revealedCount: 0, flaggedCount: 5);
-            })())]];
+            })())],
+            // msw-09: the new-game picker overlay and the custom-board form
+            // shown WITH a refusal line (the validator's own translated
+            // message) ride the same 80-cell budget as the game frame.
+            ['picker', self::pickerFixture()],
+            ['form-refused', self::refusedFormFixture()],
+        ];
+    }
+
+    /** `n` from a fresh EASY board — the plain preset list. */
+    private static function pickerFixture(): Game
+    {
+        [$picker] = Game::withDifficulty(Difficulty::EASY)
+            ->update(new KeyMsg(KeyType::Char, 'n'));
+        return $picker;
+    }
+
+    /** Picker → `c` → retyped to 3×3/1 → submit → refused (min-area law,
+     *  msw-18). Built per-locale so the error string is that locale's own. */
+    private static function refusedFormFixture(): Game
+    {
+        $press = static fn(Game $g, KeyType $t, string $rune = ''): Game => $g->update(new KeyMsg($t, $rune))[0];
+        $g = self::pickerFixture();
+        $g = $press($g, KeyType::Char, 'c');
+        $g = $press($g, KeyType::Backspace);
+        $g = $press($g, KeyType::Char, '3');
+        $g = $press($g, KeyType::Enter);
+        $g = $press($g, KeyType::Backspace);
+        $g = $press($g, KeyType::Char, '3');
+        $g = $press($g, KeyType::Enter);
+        $g = $press($g, KeyType::Backspace);
+        $g = $press($g, KeyType::Backspace);
+        $g = $press($g, KeyType::Char, '1');
+        return $press($g, KeyType::Enter);
     }
 
     public function testEveryFrameLineFitsEightyColumnsInEveryLocale(): void
@@ -164,7 +199,10 @@ final class FooterWidthGuardTest extends TestCase
      */
     public function testEveryFrameLineFitsFortyColumnsInEveryLocale(): void
     {
-        $fixtures = [
+        // Built inside the locale loop (msw-09): the refused-form fixture
+        // bakes the validator's translated message into model state at
+        // drive time, so it must be driven under each locale.
+        $fixtures = static fn(): array => [
             ['fresh', Game::withDifficulty(Difficulty::EASY)],
             ['expert', Game::withDifficulty(Difficulty::EXPERT)],
             ['toasted', Game::withDifficulty(Difficulty::STANDARD, notice: 'saved')],
@@ -191,6 +229,11 @@ final class FooterWidthGuardTest extends TestCase
                     cursorY: 0,
                 );
             })()],
+            // msw-09: the picker overlay and the refused custom-board form
+            // wrap inside the live columns too (finding 001 clamp covers
+            // every frame the app can paint, not just the board one).
+            ['picker', self::pickerFixture()],
+            ['form-refused', self::refusedFormFixture()],
         ];
         $locales = array_map('basename', array_combine($glob = glob(__DIR__ . '/../lang/*.php') ?: [], $glob));
         $this->assertNotEmpty($locales);
@@ -199,7 +242,7 @@ final class FooterWidthGuardTest extends TestCase
         try {
             foreach ($locales as $locale) {
                 T::setLocale($locale);
-                foreach ($fixtures as [$name, $game]) {
+                foreach ($fixtures() as [$name, $game]) {
                     $narrow = $game->update(new WindowSizeMsg(40, 40))[0];
                     foreach (explode("\n", Renderer::render($narrow)) as $line) {
                         $clean = rtrim(preg_replace('/\x1b\[[0-9;]*m/', '', $line) ?? $line, ' ');

@@ -100,7 +100,7 @@ $usage = "usage: candy-minesweeper --easy | --standard | --medium | --expert\n"
       . "       board sizes are columns (width) then rows (height) —\n"
       . "       e.g. candy-minesweeper 16 10 starts 16 wide by 10 tall\n"
       . "       keys: hjkl/arrows move · space reveal · f flag · c chord ·\n"
-      . "             S save · L load · r restart · q quit\n"
+      . "             S save · L load · r restart · n new game · q quit\n"
       . "       save slot: " . (Game::savePath() ?? '$HOME/.config/candy-minesweeper/savegame.json') . "\n"
       . "       stats: set CANDY_MINESWEEPER_STATS=/path/stats.json to tally across sessions\n";
 $args   = array_slice($argv ?? [], 1);
@@ -115,7 +115,8 @@ if (in_array('--help', $args, true) || in_array('-h', $args, true)) {
     fwrite(STDOUT, $usage
         . "       candy-minesweeper --version  Print the version\n"
         . "       candy-minesweeper --help     Show this help\n"
-        . "       no pause; the board is fixed at launch (no mid-session resize re-fit)\n");
+        . "       no pause; plain launch plays the 10x10 board (G5-b ruling — press n\n"
+        . "       in-game to pick a preset or type a custom shape; no mid-session resize re-fit)\n");
     exit(0);
 }
 
