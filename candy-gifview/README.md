@@ -91,7 +91,9 @@ form overwrote the rate slot, the multiplier composed onto it). An unknown
 preset token (a typo like `densiy`) is refused with an explicit message — the
 two valid tokens are `solid` and `density`; a third positional argument is
 likewise refused. Stdin is not read: a bare `-` is treated as an ordinary
-file-path argument and is refused as `could not play '-'`.
+file-path argument and is refused as `could not play '-'`. A standalone `--`
+ends option parsing outright: every token after it is an ordinary path, so a
+GIF literally named `-foo.gif` still gets its chance (`-- -foo.gif`).
 
 The loop count stored in the file is honoured:
 
@@ -219,7 +221,7 @@ which this viewer does not expose) — lives in
 | `bin/candy-gifview` | Autoload probe, locale wiring (`T::setLocale(T::detect())` before the first message), and a `Cli::main()` hand-off — deliberately a thin shim. |
 | `src/Cli.php`         | Argv parsing, gd preflight, viewport sizing, intake caps, decode-failure exits, Player wiring, Program launch, and signal re-encoding (`stopSignal()` → 128+N). |
 | `src/Support/Version.php` | Resolves the version stamp: the phar's embedded `metadata['version']` when running from a phar (release `x.y.z` or an honest `dev-<sha>`/`dev-build` stamp), falling back to the compiled `CURRENT` constant. |
-| `src/Lang.php`    | i18n facade over the shared `T` registry, namespace `gifview` (`cli.usage`, `cli.bad_flag`, `cli.bad_value`, `cli.too_many`, `cli.unexpected_value`, `cli.bad_preset`, `cli.no_frames`, `cli.cannot_play`, `cli.reason_frames_over`, `cli.reason_bytes_over`, `cli.reason_cells_over`, `cli.duration_static`, `cli.need_gd`, `cli.decoding`, `cli.truncated`, `cli.no_autoload` — all 16 keys ship in every locale file; `cli.no_autoload` exists so the parity census sees the string the bin shim prints before autoload, where translation cannot run). |
+| `src/Lang.php`    | i18n facade over the shared `T` registry, namespace `gifview` (`cli.usage`, `cli.bad_flag`, `cli.empty_flag`, `cli.bad_value`, `cli.too_many`, `cli.unexpected_value`, `cli.bad_preset`, `cli.no_frames`, `cli.cannot_play`, `cli.reason_frames_over`, `cli.reason_bytes_over`, `cli.reason_cells_over`, `cli.duration_static`, `cli.need_gd`, `cli.decoding`, `cli.truncated`, `cli.no_autoload` — all 17 keys ship in every locale file; `cli.no_autoload` exists so the parity census sees the string the bin shim prints before autoload, where translation cannot run). |
 
 Three cross-cutting behaviours of `src/Cli.php` worth knowing before reading
 the source:

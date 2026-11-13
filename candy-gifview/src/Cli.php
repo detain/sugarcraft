@@ -129,26 +129,43 @@ final class Cli
         $duration = null;
         $watch = false;
         $paused = false;
+        $noMoreFlags = false;
 
         foreach (\array_slice($argv, 1) as $token) {
-            if ($token === '--help' || $token === '-h') {
+            // gifview-021: a standalone `--` ends option parsing — later
+            // tokens, even ones shaped like flags, are ordinary paths (the
+            // classic escape for a file literally named `-foo.gif`).
+            if (!$noMoreFlags && $token === '--') {
+                $noMoreFlags = true;
+
+                continue;
+            }
+
+            if (!$noMoreFlags && ($token === '--help' || $token === '-h')) {
                 \fwrite($stdout, Lang::t('cli.usage') . "\n");
 
                 return 0;
             }
 
-            if ($token === '--version' || $token === '-v') {
+            if (!$noMoreFlags && ($token === '--version' || $token === '-v')) {
                 \fwrite($stdout, 'candy-gifview ' . self::runningVersion() . "\n");
 
                 return 0;
             }
 
-            if (\str_starts_with($token, '--')) {
+            if (!$noMoreFlags && \str_starts_with($token, '--')) {
                 $flag = \substr($token, 2);
                 $raw = null;
                 if (($eq = \strpos($flag, '=')) !== false) {
                     $raw = \substr($flag, $eq + 1);
                     $flag = \substr($flag, 0, $eq);
+                }
+
+                if ($flag === '') {
+                    \fwrite($stderr, Lang::t('cli.empty_flag') . "\n");
+                    \fwrite($stderr, Lang::t('cli.usage') . "\n");
+
+                    return 1;
                 }
 
                 if (!\in_array($flag, ['fps', 'speed', 'duration', 'watch', 'paused'], true)) {
@@ -236,7 +253,7 @@ final class Cli
             // The display normalizes to --name form: the cli.bad_flag template
             // hardcodes the double dash, so `-fps=10` echoes as
             // `unknown option --fps` (pinned by CliTest's single-dash refusal).
-            if (\str_starts_with($token, '-') && $token !== '-') {
+            if (!$noMoreFlags && \str_starts_with($token, '-') && $token !== '-') {
                 $body = \substr($token, 1);
                 $name = \rtrim(($eq = \strpos($body, '=')) === false ? $body : \substr($body, 0, $eq), '-');
                 \fwrite($stderr, Lang::t('cli.bad_flag', ['flag' => self::printable($name)]) . "\n");

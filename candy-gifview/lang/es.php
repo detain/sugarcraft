@@ -12,6 +12,7 @@ return [
     'cli.usage'       => 'uso: candy-gifview <gif> [solid|density] [--fps=N] [--speed=N|Nfps|max] [--duration=SECONDS] [--watch] [--paused] [--help|-h] [--version|-v]',
     'cli.no_autoload' => 'candy-gifview: no se puede encontrar composer autoload.php',
     'cli.bad_flag'    => 'candy-gifview: opción desconocida --{flag}',
+    'cli.empty_flag'  => 'candy-gifview: falta el nombre de opción tras --',
     'cli.bad_value'   => 'candy-gifview: valor no válido \'{value}\' para {flag} (se espera un número positivo)',
     'cli.too_many'    => 'candy-gifview: argumento inesperado \'{arg}\'',
     'cli.unexpected_value' => 'candy-gifview: --{flag} no admite valor',

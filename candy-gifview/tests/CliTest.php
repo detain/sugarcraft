@@ -200,6 +200,54 @@ final class CliTest extends TestCase
         $this->assertSame('', self::drain($stdout));
     }
 
+    /**
+     * The standalone `--` ends option parsing (gifview-021): what follows is
+     * positional, so files literally named -foo.gif are reachable and flag
+     * spellings after the hatch are ordinary paths.
+     */
+    public function testTheEndOfOptionsHatchMakesLaterTokensPositional(): void
+    {
+        [$stdout, $stderr] = self::pipes();
+
+        $exit = Cli::main(['candy-gifview', '--', '-foo.gif'], $stdout, $stderr);
+
+        $this->assertSame(1, $exit);
+        $err = self::drain($stderr);
+        $this->assertStringContainsString("could not play '-foo.gif'", $err,
+            'the escaped name reaches the intake as an ordinary path');
+        $this->assertStringNotContainsString('unknown option', $err);
+
+        [$stdout2, $stderr2] = self::pipes();
+        $exit2 = Cli::main(['candy-gifview', '--', '--watch'], $stdout2, $stderr2);
+
+        $this->assertSame(1, $exit2);
+        $err2 = self::drain($stderr2);
+        $this->assertStringContainsString("could not play '--watch'", $err2,
+            'even flag-shaped tokens after the hatch are paths');
+        $this->assertStringNotContainsString('takes no value', $err2);
+        $this->assertSame('', self::drain($stdout));
+        $this->assertSame('', self::drain($stdout2));
+    }
+
+    /**
+     * `--=x` (empty option name) must get its own message instead of the
+     * degenerate `unknown option --` echo (gifview-021).
+     */
+    public function testTheEmptyOptionNameGetsItsOwnRefusal(): void
+    {
+        [$stdout, $stderr] = self::pipes();
+
+        $exit = Cli::main(['candy-gifview', '--=x'], $stdout, $stderr);
+
+        $this->assertSame(1, $exit);
+        $err = self::drain($stderr);
+        $this->assertStringContainsString('missing option name', $err);
+        $this->assertStringNotContainsString('unknown option --', $err,
+            'the degenerate empty-flag echo is dead');
+        $this->assertStringContainsString('usage:', $err, 'the usage banner still follows');
+        $this->assertSame('', self::drain($stdout));
+    }
+
     public function testMissingFileIsWrappedInTheAppCannotPlayLine(): void
     {
         [$stdout, $stderr] = self::pipes();
