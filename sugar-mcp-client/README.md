@@ -104,12 +104,16 @@ as it does with no map at all (`StdioMcpServerTrustBoundaryTest` pins both
 halves of that contract). The option is for telling a server where its own
 token lives, not for withholding the rest of your environment.
 
-**To narrow, wrap `spawnPlanner`.** The planner receives the server name, the
+**`envRemove:` drops names declaratively.** `envRemove: ['AWS_SECRET_ACCESS_KEY', 'SSH_AUTH_SOCK']` strips each name from the inherited environment before `env:` overlays land — the precedence chain is inherited → envRemove → env, and the grammar (a list of distinct non-empty names) is validated at construction. `curatedEnv:` is the exclusive full replace: the child sees only the names you list (`[]` means a purged environment); pairing it with `env:`, `envRemove:` or `spawnPlanner:` throws at construction, because an input that would never be read is a lie. Neither knob holds opinions: this library still has no list of which names are secrets, and any list it shipped would be wrong for someone's environment — you name what you drop.
+
+**Use `spawnPlanner` for containment.** The planner receives the server name, the
 argv the spawn would exec, and the env map YOU authored via `env:` (empty
 when you passed none) — never the merged ambient environment. It returns the
 pair that actually spawns: the curated key/value map there is the full
 replacement, not a merge, and `null` in its place sends the child out with
-the parent's entire ambient environment. This is exactly what `candy-code`
+the parent's entire ambient environment; combining a planner with either
+declarative knob refuses at construction (the planner owns the environment
+wholesale). This is exactly what `candy-code`
 does: it
 ships credential-shaped-name scrubbing on top of this library
 (`ProcessContainment`) because the ambient-secrets hazard is real in

@@ -436,6 +436,18 @@ final class StdioMcpServer implements McpServer
         array $capabilities = [],
         ?\Closure $onServerMessage = null,
         private readonly ?string $lockDir = null,
+        /**
+         * Names stripped from the inherited environment before `env:` applies
+         * (precedence: inherited → envRemove → env). `curatedEnv:` is the
+         * exclusive full-replace alternative; the `spawnPlanner:` closure
+         * owns its environment wholesale and may not be combined with either
+         * knob (a silent no-op knob is a lie the constructor refuses).
+         *
+         * @var list<string>
+         */
+        private readonly array $envRemove = [],
+        /** @var ?array<string,string> full replacement, `[]` means a purged environment */
+        private readonly ?array $curatedEnv = null,
     ) {
         $this->startTimeoutSeconds = $startTimeoutSeconds !== null && $startTimeoutSeconds > 0
             ? $startTimeoutSeconds
@@ -446,6 +458,7 @@ final class StdioMcpServer implements McpServer
         }
 
         $this->assertClientInfoShaped($clientInfo);
+        $this->assertEnvKnobsShaped($spawnPlanner);
         $this->clientInfo = $clientInfo;
         $this->capabilities = $capabilities;
         $this->onServerMessage = $onServerMessage;
@@ -472,6 +485,87 @@ final class StdioMcpServer implements McpServer
                 "MCP clientInfo needs a non-empty 'name' and a 'version' string, {$keys}"
             );
         }
+    }
+
+    /**
+     * Grammar for the declarative env knobs, checked at construction — the
+     * one place a typo'd name list or a half-mixed strategy is still cheap
+     * to say no to (before the child exists). The precedence chain when no
+     * curatedEnv is given: inherited → strip envRemove names → overlay env.
+     *
+     * @throws \InvalidArgumentException on a non-string or empty name, a
+     *         duplicate envRemove entry, a malformed curatedEnv map, or a
+     *         combination that would leave one input silently unread
+     */
+    private function assertEnvKnobsShaped(?\Closure $spawnPlanner): void
+    {
+        if (!array_is_list($this->envRemove)) {
+            throw new \InvalidArgumentException(
+                'MCP envRemove must be a list of environment variable names (strings), got a keyed array',
+            );
+        }
+
+        $seen = [];
+        foreach ($this->envRemove as $index => $entry) {
+            if (!is_string($entry) || $entry === '') {
+                throw new \InvalidArgumentException(
+                    'MCP envRemove entry #' . $index . ' must be a non-empty variable name, got ' . get_debug_type($entry),
+                );
+            }
+            if (isset($seen[$entry])) {
+                throw new \InvalidArgumentException(
+                    "MCP envRemove names {$entry} twice; each name is stripped once",
+                );
+            }
+            $seen[$entry] = true;
+        }
+
+        if ($this->curatedEnv !== null) {
+            foreach ($this->curatedEnv as $key => $value) {
+                if (!is_string($key) || !is_string($value)) {
+                    throw new \InvalidArgumentException(
+                        'MCP curatedEnv must map variable names to string values, got ['
+                        . (is_string($key) ? $key : get_debug_type($key)) . '] => ' . get_debug_type($value),
+                    );
+                }
+            }
+            if ($this->env !== [] || $this->envRemove !== []) {
+                throw new \InvalidArgumentException(
+                    'MCP curatedEnv replaces the environment outright, which makes env: and envRemove: unread; pass curatedEnv alone, or env:/envRemove: without it',
+                );
+            }
+        }
+
+        if ($spawnPlanner !== null && ($this->envRemove !== [] || $this->curatedEnv !== null)) {
+            throw new \InvalidArgumentException(
+                'MCP spawnPlanner owns the child environment wholesale, so envRemove: and curatedEnv: would never be read; express the scrub inside the planner, or drop the planner',
+            );
+        }
+    }
+
+    /**
+     * The environment the default (planner-less) spawn hands to the child.
+     * Null keeps proc_open's full inheritance — the untouched historical
+     * shape when neither env nor a removal narrows it.
+     *
+     * @return ?array<string,string>
+     */
+    private function buildEnv(): ?array
+    {
+        if ($this->curatedEnv !== null) {
+            return $this->curatedEnv;
+        }
+
+        if ($this->envRemove === []) {
+            return $this->env === [] ? null : array_merge(getenv(), $this->env);
+        }
+
+        $base = getenv();
+        foreach ($this->envRemove as $name) {
+            unset($base[$name]);
+        }
+
+        return array_merge($base, $this->env);
     }
 
     /**
@@ -513,7 +607,7 @@ final class StdioMcpServer implements McpServer
         $argv = [$this->command, ...array_map(static fn (mixed $arg): string => (string) $arg, array_values($this->args))];
 
         if ($this->spawnPlanner === null) {
-            return [$argv, $this->env === [] ? null : array_merge(getenv(), $this->env)];
+            return [$argv, $this->buildEnv()];
         }
 
         $plan = ($this->spawnPlanner)($this->name, $argv, $this->env);

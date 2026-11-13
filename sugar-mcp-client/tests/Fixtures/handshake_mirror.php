@@ -73,6 +73,7 @@ while (($line = fgets(STDIN)) !== false) {
                         'text' => json_encode([
                             'initializeParams' => $initParams,
                             'probeEnv' => getenv('MCP_PROBE_ENV'),
+                            'secretPresent' => getenv('MCP_TEST_SECRET') !== false,
                         ]),
                     ]],
                 ],
