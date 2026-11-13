@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Channels;
 
 use SugarCraft\Code\Cli\Bootstrap;
+use SugarCraft\Code\Support\Log;
 use SugarCraft\Core\Util\AtomicJsonFile;
 
 /**
@@ -144,6 +145,24 @@ final class ChannelsStore
     public function readFailure(): ?string
     {
         return $this->readFailure;
+    }
+
+    /**
+     * Announce a broken record on the operator log, once per call site. The
+     * launch survives corruption fail-closed (empty view, policy reads throw,
+     * writes refused), which is invisible unless somebody says why; this is
+     * the one drain, called at launch. Operator-side diagnostic like the MCP
+     * trust-pin sibling, so deliberately untranslated.
+     */
+    public function announceReadFailure(): void
+    {
+        if ($this->readFailure === null) {
+            return;
+        }
+        try {
+            Log::channel(Log::APP, 'channels record ' . $this->configDir->__invoke() . '/' . self::FILE_NAME . ' unusable (' . $this->readFailure . '); channel policy fails closed and quarantine will not persist until it is repaired');
+        } catch (\Throwable) {
+        }
     }
 
     /**

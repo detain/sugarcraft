@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Channels\ChannelToolPolicyService;
 use SugarCraft\Code\Channels\ChannelsStore;
 use SugarCraft\Code\Tests\Skills\TemporaryDirectoryTrait;
+use SugarCraft\Code\Tests\Support\DiscardsErrorLogTrait;
 
 /**
  * Ledger pins for the channels store (code-chat P1 step 3/8): the quarantine
@@ -23,6 +24,7 @@ use SugarCraft\Code\Tests\Skills\TemporaryDirectoryTrait;
 final class ChannelsStoreTest extends TestCase
 {
     use TemporaryDirectoryTrait;
+    use DiscardsErrorLogTrait;
 
     private string $root = '';
     private string $configDir = '';
@@ -62,6 +64,26 @@ final class ChannelsStoreTest extends TestCase
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage(ChannelsStore::FILE_NAME);
         $store->all();
+    }
+
+    public function testACorruptLedgerIsAnnouncedOnTheOperatorLogAtLaunch(): void
+    {
+        $this->seedRawLedger('{not json at all');
+        $store = $this->ledger();
+        $captured = self::withErrorLogDiscarded(static function () use ($store): void {
+            $store->announceReadFailure();
+        });
+        self::assertStringContainsString(ChannelsStore::FILE_NAME . ' unusable', $captured);
+        self::assertStringContainsString('fails closed', $captured);
+    }
+
+    public function testAHealthyOrAbsentLedgerAnnouncesNothing(): void
+    {
+        $store = $this->ledger();
+        $captured = self::withErrorLogDiscarded(static function () use ($store): void {
+            $store->announceReadFailure();
+        });
+        self::assertSame('', trim($captured));
     }
 
     public function testALedgerThatDecodesToSomethingOtherThanAnArrayFailsLoudlyToo(): void

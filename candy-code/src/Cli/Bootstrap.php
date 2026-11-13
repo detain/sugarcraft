@@ -2340,10 +2340,12 @@ final class Bootstrap
         );
         // code-chat D6: the channel TOOL POLICY resolver shares the registry's workspace slot and user-tier trust list;
         // fresh channels.json reads at every admission are the door a Track-B scope walks, leaving untrusted bundles inert.
+        $channelsStore = \SugarCraft\Code\Channels\ChannelsStore::new();
+        $channelsStore->announceReadFailure();
         $workspace = $workspace->withService(
             \SugarCraft\Code\Channels\ChannelToolPolicyService::class,
             \SugarCraft\Code\Channels\ChannelToolPolicyService::forStore(
-                \SugarCraft\Code\Channels\ChannelsStore::new(),
+                $channelsStore,
                 self::trustedBundleChannelNames(),
             ),
         );
