@@ -116,7 +116,8 @@ final class SecurityDefaultsTest extends TestCase
         // since audit MAJOR 9 a gate that says no marks the session and the
         // walk answers `Server::EXIT_DENIED` instead -- see
         // tests/ExitStatusTest.php for that half of the contract.
-        $this->assertSame(0, (new Server())->serve(), 'an empty stack reports success -- it is reporting that nothing ran');
+        // 076 made the constructor private; `::new()` is the door here too.
+        $this->assertSame(0, Server::new()->serve(), 'an empty stack reports success -- it is reporting that nothing ran');
 
         $seen = (object) ['ran' => false];
         $marker = new class($seen) implements Middleware {
@@ -131,7 +132,7 @@ final class SecurityDefaultsTest extends TestCase
             }
         };
 
-        $this->assertSame(0, (new Server())->use($marker)->serve());
+        $this->assertSame(0, Server::new()->use($marker)->serve());
         $this->assertTrue($seen->ran, 'the stack you give Server is the stack that runs');
     }
 

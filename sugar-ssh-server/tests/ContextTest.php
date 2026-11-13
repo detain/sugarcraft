@@ -103,6 +103,37 @@ final class ContextTest extends TestCase
         $this->assertSame($reason, $armed->err());
     }
 
+    public function testCancellationExceptionMessageCarriesTheOptionalReason(): void
+    {
+        // Audit 078 shape contract: the no-reason arm is byte-for-byte
+        // the string this lib has always emitted, and a supplied reason
+        // rides the fixed text — both halves must survive.
+        $this->assertSame('context cancelled', (new CancellationException())->getMessage());
+        $rich = new CancellationException('hangup received');
+        $this->assertSame('context cancelled: hangup received', $rich->getMessage());
+        $this->assertStringContainsString('context cancelled', $rich->getMessage());
+        $this->assertStringContainsString('hangup received', $rich->getMessage());
+    }
+
+    public function testDeadlineExceptionMessageCarriesTheOptionalReason(): void
+    {
+        $this->assertSame('context deadline exceeded', (new DeadlineExceededException())->getMessage());
+        $rich = new DeadlineExceededException('budget of 30s spent');
+        $this->assertSame('context deadline exceeded: budget of 30s spent', $rich->getMessage());
+    }
+
+    public function testReasonAttachedViaCancelRidesThroughToErr(): void
+    {
+        // cancel() passes the supplied Throwable through verbatim, so
+        // the blessed zero-churn way to attach a why is
+        // `new CancellationException('...')` — the message survives.
+        $ctx = Context::background()->withCancelable();
+        $reason = new CancellationException('peer closed');
+        $this->assertTrue($ctx->cancel($reason));
+        $this->assertSame($reason, $ctx->err());
+        $this->assertSame('context cancelled: peer closed', $ctx->err()->getMessage());
+    }
+
     public function testDeadlineExpiryMarksContextDone(): void
     {
         $ctx = Context::background()->withDeadline(

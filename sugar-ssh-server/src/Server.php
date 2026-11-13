@@ -107,7 +107,13 @@ final class Server
     /** Keepalive value armed by {@see withKeepalive()}; applied at `serve()` entry. */
     private ?Keepalive $keepalive = null;
 
-    public function __construct()
+    /**
+     * `::new()` is the door (audit sugar-ssh-server-076): the class is
+     * final and every sibling factory in this lib keeps its constructor
+     * effectively private (Context does exactly the same), so direct
+     * construction was never an intended surface.
+     */
+    private function __construct()
     {
         $this->transport = new InProcessTransport();
     }

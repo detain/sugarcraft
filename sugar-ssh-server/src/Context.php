@@ -113,6 +113,12 @@ final class Context
      * context was silently inert because it is not cancelable — callers
      * on signal-handler paths can branch on it instead of wondering
      * whether their cancellation landed.
+     *
+     * A supplied Throwable reaches `err()` verbatim (identity, not a
+     * re-wrap); to attach a reason without defining your own class,
+     * hand over `new CancellationException('hangup received')` — the
+     * optional reason rides its message straight through (audit
+     * sugar-ssh-server-078).
      */
     public function cancel(?\Throwable $reason = null): bool
     {

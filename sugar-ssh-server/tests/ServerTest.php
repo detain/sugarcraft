@@ -22,6 +22,16 @@ final class ServerTest extends TestCase
         );
     }
 
+    public function testTheConstructorIsPrivateAndNewIsTheDoor(): void
+    {
+        // Audit 076: house law — `::new()` is the construction surface,
+        // the ctor keeps the Context-style privacy it has with every
+        // other static factory in this lib.
+        $ctor = new \ReflectionMethod(Server::class, '__construct');
+        $this->assertTrue($ctor->isPrivate(), 'Server::__construct must not be public');
+        $this->assertInstanceOf(Server::class, Server::new(), 'and the factory door still opens');
+    }
+
     public function testStackInvokedInRegistrationOrder(): void
     {
         $log = [];
