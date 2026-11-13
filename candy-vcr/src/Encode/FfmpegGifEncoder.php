@@ -99,6 +99,10 @@ final class FfmpegGifEncoder implements GifEncoder
                 );
             }
 
+            // Same re-stat law as PhpGifEncoder: ffmpeg overwrites the
+            // reserved 0-byte temp file, and any stat cached at reservation
+            // time would make the bool below report failure for a real GIF.
+            clearstatcache(true, $outputPath);
             return is_file($outputPath) && filesize($outputPath) > 0;
         } finally {
             $this->cleanup($tempDir);

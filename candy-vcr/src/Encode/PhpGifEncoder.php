@@ -69,6 +69,21 @@ final class PhpGifEncoder implements GifEncoder
         $gif->fwrite("\x3b");
         $gif = null;
 
+        // The return MUST re-stat: encodeAtomically() reserves $outputPath with
+        // fopen('x') and hands it to us over an already-open SplFileObject, and
+        // BOTH seed PHP's global stat cache with the creation-time size 0. The
+        // bare filesize() below would then read the stale 0 and return false
+        // for a fully written GIF (the write itself is real — the rename that
+        // follows moved the bytes). Clearing the path's cache makes the bool
+        // the honest verdict its @return contract promises.
+        // The return MUST re-stat: encodeAtomically() reserves $outputPath with
+        // fopen('x') and hands it to us over an already-open SplFileObject, and
+        // BOTH seed PHP's global stat cache with the creation-time size 0. The
+        // bare filesize() below would then read the stale 0 and return false
+        // for a fully written GIF (the write itself is real — the rename that
+        // follows moved the bytes). Clearing the path's cache makes the bool
+        // the honest verdict its @return contract promises.
+        clearstatcache(true, $outputPath);
         return is_file($outputPath) && filesize($outputPath) > 0;
     }
 

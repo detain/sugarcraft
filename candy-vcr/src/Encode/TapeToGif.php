@@ -348,7 +348,18 @@ final class TapeToGif
         fclose($handle);
 
         try {
-            $this->encoder->encode($pngPaths, $tmp, (int) round($fps), $frameHoldsMs);
+            // The encoder contract returns bool. Ignoring it meant a real
+            // false (encoder killed mid-mux, out of memory) fell through to
+            // the rename and the caller heard "GIF written" about a 0-byte
+            // file. Fail loud BEFORE the rename: the catch below removes the
+            // reserved temp, so nothing lies about existing. The bool is only
+            // trustworthy now because both encoders re-stat their output
+            // instead of reading the 0-byte size the fopen('x') reservation
+            // left in PHP's stat cache — that cure rides with this guard in
+            // PhpGifEncoder::encode() / FfmpegGifEncoder::encode().
+            if ($this->encoder->encode($pngPaths, $tmp, (int) round($fps), $frameHoldsMs) === false) {
+                throw new \RuntimeException("GIF encoder failed to produce: {$output}");
+            }
 
             // rename() replaces the directory ENTRY at $output rather than writing
             // *through* it: a pre-existing symlink or hard link at $output is
@@ -441,11 +452,19 @@ final class TapeToGif
             return $rawPath;
         }
 
-        // Relative path: join under outputDir
+        // Relative path: join under outputDir. realpath BOTH sides before the
+        // prefix compare — $outputDir may itself be relative (`-o rel.gif`
+        // makes dirname() hand us '.'), and an absolute realpath never starts
+        // with './', so the old single-sided check rejected a perfectly
+        // confined screenshot whenever the output path was relative. When
+        // outputDir does not exist realpath() is false; keeping the raw value
+        // as the floor is safe because the join under it then fails the
+        // $targetDirReal === false arm below.
         $target = $outputDir . DIRECTORY_SEPARATOR . $rawPath;
         $targetDir = dirname($target);
         $targetDirReal = realpath($targetDir);
-        if ($targetDirReal === false || !str_starts_with($targetDirReal . DIRECTORY_SEPARATOR, $outputDir . DIRECTORY_SEPARATOR)) {
+        $outputDirReal = realpath($outputDir) ?: $outputDir;
+        if ($targetDirReal === false || !str_starts_with($targetDirReal . DIRECTORY_SEPARATOR, $outputDirReal . DIRECTORY_SEPARATOR)) {
             throw new \RuntimeException("Screenshot path escapes output directory: {$rawPath}");
         }
 
