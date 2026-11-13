@@ -545,6 +545,15 @@ final class Store
      * they participate in the transaction. On exception the transaction is
      * rolled back and the exception propagates.
      *
+     * HAZARD — cross-database writes are NOT transacted (kv-067): an
+     * operation routed to a different database (`set('k@other', ...)` inside
+     * a `$dbName = 'mine'` transaction) opens a SECOND connection that lives
+     * outside this transaction. Those writes commit on their own schedule
+     * and a rollback here will not undo them — partial state across vaults
+     * is the result. Keep every write inside the callback on `$dbName`; the
+     * importers discovered this and refuse multi-db documents outright, but
+     * the public API can only warn you, not intercept every route.
+     *
      * @param callable(): mixed $fn
      * @return mixed The callback's return value.
      */

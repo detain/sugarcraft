@@ -69,17 +69,19 @@ final class ImportCommand
         }
 
         try {
+            // kv-065: the validated importer IS the format decision — the
+            // read/dispatch branches below carry zero format knowledge, so
+            // adding a fourth format means touching the single match above,
+            // not five coordinated edits that can drift apart. Both
+            // importers expose importFromString/importFromFile; PHP's
+            // duck-typing dispatches on the object we already built.
             if ($path === '-' || $path === '/dev/stdin') {
-                $json = \file_get_contents('php://stdin');
-                if ($json === false) {
+                $document = \file_get_contents('php://stdin');
+                if ($document === false) {
                     \fwrite($this->stderr, "Failed to read from STDIN.\n");
                     return 1;
                 }
-                if ($format === 'yaml' || $format === 'yml') {
-                    $count = (new YamlImporter($this->store))->importFromString($json, $atomic);
-                } else {
-                    $count = (new JsonImporter($this->store))->importFromString($json, $atomic);
-                }
+                $count = $importer->importFromString($document, $atomic);
             } else {
                 // kv-019: refuse wrapper URLs BEFORE file_exists — the stat
                 // itself deserializes phar archive metadata inside us.
@@ -89,11 +91,7 @@ final class ImportCommand
                     \fwrite($this->stderr, "File not found: " . Store::sanitizeForTty($path) . "\n");
                     return 1;
                 }
-                if ($format === 'yaml' || $format === 'yml') {
-                    $count = (new YamlImporter($this->store))->importFromFile($path, $atomic);
-                } else {
-                    $count = (new JsonImporter($this->store))->importFromFile($path, $atomic);
-                }
+                $count = $importer->importFromFile($path, $atomic);
             }
 
             \fwrite($this->stdout, Lang::t($count === 1 ? 'cli.imported_one' : 'cli.imported_n', ['count' => $count]) . "\n");

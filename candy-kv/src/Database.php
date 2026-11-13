@@ -649,11 +649,12 @@ final class Database
                  WHERE expires_at IS NULL OR expires_at >= :now'
             );
             $stmt->bindValue(':now', $now, \SQLITE3_INTEGER);
+            // One failure model: enableExceptions(true) makes execute() throw
+            // (a false-returning API is a fiction this connection can never
+            // produce — kv-064). A dead false-check arm is worse than none:
+            // it pretends to handle errors while swallowing the one real
+            // path, SQLite3Exception with SQLite's own diagnostic.
             $r = $stmt->execute();
-            if ($r === false) {
-                $stmt->close();
-                throw new \RuntimeException(Lang::t('database.query_failed'));
-            }
             $row = $r->fetchArray();
             $stmt->close();
             return (int) ($row[0] ?? 0);
@@ -667,10 +668,6 @@ final class Database
         $stmt->bindValue(':pat', $like, \SQLITE3_TEXT);
         $stmt->bindValue(':now', $now, \SQLITE3_INTEGER);
         $result = $stmt->execute();
-        if ($result === false) {
-            $stmt->close();
-            throw new \RuntimeException(Lang::t('database.query_failed'));
-        }
         $row = $result->fetchArray(\SQLITE3_NUM);
         $stmt->close();
 
@@ -844,18 +841,31 @@ final class Database
      * If the callback throws, the transaction is rolled back and the exception
      * propagates outward. On success the transaction is committed.
      *
+     * `BEGIN` spelling is a lock decision, not a style choice (kv-080):
+     * IMMEDIATE claims the sole WAL writer slot before the callback reads a
+     * byte, so a callback that only reads would still serialise every other
+     * process's writes for its whole duration. `$write = false` opens a
+     * DEFERRED read snapshot instead — WAL readers never block writers, and
+     * the callback additionally sees one stable instant of the data. A
+     * deferred transaction that DOES write upgrades on first write and
+     * surfaces SQLITE_BUSY if another writer got there first; that is the
+     * documented cost of claiming read-only and lying about it.
+     *
      * @param callable(): mixed $fn
+     * @param bool $write True (default) claims the write lock up front —
+     *     the right choice when the callback commits changes; the upgrade
+     *     path from deferred cannot promise a winner.
      * @return mixed The return value of the callback.
      * @throws \Throwable Re-throws any exception from the callback after rollback.
      */
-    public function transaction(callable $fn): mixed
+    public function transaction(callable $fn, bool $write = true): mixed
     {
         if ($this->inTransaction) {
             throw new \RuntimeException('Nested transactions are not supported.');
         }
         $this->inTransaction = true;
         try {
-            $this->db->exec('BEGIN IMMEDIATE');
+            $this->db->exec($write ? 'BEGIN IMMEDIATE' : 'BEGIN DEFERRED');
             try {
                 $result = $fn();
                 $this->db->exec('COMMIT');

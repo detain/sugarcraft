@@ -640,4 +640,24 @@ final class DatabaseTtlMigrationTest extends TestCase
             "prune must delete the bare comparison's exact complement"
         );
     }
+
+    public function testNoDeadFalseCheckOnSqliteCalls(): void
+    {
+        // kv-064: the class picked the exceptions model (enableExceptions at
+        // construction), so a check for a false return from a SQLite call is
+        // dead code that also swallows SQLite's real diagnostic. Zero such
+        // arms may live in the source.
+        $src = (string) \file_get_contents((new \ReflectionClass(Database::class))->getFileName());
+
+        $this->assertSame(
+            0,
+            \preg_match_all('/===\s*false/', $src),
+            'Database must carry exactly one failure model: exceptions (kv-064)'
+        );
+        $this->assertMatchesRegularExpression(
+            '/enableExceptions\(true\)/',
+            $src,
+            'the surviving model must stay the exception one'
+        );
+    }
 }

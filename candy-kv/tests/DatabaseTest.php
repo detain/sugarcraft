@@ -303,6 +303,61 @@ final class DatabaseTest extends TestCase
         $this->assertNull($this->db->get('tx-rollback'));
     }
 
+    private function rawHandleOf(Database $db): \SQLite3
+    {
+        $prop = new \ReflectionProperty(Database::class, 'db');
+        $prop->setAccessible(true);
+        /** @var \SQLite3 $sqlite */
+        return $prop->getValue($db);
+    }
+
+    public function testReadOnlyTransactionDoesNotBlockAConcurrentWriter(): void
+    {
+        // kv-080: transaction() used to BEGIN IMMEDIATE unconditionally, so
+        // even a read-only callback claimed the sole WAL writer slot and
+        // every other process's writes stalled (then died at the 5 s busy
+        // timeout). A DEFERRED read snapshot must let a writer commit
+        // mid-callback.
+        $path = $this->tmpDir . '/snapshot.db';
+        $reader = new Database($path, 'snapshot');
+        $writer = new Database($path, 'snapshot');
+        $reader->set('seed', 'v');
+        // Zero the writer's busy timeout: if the read branch wrongly held
+        // the write lock, this connection errors immediately instead of
+        // stalling the suite five seconds.
+        $this->rawHandleOf($writer)->busyTimeout(0);
+
+        $reader->transaction(function () use ($reader, $writer): void {
+            $this->assertContains('seed', $reader->allKeys(), 'the snapshot sees pre-transaction data');
+            $writer->set('from-writer', 'w');
+            $this->assertNull(
+                $reader->get('from-writer'),
+                'the snapshot keeps ONE stable instant even after the concurrent commit (WAL read semantics)'
+            );
+        }, write: false);
+
+        $this->assertNotNull($reader->get('from-writer'), 'after COMMIT the fresh write is visible');
+        $reader->close();
+        $writer->close();
+    }
+
+    public function testWriteTransactionHoldsTheWriterSlot(): void
+    {
+        // Opposite polarity (kv-080 belt): the default write branch must
+        // still claim BEGIN IMMEDIATE — an embedded consumer transacting
+        // writes needs the sole-writer promise, and a swapped parameter
+        // spelling would silently lose it.
+        $path = $this->tmpDir . '-write-slot.db';
+        $tx = new Database($path, 'writeslot');
+        $other = new Database($path, 'writeslot');
+        $this->rawHandleOf($other)->busyTimeout(0);
+
+        $this->expectException(\SQLite3Exception::class);
+        $tx->transaction(function () use ($other): void {
+            $other->set('intruder', 'v');
+        });
+    }
+
     public function testAllKeys(): void
     {
         $this->db->set('apple', 'a');
