@@ -29,6 +29,19 @@ final class ProbeTest extends TestCase
             unset($_ENV[$key]);
             putenv($key);
         }
+
+        // CP-02 hermeticity: drain the shared exec statics (without this the
+        // per-TERM dump memo survives method — and file — boundaries) and
+        // point the binary sniff at its ABSENT sentinel so phase-2 never
+        // execs the host infocmp. The rows below then answer from the env
+        // ladder alone: a host whose terminfo entries carry a name-position
+        // Tc/RGB (kitty and ghostty ship those; some distros graft Tc onto
+        // xterm-256color) can no longer flip an Ansi256 expectation to
+        // TrueColor here. Genuine terminfo-promotion coverage stays
+        // fixture-driven where it already lives (InfocmpEnvPurityTest's
+        // stuffed Tc-printer) — it is not duplicated here.
+        Probe::_reset();
+        (new \ReflectionProperty(InfocmpBinary::class, 'path'))->setValue(null, '');
     }
 
     protected function tearDown(): void
@@ -45,6 +58,10 @@ final class ProbeTest extends TestCase
                 putenv("{$key}={$value}");
             }
         }
+
+        // Drain the stuffed sentinel + any recorded miss so the next suite
+        // inherits a clean door (the in-suite hermetic idiom, CP-26 wave).
+        Probe::_reset();
     }
 
     /**
