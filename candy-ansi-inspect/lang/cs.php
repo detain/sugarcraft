@@ -9,7 +9,7 @@
 declare(strict_types=1);
 
 return [
-    'cli.usage' => "Použití: candy-ansi-inspect [soubor]\n  nebo:  cmd | candy-ansi-inspect",
+    'cli.usage' => "Použití: candy-ansi-inspect [soubor]\n  nebo:  cmd | candy-ansi-inspect\n  nebo:  candy-ansi-inspect [--help | -h]",
     'cli.not_a_file' => "candy-ansi-inspect: nelze číst: {path}",
     'cli.wrapper_note' => "  (proudové obálky jako php:// nebo data:// nejsou přijímány)",
     'cli.pty_unavailable' => "candy-ansi-inspect: nelze spustit pseudoterminál: {reason}",

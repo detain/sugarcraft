@@ -280,6 +280,9 @@ final class CliTest extends TestCase
         // stdout, exit 0, stderr silent (a scripted caller may capture it).
         // The expected text is read from lang/en.php, not hardcoded.
         $usage = (string) (require dirname(__DIR__) . '/lang/en.php')['cli.usage'];
+        // The usage surface must self-document its own flags (finding 047):
+        // a misuse reader who only ever sees this text can still learn --help.
+        $this->assertStringContainsString('[--help | -h]', $usage);
         foreach (['--help', '-h'] as $flag) {
             [$code, $stdout, $stderr] = self::runCli($flag);
             $this->assertSame(0, $code, $flag . ': ' . $stderr);

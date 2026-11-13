@@ -9,7 +9,7 @@
 declare(strict_types=1);
 
 return [
-    'cli.usage' => "Gebruik: candy-ansi-inspect [bestand]\n  of:  cmd | candy-ansi-inspect",
+    'cli.usage' => "Gebruik: candy-ansi-inspect [bestand]\n  of:  cmd | candy-ansi-inspect\n  of:  candy-ansi-inspect [--help | -h]",
     'cli.not_a_file' => "candy-ansi-inspect: kan niet lezen: {path}",
     'cli.wrapper_note' => "  (stream-wrappers zoals php:// of data:// worden niet geaccepteerd)",
     'cli.pty_unavailable' => "candy-ansi-inspect: kan geen pseudo-terminal starten: {reason}",
