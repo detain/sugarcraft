@@ -7,7 +7,10 @@ namespace SugarCraft\Log;
 /**
  * Captures the file:line of the immediate caller outside the log package.
  *
- * Mirrors charmbracelet/log's caller functionality.
+ * Mirrors charmbracelet/log's caller functionality. Upstream v2 also
+ * ships a LongCallerFormatter that reports the full path; this port is
+ * deliberately short-only — basename:line, one column for every
+ * caller, wherever the package lives.
  *
  * Public API — but normal callers never touch it: enable caller reporting
  * once with {@see Logger::setReportCaller()} and the Logger wires this
@@ -44,12 +47,23 @@ final class CallerFormatter
      *
      * @param list<array{file?: string, line?: int|string}> $traces
      */
-    private static function locate(array $traces, string $selfDir): ?string
-    {
+    private static function locate(
+        array $traces,
+        string $selfDir,
+        bool $caseFoldPaths = \PHP_OS_FAMILY === 'Windows',
+    ): ?string {
+        $prefix = $selfDir . DIRECTORY_SEPARATOR;
         foreach (\array_slice($traces, 0, self::MAX_FRAMES) as $t) {
             $file = $t['file'] ?? '';
-            // Skip frames inside the log package itself
-            if (\strpos($file, $selfDir) === 0) {
+            // Skip frames inside the log package itself. The separator is
+            // required so a sibling whose name merely starts with the same
+            // text (.../sugar-log/src-vendor) is NOT mistaken for ours, and
+            // on Windows frames arrive with whatever case the path was
+            // opened in, so both sides fold before the compare.
+            $owned = $caseFoldPaths
+                ? \str_starts_with(\strtolower($file), \strtolower($prefix))
+                : \str_starts_with($file, $prefix);
+            if ($owned) {
                 continue;
             }
             $line = $t['line'] ?? '?';
