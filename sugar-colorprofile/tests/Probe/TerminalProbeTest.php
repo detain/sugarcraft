@@ -762,4 +762,30 @@ final class TerminalProbeTest extends TestCase
             InfocmpBinary::reset();
         }
     }
+
+    /**
+     * CP-03 call-shape pin: the two environment parameters carry OPPOSITE
+     * grammars — the constructor's `$environment` is a complete hermetic
+     * replacement, `runProbe()`'s `$overrides` a name-only merge OVER the
+     * instance map — and the names themselves are the documentation of the
+     * split. Every in-repo caller is positional (grep-verified tree-wide),
+     * so renaming is BC-safe while an arity change would not be: pin both
+     * the names and the count.
+     */
+    public function testTheEnvironmentParametersAreNamedForTheirGrammar(): void
+    {
+        $names = static fn (\ReflectionMethod $m): array => \array_map(
+            static fn (\ReflectionParameter $p): string => $p->getName(),
+            $m->getParameters(),
+        );
+
+        $this->assertSame(
+            ['environment', 'interactive'],
+            $names(new \ReflectionMethod(TerminalProbe::class, '__construct')),
+        );
+        $this->assertSame(
+            ['overrides', 'interactive'],
+            $names(new \ReflectionMethod(TerminalProbe::class, 'runProbe')),
+        );
+    }
 }

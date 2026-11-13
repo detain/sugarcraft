@@ -60,23 +60,25 @@ class TerminalProbe
     private bool $asciiAnswered = false;
 
     /**
-     * Create a new probe with optional environment overrides.
+     * Create a new probe with an optional complete environment replacement.
      *
-     * Resolution follows the single {@see Env} rule: a NON-EMPTY $env map is
-     * a complete hermetic replacement (ambient variables do not leak in);
-     * [] reads the ambient snapshot.
+     * Resolution follows the single {@see Env} rule: a NON-EMPTY $environment
+     * map is a complete hermetic replacement (ambient variables do not leak
+     * in); [] reads the ambient snapshot. This is the opposite grammar of
+     * {@see self::runProbe()}'s $overrides, which merge name-only OVER an
+     * existing map — one name carried both meanings until the split.
      *
-     * @param array<string, string|null> $env  Environment map for testing
-     * @param bool                      $interactive  Whether the environment
-     *                                                upgrade table (Phase 3)
-     *                                                may run; ANDed with
-     *                                                isInteractive() here and
-     *                                                honored by runProbe() unless
-     *                                                that call overrides it
+     * @param array<string, string|null> $environment  Complete replacement environment (non-empty map is hermetic — pass [] for the real ambient world)
+     * @param bool                       $interactive  Whether the environment
+     *                                                 upgrade table (Phase 3)
+     *                                                 may run; ANDed with
+     *                                                 isInteractive() here and
+     *                                                 honored by runProbe() unless
+     *                                                 that call overrides it
      */
-    public function __construct(array $env = [], bool $interactive = true)
+    public function __construct(array $environment = [], bool $interactive = true)
     {
-        $this->env = Env::resolve($env);
+        $this->env = Env::resolve($environment);
         $this->interactive = $interactive && $this->isInteractive();
     }
 
@@ -93,23 +95,25 @@ class TerminalProbe
     /**
      * Run the full probe pipeline with optional environment overrides.
      *
-     * $env overlays are applied for THIS run only — the instance state is
-     * restored afterwards, so a probe reused across runs cannot have run N's
-     * suppression leak into run N+1 (the old code merged overrides into
-     * $this->env permanently).
+     * $overrides are merged OVER the instance environment — name-only
+     * overrides, ambient keys survive — for THIS run only; the instance state
+     * is restored afterwards, so a probe reused across runs cannot have run
+     * N's suppression leak into run N+1 (the old code merged overrides into
+     * $this->env permanently). The opposite grammar to the constructor's
+     * $environment, which replaces the world wholesale.
      *
-     * @param array<string, string|null> $env          Environment overrides
-     * @param bool|null                  $interactive  null (default) keeps the
-     *                                                 constructor's decision;
-     *                                                 true re-evaluates
-     *                                                 isInteractive(); false
-     *                                                 forces Phase 3 off
+     * @param array<string, string|null> $overrides        Name-only overrides merged OVER the instance environment (ambient keys survive)
+     * @param bool|null                  $interactive      null (default) keeps the
+     *                                                     constructor's decision;
+     *                                                     true re-evaluates
+     *                                                     isInteractive(); false
+     *                                                     forces Phase 3 off
      */
-    public function runProbe(array $env = [], ?bool $interactive = null): ProbeReport
+    public function runProbe(array $overrides = [], ?bool $interactive = null): ProbeReport
     {
         $baseEnv = $this->env;
-        if ($env !== []) {
-            $this->env = array_merge($this->env, $env);
+        if ($overrides !== []) {
+            $this->env = array_merge($this->env, $overrides);
         }
         $this->interactive = match ($interactive) {
             false => false,
