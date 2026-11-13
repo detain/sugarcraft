@@ -64,7 +64,8 @@ use SugarCraft\Core\Util\Width;
  * none. Visual-LINE entry stays un-wired here:
  * its pinned j/k direction is an open owner ruling (E736 plan 3.2 / campaign
  * R4) and this port deliberately does not pre-empt it.
- */
+
+ * NOTE (sugar-forms-058, 2026-11-13): upstream names in this class were re-spelled to canonical grammar from earlier prose and are NOT verified against a pinned charmbracelet checkout; per-symbol verification is gated on a research-lane huh/bubbles reference. Treat them as indicative, not proven. */
 final class TextArea implements Model
 {
     use Mutable;
@@ -111,7 +112,7 @@ final class TextArea implements Model
         public readonly bool $dynamic = false,
         /**
          * Filename suffix used when {@see openInEditor()} writes the
-         * seed temp file. Mirrors upstream Bubbles' editor example —
+         * seed temp file. Mirrors charmbracelet/bubbles.editor example —
          * `.md` triggers vim's markdown ftplugin, `.json` opens with
          * JSON syntax highlighting, etc. Default `.txt`.
          */
@@ -900,7 +901,7 @@ final class TextArea implements Model
      * means uncapped). When off (default), `$height` is the fixed row
      * count and short content gets padded with end-of-buffer glyphs.
      *
-     * Mirrors upstream Bubbles `WithDynamicHeight` (#910).
+     * Mirrors charmbracelet/bubbles.`WithDynamicHeight` (#910).
      */
     public function withDynamic(bool $on = true): self
     {
@@ -915,7 +916,7 @@ final class TextArea implements Model
      * external `$EDITOR`. Pass with the leading dot (`'.md'`) or
      * without (`'md'`); both are accepted. Empty string skips the
      * suffix entirely. Mirrors the editor-example pattern in
-     * upstream `bubbles/textarea`.
+     * charmbracelet/bubbles textarea.
      *
      * @throws \InvalidArgumentException when the suffix is not a single
      *         safe filename extension — after the optional leading dot
@@ -1022,7 +1023,7 @@ final class TextArea implements Model
         return $this->mutate(endOfBufferCharacter: $c);
     }
 
-    /** Static prefix prepended to every line. Mirrors Bubbles' `Prompt`. */
+    /** Static prefix prepended to every line. Mirrors charmbracelet/bubbles.`Prompt`. */
     public function withPrompt(string $p): self
     {
         return $this->mutate(prompt: $p);
@@ -1032,7 +1033,7 @@ final class TextArea implements Model
      * Dynamic prompt: closure `fn(int $rowIndex, string $line): string`.
      * Called once per visible row to compute the line prefix. When set,
      * wins over the static {@see withPrompt()} prefix. Pass null to
-     * clear and revert to the static prompt. Mirrors Bubbles'
+     * clear and revert to the static prompt. Mirrors charmbracelet/bubbles.
      * `SetPromptFunc` (with the row-index argument also exposed so
      * callers can render `> ` on the active row, ` ` elsewhere).
      */
@@ -1149,7 +1150,7 @@ final class TextArea implements Model
 
     /**
      * Move cursor up one row, preserving column where possible.
-     * Mirrors Bubbles' `CursorUp`. Clamps at the first row.
+     * Mirrors charmbracelet/bubbles.`CursorUp`. Clamps at the first row.
      */
     public function cursorUp(): self
     {
@@ -1161,7 +1162,7 @@ final class TextArea implements Model
 
     /**
      * Move cursor down one row, preserving column where possible.
-     * Mirrors Bubbles' `CursorDown`. Clamps at the last row.
+     * Mirrors charmbracelet/bubbles.`CursorDown`. Clamps at the last row.
      */
     public function cursorDown(): self
     {
@@ -1172,7 +1173,7 @@ final class TextArea implements Model
     }
 
     /**
-     * Jump to (0, 0). Mirrors Bubbles' `MoveToBegin`.
+     * Jump to (0, 0). Mirrors charmbracelet/bubbles.`MoveToBegin`.
      */
     public function moveToBegin(): self
     {
@@ -1180,7 +1181,7 @@ final class TextArea implements Model
     }
 
     /**
-     * Jump to the last row, end of last line. Mirrors Bubbles' `MoveToEnd`.
+     * Jump to the last row, end of last line. Mirrors charmbracelet/bubbles.`MoveToEnd`.
      */
     public function moveToEnd(): self
     {
@@ -1190,7 +1191,7 @@ final class TextArea implements Model
 
     /**
      * Move cursor up by the configured display height (one viewport).
-     * Mirrors Bubbles' `PageUp`. Falls back to a single row when height
+     * Mirrors charmbracelet/bubbles.`PageUp`. Falls back to a single row when height
      * is unset (`height = 0`).
      */
     public function pageUp(): self
@@ -1201,7 +1202,7 @@ final class TextArea implements Model
 
     /**
      * Move cursor down by the configured display height. Mirrors
-     * Bubbles' `PageDown`.
+     * charmbracelet/bubbles `PageDown`.
      */
     public function pageDown(): self
     {
@@ -1212,7 +1213,7 @@ final class TextArea implements Model
 
     /**
      * Insert a single rune (one or more bytes — multibyte safe) at the
-     * cursor. Mirrors Bubbles' `InsertRune`.
+     * cursor. Mirrors charmbracelet/bubbles.`InsertRune`.
      */
     public function insertRune(string $rune): self
     {
@@ -1225,7 +1226,7 @@ final class TextArea implements Model
     /**
      * Return the word containing the cursor — a maximal run of
      * non-whitespace characters that the cursor sits in or adjacent
-     * to. Mirrors Bubbles' `Word`. Returns the empty string when the
+     * to. Mirrors charmbracelet/bubbles.`Word`. Returns the empty string when the
      * cursor is on whitespace.
      */
     public function word(): string
@@ -1262,7 +1263,7 @@ final class TextArea implements Model
 
     /**
      * Insert a string at the cursor; embedded newlines split lines.
-     * Mirrors Bubbles' `InsertString` / `InsertRune`.
+     * Mirrors charmbracelet/bubbles.`InsertString` / `InsertRune`.
      *
      * `\r\n` and a lone `\r` are line breaks too — Bubbles' runeutil
      * sanitizer (`ReplaceNewlines`) makes the same substitution. Bracketed
@@ -1304,16 +1305,16 @@ final class TextArea implements Model
 
     // ---- public read-only accessors ---------------------------------
 
-    /** Mirrors upstream Bubbles `Focused()` — true when the area accepts input. */
+    /** Mirrors charmbracelet/bubbles.`Focused()` — true when the area accepts input. */
     public function focused(): bool { return $this->focused; }
 
     /** Read-only access to the embedded {@see Cursor}. */
     public function cursor(): Cursor { return $this->cursor; }
 
-    /** Currently-active line (0-based). Mirrors upstream `Line()`. */
+    /** Currently-active line (0-based). Mirrors charmbracelet/bubbles.`Line()`. */
     public function line(): int { return $this->row; }
 
-    /** Cursor column on {@see line()} (0-based, codepoint count). Mirrors `Column()`. */
+    /** Cursor column on {@see line()} (0-based, codepoint count). Mirrors charmbracelet/bubbles.`Column()`. */
     public function column(): int { return $this->col; }
 
     /**

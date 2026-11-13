@@ -45,7 +45,8 @@ use SugarCraft\Forms\Util\RenderSafe;
  *
  * After submit (or abort), the form stops absorbing keystrokes and
  * caller code can collect {@see values()} keyed by each field's key.
- */
+
+ * NOTE (sugar-forms-058, 2026-11-13): upstream names in this class were re-spelled to canonical grammar from earlier prose and are NOT verified against a pinned charmbracelet checkout; per-symbol verification is gated on a research-lane huh/bubbles reference. Treat them as indicative, not proven. */
 final class Form implements Model
 {
     /**
@@ -107,7 +108,7 @@ final class Form implements Model
     /**
      * Multi-page form. Each {@see Group} renders on its own page; the
      * user advances with Tab past the last field on the page and pops
-     * back with Shift-Tab. Mirrors huh's multi-group flow.
+     * back with Shift-Tab. Mirrors charmbracelet/huh.multi-group flow.
      */
     public static function groups(Group ...$groups): self
     {
@@ -166,7 +167,7 @@ final class Form implements Model
 
     /**
      * Set the global theme. Per-{@see Group} overrides take priority
-     * via {@see activeTheme()}. Mirrors huh's `WithTheme`.
+     * via {@see activeTheme()}. Mirrors charmbracelet/huh.`WithTheme`.
      */
     public function withTheme(Theme $theme): self
     {
@@ -177,7 +178,7 @@ final class Form implements Model
      * Toggle accessibility mode. When on, the Form's view() degrades
      * to a single-line "label: value" plain-text rendering for the
      * focused field — designed for screen readers / non-TUI contexts.
-     * Mirrors huh's `WithAccessible`.
+     * Mirrors charmbracelet/huh.`WithAccessible`.
      */
     public function withAccessible(bool $on = true): self
     {
@@ -186,7 +187,7 @@ final class Form implements Model
 
     /**
      * Show / hide the help footer rendered below the focused field.
-     * Default on. Mirrors huh's `WithShowHelp`.
+     * Default on. Mirrors charmbracelet/huh.`WithShowHelp`.
      */
     public function withShowHelp(bool $on = true): self
     {
@@ -198,7 +199,7 @@ final class Form implements Model
      * rendered by fields with active validation errors: Form::view() passes
      * this flag into every field's `view($showErrors)`. The end-of-form
      * error {@see withErrorSummary()} block is a separate composer and is
-     * NOT affected. Default on. Mirrors huh's `WithShowErrors`.
+     * NOT affected. Default on. Mirrors charmbracelet/huh.`WithShowErrors`.
      */
     public function withShowErrors(bool $on = true): self
     {
@@ -209,7 +210,7 @@ final class Form implements Model
      * Show / hide an error summary at the end of the form after all
      * fields are rendered. When enabled and validation errors exist,
      * displays a list of field titles with their error messages.
-     * Default off. Mirrors huh's `WithErrorSummary`.
+     * Default off. Mirrors charmbracelet/huh.`WithErrorSummary`.
      */
     public function withErrorSummary(bool $on = true): self
     {
@@ -228,7 +229,7 @@ final class Form implements Model
      * FilePicker render at natural width: they carry no meaningful width
      * knob, so the budget does not bind them (documented exemption, not a
      * silent surprise). Default 0 = no budget: every line ships exactly as
-     * the field painted it. Mirrors huh's `WithWidth`.
+     * the field painted it. Mirrors charmbracelet/huh.`WithWidth`.
      */
     public function withWidth(int $cells): self
     {
@@ -237,8 +238,8 @@ final class Form implements Model
 
     /**
      * Pin the rendered height. Currently advisory — fields decide
-     * how to use the budget. Default 0 = no cap. Mirrors huh's
-     * `WithHeight`.
+     * how to use the budget. Default 0 = no cap. Mirrors
+     * charmbracelet/huh.`WithHeight`.
      */
     public function withHeight(int $rows): self
     {
@@ -248,8 +249,8 @@ final class Form implements Model
     /**
      * Auto-abort after `$ms` milliseconds of wall-clock time. The form
      * stores the budget for the runtime to consult — it does not start
-     * a timer itself. Default 0 = no timeout. Mirrors huh's
-     * `WithTimeout(time.Duration)`.
+     * a timer itself. Default 0 = no timeout. Mirrors
+     * charmbracelet/huh.`WithTimeout(time.Duration)`.
      */
     public function withTimeout(int $ms): self
     {
@@ -1093,7 +1094,7 @@ final class Form implements Model
 
     /**
      * String accessor — coerces scalar or stringable values; arrays are
-     * imploded with `, ` to mirror huh's `GetString`. Returns `$default`
+     * imploded with `, ` to mirror charmbracelet/huh `GetString`. Returns `$default`
      * on missing key or values that don't coerce sensibly.
      */
     public function string(string $key, string $default = ''): string
@@ -1110,7 +1111,7 @@ final class Form implements Model
     /**
      * The string coercion shared by {@see string()} and the accessible
      * view: scalars cast, bools spell `true`/`false`, arrays (MultiSelect)
-     * implode with `, ` as huh's `GetString` does. Null when the value has
+     * implode with `, ` as charmbracelet/huh `GetString` does. Null when the value has
      * no sensible string form (null, non-stringable objects).
      */
     private static function coerceString(mixed $v): ?string
@@ -1232,7 +1233,7 @@ final class Form implements Model
 
     /**
      * @deprecated Use the bare {@see self::focusedField()} read; the alias
-     *             for huh's `GetFocusedField` (accessor era, 2026-10-24).
+     *             for charmbracelet/huh `GetFocusedField` (accessor era, 2026-10-24).
      *             REMOVED-IN: 2.0.0
      */
     public function getFocusedField(): ?Field { return $this->focusedField(); }
@@ -1322,7 +1323,7 @@ final class Form implements Model
     /**
      * Validation errors keyed by field key. Hidden groups, hidden fields
      * and skippable fields (Note) are excluded. Empty when every visible field
-     * validates cleanly. Mirrors huh's `Errors()`.
+     * validates cleanly. Mirrors charmbracelet/huh.`Errors()`.
      *
      * @return array<string, string>
      */
@@ -1368,7 +1369,7 @@ final class Form implements Model
      * (min/max violations, format errors), this also triggers any
      * attached validators so cross-field constraints are evaluated.
      * Returns `array<fieldKey, errorMessage>` for fields that fail.
-     * Mirrors huh's `ValidateAll()`.
+     * Mirrors charmbracelet/huh.`ValidateAll()`.
      *
      * E736-F2/2.1 (round 85): single progressive pass. The old shape
      * walked every group twice — once to build the FULL accumulated value
@@ -1475,7 +1476,7 @@ final class Form implements Model
      * groups. There is no per-field extras channel: keys a field consumes
      * beyond the map live in that field's own update() (the README
      * field-types table inventories them) and are deliberately not rendered
-     * here. Mirrors the surface of huh's `KeyBinds()`.
+     * here. Mirrors the surface of charmbracelet/huh.`KeyBinds()`.
      *
      * @return list<array{0:string, 1:string}>
      */
@@ -1499,7 +1500,7 @@ final class Form implements Model
      * Single-line help string composed from {@see keyBinds()}. Useful
      * for host status bars / footers — like keyBinds(), the form's own
      * view() never renders it; calling it is the host's choice.
-     * Mirrors huh's `Help()`.
+     * Mirrors charmbracelet/huh.`Help()`.
      */
     public function help(): string
     {

@@ -15,8 +15,8 @@ use SugarCraft\Core\Msg;
  * never produce this Msg — the temp file is dropped and the
  * pre-edit value is preserved.
  *
- * Mirrors the `editorFinishedMsg` pattern in upstream
- * `bubbles/textarea`'s editor example.
+ * Mirrors the `editorFinishedMsg` pattern in the
+ * charmbracelet/bubbles textarea editor example.
  */
 final class TextAreaEditedMsg implements Msg
 {

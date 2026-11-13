@@ -33,7 +33,9 @@ use SugarCraft\Forms\Validator\Validator;
 /**
  * Single-line text field. Wraps a {@see TextInput} and exposes an
  * optional validator that runs on every keystroke.
- */
+
+ * NOTE (sugar-forms-058, 2026-11-13): upstream names in this class were re-spelled to canonical grammar from earlier prose and are NOT verified against a pinned charmbracelet checkout; per-symbol verification is gated on a research-lane huh/bubbles reference. Treat them as indicative, not proven.
+ * NAME SHIFT (sugar-forms-043): this single-line field maps to charmbracelet/huh Text (the upstream single-line editor); the counter-intuitive pairing is intentional — sugar-forms Input is huh Text, sugar-forms Text is huh Textarea. */
 final class Input implements \SugarCraft\Forms\Field, \SugarCraft\Forms\AsyncValidatable
 {
     use HasThemeChrome;
@@ -205,8 +207,8 @@ final class Input implements \SugarCraft\Forms\Field, \SugarCraft\Forms\AsyncVal
     }
 
     /**
-     * Mask the rendered value with a fixed echo character. Mirrors huh's
-     * `Password()` modifier — handy for token / passphrase prompts.
+     * Mask the rendered value with a fixed echo character. Mirrors
+     * charmbracelet/huh.`Password()` modifier — handy for token / passphrase prompts.
      * Pass an empty echo char to fall back to the default `*` (the value stays
      * masked); clearing masking itself is `withPassword(false)` or
      * `withPasswordMask(null)` on this field.
@@ -226,7 +228,7 @@ final class Input implements \SugarCraft\Forms\Field, \SugarCraft\Forms\AsyncVal
     /**
      * E736 5.5 — the pattern-based upgrade of {@see withPassword()}: matched
      * characters echo as `$echoChar`, the rest render verbatim (partial masks
-     * like `4111 **** **** 1111`). Mirrors huh's Password() in spirit; the
+     * like `4111 **** **** 1111`). Mirrors charmbracelet/huh.Password() in spirit; the
      * pattern granularity is the SugarCraft extension. Null clears back to
      * plain rendering. The pattern is compile-checked at this door (with the
      * renderer's own `/u` flags) and throws loudly — it can never silently
@@ -243,7 +245,7 @@ final class Input implements \SugarCraft\Forms\Field, \SugarCraft\Forms\AsyncVal
     /**
      * Provide an autocomplete pool that the user can cycle with the
      * default TextInput suggestion bindings. Pass an empty list (or omit)
-     * to disable. Mirrors huh's `Suggestions([]string)`.
+     * to disable. Mirrors charmbracelet/huh.`Suggestions([]string)`.
      *
      * @param list<string> $candidates
      */
@@ -258,7 +260,7 @@ final class Input implements \SugarCraft\Forms\Field, \SugarCraft\Forms\AsyncVal
     /**
      * Dynamic suggestions: the closure receives the current input value
      * (post-keystroke) and returns the candidate list to display. Mirrors
-     * huh's `SuggestionsFunc`. The closure is re-evaluated on every
+     * charmbracelet/huh `SuggestionsFunc`. The closure is re-evaluated on every
      * keystroke so callers can hit a remote completion endpoint, etc.
      *
      * @param \Closure(string):list<string> $fn
@@ -288,7 +290,7 @@ final class Input implements \SugarCraft\Forms\Field, \SugarCraft\Forms\AsyncVal
      * Provide an autocomplete pool that is filtered and ranked by fuzzy
      * substring match (Smith-Waterman scoring) against the current input
      * value. The user picks from the ranked suggestion list via arrow keys.
-     * Mirrors huh's `WithFuzzySuggestions([]string)`.
+     * Mirrors charmbracelet/huh.`WithFuzzySuggestions([]string)`.
      *
      * @param list<string> $candidates
      */
@@ -327,7 +329,7 @@ final class Input implements \SugarCraft\Forms\Field, \SugarCraft\Forms\AsyncVal
     /**
      * Async suggestions via a callable that returns a Promise.
      * Debounces for $debounceMs after each keystroke, then calls the fetcher.
-     * Mirrors huh's async suggestion pattern.
+     * Mirrors charmbracelet/huh.async suggestion pattern.
      *
      * WORKER POOL STATUS (E736 1.5): the fetch runs on the MAIN event loop —
      * {@see scheduleAsyncSuggestions()} debounces via {@see Loop::addTimer()}

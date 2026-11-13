@@ -23,7 +23,9 @@ use SugarCraft\Forms\Util\RenderSafe;
  * Multi-line text field. Wraps a {@see TextArea}; Enter inserts a newline
  * inside the field rather than advancing the form, so the field declares
  * itself a consumer of Enter via {@see consumes()}.
- */
+
+ * NOTE (sugar-forms-058, 2026-11-13): upstream names in this class were re-spelled to canonical grammar from earlier prose and are NOT verified against a pinned charmbracelet checkout; per-symbol verification is gated on a research-lane huh/bubbles reference. Treat them as indicative, not proven.
+ * NAME SHIFT (sugar-forms-043): this multi-line field maps to charmbracelet/huh Textarea; sugar-forms Text is huh Textarea while sugar-forms Input is huh Text — the crosswise naming is deliberate and documented here so port readers do not map by name. */
 final class Text implements \SugarCraft\Forms\Field, \SugarCraft\Forms\AsyncValidatable
 {
     use HasThemeChrome;

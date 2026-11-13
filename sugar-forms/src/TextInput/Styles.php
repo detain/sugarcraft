@@ -12,7 +12,7 @@ use SugarCraft\Style\Style;
  * never touch styling stay byte-for-byte unchanged. Pass non-default
  * styles to {@see TextInput::withStyles()} to customise.
  *
- * Mirrors upstream Bubbles' `textinput.Styles`.
+ * Mirrors charmbracelet/bubbles.`textinput.Styles`.
  */
 final class Styles
 {

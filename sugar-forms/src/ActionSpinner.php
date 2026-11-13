@@ -10,8 +10,8 @@ use SugarCraft\Core\Util\Proc\BoundedShutdown;
 use SugarCraft\Core\Util\TtyDetect;
 
 /**
- * Blocking "loading" prompt with a spinner. Mirrors huh's
- * `huh.NewSpinner().Title(...).Action(fn).Run()` — schedules a
+ * Blocking "loading" prompt with a spinner. Mirrors
+ * charmbracelet/huh.`huh.NewSpinner().Title(...).Action(fn).Run()` — schedules a
  * worker callable, animates a {@see \SugarCraft\Forms\Spinner\Style} frame sequence while it runs, and
  * returns once the action completes.
  *

@@ -22,7 +22,9 @@ use SugarCraft\Forms\Util\RenderSafe;
  *
  * Enter and Backspace are forwarded to the picker (descend / ascend) so
  * the field declares itself a consumer of those keys.
- */
+
+ * NOTE (sugar-forms-058, 2026-11-13): upstream names in this class were re-spelled to canonical grammar from earlier prose and are NOT verified against a pinned charmbracelet checkout; per-symbol verification is gated on a research-lane huh/bubbles reference. Treat them as indicative, not proven.
+ * ANTECEDENT (sugar-forms-058): the upstream shape is charmbracelet/bubbles filepicker. Divergences shipped here: (1) no typed-directory filter navigation (entry lists are browsed by arrows/paging only, not filtered by typed path text); (2) no mouse support in the picker overlay. */
 final class FilePicker implements \SugarCraft\Forms\Field
 {
     use HasThemeChrome;

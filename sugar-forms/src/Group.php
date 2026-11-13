@@ -7,7 +7,7 @@ namespace SugarCraft\Forms;
 /**
  * One page of fields in a multi-page {@see Form}.
  *
- * Mirrors charmbracelet/huh's `huh.Group`. Carries a title, optional
+ * Mirrors charmbracelet/charmbracelet/huh `huh.Group`. Carries a title, optional
  * description, and an optional `hideFunc` predicate that the runtime
  * evaluates on page transitions — when it returns true the group is
  * skipped entirely.
@@ -30,7 +30,8 @@ namespace SugarCraft\Forms;
  * )
  *     ->withHideFunc(static fn(array $values): bool => empty($values['agree']));
  * ```
- */
+
+ * NOTE (sugar-forms-058, 2026-11-13): upstream names in this class were re-spelled to canonical grammar from earlier prose and are NOT verified against a pinned charmbracelet checkout; per-symbol verification is gated on a research-lane huh/bubbles reference. Treat them as indicative, not proven. */
 final class Group
 {
     /**
@@ -72,7 +73,7 @@ final class Group
     /**
      * Per-group help-bar toggle. When false, the {@see Form} suppresses
      * the help line while this group is active. Default true. Mirrors
-     * huh's `Group.WithShowHelp`.
+     * charmbracelet/huh `Group.WithShowHelp`.
      */
     public function withShowHelp(bool $on = true): self
     {
@@ -83,7 +84,7 @@ final class Group
      * Override the {@see Form} theme while this group is active. Useful
      * when a particular page wants a different palette (e.g. a "danger"
      * page in red). Pass null to inherit the form-level theme. Mirrors
-     * huh's `Group.WithTheme`.
+     * charmbracelet/huh `Group.WithTheme`.
      */
     public function withTheme(?Theme $theme): self
     {

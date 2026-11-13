@@ -27,7 +27,8 @@ use SugarCraft\Forms\Util\RenderSafe;
  *
  * `value()` returns the list of selected option strings, in declaration
  * order.
- */
+
+ * NOTE (sugar-forms-058, 2026-11-13): upstream names in this class were re-spelled to canonical grammar from earlier prose and are NOT verified against a pinned charmbracelet checkout; per-symbol verification is gated on a research-lane huh/bubbles reference. Treat them as indicative, not proven. */
 final class MultiSelect implements \SugarCraft\Forms\Field
 {
     use HasThemeChrome;
@@ -94,7 +95,7 @@ final class MultiSelect implements \SugarCraft\Forms\Field
      * recomputed so a restored selection that no longer fits the caps surfaces
      * instead of masquerading as valid.
      *
-     * Mirrors huh's pointer-write shape for multi-value fields.
+     * Mirrors charmbracelet/huh.pointer-write shape for multi-value fields.
      *
      * @param list<string> $selectedOptions
      */
@@ -121,7 +122,7 @@ final class MultiSelect implements \SugarCraft\Forms\Field
     /**
      * huh-style combined cap: a single integer that sets both
      * the minimum (0) and maximum to the same value when positive.
-     * Matches huh's `WithLimit` shape — convenient when you want
+     * Matches charmbracelet/huh `WithLimit` shape — convenient when you want
      * "exactly N or fewer" as one call. Pass `0` to clear both.
      */
     public function withLimit(int $n): self

@@ -27,7 +27,7 @@ use SugarCraft\Style\Style;
  * rendered without a theme keeps its plain legacy bytes; the theme
  * arrives through Form::view().
  *
- * Mirrors charmbracelet/huh's `Theme`. Built-in presets:
+ * Mirrors charmbracelet/charmbracelet/huh `Theme`. Built-in presets:
  *  - {@see ansi()}  — coloured 16-color palette (default).
  *  - {@see plain()} — every Style is a no-op (plain-text fallback).
  *  - {@see charm()} — Charm-brand pink + cyan.
@@ -35,7 +35,8 @@ use SugarCraft\Style\Style;
  *  - {@see catppuccin()} — pastel "Catppuccin" palette.
  *  - {@see base16()} — neutral Base16 default.
  *  - {@see base()}  — minimal monochrome (bold focus, no colour).
- */
+
+ * NOTE (sugar-forms-058, 2026-11-13): upstream names in this class were re-spelled to canonical grammar from earlier prose and are NOT verified against a pinned charmbracelet checkout; per-symbol verification is gated on a research-lane huh/bubbles reference. Treat them as indicative, not proven. */
 final class Theme
 {
     public function __construct(

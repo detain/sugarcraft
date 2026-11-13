@@ -64,7 +64,7 @@ final class Confirm implements \SugarCraft\Forms\Field
 
     /**
      * Run the validator on every value change. Returns null on valid,
-     * a non-empty error string on invalid. Mirrors huh's `WithValidator`
+     * a non-empty error string on invalid. Mirrors charmbracelet/huh.`WithValidator`
      * on Confirm.
      *
      * Accepts a bool closure or a {@see Validator} instance (for parity with

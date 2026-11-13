@@ -20,7 +20,8 @@ use SugarCraft\Style\Style;
  *   {@see update()}.
  * - When {@see Mode::Static}, the cell is always highlighted.
  * - When {@see Mode::Hidden} or unfocused, the cell renders plain.
- */
+
+ * NOTE (sugar-forms-058, 2026-11-13): upstream names in this class were re-spelled to canonical grammar from earlier prose and are NOT verified against a pinned charmbracelet checkout; per-symbol verification is gated on a research-lane huh/bubbles reference. Treat them as indicative, not proven. */
 final class Cursor implements Model
 {
     /**
@@ -176,12 +177,12 @@ final class Cursor implements Model
     /** Current cursor mode. */
     public function mode(): Mode { return $this->mode; }
 
-    /** Configured blink interval in seconds. Mirrors Bubbles' `BlinkSpeed`. */
+    /** Configured blink interval in seconds. Mirrors charmbracelet/bubbles.`BlinkSpeed`. */
     public function blinkSpeed(): float { return $this->blinkSpeed; }
 
     /**
      * True when the cursor is currently in the "off" half of a blink
-     * cycle (the cell is rendered without highlight). Mirrors Bubbles'
+     * cycle (the cell is rendered without highlight). Mirrors charmbracelet/bubbles.
      * `IsBlinked()`.
      */
     public function isBlinked(): bool

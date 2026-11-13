@@ -81,13 +81,13 @@ final class Spinner implements Model
     /**
      * Stable per-instance ID — used by {@see TickMsg} routing so two
      * spinners on the same loop don't both step on every tick.
-     * Mirrors upstream Bubbles `ID()`.
+     * Mirrors charmbracelet/bubbles.`ID()`.
      */
     public function id(): int { return $this->id; }
 
     /**
-     * Read-only access to the active {@see Style}. Mirrors upstream's
-     * public `Spinner` field, which callers inspect to read frame
+     * Read-only access to the active {@see Style}. Mirrors the
+     * charmbracelet/bubbles spinner public `Spinner` field, which callers inspect to read frame
      * counts, colour, FPS, etc. The same data is reachable via the
      * already-public `style` property; the method form is provided
      * for parity with the rest of the read-only API surface.
@@ -117,8 +117,8 @@ final class Spinner implements Model
     /**
      * Swap the spinner style mid-flight. Frame index resets to 0 so the
      * new style starts from its first frame. The next tick adopts the
-     * new style's interval automatically. Mirrors upstream's mutable
-     * `Spinner` field assignment (rendered immutable here so snapshot-
+     * new style's interval automatically. Mirrors the mutable
+     * charmbracelet/bubbles spinner `Spinner` field assignment (rendered immutable here so snapshot-
      * based tests stay deterministic).
      */
     public function withStyle(Style $style): self

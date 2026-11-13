@@ -23,8 +23,9 @@ use SugarCraft\Forms\Util\RenderSafe;
  * the Note becomes interactive: a labelled button is rendered after
  * the description and Enter activates it — through the Form's generic
  * advance arm, not a Note-level binding (Space is bound nowhere)
- * (mirrors huh's `Note.Next` / `NextLabel`).
- */
+ * (mirrors charmbracelet/huh `Note.Next` / `NextLabel`).
+
+ * NOTE (sugar-forms-058, 2026-11-13): upstream names in this class were re-spelled to canonical grammar from earlier prose and are NOT verified against a pinned charmbracelet checkout; per-symbol verification is gated on a research-lane huh/bubbles reference. Treat them as indicative, not proven. */
 final class Note implements \SugarCraft\Forms\Field
 {
     use HasThemeChrome;
@@ -61,7 +62,7 @@ final class Note implements \SugarCraft\Forms\Field
      * Pin the rendered note to a fixed row count. Padding-only — short
      * content is bottom-padded with blanks; over-long content still
      * renders in full so callers don't lose information silently.
-     * Default 0 = render at natural height. Mirrors huh's `Note.Height`.
+     * Default 0 = render at natural height. Mirrors charmbracelet/huh.`Note.Height`.
      */
     public function withHeight(int $rows): self
     {
@@ -73,7 +74,7 @@ final class Note implements \SugarCraft\Forms\Field
      * Note participates in form navigation (no longer skippable) and
      * Enter advances to the next field — through the Form's generic
      * advance arm; Space is bound nowhere (lane p4, F-P4-3 truth-flip).
-     * Mirrors huh's `Note.Next(bool)`.
+     * Mirrors charmbracelet/huh.`Note.Next(bool)`.
      */
     public function withNext(bool $on = true): self
     {
@@ -82,7 +83,7 @@ final class Note implements \SugarCraft\Forms\Field
 
     /**
      * Override the button label rendered by {@see withNext()}. Default
-     * `Next`. Mirrors huh's `Note.NextLabel`.
+     * `Next`. Mirrors charmbracelet/huh.`Note.NextLabel`.
      */
     public function withNextLabel(string $label): self
     {

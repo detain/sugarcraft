@@ -21,7 +21,7 @@ use SugarCraft\Forms\Validator\Validator;
 
 /**
  * Calendar-grid date picker (E736 Phase-5 row 5.6, r88-x4). Mirrors the
- * keyboard model of charmbracelet/bubbles' datepicker reduced to the date
+ * keyboard model of the charmbracelet/bubbles datepicker reduced to the date
  * half of HTML's `date` input: the value is a `YYYY-MM-DD` string, the grid
  * walks it with arrows, and every movement commits.
  *

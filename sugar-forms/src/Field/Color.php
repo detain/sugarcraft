@@ -20,7 +20,7 @@ use SugarCraft\Forms\Lang;
 
 /**
  * xterm-256 color swatch grid (E736 Phase-5 row 5.8, r88-x4). Mirrors the
- * keyboard model of charmbracelet/bubbles' colorpicker: the 6x6x6 color
+ * keyboard model of the charmbracelet/bubbles colorpicker: the 6x6x6 color
  * cube, one 6x6 plane of red per page.
  *
  * The cube follows the SAME xterm table semantics sugar-vterm documents —

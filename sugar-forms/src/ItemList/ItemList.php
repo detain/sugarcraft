@@ -48,7 +48,8 @@ use SugarCraft\Forms\Util\ViewportPan;
  * The visible window is sized by {@see $height}; entries scroll under
  * the cursor automatically. Selection (`{@see selectedItem()}`) returns
  * the highlighted item from the *filtered* view.
- */
+
+ * NOTE (sugar-forms-058, 2026-11-13): upstream names in this class were re-spelled to canonical grammar from earlier prose and are NOT verified against a pinned charmbracelet checkout; per-symbol verification is gated on a research-lane huh/bubbles reference. Treat them as indicative, not proven. */
 final class ItemList implements Model
 {
     use HasThemeChrome;
@@ -370,7 +371,7 @@ final class ItemList implements Model
     /**
      * Replace a single item in place. Negative indices count from the
      * end (Pythonic). Out-of-range indices are silently ignored, matching
-     * upstream Bubbles' `SetItem`.
+     * upstream charmbracelet/bubbles `SetItem`.
      */
     public function withItem(int $index, Item $item): self
     {
@@ -449,31 +450,31 @@ final class ItemList implements Model
         return $this->items;
     }
 
-    /** Move cursor up `$n` rows. Mirrors Bubbles' `CursorUp`. */
+    /** Move cursor up `$n` rows. Mirrors charmbracelet/bubbles.`CursorUp`. */
     public function cursorUp(int $n = 1): self
     {
         return $this->moveCursor($this->cursor - max(1, $n));
     }
 
-    /** Move cursor down `$n` rows. Mirrors Bubbles' `CursorDown`. */
+    /** Move cursor down `$n` rows. Mirrors charmbracelet/bubbles.`CursorDown`. */
     public function cursorDown(int $n = 1): self
     {
         return $this->moveCursor($this->cursor + max(1, $n));
     }
 
-    /** Jump to row 0. Mirrors `GoToStart`. */
+    /** Jump to row 0. Mirrors charmbracelet/bubbles list `GoToStart`. */
     public function goToStart(): self { return $this->moveCursor(0); }
 
-    /** Jump to last row. Mirrors `GoToEnd`. */
+    /** Jump to last row. Mirrors charmbracelet/bubbles list `GoToEnd`. */
     public function goToEnd(): self   { return $this->moveCursor(PHP_INT_MAX); }
 
-    /** Page back by `$height` rows. Mirrors `PrevPage`. */
+    /** Page back by `$height` rows. Mirrors charmbracelet/bubbles list `PrevPage`. */
     public function prevPage(): self
     {
         return $this->moveCursor($this->cursor - max(1, $this->height));
     }
 
-    /** Page forward by `$height` rows. Mirrors `NextPage`. */
+    /** Page forward by `$height` rows. Mirrors charmbracelet/bubbles list `NextPage`. */
     public function nextPage(): self
     {
         return $this->moveCursor($this->cursor + max(1, $this->height));
@@ -481,14 +482,14 @@ final class ItemList implements Model
 
     /**
      * Move the cursor directly to `$index` (0-based, clamped).
-     * Mirrors Bubbles' `Select(int)`.
+     * Mirrors charmbracelet/bubbles.`Select(int)`.
      */
     public function select(int $index): self
     {
         return $this->moveCursor($index);
     }
 
-    /** Reset the selection to row 0. Mirrors `ResetSelected`. */
+    /** Reset the selection to row 0. Mirrors charmbracelet/bubbles list `ResetSelected`. */
     public function resetSelected(): self
     {
         return $this->moveCursor(0);
@@ -496,20 +497,20 @@ final class ItemList implements Model
 
     /**
      * Drop the active filter text and exit filter mode. Mirrors
-     * Bubbles' `ResetFilter`. Equivalent to {@see clearFilter()}.
+     * charmbracelet/bubbles `ResetFilter`. Equivalent to {@see clearFilter()}.
      */
     public function resetFilter(): self
     {
         return $this->clearFilter();
     }
 
-    /** True when a filter is currently typed. Mirrors `IsFiltered`. */
+    /** True when a filter is currently typed. Mirrors charmbracelet/bubbles list `IsFiltered`. */
     public function isFiltered(): bool
     {
         return $this->filterText !== '';
     }
 
-    /** Currently typed filter text. Mirrors `FilterValue`. */
+    /** Currently typed filter text. Mirrors charmbracelet/bubbles list `FilterValue`. */
     public function filterValue(): string
     {
         return $this->filterText;
@@ -517,7 +518,7 @@ final class ItemList implements Model
 
     /**
      * True when the user is actively typing into the filter buffer
-     * (vs viewing filtered results). Mirrors `SettingFilter`.
+     * (vs viewing filtered results). Mirrors charmbracelet/bubbles list `SettingFilter`.
      */
     public function settingFilter(): bool
     {

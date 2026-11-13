@@ -31,7 +31,8 @@ use SugarCraft\Forms\Util\ViewportPan;
  *   hidden.
  * - `allowedExtensions` — when non-empty, files whose extension isn't in
  *   the list are hidden. Always includes directories regardless.
- */
+
+ * NOTE (sugar-forms-058, 2026-11-13): upstream names in this class were re-spelled to canonical grammar from earlier prose and are NOT verified against a pinned charmbracelet checkout; per-symbol verification is gated on a research-lane huh/bubbles reference. Treat them as indicative, not proven. */
 final class FilePicker implements Model
 {
     use HasThemeChrome;
@@ -186,7 +187,7 @@ final class FilePicker implements Model
 
     /**
      * Absolute path of the currently-highlighted entry, or null when
-     * the listing is empty. Mirrors upstream Bubbles' `HighlightedPath`.
+     * the listing is empty. Mirrors charmbracelet/bubbles.`HighlightedPath`.
      */
     public function highlightedPath(): ?string
     {
@@ -194,13 +195,13 @@ final class FilePicker implements Model
         return $entry?->path($this->cwd);
     }
 
-    /** Configured viewport height. Mirrors upstream `Height()`. */
+    /** Configured viewport height. Mirrors charmbracelet/bubbles.`Height()`. */
     public function height(): int
     {
         return $this->height;
     }
 
-    /** Configured viewport width in cells (0 = natural). Mirrors upstream `Width()`. */
+    /** Configured viewport width in cells (0 = natural). Mirrors charmbracelet/bubbles.`Width()`. */
     public function width(): int
     {
         return $this->width;

@@ -26,7 +26,8 @@ use SugarCraft\Core\Util\Width;
  * `update()` recognises the standard navigation keys: ↑/k, ↓/j, PgUp/b,
  * PgDn/space/f, Ctrl+U / Ctrl+D (half page), Home/g, End/G, plus
  * ←/h and →/l for horizontal scroll.
- */
+
+ * NOTE (sugar-forms-058, 2026-11-13): upstream names in this class were re-spelled to canonical grammar from earlier prose and are NOT verified against a pinned charmbracelet checkout; per-symbol verification is gated on a research-lane huh/bubbles reference. Treat them as indicative, not proven. */
 final class Viewport implements Model
 {
     use \SugarCraft\Core\SubscriptionCapable;
@@ -274,7 +275,7 @@ final class Viewport implements Model
     }
 
     /**
-     * Resize only the visible width. Mirrors upstream Bubbles'
+     * Resize only the visible width. Mirrors charmbracelet/bubbles.
      * `Viewport.SetWidth(int)` — separate from `SetHeight` so callers
      * can resize one axis at a time without rebuilding the whole
      * geometry. Negative values throw.
@@ -288,7 +289,7 @@ final class Viewport implements Model
     }
 
     /**
-     * Resize only the visible height. Mirrors upstream Bubbles'
+     * Resize only the visible height. Mirrors charmbracelet/bubbles.
      * `Viewport.SetHeight(int)`. Negative values throw.
      */
     public function setHeight(int $height): self

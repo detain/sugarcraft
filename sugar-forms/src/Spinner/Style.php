@@ -13,7 +13,8 @@ use SugarCraft\Forms\Lang;
  * minidot, meter, points, pulse, globe).
  *
  * Mirrors charmbracelet/bubbles spinner.Spinner.
- */
+
+ * NOTE (sugar-forms-058, 2026-11-13): upstream names in this class were re-spelled to canonical grammar from earlier prose and are NOT verified against a pinned charmbracelet checkout; per-symbol verification is gated on a research-lane huh/bubbles reference. Treat them as indicative, not proven. */
 final class Style
 {
     /** @param list<string> $frames */
@@ -37,31 +38,31 @@ final class Style
     public static function globe(): self   { return new self(['🌍','🌎','🌏'], 4.0); }
     public static function meter(): self   { return new self(['▱▱▱','▰▱▱','▰▰▱','▰▰▰','▰▰▱','▰▱▱'], 7.0); }
 
-    /** Bouncing dot: ⢄ ⢂ ⢁ ⡁ ⡈ ⡐ ⡠ — used by Bubbles' `Jump`. */
+    /** Bouncing dot: ⢄ ⢂ ⢁ ⡁ ⡈ ⡐ ⡠ — used by charmbracelet/bubbles `Jump`. */
     public static function jump(): self
     {
         return new self(['⢄','⢂','⢁','⡁','⡈','⡐','⡠'], 7.0);
     }
 
-    /** Moon-phase rotation: 🌑 🌒 🌓 🌔 🌕 🌖 🌗 🌘 — Bubbles' `Moon`. */
+    /** Moon-phase rotation: 🌑 🌒 🌓 🌔 🌕 🌖 🌗 🌘 — charmbracelet/bubbles `Moon`. */
     public static function moon(): self
     {
         return new self(['🌑','🌒','🌓','🌔','🌕','🌖','🌗','🌘'], 8.0);
     }
 
-    /** Walking monkey: 🙈 🙉 🙊 — Bubbles' `Monkey`. */
+    /** Walking monkey: 🙈 🙉 🙊 — charmbracelet/bubbles `Monkey`. */
     public static function monkey(): self
     {
         return new self(['🙈','🙉','🙊'], 3.0);
     }
 
-    /** Sliding hamburger bars: ☱ ☲ ☴ ☲ — Bubbles' `Hamburger`. */
+    /** Sliding hamburger bars: ☱ ☲ ☴ ☲ — charmbracelet/bubbles `Hamburger`. */
     public static function hamburger(): self
     {
         return new self(['☱','☲','☴','☲'], 3.0);
     }
 
-    /** Animated dots: ` `, `.`, `..`, `...` — Bubbles' `Ellipsis`. */
+    /** Animated dots: ` `, `.`, `..`, `...` — charmbracelet/bubbles `Ellipsis`. */
     public static function ellipsis(): self
     {
         return new self(['','.','..','...'], 3.0);

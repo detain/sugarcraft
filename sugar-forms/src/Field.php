@@ -38,8 +38,8 @@ interface Field
     public function blur(): Field;
 
     /**
-     * Apply a Bubble-Tea message and return `[$next, $cmd]`. Mirrors the
-     * upstream `Update(msg)` shape.
+     * Apply a bubbletea message and return `[$next, $cmd]`. Mirrors the
+     * charmbracelet/bubbletea `Model.Update(msg)` shape.
      *
      * @return array{0:Field, 1:?\Closure}
      */

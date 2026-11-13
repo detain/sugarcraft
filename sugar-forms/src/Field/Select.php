@@ -129,7 +129,7 @@ final class Select implements \SugarCraft\Forms\Field
      * Provide a candidate pool that is filtered and ranked by fuzzy
      * substring match (Smith-Waterman scoring) against the user's
      * filter keystrokes. The suggestion list ranks by score; user picks
-     * via arrow keys. Mirrors huh's `WithFuzzySuggestions([]string)`.
+     * via arrow keys. Mirrors charmbracelet/huh.`WithFuzzySuggestions([]string)`.
      *
      * @param list<string> $candidates
      */
@@ -146,7 +146,7 @@ final class Select implements \SugarCraft\Forms\Field
      * Async suggestions via a callable that returns a Promise.
      * Debounces for $debounceMs after each filter keystroke, then calls the fetcher.
      * The fetcher receives the current filter text and returns a promise of suggestions.
-     * Mirrors huh's async suggestion pattern.
+     * Mirrors charmbracelet/huh.async suggestion pattern.
      *
      * WORKER POOL STATUS (E736 1.5): the fetch runs on the MAIN event loop —
      * {@see scheduleAsyncSuggestions()} debounces via {@see Loop::addTimer()}

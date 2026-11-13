@@ -46,7 +46,8 @@ use SugarCraft\Style\Style;
  * - Normal mode: `h/l` move, `w/b` word navigation, `0/$` line boundaries,
  *   `i/a/A/I` enter insert mode, `x` delete character
  * - Insert mode: standard editing behavior, Escape returns to normal mode
- */
+
+ * NOTE (sugar-forms-058, 2026-11-13): upstream names in this class were re-spelled to canonical grammar from earlier prose and are NOT verified against a pinned charmbracelet checkout; per-symbol verification is gated on a research-lane huh/bubbles reference. Treat them as indicative, not proven. */
 final class TextInput implements Model
 {
 
@@ -648,21 +649,21 @@ final class TextInput implements Model
      * above, and PHP admits one method per name. Treated as the documented
      * legal exception (sugar-style precedent); owner-pending and rostered in
      * tests/AccessorDeprecationTest.php until a vocabulary ruling lands.
-     * — Configured display width. 0 = no cap. Mirrors Bubbles' `Width()`.
+     * — Configured display width. 0 = no cap. Mirrors charmbracelet/bubbles.`Width()`.
      */
     public function getWidth(): int  { return $this->width; }
 
-    /** Cursor position (0-based char index). Mirrors Bubbles' `Position()`. */
+    /** Cursor position (0-based char index). Mirrors charmbracelet/bubbles.`Position()`. */
     public function position(): int  { return $this->cursorPos; }
 
-    /** Mirror of {@see $focused}. Mirrors Bubbles' `Focused()`. */
+    /** Mirror of {@see $focused}. Mirrors charmbracelet/bubbles.`Focused()`. */
     public function isFocused(): bool { return $this->focused; }
 
     /** Read-only accessor for the underlying {@see Cursor}. */
     public function cursor(): Cursor { return $this->cursor; }
 
     /**
-     * Full configured suggestion list. Mirrors Bubbles'
+     * Full configured suggestion list. Mirrors charmbracelet/bubbles.
      * `AvailableSuggestions()`.
      *
      * @return list<string>
@@ -673,7 +674,7 @@ final class TextInput implements Model
     public function currentSuggestionIndex(): int { return $this->currentSuggestionIndex; }
 
     /**
-     * Apply per-element styling. Mirrors upstream Bubbles' `Styles`
+     * Apply per-element styling. Mirrors charmbracelet/bubbles.`Styles`
      * struct + `SetStyles`. Pass null to clear.
      */
     public function withStyles(?Styles $styles): self
