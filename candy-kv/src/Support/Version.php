@@ -115,6 +115,14 @@ final class Version
         if ($stamp === '' || $stamp === self::DEV_BUILD) {
             return null;
         }
+        // kv-004: the stamp rides straight into --version stdout, and phar
+        // metadata is whatever the sealing process wrote — a forged or
+        // misbuilt archive must not be able to smuggle control bytes (or an
+        // encoded C1) onto the terminal. Version stamps are printable ASCII
+        // by construction; anything else is dropped, not printed.
+        if (\preg_match('/^[\x20-\x7e]+$/', $stamp) !== 1) {
+            return null;
+        }
 
         return $stamp;
     }

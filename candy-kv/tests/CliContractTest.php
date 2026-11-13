@@ -148,6 +148,25 @@ final class CliContractTest extends TestCase
         $this->assertStringContainsString('-debug', $run['stderr']);
     }
 
+    public function testDiagnosticsNeverCarryRawEscapeBytes(): void
+    {
+        // kv-004 egress law: every diagnostic that interpolates argv or store
+        // bytes passes through Store::sanitizeForTty before reaching stderr —
+        // parser refusals at their message source, everything else at the bin
+        // catches. The probes must fail (exit != 0) and stay 0x1b-free.
+        $probes = [
+            ['list', "-\x1b[31mfo"],            // unknownOption names the token
+            ['set', 'k', 'v', "--ttl=1\x1b2"],  // ttlSeconds echoes the value
+            ['set', 'k', 'v', "e\x1bx"],         // refuseSurplus names the surplus
+            ['get', "a@\x1bb@c"],                // splitKey's ambiguous-address refusal
+        ];
+        foreach ($probes as $args) {
+            $run = $this->runKv($args);
+            $this->assertNotSame(0, $run['exit'], 'probe must fail: ' . json_encode($args));
+            $this->assertStringNotContainsString("\x1b", $run['stderr'], 'raw ESC must never ride a diagnostic: ' . json_encode($args));
+        }
+    }
+
     public function testSurplusPositionalRefused(): void
     {
         $run = $this->runKv(['set', 'k1', 'v1', 'oops']);

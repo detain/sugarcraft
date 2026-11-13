@@ -82,7 +82,7 @@ use SugarCraft\Kv\Support\Version;
 // importer parse errors are English — see README.
 T::setLocale(T::detect());
 
-$bin = basename($argv[0]);
+$bin = Store::sanitizeForTty(basename($argv[0]));
 
 if ($argc < 2) {
     help($bin);
@@ -99,7 +99,7 @@ if (($argv[1] ?? '') === '--version') {
     try {
         ArgParser::noArguments($argv, 2, '--version');
     } catch (\InvalidArgumentException $e) {
-        fwrite(STDERR, 'candy-kv: ' . $e->getMessage() . "\n");
+        fwrite(STDERR, 'candy-kv: ' . Store::sanitizeForTty($e->getMessage()) . "\n");
         exit(2);
     }
     fwrite(STDOUT, Version::line());
@@ -132,10 +132,12 @@ $cmd = $argv[1];
 try {
     run($store, $cmd, $argv, $bin);
 } catch (\InvalidArgumentException $e) {
-    fwrite(STDERR, 'candy-kv: ' . $e->getMessage() . "\n");
+    // kv-004 sanitize-on-egress: messages interpolate attacker-chosen argv
+    // and store bytes (entry names, keys, paths) — nothing raw leaves here.
+    fwrite(STDERR, 'candy-kv: ' . Store::sanitizeForTty($e->getMessage()) . "\n");
     exit(2);
 } catch (\Throwable $e) {
-    fwrite(STDERR, 'candy-kv: error: ' . $e->getMessage() . "\n");
+    fwrite(STDERR, 'candy-kv: error: ' . Store::sanitizeForTty($e->getMessage()) . "\n");
     exit(1);
 }
 

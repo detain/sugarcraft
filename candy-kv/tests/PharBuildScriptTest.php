@@ -166,6 +166,10 @@ final class PharBuildScriptTest extends TestCase
         self::assertNull(Version::versionFromMetadata([]), 'a stamp-less manifest answers null');
         self::assertNull(Version::versionFromMetadata(['version' => 42]), 'a stamp of the wrong type answers null');
         self::assertNull(Version::versionFromMetadata(null), 'getMetadata() answering null is a refusal, not an error');
+        // kv-004: a forged/misbuilt archive must not smuggle control bytes
+        // onto --version stdout through the metadata stamp.
+        self::assertNull(Version::versionFromMetadata(['version' => "\x1b[31m1.2.3"]), 'an escape-bearing stamp is dropped, never printed');
+        self::assertNull(Version::versionFromMetadata(['version' => "1.2.3\xC2\x9B"]), 'an encoded-C1-bearing stamp is dropped too');
     }
 
     /**

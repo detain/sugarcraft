@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Kv\Cli;
 
+use SugarCraft\Kv\Store;
 use SugarCraft\Kv\Support\Ttl;
 
 /**
@@ -342,7 +343,8 @@ final class ArgParser
                 sprintf(
                     'Option --ttl expects an integer of seconds from 1 to %d, got "%s".',
                     Ttl::MAX_SECONDS,
-                    $raw
+                    // kv-004: --ttl's value is raw argv bytes; the refusal echoes them.
+                    Store::sanitizeForTty($raw)
                 )
             );
         }
@@ -400,7 +402,13 @@ final class ArgParser
     {
         if (count($positional) > $max) {
             throw new \InvalidArgumentException(
-                sprintf('%s takes at most %d argument(s), got extra "%s".', $command, $max, $positional[$max])
+                sprintf(
+                    '%s takes at most %d argument(s), got extra "%s".',
+                    $command,
+                    $max,
+                    // kv-004: surplus positionals are raw argv bytes echoed back.
+                    Store::sanitizeForTty($positional[$max]),
+                )
             );
         }
     }
@@ -410,7 +418,9 @@ final class ArgParser
         // Report the flag NAME, not any =payload: a typo'd flag may carry
         // secret material, and usage errors echo into terminals, logs,
         // and shell history.
-        $name = strtok($token, '=');
+        // kv-004: the flag name is attacker-chosen argv bytes echoed into the
+        // refusal — scrub before interpolation (the =payload stays withheld).
+        $name = Store::sanitizeForTty((string) \strtok($token, '='));
 
         return new \InvalidArgumentException(
             sprintf('Unknown option "%s" for %s. Run "candy-kv --help" for usage.', $name, $command)
