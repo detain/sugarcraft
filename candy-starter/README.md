@@ -10,10 +10,9 @@
 [![PHP](https://img.shields.io/badge/php-%E2%89%A58.3-8892bf.svg)](https://www.php.net/)
 <!-- BADGES:END -->
 
-
 ![Terminal recording: the counter app — Up/Down change the count, q/Esc/Ctrl+C quits](.vhs/start.gif)
 
-Skeleton repo for bootstrapping a SugarCraft TUI app. Start from this template and you've got a working app.
+Skeleton repo for bootstrapping a SugarCraft TUI app — part of the [SugarCraft](https://sugarcraft.github.io) family of terminal libraries and apps. Start from this template and you have a working app.
 
 ```bash
 composer create-project sugarcraft/candy-starter my-app --stability=dev
@@ -21,9 +20,7 @@ cd my-app
 ./bin/start
 ```
 
-Packagist carries only `dev-master` today: `create-project` refuses a dev-only package unless told to accept it, hence `--stability=dev` above (equivalently, pin the package as `sugarcraft/candy-starter:"@dev"`). Once a `candy-starter/*` tag exists the flag is no longer needed.
-
-and you'll see a working counter — quit it with `q`, `Esc`, or Ctrl+C; the quit keypress exits cooperatively with `0`, while `130` belongs to a real `SIGINT` delivered by the operating system (see the exit tail under "What you get"). Replace `src/Counter.php` with your own `Model`, keep editing.
+Run it and you'll see a working counter — quit with `q`, `Esc`, or Ctrl+C. Replace `src/Counter.php` with your own `Model` and keep editing.
 
 ## What you get
 
@@ -57,6 +54,8 @@ my-app/
 ## Requirements
 
 PHP 8.3+ with `ext-intl` and `ext-mbstring` (both hard-required by `sugar-core`) and `ext-ffi` (required by `sugar-pty`, which arrives transitively via `sugar-core`). The skeleton declares no `ext-*` of its own; `composer` fails loudly with a platform error if one is missing — enable it with your distro's `php-intl` / `php-mbstring` / `php-ffi` packages (`pecl install ffi` where FFI isn't bundled). A TTY-capable terminal is assumed for interactive use — colour is auto-detected and the demo renders monochrome-safe — see the `openTty` note under "Forking checklist" for piped-stream setups.
+
+Packagist carries only `dev-master` today, so the quickstart passes `--stability=dev` — `create-project` refuses a dev-only package unless told to accept it. The equivalent command shape is `composer create-project sugarcraft/candy-starter:dev-master my-app`. Once a `candy-starter/*` tag exists the flag is no longer needed.
 
 ## Anatomy of a SugarCraft Model
 
