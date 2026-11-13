@@ -255,6 +255,44 @@ final class RailTest extends TestCase
         self::assertSame(0, $moved->scroll);
     }
 
+    public function testStoredGeometryDrivesTheMoveCursorWindow(): void
+    {
+        // sugar-gallery-001: with $perRow omitted, moveCursor() uses the
+        // geometry stored by withGeometry() — and the window it scrolls into
+        // agrees with the one render() paints at the same values.
+        $rail = Rail::new('R', $this->cards(10))->withGeometry(50, 10, 2);
+
+        $stored = $rail->moveCursor(6);
+        $explicit = $rail->moveCursor(6, Rail::perRow(50, 10, 2));
+
+        self::assertSame(6, $stored->cursor);
+        self::assertSame(3, $stored->scroll);
+        self::assertSame($explicit->scroll, $stored->scroll, 'stored geometry agrees with the explicit derivation');
+
+        $frame = $stored->render(50, true, 10, 2, 2);
+        self::assertStringContainsString('Card 3', $frame, 'the render window starts at the stored-geometry scroll');
+        self::assertStringContainsString('Card 6', $frame, 'the focused card is inside the window');
+        self::assertStringNotContainsString('Card 2', $frame, 'one card above the window stays unpainted');
+    }
+
+    public function testExplicitPerRowStillOverridesStoredGeometry(): void
+    {
+        $rail = Rail::new('R', $this->cards(10))->withGeometry(50, 10, 2); // stored perRow is 4
+
+        $override = $rail->moveCursor(6, 2); // explicit 2-wide window scrolls further
+
+        self::assertSame(5, $override->scroll, 'the explicit argument wins over stored geometry');
+    }
+
+    public function testMoveCursorWithoutGeometryOrPerRowFailsLoud(): void
+    {
+        $rail = new Rail('R', $this->cards(3));
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('needs a $perRow argument or stored geometry');
+        $rail->moveCursor(1);
+    }
+
     public function testWithCardsWithSingleCard(): void
     {
         $rail = new Rail('R', $this->cards(1));

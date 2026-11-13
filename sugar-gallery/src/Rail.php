@@ -29,12 +29,16 @@ final readonly class Rail
      * perRow changes between moves.
      *
      * @param list<PosterCard> $cards
+     * @param array{railWidth:int, cardWidth:int, spacing:int}|null $geometry
+     *                          Optional stored layout (see {@see withGeometry()});
+     *                          null until a host stores one.
      */
     public function __construct(
         public string $title,
         public array $cards = [],
         int $cursor = 0,
         int $scroll = 0,
+        public ?array $geometry = null,
     ) {
         $last = $this->cards === [] ? 0 : count($this->cards) - 1;
         $cursor = max(0, min($last, $cursor));
@@ -44,9 +48,23 @@ final readonly class Rail
     }
 
     /** Canonical factory — mirrors the public constructor. */
-    public static function new(string $title, array $cards = [], int $cursor = 0, int $scroll = 0): self
+    public static function new(string $title, array $cards = [], int $cursor = 0, int $scroll = 0, ?array $geometry = null): self
     {
-        return new self($title, $cards, $cursor, $scroll);
+        return new self($title, $cards, $cursor, $scroll, $geometry);
+    }
+
+    /**
+     * Store the layout tuple (`railWidth`, `cardWidth`, `spacing`) on the rail
+     * so `moveCursor()` can derive its window without the host re-threading
+     * the numbers (sugar-gallery-001). Additive: explicit call-site values
+     * always win, and `render()` keeps taking its own geometry — this stores
+     * the same three numbers in ONE place for the zero-arg move path.
+     */
+    public function withGeometry(int $railWidth, int $cardWidth, int $spacing = 2): self
+    {
+        return $this->carrying([
+            'geometry' => ['railWidth' => $railWidth, 'cardWidth' => $cardWidth, 'spacing' => $spacing],
+        ]);
     }
 
     /**
@@ -65,6 +83,7 @@ final readonly class Rail
             'cards' => $this->cards,
             'cursor' => $this->cursor,
             'scroll' => $this->scroll,
+            'geometry' => $this->geometry,
         ];
 
         foreach ($overrides as $name => $value) {
@@ -136,11 +155,25 @@ final readonly class Rail
         return $this->cards === [];
     }
 
-    /** Move the cursor by $delta, scrolling so it stays visible. */
-    public function moveCursor(int $delta, int $perRow): self
+    /**
+     * Move the cursor by $delta, scrolling so it stays visible. Omit $perRow
+     * to use the stored geometry set by {@see withGeometry()}; an explicit
+     * $perRow always wins (override). With no stored geometry and no
+     * argument, the call fails loud naming both remedies.
+     */
+    public function moveCursor(int $delta, ?int $perRow = null): self
     {
         if ($this->cards === []) {
             return $this;
+        }
+
+        if ($perRow === null) {
+            if ($this->geometry === null) {
+                throw new InvalidArgumentException(
+                    'Rail::moveCursor() needs a $perRow argument or stored geometry — pass $perRow or build the rail via withGeometry() first',
+                );
+            }
+            $perRow = self::perRow($this->geometry['railWidth'], $this->geometry['cardWidth'], $this->geometry['spacing']);
         }
 
         $cursor = max(0, min(count($this->cards) - 1, $this->cursor + $delta));
