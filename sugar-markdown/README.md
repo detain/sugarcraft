@@ -234,6 +234,13 @@ $writer->close();
   `SyntaxHighlighter`'s `MAX_HIGHLIGHT_BYTES` = 1,000,000 bytes
   (≈ 0.95 MiB) degrades to the plain code-block style instead of
   tokenising.
+- Word-wrapping takes a fast path around pathological tokens: a
+  whitespace-free run longer than four times the wrap width is packed
+  into hard-break rows before the ANSI-aware wrapper sees it, so a
+  400 KB base64 blob costs the same as its row count, not a
+  per-cluster walk. The output is byte-identical to the plain wrap,
+  including runs the fast path declines (tokens carrying escape
+  sequences or control bytes).
 - The thematic break always draws `horizontalRuleLength` cells (default
   40) regardless of the wrap width, and `withTableWrap(true)` wraps each
   cell at the *full* wrap width — pair it with `withTableColumnBudget()`

@@ -1180,7 +1180,7 @@ final class Renderer
             $body = $this->renderChildren($node);
             if ($this->wrapWidth !== null) {
                 $avail = $this->blockStack->availableWidth($this->wrapWidth);
-                $body = Width::wrapAnsi($body, $avail);
+                $body = Render\TokenWrap::wrap($body, $avail);
             }
             $body = $this->theme->paragraphPrefix . $body . $this->theme->paragraphSuffix;
             return $cascadedStyle->render($body) . "\n\n";
@@ -1388,7 +1388,7 @@ final class Renderer
             if ($this->wrapWidth !== null) {
                 $avail = $this->blockStack->availableWidth($this->wrapWidth);
                 if ($avail >= self::MIN_QUOTE_WRAP_CELLS) {
-                    $inner = Width::wrapAnsi($inner, $avail);
+                    $inner = Render\TokenWrap::wrap($inner, $avail);
                 }
             }
             $lines = explode("\n", $inner);
@@ -1630,7 +1630,7 @@ final class Renderer
                     // geometry now, full content via scrolling later.
                     $body = Width::truncateAnsi($body, $budgets[$i]);
                 } elseif ($this->tableWrap && $this->wrapWidth !== null) {
-                    $body = Width::wrapAnsi($body, $this->wrapWidth);
+                    $body = Render\TokenWrap::wrap($body, $this->wrapWidth);
                 }
                 if ($cellStyle !== null) {
                     $body = $cellStyle->render($body);
