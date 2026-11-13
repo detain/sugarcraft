@@ -149,6 +149,41 @@ final class RateLimitTest extends TestCase
         fclose($err);
     }
 
+    public function testSymlinkedLockSidecarDegradesAndNeverFollowsTheTarget(): void
+    {
+        // Audit 038: a planted symlink at the .lock name must not make the
+        // gate create through it or chmod the target — the degradation
+        // rides the ordinary state-error path, loudly, policy-decided.
+        if (!\function_exists('symlink') || \DIRECTORY_SEPARATOR !== '/') {
+            $this->markTestSkipped('symlink arms need a platform that honours POSIX symlinks');
+        }
+        $victim = sys_get_temp_dir() . '/wish-ratelimit-victim-' . uniqid();
+        $this->assertNotFalse(file_put_contents($victim, 'pre-existing'));
+        $this->assertNotFalse(chmod($victim, 0640));
+        $this->assertTrue(symlink($victim, $this->statePath . '.lock'));
+        $err = fopen('php://memory', 'w+');
+        $this->assertNotFalse($err);
+        try {
+            $rl = new RateLimit($this->statePath, 5, 0.5, $err);
+            $ok = 0;
+            $rl->handle(Context::background(), $this->session('9.9.9.9'), function () use (&$ok): void {
+                $ok++;
+            });
+            rewind($err);
+            $out = (string) stream_get_contents($err);
+            $this->assertSame(1, $ok, 'fail-open policy still decides when the lock is poisoned');
+            $this->assertStringContainsString('cannot open the lock file', $out, 'the degradation is announced');
+            $this->assertStringContainsString('fail-open', $out);
+            $this->assertSame('pre-existing', file_get_contents($victim), 'the target is untouched');
+            \clearstatcache(true, $victim);
+            $this->assertSame(0640, fileperms($victim) & 0777, 'and its mode was never chmodded through the link');
+        } finally {
+            @unlink($this->statePath . '.lock');
+            @unlink($victim);
+            @unlink($this->statePath);
+        }
+    }
+
     public function testDefaultFailsOpenButLogsWhenStateFileUnreadable(): void
     {
         $err = fopen('php://memory', 'w+');

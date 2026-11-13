@@ -374,11 +374,20 @@ final class RateLimit implements Middleware
         // its identity (and its waiters). @-suppressed because an
         // uncreateable parent directory is an expected operational
         // condition handled by the caller (and phpunit runs failOnWarning).
+        // Audit 038 (TOCTOU family): a planted symlink at the sidecar name
+        // would make fopen CREATE — and the chmod below — act on the link's
+        // target. The lock is pure machinery, so this degrades through the
+        // existing state-error path (the policy decides the outcome).
+        if (\is_link($path)) {
+            return false;
+        }
         $fh = @\fopen($path, 'cb');
         if ($fh === false) {
             return false;
         }
-        @\chmod($path, 0600);
+        // Mode on the inode we opened, never through the name (audit 038,
+        // second half — same no-symlink-hop reasoning as the Logger sink).
+        StreamHelper::chmodOpenedFile($fh, $path, 0600);
         return $fh;
     }
 

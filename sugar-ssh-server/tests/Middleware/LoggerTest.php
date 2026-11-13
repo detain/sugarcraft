@@ -114,6 +114,43 @@ final class LoggerTest extends TestCase
         }
     }
 
+    public function testFreshlyCreatedLogFileCarries0600OnItsInode(): void
+    {
+        // Audit 037 second half: the mode is set through the fd the sink
+        // actually opened (fchmod), never through a later name lookup that
+        // a swapped symlink could redirect.
+        $path = sys_get_temp_dir() . '/wish-logger-mode-' . uniqid() . '.log';
+        try {
+            new Logger($path);
+            \clearstatcache(true, $path);
+            $this->assertSame(0600, \fileperms($path) & 0777);
+        } finally {
+            @unlink($path);
+        }
+    }
+
+    public function testRefusesASymlinkedLogTarget(): void
+    {
+        // Audit 037: a planted symlink at the log name must be refused,
+        // not opened through — writing "into the log" would write into
+        // whatever file the link points at.
+        if (!\function_exists('symlink') || \DIRECTORY_SEPARATOR !== '/') {
+            $this->markTestSkipped('symlink arms need a platform that honours POSIX symlinks');
+        }
+        $victim = sys_get_temp_dir() . '/wish-logger-victim-' . uniqid();
+        $link   = sys_get_temp_dir() . '/wish-logger-link-' . uniqid() . '.log';
+        try {
+            $this->assertNotFalse(file_put_contents($victim, 'do-not-touch'));
+            $this->assertTrue(symlink($victim, $link));
+            $this->expectException(\RuntimeException::class);
+            $this->expectExceptionMessage('cannot open log target');
+            new Logger($link);
+        } finally {
+            @unlink($link);
+            @unlink($victim);
+        }
+    }
+
     public function testConstructorWithInvalidNonResourceThrows(): void
     {
         // Logger checks: null -> open stderr, string -> open file path, resource -> use as-is

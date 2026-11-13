@@ -6,6 +6,7 @@ namespace SugarCraft\SshServer\Middleware;
 
 use SugarCraft\SshServer\Context;
 use SugarCraft\SshServer\Lang;
+use SugarCraft\SshServer\StreamHelper;
 use SugarCraft\SshServer\Middleware;
 use SugarCraft\SshServer\Session;
 
@@ -176,6 +177,14 @@ final class Logger implements Middleware
 
     private function openFile(string $path): void
     {
+        // Audit 037 (TOCTOU family): the log path is a NAME a local actor
+        // can plant a symlink under. Opening a link would append the log —
+        // and later chmod — the TARGET, which can be any file this uid can
+        // reach. lstat first and refuse loudly; the check rides the same
+        // cannot-open target error the caller already presents.
+        if (\is_link($path)) {
+            throw new \RuntimeException(Lang::t('logger.cannot_open_target', ['target' => $path]));
+        }
         $directory = dirname($path);
         $existed = is_file($path);
         if (!$existed && !is_dir($directory)) {
@@ -189,7 +198,9 @@ final class Logger implements Middleware
             throw new \RuntimeException(Lang::t('logger.cannot_open_target', ['target' => $path]));
         }
         if (!$existed) {
-            @chmod($path, 0600);
+            // Audit 037, second half: mode lands on the inode we opened,
+            // never through a name that a swapped link could redirect.
+            StreamHelper::chmodOpenedFile($stream, $path, 0600);
         }
         $this->stream = $stream;
         $this->owns = true;
