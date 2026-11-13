@@ -28,26 +28,32 @@ final class VeilAnimationTest extends TestCase
 
     public function testWithBackdropClampsTo0to100(): void
     {
-        $v = Veil::new()->withBackdrop(150);
-        // Internally clamps to 100, but we verify composite doesn't crash
-
+        // Clamped to 100 — observed in the bytes: an unclamped 150 would run
+        // the blend past black into negative channels ("38;2;-128;…"), so 150
+        // must emit exactly the full-black 100 pen and nothing else.
         $bg = "..........\n..........";
         $fg = "X";
 
-        // Should not crash even with out-of-range value
-        $result = $v->composite($fg, $bg, Position::TOP, Position::LEFT);
-        $this->assertNotEmpty($result);
+        $over = Veil::new()->withBackdrop(150)->composite($fg, $bg, Position::TOP, Position::LEFT);
+        $full = Veil::new()->withBackdrop(100)->composite($fg, $bg, Position::TOP, Position::LEFT);
+
+        $this->assertSame($full, $over);
+        $this->assertStringContainsString("\e[38;2;0;0;0m", $over);
     }
 
     public function testWithBackdropNegativeClampsToZero(): void
     {
-        $v = Veil::new()->withBackdrop(-50);
-
+        // Clamped to 0 — observed in the bytes: an unclamped -50 would blend
+        // UPWARD ("38;2;383;…") and arm a pen, so a negative backdrop must be
+        // byte-identical to no backdrop: no truecolor pen anywhere.
         $bg = "..........\n..........";
         $fg = "X";
 
-        $result = $v->composite($fg, $bg, Position::TOP, Position::LEFT);
-        $this->assertNotEmpty($result);
+        $neg = Veil::new()->withBackdrop(-50)->composite($fg, $bg, Position::TOP, Position::LEFT);
+        $zero = Veil::new()->withBackdrop(0)->composite($fg, $bg, Position::TOP, Position::LEFT);
+
+        $this->assertSame($zero, $neg);
+        $this->assertStringNotContainsString('38;2;', $neg);
     }
 
     public function testBackdropDimsBackground(): void

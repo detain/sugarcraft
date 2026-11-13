@@ -297,20 +297,32 @@ final class VeilTest extends TestCase
 
     public function testWithBackdropClampsNegativeToZero(): void
     {
-        // The constructor clamps: max(0, min(100, -10)) = 0
-        $v = $this->veil->withBackdrop(-10);
+        // The constructor clamps: max(0, min(100, -10)) = 0 — observed in the
+        // emitted bytes, not just survival: an unclamped -10 would blend the
+        // pen UPWARD (255 × 1.1 → "38;2;281;281;281m") and arm it at all,
+        // while a clamped veil must be byte-identical to plain opacity 0.
         $bg = "..........\n..........";
-        $result = $v->composite('X', $bg, Position::TOP, Position::LEFT);
-        $this->assertStringContainsString('X', $result);
+        $clamped = Veil::new()->withBackdrop(-10)->composite('X', $bg, Position::TOP, Position::LEFT);
+        $zero = Veil::new()->withBackdrop(0)->composite('X', $bg, Position::TOP, Position::LEFT);
+
+        $this->assertSame($zero, $clamped);
+        $this->assertStringNotContainsString('38;2;', $clamped, 'a clamped-to-zero backdrop arms no dim pen');
+        $this->assertStringContainsString('X', $clamped);
     }
 
     public function testWithBackdropClampsOver100To100(): void
     {
-        // The constructor clamps: max(0, min(100, 150)) = 100
-        $v = $this->veil->withBackdrop(150);
+        // The constructor clamps: max(0, min(100, 150)) = 100 — observed in
+        // the bytes: an unclamped 150 would blend past black into negative
+        // channels ("38;2;-128;-128;-128m"), so 150 must emit exactly what
+        // 100 emits, full black pen included (the contains-leg keeps the
+        // equality from being satisfied by some shared no-pen bug).
         $bg = "..........\n..........";
-        $result = $v->composite('X', $bg, Position::TOP, Position::LEFT);
-        $this->assertStringContainsString('X', $result);
+        $over = Veil::new()->withBackdrop(150)->composite('X', $bg, Position::TOP, Position::LEFT);
+        $full = Veil::new()->withBackdrop(100)->composite('X', $bg, Position::TOP, Position::LEFT);
+
+        $this->assertSame($full, $over);
+        $this->assertStringContainsString("\e[38;2;0;0;0m", $over);
     }
 
     public function testBrightOverlayIsNotDimmedWhileBackgroundIs(): void
