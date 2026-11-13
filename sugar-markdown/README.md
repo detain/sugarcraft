@@ -501,6 +501,21 @@ once.
   one callback — the projection candy-code feeds through its
   `Theme::pair` colour bridge.
 
+## Who uses this (and when not to)
+
+- **In-repo dependents.** candy-mdview renders documents through this
+  library's theme files and localized messages (`Lang::t()` keys such
+  as `theme.read_failed`); candy-code consumes the `Theme` slots via
+  the `mapStyles()` projection above and ships a markdown chat bridge.
+- **When not to.** This library renders ANSI for terminals. If you
+  want HTML output, use plain `league/commonmark` — the parser this
+  library delegates to — directly, and skip the terminal layer.
+- **One-stop vs pieces.** `Renderer` is the whole door: parse, style,
+  wrap, hyperlink, write. The parts it composes are public if you need
+  one alone: `StyleGuide` (glamour schema decoding), `SyntaxHighlighter`
+  (tokenising with the plain-style degrade), `StreamSink` / `Writer`
+  (the sink and push side of the streaming channels).
+
 ## Test
 
 ```sh
