@@ -251,11 +251,21 @@ final class Scan
                 }
             }
 
-            // CSI sequence — pass through with no width.
+            // CSI sequence — pass through with no width.  Following ctlseqs/
+            // xterm, a bare ESC before the final byte CANCELS the sequence:
+            // the walk stops AT the ESC so the dispatcher re-enters and reads
+            // it as the next introducer.  A CR/LF ends the sequence and is
+            // distributed: the walk stops before it so the newline branches
+            // below move the cursor exactly as for ordinary bytes.  Without
+            // these breaks a truncated CSI swallowed the cancel byte and
+            // whatever followed — text mis-measured, or a whole zone lost.
             if ($b === "\x1b" && ($rendered[$i + 1] ?? '') === '[') {
                 $j = $i + 2;
                 while ($j < $len) {
                     $c = ord($rendered[$j]);
+                    if ($c === 0x1b || $c === 0x0d || $c === 0x0a) {
+                        break;
+                    }
                     $j++;
                     if ($c >= 0x40 && $c <= 0x7e) {
                         break;
@@ -265,12 +275,19 @@ final class Scan
                 continue;
             }
 
-            // OSC sequence — pass through with no width.
+            // OSC sequence — pass through with no width.  A bare ESC that does
+            // not introduce an ST cancels the OSC (ctlseqs/xterm): stop AT the
+            // ESC so the dispatcher re-enters.  A CR/LF ends the string and is
+            // distributed, letting the newline branch move the cursor.  A
+            // swallowed ESC here would eat the next sequence's introducer and
+            // mis-measure everything after it.
             if ($b === "\x1b" && ($rendered[$i + 1] ?? '') === ']') {
                 $j = $i + 2;
                 while ($j < $len) {
                     if ($rendered[$j] === "\x07") { $j++; break; }
                     if ($j + 1 < $len && $rendered[$j] === "\x1b" && $rendered[$j + 1] === '\\') { $j += 2; break; }
+                    if ($rendered[$j] === "\x1b") { break; }
+                    if ($rendered[$j] === "\x0d" || $rendered[$j] === "\x0a") { break; }
                     $j++;
                 }
                 $i = $j;
@@ -283,11 +300,20 @@ final class Scan
             // the ST is their only resync point.  Without this branch their
             // bytes were measured as text and every zone below them started
             // columns too far right (sixel/kitty graphics hosts emit these).
+            // A bare ESC that does not introduce an ST cancels the string
+            // (ctlseqs/xterm): stop AT the ESC so the dispatcher re-enters.
+            // Unlike OSC, CR/LF are NOT breaks here — they are legitimate
+            // payload bytes inside sixel streams, and ending the walk on one
+            // would measure the rest of the graphics payload as text, the
+            // exact drift this branch exists to prevent.
             if ($b === "\x1b" && (($rendered[$i + 1] ?? '') === 'P' || ($rendered[$i + 1] ?? '') === 'X' || ($rendered[$i + 1] ?? '') === '^' || ($rendered[$i + 1] ?? '') === '_')) {
                 $j = $i + 2;
                 while ($j < $len) {
                     if ($j + 1 < $len && $rendered[$j] === "\x1b" && $rendered[$j + 1] === '\\') {
                         $j += 2;
+                        break;
+                    }
+                    if ($rendered[$j] === "\x1b") {
                         break;
                     }
                     $j++;

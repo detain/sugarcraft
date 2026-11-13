@@ -338,4 +338,65 @@ final class ScanMalformedMarkupTest extends TestCase
 
         self::assertSame([1, 1, 1, 1], self::box($zones['d']));
     }
+
+    // ─── escape-sequence resync (ESC cancel / C0 distribution) ──────────────
+
+    public function testEscMidCsiCancelsAndNextSequenceIsRead(): void
+    {
+        // A truncated CSI (params but no final byte) hit by a fresh ESC: the
+        // old walk swallowed the ESC and terminated on the next '[' — the
+        // rest of the cancel-introducing sequence then painted as text and
+        // the zone registered two phantom columns.
+        $zones = (new Scan())->parse('12345' . Mark::zone('z', "\x1b[3\x1b[0mAB"));
+
+        self::assertSame([6, 1, 7, 1], self::box($zones['z']), 'AB paints cols 6-7; "\x1b[0m" is consumed as a sequence');
+    }
+
+    public function testCrMidOscEndsSequenceAndIsDistributed(): void
+    {
+        // A malformed OSC (no BEL/ST before a CR): the walk must stop before
+        // the CR so the carriage-return branch resets the column, and the
+        // text after it must be measured, not swallowed to end of render.
+        $zones = (new Scan())->parse("AA\x1b]0;title\rBB" . Mark::zone('z', 'Q'));
+
+        self::assertSame(['z'], array_keys($zones), 'the CR must not keep the OSC walk alive into the zone tag');
+        self::assertSame([3, 1, 3, 1], self::box($zones['z']), 'CR distributed: BB is back at cols 1-2, so z paints col 3');
+    }
+
+    public function testLfMidOscEndsSequenceAndAdvancesRow(): void
+    {
+        $zones = (new Scan())->parse("AA\x1b]0;t\nBB" . Mark::zone('z', 'Q'));
+
+        self::assertSame([3, 2, 3, 2], self::box($zones['z']), 'the LF is distributed: BB lands on row 2, z follows it');
+    }
+
+    public function testEscMidDcsCancelsAndNextSequenceIsRead(): void
+    {
+        $zones = (new Scan())->parse('XY' . "\x1bPq#0;2\x1b[0m" . Mark::zone('z', 'Q'));
+
+        self::assertSame([3, 1, 3, 1], self::box($zones['z']), 'ESC cancels the DCS; the SGR reset is then consumed as a sequence, not text');
+    }
+
+    public function testCrlfInsideDcsPayloadStayConsumed(): void
+    {
+        // Deliberate divergence from the OSC behaviour: CR/LF inside a DCS
+        // string are legitimate sixel line-control bytes (this is exactly the
+        // payload the branch exists to pass through).  Ending the walk on one
+        // would measure the graphics data as visible text and drift every
+        // zone below the image.
+        $zones = (new Scan())->parse('AB' . "\x1bPq#0;2;0\r\n?1;1;0,64#1;2;0,64\x1b\\" . Mark::zone('z', 'Q'));
+
+        self::assertSame([3, 1, 3, 1], self::box($zones['z']), 'a sixel with CRLF payload stays zero-width');
+    }
+
+    public function testWellFormedSequencesUnchangedByResync(): void
+    {
+        // Benign-input guard: final-byte CSI, BEL-terminated OSC and ST-
+        // terminated OSC 8 hyperlink all walk exactly as before.
+        $frame = "AB\x1b[1m\x1b]0;title\x07\x1b]8;;http://example.com\x1b\\CD" . Mark::zone('z', 'Q');
+
+        $zones = (new Scan())->parse($frame);
+
+        self::assertSame([5, 1, 5, 1], self::box($zones['z']), 'ABCD paints cols 1-4; z paints col 5');
+    }
 }
