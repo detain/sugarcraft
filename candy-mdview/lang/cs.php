@@ -26,5 +26,8 @@ return [
     'render.binary_input' => 'zamítnuto zobrazení {path}: není textový soubor',
     'render.input_too_large' => 'vstup přesahuje {limit} bajtů: {path}',
     'render.fetch_failed' => 'nelze načíst {url}: {reason}',
+    'render.directory_empty' => 'žádný dokument Markdown v {path}: hledáno README.md, README.markdown, index.md nebo libovolný *.md',
+    'render.directory_ambiguous' => 'žádný jediný dokument v {path}: nalezeno {found} — zadejte jeden explicitně',
+    'render.directory_chosen' => 'kreslí se {chosen} z argumentu adresáře {path}',
     'render.width_invalid' => 'neplatná hodnota --width: {value} (očekává se celé číslo od 0 do 9999; 0 vypíná zalomení)',
 ];

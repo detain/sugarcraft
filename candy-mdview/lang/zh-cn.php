@@ -26,5 +26,8 @@ return [
     'render.binary_input' => '拒绝渲染 {path}：不是文本文件',
     'render.input_too_large' => '输入超过 {limit} 字节：{path}',
     'render.fetch_failed' => '无法获取 {url}：{reason}',
+    'render.directory_empty' => '{path} 中没有 Markdown 文档：已查找 README.md、README.markdown、index.md 及单个 *.md',
+    'render.directory_ambiguous' => '{path} 中没有唯一文档：找到 {found} —— 请显式指定其一',
+    'render.directory_chosen' => '正在从目录参数 {path} 渲染 {chosen}',
     'render.width_invalid' => '无效的 --width 值：{value}（应为 0 到 9999 之间的整数；0 表示不换行）',
 ];

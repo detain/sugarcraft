@@ -26,5 +26,8 @@ return [
     'render.binary_input' => 'отказ рендеринга {path}: это не текстовый файл',
     'render.input_too_large' => 'вход превышает {limit} байт: {path}',
     'render.fetch_failed' => 'не удалось получить {url}: {reason}',
+    'render.directory_empty' => 'в {path} нет документа Markdown: искали README.md, README.markdown, index.md или единственный *.md',
+    'render.directory_ambiguous' => 'в {path} нет единственного документа: найдено {found} — укажите один явно',
+    'render.directory_chosen' => 'отображение {chosen} из аргумента-каталога {path}',
     'render.width_invalid' => 'недопустимое значение --width: {value} (ожидалось целое число от 0 до 9999; 0 отключает перенос)',
 ];

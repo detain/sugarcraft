@@ -24,10 +24,10 @@ candy-mdview — a Markdown CLI viewer for PHP 8.3+ that composes **SugarMarkdow
 composer require sugarcraft/candy-mdview   # binary lands in vendor/bin/candy-mdview
 ```
 
-Prefer a single file? The rolling dev phar is rebuilt on every push to master that affects this lib:
+Prefer a single file? The rolling latest phar is rebuilt on every push to master that affects this lib:
 
 ```sh
-wget https://github.com/detain/sugarcraft/releases/download/candy-mdview/dev/candy-mdview.phar
+wget https://github.com/detain/sugarcraft/releases/download/candy-mdview/latest/candy-mdview.phar
 php candy-mdview.phar README.md
 ```
 
@@ -41,9 +41,18 @@ candy-mdview --theme dracula README.md
 candy-mdview --width 80 --no-hyperlinks README.md
 candy-mdview --theme-config ./my-theme.json README.md
 candy-mdview https://example.com/README.md        # fetch a URL, then render it
+candy-mdview docs/                                # render docs/README.md (glow's directory form)
 ```
 
-The `file` argument is a path **or** an `http(s)://` URL. A URL is fetched
+A directory argument resolves to one document: `README.md`, then
+`README.markdown`, then `index.md`, then a single unambiguous `*.md` in that
+directory — and STDERR names the chosen file. A directory with no match (or
+several competing `*.md` files) refuses exit 2 naming what it searched;
+recursive trees are not walked. The resolved path then rides the ordinary
+file door: auto-reload and the status header stay available.
+
+The `file` argument is a path, a directory (resolved as above) **or** an
+`http(s)://` URL. A URL is fetched
 with a 10 s transfer deadline, a 5-redirect cap and TLS verification ON; the
 final answer must be 2xx; the body then passes the exact same size cap and
 binary refusal as a local file, and its remote origin earns no special
@@ -164,10 +173,10 @@ the next accepted reload.
 |---|---|
 | 0 | rendered successfully (an empty *file* renders blank) |
 | 1 | runtime failure |
-| 2 | usage error — bad theme, unreadable/oversized theme config, missing or unreadable file, a directory argument, non-text (binary) input, a document over 64 MiB, a refused or failed URL fetch (transport, non-2xx answer, oversize body), invalid `--width`, or no input (no file argument with a terminal on stdin, or empty stdin) |
+| 2 | usage error — bad theme, unreadable/oversized theme config, missing or unreadable file, a directory argument with no resolvable document, non-text (binary) input, a document over 64 MiB, a refused or failed URL fetch (transport, non-2xx answer, oversize body), invalid `--width`, or no input (no file argument with a terminal on stdin, or empty stdin) |
 
 Usage errors are named and go to **stderr** (`open notes.md: no such file`,
-`open docs/: is a directory`, …); file paths and option values coming from
+`no Markdown document in docs/: looked for …`, …); file paths and option values coming from
 argv are sanitized before display, so a crafted name cannot inject escape
 sequences or restyle the message. The rendered document is written **raw**:
 Symfony's output formatter never interprets `<tags>` inside your Markdown.

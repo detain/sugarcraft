@@ -26,5 +26,8 @@ return [
     'render.binary_input' => 'rendering rifiutato per {path}: non è un file di testo',
     'render.input_too_large' => 'l\'input supera {limit} byte: {path}',
     'render.fetch_failed' => 'impossibile recuperare {url}: {reason}',
+    'render.directory_empty' => 'nessun documento Markdown in {path}: cercati README.md, README.markdown, index.md o un singolo *.md',
+    'render.directory_ambiguous' => 'nessun documento unico in {path}: trovato {found} — indicane uno esplicitamente',
+    'render.directory_chosen' => 'rendering di {chosen} dall\'argomento cartella {path}',
     'render.width_invalid' => 'valore --width non valido: {value} (previsto un intero tra 0 e 9999; lo 0 disattiva il ritorno a capo)',
 ];

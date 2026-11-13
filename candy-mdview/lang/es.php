@@ -26,5 +26,8 @@ return [
     'render.binary_input' => 'se rechaza renderizar {path}: no es un archivo de texto',
     'render.input_too_large' => 'la entrada supera los {limit} bytes: {path}',
     'render.fetch_failed' => 'no se puede obtener {url}: {reason}',
+    'render.directory_empty' => 'no hay documento Markdown en {path}: se buscó README.md, README.markdown, index.md o un único *.md',
+    'render.directory_ambiguous' => 'no hay un único documento en {path}: se encontró {found} — indique uno explícitamente',
+    'render.directory_chosen' => 'renderizando {chosen} del argumento de directorio {path}',
     'render.width_invalid' => 'valor de --width no válido: {value} (se esperaba un entero entre 0 y 9999; 0 desactiva el ajuste de línea)',
 ];

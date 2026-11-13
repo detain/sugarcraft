@@ -26,5 +26,8 @@ return [
     'render.binary_input' => 'رفض عرض {path}: ليس ملفًا نصيًا',
     'render.input_too_large' => 'حجم الإدخال يتجاوز {limit} بايت: {path}',
     'render.fetch_failed' => 'يتعذر جلب {url}: {reason}',
+    'render.directory_empty' => 'لا مستند Markdown في {path}: تم البحث عن README.md وREADME.markdown وindex.md وأي *.md',
+    'render.directory_ambiguous' => 'لا مستند واحد في {path}: وُجد {found} — مرر أحدهما صراحةً',
+    'render.directory_chosen' => 'جارٍ عرض {chosen} من وسيط الدليل {path}',
     'render.width_invalid' => 'قيمة --width غير صالحة: {value} (يُتوقع عدد صحيح بين 0 و9999؛ 0 يعطّل الالتفاف)',
 ];

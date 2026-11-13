@@ -1329,15 +1329,133 @@ final class RenderCommandTest extends TestCase
 
     public function testDirectoryArgumentFailsLoudly(): void
     {
-        // KM4 keystone: `candy-mdview docs/` used to "succeed" — directory
-        // reads returned string(0), passed the is_string gate, and rendered
-        // an empty document with exit code 0. An exit-code lie is now a
-        // named refusal.
-        $dir = (string) sys_get_temp_dir();
+        // KM4 keystone (finding 037 shape): `candy-mdview docs/` used to
+        // "succeed" — directory reads returned string(0), passed the
+        // is_string gate, and rendered an empty document with exit code 0.
+        // The exit-code lie is now a named refusal; a directory WITH a
+        // resolvable document renders instead (see the S23 legs below).
+        $dir = sys_get_temp_dir() . '/mdview-empty-' . uniqid('', true);
+        $this->assertTrue(mkdir($dir, 0777, true));
         [$rc, $msg] = $this->runUsageRun(null, $this->optionMap(), ['file' => $dir]);
         $this->assertSame(Command::INVALID, $rc);
         $this->assertStringContainsString($dir, $msg);
-        $this->assertStringContainsString('is a directory', $msg);
+        $this->assertStringContainsString('no Markdown document', $msg);
+        $this->assertStringContainsString('looked for README.md', $msg);
+        rmdir($dir);
+    }
+
+    public function testDirectoryArgumentRendersItsReadmeWithAnnounce(): void
+    {
+        // glow's second invocation form lands: README.md wins, the render
+        // rides the ordinary file door, STDERR names the chosen file.
+        $dir = $this->makeDir(['README.md' => "# Readme Chosen\n\nbody text\n", 'other.md' => 'ignored']);
+        [$rc, $payload, $errors] = $this->runCaptureWrite($dir);
+        $this->assertSame(Command::SUCCESS, $rc);
+        $this->assertStringContainsString('Readme Chosen', $this->plainText($payload));
+        $this->assertStringContainsString('rendering README.md from directory argument', $errors);
+        $this->assertStringContainsString($dir, $errors);
+        $this->assertStringNotContainsString('other.md', $errors);
+        $this->rrmdir($dir);
+    }
+
+    public function testDirectorySearchOrderMarkdownThenIndexThenSingleMd(): void
+    {
+        $dir = $this->makeDir(['README.markdown' => "# Second Form\n"]);
+        [$rc, , $errors] = $this->runCaptureWrite($dir);
+        $this->assertSame(Command::SUCCESS, $rc);
+        $this->assertStringContainsString('rendering README.markdown', $errors);
+        $this->rrmdir($dir);
+
+        $dir = $this->makeDir(['index.md' => "# Third Form\n"]);
+        [$rc, , $errors] = $this->runCaptureWrite($dir);
+        $this->assertSame(Command::SUCCESS, $rc);
+        $this->assertStringContainsString('rendering index.md', $errors);
+        $this->rrmdir($dir);
+
+        // A lone non-standard name is unambiguous and gets chosen; README.md
+        // still outranks it.
+        $dir = $this->makeDir(['notes.md' => "# Sole Doc\n"]);
+        [$rc, $payload, $errors] = $this->runCaptureWrite($dir);
+        $this->assertSame(Command::SUCCESS, $rc);
+        $this->assertStringContainsString('rendering notes.md', $errors);
+        $this->assertStringContainsString('Sole Doc', $this->plainText($payload));
+        $this->rrmdir($dir);
+
+        $dir = $this->makeDir(['index.md' => "# Rank\n", 'notes.md' => "no\n"]);
+        [, , $errors] = $this->runCaptureWrite($dir);
+        $this->assertStringContainsString('rendering index.md', $errors);
+        $this->rrmdir($dir);
+    }
+
+    public function testAmbiguousDirectoryRefusesNamingCandidates(): void
+    {
+        $dir = $this->makeDir(['alpha.md' => "a\n", 'beta.md' => "b\n", 'todo.txt' => 'x']);
+        [$rc, , $errors] = $this->runCaptureWrite($dir);
+        $this->assertSame(Command::INVALID, $rc);
+        $this->assertStringContainsString('no single document', $errors);
+        $this->assertStringContainsString('alpha.md, beta.md', $errors);
+        $this->assertStringContainsString($dir, $errors);
+        $this->assertStringNotContainsString('todo.txt', $errors);
+        $this->rrmdir($dir);
+    }
+
+    /** @param array<string,string> $files */
+    private function makeDir(array $files): string
+    {
+        $dir = sys_get_temp_dir() . '/mdview-dir-' . uniqid('', true);
+        $this->assertTrue(mkdir($dir, 0777, true));
+        foreach ($files as $name => $bytes) {
+            file_put_contents($dir . '/' . $name, $bytes);
+        }
+
+        return $dir;
+    }
+
+    private function rrmdir(string $dir): void
+    {
+        foreach ((array) glob($dir . '/*') as $f) {
+            unlink((string) $f);
+        }
+        rmdir($dir);
+    }
+
+    /**
+     * Run execute() with a raw file argument and capture BOTH channels
+     * (write payload + writeln lines). Plain theme: deterministic bytes.
+     *
+     * @return array{0:int,1:string,2:string}
+     */
+    private function runCaptureWrite(string $fileArg): array
+    {
+        $input = $this->createMock(InputInterface::class);
+        $input->method('getArgument')->willReturnCallback(
+            static fn (string $name): mixed => $name === 'file' ? $fileArg : null
+        );
+        $input->method('getOption')->willReturnMap($this->optionMap(['theme' => 'plain']));
+
+        $payload = '';
+        $errors  = '';
+        $output  = $this->createMock(OutputInterface::class);
+        $output->method('write')->willReturnCallback(
+            static function ($messages) use (&$payload): void {
+                $payload .= (string) $messages;
+            }
+        );
+        $output->method('writeln')->willReturnCallback(
+            static function ($messages) use (&$errors): void {
+                $errors .= (string) $messages;
+            }
+        );
+
+        $method = new ReflectionMethod(RenderCommand::class, 'execute');
+        $method->setAccessible(true);
+
+        return [$method->invoke(new RenderCommand(), $input, $output), $payload, $errors];
+    }
+
+    private function plainText(string $ansi): string
+    {
+        return (string) preg_replace('/\e\[[0-9;]*m/', '', $ansi);
     }
 
     public function testBinaryFileIsRefused(): void

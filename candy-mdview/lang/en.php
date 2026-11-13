@@ -26,5 +26,8 @@ return [
     'render.binary_input' => 'refusing to render {path}: not a text file',
     'render.input_too_large' => 'input exceeds {limit} bytes: {path}',
     'render.fetch_failed' => 'cannot fetch {url}: {reason}',
+    'render.directory_chosen' => 'rendering {chosen} from directory argument {path}',
+    'render.directory_ambiguous' => 'no single document in {path}: found {found} — pass one of them explicitly',
+    'render.directory_empty' => 'no Markdown document in {path}: looked for README.md, README.markdown, index.md or a single *.md',
     'render.width_invalid' => 'invalid --width value: {value} (expected an integer between 0 and 9999; 0 disables wrapping)',
 ];

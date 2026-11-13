@@ -26,5 +26,8 @@ return [
     'render.binary_input' => 'Renderen von {path} verweigert: keine Textdatei',
     'render.input_too_large' => 'Eingabe überschreitet {limit} Bytes: {path}',
     'render.fetch_failed' => 'Abruf von {url} fehlgeschlagen: {reason}',
+    'render.directory_empty' => 'kein Markdown-Dokument in {path}: gesucht wurden README.md, README.markdown, index.md oder eine einzelne *.md',
+    'render.directory_ambiguous' => 'kein einzelnes Dokument in {path}: gefunden {found} — gib eines explizit an',
+    'render.directory_chosen' => 'gebe {chosen} aus Verzeichnis-Argument {path} wieder',
     'render.width_invalid' => 'ungültiger --width-Wert: {value} (erwartet eine Ganzzahl zwischen 0 und 9999; 0 deaktiviert den Umbruch)',
 ];

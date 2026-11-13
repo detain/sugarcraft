@@ -26,5 +26,8 @@ return [
     'render.binary_input' => 'odmowa renderowania {path}: to nie plik tekstowy',
     'render.input_too_large' => 'wejście przekracza {limit} bajtów: {path}',
     'render.fetch_failed' => 'nie można pobrać {url}: {reason}',
+    'render.directory_empty' => 'brak dokumentu Markdown w {path}: szukano README.md, README.markdown, index.md lub pojedynczego *.md',
+    'render.directory_ambiguous' => 'brak pojedynczego dokumentu w {path}: znaleziono {found} — wskaż jeden jawnie',
+    'render.directory_chosen' => 'renderowanie {chosen} z argumentu katalogu {path}',
     'render.width_invalid' => 'nieprawidłowa wartość --width: {value} (oczekiwano liczby całkowitej od 0 do 9999; 0 wyłącza łamanie wierszy)',
 ];

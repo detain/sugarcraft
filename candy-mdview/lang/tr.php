@@ -26,5 +26,8 @@ return [
     'render.binary_input' => '{path} işlemesi reddedildi: metin dosyası değil',
     'render.input_too_large' => 'girdi {limit} baytı aşıyor: {path}',
     'render.fetch_failed' => 'alınamadı {url}: {reason}',
+    'render.directory_empty' => '{path} içinde Markdown belgesi yok: README.md, README.markdown, index.md veya tek bir *.md arandı',
+    'render.directory_ambiguous' => '{path} içinde tek belge yok: bulunan {found} — birini açıkça verin',
+    'render.directory_chosen' => 'dizin argümanı {path} içinden {chosen} işleniyor',
     'render.width_invalid' => 'geçersiz --width değeri: {value} (0 ile 9999 arasında tam sayı beklendi; 0 sarmalamayı kapatır)',
 ];

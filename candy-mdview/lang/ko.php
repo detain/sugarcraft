@@ -26,5 +26,8 @@ return [
     'render.binary_input' => '{path} 렌더링 거부: 텍스트 파일이 아닙니다',
     'render.input_too_large' => '입력이 {limit}바이트를 초과합니다: {path}',
     'render.fetch_failed' => '가져올 수 없음 {url}: {reason}',
+    'render.directory_empty' => '{path}에 Markdown 문서가 없음: README.md, README.markdown, index.md, 단일 *.md를 검색했습니다',
+    'render.directory_ambiguous' => '{path}에 단일 문서가 없음: {found} — 하나를 명시하세요',
+    'render.directory_chosen' => '디렉터리 인자 {path}에서 {chosen} 렌더링 중',
     'render.width_invalid' => '잘못된 --width 값: {value} (0~9999 정수 필요; 0은 줄바꿈 해제)',
 ];

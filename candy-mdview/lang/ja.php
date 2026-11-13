@@ -26,5 +26,8 @@ return [
     'render.binary_input' => '{path} をレンダリングできません: テキストファイルではありません',
     'render.input_too_large' => '入力が {limit} バイトを超えています: {path}',
     'render.fetch_failed' => '取得できません {url}: {reason}',
+    'render.directory_empty' => '{path} に Markdown ドキュメントがありません: README.md、README.markdown、index.md、単一の *.md を検索しました',
+    'render.directory_ambiguous' => '{path} に単一ドキュメントがありません: {found} — どれか1つを明示してください',
+    'render.directory_chosen' => 'ディレクトリ引数 {path} から {chosen} をレンダリング中',
     'render.width_invalid' => '無効な --width 値: {value} (0〜9999 の整数が必要です。0 は折り返し無効)',
 ];

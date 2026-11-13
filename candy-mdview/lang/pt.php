@@ -26,5 +26,8 @@ return [
     'render.binary_input' => 'renderização de {path} recusada: não é um ficheiro de texto',
     'render.input_too_large' => 'a entrada excede {limit} bytes: {path}',
     'render.fetch_failed' => 'não foi possível obter {url}: {reason}',
+    'render.directory_empty' => 'nenhum documento Markdown em {path}: procurado README.md, README.markdown, index.md ou um único *.md',
+    'render.directory_ambiguous' => 'nenhum documento único em {path}: encontrado {found} — especifique um explicitamente',
+    'render.directory_chosen' => 'a renderizar {chosen} do argumento de diretório {path}',
     'render.width_invalid' => 'valor de --width inválido: {value} (esperado um inteiro entre 0 e 9999; 0 desativa a quebra de linha)',
 ];

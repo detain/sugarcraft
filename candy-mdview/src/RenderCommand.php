@@ -98,7 +98,7 @@ final class RenderCommand extends Command
     protected function configure(): void
     {
         $this
-            ->addArgument('file',     InputArgument::OPTIONAL, 'Markdown file. Default: stdin.')
+            ->addArgument('file',     InputArgument::OPTIONAL, 'Markdown file, a directory containing one (README.md > README.markdown > index.md > a single *.md), or an http(s):// URL. Default: stdin.')
             ->addOption('pager',         'p', InputOption::VALUE_NONE,     'Open the rendered output in a fullscreen pager.')
             ->addOption('theme',         null, InputOption::VALUE_REQUIRED, 'ansi | ascii | plain | dark | light | notty | dracula | tokyo-night | pink | solarized | monokai | github. Aliases: no, auto-no, tokyonight. Default (omitted): ansi on a color-capable terminal, ascii when color is off, plain when the stream is undecorated (--no-ansi, or a non-terminal without forced decoration).', null)
             ->addOption('style',         's',  InputOption::VALUE_REQUIRED, 'Alias for --theme (glamour-compat).', null)
@@ -138,10 +138,16 @@ final class RenderCommand extends Command
         // STDERR with Command::INVALID: `--theme=ZORG missingfile.md` names
         // the theme (the flag was the first thing wrong), and an error never
         // lands inside a redirected document stream.
+        $dirNotice = '';
         try {
             $width      = self::resolveWidth($input);
             $onTerminal = self::decoratedOutput($input, $output);
             $theme      = self::resolveTheme($input, $onTerminal);
+            // glow's second invocation form (finding 037): a directory
+            // argument renders its README instead of refusing. Resolution
+            // runs BEFORE the read so every later door (header name, watch
+            // arming, exit contract) sees a plain file path.
+            $fileArg    = self::resolveDirectoryArgument($fileArg, $dirNotice);
             $raw        = self::readDocument($fileArg);
             if ($input->getOption('pager') === true) {
                 // Refuse before any painting: the escape-soup capture and
@@ -153,6 +159,13 @@ final class RenderCommand extends Command
         } catch (\InvalidArgumentException $usage) {
             self::writeError($output, $usage->getMessage());
             return Command::INVALID;
+        }
+
+        if ($dirNotice !== '') {
+            // The directory announce rides the error stream: stdout may be
+            // a redirected document channel, and WHICH file was chosen is
+            // metadata about the run, not the document.
+            self::writeNote($output, $dirNotice);
         }
 
         $renderer = (new Renderer($theme))
@@ -364,6 +377,60 @@ final class RenderCommand extends Command
     {
         $target = $output instanceof ConsoleOutputInterface ? $output->getErrorOutput() : $output;
         $target->writeln('<error>' . OutputFormatter::escape(Sanitize::cellValue($message)) . '</error>');
+    }
+
+    /**
+     * Informational line on the same STDERR channel, without the error tag
+     * — sanitized like writeError, because the payload interpolates
+     * user-supplied names (a crafted file name must not restyle the note
+     * or inject escape sequences).
+     */
+    private static function writeNote(OutputInterface $output, string $message): void
+    {
+        $target = $output instanceof ConsoleOutputInterface ? $output->getErrorOutput() : $output;
+        $target->writeln(OutputFormatter::escape(Sanitize::cellValue($message)));
+    }
+
+    /**
+     * Directory argument (finding 037, glow's second invocation form):
+     * `glow docs/` renders docs/README.md. Search order README.md →
+     * README.markdown → index.md → a SINGLE unambiguous *.md; the chosen
+     * file is announced via $dirNotice, and every miss refuses by naming
+     * what was searched. Recursive trees are NOT walked — that stays the
+     * disclosed gap. A non-directory argument passes through untouched.
+     */
+    private static function resolveDirectoryArgument(string $arg, string &$dirNotice): string
+    {
+        if ($arg === '' || is_dir($arg) === false) {
+            return $arg;
+        }
+
+        $root = rtrim($arg, '/\\');
+        foreach (['README.md', 'README.markdown', 'index.md'] as $name) {
+            $candidate = $root . '/' . $name;
+            if (is_file($candidate)) {
+                $dirNotice = Lang::t('render.directory_chosen', ['chosen' => $name, 'path' => $arg]);
+
+                return $candidate;
+            }
+        }
+
+        $found = glob($root . '/*.md');
+        if (is_array($found) && count($found) === 1) {
+            $dirNotice = Lang::t('render.directory_chosen', ['chosen' => basename($found[0]), 'path' => $arg]);
+
+            return $found[0];
+        }
+
+        if (is_array($found) && count($found) > 1) {
+            sort($found);
+            throw new \InvalidArgumentException(Lang::t('render.directory_ambiguous', [
+                'path'  => $arg,
+                'found' => implode(', ', array_map('basename', $found)),
+            ]));
+        }
+
+        throw new \InvalidArgumentException(Lang::t('render.directory_empty', ['path' => $arg]));
     }
 
     public static function pickTheme(string $name): Theme
