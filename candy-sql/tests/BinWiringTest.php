@@ -79,8 +79,8 @@ final class BinWiringTest extends TestCase
      * unsupported driver fails at parse time, before any socket is opened,
      * so this stays hermetic (no live connection anywhere).
      */
-    /** Run the real bin with argv and capture (exit, stdout, stderr). */
-    private function runBin(array $argv): array
+    /** Run the real bin with argv (and optional env overrides) and capture (exit, stdout, stderr). */
+    private function runBin(array $argv, ?array $env = null): array
     {
         $descriptors = [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
         $process = \proc_open(
@@ -88,6 +88,7 @@ final class BinWiringTest extends TestCase
             $descriptors,
             $pipes,
             \dirname(self::BIN_PATH),
+            $env,
         );
         $this->assertIsResource($process);
         \fclose($pipes[0]);
@@ -144,5 +145,131 @@ final class BinWiringTest extends TestCase
         $this->assertStringNotContainsString('Fatal error', $stderr);
         // Exactly one line: the sanitized sentence, nothing else.
         $this->assertSame(1, \substr_count($stderr, "\n"));
+    }
+
+    // ── SQL-O02: saved connections ───────────────────────────────────────────
+
+    /** @return array{0: string, 1: array<string,string>} tmp home + child env */
+    private function isolatedHome(string $json = ''): array
+    {
+        $home = \sys_get_temp_dir() . '/cs-bin-' . \uniqid('', true);
+        $configDir = $home . '/.config/candy-sql';
+        \mkdir($configDir, 0700, true);
+        if ($json !== '') {
+            \file_put_contents($configDir . '/connections.json', $json);
+            \chmod($configDir . '/connections.json', 0600);
+        }
+        $env = [
+            'HOME' => $home,
+            'XDG_CONFIG_HOME' => $home . '/.config',
+            'PATH' => \getenv('PATH') ?: '/usr/bin:/bin',
+        ];
+
+        return [$home, $env];
+    }
+
+    private static function cleanIsolatedHome(string $home): void
+    {
+        @\unlink($home . '/.config/candy-sql/connections.json');
+        @\rmdir($home . '/.config/candy-sql');
+        @\rmdir($home . '/.config');
+        @\rmdir($home);
+    }
+
+    public function testSavedConnectionWiringIsPresentInTheLauncher(): void
+    {
+        $src = self::binSource();
+
+        $this->assertStringContainsString("'--connect='", $src);
+        $this->assertStringContainsString('ConnectionPicker', $src);
+        $this->assertStringContainsString('stream_isatty(STDOUT)', $src);
+        $this->assertStringContainsString('SAVED CONNECTIONS', $src);
+    }
+
+    public function testConnectRefusesAnUnknownNameAndListsSavedOnes(): void
+    {
+        [$home, $env] = $this->isolatedHome(
+            '{"connections": {"dev": {"driver": "mysql", "host": "h", "db": "d"}}}'
+        );
+        try {
+            [$exit, $stdout, $stderr] = $this->runBin(['--connect=ghost'], $env);
+            $this->assertSame(2, $exit);
+            $this->assertSame('', $stdout);
+            $this->assertStringContainsString("Unknown connection 'ghost'", $stderr);
+            $this->assertStringContainsString('saved connections: dev', $stderr);
+        } finally {
+            $this->cleanIsolatedHome($home);
+        }
+    }
+
+    public function testConnectCannotBeCombinedWithExplicitArgs(): void
+    {
+        [$home, $env] = $this->isolatedHome(
+            '{"connections": {"dev": {"driver": "mysql", "host": "h", "db": "d"}}}'
+        );
+        try {
+            [$exit, , $stderr] = $this->runBin(['--connect=dev', '--driver=pgsql'], $env);
+            $this->assertSame(2, $exit);
+            $this->assertStringContainsString('cannot be combined', $stderr);
+        } finally {
+            $this->cleanIsolatedHome($home);
+        }
+    }
+
+    public function testConnectWithAMissingPasswordEnvVarRefusesByVariableName(): void
+    {
+        [$home, $env] = $this->isolatedHome(
+            '{"connections": {"p": {"driver": "mysql", "host": "h", "db": "d", "pass-env": "CS_ABSENT_PW"}}}'
+        );
+        try {
+            [$exit, , $stderr] = $this->runBin(['--connect=p'], $env);
+            $this->assertSame(2, $exit);
+            $this->assertStringContainsString('$CS_ABSENT_PW', $stderr);
+            $this->assertStringContainsString('export it before dialing', $stderr);
+        } finally {
+            $this->cleanIsolatedHome($home);
+        }
+    }
+
+    public function testPlaintextPassInFileRefusesTheLaunch(): void
+    {
+        [$home, $env] = $this->isolatedHome(
+            '{"connections": {"p": {"driver": "mysql", "host": "h", "db": "d", "pass": "hunter2"}}}'
+        );
+        try {
+            [$exit, , $stderr] = $this->runBin(['--connect=p'], $env);
+            $this->assertSame(2, $exit);
+            $this->assertStringContainsString("plaintext 'pass'", $stderr);
+        } finally {
+            $this->cleanIsolatedHome($home);
+        }
+    }
+
+    public function testCorruptConnectionsFileRefusesNotFatals(): void
+    {
+        [$home, $env] = $this->isolatedHome('{"connections": {oops');
+        try {
+            [$exit, , $stderr] = $this->runBin(['--connect=anything'], $env);
+            $this->assertSame(2, $exit);
+            $this->assertStringContainsString('not valid JSON', $stderr);
+            $this->assertStringNotContainsString('Fatal error', $stderr);
+        } finally {
+            $this->cleanIsolatedHome($home);
+        }
+    }
+
+    public function testBareInvocationWithNoSavedConnectionsKeepsUsageExitTwo(): void
+    {
+        // Piped stdout is never a tty, so the picker gate must not open here —
+        // the named exit-2 refusal stays the pipe contract (O02 carve-out).
+        [$home, $env] = $this->isolatedHome();
+        try {
+            [$exit, $stdout,] = $this->runBin([], $env);
+            $this->assertSame(2, $exit);
+            $this->assertStringContainsString('USAGE', $stdout);
+            $this->assertStringContainsString('connections.json', $stdout);
+        } finally {
+            $this->cleanIsolatedHome($home);
+        }
     }
 }

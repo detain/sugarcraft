@@ -26,7 +26,10 @@ composer require sugarcraft/candy-sql
 
 First run, no database at hand: `php examples/play.php` seeds an in-memory
 SQLite instance (`users`/`posts`) and opens the dashboard over it. Invoked with
-no arguments the launcher prints a one-line `USAGE:` reminder and exits 2;
+no arguments the launcher presents a picker of your saved connections when the
+stdout is a terminal and at least one entry exists (see
+[Saved connections](#saved-connections) below); in every other case it prints
+a one-line `USAGE:` reminder and exits 2;
 `bin/candy-sql --help` prints the full flag table (exit 0) and `--version`
 prints the build stamp (exit 0).
 
@@ -51,6 +54,9 @@ bin/candy-sql --driver=mysql --host=localhost --port=3306 --user=root --db=mydb
 # Status-snapshot history: on by default at $HOME/.candy-sql/history.db
 bin/candy-sql app.sqlite --no-history
 bin/candy-sql app.sqlite --history=/var/tmp/my-history.db
+
+# Saved connection by name (interactive no-arg launch opens the picker)
+bin/candy-sql --connect=prod
 ```
 
 Supported drivers are `sqlite`, `mysql` and `pgsql` (`ConnectionFactory::SUPPORTED_DRIVERS`); anything else — including
@@ -70,6 +76,36 @@ any of the app's own gates run.
 optional `$flavor` override, an optional history recorder (the launcher builds one itself — see Status-Snapshot History), and an optional
 `$sslMode` override: unset, the MySQL ssl-mode is derived from a real `MysqlDatabase` handle to feed the TLS gate (see MySQL SSL
 above); the explicit string exists as a test seam because `MysqlDatabase` is final with a private constructor.
+
+## Saved connections
+
+Named servers live in `$XDG_CONFIG_HOME/candy-sql/connections.json`
+(falling back to `$HOME/.config/candy-sql/connections.json`), written once
+and dialed forever with `--connect=<name>` — or chosen interactively by a
+no-arg launch. The directory is created 0700 and the file 0600; a
+pre-existing readable file is tightened on load, never loosened.
+
+```json
+{
+  "connections": {
+    "prod":  {"driver": "mysql", "host": "db.example.com", "port": "3306",
+              "user": "app", "db": "shop", "ssl-mode": "verify_identity",
+              "pass-env": "PROD_DB_PASS"},
+    "local": {"driver": "pgsql", "host": "127.0.0.1", "port": "5432",
+              "user": "pg", "db": "dev"},
+    "scratch": {"driver": "sqlite", "db": "/tmp/scratch.sqlite"}
+  }
+}
+```
+
+Allowed fields are `driver`, `host`, `port`, `user`, `db`, `ssl-mode` and
+`pass-env`; unknown fields, unsupported drivers, non-numeric ports and
+malformed names are refused by name (one line, exit 2 — never a stack
+trace). **Passwords are never stored on disk:** an entry points at an
+environment variable via `pass-env`, read at dial time; a `pass` field in
+the file is a hard refusal that says so. Without `pass-env`, the global
+`CANDY_SQL_PASS` fallback behaves exactly as with individual flags.
+`--connect` cannot be combined with explicit connection arguments.
 
 ## Keys
 

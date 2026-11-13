@@ -45,8 +45,10 @@ use SugarCraft\Sql\Admin\History\HistoryRecorder;
 use SugarCraft\Sql\Admin\History\SqliteHistoryStore;
 use SugarCraft\Sql\App;
 use SugarCraft\Sql\App\AppBuilder;
+use SugarCraft\Sql\App\ConnectionPicker;
 use SugarCraft\Sql\CellValue;
 use SugarCraft\Sql\Db\ConnectionFactory;
+use SugarCraft\Sql\Db\ConnectionStore;
 use SugarCraft\Sql\Db\DatabaseInterface;
 use SugarCraft\Sql\Db\Flavor;
 use SugarCraft\Sql\Db\MysqlDatabase;
@@ -195,9 +197,10 @@ ARGUMENTS
     SQLite database file path, e.g.: app.sqlite
     Or a DSN string, e.g.:  mysql://user:pass@localhost:3306/dbname
 
-  When omitted entirely, a short usage line is printed and the
-  process exits with status 2 (bad invocation); run --help for this full
-  screen.
+  When omitted entirely: on an interactive terminal with saved
+  connections, a picker offers them; otherwise a short usage line is
+  printed and the process exits with status 2 (bad invocation) — run
+  --help for this full screen.
 
 OPTIONS
   --help, -h
@@ -205,6 +208,14 @@ OPTIONS
 
   --version, -V
     Show the version number.
+
+  --connect=<name>
+    Dial the named entry from the saved-connections file
+    ($XDG_CONFIG_HOME/candy-sql/connections.json, defaulting to
+    $HOME/.config/candy-sql/connections.json). Cannot be combined
+    with explicit connection arguments. Passwords are never stored
+    on disk: an entry names its secret via "pass-env" and the
+    variable is read at dial time. See SAVED CONNECTIONS below.
 
   --dsn=<dsn>
     Full DSN connection string.
@@ -250,6 +261,27 @@ EXAMPLES
   candy-sql pgsql://postgres:pass@db.example.com:5432/mydb
   candy-sql --driver=pgsql --host=db.example.com --port=5432 --user=postgres --pass=pass --db=mydb
 
+SAVED CONNECTIONS
+  List named servers once, dial them forever:
+
+    $HOME/.config/candy-sql/connections.json  (dir 0700, file 0600)
+
+    {
+      "connections": {
+        "prod":  {"driver": "mysql", "host": "db.example.com",
+                  "port": "3306", "user": "app", "db": "shop",
+                  "ssl-mode": "verify_identity", "pass-env": "PROD_DB_PASS"},
+        "local": {"driver": "pgsql", "host": "127.0.0.1",
+                  "port": "5432", "user": "pg", "db": "dev"}
+      }
+    }
+
+  Fields: driver (sqlite|mysql|pgsql), host, port, user, db, ssl-mode,
+  pass-env. Any other field is refused, and a plaintext "pass" field
+  is always refused — point pass-env at a variable instead. A launch
+  with no arguments on an interactive terminal presents these entries
+  as a picker; --connect=<name> dials one directly.
+
 HISTORY
   By default every admin poll snapshot is recorded to
   $HOME/.candy-sql/history.db (0700 dir / 0600 file) as an offline
@@ -292,6 +324,8 @@ HELP
  *   - Bare path (e.g. app.sqlite) → SQLite connection
  *   - DSN as first argument (e.g. mysql://user:pass@host:3306/db)
  *   - --dsn=<dsn> → ConnectionFactory::fromDsn()
+ *   - --connect=<name> → saved entry expanded (SQL-O02)
+ *   - no-arg interactive launch → saved-connection picker (SQL-O02b)
  *   - --driver=<driver> --db=<db> [--host=<host>] [--port=<port>]
  *     [--user=<user>] [--pass=<pass>] [--ssl-mode=<mode>]
  *
@@ -302,11 +336,50 @@ function buildDatabase(array $argv): DatabaseInterface
 {
     // Filter out the script name at index 0
     $args = array_slice($argv, 1);
+    $store = ConnectionStore::open();
 
-    // No arguments → show usage
+    // SQL-O02a: --connect=<name> dials a saved connection. The flag is
+    // expanded here (bin level) rather than passed to ConnectionFactory, so
+    // the factory's unknown-option contract stays untouched and combination
+    // refusals name the launch grammar the user actually typed.
+    [$connectName, $args] = extractConnectFlag($args);
+    if ($connectName !== null) {
+        if ($args !== []) {
+            throw new \InvalidArgumentException(
+                '--connect cannot be combined with explicit connection arguments (the saved entry is the connection)',
+            );
+        }
+        if ($store === null) {
+            throw new \RuntimeException(
+                'No HOME or XDG_CONFIG_HOME — the connections file cannot be located; pass a DSN instead',
+            );
+        }
+        return ConnectionFactory::fromArgv(injectPasswordFromEnv($store->argv($connectName)));
+    }
+
+    // No arguments → the picker for a live terminal with saved connections
+    // (SQL-O02b), the guided usage refusal everywhere else.
     if ($args === []) {
+        if ($store !== null && stream_isatty(STDOUT) && $store->names() !== []) {
+            $final = (new Program(
+                new ConnectionPicker($store->all()),
+                new ProgramOptions(useAltScreen: true),
+            ))->run();
+            if (!$final instanceof ConnectionPicker) {
+                throw new \LogicException('the picker program returned a foreign model');
+            }
+            $picked = $final->pickedName();
+            if ($picked === null) {
+                fwrite(STDERR, "candy-sql: no connection selected — pass a path, a DSN or --connect=<name>\n");
+                exit(2);
+            }
+            return ConnectionFactory::fromArgv(injectPasswordFromEnv($store->argv($picked)));
+        }
         fwrite(STDOUT, "USAGE: candy-sql [OPTIONS] [path-or-dsn]\n");
         fwrite(STDOUT, "       candy-sql --help   # for full usage information\n");
+        if ($store !== null && $store->names() === []) {
+            fwrite(STDOUT, "       Tip: save named connections in {$store->path()} and launch with --connect=<name>.\n");
+        }
         exit(2);
     }
 
@@ -327,6 +400,33 @@ function buildDatabase(array $argv): DatabaseInterface
 
     // Parse and build from ConnectionFactory
     return ConnectionFactory::fromArgv(injectPasswordFromEnv($args));
+}
+
+/**
+ * Split the `--connect=<name>` flag out of an argv tail.
+ *
+ * @param list<string> $args
+ * @return array{0: ?string, 1: list<string>} the name (null when absent) and the remaining args
+ */
+function extractConnectFlag(array $args): array
+{
+    $name = null;
+    $rest = [];
+    foreach ($args as $arg) {
+        if (str_starts_with($arg, '--connect=')) {
+            if ($name !== null) {
+                throw new \InvalidArgumentException('Option --connect may be given only once');
+            }
+            $value = substr($arg, strlen('--connect='));
+            if ($value === '') {
+                throw new \InvalidArgumentException('Option --connect requires a value');
+            }
+            $name = $value;
+            continue;
+        }
+        $rest[] = $arg;
+    }
+    return [$name, $rest];
 }
 
 /**
