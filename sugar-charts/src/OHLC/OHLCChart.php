@@ -18,7 +18,6 @@ use SugarCraft\Charts\Canvas\Canvas;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Style\Style;
-use SugarCraft\Charts\Legend\Legend;
 
 /**
  * OHLC / candlestick chart drawn onto a {@see Canvas}. Each bar gets
