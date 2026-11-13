@@ -73,9 +73,24 @@ final class SessionMap
                     platform  TEXT NOT NULL,
                     inbound_id TEXT NOT NULL,
                     seen_at   INTEGER NOT NULL,
+                    state     TEXT NOT NULL DEFAULT 'pending',
                     PRIMARY KEY (platform, inbound_id)
                 )
                 SQL);
+            // Idempotent column migration: an existing pre-two-state db has
+            // no 'state' column and CREATE skipped. -24 wraps schema upkeep
+            // in the user_version ladder; until then this keeps boot safe.
+            $seenCols = \array_column($db->query('PRAGMA table_info(seen_inbound)')->fetchAll(), 'name');
+            if (!\in_array('state', $seenCols, true)) {
+                $db->exec("ALTER TABLE seen_inbound ADD COLUMN state TEXT NOT NULL DEFAULT 'pending'");
+            }
+            // Boot orphan sweep (043): at open time nothing is in flight in
+            // THIS process, so every surviving 'pending' row is a message
+            // whose dispatch died with a previous process — mark it 'stale'
+            // so the platform's redelivery re-processes it instead of
+            // hitting the duplicate suppress. Runs inside the private
+            // window so the write cannot leak sidecars past the 0600 law.
+            $db->exec("UPDATE seen_inbound SET state = 'stale' WHERE state = 'pending'");
         } finally {
             \umask($priorUmask);
         }
@@ -217,19 +232,69 @@ final class SessionMap
     }
 
     /**
-     * First delivery wins for one platform message id (at-least-once
-     * platforms + bridge restarts both re-present the same id).
+     * The re-process horizon (043): a 'pending' row older than this cannot
+     * belong to a live dispatch — an inbound reaches its confirm within
+     * seconds — so it is treated as orphaned even without a boot in
+     * between. Re-claims refresh seen_at, so a poison id that keeps
+     * crashing only replays once per horizon, and pruneSeen deletes it.
      */
-    public function claimInbound(string $platform, string $inboundId): bool
+    public const CLAIM_GRACE_SECONDS = 300;
+
+    /**
+     * First delivery wins for one platform message id — with a crash
+     * window (043): the claim is 'pending' until the dispatch is enqueued
+     * (confirmInbound). A redelivery that finds a 'stale' row (the boot
+     * orphan sweep's doing) or a 'pending' row past the horizon
+     * re-processes; platform at-least-once intent beats bundle-once
+     * caution. A redelivery inside the live window (fresh pending, not
+     * yet confirmed) still suppresses, as before.
+     */
+    public function claimInbound(string $platform, string $inboundId, ?int $now = null): bool
     {
-        $now = \time();
+        $now ??= \time();
         $stmt = $this->db->prepare(
-            'INSERT INTO seen_inbound (platform, inbound_id, seen_at) VALUES (:p, :i, :now)
-             ON CONFLICT(platform, inbound_id) DO NOTHING',
+            "INSERT INTO seen_inbound (platform, inbound_id, seen_at, state) VALUES (:p, :i, :now, 'pending')
+             ON CONFLICT(platform, inbound_id) DO NOTHING",
         );
         $stmt->execute(['p' => $platform, 'i' => $inboundId, 'now' => $now]);
+        if ($stmt->rowCount() === 1) {
+            return true;
+        }
 
-        return $stmt->rowCount() === 1;
+        $look = $this->db->prepare('SELECT state, seen_at FROM seen_inbound WHERE platform = :p AND inbound_id = :i');
+        $look->execute(['p' => $platform, 'i' => $inboundId]);
+        $row = $look->fetch();
+        $orphaned = $row !== false && ((string) $row['state'] === 'stale'
+            || ((string) $row['state'] === 'pending' && $now - (int) $row['seen_at'] > self::CLAIM_GRACE_SECONDS));
+        if (!$orphaned) {
+            return false;
+        }
+
+        $this->db->prepare('UPDATE seen_inbound SET state = \'pending\', seen_at = :now WHERE platform = :p AND inbound_id = :i')
+            ->execute(['now' => $now, 'p' => $platform, 'i' => $inboundId]);
+
+        return true;
+    }
+
+    /**
+     * The honest "we have it now" moment: the dispatch was enqueued (or the
+     * command was handed to its handler), so a later redelivery of this id
+     * must suppress even after the process that confirmed it dies.
+     */
+    public function confirmInbound(string $platform, string $inboundId): void
+    {
+        $this->db->prepare("UPDATE seen_inbound SET state = 'confirmed' WHERE platform = :p AND inbound_id = :i AND state = 'pending'")
+            ->execute(['p' => $platform, 'i' => $inboundId]);
+    }
+
+    /** The current state of one inbound claim ('pending'|'confirmed'|'stale'), or null. Test/ops surface. */
+    public function inboundState(string $platform, string $inboundId): ?string
+    {
+        $stmt = $this->db->prepare('SELECT state FROM seen_inbound WHERE platform = :p AND inbound_id = :i');
+        $stmt->execute(['p' => $platform, 'i' => $inboundId]);
+        $row = $stmt->fetch();
+
+        return $row === false ? null : (string) $row['state'];
     }
 
     /** Trim the dedupe ledger to $keep days so the sidecar stays bounded. */

@@ -42,6 +42,66 @@ final class SessionMapTest extends TestCase
         return new SessionMap($this->path);
     }
 
+    // ── inbound claim machine (043, discord-25) ────────────────────────
+
+    public function testAFreshClaimAnswersOnceAndTheLiveDuplicateStaysSuppressed(): void
+    {
+        $map = $this->map();
+        self::assertTrue($map->claimInbound('discord', 'msg-1'));
+        self::assertFalse($map->claimInbound('discord', 'msg-1'), 'a replay of a still-pending claim suppresses (as before)');
+        self::assertSame('pending', $map->inboundState('discord', 'msg-1'));
+    }
+
+    public function testAConfirmedClaimSurvivesReopenAndNeverReprocesses(): void
+    {
+        $map = $this->map();
+        self::assertTrue($map->claimInbound('discord', 'msg-2'));
+        $map->confirmInbound('discord', 'msg-2');
+        self::assertSame('confirmed', $map->inboundState('discord', 'msg-2'));
+
+        $reopened = $this->map();
+        self::assertSame('confirmed', $reopened->inboundState('discord', 'msg-2'), 'the boot sweep only orphans pending rows');
+        self::assertFalse($reopened->claimInbound('discord', 'msg-2'));
+    }
+
+    public function testAPendingClaimFromADeadProcessIsStaleAndRedeliveryReprocessesIt(): void
+    {
+        // The crash window: claimed, never confirmed, then the process dies.
+        $this->map()->claimInbound('discord', 'msg-3');
+
+        $reopened = $this->map();
+        self::assertSame('stale', $reopened->inboundState('discord', 'msg-3'), 'boot marks surviving claims orphaned');
+        self::assertTrue($reopened->claimInbound('discord', 'msg-3'), 'the redelivery re-processes instead of vanishing');
+        self::assertSame('pending', $reopened->inboundState('discord', 'msg-3'));
+    }
+
+    public function testAPendingRowPastTheHorizonReprocessesAndThePoisonArmStaysBounded(): void
+    {
+        $now = \time();
+        $map = $this->map();
+        self::assertTrue($map->claimInbound('discord', 'poison-1', $now));
+        // Still inside the horizon: looks like a live dispatch, suppress.
+        self::assertFalse($map->claimInbound('discord', 'poison-1', $now + SessionMap::CLAIM_GRACE_SECONDS - 10));
+        // Past the horizon: no live dispatch takes that long — re-process.
+        self::assertTrue($map->claimInbound('discord', 'poison-1', $now + SessionMap::CLAIM_GRACE_SECONDS + 1));
+        // Re-claim refreshes the horizon, so a re-crashing id replays at
+        // most once per horizon, and pruneSeen ages the row out.
+        self::assertFalse($map->claimInbound('discord', 'poison-1', $now + SessionMap::CLAIM_GRACE_SECONDS + 30));
+    }
+
+    public function testALegacySeenTableWithoutTheStateColumnMigratesOnOpen(): void
+    {
+        $legacy = new \PDO('sqlite:' . $this->path);
+        $legacy->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
+        $legacy->exec('CREATE TABLE seen_inbound (platform TEXT NOT NULL, inbound_id TEXT NOT NULL, seen_at INTEGER NOT NULL, PRIMARY KEY (platform, inbound_id))');
+        $legacy->exec("INSERT INTO seen_inbound (platform, inbound_id, seen_at) VALUES ('discord', 'old-1', 100)");
+        $legacy = null;
+
+        $map = $this->map();
+        self::assertNotNull($map->inboundState('discord', 'old-1'), 'the ALTER added the state column');
+        self::assertTrue($map->claimInbound('discord', 'old-1'), 'a legacy row reads as an orphan (stale) and re-claims');
+    }
+
     /**
      * The M-7 keystone: re-binding a key onto a fresh session resets
      * its cursor, so the fresh session's low seqs stay deliverable.

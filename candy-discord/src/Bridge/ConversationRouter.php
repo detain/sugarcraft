@@ -151,6 +151,12 @@ final class ConversationRouter
         return $this->map->claimInbound($platform, $inboundId);
     }
 
+    /** Release the crash window: the claimed inbound reached its dispatch stage (043). */
+    public function confirmInbound(string $platform, string $inboundId): void
+    {
+        $this->map->confirmInbound($platform, $inboundId);
+    }
+
     /**
      * One inbound human message.
      *
@@ -172,9 +178,15 @@ final class ConversationRouter
             return;
         }
 
-        $this->sessionFor($key, $ref)->then(function (string $sessionId) use ($key, $ref, $text, $isMention, $channel, $images, $documents): void {
+        $this->sessionFor($key, $ref)->then(function (string $sessionId) use ($platform, $key, $ref, $text, $isMention, $channel, $images, $documents, $inboundId): void {
             $this->map->rememberConversation($sessionId, $key, $ref);
             $this->dispatch($channel, $ref, $sessionId, $key, $text, $isMention, $images, $documents);
+            // (043) post-enqueue is the honest "we have it now" moment: the
+            // dispatch synchronously reached the queue/prompt stage, so a
+            // later redelivery must suppress even across restarts.
+            if ($inboundId !== null) {
+                $this->map->confirmInbound($platform, $inboundId);
+            }
         }, fn (\Throwable $e) => $this->failWith($channel, $ref, Lang::t('channels.discord.session.could_not_open', ['error' => $e->getMessage()])));
     }
 

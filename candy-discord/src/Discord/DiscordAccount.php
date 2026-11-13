@@ -386,10 +386,14 @@ final class DiscordAccount implements PlatformFace
             }
             if ($command['name'] === 'pair') {
                 $this->handlePairCommand($ref, (array) $command['args'], $authorId, $isDm, null);
+                $this->router->confirmInbound('discord', $inboundId);
 
                 return;
             }
             $this->router->runCommand('discord', $key, $ref + ['__actor' => ['userId' => $authorId, 'name' => (string) ($author['global_name'] ?? $author['username'] ?? $authorId)]], $command);
+            // (043) the command reached its handler — the enqueue-equivalent
+            // moment — so the claim confirms and a replay must not re-run it.
+            $this->router->confirmInbound('discord', $inboundId);
 
             return;
         }

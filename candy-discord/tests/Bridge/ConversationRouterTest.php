@@ -583,6 +583,33 @@ final class ConversationRouterTest extends TestCase
         self::assertCount(1, $refusals);
     }
 
+    // ── inbound claim machine (043, discord-25) ────────────────────────
+
+    public function testADispatchedInboundConfirmsItsClaimSoTheCrashWindowCloses(): void
+    {
+        // (043) post-enqueue confirm: once the prompt reached the queue
+        // stage the row must read 'confirmed', surviving any later restart.
+        $this->boot();
+        $before = $this->serve->sendSeen;
+        $this->inboundDm('crash-window hello', false, 'm-cf-1');
+        self::assertSame($before + 1, $this->serve->sendSeen, 'the prompt was enqueued');
+        self::assertSame('confirmed', $this->map->inboundState('discord', 'm-cf-1'));
+    }
+
+    public function testALiveDuplicateOfTheSameMessageIdIsSuppressedAndLogged(): void
+    {
+        $rows = [];
+        $this->boot([], new Log(static function (string $line) use (&$rows): void {
+            $rows[] = $line;
+        }, 'debug'));
+        $before = $this->serve->sendSeen;
+        $this->inboundDm('once please', false, 'm-dup-1');
+        $this->inboundDm('once please', false, 'm-dup-1');
+        self::assertSame($before + 1, $this->serve->sendSeen, 'a replay of a fresh pending/confirmed claim never reaches the serve');
+        $dupes = \array_values(\array_filter($rows, static fn (string $r): bool => \str_contains($r, 'inbound_duplicate')));
+        self::assertCount(1, $dupes, 'the suppress keeps its debug row');
+    }
+
     /** @param array<string,mixed> $policy */
     private function boot(array $policy = [], ?Log $log = null): void
     {
