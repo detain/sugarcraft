@@ -5,14 +5,66 @@ declare(strict_types=1);
 namespace SugarCraft\Video\Tests;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Video\Player;
 use SugarCraft\Video\Reel;
 use SugarCraft\Video\Render\Mode;
+use SugarCraft\Video\Render\RendererFactory;
 use SugarCraft\Video\Subtitle\WebVtt;
+use SugarCraft\Video\Synthetic;
 use SugarCraft\Video\Tests\Concerns\CapturesErrorLog;
+use SugarCraft\Video\Tests\Concerns\HidesPathBinaries;
 
 final class ReelTest extends TestCase
 {
     use CapturesErrorLog;
+    use HidesPathBinaries;
+
+    /**
+     * @testdox SV-C1: withAutoMode() was dead-on-arrival — now it builds through the auto ladder
+     *
+     * Load-bearing: revert withAutoMode() to `new AutoMode()` (private ctor)
+     * and this test fails with the original Error; drop the ladder resolution
+     * in toPlayer() and the mode assertion reddens.
+     */
+    public function testWithAutoModeBuildsAPlayerThroughTheAutoLadder(): void
+    {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('GD not available');
+        }
+
+        $gif = Synthetic::generate(
+            sys_get_temp_dir() . '/sugar-video-c1-' . getmypid() . '-' . bin2hex(random_bytes(4)) . '.gif',
+            16,
+            8,
+            4,
+            4,
+        );
+
+        try {
+            $reel = Reel::open($gif)->withAutoMode();
+            $this->assertNull($reel->mode(), 'the AutoMode sentinel stores the auto (null) selection');
+
+            // The Mode|AutoMode union read: an explicit Mode keeps itself.
+            $this->assertSame(Mode::Ascii, Reel::open($gif)->withMode(Mode::Ascii)->mode());
+
+            // Live-against-live keeps the pin environment-proof while still
+            // reddening a build path that never consults the ladder.
+            $expected = null;
+            $player = $this->withoutPathBinaries(function () use ($reel, &$expected): Player {
+                $expected = RendererFactory::autoMode();
+
+                return $reel->toPlayer();
+            });
+
+            try {
+                $this->assertSame($expected, $player->mode, 'toPlayer() must resolve the auto selection through the same ladder as Player::open()');
+            } finally {
+                $player->stop();
+            }
+        } finally {
+            @unlink($gif);
+        }
+    }
     public function testOpenRecordsThePath(): void
     {
         $this->assertSame('/tmp/x.mp4', Reel::open('/tmp/x.mp4')->path());

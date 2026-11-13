@@ -319,7 +319,7 @@ final class Reel
      */
     public function withAutoMode(): self
     {
-        return $this->with(mode: new AutoMode());
+        return $this->with(mode: AutoMode::new());
     }
 
     /**
