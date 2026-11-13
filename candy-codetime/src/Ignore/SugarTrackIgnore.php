@@ -70,11 +70,7 @@ final class SugarTrackIgnore
 
         $size = @filesize($path);
         if ($size !== false && $size > self::MAX_IGNORE_BYTES) {
-            throw new \RuntimeException(
-                'candy-codetime: ' . $label . ' ' . $path . ' is ' . $size
-                . ' bytes, over the ' . self::MAX_IGNORE_BYTES
-                . ' byte limit — refusing to read it',
-            );
+            throw new IgnoreFileTooLargeException($path, $size, self::MAX_IGNORE_BYTES, $label);
         }
 
         // is_file() would be the blunt test, but on Linux file() against a
@@ -84,7 +80,7 @@ final class SugarTrackIgnore
         $lines = is_dir($path) ? false : @file($path, FILE_IGNORE_NEW_LINES);
         if ($lines === false) {
             throw new \RuntimeException(
-                'candy-codetime: ' . $label . ' ' . $path . ' could not be read — refusing to track with it in an unknown state',
+                $label . ' ' . $path . ' could not be read — refusing to track with it in an unknown state',
             );
         }
 

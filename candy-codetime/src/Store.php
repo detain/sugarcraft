@@ -115,7 +115,7 @@ final class Store implements HeartbeatReader
             if (!$created && !is_dir($dir)) {
                 $last = error_get_last();
                 throw new \RuntimeException(
-                    'candy-codetime: cannot create ' . $label . ' ' . $dir
+                    'cannot create ' . $label . ' ' . $dir
                     . (isset($last['message']) ? ': ' . $last['message'] : ''),
                 );
             }
@@ -208,7 +208,7 @@ final class Store implements HeartbeatReader
         }
         if (!@chmod($path, $target)) {
             throw new \RuntimeException(
-                "candy-codetime: cannot make {$label} {$path} owner-private",
+                "cannot make {$label} {$path} owner-private",
             );
         }
     }
@@ -372,7 +372,7 @@ final class Store implements HeartbeatReader
             // An unencodable heartbeat (raw invalid UTF-8 in a field) must never
             // become a silent blank line — the old false concat wrote exactly that.
             throw new \RuntimeException(
-                'candy-codetime: heartbeat could not be encoded: ' . $e->getMessage(),
+                'heartbeat could not be encoded: ' . $e->getMessage(),
                 0,
                 $e,
             );
@@ -392,7 +392,7 @@ final class Store implements HeartbeatReader
         } elseif (!is_file($file)) {
             $last = error_get_last();
             throw new \RuntimeException(
-                'candy-codetime: cannot create ' . $file
+                'cannot create ' . $file
                 . (isset($last['message']) ? ': ' . $last['message'] : ''),
             );
         }
@@ -416,7 +416,7 @@ final class Store implements HeartbeatReader
             // failed backup.
             $last = error_get_last();
             throw new \RuntimeException(
-                'candy-codetime: failed to append heartbeat to ' . $file
+                'failed to append heartbeat to ' . $file
                 . (isset($last['message']) ? ': ' . $last['message'] : ''),
             );
         }

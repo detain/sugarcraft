@@ -65,7 +65,7 @@ final class JsonExporter implements TabularExporterInterface
             return json_encode($objects, JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR);
         } catch (\JsonException $e) {
             throw new \RuntimeException(
-                'candy-codetime: export could not be encoded: ' . $e->getMessage(),
+                'export could not be encoded: ' . $e->getMessage(),
                 0,
                 $e,
             );

@@ -49,6 +49,7 @@ use SugarCraft\CodeTime\Export\CsvExporter;
 use SugarCraft\CodeTime\Export\IcalExporter;
 use SugarCraft\CodeTime\Export\JsonExporter;
 use SugarCraft\CodeTime\Heartbeat;
+use SugarCraft\CodeTime\Ignore\IgnoreFileTooLargeException;
 use SugarCraft\CodeTime\Ignore\SugarTrackIgnore;
 use SugarCraft\CodeTime\Lang;
 use SugarCraft\CodeTime\Report\GapsReport;
@@ -464,6 +465,11 @@ if ($cmd === 'push') {
             if ($allow === null || !$allow->isAllowed($file)) {
                 [$ignore, $ignorePath] = $ignoreFor($file, $cwd);
             }
+        } catch (IgnoreFileTooLargeException $e) {
+            // CT-S39: a size refusal is a config-file verdict, not a storage
+            // failure — its own envelope, branded exactly once.
+            fwrite(STDERR, Lang::t('cli.ignore_too_large', ['message' => Sanitize::untrusted($e->getMessage())]) . "\n");
+            exit(1);
         } catch (\Throwable $e) {
             $storageError($e);
         }
@@ -570,6 +576,14 @@ if ($cmd === 'push') {
             if ($allow === null || !$allow->isAllowed($row['file'])) {
                 [$ignore, $ignorePath] = $ignoreFor($row['file'], $cwd);
             }
+        } catch (IgnoreFileTooLargeException $e) {
+            // A batch row's own consult failing on size: name the row, name
+            // the file, count it malformed, and let the rest of the batch
+            // through — same discipline as every other stdin refusal.
+            fwrite(STDERR, Lang::t('cli.push_stdin_malformed', ['line' => $index + 1]) . "\n");
+            fwrite(STDERR, Lang::t('cli.ignore_too_large', ['message' => Sanitize::untrusted($e->getMessage())]) . "\n");
+            $malformed++;
+            continue;
         } catch (\Throwable $e) {
             $storageError($e);
         }
@@ -775,8 +789,10 @@ if ($cmd === 'backup') {
         try {
             $dest = (new AutoBackup($backupDir, [$dataDir]))->archiveSqliteDatabase($dbPath);
         } catch (\RuntimeException $e) {
-            fwrite(STDERR, Sanitize::untrusted($e->getMessage()) . "\n");
-            exit(1);
+            // CT-S39: the backup door used to print the bare exception text —
+            // brand-less and untranslated. Same envelope as every other
+            // storage verdict now.
+            $storageError($e);
         }
         fwrite(STDOUT, Lang::t('cli.backup_sqlite_done', ['file' => Sanitize::untrusted($dest)]) . "\n");
         exit(0);
@@ -789,9 +805,9 @@ if ($cmd === 'backup') {
         $count = $autoBackup->rotate(30);
     } catch (\RuntimeException $e) {
         // rotate() now throws on mkdir/copy failure rather than losing data
-        // silently — surface it to the user with a non-zero exit.
-        fwrite(STDERR, Sanitize::untrusted($e->getMessage()) . "\n");
-        exit(1);
+        // silently — surface it to the user through the error envelope
+        // (CT-S39: translated, branded exactly once).
+        $storageError($e);
     }
     if ($count > 0) {
         fwrite(STDOUT, Lang::t($count === 1 ? 'cli.backup_done_one' : 'cli.backup_done', ['count' => $count]) . "\n");

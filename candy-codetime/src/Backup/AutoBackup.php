@@ -89,7 +89,7 @@ final class AutoBackup
                 $owner = $pending[$dest] ?? null;
                 if ($owner !== null && $owner !== $file) {
                     throw new \RuntimeException(
-                        'candy-codetime: ' . $owner . ' and ' . $file
+                        '' . $owner . ' and ' . $file
                         . ' both archive to ' . basename($dest)
                         . ' — refusing to guess which one owns it',
                     );
@@ -120,13 +120,13 @@ final class AutoBackup
         $lockPath = $this->backupDir . '/.lock';
         $lock = @fopen($lockPath, 'c');
         if ($lock === false) {
-            throw new \RuntimeException('candy-codetime: could not open the backup lock file at ' . $lockPath);
+            throw new \RuntimeException('could not open the backup lock file at ' . $lockPath);
         }
         Store::ensurePrivateFile($lockPath, 'backup lock file');
         if (@flock($lock, LOCK_EX | LOCK_NB) === false) {
             fclose($lock);
             throw new \RuntimeException(
-                'candy-codetime: another backup run is already writing to ' . $this->backupDir
+                'another backup run is already writing to ' . $this->backupDir
                 . ' — refusing to overlap',
             );
         }
@@ -142,7 +142,7 @@ final class AutoBackup
                 $tmp = $dest . '.tmp';
                 if (!@copy($file, $tmp)) {
                     @unlink($tmp);
-                    throw new \RuntimeException("candy-codetime: failed to copy {$file} to {$dest}");
+                    throw new \RuntimeException("failed to copy {$file} to {$dest}");
                 }
                 // copy() creates the destination from the process umask, NOT
                 // from the source mode (measured: a 0600 source lands 0644
@@ -152,11 +152,11 @@ final class AutoBackup
                 Store::ensurePrivateFile($tmp, 'archived heartbeat file');
                 if (is_file($dest) && !@unlink($dest)) {
                     @unlink($tmp);
-                    throw new \RuntimeException("candy-codetime: could not replace the stale archive at {$dest}");
+                    throw new \RuntimeException("could not replace the stale archive at {$dest}");
                 }
                 if (!@rename($tmp, $dest)) {
                     @unlink($tmp);
-                    throw new \RuntimeException("candy-codetime: could not move the archived copy into place at {$dest}");
+                    throw new \RuntimeException("could not move the archived copy into place at {$dest}");
                 }
                 ++$count;
             }
@@ -231,10 +231,10 @@ final class AutoBackup
     public function archiveSqliteDatabase(string $dbPath): string
     {
         if (!extension_loaded('sqlite3')) {
-            throw new \RuntimeException('candy-codetime: backup --sqlite needs the sqlite3 PHP extension, which is not loaded in this PHP');
+            throw new \RuntimeException('backup --sqlite needs the sqlite3 PHP extension, which is not loaded in this PHP');
         }
         if (!is_file($dbPath)) {
-            throw new \RuntimeException("candy-codetime: no sqlite database at {$dbPath} — nothing to archive");
+            throw new \RuntimeException("no sqlite database at {$dbPath} — nothing to archive");
         }
 
         Store::ensurePrivateDir($this->backupDir, 'backup directory');
@@ -243,7 +243,7 @@ final class AutoBackup
         try {
             $db = new \SQLite3($dbPath, SQLITE3_OPEN_READWRITE);
         } catch (\Throwable $error) {
-            throw new \RuntimeException('candy-codetime: could not open ' . $dbPath . ' for archiving: ' . $error->getMessage());
+            throw new \RuntimeException('could not open ' . $dbPath . ' for archiving: ' . $error->getMessage());
         }
 
         // @ on the exec legs: a failure already answers through lastErrorMsg
@@ -253,13 +253,13 @@ final class AutoBackup
         if ($stmt === false) {
             $message = $db->lastErrorMsg();
             $db->close();
-            throw new \RuntimeException('candy-codetime: this SQLite build cannot run VACUUM INTO: ' . $message);
+            throw new \RuntimeException('this SQLite build cannot run VACUUM INTO: ' . $message);
         }
         $stmt->bindValue(1, $dest, SQLITE3_TEXT);
         if (@$stmt->execute() === false) {
             $message = $db->lastErrorMsg();
             $db->close();
-            throw new \RuntimeException("candy-codetime: could not archive {$dbPath} to {$dest}: " . $message);
+            throw new \RuntimeException("could not archive {$dbPath} to {$dest}: " . $message);
         }
         $db->close();
 

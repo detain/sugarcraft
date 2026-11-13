@@ -202,6 +202,10 @@ final class CliTest extends TestCase
         $this->assertSame(1, $res['exit'], 'refused at the load door, not a 255 fatal');
         $this->assertStringContainsString('over the', $res['stderr'], 'the refusal names the byte limit breach');
         $this->assertStringContainsString('.sugartrackignore', $res['stderr'], 'and the offending file');
+        // CT-S39: a size refusal is a config verdict — its own envelope, and
+        // the process name appears exactly once on the surface.
+        $this->assertStringNotContainsString('storage error', $res['stderr']);
+        $this->assertSame(1, substr_count($res['stderr'], 'candy-codetime: '));
         $this->assertCount(1, array_filter(explode("\n", $res['stderr'])), 'a one-line diagnosis');
         $this->assertStringNotContainsString('Fatal error', $res['stderr']);
         $this->assertStringNotContainsString('recorded', $res['stdout']);
@@ -976,6 +980,46 @@ final class CliTest extends TestCase
         } finally {
             chmod($allow, 0644);
         }
+    }
+
+    // ---- CT-S39 (finding 059): the error-prefix policy.
+
+    public function testAnOversizedAllowFileTakesTheSameConfigDoorWithTheAllowNoun(): void
+    {
+        $star = chr(42);
+        file_put_contents($this->workDir . '/.sugartrackallow', str_repeat($star, SugarTrackIgnore::MAX_IGNORE_BYTES + 1));
+        $res = $this->runCli(['push', 'proj', 'php', $this->workDir . '/main.php']);
+        self::assertSame(1, $res['exit'], $res['stderr']);
+        self::assertStringContainsString('allow file', $res['stderr']);
+        self::assertStringContainsString('over the', $res['stderr']);
+        self::assertStringNotContainsString('storage error', $res['stderr']);
+        self::assertSame(1, substr_count($res['stderr'], 'candy-codetime: '));
+    }
+
+    public function testTheBatchRowHitByARuleSizeRefusalIsNamedAndCounted(): void
+    {
+        $star = chr(42);
+        file_put_contents($this->workDir . '/.sugartrackignore', str_repeat($star, SugarTrackIgnore::MAX_IGNORE_BYTES + 1));
+        $row = json_encode(['time' => time(), 'project' => 'p', 'language' => 'php', 'file' => $this->workDir . '/a.php', 'duration' => 60]);
+        $res = $this->runCli(['push', '--'], $this->workDir, ['CANDY_CODETIME_DIR' => $this->dataDir], $row . "\n");
+        self::assertSame(1, $res['exit'], $res['stderr']);
+        self::assertStringContainsString('stdin line 1', $res['stderr']);
+        self::assertStringContainsString('over the', $res['stderr']);
+        self::assertStringNotContainsString('recorded', $res['stdout']);
+    }
+
+    public function testThrownStorageTextsCarryNoBrandAndTheEnvelopeAddsExactlyOne(): void
+    {
+        // A file that is not a database at all answers through the
+        // storage-error envelope: brand once, message unbranded beneath it.
+        $dbPath = $this->dataDir . '/candy-codetime.db';
+        file_put_contents($dbPath, 'this is not a sqlite database at all');
+
+        $res = $this->runCli(['--backend=sqlite', 'export', 'json', '3']);
+        self::assertSame(1, $res['exit'], $res['stderr']);
+        self::assertStringContainsString('candy-codetime: storage error: ', $res['stderr']);
+        self::assertStringContainsString('is not a usable candy-codetime database', $res['stderr']);
+        self::assertSame(1, substr_count($res['stderr'], 'candy-codetime: '), 'no doubled brand: ' . $res['stderr']);
     }
 
     public function testAPreRenameDefaultDirectoryIsMovedOnceAndReadThroughTheNewName(): void

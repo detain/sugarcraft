@@ -135,7 +135,7 @@ final class Renderer
             Style::new(),
             self::palette($d)->error,
             $d->colorProfile,
-        )->render(' ' . self::clean($d->loadError)), $d->width) . "\n";
+        )->render(' candy-codetime: ' . self::clean($d->loadError)), $d->width) . "\n";
         $notes = '';
         if ($d->droppedLines > 0) {
             $notes .= self::clip(self::tint(Style::new(), self::palette($d)->note, $d->colorProfile)

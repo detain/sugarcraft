@@ -22,3 +22,11 @@ Source: review-pipeline-1112 candy-codetime CT-S49 (findings 060+061)
 ### 2026-11-13 — Translated chrome, English date formats, verbatim storage errors (CT-S13)
 Pattern: the dashboard paints every chrome string through `Lang::t('ui.*')` (titles, help row, headings, suffixes, '(no data)'), but the DATE FORMATS stay English letters: `ui.range_format`/`ui.weekday_format` hold the PHP format characters (`M j`, `D`) themselves, so every locale catalogue carries them byte-identical and month/weekday names render in English on the timeline — deliberate, because `DateTimeImmutable::format()` has no locale table and shipping one for 16 locales inside the chrome is out of scope for a TUI whose dates are read numerically anyway. Second law: `Store`/`SqliteBackend` RuntimeException and STDERR texts ("cannot read day file…", "Heartbeat append cancelled") stay VERBATIM English — they name storage invariants for log forensics and the tests pin them byte-wise; user-facing CLI chrome all rides `cli.*`/`ui.*` keys. Help-row width: translated rows are longer than English (de 75 cells); the renderer falls back to the locale-independent `ui.help_row_compact` (key symbols only, identical in all 16) when the terminal cannot hold the full translated row, so words are never clipped mid-binding.
 Source: review-pipeline-1112 candy-codetime CT-S13 (finding 012 call-site half)
+
+### 2026-11-13 — error brand belongs to the display layer alone (CT-S39)
+
+Thrown exception texts under src/ carry NO `candy-codetime: ` prefix; the CLI's
+`cli.storage_error` / `cli.ignore_too_large` envelopes (and the dashboard
+banner in Renderer) add the process name exactly once. Direct STDERR warning
+writes inside Store are display surfaces and keep their own prefix.
+`tests/ErrorBrandCensusTest.php` fails closed on new throw-side literals.

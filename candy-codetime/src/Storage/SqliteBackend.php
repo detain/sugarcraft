@@ -44,7 +44,7 @@ final class SqliteBackend implements HeartbeatReader
         $this->db = new \SQLite3($dbPath);
         if (!$this->db->busyTimeout(self::BUSY_TIMEOUT_MS)) {
             throw new \RuntimeException(
-                "candy-codetime: cannot set the busy timeout on database file {$dbPath}",
+                "cannot set the busy timeout on database file {$dbPath}",
             );
         }
         // WAL removes the writer-blocks-reader class outright: the file's
@@ -76,7 +76,7 @@ final class SqliteBackend implements HeartbeatReader
         $version = (int) @$this->db->querySingle('PRAGMA user_version');
         if ($version !== 0 && $version !== self::SCHEMA_VERSION) {
             throw new \RuntimeException(
-                "candy-codetime: {$dbPath} carries schema version {$version}, which this build does not understand — refusing to open it (README Data layout documents the supported version)",
+                "{$dbPath} carries schema version {$version}, which this build does not understand — refusing to open it (README Data layout documents the supported version)",
             );
         }
         @$this->db->exec('CREATE TABLE IF NOT EXISTS heartbeats (
@@ -104,7 +104,7 @@ final class SqliteBackend implements HeartbeatReader
         // was a "successful" backend whose first real query died later.
         if (@$this->db->querySingle('SELECT count(*) FROM heartbeats') === false) {
             throw new \RuntimeException(
-                "candy-codetime: {$dbPath} is not a usable candy-codetime database: "
+                "{$dbPath} is not a usable candy-codetime database: "
                 . $this->db->lastErrorMsg(),
             );
         }
@@ -113,7 +113,7 @@ final class SqliteBackend implements HeartbeatReader
         // never leave wearing a version it does not actually carry.
         if ($version === 0 && @$this->db->exec('PRAGMA user_version = ' . self::SCHEMA_VERSION) === false) {
             throw new \RuntimeException(
-                "candy-codetime: could not stamp schema version " . self::SCHEMA_VERSION . ' on ' . $dbPath . ': '
+                "could not stamp schema version " . self::SCHEMA_VERSION . ' on ' . $dbPath . ': '
                 . $this->db->lastErrorMsg(),
             );
         }
@@ -131,14 +131,14 @@ final class SqliteBackend implements HeartbeatReader
         $mode = @fileperms($dbPath);
         if ($mode !== false && ($mode & 0o077) !== 0 && !@chmod($dbPath, 0o600)) {
             throw new \RuntimeException(
-                "candy-codetime: cannot make database file {$dbPath} owner-private",
+                "cannot make database file {$dbPath} owner-private",
             );
         }
         foreach ([$dbPath . '-wal', $dbPath . '-shm'] as $sidecar) {
             $sidecarMode = @fileperms($sidecar);
             if ($sidecarMode !== false && ($sidecarMode & 0o077) !== 0 && !@chmod($sidecar, 0o600)) {
                 throw new \RuntimeException(
-                    "candy-codetime: cannot make database sidecar {$sidecar} owner-private",
+                    "cannot make database sidecar {$sidecar} owner-private",
                 );
             }
         }
@@ -152,7 +152,7 @@ final class SqliteBackend implements HeartbeatReader
         // `export json` into a fatal (JsonExporter cannot encode it).
         foreach ([$hb->project, $hb->language, $hb->file] as $text) {
             if (!\mb_check_encoding($text, 'UTF-8')) {
-                throw new \RuntimeException('candy-codetime: heartbeat text is not valid UTF-8, refusing to store it');
+                throw new \RuntimeException('heartbeat text is not valid UTF-8, refusing to store it');
             }
         }
 
@@ -160,7 +160,7 @@ final class SqliteBackend implements HeartbeatReader
             $tags = json_encode($hb->tags, JSON_THROW_ON_ERROR);
         } catch (\JsonException $e) {
             throw new \RuntimeException(
-                'candy-codetime: heartbeat tags could not be encoded: ' . $e->getMessage(),
+                'heartbeat tags could not be encoded: ' . $e->getMessage(),
                 0,
                 $e,
             );
@@ -168,7 +168,7 @@ final class SqliteBackend implements HeartbeatReader
 
         $stmt = @$this->db->prepare('INSERT INTO heartbeats (time, project, language, file, duration, tags) VALUES (:time, :project, :language, :file, :duration, :tags)');
         if ($stmt === false) {
-            throw new \RuntimeException('candy-codetime: sqlite prepare failed: ' . $this->db->lastErrorMsg());
+            throw new \RuntimeException('sqlite prepare failed: ' . $this->db->lastErrorMsg());
         }
         $stmt->bindValue(':time', $hb->time);
         $stmt->bindValue(':project', $hb->project);
@@ -179,7 +179,7 @@ final class SqliteBackend implements HeartbeatReader
         $result = @$stmt->execute();
         if ($result === false) {
             $stmt->close();
-            throw new \RuntimeException('candy-codetime: sqlite heartbeat insert failed: ' . $this->db->lastErrorMsg());
+            throw new \RuntimeException('sqlite heartbeat insert failed: ' . $this->db->lastErrorMsg());
         }
         // Finalize the result BEFORE closing its statement — closing first
         // invalidates the result object (finalize() then errors).
@@ -194,14 +194,14 @@ final class SqliteBackend implements HeartbeatReader
     {
         $stmt = @$this->db->prepare('SELECT * FROM heartbeats WHERE time >= :from AND time <= :to ORDER BY time ASC');
         if ($stmt === false) {
-            throw new \RuntimeException('candy-codetime: sqlite prepare failed: ' . $this->db->lastErrorMsg());
+            throw new \RuntimeException('sqlite prepare failed: ' . $this->db->lastErrorMsg());
         }
         $stmt->bindValue(':from', $fromTime);
         $stmt->bindValue(':to', $toTime);
         $result = @$stmt->execute();
         if ($result === false) {
             $stmt->close();
-            throw new \RuntimeException('candy-codetime: sqlite heartbeat query failed: ' . $this->db->lastErrorMsg());
+            throw new \RuntimeException('sqlite heartbeat query failed: ' . $this->db->lastErrorMsg());
         }
         $rows = [];
         try {
@@ -252,7 +252,7 @@ final class SqliteBackend implements HeartbeatReader
     {
         $stmt = @$this->db->prepare('INSERT INTO milestones (name, time, description) VALUES (:name, :time, :desc)');
         if ($stmt === false) {
-            throw new \RuntimeException('candy-codetime: sqlite prepare failed: ' . $this->db->lastErrorMsg());
+            throw new \RuntimeException('sqlite prepare failed: ' . $this->db->lastErrorMsg());
         }
         $stmt->bindValue(':name', $name);
         $stmt->bindValue(':time', $time);
@@ -260,7 +260,7 @@ final class SqliteBackend implements HeartbeatReader
         $result = @$stmt->execute();
         if ($result === false) {
             $stmt->close();
-            throw new \RuntimeException('candy-codetime: sqlite milestone insert failed: ' . $this->db->lastErrorMsg());
+            throw new \RuntimeException('sqlite milestone insert failed: ' . $this->db->lastErrorMsg());
         }
         $result->finalize();
         $stmt->close();
@@ -273,7 +273,7 @@ final class SqliteBackend implements HeartbeatReader
     {
         $result = @$this->db->query('SELECT name, time, description FROM milestones ORDER BY time ASC');
         if ($result === false) {
-            throw new \RuntimeException('candy-codetime: sqlite milestone query failed: ' . $this->db->lastErrorMsg());
+            throw new \RuntimeException('sqlite milestone query failed: ' . $this->db->lastErrorMsg());
         }
         $rows = [];
         try {
