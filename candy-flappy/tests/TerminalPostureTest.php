@@ -234,4 +234,33 @@ final class TerminalPostureTest extends TestCase
             $this->assertTrue($whole, "no complete crash hint survived at $cols cols: '$status'");
         }
     }
+
+    public function testCrashStatusRowOmitsTheHintRatherThanClippingIt(): void
+    {
+        // flappy-46 (finding -046, the test-side twin of -021): the sweep in
+        // the sibling test pins a COMPLETE tier surviving the 62..82 band;
+        // this pins pickHint's third branch — when even the floor tier
+        // cannot fit (a seven-digit score eating the budget), the hint is
+        // OMITTED whole, never re-joined and re-clipped mid-word. The old
+        // behaviour leaked exactly this: '💥 splat — r retry · q q'.
+        $g = new Game(
+            bird: $this->sized(62, 24)->bird,
+            pipes: [],
+            score: 9999999,
+            crashed: true,
+            highScores: [9999999],
+            newRecord: true,
+            configDir: $this->hermeticConfigDir(),
+        );
+        [$sized,] = $g->update(new WindowSizeMsg(62, 24));
+        $rows = explode("\n", rtrim($sized->view(), "\n"));
+        $status = (string) end($rows);
+        $this->assertLessThanOrEqual(62, Width::of($status));
+        $en = require __DIR__ . '/../lang/en.php';
+        foreach (['ui.crash_full', 'ui.crash_short', 'ui.crash_floor'] as $key) {
+            $this->assertStringNotContainsString($en[$key], $status, "tier $key cannot fit at this budget");
+        }
+        // No hint glyph bytes at all: a clipped re-join would leave 💥 in the row.
+        $this->assertStringNotContainsString('💥', $status, 'a too-wide hint must be omitted, never clipped');
+    }
 }
