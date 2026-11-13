@@ -875,10 +875,17 @@ final class GifDecoder implements Decoder
     }
 
     /**
-     * A GIF decoder is factory-owned and re-decodes its file from scratch, so
-     * Player rebuilds it via DecoderFactory rather than reopening in place —
-     * matching the ffmpeg path. The distinction only matters for custom
-     * in-memory decoders injected through Player::fromDecoder().
+     * False — a seek cannot WALK this decoder's live cursor in place the way
+     * an injected double replays from its head; positions are taken by
+     * re-hydrating (the seconds route or the index walk both re-open from the
+     * captured bytes and land the cursor).
+     *
+     * It does NOT mean "rebuild me as a new object": since M38 the Player's
+     * factory-else branch recognises this class by name and reuses THIS
+     * decoder through its same-source reopen() — re-hydrating from the
+     * open-time capture with zero filesystem re-read, with the M40 emit cache
+     * making the walk free. Only the ffmpeg path (whose rebuild is a respawn
+     * anyway) still goes through a fresh DecoderFactory object.
      */
     public function reopensInPlace(): bool
     {

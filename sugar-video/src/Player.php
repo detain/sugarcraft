@@ -20,6 +20,7 @@ use SugarCraft\ColorProfile\Probe;
 use SugarCraft\Video\Decode\Decoder;
 use SugarCraft\Video\Decode\DecoderFactory;
 use SugarCraft\Video\Decode\FfmpegDecodeFailure;
+use SugarCraft\Video\Decode\GifDecoder;
 use SugarCraft\Video\Decode\RgbFrame;
 use SugarCraft\Video\Msg\ResizeRebuildMsg;
 use SugarCraft\Video\Msg\TickMsg;
@@ -1823,11 +1824,16 @@ final class Player implements Model
      * Close-and-recreate the decoder at a given size+mode, advanced to $frameIndex.
      *
      * The decision is driven by the decoder's own {@see Decoder::reopensInPlace()}
-     * capability, not by a `'/fake'` string or an `instanceof` test class in the
-     * playback path:
+     * capability, with one production-class branch (M38), never by a `'/fake'`
+     * string or an `instanceof` test class in the playback path — test doubles
+     * answer the capability and take the first branch:
      *  - A decoder that reopens in place (an injected test double, or a server
      *    stream that regenerates at the new geometry) is re-opened via reopen().
-     *  - Any other decoder (the ffmpeg/GIF decoders DecoderFactory owns) is
+     *  - The GIF decoder holds its whole source as an open-time capture, so it
+     *    re-hydrates from those bytes via its own same-source reopen() — zero
+     *    filesystem, zero re-conversion (M40), and the single-capture law stops
+     *    a mutated file from changing what plays mid-session.
+     *  - Any other decoder (the ffmpeg path DecoderFactory owns) is
      *    closed — F21: never leak the old ffmpeg process — and rebuilt fresh
      *    from the source path via DecoderFactory, re-presenting the request
      *    headers so a signed stream survives the rebuild.
@@ -1845,6 +1851,18 @@ final class Player implements Model
     private function rebuildDecoderAt(int $cellsW, int $cellsH, Mode $mode, int $frameIndex): array
     {
         if ($this->decoder->reopensInPlace()) {
+            $this->decoder->reopen($this->videoPath, $cellsW, $cellsH, $this->fps, $mode, 0.0, $this->headers);
+            $decoder = $this->decoder;
+        } elseif ($this->decoder instanceof GifDecoder) {
+            // M38: the retained-capture decoder IS a reopen-in-place machine
+            // for its own bytes — its same-source reopen() re-hydrates from
+            // the single open() capture without touching the filesystem (the
+            // single-capture law) and the M40 emit cache serves the walk to
+            // $frameIndex without re-converting. The close()-before-rebuild
+            // in the factory branch exists to reap the ffmpeg child; a local
+            // GIF holds no child, and re-reading it mid-playback was both
+            // the cost this row retires and the second-chance TOCTOU the
+            // capture law exists to deny.
             $this->decoder->reopen($this->videoPath, $cellsW, $cellsH, $this->fps, $mode, 0.0, $this->headers);
             $decoder = $this->decoder;
         } else {
@@ -2340,6 +2358,17 @@ final class Player implements Model
         if ($this->decoder->reopensInPlace()) {
             $index = (int) round(max(0.0, $startSec) * $this->fps);
             return $this->rebuildDecoderAt($cellsW, $cellsH, $mode, $index);
+        }
+
+        if ($this->decoder instanceof GifDecoder) {
+            // M38/038: same retained-capture route as the index rebuild —
+            // GifDecoder::open() honours $startSec as a cursor jump over its
+            // kept bytes, so the seek lands with ONE cached pull: no re-read,
+            // no re-decode, no child to reap (there never was one).
+            $this->decoder->reopen($this->videoPath, $cellsW, $cellsH, $this->fps, $mode, max(0.0, $startSec), $this->headers);
+            $decoder = $this->decoder;
+            $frame = $decoder->next();
+            return [$decoder, $frame, $frame !== null ? (int) round(max(0.0, $startSec) * $this->fps) : 0];
         }
 
         $this->decoder->close(); // never leak the old ffmpeg process

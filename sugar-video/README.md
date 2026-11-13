@@ -500,7 +500,11 @@ reinvented: [sugar-image](../sugar-image) (image → cell renderers),
   digit keys) ride the SAME seconds route on factory-owned sources (SV-H11):
   the decoder re-spawns at the target's seconds and lands with one pull
   instead of re-decoding every intervening frame, so the keyframe-snap
-  trade-off applies to them too. Injected decoders that reopen from their own
+  trade-off applies to them too. A local GIF rides the same route but never
+  the filesystem: it re-seeks inside the bytes captured at open (the
+  single-capture law) and its converted-frame cache (SV-M40) serves any frame
+  already painted, so seek round-trips cost zero re-reads and zero
+  re-conversions, exactly frame index. Injected decoders that reopen from their own
   head (no seconds notion) keep the frame-exact forward walk, bounded by the
   per-tick budget.
 
