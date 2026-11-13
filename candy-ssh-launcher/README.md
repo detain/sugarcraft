@@ -195,6 +195,8 @@ read config → render picker → read keys → choose → pcntl_exec(ssh, argv)
 
 That last `pcntl_exec` is the critical line: it **replaces** the PHP process with `ssh`. File descriptors, environment, and the controlling tty all flow through unchanged, so the user sees a normal `ssh` session — host-key prompts, agent forwarding, MOTD, exit status, all native. We never proxy bytes; we get out of the way.
 
+The interactive picker owns the **alternate screen buffer** — it enters on the first draw (`CSI ?1049h`) and leaves on every exit path (pick, cancel, or trapped signal, `CSI ?1049l`). The shell's screen is restored exactly: a cancelled session leaves nothing behind because the frame never touched the main screen. `--list` (no-terminal mode) is a plain line printer and performs no buffer switching.
+
 ## Import from ssh config
 
 `candy-ssh-launcher` can import endpoints directly from your OpenSSH config file (`~/.ssh/config`):

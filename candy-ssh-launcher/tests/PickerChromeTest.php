@@ -75,19 +75,36 @@ final class PickerChromeTest extends TestCase
         ];
     }
 
+    public function testEverySessionOwnsTheAlternateBufferAndLeavesIt(): void
+    {
+        // -08: enter exactly once, first byte of the session; leave
+        // exactly once, on EVERY exit shape. The main screen is restored
+        // by the buffer switch itself — no hand-rolled erase survives.
+        foreach (["\x1b", "\r", "\x03"] as $exitKey) {
+            [, $out] = $this->drive($exitKey, $this->threeHosts());
+            self::assertStringStartsWith("\x1b[?1049h", $out, 'alternate buffer opens the session');
+            self::assertSame(1, substr_count($out, "\x1b[?1049h"), 'entered once');
+            self::assertSame(1, substr_count($out, "\x1b[?1049l"), 'left once');
+            self::assertStringContainsString("\x1b[?1049l\n", $out, 'leave is the last thing the picker writes');
+            self::assertStringNotContainsString("\x1b[2J", $out, 'the eraseScreen cancel path is gone');
+        }
+    }
+
     public function testAbortClearsTheTransientFrameAndPickDoesNot(): void
     {
-        // T1: Esc (and ^C) must erase the picker frame — a cancelled
-        // session should not leave dead chrome on the terminal. A
-        // successful pick deliberately keeps the frame (PickerSanitizeTest
-        // pins that the Enter path never emits eraseScreen).
+        // T1 superseded by -08: a cancelled session leaves nothing behind
+        // because the frame lived in the alternate buffer the whole time.
+        // Both exits now share the same visible truth: the main screen was
+        // never touched. The old pin (cancel erases, pick keeps the
+        // frame) is rewritten to the buffer model it replaced.
         [, $abortOut] = $this->drive("\x1b", $this->threeHosts());
-        self::assertStringContainsString("\x1b[2J", $abortOut);
-        self::assertStringContainsString("\x1b[1;1H", $abortOut);
+        self::assertStringContainsString("\x1b[?1049l", $abortOut);
+        self::assertStringNotContainsString("\x1b[2J", $abortOut);
 
         [$picked, $pickOut] = $this->drive("\r", $this->threeHosts());
         self::assertNotNull($picked);
         self::assertStringNotContainsString("\x1b[2J", $pickOut);
+        self::assertStringContainsString("\x1b[?1049l", $pickOut);
     }
 
     public function testCountRowAppearsOnlyWhileFiltering(): void

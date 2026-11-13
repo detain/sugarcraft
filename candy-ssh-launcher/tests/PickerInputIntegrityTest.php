@@ -367,6 +367,22 @@ PHP;
             $this->assertSame(130, $code, 'stdout: ' . $seen . $rest . ' stderr: ' . $err);
             $this->assertStringContainsString('RAW:OFF', $seen . $rest, 'SIGINT path restored the terminal');
             $this->assertStringNotContainsString('RETURNED', $seen . $rest, 'the handler exits; pick() never returns');
+            // -08: the signal path shares the alternate-buffer contract —
+            // the session entered it after going raw and the handler left
+            // it after restoring, with no hand-rolled erase anywhere.
+            $stream = $seen . $rest;
+            $this->assertStringContainsString("\x1b[?1049h", $stream, 'child entered the alternate buffer');
+            $this->assertGreaterThan(
+                strpos($stream, 'RAW:ON'),
+                strpos($stream, "\x1b[?1049h"),
+                'the buffer switch follows raw entry',
+            );
+            $this->assertGreaterThan(
+                strpos($stream, 'RAW:OFF'),
+                strpos($stream, "\x1b[?1049l"),
+                'the SIGINT handler leaves the alternate buffer',
+            );
+            $this->assertStringNotContainsString("\x1b[2J", $stream, 'no legacy eraseScreen survives the signal path');
             $this->assertStringContainsString(
                 \SugarCraft\SshLauncher\Lang::t('cli.cancelled'),
                 $err,
@@ -504,6 +520,22 @@ PHP;
             $this->assertSame(130, $code, 'stdout: ' . $seen . $rest . ' stderr: ' . $err);
             $this->assertStringContainsString('RAW:OFF', $seen . $rest, 'SIGINT path restored the terminal');
             $this->assertStringNotContainsString('RETURNED', $seen . $rest, 'the handler exits; pick() never returns');
+            // -08: the signal path shares the alternate-buffer contract —
+            // the session entered it after going raw and the handler left
+            // it after restoring, with no hand-rolled erase anywhere.
+            $stream = $seen . $rest;
+            $this->assertStringContainsString("\x1b[?1049h", $stream, 'child entered the alternate buffer');
+            $this->assertGreaterThan(
+                strpos($stream, 'RAW:ON'),
+                strpos($stream, "\x1b[?1049h"),
+                'the buffer switch follows raw entry',
+            );
+            $this->assertGreaterThan(
+                strpos($stream, 'RAW:OFF'),
+                strpos($stream, "\x1b[?1049l"),
+                'the SIGINT handler leaves the alternate buffer',
+            );
+            $this->assertStringNotContainsString("\x1b[2J", $stream, 'no legacy eraseScreen survives the signal path');
             $this->assertStringContainsString(
                 \SugarCraft\SshLauncher\Lang::t('cli.cancelled'),
                 $err,

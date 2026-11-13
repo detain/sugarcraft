@@ -99,7 +99,6 @@ class Picker
      * single argument (2026-10-23).
      */
     private int $totalEndpoints = 0;
-    private bool $aborted = false;
     /**
      * Saved pcntl_async_signals() state so the SIGINT arm in
      * armCancelSignal() is strictly picker-scoped.
@@ -143,7 +142,6 @@ class Picker
             return null;
         }
         $this->totalEndpoints = count($endpoints);
-        $this->aborted = false;
         // -062: pick() is re-entrant-clean. The historical contract was
         // one-shot (filter and cursor leaked across calls), and bin only
         // ever calls once — but the class is non-final with subclass
@@ -160,6 +158,12 @@ class Picker
         $this->armResizeSignal();
         $this->setRawMode(true);
         try {
+            // -08: own the alternate buffer for the session (CSI ?1049h
+            // saves the main screen + cursor, and the matching ?1049l on
+            // every exit path restores them byte-exactly). Entering
+            // inside the try means the finally's leave covers every
+            // return, throw and cancel shape.
+            fwrite($this->out, Ansi::altScreenEnter());
             while (true) {
                 $matches = $this->filterMatches($endpoints);
                 if ($this->cursor >= count($matches)) {
@@ -174,7 +178,6 @@ class Picker
                 switch ($key) {
                     case "\x03": /* cancel byte: stdin EOF, or ^C where SIGINT is blocked */
                     case "\x1b": /* ESC */
-                        $this->aborted = true;
                         return null;
                     case "\r":
                     case "\n":
@@ -273,15 +276,13 @@ class Picker
             $this->setRawMode(false);
             $this->disarmCancelSignal();
             $this->disarmResizeSignal();
-            if ($this->aborted) {
-                // Esc/^C: erase the transient frame before releasing the
-                // cursor line. After a successful pick the frame is a
-                // meaningful record (and ssh takes the screen over
-                // anyway), so only the cancel path cleans up — and only
-                // the cancel path may show eraseScreen, pinned by the
-                // sanitize suite (2026-10-23).
-                fwrite($this->out, Ansi::cursorTo(1, 1) . Ansi::eraseScreen());
-            }
+            // -08: leaving the alternate buffer restores the shell's screen
+            // exactly — the historical hand-rolled cancel path (cursorTo +
+            // eraseScreen) is gone, and both exits now share one truth:
+            // the frame was never on the main screen at all. After a pick
+            // ssh takes the screen over; after a cancel the shell prompt
+            // returns untouched.
+            fwrite($this->out, Ansi::altScreenLeave());
             fwrite($this->out, "\n");
         }
     }
@@ -330,14 +331,15 @@ class Picker
     }
 
     /**
-     * Common restore sequence for every signal handler: leave raw mode,
-     * erase the transient frame, release the cursor line — the same bytes
-     * the aborted pick() path writes.
+     * Common restore sequence for every signal handler: leave raw mode and
+     * leave the alternate buffer — the shell's screen comes back exactly
+     * as it was, then the cursor line is released. The same bytes the
+     * normal pick() finally writes (-08).
      */
     private function restoreTerminalForSignal(): void
     {
         $this->setRawMode(false);
-        fwrite($this->out, Ansi::cursorTo(1, 1) . Ansi::eraseScreen());
+        fwrite($this->out, Ansi::altScreenLeave());
         fwrite($this->out, "\n");
     }
 
@@ -527,10 +529,15 @@ class Picker
     }
 
     /**
-     * Truncate a composed row to one less than the terminal width, so a
-     * long host or description cannot force a soft wrap that strands the
-     * overflow under the next redraw (eraseToEnd only clears to the end of
-     * the CURRENT line; 2026-10-23). Non-terminals — every byte-pinned
+     * Truncate a composed row to one less than the terminal width so a
+     * long host or description cannot force a soft wrap. The byte model
+     * (-08 correction of the stale comment here): each frame opens with
+     * cursorTo(1,1) + eraseToEnd (CSI 0J — clears from the cursor to the
+     * END OF SCREEN, not just the line), so horizontal leftovers never
+     * survive. Wrapping is still fatal because a wrapped row consumes an
+     * extra line: every later row lands one cell low, and at the bottom
+     * margin the scroll pushes the picker's own title above the cursor —
+     * out of reach of the next 0J. Non-terminals — every byte-pinned
      * picker test and any piped run — probe null and pass through unclamped.
      * The floor is cols-1 at the extremes too (-061): the old
      * max(8, cols-1) could EXCEED the terminal on 4-8-col ttys, defeating

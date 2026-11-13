@@ -54,6 +54,26 @@ final class PickerSanitizeTest extends TestCase
         $this->assertStringNotContainsString("\x07", $output);
     }
 
+    public function testForgedBufferSwitchCannotDuplicateThePickerOwn(): void
+    {
+        // -08: the picker itself emits the alternate-buffer pair once per
+        // session; a config string must never add to either count (ESC is
+        // stripped upstream, but the buffer codes are the crown jewels
+        // now, so pin the counts against a hostile name directly).
+        $hostile = new Endpoint(
+            name: "prod\x1b[?1049l\x1b[?1049h",
+            host: 'prod.example.com',
+        );
+
+        [, $out, $p] = $this->makePicker("\r");
+        $p->pick([$hostile]);
+        rewind($out);
+        $output = (string) stream_get_contents($out);
+
+        $this->assertSame(1, substr_count($output, "\x1b[?1049h"), 'only the picker enters the buffer');
+        $this->assertSame(1, substr_count($output, "\x1b[?1049l"), 'only the picker leaves the buffer');
+    }
+
     public function testHostileDescriptionIsSanitized(): void
     {
         $hostile = new Endpoint(
