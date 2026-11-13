@@ -81,16 +81,6 @@ final class Manager
     }
 
     /**
-     * Reset the auto-prefix counter. Test seam only — production code
-     * must not rely on particular generated prefixes; they are unique
-     * per process, not stable.
-     */
-    public static function resetPrefixCounterForTesting(): void
-    {
-        self::$prefixCounter = 0;
-    }
-
-    /**
      * Build a manager that namespaces every id with a unique prefix.
      *
      * Useful when you compose multiple SugarMouse-aware components into
