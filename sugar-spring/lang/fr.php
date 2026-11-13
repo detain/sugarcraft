@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 return [
     'spring.fps_positive' => 'fps doit être > 0 ; reçu : {fps}',
+    'spring.fps_rate_too_small' => 'fps doit être assez grand pour que 1/fps soit fini ; reçu : {fps}',
     'spring.inputs_finite' => 'Les entrées de Spring doivent être finies ; reçu : deltaTime={deltaTime}, angularFrequency={angularFrequency}, dampingRatio={dampingRatio}',
     'spring.dt_positive' => 'deltaTime doit être > 0 ; reçu : {deltaTime}',
     'spring.angular_too_small' => 'angularFrequency doit être >= 1e-9 ; un ressort qui ne peut pas osciller ne se stabilise jamais ; obtenu : {angularFrequency}',

@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 return [
     'spring.fps_positive' => 'fps must be > 0; got {fps}',
+    'spring.fps_rate_too_small' => 'fps must be large enough for 1/fps to be finite; got {fps}',
     'spring.inputs_finite' => 'Spring inputs must be finite; got deltaTime={deltaTime}, angularFrequency={angularFrequency}, dampingRatio={dampingRatio}',
     'spring.dt_positive' => 'deltaTime must be > 0; got {deltaTime}',
     'spring.angular_too_small' => 'angularFrequency must be >= 1e-9; a spring that cannot oscillate never settles; got {angularFrequency}',
@@ -32,7 +33,7 @@ return [
     'vector.normalize_zero' => 'Cannot normalize a zero-length vector',
     'vector.normalize_overflow' => 'Cannot normalize a vector whose length overflowed to infinity; got length={length}',
     'point.components_finite' => 'Point components must be finite; got x={x}, y={y}, z={z}',
-    'bezier.points_finite' => 'cubic-bezier control points must be finite, got [{x1}, {y1}, {x2}, {y2}]',
+    'bezier.points_finite' => 'CubicBezier control points must be finite; got [{x1}, {y1}, {x2}, {y2}]',
     'bezier.x_range' => 'CubicBezier control points must have x-values in [0, 1]; got x1={x1}, x2={x2}',
     'bezier.t_finite' => 't must be finite; got {t}',
     'bezier.unknown_static' => 'CubicBezier has no static factory {name}',

@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 return [
     'spring.fps_positive' => 'fps > 0 olmalıdır; alınan: {fps}',
+    'spring.fps_rate_too_small' => 'fps, 1/fps sonlu kalacak kadar büyük olmalıdır; alınan: {fps}',
     'spring.inputs_finite' => 'Spring girdileri sonlu olmalıdır; alınan: deltaTime={deltaTime}, angularFrequency={angularFrequency}, dampingRatio={dampingRatio}',
     'spring.dt_positive' => 'deltaTime > 0 olmalıdır; alınan: {deltaTime}',
     'spring.angular_too_small' => 'angularFrequency >= 1e-9 olmalı; salınamayan bir yay asla yatışmaz; alınan {angularFrequency}',

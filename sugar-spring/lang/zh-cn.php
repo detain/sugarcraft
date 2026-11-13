@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 return [
     'spring.fps_positive' => 'fps 必须 > 0；实际：{fps}',
+    'spring.fps_rate_too_small' => 'fps 必须足够大以使 1/fps 有限；实际：{fps}',
     'spring.inputs_finite' => 'Spring 输入必须为有限值；实际：deltaTime={deltaTime}, angularFrequency={angularFrequency}, dampingRatio={dampingRatio}',
     'spring.dt_positive' => 'deltaTime 必须 > 0；实际：{deltaTime}',
     'spring.angular_too_small' => 'angularFrequency 必须 >= 1e-9；无法振荡的弹簧永远不会稳定；得到 {angularFrequency}',

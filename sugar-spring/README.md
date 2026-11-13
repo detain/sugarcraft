@@ -71,7 +71,10 @@ while (!Spring::settled($pos, $vel, $target) && $frame < 600) {
 }
 ```
 
-`Spring::fps(float $n)` returns `1.0 / $n` for the deltaTime — then tick the
+`Spring::fps(float $n)` returns `1.0 / $n` for the deltaTime — refusing
+non-finite and non-positive rates, and rates so small their reciprocal
+overflows to INF (`fps(1e-310)` throws rather than handing out a frozen step)
+— then tick the
 simulation `$n` times per second. `Spring::settled($pos, $vel, $target,
 $threshold)` is the stop predicate: position within the threshold (default
 `Spring::SETTLING_THRESHOLD` = `1e-4`) and velocity below it. Drive loops by
@@ -570,7 +573,8 @@ back-flavoured control points — same honesty rule as `Easing`.
 - **`Spring`** — `__construct($deltaTime, $angularFrequency, $dampingRatio,
   ?bool $reducedMotionOverride = null)` (the classic `$dt`/`ω`/`ζ` triple;
   refuses non-finite inputs, `dt <= 0`, `ω < 1e-9`, `ζ <= 0` and coefficient
-  overflow) / `update($pos, $vel, $target)` / `fps(float $n)` /
+  overflow) / `update($pos, $vel, $target)` / `fps(float $n)` (refuses rates
+  whose reciprocal is not finite) /
   `fromPreset(SpringPreset, ?float $deltaTime = null, ?bool $reducedMotionOverride = null)` /
   static `settled($pos, $vel, $target, $threshold = SETTLING_THRESHOLD)`.
   `const SETTLING_THRESHOLD = 1e-4`. `update()` rejects non-finite state and

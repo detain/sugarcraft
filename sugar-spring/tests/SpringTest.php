@@ -286,6 +286,28 @@ final class SpringTest extends TestCase
     }
 
     /**
+     * SPR-10 (finding 012): finite and positive is not sufficient — a rate
+     * whose RECIPROCAL overflows used to walk out of the door as INF (the
+     * frozen step the docblock promises callers never hold). fps(1e-310)
+     * was probe-confirmed live. Boundary pair pinned: 5e-324 (largest
+     * positive sub-normal) refuses, PHP_FLOAT_MIN (reciprocal ≈ 4.49e307,
+     * still finite) answers.
+     */
+    public function testFpsRefusesRatesWhoseReciprocalOverflows(): void
+    {
+        foreach ([1e-310, 1e-320, 5e-324] as $tiny) {
+            try {
+                Spring::fps($tiny);
+                $this->fail('fps() handed out a non-finite frame time for ' . var_export($tiny, true));
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString('large enough', $e->getMessage());
+            }
+        }
+
+        $this->assertSame(1.0 / PHP_FLOAT_MIN, Spring::fps(PHP_FLOAT_MIN));
+    }
+
+    /**
      * settled() is a pure predicate: non-finite inputs answer "not settled"
      * (safe direction) rather than throwing — but the update() guard above
      * means real callers cannot reach the predicate with poisoned values.

@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 return [
     'spring.fps_positive' => 'fps moet > 0 zijn; gekregen: {fps}',
+    'spring.fps_rate_too_small' => 'fps moet groot genoeg zijn opdat 1/fps eindig is; gekregen: {fps}',
     'spring.inputs_finite' => 'Spring-invoer moet eindig zijn; gekregen: deltaTime={deltaTime}, angularFrequency={angularFrequency}, dampingRatio={dampingRatio}',
     'spring.dt_positive' => 'deltaTime moet > 0 zijn; gekregen: {deltaTime}',
     'spring.angular_too_small' => 'angularFrequency moet >= 1e-9 zijn; een veer die niet kan oscilleren komt nooit tot rust; gekregen {angularFrequency}',

@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 return [
     'spring.fps_positive' => 'fps musí být > 0; obdrženo: {fps}',
+    'spring.fps_rate_too_small' => 'fps musí být dostatečně velké, aby 1/fps bylo konečné; obdrženo: {fps}',
     'spring.inputs_finite' => 'Vstupy Spring musí být konečné; obdrženo: deltaTime={deltaTime}, angularFrequency={angularFrequency}, dampingRatio={dampingRatio}',
     'spring.dt_positive' => 'deltaTime musí být > 0; obdrženo: {deltaTime}',
     'spring.angular_too_small' => 'angularFrequency musí být >= 1e-9; pružina, která nemůže kmitat, se nikdy neustálí; obdrženo {angularFrequency}',

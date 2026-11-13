@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 return [
     'spring.fps_positive' => 'fps は > 0 である必要があります；取得：{fps}',
+    'spring.fps_rate_too_small' => 'fps は 1/fps が有限になる十分大きな値である必要があります；取得：{fps}',
     'spring.inputs_finite' => 'Spring の入力は有限である必要があります；取得：deltaTime={deltaTime}, angularFrequency={angularFrequency}, dampingRatio={dampingRatio}',
     'spring.dt_positive' => 'deltaTime は > 0 である必要があります；取得：{deltaTime}',
     'spring.angular_too_small' => 'angularFrequency は 1e-9 以上である必要があります。振動できないばねは決して安定しません。取得値: {angularFrequency}',

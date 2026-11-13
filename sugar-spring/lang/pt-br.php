@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 return [
     'spring.fps_positive' => 'fps deve ser > 0; obtido: {fps}',
+    'spring.fps_rate_too_small' => 'fps deve ser grande o suficiente para que 1/fps seja finito; obtido: {fps}',
     'spring.inputs_finite' => 'As entradas do Spring devem ser finitas; obtido: deltaTime={deltaTime}, angularFrequency={angularFrequency}, dampingRatio={dampingRatio}',
     'spring.dt_positive' => 'deltaTime deve ser > 0; obtido: {deltaTime}',
     'spring.angular_too_small' => 'angularFrequency deve ser >= 1e-9; uma mola que não pode oscilar nunca se estabiliza; obtido {angularFrequency}',

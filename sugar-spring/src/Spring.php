@@ -229,7 +229,13 @@ final class Spring
         return abs($pos - $target) < $threshold && abs($vel) < $threshold;
     }
 
-    /** Frame-time (seconds) for a given frame rate. `Spring::fps(60)` → 1/60. */
+    /**
+     * Frame-time (seconds) for a given frame rate. `Spring::fps(60)` → 1/60.
+     *
+     * Refuses non-finite and non-positive rates AND rates so small the
+     * reciprocal itself overflows (1e-310 → INF): whatever this returns is
+     * always a usable, finite, positive frame time.
+     */
     public static function fps(float $n): float
     {
         // is_finite() first: `INF <= 0.0` is false, so fps(INF) would
@@ -239,7 +245,17 @@ final class Spring
         if (!is_finite($n) || $n <= 0.0) {
             throw new \InvalidArgumentException(Lang::t('spring.fps_positive', ['fps' => $n]));
         }
-        return 1.0 / $n;
+
+        // The input guard alone was not enough to keep the promise: a finite,
+        // positive 1e-310 passes it, yet 1/1e-310 overflows to INF — the very
+        // frozen step this door exists to keep out. Guard the OUTPUT so the
+        // docblock claim ("callers never hold the poison") is literally true.
+        $frameTime = 1.0 / $n;
+        if (!is_finite($frameTime)) {
+            throw new \InvalidArgumentException(Lang::t('spring.fps_rate_too_small', ['fps' => $n]));
+        }
+
+        return $frameTime;
     }
 
     /**

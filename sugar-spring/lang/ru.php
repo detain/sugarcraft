@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 return [
     'spring.fps_positive' => 'fps должен быть > 0; получено: {fps}',
+    'spring.fps_rate_too_small' => 'fps должен быть достаточно большим, чтобы 1/fps был конечным; получено: {fps}',
     'spring.inputs_finite' => 'Входные данные Spring должны быть конечными; получено: deltaTime={deltaTime}, angularFrequency={angularFrequency}, dampingRatio={dampingRatio}',
     'spring.dt_positive' => 'deltaTime должен быть > 0; получено: {deltaTime}',
     'spring.angular_too_small' => 'angularFrequency должен быть >= 1e-9; пружина, не способная колебаться, никогда не успокоится; получено {angularFrequency}',

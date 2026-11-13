@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 return [
     'spring.fps_positive' => 'fps musi być > 0; otrzymano: {fps}',
+    'spring.fps_rate_too_small' => 'fps musi być wystarczająco duże, aby 1/fps było skończone; otrzymano: {fps}',
     'spring.inputs_finite' => 'Dane wejściowe Spring muszą być skończone; otrzymano: deltaTime={deltaTime}, angularFrequency={angularFrequency}, dampingRatio={dampingRatio}',
     'spring.dt_positive' => 'deltaTime musi być > 0; otrzymano: {deltaTime}',
     'spring.angular_too_small' => 'angularFrequency musi wynosić >= 1e-9; sprężyna, która nie może drgać, nigdy się nie wyciszy; otrzymano {angularFrequency}',
