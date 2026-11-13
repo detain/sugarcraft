@@ -364,6 +364,44 @@ final class DatePicker
     }
 
     /**
+     * The date an Enter on the CURRENT cursor state would attempt to apply:
+     * the cursor date (range mode — and single mode when the cell holds a
+     * day), or the first of the viewed month as single mode's lead-in blank
+     * fallback. Pure query over current state (dp-09 refusal seam), which is
+     * exactly what {@see selectDate()} and {@see handleRangeEnter()} act on.
+     */
+    public function selectionTarget(): ?\DateTimeImmutable
+    {
+        return $this->dateAtCursor() ?? ($this->isRangeMode() ? null : $this->firstOfViewMonth());
+    }
+
+    /**
+     * Why a bare Enter on the CURRENT cursor state would be refused, or null
+     * when it would apply (dp-09). Vocabulary mirrors PickerEvent::SELECTION_REFUSED
+     * payloads: `out_of_bounds` (dimmed day under cursor), `empty_cell` (blank
+     * lead-in/trailing cell whose fallback the bounds also reject), and
+     * `year_unresolvable` (defensive — the floored view makes it unreachable).
+     */
+    public function selectionRefusal(): ?string
+    {
+        $target = $this->selectionTarget();
+        if ($target !== null && $this->inBounds($target)) {
+            return null;
+        }
+
+        if ($this->dateAtCursor() !== null) {
+            return 'out_of_bounds';
+        }
+
+        // Blank cell: single mode fell back to a first-of-month the bounds
+        // also reject; range mode has no fallback at all. The reason only
+        // escalates to year_unresolvable when even the month floor fails.
+        return !$this->isRangeMode() && $this->firstOfViewMonth() === null
+            ? 'year_unresolvable'
+            : 'empty_cell';
+    }
+
+    /**
      * Stable calendar-day key (Y as 4 digits + m + d) for timezone-safe
      * comparison: two dates showing the same wall date compare equal
      * regardless of the zone each \DateTimeImmutable carries.

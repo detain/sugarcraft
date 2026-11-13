@@ -20,7 +20,7 @@ namespace SugarCraft\DatePicker;
  */
 final class PickerEvent
 {
-    /** Cursor index changed; payload `{index}`. */
+    /** Cursor index changed; payload `{index, date}` (date null on an empty cell). */
     public const CURSOR_MOVED = 'cursor_moved';
 
     /** Range mode's first Enter armed the start (unset → set); payload `{date}`. */
@@ -31,6 +31,32 @@ final class PickerEvent
 
     /** Single-mode selection went from set to unset; empty payload. */
     public const DATE_CLEARED = 'date_cleared';
+
+    /**
+     * A completed range was re-armed by another Enter (dp-09): the end was
+     * dropped and the start moved to a fresh day; payload `{from, to}`
+     * (to may equal from — same-day restart is still a completed→pending
+     * transition).
+     */
+    public const RANGE_RESTARTED = 'range_restarted';
+
+    /**
+     * Range endpoints went from armed to fully cleared (Escape or bound
+     * tightening), pending or completed alike (dp-09); payload `{from}`.
+     */
+    public const RANGE_CLEARED = 'range_cleared';
+
+    /**
+     * A bare Enter acted on a day that could not be selected (dp-09);
+     * payload `{date, reason}` with reason out_of_bounds | empty_cell |
+     * year_unresolvable. The announcement of a refusal does NOT make it
+     * optional to poll — state stays authoritative; this is the error state
+     * a host may now surface without diffing picker state.
+     */
+    public const SELECTION_REFUSED = 'selection_refused';
+
+    /** The viewed month stepped (PageUp/PageDown within bounds, dp-09); payload `{year, month}`. */
+    public const MONTH_CHANGED = 'month_changed';
 
     private function __construct()
     {

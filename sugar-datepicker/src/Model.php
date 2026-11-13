@@ -92,7 +92,7 @@ final class Model implements \SugarCraft\Core\Model
         $prev = $this->picker;
         $next = $this->applyKey($prev, $msg);
 
-        $this->recordTransitions($prev, $next);
+        $this->recordTransitions($prev, $next, $msg);
 
         return [new self($next, $this->store), null];
     }
@@ -128,8 +128,15 @@ final class Model implements \SugarCraft\Core\Model
      * Emit events for state TRANSITIONS (value change), never for flag edges:
      * re-selecting a different date must notify, re-selecting the same one
      * must not double-notify.
+     *
+     * dp-09 completes the census: range restarts (both-set → fresh start),
+     * pending- and completed-range clears, month steps, and refused Enters
+     * are all transitions over the prev/next diff plus the pure refusal seam
+     * {@see DatePicker::selectionRefusal()} — no picker state is consulted
+     * beyond public queries, so mutability law holds. A refusal is an
+     * ANNOUNCEMENT only: polling the picker stays the authoritative channel.
      */
-    private function recordTransitions(DatePicker $prev, DatePicker $next): void
+    private function recordTransitions(DatePicker $prev, DatePicker $next, KeyMsg $msg): void
     {
         if ($this->store === null) {
             return;
@@ -138,22 +145,69 @@ final class Model implements \SugarCraft\Core\Model
         if ($next->cursorIndex() !== $prev->cursorIndex()) {
             $this->store->record(PickerEvent::CURSOR_MOVED, [
                 'index' => $next->cursorIndex(),
+                'date'  => $next->dateAtCursor()?->format('Y-m-d'),
+            ]);
+        }
+
+        // Refused Enter (dp-09): the acted key would have applied nothing on
+        // the pre-key state. Chorded Enter never acted (host-reserved) and so
+        // cannot be refused. Computed off $prev because a refusal is exactly
+        // "next == prev on the selection channels".
+        $chorded = $msg->ctrl || $msg->alt || $msg->shift;
+        if ($msg->type === KeyType::Enter && !$chorded) {
+            $reason = $prev->selectionRefusal();
+            if ($reason !== null) {
+                $this->store->record(PickerEvent::SELECTION_REFUSED, [
+                    'date'   => $prev->selectionTarget()?->format('Y-m-d'),
+                    'reason' => $reason,
+                ]);
+            }
+        }
+
+        // Month step (PageUp/PageDown — any public channel that moved the
+        // view window): a transition in its own right, recorded for the host.
+        if ($prev->viewMonth() !== $next->viewMonth() || $prev->viewYear() !== $next->viewYear()) {
+            $this->store->record(PickerEvent::MONTH_CHANGED, [
+                'year'  => $next->viewYear(),
+                'month' => $next->viewMonth(),
             ]);
         }
 
         if ($next->isRangeMode()) {
-            // range start armed (was unset, now set): the start transition.
-            if ($prev->rangeStart() === null && $next->rangeStart() !== null) {
+            $ps = $prev->rangeStart();
+            $pe = $prev->rangeEnd();
+            $ns = $next->rangeStart();
+            $ne = $next->rangeEnd();
+
+            // range start armed (unset → set): the start transition.
+            if ($ps === null && $ns !== null) {
                 $this->store->record(PickerEvent::RANGE_STARTED, [
-                    'date' => $next->rangeStart()?->format('Y-m-d'),
+                    'date' => $ns->format('Y-m-d'),
                 ]);
             }
-            // range completed (start set, end just became non-null).
-            if ($next->rangeEnd() !== null && $prev->rangeEnd() === null) {
+            // Both had been set and the end is now gone while a start stands:
+            // the third Enter restarted the range (dp-09). to may equal from —
+            // dropping a completed end IS the transition.
+            if ($ps !== null && $pe !== null && $ne === null && $ns !== null) {
+                $this->store->record(PickerEvent::RANGE_RESTARTED, [
+                    'from' => $ps->format('Y-m-d'),
+                    'to'   => $ns->format('Y-m-d'),
+                ]);
+            }
+            // Endpoints went armed → fully cleared (Escape, pending or
+            // completed alike; the completed case also drops the end, but the
+            // surviving null start distinguishes it from a restart).
+            if ($ps !== null && $ns === null) {
+                $this->store->record(PickerEvent::RANGE_CLEARED, [
+                    'from' => $ps->format('Y-m-d'),
+                ]);
+            }
+            // Range completed (end just became non-null).
+            if ($ne !== null && $pe === null) {
                 $this->store->record(PickerEvent::DATE_SELECTED, [
-                    'date'       => $next->rangeEnd()?->format('Y-m-d'),
-                    'rangeStart' => $next->rangeStart()?->format('Y-m-d'),
-                    'rangeEnd'   => $next->rangeEnd()?->format('Y-m-d'),
+                    'date'       => $ne->format('Y-m-d'),
+                    'rangeStart' => $ns?->format('Y-m-d'),
+                    'rangeEnd'   => $ne->format('Y-m-d'),
                 ]);
             }
         } else {

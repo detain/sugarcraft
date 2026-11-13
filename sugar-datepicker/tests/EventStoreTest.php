@@ -103,23 +103,42 @@ final class EventStoreTest extends TestCase
      */
     public function testEventConstantValuesAreStableWireContract(): void
     {
+        // Independent literals (dp-20 law): renaming a wire VALUE reddens
+        // exactly this pin. Roster = all eight kinds (dp-09 adds four).
         $this->assertSame('cursor_moved', PickerEvent::CURSOR_MOVED);
         $this->assertSame('range_started', PickerEvent::RANGE_STARTED);
+        $this->assertSame('range_restarted', PickerEvent::RANGE_RESTARTED);
+        $this->assertSame('range_cleared', PickerEvent::RANGE_CLEARED);
         $this->assertSame('date_selected', PickerEvent::DATE_SELECTED);
         $this->assertSame('date_cleared', PickerEvent::DATE_CLEARED);
+        $this->assertSame('month_changed', PickerEvent::MONTH_CHANGED);
+        $this->assertSame('selection_refused', PickerEvent::SELECTION_REFUSED);
     }
 
-    public function testAllFourWireKindsRoundTripThroughTheStore(): void
+    public function testAllEightWireKindsRoundTripThroughTheStore(): void
     {
         $store = new EventStore();
-        $store->record(PickerEvent::CURSOR_MOVED, ['index' => 2]);
+        $store->record(PickerEvent::CURSOR_MOVED, ['index' => 2, 'date' => '2026-05-03']);
         $store->record(PickerEvent::RANGE_STARTED, ['date' => '2026-05-02']);
+        $store->record(PickerEvent::RANGE_RESTARTED, ['from' => '2026-05-02', 'to' => '2026-05-09']);
+        $store->record(PickerEvent::RANGE_CLEARED, ['from' => '2026-05-09']);
         $store->record(PickerEvent::DATE_SELECTED, ['date' => '2026-05-09']);
         $store->record(PickerEvent::DATE_CLEARED, []);
+        $store->record(PickerEvent::MONTH_CHANGED, ['year' => 2026, 'month' => 6]);
+        $store->record(PickerEvent::SELECTION_REFUSED, ['date' => '2026-05-11', 'reason' => 'out_of_bounds']);
 
         $types = array_map(static fn(array $e): string => $e['type'], $store->release());
         $this->assertSame(
-            [PickerEvent::CURSOR_MOVED, PickerEvent::RANGE_STARTED, PickerEvent::DATE_SELECTED, PickerEvent::DATE_CLEARED],
+            [
+                PickerEvent::CURSOR_MOVED,
+                PickerEvent::RANGE_STARTED,
+                PickerEvent::RANGE_RESTARTED,
+                PickerEvent::RANGE_CLEARED,
+                PickerEvent::DATE_SELECTED,
+                PickerEvent::DATE_CLEARED,
+                PickerEvent::MONTH_CHANGED,
+                PickerEvent::SELECTION_REFUSED,
+            ],
             $types,
         );
     }

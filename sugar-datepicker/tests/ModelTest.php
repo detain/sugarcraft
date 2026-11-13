@@ -489,25 +489,183 @@ final class ModelTest extends TestCase
         $this->assertNull($model->picker()->SelectedDate());
     }
 
-    public function testEnterOnOutOfBoundDateRecordsNothing(): void
+    public function testEnterOnOutOfBoundDateAnnouncesRefusal(): void
     {
-        // Selection refusal (bound) must not fabricate a date_selected event.
+        // dp-09 flip of the old silent-refusal pin: a refused Enter must not
+        // fabricate a date_selected, but the Model channel now announces the
+        // refusal as an event (state stays the authoritative channel).
         $store = new EventStore();
         $model = Model::new(new \DateTimeImmutable('2026-05-01'), $store);
         $picker = $model->picker()->withMinDate(new \DateTimeImmutable('2026-05-10'));
         $model = new Model($picker, $store);
-        // dp-11: Home now clamps to May 10 (the bound), so the refusal leg
-        // reaches the dimmed May 9 the way arrows allow it — one left.
+        // dp-11: Home clamps to May 10 (the bound); the refusal leg reaches the
+        // dimmed May 9 the way arrows allow it — one left. Drain the legitimate
+        // cursor_moved transitions so the store shows exactly the refused Enter.
         $model = $model->update(new KeyMsg(KeyType::Home))[0];
         $model = $model->update(new KeyMsg(KeyType::Left))[0];
-        // The clamp itself legitimately records cursor_moved transitions; drain
-        // them so the assertion below tests exactly the refused Enter.
         $store->release();
         $model = $model->update(new KeyMsg(KeyType::Enter))[0]; // May 9 < min
 
-        $this->assertFalse($model->picker()->IsSelecting());
+        $this->assertFalse($model->picker()->IsSelecting(),
+            'Refused selection must still change no state');
+        $events = $store->release();
+        $this->assertCount(1, $events);
+        $this->assertSame(PickerEvent::SELECTION_REFUSED, $events[0]['type']);
+        $this->assertSame('2026-05-09', $events[0]['payload']['date']);
+        $this->assertSame('out_of_bounds', $events[0]['payload']['reason']);
+    }
+
+    public function testChordedEnterCannotBeRefused(): void
+    {
+        // Chorded Enter never acts (host-reserved, dp-07), so the refusal
+        // announcement must stay silent — deliberate-negative pin.
+        $store = new EventStore();
+        $model = Model::new(new \DateTimeImmutable('2026-05-01'), $store);
+        $model = new Model($model->picker()->withMinDate(new \DateTimeImmutable('2026-05-10')), $store);
+        $model = $model->update(new KeyMsg(KeyType::Home))[0];
+        $model = $model->update(new KeyMsg(KeyType::Left))[0];
+        $store->release();
+
+        $model->update(new KeyMsg(KeyType::Enter, ctrl: true));
+
         $this->assertFalse($store->hasEvents(),
-            'A refused selection must record nothing');
+            'A chorded Enter is ignored, not refused — no event either way');
+    }
+
+    public function testEmptyCellFallbackBeyondBoundRefusesWithReason(): void
+    {
+        // Single mode on a lead-in blank: the fallback is the first of the
+        // month, May 1 — before the bound, so the refusal carries that date
+        // with reason empty_cell.
+        $store = new EventStore();
+        $model = Model::new(new \DateTimeImmutable('2026-05-01'), $store);
+        $model = new Model($model->picker()->withMinDate(new \DateTimeImmutable('2026-05-10')), $store);
+        // Park on the empty lead-in: Home clamps to May 10 (index 14), then
+        // walk left past May 1 (index 5) into the blanks (indices 0-4).
+        $model = $model->update(new KeyMsg(KeyType::Home))[0];
+        for ($i = 0; $i < 14; $i++) {
+            $model = $model->update(new KeyMsg(KeyType::Left))[0];
+        }
+        $this->assertNull($model->picker()->dateAtCursor());
+        $store->release();
+
+        $model = $model->update(new KeyMsg(KeyType::Enter))[0];
+
+        $events = $store->release();
+        $this->assertCount(1, $events);
+        $this->assertSame(PickerEvent::SELECTION_REFUSED, $events[0]['type']);
+        $this->assertSame('2026-05-01', $events[0]['payload']['date'],
+            'The refused attempt is the fallback date, not a phantom');
+        $this->assertSame('empty_cell', $events[0]['payload']['reason']);
+        $this->assertNull($model->picker()->SelectedDate());
+    }
+
+    public function testEmptyCellWithInBoundsFallbackSelectsQuietly(): void
+    {
+        // Unbounded May: Enter on the lead-in blank falls back to May 1 and
+        // SUCCEEDS — empty_cell is a refusal only when the fallback is also
+        // out of bounds. Deliberate-negative pin.
+        $store = new EventStore();
+        $model = Model::new(new \DateTimeImmutable('2026-05-01'), $store);
+        $model = $model->update(new KeyMsg(KeyType::Left))[0];
+        $this->assertNull($model->picker()->dateAtCursor());
+        $store->release();
+
+        $model = $model->update(new KeyMsg(KeyType::Enter))[0];
+
+        $this->assertTrue($model->picker()->IsSelecting());
+        $this->assertSame('2026-05-01', $model->picker()->SelectedDate()?->format('Y-m-d'));
+        $events = $store->release();
+        $types = array_column($events, 'type');
+        $this->assertNotContains(PickerEvent::SELECTION_REFUSED, $types);
+        $this->assertContains(PickerEvent::DATE_SELECTED, $types);
+    }
+
+    public function testMonthStepRecordsMonthChanged(): void
+    {
+        $store = new EventStore();
+        $model = Model::new(new \DateTimeImmutable('2026-05-01'), $store);
+
+        $model = $model->update(new KeyMsg(KeyType::PageDown))[0];
+
+        $events = $store->release();
+        $changed = array_values(array_filter($events, static fn(array $e): bool => $e['type'] === PickerEvent::MONTH_CHANGED));
+        $this->assertCount(1, $changed);
+        $this->assertSame(['year' => 2026, 'month' => 6], $changed[0]['payload']);
+
+        // Clamped at the bound month the view cannot step — silence pin.
+        $bounded = new Model($model->picker()->withMaxDate(new \DateTimeImmutable('2026-06-20')), $store);
+        $bounded->update(new KeyMsg(KeyType::PageDown));
+        $this->assertFalse($store->hasEvents(),
+            'A month step that cannot happen records nothing');
+    }
+
+    public function testRangeRestartAndClearAreVisible(): void
+    {
+        // The third Enter (restart) and Escape (clear) used to be invisible
+        // flag-edge blind spots (dp-09).
+        $store = new EventStore();
+        $model = Model::new(new \DateTimeImmutable('2026-05-01'), $store);
+        $model = new Model($model->picker()->withRangeMode(true), $store);
+
+        $model = $model->update(new KeyMsg(KeyType::Enter))[0];  // arm May 1
+
+        // Completed range May 1 - May 31. The cursor hop goes through
+        // moveToDate on the picker (a constructor swap, not an update), so no
+        // cursor_moved is recorded for it — events below are Enter-channel only.
+        $end = $model->picker()->moveToDate(new \DateTimeImmutable('2026-05-31'));
+        $model = new Model($end, $store);
+        $model = $model->update(new KeyMsg(KeyType::Enter))[0];  // completes
+        $events = $store->release();
+        $this->assertSame([PickerEvent::RANGE_STARTED, PickerEvent::DATE_SELECTED], array_column($events, 'type'));
+
+        // Third Enter on May 20 restarts: end drops, start moves.
+        $restart = $model->picker()->moveToDate(new \DateTimeImmutable('2026-05-20'));
+        $model = new Model($restart, $store);
+        $model = $model->update(new KeyMsg(KeyType::Enter))[0];
+        $events = $store->release();
+        $restarted = array_values(array_filter($events, static fn(array $e): bool => $e['type'] === PickerEvent::RANGE_RESTARTED));
+        $this->assertCount(1, $restarted);
+        $this->assertSame(['from' => '2026-05-01', 'to' => '2026-05-20'], $restarted[0]['payload']);
+
+        // Escape clears the pending restart — announced, never silent.
+        $model = $model->update(new KeyMsg(KeyType::Escape))[0];
+        $events = $store->release();
+        $cleared = array_values(array_filter($events, static fn(array $e): bool => $e['type'] === PickerEvent::RANGE_CLEARED));
+        $this->assertCount(1, $cleared);
+        $this->assertSame(['from' => '2026-05-20'], $cleared[0]['payload']);
+        $this->assertNull($model->picker()->rangeStart());
+    }
+
+    public function testCursorMovedCarriesDatedPayload(): void
+    {
+        $store = new EventStore();
+        $model = Model::new(new \DateTimeImmutable('2026-05-01'), $store);
+
+        $model = $model->update(new KeyMsg(KeyType::Right))[0];
+        $model = $model->update(new KeyMsg(KeyType::Left))[0]; // back onto May 1
+        $model = $model->update(new KeyMsg(KeyType::Left))[0]; // into the empty lead-in
+
+        $events = $store->release();
+        $moved = array_values(array_filter($events, static fn(array $e): bool => $e['type'] === PickerEvent::CURSOR_MOVED));
+        $this->assertCount(3, $moved);
+        $this->assertSame(['index' => 6, 'date' => '2026-05-02'], $moved[0]['payload'],
+            'index kept, date added (dp-09)');
+        $this->assertSame(['index' => 5, 'date' => '2026-05-01'], $moved[1]['payload']);
+        $this->assertSame(['index' => 4, 'date' => null], $moved[2]['payload'],
+            'an empty cell moves the cursor with a null date');
+    }
+
+    public function testEscapeWithNothingSelectedRecordsNothing(): void
+    {
+        // Deliberate-negative pin: clearDate() on an already-clear picker is
+        // a no-op transition and stays silent (docblock law).
+        $store = new EventStore();
+        $model = Model::new(new \DateTimeImmutable('2026-05-01'), $store);
+
+        $model->update(new KeyMsg(KeyType::Escape));
+
+        $this->assertFalse($store->hasEvents());
     }
 
     public function testModelViewDelegatesLayoutArguments(): void

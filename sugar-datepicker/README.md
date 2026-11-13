@@ -266,16 +266,33 @@ Event kinds are `PickerEvent` constants; compare against the constants, never
 hand-copied strings (a typo in a raw literal fails silently, a typo in a class
 constant does not):
 
-- **`PickerEvent::CURSOR_MOVED`** (`'cursor_moved'`) — payload `{index}` — the
-  cursor index changed.
+- **`PickerEvent::CURSOR_MOVED`** (`'cursor_moved'`) — payload `{index, date}`
+  (`date` is `Y-m-d` or `null` on an empty cell) — the cursor index changed.
 - **`PickerEvent::RANGE_STARTED`** (`'range_started'`) — payload `{date}`
   (`Y-m-d`) — range mode's first Enter armed the start (unset → set).
+- **`PickerEvent::RANGE_RESTARTED`** (`'range_restarted'`) — payload
+  `{from, to}` — a third Enter on a completed range dropped the end and
+  re-armed the start (dp-09; `to` may equal `from`, the dropped end is the
+  transition).
+- **`PickerEvent::RANGE_CLEARED`** (`'range_cleared'`) — payload `{from}` —
+  range endpoints went from armed to fully cleared (Escape, pending or
+  completed alike).
 - **`PickerEvent::DATE_SELECTED`** (`'date_selected'`) — single mode: payload
   `{date}` when the selected day changed; range mode: `{date, rangeStart,
   rangeEnd}` when the end becomes non-null (the start-arming Enter is reported
   by `RANGE_STARTED`, not here).
 - **`PickerEvent::DATE_CLEARED`** (`'date_cleared'`) — empty payload `{}` — the
   single-mode selection went from set to unset (Esc or a toggling Enter).
+- **`PickerEvent::MONTH_CHANGED`** (`'month_changed'`) — payload
+  `{year, month}` — the viewed month stepped (PageUp/PageDown); a step
+  clamped by the bound months records nothing.
+- **`PickerEvent::SELECTION_REFUSED`** (`'selection_refused'`) — payload
+  `{date, reason}` — a bare Enter acted on a day it could not apply
+  (dp-09). `reason` is `out_of_bounds` (dimmed day under cursor),
+  `empty_cell` (blank cell whose first-of-month fallback is also out of
+  bounds — range mode has no fallback, so a blank always refuses), or
+  `year_unresolvable` (defensive vocabulary; the floored view makes it
+  unreachable). A chorded Enter never acts, so it is never refused either.
 
 Recording channel (settled ruling): the TEA `Model` is the *only* emitter.
 `DatePicker::handleKey()` and the imperative methods are the non-TEA surface
@@ -283,19 +300,20 @@ and record nothing — a host driving the picker directly either wraps it in a
 `Model` or diffs picker states itself; that asymmetry is the contract, not an
 oversight.
 
-The recording is deliberately partial in range mode: an Esc that clears a range
-and a third Enter that restarts one complete no selection, so they record
-**nothing** — `date_cleared` is a single-mode event. A host that must learn
-"user cancelled the range" cannot get it from the store; it has to poll
-`rangeStart()`/`rangeEnd()` itself, which keeps accessor polling authoritative.
+The event census is now complete: range restarts, cancels, month steps and
+refusals are all announced. Polling stays the authoritative channel — a
+`SELECTION_REFUSED` is an announcement of an error state a host may surface
+immediately, not a replacement for reading `selectedDate()`/`rangeStart()`/
+`rangeEnd()` after each update.
 
 ## API surface
 
 Beyond `DatePicker` itself, the shipped public classes are:
 
-- **`PickerEvent`** — final const-only class: the four recorded event kinds
-  (`CURSOR_MOVED`, `RANGE_STARTED`, `DATE_SELECTED`, `DATE_CLEARED`) as the
-  published wire vocabulary; see Events below.
+- **`PickerEvent`** — final const-only class: the eight recorded event kinds
+  (`CURSOR_MOVED`, `RANGE_STARTED`, `RANGE_RESTARTED`, `RANGE_CLEARED`,
+  `DATE_SELECTED`, `DATE_CLEARED`, `MONTH_CHANGED`, `SELECTION_REFUSED`) as
+  the published wire vocabulary; see Events above.
 - **`DateRange`** — an immutable start/end value object: promoted public
   readonly `$start`/`$end` plus `withStart()`/`withEnd()` clones;
   `contains($date)` (compares calendar days, timezone-safe — while the range is
