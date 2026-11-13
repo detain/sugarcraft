@@ -197,4 +197,79 @@ final class ParserFastPathTest extends TestCase
         // Single run after the newline.
         $this->assertSame(1, $parser->fastPathRuns());
     }
+
+    /**
+     * sap-02 equivalence pin (findings 010+011, acceptance per the annotation):
+     * the whole-chunk sweeps — inline UTF-8 lead scan and bulk string-payload
+     * append — must be dispatch-identical to the per-byte route. A byte-per-
+     * byte feed can never engage the rune scan (a 1-byte chunk holds no
+     * multi-byte rune) and engages the payload sweep at exactly one byte —
+     * the same append put() performed — so this pin proves chunk-size
+     * independence for every split (whole, 1-byte, 3-byte); the pre-sweep
+     * old-vs-new equality is separately verified against the previous
+     * implementation (step-report differential, not committed). Fixed-seed
+     * xorshift corpora hit the full byte space (scan breaks, invalid leads,
+     * lone continuations, random terminators); structured legs hit valid
+     * runes, terminators and the C1 edges; the tiny-cap rides pin the
+     * clip-to-free + skip-the-rest drop semantics against the per-byte
+     * put() drop.
+     */
+    public function testBulkSweepsMatchPerBytePathOnSeededCorpora(): void
+    {
+        $random = self::xorshiftStream(4096, 0xC0FFEE);
+        $corpora = [
+            'raw-random' => $random,
+            'ground-cjk-mix' => str_repeat("plain \xe4\xb8\xad\xe6\x96\x87 \xff \xc3\xa9 caf\xe9; ", 150) . $random,
+            'string-heavy' => str_repeat(
+                "\x1b]0;ttl\xc3\xa9\xff\x07abc\x1bP1;qpassthrough\x1b\\\x9ein-flight\x9c\x1b_1337;data\x1b\\ \x1b[1;2m",
+                120,
+            ) . $random,
+            'combined' => $random . str_repeat("\x1b]8;;http://e\xc2\xa0x/\x07\xe4\xb8\xad", 200),
+        ];
+
+        foreach ([false, true] as $replaceMalformed) {
+            foreach ([65536, 5, 16] as $cap) {
+                foreach ($corpora as $label => $bytes) {
+                    $case = sprintf('corpus=%s cap=%d malformed=%d', $label, $cap, (int) $replaceMalformed);
+
+                    $bulk = new Parser($bulkHandler = new DebugHandler(), $replaceMalformed, $cap);
+                    $byte = new Parser($byteHandler = new DebugHandler(), $replaceMalformed, $cap);
+                    $chunked = new Parser($chunkedHandler = new DebugHandler(), $replaceMalformed, $cap);
+
+                    $bulk->feed($bytes);
+                    foreach (str_split($bytes) as $b) {
+                        $byte->feed($b);
+                    }
+                    foreach (str_split($bytes, 3) as $c) {
+                        $chunked->feed($c);
+                    }
+                    $bulk->flush();
+                    $byte->flush();
+                    $chunked->flush();
+
+                    $this->assertSame($byteHandler->log, $bulkHandler->log, "whole-chunk sweep diverged from per-byte path ($case)");
+                    $this->assertSame($byteHandler->log, $chunkedHandler->log, "3-byte chunking diverged from per-byte path ($case)");
+                }
+            }
+        }
+    }
+
+    /**
+     * Deterministic byte source (xorshift32): stable across PHP builds and
+     * versions, so the equivalence matrix above is a permanent pin rather
+     * than a luck-of-mt_rand snapshot.
+     */
+    private static function xorshiftStream(int $length, int $seed): string
+    {
+        $out = '';
+        $x = $seed;
+        for ($i = 0; $i < $length; $i++) {
+            $x ^= ($x << 13) & 0xFFFFFFFF;
+            $x ^= $x >> 17;
+            $x ^= ($x << 5) & 0xFFFFFFFF;
+            $x &= 0xFFFFFFFF;
+            $out .= chr($x & 0xFF);
+        }
+        return $out;
+    }
 }

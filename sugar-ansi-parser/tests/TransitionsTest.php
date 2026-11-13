@@ -374,4 +374,46 @@ final class TransitionsTest extends TestCase
         $fourByteUpper = Transitions::get(State::Ground->value, 0xF4);
         $this->assertSame(State::Utf8->value, Transitions::nextState($fourByteUpper));
     }
+
+    /**
+     * sap-02 pin: the sweep terminator sets must match the shipped rows
+     * EXACTLY per string state (a missed byte would let the bulk append
+     * swallow a dispatch edge; an extra byte only costs one advance()).
+     * Derived expected sets, stated as ord-lists so the whole 256-byte
+     * space is asserted, not spot-checks:
+     * - OscString: everything below 0x20 (C0 none-band + BEL/CAN/SUB/ESC)
+     *   plus 0x9C (ST dispatches; the rest of 0x80-0xFF is Put payload).
+     * - DcsString: only the four cancel/terminator edges (the whole rest of
+     *   the byte space is Put passthrough).
+     * - SOS/PM/APC: those four plus the five C1 introducer Start edges
+     *   (0x98/0x9D/0x9E/0x9F — same-type re-introduction stays deliberately
+     *   byte-at-a-time so start()'s cross-type discard keeps its exact seat).
+     */
+    public function testSweepTerminatorSetsMatchTheShippedRows(): void
+    {
+        $ords = static fn (string $set): array => array_map('ord', str_split($set));
+
+        $expectedOsc = array_merge(range(0x00, 0x1F), [0x9C]);
+        $this->assertSame($expectedOsc, $ords(Transitions::terminators(State::OscString->value)));
+
+        $expectedDcs = [0x18, 0x1A, 0x1B, 0x9C];
+        $this->assertSame($expectedDcs, $ords(Transitions::terminators(State::DcsString->value)));
+
+        $expectedSosPmApc = [0x18, 0x1A, 0x1B, 0x98, 0x9C, 0x9D, 0x9E, 0x9F];
+        foreach ([State::SosString, State::PmString, State::ApcString] as $state) {
+            $this->assertSame(
+                $expectedSosPmApc,
+                $ords(Transitions::terminators($state->value)),
+                "terminator set drifted for {$state->name}",
+            );
+        }
+    }
+
+    public function testSweepTerminatorsRejectNonStringStates(): void
+    {
+        // Fail-fast: an empty/garbage set would mean an unbounded bulk append
+        // past the sequence boundary, so only the five string states answer.
+        $this->expectException(\InvalidArgumentException::class);
+        Transitions::terminators(State::Ground->value);
+    }
 }

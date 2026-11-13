@@ -34,6 +34,18 @@ final class Transitions
     private static ?string $table = null;
 
     /**
+     * Per-string-state terminator sets, derived from the built table on
+     * first use: the bytes whose entry for that state is NOT `Put → stay in
+     * state` (dispatch edges, C1 edges, non-Put holds like OSC's C0 ignore
+     * band — anything the byte-per-byte machine would act on differently
+     * than appending). {@see Parser::feed()} sweeps payloads against these
+     * so a bulk append can never over-read a sequence boundary.
+     *
+     * @var array<int, string>|null
+     */
+    private static ?array $terminators = null;
+
+    /**
      * Look up the packed transition entry for a given state and byte.
      *
      * Returns `(action << 4) | nextState`. Use {@see Transitions::action()}
@@ -52,6 +64,59 @@ final class Transitions
     public static function nextState(int $entry): int
     {
         return $entry & self::STATE_MASK;
+    }
+
+    /**
+     * The payload-sweep terminator set for one of the five string states
+     * (see {@see self::$terminators}). Only meaningful while the machine sits
+     * in a string state; any other state fails fast — a silently-empty set
+     * here would mean an unbounded bulk append past the sequence boundary.
+     *
+     * @throws \InvalidArgumentException if the state is not a string state
+     */
+    public static function terminators(int $state): string
+    {
+        self::$terminators ??= self::buildTerminators();
+        if (!isset(self::$terminators[$state])) {
+            throw new \InvalidArgumentException(
+                'terminators() is defined only for the five string states (Dcs/Osc/Sos/Pm/Apc); got state ' . $state . '.',
+            );
+        }
+        return self::$terminators[$state];
+    }
+
+    /**
+     * Scan the built table once per string state: a byte is a terminator
+     * unless its entry is exactly `Put` staying in the same state. Derived
+     * from the shipped rows, so the sweep can never disagree with the
+     * machine the rows actually encode.
+     *
+     * @return array<int, string>
+     */
+    private static function buildTerminators(): array
+    {
+        $table = self::$table ??= self::build();
+        $put = Action::Put->value;
+        $sets = [];
+        foreach (
+            [
+                State::DcsString->value,
+                State::OscString->value,
+                State::SosString->value,
+                State::PmString->value,
+                State::ApcString->value,
+            ] as $state
+        ) {
+            $set = '';
+            for ($b = 0; $b <= 0xFF; $b++) {
+                $entry = ord($table[($state << self::STATE_SHIFT) | $b]);
+                if (($entry >> self::ACTION_SHIFT) !== $put || ($entry & self::STATE_MASK) !== $state) {
+                    $set .= chr($b);
+                }
+            }
+            $sets[$state] = $set;
+        }
+        return $sets;
     }
 
     private static function build(): string

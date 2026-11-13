@@ -195,24 +195,87 @@ final class Parser
         while ($i < $len) {
             $b = ord($bytes[$i]);
 
-            // Ground-state fast path: in Ground, every printable-ASCII byte
-            // (0x20-0x7E) maps to Action::Print and stays in Ground (see the
-            // transition table). Sweep the maximal run and emit its per-byte
-            // printChar() calls directly, skipping the transition-table
-            // round-trip (two enum ::from()s + a table lookup) for each byte.
-            //
-            // This is byte-for-byte identical to advancing one byte at a
-            // time: exactly one printChar() with a single-byte rune per byte,
-            // in order. 0x7F (DEL, Execute), C0 controls, ESC, C1 and UTF-8
-            // lead bytes (>=0x80) all fall outside the range and route through
-            // the normal state machine, preserving every boundary behaviour.
-            if ($this->state === self::S_GROUND && $b >= 0x20 && $b <= 0x7E) {
-                $this->fastPathRuns++;
-                do {
-                    $this->handler->printChar($bytes[$i]);
-                    $i++;
-                } while ($i < $len && ($b = ord($bytes[$i])) >= 0x20 && $b <= 0x7E);
-                continue;
+            if ($this->state === self::S_GROUND) {
+                // Ground-state fast path: in Ground, every printable-ASCII byte
+                // (0x20-0x7E) maps to Action::Print and stays in Ground (see the
+                // transition table). Sweep the maximal run and emit its per-byte
+                // printChar() calls directly, skipping the transition-table
+                // round-trip for each byte (two enum ::from()s per byte were the
+                // old cost; sap-01 removed them — the table round-trip remains).
+                //
+                // This is byte-for-byte identical to advancing one byte at a
+                // time: exactly one printChar() with a single-byte rune per byte,
+                // in order. 0x7F (DEL, Execute), C0 controls, ESC, C1 and UTF-8
+                // lead bytes (>=0x80) all fall outside the range and route through
+                // the normal state machine, preserving every boundary behaviour.
+                if ($b >= 0x20 && $b <= 0x7E) {
+                    $this->fastPathRuns++;
+                    do {
+                        $this->handler->printChar($bytes[$i]);
+                        $i++;
+                    } while ($i < $len && ($b = ord($bytes[$i])) >= 0x20 && $b <= 0x7E);
+                    continue;
+                }
+
+                // Inline UTF-8 lead scan (finding sugar-ansi-parser-010): the
+                // table takes every lead 0xC2-0xF4 from Ground to the Utf8
+                // collection state (the anywhere rows — Transitions.php — are
+                // unbranching for leads), so a complete, well-formed run of
+                // `lead + (len-1)` continuations is provably one printChar()
+                // of the whole slice. Take it without buffering per byte.
+                // Anything the scan cannot prove complete — end-of-chunk
+                // truncation or a scan break at a non-continuation — falls
+                // through to advance(), whose Utf8 machinery stays the single
+                // source of rune truth (mid-rune chunk carry, malformed
+                // handling, drop-vs-U+FFFD policy all unchanged).
+                if ($b >= 0xC2 && $b <= 0xF4) {
+                    $need = $b <= 0xDF ? 2 : ($b <= 0xEF ? 3 : 4);
+                    if ($i + $need <= $len) {
+                        $complete = true;
+                        for ($k = 1; $k < $need; $k++) {
+                            $c = ord($bytes[$i + $k]);
+                            if ($c < 0x80 || $c > 0xBF) {
+                                $complete = false;
+                                break;
+                            }
+                        }
+                        if ($complete) {
+                            $rune = substr($bytes, $i, $need);
+                            if ($this->replaceMalformed && !$this->isValidUtf8Rune($rune)) {
+                                $this->handler->printChar("\xEF\xBF\xBD");
+                            } else {
+                                $this->handler->printChar($rune);
+                            }
+                            $i += $need;
+                            continue;
+                        }
+                    }
+                }
+            } elseif (((1 << $this->state) & self::STRING_STATE_MASK) !== 0) {
+                // Bulk string-payload sweep (finding sugar-ansi-parser-011):
+                // in a string state the table appends all-but-a-handful of the
+                // byte space (Put → stay). strcspn against the build-time
+                // derived terminator set finds the maximal safely-appendable
+                // run in one pass; the run is appended whole instead of one
+                // put() per byte (each of which re-evaluated strlen()). The
+                // byte that stopped the sweep — a dispatch edge, a non-Put
+                // hold like OSC's C0 ignore band, or a same-state
+                // re-introducer Start — is advanced one byte at a time, so
+                // every sequence boundary keeps its exact per-byte semantics.
+                // The cap ride stays: at maxStringBuffer the put() route drops
+                // further payload bytes silently, so a clipped run skips its
+                // uncollectable remainder to the same landing point (the
+                // truncation-signal gap is a separate row, not fixed here).
+                $terminators = Transitions::terminators($this->state);
+                $run = strcspn($bytes, $terminators, $i);
+                if ($run > 0) {
+                    $free = $this->maxStringBuffer - strlen($this->stringBuffer);
+                    if ($free > 0) {
+                        $this->stringBuffer .= substr($bytes, $i, min($run, $free));
+                    }
+                    $i += $run;
+                    continue;
+                }
             }
 
             $this->advance($b);
