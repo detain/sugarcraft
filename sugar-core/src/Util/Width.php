@@ -63,6 +63,25 @@ final class Width
     private static array $memo = [];
 
     /**
+     * Running byte total of the keys currently held in {@see $memo}. sc-36:
+     * the 2048-entry cap alone is not a memory bound — a hostile caller (or
+     * an old wrap pass memoizing shrinking 100 KB tails) can park 2048
+     * giant keys and hold hundreds of megabytes. Every store adds the key's
+     * byte length; every eviction recomputes the total from survivors.
+     */
+    private static int $memoBytes = 0;
+
+    /**
+     * sc-36: byte budget for {@see $memo}. Exceeding it evicts the oldest
+     * half exactly like the entry cap, so the memo's memory footprint is
+     * bounded by bytes, not just by glyph-shaped entry counts. A single
+     * input larger than the whole budget is still cached (refusing it would
+     * silently disable memoization for long rows); the budget then holds
+     * until that key is the oldest half and goes.
+     */
+    private const MEMO_MAX_BYTES = 1_048_576;
+
+    /**
      * Hard cap on {@see $memo} entries. When reached, the oldest half is
      * dropped in one pass (amortized O(1) eviction) rather than one-shift-
      * per-insert (O(n)); this keeps the memo a net win even when the
@@ -111,9 +130,19 @@ final class Width
             return self::$memo[$s];
         }
         $width = self::compute($s);
-        if (\count(self::$memo) >= self::MEMO_MAX) {
-            self::$memo = \array_slice(self::$memo, self::MEMO_MAX >> 1, null, true);
+        while (self::$memo !== []
+            && (\count(self::$memo) >= self::MEMO_MAX
+                || self::$memoBytes + \strlen($s) > self::MEMO_MAX_BYTES)
+        ) {
+            // Drop the oldest half of what is actually there (the entry-cap
+            // path at a full 2048 memo behaves exactly as the old fixed
+            // 1024-offset slice did) and re-account the survivors. The loop
+            // lets a byte-triggered overflow with only a few huge keys keep
+            // shedding instead of over-shooting the budget.
+            self::$memo = \array_slice(self::$memo, intdiv(\count(self::$memo), 2) ?: 1, null, true);
+            self::$memoBytes = \array_sum(\array_map('strlen', \array_keys(self::$memo)));
         }
+        self::$memoBytes += \strlen($s);
         return self::$memo[$s] = $width;
     }
 
@@ -213,15 +242,34 @@ final class Width
             return '';
         }
         $clean = Ansi::strip($s);
+        // sc-36 early door: when the byte length alone already proves the
+        // string fits (no tab: every other cluster is at most 1 cell per
+        // byte, zero-width ones less), return it whole without measuring,
+        // memoizing, or splitting a single grapheme. Inputs longer than the
+        // budget skip the door and let the cursor below stop on the first
+        // overshoot — the old code's full-array materialisation is exactly
+        // what this walk replaces.
+        if (\strlen($clean) <= $max && strpos($clean, "\t") === false) {
+            return $clean;
+        }
+        // sc-36 lazy slice: walk clusters with the cursor and stop at the
+        // budget. Byte-identical to the old graphemes()-materialising loop —
+        // same splitter (graphemes() is this same nextCluster walk), same
+        // first-overshoot break — it simply never builds the tail it will
+        // discard.
         $out = '';
         $w = 0;
-        foreach (self::graphemes($clean) as $g) {
-            $gw = self::graphemeWidth($g);
+        $i = 0;
+        $len = strlen($clean);
+        while ($i < $len) {
+            $cluster = self::nextCluster($clean, $i);
+            $gw = self::graphemeWidth($cluster);
             if ($w + $gw > $max) {
                 break;
             }
-            $out .= $g;
+            $out .= $cluster;
             $w += $gw;
+            $i += strlen($cluster);
         }
         return $out;
     }
@@ -636,6 +684,61 @@ final class Width
                     $line = '';
                     $lineWidth = 0;
                 }
+                if (strpos($token, "\x1b") === false) {
+                    // sc-36 linear door (the common shape): the legacy loop
+                    // below re-measured the WHOLE shrinking tail through
+                    // string() on every emitted chunk and materialised it
+                    // again inside truncate() — a hostile 100 KB single-token
+                    // paragraph was O(n²/max) per frame (measured: 220 s for
+                    // 50k CJK cells before this arm existed). Here the
+                    // token's width is already known ($w, measured exactly
+                    // once by the memo door) and each cluster's width is
+                    // paid for once, ever, because compute() is a plain sum
+                    // over the same nextCluster walk — so subtracting the
+                    // emitted chunk's width is byte-exact bookkeeping, not
+                    // an approximation. Output is identical to the legacy
+                    // arm on ANSI-free input, including the 15b-26 over-wide
+                    // leading-cluster rule.
+                    $remaining = $token;
+                    $remainingWidth = $w;
+                    while ($remainingWidth > $max) {
+                        $chunk = '';
+                        $chunkWidth = 0;
+                        while ($remaining !== '') {
+                            $cluster = self::nextCluster($remaining, 0);
+                            $cw = self::graphemeWidth($cluster);
+                            if ($chunkWidth + $cw > $max) {
+                                break;
+                            }
+                            $chunk .= $cluster;
+                            $chunkWidth += $cw;
+                            $remaining = substr($remaining, strlen($cluster));
+                        }
+                        if ($chunk === '') {
+                            // 15b-26: the leading cluster is wider than the
+                            // whole budget — emit it alone on an over-wide
+                            // row; every pass must consume at least one
+                            // cluster and over-wide beats a hang.
+                            $chunk = self::nextCluster($remaining, 0);
+                            $chunkWidth = self::graphemeWidth($chunk);
+                            $remaining = substr($remaining, strlen($chunk));
+                        }
+                        $lines[] = $chunk;
+                        $remainingWidth -= $chunkWidth;
+                    }
+                    if ($remaining !== '') {
+                        $line = $remaining;
+                        $lineWidth = $remainingWidth;
+                    }
+                    continue;
+                }
+                // ANSI-bearing oversize token: the legacy arm, kept verbatim.
+                // truncate() strips escapes, so this shape's output does NOT
+                // obey the additivity the fast arm above leans on, and
+                // changing it here would move wrap bytes — sc-36 is a
+                // performance row, not a behaviour row. (The substr-slicing
+                // of stripped lengths out of unstripped bytes is the shipped
+                // shape callers depend on today.)
                 $remaining = $token;
                 while (self::string($remaining) > $max) {
                     $chunk = self::truncate($remaining, $max);

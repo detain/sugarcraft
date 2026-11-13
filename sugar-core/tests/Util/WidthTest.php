@@ -989,4 +989,102 @@ final class WidthTest extends TestCase
         }
         return $out;
     }
+
+    /**
+     * sc-36: the memo carries a BYTE budget as well as a count cap — 2048
+     * keys of 1 MB each is a multi-GB footer on a long-lived renderer. Huge
+     * distinct keys must keep the tracked total at or under the budget
+     * (eviction halves by insertion, and the counter self-heals from keys),
+     * while every width answer stays exact whether cached, evicted, or
+     * recomputed.
+     */
+    public function testMemoByteBudgetEvictsHugeKeys(): void
+    {
+        $memoProp = new \ReflectionProperty(Width::class, 'memo');
+        $bytesProp = new \ReflectionProperty(Width::class, 'memoBytes');
+        $memoProp->setAccessible(true);
+        $bytesProp->setAccessible(true);
+        $memoProp->setValue(null, []);
+        $bytesProp->setValue(null, 0);
+
+        $budget = (new \ReflectionClassConstant(Width::class, 'MEMO_MAX_BYTES'))->getValue();
+        $keys = [];
+        for ($i = 0; $i < 8; $i++) {
+            $keys[$i] = 'H' . $i . str_repeat('x', 200_000);
+            $this->assertSame(200_001 + \strlen((string) $i), Width::string($keys[$i]));
+        }
+
+        $this->assertLessThanOrEqual($budget, $bytesProp->getValue(), 'tracked memo bytes must stay under budget');
+        $this->assertLessThan(8, \count($memoProp->getValue()), 'a 1.6MB burst cannot sit fully inside a 1MiB budget');
+        // Evicted keys recompute exactly — the cache changes speed, never truth.
+        $this->assertSame(200_002, Width::string($keys[0]));
+
+        $memoProp->setValue(null, []);
+        $bytesProp->setValue(null, 0);
+    }
+
+    /**
+     * sc-36: the truncate early door and the cursor walk must be
+     * byte-identical to the old materialising loop at every seam — door hit,
+     * door-miss by tab, over-budget walk, and the CJK overshoot where the
+     * budget strands a column.
+     */
+    public function testTruncateDoorAndCursorByteEquivalence(): void
+    {
+        // Door hit: bytes fit, no tab — string returned whole.
+        $this->assertSame(str_repeat('x', 50), Width::truncate(str_repeat('x', 50), 100));
+        // Door skipped by TAB: the walk path still returns the whole string.
+        $this->assertSame("a\tb", Width::truncate("a\tb", 20));
+        // Cursor path, plain ASCII over budget.
+        $this->assertSame(str_repeat('x', 100), Width::truncate(str_repeat('x', 1000), 100));
+        // CJK overshoot: 101 cells of 2-wide あ fits exactly 50 clusters and
+        // strands one column — the first-overshoot break, pinned.
+        $this->assertSame(
+            str_repeat("\u{3042}", 50),
+            Width::truncate(str_repeat("\u{3042}", 200_000), 101),
+        );
+        // ANSI input: the door sees the STRIPPED bytes; styled text over
+        // budget truncates on the visible cells.
+        $this->assertSame(str_repeat('b', 30), Width::truncate("\x1b[31m" . str_repeat('b', 300) . "\x1b[0m", 30));
+    }
+
+    /**
+     * sc-36: the linear hard-break fast arm must reproduce every shape the
+     * old quadratic truncate-loop produced — uniform chunks, the ASCII tail,
+     * and the 15b-26 over-wide single-cluster emission that can never
+     * otherwise progress.
+     */
+    public function testWrapHardBreakFastArmMatchesShapes(): void
+    {
+        // 200 CJK chars into width 5: 2 clusters (4 cells) per line, 100 lines.
+        $this->assertSame(
+            implode("\n", array_fill(0, 100, "\u{4e2d}\u{4e2d}")),
+            Width::wrap(str_repeat("\u{4e2d}", 200), 5),
+        );
+        // 1000 ASCII into 80: twelve full lines + the 40-cell tail.
+        $lines = explode("\n", Width::wrap(str_repeat('a', 1000), 80));
+        $this->assertCount(13, $lines);
+        $this->assertSame(str_repeat('a', 80), $lines[0]);
+        $this->assertSame(str_repeat('a', 40), $lines[12]);
+        // Single cluster wider than the whole box (1 cell): emitted alone,
+        // never lost — this is the arm the loop-without-progress guard owns.
+        $this->assertSame("\u{4e2d}\n\u{4e2d}", Width::wrap("\u{4e2d}\u{4e2d}", 1));
+    }
+
+    /**
+     * sc-36 performance row, NOT behaviour row: a hard-broken token that
+     * carries ANSI keeps the legacy stripped shape — the truncate-based arm
+     * eats the escape bytes, so the chunks are the plain text reflowed.
+     * Pinned as shipped (the bench corpus cmp proved before/after byte
+     * equality on exactly this input family).
+     */
+    public function testWrapAnsiTokenHardBreakKeepsLegacyStrippedShape(): void
+    {
+        $out = Width::wrap("\x1b[31m" . str_repeat('b', 500) . "\x1b[0m", 40);
+        $lines = explode("\n", $out);
+        $this->assertCount(13, $lines);
+        $this->assertSame(str_repeat('b', 40), $lines[0], 'escape bytes are stripped by the legacy arm');
+        $this->assertStringNotContainsString("\x1b", $out, 'documented quirk: styling does not survive a hard break');
+        $this->assertSame(str_repeat('b', 20), $lines[12]);
+    }
 }
