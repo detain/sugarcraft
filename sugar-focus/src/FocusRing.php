@@ -684,7 +684,9 @@ final class FocusRing implements \Countable, \IteratorAggregate, \JsonSerializab
      * no flag to restore).
      *
      * Resolution order for focus: a string "focused" id wins (id-keyed,
-     * drift-proof); an unknown focused id leaves the first region focused.
+     * drift-proof); an unknown focused id lands on the first ENABLED region —
+     * the same wall reorder() respects — or index 0 (parked) only when every
+     * region is disabled.
      * The positional "index" is consulted only when no usable focus leg is
      * present at all (legacy snapshots), and then clamped into range. An
      * empty ids list focuses nothing either way.
@@ -760,6 +762,25 @@ final class FocusRing implements \Countable, \IteratorAggregate, \JsonSerializab
         }
 
         return new self($ids, $target, $disabled);
+    }
+
+    /**
+     * Decode a JSON snapshot string and rebuild through {@see restore()} — the
+     * file-reading convenience that keeps callers from hand-assembling the
+     * json_decode/is_array guard.
+     *
+     * The null-vs-throw split is deliberate: text that does not parse to an
+     * ARRAY is expected disk rot (unreadable file, truncated write) and
+     * answers null so `??` can rebuild defaults; text that parses to an array
+     * but carries structurally broken ids still throws from restore(),
+     * because that is a producer-side programmer error, not rot to recover
+     * from.
+     */
+    public static function fromJson(string $json): ?self
+    {
+        $decoded = json_decode($json, true);
+
+        return is_array($decoded) ? self::restore($decoded) : null;
     }
 
     /** The focused region id, or null when the ring is empty. */

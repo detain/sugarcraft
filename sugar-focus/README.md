@@ -137,13 +137,12 @@ strength itself under 1.4.11 *Non-text Contrast*).
 - The snapshot's `disabled` list is in traversal order and always holds
   strings, numeric ids such as `"1"` included. `focused` names the id directly
   (drift-proof against reordering) while `index` rides along for readers of
-  older snapshots. Restore with the inverse of `jsonSerialize()`:
+  older snapshots. Restore from a file with `fromJson()`, the inverse of
+  `json_encode()`:
 
 ```php
-$decoded = json_decode($json, true);
-$ring = is_array($decoded)
-    ? FocusRing::restore($decoded)
-    : FocusRing::of('sidebar', 'grid', 'filter');  // unreadable file: rebuild defaults
+$ring = FocusRing::fromJson($json)
+    ?? FocusRing::of('sidebar', 'grid', 'filter');  // unreadable file: rebuild defaults
 ```
 
   For an **array** payload, `restore()` prefers the `focused` id over the
@@ -224,7 +223,8 @@ perceivable (2.4.7 *Focus Visible*).
 | `FocusRing::new(): self` | An empty ring. |
 | `FocusRing::of(string ...$ids): self` | A ring of regions (duplicates dropped), focusing the first. |
 | `FocusRing::ofStrict(string ...$ids): self` | Like `of()`, but throws `InvalidArgumentException` on a duplicate id. |
-| `FocusRing::restore(array $snapshot): self` | Inverse of `jsonSerialize()` — clamps stale indices on legacy positional-only snapshots, unknown `focused` ids land on the first region, drops unknown disabled entries; a legacy positional-only snapshot has no `disabled` key, so every region comes back enabled. Takes a decoded **array**: guard `json_decode()` with `is_array()` before calling. |
+| `FocusRing::restore(array $snapshot): self` | Inverse of `jsonSerialize()` — clamps stale indices on legacy positional-only snapshots, unknown `focused` ids land on the first **enabled** region (index 0 only when every region is disabled), drops unknown disabled entries; a legacy positional-only snapshot has no `disabled` key, so every region comes back enabled. Takes a decoded **array** — read JSON strings through `fromJson()` instead. |
+| `FocusRing::fromJson(string $json): ?self` | `json_decode` + `restore()` with the guard built in: text that does not parse to an array answers **null** (disk rot — `??` a default ring); parsed-but-structurally-broken ids still **throw** from `restore()` (producer bug, not rot). |
 | `register(string $id): self` | Add an enabled region to the end of the order. |
 | `unregister(string $id): self` | Remove a region, preserving focus where possible. |
 | `reorder(string ...$ids): self` | Replace the traversal order, keeping focus on the current id when it survives. |

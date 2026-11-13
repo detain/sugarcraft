@@ -1211,6 +1211,36 @@ final class FocusRingTest extends TestCase
         self::assertCacheConsistent($ring);
     }
 
+    // ─── fromJson(): the guarded decode convenience ────────────────────────
+
+    public function testFromJsonRoundTripsThePersistedSnapshot(): void
+    {
+        $ring = FocusRing::of('a', 'b', 'c')->focus('b')->disable('c');
+        $decoded = FocusRing::fromJson(json_encode($ring));
+
+        self::assertNotNull($decoded);
+        self::assertSame($ring->jsonSerialize(), $decoded->jsonSerialize(), 'the round trip preserves the full spec incl. flags');
+        self::assertSame('b', $decoded->current());
+    }
+
+    public function testFromJsonAnswersNullForRot(): void
+    {
+        // Text that does not decode to an array is expected disk rot — the
+        // guard the README recipe used to hand-assemble.
+        foreach (['', 'not json', '5', 'null', '"str"'] as $rot) {
+            self::assertNull(FocusRing::fromJson($rot), $rot);
+        }
+    }
+
+    public function testFromJsonStillThrowsOnStructuredNonsense(): void
+    {
+        // Documented split: parses to an array, but broken ids are a
+        // producer-side bug — restore() keeps its guarantee.
+        $this->expectException(\InvalidArgumentException::class);
+
+        FocusRing::fromJson('{"ids":5}');
+    }
+
     // ─── nextOf() / previousOf(): pure traversal queries ───────────────────
 
     public function testNextOfAndPreviousOfMirrorTraversalWithoutMovingFocus(): void
