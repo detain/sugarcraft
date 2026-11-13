@@ -440,7 +440,10 @@ object.
   `Theme::byName()` returns `?Theme` — null on an unknown name, which
   then lands silently on `ansi()` through `new Renderer($theme)`; for
   name-based construction prefer `withStandardStyle()` (throws on
-  unknown) or `Theme::fromEnvironment($fallback)`. `Theme::fromFile()`
+  unknown, naming the `Theme::names()` roster; `Theme::requireName()`
+  is the same refusal standalone) or `Theme::fromEnvironment($fallback)`.
+  `auto` is not a `byName` slug — it is a `fromEnvironment()` channel,
+  so a name lookup never probes the terminal. `Theme::fromFile()`
   and `Theme::fromJsonString()` complete the theme file/inline pair
   (`fromJson()` remains as a deprecated alias),
   and `Theme::mapStyles(callable)` rewrites every `Style` slot through

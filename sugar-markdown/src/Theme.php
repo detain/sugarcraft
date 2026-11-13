@@ -363,7 +363,10 @@ final class Theme
      * null for unknown names so callers can fall back to their own
      * default rather than receiving a surprising one. Names mirror the
      * upstream glamour preset slugs (case-insensitive, hyphens
-     * normalised to none).
+     * normalised to none); the roster is {@see names()}. `auto` is
+     * deliberately NOT a byName slug — it resolves via
+     * {@see fromEnvironment()} only, so a pure lookup never probes the
+     * terminal.
      *
      *   ansi / plain / notty / ascii / dark / light /
      *   dracula / tokyo-night | tokyonight / pink
