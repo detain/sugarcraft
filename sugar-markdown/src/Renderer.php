@@ -111,7 +111,7 @@ final class Renderer
     /**
      * CommonMark parser, built lazily on first {@see render()} and cached
      * on the instance. Left null by the constructor so the chainable
-     * `with*()` builders (which spin up a fresh instance via {@see copy()})
+     * `with*()` builders (which spin up a fresh instance via {@see mutate()})
      * do NOT rebuild the parser/Environment on every call — only an actual
      * render pays that cost, once per instance.
      */
@@ -554,7 +554,7 @@ final class Renderer
      */
     public function renderParsedSection(Document $document): string
     {
-        $sub = $this->copy();
+        $sub = $this->mutate();
         $sub->blockStack = new BlockStack();
         $sub->styleSheet = $this->styleSheetOverride ?? StyleSheet::base();
         $sub->blockStack->push(new BlockContext(
@@ -590,7 +590,7 @@ final class Renderer
 
     public function withTheme(Theme $theme): self
     {
-        return $this->copy(theme: $theme);
+        return $this->mutate(theme: $theme);
     }
 
     /**
@@ -603,7 +603,7 @@ final class Renderer
      */
     public function withWordWrap(?int $cols): self
     {
-        return $this->copy(wrapWidth: $cols, wrapWidthSet: true);
+        return $this->mutate(wrapWidth: $cols, wrapWidthSet: true);
     }
 
     /**
@@ -614,7 +614,7 @@ final class Renderer
      */
     public function withHyperlinks(bool $on = true): self
     {
-        return $this->copy(emitHyperlinks: $on);
+        return $this->mutate(emitHyperlinks: $on);
     }
 
     /**
@@ -625,7 +625,7 @@ final class Renderer
     public function withBaseURL(?string $url): self
     {
         $url = $url === null || $url === '' ? null : rtrim($url, '/') . '/';
-        return $this->copy(baseUrl: $url, baseUrlSet: true);
+        return $this->mutate(baseUrl: $url, baseUrlSet: true);
     }
 
     /**
@@ -641,7 +641,7 @@ final class Renderer
      */
     public function withTableWrap(bool $on = true): self
     {
-        return $this->copy(tableWrap: $on);
+        return $this->mutate(tableWrap: $on);
     }
 
     /**
@@ -653,7 +653,7 @@ final class Renderer
      */
     public function withInlineTableLinks(bool $on = true): self
     {
-        return $this->copy(inlineTableLinks: $on);
+        return $this->mutate(inlineTableLinks: $on);
     }
 
     /**
@@ -676,7 +676,7 @@ final class Renderer
      */
     public function withTableColumnBudget(bool $on = true): self
     {
-        return $this->copy(tableColumnBudget: $on);
+        return $this->mutate(tableColumnBudget: $on);
     }
 
     /**
@@ -696,7 +696,7 @@ final class Renderer
      */
     public function withFenceColumnBudget(bool $on = true): self
     {
-        return $this->copy(fenceColumnBudget: $on);
+        return $this->mutate(fenceColumnBudget: $on);
     }
 
     /**
@@ -707,7 +707,7 @@ final class Renderer
      */
     public function withStyleSheet(StyleSheet $sheet): self
     {
-        return $this->copy(styleSheetOverride: $sheet);
+        return $this->mutate(styleSheetOverride: $sheet);
     }
 
     /**
@@ -721,7 +721,7 @@ final class Renderer
      */
     public function withPreservedNewLines(bool $on = true): self
     {
-        return $this->copy(preservedNewLines: $on);
+        return $this->mutate(preservedNewLines: $on);
     }
 
     /**
@@ -733,7 +733,7 @@ final class Renderer
      */
     public function withStandardStyle(string $name): self
     {
-        return $this->copy(theme: Theme::requireName($name));
+        return $this->mutate(theme: Theme::requireName($name));
     }
 
     /**
@@ -748,7 +748,7 @@ final class Renderer
      */
     public function withEmoji(bool $on = true): self
     {
-        return $this->copy(expandEmoji: $on);
+        return $this->mutate(expandEmoji: $on);
     }
 
     /**
@@ -766,7 +766,7 @@ final class Renderer
      */
     public function withSanitize(bool $on = true): self
     {
-        return $this->copy(sanitize: $on);
+        return $this->mutate(sanitize: $on);
     }
 
     // Short-form alias.
@@ -790,8 +790,8 @@ final class Renderer
     public function standardStyle(string $name): self    { return $this->withStandardStyle($name); }
     public function styleSheet(StyleSheet $sheet): self  { return $this->withStyleSheet($sheet); }
 
-    /** @internal copy-with-overrides for chainable builders. */
-    private function copy(
+    /** @internal mutate-with-overrides for chainable builders. */
+    private function mutate(
         ?Theme $theme = null,
         ?int $wrapWidth = null, bool $wrapWidthSet = false,
         ?bool $emitHyperlinks = null,
