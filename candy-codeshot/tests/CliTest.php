@@ -20,7 +20,12 @@ final class CliTest extends TestCase
         }
     }
 
-    private function runCli(array $args, ?string $stdin = null, ?string $cwd = null): array
+    /**
+     * @param array<string,string> $env overrides applied AFTER the C pin — a
+     *                                  leg that wants a translated run opts
+     *                                  out of the English default.
+     */
+    private function runCli(array $args, ?string $stdin = null, ?string $cwd = null, array $env = []): array
     {
         $cmd = [self::$phpBinary, self::$binPath, ...$args];
 
@@ -32,7 +37,7 @@ final class CliTest extends TestCase
 
         // Pin English output deterministically: the bin now activates the host
         // locale (T::detect), so child runs must not inherit a translated LANG.
-        $env = array_merge((array) getenv(), ['LANG' => 'C', 'LC_ALL' => 'C']);
+        $env = array_merge((array) getenv(), ['LANG' => 'C', 'LC_ALL' => 'C'], $env);
         $handle = proc_open($cmd, $desc, $pipes, $cwd, $env);
 
         try {
@@ -62,11 +67,44 @@ final class CliTest extends TestCase
     public function testHelpExitsZeroAndPrintsToStdout(): void
     {
         $result = $this->runCli(['--help']);
-
         $this->assertSame(0, $result['exitCode']);
         $this->assertStringStartsWith('candy-codeshot', $result['stdout']);
         $this->assertStringContainsString('--theme', $result['stdout']);
         $this->assertSame('', $result['stderr']);
+    }
+
+    public function testGermanLocaleReachesTheUsageLine(): void
+    {
+        // cs-22 positive pin for the locale-selection wiring. runCli pins
+        // LANG/LC_ALL to C for every other leg, so these German words can
+        // only arrive through the bin's own T::setLocale(T::detect()) call —
+        // deleting that line leaves the whole set falling back to 'en' and
+        // reddens this leg (mutation-proven: pre-pin, removing it kept all
+        // tests green, the dormant-wiring class).
+        $result = $this->runCli(['--help'], env: ['LANG' => 'de_DE.UTF-8', 'LC_ALL' => 'de_DE.UTF-8']);
+
+        $this->assertSame(0, $result['exitCode']);
+        // Substance, not is_string: the translated headline row itself.
+        $this->assertStringContainsString(
+            'Code oder Terminal-Ausgabe als SVG- oder PNG-Screenshot rendern',
+            $result['stdout'],
+        );
+        $this->assertStringContainsString('Aufruf:', $result['stdout']);
+        $this->assertStringNotContainsString('Usage:', $result['stdout']);
+    }
+
+    public function testCLocaleKeepsTheEnglishUsageLine(): void
+    {
+        // Polarity pin for the same wiring: C/POSIX is the detect() skip
+        // list, so the English headline must answer when LC_ALL=C rides.
+        $result = $this->runCli(['--help'], env: ['LC_ALL' => 'C']);
+
+        $this->assertSame(0, $result['exitCode']);
+        $this->assertStringContainsString(
+            'render code or terminal output to an SVG or PNG screenshot',
+            $result['stdout'],
+        );
+        $this->assertStringContainsString('Usage:', $result['stdout']);
     }
 
     public function testStdinHappyPath(): void
