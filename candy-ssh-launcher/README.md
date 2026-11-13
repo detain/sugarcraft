@@ -172,6 +172,7 @@ Flat list of endpoint objects (YAML subset or JSON). The parser is chosen by the
 | `flags` | list, optional | Extra ssh(1) flag letters (`-A`, `-t`, `-T`, `-N`, `-f`, `-X` are not `-o`-able): pass `t`, `N` — the dash is added at argv build, before the destination. An entry that itself starts with a dash is refused at dispatch (the option-injection guard), and an empty item is skipped. |
 | `remoteCommand` | string, optional; alias `remote_command` | The ssh(1) command positional: appended after the destination per the `ssh [options] destination [command]` synopsis, so tunnel/kubectl/tmux-attach endpoints are expressible. Leading-dash values are refused at dispatch; an empty value behaves as no command. |
 | `command` | string, optional; alias `transport` | Custom transport binary for this row (upstream's mosh lane, generalized): replaces `--ssh` when this endpoint dispatches. It must be an **existing executable path** — the same gate `--ssh` passes — and it is refused by name at dispatch (exit `3`) otherwise; it never rides argv, so the leading-dash guard family does not apply to it. The transport argv is the restricted ssh-shaped subset: binary, `-p <port>` when not 22, the raw `flags` lane, destination — `identityFiles`, `proxyJump`, `options` and `remoteCommand` are not mosh-class speak, so if the row sets any of them they are dropped **with one stderr line naming the endpoint and every dropped field** — never trimmed in silence. An empty value behaves as no command. |
+| `forward_agent` / `request_tty` / `connect_timeout` | **not fields here** | Upstream's first-class keys are expressed as `options:` entries (`ForwardAgent=yes`, `RequestTTY=force`, `ConnectTimeout=30`) — see [Divergences from upstream wishlist](#divergences-from-upstream-wishlist). Spelling the upstream key here draws the unknown-field notice, never a silent ignore. |
 
 Limits of the embedded YAML reader: flat entries only, and a nested list is written one `- item` line at a time — any number of items accumulates, but each must be a scalar. An optional field can be left out entirely or written `key: null` / `key: ~` — both read as omitted; a bare `key:` is never an omission: on a list field it opens the `- item` block, and on a scalar field it is refused by name as a non-scalar. **Inline flow collections** (`options: [a, b]`) are refused with a message that names the fix — write the nested list form; block mappings indented under a list field are refused by name, field and line. A `#` after whitespace starts a comment, and stripping is quote-aware: outside quotes only, so `description: "fix #1"` keeps its hash. Files saved **with a UTF-8 BOM load fine** (the mark is stripped at the read); **UTF-16 files are refused by name** with a re-save-as-UTF-8 hint — the reader never guesses an encoding. Booleans are refused at any string field rather than reaching ssh as `"1"` — and the boolean set is YAML 1.2 core only (`true/True/TRUE`, `false/False/FALSE`): `yes`, `no`, `on`, `off` are ordinary strings, so a host genuinely named `yes` loads as `yes`.
 
@@ -246,6 +247,30 @@ Import surprises worth knowing:
 - A block whose only pattern is `Host *` mints no endpoint of its own.
 - A multi-pattern block `Host a b c` mints one endpoint **per pattern**, sharing the block's values; `!negation` tokens only exclude, they never mint.
 - Quoted patterns are no exception — patterns split on spaces, so `Host "web 1"` mints entries literally named `"web` and `1"` (quotes are not stripped).
+
+## Divergences from upstream wishlist
+
+This is a deliberately scoped port. The honest gap list — every upstream roadmap key the reviewers named is here, ported, re-expressed, or refused with a reason, because silence about scope is the bug we would not ship. Freshness caveat: this inventory was written against the 2026-05 research snapshot of charmbracelet/wishlist and a no-network lane — if upstream has moved since, this section can lag it.
+
+**Not ported, by architecture: the directory server.** wishlist's flagship is an SSH directory service with its own certificate authority — a daemon that hands out host access over a network. This launcher is a local picker and an exec hand-off: it reads your files, draws a list, and `pcntl_exec`s `ssh`. No daemon, no CA, no per-user grant store. The fleet's server-side story is the separate `sugar-ssh-server` middleware library (composable auth/logging/rate-limit middleware run under a host OpenSSH daemon's `ForceCommand`) — and it, too, implements no directory CA.
+
+**Opposite by design: `--wizard`.** Upstream can generate a config for you; this tool never writes one. It reads the config you already have — including the import route over your existing `~/.ssh/config` above. One config generator per fleet is enough.
+
+**Refused with a schema reason: `hints`.** Upstream's top-level `hints:` block carries glob-defaulted connections (every `*.local` box is `admin:2222`) merged into matching endpoints. The embedded reader consumes a flat list of endpoint rows — it cannot represent a top-level map at all, so a file opening with `hints:` is refused as unparseable; that is the parser's shape, not a validator's choice. Porting hints means a schema plus parser plus merge semantics (the 2026-05 research estimated 6–8 h), so it stays an open product decision, recorded here and in `CALIBER_LEARNINGS.md`, not a forgotten feature. Mitigation for migrants: the ssh_config importer already carries positional first-obtained defaults — a `Host *.local` block with `User admin` and `Port 2222` is the same workflow expressed where patterns *are* understood.
+
+**Dropped for want of a story: `link`.** Upstream attaches per-endpoint URLs. A raw-mode picker has no browser to hand them to, and no UI surface would show them; shipping the key with nothing consuming it is how silent dead config starts. A `link:` field is at least named — the unknown-field notice says so instead of swallowing it quietly. The plausible future is display-only OSC 8 hyperlinks in `--list` output (no argv involved); nothing is committed to that.
+
+**Re-expressed, not renamed: `forward_agent`, `request_tty`, `connect_timeout`.** Upstream ships these as first-class keys. Here they are `options:` entries — the same `-o` argv, one less schema field:
+
+| Upstream key | This schema's equivalent |
+|--------------|--------------------------|
+| `forward_agent: true` | `-o ForwardAgent=yes` via `options:` |
+| `request_tty: force` | `-o RequestTTY=force` via `options:` |
+| `connect_timeout: 30` | `-o ConnectTimeout=30` via `options:` |
+
+Portability edge: `-o` support is client-dependent — OpenSSH honors all three, dropbear and busybox ssh implement only subsets and commonly none of `ForwardAgent`/`RequestTTY`; the option reaches the client verbatim and what it does there is that client's contract. Writing the upstream key names as fields gets the unknown-field notice, never a silent ignore.
+
+**No longer divergences: `remote_command` and `flags`.** Both were missing when the audit ran; both ship now. `remoteCommand` (alias `remote_command`) rides the ssh(1) command positional; `flags` is the boolean-flag lane (`t`, `N`, `X`, … → `-t`, `-N`, `-X`) for the switches `options:` cannot express. They are named here so the list above is never misread as still claiming them absent.
 
 ## Security
 

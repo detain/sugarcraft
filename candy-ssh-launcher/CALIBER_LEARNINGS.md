@@ -61,6 +61,18 @@ The binary checks for config in this order (2026-10-23 rewrite — the list here
 
 Both tiers are existence-gated. The HOME tier previously appended candidates unconditionally, so a missing `~/.config/wishlist.yml` shadowed a valid `wishlist.yaml` sibling and the run died on a "not found" for a path the user never named.
 
+## Wishlist Schema Boundaries
+
+### `hints:` refused — schema shape, not a parser gap
+
+Upstream wishlist's top-level `hints:` block (glob-defaulted connections) is NOT shipped, and the reason is structural: the embedded reader consumes a flat list of endpoint rows and has no way to represent a top-level map at all, so a file opening with `hints:` is refused as unparseable by the parser's shape, not by a validator's choice. The decision is recorded publicly in README `## Divergences from upstream wishlist`; the implement arm (`defaults:`/`hints:` plus merge semantics — the 2026-05 research estimated 6–8 h) stays an OPEN product decision, not a forgotten feature.
+
+**Anti-pattern:** silently tolerating a key the schema cannot represent. A `hints:` (or any top-level map) that parsed-and-dropped would recreate exactly the vanished-roadmap-key failure this record exists to prevent; the flat reader must keep refusing the shape loudly.
+
+**Mitigation for upstream migrants:** the ssh_config importer's positional first-obtained rule already does the glob-defaults job (`Host *.local` + `User admin` + `Port 2222`).
+
+Source: findings -031/-034, sshl-29 (2026-11-13)
+
 ## Testing SSH Config Parsing
 
 ### Snapshot tests
