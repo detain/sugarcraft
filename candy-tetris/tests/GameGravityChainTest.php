@@ -26,7 +26,11 @@ use PHPUnit\Framework\TestCase;
  * drive: each Cmd is invoked to a TickRequest, queued at now + seconds, and
  * the produced Msg is fed back through update(). Counting GravityMsg
  * arrivals inside a fixed wall-clock window exposes any timer stacking —
- * no real sleeping involved.
+ * no real sleeping involved. The game is armed with a virtual clock that
+ * reads the simulator's own timeline (candy-tetris-023): the absolute
+ * deadline chain and the event queue must tick on the SAME time base, or
+ * the simulation would compare its synthetic now against the machine's
+ * hrtime.
  */
 final class GameGravityChainTest extends TestCase
 {
@@ -38,8 +42,13 @@ final class GameGravityChainTest extends TestCase
      */
     private function simulate(array $keys = []): int
     {
-        $game = Game::start(new Bag(static fn(int $_max): int => 0));
         $now = 0.0;
+        $game = Game::start(
+            new Bag(static fn(int $_max): int => 0),
+            clockUs: static function () use (&$now): float {
+                return $now * 1_000_000;
+            },
+        );
         /** @var list<array{0: float, 1: \Closure}> $queue absolute fire times */
         $queue = [];
         $arm = static function (?\Closure $cmd) use (&$queue, &$now): void {

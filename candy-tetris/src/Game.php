@@ -36,6 +36,14 @@ use SugarCraft\Tetris\Support\Scores;
  *     never append a second tick — {@see self::armGravity()} skips
  *     re-arming while one is pending, so N actions cannot buy N
  *     extra timers.
+ *   - The descent chain is paced on an ABSOLUTE deadline
+ *     (candy-tetris-023): each re-arm fires interval - lateness,
+ *     where lateness is the render/update cost that ran between the
+ *     armed deadline and this handler. A slow terminal therefore
+ *     drops ticks (never pieces) instead of stretching every gap by
+ *     its own frame cost — fall speed is game state, not machine
+ *     throughput. A gap already in the past when it is armed is
+ *     dropped outright (no catch-up burst).
  *   - The lock-delay window is real-time (milliseconds), independent
  *     of gravity speed, and generation-tagged via
  *     {@see LockDelayMsg}: superseded windows go stale by tag
@@ -173,6 +181,14 @@ final class Game implements Model
          * byte-identical.
          */
         public readonly bool $reproducible = false,
+        /**
+         * Monotonic-microsecond clock used to pace the gravity chain
+         * (candy-tetris-023). Null answers for the real hrtime; a test
+         * reads the simulator's own timeline so arm and fire happen on the
+         * SAME time base — without one, deadline chaining is untestable
+         * without sleeping. Signature: `(): float`, microseconds.
+         */
+        public readonly ?\Closure $clockUs = null,
     ) {
         // One stateful stream feeds this game's garbage holes. Built from
         // the seed so the sequence is run-determined; Game::mutate()
@@ -250,6 +266,7 @@ final class Game implements Model
             $changes['introPending']  ?? $this->introPending,
             $changes['seed']          ?? $this->seed,
             $changes['reproducible']  ?? $this->reproducible,
+            $changes['clockUs']       ?? $this->clockUs,
         );
         // The live garbage stream rides the update (see ctor note): a
         // re-derived stream would restart the hole sequence on every
@@ -270,7 +287,7 @@ final class Game implements Model
         return $this->frameCols < Renderer::MIN_COLS || $this->frameRows < Renderer::MIN_ROWS;
     }
 
-    public static function start(?Bag $bag = null, ?KeyBindings $bindings = null, ?Scores $scores = null, ?string $scoresPath = null, bool $introPending = false, ?int $seed = null, bool $reproducible = false): self
+    public static function start(?Bag $bag = null, ?KeyBindings $bindings = null, ?Scores $scores = null, ?string $scoresPath = null, bool $introPending = false, ?int $seed = null, bool $reproducible = false, ?\Closure $clockUs = null): self
     {
         // candy-tetris-018: the production path always carries a seed.
         // `--seed=N` pins it (and stamps the banner); a plain launch
@@ -282,7 +299,7 @@ final class Game implements Model
         $piece = self::spawn($first);
         // init() will arm the gravity chain; the pending slot starts taken
         // so no key path can double-book it before then.
-        return new self(new Board(), $piece, $bag, new Score(), gravityPending: true, bindings: $bindings, scores: $scores, scoresPath: $scoresPath, introPending: $introPending, seed: $seed, reproducible: $reproducible);
+        return new self(new Board(), $piece, $bag, new Score(), gravityPending: true, bindings: $bindings, scores: $scores, scoresPath: $scoresPath, introPending: $introPending, seed: $seed, reproducible: $reproducible, clockUs: $clockUs);
     }
 
     /**
@@ -291,7 +308,7 @@ final class Game implements Model
      * @param int $lockDelayMs Grounded window length in milliseconds
      *                         (SRS-style: ~0.5 s, independent of gravity).
      */
-    public static function startWithLockDelay(?Bag $bag = null, int $lockDelayMs = self::DEFAULT_LOCK_DELAY_MS, ?KeyBindings $bindings = null, ?Scores $scores = null, ?string $scoresPath = null, bool $introPending = false, ?int $seed = null, bool $reproducible = false): self
+    public static function startWithLockDelay(?Bag $bag = null, int $lockDelayMs = self::DEFAULT_LOCK_DELAY_MS, ?KeyBindings $bindings = null, ?Scores $scores = null, ?string $scoresPath = null, bool $introPending = false, ?int $seed = null, bool $reproducible = false, ?\Closure $clockUs = null): self
     {
         // Seed law as in {@see self::start()} (candy-tetris-018).
         $seed ??= random_int(0, self::SEED_MASK);
@@ -311,20 +328,53 @@ final class Game implements Model
             introPending: $introPending,
             seed: $seed,
             reproducible: $reproducible,
+            clockUs: $clockUs,
         );
     }
 
     public function init(): ?\Closure
     {
-        return self::scheduleGravity($this->score, $this->gravityChain);
+        return $this->scheduleGravity($this->score, $this->gravityChain);
     }
 
-    private static function scheduleGravity(Score $score, int $chain = 0): \Closure
+    /**
+     * Arm the next gravity tick on the absolute-deadline chain
+     * (candy-tetris-023). $deadlineUs is the monotonic reading the tick
+     * that triggered this re-arm was SUPPOSED to fire at — null answers
+     * for fresh baselines (init, restart, lock-and-spawn, input revives,
+     * non-descending heartbeats). The next deadline sits exactly one
+     * interval after the given one, so the cadence advances in virtual
+     * time and only the wait shrinks by whatever processing overran the
+     * deadline: fall speed stops being `interval + frame cost` and stops
+     * depending on the machine. A deadline already in the past when
+     * armed (the terminal lagged a whole interval) is rebased: the
+     * overdue tick is dropped, never burst into a catch-up cascade.
+     */
+    private function scheduleGravity(Score $score, int $chain = 0, ?float $deadlineUs = null): \Closure
     {
+        $intervalUs = (float) $score->gravityIntervalUs();
+        $nowUs = $this->nowUs();
+        $nextDeadlineUs = ($deadlineUs ?? $nowUs) + $intervalUs;
+        if ($nextDeadlineUs <= $nowUs) {
+            $nextDeadlineUs = $nowUs + $intervalUs;
+        }
+
         return Cmd::tick(
-            $score->gravityIntervalUs() / 1_000_000,
-            static fn(): Msg => new GravityMsg($chain),
+            max(0.0, $nextDeadlineUs - $nowUs) / 1_000_000,
+            static fn(): Msg => new GravityMsg($chain, $nextDeadlineUs),
         );
+    }
+
+    /**
+     * Monotonic clock in microseconds. hrtime (not microtime) so the
+     * chain survives wall-clock steps and NTP slewing; an injected
+     * clock (see the ctor param) puts arm and fire on one time base.
+     */
+    private function nowUs(): float
+    {
+        $clock = $this->clockUs;
+
+        return $clock === null ? hrtime(true) / 1_000.0 : (float) $clock();
     }
 
     private function scheduleLockDelay(int $generation): \Closure
@@ -339,17 +389,19 @@ final class Game implements Model
      * Idempotent gravity arming: while a gravity tick is already pending,
      * re-arming is skipped (the single-chain invariant). Returns the game
      * plus the arm Cmd only when the chain was actually stopped.
+     * $deadlineUs chains an absolute-deadline re-arm (see
+     * {@see $this->scheduleGravity()}); null arms a fresh baseline.
      *
      * @return array{0:self,1:?\Closure}
      */
-    private static function armGravity(self $game): array
+    private function armGravity(self $game, ?float $deadlineUs = null): array
     {
         if ($game->gravityPending === true) {
             return [$game, null];
         }
         return [
             $game->mutate(['gravityPending' => true]),
-            self::scheduleGravity($game->score, $game->gravityChain),
+            $this->scheduleGravity($game->score, $game->gravityChain, $deadlineUs),
         ];
     }
 
@@ -464,7 +516,7 @@ final class Game implements Model
             if ($msg->chain !== $this->gravityChain || $this->gravityPending === false) {
                 return [$this, null];
             }
-            return self::armGravity($this->mutate(['gravityPending' => false]));
+            return $this->armGravity($this->mutate(['gravityPending' => false]));
         }
         if ($msg instanceof LockDelayMsg) {
             if ($msg->generation !== $this->lockWindowGeneration) {
@@ -524,7 +576,7 @@ final class Game implements Model
                 if ($msg->chain !== $this->gravityChain || $this->gravityPending === false) {
                     return [$this, null];
                 }
-                return self::armGravity($this->mutate(['gravityPending' => false]));
+                return $this->armGravity($this->mutate(['gravityPending' => false]));
             }
             if ($msg instanceof LockDelayMsg) {
                 if ($msg->generation !== $this->lockWindowGeneration) {
@@ -554,8 +606,8 @@ final class Game implements Model
                 // chain is armed right here — init() ran once at boot and
                 // will not re-run.
                 $fresh = $this->lockDelayMs > 0
-                    ? self::startWithLockDelay(lockDelayMs: $this->lockDelayMs, bindings: $this->bindings, scores: $this->scores, scoresPath: $this->scoresPath, seed: $this->seed, reproducible: $this->reproducible)
-                    : self::start(bindings: $this->bindings, scores: $this->scores, scoresPath: $this->scoresPath, seed: $this->seed, reproducible: $this->reproducible);
+                    ? self::startWithLockDelay(lockDelayMs: $this->lockDelayMs, bindings: $this->bindings, scores: $this->scores, scoresPath: $this->scoresPath, seed: $this->seed, reproducible: $this->reproducible, clockUs: $this->clockUs)
+                    : self::start(bindings: $this->bindings, scores: $this->scores, scoresPath: $this->scoresPath, seed: $this->seed, reproducible: $this->reproducible, clockUs: $this->clockUs);
                 // Bump the chain tag so any tick still in flight from the
                 // dead chain lands inert on the fresh board.
                 $fresh = $fresh->mutate([
@@ -574,7 +626,7 @@ final class Game implements Model
                     'frameRows' => $this->frameRows,
                     'colorProfile' => $this->colorProfile,
                 ]);
-                return [$fresh, self::scheduleGravity($fresh->score, $fresh->gravityChain)];
+                return [$fresh, $this->scheduleGravity($fresh->score, $fresh->gravityChain)];
             }
             return [$this, null];
         }
@@ -596,9 +648,9 @@ final class Game implements Model
             }
             $consumed = $this->mutate(['gravityPending' => false]);
             if ($this->paused) {
-                return self::armGravity($consumed);
+                return $this->armGravity($consumed);
             }
-            return $consumed->gravityStep();
+            return $consumed->gravityStep($msg->deadlineUs);
         }
 
         if ($msg instanceof LockDelayMsg) {
@@ -626,7 +678,7 @@ final class Game implements Model
         if ($game->over === true) {
             return [$game, null];
         }
-        return self::armGravity($game);
+        return $this->armGravity($game);
     }
 
     public function view(): string
@@ -678,7 +730,16 @@ final class Game implements Model
      *
      * @return array{0:Game,1:?\Closure}
      */
-    private function gravityStep(): array
+    /**
+     * One gravity tick of descent. $deadlineUs is the armed deadline of
+     * the tick being handled: a successful move chains the next arm to
+     * it (absolute-deadline cadence, candy-tetris-023), while a lock
+     * ends the piece's chain — the spawned piece gets a fresh baseline
+     * because it was born now, not one interval after the last tick.
+     *
+     * @return array{0:self,1:?\Closure}
+     */
+    private function gravityStep(?float $deadlineUs = null): array
     {
         $next = $this->piece->moved(0, 1);
         if ($this->board->fits($next)) {
@@ -686,7 +747,7 @@ final class Game implements Model
             // never clears lastActionWasRotation (rotate-then-settle is a
             // valid T-Spin in the SRS guidelines).
             $game = $this->mutate(['piece' => $next, 'lockWindowGeneration' => null]);
-            return self::armGravity($game);
+            return $this->armGravity($game, $deadlineUs);
         }
 
         // Piece can't move down - handle the lock-delay window.
@@ -705,7 +766,7 @@ final class Game implements Model
                 if ($locked->over === true) {
                     return [$locked, null];
                 }
-                return self::armGravity($locked);
+                return $this->armGravity($locked);
             }
             return $this->openLockWindow();
         }
@@ -714,7 +775,7 @@ final class Game implements Model
         if ($game->over === true) {
             return [$game, null];
         }
-        return self::armGravity($game);
+        return $this->armGravity($game);
     }
 
     /**
@@ -759,7 +820,7 @@ final class Game implements Model
                     if ($locked->over === true) {
                         return [$locked, null];
                     }
-                    return self::armGravity($locked);
+                    return $this->armGravity($locked);
                 }
                 // Landed on this input — open the window. The gravity
                 // chain (if still pending) self-parks on its next tick.
@@ -791,7 +852,7 @@ final class Game implements Model
             if ($moved->lockResets < self::LOCK_DELAY_RESET_CAP) {
                 $changes['lockResets'] = $moved->lockResets + 1;
             }
-            return self::armGravity($moved->mutate($changes));
+            return $this->armGravity($moved->mutate($changes));
         }
 
         return [$moved, null];
@@ -869,7 +930,7 @@ final class Game implements Model
         if ($game->over === true) {
             return [$game, null];
         }
-        return self::armGravity($game);
+        return $this->armGravity($game);
     }
 
     /**
@@ -1105,7 +1166,7 @@ final class Game implements Model
         if ($game->over === true) {
             return [$game, null];
         }
-        return self::armGravity($game);
+        return $this->armGravity($game);
     }
 
     private static function spawn(Tetromino $kind): Piece

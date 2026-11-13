@@ -1616,4 +1616,132 @@ final class GameTest extends TestCase
             '40 base + 400 award + 10 combo, every leg x(old level + 1) = x3');
         $this->assertSame('T-SPIN', $state->lastAward, 'the nub-pair spin names itself T-SPIN at level 2 too');
     }
+
+    // ------------------------------------------------------------------
+    // candy-tetris-023 — absolute-deadline gravity scheduling
+    // ------------------------------------------------------------------
+
+    /** Level-0 gravity interval in seconds (48 frames x 16,667 µs). */
+    private const GRAVITY_INTERVAL_S = 0.800016;
+
+    /** Monotonic microseconds, same clock the model chains against. */
+    private function nowUs(): float
+    {
+        return hrtime(true) / 1_000.0;
+    }
+
+    /**
+     * Deliver one gravity tick stamped with $deadlineUs and unwrap the
+     * re-arm Cmd into the TickRequest the loop would see.
+     */
+    private function arm(Game $game, ?float $deadlineUs): TickRequest
+    {
+        [, $cmd] = $game->update(new GravityMsg($game->gravityChain, $deadlineUs));
+        $this->assertInstanceOf(\Closure::class, $cmd, 'the tick must re-arm the chain');
+        $req = $cmd();
+        $this->assertInstanceOf(TickRequest::class, $req);
+        return $req;
+    }
+
+    public function testFreshArmsStampAFutureDeadlineOneIntervalAway(): void
+    {
+        $game = $this->deterministicGame();
+        $init = $game->init();
+        $this->assertInstanceOf(\Closure::class, $init);
+        $req = $init();
+        $this->assertInstanceOf(TickRequest::class, $req);
+        $this->assertEqualsWithDelta(self::GRAVITY_INTERVAL_S, $req->seconds, 0.02);
+
+        $msg = ($req->produce)();
+        $this->assertInstanceOf(GravityMsg::class, $msg);
+        $this->assertIsFloat($msg->deadlineUs, 'every arm stamps the deadline it waits for');
+        $this->assertGreaterThan($this->nowUs(), $msg->deadlineUs, 'the deadline is in the future');
+        $this->assertEqualsWithDelta($this->nowUs() + 800_016.0, $msg->deadlineUs, 20_000.0, 'one interval out');
+    }
+
+    public function testInjectedFrameCostShortensTheWaitButNeverMovesTheCadence(): void
+    {
+        // candy-tetris-023: the law in one test. A simulated slow render
+        // — $late µs of update+cost already burned between the tick
+        // firing and this re-arm — subtracts from the WAIT, never from
+        // the CADENCE: the next deadline sits exactly one interval after
+        // the one just delivered. Fall speed is game state, not machine
+        // throughput.
+        $intervalUs = 800_016.0;
+        foreach ([0.0, 0.3 * $intervalUs, 0.5 * $intervalUs] as $late) {
+            $now = $this->nowUs();
+            $game = $this->deterministicGame();
+            // The tick fired at its deadline $late microseconds ago.
+            $req = $this->arm($game, $now - $late);
+            $msg = ($req->produce)();
+            $this->assertInstanceOf(GravityMsg::class, $msg);
+            $this->assertSame(
+                $now - $late + $intervalUs,
+                $msg->deadlineUs,
+                'the next deadline is prev+interval exactly — frame cost never shifts the cadence',
+            );
+            $this->assertEqualsWithDelta(
+                self::GRAVITY_INTERVAL_S - $late / 1_000_000,
+                $req->seconds,
+                0.02,
+                "the burned {$late} µs are absorbed out of the wait",
+            );
+        }
+    }
+
+    public function testAnOverdueArmDropsTheStaleTickInsteadOfBurstingCatchUp(): void
+    {
+        // A whole interval (and more) gone by the time the handler arms:
+        // the overdue slot is skipped outright — the wait rebases to a
+        // fresh full interval, never 0 and never a fast-forward cascade.
+        $game = $this->deterministicGame();
+        $req = $this->arm($game, $this->nowUs() - 2_000_000.0);
+        $this->assertEqualsWithDelta(
+            self::GRAVITY_INTERVAL_S,
+            $req->seconds,
+            0.02,
+            'a stale deadline rebases to a full fresh interval — no burst, no instant re-fire',
+        );
+        $msg = ($req->produce)();
+        $this->assertInstanceOf(GravityMsg::class, $msg);
+        $this->assertGreaterThan($this->nowUs(), $msg->deadlineUs, 'the rebased deadline is in the future');
+    }
+
+    public function testASpawnAfterGravityLockStartsItsChainOnAFreshBaseline(): void
+    {
+        // The lock ends the piece's virtual chain: the spawned piece was
+        // born NOW, so its first descent waits a FULL interval even
+        // though the tick that locked it arrived 0.5 intervals late.
+        $intervalUs = 800_016.0;
+        $game = $this->deterministicGame()->mutate(['piece' => new Piece(Tetromino::O, 0, 3, 22)]); // grounded
+        $req = $this->arm($game, $this->nowUs() - 0.5 * $intervalUs);
+        $this->assertEqualsWithDelta(
+            self::GRAVITY_INTERVAL_S,
+            $req->seconds,
+            0.02,
+            'spawn resets the baseline — chaining the dead piece here would fire half a frame after the new piece appeared',
+        );
+    }
+
+    public function testAMovingPieceChainsWhileAPausedHeartbeatRebaselines(): void
+    {
+        $intervalUs = 800_016.0;
+        $game = $this->deterministicGame();
+        $stamp = $this->nowUs() - 0.5 * $intervalUs;
+
+        // Airborne descent: the next deadline chains off the stamp, so
+        // the absorbed lateness shows up as a shortened wait.
+        $moving = $this->arm($game, $stamp);
+        $msg = ($moving->produce)();
+        $this->assertInstanceOf(GravityMsg::class, $msg);
+        $this->assertSame($stamp + $intervalUs, $msg->deadlineUs, 'descent chains the virtual deadline exactly');
+        $this->assertEqualsWithDelta(0.5 * self::GRAVITY_INTERVAL_S, $moving->seconds, 0.03, 'the burned half-interval is subtracted from the wait');
+
+        // While paused no piece descends; the heartbeat is a baseline,
+        // never a chain — pause must not accrue catch-up debt against
+        // resume.
+        $paused = $game->mutate(['paused' => true]);
+        $beat = $this->arm($paused, $stamp);
+        $this->assertEqualsWithDelta(self::GRAVITY_INTERVAL_S, $beat->seconds, 0.03, 'the paused heartbeat waits a full fresh interval');
+    }
 }
