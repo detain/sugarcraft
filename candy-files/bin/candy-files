@@ -56,6 +56,18 @@ if (in_array('--help', $flags, true) || in_array('-h', $flags, true)) {
     exit(0);
 }
 
+// Refuse at the door (CF-19, closes audit 027): the UI is a full-screen
+// alt-buffer program, so a piped stdout emits unlabelled escape-sequence
+// soup and then blocks forever on a stdin it cannot read — an un-killable
+// launch (rc=137 was observed by two independent lanes; same
+// non-terminating shape as CF-13's live-loop class). The candy-git
+// launcher gate is the house mirror; --version/--help stay piped-safe
+// above because packaging scripts and bug reports need them headless.
+if (!stream_isatty(STDOUT)) {
+    fwrite(STDERR, "candy-files: this program needs an interactive terminal (stdout is not a TTY); --version and --help work when piped\n");
+    exit(1);
+}
+
 $cwd = getcwd() ?: '/';
 $home = getenv('HOME') ?: '/';
 $leftCwd  = $argv[1] ?? $cwd;
