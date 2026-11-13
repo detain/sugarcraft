@@ -363,4 +363,39 @@ final class PosixTermiosTest extends TestCase
             $master->close();
         }
     }
+
+    public function testTermiosIoctlFailuresCarryTheErrnoDetail(): void
+    {
+        $this->requirePtySyscalls();
+
+        // A number guaranteed closed: open /dev/null through a raw
+        // syscall and release it again (PTY-38 field fact: PHP fopen
+        // would not reuse the low number; raw open gives us a closed,
+        // deterministic fd to fail against).
+        $ffi = \FFI::cdef('int open(const char *path, int flags); int close(int fd);');
+        $fd = $ffi->open('/dev/null', 2);
+        $this->assertGreaterThan(-1, $fd);
+        $this->assertSame(0, $ffi->close($fd));
+
+        $termios = new PosixTermios($fd);
+
+        foreach ([
+            ['current', 'tcgetattr failed on fd ' . $fd],
+            ['apply', 'tcsetattr failed on fd ' . $fd . ' with when=0'],
+        ] as [$method, $head]) {
+            try {
+                $termios->{$method}();
+                $this->fail($method . '() on a closed fd must throw');
+            } catch (\RuntimeException $e) {
+                $msg = $e->getMessage();
+                $this->assertStringStartsWith($head, $msg);
+                // errno 9 = EBADF; ext-posix renders the string too.
+                $this->assertStringContainsString(
+                    \function_exists('posix_strerror') ? '9 (Bad file descriptor)' : ': 9',
+                    $msg,
+                    'PTY-32 errno appendix missing from ' . $method . '() failure',
+                );
+            }
+        }
+    }
 }

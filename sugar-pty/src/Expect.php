@@ -159,42 +159,42 @@ final class Expect
             $restoreBlocking = true;
         }
         try {
-                while ($written < $total) {
-                    if ($writeStream !== null) {
-                        $budget = $stallDeadline - \microtime(true);
-                        if ($budget <= 0) {
-                            throw $this->stalled($written, $total);
-                        }
-                        $read = [];
-                        $write = [$writeStream];
-                        $except = null;
-                        $ready = PosixMasterPty::retryOnEintr(
-                            $read,
-                            $write,
-                            $except,
-                            (int) $budget,
-                            (int) \round(($budget - (int) $budget) * 1_000_000),
-                        );
-                        if ($ready === false || $ready === 0) {
-                            continue;
-                        }
-                    }
-                    $n = $this->master->write(\substr($bytes, $written));
-                    if ($n > 0) {
-                        $written += $n;
-                        $stallDeadline = \microtime(true) + self::SEND_STALL_BUDGET_SEC;
-                        continue;
-                    }
-                    if (\microtime(true) >= $stallDeadline) {
+            while ($written < $total) {
+                if ($writeStream !== null) {
+                    $budget = $stallDeadline - \microtime(true);
+                    if ($budget <= 0) {
                         throw $this->stalled($written, $total);
                     }
-                    // Would-block on a non-blocking master: back off briefly.
-                    \usleep(1000);
+                    $read = [];
+                    $write = [$writeStream];
+                    $except = null;
+                    $ready = PosixMasterPty::retryOnEintr(
+                        $read,
+                        $write,
+                        $except,
+                        (int) $budget,
+                        (int) \round(($budget - (int) $budget) * 1_000_000),
+                    );
+                    if ($ready === false || $ready === 0) {
+                        continue;
+                    }
                 }
-                if ($restoreBlocking) {
-                    \stream_set_blocking($writeStream, true);
+                $n = $this->master->write(\substr($bytes, $written));
+                if ($n > 0) {
+                    $written += $n;
+                    $stallDeadline = \microtime(true) + self::SEND_STALL_BUDGET_SEC;
+                    continue;
                 }
+                if (\microtime(true) >= $stallDeadline) {
+                    throw $this->stalled($written, $total);
+                }
+                // Would-block on a non-blocking master: back off briefly.
+                \usleep(1000);
+            }
         } finally {
+            // The single restore point for every path (PTY-32): the
+            // old in-try duplicate was dead — this finally covers the
+            // success leg too.
             if ($restoreBlocking) {
                 \stream_set_blocking($writeStream, true);
             }
@@ -514,6 +514,19 @@ final class Expect
     }
 
     /**
+     * A negative budget cannot be raced: it would mint timeout messages
+     * like 'timed out after -5.000s' while silently disabling all waits.
+     */
+    private static function assertTimeoutIsNonNegative(float $timeoutSec): void
+    {
+        if ($timeoutSec < 0) {
+            throw new \InvalidArgumentException(
+                'timeoutSec must be >= 0; got ' . \var_export($timeoutSec, true)
+            );
+        }
+    }
+
+    /**
      * Trim the buffer to at most `$this->maxBuffer` bytes, keeping
      * enough trailing bytes to match a needle of `$needleLen`.
      *
@@ -530,19 +543,6 @@ final class Expect
      * which may softly exceed a tighter `maxBuffer` (bounded by the
      * heuristic) rather than run away.
      */
-    /**
-     * A negative budget cannot be raced: it would mint timeout messages
-     * like 'timed out after -5.000s' while silently disabling all waits.
-     */
-    private static function assertTimeoutIsNonNegative(float $timeoutSec): void
-    {
-        if ($timeoutSec < 0) {
-            throw new \InvalidArgumentException(
-                'timeoutSec must be >= 0; got ' . \var_export($timeoutSec, true)
-            );
-        }
-    }
-
     private function trimBuffer(string $buffer, int $needleLen): string
     {
         if ($this->maxBuffer === null || \strlen($buffer) <= $this->maxBuffer) {

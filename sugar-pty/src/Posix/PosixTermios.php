@@ -6,6 +6,7 @@ namespace SugarCraft\Pty\Posix;
 
 use SugarCraft\Pty\Concerns\LibcAccess;
 use SugarCraft\Pty\Contract\Termios;
+use SugarCraft\Pty\Libc;
 
 /**
  * FFI-based termios implementation using libc tcgetattr/tcsetattr/cfmakeraw.
@@ -58,8 +59,10 @@ final class PosixTermios implements Termios
         $instance = $this->withCData($this->buf);
         $rc = $this->libc->tcgetattr($this->fd, \FFI::addr($instance->buf));
         if ($rc !== 0) {
+            // errno captured immediately: building the message makes
+            // calls of its own that could overwrite it.
             throw new \RuntimeException(
-                'tcgetattr failed on fd ' . $this->fd
+                'tcgetattr failed on fd ' . $this->fd . ': ' . Libc::errnoDetail()
             );
         }
         // Record the just-captured attributes as the restore target so
@@ -104,6 +107,7 @@ final class PosixTermios implements Termios
         if ($rc !== 0) {
             throw new \RuntimeException(
                 'tcsetattr failed on fd ' . $this->fd . ' with when=' . $when
+                . ': ' . Libc::errnoDetail()
             );
         }
     }

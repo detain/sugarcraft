@@ -81,7 +81,9 @@ final class ControllingTerminal
         $libc = self::libc();
 
         if ($libc->setsid() === -1) {
-            throw new PtyException(Lang::t('ctty.setsid_failed'));
+            // errno captured immediately — the failure surface makes
+            // calls of its own that could overwrite it (PTY-32).
+            throw new PtyException(Lang::t('ctty.setsid_failed', ['detail' => Libc::errnoDetail()]));
         }
 
         $cttyRequest = self::cttyRequestFor(\PHP_OS_FAMILY);
@@ -94,7 +96,7 @@ final class ControllingTerminal
         // $int=0 would pass a pointer-to-zero, which the kernel would
         // misinterpret. See [gotcha:ioctl-third-arg-ulong-not-pointer].
         if ($libc->ioctl($fd, $cttyRequest, null) !== 0) {
-            throw new PtyException(Lang::t('ctty.ioctl_failed', ['fd' => $fd]));
+            throw new PtyException(Lang::t('ctty.ioctl_failed', ['fd' => $fd, 'detail' => Libc::errnoDetail()]));
         }
     }
 
