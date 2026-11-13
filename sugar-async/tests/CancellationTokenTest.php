@@ -123,6 +123,7 @@ final class CancellationTokenTest extends TestCase
         // CancellationSource), the only intended path is via Source::cancel().
         // Demonstrating that notifyCancellation IS on the token but the
         // public API is Source->cancel().
+        $this->assertNotSame($source, $token, 'the consumer-facing handle is a distinct object — no source methods leak');
         $this->assertFalse($source->isCancelled());
         $this->assertFalse($token->isCancelled());
 
@@ -143,6 +144,7 @@ final class CancellationTokenTest extends TestCase
         $source1 = CancellationSource::new();
         $source2 = CancellationSource::new();
 
+        $this->assertInstanceOf(CancellationSource::class, $source1);
         $this->assertNotSame($source1->token(), $source2->token());
     }
 
