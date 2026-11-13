@@ -41,6 +41,7 @@ return [
 
     // DiskCache
     'disk_cache.max_entries'   => 'maxEntries must be >= 1, got {max}',
+    'disk_cache.max_bytes'     => 'maxBytes must be >= 1, got {max}',
     'disk_cache.mkdir_failed'  => 'Failed to create cache directory: {dir}',
     'disk_cache.write_failed'  => 'Failed to write cache entry in: {dir}',
 

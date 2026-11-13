@@ -20,13 +20,16 @@ namespace SugarCraft\Image;
  * intended key for rendered images (the same image at the same cell size
  * renders differently per protocol).
  *
- * Eviction is approximately least-recently-used by file mtime:
- * {@see DiskCache::get()} and {@see DiskCache::getOrCompute()} touch an entry on
- * a hit, and {@see put()} trims the oldest entries once the directory exceeds
- * the configured cap. Because mtime is 1-second-resolution on most filesystems,
- * entries written within the same second order arbitrarily among themselves —
- * the cap is always honoured, but the victim within a same-second burst is not
- * strictly the least-recently-used.
+ * Eviction is approximately least-recently-used by file mtime, under two
+ * budgets: {@see DiskCache::get()} and {@see DiskCache::getOrCompute()}
+ * touch an entry on a hit (coarsely — an entry younger than a minute is
+ * not re-written), and {@see put()} trims the oldest entries once the
+ * directory exceeds the entry cap, or once its bytes pass 125 % of the
+ * byte budget (trimming back to budget). Because mtime is
+ * 1-second-resolution on most filesystems, entries written within the same
+ * second order arbitrarily among themselves — the caps are always honoured,
+ * but the victim within a same-second burst is not strictly the
+ * least-recently-used (it is deterministic: oldest, then lowest path).
  *
  * Writes are atomic (temp file + rename), so a concurrent reader never sees a
  * half-written entry; a process that dies mid-write can leave a stray temp
@@ -38,6 +41,23 @@ final class DiskCache
 {
     /** A write temp file older than this (seconds) is treated as orphaned. */
     private const TEMP_GRACE_SECONDS = 30;
+
+    /**
+     * Default byte budget for the whole cache directory — the lib's own
+     * {@see ImageSource::MAX_BYTES} law: the store must never hold (or
+     * slurp) a payload the pipeline itself refuses to fetch.
+     */
+    public const DEFAULT_MAX_BYTES = ImageSource::MAX_BYTES;
+
+    /** A hit younger than this (seconds) skips its LRU touch (finding 014). */
+    private const TOUCH_MIN_INTERVAL_SECONDS = 60;
+
+    /**
+     * The byte-budget sweep wakes only once usage passes this multiple of
+     * $maxBytes and then trims back to the cap — trimming on every put
+     * that crosses the line by one byte is churn, not eviction (finding 014).
+     */
+    private const EVICT_DEBOUNCE_FACTOR = 1.25;
 
     /**
      * Cache-format version, mixed into every {@see key()}.
@@ -79,17 +99,50 @@ final class DiskCache
      *                            (created on first write if missing).
      * @param int    $maxEntries  Soft cap on stored entries; the oldest are
      *                            evicted after each write once exceeded.
-     * @throws \InvalidArgumentException  if $maxEntries is below 1
+     * @param int    $maxBytes    Byte budget for the stored entries; the
+     *                            sweep (see EVICT_DEBOUNCE_FACTOR) trims the
+     *                            oldest back under it, and get() refuses to
+     *                            read any single entry above it (finding 013).
+     *                            Defaults to the lib's MAX_BYTES law.
+     * @throws \InvalidArgumentException  if $maxEntries is below 1 or
+     *                            $maxBytes is below 1
      */
     public function __construct(
         private readonly string $dir,
         private readonly int $maxEntries = 512,
+        private readonly int $maxBytes = self::DEFAULT_MAX_BYTES,
     ) {
         if ($maxEntries < 1) {
             throw new \InvalidArgumentException(
                 Lang::t('disk_cache.max_entries', ['max' => $maxEntries]),
             );
         }
+
+        if ($maxBytes < 1) {
+            throw new \InvalidArgumentException(
+                Lang::t('disk_cache.max_bytes', ['max' => $maxBytes]),
+            );
+        }
+    }
+
+    /**
+     * Test seam for the LRU touch clock (same override-*-style pattern as
+     * {@see ImageSource::overrideHostResolver()}): lets a test age entries
+     * by virtual seconds instead of wall-waiting sixty of them.
+     */
+    public static function overrideClock(?callable $clock): void
+    {
+        self::$clock = $clock;
+    }
+
+    /** @var (callable(): int)|null */
+    private static $clock;
+
+    private static function now(): int
+    {
+        $clock = self::$clock;
+
+        return $clock === null ? time() : (int) $clock();
     }
 
     /**
@@ -114,17 +167,41 @@ final class DiskCache
     /**
      * Return the cached value, or null on a miss.
      *
-     * A hit touches the entry so it counts as recently used for eviction.
+     * Two ceilings (finding 013): a single entry above $maxBytes reads as a
+     * miss — the lib refuses to source payloads past its MAX_BYTES law, so
+     * the store must not slurp them either — and the directory as a whole is
+     * swept back under budget by put(). Such an entry is never touched, so
+     * it carries the oldest mtime in the house and ages out of LRU first:
+     * the miss is self-healing, not a permanent orphan.
+     *
+     * A hit touches the entry so it counts as recently used for eviction —
+     * coarsely: an entry written or touched within the last minute is NOT
+     * re-touched (finding 014). A redraw loop asking for the same poster
+     * every frame used to pay one write syscall per hit for an mtime change
+     * that 1-second filesystem resolution cannot even observe between
+     * frames; the LRU ordering the touch exists for is unaffected, because
+     * per-second granularity is all the eviction sort can see anyway.
      */
     public function get(string $key): ?string
     {
         $path  = $this->path($key);
+        $stamp = @stat($path); // one syscall: size ceiling AND age below
+        if ($stamp === false) {
+            return null;
+        }
+
+        if ($stamp['size'] > $this->maxBytes) {
+            return null; // over the single-entry ceiling — treat as a miss
+        }
+
         $bytes = @file_get_contents($path);
         if ($bytes === false) {
             return null;
         }
 
-        @touch($path);
+        if (self::now() - $stamp['mtime'] >= self::TOUCH_MIN_INTERVAL_SECONDS) {
+            @touch($path);
+        }
 
         return $bytes;
     }
@@ -199,23 +276,68 @@ final class DiskCache
     }
 
     /**
-     * Evict least-recently-used entries until at or below the cap.
+     * Evict until the directory is back inside BOTH budgets: the entry
+     * count at most $maxEntries (trimmed immediately — a cap that lags a
+     * burst is no cap), and the total bytes at most $maxBytes, swept only
+     * once usage has passed EVICT_DEBOUNCE_FACTOR of the budget (finding
+     * 014: a cap-125%-wide band means entries oscillating around the line
+     * cost one sweep per overshoot instead of one per full band).
+     *
+     * Performance law: every surviving entry is stat-ed exactly once into
+     * a (path, mtime, size) tuple and the tuples are sorted once. The
+     * pre-finding comparator called filemtime() inside usort — O(n log n)
+     * syscalls per put on top of the per-second re-glob — which is how a
+     * cache earned the word "hot" for all the wrong reasons.
      */
     private function evict(): void
     {
         $this->sweepStaleTemp();
 
-        $files = $this->files();
-        $excess = count($files) - $this->maxEntries;
-        if ($excess <= 0) {
-            return;
-        }
+        $entries = $this->collectEntries();
+        $excess  = count($entries) - $this->maxEntries;
 
-        usort($files, fn (string $a, string $b): int => $this->mtime($a) <=> $this->mtime($b));
+        // Oldest first; equal mtimes (the same-second burst) order by path
+        // so the victim list is deterministic across platforms — the count
+        // cap itself keeps the pre-finding semantics untouched.
+        usort($entries, static fn (array $a, array $b): int => $a['mtime'] <=> $b['mtime'] ?: strcmp($a['path'], $b['path']));
 
+        $victims = [];
         for ($i = 0; $i < $excess; $i++) {
-            @unlink($files[$i]);
+            $victims[] = $entries[$i]['path'];
         }
+
+        $bytes = 0;
+        foreach ($entries as $entry) {
+            $bytes += $entry['size'];
+        }
+
+        if ($bytes > $this->maxBytes * self::EVICT_DEBOUNCE_FACTOR) {
+            for ($i = $excess > 0 ? $excess : 0; $i < count($entries) && $bytes > $this->maxBytes; $i++) {
+                $bytes -= $entries[$i]['size'];
+                $victims[] = $entries[$i]['path'];
+            }
+        }
+
+        foreach ($victims as $path) {
+            @unlink($path);
+        }
+    }
+
+    /**
+     * @return list<array{path: string, mtime: int, size: int}>
+     */
+    private function collectEntries(): array
+    {
+        $out = [];
+        foreach ($this->files() as $file) {
+            $stamp = @stat($file);
+            if ($stamp === false) {
+                continue; // vanished mid-sweep: nothing to evict or count
+            }
+            $out[] = ['path' => $file, 'mtime' => $stamp['mtime'], 'size' => $stamp['size']];
+        }
+
+        return $out;
     }
 
     /**

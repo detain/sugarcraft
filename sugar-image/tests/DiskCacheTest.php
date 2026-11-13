@@ -6,6 +6,7 @@ namespace SugarCraft\Image\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Image\DiskCache;
+use SugarCraft\Image\ImageSource;
 
 final class DiskCacheTest extends TestCase
 {
@@ -19,6 +20,7 @@ final class DiskCacheTest extends TestCase
 
     protected function tearDown(): void
     {
+        DiskCache::overrideClock(null); // the touch clock is process-static; never leak the seam
         if (is_file($this->dir)) {
             @unlink($this->dir);
         } elseif (is_dir($this->dir)) {
@@ -41,6 +43,12 @@ final class DiskCacheTest extends TestCase
             }
         }
         self::fail("No cache entry found with content '{$content}'");
+    }
+
+    /** The on-disk path a key hashes to (the sweep's glob shape). */
+    private function entryFor(string $key): string
+    {
+        return $this->dir . '/' . sha1($key) . '.cache';
     }
 
     public function testKeyIsDeterministic(): void
@@ -319,5 +327,178 @@ final class DiskCacheTest extends TestCase
 
         $this->assertFileDoesNotExist($stale);
         $this->assertFileExists($fresh);
+    }
+
+    // --- SI-19 (findings 013+014): byte budget, single-entry ceiling, coarse
+    // touch, debounced sweep, deterministic same-second victims ---
+
+    public function testConstructorRejectsNonPositiveByteBudget(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('maxBytes must be >= 1, got 0');
+
+        new DiskCache($this->dir, 512, 0);
+    }
+
+    public function testByteBudgetDefaultsToTheLibsOwnMaxBytesLaw(): void
+    {
+        // The store must never hold (or slurp) a payload the pipeline itself
+        // refuses to fetch, so the default budget is not an independent
+        // number — it IS ImageSource::MAX_BYTES, and a constructor left at
+        // defaults carries it into the instance.
+        $this->assertSame(ImageSource::MAX_BYTES, DiskCache::DEFAULT_MAX_BYTES);
+
+        $property = new \ReflectionProperty(DiskCache::class, 'maxBytes');
+        $this->assertSame(ImageSource::MAX_BYTES, $property->getValue(new DiskCache($this->dir)));
+    }
+
+    public function testGetRefusesEntryOverTheByteCeilingWithoutTouchingIt(): void
+    {
+        // Seeded through a wide door, read through a narrow one — the shape a
+        // re-tuned cache takes. An over-ceiling entry is a MISS, never a
+        // slurp (finding 013)...
+        $seed = new DiskCache($this->dir);
+        $seed->put('big', str_repeat('x', 64));
+        $file = $this->entryFor('big');
+        touch($file, 1000);
+
+        $narrow = new DiskCache($this->dir, 512, 32);
+
+        $this->assertTrue($narrow->has('big'), 'presence is presence — the ceiling is a read law');
+        $this->assertNull($narrow->get('big'), 'a single entry above maxBytes must not be slurped');
+        clearstatcache();
+        $this->assertSame(1000, filemtime($file), 'the refused entry is not touched, so it carries the oldest mtime in the house');
+    }
+
+    public function testOverCeilingEntryAgesOutUnderTheByteSweepSelfHealing(): void
+    {
+        // The second half of the 013 story: a refused read is self-healing,
+        // not a permanent orphan. It counts toward the directory bytes, so
+        // the next sweep wakes on it and the untouched (oldest) entry pays.
+        $seed = new DiskCache($this->dir);
+        $seed->put('big', str_repeat('x', 64));
+        touch($this->entryFor('big'), 1000);
+
+        $narrow = new DiskCache($this->dir, 512, 32);
+        $narrow->put('small', str_repeat('s', 10)); // 74 bytes > 125 % of 32 — wakes the sweep
+
+        $this->assertFalse($narrow->has('big'), 'the over-ceiling orphan aged out first');
+        $this->assertSame(str_repeat('s', 10), $narrow->get('small'));
+    }
+
+    public function testByteSweepWakesOnlyPastTheDebounceBand(): void
+    {
+        // Finding 014's churn law, pinned at the strict boundary: four 30-byte
+        // entries put the directory at 120 of a 100-byte budget — over the
+        // budget but inside the 125 % band, so writes there must cost ZERO
+        // eviction. Only crossing 125 % wakes the sweep, and it trims back to
+        // budget (not merely under the band).
+        $seed = new DiskCache($this->dir, 1000);
+        foreach (['a', 'b', 'c', 'd'] as $i => $k) {
+            $seed->put($k, str_repeat('x', 30));
+            touch($this->entryFor($k), 100 + $i * 100);
+        }
+
+        $cache = new DiskCache($this->dir, 1000, 100);
+        for ($i = 1; $i <= 5; $i++) {
+            $cache->put("w{$i}", 'w'); // totals 121..125 — 125 is NOT > 125
+        }
+        $this->assertSame(9, $cache->count(), 'at exactly 125 % of budget nothing is swept');
+
+        $cache->put('w6', 'w'); // 126 — the band is crossed
+
+        $this->assertFalse($cache->has('a'), 'the oldest entry is the sweep victim');
+        foreach (['b', 'c', 'd'] as $k) {
+            $this->assertTrue($cache->has($k));
+        }
+        $bytes = 0;
+        foreach (glob($this->dir . '/*.cache') ?: [] as $f) {
+            $bytes += (int) filesize($f);
+        }
+        $this->assertLessThanOrEqual(100, $bytes, 'the sweep trims back to the budget itself');
+    }
+
+    public function testGetOnFreshEntrySkipsTheLruTouch(): void
+    {
+        // Write-amplification law (finding 014): a redraw loop hitting the
+        // same poster every frame used to pay one touch() syscall per hit for
+        // an mtime change that 1-second filesystem resolution cannot even
+        // observe between frames. A hit on an entry inside the skip window
+        // must cost zero writes.
+        $cache = new DiskCache($this->dir);
+        $cache->put('k', 'v');
+        $file = $this->entryFor('k');
+        clearstatcache();
+        $before = filemtime($file);
+
+        $this->assertSame('v', $cache->get('k'));
+
+        clearstatcache();
+        $this->assertSame($before, filemtime($file), 'a fresh hit is a zero-write read');
+    }
+
+    public function testGetOnAgedEntryTouchesThroughTheClockSeam(): void
+    {
+        // The other side of the coarse touch, pinned at the exact interval
+        // boundary via the virtual clock: 59 s still skips, 60 s re-arms the
+        // LRU promotion (and the test never wall-waits sixty of them).
+        $cache = new DiskCache($this->dir);
+        $cache->put('k', 'v');
+        $file = $this->entryFor('k');
+        touch($file, 1000);
+
+        DiskCache::overrideClock(static fn (): int => 1059);
+        $this->assertSame('v', $cache->get('k'));
+        clearstatcache();
+        $this->assertSame(1000, filemtime($file), 'inside the skip window the touch is withheld');
+
+        DiskCache::overrideClock(static fn (): int => 1060);
+        $this->assertSame('v', $cache->get('k'));
+        clearstatcache();
+        $this->assertGreaterThan(1000, (int) filemtime($file), 'at the interval the touch fires again');
+    }
+
+    public function testSameSecondVictimOrderIsDeterministic(): void
+    {
+        // The class docblock moved the same-second story from "orders
+        // arbitrarily among themselves" to a law: oldest first, then lowest
+        // hashed path. Three entries stamped to one mtime under a cap of 2
+        // must therefore lose exactly one of the tie — and WHICH one dies is
+        // the strcmp leg of the comparator, not the accident of a directory
+        // listing order.
+        $seed = new DiskCache($this->dir, 10);
+        foreach (['a', 'b', 'c'] as $k) {
+            $seed->put($k, $k);
+            touch($this->entryFor($k), 500);
+        }
+
+        $cache = new DiskCache($this->dir, 2);
+        $cache->put('d', 'd'); // newest mtime; excess 2 takes both victims from the tie
+
+        $expected = 'a';
+        foreach (['b', 'c'] as $k) {
+            if (sha1($k) > sha1($expected)) {
+                $expected = $k;
+            }
+        }
+        foreach (['a', 'b', 'c'] as $k) {
+            $this->assertSame($k === $expected, $cache->has($k), "only the highest-path tie entry survives");
+        }
+        $this->assertTrue($cache->has('d'));
+        $this->assertSame(2, $cache->count());
+    }
+
+    public function testCountCapIsTrimmedImmediatelyBurstsNeverWin(): void
+    {
+        // Acceptance from the finding: the count cap keeps its pre-finding
+        // semantics and is NOT debounced like the byte budget — a cap that
+        // lags a burst is no cap. Which tied-second entries survive is the
+        // strcmp leg's business (pinned separately); this arm pins that the
+        // directory never sits above the cap between writes.
+        $cache = new DiskCache($this->dir, 3);
+        foreach (range('a', 'g') as $i => $k) {
+            $cache->put($k, $k);
+            $this->assertSame(min(3, $i + 1), $cache->count(), 'trim is immediate after every write past the cap');
+        }
     }
 }

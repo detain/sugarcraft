@@ -311,10 +311,20 @@ $ansi = $cache->getOrCompute($key, fn (): string =>
 echo $ansi;
 ```
 
-`get()`/`getOrCompute()` touch an entry on a hit, and `put()` evicts the
-approximately least-recently-used entries once the directory exceeds
-`maxEntries` (mtime is 1-second-resolution, so the cap is always honoured but
-same-second writes order arbitrarily). Writes are atomic (temp file + rename)
+`get()`/`getOrCompute()` touch an entry on a hit — coarsely: an entry younger
+than a minute skips the touch, because a redraw loop used to pay one write
+syscall per frame for an mtime change the 1-second filesystem resolution cannot
+even observe. `put()` evicts under two budgets: the entry count
+(`maxEntries`, trimmed immediately — a cap that lags a burst is no cap) and the
+directory bytes (`maxBytes`, defaulting to `ImageSource::MAX_BYTES` — the
+store never holds what the fetch pipeline refuses to source), whose sweep
+wakes only past 125 % of the budget and then trims back to it (a cap-sized
+overshoot is churn, not eviction). `get()` also refuses to read any single
+entry larger than `maxBytes` — such an entry is never touched, so it carries
+the oldest mtime and ages out first. (mtime is 1-second-resolution, so the caps
+are always honoured but same-second writes are not strictly least-recently-used
+among themselves; the victim order is at least deterministic — oldest, then
+lowest hashed path.) Writes are atomic (temp file + rename)
 and keys are hashed to derive the filename, so an arbitrary key can never escape
 the cache directory.
 
