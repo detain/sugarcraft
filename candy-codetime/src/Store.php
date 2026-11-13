@@ -9,8 +9,10 @@ use SugarCraft\CodeTime\Storage\HeartbeatReader;
 use SugarCraft\Core\Util\Sanitize;
 
 /**
- * JSONL-backed heartbeat store. One file per day under
- * `~/.local/share/candy-codetime/YYYY-MM-DD.jsonl` — the path stays
+ * JSONL-backed heartbeat store. One file per day under the data dir —
+ * `$XDG_DATA_HOME/candy-codetime/YYYY-MM-DD.jsonl` (fallback
+ * `~/.local/share/candy-codetime/`, resolved by {@see self::defaultDir()}) —
+ * the path stays
  * appendable, every editor plugin just `>>` echoes a JSON line; whatever
  * loose modes such a line is minted with are swept back to owner-private by
  * {@see self::enforcePrivateModes()} on the next CLI launch.
