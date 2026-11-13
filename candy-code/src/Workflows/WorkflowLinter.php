@@ -669,7 +669,7 @@ final class WorkflowLinter
             self::add($findings, 'error', 'workflow', 'maxCost ' . var_export($workflow->maxCost, true) . ' is not a positive number of USD; the first dispatch would already be past the ceiling.');
         }
         if ($workflow->stages === []) {
-            self::add($findings, 'warning', 'workflow', 'The plan has no stages; the run finishes without dispatching anything.');
+            self::add($findings, 'error', 'workflow', 'The plan has no stages; a run would finish "completed" having dispatched nothing, so it is refused.');
         }
     }
 

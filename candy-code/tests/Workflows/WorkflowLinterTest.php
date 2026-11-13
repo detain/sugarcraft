@@ -38,6 +38,17 @@ final class WorkflowLinterTest extends TestCase
         self::assertStringContainsString('3600', $report->renderPlanTable());
     }
 
+    public function testAPlanWithNoStagesIsALintErrorNotAWarning(): void
+    {
+        $report = WorkflowLinter::lint(new Workflow('empty', 'no stages', []), [], self::UNIVERSE);
+
+        self::assertTrue($report->hasErrors(), $report->renderFindings());
+        self::assertSame(1, $report->errorCount());
+        self::assertSame(0, $report->warningCount());
+        self::assertSame(1, $report->exitStatus());
+        self::assertStringContainsString('The plan has no stages', $report->renderFindings());
+    }
+
     public function testSeedsSatisfyBareReferencesAndCostTheWarningLeg(): void
     {
         $plan = new Workflow('seeded', 'seeded plan', [

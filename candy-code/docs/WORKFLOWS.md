@@ -1690,12 +1690,12 @@ a `uses:` chain that cycles or runs too deep, a `loop:` on a pipeline or
 `uses:` stage, `{dry: N}` without `accumulate:`, a `from.stage` that is not a
 prior stage, `minSuccess` off a parallel/map stage or above a static agent
 count, a `{{X.failed}}` reading a `minSuccess` stage at or after its own
-position, a map with no steps, no `from:` or a duplicate step name, a negative
+position, a map with no steps, no `from:` or a duplicate step name, a plan with no stages, a negative
 `maxConcurrent`, an unresolved `{$ref}`, a blank `preset:` or one the
 session's roster does not know (every caller passes the roster's names when
 the plan names a preset), a blank `announce:`, a hand-built `maxTokens` below
 1 or a non-positive `maxCost`, and bound violations. WARNINGS: bare
-unknown `{{token}}`, an empty prompt, an unnamed stage, a plan with no stages,
+unknown `{{token}}`, an empty prompt, an unnamed stage,
 two or more agents of a parallel stage that can write the shared checkout
 (below), an unsatisfiable
 `rejectMinOccurrences`, retries above the warn ceiling, `maxConcurrent: 0`

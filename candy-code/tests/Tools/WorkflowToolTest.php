@@ -151,6 +151,18 @@ final class WorkflowToolTest extends TestCase
         $this->assertStringContainsString('has two stages with the same name', $result->content());
     }
 
+    public function testAStagelessPlanIsRefusedByTheRunPathLintWithNothingDispatched(): void
+    {
+        $provider = new ScriptedProvider([]);
+
+        $result = $this->tool($provider, [])->execute(['plan' => 'stages: []']);
+
+        $this->assertTrue($result->isError());
+        $this->assertStringContainsString('the plan was not run: lint found 1 error', $result->content());
+        $this->assertStringContainsString('The plan has no stages', $result->content());
+        $this->assertSame([], $provider->requests);
+    }
+
     public function testADeclaredToolTheSessionDoesNotHaveFailsTheStageBeforeItRuns(): void
     {
         $provider = new ScriptedProvider([]);
