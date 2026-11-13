@@ -181,7 +181,10 @@ final class ColourGateTest extends TestCase
         } catch (\InvalidArgumentException $failure) {
             $message = $failure->getMessage();
             self::assertStringContainsString('pineapple', $message);
-            self::assertStringContainsString('allowed', $message);
+            // scriptui-56: the refusal voice is sentence-case + period, so
+            // the Allowed token capitalises with it ('allowed:' was the
+            // untranslated remnant this sweep translated per locale).
+            self::assertStringContainsString('Allowed', $message);
             self::assertStringContainsString('black, red', $message);
             self::assertStringNotContainsString('{allowed}', $message, 'placeholder must interpolate');
             self::assertStringNotContainsString('{value}', $message);

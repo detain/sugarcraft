@@ -86,8 +86,20 @@ final class BinStartupLocaleTest extends TestCase
         self::assertStringNotContainsString('Erlaubt', $stderr);
         $pt = (string) file_get_contents(__DIR__ . '/../lang/pt.php');
         $ptBr = (string) file_get_contents(__DIR__ . '/../lang/pt-br.php');
-        $ptValue = preg_match("/'runtime\\.unknown_choice' => '([^']*)'/", $pt, $m) === 1 ? $m[1] : '';
-        $ptBrValue = preg_match("/'runtime\\.unknown_choice' => '([^']*)'/", $ptBr, $n) === 1 ? $n[1] : '';
+        // Values may be single- or double-quoted PHP literals (scriptui-56
+        // re-quotes values containing apostrophes as doubles); either form
+        // satisfies the contract, so the pin accepts both.
+        $pick = static function (string $contents): string {
+            if (preg_match("/'runtime\\.unknown_choice'\\s*=>\\s*'([^']*)'/", $contents, $m) === 1) {
+                return $m[1];
+            }
+            if (preg_match("/'runtime\\.unknown_choice'\\s*=>\\s*\"([^\"]*)\"/", $contents, $n) === 1) {
+                return str_replace('\\"', '"', $n[1]);
+            }
+            return '';
+        };
+        $ptValue = $pick($pt);
+        $ptBrValue = $pick($ptBr);
         self::assertNotSame('', $ptValue);
         self::assertNotSame('', $ptBrValue);
         if ($ptValue !== $ptBrValue) {

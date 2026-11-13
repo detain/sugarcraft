@@ -149,7 +149,7 @@ final class LogCommandTest extends TestCase
         }
 
         $this->assertSame(1, $status, 'a failed --file append must not exit 0');
-        $this->assertStringNotContainsString('could not write to file', $tester->getDisplay());
+        $this->assertStringNotContainsString('Could not write to file', $tester->getDisplay());
         $src = (string) file_get_contents(__DIR__ . '/../../src/Command/LogCommand.php');
         $this->assertStringContainsString("fwrite(STDERR, Lang::t('io.write_failed'", $src);
     }

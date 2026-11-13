@@ -98,7 +98,7 @@ final class BinExitCodeTest extends TestCase
         // Before the `use ...Lang;` import fix this path fataled with
         // "Class 'SugarCraft\ScriptUi\Command\Lang' not found" at exit 255.
         self::assertSame(1, $status, 'unreadable --file must exit FAILURE');
-        self::assertStringContainsString('could not read file: ' . $missing, $stdout . $stderr);
+        self::assertStringContainsString('Could not read file: ' . $missing, $stdout . $stderr);
         self::assertStringNotContainsString('Class "', $stdout . $stderr);
         self::assertStringNotContainsString('Fatal error', $stdout . $stderr);
     }
