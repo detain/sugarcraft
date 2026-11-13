@@ -222,13 +222,6 @@ final class GifDecoder implements Decoder
     }
 
     /**
-     * Rebuild the frame list from the bytes already captured at open.
-     *
-     * Split out of {@see open()} so reopen() of the SAME source can refresh
-     * the playback state without touching the filesystem again. The
-     * header-drop notice belongs to the callers — they still have $source.
-     */
-    /**
      * m14: non-null hint when the graphics path will silently degrade because
      * this PHP has no image extension; null on a normal GD-capable host.
      */
@@ -237,6 +230,13 @@ final class GifDecoder implements Decoder
         return function_exists('imagecreatetruecolor') ? null : Lang::t('decoder.text_sampled');
     }
 
+    /**
+     * Rebuild the frame list from the bytes already captured at open.
+     *
+     * Split out of {@see open()} so reopen() of the SAME source can refresh
+     * the playback state without touching the filesystem again. The
+     * header-drop notice belongs to the callers — they still have $source.
+     */
     private function hydrate(int $cellsW, int $cellsH, float $fps, ?Mode $mode, float $startSec): void
     {
         $bytes = $this->bytes;

@@ -87,17 +87,6 @@ class AudioPlayer
     }
 
     /**
-     * Strip the userinfo segment — everything from `scheme://` up to the LAST `@`
-     * before the first path separator — from a source before it is
-     * interpolated into a log line.
-     *
-     * WHY: `isNetworkSource()` only matches http(s), so an `rtsp` or `ftp` URL whose
-     * authority embeds credentials (a username/password pair before the host separator)
-     * takes the header-DROP branch — and the drop
-     * notice prints the source verbatim, password included, straight into error_log.
-     * Refusing to send credentials and then logging them is no refusal at all.
-     */
-    /**
      * Query parameter names whose VALUE is a credential and must never reach
      * a display surface (SV-L75), matched case-insensitively against the
      * lower-cased key. Presigned object-store URLs — the documented
@@ -195,6 +184,17 @@ class AudioPlayer
      */
     private ?int $exitCode = null;
 
+    /**
+     * Strip the userinfo segment — everything from `scheme://` up to the LAST `@`
+     * before the first path separator — from a source before it is
+     * interpolated into a log line.
+     *
+     * WHY: `isNetworkSource()` only matches http(s), so an `rtsp` or `ftp` URL whose
+     * authority embeds credentials (a username/password pair before the host separator)
+     * takes the header-DROP branch — and the drop
+     * notice prints the source verbatim, password included, straight into error_log.
+     * Refusing to send credentials and then logging them is no refusal at all.
+     */
     public static function redactCredentials(string $source): string
     {
         // Public because FfmpegDecoder redacts the same source for the same

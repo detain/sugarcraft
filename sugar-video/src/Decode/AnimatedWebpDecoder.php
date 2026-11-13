@@ -125,7 +125,13 @@ final class AnimatedWebpDecoder implements Decoder
     /** @var list<int> per-frame display durations in ms, container order. */
     private array $delaysMs = [];
 
-    /** @var int the raw container field (0 = forever, N = N extra passes after the first) */
+    /**
+     * ANIM chunk loop count: 0 means "repeat forever", N means the sequence
+     * plays N+1 times (libwebp semantics). Exposed for hosts that honor it;
+     * this decoder itself plays the sequence once per open().
+     *
+     * @var int the raw container field (0 = forever, N = N extra passes after the first)
+     */
     private int $rawLoop = 0;
     private int $cursor = 0;
 
@@ -387,11 +393,6 @@ final class AnimatedWebpDecoder implements Decoder
         return $this->delaysMs;
     }
 
-    /**
-     * ANIM chunk loop count: 0 means "repeat forever", N means the sequence
-     * plays N+1 times (libwebp semantics). Exposed for hosts that honor it;
-     * this decoder itself plays the sequence once per open().
-     */
     /**
      * Total playthroughs the author requested — the SAME contract
      * GifDecoder ships (review 015): null when the file says "forever",
