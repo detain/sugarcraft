@@ -152,6 +152,26 @@ final class Veil
     }
 
     /**
+     * The modal preset: dim the backdrop, then centre the content over it.
+     *
+     * Every production modal spells the same thing — a 50% backdrop and the
+     * CENTER/CENTER anchor pair (upstream's Bubble Tea modal recipe). This
+     * delegates to exactly that call, byte for byte; it is shorthand, never
+     * a second code path.
+     */
+    public static function centered(
+        string $content,
+        string $backdrop,
+        int $dimmingPercent = 50,
+        int $xOffset = 0,
+        int $yOffset = 0,
+    ): string {
+        return self::new()
+            ->withBackdrop($dimmingPercent)
+            ->composite($content, $backdrop, Position::CENTER, Position::CENTER, $xOffset, $yOffset);
+    }
+
+    /**
      * Set the backdrop opacity for dimming the background.
      *
      * @param int $opacity 0–100 (0 = no dimming, 100 = fully dimmed)

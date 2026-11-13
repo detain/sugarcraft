@@ -61,6 +61,9 @@ $output = $veil->composite($modal, $background, Position::CENTER, Position::CENT
 echo $output;
 ```
 
+The one-call form of that centered modal is `Veil::centered($modal,
+$background)` — see [Backdrop Dimming](#backdrop-dimming).
+
 `composite()` returns the full merged frame (or a diff — see
 [Buffer diffing](#buffer-diffing-and-rendersession)). The background is
 the canvas: an overlay wider or taller
@@ -129,6 +132,11 @@ $fg = "[modal]";
 $veil = Veil::new()->withBackdrop(50); // 50% dim
 echo $veil->composite($fg, $bg, Position::CENTER, Position::CENTER) . "\n";
 ```
+
+That pair — 50% backdrop, CENTER on both axes — is the modal recipe, so
+it has a preset: `Veil::centered($fg, $bg, $dimmingPercent = 50,
+$xOffset = 0, $yOffset = 0)`. It delegates to the call spelled above and
+emits byte-identical output; it is shorthand, never a second path.
 
 `withBackdrop(int $opacity)` takes 0–100 (clamped) and darkens every row
 outside the overlay footprint: each non-empty background line is wrapped in

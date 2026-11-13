@@ -325,6 +325,26 @@ final class VeilTest extends TestCase
         $this->assertStringContainsString("\e[38;2;0;0;0m", $over);
     }
 
+    /**
+     * SO-08 (sugar-overlay-010): the modal preset is shorthand for the
+     * hand-spelled 50%-backdrop + CENTER/CENTER call every production
+     * renderer spells — byte identity, never a second code path.
+     */
+    public function testCenteredPresetIsTheHandSpelledModalByteForByte(): void
+    {
+        $backdrop = \str_repeat("status line one\nstatus line two with more text\n", 10);
+        $content = 'Press [y/N] to continue';
+
+        $this->assertSame(
+            Veil::new()->withBackdrop(50)->composite($content, $backdrop, Position::CENTER, Position::CENTER),
+            Veil::centered($content, $backdrop),
+        );
+        $this->assertSame(
+            Veil::new()->withBackdrop(75)->composite($content, $backdrop, Position::CENTER, Position::CENTER, -2, 3),
+            Veil::centered($content, $backdrop, 75, -2, 3),
+        );
+    }
+
     public function testBrightOverlayIsNotDimmedWhileBackgroundIs(): void
     {
         // A FULL-WIDTH styled foreground bar over a dotted background + backdrop.
