@@ -16,6 +16,7 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Msg\PasteMsg;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Forms\Util\RenderSafe;
 use SugarCraft\Style\Style;
@@ -166,6 +167,19 @@ final class TextInput implements Model
         if ($msg instanceof BlinkMsg) {
             [$cursor, $cmd] = $this->cursor->update($msg);
             return [$this->withCursor($cursor), $cmd];
+        }
+        if ($msg instanceof PasteMsg) {
+            // sugar-forms-027: a single-line field treats a bracketed paste
+            // as typed text — every CR/LF of the payload is stripped first
+            // (the widget cannot carry a newline) and the rest splices in
+            // through insert(), the SAME per-rune seam the keystrokes use,
+            // so withRestrict, charLimit, mask and password echo semantics
+            // are inherited, not re-implemented. The cursor lands after the
+            // inserted text, matching TextArea's paste contract.
+            if (!$this->focused) {
+                return [$this, null];
+            }
+            return [$this->insert(str_replace(["\r", "\n"], '', $msg->content)), null];
         }
         if (!$msg instanceof KeyMsg || !$this->focused) {
             return [$this, null];

@@ -130,7 +130,7 @@ $form = Form::new(
 
 | Field         | Description                                                 | Notable knobs | Keys consumed |
 | ------------- | ----------------------------------------------------------- | ------------- | --------------- |
-| `Input`       | Single-line text (wraps `SugarCraft\Forms\TextInput\TextInput`)     | `withPlaceholder`, `withCharLimit`, `withWidth`, `withPrompt`, `withValidator(Validator\|\Closure)` (chains; first error wins), `withTitleFunc` / `withDescriptionFunc`, `withPassword(bool $on = true, string $echoChar = '*')`, `withPasswordMask(?string $pattern, string $echoChar = '*')`, `withSuggestions(list<string>)`, `withSuggestionsFunc(\Closure(string):list<string>)`, `withFuzzySuggestions(list<string>)`, `withAsyncSuggestions(callable $fetcher, int $debounceMs = 150)` | typing, Home/End, Left/Right, Backspace/Delete, ctrl+a / ctrl+e / ctrl+u / ctrl+k; Up/Down history recall and the Enter submit-validator run only when a custom key map frees those keys (by default they drive field navigation); paste not consumed |
+| `Input`       | Single-line text (wraps `SugarCraft\Forms\TextInput\TextInput`)     | `withPlaceholder`, `withCharLimit`, `withWidth`, `withPrompt`, `withValidator(Validator\|\Closure)` (chains; first error wins), `withTitleFunc` / `withDescriptionFunc`, `withPassword(bool $on = true, string $echoChar = '*')`, `withPasswordMask(?string $pattern, string $echoChar = '*')`, `withSuggestions(list<string>)`, `withSuggestionsFunc(\Closure(string):list<string>)`, `withFuzzySuggestions(list<string>)`, `withAsyncSuggestions(callable $fetcher, int $debounceMs = 150)` | typing, Home/End, Left/Right, Backspace/Delete, ctrl+a / ctrl+e / ctrl+u / ctrl+k; Up/Down history recall and the Enter submit-validator run only when a custom key map frees those keys (by default they drive field navigation); a host PasteMsg is consumed as typed text (CR/LF stripped) |
 | `Text`        | Multi-line text editor                                      | `withCharLimit`, `withHeight`, `withWidth`, `withValidator(closure only; replaces)` | full buffer editing; Enter newline and Up/Down caret rows are claimed (they arrive despite nav); ctrl+a/e/u/k + ctrl+c/x/o chords (under the default map Ctrl+C is abort — the copy/cut chords need a custom map that frees Ctrl+C); a host PasteMsg replaces the selection; Tab indents only when a custom map frees it (default: Tab navigates) |
 | `Confirm`     | Yes/no boolean                                              | `withLabels(affirmative, negative)`, `withDefault(bool)`, `withValidator(Validator\|\Closure(bool):?string\|null)` (replaces; null clears), `withTitleFunc`, `withDescriptionFunc` | Left/Right or h/l answer, y / n answer; Tab toggles only when a custom map frees it (default: Tab navigates) |
 | `Select`      | Single-choice list (wraps `SugarCraft\Forms\ItemList\ItemList`)     | `withOptions(...)`, `withWidth(int)`, `withVisibleLines(int)` (page by LINES, not items — `withHeight` counts items, so described entries can double the painted rows), `withTitleFunc`, `withDescriptionFunc`, `withFuzzySuggestions(list<string>)`, `withAsyncSuggestions(callable $fetcher, int $debounceMs = 150)`, `withEnum(\BackedEnum::class)` | list keys Up/Down or k/j, PageUp/PageDown, Home/g, End/G; the / key opens the filter (typing + Backspace narrow, Enter/Escape end it — claimed); click to position when focused |
@@ -171,9 +171,12 @@ renders the active set, never the defaults.
   custom map via `withKeyMap()` to free a key for the field; the
   field-types table above marks which arms need that.
   `tests/FormKeyDispatchTest.php` verifies both directions.
-- **Paste:** the terminal sends pastes as a PasteMsg; only TextArea consumes
-  it (replacing the selection). TextInput — and NumberField's typing
-  surface — accept KeyMsg events only and drop PasteMsg (v1 limitation).
+- **Paste:** the terminal sends pastes as a PasteMsg and both text surfaces
+  consume it: TextArea replaces the selection (or inserts at the caret),
+  TextInput splices the payload in as typed text — CR/LF stripped (it is a
+  single-line buffer), every remaining rune facing the same restrict gate,
+  charLimit budget and mask/echo projection as keystrokes. NumberField's
+  typing surface rides the same TextInput pipeline.
 - **History recall:** TextInput's Up/Down browse a host-populated list
   (`withHistory()` / `addToHistory()` feed it); under the default map the
   arrows are navigation, so recall needs a freed map (or vim-insert's
