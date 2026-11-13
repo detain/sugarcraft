@@ -51,7 +51,7 @@ The board renders in full — there is no scrolling viewport — and the help fo
 | `f`                | Toggle flag                      |
 | Left-click         | Reveal cell (mouse)              |
 | Right-click        | Toggle flag (mouse)              |
-| `c` / middle-click | Chord — open a number's ring once its flags match |
+| `c` / middle-click | Chord — open a number's ring once its flags match exactly |
 | `S`                | Save the live game to the slot   |
 | `L`                | Load the saved game              |
 | `r`                | Restart with new mines           |
@@ -121,7 +121,7 @@ Pure-state classes plus the runtime Model, renderer, UI helper, and persistence:
 
 The first reveal is always safe — mines are placed only after click 1. The normal rule excludes the clicked cell and its whole 3×3 neighbourhood, so the player gets a non-trivial flood-fill on every game; at edges and corners the zone truncates to the cells that exist on the board — 6 or 4 guaranteed-safe cells instead of 9. The fallback rule covers dense boards that cannot afford the full exclusion: only the clicked cell itself is kept mine-free (its neighbours may hold mines), and every requested mine is still placed so win detection stays reachable. Falling into the fallback takes more mines than any CLI or picker game can carry — the −9 cap on custom mine counts always leaves room for the full safe zone — so this is a library-only regime for hand-built boards.
 
-**Chord click** (`c` / middle-click): when a revealed number has exactly the right number of flagged neighbours, chording reveals the neighbours your flags say are clear — the flagged cells stay flagged, and if any of those flags is wrong the chord detonates on it. This mirrors the standard left+right simultaneous press in classic minesweeper.
+**Chord click** (`c` / middle-click): when a revealed number has exactly the right number of flagged neighbours, chording reveals the neighbours your flags say are clear — the flagged cells stay flagged, and if any of those flags is wrong the chord detonates on it. This follows the classic left+right simultaneous press, tightened against its go-sweep transcription in three ways: the flags must match the number **exactly** (the antecedent swept at `adjFlags >= adjMines`, so over-flagging still fired the sweep — here an over-flagged number is refused with the same toast as an under-flagged one), a revealed zero is not chordable (the antecedent swept at `0 >= 0`, but a zero's flood already cleared its ring, so a chord there could only fake a move), and the chord lives on `c`/middle-click alone — re-pressing Space/Enter on a satisfied number is a pure no-op here, not the antecedent's re-sweep.
 
 **O(1) win detection**: `Board::isWon()` compares `revealedCount` (the number of non-mine cells revealed) against `width × height − mineCount`. Win detection is constant-time regardless of board size — no full-grid scan on every move.
 
@@ -160,7 +160,7 @@ The design antecedent [`maxpaulus43/go-sweep`](https://github.com/maxpaulus43/go
 | Win detection | O(n) grid scan | O(1) via `revealedCount` |
 | Mine placement | Shuffle all cells upfront | Deferred until first click, safe-zone exclusion |
 | Recursion | Recursive `sweep()` | Iterative `floodReveal()` (stack-based) |
-| Chord rule | Satisfied at `adjFlags >= adjMines`, revealed zeros chordable | Tightened — exact `===` match, revealed zeros not chordable (`Board::chord()`) |
+| Chord rule | Satisfied at `adjFlags >= adjMines`, revealed zeros chordable, re-pressed sweep key chords | Tightened — exact `===` match, revealed zeros not chordable, chord only on `c`/middle-click (`Board::chord()`) |
 | RNG | `rand.New(rand.NewSource(time…))` | Injectable `Closure(int):int` |
 | Board representation | Mutating `[][]cell` | Immutable `list<list<Cell>>` |
 | Serialization | None | Versioned JSON — the in-game `S` / `L` slot uses exactly this format |

@@ -758,6 +758,9 @@ final class Game implements Model
         // cell) returns the same Board, and must not arm the clock — the timer
         // is documented (README, subscriptions()) to start on the first actual
         // reveal, not on the first keypress that happened to hit a dud.
+        // Re-pressing the reveal key on a satisfied number is likewise a pure
+        // no-op: go-sweep's sweep key re-chorded there (userInitiatedSweep);
+        // here the chord lives only on `c` and middle-click.
         $board = $this->board->reveal($this->cursorX, $this->cursorY, $this->rand);
         if ($board === $this->board) {
             return $this;

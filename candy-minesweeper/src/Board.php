@@ -539,7 +539,8 @@ final class Board
      * Chord click — reveal all unflagged neighbors of a "satisfied" number.
      *
      * A cell is satisfied when its (positive) adjacent count equals the number
-     * of flagged neighbours. The chord then reveals every unflagged neighbour
+     * of flagged neighbours — EQUALS, not go-sweep's transcribed `adjFlags >=
+     * adjMines`: upstream chorded an over-flagged number, here it is refused. The chord then reveals every unflagged neighbour
      * — safe ONLY while those flags are correct: a wrong flag leaves its mine
      * unflagged, and the reveal flood detonates on it.
      *
