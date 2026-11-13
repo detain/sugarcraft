@@ -8,6 +8,10 @@ use SugarCraft\Core\Util\Color;
 
 /**
  * A single alert entry in the queue.
+ *
+ * @see https://github.com/DaltonSW/bubbleup — upstream antecedent: its
+ *      AlertDefinition struct maps onto Alert + ToastType here (severity,
+ *      message, lifetime, style overrides, actions).
  */
 final class Alert
 {

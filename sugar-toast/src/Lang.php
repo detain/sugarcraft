@@ -10,8 +10,7 @@ use SugarCraft\Core\I18n\Lang as BaseLang;
  * Per-library translation facade for sugar-toast.
  *
  * Wraps the shared {@see \SugarCraft\Core\I18n\T} registry with the
- * `'toast'` namespace baked in. Translated strings live in
- * {@see ../lang/en.php}.
+ * `'toast'` namespace baked in. Key definitions live in `lang/en.php`.
  *
  * @extends BaseLang
  */

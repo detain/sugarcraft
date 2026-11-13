@@ -97,9 +97,13 @@ final class Action
             $label
         );
         if ($out === null) {
-            // Invalid UTF-8 (the /u compile guard): byte-wise equivalent,
-            // C1 classes dropped — matches the cell grid's own behaviour of
-            // reproducing malformed bytes rather than executing them.
+            // Invalid UTF-8 (the /u compile guard): byte-wise floor of the
+            // /u branch above — C0 and DEL drop, but raw C1 bytes fall
+            // outside [\x00-\x1F\x7F] and survive this fallback (they
+            // cannot be told apart without decoding). Encoded C1 that does
+            // ride valid UTF-8 is dropped by the /u branch and zero-scored
+            // by the grid width law either way; the cell grid's own stance
+            // is reproducing malformed bytes, never executing them.
             $out = \preg_replace_callback(
                 '/\x1b\[(?<sgr>[0-9;]*)(?<si>[ -\/]*)m|\x1b\][\s\S]*?(?:\x07|\x1b\\\\)|\x1b\][\s\S]*|\x1b[\x50\x58\x5e\x5f][\s\S]*?(?:\x07|\x1b\\\\)|\x1b[\x50\x58\x5e\x5f][\s\S]*|\x1b\[[0-9;?]*[ -\/]*[@-~]|\x1b|[\x00-\x1F\x7F]/',
                 static fn (array $m): string => isset($m['sgr'])

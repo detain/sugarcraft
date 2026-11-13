@@ -20,7 +20,7 @@ use SugarCraft\Core\Util\Width;
  * Renders one or more toast alerts (error/warning/info/success) at a fixed
  * screen position, composited over a background view. Stacked/queued alerts
  * are bounded by maxConcurrent + the Overflow strategy; runnable demos live
- * in examples/ (basic.php, types.php).
+ * in examples/ (basic.php, types.php, accessibility.php).
  *
  * Design antecedent: DaltonSW/bubbleup.
  *
@@ -97,7 +97,13 @@ final class Toast
      */
     private bool $dismissed = false;
 
-    /** Host-consumed flag: whether the host should dismiss on Escape key press. The renderer stores this preference; it does not handle input itself. */
+    /**
+     * Host-consumed flag: whether the host should dismiss on Escape key
+     * press. The renderer stores this preference; it does not handle input
+     * itself. Polarity note: upstream bubbleup treats ESC-close as an explicit
+     * opt-in; flipped to default-on here because the flag is inert unless the
+     * host wires it — the renderer never consumes keypresses either way.
+     */
     private bool $allowEscToClose = true;
 
     /** Opt-in accessible chrome: severity word in the header + numeric percentage on progress rows. Default OFF keeps every existing frame byte-identical. */
@@ -365,12 +371,8 @@ final class Toast
      * toast's duration unset (the default, or withDuration(null)), queue a
      * ->withCancelledExpiry() Alert via push() (that sets the explicit persistent
      * sentinel, which the inheritance door honours),
-     * or call cancelAlert() on a queued alert.
-     *
-     * @param string|null $id  Stable identity: re-queuing with the same id
-     *        REPLACES the live alert in place instead of appending a second
-     *        box (progress/feedback toasts; see progressToast()).
-     * Accepts a ToastType or a string type name (case-insensitive).
+     * or call cancelAlert() on a queued alert. Accepts a ToastType or a
+     * string type name (case-insensitive).
      *
      * The message text is app-supplied: inline SGR sequences in it are honoured
      * as styling (re-encoded through the cell grid), but raw control bytes can
@@ -382,6 +384,9 @@ final class Toast
      * the configured overflow strategy (DropOldest, DropNewest, or Enqueue).
      * Expired alerts sitting in the queue are pruned first, on this write.
      *
+     * @param string|null $id  Stable identity: re-queuing with the same id
+     *        REPLACES the live alert in place instead of appending a second
+     *        box (progress/feedback toasts; see progressToast()).
      * @param list<Action>|null $actions  Clickable action buttons to render beneath the message
      * @param float|null $ttlSeconds  Relative lifetime resolved AT THIS DOOR
      *        into an absolute epoch ($expiresAt = microtime(true) + $ttlSeconds)
@@ -1593,38 +1598,19 @@ final class Toast
     }
 
     /**
-     * Overlay a queued Alert's optional bg/fg/border colours onto its
-     * freshly laid-out buffer.
-     *
-     * Every box cell gains the background fill; box-drawing glyphs
+     * Overlay a queued Alert's optional bg/fg/border colours onto its grid:
+     * every box cell gains the background fill; box-drawing glyphs
      * (╭ ─ ╮ │ ╰ ╯) take the border colour; remaining interior text takes
      * the foreground colour. Cells that already carry a colour — the
      * severity-coloured icon and any inline-SGR message spans — keep it.
      * sugar-dashboard's Toast adapter DELEGATES to this renderer — the
      * styled box originates here (PR #1289 folded dashboard's rendering
      * into this lib; an earlier 'mirrors sugar-dashboard' cite had the
-     * direction inverted).
-     *
-     * @param list<string> $lines The rendered alert rows, used to bound the
-     *                            styled columns to each row's box width so a
-     *                            narrower box never bleeds fill into the
-     *                            trailing blank cells of a wider buffer.
-     */
-    private function applyAlertColors(Buffer $buf, Alert $alert, array $lines): Buffer
-    {
-        $grid = [];
-        for ($r = 0; $r < $buf->height(); $r++) {
-            for ($c = 0; $c < $buf->width(); $c++) {
-                $grid[] = $buf->cellAt($c, $r);
-            }
-        }
-        return Buffer::fromGrid($buf->width(), $buf->height(), $this->colorAlertGrid($grid, $buf->width(), $alert, $lines));
-    }
-
-    /**
-     * Grid-native colour pass — the single truth the production build
-     * calls directly; the Buffer-shaped method above keeps the
-     * reflection-pinned seam.
+     * direction inverted). The grid-native pass is the single truth the
+     * production build calls directly; its former Buffer-shaped wrapper
+     * went unreferenced and was deleted rather than left holding a
+     * reflection-pinned claim no test honoured — the honest seam pins are
+     * placeAnsiStringAt/sgrToBufferStyle in ToastRenderingTest.
      *
      * @param list<Cell> $grid
      * @return list<Cell>
@@ -1688,10 +1674,6 @@ final class Toast
         return ($color->r << 16) | ($color->g << 8) | $color->b;
     }
 
-    /**
-     * Place an ANSI-encoded string into the buffer at (col, row), parsing
-     * SGR sequences and applying corresponding Buffer Style objects.
-     */
     /**
      * Scan one string into its sequence of display cells (the linear
      * build path: rows are scanned once into a flat grid and committed with
@@ -1831,8 +1813,8 @@ final class Toast
     }
 
     /**
-     * Extract the next UTF-8 grapheme cluster
-     * Extract the next UTF-8 grapheme cluster from string    * Delegates to sugar-core's canonical {@see Width::nextCluster()}. This
+     * Extract the next UTF-8 grapheme cluster from string at $i. Delegates
+     * to sugar-core's canonical {@see Width::nextCluster()}. This
      * used to be a sanctioned verbatim fork (kept because the core splitter
      * was private); the duplicated body is deleted now that core promotes it
      * to a public entry point, so both invalid-UTF-8 guards (ICU position
