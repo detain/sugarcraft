@@ -976,6 +976,17 @@ final class Player implements Model
         if (!$this->loop) {
             // End of stream, no loop: stop audio and freeze on the last frame.
             $this->audioPlayer?->stop();
+            // SV-L91/091: the F21 house law — a child dies with the purpose
+            // that kept it alive. The parked end view needs NO decoder: it
+            // paints the retained last frame from the model, and the [ended]
+            // row is plain text. Leaving the ffmpeg child open here parked an
+            // unreaped process slot plus its /tmp/sugar-video-ffmpeg-* stderr
+            // temp for the whole lifetime of the view (destruct backstopped
+            // it — bounded, but reason-less). close() is idempotent (every
+            // handle is nulled on first tear), stop() staying able to re-run
+            // it is what keeps this safe.
+            $this->decoder->close();
+
             $nextPlayer = $this->mutate([
                 'ended' => true,
                 'currentFrame' => $nextFrame ?? $this->currentFrame,
