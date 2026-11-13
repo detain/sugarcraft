@@ -278,10 +278,28 @@ final class Breadcrumb
      */
     public function withScanner(?Scanner $scanner): self
     {
-        $clone         = clone $this;
+        $clone          = $this->copy();
         $clone->scanner = $scanner === null ? null : clone $scanner;
         $clone->scanned = false;
         return $clone;
+    }
+
+    /**
+     * The single copy mechanism of this class (NS-25): a plain shallow
+     * clone, routed through by every derive-a-new-bar site.
+     *
+     * Why raw clone instead of sugar-core's Mutable trait: Mutable/mutate()
+     * fits value objects whose field set is immutable; the Breadcrumb is
+     * MUTABLE by design (set* retunes in place — see the class docblock),
+     * and the shallow clone's only sharing is the documented-harmless one
+     * (sugar-core Width math is stateless; the scanner is re-cloned here
+     * so two bars never co-write zones, and the mutable stamps — scanned/
+     * lastVisible/generation pairing — are reset by every render path
+     * above). A trait adoption would be ceremony around one line.
+     */
+    private function copy(): self
+    {
+        return clone $this;
     }
 
     /**

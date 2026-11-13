@@ -67,7 +67,7 @@ final class Shell
     {
         $newStack = (new NavStack())->setItems($this->stack->items());
         $newStack->push($title, $data);
-        return new self($newStack, clone $this->breadcrumb);
+        return $this->copy($newStack);
     }
 
     /**
@@ -88,7 +88,7 @@ final class Shell
     {
         $newStack = (new NavStack())->setItems($this->stack->items());
         $newStack->pop();
-        return new self($newStack, clone $this->breadcrumb);
+        return $this->copy($newStack);
     }
 
     /**
@@ -104,7 +104,7 @@ final class Shell
     {
         $newStack = (new NavStack())->setItems($this->stack->items());
         $newStack->popTo($index);
-        return new self($newStack, clone $this->breadcrumb);
+        return $this->copy($newStack);
     }
 
     /**
@@ -113,6 +113,27 @@ final class Shell
      * Shells (the `with*()` family otherwise copies the breadcrumb so
      * configuration cannot leak sideways).
      */
+    /**
+     * The single copy mechanism for the whole `with*()` family (NS-25).
+     *
+     * Four call sites used to inline `new self($newStack, clone
+     * $this->breadcrumb)`; one named helper keeps the copy story in one
+     * grep-able place: a fresh Shell object, the CALLER-BUILT new stack,
+     * and a private clone of the shared-by-reference breadcrumb so derived
+     * Shells cannot leak bar configuration sideways (NS-02).
+     *
+     * Why raw clone instead of sugar-core's Mutable trait: Mutable/mutate()
+     * serves immutable value objects with a fixed field set; the Shell
+     * hands back a DIFFERENT stack (built by the caller) and the
+     * Breadcrumb is mutable-by-design — a trait copy would obscure the
+     * one deliberate shallow-clone sharing (item identity survives, pinned
+     * by ShellTest). This deviation is documented, not accidental.
+     */
+    private function copy(NavStack $newStack): self
+    {
+        return new self($newStack, clone $this->breadcrumb);
+    }
+
     public function withBreadcrumb(Breadcrumb $breadcrumb): self
     {
         return new self($this->stack, $breadcrumb);
@@ -176,6 +197,6 @@ final class Shell
             $acc .= '/' . $segment;
             $newStack->push($segment, $acc);
         }
-        return new self($newStack, clone $this->breadcrumb);
+        return $this->copy($newStack);
     }
 }

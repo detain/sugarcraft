@@ -35,3 +35,10 @@ See: `Breadcrumb::withScanner()`, `Breadcrumb::scan()`, `Breadcrumb::hit()`,
 
 - Mouse hit-testing self-contained via sugar-mouse. No external zone manager
   is needed — attach a `Scanner` with `withScanner()`.
+
+## Copy mechanism (NS-25)
+
+- Clone/new-self is centralized in one private `copy()` helper per class
+  (`Breadcrumb::copy()`, `Shell::copy(NavStack)`), not sugar-core Mutable:
+  both classes are mutable-by-design carriers whose derived copies hand back
+  caller-built state; the trait would be ceremony around one line.
