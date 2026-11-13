@@ -28,6 +28,13 @@ use SugarCraft\Sql\Db\Identifier;
  */
 final class VariableEditor
 {
+    /**
+     * One shared, honest prepare-failure copy (SQL-P13/adminpages-023): the
+     * five sites that said bare "Prepare failed" named neither the statement
+     * position nor the connection the user is staring at.
+     */
+    private const PREPARE_FAILURE = 'Could not prepare the statement on this connection';
+
     private DatabaseInterface $db;
 
     private function __construct(
@@ -72,7 +79,7 @@ final class VariableEditor
         try {
             $stmt = $this->db->prepare($sql);
             if ($stmt === null) {
-                return ['success' => false, 'errorCode' => null, 'errorMessage' => 'Prepare failed'];
+                return ['success' => false, 'errorCode' => null, 'errorMessage' => self::PREPARE_FAILURE];
             }
 
             $result = $stmt->execute([$newValue]);
@@ -85,9 +92,11 @@ final class VariableEditor
     }
 
     /**
-     * Edit a variable using SET PERSIST (MySQL 8.0+).
+     * Edit a variable using SET PERSIST (vendor-gated; see persist()).
      *
-     * Sets the variable both globally and persists it to mysqld-auto.cnf.
+     * Sets the variable both globally and persists it to mysqld-auto.cnf —
+     * exactly persist()'s contract, which it now delegates to so there is
+     * one gated SET PERSIST path (SQL-P13/adminpages-029).
      *
      * @param string $variableName The variable name (backtick-escaped internally)
      * @param string $newValue The new value to set
@@ -95,41 +104,22 @@ final class VariableEditor
      */
     public function editPersistent(string $variableName, string $newValue): array
     {
-        // Validate variable is editable before attempting
-        if (!$this->isEditable($variableName)) {
-            return ['success' => false, 'errorCode' => null, 'errorMessage' => 'Variable not editable'];
-        }
-
-        // Check MySQL version supports SET PERSIST (8.0+)
-        // We assume the caller has already checked, but double-check here
-        // For safety, we catch errors from older versions gracefully
-
-        // Backtick-escape the variable name
-        $escapedName = Identifier::quote(Flavor::MySQL, $variableName);
-
-        // Placeholder resolved by emulated prepares (PDO quotes the value client-side)
-        $sql = "SET PERSIST {$escapedName} = ?";
-
-        try {
-            $stmt = $this->db->prepare($sql);
-            if ($stmt === null) {
-                return ['success' => false, 'errorCode' => null, 'errorMessage' => 'Prepare failed'];
-            }
-
-            $result = $stmt->execute([$newValue]);
-            $stmt->closeCursor();
-
-            return ['success' => $result, 'errorCode' => null, 'errorMessage' => null];
-        } catch (\PDOException $e) {
-            return $this->handleError($e);
-        }
+        // SQL-P13 (adminpages-029): the old body carried a comment claiming a
+        // version check ("we double-check here") while performing none — a
+        // pre-PERSIST server answered its raw SET PERSIST with a misleading
+        // 1064. SET PERSIST is exactly what persist() already does (global +
+        // mysqld-auto.cnf), and persist() is where the honest vendor-aware
+        // gate lives. Delegate: the refusal is named, and success reaches
+        // the server through the same single gated path.
+        return $this->persist($variableName, $newValue);
     }
 
     /**
      * Persist a variable using SET PERSIST (MySQL 8.0+).
      *
      * Sets the variable globally AND persists it to mysqld-auto.cnf.
-     * Gated to MySQL 8.0+ because PERSIST is not available in earlier versions.
+     * Gated by vendor because PERSIST is not available earlier (SQL-P13:
+     * MySQL 8.0.16+, MariaDB 11.1+ — see {@see self::persistRefusal()}).
      *
      * @param string $variableName The variable name (backtick-escaped internally)
      * @param string $newValue The new value to set
@@ -137,8 +127,9 @@ final class VariableEditor
      */
     public function persist(string $variableName, string $newValue): array
     {
-        if (!$this->context->version()->isAtLeast(8, 0)) {
-            return ['success' => false, 'errorCode' => null, 'errorMessage' => 'Persisting requires MySQL 8.0+'];
+        $refusal = $this->persistRefusal();
+        if ($refusal !== null) {
+            return ['success' => false, 'errorCode' => null, 'errorMessage' => $refusal];
         }
 
         if (!$this->isEditable($variableName)) {
@@ -151,7 +142,7 @@ final class VariableEditor
         try {
             $stmt = $this->db->prepare($sql);
             if ($stmt === null) {
-                return ['success' => false, 'errorCode' => null, 'errorMessage' => 'Prepare failed'];
+                return ['success' => false, 'errorCode' => null, 'errorMessage' => self::PREPARE_FAILURE];
             }
 
             $result = $stmt->execute([$newValue]);
@@ -168,7 +159,8 @@ final class VariableEditor
      *
      * Only persists to mysqld-auto.cnf without affecting the running value.
      * Use this for variables that cannot be set at runtime (error 1238).
-     * Gated to MySQL 8.0+ because PERSIST_ONLY is not available in earlier versions.
+     * Gated by vendor because PERSIST_ONLY is not available earlier
+     * (MySQL 8.0.16+, MariaDB 11.1+ — see {@see self::persistRefusal()}).
      *
      * @param string $variableName The variable name (backtick-escaped internally)
      * @param string $newValue The new value to persist
@@ -176,8 +168,9 @@ final class VariableEditor
      */
     public function persistOnly(string $variableName, string $newValue): array
     {
-        if (!$this->context->version()->isAtLeast(8, 0)) {
-            return ['success' => false, 'errorCode' => null, 'errorMessage' => 'Persisting requires MySQL 8.0+'];
+        $refusal = $this->persistRefusal();
+        if ($refusal !== null) {
+            return ['success' => false, 'errorCode' => null, 'errorMessage' => $refusal];
         }
 
         if (!$this->isEditable($variableName)) {
@@ -190,7 +183,7 @@ final class VariableEditor
         try {
             $stmt = $this->db->prepare($sql);
             if ($stmt === null) {
-                return ['success' => false, 'errorCode' => null, 'errorMessage' => 'Prepare failed'];
+                return ['success' => false, 'errorCode' => null, 'errorMessage' => self::PREPARE_FAILURE];
             }
 
             $result = $stmt->execute([$newValue]);
@@ -207,15 +200,17 @@ final class VariableEditor
      *
      * Without an argument, clears all persisted variables from mysqld-auto.cnf.
      * With a name argument, removes only that specific variable.
-     * Gated to MySQL 8.0+ because RESET PERSIST is not available in earlier versions.
+     * Gated by vendor because RESET PERSIST is not available earlier
+     * (MySQL 8.0.16+, MariaDB 11.1+ — see {@see self::persistRefusal()}).
      *
      * @param string|null $variableName Optional variable name to reset (clears all if null)
      * @return array{success: bool, errorCode: ?int, errorMessage: ?string} Result with success status and error details
      */
     public function resetPersist(?string $variableName = null): array
     {
-        if (!$this->context->version()->isAtLeast(8, 0)) {
-            return ['success' => false, 'errorCode' => null, 'errorMessage' => 'Persisting requires MySQL 8.0+'];
+        $refusal = $this->persistRefusal();
+        if ($refusal !== null) {
+            return ['success' => false, 'errorCode' => null, 'errorMessage' => $refusal];
         }
 
         // RESET PERSIST does not require the variable to be editable
@@ -227,7 +222,7 @@ final class VariableEditor
         try {
             $stmt = $this->db->prepare($sql);
             if ($stmt === null) {
-                return ['success' => false, 'errorCode' => null, 'errorMessage' => 'Prepare failed'];
+                return ['success' => false, 'errorCode' => null, 'errorMessage' => self::PREPARE_FAILURE];
             }
 
             $result = $stmt->execute([]);
@@ -337,6 +332,33 @@ final class VariableEditor
      *
      * @return array{success: false, errorCode: ?int, errorMessage: string}
      */
+    /**
+     * Vendor-aware support gate for the SET PERSIST family (SQL-P13/
+     * adminpages-024).
+     *
+     * The capability timeline is not a single number: MySQL shipped
+     * SET PERSIST in 8.0.16 (8.0.0-8.0.15 answer a raw 1064), and MariaDB —
+     * whose reported version Db\Version deliberately normalises from its
+     * "5.5.5-" compatibility prefix — only implemented it in 11.1. The old
+     * `isAtLeast(8, 0)` gate let MariaDB 10.x "pass" on numbers alone and
+     * die server-side. Null means supported; otherwise the refusal names
+     * the vendor the pane actually faces.
+     */
+    private function persistRefusal(): ?string
+    {
+        $version = $this->context->version();
+
+        if ($version->isMariaDb()) {
+            return $version->isAtLeast(11, 1)
+                ? null
+                : 'Persisting requires MariaDB 11.1+ — this server does not implement SET PERSIST.';
+        }
+
+        return $version->isAtLeast(8, 0, 16)
+            ? null
+            : 'Persisting requires MySQL 8.0.16+ — this server does not implement SET PERSIST.';
+    }
+
     private function handleError(\PDOException $e): array
     {
         // PDOException::getCode() returns the MySQL error code for PDO errors

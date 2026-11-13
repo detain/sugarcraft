@@ -138,4 +138,33 @@ final class VersionTest extends TestCase
         $this->assertSame(0, $version->minor);
         $this->assertSame(0, $version->release);
     }
+
+    // ─── SQL-P13 (adminpages-024): vendor identity marker ──────────────────
+
+    public function testIsMariaDbDetectsTheNormalisedPseudoVersion(): void
+    {
+        // The reported numbers are normalised from the 5.5.5- prefix, so the
+        // marker is the only thing that distinguishes MariaDB from MySQL at
+        // the same parsed major.
+        $maria = Version::parse('5.5.5-10.6.7-MariaDB-1:10.6.7+maria~ubu2204');
+
+        $this->assertTrue($maria->isMariaDb());
+        $this->assertSame(10, $maria->major, 'the numbers still ride the compatibility normalisation');
+    }
+
+    public function testIsMariaDbIsFalseForPlainMySQL(): void
+    {
+        $this->assertFalse(Version::parse('8.0.16')->isMariaDb());
+        $this->assertFalse(Version::parse('5.7.44-log')->isMariaDb());
+    }
+
+    public function testMariaDbCanPassIsAtLeastWhileLackingTheCapability(): void
+    {
+        // Non-vacuity for the gate: MariaDB 10.6 numerically satisfies the
+        // old isAtLeast(8,0) PERSIST gate yet must be refused by isMariaDb().
+        $maria = Version::parse('5.5.5-10.6.7-MariaDB-1:10.6.7+maria~ubu2204');
+
+        $this->assertTrue($maria->isAtLeast(8, 0), 'numbers say "8+" — the exact trap the gate must not fall for');
+        $this->assertTrue($maria->isMariaDb(), 'but the vendor marker catches it');
+    }
 }

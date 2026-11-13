@@ -71,6 +71,22 @@ final readonly class Version
     }
 
     /**
+     * True when the raw version string carries the MariaDB identity marker.
+     *
+     * The numeric fields are deliberately NORMALISED for compatibility —
+     * "5.5.5-10.11.4-MariaDB" parses to 10.11.4 — which makes the numbers
+     * unsafe alone for capability gates whose history differs by vendor
+     * (SET PERSIST shipped in MySQL 8.0.16 but only in MariaDB 11.1; a bare
+     * isAtLeast(8, 0) lets MariaDB 10.x "pass" the gate and then die on a
+     * raw 1064 server-side, SQL-P13/adminpages-024). Vendor-sensitive
+     * consumers branch on this marker before comparing numbers.
+     */
+    public function isMariaDb(): bool
+    {
+        return stripos($this->raw, 'MariaDB') !== false;
+    }
+
+    /**
      * Check if this version is at least the specified version.
      *
      * @param int $major    Required major version
