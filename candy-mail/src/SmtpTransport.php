@@ -610,7 +610,9 @@ final class SmtpTransport implements Transport
     private function sendRcptTo(string $address): void
     {
         $this->sendRaw("RCPT TO:<{$this->bareAddr($address)}>\r\n");
-        $this->readResponse(250);
+        // 251 (user not local; the relay forwards) is an accepted outcome at
+        // this call-site alone; 252 and every other code stay refusals.
+        $this->readResponseAny([250, 251]);
     }
 
     private function sendData(Email $email, bool $allow8Bit = true): void
@@ -951,6 +953,24 @@ final class SmtpTransport implements Transport
 
     private function readResponse(int $expectedCode): void
     {
+        // Strict single-code wrapper over the accepted-list core.
+        $this->readResponseAny([$expectedCode]);
+    }
+
+    /**
+     * Loop core: read a (possibly multi-line) reply and demand one of the
+     * accepted status codes.
+     *
+     * RFC 5321 §4.1.2.5 makes RCPT the one command in this conversation
+     * where a second success code is legal - 251 (user not local; the relay
+     * will forward) confirms the recipient as loudly as 250 does. Every other
+     * call-site (greeting, EHLO/HELO, STARTTLS, AUTH, MAIL FROM, DATA, QUIT)
+     * stays strict single-code; only the RCPT caller widens the list.
+     *
+     * @param list<int> $accepted
+     */
+    private function readResponseAny(array $accepted): void
+    {
         if ($this->socket === null) {
             throw new \RuntimeException(Lang::t('smtp.not_connected'));
         }
@@ -987,7 +1007,7 @@ final class SmtpTransport implements Transport
         $this->lastResponse = \implode("\n", $lines);
 
         $code = (int) \substr($lines[0], 0, 3);
-        if ($code !== $expectedCode) {
+        if (!\in_array($code, $accepted, true)) {
             throw new \RuntimeException(Lang::t('smtp.unexpected_response', ['response' => $this->lastResponse]));
         }
     }

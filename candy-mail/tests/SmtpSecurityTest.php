@@ -370,6 +370,42 @@ final class SmtpSecurityTest extends TestCase
         $this->assertStringContainsString("\r\n..dot line\r\n", $wire, 'a leading-dot body line must leave dot-stuffed');
     }
 
+    public function testRcptForwardingCode251CompletesTheSend(): void
+    {
+        // RFC 5321 4.1.2.5: a forwarding relay answers RCPT with 251; the
+        // send must ride it to completion, not read it as a protocol break.
+        $this->requireFork();
+        [$port, $pid, $log] = $this->forkFakeServer(false, false, 251);
+        try {
+            $transport = (new SmtpTransport('127.0.0.1', $port))->withRequireTls(false);
+            $transport->send($this->sampleEmail());
+        } finally {
+            $this->reap($pid);
+        }
+        $wire = (string) \file_get_contents($log);
+        @\unlink($log);
+
+        $this->assertMatchesRegularExpression('/^RCPT TO:<to\@example\.com>/mi', $wire);
+        $this->assertStringContainsString('DATA', $wire);
+    }
+
+    public function testRcptCode252IsStillRefused(): void
+    {
+        // 252 (not implemented) is NOT an accepted outcome: the widening
+        // covers exactly the 251 forwarding code.
+        $this->requireFork();
+        [$port, $pid, $log] = $this->forkFakeServer(false, false, 252);
+        try {
+            $transport = (new SmtpTransport('127.0.0.1', $port))->withRequireTls(false);
+            $this->expectException(\RuntimeException::class);
+            $this->expectExceptionMessage('Unexpected SMTP response');
+            $transport->send($this->sampleEmail());
+        } finally {
+            $this->reap($pid);
+            @\unlink($log);
+        }
+    }
+
     public function testCaFileIsImmutableAndFeedsTheSslContext(): void
     {
         $base = new SmtpTransport('smtp.example.com', 465);
@@ -836,7 +872,7 @@ final class SmtpSecurityTest extends TestCase
      *
      * @return array{0:int,1:int,2:string} [port, childPid, dialogueLogPath]
      */
-    private function forkFakeServer(bool $advertiseStartTls, bool $advertiseAuth = false): array
+    private function forkFakeServer(bool $advertiseStartTls, bool $advertiseAuth = false, int $rcptCode = 250): array
     {
         $errno  = 0;
         $errstr = '';
@@ -878,8 +914,10 @@ final class SmtpSecurityTest extends TestCase
                         }
                         $resp .= "250 HELP\r\n";
                         @\fwrite($conn, $resp);
-                    } elseif ($cmd === 'MAIL' || $cmd === 'RCPT') {
+                    } elseif ($cmd === 'MAIL') {
                         @\fwrite($conn, "250 OK\r\n");
+                    } elseif ($cmd === 'RCPT') {
+                        @\fwrite($conn, \sprintf("%d OK\r\n", $rcptCode));
                     } elseif ($cmd === 'DATA') {
                         @\fwrite($conn, "354 go\r\n");
                         while (($d = \fgets($conn)) !== false && $d !== '') {
