@@ -16,7 +16,7 @@
 
 ![demo](.vhs/chat.gif)
 
-A terminal AI coding agent for PHP 8.3+, built on the SugarCraft libraries. It is a SugarCraft program (a real `Model`/`Program` render loop — the MVC-style Model–Update–View pattern — with buffer-diffed output and Markdown-rendered replies) wrapped around a full agent engine: **multiple LLM providers**, model-driven **tool calling** gated by **hooks**, prompt-injecting **skills**, **sub-agents**, an **MCP** (Model Context Protocol — the standard for plugging external tool servers into an agent) client — stdio (each server a child process speaking the protocol over its standard input and output), Streamable HTTP, and an in-process git server it hosts for itself — and **SQLite** session history. The interface is a **TUI** (terminal user interface — a full-screen keyboard-and-mouse app drawn in your terminal window).
+A terminal AI coding agent for PHP 8.3+, built on the SugarCraft libraries. It is a SugarCraft program (a real `Model`/`Program` render loop — the MVC-style Model–Update–View pattern — with buffer-diffed output and Markdown-rendered replies) wrapped around a full agent engine. That engine gives you **multiple LLM providers**, model-driven **tool calling** gated by **hooks**, prompt-injecting **skills**, **sub-agents**, and **SQLite** session history. It also carries an **MCP** (Model Context Protocol — the standard for plugging external tool servers into an agent) client, which speaks stdio (each server a child process using its standard input and output) and Streamable HTTP, and it hosts an in-process git server for itself. The interface is a **TUI** (terminal user interface — a full-screen keyboard-and-mouse app drawn in your terminal window).
 
 > **Before you start.** You need **PHP 8.3+**, **Composer**, and the extensions
 > listed under [Install](#install). Platform support: **Linux** is the primary,
@@ -128,8 +128,11 @@ Run the single-file phar — no Composer, no `vendor/`: download
 `candy-code.phar` and its `candy-code.phar.sha256` sidecar from the
 `candy-code/v*` releases at <https://github.com/detain/sugarcraft/releases>,
 verify with `sha256sum -c candy-code.phar.sha256`, run with
-`php candy-code.phar`. Renaming it to a suffix-less executable (`mv
-candy-code.phar ~/bin/candy-code`) works just as well, and so does a symlink:
+`php candy-code.phar`. To get a `candy-code` command instead, make the
+download executable (a browser download loses the bit) and put it on your
+`PATH`: `chmod +x candy-code.phar && mv candy-code.phar ~/.local/bin/candy-code`
+(any directory on `PATH` works; the stub's `#!/usr/bin/env php` line does the
+rest). A symlink works just as well:
 the stub maps the archive sealed in its own bytes and boots that archive's
 vendor — a stray `vendor/` beside the installed name is never consulted.
 Releases from `candy-code/v0.1.1` onward carry an
