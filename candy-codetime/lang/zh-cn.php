@@ -75,6 +75,7 @@ return [
     'cli.unknown_command' => "candy-codetime: 未知命令: {command}",
     'cli.legacy_env_deprecated' => "candy-codetime: {variable} 已弃用；请改为设置 CANDY_CODETIME_DIR。",
     'cli.migration_notice' => "candy-codetime: {notice}",
+    'cli.migration_twin_notice' => 'candy-codetime：{old} 与 {new} 同时存在 - 改名前的历史留在原处，未做任何合并；如需合并请手动归同日数据文件（见 README Compatibility）',
     'ui.top_projects' => '热门项目',
     'ui.by_language' => '按语言',
     'ui.by_tags' => '按标签',

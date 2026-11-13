@@ -118,6 +118,15 @@ if (getenv('CANDY_CODETIME_DIR') === false) {
         // The moved path is filesystem data (a planted directory name could
         // carry control bytes) — sweep it before it paints the terminal.
         fwrite(STDERR, Lang::t('cli.migration_notice', ['notice' => Sanitize::untrusted($moved)]) . "\n");
+    } elseif (is_dir($dataBase . '/sugar-tick') && is_dir($dataBase . '/candy-codetime')) {
+        // migrate() refused to merge, which is the right law — the failure was
+        // the silence: pre-rename history sitting beside live data with nobody
+        // naming it. One notice per launch, both paths sanitized, README
+        // Compatibility carries the manual-merge pointer.
+        fwrite(STDERR, Lang::t('cli.migration_twin_notice', [
+            'old' => Sanitize::untrusted($dataBase . '/sugar-tick'),
+            'new' => Sanitize::untrusted($dataBase . '/candy-codetime'),
+        ]) . "\n");
     }
 }
 

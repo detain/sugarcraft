@@ -75,6 +75,7 @@ return [
     'cli.unknown_command' => "candy-codetime: nieznane polecenie: {command}",
     'cli.legacy_env_deprecated' => "candy-codetime: {variable} jest przestarzałe; ustaw zamiast tego CANDY_CODETIME_DIR.",
     'cli.migration_notice' => "candy-codetime: {notice}",
+    'cli.migration_twin_notice' => 'candy-codetime: istnieją zarówno {old}, jak i {new} - historia przed zmianą nazwy pozostała na miejscu, nic nie zostało scalone; scal pliki dzienne ręcznie, jeśli chcesz je mieć razem (zobacz README Compatibility)',
     'ui.top_projects' => 'Najlepsze projekty',
     'ui.by_language' => 'Wg języka',
     'ui.by_tags' => 'Według tagu',

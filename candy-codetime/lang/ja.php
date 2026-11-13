@@ -75,6 +75,7 @@ return [
     'cli.unknown_command' => "candy-codetime: 不明なコマンド: {command}",
     'cli.legacy_env_deprecated' => "candy-codetime: {variable} は非推奨です。代わりに CANDY_CODETIME_DIR を設定してください。",
     'cli.migration_notice' => "candy-codetime: {notice}",
+    'cli.migration_twin_notice' => 'candy-codetime: {old} と {new} が共に存在します - 改名前の履歴はそのまま残され、統合は行われませんでした。まとめて使いたい場合は日次ファイルを手動で統合してください（README の Compatibility 参照）',
     'ui.top_projects' => '主なプロジェクト',
     'ui.by_language' => '言語別',
     'ui.by_tags' => 'タグ別',

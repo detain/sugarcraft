@@ -148,6 +148,10 @@ its old file and environment names:
   launch, each with a deprecation notice on stderr.
 - The old default data directory is migrated once on first launch — not when
   `CANDY_CODETIME_DIR` is set, because then you have chosen the destination.
+  If both the old and the new directory already exist, nothing is merged (the
+  tool never fuses two histories on its own) and every launch prints one
+  stderr notice naming both paths — merge the day files by hand if you want
+  the old records in the live tree.
 
 CLI messages and dashboard chrome follow `LC_ALL`/`LC_MESSAGES`/`LANG`
 across the 16 shipped locales. Date and weekday names (`Jun 7`, `Sat`) render

@@ -75,6 +75,7 @@ return [
     'cli.unknown_command' => "candy-codetime : commande inconnue : {command}",
     'cli.legacy_env_deprecated' => "candy-codetime : {variable} est déprécié ; définissez CANDY_CODETIME_DIR à la place.",
     'cli.migration_notice' => "candy-codetime : {notice}",
+    'cli.migration_twin_notice' => 'candy-codetime : {old} et {new} existent - l\'historique avant le renommage est resté en place, rien n\'a été fusionné ; fusionnez les fichiers journaliers à la main si vous les voulez ensemble (voir README Compatibility)',
     'ui.top_projects' => 'Top des projets',
     'ui.by_language' => 'Par langage',
     'ui.by_tags' => 'Par étiquette',

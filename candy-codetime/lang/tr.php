@@ -75,6 +75,7 @@ return [
     'cli.unknown_command' => "candy-codetime: bilinmeyen komut: {command}",
     'cli.legacy_env_deprecated' => "candy-codetime: {variable} kullanımdan kaldırıldı; yerine CANDY_CODETIME_DIR ayarlayın.",
     'cli.migration_notice' => "candy-codetime: {notice}",
+    'cli.migration_twin_notice' => 'candy-codetime: hem {old} hem de {new} var - adlandırma öncesi geçmişi yerinde kaldı, hiçbir birleştirme yapılmadı; birlikte istiyorsan günlük dosyaları elle birleştir (README Compatibility bölümüne bak)',
     'ui.top_projects' => 'En çok projeler',
     'ui.by_language' => 'Dile göre',
     'ui.by_tags' => 'Etikete göre',

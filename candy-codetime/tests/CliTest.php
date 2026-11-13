@@ -1185,6 +1185,47 @@ final class CliTest extends TestCase
         @rmdir($xdg);
     }
 
+    public function testTwinDataDirectoriesAreRefusedForMergingButNeverLeftUnannounced(): void
+    {
+        // CT-S55 (finding 070): migrate() refusing to fuse two histories is
+        // the right law; the silence was the failure. Both trees planted ->
+        // every launch names both paths on stderr and reads only the new one.
+        $xdg = $this->dataDir . '-twin';
+        mkdir($xdg . '/sugar-tick', 0755, true);
+        mkdir($xdg . '/candy-codetime', 0755, true);
+        $day = date('Y-m-d', time() - 86400);
+        $row = static fn (string $project, string $file): string => json_encode([
+            'time' => strtotime($day . ' 10:00:00'),
+            'project' => $project,
+            'language' => 'php',
+            'file' => $file,
+            'duration' => 60,
+            'tags' => [],
+        ], JSON_THROW_ON_ERROR) . "\n";
+        file_put_contents($xdg . '/sugar-tick/' . $day . '.jsonl', $row('orphaned-old', '/srv/tick/old.php'));
+        file_put_contents($xdg . '/candy-codetime/' . $day . '.jsonl', $row('live-new', '/srv/tick/new.php'));
+
+        $env = ['CANDY_CODETIME_DIR' => null, 'XDG_DATA_HOME' => $xdg];
+        $res = $this->runCli(['export', 'json', '3'], null, $env);
+
+        self::assertSame(0, $res['exit'], $res['stderr']);
+        self::assertStringContainsString($xdg . '/sugar-tick', $res['stderr']);
+        self::assertStringContainsString($xdg . '/candy-codetime', $res['stderr']);
+        self::assertStringContainsString('live-new', $res['stdout']);
+        self::assertStringNotContainsString('orphaned-old', $res['stdout']);
+
+        // Nothing was moved or merged: the orphan keeps its own file.
+        self::assertFileExists($xdg . '/sugar-tick/' . $day . '.jsonl');
+
+        foreach ([$xdg . '/sugar-tick', $xdg . '/candy-codetime'] as $dir) {
+            foreach (glob($dir . '/*') ?: [] as $f) {
+                unlink($f);
+            }
+            @rmdir($dir);
+        }
+        @rmdir($xdg);
+    }
+
     public function testExportOfPoisonedLegacyDatabaseIsALineErrorNeverAFatal(): void
     {
         if (!extension_loaded('sqlite3')) {

@@ -75,6 +75,7 @@ return [
     'cli.unknown_command' => "candy-codetime: أمر غير معروف: {command}",
     'cli.legacy_env_deprecated' => "candy-codetime: المتغير {variable} مهمل؛ استخدم CANDY_CODETIME_DIR بدلاً منه.",
     'cli.migration_notice' => "candy-codetime: {notice}",
+    'cli.migration_twin_notice' => 'candy-codetime: كل من {old} و{new} موجود - تاريخ ما قبل الاسم بقي مكانه ولم يُدمج شيء؛ ادمج ملفات الأيام يدويًا إن أردت جمعها (انظر README Compatibility)',
     'ui.top_projects' => 'أبرز المشاريع',
     'ui.by_language' => 'حسب اللغة',
     'ui.by_tags' => 'حسب الوسم',

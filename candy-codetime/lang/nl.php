@@ -75,6 +75,7 @@ return [
     'cli.unknown_command' => "candy-codetime: onbekend commando: {command}",
     'cli.legacy_env_deprecated' => "candy-codetime: {variable} is verouderd; stel CANDY_CODETIME_DIR in.",
     'cli.migration_notice' => "candy-codetime: {notice}",
+    'cli.migration_twin_notice' => 'candy-codetime: zowel {old} als {new} bestaan - de geschiedenis vóór de naamwijziging bleef liggen, er is niets samengevoegd; voeg de dagsbestanden handmatig samen als je ze samen wilt (zie README Compatibility)',
     'ui.top_projects' => 'Topprojecten',
     'ui.by_language' => 'Per taal',
     'ui.by_tags' => 'Per tag',

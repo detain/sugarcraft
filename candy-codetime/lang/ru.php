@@ -75,6 +75,7 @@ return [
     'cli.unknown_command' => "candy-codetime: неизвестная команда: {command}",
     'cli.legacy_env_deprecated' => "candy-codetime: {variable} устарело; установите вместо него CANDY_CODETIME_DIR.",
     'cli.migration_notice' => "candy-codetime: {notice}",
+    'cli.migration_twin_notice' => 'candy-codetime: существуют и {old}, и {new} - история до переименования осталась на месте, ничего не объединено; объедините дневные файлы вручную, если хотите работать вместе (см. README Compatibility)',
     'ui.top_projects' => 'Лучшие проекты',
     'ui.by_language' => 'По языку',
     'ui.by_tags' => 'По тегу',

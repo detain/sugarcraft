@@ -75,6 +75,7 @@ return [
     'cli.unknown_command' => "candy-codetime: 알 수 없는 명령: {command}",
     'cli.legacy_env_deprecated' => "candy-codetime: {variable} 은(는) 지원이 중단되었습니다. 대신 CANDY_CODETIME_DIR 을 설정하세요.",
     'cli.migration_notice' => "candy-codetime: {notice}",
+    'cli.migration_twin_notice' => 'candy-codetime: {old}과(와) {new}이(가) 모두 있습니다 - 이름 변경 이전의 기록은 제자리에 남아 있으며 병합되지 않았습니다. 함께 쓰려면 일별 파일을 수동으로 병합하세요(README Compatibility 참조)',
     'ui.top_projects' => '인기 프로젝트',
     'ui.by_language' => '언어별',
     'ui.by_tags' => '태그별',

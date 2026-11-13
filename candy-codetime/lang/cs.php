@@ -75,6 +75,7 @@ return [
     'cli.unknown_command' => "candy-codetime: neznámý příkaz: {command}",
     'cli.legacy_env_deprecated' => "candy-codetime: {variable} je zastaralé; nastavte místo toho CANDY_CODETIME_DIR.",
     'cli.migration_notice' => "candy-codetime: {notice}",
+    'cli.migration_twin_notice' => 'candy-codetime: existují {old} i {new} - historie před přejmenováním zůstala na místě, nic se nesloučilo; denní soubory sloučte ručně, pokud je chcete mít pohromadě (viz README Compatibility)',
     'ui.top_projects' => 'Nejaktivnější projekty',
     'ui.by_language' => 'Podle jazyka',
     'ui.by_tags' => 'Podle štítku',
