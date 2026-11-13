@@ -14,9 +14,9 @@ declare(strict_types=1);
 
 return [
     // Single-player renderer
-    'score_card' => '分数: %d
-行数: %d
-等级: %d',
+    'score_card' => '分数: {score}
+行数: {lines}
+等级: {level}',
     'help_card'  => '移动
 顺时针旋转
 逆时针旋转
@@ -51,7 +51,6 @@ return [
     'label.computer' => '电脑',
     'win.player'     => '你赢了!',
     'win.computer'   => '电脑赢了!',
-    'over.quit_hint' => '按 q 退出',
     'vs_keys'        => '硬降
 暂存
 暂停
@@ -59,9 +58,10 @@ return [
 退出',
     'vs.record' => '战绩: {wins} 胜, {losses} 负',
     'intro.title' => '欢迎游玩 candy-tetris',
-    'intro.goal' => '消除行 - 别堆到顶部',
+    'intro.goal' => '消除行 — 别堆到顶部',
     'intro.press' => '按 {keys} 开始',
     'intro.vs' => '对战模式: candy-tetris -v',
+    'key_or' => ' 或 ',
 
     // Launch screen
     'mode.unknown' => 'candy-tetris: 未知模式 "{flag}"',
@@ -74,4 +74,15 @@ return [
   --version  显示版本
 ',
     'cli.no_tty' => 'candy-tetris 需要交互式终端：请在 TTY 中运行（不要通过管道或重定向），并将 TERM 设为 dumb 以外的值。',
+    'launch.extras' => 'candy-tetris: 只接受一个参数，多出 {count} 个：{list}',
+    'score.save.failed' => 'candy-tetris: 无法保存成绩 ({problem})',
+    'keys.ignored' => 'candy-tetris: 忽略无法读取的按键文件 ({problem})',
+    'scores.ignored' => 'candy-tetris: 忽略无法读取的成绩文件 ({problem})',
+    'config.problem' => 'candy-tetris: {path} 中：{detail}',
+    'cli.refusal' => 'candy-tetris 需要交互式终端 (TTY)。
+无色也能玩：设置 NO_COLOR。',
+    'cli.too_small' => 'candy-tetris 需要 {size} 的终端；当前为 {actual}。
+调整窗口大小，游戏就在这里继续。',
+    'cli.too_small_vs' => 'candy-tetris VS 需要 {size} 的终端；当前为 {actual}。
+调整窗口大小，对战就在这里继续。',
 ];

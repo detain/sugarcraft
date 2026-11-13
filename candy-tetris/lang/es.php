@@ -14,9 +14,9 @@ declare(strict_types=1);
 
 return [
     // Single-player renderer
-    'score_card' => 'puntos: %d
-líneas: %d
-nivel:  %d',
+    'score_card' => 'puntos: {score}
+líneas: {lines}
+nivel:  {level}',
     'help_card'  => 'mover
 girar horario
 girar antihorario
@@ -51,7 +51,6 @@ salir',
     'label.computer' => 'ORDENADOR',
     'win.player'     => '¡GANASTE!',
     'win.computer'   => '¡GANA EL ORDENADOR!',
-    'over.quit_hint' => 'pulsa q para salir',
     'vs_keys'        => 'caída
 reserva
 pausa
@@ -59,9 +58,10 @@ reinicio
 salir',
     'vs.record' => 'balance: {wins} ganadas, {losses} perdidas',
     'intro.title' => 'bienvenido a candy-tetris',
-    'intro.goal' => 'elimina líneas - no llegues arriba',
+    'intro.goal' => 'elimina líneas — no llegues arriba',
     'intro.press' => 'pulsa {keys} para jugar',
     'intro.vs' => 'modo versus: candy-tetris -v',
+    'key_or' => ' o ',
 
     // Launch screen
     'mode.unknown' => 'candy-tetris: modo desconocido "{flag}"',
@@ -74,4 +74,15 @@ Uso: candy-tetris [opciones]
   --version  Imprimir la versión
 ',
     'cli.no_tty' => 'candy-tetris necesita una terminal interactiva: ejecútalo desde una TTY (no una tubería ni una redirección) con TERM distinto de dumb.',
+    'launch.extras' => 'candy-tetris: solo se acepta un argumento, pero {count} de más: {list}',
+    'score.save.failed' => 'candy-tetris: no se pudieron guardar las puntuaciones ({problem})',
+    'keys.ignored' => 'candy-tetris: archivo de teclas ilegible, ignorado ({problem})',
+    'scores.ignored' => 'candy-tetris: archivo de puntuaciones ilegible, ignorado ({problem})',
+    'config.problem' => 'candy-tetris: {detail} en {path}',
+    'cli.refusal' => 'candy-tetris necesita una terminal interactiva (TTY).
+Funciona sin color: configura NO_COLOR.',
+    'cli.too_small' => 'candy-tetris necesita una terminal {size}; esta es {actual}.
+Cambia el tamaño de la ventana y la partida continúa aquí.',
+    'cli.too_small_vs' => 'candy-tetris VS necesita una terminal {size}; esta es {actual}.
+Cambia el tamaño de la ventana y la partida continúa aquí.',
 ];

@@ -27,7 +27,7 @@ final class LangTest extends TestCase
         );
         self::assertSame(
             "score:  1\nlines:  2\nlevel:  3",
-            sprintf(Lang::t('score_card'), 1, 2, 3),
+            Lang::t('score_card', ['score' => 1, 'lines' => 2, 'level' => 3]),
         );
         self::assertSame('next:', Lang::t('next_label'));
         self::assertSame('hold:', Lang::t('hold_label'));
@@ -39,7 +39,16 @@ final class LangTest extends TestCase
         self::assertSame('COMPUTER', Lang::t('label.computer'));
         self::assertSame('YOU WIN!', Lang::t('win.player'));
         self::assertSame('COMPUTER WINS!', Lang::t('win.computer'));
-        self::assertSame('press q to quit', Lang::t('over.quit_hint'));
+        // The launch/CLI diagnostic frame (candy-tetris-028/-033): named
+        // interpolation, no English 'argument%s' append left alive.
+        self::assertSame(
+            'candy-tetris: only one flag is accepted, but 2 extra: "--puzzle", "-h"',
+            Lang::t('launch.extras', ['count' => 2, 'list' => '"--puzzle", "-h"']),
+        );
+        self::assertSame(
+            'candy-tetris: could not save scores (disk full)',
+            Lang::t('score.save.failed', ['problem' => 'disk full']),
+        );
         self::assertStringEndsWith(
             "  --version    Print the version\n",
             Lang::t('help_text'),

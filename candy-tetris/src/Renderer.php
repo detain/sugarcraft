@@ -208,8 +208,7 @@ final class Renderer
      */
     private static function refusal(): string
     {
-        return "candy-tetris needs an interactive terminal (a TTY).\n"
-            . "It plays without colour: set NO_COLOR.\n";
+        return Lang::t('cli.refusal') . "\n";
     }
 
     /**
@@ -218,9 +217,10 @@ final class Renderer
      */
     private static function tooSmallNotice(int $cols, int $rows): string
     {
-        $notice = "candy-tetris needs a " . self::MIN_COLS . "x" . self::MIN_ROWS
-            . " terminal; this one is {$cols}x{$rows}.\n"
-            . "Resize the window and the game resumes right here.\n";
+        $notice = Lang::t('cli.too_small', [
+            'size' => self::MIN_COLS . 'x' . self::MIN_ROWS,
+            'actual' => $cols . 'x' . $rows,
+        ]) . "\n";
         return self::wrapPlain($notice, max(20, $cols));
     }
 
@@ -310,12 +310,11 @@ final class Renderer
         foreach ($next as $kind) {
             $previews[] = self::renderMini($kind, $plain);
         }
-        $score = sprintf(
-            Lang::t('score_card'),
-            $game->score->points,
-            $game->score->lines,
-            $game->score->level,
-        );
+        $score = Lang::t('score_card', [
+            'score' => (string) $game->score->points,
+            'lines' => (string) $game->score->lines,
+            'level' => (string) $game->score->level,
+        ]);
         // MA-13: badge the earned moments INSIDE the score card — rows are
         // added only while something is armed, so a fresh game keeps the
         // natural-height frame the goldens and ViewportTest pin.

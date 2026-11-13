@@ -14,9 +14,9 @@ declare(strict_types=1);
 
 return [
     // Single-player renderer
-    'score_card' => 'pontos: %d
-linhas: %d
-nível:  %d',
+    'score_card' => 'pontos: {score}
+linhas: {lines}
+nível:  {level}',
     'help_card'  => 'mover
 rodar horário
 rodar anti-horário
@@ -51,7 +51,6 @@ sair',
     'label.computer' => 'COMPUTADOR',
     'win.player'     => 'GANHASTE!',
     'win.computer'   => 'O COMPUTADOR GANHA!',
-    'over.quit_hint' => 'prima q para sair',
     'vs_keys'        => 'queda
 guardar
 pausa
@@ -59,9 +58,10 @@ reinício
 sair',
     'vs.record' => 'percurso: {wins} ganhos, {losses} perdidos',
     'intro.title' => 'bem-vindo ao candy-tetris',
-    'intro.goal' => 'elimina linhas - não chegues ao topo',
+    'intro.goal' => 'elimina linhas — não chegues ao topo',
     'intro.press' => 'prime {keys} para jogar',
     'intro.vs' => 'modo versus: candy-tetris -v',
+    'key_or' => ' ou ',
 
     // Launch screen
     'mode.unknown' => 'candy-tetris: modo desconhecido "{flag}"',
@@ -74,4 +74,15 @@ Uso: candy-tetris [opções]
   --version  Mostrar a versão
 ',
     'cli.no_tty' => 'O candy-tetris precisa de um terminal interativo: execute-o a partir de um TTY (não de um pipe ou redirecionamento) com TERM diferente de dumb.',
+    'launch.extras' => 'candy-tetris: apenas um argumento é aceito, mas {count} a mais: {list}',
+    'score.save.failed' => 'candy-tetris: não foi possível guardar as pontuações ({problem})',
+    'keys.ignored' => 'candy-tetris: ficheiro de teclas ilegível ignorado ({problem})',
+    'scores.ignored' => 'candy-tetris: ficheiro de pontuações ilegível ignorado ({problem})',
+    'config.problem' => 'candy-tetris: {detail} em {path}',
+    'cli.refusal' => 'candy-tetris precisa de um terminal interativo (TTY).
+Funciona sem cor: define NO_COLOR.',
+    'cli.too_small' => 'candy-tetris precisa de um terminal {size}; este tem {actual}.
+Redimensione a janela e o jogo continua aqui.',
+    'cli.too_small_vs' => 'candy-tetris VS precisa de um terminal {size}; este tem {actual}.
+Redimensione a janela e o duelo continua aqui.',
 ];

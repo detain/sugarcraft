@@ -153,8 +153,8 @@ final class VsRendererTest extends TestCase
         $vs = VsGame::start();
         $output = VsRenderer::render($vs);
 
-        // Should not show quit prompt in normal play
-        $this->assertStringNotContainsString('press q to quit', $output);
+        // Should not teach the over-screen verb during normal play
+        $this->assertStringNotContainsString('press r to restart', $output);
     }
 
     public function testRenderContainsQuitPromptWhenOver(): void
@@ -174,8 +174,9 @@ final class VsRendererTest extends TestCase
         $output = VsRenderer::render($vs);
 
         // The over banner must teach r alongside q — the versus over
-        // screen answers restart (VsGame::update); a banner stuck on
-        // quit_hint alone hid a live key.
+        // screen answers restart (VsGame::update); a banner stuck on the
+        // quit hint alone hid a live key (the dead-key era of
+        // candy-tetris-070; restart_hint is the teaching line now).
         $this->assertStringContainsString('press r to restart', $output);
     }
 

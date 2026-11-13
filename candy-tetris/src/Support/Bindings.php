@@ -49,6 +49,27 @@ final class Bindings
     ];
 
     /**
+     * Display names for the named key tokens, spelled the way the physical
+     * keycaps read them. The frame glyph map (sugar-core KeyBindings) is
+     * deliberately compact ('spc'); the on-ramp card speaks the long form
+     * so its first sentence never reads as a chord (candy-tetris-053).
+     *
+     * @var array<string, string>
+     */
+    public const KEY_NAMES = [
+        'space' => 'Space',
+        'enter' => 'Enter',
+        'escape' => 'Escape',
+        'backspace' => 'Backspace',
+        'delete' => 'Delete',
+        'tab' => 'Tab',
+        'up' => 'Up',
+        'down' => 'Down',
+        'left' => 'Left',
+        'right' => 'Right',
+    ];
+
+    /**
      * Key-column width of the hand-written help card ('← →' pads to 5).
      */
     private const KEY_COLUMN = 5;

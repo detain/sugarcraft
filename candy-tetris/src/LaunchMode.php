@@ -52,11 +52,13 @@ final class LaunchMode
             $extras = array_slice($flags, 1);
             $listed = '"' . implode('", "', array_map(strval(...), $extras)) . '"';
 
-            throw new InvalidArgumentException(sprintf(
-                'candy-tetris: unexpected argument%s %s (at most one flag is accepted)',
-                count($extras) > 1 ? 's' : '',
-                $listed,
-            ));
+            // One localized key (candy-tetris-033): the count rides a
+            // plural-safe frame in every locale, so the English-only
+            // 'argument%s' 's' append and the hardcoded sentence are gone.
+            throw new InvalidArgumentException(Lang::t('launch.extras', [
+                'count' => (string) count($extras),
+                'list' => $listed,
+            ]));
         }
 
         $flag = $flags[0];

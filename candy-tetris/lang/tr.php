@@ -14,9 +14,9 @@ declare(strict_types=1);
 
 return [
     // Single-player renderer
-    'score_card' => 'skor:  %d
-satır: %d
-seviye: %d',
+    'score_card' => 'skor:  {score}
+satır: {lines}
+seviye: {level}',
     'help_card'  => 'hareket
 saat yönünde
 ters yönde
@@ -51,7 +51,6 @@ yeniden (sonra)
     'label.computer' => 'BİLGİSAYAR',
     'win.player'     => 'KAZANDIN!',
     'win.computer'   => 'BİLGİSAYAR KAZANDI!',
-    'over.quit_hint' => 'çıkmak için q',
     'vs_keys'        => 'iniş
 bekleme
 duraklat
@@ -59,9 +58,10 @@ yeniden
 çık',
     'vs.record' => 'rekor: {wins} galibiyet, {losses} mağlubiyet',
     'intro.title' => 'candy-tetris oyununa hoş geldin',
-    'intro.goal' => 'satırları temizle - tepeye ulaşma',
+    'intro.goal' => 'satırları temizle — tepeye ulaşma',
     'intro.press' => 'oynamak için {keys} tuşuna bas',
     'intro.vs' => 'dövüş modu: candy-tetris -v',
+    'key_or' => ' veya ',
 
     // Launch screen
     'mode.unknown' => 'candy-tetris: bilinmeyen mod "{flag}"',
@@ -74,4 +74,15 @@ Kullanım: candy-tetris [seçenekler]
   --version  Sürümü yazdır
 ',
     'cli.no_tty' => 'candy-tetris etkileşimli bir terminal gerektirir: onu bir boru veya yönlendirme yerine bir TTY\'den, TERM değeri dumb dışında olacak şekilde çalıştırın.',
+    'launch.extras' => 'candy-tetris: yalnızca bir argüman kabul edilir, ama {count} fazla: {list}',
+    'score.save.failed' => 'candy-tetris: puanlar kaydedilemedi ({problem})',
+    'keys.ignored' => 'candy-tetris: okunamayan tuş dosyası yoksayılıyor ({problem})',
+    'scores.ignored' => 'candy-tetris: okunamayan puan dosyası yoksayılıyor ({problem})',
+    'config.problem' => 'candy-tetris: {path} içinde: {detail}',
+    'cli.refusal' => 'candy-tetris etkileşimli bir terminal gerektirir (TTY).
+Renksiz çalışır: NO_COLOR ayarlayın.',
+    'cli.too_small' => 'candy-tetris {size} boyutunda bir terminal ister; bu {actual}.
+Pencereyi yeniden boyutlandırın, oyun burada devam eder.',
+    'cli.too_small_vs' => 'candy-tetris VS {size} boyutunda bir terminal ister; bu {actual}.
+Pencereyi yeniden boyutlandırın, maç burada devam eder.',
 ];

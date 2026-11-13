@@ -358,7 +358,7 @@ final class VsGame implements Model
         try {
             $next->save($this->scoresPath);
         } catch (\Throwable $problem) {
-            fwrite(STDERR, 'candy-tetris: could not save scores (' . self::cliVisible($problem->getMessage()) . ")\n");
+            fwrite(STDERR, Lang::t('score.save.failed', ['problem' => self::cliVisible($problem->getMessage())]) . "\n");
         }
 
         return $this->mutate($changes);

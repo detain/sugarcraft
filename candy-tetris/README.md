@@ -80,7 +80,9 @@ falls back to English.
 bogus flag — and exits 0. Any *other* unrecognised flag is refused with a usage
 note on stderr and exit code 1. The refusal is also how a *combination* of
 recognised flags is refused: at most one mode flag is accepted, so `-v -h`
-exits 1 naming both extras rather than silently preferring one.
+exits 1 naming every flag after the first (the first is taken as the
+mode; the surplus is what the refusal lists) rather than silently
+preferring one.
 
 Needs an interactive TTY of at least 40 columns by 24 rows; colour is
 optional (the full frame is 40x32 — at squeezed heights the sidebar

@@ -15,6 +15,7 @@ use SugarCraft\Core\Msg\KeyRepeatMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Tetris\Scoring\TSpin;
+use SugarCraft\Tetris\Support\Bindings;
 use SugarCraft\Tetris\Support\Scores;
 
 /**
@@ -367,7 +368,7 @@ final class Game implements Model
         } catch (\Throwable $problem) {
             // Loud, and only loud: the session keeps its honest banner and
             // the untouched old file still holds the true record.
-            fwrite(STDERR, 'candy-tetris: could not save scores (' . self::cliVisible($problem->getMessage()) . ")\n");
+            fwrite(STDERR, Lang::t('score.save.failed', ['problem' => self::cliVisible($problem->getMessage())]) . "\n");
         }
 
         return $pair;
@@ -409,7 +410,7 @@ final class Game implements Model
                     try {
                         $next->save($closed->scoresPath);
                     } catch (\Throwable $problem) {
-                        fwrite(STDERR, 'candy-tetris: could not save scores (' . self::cliVisible($problem->getMessage()) . ")\n");
+                        fwrite(STDERR, Lang::t('score.save.failed', ['problem' => self::cliVisible($problem->getMessage())]) . "\n");
                     }
                 }
                 return [$closed, null];
@@ -432,12 +433,21 @@ final class Game implements Model
     }
 
     /**
-     * The live token labels the on-ramp card prints for the start action
-     * (m27: a remapped begin shows remapped on the card).
+     * The key names the on-ramp card prints for the start action (m27: a
+     * remapped begin shows remapped on the card). Candy-tetris-053: the
+     * frame glyph pair 'spc ent' read as one impossible chord to a new
+     * player — the card spells the keycaps ('Space or Enter') and joins
+     * them with the locale's own disjunction; a custom remap token that
+     * has no display name shows itself verbatim.
      */
     public function introBeginLabel(): string
     {
-        return $this->keys()->label('begin');
+        $names = array_map(
+            static fn(string $token): string => Bindings::KEY_NAMES[$token] ?? $token,
+            $this->keys()->tokens('begin'),
+        );
+
+        return implode(Lang::t('key_or'), $names);
     }
 
     private function stepGame(Msg $msg): array

@@ -136,7 +136,7 @@ final class BinaryLaunchTest extends TestCase
     {
         [$exit, , $stderr] = $this->runBinary(['-v', '-h']);
         self::assertSame(1, $exit);
-        self::assertStringContainsString('unexpected argument "-h"', $stderr);
+        self::assertStringContainsString('but 1 extra: "-h"', $stderr);
     }
 
     public function testNoArgumentsBootsTheSinglePlayerEngine(): void

@@ -313,7 +313,10 @@ final class CliContractTest extends TestCase
     public function testExportSurvivesLegacyInvalidUtf8Value(): void
     {
         // A pre-auto-detect entry: raw non-UTF-8 bytes stored with binary=false.
-        // One such value used to fail json_encode and poison the whole export.
+        // One such value used to fail json_encode, then (after the first fix)
+        // was silently rewritten to U+FFFD. The kv-009 law: the walk promotes
+        // it into the base64 binary envelope — export succeeds AND the exact
+        // bytes ride the document.
         $previous = \getenv('XDG_CONFIG_HOME');
         \putenv('XDG_CONFIG_HOME=' . $this->configHome);
         try {
@@ -325,8 +328,9 @@ final class CliContractTest extends TestCase
 
         $export = $this->runKv(['export', 'json']);
         $this->assertSame(0, $export['exit'], $export['stderr']);
-        $this->assertStringContainsString('legacy-raw', $export['stdout']);
-        $this->assertStringContainsString("\xef\xbf\xbd", $export['stdout'], 'invalid bytes must be substituted, not fatal');
+        $this->assertStringContainsString('"//4="', $export['stdout'], 'the exact bytes ride the base64 envelope');
+        $this->assertStringContainsString('_binary', $export['stdout']);
+        $this->assertStringNotContainsString("\xef\xbf\xbd", $export['stdout'], 'the substitution character must never appear');
     }
 
     public function testDeleteDryRunPreviewsWithoutWriting(): void

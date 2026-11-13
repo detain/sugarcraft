@@ -87,7 +87,7 @@ final class LaunchModeTest extends TestCase
     public function testASecondArgumentIsRefusedByName(): void
     {
         $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('unexpected argument "-h"');
+        $this->expectExceptionMessage('candy-tetris: only one flag is accepted, but 1 extra: "-h"');
         LaunchMode::resolve(['candy-tetris', '-v', '-h']);
     }
 
@@ -100,7 +100,7 @@ final class LaunchModeTest extends TestCase
             LaunchMode::resolve(['candy-tetris', '-v', '--puzzle', '-h']);
             self::fail('a three-flag argv must be refused');
         } catch (InvalidArgumentException $refusal) {
-            self::assertStringContainsString('unexpected arguments', $refusal->getMessage());
+            self::assertStringContainsString('but 2 extra', $refusal->getMessage());
             self::assertStringContainsString('"--puzzle"', $refusal->getMessage());
             self::assertStringContainsString('"-h"', $refusal->getMessage());
         }

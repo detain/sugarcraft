@@ -47,8 +47,8 @@ final class IntroGateTest extends TestCase
     {
         $frame = $this->intro(true)->view();
         self::assertStringContainsString('welcome to candy-tetris', $frame);
-        self::assertStringContainsString('clear lines - do not reach the top', $frame);
-        self::assertStringContainsString('press spc ent to play', $frame, 'begin defaults to space+enter');
+        self::assertStringContainsString('clear lines — do not reach the top', $frame);
+        self::assertStringContainsString('press Space or Enter to play', $frame, 'begin defaults to Space/Enter spelled like the keycaps (candy-tetris-053)');
         self::assertStringContainsString('versus mode: candy-tetris -v', $frame);
     }
 

@@ -14,9 +14,9 @@ declare(strict_types=1);
 
 return [
     // Single-player renderer
-    'score_card' => '점수: %d
-줄:   %d
-레벨: %d',
+    'score_card' => '점수: {score}
+줄:   {lines}
+레벨: {level}',
     'help_card'  => '이동
 시계 방향 회전
 반시계 방향 회전
@@ -51,7 +51,6 @@ return [
     'label.computer' => '컴퓨터',
     'win.player'     => '당신이 이겼습니다!',
     'win.computer'   => '컴퓨터가 이겼습니다!',
-    'over.quit_hint' => 'q로 종료',
     'vs_keys'        => '드롭
 홀드
 정지
@@ -59,9 +58,10 @@ return [
 종료',
     'vs.record' => '전적: {wins}승 {losses}패',
     'intro.title' => 'candy-tetris에 오신 것을 환영합니다',
-    'intro.goal' => '줄을 지우세요 - 위에 닿으면 끝',
+    'intro.goal' => '줄을 지우세요 — 위에 닿으면 끝',
     'intro.press' => '{keys} 눌러 시작',
     'intro.vs' => '대전 모드: candy-tetris -v',
+    'key_or' => ' 또는 ',
 
     // Launch screen
     'mode.unknown' => 'candy-tetris: 알 수 없는 모드 "{flag}"',
@@ -74,4 +74,15 @@ return [
   --version  버전 출력
 ',
     'cli.no_tty' => 'candy-tetris는 대화형 터미널이 필요합니다. 파이프나 리디렉션이 아닌 TTY에서, TERM을 dumb 이외의 값으로 설정해 실행하세요.',
+    'launch.extras' => 'candy-tetris: 인수 하나만 허용됩니다. 초과 {count}개: {list}',
+    'score.save.failed' => 'candy-tetris: 점수를 저장할 수 없습니다 ({problem})',
+    'keys.ignored' => 'candy-tetris: 읽을 수 없는 키 파일 무시 ({problem})',
+    'scores.ignored' => 'candy-tetris: 읽을 수 없는 점수 파일 무시 ({problem})',
+    'config.problem' => 'candy-tetris: {path}에서: {detail}',
+    'cli.refusal' => 'candy-tetris는 대화형 터미널(TTY)이 필요합니다.
+색상 없이도 실행됩니다: NO_COLOR를 설정하세요.',
+    'cli.too_small' => 'candy-tetris에는 {size} 크기의 터미널이 필요합니다. 현재: {actual}.
+창 크기를 바꾸면 여기서 게임이 다시 시작됩니다.',
+    'cli.too_small_vs' => 'candy-tetris VS에는 {size} 크기의 터미널이 필요합니다. 현재: {actual}.
+창 크기를 바꾸면 대결이 여기서 다시 시작됩니다.',
 ];

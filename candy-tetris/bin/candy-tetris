@@ -27,6 +27,8 @@ use SugarCraft\Tetris\VsGame;
         static fn (string $ext): bool => !extension_loaded($ext),
     ));
     if ($missing !== []) {
+        // Bootstrap-exempt English (candy-tetris-028): nothing can be
+        // localized from disk before the extension floor itself holds.
         fwrite(STDERR, 'candy-tetris needs the PHP extension(s): ' . implode(', ', $missing) . ".\n");
         exit(1);
     }
@@ -72,6 +74,8 @@ use SugarCraft\Tetris\VsGame;
             return;
         }
     }
+    // Bootstrap-exempt English (candy-tetris-028): the catalogue loads
+    // through composer, and composer may be the thing that is missing.
     fwrite(STDERR, "candy-tetris: cannot find composer autoload.php\n");
     exit(1);
 })();
@@ -122,7 +126,7 @@ if ($mode === LaunchMode::HELP) {
 try {
     $bindings = KeyMap::load(Paths::keys(), Bindings::table());
 } catch (Throwable $problem) {
-    fwrite(STDERR, 'candy-tetris: ignoring unreadable keys file (' . cliVisible($problem->getMessage()) . ")\n");
+    fwrite(STDERR, \SugarCraft\Tetris\Lang::t('keys.ignored', ['problem' => cliVisible($problem->getMessage())]) . "\n");
     $bindings = Bindings::table();
 }
 
@@ -136,7 +140,7 @@ if ($scoresPath !== null) {
     try {
         $scores = Scores::load($scoresPath) ?? new Scores();
     } catch (Throwable $problem) {
-        fwrite(STDERR, 'candy-tetris: ignoring unreadable scores file (' . cliVisible($problem->getMessage()) . ")\n");
+        fwrite(STDERR, \SugarCraft\Tetris\Lang::t('scores.ignored', ['problem' => cliVisible($problem->getMessage())]) . "\n");
         $scores = new Scores();
     }
 }

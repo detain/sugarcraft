@@ -91,9 +91,17 @@ final class ExportCommand
             $ttl = null;
             if ($entry->expiresAt !== null) {
                 $diff = $entry->expiresAt->getTimestamp() - (new \DateTimeImmutable())->getTimestamp();
-                if ($diff > 0) {
-                    $ttl = $diff;
+                if ($diff <= 0) {
+                    // kv-026: the row was live when the SQL gate listed it but
+                    // its life hit zero during the walk. Dumping it now would
+                    // shed the TTL envelope and reimport as a forever entry —
+                    // silent laundering in the security-relevant direction.
+                    // One liveness law on both doors: skip it loudly instead.
+                    $shown = $dbName === null ? $entry->key : $entry->key . '@' . $dbName;
+                    \fwrite($this->stderr, 'export: skipped "' . Store::sanitizeForTty($shown) . '" — its TTL expires during this export run.' . \PHP_EOL);
+                    continue;
                 }
+                $ttl = $diff;
             }
             // Exporting one named database qualifies its keys, so the dump
             // can be reimported into a store whose default database is
@@ -131,7 +139,19 @@ final class ExportCommand
             // Binary entries export their stored base64 (an ASCII-safe
             // wire form) plus a flag; raw bytes through a text format is
             // exactly what used to break JSON export.
-            $entries[$key] = $entry->binary ? $entry->value : $entry->rawValue();
+            $value = $entry->binary ? $entry->value : $entry->rawValue();
+            if (!$entry->binary && !\mb_check_encoding($value, 'UTF-8')) {
+                // kv-009: a --text-forced row may hold bytes no text format
+                // carries losslessly — json_encode substituted them with
+                // U+FFFD, so the export quietly MUTATED stored bytes and the
+                // "value-preserving" README law was false on the JSON leg.
+                // Promotion into the binary envelope (base64 + flag) keeps
+                // the bytes intact; the reimported row carries the binary
+                // flag its payload has earned.
+                $value = \base64_encode($value);
+                $binaryKeys[] = $key;
+            }
+            $entries[$key] = $value;
             if ($entry->binary) {
                 $binaryKeys[] = $key;
             }
@@ -170,10 +190,11 @@ final class ExportCommand
             return '{}' . \PHP_EOL;
         }
 
-        // Binary values survive export: JSON_INVALID_UTF8_SUBSTITUTE replaces the
-        // lone surrogates/invalid sequences a byte-blob carries with U+FFFD instead
-        // of failing the whole encode (one binary value used to poison the store dump).
-        $flags = \JSON_PRETTY_PRINT | \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE;
+        // No INVALID_UTF8_SUBSTITUTE here (kv-009): the walk promotes every
+        // non-UTF-8 value into the base64 binary envelope, so anything still
+        // carrying invalid bytes is a key or an unforeseen field — and there
+        // a failed encode that throws LOUD beats a silent U+FFFD rewrite.
+        $flags = \JSON_PRETTY_PRINT | \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE;
         $json = \json_encode($entries, $flags, 512);
         if ($json === false) {
             throw new \RuntimeException('Failed to encode JSON: ' . \json_last_error_msg());

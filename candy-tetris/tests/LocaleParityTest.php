@@ -75,9 +75,14 @@ final class LocaleParityTest extends TestCase
     }
 
     /**
-     * The sprintf-shaped keys (score card, combo counter) are consumed by
-     * sprintf(), so a lost or gained %d is a fatal or a silent truncation —
-     * never a translation choice.
+     * The sprintf-shaped keys are consumed by sprintf(), so a lost or
+     * gained %d is a fatal or a silent truncation — never a translation
+     * choice. And since candy-tetris-030: MULTI-positional values are
+     * forbidden outright — a three-%d frame key lets a locale reorder its
+     * labels while the call site still feeds the args positionally,
+     * printing the score under "lines" with every structural leg green.
+     * Frame copy that takes more than one value uses named {tokens}; only
+     * the single-value combo counter may stay sprintf-shaped.
      */
     #[DataProvider('localeFiles')]
     public function testEveryLocaleCarriesTheEnglishSprintfShape(string $code, string $path): void
@@ -90,6 +95,51 @@ final class LocaleParityTest extends TestCase
                 substr_count((string) $locale[$key], '%d'),
                 "locale '$code' key '$key' must keep the %d argument count",
             );
+            $this->assertLessThanOrEqual(
+                1,
+                substr_count((string) $locale[$key], '%d'),
+                "locale '$code' key '$key' uses more than one positional %d — the reorder trap (candy-tetris-030); migrate to named {tokens}",
+            );
+        }
+    }
+
+    /**
+     * Punctuation/diacritics arms (candy-tetris-029/-088/-089): the shape
+     * of these checks is a pin per documented defect class, not a
+     * language model —
+     * - Italian 'modalita' is a typo of 'modalità' in every seat;
+     * - Russian clauses with чтобы carry a comma before the conjunction;
+     * - the versus win lines are banner-register: any Latin letters a
+     *   locale uses there must be capitals (every other locale's win line
+     *   shouts; a lowercase one reads as body copy).
+     */
+    #[DataProvider('localeFiles')]
+    public function testLocalePunctuationStaysInRegister(string $code, string $path): void
+    {
+        $locale = require $path;
+        foreach ($locale as $key => $value) {
+            $this->assertStringNotContainsString(
+                'modalita',
+                (string) $value,
+                "locale '$code' key '$key': unaccented Italian 'modalita' (candy-tetris-029)",
+            );
+            if ($code === 'ru') {
+                $this->assertSame(
+                    0,
+                    preg_match('/нажмите [^\s,]+ чтобы/u', (string) $value),
+                    "locale '$code' key '$key': missing comma before чтобы (candy-tetris-088)",
+                );
+            }
+            if (str_starts_with((string) $key, 'win.') && preg_match('/[a-zA-Z]/', (string) $value) === 1) {
+                $this->assertSame(
+                    mb_strtoupper((string) $value),
+                    $value,
+                    "locale '$code' key '$key': Latin win text must sit in the all-caps banner register (candy-tetris-089)",
+                );
+            }
+        }
+        if ($code === 'it') {
+            $this->assertStringContainsString('modalità', (string) $locale['intro.vs'], "it.php intro.vs must keep the grave accent (candy-tetris-029)");
         }
     }
 
@@ -138,9 +188,13 @@ final class LocaleParityTest extends TestCase
             'hold_used', 'combo_line', 'b2b_line',
             'over.best', 'over.new_best',
             'label.player', 'label.computer', 'win.player', 'win.computer',
-            'over.quit_hint', 'vs_keys', 'vs.record',
-            'intro.title', 'intro.goal', 'intro.press', 'intro.vs',
+            'vs_keys', 'vs.record',
+            'intro.title', 'intro.goal', 'intro.press', 'intro.vs', 'key_or',
             'mode.unknown', 'help_text',
+            // Launch/CLI diagnostic frame (candy-tetris-028): the first
+            // text a user reads is catalogue-owned, not inline English.
+            'launch.extras', 'score.save.failed', 'keys.ignored', 'scores.ignored',
+            'config.problem', 'cli.refusal', 'cli.too_small', 'cli.too_small_vs',
         ] as $key) {
             $this->assertArrayHasKey($key, $en, "en.php must own '$key' — visible strings never live inline");
         }

@@ -148,8 +148,8 @@ final class BindingsDerivationTest extends TestCase
         );
         $frame = $game->view();
 
-        self::assertStringContainsString('press ent to play', $frame, 'the card names the remapped begin key');
-        self::assertStringNotContainsString('press spc ent to play', $frame, 'the two-token default label must be gone');
+        self::assertStringContainsString('press Enter to play', $frame, 'the card names the remapped begin key (spelled like the keycap since candy-tetris-053)');
+        self::assertStringNotContainsString('press Space or Enter to play', $frame, 'the two-token default label must be gone');
 
         [$held] = $game->update(new KeyMsg(KeyType::Space, ' '));
         self::assertTrue($held->introPending, 'the shipped begin token is inert behind the card');

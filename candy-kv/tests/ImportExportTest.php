@@ -847,4 +847,57 @@ final class ImportExportTest extends TestCase
             self::assertStringContainsString('entry "k"', $e->getMessage());
         }
     }
+
+    private function exporter(): \SugarCraft\Kv\Cli\ExportCommand
+    {
+        return new \SugarCraft\Kv\Cli\ExportCommand($this->store);
+    }
+
+    public function testInvalidUtfTextRowsExportUnmangledThroughTheBinaryEnvelope(): void
+    {
+        // kv-009: a --text-forced row holding non-UTF-8 bytes once rode
+        // json_encode's INVALID_UTF8_SUBSTITUTE and came back as U+FFFD —
+        // the export mutated stored bytes while claiming value preservation.
+        $this->store->set('bad', "\xff\xfe", false);
+        $out = $this->exporter()->exportToString('json');
+        $this->assertStringNotContainsString("\xEF\xBF\xBD", $out, 'the substitution character must never reach the dump');
+        $decoded = \json_decode($out, true);
+        $this->assertSame(\base64_encode("\xff\xfe"), $decoded['bad']);
+        $this->assertContains('bad', $decoded['_binary'], 'the promoted row must announce its envelope');
+
+        $freshStore = new Store($this->tmpDir . '/json-restore', 'main');
+        (new JsonImporter($freshStore))->importFromString($out, false);
+        $this->assertSame("\xff\xfe", $freshStore->entry('bad')->rawValue());
+        $this->assertTrue($freshStore->entry('bad')->binary, 'bytes that need the envelope reimport with the flag');
+
+        $yamlOut = $this->exporter()->exportToString('yaml');
+        $yamlStore = new Store($this->tmpDir . '/yaml-restore', 'main');
+        (new YamlImporter($yamlStore))->importFromString($yamlOut, false);
+        $this->assertSame("\xff\xfe", $yamlStore->entry('bad')->rawValue());
+    }
+
+    public function testARowDyingDuringTheExportWalkIsSkippedLoudlyNotDumpedForever(): void
+    {
+        // kv-026, gate G4 default (skip, never launder): a row still listed
+        // by the integer-second SQL gate whose life reaches zero inside the
+        // walk must NOT be written as a TTL-less forever entry.
+        $this->store->setWithTtl('edge', 'v', 2);
+        $expiry = $this->store->entry('edge')->expiresAt->getTimestamp();
+        while (\time() < $expiry) {
+            \usleep(2_000);
+        }
+        $err = \fopen('php://memory', 'r+');
+        $exporter = new \SugarCraft\Kv\Cli\ExportCommand($this->store, \STDOUT, $err);
+        $out = $exporter->exportToString('json');
+        \rewind($err);
+        $note = (string) \stream_get_contents($err);
+        \fclose($err);
+
+        $this->assertStringContainsString('edge', $note, 'the skip must be announced on stderr');
+        $decoded = \json_decode($out, true);
+        $this->assertArrayNotHasKey('edge', $decoded, 'a dying row may never be written as a forever entry');
+        // A row without expiry metadata is also never laundered: assert the
+        // document simply does not carry a naked TTL-less copy of it.
+        $this->assertArrayNotHasKey('_ttl', $decoded ?? []);
+    }
 }

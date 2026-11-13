@@ -14,9 +14,9 @@ declare(strict_types=1);
 
 return [
     // Single-player renderer
-    'score_card' => 'score:  %d
-lijnen: %d
-niveau: %d',
+    'score_card' => 'score:  {score}
+lijnen: {lines}
+niveau: {level}',
     'help_card'  => 'verplaats
 met klok mee
 tegen klok in
@@ -51,7 +51,6 @@ afsluiten',
     'label.computer' => 'COMPUTER',
     'win.player'     => 'JIJ WINT!',
     'win.computer'   => 'COMPUTER WINT!',
-    'over.quit_hint' => 'druk q om af te sluiten',
     'vs_keys'        => 'laten
 opslag
 pauze
@@ -59,9 +58,10 @@ opnieuw
 afsluiten',
     'vs.record' => 'balans: {wins} gewonnen, {losses} verloren',
     'intro.title' => 'welkom bij candy-tetris',
-    'intro.goal' => 'verwijder regels - bereik de top niet',
+    'intro.goal' => 'verwijder regels — bereik de top niet',
     'intro.press' => 'druk op {keys} om te spelen',
     'intro.vs' => 'versusmodus: candy-tetris -v',
+    'key_or' => ' of ',
 
     // Launch screen
     'mode.unknown' => 'candy-tetris: onbekende modus "{flag}"',
@@ -74,4 +74,15 @@ Gebruik: candy-tetris [opties]
   --version  Toon de versie
 ',
     'cli.no_tty' => 'candy-tetris heeft een interactieve terminal nodig: start het vanuit een TTY (geen pipe of omleiding) met een TERM anders dan dumb.',
+    'launch.extras' => 'candy-tetris: slechts één argument toegestaan, maar {count} te veel: {list}',
+    'score.save.failed' => 'candy-tetris: kon scores niet opslaan ({problem})',
+    'keys.ignored' => 'candy-tetris: niet-leesbaar toetsenbestand genegeerd ({problem})',
+    'scores.ignored' => 'candy-tetris: niet-leesbaar scorebestand genegeerd ({problem})',
+    'config.problem' => 'candy-tetris: {detail} in {path}',
+    'cli.refusal' => 'candy-tetris heeft een interactieve terminal nodig (een TTY).
+Speelt zonder kleur: stel NO_COLOR in.',
+    'cli.too_small' => 'candy-tetris heeft een {size}-terminal nodig; deze is {actual}.
+Verander het vensterformaat en het spel gaat hier verder.',
+    'cli.too_small_vs' => 'candy-tetris VS heeft een {size}-terminal nodig; deze is {actual}.
+Verander het vensterformaat en de wedstrijd gaat hier verder.',
 ];

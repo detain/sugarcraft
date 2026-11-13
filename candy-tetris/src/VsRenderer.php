@@ -163,15 +163,15 @@ final class VsRenderer
      */
     private static function refusal(): string
     {
-        return "candy-tetris needs an interactive terminal (a TTY).\n"
-            . "It plays without colour: set NO_COLOR.\n";
+        return Lang::t('cli.refusal') . "\n";
     }
 
     private static function tooSmallNotice(int $cols, int $rows): string
     {
-        $notice = "candy-tetris VS needs a " . self::MIN_COLS . "x" . self::MIN_ROWS
-            . " terminal; this one is {$cols}x{$rows}.\n"
-            . "Resize the window and the match resumes right here.\n";
+        $notice = Lang::t('cli.too_small_vs', [
+            'size' => self::MIN_COLS . 'x' . self::MIN_ROWS,
+            'actual' => $cols . 'x' . $rows,
+        ]) . "\n";
         $width = max(20, $cols);
         $out = [];
         foreach (explode("\n", $notice) as $paragraph) {

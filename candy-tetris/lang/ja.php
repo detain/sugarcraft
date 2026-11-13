@@ -14,9 +14,9 @@ declare(strict_types=1);
 
 return [
     // Single-player renderer
-    'score_card' => 'スコア: %d
-ライン: %d
-レベル: %d',
+    'score_card' => 'スコア: {score}
+ライン: {lines}
+レベル: {level}',
     'help_card'  => '移動
 右回転
 左回転
@@ -51,7 +51,6 @@ return [
     'label.computer' => 'コンピューター',
     'win.player'     => 'あなたの勝ち!',
     'win.computer'   => 'コンピューターの勝ち!',
-    'over.quit_hint' => 'q で終了',
     'vs_keys'        => '落とす
 ホールド
 停止
@@ -59,9 +58,10 @@ return [
 終了',
     'vs.record' => '通算: {wins}勝 {losses}敗',
     'intro.title' => 'candy-tetris へようこそ',
-    'intro.goal' => '行を消す - 上まで積んだら終わり',
+    'intro.goal' => '行を消す — 上まで積んだら終わり',
     'intro.press' => '{keys} で開始',
     'intro.vs' => '対戦モード: candy-tetris -v',
+    'key_or' => ' または ',
 
     // Launch screen
     'mode.unknown' => 'candy-tetris: 不明なモード "{flag}"',
@@ -74,4 +74,15 @@ return [
   --version  バージョンを表示
 ',
     'cli.no_tty' => 'candy-tetris には対話型ターミナルが必要です。パイプやリダイレクトではなく TTY から、TERM を dumb 以外にして起動してください。',
+    'launch.extras' => 'candy-tetris: 引数は1つまでです。超過 {count} 個: {list}',
+    'score.save.failed' => 'candy-tetris: スコアを保存できませんでした ({problem})',
+    'keys.ignored' => 'candy-tetris: 読み込めないキーファイルを無視しました ({problem})',
+    'scores.ignored' => 'candy-tetris: 読み込めないスコアファイルを無視しました ({problem})',
+    'config.problem' => 'candy-tetris: {path} — {detail}',
+    'cli.refusal' => 'candy-tetris は対話型端末 (TTY) が必要です。
+色なしでもプレイできます: NO_COLOR を設定。',
+    'cli.too_small' => 'candy-tetris には {size} の端末が必要です。現在は {actual} です。
+ウィンドウサイズを変更するとここから再開します。',
+    'cli.too_small_vs' => 'candy-tetris VS には {size} の端末が必要です。現在は {actual} です。
+ウィンドウサイズを変更すると対戦をここから再開します。',
 ];

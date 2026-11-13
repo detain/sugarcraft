@@ -186,7 +186,11 @@ final class ScoresRecordingTest extends TestCase
         $bin = (string) file_get_contents(__DIR__ . '/../../bin/candy-tetris');
         self::assertStringContainsString('Paths::scores()', $bin);
         self::assertStringContainsString('Scores::load($scoresPath)', $bin);
-        self::assertStringContainsString('ignoring unreadable scores file', $bin);
+        // The announcement is catalogue-owned since candy-tetris-028: the
+        // launcher wires the key, the phrase lives in the source of truth.
+        self::assertStringContainsString("Lang::t('scores.ignored'", $bin);
+        $en = (string) file_get_contents(__DIR__ . '/../../lang/en.php');
+        self::assertStringContainsString('ignoring unreadable scores file', $en);
     }
 
     /**

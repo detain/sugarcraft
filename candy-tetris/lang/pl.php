@@ -14,9 +14,9 @@ declare(strict_types=1);
 
 return [
     // Single-player renderer
-    'score_card' => 'wynik: %d
-linie: %d
-poziom: %d',
+    'score_card' => 'wynik: {score}
+linie: {lines}
+poziom: {level}',
     'help_card'  => 'ruch
 obrót w prawo
 obrót w lewo
@@ -26,7 +26,7 @@ bufor
 pauza
 restart (po)
 wyjście',
-    'next_label' => 'następny:',
+    'next_label' => 'następna:',
     'hold_label' => 'bufor:',
     'paused'     => '[ pauza — naciśnij p aby wznowić ]',
 
@@ -51,7 +51,6 @@ wyjście',
     'label.computer' => 'KOMPUTER',
     'win.player'     => 'WYGRAŁEŚ!',
     'win.computer'   => 'KOMPUTER WYGRAŁ!',
-    'over.quit_hint' => 'naciśnij q aby wyjść',
     'vs_keys'        => 'zjazd
 bufor
 pauza
@@ -59,9 +58,10 @@ restart
 wyjście',
     'vs.record' => 'bilans: {wins} wygrane, {losses} przegrane',
     'intro.title' => 'witamy w candy-tetris',
-    'intro.goal' => 'usuwaj linie - nie dotknij góry',
+    'intro.goal' => 'usuwaj linie — nie dotknij góry',
     'intro.press' => 'naciśnij {keys} aby grać',
     'intro.vs' => 'tryb versus: candy-tetris -v',
+    'key_or' => ' lub ',
 
     // Launch screen
     'mode.unknown' => 'candy-tetris: nieznany tryb "{flag}"',
@@ -74,4 +74,15 @@ Użycie: candy-tetris [opcje]
   --version  Wypisz wersję
 ',
     'cli.no_tty' => 'candy-tetris wymaga interaktywnego terminala: uruchom go z TTY (nie przez potok ani przekierowanie), z TERM innym niż dumb.',
+    'launch.extras' => 'candy-tetris: akceptowany jest tylko jeden argument, ale o {count} za dużo: {list}',
+    'score.save.failed' => 'candy-tetris: nie udało się zapisać wyników ({problem})',
+    'keys.ignored' => 'candy-tetris: pomijam nieczytelny plik klawiszy ({problem})',
+    'scores.ignored' => 'candy-tetris: pomijam nieczytelny plik wyników ({problem})',
+    'config.problem' => 'candy-tetris: {detail} w {path}',
+    'cli.refusal' => 'candy-tetris wymaga terminala interaktywnego (TTY).
+Działa bez koloru: ustaw NO_COLOR.',
+    'cli.too_small' => 'candy-tetris wymaga terminala {size}; ten ma {actual}.
+Zmień rozmiar okna, gra wznowi się tutaj.',
+    'cli.too_small_vs' => 'candy-tetris VS wymaga terminala {size}; ten ma {actual}.
+Zmień rozmiar okna, pojedynek wznowi się tutaj.',
 ];

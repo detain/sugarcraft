@@ -14,9 +14,9 @@ declare(strict_types=1);
 
 return [
     // Single-player renderer
-    'score_card' => 'Punkte: %d
-Zeilen: %d
-Level:  %d',
+    'score_card' => 'Punkte: {score}
+Zeilen: {lines}
+Level:  {level}',
     'help_card'  => 'bewegen
 im Uhrzeigersinn
 gegen den Uhrz.
@@ -51,7 +51,6 @@ beenden',
     'label.computer' => 'COMPUTER',
     'win.player'     => 'DU GEWINNST!',
     'win.computer'   => 'COMPUTER GEWINNT!',
-    'over.quit_hint' => 'q zum Beenden',
     'vs_keys'        => 'fallen
 Lager
 Pause
@@ -59,9 +58,10 @@ Neustart
 beenden',
     'vs.record' => 'Bilanz: {wins} gewonnen, {losses} verloren',
     'intro.title' => 'willkommen bei candy-tetris',
-    'intro.goal' => 'Linien löschen - nicht oben ankommen',
+    'intro.goal' => 'Linien löschen — nicht oben ankommen',
     'intro.press' => 'drücke {keys} zum Spielen',
     'intro.vs' => 'Versus-Modus: candy-tetris -v',
+    'key_or' => ' oder ',
 
     // Launch screen
     'mode.unknown' => 'candy-tetris: unbekannter Modus "{flag}"',
@@ -74,4 +74,15 @@ Aufruf: candy-tetris [Optionen]
   --version  Version ausgeben
 ',
     'cli.no_tty' => 'candy-tetris braucht ein interaktives Terminal: Starte es in einem TTY (nicht über eine Pipe oder Umleitung) mit einem TERM ungleich dumb.',
+    'launch.extras' => 'candy-tetris: nur ein Argument erlaubt, aber {count} zu viel: {list}',
+    'score.save.failed' => 'candy-tetris: Punkte konnten nicht gespeichert werden ({problem})',
+    'keys.ignored' => 'candy-tetris: nicht lesbare Tastaturdatei ignoriert ({problem})',
+    'scores.ignored' => 'candy-tetris: nicht lesbare Punktedatei ignoriert ({problem})',
+    'config.problem' => 'candy-tetris: {detail} in {path}',
+    'cli.refusal' => 'candy-tetris braucht ein interaktives Terminal (ein TTY).
+Es spielt ohne Farbe: NO_COLOR setzen.',
+    'cli.too_small' => 'candy-tetris benötigt ein {size}-Terminal; dieses hier ist {actual}.
+Ändere die Fenstergröße, das Spiel setzt genau hier fort.',
+    'cli.too_small_vs' => 'candy-tetris VS benötigt ein {size}-Terminal; dieses hier ist {actual}.
+Ändere die Fenstergröße, die Partie setzt genau hier fort.',
 ];

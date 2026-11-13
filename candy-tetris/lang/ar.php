@@ -14,9 +14,9 @@ declare(strict_types=1);
 
 return [
     // Single-player renderer
-    'score_card' => 'النقاط: %d
-الأسطر: %d
-المستوى: %d',
+    'score_card' => 'النقاط: {score}
+الأسطر: {lines}
+المستوى: {level}',
     'help_card'  => 'تحريك
 تدوير مع العقارب
 تدوير عكس العقارب
@@ -51,7 +51,6 @@ return [
     'label.computer' => 'الحاسوب',
     'win.player'     => 'لقد فزت!',
     'win.computer'   => 'فاز الحاسوب!',
-    'over.quit_hint' => 'اضغط q للخروج',
     'vs_keys'        => 'إنزال
 تخزين
 إيقاف
@@ -59,9 +58,10 @@ return [
 خروج',
     'vs.record' => 'السجل: {wins} فوز، {losses} خسارة',
     'intro.title' => 'مرحبًا بك في candy-tetris',
-    'intro.goal' => 'امسح الأسطر - لا تصل إلى القمة',
+    'intro.goal' => 'امسح الأسطر — لا تصل إلى القمة',
     'intro.press' => 'اضغط {keys} للعب',
     'intro.vs' => 'وضع المبارزة: candy-tetris -v',
+    'key_or' => ' أو ',
 
     // Launch screen
     'mode.unknown' => 'candy-tetris: وضع غير معروف "{flag}"',
@@ -74,4 +74,15 @@ return [
   --version  طباعة الإصدار
 ',
     'cli.no_tty' => 'يحتاج candy-tetris إلى طرفية تفاعلية: شغّله من TTY (وليس من أنبوب أو إعادة توجيه) مع ضبط TERM على قيمة غير dumb.',
+    'launch.extras' => 'candy-tetris: يُقبل وسيط واحد فقط، لكن هناك {count} زائد: {list}',
+    'score.save.failed' => 'candy-tetris: تعذر حفظ النتائج ({problem})',
+    'keys.ignored' => 'candy-tetris: تجاهل ملف المفاتيح غير المقروء ({problem})',
+    'scores.ignored' => 'candy-tetris: تجاهل ملف النتائج غير المقروء ({problem})',
+    'config.problem' => 'candy-tetris: {detail} في {path}',
+    'cli.refusal' => 'candy-tetris يحتاج طرفية تفاعلية (TTY).
+يعمل بلا ألوان: اضبط NO_COLOR.',
+    'cli.too_small' => 'candy-tetris يتطلب طرفية بمقاس {size}؛ الحالية {actual}.
+غيّر حجم النافذة وستستأنف اللعبة من هنا.',
+    'cli.too_small_vs' => 'candy-tetris VS يتطلب طرفية بمقاس {size}؛ الحالية {actual}.
+غيّر حجم النافذة وستستأنف المواجهة من هنا.',
 ];

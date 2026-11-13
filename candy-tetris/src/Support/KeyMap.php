@@ -23,6 +23,7 @@ namespace SugarCraft\Tetris\Support;
 
 use SugarCraft\Core\Keys\KeyBindings;
 use SugarCraft\Core\Util\AtomicJsonFile;
+use SugarCraft\Tetris\Lang;
 
 final class KeyMap
 {
@@ -99,6 +100,9 @@ final class KeyMap
 
     private static function problem(string $path, string $detail): string
     {
-        return 'candy-tetris: ' . $detail . ' in ' . $path;
+        // The frame localizes (candy-tetris-028); the detail stays the
+        // code's own diagnostic vocabulary — it names a structural fact
+        // about the file, translatable later with the strings themselves.
+        return Lang::t('config.problem', ['detail' => $detail, 'path' => $path]);
     }
 }

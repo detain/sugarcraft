@@ -14,9 +14,9 @@ declare(strict_types=1);
 
 return [
     // Single-player renderer
-    'score_card' => 'skóre:  %d
-řádky:  %d
-úroveň: %d',
+    'score_card' => 'skóre:  {score}
+řádky:  {lines}
+úroveň: {level}',
     'help_card'  => 'posun
 otočit ve směru
 otočit proti směru
@@ -49,9 +49,8 @@ konec',
     // Versus renderer
     'label.player'   => 'HRÁČ',
     'label.computer' => 'POČÍTAČ',
-    'win.player'     => 'Vyhrál jsi!',
-    'win.computer'   => 'Počítač vyhrál!',
-    'over.quit_hint' => 'q pro konec',
+    'win.player'     => 'VYHRÁL JSI!',
+    'win.computer'   => 'POČÍTAČ VYHRÁL!',
     'vs_keys'        => 'pád
 hold
 pauza
@@ -59,9 +58,10 @@ restart
 konec',
     'vs.record' => 'zápas: {wins} vyhráno, {losses} prohráno',
     'intro.title' => 'vítejte v candy-tetris',
-    'intro.goal' => 'maž řádky - nedosáhni na vrchol',
+    'intro.goal' => 'maž řádky — nedosáhni na vrchol',
     'intro.press' => 'pro hraní stiskni {keys}',
     'intro.vs' => 'režim proti sobě: candy-tetris -v',
+    'key_or' => ' nebo ',
 
     // Launch screen
     'mode.unknown' => 'candy-tetris: neznámý režim "{flag}"',
@@ -74,4 +74,15 @@ Použití: candy-tetris [volby]
   --version  Vytiskne verzi
 ',
     'cli.no_tty' => 'candy-tetris potřebuje interaktivní terminál: spusťte ho z TTY (ne z roury ani přesměrování) a s TERM jiným než dumb.',
+    'launch.extras' => 'candy-tetris: je přijímán pouze jeden argument, ale o {count} navíc: {list}',
+    'score.save.failed' => 'candy-tetris: nelze uložit skóre ({problem})',
+    'keys.ignored' => 'candy-tetris: nečitelný soubor klíčů ignorován ({problem})',
+    'scores.ignored' => 'candy-tetris: nečitelný soubor skóre ignorován ({problem})',
+    'config.problem' => 'candy-tetris: {detail} v {path}',
+    'cli.refusal' => 'candy-tetris potřebuje interaktivní terminál (TTY).
+Hraje bez barev: nastavte NO_COLOR.',
+    'cli.too_small' => 'candy-tetris potřebuje terminál {size}; tento má {actual}.
+Změňte velikost okna a hra pokračuje právě tady.',
+    'cli.too_small_vs' => 'candy-tetris VS potřebuje terminál {size}; tento má {actual}.
+Změňte velikost okna a duel pokračuje právě tady.',
 ];
