@@ -25,6 +25,13 @@ use SugarCraft\Core\Util\Ansi;
  */
 final class Hyperlink implements \JsonSerializable
 {
+    /**
+     * The OSC 8 close frame (empty params, empty URI): `ESC ] 8 ; ; ST`.
+     * Single home for every close the fleet's emitters write, so the byte
+     * shape can never drift between the repaint and delta paths.
+     */
+    public const CLOSE = "\x1b]8;;\x1b\\";
+
     public function __construct(
         public readonly string $url,
         public readonly string $id = '',
@@ -52,6 +59,25 @@ final class Hyperlink implements \JsonSerializable
 
     public function url(): string  { return $this->url; }
     public function id(): string   { return $this->id; }
+
+    /**
+     * The OSC 8 open frame for this anchor, spelled per spec grammar
+     * `OSC 8 ; params ; URI ST`: `ESC ] 8 ; <params> ; <url> ESC \`.
+     *
+     * With an id the params field carries the `id=<value>` attribute
+     * (sugar-core's Ansi::hyperlinkOpen spelling); without one the params
+     * field is EMPTY — the double semicolon stays, so the URI always sits
+     * in its own field. Dropping it (`ESC ] 8 ; URI ST`) would slide the
+     * URL into params and leave the URI field absent: conforming terminals
+     * — and this fleet's own sugar-ansi-parser decoder, which reads the
+     * two-field shape as a CLOSE — then never activate the link.
+     */
+    public function toAnsi(): string
+    {
+        $params = $this->id !== '' ? ('id=' . $this->id) : '';
+
+        return "\x1b]8;{$params};{$this->url}\x1b\\";
+    }
 
     /**
      * Value equality: two hyperlinks are equal iff their url and id match.

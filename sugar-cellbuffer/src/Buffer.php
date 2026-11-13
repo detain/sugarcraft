@@ -773,7 +773,7 @@ final class Buffer implements \JsonSerializable
                 // open decision below so equal-but-unshared links never
                 // produce nested OSC 8 opens without a close).
                 if ($prevLink !== null && !Hyperlink::valuesEqual($cell->link(), $prevLink)) {
-                    $out .= "\x1b]8;;\x1b\\";
+                    $out .= Hyperlink::CLOSE;
                     $prevLink = null;
                 }
 
@@ -784,15 +784,12 @@ final class Buffer implements \JsonSerializable
                 }
 
                 // Open hyperlink when a link appears that is not already open.
-                // The id rides the spec-conformant 'id=<value>' parameter form
-                // (shared spelling with sugar-core's Ansi::hyperlinkOpen); a
-                // bare ';<id>;' token is ignored by conforming terminals and
-                // dropped by the fleet's own sugar-ansi-parser decoder.
+                // The frame's spelling — including the spec's empty-params
+                // double semicolon on the id-less form — lives once in
+                // Hyperlink::toAnsi(), shared with the delta encoder, so both
+                // wires are byte-identical by construction.
                 if ($cell->link() !== null && !Hyperlink::valuesEqual($cell->link(), $prevLink)) {
-                    $url = $cell->link()->url();
-                    $id = $cell->link()->id();
-                    $idPart = $id !== '' ? (";id=" . $id) : "";
-                    $out .= "\x1b]8" . $idPart . ";" . $url . "\x1b\\";
+                    $out .= $cell->link()->toAnsi();
                     $prevLink = $cell->link();
                 }
 
@@ -802,7 +799,7 @@ final class Buffer implements \JsonSerializable
 
         // Close any open hyperlink and reset SGR.
         if ($prevLink !== null) {
-            $out .= "\x1b]8;;\x1b\\";
+            $out .= Hyperlink::CLOSE;
         }
         if ($prevStyle !== null) {
             $out .= "\x1b[0m";

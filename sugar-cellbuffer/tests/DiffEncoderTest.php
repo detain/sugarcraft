@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\CellBuffer\Tests;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\CellBuffer\Buffer;
 use SugarCraft\CellBuffer\Cell;
 use SugarCraft\CellBuffer\Diff\DiffEncoder;
 use SugarCraft\CellBuffer\Diff\EraseRunOp;
@@ -136,7 +137,7 @@ final class DiffEncoderTest extends TestCase
         $ops = [new SetHyperlinkOp($link)];
         $bytes = $this->encoder->encode($ops);
 
-        $this->assertSame("\x1b]8;https://example.com\x1b\\\x1b]8;;\x1b\\", $bytes);
+        $this->assertSame("\x1b]8;;https://example.com\x1b\\\x1b]8;;\x1b\\", $bytes);
     }
 
     public function testEncodeSetHyperlinkOpOpenWithId(): void
@@ -166,7 +167,7 @@ final class DiffEncoderTest extends TestCase
         ];
         $bytes = $this->encoder->encode($ops);
 
-        $this->assertSame("\x1b]8;https://example.com\x1b\\\x1b]8;;\x1b\\X", $bytes);
+        $this->assertSame("\x1b]8;;https://example.com\x1b\\\x1b]8;;\x1b\\X", $bytes);
     }
 
     public function testEncodeSgrTransitionIsMinimal(): void
@@ -385,12 +386,42 @@ final class DiffEncoderTest extends TestCase
         $this->assertSame("\x1b[3;5H\x1b[1;1H", $bytes);
     }
 
-    public function testTheEmittersSpellTheHyperlinkIdentifierAsASpecParameter(): void
+    public function testTheEmittersSpellTheHyperlinkOpenThroughOneHelper(): void
     {
-        // Reverse-parity: both OSC 8 open emitters must fold the id into the
-        // spec's `id=` attribute parameter (sugar-core's Ansi::hyperlinkOpen
-        // spelling, sugar-ansi-parser's only readable form). A reverted
-        // emitter re-spells $idPart bare (';' . $id) and reddens this pin.
+        // Reverse-parity: the OSC 8 open frame is spelled in exactly one
+        // place — Hyperlink::toAnsi() — per spec grammar
+        // `OSC 8 ; params ; URI ST`. Two historical bugs redden these pins:
+        // the bare ';<id>;' token (ignored by conforming terminals) and the
+        // single-semicolon id-less slide, which lands the URL in params,
+        // leaves the URI field absent, and reads as a CLOSE to this fleet's
+        // own sugar-ansi-parser decoder.
+        $withId = Hyperlink::new('https://example.com', 'myid');
+        $noId = Hyperlink::new('https://example.com');
+
+        $this->assertSame("\x1b]8;id=myid;https://example.com\x1b\\", $withId->toAnsi());
+        $this->assertSame("\x1b]8;;https://example.com\x1b\\", $noId->toAnsi());
+
+        // Fleet parity: byte-identical to sugar-core's canonical emitter.
+        $core = \SugarCraft\Core\Util\Ansi::class;
+        $this->assertSame($core::hyperlinkOpen($withId->url(), $withId->id()), $withId->toAnsi());
+        $this->assertSame($core::hyperlinkOpen($noId->url()), $noId->toAnsi());
+
+        // Emitter agreement: repaint path (toAnsi) and delta path (encode)
+        // both ship the helper's exact bytes for either shape.
+        foreach ([$withId, $noId] as $link) {
+            $painted = Buffer::new(1, 1)
+                ->withCellAt(0, 0, Cell::new('L', null, $link))
+                ->toAnsi();
+            $delta = $this->encoder->encode([
+                new SetHyperlinkOp($link),
+                new SetCellOp([Cell::new('L', null, $link)]),
+            ]);
+            $this->assertStringContainsString($link->toAnsi(), $painted);
+            $this->assertStringStartsWith($link->toAnsi(), $delta);
+        }
+
+        // Neither emitter hand-rolls OSC 8 frames any more — the literals
+        // live only in the helper and the CLOSE const.
         foreach (
             [
                 __DIR__ . '/../src/Buffer.php',
@@ -398,15 +429,7 @@ final class DiffEncoderTest extends TestCase
             ] as $file
         ) {
             $source = (string) file_get_contents($file);
-            preg_match_all('/\$idPart\s*=.*/', $source, $matches);
-            $this->assertNotEmpty($matches[0], "no \$idPart assignment found in {$file}");
-            foreach ($matches[0] as $assignment) {
-                $this->assertStringContainsString(
-                    'id=',
-                    $assignment,
-                    "an emitter spells the OSC 8 id bare in {$file}: {$assignment}",
-                );
-            }
+            $this->assertStringNotContainsString('\x1b]8', $source, "an emitter re-spells OSC 8 bytes in {$file}");
         }
     }
 }

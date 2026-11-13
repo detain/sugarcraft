@@ -123,7 +123,7 @@ $manual = Buffer::fromGrid(2, 1, [Cell::new('中', null, null, 2), $cont]);
 
 - `Position::new(int $col, int $row): self` with `col()`/`row()`.
 - `Region::new(Position $origin, int $width, int $height): self` — promoted readonly `$origin`/`$width`/`$height` with accessors `origin()`, `width()`, `height()`, inclusive-edge `right()`/`bottom()`, and `contains(int $col, int $row): bool`. Zero-area regions no-op in `fill()`/`withRegion()`; `copy()` refuses them (its result is region-sized by contract).
-- `Hyperlink::new(string $url, string $id = '')` — rejects C0 controls, DEL and the C1 escape introducers in both fields (lone raw 0x80-0x9F bytes and their `C2 xx` spellings; valid multibyte IRI payloads pass), and semicolons in the id; on the wire the id is spelled as the spec's `id=` attribute.
+- `Hyperlink::new(string $url, string $id = '')` — rejects C0 controls, DEL and the C1 escape introducers in both fields (lone raw 0x80-0x9F bytes and their `C2 xx` spellings; valid multibyte IRI payloads pass), and semicolons in the id. On the wire the open frame is spelled once, by `Hyperlink::toAnsi()`, per the spec grammar `OSC 8 ; params ; URI ST`: the id rides the `id=` attribute, and the id-less form keeps the empty params field (double semicolon — a single-semicolon slide puts the URL in params and reads as a CLOSE on conforming decoders). The close frame is the `Hyperlink::CLOSE` constant; both `toAnsi()` and the delta encoder route through the same pair.
 - Every value object here (`Buffer`, `Cell`, `Position`, `Region`, `Style`, `Hyperlink`) implements `JsonSerializable`. `Position` deliberately admits negative coordinates (relative offsets); `Region` refuses negative dimensions at construction.
 
 ## Diffing & delta ANSI

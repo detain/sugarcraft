@@ -24,8 +24,12 @@ use SugarCraft\CellBuffer\Style;
  *                          literal bytes, a byte-arithmetic rule chafa's
  *                          canvas printer follows too)
  *   - SGR  \x1b[...m      (style transitions)
- *   - OSC 8;id=<id>;url\x1b\\  (hyperlink open, when an id is set)
- *   - OSC 8;url\x1b\\          (hyperlink open, id-less short form)
+ *   - OSC 8;id=<id>;<url>\x1b\\    (hyperlink open, id rides the params field)
+ *   - OSC 8;;<url>\x1b\\           (hyperlink open, EMPTY params field — the
+ *                          spec grammar is OSC 8 ; params ; URI, so the
+ *                          id-less form keeps both semicolons; single-field
+ *                          spellings land the URL in params and read as a
+ *                          CLOSE to conforming decoders)
  *   - OSC 8;;\x1b\\        (hyperlink close)
  *   - trailing \x1b[0m    (conditional SGR reset closing the stream when the
  *                          frame ended styled — same contract as toAnsi())
@@ -72,7 +76,7 @@ final class DiffEncoder
 
         // Close any open hyperlink + reset SGR.
         if ($this->currentLink !== null) {
-            $out .= "\x1b]8;;\x1b\\";
+            $out .= Hyperlink::CLOSE;
             $this->currentLink = null;
         }
         // The reset half of that promise is load-bearing: sugar-overlay and
@@ -140,7 +144,7 @@ final class DiffEncoder
             $cellLink = $cell->link();
             if (!Hyperlink::valuesEqual($cellLink, $this->currentLink)) {
                 if ($this->currentLink !== null) {
-                    $out .= "\x1b]8;;\x1b\\";
+                    $out .= Hyperlink::CLOSE;
                     $this->currentLink = null;
                 }
                 if ($cellLink !== null) {
@@ -223,7 +227,7 @@ final class DiffEncoder
         if ($op->hyperlink === null) {
             if ($this->currentLink !== null) {
                 $this->currentLink = null;
-                return "\x1b]8;;\x1b\\";
+                return Hyperlink::CLOSE;
             }
 
             return '';
@@ -235,18 +239,14 @@ final class DiffEncoder
     }
 
     /**
-     * OSC 8 open frame for a hyperlink (shared wire format for the cell
-     * and op paths so both emit byte-identical opens).
+     * OSC 8 open frame for a hyperlink — delegates to {@see Hyperlink::toAnsi()},
+     * the single wire-format home shared with Buffer::toAnsi() so both paths
+     * emit byte-identical opens (id as the spec's `id=` parameter, and the
+     * empty-params double semicolon on the id-less form).
      */
     private function openHyperlink(Hyperlink $link): string
     {
-        $id = $link->id();
-        // Spec-conformant 'id=<value>' parameter (sugar-core Ansi::hyperlinkOpen
-        // spelling); the old bare ';<id>;' token was silently ignored by
-        // conforming terminals and dropped by sugar-ansi-parser's decoder.
-        $idPart = $id !== '' ? (';id=' . $id) : '';
-
-        return "\x1b]8{$idPart};{$link->url()}\x1b\\";
+        return $link->toAnsi();
     }
 
     /**

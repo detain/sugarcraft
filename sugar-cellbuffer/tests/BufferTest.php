@@ -1542,9 +1542,9 @@ final class BufferTest extends TestCase
         $this->assertSame($withShared->toAnsi(), $withFresh->toAnsi());
         // Exactly ONE open frame and ONE close frame — the old identity check
         // re-opened per cell, nesting OSC 8 opens without a close between them.
-        $this->assertSame(1, substr_count($withFresh->toAnsi(), "\x1b]8;https"));
-        $this->assertSame(1, substr_count($withFresh->toAnsi(), "\x1b]8;;\x1b\\"));
-        $this->assertSame("\x1b]8;https://x.dev\x1b\\AB\x1b]8;;\x1b\\", $withFresh->toAnsi());
+        $this->assertSame(1, substr_count($withFresh->toAnsi(), "\x1b]8;;https"));
+        $this->assertSame(1, substr_count($withFresh->toAnsi(), Hyperlink::CLOSE));
+        $this->assertSame("\x1b]8;;https://x.dev\x1b\\AB" . Hyperlink::CLOSE, $withFresh->toAnsi());
     }
 
     public function testDiffBytesIndependentOfStyleInstances(): void
