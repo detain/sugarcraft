@@ -439,6 +439,36 @@ final class ProviderConnectTimeoutTest extends TestCase
         }
     }
 
+    /** S-P08: the header-wait rewrite also strips userinfo, query and fragment from the URI it names. */
+    public function testTheHeaderWaitMessageNeverLeaksUserInfoQueryOrFragment(): void
+    {
+        $server = @\stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
+        $this->assertIsResource($server, 'a local listener is the whole fixture: ' . $errstr);
+        $address = (string) \stream_socket_get_name($server, false);
+
+        try {
+            $client = self::buildSeamClient([
+                'handler' => static fn (RequestInterface $request, array $options): PromiseInterface => new \GuzzleHttp\Promise\RejectedPromise(
+                    new \GuzzleHttp\Exception\ConnectException('Connection refused for URI ' . (string) $request->getUri(), $request),
+                ),
+            ]);
+
+            try {
+                $client->request('POST', 'http://user:pw-secret@' . $address . '/v1/x?api_key=KEY-SECRET#frag-secret', ['stream' => true, 'json' => [], 'proxy' => false]);
+                $this->fail('the lying handler must still surface a rejection');
+            } catch (\GuzzleHttp\Exception\ConnectException $e) {
+                $msg = $e->getMessage();
+                $this->assertStringContainsString('Response headers did not arrive for', $msg);
+                $this->assertStringContainsString($address . '/v1/x', $msg);
+                foreach (['pw-secret', 'KEY-SECRET', 'frag-secret'] as $secret) {
+                    $this->assertStringNotContainsString($secret, $msg);
+                }
+            }
+        } finally {
+            \fclose($server);
+        }
+    }
+
     /**
      * The opt-out key is total: with it, no probe, no rewriter — the handler
      * promise is returned untouched so capture-style tests see exactly what
