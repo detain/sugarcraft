@@ -27,24 +27,33 @@ final class SemanticsPinsTest extends TestCase
 
     public function testOutOfBoundsDayRendersFaint(): void
     {
-        // D12: a day outside the configured [min,max] window is dimmed so the
-        // disabled state is visible, not just silently unselectable. Inspecting
-        // the cell grid directly (not the delta-encoded ANSI stream, whose
-        // 38;2 true-colour introducers make ';2' substring matching ambiguous)
-        // pins the buildCells() faint branch itself.
+        // D12 (dp-01): a day outside the configured [min,max] window is dimmed
+        // so the disabled state is visible, not just silently unselectable —
+        // AND the faint cue composes onto state styles, so a disabled TODAY
+        // cell carries its colour attrs and faint simultaneously: a stale or
+        // out-of-window highlight must never masquerade as selectable.
+        // Inspecting the cell grid directly (not the delta-encoded ANSI stream,
+        // whose 38;2 true-colour introducers make ';2' substring matching
+        // ambiguous) pins the buildCells() faint branch itself.
         $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
             ->withMinDate(new \DateTimeImmutable('2026-05-10'))
-            ->withToday(new \DateTimeImmutable('2026-12-31')); // keep "today" clear of May
+            ->withToday(new \DateTimeImmutable('2026-05-05')); // inside the May view, outside the bounds
 
         $cells = self::cellsOf($dp);
 
-        // May 2026 starts Friday (firstDow 5): day 5 → grid idx 9 (disabled),
-        // day 15 → grid idx 19 (in-bounds, plain).
+        // May 2026 starts Friday (firstDow 5): day 5 → grid idx 9 (disabled
+        // AND today), day 15 → grid idx 19 (in-bounds, plain).
         $this->assertNotNull($cells[9][1], 'the disabled day carries a style');
         $this->assertNotSame(
             0,
             $cells[9][1]->attrs() & Style::ATTR_FAINT,
             'a disabled day must render faint'
+        );
+        $this->assertNotNull($cells[9][1]->fg(), 'a disabled today cell keeps its today colour');
+        $this->assertNotSame(
+            0,
+            $cells[9][1]->attrs() & Style::ATTR_BOLD,
+            'a disabled today cell keeps the bold half of the today style'
         );
         $this->assertNull($cells[19][1], 'an in-bounds plain day carries no style');
     }

@@ -1185,8 +1185,14 @@ final class DatePicker
 
             // Out-of-bounds (disabled) days are dimmed so a host shows the
             // difference between an unselectable day and a selectable one.
-            if (!$this->inBounds($cellDate) && $style === null) {
-                $style = new Style(null, null, Style::ATTR_FAINT);
+            // The faint attribute COMPOSES onto whatever state style the chain
+            // chose (buffer-level attr union, not an SGR string concat): a
+            // disabled today/selected cell keeps its colour cue and still reads
+            // disabled, so no out-of-bounds day can masquerade as live.
+            if (!$this->inBounds($cellDate)) {
+                $style = $style === null
+                    ? new Style(null, null, Style::ATTR_FAINT)
+                    : new Style($style->fg(), $style->bg(), $style->attrs() | Style::ATTR_FAINT);
             }
 
             // Apply cursor as final override — compose reverse attr onto existing style

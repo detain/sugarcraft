@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\DatePicker\Tests;
 
+use SugarCraft\CellBuffer\Style;
 use SugarCraft\DatePicker\DatePicker;
 use SugarCraft\DatePicker\Navigation;
 use PHPUnit\Framework\TestCase;
@@ -838,5 +839,33 @@ final class DatePickerTest extends TestCase
         $selected = $dp->SelectDate();
         $this->assertTrue($selected->IsSelecting());
         $this->assertSame('2026-05-01', $selected->SelectedDate()?->format('Y-m-d'));
+    }
+
+    public function testOutOfBoundsSelectedDayRendersFaint(): void
+    {
+        // dp-01: a selection that falls out of the window (the bound is
+        // tightened after selecting) is never retroactively cleared — and its
+        // cell must carry faint composed onto the selected style, so the stale
+        // selection still reads disabled while keeping its colour cue.
+        $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
+            ->withToday(new \DateTimeImmutable('2026-12-31')) // keep "today" clear of May
+            ->MoveToDate(new \DateTimeImmutable('2026-05-05'))
+            ->SelectDate()
+            ->withMinDate(new \DateTimeImmutable('2026-05-10'));
+
+        $this->assertNotNull($dp->SelectedDate(), 'the selection survives the tightened bound');
+
+        $build  = new \ReflectionMethod(DatePicker::class, 'buildCells');
+        $cells  = $build->invoke($dp);
+
+        // May 2026 starts Friday (firstDow 5): day 5 → grid idx 9, selected
+        // and now out-of-bounds.
+        $this->assertNotNull($cells[9][1], 'the stale selection carries a style');
+        $this->assertNotSame(
+            0,
+            $cells[9][1]->attrs() & Style::ATTR_FAINT,
+            'a stale out-of-bounds selection renders faint'
+        );
+        $this->assertNotNull($cells[9][1]->fg(), 'the stale selection keeps its selected colour');
     }
 }

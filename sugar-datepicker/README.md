@@ -26,7 +26,8 @@ sugar-datepicker — an interactive date picker component for terminal UIs, for 
 - **Min/max date constraints** — the month view clamps to the allowed window
   and Enter silently refuses a selection outside it (the receiver comes back
   unchanged); the cursor can still rest on out-of-bounds days, which the grid
-  renders dimmed
+  renders dimmed (faint) whatever their today/selected state — the disabled
+  cue composes onto state colours rather than being masked by them
 - **Model–Update–View (TEA) integration** — a `Model` wrapper implementing the sugar-core
   `Model` contract (`init()`/`update(Msg)`/`view()`), recording picker events
   into an optional `EventStore`
@@ -141,7 +142,8 @@ $picker = $picker->withoutMaxDate();
 Bounds are compared at midnight (time-of-day is ignored). Setting a bound
 pulls the currently viewed month into the window and re-clamps the cursor.
 Selecting a date outside the window is refused (the receiver is returned
-unchanged); an existing selection is never retroactively cleared. Each setter
+unchanged); an existing selection is never retroactively cleared — it simply
+remains dimmed like any other out-of-bounds day. Each setter
 throws an `InvalidArgumentException` only when the new bound crosses the
 existing one — setting `minDate` after `maxDate` (or `maxDate` before
 `minDate`) is accepted as long as the resulting pair stays ordered.
@@ -196,6 +198,10 @@ $picker = $picker
     ->WithCursorStyle('7')
     ->WithRangeStyle('4;35');
 ```
+
+There is no dedicated disabled-day style: every out-of-bounds day always
+receives the built-in faint composition, layered onto whichever style the
+chain above chose, and none of the seven setters influence it.
 
 ## Keyboard handling
 
