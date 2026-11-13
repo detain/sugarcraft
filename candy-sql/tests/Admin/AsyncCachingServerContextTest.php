@@ -66,8 +66,8 @@ final class AsyncCachingServerContextTest extends TestCase
         // getStatusVariables()/getServerVariables() read the fixed keys the
         // admin tick stores under.
         $cache = new AdminQueryCache();
-        $cache->store('status', ['Threads_connected' => '7']);
-        $cache->store('server', ['max_connections' => '151']);
+        $cache->storeStatusSnapshot(['Threads_connected' => '7']);
+        $cache->storeServerSnapshot(['max_connections' => '151']);
 
         $ctx = new AsyncCachingServerContext($inner, cache: $cache);
 
@@ -182,7 +182,7 @@ final class AsyncCachingServerContextTest extends TestCase
         $inner = $this->createMock(ServerContextInterface::class);
         $inner->method('statusVariablesTs')->willReturn(1000.0);
         $cache = new AdminQueryCache();
-        $cache->store('status', ['Threads_connected' => '7']);
+        $cache->storeStatusSnapshot(['Threads_connected' => '7']);
 
         $ctx = new AsyncCachingServerContext($inner, cache: $cache);
         $this->assertSame(1000.0, $ctx->statusVariablesTs());
@@ -193,7 +193,7 @@ final class AsyncCachingServerContextTest extends TestCase
         // own storedAt), not the adoption instant — and that arrival post-dates
         // the inner's frozen sync stamp, which is the progress this pin is
         // about. Laundering "now" onto aged rows was MINOR-1's disease.
-        $this->assertSame($cache->storedAt('status'), $ctx->statusVariablesTs());
+        $this->assertSame($cache->statusSnapshotAt(), $ctx->statusVariablesTs());
         $this->assertGreaterThan(1000.0, $ctx->statusVariablesTs());
         $this->assertSame(['Threads_connected' => '7'], $ctx->statusVariables());
     }

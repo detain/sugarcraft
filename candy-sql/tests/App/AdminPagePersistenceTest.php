@@ -69,9 +69,9 @@ final class AdminPagePersistenceTest extends TestCase
         // does before resolving AdminDataLoadedMsg — the page's reload arm
         // adopts from that cache, not from the message payload.
         $app = $this->statusApp();
-        AdminQueryCache::instance()->store('status', $this->vars('100'));
+        AdminQueryCache::instance()->storeStatusSnapshot($this->vars('100'));
         [$app,] = $app->update(new AdminDataLoadedMsg($this->vars('100'), $this->serverVars(), 1000.0));
-        AdminQueryCache::instance()->store('status', $this->vars('117'));
+        AdminQueryCache::instance()->storeStatusSnapshot($this->vars('117'));
         [$app,] = $app->update(new AdminDataLoadedMsg($this->vars('117'), $this->serverVars(), 1001.0));
 
         $page = $app->admin->page;

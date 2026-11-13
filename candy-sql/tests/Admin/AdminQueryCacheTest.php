@@ -158,11 +158,11 @@ final class AdminQueryCacheTest extends TestCase
         // leg has dialed; the first-ever connection() must not treat that
         // warm data as belonging to a dead session.
         $cache = new AdminQueryCache();
-        $cache->store('status', [['Variable_name' => 'Uptime', 'Value' => '9']]);
+        $cache->storeStatusSnapshot(['Uptime' => '9']);
 
         $cache->connection('mysql|dsn|user', fn () => $this->spyConnection());
 
-        $this->assertNotNull($cache->lookup('status'), 'the first dial must keep pre-adopted snapshots');
+        $this->assertNotNull($cache->statusVariables(), 'the first dial must keep pre-adopted snapshots');
     }
 
     // ---------------------------------------------------------------
@@ -198,10 +198,72 @@ final class AdminQueryCacheTest extends TestCase
 
         $fromA = $cache->serverContext($dbA, static fn(): ServerContext => new ServerContext($dbA));
         $fromB = $cache->serverContext($dbB, static fn(): ServerContext => new ServerContext($dbB));
-        $backToA = $cache->serverContext($dbA, static fn(): ServerContext => new ServerContext($dbA));
 
         $this->assertNotSame($fromA, $fromB, 'a different handle must not inherit A\'s cache');
-        $this->assertNotSame($fromB, $backToA, 'returning to A must rebuild after B displaced the slot');
+    }
+
+    public function testServerContextSurvivesHandleAlternation(): void
+    {
+        // admindata-018: the old single-slot memo displaced A when B entered,
+        // so every alternation re-minted a cold context (cold TTL cache,
+        // restart-latch reset, re-armed fetch era). With the bounded handle
+        // map, A/B/A reuses A's context — one build per live handle.
+        $cache = AdminQueryCache::instance();
+        $dbA = new FakeDatabase();
+        $dbB = new FakeDatabase();
+        $buildsA = 0;
+        $buildsB = 0;
+
+        $firstA = $cache->serverContext($dbA, static function () use ($dbA, &$buildsA): ServerContext {
+            $buildsA++;
+            return new ServerContext($dbA);
+        });
+        $fromB = $cache->serverContext($dbB, static function () use ($dbB, &$buildsB): ServerContext {
+            $buildsB++;
+            return new ServerContext($dbB);
+        });
+        $backToA = $cache->serverContext($dbA, static function () use ($dbA, &$buildsA): ServerContext {
+            $buildsA++;
+            return new ServerContext($dbA);
+        });
+
+        $this->assertSame($firstA, $backToA, 'returning to a still-live handle must reuse its context');
+        $this->assertSame(1, $buildsA, 'handle A must be built exactly once across alternation');
+        $this->assertSame(1, $buildsB);
+        $this->assertNotSame($firstA, $fromB, 'A and B still never share a context');
+    }
+
+    public function testServerContextMapEvictsBeyondItsCap(): void
+    {
+        // The map is bounded (MAX_SERVER_CONTEXTS=3) and LRU: a fourth live
+        // handle retires the LEAST recently used slot, so dead-but-pinned
+        // contexts cannot pile up while hot handles stay warm.
+        $cache = AdminQueryCache::instance();
+        $handles = [new FakeDatabase(), new FakeDatabase(), new FakeDatabase(), new FakeDatabase()];
+        $builds = 0;
+        $get = static function (FakeDatabase $db) use ($cache, &$builds): ServerContext {
+            return $cache->serverContext($db, static function () use ($db, &$builds): ServerContext {
+                $builds++;
+                return new ServerContext($db);
+            });
+        };
+
+        $first0 = $get($handles[0]);
+        $first1 = $get($handles[1]);
+        $get($handles[2]);
+        $this->assertSame(3, $builds);
+
+        $this->assertSame($first0, $get($handles[0]), 'a warm handle reuses its context');
+        $this->assertSame(3, $builds, 'a memo hit must not build');
+
+        $get($handles[3]); // cap reached: evicts handles[1] (least recently used)
+        $this->assertSame(4, $builds);
+
+        $this->assertSame($first0, $get($handles[0]), 'the most recently touched slot survives the eviction');
+        $this->assertSame(4, $builds);
+
+        $this->assertNotSame($first1, $get($handles[1]), 'the evicted handle rebuilds on return');
+        $this->assertSame(5, $builds);
     }
 
     public function testServerContextMemoIsClearedByReset(): void
@@ -221,5 +283,114 @@ final class AdminQueryCacheTest extends TestCase
         $empty = AdminQueryCache::instance()->serverContext($db, static fn(): EmptyServerContext => new EmptyServerContext());
 
         $this->assertInstanceOf(EmptyServerContext::class, $empty);
+    }
+
+    // ---------------------------------------------------------------
+    // SQL-A06: typed snapshot slots, retention sweep, LRU context map
+    // ---------------------------------------------------------------
+
+    public function testStoreRejectsFlattenedMapsIntoTheRowListSpace(): void
+    {
+        // admindata-011: the shape split is enforced at the boundary, not by
+        // docblock wishful thinking — a map smuggled under a SQL-ish key is
+        // exactly how the 'status' pseudo-key contamination started.
+        $cache = new AdminQueryCache();
+
+        $this->expectException(\InvalidArgumentException::class);
+        $cache->store('status', ['Uptime' => '7']);
+    }
+
+    public function testEmptyRowsStillStoreThroughTheRowListDoor(): void
+    {
+        // The guard fires on non-empty non-lists only: an empty result is a
+        // legitimate drain success (and markError owns the failure story).
+        $cache = new AdminQueryCache();
+        $cache->store('SELECT none', []);
+
+        $this->assertSame([], $cache->lookup('SELECT none'));
+    }
+
+    public function testSnapshotSlotsRoundTripAndAgeOut(): void
+    {
+        $cache = new AdminQueryCache();
+        $this->assertNull($cache->statusVariables());
+        $this->assertNull($cache->statusSnapshotAt());
+        $this->assertNull($cache->serverSnapshotAt());
+
+        $cache->storeStatusSnapshot(['Uptime' => '9']);
+        $cache->storeServerSnapshot(['max_connections' => '151']);
+
+        $this->assertSame(['Uptime' => '9'], $cache->statusVariables());
+        $this->assertSame(['max_connections' => '151'], $cache->serverVariables());
+        $this->assertNotNull($cache->statusSnapshotAt());
+        $this->assertNotNull($cache->serverSnapshotAt());
+
+        // Age both stamps past TTL (3 s): stale slots serve null (the render
+        // path shows its loading shape) and the refresh cadence is owned by
+        // the full admin tick — the pending set must stay pure SQL text.
+        $stamp = new \ReflectionProperty(AdminQueryCache::class, 'statusSnapshotAt');
+        $stamp->setValue($cache, $stamp->getValue($cache) - 10.0);
+        $srvStamp = new \ReflectionProperty(AdminQueryCache::class, 'serverSnapshotAt');
+        $srvStamp->setValue($cache, $srvStamp->getValue($cache) - 10.0);
+
+        $this->assertNull($cache->statusVariables());
+        $this->assertNull($cache->serverVariables());
+        $this->assertSame(
+            [],
+            $cache->takePending(),
+            'snapshot staleness must not leak pseudo-keys into the pending SQL set (admindata-011)',
+        );
+    }
+
+    public function testResidencySweepRetiresStaleRowLists(): void
+    {
+        // admindata-017: TTL is 3 s, retention horizon is 8 windows = 24 s.
+        $cache = new AdminQueryCache();
+        $cache->store('SELECT fresh', [['x' => '1']]);
+        $cache->store('SELECT ancient_processlist', array_fill(0, 3, ['Id' => '1']));
+
+        $storedAt = new \ReflectionProperty(AdminQueryCache::class, 'storedAt');
+        $now = microtime(true);
+        $storedAt->setValue($cache, [
+            'SELECT fresh' => $now - 10.0,
+            'SELECT ancient_processlist' => $now - 25.0,
+        ]);
+
+        $cache->store('SELECT anything', [['x' => '1']]); // any store sweeps
+
+        $this->assertNotNull($cache->lookup('SELECT fresh'), 'inside the horizon the last-known rows still serve');
+        $this->assertNull(
+            (static function (AdminQueryCache $c): ?array {
+                // direct peek: lookup() re-pends a miss; test the slot itself
+                $results = new \ReflectionProperty(AdminQueryCache::class, 'results');
+                return $results->getValue($c)['SELECT ancient_processlist'] ?? null;
+            })($cache),
+            'payload past the retention horizon must not squat in the cache',
+        );
+    }
+
+    public function testInvalidateRetiresAdoptedSnapshots(): void
+    {
+        $cache = new AdminQueryCache();
+        $cache->storeStatusSnapshot(['Uptime' => '9']);
+        $cache->storeServerSnapshot(['max_connections' => '151']);
+        $cache->connection('mysql|dsn|user', fn () => $this->spyConnection());
+        $this->assertNotNull($cache->statusVariables(), 'the first dial must keep pre-adopted snapshots');
+
+        $cache->invalidateConnection();
+
+        $this->assertNull($cache->statusVariables(), 'invalidation retires session-derived snapshots too (admindata-007)');
+        $this->assertNull($cache->serverVariables());
+        $this->assertNull($cache->statusSnapshotAt());
+    }
+
+    public function testForgetClearsSnapshotSlots(): void
+    {
+        $cache = new AdminQueryCache();
+        $cache->storeStatusSnapshot(['Uptime' => '9']);
+
+        $cache->forget();
+
+        $this->assertNull($cache->statusVariables(), 'an explicit refresh forgets the snapshots as well');
     }
 }

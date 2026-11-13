@@ -48,8 +48,8 @@ final class DashboardPageBlocksTest extends TestCase
         $page->view();
 
         $cache = AdminQueryCache::instance();
-        $cache->store('status', $second);
-        $cache->store('server', $server);
+        $cache->storeStatusSnapshot($second);
+        $cache->storeServerSnapshot($server);
 
         [$page,] = $page->update(new ReloadReportMsg());
         $this->assertInstanceOf(DashboardPage::class, $page);

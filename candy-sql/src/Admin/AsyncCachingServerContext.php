@@ -243,7 +243,7 @@ final class AsyncCachingServerContext implements ServerContextInterface
             $this->cachedStatusVars = $status;
             // The payload's true arrival, not "now" (MINOR-1 rule) — a
             // re-adoption of an already-aged row must not launder it fresh.
-            $fetchedAt = $this->cache()->storedAt('status') ?? microtime(true);
+            $fetchedAt = $this->cache()->statusSnapshotAt() ?? microtime(true);
             $this->statusVarsAdoptedAt = $fetchedAt;
             // SQL-A03: the restart latch and the inner freshness stamp live
             // in ServerContext, which the async render path never lets fetch.

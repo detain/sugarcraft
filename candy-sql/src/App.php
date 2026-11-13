@@ -1556,11 +1556,11 @@ final class App implements Model
             // AsyncCachingServerContext can read them even before the App model
             // is updated with the result.
             if (isset($results['status'])) {
-                $cache->store('status', $results['status']);
+                $cache->storeStatusSnapshot($results['status']);
                 QueryLogger::log('status', 'SHOW GLOBAL STATUS', count($results['status']));
             }
             if (isset($results['server'])) {
-                $cache->store('server', $results['server']);
+                $cache->storeServerSnapshot($results['server']);
                 QueryLogger::log('server', 'SHOW GLOBAL VARIABLES', count($results['server']));
             }
 

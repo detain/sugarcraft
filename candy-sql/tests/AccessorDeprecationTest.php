@@ -467,8 +467,8 @@ final class AccessorDeprecationTest extends TestCase
 
         if ($class === AdminQueryCache::class) {
             $cache = new AdminQueryCache();
-            $cache->store('status', [['Variable_name' => 'Uptime', 'Value' => '7']]);
-            $cache->store('server', [['Variable_name' => 'max_connections', 'Value' => '151']]);
+            $cache->storeStatusSnapshot(['Uptime' => '7']);
+            $cache->storeServerSnapshot(['max_connections' => '151']);
             return $cache;
         }
 

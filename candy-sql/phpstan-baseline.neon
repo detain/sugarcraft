@@ -4,9 +4,6 @@
 #    claims Closure|null for the command slot while the house convention (and
 #    sugar-core's own Cmd class) is ?Cmd; the contract file is untouchable
 #    from this lib, so the mismatch rides here (NIT #886 lineage).
-#  - AdminQueryCache pseudo-slot group: the 'status'/'server' slots hold the
-#    name=>Value map produced by App's Variable_name fold, the SQL-keyed slots
-#    hold list<rows>; one array<string,mixed> property type cannot express both.
 #  - property.onlyWritten group: clone-propagated state awaiting its SQL-P*
 #    wiring rows (pagination/sort quartet, commit planner, detail tabs); kept
 #    so those rows' landing diffs stay local.
@@ -18,32 +15,12 @@
 #  - NullDatabase/ServerStatusSnapshotAdapter unusedType + MysqlExplainProvider
 #    is_array hedges: NullObject/interface mimicry and server-JSON variance
 #    guards; widening the mimic returns would break the interfaces they copy.
+# SQL-A06 (2026-11-13) shrank this file: the AdminQueryCache pseudo-slot group
+# (and its App.php store() argument twin) tolerated one property expressing
+# two value shapes — the flattened snapshots now have dedicated typed slots,
+# so the disagreement (and those entries) are gone.
 parameters:
 	ignoreErrors:
-		-
-			message: '#^Method SugarCraft\\Sql\\Admin\\AdminQueryCache\:\:serverVariables\(\) never returns array\<string, string\> so it can be removed from the return type\.$#'
-			identifier: return.unusedType
-			count: 1
-			path: src/Admin/AdminQueryCache.php
-
-		-
-			message: '#^Method SugarCraft\\Sql\\Admin\\AdminQueryCache\:\:serverVariables\(\) should return array\<string, string\>\|null but returns list\<array\<string, mixed\>\>\.$#'
-			identifier: return.type
-			count: 1
-			path: src/Admin/AdminQueryCache.php
-
-		-
-			message: '#^Method SugarCraft\\Sql\\Admin\\AdminQueryCache\:\:statusVariables\(\) never returns array\<string, string\> so it can be removed from the return type\.$#'
-			identifier: return.unusedType
-			count: 1
-			path: src/Admin/AdminQueryCache.php
-
-		-
-			message: '#^Method SugarCraft\\Sql\\Admin\\AdminQueryCache\:\:statusVariables\(\) should return array\<string, string\>\|null but returns list\<array\<string, mixed\>\>\.$#'
-			identifier: return.type
-			count: 1
-			path: src/Admin/AdminQueryCache.php
-
 		-
 			message: '#^Property SugarCraft\\Sql\\Admin\\Connections\\ConnectionCounters\:\:\$snapshot is never read, only written\.$#'
 			identifier: property.onlyWritten
@@ -144,12 +121,6 @@ parameters:
 			message: '#^Method SugarCraft\\Sql\\App\:\:update\(\) should return array\{SugarCraft\\Core\\Model, Closure\|null\} but returns array\{SugarCraft\\Sql\\App, SugarCraft\\Core\\Cmd\|null\}\.$#'
 			identifier: return.type
 			count: 3
-			path: src/App.php
-
-		-
-			message: '#^Parameter \#2 \$rows of method SugarCraft\\Sql\\Admin\\AdminQueryCache\:\:store\(\) expects list\<array\<string, mixed\>\>, array\<string, string\>\|void given\.$#'
-			identifier: argument.type
-			count: 2
 			path: src/App.php
 
 		-

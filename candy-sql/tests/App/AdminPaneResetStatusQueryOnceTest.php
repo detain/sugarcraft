@@ -111,23 +111,23 @@ final class AdminPaneResetStatusQueryOnceTest extends TestCase
         $ctx = new AsyncCachingServerContext($inner, cache: $cache);
 
         // First arrival through the async pipeline: seed must reach the inner.
-        $cache->store('status', ['Uptime' => '100']);
+        $cache->storeStatusSnapshot(['Uptime' => '100']);
         $ctx->refreshFromLiveCache();
         $this->assertSame(100, $inner->lastUptime(), 'adoption seeds the Uptime baseline');
 
         // A restart arrives: Uptime falls. wasReset() delegates into the
         // (non-fetching, seeded) inner — true, and zero queries.
-        $cache->store('status', ['Uptime' => '40']);
+        $cache->storeStatusSnapshot(['Uptime' => '40']);
         $ctx->refreshFromLiveCache();
         $this->assertTrue($inner->wasReset(), 'adopted Uptime decrease flips the latch');
 
         // The next healthy arrival clears it (edge-triggered, A02 rule).
-        $cache->store('status', ['Uptime' => '45']);
+        $cache->storeStatusSnapshot(['Uptime' => '45']);
         $ctx->refreshFromLiveCache();
         $this->assertFalse($inner->wasReset());
 
         // The stamp tracks the payload's TRUE arrival, never a laundered now.
-        $fetched = $cache->storedAt('status');
+        $fetched = $cache->statusSnapshotAt();
         $this->assertIsFloat($fetched);
         $this->assertSame($fetched, $ctx->statusVariablesTs());
         $this->assertSame($fetched, $inner->statusVariablesTs());

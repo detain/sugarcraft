@@ -139,8 +139,8 @@ final class ConnectionsPageReloadTest extends TestCase
         $page = ConnectionsPage::new($context);
 
         $cache = AdminQueryCache::instance();
-        $cache->store('status', ['Threads_connected' => '9', 'max_used_connections' => '8']);
-        $cache->store('server', ['max_connections' => '200']);
+        $cache->storeStatusSnapshot(['Threads_connected' => '9', 'max_used_connections' => '8']);
+        $cache->storeServerSnapshot(['max_connections' => '200']);
 
         [$reloaded, $cmd] = $page->update(new ReloadReportMsg());
         $this->assertNull($cmd);

@@ -57,8 +57,8 @@ final class DashboardPageReloadTest extends TestCase
         $baseline = $this->sampleTotal($page);
 
         $cache = AdminQueryCache::instance();
-        $cache->store('status', ['Bytes_received' => '5000', 'Bytes_sent' => '2500', 'Threads_connected' => '12', 'Com_select' => '400', 'Uptime' => '999']);
-        $cache->store('server', ['max_connections' => '100']);
+        $cache->storeStatusSnapshot(['Bytes_received' => '5000', 'Bytes_sent' => '2500', 'Threads_connected' => '12', 'Com_select' => '400', 'Uptime' => '999']);
+        $cache->storeServerSnapshot(['max_connections' => '100']);
 
         [$reloaded, $cmd] = $page->update(new \SugarCraft\Sql\Core\Msg\ReloadReportMsg());
         $this->assertNull($cmd);
@@ -75,7 +75,7 @@ final class DashboardPageReloadTest extends TestCase
 
         // Third leg: another reload with further-changed counters keeps the
         // series alive (rates stay non-zero across successive arrivals).
-        $cache->store('status', ['Bytes_received' => '9000', 'Bytes_sent' => '4500', 'Threads_connected' => '14', 'Com_select' => '700', 'Uptime' => '1234']);
+        $cache->storeStatusSnapshot(['Bytes_received' => '9000', 'Bytes_sent' => '4500', 'Threads_connected' => '14', 'Com_select' => '700', 'Uptime' => '1234']);
         [$reloaded2,] = $reloaded->update(new \SugarCraft\Sql\Core\Msg\ReloadReportMsg());
         $this->assertInstanceOf(DashboardPage::class, $reloaded2);
         $reloaded2->view();

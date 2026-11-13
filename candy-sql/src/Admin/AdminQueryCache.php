@@ -27,11 +27,47 @@ use SugarCraft\Sql\Db\DatabaseInterface;
  * (AsyncCachedConnection, AsyncCachingServerContext, ReconnectManager) can receive an
  * isolated cache via injection — tests then don't have to touch global state,
  * and multiple caches can coexist in one process.
+ *
+ * Two value shapes flow through here and they are kept apart BY TYPE, not by
+ * convention (admindata-011): page queries produce row-LISTS keyed by SQL
+ * text ({@see self::store()} / {@see self::lookup()}), while the admin tick's
+ * SHOW GLOBAL STATUS / SHOW GLOBAL VARIABLES legs arrive FLATTENED name=>value
+ * maps. The maps once lived in the same $results array under the pseudo-keys
+ * 'status'/'server' — which lied in both directions: the list-shaped
+ * docblock covered the maps falsely, and a stale snapshot re-pended its
+ * pseudo-KEY into the drain's pending set, so a later drain would issue the
+ * literal SQL text "status" at the server (syntax error, then markError
+ * wiped the very snapshot the next tick had just stored). The snapshots now
+ * have dedicated typed slots ({@see self::storeStatusSnapshot()}); staleness
+ * there serves a loading state and the full admin tick re-fetches on its own
+ * cadence — the pending set never sees a non-SQL key again.
+ *
+ * TTL governs RE-QUERY, not residency (admindata-017): {@see self::store()}
+ * sweeps any entry older than RETENTION_TTL_FACTOR windows so a 10k-thread
+ * processlist cannot squat in the cache for the whole session after the
+ * pane that asked for it is gone.
  */
 final class AdminQueryCache
 {
     /** Seconds a cached result stays fresh before it is re-requested. */
     private const TTL = CacheTtl::STATUS;
+
+    /**
+     * admindata-017: how many TTL windows a row-list may stay RESIDENT after
+     * it last arrived, swept on every store(). A page that stopped polling
+     * stops reading its key; after this many windows the payload — however
+     * large — is retired. Sized so the normal last-known-serving window
+     * (one stale tick while a refresh is in flight) is never cut short: at
+     * TTL=3 s the horizon is 24 s of silence.
+     */
+    private const RETENTION_TTL_FACTOR = 8;
+
+    /**
+     * admindata-018: cap of the ServerContext handle map. Handles are strong
+     * references, so the cap also bounds how many dead-but-pinned database
+     * handles the process-global can keep alive.
+     */
+    private const MAX_SERVER_CONTEXTS = 3;
 
     private static ?self $instance = null;
 
@@ -43,6 +79,25 @@ final class AdminQueryCache
 
     /** @var array<string, true> */
     private array $pending = [];
+
+    /**
+     * admindata-011: the flattened SHOW GLOBAL STATUS map from the last full
+     * admin tick (name=>value strings, NOT row-lists — that is the whole
+     * point of the dedicated slot).
+     *
+     * @var array<string,string>|null
+     */
+    private ?array $statusSnapshot = null;
+    private ?float $statusSnapshotAt = null;
+
+    /**
+     * admindata-011: flattened SHOW GLOBAL VARIABLES twin of
+     * {@see self::$statusSnapshot}.
+     *
+     * @var array<string,string>|null
+     */
+    private ?array $serverSnapshot = null;
+    private ?float $serverSnapshotAt = null;
 
     /**
      * client-012: the last known failure per query. An errored drain leg used
@@ -59,8 +114,14 @@ final class AdminQueryCache
     private ?AsyncConnection $connection = null;
     private string $connectionKey = '';
 
-    private ?ServerContextInterface $serverContext = null;
-    private ?DatabaseInterface $serverContextDb = null;
+    /**
+     * admindata-018: handle-keyed ServerContext map (see serverContext()).
+     * Slots hold the handle strongly — identity is compared with ===, so a
+     * pinned handle also cannot have its object id recycled under a ghost.
+     *
+     * @var list<array{db: DatabaseInterface, ctx: ServerContextInterface}>
+     */
+    private array $serverContexts = [];
 
     public static function instance(): self
     {
@@ -101,13 +162,45 @@ final class AdminQueryCache
     }
 
     /**
+     * Cache the rows a drain leg fetched for $sql.
+     *
+     * admindata-011: the boundary is parsed, not trusted — flattened variable
+     * maps (non-list arrays) throw here; they belong in
+     * {@see self::storeStatusSnapshot()}/{@see self::storeServerSnapshot()}.
+     * admindata-017: every store also sweeps row-lists past the retention
+     * horizon, bounding residency to the keys pages still care about.
+     *
      * @param list<array<string,mixed>> $rows
      */
     public function store(string $sql, array $rows): void
     {
+        if ($rows !== [] && !array_is_list($rows)) {
+            throw new \InvalidArgumentException(
+                'AdminQueryCache::store() takes row-lists keyed by SQL text; a flattened name=>value map belongs in storeStatusSnapshot()/storeServerSnapshot().',
+            );
+        }
+
+        $this->sweepResidency();
         $this->results[$sql] = $rows;
         $this->storedAt[$sql] = microtime(true);
         unset($this->pending[$sql], $this->errors[$sql]);
+    }
+
+    /**
+     * admindata-017: retire row-lists whose payload is more than
+     * RETENTION_TTL_FACTOR windows old. The whole per-key footprint goes —
+     * value, stamp, pending flag, last error — so the key returns to a true
+     * miss and any page that comes back for it re-fetches over the live
+     * session instead of inheriting an archaeology layer.
+     */
+    private function sweepResidency(): void
+    {
+        $horizon = microtime(true) - (self::TTL * self::RETENTION_TTL_FACTOR);
+        foreach ($this->storedAt as $sql => $at) {
+            if ($at < $horizon) {
+                unset($this->results[$sql], $this->storedAt[$sql], $this->pending[$sql], $this->errors[$sql]);
+            }
+        }
     }
 
     /**
@@ -159,10 +252,16 @@ final class AdminQueryCache
         $this->results = [];
         $this->storedAt = [];
         $this->errors = [];
+        $this->statusSnapshot = null;
+        $this->statusSnapshotAt = null;
+        $this->serverSnapshot = null;
+        $this->serverSnapshotAt = null;
     }
 
     /**
-     * When the payload under $key last arrived, or null if never stored.
+     * When the payload under a row-list SQL key last arrived, or null if
+     * never stored. The flattened snapshots have their own stamps —
+     * {@see self::statusSnapshotAt()}/{@see self::serverSnapshotAt()}.
      *
      * SQL-A03: adopters must stamp their snapshots with the payload's TRUE
      * fetchedAt rather than "now" — the same anti-laundering rule the
@@ -217,17 +316,35 @@ final class AdminQueryCache
      * Identity (not DSN) is the key: a reconnect that swaps in a new handle
      * must not resurrect a context bound to the dead one, while a handle that
      * reconnects in place keeps its warm cache.
+     *
+     * admindata-018: this was a SINGLE slot, so any handle alternation — a
+     * disconnect→reconnect to a different flavor, or MySQL and Postgres
+     * contexts coexisting across a session switch — displaced the memo and
+     * re-minted a cold ServerContext on the next visit, restarting the
+     * blocking-fetch seeding era E718 was written to end. A small bounded
+     * map (MAX_SERVER_CONTEXTS slots, oldest evicted) keeps each live handle
+     * warm without letting dead-but-referenced contexts pile up.
      */
     public function serverContext(DatabaseInterface $db, \Closure $factory): ServerContextInterface
     {
-        if ($this->serverContext !== null && $this->serverContextDb === $db) {
-            return $this->serverContext;
+        foreach ($this->serverContexts as $i => $slot) {
+            if ($slot['db'] === $db) {
+                // LRU touch: the slot the app just used is the last one to
+                // evict. Without this, a session's hot handle would be the
+                // first casualty of a fourth dial.
+                array_splice($this->serverContexts, $i, 1);
+                $this->serverContexts[] = $slot;
+
+                return $slot['ctx'];
+            }
         }
 
         /** @var ServerContextInterface $context */
         $context = $factory($db);
-        $this->serverContext = $context;
-        $this->serverContextDb = $db;
+        while (count($this->serverContexts) >= self::MAX_SERVER_CONTEXTS) {
+            array_shift($this->serverContexts);
+        }
+        $this->serverContexts[] = ['db' => $db, 'ctx' => $context];
 
         return $context;
     }
@@ -248,8 +365,9 @@ final class AdminQueryCache
      * admindata-007: the rows it produced are retired too. Entries are keyed
      * by SQL TEXT alone, so after a reconnect/failover behind the same DSN the
      * old session's rows would otherwise keep serving with no TTL floor —
-     * clearing $results/$storedAt/$pending makes every value slot a true
-     * miss that the next drain re-fetches over the new session. ($errors is
+     * clearing $results/$storedAt/$pending (and the dedicated snapshot slots,
+     * equally session-derived) makes every value slot a true miss that the
+     * next drain re-fetches over the new session. ($errors is
      * deliberately kept: each entry records the last drain attempt, which is
      * a true statement regardless of session identity, and store() clears it
      * on the next success.)
@@ -270,27 +388,51 @@ final class AdminQueryCache
         $this->results = [];
         $this->storedAt = [];
         $this->pending = [];
+        $this->statusSnapshot = null;
+        $this->statusSnapshotAt = null;
+        $this->serverSnapshot = null;
+        $this->serverSnapshotAt = null;
     }
 
     /**
-     * Get cached status variables from the last async fetch.
+     * The flattened SHOW GLOBAL STATUS map from the last async fetch, or null
+     * when nothing usable is cached.
      *
-     * @return array<string, string>|null
+     * A stale slot returns null — the render path shows its loading/last-known
+     * shape — but the slot itself keeps serving nothing to the drain: refresh
+     * is the full admin tick's own cadence ({@see AsyncCachingServerContext}),
+     * never a pseudo-key smuggled into the pending SQL set (admindata-011).
+     *
+     * @return array<string,string>|null
      */
     public function statusVariables(): ?array
     {
-        $key = 'status';
-        if (!array_key_exists($key, $this->results)) {
+        if ($this->statusSnapshot === null) {
+            return null;
+        }
+        if ((microtime(true) - $this->statusSnapshotAt) >= self::TTL) {
             return null;
         }
 
-        if ((microtime(true) - ($this->storedAt[$key] ?? 0.0)) >= self::TTL) {
-            $this->pending[$key] = true;
-            return null;
-        }
+        return $this->statusSnapshot;
+    }
 
-        $result = $this->results[$key];
-        return is_array($result) ? $result : null;
+    /**
+     * @param array<string,string> $vars flattened name=>value map
+     */
+    public function storeStatusSnapshot(array $vars): void
+    {
+        $this->statusSnapshot = $vars;
+        $this->statusSnapshotAt = microtime(true);
+    }
+
+    /**
+     * When the current status snapshot arrived — the payload's TRUE stamp for
+     * MINOR-1 honest adoption — or null when no snapshot was ever stored.
+     */
+    public function statusSnapshotAt(): ?float
+    {
+        return $this->statusSnapshotAt;
     }
 
     /**
@@ -303,24 +445,39 @@ final class AdminQueryCache
     public function getStatusVariables(): ?array { return $this->statusVariables(); }
 
     /**
-     * Get cached server variables from the last async fetch.
+     * The flattened SHOW GLOBAL VARIABLES map from the last async fetch, or
+     * null when nothing usable is cached. Same staleness contract as
+     * {@see self::statusVariables()}.
      *
-     * @return array<string, string>|null
+     * @return array<string,string>|null
      */
     public function serverVariables(): ?array
     {
-        $key = 'server';
-        if (!array_key_exists($key, $this->results)) {
+        if ($this->serverSnapshot === null) {
+            return null;
+        }
+        if ((microtime(true) - $this->serverSnapshotAt) >= self::TTL) {
             return null;
         }
 
-        if ((microtime(true) - ($this->storedAt[$key] ?? 0.0)) >= self::TTL) {
-            $this->pending[$key] = true;
-            return null;
-        }
+        return $this->serverSnapshot;
+    }
 
-        $result = $this->results[$key];
-        return is_array($result) ? $result : null;
+    /**
+     * @param array<string,string> $vars flattened name=>value map
+     */
+    public function storeServerSnapshot(array $vars): void
+    {
+        $this->serverSnapshot = $vars;
+        $this->serverSnapshotAt = microtime(true);
+    }
+
+    /**
+     * When the current server snapshot arrived, or null when never stored.
+     */
+    public function serverSnapshotAt(): ?float
+    {
+        return $this->serverSnapshotAt;
     }
 
     /**
