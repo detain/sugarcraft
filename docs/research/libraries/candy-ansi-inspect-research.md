@@ -3,6 +3,7 @@
 **Date:** 2026-05-13
 **Upstream:** [charmbracelet/sequin](https://github.com/charmbracelet/sequin)
 **Context:** PHP 8.3+ port of sequin for SugarCraft monorepo
+**Status banner added 2026-11-12:** this is a *snapshot* of the pre-port state. Nearly everything below has since shipped — C0/C1 classification, the streaming interface, the state-machine parser (sugar-ansi-parser), JSON output, and a large chunk of §4's sequence vocabulary. Read the inline ✅/⏭ markers; the README "What it decodes" + "Byte-fidelity contract" sections are the live inventory. Where a marker says otherwise, history is not a gap list.
 
 ---
 
@@ -159,7 +160,9 @@ pub fn strip_str(data: &str) -> StrippedStr<'_>  // Strip ANSI from string
 
 ## 3. Specific Improvements for candy-ansi-inspect
 
-### Priority 1: Add Control Code (C0/C1) Support
+### Priority 1: Add Control Code (C0/C1) Support ✅ shipped
+
+✅ **Shipped (2026-10/11 waves + 2026-11 review EXEC).** C0/C1 named via `C0C1` tables, controls isolated as their own segments (`tests/C0InTextTest.php`, `tests/C0C1Test.php`), and the full 0x80–0x9F execute/introduce partition pinned by `tests/C1ClassificationSweepTest.php`.
 
 **Why:** sequin handles 0x00-0x1F (C0) and 0x80-0x9F (C1) control codes. candy-ansi-inspect ignores them.
 
@@ -186,7 +189,9 @@ private static function describeControlCode(string $byte): string
 
 ---
 
-### Priority 2: Incremental Parsing Interface
+### Priority 2: Incremental Parsing Interface ✅ shipped
+
+✅ **Shipped.** `StreamingInspector::feed()`/`finish()` plus the live-stdin streaming in `bin/candy-ansi-inspect`; byte-for-byte one-shot/streaming parity pinned in `tests/StreamingInspectorTest.php` and `tests/ByteFidelityTest.php`.
 
 **Why:** Current implementation requires buffering entire input. For streaming/chunked input, need incremental approach.
 
@@ -227,7 +232,9 @@ final class StreamingInspector
 
 ---
 
-### Priority 3: State Machine Parser
+### Priority 3: State Machine Parser ✅ shipped
+
+✅ **Shipped.** The hand-rolled loop below is history: `AnsiHandler` drives sugar-ansi-parser's VT520 state machine and replays dispatch windows verbatim (see README "Byte-fidelity contract").
 
 **Why:** Manual byte-by-byte parsing is harder to extend and maintain. State machine approach (like `charmbracelet/x/ansi`) is more robust.
 
@@ -254,7 +261,9 @@ Ground → Escape → CsiEntry → CsiParam → CsiIntermediate → CsiDispatch
 
 ---
 
-### Priority 4: Structured Output Format
+### Priority 4: Structured Output Format ✅ shipped
+
+✅ **Shipped.** `Inspector::reportAsJson()` and the CLI `--json` flag emit the {type, content, description} array; single-JSON-at-EOF, NDJSON left deferred.
 
 **Why:** Currently only human-readable text. Need machine-parseable output for tooling.
 
@@ -297,7 +306,9 @@ public static function reportAsJson(string $input): string
 
 ---
 
-### Priority 5: Visual Representation Enhancements
+### Priority 5: Visual Representation Enhancements ⏭ declined
+
+⏭ **Declined by design.** The report is deliberately plain text — colouring or highlighting the transcript would fight the byte-trustworthy property (README "Divergences from sequin").
 
 **Why:** Improve debugging DX with syntax highlighting and inline visualization.
 
@@ -334,7 +345,9 @@ public static function highlight(string $input, HighlightTheme $theme = null): s
 
 ---
 
-## 4. Missing Sequence Types
+## 4. Missing Sequence Types ✅ largely shipped
+
+✅ **Largely shipped.** Mouse (X10/SGR/1015), kitty keyboard flags, DA1/DA2/DA3, DSR 5n/6n, HVP/ECH/XTWINOPS, Insert `2~`, DECALN, charset designation, OSC 8 split, 104/133/1337, colour query-vs-set and SGR `4:N`/58/59 all decode now; the live inventory is README "What it decodes", pinned by `tests/MouseVocabularyTest.php` and `tests/InspectorTest.php`.
 
 ### From upstream sequin:
 
@@ -364,7 +377,9 @@ case 4:
 
 ---
 
-## 5. Recommendations (Prioritized)
+## 5. Recommendations (Prioritized) ✅ closed out
+
+✅ **Closed out by 2026-11-12.** Every recommendation except Priority 5 shipped (5 declined above); DECRQSS variants landed in the DCS decode wave.
 
 | Priority | Improvement | Effort | Impact | 
 |----------|-------------|--------|--------|
@@ -378,7 +393,9 @@ case 4:
 
 ---
 
-## 6. Implementation Plan
+## 6. Implementation Plan ✅ absorbed
+
+✅ **Absorbed.** Phases 1–4 all landed across the 2026-10/11 work and the 2026-11 review EXEC wave; kept as-written for the record.
 
 ### Phase 1: Quick Wins (1-2 sessions)
 
