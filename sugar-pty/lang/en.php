@@ -32,4 +32,5 @@ return [
     'stream.set_blocking_failed' => 'stream_set_blocking({blocking}) failed on master_fd={fd}',
     'write.failed'             => 'fwrite() failed on master_fd={fd} (len={len})',
     'read.select_failed'       => 'stream_select() failed while waiting for master_fd={fd}',
+    'multi.select_failed'      => 'stream_select() failed inside MultiPump::tick() — this is an error, not a timeout: {detail}',
 ];

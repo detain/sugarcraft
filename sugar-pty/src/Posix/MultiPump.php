@@ -8,7 +8,9 @@ use React\EventLoop\LoopInterface;
 use React\Promise\PromiseInterface;
 use SugarCraft\Pty\Contract\Child;
 use SugarCraft\Pty\Contract\MasterPty;
+use SugarCraft\Pty\Lang;
 use SugarCraft\Pty\PumpOptions;
+use SugarCraft\Pty\PtyException;
 
 /**
  * Supervises N master-PTY → stdout pumps from a single `stream_select`
@@ -286,7 +288,16 @@ final class MultiPump
         $ready = PosixMasterPty::retryOnEintr($r, $wArg, $e, 0, $timeoutUs);
 
         if ($ready === false) {
-            return 0;
+            // stream_select FALSE is an error, not a timeout. Laundering it
+            // through the idle arm armed the hooks, re-selected the same
+            // broken set, and spun every caller to its deadline under a fake
+            // "idle" story (EBADF from a mid-tick closed stream being the
+            // classic cause). PosixMasterPty::read() fails loud on the
+            // identical condition; tick() now does the same.
+            $last = \error_get_last();
+            throw new PtyException(Lang::t('multi.select_failed', [
+                'detail' => (string) ($last['message'] ?? 'unknown select failure'),
+            ]));
         }
         if ($ready === 0) {
             foreach ($live as $session) {

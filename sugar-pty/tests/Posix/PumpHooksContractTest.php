@@ -97,6 +97,49 @@ final class PumpHooksContractTest extends TestCase
         $this->assertPairOrder($seq, 'ReactPump');
     }
 
+    public function testMultiPumpTickTreatsSelectFalseAsLoudErrorNotIdleTick(): void
+    {
+        $seq = [];
+        $opts = (new PumpOptions())
+            ->withOnIdle(static function () use (&$seq): void {
+                $seq[] = 'idle';
+            })
+            ->withKeepalive(static function () use (&$seq): void {
+                $seq[] = 'ka';
+            });
+
+        [$a, $b] = \stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+        $sink = \fopen('php://temp', 'r+b');
+        $pump = new MultiPump();
+        // Hold the resource in a local AND close it out from under the
+        // session: a stream the caller closed mid-tick is the classic
+        // EBADF/stream_select-false shape.
+        $master = $this->quietMaster($a);
+        $pump->add($master, $sink, null, $opts);
+        \fclose($a);
+
+        // "Loud" has two honest shapes on PHP 8: a rejected stream set
+        // raises ValueError from inside stream_select() itself, while a
+        // genuine select() false reaches our PtyException. Either must
+        // escape the tick — the regression being pinned is the SILENT one
+        // (laundering the failure into an idle tick + hook spin).
+        $loud = null;
+        try {
+            $pump->tick();
+        } catch (\SugarCraft\Pty\PtyException|\ValueError $e) {
+            $loud = $e;
+        } finally {
+            \fclose($b);
+            \fclose($sink);
+        }
+
+        $this->assertNotNull($loud, 'a failed select must throw out of tick(), not launder into an idle tick');
+        if ($loud instanceof \SugarCraft\Pty\PtyException) {
+            $this->assertMatchesRegularExpression('/stream_select\(\) failed inside MultiPump::tick/', $loud->getMessage());
+        }
+        $this->assertSame([], $seq, 'the failed select fired idle hooks — the silent-laundering regression');
+    }
+
     public function testMultiPumpSyncTickIdleArmFiresOnIdleThenKeepalive(): void
     {
         $seq = [];
