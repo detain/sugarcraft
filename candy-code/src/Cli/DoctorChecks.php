@@ -576,7 +576,42 @@ final class DoctorChecks
             },
 
             'inbound log' => static fn (): array => DoctorChannelsChecks::inboundLogRow(),
+
+            'otlp export' => static fn (): array => self::otlpExportRow(
+                \SugarCraft\Code\Observability\OtelConfig::fromEnvironment()->exportsEvents(),
+                \SugarCraft\Code\Observability\OtlpExportHealth::snapshot(),
+            ),
         ];
+    }
+
+    /**
+     * The `otlp export` verdict (S-O27), kept off the probe so each edge is
+     * pin-testable. Reads counters only — never dials, never names the
+     * endpoint (it can carry credentials). The tally is THIS process's: a
+     * fresh `candy-code doctor` honestly reports none recorded, while the
+     * in-session `/doctor` reports the live session's losses.
+     *
+     * @param array{refused: int, encodeFailures: int, carryEvictions: int, undelivered: int} $health
+     *
+     * @return array{status: string, detail: string}
+     */
+    public static function otlpExportRow(bool $exporting, array $health): array
+    {
+        $lossy = \array_sum($health) > 0;
+        if (!$exporting && !$lossy) {
+            return ['status' => 'OK', 'detail' => Lang::t('cli.doctor.otlp_dark')];
+        }
+
+        if ($lossy) {
+            return ['status' => 'WARN', 'detail' => Lang::t('cli.doctor.otlp_degraded', [
+                'refused' => $health['refused'],
+                'encode' => $health['encodeFailures'],
+                'evicted' => $health['carryEvictions'],
+                'lost' => $health['undelivered'],
+            ])];
+        }
+
+        return ['status' => 'OK', 'detail' => Lang::t('cli.doctor.otlp_clean')];
     }
 
     /**

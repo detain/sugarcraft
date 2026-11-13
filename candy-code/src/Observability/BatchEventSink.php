@@ -272,6 +272,7 @@ final class BatchEventSink implements EventSink, RetryingEventSink
         if (0 === $this->encodeFailures && 0 === $this->carryEvictions && 0 === $lost) {
             return;
         }
+        OtlpExportHealth::recordUndelivered($lost);
         ($this->diagnostic)(\sprintf(
             'candy-code: OTLP telemetry lost at shutdown: %d batch(es) failed to encode, %d body(ies) evicted from the retry queue, %d body(ies) undelivered.',
             $this->encodeFailures,
@@ -288,8 +289,11 @@ final class BatchEventSink implements EventSink, RetryingEventSink
     private function carry(array $add): void
     {
         $merged = array_merge($this->unsent, $add);
-        $this->carryEvictions += max(0, \count($merged) - $this->batchSize);
+        $evicted = max(0, \count($merged) - $this->batchSize);
+        $this->carryEvictions += $evicted;
+        OtlpExportHealth::recordEvictions($evicted);
         $this->unsent = \array_slice($merged, -$this->batchSize);
+        OtlpExportHealth::recordRefused(\count($add));
         $this->reportFirstFailure('endpoint refused a body');
     }
 
@@ -309,6 +313,7 @@ final class BatchEventSink implements EventSink, RetryingEventSink
             // cannot be rendered is lost and counted; undeliverable bytes
             // must not poison the caller's turn.
             ++$this->encodeFailures;
+            OtlpExportHealth::recordEncodeFailure();
             $this->reportFirstFailure('a batch could not be encoded');
 
             return;

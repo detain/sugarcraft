@@ -9,7 +9,9 @@ use SugarCraft\Code\Events\SpendCapBreached;
 use SugarCraft\Code\Events\StepStarted;
 use SugarCraft\Code\Events\UsageUpdated;
 use SugarCraft\Code\Observability\BatchEventSink;
+use SugarCraft\Code\Cli\DoctorChecks;
 use SugarCraft\Code\Observability\OtelSink;
+use SugarCraft\Code\Observability\OtlpExportHealth;
 
 /**
  * OBS-1: the batching arm. A batch renders and leaves on count, on
@@ -37,6 +39,12 @@ final class BatchEventSinkTest extends TestCase
         $this->endpointAccepts = true;
         $this->clockNanos = 1_000;
         $this->pidAsSeen = \getmypid();
+        OtlpExportHealth::reset();
+    }
+
+    protected function tearDown(): void
+    {
+        OtlpExportHealth::reset();
     }
 
     public function testBatchRendersOnCountAndNothingLeavesPerEventBeforeThat(): void
@@ -339,6 +347,52 @@ final class BatchEventSinkTest extends TestCase
 
         $this->assertNotSame([], $this->bodies);
         $this->assertSame([], $lines);
+    }
+
+    public function testRefusalsFeedTheProcessTallyTheDoctorRowReads(): void
+    {
+        $sink = new BatchEventSink($this->collectorSink(), 1, null, null, static function (string $line): void {});
+        $this->endpointAccepts = false;
+        $sink->consume(new StepStarted(1, 9));
+        $sink->consume(new SpendCapBreached(1, 2.0, 1.0));
+        $sink->consume(new StepStarted(2, 9));
+        $sink->consume(new SpendCapBreached(2, 2.0, 1.0));
+        $sink->flush();
+
+        $health = OtlpExportHealth::snapshot();
+        $this->assertGreaterThan(0, $health['refused']);
+        $row = DoctorChecks::otlpExportRow(true, $health);
+        $this->assertSame('WARN', $row['status']);
+        $this->assertStringContainsString('OTEL_EXPORTER_OTLP_ENDPOINT', $row['detail']);
+    }
+
+    public function testHealthySinkLeavesTheTallyAtZeroAndTheRowQuiet(): void
+    {
+        $sink = new BatchEventSink($this->collectorSink(), 1, null, null, static function (string $line): void {});
+        $sink->consume(new StepStarted(1, 9));
+        $sink->consume(new SpendCapBreached(1, 2.0, 1.0));
+        $sink->flush();
+
+        $this->assertFalse(OtlpExportHealth::degraded());
+        $this->assertSame('OK', DoctorChecks::otlpExportRow(true, OtlpExportHealth::snapshot())['status']);
+    }
+
+    public function testDoctorRowDarkCleanAndDegradedEdges(): void
+    {
+        $zero = ['refused' => 0, 'encodeFailures' => 0, 'carryEvictions' => 0, 'undelivered' => 0];
+        $dark = DoctorChecks::otlpExportRow(false, $zero);
+        $this->assertSame('OK', $dark['status']);
+        $this->assertStringContainsString('not set', $dark['detail']);
+
+        $clean = DoctorChecks::otlpExportRow(true, $zero);
+        $this->assertSame('OK', $clean['status']);
+        $this->assertStringContainsString('no failures', $clean['detail']);
+
+        $evicted = DoctorChecks::otlpExportRow(true, ['carryEvictions' => 3] + $zero);
+        $this->assertSame('WARN', $evicted['status']);
+        $this->assertStringContainsString('3 evicted', $evicted['detail']);
+
+        $this->assertSame('WARN', DoctorChecks::otlpExportRow(false, ['encodeFailures' => 1] + $zero)['status'], 'a loss recorded after export went dark is still named');
     }
 
     private function collectorSink(): OtelSink

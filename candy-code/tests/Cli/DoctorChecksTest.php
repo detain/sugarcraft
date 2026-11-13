@@ -48,9 +48,10 @@ final class DoctorChecksTest extends TestCase
         'channels store',
         'channel bundles',
         'inbound log',
+        'otlp export',
     ];
 
-    public function testTheRosterIsTheseTwentyRowsInThisOrder(): void
+    public function testTheRosterIsTheseTwentyOneRowsInThisOrder(): void
     {
         self::assertSame(self::ROSTER, array_keys(self::probes()), 'the doctor roster changed shape — the pages, the check-count headline and this list move together');
     }
