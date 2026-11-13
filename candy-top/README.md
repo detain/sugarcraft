@@ -142,7 +142,7 @@ The three launch flags mirror btop's `-p`/`-t`/`-u` and steer the running sessio
 
 On first run you get four boxes: **cpu** (per-core meters and load), **memory** (the legend, plus disks when `show_disks` is on), **network** (one interface with its rates) and **processes** (the sortable list). `1` to `4` toggle the four boxes, `5` to `0` the gpu slots, `F1` (or `h`) opens the help overlay that lists every key, and `q` quits — saving the layout on the way out, as btop does. Nothing needs configuring to start: the defaults are btop's — except the theme, which is candy-top's own pastel (see [Themes](#themes)) — and a copied `btop.conf` loads as-is. Run it against fake data (`--fake`) to see all of that without touching your host.
 
-Any other argument exits with status 2. There is no `--tty` flag. TTY mode comes from the `force_tty` option or from running on a real console, as described in [TTY mode](#tty-mode). Config load warnings (bad values) are printed on stderr at startup, and the option keeps its previous value.
+Any other argument exits with status 2. There is no `--tty` flag. TTY mode comes from the `force_tty` option or from running on a real console, as described in [TTY mode](#tty-mode). Config load warnings (bad values) are printed on stderr at startup, and each option keeps its previous value.
 
 From a monorepo checkout, `php candy-top/bin/candy-top` works as well. `php candy-top/examples/top.php` runs the fake demo with a throwaway config path; it boots through `bin/candy-top` itself, so the tty requirement under Requirements applies to it too. The VHS tape `candy-top/.vhs/top.tape` records that demo.
 
@@ -177,7 +177,7 @@ Hidden boxes are never sampled or drawn (btop #1858). Every graph dimension is c
 - **Interface selection.** At startup the interface is `net_iface` if it exists. Otherwise the first connected interface with the most traffic is picked, and that pick sticks until the interface disappears. `b` and `n` cycle through the interfaces. That choice is not saved.
 - **Zeroing.** `z` resets the totals of the current interface, and a second `z` restores them.
 - **Addresses.** The interface's IPv4 address (otherwise its global IPv6 address) is shown in the title (btop #1573). `net_hide_ip` hides it.
-- **Bitrate units.** `base_10_bitrate` (`Auto` follows `base_10_sizes`).
+- **Bitrate units.** `base_10_bitrate` switches the rate units between base 10 (`Kbps`, `Mbps`) and binary (`Kibps`, `Mibps`, ...); `Auto` follows `base_10_sizes`.
 
 ### proc
 
@@ -225,16 +225,16 @@ The VM dashboard (candy-top's own; btop has none) shows every running libvirt/KV
 - **Pressure.** A guest whose worst PSI `some avg10` (`cpu.pressure`, `memory.pressure`, `io.pressure` of its scope) reaches 10% gets a `psi cpu 23%` badge on its card, in the temp gradient. This flags a guest that is starved for cpu, memory or io, which no utilisation figure shows.
 - **Order and selection.** Cards are sorted by `vms_sorting` (`cpu` by default, then `mem`, `disk`, `net`, `psi`, `name`); `s` / `S` or the halves of the `sort ‹ cpu ›` button cycle it. The arrow keys move the selection through the grid, PgUp/PgDn move a page, and Home/End jump to the ends. The grid scrolls by rows to keep the selection in view; the bottom border shows the visible range (`1-30/55`) and the allocation summary (vCPUs given out against host cpus, configured RAM against MemTotal).
 - **Enter.** Enter (or a click on the selected card) leaves the dashboard with the proc box filtered to that guest: proc and ctr are shown and the guest is picked in the ctr box (`ctr_selected`). With `ctr_show_vms` off the ctr box lists no guests, but the pick still filters the proc box (the option is not changed) and the ctr box's bottom border says `proc filter: kvm:<guest>`; the pick is dropped once the guest has no process left.
-- **Data.** No subprocess and no libvirt connection. Guests are the machined scopes under `/sys/fs/cgroup/machine.slice` (and libvirt's own `machine/` layout). vCPUs, RAM, the tap names and the qemu pid come from libvirt's live XML (`/run/libvirt/qemu/<name>.xml`, root only), re-read only when it changes. Without root, the facts come from the qemu command line (`-smp`, `-m`), the taps are matched by MAC (libvirt gives a tap its guest's MAC with the first octet `fe`, or `fa` when it already was `fe`; a macvtap keeps the guest MAC), and the bottom border says `not root: no libvirt XML`. Disk rates come from the qemu process's `/proc/<pid>/io` `read_bytes`/`write_bytes` (root). On a host whose images sit on ZFS or are written back by the kernel's flusher, the scope's `io.stat` reads near zero, so it is only the fallback (summed over devices, which double-counts stacked md/dm devices). The dashboard is sampled only while it is shown; on a 55-guest host a sample costs about 15 ms. After it has been hidden, the first sample starts the histories afresh instead of plotting the hidden period's average.
+- **Data.** No subprocess and no libvirt connection. Guests are the machined scopes under `/sys/fs/cgroup/machine.slice` (and libvirt's own `machine/` layout). vCPUs, RAM, the tap names and the qemu pid come from libvirt's live XML (`/run/libvirt/qemu/<name>.xml`, root only), re-read only when it changes. Without root, the facts come from the qemu command line (`-smp`, `-m`), the taps are matched by MAC (libvirt gives a tap its guest's MAC with the first octet `fe`, or `fa` when it already was `fe`; a macvtap keeps the guest MAC), and the bottom border says `not root: no libvirt XML`. Disk rates come from the qemu process's `/proc/<pid>/io` `read_bytes`/`write_bytes` (root) whenever that file is readable; the scope's `io.stat` is only the fallback when it is not (summed over devices, which double-counts stacked md/dm devices, and on a host whose images sit on ZFS or are written back by the kernel's flusher it reads near zero anyway). The dashboard is sampled only while it is shown; on a 55-guest host a sample costs about 15 ms. After it has been hidden, the first sample starts the histories afresh instead of plotting the hidden period's average.
 - **Empty.** A host without libvirt shows "No virtual machines found". FreeBSD always does: bhyve is not covered.
 
 ### ipmi
 
 The ipmi box (candy-top's own; btop has none) shows the machine's BMC — the baseboard management controller every server board carries — as read by `ipmitool`: the whole-system power draw, each power supply, fans, temperatures, voltages, the chassis fault flags and the System Event Log. `I` (shift + i; `i` is mem's io_mode) toggles it, as does the `IPMI` button on the cpu box's top border (shown on hosts with a BMC device node, after `x ctr` / `vms`, when the clock leaves room), and `ipmi` in `shown_boxes` or a preset turns it on.
 
-- **Layout.** A full-width band directly under the cpu box (and the gpu boxes), 28% of the terminal height between 6 and 16 rows, never squeezing the boxes below it under their minimums; alone with cpu it takes the whole rest. It stays shown beside the [VM dashboard](#vms) (on a hypervisor, the BMC's power and thermals are the other half of the fleet picture), and its minimum (40×6) counts toward the size notice. The outline uses the `net_box` family and its flow: the band's neighbours are cpu above and mem, proc or the VM dashboard below, none of which is the net family.
+- **Layout.** A full-width band directly under the cpu box (and the gpu boxes), 28% of the terminal height between 6 and 16 rows, never squeezing the boxes below it past their minimums; alone with cpu it takes the whole rest. It stays shown beside the [VM dashboard](#vms) (on a hypervisor, the BMC's power and thermals are the other half of the fleet picture), and its minimum (40×6) counts toward the size notice. The outline uses the `net_box` family and its flow: the band's neighbours are cpu above and mem, proc or the VM dashboard below, none of which is the net family.
 - **Detail levels.** The box degrades by size, as the gpu boxes do:
-  - full (64×14 or more, or 100×5 for a short band): titled sub-panels in 2, 3 or a 4-column strip (power | temperatures | fans + voltages | status), whichever leaves the least blank space;
+  - full (64×14 or more, or 100×5 for a short band): titled sub-panels in a 2-, 3- or 4-column strip (power | temperatures | fans + voltages | status), whichever leaves the least blank space;
   - compact (34×6): the power gauge beside the hottest temperatures, a fan summary and the fault chips;
   - tiny: a power bar, the hottest temperatures and the faults, one line each.
 - **Header.** The machine (FRU product), the BMC vendor and firmware (`iLO fw 2.82`, `ASUS fw 1.02`) and the BMC's LAN address ride the top border.
@@ -301,7 +301,7 @@ The default is `cpu:1:default,proc:0:default cpu:0:default,mem:0:default,net:0:d
 
 - The alternate position maps to `cpu_bottom`, `mem_below_net` and `proc_left`.
 - A `ctr` entry (btop #1873) shows the containers box. Its position and graph symbol are ignored; the box draws with `graph_symbol_proc`.
-- A proc entry always sets `proc_box_width_percent`, to its W value or to 55 when W is missing.
+- A proc entry always sets `proc_box_width_percent` to its W value or to 55 when W is missing.
 - W is written back only when you wrote it. Stock btop 1.4.7 rejects a whole `presets` string that contains a W field and falls back to its default.
 - `disable_presets` turns off the default preset (`Default`), the custom presets (`Custom`) or all of them (`All`).
 - A preset that would not fit the terminal opens the size-error box and keeps the current preset.
@@ -555,7 +555,7 @@ This is a deliberate deviation from btop, whose default is its builtin `Default`
 
 `color_theme` names a btop/bpytop/bashtop `.theme` file, or one of the builtins `Default` and `TTY`. Themes are read from two directories:
 
-1. The user directory, `$XDG_CONFIG_HOME/candy-top/themes`, or `~/.config/candy-top/themes`.
+1. The user directory: `$XDG_CONFIG_HOME/candy-top/themes`, or `~/.config/candy-top/themes` when `XDG_CONFIG_HOME` is unset or not absolute.
 2. The bundled `candy-top/themes/` directory.
 
 The list starts with `Default` and `TTY`, then every `*.theme` file from both directories in a single list sorted by file name. When both directories hold the same file name, both copies are listed, and the user copy comes first and wins every lookup by name. btop's `--themes-dir` analogue exists in the code — `ThemeRegistry` takes an optional custom directory that would rank above both — but candy-top ships no flag or config key to set it, so the user directory is the supported way to add themes.
@@ -762,7 +762,7 @@ These are deliberate deviations and gaps; the accumulated notes live in `CALIBER
 - **Where the files live.** Config `$XDG_CONFIG_HOME/candy-top/config.conf`, themes in the same directory, tree-collapse state in `$XDG_STATE_HOME/candy-top/tree-state.json`. There is no log file: `log_level` is accepted for btop.conf compatibility and ignored.
 - **It refuses to start.** `candy-top --version` proves the binary itself is fine; the startup refusals (no tty, an unusable config path) all print a reason on stderr and exit non-zero before drawing anything.
 
-Bug reports and feature requests: [the SugarCraft issue tracker](https://github.com/detain/sugarcraft/issues) — the monorepo tracker, not the split `sugarcraft/candy-top` repository's, which CI only fills by syncing. Say which version (`candy-top --version`), which terminal, and whether it reproduces with `--fake` — a fake-data repro needs no host state at all.
+Bug reports and feature requests: [the SugarCraft issue tracker](https://github.com/detain/sugarcraft/issues) — the monorepo tracker, not the split `sugarcraft/candy-top` repository — CI syncs code into that mirror, so issues filed there are never seen. Say which version (`candy-top --version`), which terminal, and whether it reproduces with `--fake` — a fake-data repro needs no host state at all.
 
 ## Development
 
