@@ -391,6 +391,25 @@ if ($cmd === 'push') {
         }
         return [new SugarTrackIgnore([]), ''];
     };
+
+    // CT-S38 (finding 045): the companion control to the deny file. A path
+    // matched by ".sugartrackallow" is tracked and the ignore file is never
+    // consulted for it — first-match precedence to the allow side, upstream
+    // .takatrack parity. The same candidate order and the same parse law
+    // (size refusal, fail-closed unreadable) apply through load().
+    $allowFor = static function (string $file, string|false|null $cwd): ?SugarTrackIgnore {
+        $candidates = [];
+        if ($cwd !== false && $cwd !== null) {
+            $candidates[] = $cwd . '/.sugartrackallow';
+        }
+        $candidates[] = dirname($file) . '/.sugartrackallow';
+        foreach ($candidates as $candidate) {
+            if (is_file($candidate)) {
+                return SugarTrackIgnore::load($candidate, 'allow file');
+            }
+        }
+        return null;
+    };
     $cwd = getcwd();
 
     if (!$stdinBatch) {
@@ -438,12 +457,17 @@ if ($cmd === 'push') {
                 exit(1);
             }
         }
+        $ignore = null;
+        $ignorePath = '';
         try {
-            [$ignore, $ignorePath] = $ignoreFor($file, $cwd);
+            $allow = $allowFor($file, $cwd);
+            if ($allow === null || !$allow->isAllowed($file)) {
+                [$ignore, $ignorePath] = $ignoreFor($file, $cwd);
+            }
         } catch (\Throwable $e) {
             $storageError($e);
         }
-        if ($ignore->isIgnored($file)) {
+        if ($ignore !== null && $ignore->isIgnored($file)) {
             // A repo can ship its own ".sugartrackignore", so its patterns are
             // untrusted input to the tracking tool. When the loaded file carries
             // a wildcard-only pattern it zeroes the project's ENTIRE recorded
@@ -539,12 +563,17 @@ if ($cmd === 'push') {
         // moment it is read in — the documented contract. The wall-clock lives
         // here at capture, never inside the storage readers.
         $row['time'] ??= time();
+        $ignore = null;
+        $ignorePath = '';
         try {
-            [$ignore, $ignorePath] = $ignoreFor($row['file'], $cwd);
+            $allow = $allowFor($row['file'], $cwd);
+            if ($allow === null || !$allow->isAllowed($row['file'])) {
+                [$ignore, $ignorePath] = $ignoreFor($row['file'], $cwd);
+            }
         } catch (\Throwable $e) {
             $storageError($e);
         }
-        if ($ignore->isIgnored($row['file'])) {
+        if ($ignore !== null && $ignore->isIgnored($row['file'])) {
             if ($ignore->hasWholesalePattern()) {
                 fwrite(STDERR, Lang::t('cli.push_ignored_wholesale', [
                     'file'        => Sanitize::untrusted($row['file']),

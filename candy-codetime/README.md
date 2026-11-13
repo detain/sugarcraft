@@ -87,7 +87,7 @@ calendar date, matching the store layout.)
 | Command | Arguments | What it does |
 |---------|-----------|--------------|
 | `dashboard` | `[days]` | Open the TUI (reads the selected backend), showing a `[days]`-day window ending today (default 7). Inside the TUI, `+`/`-` step the window through 7, 14, 30, 90 days. Without an interactive terminal it refuses with a pointer to `export` instead of hanging. |
-| `push` | `[<project> <language>] <file> [duration] [tags]` \| `--` | Record heartbeats. `duration` is whole seconds (default 60); a non-numeric value is rejected, not silently read as 0; durations above one year are clamped to 31,536,000 s. `--time=<unix>` files a single beat at a past (or future) instant instead of `now` — a malformed value is refused, never coerced. `push --` reads a batch: one JSON heartbeat per line on stdin, each with its own `time`; a malformed line is named with its line number on STDERR and the run exits 1 after the well-formed rows still land. `tags` is a comma-list (`work,review`) stored with the beat and carried by every export format; blank members are dropped. When project and language are omitted (the first slot contains a path separator or a known extension), they are detected: project is the nearest `.git` ancestor's name (else the first path segment relative to the working directory, else `unknown`), language is the extension map (`php`, `js`, `ts`, `python`, …, else `unknown`). Typed slots always win. Both forms pass the same ignore door and the same clamps. |
+| `push` | `[<project> <language>] <file> [duration] [tags]` \| `--` | Record heartbeats. `duration` is whole seconds (default 60); a non-numeric value is rejected, not silently read as 0; durations above one year are clamped to 31,536,000 s. `--time=<unix>` files a single beat at a past (or future) instant instead of `now` — a malformed value is refused, never coerced. `push --` reads a batch: one JSON heartbeat per line on stdin, each with its own `time`; a malformed line is named with its line number on STDERR and the run exits 1 after the well-formed rows still land. `tags` is a comma-list (`work,review`) stored with the beat and carried by every export format; blank members are dropped. When project and language are omitted (the first slot contains a path separator or a known extension), they are detected: project is the nearest `.git` ancestor's name (else the first path segment relative to the working directory, else `unknown`), language is the extension map (`php`, `js`, `ts`, `python`, …, else `unknown`). Typed slots always win. Both forms pass the same allow/deny door and the same clamps. |
 | `milestone` | `add [name] [description]` \| `list` | Manage release markers. `name` and `description` are read for `add` only. Milestones live only in SQLite, so this command uses the sqlite backend regardless of `--backend` (a `milestone add` into a file-only data dir says so on stderr before it creates the database); the sqlite dashboard marks the milestone days with `*` under the weekday row. |
 | `export` | `<csv\|json\|ics> [days]` | Dump heartbeats for the last N days (default 7, clamped to [1, 3660]; a non-numeric count is refused with a one-line error and exit 1). Output goes to STDOUT — redirect it to a file to save it. |
 | `gaps` | `[days]` | List untracked stretches of at least 300 seconds within the last N days (default 7, days clamped to [1, 3660]; a non-numeric count is refused with a one-line error and exit 1). |
@@ -146,6 +146,17 @@ deliberately hostile file. An ignore file that exists but cannot be read is refu
 same way — tracking with the opt-out in an unknown state is exactly the
 failure the file was written to prevent, so `push` never proceeds as if the
 file were empty.
+
+The sibling `.sugartrackallow` file reverses the deny file: a path matched
+by one of its patterns is tracked and the ignore file is never consulted
+for it — first-match precedence goes to the allow side. It is looked for in
+the same candidates, in the same order (current directory first, then the
+tracked file's own directory), and the same parsing law applies: over 1 MiB
+is refused, and an unreadable allow file aborts the push with a one-line
+error just like an unreadable ignore file. Since a repository can ship one,
+that means a checked-out repo can re-enable tracking of paths a deny file
+elsewhere would have skipped — remove or narrow the allow file it planted
+to undo that.
 
 Trust boundary: ignore files usually live *inside* tracked repositories, so
 their patterns are untrusted input to the tracking tool. A wildcard-only

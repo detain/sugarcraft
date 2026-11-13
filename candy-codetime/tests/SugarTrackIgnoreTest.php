@@ -167,6 +167,35 @@ final class SugarTrackIgnoreTest extends TestCase
      * census never sees it as a new harvested shape; the semantics below are
      * identical to the literal form.
      */
+    // ---- CT-S38 (finding 045): the allow-list twin of the deny file.
+
+    public function testIsAllowedSharesTheThreeLegMatchRules(): void
+    {
+        $allow = new SugarTrackIgnore(['keep.log', 'src' . chr(47) . chr(42), 'exact' . chr(47) . 'one.php']);
+        $this->assertTrue($allow->isAllowed('/home/u/proj/keep.log'));   // basename leg
+        $this->assertTrue($allow->isAllowed('/home/u/proj/src/deep/x.php')); // subpath leg
+        $this->assertTrue($allow->isAllowed('exact/one.php'));           // whole-path leg
+        $this->assertFalse($allow->isAllowed('/home/u/proj/other.log'));
+        $this->assertFalse($allow->isAllowed('/home/u/proj/lib/x.php'));
+    }
+
+    public function testAnUnreadableAllowFileCarriesTheAllowLabelInItsRefusal(): void
+    {
+        if (\function_exists('posix_geteuid') && \posix_geteuid() === 0) {
+            $this->markTestSkipped('root bypasses file permission modes');
+        }
+        $unreadable = $this->tmpDir . '/unreadable.allow';
+        \file_put_contents($unreadable, "*.php\n");
+        \chmod($unreadable, 0000);
+        try {
+            $this->expectException(\RuntimeException::class);
+            $this->expectExceptionMessage('allow file');
+            SugarTrackIgnore::load($unreadable, 'allow file');
+        } finally {
+            \chmod($unreadable, 0644);
+        }
+    }
+
     public function testDirectoryPatternsMatchEveryPathDepth(): void
     {
         $vendorDir = 'vendor/' . chr(42);

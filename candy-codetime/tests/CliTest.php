@@ -920,6 +920,64 @@ final class CliTest extends TestCase
         @rmdir($legacyDir);
     }
 
+    // ---- CT-S38 (finding 045): .sugartrackallow rescues paths before the
+    // deny file is ever consulted.
+
+    public function testAnAllowFileRescuesWhatTheIgnoreFileWouldSwallow(): void
+    {
+        file_put_contents($this->workDir . '/.sugartrackignore', "*.log\n");
+        file_put_contents($this->workDir . '/.sugartrackallow', "keep.log\n");
+
+        $kept = $this->runCli(['push', 'proj', 'php', $this->workDir . '/keep.log', '60']);
+        self::assertSame(0, $kept['exit'], $kept['stderr']);
+        self::assertStringNotContainsString('skipped', $kept['stdout']);
+
+        $gone = $this->runCli(['push', 'proj', 'php', $this->workDir . '/other.log', '60']);
+        self::assertSame(0, $gone['exit'], $gone['stderr']);
+        self::assertStringContainsString('skipped', $gone['stdout']);
+
+        $export = $this->runCli(['export', 'json', '1']);
+        self::assertStringContainsString('keep.log', $export['stdout']);
+        self::assertStringNotContainsString('other.log', $export['stdout']);
+    }
+
+    public function testTheAllowFileWinsBeforeTheWholesaleNotice(): void
+    {
+        $star = chr(42);
+        file_put_contents($this->workDir . '/.sugartrackignore', $star . "\n");
+        file_put_contents($this->workDir . '/.sugartrackallow', "*.php\n");
+
+        $rescued = $this->runCli(['push', 'proj', 'php', $this->workDir . '/src.php', '60']);
+        self::assertSame(0, $rescued['exit'], $rescued['stderr']);
+        self::assertStringNotContainsString('records nothing', $rescued['stderr']);
+
+        // Paths the allow file does not name still take the loud wholesale skip.
+        $erased = $this->runCli(['push', 'proj', 'php', $this->workDir . '/notes.txt', '60']);
+        self::assertSame(0, $erased['exit'], $erased['stderr']);
+        self::assertStringContainsString('records nothing', $erased['stderr']);
+    }
+
+    public function testAnUnreadableAllowFileRefusesLikeTheDenyFile(): void
+    {
+        if (\function_exists('posix_geteuid') && \posix_geteuid() === 0) {
+            $this->markTestSkipped('root bypasses file permission modes');
+        }
+        file_put_contents($this->workDir . '/.sugartrackignore', "*.log\n");
+        $allow = $this->workDir . '/.sugartrackallow';
+        file_put_contents($allow, "*.log\n");
+        chmod($allow, 0000);
+        try {
+            $res = $this->runCli(['push', 'proj', 'php', $this->workDir . '/keep.log', '60']);
+            self::assertSame(1, $res['exit'], $res['stderr']);
+            self::assertStringContainsString('storage error', $res['stderr']);
+            self::assertStringContainsString('allow file', $res['stderr']);
+            self::assertStringContainsString('could not be read', $res['stderr']);
+            self::assertStringNotContainsString('keep.log', (string) @file_get_contents($this->dataDir . '/' . date('Y-m-d') . '.jsonl'));
+        } finally {
+            chmod($allow, 0644);
+        }
+    }
+
     public function testAPreRenameDefaultDirectoryIsMovedOnceAndReadThroughTheNewName(): void
     {
         $xdg = $this->dataDir . '-xdg';

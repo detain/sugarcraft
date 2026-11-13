@@ -62,7 +62,7 @@ final class SugarTrackIgnore
      *         empty, because a silently unreadable ignore file would track
      *         exactly the files its author asked to protect.
      */
-    public static function load(string $path): self
+    public static function load(string $path, string $label = 'ignore file'): self
     {
         if (!file_exists($path)) {
             return new self([]);
@@ -71,7 +71,7 @@ final class SugarTrackIgnore
         $size = @filesize($path);
         if ($size !== false && $size > self::MAX_IGNORE_BYTES) {
             throw new \RuntimeException(
-                'candy-codetime: ignore file ' . $path . ' is ' . $size
+                'candy-codetime: ' . $label . ' ' . $path . ' is ' . $size
                 . ' bytes, over the ' . self::MAX_IGNORE_BYTES
                 . ' byte limit — refusing to read it',
             );
@@ -84,7 +84,7 @@ final class SugarTrackIgnore
         $lines = is_dir($path) ? false : @file($path, FILE_IGNORE_NEW_LINES);
         if ($lines === false) {
             throw new \RuntimeException(
-                'candy-codetime: ignore file ' . $path . ' could not be read — refusing to track with the opt-out in an unknown state',
+                'candy-codetime: ' . $label . ' ' . $path . ' could not be read — refusing to track with it in an unknown state',
             );
         }
 
@@ -156,6 +156,24 @@ final class SugarTrackIgnore
      * Returns true if the file path should be ignored.
      */
     public function isIgnored(string $path): bool
+    {
+        return $this->matches($path);
+    }
+
+    /**
+     * The sibling control of isIgnored, for ".sugartrackallow" files: the
+     * same three-leg match, read as a rescue instead of a rejection. The
+     * CLI consults an allow-list FIRST — a path matched here is tracked
+     * without the deny file ever being consulted — so the two files
+     * together give first-match precedence to the allow side (upstream
+     * .takatrack parity, finding 045).
+     */
+    public function isAllowed(string $path): bool
+    {
+        return $this->matches($path);
+    }
+
+    private function matches(string $path): bool
     {
         foreach ($this->patterns as $pat) {
             if (fnmatch($pat, basename($path))) {
