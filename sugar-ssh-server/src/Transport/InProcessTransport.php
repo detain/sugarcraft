@@ -71,7 +71,13 @@ final class InProcessTransport implements Transport, ChildSpawner, KeepaliveArmi
      * busy-polling.
      *
      * Normalised to a plain Closure by setKeepaliveCallback(), the
-     * only writer.
+     * only setter; the runChild() teardown resets it back to null at
+     * the end of every pumped run (the finally, beside the child-pid
+     * reset): a beat armed for one run is this run's business only,
+     * and a transport instance reused for a later run must not fire a
+     * stale closure into a child that never asked for it (audit
+     * sugar-ssh-server-016). Server::serve() re-arms at every entry,
+     * so the shipped story is unaffected by the reset.
      *
      * @var ?\Closure
      */
@@ -80,7 +86,6 @@ final class InProcessTransport implements Transport, ChildSpawner, KeepaliveArmi
     /** PID of the live child, used for signal forwarding; null once runChild() tears it down. */
     private ?int $childPid = null;
 
-    /**
     /**
      * The active master for the current session. Stored here so the
      * keepalive callback (armed via {@see armKeepalive()} at serve
@@ -112,6 +117,14 @@ final class InProcessTransport implements Transport, ChildSpawner, KeepaliveArmi
      * provider — used by SIGWINCH forwarding to query the host's
      * PTY winsize. Production code rarely needs to call this.
      *
+     * The clone is shallow: a set channel handler and any pending
+     * keepalive beat are shared references, and the beat captured the
+     * transport it was armed on — a clone that pumps with an inherited
+     * beat drives the ORIGINAL's pty(). The runChild() teardown clear
+     * (audit sugar-ssh-server-016) bounds the window to a beat armed
+     * but never yet run; callers wanting independent instances arm
+     * each one separately (every Server::serve() arms its own).
+     *
      * @param callable(): array{cols:int, rows:int} $provider
      */
     public function withSizeProvider(callable $provider): self
@@ -126,7 +139,12 @@ final class InProcessTransport implements Transport, ChildSpawner, KeepaliveArmi
      *
      * The beat: every `$intervalSeconds` of pump-loop idle a `\0` byte
      * travels through the PTY master into the child's input side. The
-     * byte reaches the remote wire only where the tty echoes input —
+     * elapsed clock is anchored on the pump's FIRST idle tick, not at
+     * arm time — arming happens at serve() entry, before the
+     * handshake and any slow auth round-trips, and counting that
+     * pre-pump time would burn the first interval (audit
+     * sugar-ssh-server-016; see {@see keepaliveBeat()}). The byte
+     * reaches the remote wire only where the tty echoes input —
      * line-oriented shells echo it back, while raw-mode TUIs suppress
      * echo and those sessions stay silent. It is NOT an SSH_MSG_IGNORE
      * packet; where the echo path exists, the periodic traffic keeps
@@ -136,27 +154,58 @@ final class InProcessTransport implements Transport, ChildSpawner, KeepaliveArmi
      */
     public function armKeepalive(int $intervalSeconds): void
     {
+        $this->setKeepaliveCallback($this->keepaliveBeat($intervalSeconds));
+    }
+
+    /**
+     * Build the idle beat: a callback the pump fires on every
+     * `stream_select` timeout that writes one `\0` through the master
+     * once `$intervalSeconds` have elapsed since the previous beat —
+     * with the zero point anchored on the callback's first fire (the
+     * loop's first idle observation) rather than at construction.
+     *
+     * `$clock` and `$send` are test seams: they let the elapsed-gate
+     * arithmetic and the anchor micro-pin be driven without a real
+     * PTY or wall-clock waits. Production arming passes neither and
+     * the defaults route straight to `microtime(true)` and
+     * {@see pty()}.
+     *
+     * @param (callable(): float)|null $clock injectable "now"
+     * @param (callable(): void)|null  $send  injectable byte emitter
+     *
+     * @throws \InvalidArgumentException when $intervalSeconds < 1
+     */
+    private function keepaliveBeat(int $intervalSeconds, ?callable $clock = null, ?callable $send = null): \Closure
+    {
         if ($intervalSeconds < 1) {
             throw new \InvalidArgumentException(Lang::t('keepalive.invalid_interval'));
         }
 
-        // Defer the actual keepalive byte to the pump loop timeout
-        // path. Each time the loop times out (no I/O ready) the
-        // transport invokes our callback; we track elapsed time and
-        // only write a null byte when the interval has elapsed.
-        $lastSent = \microtime(true);
-        $this->setKeepaliveCallback(function () use ($intervalSeconds, &$lastSent): void {
-            $now = \microtime(true);
-            if ($now - $lastSent >= $intervalSeconds) {
-                // Writing a null byte through the PTY master is safe
-                // for shells and most line-oriented programs — it is
-                // ignored at the application layer, and wherever the
-                // tty echoes it back the periodic traffic keeps NAT
-                // warm. Raw-mode TUIs never echo: silent by design.
-                $this->pty()->write("\0");
-                $lastSent = $now;
-            }
+        $now = $clock ?? (static fn (): float => \microtime(true));
+        $emit = $send ?? (function (): void {
+            // Writing a null byte through the PTY master is safe
+            // for shells and most line-oriented programs — it is
+            // ignored at the application layer, and wherever the
+            // tty echoes it back the periodic traffic keeps NAT
+            // warm. Raw-mode TUIs never echo: silent by design.
+            $this->pty()->write("\0");
         });
+
+        // null = not yet anchored; the first fire sets the zero point
+        // and sends nothing (audit sugar-ssh-server-016).
+        $lastSent = null;
+
+        return static function () use (&$lastSent, $intervalSeconds, $now, $emit): void {
+            $tick = (float) $now();
+            if ($lastSent === null) {
+                $lastSent = $tick;
+                return;
+            }
+            if ($tick - $lastSent >= $intervalSeconds) {
+                $emit();
+                $lastSent = $tick;
+            }
+        };
     }
 
     /**
@@ -197,6 +246,15 @@ final class InProcessTransport implements Transport, ChildSpawner, KeepaliveArmi
     /**
      * Return the active channel handler, creating a default one if
      * none has been set.
+     *
+     * The fallback is minted fresh for each runChild() and never
+     * stored: a default handler's channel state (window changes seen
+     * during a run) is that run's story and does not survive to the
+     * next runChild() over the same instance — consistent with the
+     * one-command-per-connection ForceCommand shape this transport
+     * ships for. An embedder driving several commands over one
+     * transport installs an explicit handler via setChannelHandler()
+     * (audit sugar-ssh-server-051).
      */
     private function channelHandler(Session $session): ChannelHandler
     {
@@ -466,6 +524,16 @@ final class InProcessTransport implements Transport, ChildSpawner, KeepaliveArmi
                 // the reap and the kernel recycles it, so a late
                 // RFC 4254 signal would otherwise hit an unrelated process.
                 $this->childPid = null;
+                // The keepalive beat belonged to this pumped run.
+                // Dropping it here (audit sugar-ssh-server-016) means a
+                // transport instance reused for a later run never wires
+                // a stale onIdle closure — with the clear absent, a run
+                // over the SAME instance whose stack carries no
+                // Keepalive would still fire the previous registration
+                // (and its captured references) into the new child.
+                // Server::serve() re-arms at every entry, so the
+                // shipped cadence is unchanged.
+                $this->keepaliveCallback = null;
                 if (!$master->isClosed()) {
                     $master->close();
                 }
