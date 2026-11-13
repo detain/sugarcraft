@@ -124,6 +124,11 @@ final class ChildLifetimeScanner
                 . 'return is the !is_resource() idempotency guard, where there is no live handle '
                 . 'to close in the first place. Every path that is handed a live child ends in '
                 . 'proc_close().',
+        'boundedshutdown::terminatebounded'
+            => 'sugar-core/src/Util/Proc/BoundedShutdown.php: skips signals when the child has '
+                . 'already exited, else SIGTERM, a polled grace period, signal 9 and a bounded '
+                . 'confirmation poll, then proc_close() - the only early return is the '
+                . '!is_resource() idempotency guard, where there is no live handle to close.',
     ];
 
     /**

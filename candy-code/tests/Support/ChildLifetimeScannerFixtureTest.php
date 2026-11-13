@@ -921,6 +921,9 @@ final class ChildLifetimeScannerFixtureTest extends TestCase
     public function testEveryRosterKeyNamesAMethodThatExistsInSrc(): void
     {
         $sourceFiles = self::everySourceFileIn(\dirname(__DIR__, 2), ['src']);
+        // A row may name a sibling-lib helper (BoundedShutdown lives in
+        // sugar-core); the monorepo checkout always has it, so walk it too.
+        $sourceFiles += self::everySourceFileIn(\dirname(__DIR__, 3), ['sugar-core/src/Util/Proc']);
         self::assertNotSame(
             [],
             $sourceFiles,
