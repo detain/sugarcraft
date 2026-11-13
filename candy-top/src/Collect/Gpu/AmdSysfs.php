@@ -134,32 +134,34 @@ final class AmdSysfs implements Backend
             $pwm = $hwmon === null ? null : Read::int("$hwmon/pwm1");
             $pwmMax = $hwmon === null ? 255 : (Read::int("$hwmon/pwm1_max") ?? 255);
 
+            // Named args: the 26-slot positional record silently swaps two
+            // same-typed sentinels on any reorder (candy-top-077).
             $devices[] = new GpuDevice(
-                $i,
-                $c['name'],
-                self::percent("$dev/gpu_busy_percent"),
-                self::bytes("$dev/mem_info_vram_used"),
-                self::bytes("$dev/mem_info_vram_total"),
-                Hwmon::celsius($c['temp']),
-                $watts,
-                self::percent("$dev/mem_busy_percent"),
-                $cap > 0 ? $cap : ($peak > 0 ? $peak : Sentinel::UNMEASURED),
-                $freq1 >= 0 ? $freq1 : $sclk, // Hz / 1e6 = MHz
-                $freq2 >= 0 ? $freq2 : $mclk,
-                $sclkMax,
-                $mclkMax,
-                $pwm !== null && $pwmMax > 0 ? max(0.0, min(100.0, $pwm * 100.0 / $pwmMax)) : Sentinel::UNMEASURED,
-                Sentinel::UNAVAILABLE,
-                $card->pcieGen(),
-                $card->pcieWidth(),
-                Hwmon::celsius($c['tempMem']),
-                Sentinel::UNMEASURED,
-                Sentinel::UNMEASURED,
-                Sentinel::UNAVAILABLE,
-                GpuVendor::Amd,
-                AcceleratorKind::Gpu,
-                $card->busId,
-                $card->driver,
+                index: $i,
+                name: $c['name'],
+                utilization: self::percent("$dev/gpu_busy_percent"),
+                memUsed: self::bytes("$dev/mem_info_vram_used"),
+                memTotal: self::bytes("$dev/mem_info_vram_total"),
+                temp: Hwmon::celsius($c['temp']),
+                watts: $watts,
+                memUtilization: self::percent("$dev/mem_busy_percent"),
+                powerLimit: $cap > 0 ? $cap : ($peak > 0 ? $peak : Sentinel::UNMEASURED),
+                clockGraphics: $freq1 >= 0 ? $freq1 : $sclk, // Hz / 1e6 = MHz
+                clockMem: $freq2 >= 0 ? $freq2 : $mclk,
+                clockGraphicsMax: $sclkMax,
+                clockMemMax: $mclkMax,
+                fanSpeed: $pwm !== null && $pwmMax > 0 ? max(0.0, min(100.0, $pwm * 100.0 / $pwmMax)) : Sentinel::UNMEASURED,
+                pstate: Sentinel::UNAVAILABLE,
+                pcieGen: $card->pcieGen(),
+                pcieWidth: $card->pcieWidth(),
+                tempMem: Hwmon::celsius($c['tempMem']),
+                encoderUtilization: Sentinel::UNMEASURED,
+                decoderUtilization: Sentinel::UNMEASURED,
+                uuid: Sentinel::UNAVAILABLE,
+                vendor: GpuVendor::Amd,
+                kind: AcceleratorKind::Gpu,
+                busId: $card->busId,
+                driver: $card->driver,
             );
         }
 

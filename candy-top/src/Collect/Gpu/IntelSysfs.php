@@ -89,7 +89,9 @@ final class IntelSysfs implements Backend
         $cards = $this->cards;
         foreach ($cards as $i => $c) {
             $card = $c['card'];
-            [$clock, $clockMax] = self::clocks($card, $c['cardDir']);
+            // $coreClock, not $clock: the property's name is the time source
+            // (energy → watts); a shadow here reads as the wrong clock (candy-top-076).
+            [$coreClock, $coreClockMax] = self::clocks($card, $c['cardDir']);
 
             $watts = Sentinel::UNMEASURED;
             $energyPath = Hwmon::first($c['hwmon'], 'energy1_input');
@@ -106,33 +108,35 @@ final class IntelSysfs implements Backend
             $hasPower = $energyPath !== null || Hwmon::first($c['hwmon'], 'power1_input') !== null;
 
             $util = $scan->utilization($card->busId);
+            // Named args: the 26-slot positional record silently swaps two
+            // same-typed sentinels on any reorder (candy-top-077).
             $devices[] = new GpuDevice(
-                $i,
-                $c['name'],
-                $util,
-                Sentinel::UNMEASURED_INT,
-                Sentinel::UNMEASURED_INT,
-                Hwmon::celsius($c['temp']),
-                $watts,
-                Sentinel::UNMEASURED,
-                $limit > 0 ? $limit : ($hasPower ? $peak : Sentinel::UNMEASURED),
-                $clock,
-                Sentinel::UNMEASURED,
-                $clockMax,
-                Sentinel::UNMEASURED,
-                Sentinel::UNMEASURED,
-                Sentinel::UNAVAILABLE,
-                $card->pcieGen(),
-                $card->pcieWidth(),
-                Sentinel::UNMEASURED,
-                Sentinel::UNMEASURED,
-                Sentinel::UNMEASURED,
-                Sentinel::UNAVAILABLE,
-                GpuVendor::Intel,
-                AcceleratorKind::Gpu,
-                $card->busId,
-                $card->driver,
-                $util >= 0 && $scan->lowerBound(),
+                index: $i,
+                name: $c['name'],
+                utilization: $util,
+                memUsed: Sentinel::UNMEASURED_INT,
+                memTotal: Sentinel::UNMEASURED_INT,
+                temp: Hwmon::celsius($c['temp']),
+                watts: $watts,
+                memUtilization: Sentinel::UNMEASURED,
+                powerLimit: $limit > 0 ? $limit : ($hasPower ? $peak : Sentinel::UNMEASURED),
+                clockGraphics: $coreClock,
+                clockMem: Sentinel::UNMEASURED,
+                clockGraphicsMax: $coreClockMax,
+                clockMemMax: Sentinel::UNMEASURED,
+                fanSpeed: Sentinel::UNMEASURED,
+                pstate: Sentinel::UNAVAILABLE,
+                pcieGen: $card->pcieGen(),
+                pcieWidth: $card->pcieWidth(),
+                tempMem: Sentinel::UNMEASURED,
+                encoderUtilization: Sentinel::UNMEASURED,
+                decoderUtilization: Sentinel::UNMEASURED,
+                uuid: Sentinel::UNAVAILABLE,
+                vendor: GpuVendor::Intel,
+                kind: AcceleratorKind::Gpu,
+                busId: $card->busId,
+                driver: $card->driver,
+                utilizationLowerBound: $util >= 0 && $scan->lowerBound(),
             );
         }
 
