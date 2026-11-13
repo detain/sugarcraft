@@ -714,6 +714,9 @@ final class SessionFeed
     // ── delivery ───────────────────────────────────────────────────────
 
     /** Whether $clientId gets narration instead of deltas right now. */
+    private ?EventEnvelope $frameOf = null;
+    private string $frameText = '';
+
     private function narrates(string $clientId): bool
     {
         $subscriber = $this->subscribers[$clientId];
@@ -721,6 +724,17 @@ final class SessionFeed
         return $subscriber['mode'] === self::MODE_NARRATION
             || $subscriber['client']->wantsNarration($this->sessionId())
             || ($subscriber['client']->outbox()->isAboveSoft() && !$subscriber['client']->isForeground($this->sessionId()));
+    }
+
+    /** The wire frame of $envelope, encoded once however many subscribers receive it. */
+    private function frame(EventEnvelope $envelope): string
+    {
+        if ($this->frameOf !== $envelope) {
+            $this->frameOf = $envelope;
+            $this->frameText = JsonRpc::encode($envelope->notification());
+        }
+
+        return $this->frameText;
     }
 
     private function deliver(string $clientId, EventEnvelope $envelope): void
@@ -732,14 +746,14 @@ final class SessionFeed
                 return;
             }
             $this->subscribers[$clientId]['lastSent'] = (int) $envelope->seq;
-            $client->send(JsonRpc::encode($envelope->notification()));
+            $client->send($this->frame($envelope));
 
             return;
         }
 
         if ($envelope->durable) {
             // A store that keeps no log numbers nothing; the event must still arrive.
-            $client->send(JsonRpc::encode($envelope->notification()));
+            $client->send($this->frame($envelope));
 
             return;
         }

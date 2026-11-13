@@ -57,6 +57,26 @@ final class TagCacheTest extends TestCase
         self::assertSame(['files' => 1, 'tags' => 3], $cache->stats());
     }
 
+    public function testPutAndLookupPrepareOnceAndReuseTheStatementPerConnection(): void
+    {
+        $cache = TagCache::open($this->dir . '/c/cache.sqlite');
+        $prop = static fn (string $n) => (new \ReflectionProperty(TagCache::class, $n))->getValue($cache);
+
+        self::assertNull($prop('putStmt'), 'nothing is prepared before the first put');
+        $cache->put('src/A.php', 1, 1, []);
+        $put = $prop('putStmt');
+        self::assertInstanceOf(\PDOStatement::class, $put);
+        $cache->get('src/A.php', 1, 1);
+        $row = $prop('rowStmt');
+        for ($i = 2; $i < 6; $i++) {
+            $cache->put('src/A.php', $i, $i, []);
+            self::assertEquals([], $cache->get('src/A.php', $i, $i));
+        }
+
+        self::assertSame($put, $prop('putStmt'));
+        self::assertSame($row, $prop('rowStmt'));
+    }
+
     public function testTheConnectionRaisesThePageCache(): void
     {
         $cache = TagCache::open($this->dir . '/cache.sqlite');

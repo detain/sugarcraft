@@ -72,6 +72,9 @@ final class TagCache
     /** Tag kinds as stored: one character each. */
     private const KIND_CODES = [Tag::KIND_DEFINITION => 'd', Tag::KIND_REFERENCE => 'r'];
 
+    private ?\PDOStatement $putStmt = null;
+    private ?\PDOStatement $rowStmt = null;
+
     private function __construct(
         private readonly \PDO $pdo,
         private readonly string $path,
@@ -196,8 +199,7 @@ final class TagCache
                 : [self::KIND_CODES[Tag::KIND_REFERENCE], $tag->line, $tag->name];
         }
 
-        $this->pdo->prepare('INSERT OR REPLACE INTO files (path, mtime, size, producer, count, tags) VALUES (?, ?, ?, ?, ?, ?)')
-            ->execute([
+        $this->putStatement()->execute([
                 $relPath,
                 $mtime,
                 $size,
@@ -329,6 +331,17 @@ final class TagCache
         ];
     }
 
+    /** Prepared once per connection: put() runs once per captured file. */
+    private function putStatement(): \PDOStatement
+    {
+        return $this->putStmt ??= $this->pdo->prepare('INSERT OR REPLACE INTO files (path, mtime, size, producer, count, tags) VALUES (?, ?, ?, ?, ?, ?)');
+    }
+
+    private function rowStatement(): \PDOStatement
+    {
+        return $this->rowStmt ??= $this->pdo->prepare('SELECT mtime, size, producer, tags FROM files WHERE path = ?');
+    }
+
     /**
      * The stored tag rows of $relPath when the entry matches, else null.
      *
@@ -336,7 +349,7 @@ final class TagCache
      */
     private function row(string $relPath, int $mtime, int $size, ?string $producer): ?array
     {
-        $stmt = $this->pdo->prepare('SELECT mtime, size, producer, tags FROM files WHERE path = ?');
+        $stmt = $this->rowStatement();
         $stmt->execute([$relPath]);
         $row = $stmt->fetch(\PDO::FETCH_ASSOC);
         if ($row === false || (int) $row['mtime'] !== $mtime || (int) $row['size'] !== $size
