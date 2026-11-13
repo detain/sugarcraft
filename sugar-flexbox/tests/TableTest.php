@@ -204,6 +204,53 @@ final class TableTest extends TestCase
         $this->assertSame(1, $t->rowCount());
     }
 
+    public function testFilterFoldsTheGermanCasePair(): void
+    {
+        // Finding-033 in a 12-locale ecosystem: 'Ärger' stored, 'ärger'
+        // typed. mbstring's full case fold answers the pair with or
+        // without ext-intl (intl's accent strip keeps the match, just
+        // via a de-accented key).
+        $t = (new Table())
+            ->addColumn(Column::make('Name', 10))
+            ->addRow(['Ärger'])
+            ->addRow(['Zoo'])
+            ->filter('ärger');
+        $this->assertSame(1, $t->rowCount());
+
+        $u = $t->withFilter('ÄRGER');
+        $this->assertSame(1, $u->rowCount(), 'fold is symmetric across stored/needle casing');
+    }
+
+    public function testFilterFoldsSharpSAgainstDoubleS(): void
+    {
+        // FULL (not simple) case folding: 'Straße' must answer to the
+        // typed 'strasse' — the ß↔ss expansion no simple lowercase map
+        // ever performs.
+        $t = (new Table())
+            ->addColumn(Column::make('City', 12))
+            ->addRow(['Straße'])
+            ->addRow(['Berlin'])
+            ->filter('strasse');
+        $this->assertSame(1, $t->rowCount());
+    }
+
+    public function testSortPlacesAccentedWordsWithTheirBaseLetter(): void
+    {
+        if (!\extension_loaded('intl')) {
+            $this->markTestSkipped('accent folding (NFKD mark-stripping) requires ext-intl');
+        }
+        // Raw byte placement parks every 'Ä' word after ALL ASCII ones;
+        // the fold sorts 'Ärger' as 'arger' — with the A's (between
+        // 'Apfel' and 'Zoo'), not at the end of the alphabet.
+        $t = Table::new()
+            ->addColumn(Column::new('Name', 8))
+            ->addRow(['Zoo'])
+            ->addRow(['Ärger'])
+            ->addRow(['Apfel'])
+            ->sortBy(0, true);
+        $this->assertSame(['Apfel', 'Ärger', 'Zoo'], $this->dataColumn($t));
+    }
+
     public function testFilterNoMatch(): void
     {
         $t = (new Table())
@@ -678,7 +725,7 @@ final class TableTest extends TestCase
     public function testStringSortIsCaseInsensitiveAcrossTheBinaryOrderBoundary(): void
     {
         // Binary strcmp would put uppercase 'B' (0x42) before lowercase
-        // 'a' (0x61); the documented strcasecmp comparison must not.
+        // 'a' (0x61); the documented Unicode case fold must not.
         $t = Table::new()
             ->addColumn(Column::new('Name', 8))
             ->addRow(['B'])

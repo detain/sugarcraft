@@ -34,6 +34,9 @@
     "require-dev": {
         "phpunit/phpunit": "^10.5"
     },
+    "suggest": {
+        "ext-intl": "Enables accent-insensitive folding in the Table filter and string sort (\"Ä\" matches and sorts with \"A\"); case folding itself needs no extension"
+    },
     "autoload": {
         "psr-4": {
             "SugarCraft\\Flexbox\\": "src/"

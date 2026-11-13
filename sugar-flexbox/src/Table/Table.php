@@ -208,10 +208,14 @@ final class Table
      * with identical cells resolve to the first survivor).
      *
      * Comparison semantics: when BOTH cells are numeric they compare as
-     * numbers (2 sorts before 100); otherwise they compare as
-     * case-insensitive strings (strcasecmp), so 'a' precedes 'B' — the
-     * binary strcmp order ('B' first) would read as a bug to every human
-     * looking at a sorted name column.
+     * numbers (2 sorts before 100 — and ONLY then: '9' precedes '10'
+     * silently, a mixed numeric/text column sorts as text); otherwise
+     * they compare as Unicode case-folded strings (full folding via
+     * mbstring, plus accent folding when ext-intl is loaded), so 'a'
+     * precedes 'B' and 'Ärger' sorts with the A's — the binary strcmp
+     * order ('B' first, every accented word last) would read as a bug
+     * to every human looking at a sorted name column in a 12-locale
+     * ecosystem.
      */
     public function withSort(int $colIndex, bool $ascending = true): self
     {
@@ -255,7 +259,9 @@ final class Table
     }
 
     /**
-     * Filter rows by text (case-insensitive substring match).
+     * Filter rows by text (Unicode case-folded substring match:
+     * 'ärger' finds 'Ärger' and 'strasse' finds 'Straße'; full accent
+     * folding too when ext-intl is loaded).
      *
      * Matching runs against the stored raw cell strings, exactly as sort
      * ordering does; the render-time sanitize pass never widens what can
@@ -663,7 +669,7 @@ final class Table
                 if ($na !== null && $nb !== null) {
                     $cmp = $na <=> $nb;
                 } else {
-                    $cmp = \strcasecmp((string) $va, (string) $vb);
+                    $cmp = \strcmp(self::fold((string) $va), self::fold((string) $vb));
                 }
 
                 return $asc ? $cmp : -$cmp;
@@ -732,17 +738,42 @@ final class Table
         if ($this->filterText === '') {
             return $rows;
         }
-        $lower = \strtolower($this->filterText);
+        $needle = self::fold($this->filterText);
         return \array_values(
-            \array_filter($rows, function (array $row) use ($lower): bool {
+            \array_filter($rows, function (array $row) use ($needle): bool {
                 foreach ($row as $cell) {
-                    if (\str_contains(\strtolower($cell), $lower)) {
+                    if (\str_contains(self::fold($cell), $needle)) {
                         return true;
                     }
                 }
                 return false;
             })
         );
+    }
+
+    /**
+     * The Unicode fold shared by BOTH matching paths: the filter
+     * substring test and the string-sort leg (FBX-27).
+     *
+     * mbstring's full case fold is the guaranteed floor: 'Ärger' answers
+     * to 'ärger', and 'ß' answers to 'ss'. When ext-intl is loaded the
+     * text is compatibility-decomposed first and combining marks are
+     * dropped, so accents fold too — 'Ä' matches and sorts with plain
+     * 'A'. Without intl, accented letters still case-fold but keep
+     * their code-point neighbourhood in the ordering.
+     */
+    private static function fold(string $value): string
+    {
+        if (\function_exists('normalizer_normalize')) {
+            $decomposed = \normalizer_normalize($value, \Normalizer::FORM_KD);
+            if (\is_string($decomposed)) {
+                $stripped = \preg_replace('/\p{Mn}+/u', '', $decomposed);
+                if (\is_string($stripped)) {
+                    $value = $stripped;
+                }
+            }
+        }
+        return \mb_convert_case($value, \MB_CASE_FOLD, 'UTF-8');
     }
 
     /**

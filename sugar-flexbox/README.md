@@ -28,8 +28,8 @@ The library carries the house i18n plumbing (`src/Lang.php` plus locale files un
 - **Ratio-based sizing** — items with grow ratios fill available space
 
 ### Table
-- **Sortable columns** — withSort()/sortByNext() toggle ascending/descending (mouse wiring belongs to the app); the sort arrow is prepended before the header is truncated, so a sorted column narrower than arrow plus text shows the arrow alone
-- **Filterable** — keeps rows where any cell contains a case-insensitive substring; matching runs on the stored raw strings, not the render-time sanitized text
+- **Sortable columns** — `withSort($column, $ascending = true)` sets an order, `sortByNext($column)` flips it (mouse wiring belongs to the app); when BOTH cells are numeric they compare as numbers — 2 sorts before 100, and a column mixing '9' and text sorts as text; string comparison is Unicode case-folded, so 'a' precedes 'B' and (with ext-intl loaded) 'Ärger' sorts with the A's. The sort arrow is prepended before the header is truncated, so a sorted column narrower than arrow plus text shows the arrow alone
+- **Filterable** — keeps rows where any cell contains a Unicode case-folded substring ('ärger' finds 'Ärger', 'strasse' finds 'Straße'; ext-intl adds full accent folding — without it, letters still case-fold but accented words keep their code-point neighbourhood); matching runs on the stored raw strings, not the render-time sanitized text
 - **Configurable columns** — title, width, alignment, formatter (`Column::new()`, `withAlign()`, `withStyle()`, `withFormatter()`); the render pipeline runs formatter → sanitize → truncate/pad, so a formatter's output is sanitized like any other cell value and cannot smuggle color to the screen — styling belongs to `withStyle()`
 - **Cell styling** — per-column ANSI style support
 - **Cursor tracking** — get current row/cell on selection. Note the cursor
@@ -151,7 +151,7 @@ $table = (new Table())
     ->withRow(['Carol', '35', 'Chicago']);
 
 $sorted = $table->withSort(0);     // sort by Name column → new Table
-$filtered = $sorted->withFilter('ca'); // case-insensitive substring in ANY cell → keeps the Carol row (its "Chicago" city matches too)
+$filtered = $sorted->withFilter('ca'); // case-folded substring in ANY cell → keeps the Carol row (its "Chicago" city matches too)
 
 $atCursor = $filtered
     ->withCursorStyle('1;36')    // the default style ('') marks nothing on screen
