@@ -494,11 +494,7 @@ final class StderrEmitterCensusTest extends TestCase
         // points the daemon's stderr at the TUI log, so nothing here can reach
         // the operator's terminal, and the session is over by design.
         'src/Cli/NonInteractive.php' => 1,
-        // DST-3: SelfUpdate's report() writes through the test-rebindable
-        // $errorStream ?? STDERR handle. The routing decision is stderr alone:
-        // self-update is a headless verb with no session running, so neither
-        // the transcript seam nor the notice sink can host its refusals.
-        'src/Cli/SelfUpdate.php' => 1,
+        // S-L01: SelfUpdate's report() moved into sugar-releases; the adapter holds no stderr handle.
     ];
 
     /**
@@ -673,7 +669,8 @@ final class StderrEmitterCensusTest extends TestCase
         // C-EXT-4.b 2026-10-28: +1 — bundlesUsage()'s shared usage-door
         // envelope for the marketplace/search verbs (unknown action, missing
         // operand). Same stderr-only decision as every sibling here.
-        'src/Cli/SelfUpdate.php' => 3,
+        // S-L01: three failUsage doors collapsed into the one validate()-driven door.
+        'src/Cli/SelfUpdate.php' => 1,
         // C-MCP-4.d 2026-10-28: +2 — the `mcp import --write` doors: the
         // unknown-tier refusal and the unowned-home refusal, both failUsage
         // envelopes fired BEFORE any read or write is attempted. Same

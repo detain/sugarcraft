@@ -403,17 +403,6 @@ final class ReadPathCensusTest extends TestCase
                 . 'the bytes are bounded at the instruction-document ceiling before use, and they '
                 . 'ride only as PromptFence-escaped rules text — never executed, never written back',
         ],
-        'Cli/UpdateCheck.php|file_get_contents' => [
-            'OWNED_HOME — noticeFromCache(): `~/.candy-code/cache/update-check.json` under '
-                . 'HomeDirectory::owned() on the production path, cachedNotice() the caller-named '
-                . 'seam whose pins hand in the file; the bytes are JSON judged as a release shape '
-                . 'only, never executed (C-SES-6.e)',
-        ],
-        'Cli/SelfUpdate.php|file_get_contents' => [
-            'SELF_LOCATED — verifySignature() (DST-3) reads back the temp phar this very process '
-                . 'downloaded to its own `phar.tmp-<pid>-<random>` name, for the detached-signature leg '
-                . 'against the pinned release key; the path is never externally chosen',
-        ],
         'Cli/Serve/ServeManagement.php|file_get_contents' => [
             'SELF_LOCATED — storedToken(): the owner-token file in the `serve` state dir '
                 . 'StateDir::existing() verified 0700 and ours; lstat refuses anything but a '

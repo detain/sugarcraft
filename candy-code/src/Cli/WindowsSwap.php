@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Cli;
 
 use SugarCraft\Code\Support\ProcessContainment;
+use SugarCraft\Releases\WindowsSwap as LibWindowsSwap;
 
 /**
  * The relaunch dance {@see SelfUpdate} hands the phar swap to on Windows (C-TUI-6.e).
@@ -43,117 +44,36 @@ use SugarCraft\Code\Support\ProcessContainment;
  * null device so zero parent file descriptors are inherited, and the handle is
  * deliberately dropped — outliving the verb IS the point (accounted in
  * tests/Support/DescriptorInheritanceGuardTest.php).
+ *
+ * S-L01: the helper source ({@see HELPER}), the retry budget and the detached
+ * spawn live in sugar-releases ({@see \SugarCraft\Releases\WindowsSwap}); this class
+ * is the adapter that adds candy-code's process containment (spawnSpec +
+ * scrubbed env) to the lib's host seams.
  */
 final class WindowsSwap
 {
-    /** Retry cadence between rename attempts, in microseconds (design-fixed). */
-    public const RETRY_INTERVAL_US = 200_000;
+    public const RETRY_INTERVAL_US = LibWindowsSwap::RETRY_INTERVAL_US;
 
-    /** Total wait budget for the swap, in seconds (design-fixed; E646-only ceiling). */
-    public const RETRY_BUDGET_SECONDS = 60.0;
+    public const RETRY_BUDGET_SECONDS = LibWindowsSwap::RETRY_BUDGET_SECONDS;
 
-    /**
-     * The detached helper's complete source, handed to `php -r` verbatim.
-     *
-     * FIXED LITERAL — the argv slots (1) parent pid, (2) staged `.new` path,
-     * (3) target phar path, (4) optional budget-seconds override (test seam for
-     * the never-frees leg; production never passes it) are read as DATA only.
-     * Core functions only, so the helper carries no autoload and no require edge.
-     * The parent pid rides the log line as forensic context; the wait itself is
-     * OS-portable because it IS the retry loop — rename returns false while the
-     * image lock is held, on NT and everywhere else. A vanished `.new` logs
-     * `nothing staged` and exits 0 rather than spinning against a file that is
-     * no longer there.
-     */
-    public const HELPER = <<<'PHP'
-$parentPid = isset($argv[1]) ? (int) $argv[1] : 0;
-$new = isset($argv[2]) ? (string) $argv[2] : '';
-$target = isset($argv[3]) ? (string) $argv[3] : '';
-$budget = isset($argv[4]) && \is_numeric($argv[4]) ? (float) $argv[4] : 60.0;
-if ($new === '' || $target === '') {
-    \fwrite(\STDERR, "usage: php -r <helper> <parent-pid> <staged-new> <target-phar> [budget-seconds]\n");
-    exit(2);
-}
-$log = $target . '.swap.log';
-$line = static function (string $message) use ($log): void {
-    @\file_put_contents($log, \date('c') . ' ' . $message . "\n", \FILE_APPEND | \LOCK_EX);
-};
-$line('swap helper started; waiting for parent pid ' . $parentPid . ' to exit');
-$retryUs = 200000;
-$attempts = 0;
-$deadline = \microtime(true) + $budget;
-$lastError = '';
-\set_error_handler(static function (int $severity, string $message) use (&$lastError): bool {
-    $lastError = $message;
-
-    return true;
-});
-while (true) {
-    if (!\is_file($new)) {
-        $line('nothing staged at ' . $new . '; exiting without a swap');
-        exit(0);
-    }
-    ++$attempts;
-    $lastError = '';
-    $swapped = \rename($new, $target);
-    if ($swapped) {
-        $line('swap complete after ' . $attempts . ' attempt(s)');
-        exit(0);
-    }
-    $line('attempt ' . $attempts . ': ' . ($lastError === '' ? 'rename failed' : $lastError));
-    if (\microtime(true) + $retryUs / 1000000.0 > $deadline) {
-        $line('gave up after ' . $attempts . ' attempt(s); ' . $new . ' left staged for manual swap');
-        exit(1);
-    }
-    \usleep($retryUs);
-}
-PHP;
+    /** The fixed helper program — the lib's literal, never interpolated. */
+    public const HELPER = LibWindowsSwap::HELPER;
 
     /**
      * Launch the detached swap helper for a staged `.new` waiting on `$phar`.
-     *
-     * @param int    $parentPid pid the helper waits out (the verb's own pid)
-     * @param string $new       staged path, `<phar>.new`, already verified in place
-     * @param string $phar      target phar path the helper renames onto
      *
      * @return bool false only when the spawn itself failed — the staged `.new`
      *              survives either verdict and the next run announces it
      */
     public static function launch(int $parentPid, string $new, string $phar): bool
     {
-        // Same kernel rule as BackgroundShellRegistry::start(): the null device
-        // is chosen from the PATH SEPARATOR, not from an OS-family guess, so the
-        // seam-injected Windows tests running on POSIX hosts still spawn against
-        // '/dev/null' instead of a missing literal 'NUL' path (which would fail
-        // the whole proc_open). On real NT this resolves to 'NUL' exactly.
-        $nullDevice = \DIRECTORY_SEPARATOR === '\\' ? 'NUL' : '/dev/null';
-
-        // create_process_group is a Windows-only proc_open option (inert on
-        // POSIX): the helper must land in its own group so a signal aimed at the
-        // verb's group does not kill the swap mid-retry; spawnSpec's setsid
-        // prefix keeps the same distance from the parent's group on POSIX.
-        // bypass_shell mirrors the other `PHP_BINARY -r` sites (EgressProxyProcess,
-        // WorkspaceHostClient): the argv list goes straight to CreateProcess.
-        $child = @\proc_open(
-            ProcessContainment::spawnSpec(self::launchCommand($parentPid, $new, $phar)),
-            [
-                0 => ['file', $nullDevice, 'r'],
-                1 => ['file', $nullDevice, 'w'],
-                2 => ['file', $nullDevice, 'w'],
-            ],
-            $pipes,
-            null,
+        return LibWindowsSwap::launch(
+            $parentPid,
+            $new,
+            $phar,
+            static fn(array $argv): string|array => ProcessContainment::spawnSpec($argv),
             ProcessContainment::env(),
-            ['bypass_shell' => true, 'create_process_group' => true]
         );
-        if (!\is_resource($child)) {
-            return false;
-        }
-        // The handle is deliberately dropped: proc_close would WAIT for the
-        // helper, and the helper's whole purpose is to outlive this process.
-        // The fixed retry budget bounds the orphan; the row in
-        // DescriptorInheritanceGuardTest accounts the licence.
-        return true;
     }
 
     /**
@@ -163,10 +83,9 @@ PHP;
      */
     public static function launchCommand(int $parentPid, string $new, string $phar): array
     {
-        return [\PHP_BINARY, '-r', self::HELPER, (string) $parentPid, $new, $phar];
+        return LibWindowsSwap::launchCommand($parentPid, $new, $phar);
     }
 
-    /** Never instantiated — pure static helper (mirrors the SelfUpdate verb class). */
     private function __construct()
     {
     }

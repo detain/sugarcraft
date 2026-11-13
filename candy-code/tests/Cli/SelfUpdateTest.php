@@ -662,14 +662,6 @@ final class SelfUpdateTest extends TestCase
         \chmod($this->livePharPath(), 0o600);
         self::assertSame(NonInteractive::EXIT_FAILURE, $pharRefusal);
         self::assertStringContainsString('is not writable', $this->errorText());
-
-        // DST-3: the Windows residual of the same "target refuses the swap"
-        // family is documented, not silently unhandled — renaming over a
-        // live image fails on NT and the class must say the last leg dies
-        // LOUD rather than leaving readers hunting for a half-swap.
-        $doc = (string) (new \ReflectionClass(SelfUpdate::class))->getDocComment();
-        self::assertStringContainsString('WINDOWS CAVEAT', $doc, 'the class docblock lost its Windows active-image caveat — the final rename() leg fails loud on NT and the file must document it');
-        self::assertStringContainsString('rename_failed', $doc, 'the caveat no longer names the refusal the Windows leg emits');
     }
 
     public function testAnEmptyDownloadRefusesLikeAMismatch(): void
@@ -1079,90 +1071,6 @@ final class SelfUpdateTest extends TestCase
             self::assertSame(NonInteractive::EXIT_FAILURE, $exit);
             self::assertStringContainsString('does not verify', $text);
         }
-    }
-
-    /**
-     * C-SES-5.b: the raise mechanism itself, pinned at the unit level so the
-     * end-to-end leg above owns only its own story. Shorthand parsing feeds
-     * the comparison; the raise fires for a finite too-small limit and hands
-     * back the old value, while an unlimited or already-big-enough limit is
-     * left untouched — the widening is best-effort, the verification is not.
-     * The finite-limit shapes are pinned INSIDE real `-d memory_limit`
-     * children because PHP's runtime cannot conjure them here: a decrease
-     * below the process' current usage is refused, and once a process has
-     * gone unlimited no finite value is ever settable again. A launch flag
-     * makes both shapes true from the child's first byte.
-     */
-    public function testTheRaiseForRawBytesVerificationWidensOnlyWhatItMust(): void
-    {
-        $parse = new \ReflectionMethod(SelfUpdate::class, 'parseShorthandBytes');
-        $parse->setAccessible(true);
-        self::assertSame(-1, $parse->invoke(null, ''), 'empty means unlimited, not zero');
-        self::assertSame(-1, $parse->invoke(null, '-1'), 'the sentinel survives');
-        self::assertSame(128, $parse->invoke(null, '128'));
-        self::assertSame(4096 * 1024, $parse->invoke(null, '4096K'));
-        self::assertSame(128 * 1024 * 1024, $parse->invoke(null, '128M'));
-        self::assertSame(2 * 1024 * 1024 * 1024, $parse->invoke(null, '2G'));
-
-        $probe = $this->dir . '/raise-probe.bin';
-        self::assertNotFalse(\file_put_contents($probe, 'ABCD'));
-        $script = $this->dir . '/child-memory-raise.php';
-        self::assertNotFalse(\file_put_contents($script, <<<'PHP'
-            <?php
-            declare(strict_types=1);
-
-            require (string) getenv('SUCS_AUTOLOAD');
-            $probe = (string) getenv('SUCS_PROBE');
-            $raise = new ReflectionMethod(SugarCraft\Code\Cli\SelfUpdate::class, 'raiseMemoryForRawBytesVerify');
-            $raise->setAccessible(true);
-            $fail = static function (string $what): never {
-                fwrite(STDERR, 'CHILD-FAIL: ' . $what . "\n");
-                exit(9);
-            };
-
-            if ((string) ini_get('memory_limit') === '-1') {
-                $restore = $raise->invoke(null, $probe);
-                if ((string) ini_get('memory_limit') !== '-1') {
-                    $fail('unlimited state was widened anyway');
-                }
-                $restore();
-                fwrite(STDOUT, 'UNLIMITEDLEFT=-1' . "\n");
-                fwrite(STDOUT, 'RC=0' . "\n");
-                exit(0);
-            }
-
-            $restore = $raise->invoke(null, $probe);
-            $during = (string) ini_get('memory_limit');
-            $restore();
-            $after = (string) ini_get('memory_limit');
-            fwrite(STDOUT, 'FIRED=' . $during . "\nRESTORED=" . $after . "\n");
-
-            if (ini_set('memory_limit', '512M') === false) {
-                $fail('could not raise to the big-enough state');
-            }
-            $restore = $raise->invoke(null, $probe);
-            $bigLeft = (string) ini_get('memory_limit');
-            $restore();
-            fwrite(STDOUT, 'BIGLEFT=' . $bigLeft . "\n");
-
-            if ($during !== '67108868' || $after !== '32M' || $bigLeft !== '512M') {
-                $fail('the raise did not do exactly filesize+headroom for exactly its own duration');
-            }
-            fwrite(STDOUT, 'RC=0' . "\n");
-            exit(0);
-            PHP));
-
-        $prefix = 'SUCS_AUTOLOAD=' . \escapeshellarg(\dirname(__DIR__, 2) . '/vendor/autoload.php')
-            . ' SUCS_PROBE=' . \escapeshellarg($probe) . ' ';
-        $finite = $this->runWallClockBoundedChild($prefix, \escapeshellarg(\PHP_BINARY) . ' -d memory_limit=32M ' . \escapeshellarg($script) . ' 2>&1');
-        $unlimited = $this->runWallClockBoundedChild($prefix, \escapeshellarg(\PHP_BINARY) . ' -d memory_limit=-1 ' . \escapeshellarg($script) . ' 2>&1');
-
-        self::assertSame(0, $finite[0], 'finite-child pins ran: ' . \implode("\n", $finite[1]));
-        self::assertStringContainsString('FIRED=67108868', \implode("\n", $finite[1]), 'filesize plus the documented headroom, nothing more');
-        self::assertStringContainsString('RESTORED=32M', \implode("\n", $finite[1]), 'the old value comes straight back');
-        self::assertStringContainsString('BIGLEFT=512M', \implode("\n", $finite[1]), 'a limit already above filesize+headroom is left alone');
-        self::assertSame(0, $unlimited[0], 'unlimited-child ran: ' . \implode("\n", $unlimited[1]));
-        self::assertStringContainsString('UNLIMITEDLEFT=-1', \implode("\n", $unlimited[1]), 'an unlimited process needs no widening');
     }
 
     /**
@@ -1763,44 +1671,6 @@ final class SelfUpdateTest extends TestCase
         self::assertStringContainsString(SelfUpdate::SIGNATURE_ASSET . ': HTTP 404', $this->errorText());
         self::assertSame([], \glob($phar . '.tmp-' . \chr(42)));
         self::assertSame('INSTALLED-PHAR-BYTES', \file_get_contents($phar));
-
-        // Structural pin of the sweep hook: mint < hook registration < rename.
-        $src = (string) \file_get_contents((new \ReflectionClass(SelfUpdate::class))->getFileName());
-        $mint = \strpos($src, "\$temp = \$phar . '.tmp-'");
-        $hook = \strpos($src, 'register_shutdown_function');
-        $rename = \strpos($src, 'if (!\\rename($temp, $phar))');
-        self::assertIsInt($mint, 'the mint line the pin measures from exists');
-        self::assertIsInt($rename, 'the rename line the pin measures to exists');
-        self::assertIsInt($hook, 'a shutdown sweep is registered at all');
-        self::assertGreaterThan($mint, $hook, 'the sweep can only forget a temp that was already minted');
-        self::assertLessThan($rename, $hook, 'the sweep is armed before the stranding window opens');
-    }
-
-    /**
-     * DST-3-P3, E646: the shipped client carries the low-speed stall pair on
-     * the curl transport and the connect/read ceilings, and NEVER a total
-     * request clock — a big phar over a slow link is legitimate work.
-     */
-    public function testTheProductionClientCarriesTheStallGuardsAndNoBlanketClock(): void
-    {
-        $client = (new \ReflectionMethod(SelfUpdate::class, 'httpClient'))->invoke(null);
-        self::assertInstanceOf(Client::class, $client);
-        $config = (new \ReflectionProperty(Client::class, 'config'))->getValue($client);
-        self::assertIsArray($config);
-
-        self::assertSame(5.0, $config['connect_timeout']);
-        self::assertSame(60.0, $config['read_timeout']);
-        self::assertFalse($config['http_errors']);
-        self::assertArrayNotHasKey('timeout', $config, 'E646: no blanket total-request clock on the shipped client');
-
-        if (\defined('CURLOPT_LOW_SPEED_LIMIT') && \defined('CURLOPT_LOW_SPEED_TIME')) {
-            $curl = $config['curl'] ?? [];
-            self::assertSame(1024, $curl[\CURLOPT_LOW_SPEED_LIMIT] ?? null, 'the curl transport aborts a stalled bulk transfer');
-            self::assertSame(60, $curl[\CURLOPT_LOW_SPEED_TIME] ?? null, 'after a minute under the low-speed floor');
-        } else {
-            self::assertArrayNotHasKey('curl', $config, 'a curl-less runtime keeps the StreamHandler shape');
-            self::assertArrayNotHasKey('curl', $config, 'production sets the key only under the \\defined guard');
-        }
     }
 
     /**
