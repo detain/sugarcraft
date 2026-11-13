@@ -44,6 +44,7 @@ candy-top reads btop's config format and btop's `.theme` files, and its keys, me
 - Optional PHP extensions:
   - `ext-posix` shows user names in the process list (otherwise numeric uids), sends signals (`posix_kill`) and detects a real console (`posix_ttyname`).
   - `ext-pcntl` renices processes (`pcntl_setpriority`; PHP's `proc_nice()` cannot renice another pid) and traps SIGTERM/SIGHUP so the config is still saved.
+  - `ext-sodium` verifies release signatures in `candy-top self-update` (Ed25519/minisign); without it an unverifiable download refuses to install rather than swapping in a phar nobody signed correctly.
 - Optional: `nvidia-smi` for NVIDIA [GPU](#gpu) readings. AMD and Intel GPUs and Intel/AMD NPUs are read from sysfs on Linux and need no extra tools.
 - Optional: `ipmitool` for the [ipmi box](#ipmi) — the server BMC readings (power, temperatures, fans, voltages, chassis faults and the System Event Log). Without it the box reports `No BMC tool (ipmitool)`; the binary is searched for only in absolute `PATH` directories and the standard sbin locations, and candy-top never installs anything itself.
 

@@ -44,7 +44,8 @@
     },
     "suggest": {
         "ext-posix": "User names in the process list (instead of numeric uids), signal sending (posix_kill) and real-console detection (posix_ttyname).",
-        "ext-pcntl": "Renicing processes (pcntl_setpriority) and saving the config on SIGTERM/SIGHUP."
+        "ext-pcntl": "Renicing processes (pcntl_setpriority) and saving the config on SIGTERM/SIGHUP.",
+        "ext-sodium": "Required by `candy-top self-update`: Ed25519 verification of release signatures; without it a phar whose signature cannot be verified refuses to install."
     },
     "bin": [
         "bin/candy-top"
