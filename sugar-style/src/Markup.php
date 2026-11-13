@@ -38,25 +38,6 @@ use SugarCraft\Style\Lang;
  */
 final class Markup
 {
-    private const KNOWN_COLORS = [
-        'black' => [  0,   0,   0],
-        'red' => [205,   0,   0],
-        'green' => [  0, 205,   0],
-        'yellow' => [205, 205,   0],
-        'blue' => [  0,   0, 238],
-        'magenta' => [205,   0, 205],
-        'cyan' => [  0, 205, 205],
-        'white' => [229, 229, 229],
-        'bright-black' => [127, 127, 127],
-        'bright-red' => [255,   0,   0],
-        'bright-green' => [  0, 255,   0],
-        'bright-yellow' => [255, 255,   0],
-        'bright-blue' => [ 92,  92, 255],
-        'bright-magenta' => [255,   0, 255],
-        'bright-cyan' => [  0, 255, 255],
-        'bright-white' => [255, 255, 255],
-    ];
-
     /**
      * Ceiling on simultaneously-open markup regions. Beyond it the input
      * is adversarial (or deeply mistaken), not styled text.
@@ -235,15 +216,14 @@ final class Markup
     }
 
     /**
-     * Look up a color by name, returning a Color or null.
+     * Look up a colour name, returning its palette-slot Color or null.
+     *
+     * The lookup is the shared {@see NamedColors} table both parsers use
+     * (finding 023): a name is a slot, not an absolute RGB, so the user's
+     * own terminal palette resolves it at every tier.
      */
     private static function colorFromName(string $name): ?Color
     {
-        $nameLower = strtolower($name);
-        if (isset(self::KNOWN_COLORS[$nameLower])) {
-            [$r, $g, $b] = self::KNOWN_COLORS[$nameLower];
-            return Color::rgb($r, $g, $b);
-        }
-        return null;
+        return NamedColors::color($name);
     }
 }

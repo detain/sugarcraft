@@ -20,34 +20,6 @@ use SugarCraft\Core\Util\Color;
 final class StyleParser
 {
     /**
-     * Named ANSI-16 colours with their xterm default RGB triples.
-     *
-     * A class const, matching {@see Markup::KNOWN_COLORS}: the table is
-     * static data, and rebuilding the 16-entry array literal on every
-     * colour parse compounded costs for consumers who re-parse markup per
-     * render (finding 027). Values mirror sugar-core's ruled ANSI16_RGB
-     * roster exactly — a shared-table consolidation rides the follow-up.
-     */
-    private const NAMED_COLORS = [
-        'black' => [0, 0, 0],
-        'red' => [205, 0, 0],
-        'green' => [0, 205, 0],
-        'yellow' => [205, 205, 0],
-        'blue' => [0, 0, 238],
-        'magenta' => [205, 0, 205],
-        'cyan' => [0, 205, 205],
-        'white' => [229, 229, 229],
-        'bright-black' => [127, 127, 127],
-        'bright-red' => [255, 0, 0],
-        'bright-green' => [0, 255, 0],
-        'bright-yellow' => [255, 255, 0],
-        'bright-blue' => [92, 92, 255],
-        'bright-magenta' => [255, 0, 255],
-        'bright-cyan' => [0, 255, 255],
-        'bright-white' => [255, 255, 255],
-    ];
-
-    /**
      * Parse a styled string into a list of Cells.
      *
      * Format: [text](fg:red,bg:blue,bold,italic,underline)
@@ -218,11 +190,12 @@ final class StyleParser
         }
         $value = trim($value);
 
-        // Named ANSI colors (class const — see NAMED_COLORS for the why)
-        $valueLower = strtolower($value);
-        if (isset(self::NAMED_COLORS[$valueLower])) {
-            [$r, $g, $b] = self::NAMED_COLORS[$valueLower];
-            return Color::rgb($r, $g, $b);
+        // Named ANSI colours route through their palette slots — the shared
+        // NamedColors table (findings 023/027): one source of truth, and the
+        // user's terminal palette wins the final colour at every tier.
+        $named = NamedColors::color($value);
+        if ($named !== null) {
+            return $named;
         }
 
         // Hex colour: explicit `#…`, or a bare value that is entirely a
