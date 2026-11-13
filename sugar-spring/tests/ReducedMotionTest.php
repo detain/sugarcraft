@@ -182,7 +182,7 @@ final class ReducedMotionTest extends TestCase
     {
         // The honest half of the scope sentence, now pinned the other way:
         // these are pure functions with no target to snap TO, so the app
-        // gates them (see README "Composing calm motion").
+        // gates them (see README "Reduced motion").
         putenv('REDUCE_MOTION=1');
 
         $projectile = Projectile::new(

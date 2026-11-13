@@ -15,7 +15,7 @@
 
 
 sugar-spring — damped-spring physics, projectile simulation, and easing/timing
-curves for animation, for PHP 8.3+. Pure math; no terminal dependency.
+curves for animation in PHP 8.3+. Pure math; no terminal dependency.
 
 ```sh
 composer require sugarcraft/sugar-spring
@@ -40,9 +40,10 @@ composer require sugarcraft/sugar-spring
 
 Damped harmonic oscillator (Ryan-Juckett's algorithm, [spring physics
 part 1](https://ryanjuckett.com/posts/spring-physics-part-1/) / [part
-2](https://ryanjuckett.com/posts/spring-physics-part-2/)). Choose
-`dampingRatio`: < 1 oscillates, = 1 is critical (no overshoot, fastest
-convergence), > 1 is over-damped. The frequency and damping arguments must
+2](https://ryanjuckett.com/posts/spring-physics-part-2/)). The
+`dampingRatio` regimes are tabulated under
+[Damping-ratio regimes](#damping-ratio-regimes); the frequency and damping
+arguments must
 produce a converging spring (and the frame time must be positive):
 `angularFrequency` must be at least `1e-9` and `dampingRatio` must be greater
 than `0` — a zero-damping spring oscillates forever and a negative one
@@ -146,7 +147,88 @@ honest patterns:
   frame, skip the repaint — animating a value that rounds to the same cell
   is repaints without information.
 
-### Reduced motion
+### Spring presets
+
+`Spring::fromPreset(SpringPreset $preset, ?float $deltaTime = null, ?bool $reducedMotionOverride = null)`
+constructs a spring from a named preset at 60 fps (override the frame time as
+needed; `reducedMotionOverride` pins the snap-to-target behaviour — see
+[Reduced motion](#reduced-motion)).
+Five presets are available, tuned by hand against the react-spring-era folk
+tables (they are not literal UIKit values — `UIViewPropertyAnimator` documents
+duration/damping, not tension triples):
+
+| Preset | Tension | Friction | Mass | ζ | Overshoot | Settle at 60 fps |
+|------------|-----------|---------|------|-------|-----------|------------------|
+| `Gentle`   | 100 | 10 | 1 | 0.50 | ~16% | 174 frames (~2.9 s) |
+| `Wobbly`   | 180 | 12 | 1 | 0.45 | ~21% | 141 frames (~2.4 s) |
+| `Stiff`    | 500 | 20 | 1 | 0.45 | ~21% | 94 frames (~1.6 s) |
+| `Slow`     |  50 |  6 | 1 | 0.42 | ~23% | 292 frames (~4.9 s) |
+| `Molasses` |  30 |  4 | 1 | 0.37 | ~29% | 439 frames (~7.3 s) |
+
+Every preset is under-damped (ζ < 1) — they all overshoot a little; that is
+the family's character. Settle frames are measured for a 0 → 100 move at the
+default `1e-4` threshold; under reduced motion every preset instead snaps to
+target in one tick (see [Reduced motion](#reduced-motion)). No
+critical-by-construction preset ships (none was tuned); build one with
+`dampingRatio: 1.0` (the flagship example above) or `new SpringConfig(...)`
+with friction `2 * sqrt(tension * mass)`.
+
+```php
+use SugarCraft\Spring\{Spring, SpringPreset};
+
+$spring = Spring::fromPreset(SpringPreset::Wobbly);
+// With custom frame rate
+$spring60 = Spring::fromPreset(SpringPreset::Stiff, Spring::fps(60));
+$spring30 = Spring::fromPreset(SpringPreset::Gentle, Spring::fps(30));
+```
+
+### SpringConfig
+
+`SpringConfig` accepts physical parameters (tension / friction / mass — all
+finite and greater than zero) and derives the `angularFrequency` and
+`dampingRatio` consumed by `Spring`. Extreme-but-finite triples are refused
+when the derived ω/ζ are non-finite, non-positive, or numerically degenerate
+(past ζ ≈ 2^26.5 the float sum ζ² − 1 rounds back to ζ², both over-damped
+roots collapse to one number, and the spring would freeze — illegal, not
+slow):
+
+```
+angularFrequency = sqrt(tension / mass)
+dampingRatio     = friction / (2 * sqrt(tension * mass))
+```
+
+```php
+use SugarCraft\Spring\{SpringConfig, Spring};
+
+$config = new SpringConfig(tension: 180.0, friction: 12.0, mass: 1.0);
+$spring = $config->spring();  // 1/60 default; pass $deltaTime for another frame rate
+$snapped = $config->spring(reducedMotionOverride: true);  // pin the snap, ignore the env
+echo $config->angularFrequency;     // 13.416... (public readonly)
+```
+
+`SpringConfig::spring()` returns a pre-wired `Spring` instance ready to drive
+`update()` calls and accept the optional `reducedMotionOverride` — see
+[Reduced motion](#reduced-motion). `SpringConfig::springAt60Fps()` is a deprecated synonym of its 1/60
+default leg (`REMOVED-IN: 2.0.0`): same door, two spellings, one of them
+going away.
+
+## Damping-ratio regimes
+
+The `dampingRatio` argument to `Spring` picks one of three classical
+behaviours:
+
+- **Under-damped** (`0 < ζ < 1`) — oscillates around the target,
+  amplitudes decaying each cycle. Good picks for "bouncy" feel.
+- **Critically-damped** (`ζ = 1`) — fastest convergence with no
+  overshoot. The default for "snap to value" animations.
+- **Over-damped** (`ζ > 1`) — converges without overshoot but slower
+  than critical. Good picks for slow, weighty motion.
+
+`ζ <= 0` is refused at construction: zero damping is a pure oscillator that
+never settles, and negative damping diverges — neither belongs in a frame
+loop, so the constructor throws instead of hanging it.
+
+## Reduced motion
 
 Spring-driven animation honours a reduced-motion request automatically:
 `Spring::update()` — and everything built from springs, `SpringChain` and
@@ -226,71 +308,6 @@ $alwaysAnimates = new Spring(
 );
 ```
 
-### Spring presets
-
-`Spring::fromPreset(SpringPreset $preset, ?float $deltaTime = null, ?bool $reducedMotionOverride = null)`
-constructs a spring from a named preset at 60 fps (override the frame time as
-needed; `reducedMotionOverride` pins the snap-to-target behaviour — see
-[Reduced motion](#reduced-motion)).
-Five presets are available, tuned by hand against the react-spring-era folk
-tables (they are not literal UIKit values — `UIViewPropertyAnimator` documents
-duration/damping, not tension triples):
-
-| Preset | Tension | Friction | Mass | ζ | Overshoot | Settle at 60 fps |
-|------------|-----------|---------|------|-------|-----------|------------------|
-| `Gentle`   | 100 | 10 | 1 | 0.50 | ~16% | 174 frames (~2.9 s) |
-| `Wobbly`   | 180 | 12 | 1 | 0.45 | ~21% | 141 frames (~2.4 s) |
-| `Stiff`    | 500 | 20 | 1 | 0.45 | ~21% | 94 frames (~1.6 s) |
-| `Slow`     |  50 |  6 | 1 | 0.42 | ~23% | 292 frames (~4.9 s) |
-| `Molasses` |  30 |  4 | 1 | 0.37 | ~29% | 439 frames (~7.3 s) |
-
-Every preset is under-damped (ζ < 1) — they all overshoot a little; that is
-the family's character. Settle frames are measured for a 0 → 100 move at the
-default `1e-4` threshold; under reduced motion every preset instead snaps to
-target in one tick (see [Reduced motion](#reduced-motion)). No
-critical-by-construction preset ships (none was tuned); build one with
-`dampingRatio: 1.0` (the flagship example above) or `new SpringConfig(...)`
-with friction `2 * sqrt(tension * mass)`.
-
-```php
-use SugarCraft\Spring\{Spring, SpringPreset};
-
-$spring = Spring::fromPreset(SpringPreset::Wobbly);
-// With custom frame rate
-$spring60 = Spring::fromPreset(SpringPreset::Stiff, Spring::fps(60));
-$spring30 = Spring::fromPreset(SpringPreset::Gentle, Spring::fps(30));
-```
-
-### SpringConfig
-
-`SpringConfig` accepts physical parameters (tension / friction / mass — all
-finite and greater than zero) and derives the `angularFrequency` and
-`dampingRatio` consumed by `Spring`. Extreme-but-finite triples are refused
-when the derived ω/ζ are non-finite, non-positive, or numerically degenerate
-(past ζ ≈ 2^26.5 the float sum ζ² − 1 rounds back to ζ², both over-damped
-roots collapse to one number, and the spring would freeze — illegal, not
-slow):
-
-```
-angularFrequency = sqrt(tension / mass)
-dampingRatio     = friction / (2 * sqrt(tension * mass))
-```
-
-```php
-use SugarCraft\Spring\{SpringConfig, Spring};
-
-$config = new SpringConfig(tension: 180.0, friction: 12.0, mass: 1.0);
-$spring = $config->spring();  // 1/60 default; pass $deltaTime for another frame rate
-$snapped = $config->spring(reducedMotionOverride: true);  // pin the snap, ignore the env
-echo $config->angularFrequency;     // 13.416... (public readonly)
-```
-
-`SpringConfig::spring()` returns a pre-wired `Spring` instance ready to drive
-`update()` calls and accept the optional `reducedMotionOverride` described
-above. `SpringConfig::springAt60Fps()` is a deprecated synonym of its 1/60
-default leg (`REMOVED-IN: 2.0.0`): same door, two spellings, one of them
-going away.
-
 ## Projectile
 
 Newtonian-physics simulator for arcs / bouncing balls / particle effects.
@@ -325,22 +342,6 @@ stays callable for pre-2.0 compatibility but every accessor emits
 `E_USER_DEPRECATED` and names its `Projectile::` replacement
 (REMOVED-IN: 2.0.0). Both spellings return the same SHARED immutable
 `Vector` (readonly by type — no caller can mutate what they did not build).
-
-## Damping-ratio regimes
-
-The `dampingRatio` argument to `Spring` picks one of three classical
-behaviours:
-
-- **Under-damped** (`0 < ζ < 1`) — oscillates around the target,
-  amplitudes decaying each cycle. Good picks for "bouncy" feel.
-- **Critically-damped** (`ζ = 1`) — fastest convergence with no
-  overshoot. The default for "snap to value" animations.
-- **Over-damped** (`ζ > 1`) — converges without overshoot but slower
-  than critical. Good picks for slow, weighty motion.
-
-`ζ <= 0` is refused at construction: zero damping is a pure oscillator that
-never settles, and negative damping diverges — neither belongs in a frame
-loop, so the constructor throws instead of hanging it.
 
 ## Coordinate systems
 
@@ -741,6 +742,15 @@ migrate call sites.
 
 `tests/AccessorDeprecationTest.php` pins the table above; the dated internal
 change record lives in `CALIBER_LEARNINGS.md`.
+
+## Used by
+
+- **sugar-widgets** — `AnimatedProgress` caches one `Spring` across the
+  widget's lifetime and drives it per tick.
+- **sugar-overlay** — the `Animation` layer types (Fade / Slide / Scale)
+  consume the easing seam, `CubicBezier` presets included.
+- **candy-flappy** — `Bird.php` integrates `Projectile` (gravity, terminal
+  velocity) for its flap-and-fall arc.
 
 ## Credits & inspiration
 
