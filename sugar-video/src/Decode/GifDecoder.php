@@ -36,16 +36,43 @@ final class GifDecoder implements Decoder
     public const MAX_SOURCE_BYTES = 67_108_864; // 64 MiB
 
     /**
-     * Resident-pixel budget for the whole decoded frame list (M6).
+     * Resident-pixel budget for the whole decoded frame list (M6; cap
+     * re-derived by SV-M42 from the post-M40 representation).
      *
-     * Measured basis: one 316x316 graphics-grid frame costs ~24.9 MiB of
-     * resident GD-derived state, so the un-capped product of upstream's own
-     * per-axis caps projected to multi-GB residency on hostile files. 8M
-     * frame-pixels bounds the worst case near ~2 GiB of the same units and
-     * comfortably passes ordinary terminal playback (an 80x24 HalfBlock clip
-     * is 3,840 px per frame, i.e. thousands of frames of headroom).
+     * MEASURED, not imagined (step report quotes the numbers): the upstream
+     * AnimationFrame cell roster costs 255 bytes per resident cell-pixel on
+     * this PHP (fresh-process deltas: 8 frames of 316×316 = 798,848 cells
+     * hold 203.9 MB; the 16×16 series matches the same per-cell slope, so the
+     * unit is per-cell, not per-frame overhead). The M42 target is ≤256 MB of
+     * decoder residency end to end:
+     *
+     *   650,000 px × 255 B/px  ≈ 166 MB  cells (this budget)
+     *   + 64 MB                 =  MAX_SOURCE_BYTES (the one capture)
+     *   + 24 MB                 =  MAX_EMIT_CACHE_BYTES (M40)
+     *   ────────────────────────────────
+     *   ≈ 254 MB worst case
+     *
+     * The old 8,000,000 px cap projected to ~2 GiB of the same measured
+     * units — a hostile in-cap GIF OOMed the host rather than degrading the
+     * terminal, which is the whole reason this budget exists. Affordability
+     * was checked against real use, as the row demands: an 80×24 HalfBlock
+     * clip costs 3,840 px per frame, so ordinary terminal GIFs keep 169
+     * frames (≈28 minutes at 10 fps) of headroom; the inputs the cap now
+     * refuses are large-graphics-source animations (a 316×316 grid spends the
+     * roster in 6 frames), and the typed refusal names the budget and points
+     * at a smaller geometry or shorter clip. A rolling-window forward decode
+     * could host those at bounded memory too, but that is a representation
+     * redesign, not a ceiling, and the derive showed the CURRENT shape is
+     * affordable without it — so the cap ships, documented honestly.
+     *
+     * The number sits deliberately BELOW sugar-animation's own eager
+     * {@see AnimationDecoder::MAX_TOTAL_CELLS} joint gate (2M): for any
+     * roster this decoder can be asked to hydrate, the running budget here
+     * is what fires, in sugar-video's own advice wording — the sibling's
+     * eager refusal only preempts at products so far past the budget that
+     * both say “refuse”, and hydrate() translates its wording too.
      */
-    private const MAX_TOTAL_FRAME_PIXELS = 8_000_000;
+    private const MAX_TOTAL_FRAME_PIXELS = 650_000;
 
     /**
      * `st_mode` masks used by {@see readBoundedBytes()} to prove the source
@@ -254,13 +281,16 @@ final class GifDecoder implements Decoder
         // (see FfmpegDecoder), so translate narrowly instead of letting the
         // engine-level error class escape.
         // RESIDENCY BUDGET: the decoder upstream caps a single frame's grid
-        // (graphics path) and the frame roster, but never their PRODUCT, so a
-        // GIF could still hydrate a multi-gigabyte resident list (measured
-        // ~24.9 MiB per 316x316 frame; 256 such frames project ~6.2 GiB).
-        // Consume the generator frame by frame and refuse the moment the
-        // running product would pass MAX_TOTAL_FRAME_PIXELS: at most one
-        // frame's allocation beyond the budget is ever made, then nothing
-        // over-budget stays resident and the refusal is loud and typed.
+        // (graphics path) and the frame roster, but never their PRODUCT.
+        // The product is the whole cost: the roster measures 255 bytes per
+        // cell-pixel on this PHP (SV-M42 fresh-process deltas), so the
+        // re-derived MAX_TOTAL_FRAME_PIXELS keeps even a hostile in-cap GIF
+        // inside ~166 MB of cells (total decoder residency ≈ 254 MB with the
+        // source capture and emit cache accounted). Consume the generator
+        // frame by frame and refuse the moment the running product would
+        // pass the budget: at most one frame's allocation beyond the budget
+        // is ever made, then nothing over-budget stays resident and the
+        // refusal is loud and typed.
         // m14: without ext-gd the graphics path silently degrades to the
         // (much smaller) native-pixel grid upstream. Say so, once per process.
         if ($mode !== null && $mode->isGraphics()) {
@@ -289,7 +319,16 @@ final class GifDecoder implements Decoder
             // a raw cell count nobody can act on. Keep its sentence as the
             // technical detail but answer as sugar-video advice. The budget
             // refusal raised above passes through untranslated.
-            if (!str_contains($e->getMessage(), 'cell grid product exceeds maximum')) {
+            //
+            // SV-M42: the sibling's EAGER joint gate (MAX_TOTAL_CELLS) speaks
+            // the same refuse about the same product, at call time — before
+            // this loop's running budget can reach frame #7 of a roster that
+            // will never hydrate anyway. Recognise both wordings so a hostile
+            // file always hears sugar-video's advice, never a foreign
+            // library's bare sentence, and the accounting story stays one
+            // budget with one voice.
+            if (!str_contains($e->getMessage(), 'cell grid product exceeds maximum')
+                && !str_contains($e->getMessage(), 'total cell budget exceeded')) {
                 throw $e;
             }
 

@@ -445,21 +445,27 @@ final class GifDecoderTest extends TestCase
     }
 
     /**
-     * @testdox M6: the budget helper trips exactly one frame past the product limit
+     * @testdox M6/M42: the budget helper trips exactly one frame past the re-derived product limit
      */
     public function testTheResidentBudgetHelperTripsAtTheExactProductBoundary(): void
     {
         $probe = new \ReflectionMethod(GifDecoder::class, 'exceedsResidentBudget');
         $probe->setAccessible(true);
 
-        // 99,856 px per frame (316x316 Ascii): the 80th fits, the 81st does not.
-        $this->assertFalse($probe->invoke(null, 79, 99_856));
-        $this->assertTrue($probe->invoke(null, 80, 99_856), 'the 81st frame of 99,856 px lands at 8,088,336 — over');
+        // 99,856 px per frame (316x316 Ascii): the 6th fits the 650,000-px
+        // roster, the 7th (698,992) does not (SV-M42 measured derive).
+        $this->assertFalse($probe->invoke(null, 5, 99_856));
+        $this->assertTrue($probe->invoke(null, 6, 99_856), 'the 7th frame of 99,856 px lands at 698,992 — over');
 
-        // Exact-equality edges stay inside (limit is not "greater than").
-        $this->assertFalse($probe->invoke(null, 999, 8_000));
-        $this->assertTrue($probe->invoke(null, 1_000, 8_000));
-        $this->assertTrue($probe->invoke(null, 0, 8_000_001), 'a single frame over the whole budget refuses at once');
+        // Exact-equality edges stay inside (limit is not "greater than"):
+        // held=99 accepts a 100th of 6,500 px at exactly 650,000; held=100
+        // would multiply past it.
+        $this->assertFalse($probe->invoke(null, 99, 6_500));
+        $this->assertTrue($probe->invoke(null, 100, 6_500));
+        // And a familiar non-dividing unit still fits with margin / trips:
+        $this->assertFalse($probe->invoke(null, 80, 8_000));
+        $this->assertTrue($probe->invoke(null, 81, 8_000));
+        $this->assertTrue($probe->invoke(null, 0, 650_001), 'a single frame over the whole budget refuses at once');
     }
 
     /**
@@ -483,16 +489,81 @@ final class GifDecoderTest extends TestCase
     }
 
     /**
-     * @testdox M6: a many-frame raw GIF inside the budget still hydrates
+     * @testdox M42: a roster just inside the re-derived budget still hydrates
+     *
+     * 6 distinct 316×316 frames = 599,136 resident px — the exact fit under
+     * 650,000. The old raw-run fixture was a coalescing-shaped probe (it
+     * could yield far fewer frames than it declared); the measured derive
+     * row pins the trip point on REAL frames instead, via the same
+     * Synthetic generator the seek tests trust for frame counts.
      */
-    public function testABudgetShapedRawGifStillHydrates(): void
+    public function testAJustUnderBudgetRosterStillHydrates(): void
     {
-        $path = $this->rawFrameGifPath(90);
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('GD extension required to build the animated fixture');
+        }
+
+        $this->tempGifPath = Synthetic::generate(
+            sys_get_temp_dir() . '/sugar-video-m42-under-' . uniqid('', true) . '.gif',
+            316, 316, 6, 4
+        );
 
         $decoder = new GifDecoder();
-        $decoder->open($path, 316, 316, 10.0, Mode::Ascii);
+        $decoder->open($this->tempGifPath, 316, 316, 10.0, Mode::Ascii);
         $this->assertNotNull($decoder->next());
         $decoder->close();
+    }
+
+    /**
+     * @testdox M42: the 7th 316×316 frame trips the budget in sugar-video's own words
+     */
+    public function testAJustOverBudgetRosterTripsTheResidentBudget(): void
+    {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('GD extension required to build the animated fixture');
+        }
+
+        $this->tempGifPath = Synthetic::generate(
+            sys_get_temp_dir() . '/sugar-video-m42-over-' . uniqid('', true) . '.gif',
+            316, 316, 7, 4
+        );
+
+        try {
+            (new GifDecoder())->open($this->tempGifPath, 316, 316, 10.0, Mode::Ascii);
+            $this->fail('the running budget must refuse the 7th frame');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('GIF decode budget exceeded at frame 7', $e->getMessage());
+            $this->assertStringContainsString('650000', $e->getMessage(), 'the refusal names the measured cap');
+        }
+    }
+
+    /**
+     * @testdox M42: the sibling's eager joint gate is translated, never heard raw
+     *
+     * 21 distinct frames × 99,856 px = 2,096,976 cells — over
+     * sugar-animation's own eager MAX_TOTAL_CELLS door, which fires at CALL
+     * time before this file's running budget could. Both refusals are the
+     * same accounting truth; the user hears one voice (the m13 wording
+     * recogniser now covers both upstream sentences).
+     */
+    public function testTheEagerUpstreamJointGateIsTranslatedToo(): void
+    {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('GD extension required to build the animated fixture');
+        }
+
+        $this->tempGifPath = Synthetic::generate(
+            sys_get_temp_dir() . '/sugar-video-m42-eager-' . uniqid('', true) . '.gif',
+            316, 316, 21, 4
+        );
+
+        try {
+            (new GifDecoder())->open($this->tempGifPath, 316, 316, 10.0, Mode::Ascii);
+            $this->fail('the eager joint gate must refuse before any frame lands');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('sugar-video: the GIF asks for a cell grid beyond', $e->getMessage());
+            $this->assertStringContainsString('total cell budget exceeded', $e->getMessage(), 'the upstream sentence survives as the technical detail');
+        }
     }
 
     /**
