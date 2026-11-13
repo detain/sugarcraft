@@ -104,15 +104,15 @@ These demos resolve the autoloader from a repo checkout (the library's own `vend
 ### Rendering modes
 
 | Mode | Description | Terminal requirement |
-|------|-------------|---------------------|
+|---|---|---|
 | `ascii` | Grayscale luminance ramp (` .,:;i1tfLCG08@`) | Any |
 | `ansi256` | 256-color cube + grey ramp | 256-color |
 | `truecolor` | 24-bit RGB truecolor | 24-bit color |
 | `halfblock` | 24-bit `▀` half-blocks, 2× vertical resolution | 24-bit color |
 | `quarterblock` | 24-bit quarter-block characters, 2×2 sub-cell resolution | 24-bit color |
 | `sixel` | Sixel graphics protocol (DEC) | Sixel-capable |
-| `kitty` | Kitty graphics protocol (APC `\x1b_G`) | Kitty-compatible — recognised via the `TERM=xterm-kitty` environment surrogate, no protocol handshake |
-| `iterm2` | iTerm2 inline image (OSC 1337) | iTerm2 only — WezTerm is recognised as a TrueColor seat and never an OSC 1337 one, so explicit `iterm2` there takes the typed refusal |
+| `kitty` | Kitty graphics protocol (APC `\x1b_G`) | Kitty-compatible — recognized via the `TERM=xterm-kitty` environment surrogate, no protocol handshake |
+| `iterm2` | iTerm2 inline image (OSC 1337) | iTerm2 only — WezTerm is recognized as a TrueColor seat and never an OSC 1337 one, so explicit `iterm2` there takes the typed refusal |
 | `auto` | Selector, not a ninth mode: resolves the terminal from its environment at open and picks the best mode it can render — a lookup table, no protocol negotiation. There is no `Mode::Auto` case — `Mode::from('auto')` throws a `ValueError`; `Mode::AUTO_WIRE` carries the token and `Mode::wires()` the full accepted list | — |
 
 Each row's mode column is that case's exact wire token: `Mode::wireName()`
@@ -147,7 +147,7 @@ ASCII/ANSI256 text modes use a luminance ramp to map pixel brightness to charact
 Three named ramps are available:
 
 | Ramp | Characters | Best for |
-|------|-------------|----------|
+|---|---|---|
 | `minimal` | ` .:-=+*#%@` | Low-resolution / high contrast |
 | `standard` | ` .,:;i1tfLCG08@` | General use (default) |
 | `dense` | `` .\`^",:;Il!i><~+_-?][}{1)(\|\/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$`` | High-fidelity ASCII art |
@@ -159,7 +159,7 @@ use SugarCraft\Video\Reel;
 Reel::open('video.mp4')->withRamp('dense')->play();
 ```
 
-## Remote & embedded playback
+## Remote and embedded playback
 
 ### Authenticated / signed streams
 
@@ -313,7 +313,7 @@ $player = Player::open('clip.mp4', cellsW: 80, cellsH: 24);
 #### Tell the player how big one cell is
 
 In the graphics modes (`sixel`, `kitty`, `iTerm2`) the terminal's cell pixel size
-is a **decode** input: the frame is rasterised at `cols × cellPxW` by
+is a **decode** input: the frame is rasterized at `cols × cellPxW` by
 `rows × cellPxH` so the image fills the pixel box instead of being resampled up
 from one pixel per cell. Only the host knows that number, so `Reel` accepts it
 through `withCellPx()` and forwards it to `Player::open()` (and to `play()`,
@@ -431,7 +431,7 @@ enough to read most `.srt` files directly: numeric cue indices and `,`
 millisecond separators are tolerated, `NOTE`/`STYLE`/`REGION` blocks are
 skipped, inline tags (`<i>`, `<c>`, cues' `<c.class>`) are stripped, and HTML
 entities are decoded. Cue identifiers and cue settings lines
-(`position:`, `align:` …) are parsed away but not honoured — the renderer owns
+(`position:`, `align:` …) are parsed away but not honored — the renderer owns
 placement. A track over `WebVtt::MAX_CUES` (10,000) cues is truncated to that
 bound.
 
@@ -456,7 +456,7 @@ into your own view.
 Playback starts paused — `Space` is the first key you will press.
 
 | Key | Action |
-|-----|--------|
+|---|---|
 | `Space` | Pause / resume |
 | `←` | Seek backward 10 frames |
 | `→` | Seek forward 10 frames |
@@ -469,7 +469,7 @@ Playback starts paused — `Space` is the first key you will press.
 ### Behaviour (no keyboard shortcut)
 
 | Setting | Behaviour |
-| --- | --- |
+|---|---|
 | `resize` | Terminal resize (SIGWINCH) re-scales video automatically — under `Reel::play()` the `Program` host installs the handler; embedding hosts forward `WindowSizeMsg` themselves (see Host contract) |
 | `loop` | Loop is set at open time via `Reel::new()->withLoop(true)->play()` (no keyboard shortcut) |
 | `subtitles` | Attached at open time via `Reel::withSubtitles()` (the example takes `--subs=FILE`; no keyboard shortcut). The active cue keeps painting while **paused** — it follows the playhead, not the clock |
@@ -683,7 +683,7 @@ expects.
 
 The entry points worth knowing: `Reel` (open/openUrl/play/toPlayer + `withMode/withAutoMode/withFps/withLoop/withRamp/withSize/withSubtitles/withAudio/withFrameBudget/withAllowedHosts/withHeaders/withCellPx` + the removal doors `withoutSubtitles/withoutHeaders/withoutRamp` — the allowlist has no remover by design, a security field never loosens via absence), `Player` (open/fromDecoder + pause/play/stop/isStopped/withSeek/withSubtitles/withAudio/frameAt/seekToSeconds/canSeekByTime/position/duration), `AudioPlayer` (start/stop/pause/resume/mute/unmute/isMuted/isPlaying/hasStarted/position/exitCode), `Synthetic::generate` (path defaults to `Synthetic::DEFAULT_PATH`; the returned path is the source of truth — a refused target yields a private stand-in path), `WebVtt::parse`, `VideoSource::probe`, `HttpHeaders::parse`, `Probe`, `DecoderFactory::new`, and `RendererFactory` (`auto`/`autoMode`/`supports`/`supportedModes`/`diagnose`). Two `Probe` classes share the short name: the roster entry here is `SugarCraft\Video\Source\Probe` (external-binary presence checks for ffmpeg/ffprobe/ffplay/mpv), while the auto-mode fallback above is `SugarCraft\ColorProfile\Probe`.
 
-Ceilings that shape what plays: source capture is capped at 64 MiB per file (`GifDecoder::MAX_SOURCE_BYTES`, `AnimatedWebpDecoder::MAX_SOURCE_BYTES`); animated WebP at `MAX_FRAMES` 4096 frames, `MAX_CANVAS_PIXELS` 2048² per canvas and `MAX_TOTAL_PIXELS` 33,554,432 pixels summed across the file; GIF residency at an internal `GifDecoder` cap of 8 000 000 decoded pixels per playthrough; subtitles at 4 MiB (`Reel::MAX_SUBTITLE_BYTES`) and 10 000 cues (`WebVtt::MAX_CUES`, announced when truncated); the terminal geometry clamps to 10-200 columns and 5-80 rows (`Player::MIN/MAX_COLS`, `MIN/MAX_ROWS`). ffprobe output drains under an 8 MiB ceiling and a 10 s deadline; each ffmpeg frame read is bounded by a per-fill timeout.
+Ceilings that shape what plays: source capture is capped at 64 MiB per file (`GifDecoder::MAX_SOURCE_BYTES`, `AnimatedWebpDecoder::MAX_SOURCE_BYTES`); animated WebP at `MAX_FRAMES` 4096 frames, `MAX_CANVAS_PIXELS` 2048² per canvas and `MAX_TOTAL_PIXELS` 33,554,432 pixels summed across the file; GIF residency at an internal `GifDecoder` cap of 8,000,000 decoded pixels per playthrough; subtitles at 4 MiB (`Reel::MAX_SUBTITLE_BYTES`) and 10,000 cues (`WebVtt::MAX_CUES`, announced when truncated); the terminal geometry clamps to 10-200 columns and 5-80 rows (`Player::MIN/MAX_COLS`, `MIN/MAX_ROWS`). ffprobe output drains under an 8 MiB ceiling and a 10 s deadline; each ffmpeg frame read is bounded by a per-fill timeout.
 
 ## Color and terminal honesty
 
