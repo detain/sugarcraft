@@ -38,6 +38,16 @@ final class SchemaBrowser
     }
 
     /**
+     * The introspection provider for $flavor, for callers (the completer's
+     * lazy column lookup) that need one table's columns without a full
+     * refresh() of every table.
+     */
+    public static function providerFor(DatabaseInterface $db, Flavor $flavor): SchemaProviderInterface
+    {
+        return self::createProvider($db, $flavor);
+    }
+
+    /**
      * Create the appropriate provider for the given flavor.
      */
     private static function createProvider(DatabaseInterface $db, Flavor $flavor): SchemaProviderInterface

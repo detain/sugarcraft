@@ -386,9 +386,8 @@ final class App implements Model
                 || ($msg->type === KeyType::Enter && $msg->ctrl)) {
                 return $this->beginRunQuery();
             }
-            // SQL-O04 (v1, keyword-only per owner ruling 3a): Ctrl+Space
-            // completes the word at the caret against the SQL keyword
-            // roster. The chord rides the modern terminal's ctrl-decoded
+            // SQL-O04: Ctrl+Space completes at the caret — keywords, and
+            // schema tables/columns by statement context. The chord rides the modern terminal's ctrl-decoded
             // Space (kitty protocol); legacy terminals that report
             // Ctrl+Space as a bare space simply keep typing — the key is
             // inert there, never a wrong insert.
@@ -807,47 +806,87 @@ final class App implements Model
     }
 
     /**
-     * SQL-O04 v1: Ctrl+Space completion for the keyword at the caret. The
-     * replacement is driven through the widget's own doors (Backspace
-     * KeyMsgs + insertString) so cursor and surrounding text stay the
-     * widget's business — no cross-lib edit of sugar-forms. One candidate
-     * completes outright; several advance the caret word to their longest
-     * common prefix when that is longer, otherwise the status line lists
-     * them (capped — the roster is a floor, not a ceiling to show).
+     * SQL-O04: Ctrl+Space completion at the caret. The context classifier
+     * ({@see Completer::complete()}) decides keyword vs table vs column vs
+     * qualified (`alias.`) from the statement text and the loaded schema; the
+     * replacement is driven through the widget's own doors (Backspace KeyMsgs
+     * + insertString) so cursor and surrounding text stay the widget's
+     * business — no cross-lib edit of sugar-forms. One candidate completes
+     * outright; several advance the caret word to their longest common prefix
+     * when that is longer, otherwise the status lists them (capped — the
+     * roster is a floor, not a ceiling to show). Columns are read lazily, once
+     * per distinct table the statement names, under the same stall bound as
+     * every other synchronous introspection leg.
      */
     private function completeKeyword(): array
     {
         $editor = $this->editor();
-        $word = Completer::wordAt($editor->lines, $editor->line(), $editor->column());
-        if ($word === '') {
-            return [$this->withQueryStatus('nothing to complete — type the start of a keyword'), null];
+        $sql = $editor->value();
+        $caret = 0;
+        foreach ($editor->lines as $row => $text) {
+            if ($row >= $editor->line()) {
+                break;
+            }
+            $caret += mb_strlen((string) $text) + 1;
         }
-        $candidates = Completer::candidates($word);
-        if ($candidates === []) {
-            return [$this->withQueryStatus('no keyword completes "' . $word . '"'), null];
+        $caret += $editor->column();
+
+        $db = $this->connection->db;
+        $flavor = $this->connection->flavor;
+        $provider = null;
+        $columnsOf = static function (string $table) use ($db, $flavor, &$provider): array {
+            $provider ??= SchemaBrowser::providerFor($db, $flavor);
+            try {
+                $cols = (new StatementTimeout())->run(static fn (): array => $provider->columns($table));
+            } catch (\Throwable) {
+                return [];
+            }
+            return array_values(array_map(static fn ($c): string => $c->name, $cols));
+        };
+
+        $c = Completer::complete($sql, $caret, $this->browse->tables, $columnsOf, $flavor);
+        $word = $c->prefix;
+
+        if ($c->kind === 'none') {
+            return [$this->withQueryStatus(Lang::t('complete.in_literal')), null];
         }
-        $insert = count($candidates) === 1
-            ? $candidates[0]
-            : (strlen(Completer::longestCommonPrefix($candidates)) > strlen($word)
-                ? Completer::longestCommonPrefix($candidates)
-                : '');
+        if ($c->kind === 'keyword' && $word === '') {
+            return [$this->withQueryStatus(Lang::t('complete.nothing')), null];
+        }
+        if ($c->candidates === []) {
+            $key = match ($c->kind) {
+                'table' => 'complete.none_table',
+                'column' => 'complete.none_column',
+                'qualified' => 'complete.none_qualified',
+                default => 'complete.none_keyword',
+            };
+            return [$this->withQueryStatus(Lang::t($key, ['word' => $word, 'qualifier' => $c->qualifier])), null];
+        }
+        $insert = Completer::insertion($c);
         if ($insert === '') {
-            $listed = array_slice($candidates, 0, 8);
-            $more = count($candidates) - count($listed);
-            return [$this->withQueryStatus(
-                count($candidates) . ' complete "' . $word . '": ' . implode(', ', $listed)
-                . ($more > 0 ? ' …' : '')
-            ), null];
+            $listed = array_slice($c->candidates, 0, 8);
+            $more = count($c->candidates) - count($listed);
+            return [$this->withQueryStatus(Lang::t('complete.list', [
+                'count' => (string) count($c->candidates),
+                'word' => $word,
+                'list' => implode(', ', $listed),
+                'more' => $more > 0 ? ' …' : '',
+            ])), null];
         }
         $next = $editor;
-        for ($i = 0, $n = strlen($word); $i < $n; $i++) {
+        for ($i = 0, $n = mb_strlen($word); $i < $n; $i++) {
             [$next, ] = $next->update(new KeyMsg(KeyType::Backspace, ''));
             assert($next instanceof TextArea);
         }
-        $next = $next->insertString($insert);
+        // An unterminated identifier quote is closed once the name is whole
+        // (a lone candidate); a partial LCP advance leaves the quote open.
+        $whole = count($c->candidates) === 1;
+        $next = $next->insertString($insert . ($whole ? $c->closeQuote : ''));
         return [$this->mutate([
             'query' => $this->query->withEditor($next)->withRecallIndex(null),
-            'ui'    => $this->ui->withStatus('completed ' . $word . ' → ' . $insert),
+            'ui'    => $this->ui->withStatus($word === ''
+                ? Lang::t('complete.inserted', ['insert' => $insert])
+                : Lang::t('complete.done', ['word' => $word, 'insert' => $insert])),
         ]), null];
     }
 
