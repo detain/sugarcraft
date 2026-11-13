@@ -94,6 +94,23 @@ final class Spinner implements Model
      */
     public function style(): Style { return $this->style; }
 
+    /**
+     * Frames-only accessor for static one-shot render paths (print mode,
+     * snapshots) that pick a glyph by index without running the tick loop.
+     *
+     * @return list<string>
+     */
+    public static function frames(?Style $style = null): array
+    {
+        return ($style ?? Style::dot())->frames;
+    }
+
+    /** Milliseconds per frame for a style (default dot), companion to {@see frames()}. */
+    public static function intervalMs(?Style $style = null): int
+    {
+        return (int) \round(1000.0 / ($style ?? Style::dot())->fps);
+    }
+
     /** Current frame index (0-based, modulo `count(style->frames)`). */
     public function frame(): int { return $this->frame; }
 

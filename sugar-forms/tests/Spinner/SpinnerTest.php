@@ -126,4 +126,17 @@ final class SpinnerTest extends TestCase
         $this->assertSame(0, $s2->frame());
         $this->assertSame($original, $s2->id());
     }
+
+    public function testFramesOnlyAccessor(): void
+    {
+        $this->assertSame(['|', '/', '-', '\\'], Spinner::frames(Style::line()));
+        $this->assertSame(Style::dot()->frames, Spinner::frames());
+    }
+
+    public function testIntervalMs(): void
+    {
+        $this->assertSame(100, Spinner::intervalMs(Style::line()));
+        $this->assertSame(100, Spinner::intervalMs());
+        $this->assertSame(83, Spinner::intervalMs(Style::miniDot()));
+    }
 }
