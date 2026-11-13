@@ -261,13 +261,14 @@ decision; the discipline above is the contract today.)
 
 ## Viewport Quick Start
 
-`view()` is not a `width × height` guarantee, and the two faces differ
-deliberately: the plain (streaming) face answers **variable row counts**
-— a 1-line document in a 10-row frame paints 1 row, not 10 — while the
-sticky face pads its regions so a document with pinned rows is always
-exactly `height` rows tall. Size your surrounding chrome to "at most
-`height`", not to `height` (a shape-unifying change is a parked API
-decision; this is the contract today).
+Every `view()` row is exactly `width()` cells — plain, sticky and
+scrollbar faces alike (long rows are clamped, short ones right-padded; a
+left scroll drops cells first, then the clamp applies). The row COUNT is
+the one deliberate difference: the plain (streaming) face paints
+`min(height, lines left)` rows — a 1-line document in a 10-row frame
+paints 1 row — while the sticky face pads its regions so a document with
+pinned rows is always exactly `height` rows tall. Size surrounding chrome
+to "at most `height`" rows, not to `height`.
 
 
 ```php

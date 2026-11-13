@@ -199,10 +199,35 @@ final readonly class Viewport implements Model
             // sticky frame uses, so ONE scrollbar geometry rules both).
             return $this->inner->showScrollbar
                 ? $this->renderWithScrollbarPlain()
-                : $this->inner->view();
+                : $this->renderPlain();
         }
 
         return $this->renderWithSticky();
+    }
+
+    /**
+     * Plain window, no scrollbar, no sticky regions — width-invariant (FBX-43).
+     *
+     * The delegate's view() returns RAGGED rows (each line at its own
+     * length, and unclamped once xOffset > 0), while the sticky and
+     * scrollbar frames normalise every row to width() cells. Same slice and
+     * horizontal law as the delegate, then the shared clamp-and-pad so all
+     * three faces honour one row-width contract. Row COUNT stays the
+     * streaming face's: min(height, lines left), not padded to height.
+     */
+    private function renderPlain(): string
+    {
+        $window = array_slice($this->inner->lines, max(0, $this->inner->yOffset), $this->inner->height);
+        $xOffset = $this->inner->xOffset;
+        $width = $this->inner->width;
+        $out = [];
+        foreach ($window as $line) {
+            if ($xOffset > 0) {
+                $line = Width::dropAnsi($line, $xOffset);
+            }
+            $out[] = $this->padRight($line, $width);
+        }
+        return implode("\n", $out);
     }
 
     /**
@@ -259,7 +284,7 @@ final readonly class Viewport implements Model
         if ($total <= $height) {
             return $this->inner->showScrollbar
                 ? $this->renderWithScrollbarPlain()
-                : $this->inner->view();
+                : $this->renderPlain();
         }
 
         $headerCount = min($this->stickyHeader, max(0, $height - $this->stickyFooter));

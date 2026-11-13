@@ -576,11 +576,48 @@ final class StickyViewportTest extends TestCase
         );
     }
 
-    public function testNonStickyPathKeepsDelegateHorizontalLaw(): void
+    public function testNonStickyPathDropsLeftCellsThenClampsToWidth(): void
     {
-        // The plain path answers through the delegate, which drops the left
-        // cells without a right clamp; the sticky fix must not regress it.
+        // FBX-43 (golden moved, disclosed): the plain path used to return
+        // the delegate's unclamped 16-cell row here; it now drops the left
+        // cells exactly as before and THEN clamps to width() like the
+        // sticky and scrollbar faces.
         $vp = Viewport::fromContent('0123456789abcdefghij', 10, 1)->withXOffset(4);
-        $this->assertSame('456789abcdefghij', $vp->view());
+        $this->assertSame('456789abcd', $vp->view());
+    }
+
+    /** @return array<string, array{Viewport}> */
+    public static function faces(): array
+    {
+        $doc = "short\n" . str_repeat('w', 40) . "\n日本語日本語\n\n\x1b[31mred\x1b[0m line";
+        $base = Viewport::fromContent($doc, 12, 4);
+        return [
+            'plain'            => [$base],
+            'plain x-scrolled' => [$base->withXOffset(2)],
+            'plain y-scrolled' => [$base->withYOffset(1)],
+            'sticky'           => [Viewport::fromContent($doc . "\nx\ny\nz", 12, 4)->withStickyHeader(1)],
+            'scrollbar'        => [$base->showScrollbar(true)],
+            'narrow plain'     => [Viewport::fromContent($doc, 3, 4)],
+        ];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('faces')]
+    public function testEveryRowIsExactlyWidthCells(Viewport $vp): void
+    {
+        $this->assertNotSame('', $vp->view());
+        foreach (explode("\n", $vp->view()) as $i => $row) {
+            $this->assertSame(
+                $vp->width(),
+                \SugarCraft\Core\Util\Width::string($row),
+                "row {$i} is not width() cells: " . json_encode($row),
+            );
+        }
+    }
+
+    public function testPlainRowCountStaysStreaming(): void
+    {
+        // Widths unify; the row COUNT does not (a 1-line doc paints 1 row).
+        $this->assertCount(1, explode("\n", Viewport::fromContent('hi', 6, 5)->view()));
+        $this->assertSame('hi    ', Viewport::fromContent('hi', 6, 5)->view());
     }
 }
