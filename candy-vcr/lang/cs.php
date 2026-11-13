@@ -98,6 +98,7 @@ return [
     'migrate.dry_run' => 'dry-run: migrovalo by v{from} → v{to}',
     'migrate.output_gz' => 'výstup nesmí být cesta .gz; migrate zapisuje prosté JSONL',
     'migrate.clobber' => 'výstup {path} již existuje - pro přepsání použijte --force',
+    'migrate.reserved_keys' => 'v2 rezervuje klíče _id a _enc - {count} existujících hodnot bude přepsáno',
     'migrate.backup_symlink' => 'cesta zálohy {path} je symbolický odkaz - zápis skrz něj odmítnut',
     'migrate.backup_exists' => 'záloha {path} již existuje - přepsání odmítnuto',
     'migrate.backup_create_failed' => 'nelze vytvořit zálohu v {path}',

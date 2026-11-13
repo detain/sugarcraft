@@ -98,6 +98,7 @@ return [
     'migrate.dry_run' => 'dry-run: zmigrowałby v{from} → v{to}',
     'migrate.output_gz' => 'wyjście nie może być ścieżką .gz; migrate zapisuje zwykły JSONL',
     'migrate.clobber' => 'plik wyjściowy {path} już istnieje - użyj --force, aby go nadpisać',
+    'migrate.reserved_keys' => 'v2 rezerwuje klucze pakietu _id i _enc - {count} istniejących wartości zostanie nadpisanych',
     'migrate.backup_symlink' => 'ścieżka kopii {path} jest dowiązaniem symbolicznym - odmowa zapisu przez nie',
     'migrate.backup_exists' => 'kopia {path} już istnieje - odmowa nadpisania',
     'migrate.backup_create_failed' => 'nie można utworzyć kopii w {path}',

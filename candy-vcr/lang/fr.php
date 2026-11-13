@@ -98,6 +98,7 @@ return [
     'migrate.dry_run' => 'dry-run : migrerait v{from} → v{to}',
     'migrate.output_gz' => 'la sortie ne peut pas être un chemin .gz ; migrate écrit du JSONL brut',
     'migrate.clobber' => 'la sortie {path} existe déjà - utilisez --force pour écraser',
+    'migrate.reserved_keys' => 'v2 réserve les clés de charge _id et _enc - {count} valeurs existantes seront écrasées',
     'migrate.backup_symlink' => 'le chemin de sauvegarde {path} est un lien symbolique - écriture à travers refusée',
     'migrate.backup_exists' => 'la sauvegarde {path} existe déjà - écrasement refusé',
     'migrate.backup_create_failed' => 'impossible de créer la sauvegarde dans {path}',

@@ -27,6 +27,11 @@ use SugarCraft\Vcr\EventKind;
  *     references across migrations
  *   - Output events gain `_enc` (encoding) field set to "utf-8" for explicit encoding
  *
+ * `_id` and `_enc` are v2 RESERVED payload keys: a v1 payload that already
+ * carries them (v1 defined neither) is overwritten by the stamp, never
+ * silently — {@see reservedKeyCollisions()} names the count and the migrate
+ * door warns with it before writing (finding 108).
+ *
  * No header field is dropped in translation: v2 is v1 plus the version stamp
  * and the two payload keys above. The recorder still writes v1
  * (CassetteHeader::CURRENT_VERSION); v2 is readable today
@@ -93,7 +98,11 @@ final class V1ToV2Migrator implements CassetteMigrator
     {
         $payload = $event->payload;
 
-        // Add sequential event id
+        // Add sequential event id. `_id`/`_enc` are v2-reserved (finding 108):
+        // pre-existing user payloads under those names are overwritten — the
+        // skip alternative would emit a malformed v2 (non-sequential ids,
+        // un-declared encodings) — but not silently: the migrate door counts
+        // them with reservedKeyCollisions() and warns by name.
         $payload['_id'] = $eventId;
 
         // Normalize output events with explicit encoding
@@ -106,5 +115,26 @@ final class V1ToV2Migrator implements CassetteMigrator
             kind: $event->kind,
             payload: $payload,
         );
+    }
+
+    /**
+     * How many events in $cassette already carry a payload key the v2 stamp
+     * reserves (`_id` on any event, `_enc` on output events) — i.e. how many
+     * pre-existing values migrate() will overwrite. Pure; the CLI consults
+     * it only for sub-target versions, where every hit is a real collision.
+     */
+    public static function reservedKeyCollisions(Cassette $cassette): int
+    {
+        $count = 0;
+        foreach ($cassette->events as $event) {
+            if (array_key_exists('_id', $event->payload)) {
+                $count++;
+            }
+            if ($event->kind === EventKind::Output && array_key_exists('_enc', $event->payload)) {
+                $count++;
+            }
+        }
+
+        return $count;
     }
 }

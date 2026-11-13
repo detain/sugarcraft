@@ -98,6 +98,7 @@ return [
     'migrate.dry_run' => 'dry-run: würde v{from} → v{to} migrieren',
     'migrate.output_gz' => 'Ausgabe darf kein .gz-Pfad sein; migrate schreibt reines JSONL',
     'migrate.clobber' => 'Ausgabe {path} existiert bereits - zum Überschreiben --force übergeben',
+    'migrate.reserved_keys' => 'v2 reserviert die Payload-Schlüssel _id und _enc - {count} vorhandene Werte werden überschrieben',
     'migrate.backup_symlink' => 'Sicherungspfad {path} ist ein Symlink - Schreiben hindurch verweigert',
     'migrate.backup_exists' => 'Sicherung {path} existiert bereits - Überschreiben verweigert',
     'migrate.backup_create_failed' => 'Sicherung unter {path} konnte nicht erstellt werden',

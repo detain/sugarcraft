@@ -98,6 +98,7 @@ return [
     'migrate.dry_run' => 'dry-run: 将迁移 v{from} → v{to}',
     'migrate.output_gz' => '输出不能是 .gz 路径;migrate 写入纯 JSONL',
     'migrate.clobber' => '输出 {path} 已存在 - 使用 --force 覆盖',
+    'migrate.reserved_keys' => 'v2 保留负载键 _id 和 _enc - {count} 个已有值将被覆盖',
     'migrate.backup_symlink' => '备份路径 {path} 是符号链接 - 拒绝通过它写入',
     'migrate.backup_exists' => '备份 {path} 已存在 - 拒绝覆盖',
     'migrate.backup_create_failed' => '无法在 {path} 创建备份',

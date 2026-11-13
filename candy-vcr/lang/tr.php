@@ -98,6 +98,7 @@ return [
     'migrate.dry_run' => 'dry-run: v{from} → v{to} taşınırdı',
     'migrate.output_gz' => 'çıktı bir .gz yolu olamaz; migrate düz JSONL yazar',
     'migrate.clobber' => 'çıktı {path} zaten var - üzerine yazmak için --force geçin',
+    'migrate.reserved_keys' => 'v2, _id ve _enc yük anahtarlarını saklı tutar - {count} mevcut değerin üzerine yazılacak',
     'migrate.backup_symlink' => 'yedek yolu {path} bir sembolik bağ - üzerinden yazma reddedildi',
     'migrate.backup_exists' => '{path} yedeği zaten var - üzerine yazma reddedildi',
     'migrate.backup_create_failed' => '{path} konumunda yedek oluşturulamadı',

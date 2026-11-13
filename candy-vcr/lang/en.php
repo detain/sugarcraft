@@ -98,6 +98,7 @@ return [
     'migrate.dry_run' => 'dry-run: would migrate v{from} → v{to}',
     'migrate.output_gz' => 'output cannot be a .gz path; migrate writes plain JSONL',
     'migrate.clobber' => 'output {path} already exists - pass --force to overwrite it',
+    'migrate.reserved_keys' => 'v2 reserves the payload keys _id and _enc - {count} pre-existing value(s) will be overwritten',
     'migrate.backup_symlink' => 'backup path {path} is a symlink - refusing to write through it',
     'migrate.backup_exists' => 'backup {path} already exists - refusing to overwrite it',
     'migrate.backup_create_failed' => 'could not create backup at {path}',

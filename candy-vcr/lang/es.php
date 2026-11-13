@@ -98,6 +98,7 @@ return [
     'migrate.dry_run' => 'dry-run: migraría v{from} → v{to}',
     'migrate.output_gz' => 'la salida no puede ser una ruta .gz; migrate escribe JSONL plano',
     'migrate.clobber' => 'la salida {path} ya existe - pase --force para sobrescribirla',
+    'migrate.reserved_keys' => 'v2 reserva las claves de carga _id y _enc - {count} valores existentes serán sobrescritos',
     'migrate.backup_symlink' => 'la ruta de copia {path} es un enlace simbólico - se rechaza escribir a través de él',
     'migrate.backup_exists' => 'la copia {path} ya existe - se rechaza sobrescribirla',
     'migrate.backup_create_failed' => 'no se pudo crear la copia en {path}',

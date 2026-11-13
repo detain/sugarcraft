@@ -98,6 +98,7 @@ return [
     'migrate.dry_run' => 'dry-run: zou v{from} → v{to} migreren',
     'migrate.output_gz' => 'uitvoer mag geen .gz-pad zijn; migrate schrijft gewone JSONL',
     'migrate.clobber' => 'uitvoer {path} bestaat al - gebruik --force om te overschrijven',
+    'migrate.reserved_keys' => 'v2 gereserveert de payload-sleutels _id en _enc - {count} bestaande waarden worden overschreven',
     'migrate.backup_symlink' => 'back-uppad {path} is een symbolische link - schrijven erdoorheen geweigerd',
     'migrate.backup_exists' => 'back-up {path} bestaat al - overschrijven geweigerd',
     'migrate.backup_create_failed' => 'kon geen back-up maken op {path}',

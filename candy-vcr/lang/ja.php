@@ -98,6 +98,7 @@ return [
     'migrate.dry_run' => 'dry-run: v{from} → v{to} に移行します',
     'migrate.output_gz' => '出力は .gz パスにできません。migrate は通常の JSONL を書き出します',
     'migrate.clobber' => '出力 {path} は既に存在します - 上書きするには --force を指定してください',
+    'migrate.reserved_keys' => 'v2 はペイロードキー _id と _enc を予約します - 既存の {count} 個の値は上書きされます',
     'migrate.backup_symlink' => 'バックアップパス {path} はシンボリックリンクです - 経由した書き込みを拒否します',
     'migrate.backup_exists' => 'バックアップ {path} は既に存在します - 上書きを拒否します',
     'migrate.backup_create_failed' => '{path} にバックアップを作成できませんでした',

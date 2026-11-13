@@ -98,6 +98,7 @@ return [
     'migrate.dry_run' => 'dry-run: سيتم ترحيل v{from} → v{to}',
     'migrate.output_gz' => 'لا يمكن أن يكون الإخراج مسار .gz؛ يكتب migrate ملف JSONL عاديًا',
     'migrate.clobber' => 'ملف المخرجات {path} موجود بالفعل - مرر --force للاستبدال',
+    'migrate.reserved_keys' => 'الإصدار 2 يحتفظ بمفاتيح الحمولة _id و_enc - سيتم استبدال {count} قيمة موجودة',
     'migrate.backup_symlink' => 'مسار النسخة الاحتياطية {path} رابط رمزي - تم رفض الكتابة عبره',
     'migrate.backup_exists' => 'النسخة الاحتياطية {path} موجودة بالفعل - تم رفض الكتابة فوقها',
     'migrate.backup_create_failed' => 'تعذّر إنشاء نسخة احتياطية في {path}',

@@ -98,6 +98,7 @@ return [
     'migrate.dry_run' => 'dry-run: v{from} → v{to}(으)로 마이그레이션합니다',
     'migrate.output_gz' => '출력은 .gz 경로일 수 없습니다. migrate는 일반 JSONL을 씁니다',
     'migrate.clobber' => '출력 {path}이 이미 있습니다 - 덮어쓰려면 --force를 지정하세요',
+    'migrate.reserved_keys' => 'v2는 페이로드 키 _id 및 _enc를 예약합니다 - 기존 값 {count}개가 덮어써집니다',
     'migrate.backup_symlink' => '백업 경로 {path}은(는) 심볼릭 링크입니다 - 통한 쓰기를 거부합니다',
     'migrate.backup_exists' => '백업 {path}이(가) 이미 존재합니다 - 덮어쓰기를 거부합니다',
     'migrate.backup_create_failed' => '{path}에 백업을 만들 수 없습니다',

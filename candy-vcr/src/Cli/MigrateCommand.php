@@ -7,6 +7,7 @@ namespace SugarCraft\Vcr\Cli;
 use SugarCraft\Vcr\Format\JsonlFormat;
 use SugarCraft\Vcr\Lang;
 use SugarCraft\Vcr\Migration\MigrationRunner;
+use SugarCraft\Vcr\Migration\V1ToV2Migrator;
 
 /**
  * `candy-vcr migrate <input.cas> [output.cas] [--dry-run] [--force]`
@@ -118,6 +119,18 @@ final class MigrateCommand implements DocumentedCommand
         }
 
         $originalVersion = $cassette->header->version;
+
+        // Reserved-key honesty (finding 108): below the v2 target every
+        // payload `_id`/`_enc` the stamp overwrites is user data destroyed.
+        // The overwrite is load-bearing for a valid v2 (skip would emit
+        // non-sequential ids), so it stays — but it is named BEFORE the
+        // dry-run branch, so even a validation-only pass hears about it.
+        if ($originalVersion < V1ToV2Migrator::TARGET_VERSION) {
+            $collisions = V1ToV2Migrator::reservedKeyCollisions($cassette);
+            if ($collisions > 0) {
+                fwrite($stderr, Lang::t('migrate.reserved_keys', ['count' => $collisions]) . "\n");
+            }
+        }
 
         if (!$runner->canMigrate($cassette)) {
             // Wording truth (finding 093): reaching this door means the

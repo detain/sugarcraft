@@ -98,6 +98,7 @@ return [
     'migrate.dry_run' => 'dry-run: был бы выполнен перенос v{from} → v{to}',
     'migrate.output_gz' => 'выход не может быть путём .gz; migrate записывает обычный JSONL',
     'migrate.clobber' => 'файл вывода {path} уже существует - укажите --force для перезаписи',
+    'migrate.reserved_keys' => 'v2 резервирует ключи _id и _enc - {count} существующих значений будут перезаписаны',
     'migrate.backup_symlink' => 'путь резервной копии {path} — символическая ссылка; запись через неё отклонена',
     'migrate.backup_exists' => 'резервная копия {path} уже существует — перезапись отклонена',
     'migrate.backup_create_failed' => 'не удалось создать резервную копию в {path}',

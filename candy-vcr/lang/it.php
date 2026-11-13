@@ -98,6 +98,7 @@ return [
     'migrate.dry_run' => 'dry-run: migrerebbe v{from} → v{to}',
     'migrate.output_gz' => 'l\'output non può essere un percorso .gz; migrate scrive JSONL semplice',
     'migrate.clobber' => 'l\'output {path} esiste già - usare --force per sovrascriverlo',
+    'migrate.reserved_keys' => 'v2 riserva le chiavi del payload _id e _enc - {count} valori esistenti verranno sovrascritti',
     'migrate.backup_symlink' => 'il percorso di backup {path} è un collegamento simbolico - scrittura attraverso di esso rifiutata',
     'migrate.backup_exists' => 'il backup {path} esiste già - sovrascrittura rifiutata',
     'migrate.backup_create_failed' => 'impossibile creare il backup in {path}',
