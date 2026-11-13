@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use React\EventLoop\Loop;
 use React\Promise\PromiseInterface;
 use SugarCraft\Files\AsyncOps;
+use SugarCraft\Files\Manager;
 
 final class AsyncOpsTest extends TestCase
 {
@@ -415,5 +416,39 @@ final class AsyncOpsTest extends TestCase
         self::assertTrue(AsyncOps::copyPath($link, $dst));
         self::assertTrue(is_link($dst), 'the victim file was replaced by the link (M-10 parity)');
         self::assertSame('fresh-target', readlink($dst));
+    }
+
+    /**
+     * CF-26 (audit 038): the async move/rename pipeline is TAG-AND-HONOR —
+     * @internal until CF-11's landing review decides whether performMove /
+     * performRename route through it (with the EXDEV fallback) or ~90 LOC
+     * get deleted. This guard fails the moment anyone promotes a tagged
+     * surface back to public API without having made that decision.
+     */
+    public function testDeadAsyncSurfaceCarriesInternalTags(): void
+    {
+        $tagged = [
+            [AsyncOps::class, 'moveAsync'],
+            [AsyncOps::class, 'renameAsync'],
+            [AsyncOps::class, 'moveManyAsync'],
+            [Manager::class, 'copy'],
+        ];
+        foreach ($tagged as [$class, $method]) {
+            $doc = (new \ReflectionMethod($class, $method))->getDocComment();
+            self::assertIsString($doc, $class . '::' . $method . ' must keep its docblock');
+            self::assertStringContainsString(
+                '@internal',
+                (string) $doc,
+                $class . '::' . $method . ' is test-only surface: it must stay @internal '
+                . 'until the CF-11 routing decision lands (CF-26 tag-and-honor).',
+            );
+        }
+        // copyAsync is NOT tagged: copyManyAsync() drives it in production,
+        // so pinning the roster from both sides keeps the tag list honest.
+        self::assertStringNotContainsString(
+            '@internal',
+            (string) (new \ReflectionMethod(AsyncOps::class, 'copyAsync'))->getDocComment(),
+            'copyAsync is the production copy engine on a tick - a stale @internal here is drift too',
+        );
     }
 }

@@ -1072,9 +1072,14 @@ final class Manager implements Model
      *
      * The recursive-directory machinery lives in exactly ONE home —
      * {@see AsyncOps::copyPath()} (cycle-guarded, depth-capped). Manager::copy
-     * is the sync public face; the async copy path runs the same code on a
-     * loop tick. (This used to be a second copyDir() copy here; the two
-     * copies could and did drift.)
+     * is the sync face of that engine, and the async copy path runs the same
+     * code on a loop tick. (This used to be a second copyDir() copy here; the
+     * two copies could and did drift.)
+     *
+     * @internal No production caller: the TUI copy flow resolves through
+     *           copyManyAsync()/performCopyAsync(). This face exists so the
+     *           sync and async paths share one engine and one test door —
+     *           CF-26 tag-and-honor; the delete decision rides CF-11.
      *
      * @param string $src Source path
      * @param string $dst Destination path

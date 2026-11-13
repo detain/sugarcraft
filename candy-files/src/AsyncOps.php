@@ -71,8 +71,11 @@ final class AsyncOps
     /**
      * Move a file or directory asynchronously.
      *
-     * Public API surface — no production caller today: Manager::move()
-     * completes with a synchronous @rename() (M-9 truth-stamp).
+     * @internal No production caller: Manager stages moves and resolves them
+     *           through performMove()'s synchronous @rename (M-9 truth-stamp).
+     *           Kept per CF-26 — the route-or-delete decision rides CF-11's
+     *           landing review (an EXDEV-fallback pipeline would make this
+     *           the engine of record).
      *
      * @param string $src Source path
      * @param string $dst Destination path
@@ -97,8 +100,9 @@ final class AsyncOps
     /**
      * Rename a file or directory (atomic rename in the same directory).
      *
-     * Public API surface — no production caller today: Manager::rename()
-     * completes with a synchronous @rename() (M-9 truth-stamp).
+     * @internal No production caller: Manager::performRename() completes with
+     *           a synchronous @rename (M-9 truth-stamp). Kept per CF-26 for
+     *           the same CF-11 follow-up as {@see self::moveAsync()}.
      *
      * @param string $src    Source path
      * @param string $newName New base name (not a full path)
@@ -188,12 +192,19 @@ final class AsyncOps
     }
 
     /**
-     * Move multiple files/directories tick-sliced in sequential
-     * batches — never parallel disk I/O (same contract as
-     * {@see self::copyManyAsync()}).
+     * Move multiple files/directories, mapping source → destination.
      *
-     * Public API surface — no production caller today (M-9 truth-stamp;
-     * Manager stages moves and resolves them through performMove()).
+     * CF-26 truth-stamp: this does NOT share copyManyAsync's contract.
+     * copyManyAsync keeps a bounded window of legs in flight and enqueues
+     * each successor only when one completes; moveManyAsync pre-enqueues
+     * ALL legs at once (every moveAsync futureTick lands in the same tick
+     * queue), so a large map executes as one unbounded synchronous burst
+     * on the loop. Cheap @rename calls make that tolerable today; if CF-11
+     * ever routes real traffic here, bound it first.
+     *
+     * @internal No production caller (M-9 truth-stamp; Manager stages moves
+     *           and resolves them through performMove()). Kept per CF-26
+     *           for the CF-11 follow-up.
      *
      * @param array<string, string> $map Source → Destination mapping
      * @return PromiseInterface<array<string, bool>> Map of source → success
