@@ -47,6 +47,19 @@ final class Renderer
     private static ?string $pipeCell = null;
     private static ?string $dotCell = null;
 
+    /**
+     * flappy-85 (finding -077): the status-row and border chains were the
+     * remaining per-frame Style builds (~4 fresh chains + Color::hex parses
+     * per frame). Same law as the cell memos above — the STYLE objects are
+     * immutable and shared; the rendered text still differs per frame, so
+     * only the finished builder is memoized, never its output.
+     */
+    private static ?Style $frameStyle = null;
+    private static ?Style $scoreStyle = null;
+    private static ?Style $newBestStyle = null;
+    private static ?Style $hintStyle = null;
+    private static ?Style $crashStyle = null;
+
     private static function birdCell(string $glyph): string
     {
         return self::$birdCells[$glyph] ??= Style::new()->foreground(Color::hex(self::AMBER))->bold()->render($glyph);
@@ -92,6 +105,39 @@ final class Renderer
         return self::$dotCell ??= Style::new()->foreground(Color::hex(self::DOT))->render('·');
     }
 
+    /**
+     * flappy-85 (finding -077): the status/border chains rebuilt on every
+     * frame — each is a fixed Style config around a dynamic string, and
+     * Style is immutable, so the finished objects share process-wide like
+     * the four cell memos above. Only `->render($text)` runs per frame.
+     */
+    private static function frameStyle(): Style
+    {
+        return self::$frameStyle ??= Style::new()
+            ->border(Border::rounded())
+            ->foreground(Color::hex(self::AMBER));
+    }
+
+    private static function scoreStyle(): Style
+    {
+        return self::$scoreStyle ??= Style::new()->bold()->foreground(Color::hex(self::AMBER));
+    }
+
+    private static function newBestStyle(): Style
+    {
+        return self::$newBestStyle ??= Style::new()->bold()->foreground(Color::hex(self::GREEN));
+    }
+
+    private static function hintStyle(): Style
+    {
+        return self::$hintStyle ??= Style::new()->foreground(Color::hex(self::HINT));
+    }
+
+    private static function crashStyle(): Style
+    {
+        return self::$crashStyle ??= Style::new()->foreground(Color::hex(self::CRASH))->bold();
+    }
+
     public static function render(Game $g): string
     {
         if ($g->colorProfile === ColorProfile::NoTty) {
@@ -134,27 +180,21 @@ final class Renderer
         }
         $field = implode("\n", $rows);
 
-        $framed = Style::new()
-            ->border(Border::rounded())
-            ->foreground(Color::hex(self::AMBER))
-            ->render($field);
+        $framed = self::frameStyle()->render($field);
 
         $scoreText = Lang::t('ui.score', ['score' => $g->score]);
-        $score = Style::new()->bold()->foreground(Color::hex(self::AMBER))
-            ->render($scoreText);
+        $score = self::scoreStyle()->render($scoreText);
         $highScore = $g->highScore();
         if ($g->crashed === true) {
             $highScoreLine = '';
             $highScorePlain = '';
             if ($g->newRecord && $g->score > 0) {
                 $highScorePlain = Lang::t('ui.new_best', ['best' => $highScore]);
-                $highScoreLine = Style::new()->bold()->foreground(Color::hex(self::GREEN))
-                    ->render($highScorePlain) . '   ';
+                $highScoreLine = self::newBestStyle()->render($highScorePlain) . '   ';
                 $highScorePlain .= '   ';
             } elseif ($highScore > 0) {
                 $highScorePlain = Lang::t('ui.best', ['best' => $highScore]);
-                $highScoreLine = Style::new()->foreground(Color::hex(self::HINT))
-                    ->render($highScorePlain) . '   ';
+                $highScoreLine = self::hintStyle()->render($highScorePlain) . '   ';
                 $highScorePlain .= '   ';
             }
             // flappy-78 (finding -068): the hint names the cause of death
@@ -170,8 +210,7 @@ final class Renderer
                 Lang::t('ui.crash_short', ['why' => $why]),
                 Lang::t('ui.crash_floor'),
             );
-            $hint = Style::new()->foreground(Color::hex(self::CRASH))->bold()
-                ->render($hintPlain);
+            $hint = self::crashStyle()->render($hintPlain);
             return self::fit($g, $framed . "\n " . $score . $highScoreLine . '    ' . $hint . "\n");
         }
         // m28: the live status shows the standing best, not just the
@@ -180,8 +219,7 @@ final class Renderer
         $bestLine = '';
         if ($highScore > 0) {
             $bestPlain = Lang::t('ui.best', ['best' => $highScore]);
-            $bestLine = Style::new()->foreground(Color::hex(self::HINT))
-                ->render($bestPlain) . '    ';
+            $bestLine = self::hintStyle()->render($bestPlain) . '    ';
         }
         // m6: the assembled live row is ' ' + score + bestLine + '    ' + hint,
         // and bestLine itself already trails four cells of padding — so the
@@ -206,8 +244,7 @@ final class Renderer
                 Lang::t('ui.live_short'),
             );
         }
-        $hint = Style::new()->foreground(Color::hex(self::HINT))
-            ->render($hintPlain);
+        $hint = self::hintStyle()->render($hintPlain);
 
         // flappy-18 (finding -018): the launch that archived a poisoned
         // leaderboard says so once, on the ready board — a folded line
