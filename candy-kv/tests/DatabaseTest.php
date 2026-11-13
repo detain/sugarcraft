@@ -118,6 +118,19 @@ final class DatabaseTest extends TestCase
         $this->assertSame(['alpha', 'beta'], $values);
     }
 
+    public function testListRefusesUnknownMode(): void
+    {
+        // kv-015: the signature declares 'all'|'keys'|'values'; a typo used
+        // to fall through the yield match and yield Entry objects where the
+        // caller asked for something else. It must fail loud instead.
+        $this->db->set('a', '1');
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Unknown list mode "BOGUS"');
+
+        [...$this->db->list(mode: 'BOGUS')];
+    }
+
     public function testListGlobPatternStar(): void
     {
         $this->db->set('user-alice', '1');

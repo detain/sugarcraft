@@ -384,6 +384,16 @@ final class Database
         string $mode = 'all',
         string $delimiter = "\t",
     ): \Generator {
+        // The docblock declares 'all'|'keys'|'values'; a typo must fail loud
+        // here, not reach the yield match below and silently produce Entry
+        // objects for a caller that asked for keys or values (kv-015).
+        if (!\in_array($mode, ['all', 'keys', 'values'], true)) {
+            throw new \InvalidArgumentException(\sprintf(
+                'Unknown list mode "%s"; expected "all", "keys" or "values".',
+                $mode,
+            ));
+        }
+
         $order = $reverse ? 'DESC' : 'ASC';
 
         $now = \time();

@@ -156,6 +156,18 @@ final class StoreTest extends TestCase
         $this->assertContains('beta', $vals);
     }
 
+    public function testListRefusesUnknownModeThroughStoreForwarding(): void
+    {
+        // kv-015: the refusal lives once in Database::list; Store::list
+        // forwards, so a typo via the Store door must fail the same way.
+        $this->store->set('k1', 'v1');
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Unknown list mode "all-keys"');
+
+        [...$this->store->list(null, null, mode: 'all-keys')];
+    }
+
     public function testSetFileAndGetFile(): void
     {
         $srcPath = $this->tmpDir . '/source.txt';
