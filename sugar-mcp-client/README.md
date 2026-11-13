@@ -74,7 +74,7 @@ $server->stop();                     // also runs automatically on destruct
 
 The example needs Node.js/npx on PATH (it spawns
 `npx -y @modelcontextprotocol/server-everything`); any other stdio MCP server
-is the same three constructor arguments — name, command, argv list — and
+takes the same three constructor arguments — name, command, argv list — and
 `examples/echo.php` shows exactly that with a server that needs nothing
 installed.
 
@@ -248,7 +248,7 @@ checkout the launch stood in.
   `StdioMcpServer::deadlineAfter(30.0)` for "30 seconds from now" (it refuses
   a negative bound at its own door); a past instant gives up silently
   (`null`/`false`), and a wall-clock-magnitude value would never fire, so the
-  magnitude is refused with an `InvalidArgumentException` instead.
+  magnitude is refused by throwing an `InvalidArgumentException` instead.
   `callTool(timeoutSeconds:)` remains the relative-duration spelling.
 - One frame never outgrows the read buffer: bytes past `MAX_FRAME_BYTES`
   (64 MiB) with no newline are not NDJSON whatever they eventually say, and
@@ -392,7 +392,7 @@ policy to write, not a behaviour to inherit.
 - `ExchangeLock::store()`/`markPhase()` return `false` when a state write
   fails (full or read-only temp filesystem); the exchange then fails rather
   than running without its recovery marker, and a failed store leaves the file
-  empty, which reads as dirty. The lock's factory is `ExchangeLock::new()`
+  empty, which `load()` reads as dirty. The lock's factory is `ExchangeLock::new()`
   (`create()` remains as a deprecated alias, scheduled for removal at the
   2.0.0 major); its file is opened at mode `0600`, verified before any
   payload lands, and a filesystem that refuses the mode fails the open
@@ -402,7 +402,7 @@ policy to write, not a behaviour to inherit.
   the contract bind here. The three trailing opt-ins (`onWait:`,
   `timeoutSeconds:`, `onServerMessage:`) exist on `StdioMcpServer` only —
   code typed against the interface cannot pass them.
-- What you can READ when a call comes back badly: most of the failure evidence
+- What you can READ when a call fails: most of the failure evidence
   above arrives inside a message string. The readable surface is
   `listTools()` (declared on `McpServer`) and, on `StdioMcpServer` only,
   `isUp()`, `stderrTail()`, `malformedToolDefinitions()` /
@@ -428,9 +428,9 @@ reference TS client does). The `capabilities:` constructor argument configures
 what that object HOLDS — a configured map rides through the same object cast,
 so `['roots' => ['listChanged' => false]]` arrives as a populated JSON object
 and the default still lands as `{}` byte-for-byte. Advertise what you will
-answer: a capability-gating server asks `roots/list` or sends
-`elicitation/create` only of clients that declared the capability — so the
-server-request handler described below cannot fire without it.
+answer: a capability-gating server sends `roots/list` and
+`elicitation/create` requests only to clients that declared the capability —
+so the server-request handler described below cannot fire without it.
 
 The same frame carries the client identity, configured with the `clientInfo:`
 constructor argument. It must be a non-empty string `name` and a string
@@ -482,7 +482,7 @@ notifications write nothing back. Two consequences worth knowing:
   (an elicitation held open for a human) holds the lock — every other call
   to that server queues behind it. One pipe, one conversation; an answerer
   must never call back into the same server instance.
-- the wall clock a request handler spends is **paused out** of a bounded
+- the wall clock a request handler spends is **excluded from** a bounded
   call's `timeoutSeconds` budget — waiting on an answer this client owes is
   not the server being slow. `sampling/createMessage` ships no
   answer beyond the default refusal: running a model in the client's name
@@ -516,7 +516,7 @@ process that started it — one server shared by the whole process tree:
 - stdout bytes read past a response are kept in the lock file, so the next
   exchange starts at a line boundary whichever process runs it;
 - a holder killed mid-exchange leaves a phase marker: the next exchange
-  terminates a half-written request with a leading newline and skips the
+  terminates a half-written request line with a leading newline and skips the
   fragment of a half-read reply until the first parseable message;
 - only the starting process stops the server; `stop()`/destruct in a child
   closes that child's handles only. A child checks liveness with
@@ -564,7 +564,7 @@ stderr is not locked — it is diagnostics only.
   — see *Server requests* above. What is deliberately NOT answered for you is
   `sampling/createMessage`: model policy stays downstream.
 - Deprecated surfaces (`ExchangeLock::create()`) keep working and announce
-  their replacement in the docblock; removal is a package-major change,
+  their replacement in the docblock; removal is a major-version change,
   announced in the release notes well before it lands.
 
 ## Tests

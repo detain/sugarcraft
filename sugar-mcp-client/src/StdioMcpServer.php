@@ -125,7 +125,7 @@ use SugarCraft\Core\Util\Proc\BoundedShutdown;
  * behind it. That is the deliberate shape: one pipe, one conversation. An
  * answerer must therefore never call back into this server instance; it
  * answers from state it already holds. The wall clock a request handler
- * spends is PAUSED out of any bounded call's deadline — waiting for an
+ * spends is EXCLUDED from any bounded call's deadline — waiting for an
  * answer this client owes is not the server being slow (the no-blanket-timeout law).
  *
  * The failure vocabulary (one per door, named once here and consumed by the
