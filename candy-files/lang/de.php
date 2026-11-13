@@ -41,6 +41,7 @@ return [
     'status.nothing_to_undo' => 'nichts rückgängig zu machen',
     'status.undone' => 'rückgängig gemacht: {description}',
     'status.undo_with_errors' => 'Rückgängig ({description}) mit {errors} Fehler(n)',
+    'status.undo_target_occupied' => 'Rückgängig ({description}) blockiert: {occupied} Ziel(e) belegt — Originale bleiben im Papierkorb',
     'status.cannot_close_last_tab' => 'Letzter Tab kann nicht geschlossen werden',
     'status.redone' => 'wiederhergestellt: {description}',
     'status.redo_with_errors' => 'Wiederholen ({description}) mit {errors} Fehler(n)',

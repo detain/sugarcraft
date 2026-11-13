@@ -41,6 +41,7 @@ return [
     'status.nothing_to_undo' => '元に戻す操作がありません',
     'status.undone' => '元に戻しました: {description}',
     'status.undo_with_errors' => '{description} の取り消しでエラー {errors} 件',
+    'status.undo_target_occupied' => '{description} の取り消しを阻止：ターゲット {occupied} 件が使用中 — 原本はゴミ箱に保持',
     'status.cannot_close_last_tab' => '最後のタブは閉じけません',
     'status.redone' => 'やり直しました: {description}',
     'status.redo_with_errors' => '{description} のやり直しのエラー {errors} 件',

@@ -822,7 +822,10 @@ final class Manager implements Model
             }
             $deletedItems[] = [
                 'path' => $full,
-                'isDir' => is_dir($trashPath),
+                // 018: record what the bytes ARE, not what they point at —
+                // a symlink whose target is a directory would otherwise be
+                // filed as isDir (is_dir() follows), mislabeling the entry.
+                'isDir' => is_dir($trashPath) && !is_link($trashPath),
                 'trash' => $trashPath,
             ];
         }
@@ -1514,7 +1517,7 @@ final class Manager implements Model
         if ($action === null) {
             return $this->withStatus(Lang::t('status.nothing_to_undo'));
         }
-        $errors = $this->reverseAction($action);
+        [$errors, $occupied] = $this->reverseAction($action);
         // Copy undo is informational only — original is preserved; report that explicitly
         if ($action->type === UndoActionType::Copy) {
             $msg = Lang::t('status.copy_undo_noop');
@@ -1524,10 +1527,21 @@ final class Manager implements Model
                 ->withStatus($msg)
                 ->withUndoRedoStacks($newUndoStack, $newRedoStack);
         }
-        $msg = $errors === 0
-            ? Lang::t('status.undone', ['description' => $action->description])
-            : Lang::t('status.undo_with_errors', ['description' => $action->description, 'errors' => $errors]);
-        // Push to redo stack
+        if ($errors + $occupied > 0) {
+            // 067: a leg that failed keeps the action ON its own stack —
+            // no cross-stack transfer may advertise a reversibility the
+            // action does not have. The user can press undo again (retry
+            // after clearing an occupied target); already-restored legs
+            // report goal-state and the rest is re-attempted honestly.
+            return $this
+                ->refresh()
+                ->withStatus($occupied > 0
+                    ? Lang::t('status.undo_target_occupied', ['description' => $action->description, 'occupied' => $occupied])
+                    : Lang::t('status.undo_with_errors', ['description' => $action->description, 'errors' => $errors]))
+                ->withUndoRedoStacks($this->undoStack, $this->redoStack);
+        }
+        $msg = Lang::t('status.undone', ['description' => $action->description]);
+        // Full success only: now the action may move to the redo stack.
         $newRedoStack = [...$this->redoStack, $action];
         return $this
             ->refresh()
@@ -1547,10 +1561,17 @@ final class Manager implements Model
             return $this->withStatus(Lang::t('status.nothing_to_redo'));
         }
         $errors = $this->redoAction($action);
-        $msg = $errors === 0
-            ? Lang::t('status.redone', ['description' => $action->description])
-            : Lang::t('status.redo_with_errors', ['description' => $action->description, 'errors' => $errors]);
-        // Push back to undo stack
+        if ($errors > 0) {
+            // 067 twin: a failed redo keeps the action on the redo stack —
+            // it stays retryable and no half-completed replay is claimed
+            // done by pushing it back for another undo cycle.
+            return $this
+                ->refresh()
+                ->withStatus(Lang::t('status.redo_with_errors', ['description' => $action->description, 'errors' => $errors]))
+                ->withUndoRedoStacks($this->undoStack, $this->redoStack);
+        }
+        $msg = Lang::t('status.redone', ['description' => $action->description]);
+        // Full success only: push back to undo stack
         $newUndoStack = [...$this->undoStack, $action];
         $newUndoStack = array_slice($newUndoStack, -self::UNDO_LIMIT);
         return $this
@@ -1638,90 +1659,130 @@ final class Manager implements Model
         return $errors;
     }
 
-    /** Reverse an undo action (for restore on redo) */
-    private function reverseAction(UndoAction $action): int
+    /**
+     * Reverse one undo action.
+     *
+     * @return array{0:int,1:int} [failed legs, target-occupied legs]
+     */
+    private function reverseAction(UndoAction $action): array
     {
-        $errors = 0;
         // Route by UndoActionType enum — no string prefix detection
-        match ($action->type) {
-            UndoActionType::Delete => $errors = $this->reverseDelete($action->items),
-            UndoActionType::Move => $errors = $this->reverseMove($action->items),
-            UndoActionType::Rename => $errors = $this->reverseRename($action->items),
+        return match ($action->type) {
+            UndoActionType::Delete => $this->reverseDelete($action->items),
+            UndoActionType::Move => $this->reverseMove($action->items),
+            UndoActionType::Rename => $this->reverseRename($action->items),
             // No mkdir actions are produced anymore (factory removed); the
             // arm only exists to keep the enum match exhaustive.
             UndoActionType::Insert,
             // Copy cannot be undone — original still exists
-            UndoActionType::Copy, UndoActionType::Modify, UndoActionType::Custom => $errors = 0,
+            UndoActionType::Copy, UndoActionType::Modify, UndoActionType::Custom => [0, 0],
         };
-        return $errors;
     }
 
     /**
-     * Reverse an undo action (for restore on redo).
+     * Reverse an undo action (restore trashed items).
      *
      * A delete item whose trash path is empty was removed PERMANENTLY (the
      * cross-device EXDEV fallback in performDelete). Its bytes no longer
      * exist anywhere, so "restoring" it cannot succeed: counting it as an
-     * error is the only honest polarity. Silently skipping made
-     * `undo` of such a delete report full success while restoring zero
-     * bytes — a data-loss lie on the one screen the user watches to
-     * verify recovery.
+     * error is the only honest polarity — and no empty skeleton is built,
+     * because a directory recreated without its payload must never read as
+     * "Undone" (035: the hollow-restore lie). The 0700 mkdir fallback is
+     * gone with it: unrecorded mode rewriting had no right to happen.
+     *
+     * Every restore renames ONLY onto a free path (007 — redoDelete's
+     * proven two-term check states the law, and its comment says so):
+     * undo of yesterday must never eat the file the user created today.
+     * An occupied target counts as a named leg and the bytes STAY in
+     * trash — recoverable later, once the user clears the collision.
+     *
+     * 018: a broken symlink passes file_exists nowhere (it follows), so
+     * the gate is the two-term `file_exists || is_link` check on BOTH
+     * sides — trash-presence and target-freedom.
      *
      * @param list<array{path:string,isDir:bool,trash:string}> $items
+     * @return array{0:int,1:int} [failed legs, target-occupied legs]
      */
-    private function reverseDelete(array $items): int
+    private function reverseDelete(array $items): array
     {
         $errors = 0;
+        $occupied = 0;
         foreach ($items as $item) {
             if (!isset($item['path'])) {
                 continue;
             }
             $path = $item['path'];
             $trash = $item['trash'] ?? '';
-            // If we have a trash path, restore via rename from trash
-            if ($trash !== '' && file_exists($trash)) {
-                if (!@rename($trash, $path)) {
-                    $errors++;
+            $targetHere = \file_exists($path) || \is_link($path);
+            if ($trash === '') {
+                $errors++; // permanent removal: the bytes are gone for good
+                continue;
+            }
+            $trashHere = \file_exists($trash) || \is_link($trash);
+            if (!$trashHere) {
+                if ($targetHere) {
+                    continue; // already restored by an earlier press: goal state holds
                 }
-            } elseif (isset($item['isDir']) && $item['isDir']) {
-                // Restore directory (fallback for old undo items without trash path).
-                // N-6: 0700, the same private-tree law as the trash root —
-                // a re-created directory is restored data, not a public share.
-                if (!is_dir($path) && !@mkdir($path, 0700, true)) {
-                    $errors++;
-                }
-            } else {
-                // File with no live trash bytes: unrecoverable — report loud.
+                $errors++; // trash entry vanished and nothing sits at the target
+                continue;
+            }
+            if ($targetHere) {
+                $occupied++;
+                continue;
+            }
+            if (!@\rename($trash, $path)) {
                 $errors++;
             }
         }
-        return $errors;
+        return [$errors, $occupied];
     }
 
     /**
+     * newPath -> oldPath reverses the move. 007 law: the restore renames
+     * only onto a FREE original path — a file the user created there since
+     * must never be eaten; the bytes wait at the moved location instead.
+     *
      * @param array<string,string> $moves Map of original path => new path
+     * @return array{0:int,1:int} [failed legs, target-occupied legs]
      */
-    private function reverseMove(array $moves): int
+    private function reverseMove(array $moves): array
     {
         $errors = 0;
+        $occupied = 0;
         foreach ($moves as $oldPath => $newPath) {
             if (!is_string($oldPath) || !is_string($newPath)) {
                 continue;
             }
-            // newPath -> oldPath reverses the move
-            if (!@rename($newPath, $oldPath)) {
+            $targetHere = \file_exists($oldPath) || \is_link($oldPath);
+            $sourceHere = \file_exists($newPath) || \is_link($newPath);
+            if ($targetHere) {
+                if (!$sourceHere) {
+                    continue; // bytes already home: an earlier press did it
+                }
+                $occupied++;
+                continue;
+            }
+            if (!$sourceHere) {
+                $errors++; // neither end holds the payload: nothing to reverse
+                continue;
+            }
+            if (!@\rename($newPath, $oldPath)) {
                 $errors++;
             }
         }
-        return $errors;
+        return [$errors, $occupied];
     }
 
     /**
+     * Reverse a rename pair under the same free-path law as reverseMove.
+     *
      * @param array<string,string> $renames Map of old path => new path
+     * @return array{0:int,1:int} [failed legs, target-occupied legs]
      */
-    private function reverseRename(array $renames): int
+    private function reverseRename(array $renames): array
     {
         $errors = 0;
+        $occupied = 0;
         foreach ($renames as $oldPath => $newPath) {
             if (!is_string($oldPath) || !is_string($newPath)) {
                 continue;
@@ -1730,11 +1791,24 @@ final class Manager implements Model
             $oldName = basename($oldPath);
             $newDir = dirname($newPath);
             $targetPath = Pane::join($newDir, $oldName);
-            if (!@rename($newPath, $targetPath)) {
+            $targetHere = \file_exists($targetPath) || \is_link($targetPath);
+            $sourceHere = \file_exists($newPath) || \is_link($newPath);
+            if ($targetHere) {
+                if (!$sourceHere) {
+                    continue; // already back under its old name
+                }
+                $occupied++;
+                continue;
+            }
+            if (!$sourceHere) {
+                $errors++;
+                continue;
+            }
+            if (!@\rename($newPath, $targetPath)) {
                 $errors++;
             }
         }
-        return $errors;
+        return [$errors, $occupied];
     }
 
     /** Check if undo is available */

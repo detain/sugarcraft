@@ -41,6 +41,7 @@ return [
     'status.nothing_to_undo' => 'لا شيء للتراجع عنه',
     'status.undone' => 'تم التراجع: {description}',
     'status.undo_with_errors' => 'التراجع عن {description} مع {errors} أخطاء',
+    'status.undo_target_occupied' => 'تعذّر التراجع عن {description}: {occupied} هدف مشغول — النسخ الأصلية محفوظة في سلة المهملات',
     'status.cannot_close_last_tab' => 'لا يمكن إغلاق آخر تبويب',
     'status.redone' => 'تمت الإعادة: {description}',
     'status.redo_with_errors' => 'إعادة {description} مع {errors} أخطاء',

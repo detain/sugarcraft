@@ -44,6 +44,7 @@ return [
     'status.nothing_to_undo'    => 'nothing to undo',
     'status.undone'            => 'undone: {description}',
     'status.undo_with_errors'  => 'undo {description} with {errors} error(s)',
+    'status.undo_target_occupied' => 'undo {description} blocked: {occupied} target(s) occupied — originals kept in trash',
     'status.cannot_close_last_tab' => 'Cannot close last tab',
     'status.redone'            => 'redone: {description}',
     'status.redo_with_errors'  => 'redo {description} with {errors} error(s)',

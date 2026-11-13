@@ -41,6 +41,7 @@ return [
     'status.nothing_to_undo' => 'rien à annuler',
     'status.undone' => 'annulé : {description}',
     'status.undo_with_errors' => 'annulation de {description} avec {errors} erreur(s)',
+    'status.undo_target_occupied' => 'annulation de {description} bloquée : {occupied} cible(s) occupée(s) — originaux conservés dans la corbeille',
     'status.cannot_close_last_tab' => 'Impossible de fermer le dernier onglet',
     'status.redone' => 'refait : {description}',
     'status.redo_with_errors' => 'réplication de {description} avec {errors} erreur(s)',

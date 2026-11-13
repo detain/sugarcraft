@@ -259,14 +259,15 @@ final class ManagerDeleteTest extends TestCase
     }
 
     /**
-     * CF-04: when the bytes are already gone (permanent removal — trash ''),
-     * a directory that was recorded with isDir=TRUE has its empty skeleton
-     * re-created by undo. The pre-cure bug recorded isDir=FALSE for every
-     * permanent directory (it asked is_dir('')), so undo fell to the
-     * unrecoverable error branch instead of restoring the directory. This
-     * asserts the recorded flag now drives the skeleton restore.
+     * CF-04 made the permanent-record honest (isDir captured BEFORE
+     * removePath — the pre-cure bug asked is_dir('') and got FALSE for
+     * every permanent directory). CF-08/035 then settles what undo may do
+     * with such a record: NOTHING rebuildable — a directory re-created
+     * without its payload is a hollow shell advertising a recovery that
+     * never happened, so the leg counts as an error, no skeleton appears,
+     * and the unrecorded 0700 mode rewrite is gone with the branch.
      */
-    public function testPermanentDirectoryUndoRecreatesSkeletonWhenFlagWasCaptured(): void
+    public function testPermanentDirectoryUndoReportsErrorWithoutHollowSkeleton(): void
     {
         $dir = $this->tmpDir . '/lost-dir';                 // gone (permanently removed)
         $left = \SugarCraft\Files\Pane::open($this->tmpDir, $this->lister);
@@ -281,8 +282,9 @@ final class ManagerDeleteTest extends TestCase
             ->build();
 
         [$undone] = $m->update(new KeyMsg(KeyType::Char, 'u'));
-        $this->assertDirectoryExists($dir, 'a permanent directory undo must rebuild the empty skeleton');
-        $this->assertStringNotContainsString('error', $undone->status, 'status: ' . $undone->status);
+        $this->assertStringContainsString('error', $undone->status, 'status: ' . $undone->status);
+        $this->assertDirectoryDoesNotExist($dir, 'CF-08/035: no hollow skeleton restore');
+        $this->assertTrue($undone->canUndo(), 'CF-08/067: the failed action never left its stack');
     }
 
     /** Content of the first trashed file matching $needle, or '' if none is found. */
@@ -300,5 +302,88 @@ final class ManagerDeleteTest extends TestCase
             }
         }
         return '';
+    }
+    // ------------------------------------------------------- CF-08 undo engine
+
+    /**
+     * 018: the file_exists-only trash gate never saw a broken symlink (it
+     * follows), so undo of a deleted broken link reported failure while the
+     * link sat unclaimed in trash. The two-term check restores the link.
+     */
+    public function testBrokenSymlinkRoundTrip(): void
+    {
+        $probe = $this->tmpDir . '/.probe-link';
+        if (!@symlink('nowhere-xyz', $probe)) {
+            $this->markTestSkipped('symlinks unavailable for this user/platform');
+        }
+        @unlink($probe);
+        $link = $this->tmpDir . '/dangling';
+        symlink('nowhere-xyz', $link);
+
+        $m = Manager::start($this->tmpDir, $this->tmpDir, $this->lister);
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'j'));       // onto the link
+        $this->assertSame('dangling', $m->activePane()->currentEntry()?->name);
+        [$armed] = $m->update(new KeyMsg(KeyType::Char, 'd'));
+        [$gone] = $armed->update(new KeyMsg(KeyType::Char, 'y'));
+        $this->assertFalse(is_link($link), 'delete trashed the broken link');
+
+        [$undone] = $gone->update(new KeyMsg(KeyType::Char, 'u'));
+        $this->assertTrue(is_link($link), 'undo must restore the broken link itself');
+        $this->assertSame('nowhere-xyz', readlink($link));
+        $this->assertStringNotContainsString('error', $undone->status, 'status: ' . $undone->status);
+    }
+
+    /**
+     * 007: undo renames ONLY onto a free path. A file the user created at
+     * the original location since the delete must never be eaten — the
+     * bytes wait in trash and the status names the collision.
+     */
+    public function testUndoRefusesToEatAFileCreatedAfterTheDelete(): void
+    {
+        $path = $this->tmpDir . '/report.txt';
+        $blob = $this->tmpDir . '/trash-blob';
+        file_put_contents($path, 'today bytes');
+        file_put_contents($blob, 'original bytes');
+
+        $left = \SugarCraft\Files\Pane::open($this->tmpDir, $this->lister);
+        $m = Manager::builder()
+            ->withLeft($left)
+            ->withRight($left)
+            ->withLister($this->lister)
+            ->withUndoStack([\SugarCraft\Files\UndoAction::delete([
+                ['path' => $path, 'isDir' => false, 'trash' => $blob],
+            ])])
+            ->build();
+
+        [$undone] = $m->update(new KeyMsg(KeyType::Char, 'u'));
+        $this->assertStringContainsString('occupied', $undone->status, 'status: ' . $undone->status);
+        $this->assertSame('today bytes', file_get_contents($path), 'the new file is untouched');
+        $this->assertFileExists($blob, 'the original stays in trash — recoverable after the user clears the collision');
+    }
+
+    /**
+     * 067: when EVERY leg errored the action stays on its own stack — no
+     * cross-stack transfer may advertise a reversibility it does not have.
+     */
+    public function testAllLegsFailedUndoStaysPressable(): void
+    {
+        $path = $this->tmpDir . '/gone-for-good';
+        $left = \SugarCraft\Files\Pane::open($this->tmpDir, $this->lister);
+        $m = Manager::builder()
+            ->withLeft($left)
+            ->withRight($left)
+            ->withLister($this->lister)
+            ->withUndoStack([\SugarCraft\Files\UndoAction::delete([
+                ['path' => $path, 'isDir' => false, 'trash' => ''],
+            ])])
+            ->build();
+
+        [$once] = $m->update(new KeyMsg(KeyType::Char, 'u'));
+        $this->assertStringContainsString('error', $once->status, 'status: ' . $once->status);
+        $this->assertTrue($once->canUndo(), 'the failed action never moved to redo');
+        $this->assertFalse($once->canRedo(), 'a failed undo must not manufacture a redo');
+
+        [$twice] = $once->update(new KeyMsg(KeyType::Char, 'u'));
+        $this->assertStringContainsString('error', $twice->status, 'the retry hits the same honest leg');
     }
 }

@@ -167,4 +167,36 @@ final class ManagerMoveTest extends TestCase
 
         $this->assertSame('moved 1 entries', $done->status);
     }
+    /**
+     * CF-08/007+067: undo of a move refuses to overwrite a recreated
+     * original (occupied leg, action stays pressable), and once the user
+     * clears the collision the SAME stack entry reverses the move home.
+     */
+    public function testMoveUndoRefusesRecreatedOriginalThenSucceedsWhenCleared(): void
+    {
+        $src = $this->srcDir . '/a.txt';
+        file_put_contents($src, 'payload');
+
+        $m = Manager::start($this->srcDir, $this->dstDir, $this->lister);
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'j'));
+        [$armed] = $m->update(new KeyMsg(KeyType::Char, 'm'));
+        [$moved] = $armed->update(new KeyMsg(KeyType::Char, 'y'));
+        $this->assertFileExists($this->dstDir . '/a.txt');
+
+        file_put_contents($src, 'today');   // user recreates the original name
+
+        [$blocked] = $moved->update(new KeyMsg(KeyType::Char, 'u'));
+        $this->assertStringContainsString('occupied', $blocked->status, 'status: ' . $blocked->status);
+        $this->assertSame('today', file_get_contents($src), 'undo never ate the file created today');
+        $this->assertFileExists($this->dstDir . '/a.txt');
+        $this->assertTrue($blocked->canUndo(), 'the failed action stays on the undo stack');
+
+        unlink($src);                        // user clears the collision
+
+        [$home] = $blocked->update(new KeyMsg(KeyType::Char, 'u'));
+        $this->assertStringNotContainsString('error', $home->status, 'status: ' . $home->status);
+        $this->assertStringNotContainsString('occupied', $home->status, 'status: ' . $home->status);
+        $this->assertSame('payload', file_get_contents($src), 'the bytes came home on the retry');
+        $this->assertFileDoesNotExist($this->dstDir . '/a.txt');
+    }
 }

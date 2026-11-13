@@ -41,6 +41,7 @@ return [
     'status.nothing_to_undo' => 'brak operacji do cofnięcia',
     'status.undone' => 'cofnięto: {description}',
     'status.undo_with_errors' => 'cofanie {description} z błędami: {errors}',
+    'status.undo_target_occupied' => 'cofanie {description} zablokowane: {occupied} cel(ów) zajęty — oryginały pozostają w koszu',
     'status.cannot_close_last_tab' => 'Nie można zamknąć ostatniej karty',
     'status.redone' => 'ponowiono: {description}',
     'status.redo_with_errors' => 'ponawianie {description} z błędami: {errors}',

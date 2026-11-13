@@ -41,6 +41,7 @@ return [
     'status.nothing_to_undo' => 'nulla da annullare',
     'status.undone' => 'annullato: {description}',
     'status.undo_with_errors' => 'annullamento di {description} con {errors} errori',
+    'status.undo_target_occupied' => 'annullamento di {description} bloccato: {occupied} destinazione/i occupata/e — originali conservati nel cestino',
     'status.cannot_close_last_tab' => 'Impossibile chiudere l\'ultima scheda',
     'status.redone' => 'ripristinato: {description}',
     'status.redo_with_errors' => 'ripetizione di {description} con {errors} errori',

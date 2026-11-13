@@ -41,6 +41,7 @@ return [
     'status.nothing_to_undo' => 'geri alınacak bir şey yok',
     'status.undone' => 'geri alındı: {description}',
     'status.undo_with_errors' => '{description} geri alınırken {errors} hata',
+    'status.undo_target_occupied' => '{description} geri alma engellendi: {occupied} hedef dolu — orijinaller çöp kutusunda bekliyor',
     'status.cannot_close_last_tab' => 'Son sekme kapatılamaz',
     'status.redone' => 'yinelendi: {description}',
     'status.redo_with_errors' => '{description} yinelenirken {errors} hata',

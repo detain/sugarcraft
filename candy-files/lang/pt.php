@@ -41,6 +41,7 @@ return [
     'status.nothing_to_undo' => 'nada para desfazer',
     'status.undone' => 'desfeito: {description}',
     'status.undo_with_errors' => 'desfazer {description} com {errors} erro(s)',
+    'status.undo_target_occupied' => 'desfazer {description} bloqueado: {occupied} destino(s) ocupado(s) — originais mantidos na reciclagem',
     'status.cannot_close_last_tab' => 'Não é possível fechar a última aba',
     'status.redone' => 'refeito: {description}',
     'status.redo_with_errors' => 'refazer {description} com {errors} erro(s)',

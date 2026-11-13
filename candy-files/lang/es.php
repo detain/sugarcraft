@@ -41,6 +41,7 @@ return [
     'status.nothing_to_undo' => 'nada que deshacer',
     'status.undone' => 'deshecho: {description}',
     'status.undo_with_errors' => 'deshacer {description} con {errors} error(es)',
+    'status.undo_target_occupied' => 'deshacer {description} bloqueado: {occupied} destino(s) ocupado(s) — los originales se mantienen en la papelera',
     'status.cannot_close_last_tab' => 'No se puede cerrar la última pestaña',
     'status.redone' => 'rehecho: {description}',
     'status.redo_with_errors' => 'repetir {description} con {errors} error(es)',

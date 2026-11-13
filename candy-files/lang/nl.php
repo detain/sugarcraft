@@ -41,6 +41,7 @@ return [
     'status.nothing_to_undo' => 'niets ongedaan te maken',
     'status.undone' => 'ongedaan gemaakt: {description}',
     'status.undo_with_errors' => 'ongedaan maken van {description} met {errors} fouten',
+    'status.undo_target_occupied' => 'ongedaan maken van {description} geblokkeerd: {occupied} doel(en) bezet — originelen blijven in de prullenmand',
     'status.cannot_close_last_tab' => 'Kan laatste tabblad niet sluiten',
     'status.redone' => 'opnieuw uitgevoerd: {description}',
     'status.redo_with_errors' => 'opnieuw uitvoeren van {description} met {errors} fouten',

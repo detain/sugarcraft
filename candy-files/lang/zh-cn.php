@@ -41,6 +41,7 @@ return [
     'status.nothing_to_undo' => '没有可撤销的操作',
     'status.undone' => '已撤销：{description}',
     'status.undo_with_errors' => '撤销 {description} 时发生 {errors} 个错误',
+    'status.undo_target_occupied' => '撤销 {description} 被阻止：{occupied} 个目标已被占用——原件保留在回收站',
     'status.cannot_close_last_tab' => '无法关闭最后一个标签页',
     'status.redone' => '已重做：{description}',
     'status.redo_with_errors' => '重做 {description} 时发生 {errors} 个错误',

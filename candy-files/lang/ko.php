@@ -41,6 +41,7 @@ return [
     'status.nothing_to_undo' => '실행 취소할 항목 없음',
     'status.undone' => '실행 취소됨: {description}',
     'status.undo_with_errors' => '{description} 실행 취소 중 오류 {errors}건',
+    'status.undo_target_occupied' => '{description} 실행 취소 차단: 대상 {occupied}개 사용 중 — 원본은 휴지통에 보관',
     'status.cannot_close_last_tab' => '마지막 탭은 닫을 수 없음',
     'status.redone' => '다시 실행됨: {description}',
     'status.redo_with_errors' => '{description} 다시 실행 중 오류 {errors}건',

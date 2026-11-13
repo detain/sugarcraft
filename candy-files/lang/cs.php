@@ -41,6 +41,7 @@ return [
     'status.nothing_to_undo' => 'nic ke vrácení',
     'status.undone' => 'vráceno: {description}',
     'status.undo_with_errors' => 'vrácení {description} s chybami {errors}',
+    'status.undo_target_occupied' => 'vrácení {description} blokováno: {occupied} cíl(ů) obsazeno — originály zůstaly v koši',
     'status.cannot_close_last_tab' => 'Poslední kartu nelze zavřít',
     'status.redone' => 'obnoveno: {description}',
     'status.redo_with_errors' => 'opakování {description} s chybami {errors}',

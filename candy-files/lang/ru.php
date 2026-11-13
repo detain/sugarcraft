@@ -41,6 +41,7 @@ return [
     'status.nothing_to_undo' => 'нечего отменять',
     'status.undone' => 'отменено: {description}',
     'status.undo_with_errors' => 'отмена {description}: ошибок {errors}',
+    'status.undo_target_occupied' => 'отмена {description} заблокирована: занято целей: {occupied} — оригиналы остаются в корзине',
     'status.cannot_close_last_tab' => 'Нельзя закрыть последнюю вкладку',
     'status.redone' => 'повторено: {description}',
     'status.redo_with_errors' => 'повтор {description}: ошибок {errors}',
