@@ -29,7 +29,8 @@ use SugarCraft\Style\Lang;
  *
  * Literal preservation: a `[...]` region whose words are ALL unknown or
  * no-effect (`[b]`, `[on] status`, `[]`, `[[lit]]`) is re-emitted verbatim
- * as plain text — nothing is silently dropped. An effective tag still
+ * as plain text, and an unterminated `[` or `[/` flushes the remainder of
+ * the input verbatim — nothing is silently dropped. An effective tag still
  * swallows its own delimiters, and unknown words inside an otherwise
  * effective tag (`[bold typo]`) remain ignored. Nesting beyond
  * {@see self::MAX_NESTING_DEPTH} opening tags is refused with a
@@ -108,8 +109,10 @@ final class Markup
                 // Find the closing ]
                 $closeEnd = strpos($input, ']', $i);
                 if ($closeEnd === false) {
-                    // Malformed close — treat as literal
-                    $pendingText .= '[/';
+                    // Malformed close — the '[/' is literal AND the remainder
+                    // after it is preserved verbatim (finding 022: the tail
+                    // used to be dropped with it).
+                    $pendingText .= '[/' . substr($input, $i);
                     $i = $len;
                 } else {
                     $i = $closeEnd + 1;
@@ -126,8 +129,10 @@ final class Markup
                 // Find the closing ]
                 $closePos = strpos($input, ']', $i);
                 if ($closePos === false) {
-                    // Malformed — treat '[' as literal and stop
-                    $pendingText .= '[';
+                    // Malformed — the '[' is literal and the remainder of the
+                    // input is flushed verbatim after it (finding 022: the old
+                    // break dropped everything past the bracket).
+                    $pendingText .= '[' . substr($input, $i);
                     break;
                 }
 

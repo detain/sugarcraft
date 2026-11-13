@@ -177,6 +177,23 @@ final class MarkupTest extends TestCase
         $this->assertGreaterThan(0, count($cells));
     }
 
+    public function testUnterminatedOpenBracketFlushesRemainder(): void
+    {
+        // Finding 022: an unterminated '[' used to drop everything after it.
+        $cells = Markup::parse('abc[def', Style::new());
+        $this->assertSame('abc[def', implode(array_map(fn (Cell $c) => $c->rune, $cells)));
+    }
+
+    public function testUnterminatedCloseTagFlushesRemainder(): void
+    {
+        // The malformed '[/' twin: the styled text before it survives, the
+        // tail rides verbatim, and the literal '[/y' itself is unstyled.
+        $cells = Markup::parse('[bold]x[/y', Style::new());
+        $this->assertSame('x[/y', implode(array_map(fn (Cell $c) => $c->rune, $cells)));
+        $this->assertTrue($cells[0]->style->isBold());
+        $this->assertFalse($cells[1]->style->isBold());
+    }
+
     public function testParseClosingTagWithoutOpening(): void
     {
         // Malformed closing tag - should just output the content normally
