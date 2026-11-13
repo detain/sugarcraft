@@ -34,7 +34,8 @@ echo "width 100: {$format(...$wide)}\n";
 
 // The same layout squeezed to 10 columns: the fixed pane takes what it
 // can first, the elastic pane collapses to zero. Degradation is silent —
-// compare the constraint demand against the area if you need the signal.
+// GreedySolver::demandOf($area, $dir, $constraints) answers 24 here, and
+// 24 > 10 tells you ahead of the solve that something must give.
 $narrow = $solver->solve(Region::fromSize(10, 24), Direction::Horizontal, [
     Constraint::length(24),
     Constraint::fill(1),

@@ -43,9 +43,11 @@ $short = $solver->solve(Region::fromSize(80, 8), Direction::Vertical, [
 ]);
 echo "rows  8: {$format(...$short)}\n";
 
-// Demand above supply: below its fixed panes the frame cannot seat them all,
-// regions shrink proportionally and the walk still tiles the span — silently,
-// because a resized-below-minimum window is a normal runtime state.
+// Demand above supply (demandOf([length(3),min(2)]) on 3 rows = 5 > 3):
+// below its fixed panes the frame cannot seat them all, regions shrink
+// proportionally and the walk still tiles the span — silently, because a
+// resized-below-minimum window is a normal runtime state. GreedySolver::
+// demandOf() answers that 5 without a hand-redone comparison.
 $crushed = $solver->solve(Region::fromSize(80, 3), Direction::Vertical, [
     Constraint::length(3),    // header wants every row
     Constraint::min(2),       // body floor 2

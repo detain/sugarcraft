@@ -38,9 +38,10 @@ use SugarCraft\Constraints\Region;
  *     No PHP warning is raised: an over-constrained split is the ordinary
  *     state of a TUI resized below its fixed panes, it recurs every frame,
  *     and a warning on the default handler would print into the terminal the
- *     layout is drawing. Hosts that need to know compare the constraint
- *     demand against the area themselves; {@see withoutOverflowTruncation()}
- *     keeps every region at its full base size instead.
+ *     layout is drawing. Hosts that need to know ask
+ *     {@see GreedySolver::demandOf()} — demand above the area says something
+ *     gave; {@see withoutOverflowTruncation()} keeps every region at its full
+ *     base size instead.
  *
  * The produced sub-regions tile the region exactly for every well-constrained
  * set, but two shapes deliberately fall off-grid ({@see LayoutSolver} carries
@@ -266,16 +267,7 @@ final class GreedySolver implements LayoutSolver
             return [];
         }
 
-        // The size bookkeeping below indexes rawSizes positionally and the
-        // remainder passes scan by integer offset, so a keyed or sparse array
-        // would silently mis-align constraints against their sizes (and PHP
-        // would raise "undefined key" notices per frame). The typed contract is
-        // a list — refuse anything else loudly at the boundary instead.
-        if (array_is_list($constraints) === false) {
-            throw new \InvalidArgumentException(
-                'Constraints must be a list (sequential array of Constraint); got a keyed or sparse array'
-            );
-        }
+        self::guardConstraintList($constraints);
 
         if ($dir === Direction::Horizontal) {
             return $this->solveHorizontal($region, $constraints);
@@ -299,6 +291,78 @@ final class GreedySolver implements LayoutSolver
     public static function solveStatic(Region $area, Direction $dir, array $constraints): array
     {
         return (new self())->solve($area, $dir, $constraints);
+    }
+
+    /**
+     * The integer APPETITE of a constraint set against the frame's solved
+     * axis — the README's documented host-side degradation comparison,
+     * mechanized: Length at its exact size, Percentage/Ratio resolved against
+     * the span under this instance's rounding policy, Min at its floor, Max
+     * at its cap, and Fill at 0 (it claims only slack, so it is never left
+     * "unmet"). Demand above the span means the set cannot be satisfied
+     * whole: either the proportional truncation fires (fixed + Min floors
+     * already exceed the axis) or a slack consumer is served below its
+     * appetite. Which pane lost what stays a per-frame question one integer
+     * cannot split — see the README Degradation section, which still
+     * recommends {@see withoutOverflowTruncation()} when collapse must be
+     * visible per region. Same boundary refusals as {@see solve()}; the walk
+     * is pure integer arithmetic (carve-out 4 applies to its products too).
+     *
+     * @param list<Constraint> $constraints
+     */
+    public function demandOf(Region $area, Direction $dir, array $constraints): int
+    {
+        self::guardConstraintList($constraints);
+        $span = $dir === Direction::Horizontal ? $area->width : $area->height;
+
+        $demand = 0;
+        foreach ($constraints as $index => $c) {
+            $demand += match (true) {
+                $c instanceof Length => $c->n,
+                $c instanceof Percentage => $this->resolveProportional($span, $c->n, 100),
+                $c instanceof Ratio => $this->resolveProportional($span, $c->numerator, $c->denominator),
+                $c instanceof Min => $c->n,
+                $c instanceof Max => $c->n,
+                $c instanceof Fill => 0,
+                default => throw new \InvalidArgumentException(
+                    'Unsupported constraint type at index ' . $index . ': ' . get_debug_type($c)
+                ),
+            };
+        }
+        return $demand;
+    }
+
+    /**
+     * Boundary precondition shared by solve() and demandOf(): the size
+     * bookkeeping indexes constraints positionally and the remainder passes
+     * scan by integer offset, so a keyed or sparse array would silently
+     * mis-align constraints against their sizes (and PHP would raise
+     * "undefined key" notices per frame). The typed contract is a list —
+     * refuse anything else loudly at the boundary instead.
+     *
+     * @param array<array-key, mixed> $constraints
+     */
+    private static function guardConstraintList(array $constraints): void
+    {
+        if (array_is_list($constraints) === false) {
+            throw new \InvalidArgumentException(
+                'Constraints must be a list (sequential array of Constraint); got a keyed or sparse array'
+            );
+        }
+    }
+
+    /**
+     * Resolve a proportional constraint against a span under this
+     * instance's rounding policy — the single arithmetic shared by the
+     * allocation walk (solveHorizontal) and the demand walk (demandOf), so
+     * the two can never drift on what a Percentage/Ratio "wants".
+     */
+    private function resolveProportional(int $span, int $numerator, int $denominator): int
+    {
+        // Compat mode rounds (sugar-panels distribute() uses round()); default floors.
+        return $this->roundSplit === true
+            ? (int) round($span * $numerator / $denominator)
+            : (int) floor($span * $numerator / $denominator);
     }
 
     /**
@@ -331,17 +395,12 @@ final class GreedySolver implements LayoutSolver
                 $rawSizes[] = $c->n;
                 $reservedFixed += $c->n;
             } elseif ($c instanceof Percentage) {
-                // Compat mode rounds (sugar-panels distribute() uses round()); default floors.
-                $size = $this->roundSplit === true
-                    ? (int) round($totalWidth * $c->n / 100)
-                    : (int) floor($totalWidth * $c->n / 100);
+                $size = $this->resolveProportional($totalWidth, $c->n, 100);
                 $rawSizes[] = $size;
                 $reservedFixed += $size;
                 $proportionalCount++;
             } elseif ($c instanceof Ratio) {
-                $size = $this->roundSplit === true
-                    ? (int) round($totalWidth * $c->numerator / $c->denominator)
-                    : (int) floor($totalWidth * $c->numerator / $c->denominator);
+                $size = $this->resolveProportional($totalWidth, $c->numerator, $c->denominator);
                 $rawSizes[] = $size;
                 $reservedFixed += $size;
                 $proportionalCount++;

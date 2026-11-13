@@ -218,15 +218,16 @@ edge-to-edge off the sum law.
 
 Over-constrained splits truncate **silently**: it is the ordinary state of a
 TUI resized below its fixed panes, it recurs every frame, and a warning on the
-default handler would print into the terminal the layout is drawing. The
-solver ships no `demandOf()`/`isTruncated()` carrier — hosts that need the
-signal compare demand against the area themselves: fixed sizes are exact,
-Percentage/Ratio resolve against the span, Min floors sum, and Max caps
-ceiling; if that sum exceeds the span, something gave. Which pane lost what
-is not tellable without duplicating the allocation walk, so prefer
-`withoutOverflowTruncation()` (host-side clipping) when collapse must be
-visible and distinguishable. Zero-area panes appear in the output unflagged
-in both modes.
+default handler would print into the terminal the layout is drawing.
+`GreedySolver::demandOf(Region, Direction, array): int` answers the
+comparison for you — fixed sizes are exact, Percentage/Ratio resolve against
+the span under the instance's rounding policy, Min floors sum, Max caps
+ceiling, and Fill contributes 0; demand above the area's solved axis
+(`area->width` / `area->height`) says the set cannot be satisfied whole.
+Which pane lost what is still not tellable without duplicating the allocation
+walk, so prefer `withoutOverflowTruncation()` (host-side clipping) when
+collapse must be visible and distinguishable. Zero-area panes appear in the
+output unflagged in both modes.
 
 ## Integration and performance
 
