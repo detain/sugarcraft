@@ -28,6 +28,7 @@ return [
     'scatter.dim_nonneg'       => 'عرض/ارتفاع الرسم البياني المبعثر يجب أن يكون >= 0',
     'scatter.point_numeric'    => 'يجب أن تكون النقطة [س رقميًا، ص رقميًا]، تم تقديم {given}',
     'chart.dim_nonneg'         => 'يجب أن يكون عرض/ارتفاع الرسم >= 0',
+    'chart.duration_nonneg'     => 'يجب أن تكون مدة حركة الرسم البياني >= 0 مللي ثانية',
     'finite.non_finite'        => 'يجب أن تكون قيمة الرسم نهائية، وقد حصل على {value}',
 // Support/Rune.php
     'rune.empty'               => 'يجب أن يكون {name} خانة واحدة مرئية، لا فارغة',

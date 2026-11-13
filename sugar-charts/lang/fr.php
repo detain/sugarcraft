@@ -45,6 +45,7 @@ return [
     'scatter.dim_nonneg'       => 'la largeur/hauteur du nuage de points doit être >= 0',
     'scatter.point_numeric'    => 'le point du nuage de points doit être [x numérique, y numérique], {given} fourni',
     'chart.dim_nonneg'         => 'la largeur/hauteur du graphique doit être >= 0',
+    'chart.duration_nonneg'     => 'la durée d\'animation du graphique doit être >= 0 millisecondes',
     'finite.non_finite'        => 'la valeur du graphique doit être finie, valeur reçue : {value}',
 // Support/Rune.php
     'rune.empty'               => '{name} doit être une seule cellule visible, et non vide',

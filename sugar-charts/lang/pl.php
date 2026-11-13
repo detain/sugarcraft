@@ -28,6 +28,7 @@ return [
     'scatter.dim_nonneg'       => 'szerokość/wysokość wykresu punktowego musi być >= 0',
     'scatter.point_numeric'    => 'punkt wykresu musi być [numeryczne x, numeryczne y], podano {given}',
     'chart.dim_nonneg'         => 'szerokość/wysokość wykresu musi wynosić >= 0',
+    'chart.duration_nonneg'     => 'czas animacji wykresu musi wynosić >= 0 milisekund',
     'finite.non_finite'        => 'wartość wykresu musi być skończona, otrzymano {value}',
 // Support/Rune.php
     'rune.empty'               => '{name} musi być pojedynczą widoczną komórką, nie pustą',

@@ -28,6 +28,7 @@ return [
     'scatter.dim_nonneg'       => 'la larghezza/altezza del grafico a dispersione deve essere >= 0',
     'scatter.point_numeric'    => 'il punto del grafico a dispersione deve essere [x numerico, y numerico], {given} fornito',
     'chart.dim_nonneg'         => 'larghezza/altezza del grafico devono essere >= 0',
+    'chart.duration_nonneg'     => 'la durata di animazione del grafico deve essere >= 0 millisecondi',
     'finite.non_finite'        => 'il valore del grafico deve essere finito, ottenuto {value}',
 // Support/Rune.php
     'rune.empty'               => '{name} deve essere una sola cella visibile, non vuota',

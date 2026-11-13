@@ -28,6 +28,7 @@ return [
     'scatter.dim_nonneg'       => '散点图宽/高必须 >= 0',
     'scatter.point_numeric'    => '散点必须为 [数值 x, 数值 y]，收到 {given}',
     'chart.dim_nonneg'         => '图表宽度/高度必须 >= 0',
+    'chart.duration_nonneg'     => '图表动画时长必须 >= 0 毫秒',
     'finite.non_finite'        => '图表值必须是有限值，实际为 {value}',
 // Support/Rune.php
     'rune.empty'               => '{name} 必须是单个可见单元格，不能为空',

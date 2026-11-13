@@ -28,6 +28,7 @@ return [
     'scatter.dim_nonneg'       => 'a largura/altura do gráfico de dispersão deve ser >= 0',
     'scatter.point_numeric'    => 'o ponto de dispersão deve ser [x numérico, y numérico], {given} informado',
     'chart.dim_nonneg'         => 'a largura/altura do gráfico deve ser >= 0',
+    'chart.duration_nonneg'     => 'a duração da animação do gráfico deve ser >= 0 milissegundos',
     'finite.non_finite'        => 'o valor do gráfico deve ser finito, obtido {value}',
 // Support/Rune.php
     'rune.empty'               => '{name} deve ser uma única célula visível, não vazia',

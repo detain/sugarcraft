@@ -28,6 +28,7 @@ return [
     'scatter.dim_nonneg'       => 'dağılım grafiği genişlik/yüksekliği >= 0 olmalıdır',
     'scatter.point_numeric'    => 'dağılım noktası [sayısal x, sayısal y] olmalıdır, {given} verildi',
     'chart.dim_nonneg'         => 'grafik genişliği/yüksekliği >= 0 olmalıdır',
+    'chart.duration_nonneg'     => 'grafik animasyon süresi >= 0 milisaniye olmalıdır',
     'finite.non_finite'        => 'grafik değeri sonlu olmalıdır, alınan: {value}',
 // Support/Rune.php
     'rune.empty'               => '{name} tek bir görünür hücre olmalı, boş olmamalı',

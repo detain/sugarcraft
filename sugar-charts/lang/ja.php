@@ -28,6 +28,7 @@ return [
     'scatter.dim_nonneg'       => '散布図の幅/高さは >= 0 である必要があります',
     'scatter.point_numeric'    => '散布図の点は [数値 x, 数値 y] である必要があります。指定された型: {given}',
     'chart.dim_nonneg'         => 'チャートの幅/高さは >= 0 である必要があります',
+    'chart.duration_nonneg'     => 'チャートのアニメーション長は 0 ミリ秒以上である必要があります',
     'finite.non_finite'        => 'チャートの値は有限である必要があります。取得値: {value}',
 // Support/Rune.php
     'rune.empty'               => '{name} は単一の表示セルである必要があります（空にできません）',

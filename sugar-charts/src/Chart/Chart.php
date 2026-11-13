@@ -382,15 +382,16 @@ abstract class Chart implements ChromeAccessors
     public function xLabel(string $label): self     { return $this->withXLabel($label); }
     public function yLabel(string $label): self     { return $this->withYLabel($label); }
     public function dataLabels(bool $on = true): self { return $this->withDataLabels($on); }
-    public function dataLabelFormat(\Closure $fn): self { return $this->withDataLabelFormatter($fn); }
+    /** Short-form alias for {@see withDataLabelFormatter()}; null clears the knob (sugar-charts-085). */
+    public function dataLabelFormat(?\Closure $fn = null): self { return $this->withDataLabelFormatter($fn); }
     /** Short-form alias for {@see withTitle()}. */
     public function title(string $t, Position $p = Position::Top): self { return $this->withTitle($t, $p); }
     /** Short-form alias for {@see withCanvas()}. */
     public function canvas(?CellGrid $canvas = null): self { return $this->withCanvas($canvas); }
     /** Short-form alias for {@see withBraille()}. */
     public function braille(bool $on = true): self { return $this->withBraille($on); }
-    /** Short-form alias for {@see withTheme()}. */
-    public function theme(Theme $theme): self { return $this->withTheme($theme); }
+    /** Short-form alias for {@see withTheme()}; null clears the knob (sugar-charts-085 family parity with canvas()/seriesColorFn()). */
+    public function theme(?Theme $theme = null): self { return $this->withTheme($theme); }
 
     // ─── Animation Support ──────────────────────────────────────────────
 
@@ -412,9 +413,16 @@ abstract class Chart implements ChromeAccessors
      * progress across — no renderer here owns a clock (chart libraries
      * must not spawn timers; the embedding program does). Read it back with
      * `getAnimationDuration()` / drive the frames with your own loop.
+     *
+     * @throws \InvalidArgumentException on negative milliseconds (sugar-charts-057 —
+     *                                  the last numeric door in the family without a leg)
      */
     public function withAnimationDuration(int $durationMs): self
     {
+        if ($durationMs < 0) {
+            throw new \InvalidArgumentException(Lang::t('chart.duration_nonneg'));
+        }
+
         return $this->copy(animationDuration: $durationMs);
     }
 

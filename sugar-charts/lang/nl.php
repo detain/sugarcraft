@@ -28,6 +28,7 @@ return [
     'scatter.dim_nonneg'       => 'spreidingsdiagram breedte/hoogte moet >= 0 zijn',
     'scatter.point_numeric'    => 'spreidingsdiagram-punt moet [numeriek x, numeriek y] zijn, {given} opgegeven',
     'chart.dim_nonneg'         => 'breedte/hoogte van de grafiek moet >= 0 zijn',
+    'chart.duration_nonneg'     => 'de animatieduur van de grafiek moet >= 0 milliseconden zijn',
     'finite.non_finite'        => 'de grafiekwaarde moet eindig zijn, gekregen {value}',
 // Support/Rune.php
     'rune.empty'               => '{name} moet één zichtbare cel zijn, niet leeg',

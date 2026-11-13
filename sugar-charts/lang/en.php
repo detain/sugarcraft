@@ -47,6 +47,7 @@ return [
 
     // Chart/Chart.php
     'chart.dim_nonneg'         => 'chart width/height must be >= 0',
+    'chart.duration_nonneg'     => 'chart animation duration must be >= 0 milliseconds',
 
     // Support/Finite.php
     'finite.non_finite'        => 'chart value must be finite, got {value}',

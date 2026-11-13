@@ -22,14 +22,16 @@ final class LineChartBatch2Test extends TestCase
     {
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('dataset name _primary is reserved for the primary data series');
-        new LineChart(data: [1.0, 2.0], width: 8, height: 3, min: null, max: null, point: '*', datasets: ['_primary' => [3.0, 4.0]]);
+        // CH-20 (sugar-charts-091): the ctor is private now — the same door
+        // is reached through the public withDataset ingress.
+        LineChart::new([1.0, 2.0], 8, 3)->withDataset('_primary', [3.0, 4.0]);
     }
 
     public function testReservedPrimaryDatasetPointNameThrows(): void
     {
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('dataset-point name _primary is reserved for the primary data series');
-        new LineChart(data: [1.0, 2.0], width: 8, height: 3, min: null, max: null, point: '*', datasetPoints: ['_primary' => 'o']);
+        LineChart::new([1.0, 2.0], 8, 3)->withDatasetPoint('_primary', 'o');
     }
 
     public function testWithDatasetRejectsReservedNameThroughTheCopyDoor(): void
@@ -129,7 +131,7 @@ final class LineChartBatch2Test extends TestCase
         // Themed path unchanged by M13: colors come from the theme
         // palette, not DATASET_COLORS, so no rune/glyph rotation assertion
         // here — just prove the themed render keeps its SGR bytes.
-        $chart = new LineChart(data: [1.0, 2.0], width: 8, height: 3, min: null, max: null, point: '*', theme: Theme::dark());
+        $chart = LineChart::new([1.0, 2.0], 8, 3)->withTheme(Theme::dark());
         $this->assertStringContainsString("\x1b[38;", $chart->view());
     }
 }

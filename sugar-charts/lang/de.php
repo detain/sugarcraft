@@ -45,6 +45,7 @@ return [
     'scatter.dim_nonneg'       => 'Streudiagramm-Breite/-Höhe muss >= 0 sein',
     'scatter.point_numeric'    => 'Streudiagrammpunkt muss [numerisches x, numerisches y] sein, {given} übergeben',
     'chart.dim_nonneg'         => 'Diagrammbreite/-höhe muss >= 0 sein',
+    'chart.duration_nonneg'     => 'Animationsdauer des Diagramms muss >= 0 Millisekunden sein',
     'finite.non_finite'        => 'Diagrammwert muss endlich sein, erhalten: {value}',
 // Support/Rune.php
     'rune.empty'               => '{name} muss eine einzelne sichtbare Zelle sein, nicht leer',

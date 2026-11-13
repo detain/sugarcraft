@@ -84,6 +84,12 @@ final class LineChart extends Chart
     public const PRIMARY_SERIES = '_primary';
 
     /**
+     * Private by house law (sugar-charts-091): construction goes through
+     * {@see self::new()}, every other knob through its wither — the shape
+     * promoted here (xLabels, markLines, unicodeConnectors, ...) must never
+     * become a second public ingress. All doors below rebuild through
+     * this one constructor.
+     *
      * @param list<int|float>            $data
      * @param array<string,list<int|float>> $datasets  named multi-series
      * @param array<string,string>       $datasetPoints  per-series rune override
@@ -94,7 +100,7 @@ final class LineChart extends Chart
      * @param bool                       $unicodeConnectors  draw connectors with `│ ─ ╱ ╲` instead of ASCII `| - / \`
      * @param ?\Closure                  $seriesColorFn  per-point color resolver, see {@see withSeriesColorFn()}; null = per-series colors only
      */
-    public function __construct(
+    private function __construct(
         public readonly array $data,
         int $width,
         int $height,
@@ -535,6 +541,9 @@ final class LineChart extends Chart
         return $this->lineChartCopy(dataLabelFormatter: $formatter, dataLabelFormatterSet: true);
     }
 
+    /** Short-form alias for {@see withDataLabelFormatter()}; null clears the knob (mirrors the base override, sugar-charts-085). */
+    public function dataLabelFormat(?\Closure $fn = null): self { return $this->withDataLabelFormatter($fn); }
+
     /**
      * Set the chart title.
      *
@@ -648,9 +657,17 @@ final class LineChart extends Chart
      * Set animation duration in milliseconds (0 = instant, no animation).
      * Storage-only pacing hint for the caller's frame loop — rendering
      * reads only `withAnimationProgress()`; no renderer here owns a clock.
+     *
+     * @throws \InvalidArgumentException on negative milliseconds (mirrors the
+     *                                  base door, sugar-charts-057 — this
+     *                                  override must not smuggle negatives past it)
      */
     public function withAnimationDuration(int $durationMs): self
     {
+        if ($durationMs < 0) {
+            throw new \InvalidArgumentException(Lang::t('chart.duration_nonneg'));
+        }
+
         return $this->lineChartCopy(animationDuration: $durationMs);
     }
 
@@ -1078,7 +1095,10 @@ final class LineChart extends Chart
             } catch (\InvalidArgumentException) {
                 $c = Color::hex($color);
             }
-        } catch (\Throwable) {
+        } catch (\InvalidArgumentException | \UnexpectedValueException) {
+            // Only the two spellings the color door can legitimately raise
+            // for junk input (sugar-charts-058); an \Error/\TypeError from
+            // here up is a library bug and must surface, not render unstyled.
             return null;
         }
         return Style::new()->fg($c);
