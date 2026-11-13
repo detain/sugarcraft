@@ -42,15 +42,14 @@ Damped harmonic oscillator (Ryan-Juckett's algorithm, [spring physics
 part 1](https://ryanjuckett.com/posts/spring-physics-part-1/) / [part
 2](https://ryanjuckett.com/posts/spring-physics-part-2/)). The
 `dampingRatio` regimes are tabulated under
-[Damping-ratio regimes](#damping-ratio-regimes); the frequency and damping
-arguments must
-produce a converging spring (and the frame time must be positive):
-`angularFrequency` must be at least `1e-9` and `dampingRatio` must be greater
-than `0` — a zero-damping spring oscillates forever and a negative one
-diverges, a zero `deltaTime` would freeze the state and a negative one would
-integrate backwards, so the
-constructor refuses these instead of letting your frame loop run until the
-user closes the window.
+[Damping-ratio regimes](#damping-ratio-regimes).
+
+The constructor refuses a spring that cannot converge: `angularFrequency`
+must be at least `1e-9` and `dampingRatio` greater than `0` (a zero-damping
+spring oscillates forever, a negative one diverges), and `deltaTime` must be
+positive (zero freezes the state, a negative value integrates backwards).
+These are refusals, not slowdowns — a non-converging spring would otherwise
+spin your frame loop until the user closes the window.
 
 One entry vocabulary: every class in this library answers both the plain
 `new X(...)` form and the house factory shape `X::new(...)` — `Spring`,
@@ -122,7 +121,7 @@ honest patterns:
   Every pass of this loop is one frame: one `update()`, one render, never a
   run-to-settled burst inside a single iteration. Motion then advances per
   frame, so a loop that drifts slower than 60 Hz stretches the animation —
-  which is the determinism replays record tick counts for; for wall-clock
+  replays stay deterministic by recording tick counts; for wall-clock
   motion measure the real frame time instead:
 
   ```php
@@ -136,6 +135,7 @@ honest patterns:
   $vel = 0.0;
 
   foreach ($frameTimes as $index => $deltaTime) {
+      $deltaTime = min($deltaTime, 0.05);           // cap a stall: never a teleport
       $spring = new Spring($deltaTime, 6.0, 1.0);   // coeffs are cheap (~1 µs)
       [$pos, $vel] = $spring->update($pos, $vel, $targets[$index]);
       // render $pos this frame
@@ -145,7 +145,7 @@ honest patterns:
   Rebuilding the spring per frame (above) keeps wall-clock motion honest
   under jitter; if the integer-rendered position is unchanged from last
   frame, skip the repaint — animating a value that rounds to the same cell
-  is repaints without information.
+  means the repaint carries no information.
 
 ### Spring presets
 
@@ -154,7 +154,7 @@ constructs a spring from a named preset at 60 fps (override the frame time as
 needed; `reducedMotionOverride` pins the snap-to-target behaviour — see
 [Reduced motion](#reduced-motion)).
 Five presets are available, tuned by hand against the react-spring-era folk
-tables (they are not literal UIKit values — `UIViewPropertyAnimator` documents
+tables (the presets are not literal UIKit values — `UIViewPropertyAnimator` documents
 duration/damping, not tension triples):
 
 | Preset | Tension | Friction | Mass | ζ | Overshoot | Settle at 60 fps |
@@ -170,7 +170,7 @@ the family's character. Settle frames are measured for a 0 → 100 move at the
 default `1e-4` threshold; under reduced motion every preset instead snaps to
 target in one tick (see [Reduced motion](#reduced-motion)). No
 critical-by-construction preset ships (none was tuned); build one with
-`dampingRatio: 1.0` (the flagship example above) or `new SpringConfig(...)`
+`dampingRatio: 1.0` (the critical-damped example above) or `new SpringConfig(...)`
 with friction `2 * sqrt(tension * mass)`.
 
 ```php
@@ -187,10 +187,10 @@ $spring30 = Spring::fromPreset(SpringPreset::Gentle, Spring::fps(30));
 `SpringConfig` accepts physical parameters (tension / friction / mass — all
 finite and greater than zero) and derives the `angularFrequency` and
 `dampingRatio` consumed by `Spring`. Extreme-but-finite triples are refused
-when the derived ω/ζ are non-finite, non-positive, or numerically degenerate
-(past ζ ≈ 2^26.5 the float sum ζ² − 1 rounds back to ζ², both over-damped
-roots collapse to one number, and the spring would freeze — illegal, not
-slow):
+when the derived ω/ζ are non-finite, non-positive, or numerically degenerate.
+Past ζ ≈ 2^26.5 the float sum ζ² − 1 rounds back to ζ² and both over-damped
+roots collapse to one number — the spring would freeze, and that is illegal,
+not merely slow. The derivation:
 
 ```
 angularFrequency = sqrt(tension / mass)
@@ -218,11 +218,12 @@ The `dampingRatio` argument to `Spring` picks one of three classical
 behaviours:
 
 - **Under-damped** (`0 < ζ < 1`) — oscillates around the target,
-  amplitudes decaying each cycle. Good picks for "bouncy" feel.
+  amplitudes decaying each cycle. Reach for this when the feel should read
+  as bouncy.
 - **Critically-damped** (`ζ = 1`) — fastest convergence with no
   overshoot. The default for "snap to value" animations.
 - **Over-damped** (`ζ > 1`) — converges without overshoot but slower
-  than critical. Good picks for slow, weighty motion.
+  than critical. Reach for this for slow, weighty motion.
 
 `ζ <= 0` is refused at construction: zero damping is a pure oscillator that
 never settles, and negative damping diverges — neither belongs in a frame
@@ -271,7 +272,8 @@ these variables is
 
 `Projectile`, the `Easing` curves and `CubicBezier` deliberately ignore the
 signal: they are pure functions of time with no target to snap *to*. Gate
-them app-side by short-circuiting normalized time to the end of the motion:
+them in your app — when the signal is on, jump straight to the motion's
+end instead of animating it:
 
 ```php
 use SugarCraft\ColorProfile\Probe;
@@ -356,8 +358,8 @@ normalize: no honest answer — catch what you mean, a
 `catch (InvalidArgumentException)` around `normalize()` is an uncaught fatal
 on a zero vector). `length()`,
 `lengthSquared()` and `distance()` can overflow to `INF` (components ~1e154
-and up), so compare magnitudes through `normalize()`d operands on extreme
-inputs — it refuses the overflow loudly, where a raw `length()` comparison
+and up), so compare magnitudes through `normalize()` on extreme inputs —
+`normalize()` refuses the overflow loudly, where a raw `length()` comparison
 would silently see `INF` against `INF`.
 
 The Y-axis convention is **Y-up** by default: `Projectile::gravity()` returns `(0, -9.81, 0)` so increasing
@@ -371,7 +373,7 @@ call — `update()` never mutates the receiver. The hazard is discarding
 the result: read state from whatever you last assigned (`$p = $p->update();`),
 not from the pre-update `$p`. The `position` / `velocity` / `acceleration`
 properties and their identically-named accessor methods expose the same
-`Vector`s; pick either spelling, just be consistent. Each step builds fresh
+`Vector`s; pick either spelling — just be consistent. Each step builds fresh
 `Point`/`Vector` instances; a state component that overflows to `INF`
 mid-simulation is refused by their constructors (`InvalidArgumentException`,
 naming the component), so bound your accelerations and velocities. A
@@ -388,8 +390,8 @@ four-argument rebuild, and the construction door validates every swap (so
 
 A spring has finished when `Spring::settled($pos, $vel, $target, $threshold)`
 says so — *position near the target and velocity near zero*, both required:
-a position-only check lies exactly on under-damped presets, which cross the
-target at full speed and come back. Chain and collection expose the same
+a position-only check gives false positives on under-damped presets, which
+cross the target at full speed and come back. Chain and collection expose the same
 contract at their own level: `SpringChain::isComplete()` and
 `SpringCollection::settled()`. Loops in this README stop on those predicates,
 not on frame counts; the `$frame < 600` guards shown are escape hatches for
@@ -400,9 +402,8 @@ For terminal grids the default `1e-4` threshold is finer than one cell:
 a spring has usually stopped *changing the frame* long before it has stopped
 *settling*. Pass a cell-sized threshold (`0.5`) to `settled()` when the
 consumer renders at cell resolution, and skip the repaint when the rounded
-cell value is unchanged from last frame. There is no value→cell helper
-tree-wide yet; `0.5` on a unit-per-cell mapping is the hand-carried rule of
-thumb.
+cell value is unchanged from last frame. There is no built-in value→cell
+helper; `0.5` is the working rule of thumb when one unit maps to one cell.
 
 ## SpringChain
 
@@ -473,7 +474,9 @@ Read with `position($id)` / `all()` / `target($id)` / `velocity($id)` /
 `settled($threshold = Spring::SETTLING_THRESHOLD)` (it needs velocities, which
 is why they are exposed). Unknown ids are refused by `position()` / `target()` /
 `velocity()` / `withTarget()` with an `OutOfBoundsException` naming the id,
-and the constructor refuses misaligned or orphaned id planes. The legacy
+and the constructor refuses misaligned or orphaned per-id maps (the
+position, velocity and target maps are keyed by id and must hold the same
+ids). The legacy
 `add()` / `remove()` / `setTarget()` mutators are **deprecated** shims
 (REMOVED-IN: 2.0.0) that emit `E_USER_DEPRECATED` and now delegate to their
 `with*()` twins — copy-on-write like everything else, so `$c = $c->add(...)`
@@ -503,13 +506,12 @@ leave `[0, 1]` in the *output* — `Elastic*` and `Back*` overshoot,
 `Bounce*` stays inside. One naming caveat: the shipped `BackIn`/`BackOut`/`BackInOut`
 are the sin-modulated family (`t³ ∓ sin` shaping), not Penner's classic
 `c1 = 1.70158` polynomial — the overshoot is real, but the dip shape differs
-from the canonical Penner tables. Six of the sixteen cases exit `[0, 1]`
-somewhere, by
-design. If you map an eased value to cells (`(int) round($eased * $cols)`),
+from the canonical Penner tables. Six of the sixteen cases leave the `[0, 1]`
+range somewhere, by design. If you map an eased value to cells (`(int) round($eased * $cols)`),
 clamp before indexing — a rubber-band curve is one frame away from a negative
 index. Non-finite `t` flows through `ease()` unguarded: `NAN` returns `NAN`
-from every case, `INF` survives the polynomial curves (answering `+INF` or
-`-INF` depending on the term signs) but flips to `NAN` inside the trig of
+from every case, `INF` survives the polynomial curves (returning `+INF` or
+`-INF` depending on the signs of the terms) but flips to `NAN` inside the trig of
 every `Elastic*` and `Back*` case — clamp upstream. The solver-backed
 `CubicBezier::ease()` takes the opposite policy: it refuses a non-finite
 `t` outright, because a Newton iteration has nothing honest to answer with.
@@ -531,23 +533,26 @@ the analytic enum stays a gated ruling, not an oversight.
 
 `CubicBezier` implements the CSS `cubic-bezier()` easing algorithm
 (Newton-Raphson root-finding with a bounded binary-search fallback). Construct
-via static factory methods: 26 named presets in total — the five CSS
-`transition-timing-function` keywords (`linear`, `ease`, `ease-in`,
-`ease-out`, `ease-in-out`, each expressible as `cubic-bezier()`, which
-generalizes them) plus 21 Penner-style curves (Sine/Quad/Cubic/Quart/Quint/Expo/Circ in
-In/Out/InOut) approximated with the
-[easings.net](https://easings.net/) table expressed as bezier control points.
+via static factory methods, 26 named presets in two families:
+
+- the five CSS `transition-timing-function` keywords — `linear`, `ease`,
+  `ease-in`, `ease-out`, `ease-in-out` (each is expressible as
+  `cubic-bezier()`, which generalizes them);
+- 21 Penner-style curves — Sine, Quad, Cubic, Quart, Quint, Expo and Circ,
+  each in In/Out/InOut — approximated with the
+  [easings.net](https://easings.net/) table expressed as bezier control
+  points.
 The Penner rows are named for the easing family, not for a CSS standard list:
 
 ```php
 use SugarCraft\Spring\Easing\CubicBezier;
 
 // CSS named easings
-$ease      = CubicBezier::cssEase();    // 0.25, 0.10, 0.25, 1.00
-$easeIn   = CubicBezier::easeIn();      // 0.42, 0.00, 1.00, 1.00
-$easeOut  = CubicBezier::easeOut();    // 0.00, 0.00, 0.58, 1.00
-$easeInOut = CubicBezier::easeInOut(); // 0.42, 0.00, 0.58, 1.00
-$linear   = CubicBezier::linear();      // 0.00, 0.00, 1.00, 1.00
+$ease       = CubicBezier::cssEase();    // 0.25, 0.10, 0.25, 1.00
+$easeIn     = CubicBezier::easeIn();     // 0.42, 0.00, 1.00, 1.00
+$easeOut    = CubicBezier::easeOut();    // 0.00, 0.00, 0.58, 1.00
+$easeInOut  = CubicBezier::easeInOut();  // 0.42, 0.00, 0.58, 1.00
+$linear     = CubicBezier::linear();     // 0.00, 0.00, 1.00, 1.00
 
 // Sine
 $easeInSine      = CubicBezier::easeInSine();
@@ -587,14 +592,15 @@ for ($f = 0; $f <= 60; $f++) {
 }
 ```
 
-`CubicBezier::ease(float $t): float` takes a finite `t` (a non-finite
-value throws; a finite out-of-range `t` is neither refused nor clamped, but
-past roughly 1e2 the solver saturates to an endpoint — `ease(1e3)` is
-exactly `1.0` on `cssEase()`) and returns the
-eased progress. The x-mapping is solved to `[0, 1]` monotonicity (control
-x-values are range-checked); the y-output lands exactly on `(0, 1)` for all 26
-named presets, and no preset overshoots the interval — every named curve's
-control y-values sit inside `[0, 1]`, which keeps the whole Bézier inside it.
+`CubicBezier::ease(float $t): float` takes a finite `t` and returns the
+eased progress. A non-finite `t` throws. A finite out-of-range `t` is
+neither refused nor clamped — but past roughly 1e2 the solver saturates to
+an endpoint, so `ease(1e3)` on `cssEase()` is exactly `1.0`. The x-mapping
+is solved so the curve is monotonic within `[0, 1]` (control x-values are
+range-checked). The y-output of every one of the 26 named presets lands on
+exactly 0 and 1 at the endpoints, and none overshoots the interval — each
+named curve's control y-values sit inside `[0, 1]`, which keeps the whole
+Bézier inside it.
 Overshoot *between* endpoints arises only from user-supplied elastic- or
 back-flavoured control points — same honesty rule as `Easing`.
 
@@ -700,7 +706,7 @@ cd sugar-spring && composer install && vendor/bin/phpunit
 
 Numeric trajectory output is pinned as golden files (JSON) in
 `tests/fixtures/`, using sugar-testing's `GoldenFile::save()`/`load()`
-with plain `assertEquals` equality in `tests/GoldenRenderTest.php` —
+with plain `assertEquals` in `tests/GoldenRenderTest.php` —
 sugar-testing's `assertGolden*` helper family is ANSI/cell-grid specific
 and not used here. The golden tests clear `REDUCE_MOTION` /
 `PREFERS_REDUCED_MOTION` and pin `serialize_precision` in `setUp()`, so host
@@ -717,15 +723,18 @@ UPDATE_GOLDENS=1 vendor/bin/phpunit
 
 ### Projectile motion
 
-![projectile](.vhs/projectile.gif)
+![Projectile tracing a gravity arc and bouncing off the
+floor](.vhs/projectile.gif)
 
 ### Spring physics
 
-![spring](.vhs/spring.gif)
+![Damped spring easing smoothly to its target
+value](.vhs/spring.gif)
 
 ### Particle field
 
-![particle](.vhs/particle.gif)
+![Projectile-driven particle field falling under terminal
+gravity](.vhs/particle.gif)
 
 ## Accessor deprecation (2026-10-24)
 
