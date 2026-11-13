@@ -15,6 +15,7 @@ use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\SuggestionsReadyMsg;
 use SugarCraft\Forms\Field\Input;
 use SugarCraft\Forms\Field\Select;
+use SugarCraft\Forms\Lang;
 
 /**
  * Tests for async suggestions with debounce.
@@ -291,5 +292,226 @@ final class AsyncSuggestionsTest extends TestCase
         Loop::run();
 
         $this->assertSame(1, $fetcherInvokedCount, 'Async fetcher must fire in Select even when inner cmd is present');
+    }
+
+    // ---- SF-S02 (findings 004/019/082): the shared fetcher guard ----
+
+    /**
+     * Unwrap the AsyncCmd out of the (possibly batched) Cmd a keystroke
+     * produced — same shape as AsyncSuggestionCancelTimeoutTest's helper.
+     */
+    private static function s02AsyncCmdFrom(?\Closure $cmd): AsyncCmd
+    {
+        self::assertNotNull($cmd, 'async scheduling must return a Cmd');
+        $produced = $cmd();
+        if ($produced instanceof AsyncCmd) {
+            return $produced;
+        }
+        self::assertInstanceOf(\SugarCraft\Core\BatchMsg::class, $produced);
+        foreach ($produced->cmds as $sub) {
+            $msg = $sub();
+            if ($msg instanceof AsyncCmd) {
+                return $msg;
+            }
+        }
+        self::fail('batch carried no AsyncCmd');
+    }
+
+    private static function s02Pump(float $seconds): void
+    {
+        Loop::addTimer($seconds, static fn () => Loop::stop());
+        Loop::run();
+    }
+
+    /**
+     * @return array{0: mixed, 1: ?\Throwable} [fulfilment, rejection] captured from a promise
+     */
+    private static function s02Settle(AsyncCmd $async, float $pumpSeconds = 0.2): array
+    {
+        $fulfilled = null;
+        $rejected  = null;
+        $async->promise->then(
+            static function (mixed $v) use (&$fulfilled): void {
+                $fulfilled = $v;
+            },
+            static function (?\Throwable $e) use (&$rejected): void {
+                $rejected = $e;
+            }
+        );
+        self::s02Pump($pumpSeconds);
+        return [$fulfilled, $rejected];
+    }
+
+    public function testThrowingFetcherRejectsInsteadOfUnwindingTheLoopInput(): void
+    {
+        $fetcher = static function (string $input): PromiseInterface {
+            throw new \RuntimeException('boom-fetch');
+        };
+
+        $f = Input::new('repo')->withAsyncSuggestions($fetcher, 10);
+        [$f, ] = $f->focus();
+        [$f, $cmd] = $f->update(new KeyMsg(KeyType::Char, 'r'));
+
+        $async = self::s02AsyncCmdFrom($cmd);
+        [$fulfilled, $rejected] = self::s02Settle($async);
+
+        // The loop COMPLETED this pump — pre-guard the throw unwound
+        // Loop::run() and the test died with it (mutation proof of SF-004).
+        self::assertNull($fulfilled, 'a throwing fetcher must not fulfil');
+        self::assertInstanceOf(\RuntimeException::class, $rejected);
+        self::assertSame('boom-fetch', $rejected->getMessage());
+
+        // And the loop is still alive for the program's next beat.
+        $alive = false;
+        Loop::addTimer(0.01, static function () use (&$alive): void {
+            $alive = true;
+            Loop::stop();
+        });
+        Loop::run();
+        self::assertTrue($alive, 'the event loop must survive a throwing fetcher');
+    }
+
+    public function testThrowingFetcherRejectsInsteadOfUnwindingTheLoopSelect(): void
+    {
+        $fetcher = static function (string $input): PromiseInterface {
+            throw new \RuntimeException('boom-select');
+        };
+
+        $f = Select::new('lang')
+            ->withOptions('PHP', 'Go', 'Rust')
+            ->withAsyncSuggestions($fetcher, 10);
+        [$f, ] = $f->focus();
+        [$f, ] = $f->update(new KeyMsg(KeyType::Char, '/'));
+        [$f, $cmd] = $f->update(new KeyMsg(KeyType::Char, 'P'));
+
+        $async = self::s02AsyncCmdFrom($cmd);
+        [, $rejected] = self::s02Settle($async);
+
+        self::assertInstanceOf(\RuntimeException::class, $rejected);
+        self::assertSame('boom-select', $rejected->getMessage());
+    }
+
+    public function testNonPromiseFetcherReturnRejectsWithTypedMessage(): void
+    {
+        $fetcher = static function (string $input): mixed {
+            return 'i-am-not-a-promise';
+        };
+
+        $f = Input::new('repo')->withAsyncSuggestions($fetcher, 10);
+        [$f, ] = $f->focus();
+        [$f, $cmd] = $f->update(new KeyMsg(KeyType::Char, 'r'));
+
+        [, $rejected] = self::s02Settle(self::s02AsyncCmdFrom($cmd));
+
+        self::assertInstanceOf(\InvalidArgumentException::class, $rejected);
+        self::assertSame(
+            Lang::t('suggestions.async_return_type', ['key' => 'repo', 'type' => 'string']),
+            $rejected->getMessage()
+        );
+    }
+
+    public function testNonArrayFulfillmentRejectsWithTypedMessage(): void
+    {
+        // Pre-guard the strict `function (array $suggestions)` arm turned
+        // this into an UNCONSUMED TypeError — suggestions silently never
+        // arrived. The guard must surface a typed rejection instead.
+        $fetcher = static function (string $input): PromiseInterface {
+            return \React\Promise\resolve('not-a-list');
+        };
+
+        $f = Input::new('repo')->withAsyncSuggestions($fetcher, 10);
+        [$f, ] = $f->focus();
+        [$f, $cmd] = $f->update(new KeyMsg(KeyType::Char, 'r'));
+
+        [$fulfilled, $rejected] = self::s02Settle(self::s02AsyncCmdFrom($cmd));
+
+        self::assertNull($fulfilled);
+        self::assertInstanceOf(\InvalidArgumentException::class, $rejected);
+        self::assertSame(
+            Lang::t('suggestions.async_result_type', ['key' => 'repo', 'type' => 'string']),
+            $rejected->getMessage()
+        );
+    }
+
+    public function testArrayFulfillmentStillResolvesTheSuggestionsMessage(): void
+    {
+        // Zero-regression pin of the settled happy path.
+        $fetcher = static function (string $input): PromiseInterface {
+            return \React\Promise\resolve(['alpha', 'beta']);
+        };
+
+        $f = Input::new('repo')->withAsyncSuggestions($fetcher, 10);
+        [$f, ] = $f->focus();
+        [$f, $cmd] = $f->update(new KeyMsg(KeyType::Char, 'r'));
+
+        [$fulfilled, $rejected] = self::s02Settle(self::s02AsyncCmdFrom($cmd));
+
+        self::assertNull($rejected);
+        self::assertInstanceOf(SuggestionsReadyMsg::class, $fulfilled);
+        self::assertSame(['alpha', 'beta'], $fulfilled->suggestions);
+    }
+
+    public function testConfigDoorRejectsBadTimeoutAtSetterTimeInput(): void
+    {
+        $fetcher = static fn (string $input): PromiseInterface => \React\Promise\resolve([]);
+        $field   = Input::new('repo');
+
+        foreach ([0.0, -1.0, NAN, INF] as $bad) {
+            try {
+                $field->withAsyncSuggestions($fetcher, 150, null, $bad);
+                self::fail('timeout ' . var_export($bad, true) . ' must be refused at the config door');
+            } catch (\InvalidArgumentException $e) {
+                self::assertSame(
+                    Lang::t('suggestions.bad_timeout', ['key' => 'repo', 'seconds' => var_export($bad, true)]),
+                    $e->getMessage()
+                );
+            }
+        }
+    }
+
+    public function testConfigDoorRejectsBadTimeoutAndDebounceAtSetterTimeSelect(): void
+    {
+        $fetcher = static fn (string $input): PromiseInterface => \React\Promise\resolve([]);
+        $field   = Select::new('lang')->withOptions('PHP', 'Go');
+
+        try {
+            $field->withAsyncSuggestions($fetcher, 150, null, NAN);
+            self::fail('NAN timeout must be refused at the config door');
+        } catch (\InvalidArgumentException $e) {
+            self::assertSame(
+                Lang::t('suggestions.bad_timeout', ['key' => 'lang', 'seconds' => 'NAN']),
+                $e->getMessage()
+            );
+        }
+
+        try {
+            $field->withAsyncSuggestions($fetcher, -1);
+            self::fail('negative debounce must be refused');
+        } catch (\InvalidArgumentException $e) {
+            self::assertSame(
+                Lang::t('suggestions.bad_debounce', ['key' => 'lang', 'ms' => '-1']),
+                $e->getMessage()
+            );
+        }
+
+        // The short alias delegates — same door, same refusals.
+        try {
+            $field->async($fetcher, 150, null, 0.0);
+            self::fail('async() alias must carry the config door too');
+        } catch (\InvalidArgumentException) {
+            // expected
+        }
+    }
+
+    public function testPositiveAndZeroDebounceStillPassTheConfigDoor(): void
+    {
+        // Zero debounce is a host-valid "no debounce"; a positive timeout
+        // is the point of the knob. Both must stay allowed.
+        $fetcher = static fn (string $input): PromiseInterface => \React\Promise\resolve([]);
+
+        self::assertInstanceOf(
+            Input::class,
+            Input::new('repo')->withAsyncSuggestions($fetcher, 0, null, 2.5)
+        );
     }
 }

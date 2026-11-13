@@ -345,8 +345,12 @@ final class Input implements \SugarCraft\Forms\Field, \SugarCraft\Forms\AsyncVal
      * unnecessary: Input and Select each own their debounce/cancel pair and
      * share no state to reconcile today. Many short-lived debounce timers
      * (6.4) are acceptable by design — each armed timer fires at most once
-     * into a cancellation check and neither timer nor fetch outlives its
-     * keystroke's replacement. Cold-start timing (6.9): the AsyncCmd
+     * into a cancellation check, so the timer never outlives its keystroke's
+     * replacement. The FETCH, however, does: a fetch already started when a
+     * keystroke supersedes it keeps running to completion (the deferred is
+     * resolved by the cancellation, so the program never waits on it, but
+     * the fetcher's own promise is not interruptible). Pass
+     * $fetchTimeoutSeconds to bound how long one fetch may run. Cold-start timing (6.9): the AsyncCmd
      * promise settles only once the host Program is running the event
      * loop, and its resolution is dispatched as an ordinary message, so a
      * fetch scheduled from the very first update() cannot land before
@@ -365,6 +369,13 @@ final class Input implements \SugarCraft\Forms\Field, \SugarCraft\Forms\AsyncVal
      */
     public function withAsyncSuggestions(callable $fetcher, int $debounceMs = 150, ?WorkerPool $workerPool = null, ?float $fetchTimeoutSeconds = null): self
     {
+        // SF-019: the ceiling/debounce shape is checked at the CONFIG door.
+        // AsyncOps::withTimeout() raises on a non-positive/non-finite
+        // ceiling — left to the keystroke path that throw detonated inside
+        // the live loop; here it names the bad argument at the call site
+        // that made the mistake.
+        AsyncFetcher::validateConfig($this->key, $debounceMs, $fetchTimeoutSeconds);
+
         return $this->carryNonCtorState(new self(
             key:                       $this->key,
             input:                     $this->input,
@@ -618,7 +629,7 @@ final class Input implements \SugarCraft\Forms\Field, \SugarCraft\Forms\AsyncVal
             });
 
             // Schedule the debounce timer
-            Loop::addTimer($debounceMs / 1000.0, function () use ($fetcher, $fieldKey, $field, $deferred, $token, $cancellationSource, $timeoutSeconds): void {
+            Loop::addTimer($debounceMs / 1000.0, function () use ($fetcher, $fieldKey, $field, $deferred, $token, $timeoutSeconds): void {
                 // Check if cancelled before proceeding
                 if ($token->isCancelled()) {
                     return;
@@ -627,25 +638,11 @@ final class Input implements \SugarCraft\Forms\Field, \SugarCraft\Forms\AsyncVal
                 // Get current input value
                 $inputValue = $field->input->value;
 
-                // Call the fetcher to get a promise
-                $promise = $fetcher($inputValue);
-
-                // E736-F2/6.5: opt-in wall-clock ceiling per fetch. Null
-                // (default) skips the wrapper entirely — byte-identical await
-                // of the raw fetcher promise.
-                if ($timeoutSeconds !== null) {
-                    $promise = AsyncOps::withTimeout(Loop::get(), $promise, $timeoutSeconds);
-                }
-
-                // Chain to resolve the deferred when the fetcher promise resolves
-                $promise->then(
-                    function (array $suggestions) use ($deferred, $fieldKey, $field): void {
-                        $deferred->resolve(new SuggestionsReadyMsg($fieldKey, $suggestions));
-                    },
-                    function (\Throwable $e) use ($deferred): void {
-                        $deferred->reject($e);
-                    }
-                );
+                // Call the fetcher through the shared guard: a throwing or
+                // non-promise-returning fetcher rejects the deferred (the
+                // AsyncCmd consumer sees it) instead of unwinding Loop::run()
+                // — SF-004, one definition with the Select twin.
+                AsyncFetcher::runAndSettle($fetcher, $inputValue, $fieldKey, $timeoutSeconds, $deferred);
             });
 
             return new \SugarCraft\Core\AsyncCmd($deferred->promise());

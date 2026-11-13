@@ -167,6 +167,9 @@ final class Select implements \SugarCraft\Forms\Field
      */
     public function withAsyncSuggestions(callable $fetcher, int $debounceMs = 150, ?WorkerPool $workerPool = null, ?float $fetchTimeoutSeconds = null): self
     {
+        // SF-019: config-door validation, identical to the Input twin.
+        AsyncFetcher::validateConfig($this->key, $debounceMs, $fetchTimeoutSeconds);
+
         return $this->carryNonCtorState(new self(
             key:                       $this->key,
             list:                      $this->list,
@@ -394,7 +397,7 @@ final class Select implements \SugarCraft\Forms\Field
 
         // (round-90 audit: the captured $currentSeq was never read by either
         // closure — see the identical note in Input::scheduleAsyncSuggestions.)
-        return function () use ($fetcher, $debounceMs, $timeoutSeconds, $fieldKey, $field, $scheduledFilterText, $cancellationSource): \SugarCraft\Core\AsyncCmd {
+        return function () use ($fetcher, $debounceMs, $timeoutSeconds, $fieldKey, $scheduledFilterText, $cancellationSource): \SugarCraft\Core\AsyncCmd {
             $deferred = new Deferred();
             $token = $cancellationSource->token();
 
@@ -406,30 +409,18 @@ final class Select implements \SugarCraft\Forms\Field
             });
 
             // Schedule the debounce timer
-            Loop::addTimer($debounceMs / 1000.0, function () use ($fetcher, $fieldKey, $field, $deferred, $token, $scheduledFilterText, $timeoutSeconds): void {
+            Loop::addTimer($debounceMs / 1000.0, function () use ($fetcher, $fieldKey, $deferred, $token, $scheduledFilterText, $timeoutSeconds): void {
                 // Check if cancelled before proceeding
                 if ($token->isCancelled()) {
                     return;
                 }
 
-                // Call the fetcher to get a promise
-                $promise = $fetcher($scheduledFilterText);
-
-                // E736-F2/6.5: opt-in wall-clock ceiling per fetch (null = raw await).
-                if ($timeoutSeconds !== null) {
-                    $promise = AsyncOps::withTimeout(Loop::get(), $promise, $timeoutSeconds);
-                }
-
-                // Chain to resolve the deferred when the fetcher promise resolves
-                $promise->then(
-                    function (array $suggestions) use ($deferred, $fieldKey, $field): void {
-                        // Resolve with the suggestions message
-                        $deferred->resolve(new SuggestionsReadyMsg($fieldKey, $suggestions));
-                    },
-                    function (\Throwable $e) use ($deferred): void {
-                        $deferred->reject($e);
-                    }
-                );
+                // Call the fetcher through the shared guard — the exact
+                // shape HasAsyncValidation::validateAsync() runs: host
+                // failures surface as a rejected deferred, never as a
+                // loop-unwinding throw or an unconsumed TypeError (SF-004;
+                // one definition with the Input twin).
+                AsyncFetcher::runAndSettle($fetcher, $scheduledFilterText, $fieldKey, $timeoutSeconds, $deferred);
             });
 
             return new \SugarCraft\Core\AsyncCmd($deferred->promise());
