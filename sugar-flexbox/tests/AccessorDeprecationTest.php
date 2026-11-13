@@ -71,11 +71,12 @@ final class AccessorDeprecationTest extends TestCase
                 static fn (Viewport $v): array => [30, $v->height()]],
             'Viewport::setHeight' => [Viewport::class, 'setHeight', 'withSize', [15], 'equal',
                 static fn (Viewport $v): array => [$v->width(), 15]],
-            // The factory-name misuse guard (FBX-22): one line, same args,
-            // but the canonical call sits inside a ternary that REFUSES
-            // instance misuse instead of silently resetting geometry —
-            // the reshape flag relaxes exactly the body-shape check here.
-            'Viewport::withContent' => [Viewport::class, 'withContent', 'fromContent', ['abc', 20, 10], 'equal-static'],
+            // The set* -> with* leg (FBX-06): returns-a-new-instance verbs
+            // spell themselves with*(); the static BC seat that used to
+            // squat on withContent was retired to make room for the setter.
+            'Viewport::setContent' => [Viewport::class, 'setContent', 'withContent', ['abc'], 'equal'],
+            'Viewport::setYOffset' => [Viewport::class, 'setYOffset', 'withYOffset', [3], 'equal'],
+            'Viewport::setXOffset' => [Viewport::class, 'setXOffset', 'withXOffset', [3], 'equal'],
             // The link rename (FBX-48): the old syncWith() name promised
             // offset coupling it never had; BC legs compare the SAME
             // partner object passed to both spellings.
@@ -110,13 +111,6 @@ final class AccessorDeprecationTest extends TestCase
         $object = self::fixture($class);
         $this->assertTrue(method_exists($object, $bare), $class . "::" . $bare . "() must exist");
         $bareArgs = $reshape !== null ? $reshape($object) : $args;
-        if ($mode === 'equal-static') {
-            // The BC seat is private behind __callStatic (FBX-22): the
-            // comparison must take the static leg BOTH external forms
-            // actually have in common.
-            $this->assertEquals($class::$bare(...$bareArgs), $class::$legacy(...$args));
-            return;
-        }
         if ($mode === 'equal') {
             $this->assertEquals($object->{$bare}(...$bareArgs), $object->{$legacy}(...$args));
             return;
@@ -139,15 +133,7 @@ final class AccessorDeprecationTest extends TestCase
         $this->assertStringContainsString('@deprecated', $doc);
         $this->assertStringContainsString(self::MARKER, $doc);
         $this->assertStringContainsString('{@see self::' . $bare . '()}', $doc);
-        if ($mode === 'equal-static') {
-            // The hook-hidden BC seat (FBX-22): deliberately PRIVATE —
-            // both external call forms reach it through the class's
-            // __call/__callStatic routing, which the equality leg and
-            // the misuse pin exercise.
-            $this->assertTrue($method->isPrivate());
-        } else {
-            $this->assertTrue($method->isPublic());
-        }
+        $this->assertTrue($method->isPublic());
         $lines = array_slice(
             file($method->getFileName()),
             $method->getStartLine() - 1,
@@ -233,7 +219,7 @@ final class AccessorDeprecationTest extends TestCase
         sort($found);
         sort($expected);
         $this->assertSame($expected, $found, 'src/ census drifted from the tested pairs');
-        $this->assertCount(17, $found);
+        $this->assertCount(19, $found);
     }
 
     /**
@@ -256,7 +242,7 @@ final class AccessorDeprecationTest extends TestCase
             $rows,
             PREG_SET_ORDER
         );
-        $this->assertCount(17, $rows, 'README Accessor-deprecation table must list exactly the swept pairs');
+        $this->assertCount(19, $rows, 'README Accessor-deprecation table must list exactly the swept pairs');
         $tabled = [];
         foreach ($rows as $row) {
             $tabled[$row['class'] . '::' . $row['legacy']] = $row['bare'];

@@ -769,11 +769,11 @@ final class FlexboxTest extends TestCase
         $this->assertNotSame($vp, $vp2, 'withScrollbar should return a new instance');
     }
 
-    /** setYOffset(int) returns a new Viewport with the new offset. */
+    /** withYOffset(int) returns a new Viewport with the new offset. */
     public function testViewportSetYOffset(): void
     {
-        $vp = Viewport::new(20, 5)->setContent(\implode("\n", \range(1, 20)));
-        $vp2 = $vp->setYOffset(10);
+        $vp = Viewport::new(20, 5)->withContent(\implode("\n", \range(1, 20)));
+        $vp2 = $vp->withYOffset(10);
 
         $this->assertSame(10, $vp2->yOffset());
     }
@@ -781,20 +781,20 @@ final class FlexboxTest extends TestCase
     /** yOffset() returns current scroll offset. */
     public function testViewportYOffsetAccessor(): void
     {
-        $vp = Viewport::new(20, 5)->setContent(\implode("\n", \range(1, 20)));
+        $vp = Viewport::new(20, 5)->withContent(\implode("\n", \range(1, 20)));
         $this->assertSame(0, $vp->yOffset());
 
-        $vp2 = $vp->setYOffset(5);
+        $vp2 = $vp->withYOffset(5);
         $this->assertSame(5, $vp2->yOffset());
     }
 
-    /** setContent returns a new Viewport with updated content. */
+    /** withContent returns a new Viewport with updated content. */
     public function testViewportSetContentReturnsNewInstance(): void
     {
         $vp = Viewport::new(20, 5);
-        $vp2 = $vp->setContent("hello\nworld");
+        $vp2 = $vp->withContent("hello\nworld");
 
-        $this->assertNotSame($vp, $vp2, 'setContent should return a new instance');
+        $this->assertNotSame($vp, $vp2, 'withContent should return a new instance');
     }
 
     /**

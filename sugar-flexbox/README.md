@@ -88,7 +88,7 @@ intercept.
   name) because they are an argument bug, not geometry — 0 disables the
   region, and the render-time cap to available height stays a geometry
   clamp; scroll offsets never throw — they CLAMP into range
-  (`setYOffset(-2)` answers 0); and FlexBox with no items or width ≤ 0
+  (`withYOffset(-2)` answers 0); and FlexBox with no items or width ≤ 0
   renders `''` rather than refusing
 - **Smooth scroll** and scrollbar toggle (`showScrollbar()`; the old boolean
   `withScrollbar()` spelling is a deprecated forwarder); attaching a component
@@ -442,7 +442,9 @@ sugar-flexbox v2.0.0. Migrating is a name swap with no behavior change:
 | `Flexbox` | `Viewport` | `withScrollbar()` | `showScrollbar()` |
 | `Flexbox` | `Viewport` | `setWidth()` | `withSize()` |
 | `Flexbox` | `Viewport` | `setHeight()` | `withSize()` |
-| `Flexbox` | `Viewport` | `withContent()` | `fromContent()` |
+| `Flexbox` | `Viewport` | `setContent()` | `withContent()` |
+| `Flexbox` | `Viewport` | `setYOffset()` | `withYOffset()` |
+| `Flexbox` | `Viewport` | `setXOffset()` | `withXOffset()` |
 | `Flexbox` | `Viewport` | `syncWith()` | `withLinkedViewport()` |
 | `Flexbox` | `Viewport` | `isSynced()` | `hasLinkedViewport()` |
 | `Flexbox\Table` | `Table` | `addColumn()` | `withColumn()` |

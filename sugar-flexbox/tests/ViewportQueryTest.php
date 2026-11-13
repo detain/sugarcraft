@@ -49,7 +49,7 @@ final class ViewportQueryTest extends TestCase
     public function testGotoTop(): void
     {
         $vp = Viewport::fromContent(\implode("\n", \range(1, 50)), 20, 10);
-        $scrolled = $vp->setYOffset(20);
+        $scrolled = $vp->withYOffset(20);
         $top = $scrolled->gotoTop();
         $this->assertSame(0, $top->yOffset());
     }
@@ -65,7 +65,7 @@ final class ViewportQueryTest extends TestCase
     public function testPageUp(): void
     {
         $vp = Viewport::fromContent(\implode("\n", \range(1, 50)), 20, 10);
-        $scrolled = $vp->setYOffset(20);
+        $scrolled = $vp->withYOffset(20);
         $paged = $scrolled->pageUp();
         $this->assertSame(10, $paged->yOffset());
     }
@@ -73,7 +73,7 @@ final class ViewportQueryTest extends TestCase
     public function testPageDown(): void
     {
         $vp = Viewport::fromContent(\implode("\n", \range(1, 50)), 20, 10);
-        $scrolled = $vp->setYOffset(5);
+        $scrolled = $vp->withYOffset(5);
         $paged = $scrolled->pageDown();
         $this->assertSame(15, $paged->yOffset());
     }
@@ -81,7 +81,7 @@ final class ViewportQueryTest extends TestCase
     public function testHalfPageUp(): void
     {
         $vp = Viewport::fromContent(\implode("\n", \range(1, 50)), 20, 10);
-        $scrolled = $vp->setYOffset(10);
+        $scrolled = $vp->withYOffset(10);
         $half = $scrolled->halfPageUp();
         $this->assertSame(5, $half->yOffset());
     }
@@ -89,7 +89,7 @@ final class ViewportQueryTest extends TestCase
     public function testHalfPageDown(): void
     {
         $vp = Viewport::fromContent(\implode("\n", \range(1, 50)), 20, 10);
-        $scrolled = $vp->setYOffset(5);
+        $scrolled = $vp->withYOffset(5);
         $half = $scrolled->halfPageDown();
         $this->assertSame(10, $half->yOffset());
     }
@@ -116,7 +116,7 @@ final class ViewportQueryTest extends TestCase
 
     public function testAtTopWhenScrolled(): void
     {
-        $vp = Viewport::fromContent(\implode("\n", \range(1, 50)), 20, 10)->setYOffset(5);
+        $vp = Viewport::fromContent(\implode("\n", \range(1, 50)), 20, 10)->withYOffset(5);
         $this->assertFalse($vp->atTop());
     }
 
@@ -131,7 +131,7 @@ final class ViewportQueryTest extends TestCase
 
     public function testAtBottomWhenNotAtEnd(): void
     {
-        $vp = Viewport::fromContent(\implode("\n", \range(1, 50)), 20, 10)->setYOffset(5);
+        $vp = Viewport::fromContent(\implode("\n", \range(1, 50)), 20, 10)->withYOffset(5);
         $this->assertFalse($vp->atBottom());
     }
 
@@ -143,7 +143,7 @@ final class ViewportQueryTest extends TestCase
 
     public function testScrollPercentAtMiddle(): void
     {
-        $vp = Viewport::fromContent(\implode("\n", \range(1, 50)), 20, 10)->setYOffset(20);
+        $vp = Viewport::fromContent(\implode("\n", \range(1, 50)), 20, 10)->withYOffset(20);
         $percent = $vp->scrollPercent();
         $this->assertGreaterThan(0.0, $percent);
         $this->assertLessThan(1.0, $percent);
@@ -159,7 +159,7 @@ final class ViewportQueryTest extends TestCase
 
     public function testYOffset(): void
     {
-        $vp = Viewport::fromContent(\implode("\n", \range(1, 50)), 20, 10)->setYOffset(7);
+        $vp = Viewport::fromContent(\implode("\n", \range(1, 50)), 20, 10)->withYOffset(7);
         $this->assertSame(7, $vp->yOffset());
     }
 
@@ -167,7 +167,7 @@ final class ViewportQueryTest extends TestCase
 
     public function testAtTopAfterGotoTop(): void
     {
-        $vp = Viewport::fromContent(\implode("\n", \range(1, 50)), 20, 10)->setYOffset(20);
+        $vp = Viewport::fromContent(\implode("\n", \range(1, 50)), 20, 10)->withYOffset(20);
         $top = $vp->gotoTop();
         $this->assertTrue($top->atTop());
     }
@@ -238,7 +238,7 @@ final class ViewportQueryTest extends TestCase
     {
         $vp = Viewport::fromContent(\implode("\n", \range(1, 20)), 20, 10);
         // Setting offset beyond max should clamp
-        $excessive = $vp->setYOffset(100);
+        $excessive = $vp->withYOffset(100);
         // The offset gets clamped by the inner BitsViewport
         $this->assertLessThanOrEqual(10, $excessive->yOffset());
     }
@@ -247,7 +247,7 @@ final class ViewportQueryTest extends TestCase
     {
         $wideContent = str_repeat("Very long line content here\n", 5);
         $vp = Viewport::fromContent($wideContent, 20, 3);
-        $excessive = $vp->setXOffset(1000);
+        $excessive = $vp->withXOffset(1000);
         // Should be clamped
         $this->assertLessThanOrEqual(100, $excessive->xOffset());
     }
@@ -255,7 +255,7 @@ final class ViewportQueryTest extends TestCase
     public function testLineUpClampsToZero(): void
     {
         $vp = Viewport::fromContent(\implode("\n", \range(1, 20)), 20, 10);
-        $up = $vp->setYOffset(2)->lineUp(10);
+        $up = $vp->withYOffset(2)->lineUp(10);
         $this->assertSame(0, $up->yOffset());
     }
 
@@ -263,7 +263,7 @@ final class ViewportQueryTest extends TestCase
     {
         $lines = \range(1, 20);
         $vp = Viewport::fromContent(\implode("\n", $lines), 20, 10);
-        $down = $vp->setYOffset(15)->lineDown(10);
+        $down = $vp->withYOffset(15)->lineDown(10);
         // Should clamp to max offset
         $this->assertGreaterThanOrEqual(10, $down->yOffset());
     }
@@ -290,7 +290,7 @@ final class ViewportQueryTest extends TestCase
             ->withStickyHeader(2)
             ->withStickyFooter(1)
             ->showScrollbar(true)
-            ->setYOffset(0);
+            ->withYOffset(0);
 
         $lines = explode("\n", $vp->view());
 
@@ -324,7 +324,7 @@ final class ViewportQueryTest extends TestCase
         foreach ([0, 4, 8, 12, 16, 20, 24] as $y) {
             $vp = Viewport::fromContent($content, 20, 6)
                 ->showScrollbar(true)
-                ->setYOffset($y);
+                ->withYOffset($y);
             $rows = explode("\n", $vp->view());
             foreach ($rows as $i => $line) {
                 $this->assertSame(20, \SugarCraft\Core\Util\Width::string($line), "row $i at y=$y");

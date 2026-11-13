@@ -56,7 +56,7 @@ final class StickyViewportTest extends TestCase
         $vp = Viewport::fromContent($content, 20, 6)
             ->withStickyHeader(2)
             ->withStickyFooter(1)
-            ->setYOffset(0);
+            ->withYOffset(0);
 
         $view = $vp->view();
         $lines = explode("\n", $view);
@@ -81,7 +81,7 @@ final class StickyViewportTest extends TestCase
             ->withStickyFooter(1);
 
         // Scroll well past the header content — header should still be at top.
-        $scrolled = $vp->setYOffset(20);
+        $scrolled = $vp->withYOffset(20);
         $view = $scrolled->view();
         $resultLines = explode("\n", $view);
 
@@ -98,7 +98,7 @@ final class StickyViewportTest extends TestCase
         $vp = Viewport::fromContent($content, 20, 6)
             ->withStickyHeader(1)
             ->withStickyFooter(1)
-            ->setYOffset(0);
+            ->withYOffset(0);
 
         $view = $vp->view();
         $lines = explode("\n", $view);
@@ -121,7 +121,7 @@ final class StickyViewportTest extends TestCase
             ->withStickyFooter(1);
 
         // Scroll way down — footer should still be at the bottom.
-        $scrolled = $vp->setYOffset(40);
+        $scrolled = $vp->withYOffset(40);
         $view = $scrolled->view();
         $resultLines = explode("\n", $view);
         $lastLine = trim($resultLines[count($resultLines) - 1]);
@@ -137,7 +137,7 @@ final class StickyViewportTest extends TestCase
         $vp = Viewport::fromContent($content, 20, 6)
             ->withStickyHeader(2)
             ->withStickyFooter(1)
-            ->setYOffset(0);
+            ->withYOffset(0);
 
         $view = $vp->view();
         $lines = explode("\n", $view);
@@ -156,7 +156,7 @@ final class StickyViewportTest extends TestCase
             ->withStickyHeader(2)
             ->withStickyFooter(1);
 
-        $scrolled = $vp->setYOffset(1);
+        $scrolled = $vp->withYOffset(1);
         $view = $scrolled->view();
         $lines = explode("\n", $view);
 
@@ -207,7 +207,7 @@ final class StickyViewportTest extends TestCase
             ->withStickyHeader(2)
             ->withStickyFooter(1);
 
-        $scrolled = $vp->setYOffset(5)->lineUp(1);
+        $scrolled = $vp->withYOffset(5)->lineUp(1);
         $view = $scrolled->view();
         $resultLines = explode("\n", $view);
 
@@ -227,7 +227,7 @@ final class StickyViewportTest extends TestCase
             ->withStickyHeader(1)
             ->withStickyFooter(1);
 
-        $scrolled = $vp->setYOffset(0)->lineDown(5);
+        $scrolled = $vp->withYOffset(0)->lineDown(5);
         $view = $scrolled->view();
         $resultLines = explode("\n", $view);
 
@@ -313,7 +313,7 @@ final class StickyViewportTest extends TestCase
         $v = Viewport::fromContent($content, 20, 6)
             ->withStickyHeader(2)
             ->withStickyFooter(2)
-            ->setYOffset(4); // scrolled to the end
+            ->withYOffset(4); // scrolled to the end
 
         $view = $v->view();
         $lines = explode("\n", $view);
@@ -349,10 +349,10 @@ final class StickyViewportTest extends TestCase
         // exceeds the frame, the sticky face returns at every offset.
         $grown = Viewport::fromContent("a\nb", 20, 4)
             ->withStickyFooter(1)
-            ->setContent("a\nb\nc\nd\ne");
+            ->withContent("a\nb\nc\nd\ne");
 
         foreach ([0, 1] as $offset) {
-            $lines = explode("\n", $grown->setYOffset($offset)->view());
+            $lines = explode("\n", $grown->withYOffset($offset)->view());
             $this->assertSame('e', trim($lines[count($lines) - 1]), "footer pinned at offset {$offset}");
         }
     }
@@ -514,7 +514,7 @@ final class StickyViewportTest extends TestCase
         $vp = Viewport::fromContent(self::horizontalContent(), 10, 4)
             ->withStickyHeader(1)
             ->withStickyFooter(1)
-            ->setXOffset(9);
+            ->withXOffset(9);
         // Header, middle AND footer all shift by 9 cells — pre-fix the
         // sticky frame kept painting column zero at any offset.
         $this->assertSame(
@@ -548,11 +548,11 @@ final class StickyViewportTest extends TestCase
         $mid = Viewport::fromContent(self::horizontalContent(), 10, 4)
             ->withStickyHeader(1)
             ->withStickyFooter(1)
-            ->setXOffset(5);
+            ->withXOffset(5);
         $this->assertFalse($mid->atLeftmost());
         $this->assertFalse($mid->atRightmost());
         $this->assertEqualsWithDelta(5 / 9, $mid->horizontalScrollPercent(), 0.0001);
-        $edge = $mid->setXOffset(9);
+        $edge = $mid->withXOffset(9);
         // The first painted row is header line 0 starting exactly at cell 9.
         $this->assertSame('---------0', explode("\n", $edge->view())[0]);
     }
@@ -561,7 +561,7 @@ final class StickyViewportTest extends TestCase
     {
         $headerOnly = Viewport::fromContent(self::horizontalContent(), 10, 4)
             ->withStickyHeader(1)
-            ->setXOffset(9);
+            ->withXOffset(9);
         $this->assertSame(
             "---------0\n---------1\n---------2\n---------3",
             $headerOnly->view(),
@@ -569,7 +569,7 @@ final class StickyViewportTest extends TestCase
 
         $footerOnly = Viewport::fromContent(self::horizontalContent(), 10, 3)
             ->withStickyFooter(1)
-            ->setXOffset(9);
+            ->withXOffset(9);
         $this->assertSame(
             "---------0\n---------1\n---------4",
             $footerOnly->view(),
@@ -580,7 +580,7 @@ final class StickyViewportTest extends TestCase
     {
         // The plain path answers through the delegate, which drops the left
         // cells without a right clamp; the sticky fix must not regress it.
-        $vp = Viewport::fromContent('0123456789abcdefghij', 10, 1)->setXOffset(4);
+        $vp = Viewport::fromContent('0123456789abcdefghij', 10, 1)->withXOffset(4);
         $this->assertSame('456789abcdefghij', $vp->view());
     }
 }

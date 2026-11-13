@@ -88,7 +88,7 @@ final class SyncViewportTest extends TestCase
         $a = Viewport::fromContent($content, 40, 10);
         $b = Viewport::fromContent($content, 40, 10);
 
-        $synced = $a->withLinkedViewport($b)->setYOffset(1);
+        $synced = $a->withLinkedViewport($b)->withYOffset(1);
 
         $this->assertTrue($synced->hasLinkedViewport());
         $this->assertSame(1, $synced->yOffset());
@@ -99,7 +99,7 @@ final class SyncViewportTest extends TestCase
         $a = Viewport::fromContent("original\ncontent", 40, 24);
         $b = Viewport::fromContent("other\npanel", 40, 24);
 
-        $synced = $a->withLinkedViewport($b)->setContent("new\ncontent\nhere");
+        $synced = $a->withLinkedViewport($b)->withContent("new\ncontent\nhere");
 
         $this->assertTrue($synced->hasLinkedViewport());
     }
@@ -116,7 +116,7 @@ final class SyncViewportTest extends TestCase
         $a = Viewport::fromContent($content, 40, 24);
         $b = Viewport::fromContent($content, 40, 24);
 
-        $synced = $a->withLinkedViewport($b)->setYOffset(5);
+        $synced = $a->withLinkedViewport($b)->withYOffset(5);
 
         $this->assertTrue($synced->hasLinkedViewport());
         $this->assertSame(5, $synced->yOffset());
@@ -141,8 +141,8 @@ final class SyncViewportTest extends TestCase
 
         // Caller coordinates scroll: apply same offset to both viewports.
         $scrollOffset = 20;
-        $leftScrolled = $leftSynced->setYOffset($scrollOffset);
-        $rightScrolled = $right->setYOffset($scrollOffset);
+        $leftScrolled = $leftSynced->withYOffset($scrollOffset);
+        $rightScrolled = $right->withYOffset($scrollOffset);
 
         $this->assertSame($scrollOffset, $leftScrolled->yOffset());
         $this->assertSame($scrollOffset, $rightScrolled->yOffset());

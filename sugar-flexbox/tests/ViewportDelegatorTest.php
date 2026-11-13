@@ -162,19 +162,34 @@ final class ViewportDelegatorTest extends TestCase
         $this->assertEquals($vp->withSize(20, 15), $vp2);
     }
 
-    public function testInstanceMisuseOfTheStaticFactoryThrowsLoudly(): void
+    public function testWithContentIsTheInstanceSetterAndKeepsGeometry(): void
     {
-        // FBX-22: PHP resolved $vp->withContent(...) to the static
-        // factory, which silently rebuilt a DEFAULT 80x24 box and threw
-        // the receiver's geometry away — the probe that named the whole
-        // vocabulary problem. The BC forwarder now refuses the misuse
-        // by name; the pure-static call still constructs (covered by
-        // the roster's equality leg).
+        // FBX-06: the retired static BC seat made room for the setter; the
+        // receiver's geometry must survive (the old misuse rebuilt 80x24).
         $vp = Viewport::new(20, 4);
+        $next = $vp->withContent("a\nb");
 
-        $this->expectException(\BadMethodCallException::class);
-        $this->expectExceptionMessage('use setContent() on the instance');
-        $vp->withContent('anything');
+        $this->assertNotSame($vp, $next);
+        $this->assertSame(20, $next->width());
+        $this->assertSame(4, $next->height());
+        $this->assertSame(2, $next->totalLineCount());
+        $this->assertEquals(Viewport::fromContent("a\nb", 20, 4), $next);
+    }
+
+    public function testRetiredStaticWithContentFailsWithTheEnginesNonStaticError(): void
+    {
+        $this->expectException(\Error::class);
+        $this->expectExceptionMessageMatches('/non-static method .*withContent/i');
+        Viewport::{'withContent'}('abc', 20, 10);
+    }
+
+    public function testWithOffsetSettersMoveTheWindow(): void
+    {
+        $vp = Viewport::fromContent(implode("\n", range(1, 30)), 20, 5);
+        $this->assertSame(7, $vp->withYOffset(7)->yOffset());
+        $this->assertSame(0, $vp->yOffset(), 'receiver unchanged');
+        $wide = Viewport::fromContent(str_repeat('x', 60), 10, 2);
+        $this->assertSame(4, $wide->withXOffset(4)->xOffset());
     }
 
     // ---- X offset delegators ----------------------------------------------
@@ -183,7 +198,7 @@ final class ViewportDelegatorTest extends TestCase
     {
         $wideContent = str_repeat("Very long line content here that exceeds width\n", 5);
         $vp = Viewport::fromContent($wideContent, 20, 10);
-        $vp2 = $vp->setXOffset(5);
+        $vp2 = $vp->withXOffset(5);
 
         $this->assertNotSame($vp, $vp2);
     }
@@ -286,7 +301,7 @@ final class ViewportDelegatorTest extends TestCase
             static fn (int $n): string => str_repeat('y', 40),
             range(1, 12),
         ));
-        $vp = Viewport::fromContent($content, 20, 4)->showScrollbar(true)->setXOffset(15);
+        $vp = Viewport::fromContent($content, 20, 4)->showScrollbar(true)->withXOffset(15);
         foreach (explode("\n", $vp->view()) as $i => $line) {
             $this->assertSame(20, \SugarCraft\Core\Util\Width::string($line), "offset+bar row $i");
         }
@@ -327,7 +342,7 @@ final class ViewportDelegatorTest extends TestCase
 
     public function testWheelUpThroughUpdateMovesBackExactly(): void
     {
-        $vp = $this->fifty()->setYOffset(10);
+        $vp = $this->fifty()->withYOffset(10);
         [$after, $cmd] = $vp->update(self::wheel(\SugarCraft\Core\MouseButton::WheelUp));
 
         $this->assertSame(7, $after->yOffset());
