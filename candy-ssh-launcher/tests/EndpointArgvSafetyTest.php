@@ -95,9 +95,18 @@ final class EndpointArgvSafetyTest extends TestCase
     {
         // F-22 (Step 18): an empty host minted a selectable picker row that
         // dispatched a blank destination; construction now refuses by name.
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('x');
-        new Endpoint(name: 'x', host: '');
+        // -099(b): the old expectExceptionMessage('x') substring matched
+        // ANY message carrying an x — it could not fail. Assert the exact
+        // Lang refusal substance instead, like the adjacent guards.
+        try {
+            new Endpoint(name: 'x', host: '');
+            $this->fail('expected a named refusal');
+        } catch (\InvalidArgumentException $ex) {
+            $this->assertSame(
+                \SugarCraft\SshLauncher\Lang::t('endpoint.host_empty', ['name' => 'x']),
+                $ex->getMessage(),
+            );
+        }
     }
 
     public function testEmptyOptionRefusedAtDispatch(): void

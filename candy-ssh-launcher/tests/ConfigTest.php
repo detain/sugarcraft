@@ -184,6 +184,22 @@ final class ConfigTest extends TestCase
         $this->assertSame([], $empty[0]->options);
     }
 
+    public function testValuelessEntryHeaderAccumulatesListThenRefusesByPosition(): void
+    {
+        // -099(c): the `- key:` ENTRY-HEADER branch (value-less first key of
+        // a row opens the same list mode) was an unpinned defensive leg.
+        // The distinguishing byte: if the header branch dropped list mode,
+        // the indented `- item` line would surface as "unparseable line 2";
+        // because it opens correctly, the row fails validation the honest
+        // way — by position and missing field name (-052 pairing).
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage("wishlist entry #2 is missing a required field: name");
+        Config::parse(
+            "- name: a\n  host: a.test\n- options:\n  - ServerAliveInterval=30\n",
+            'wishlist.yml',
+        );
+    }
+
     public function testIdentityExpansionNeverTouchesNonTildePathsEvenWhenHomeMoves(): void
     {
         // Trust-boundary leg: expansion consults $HOME only for values that

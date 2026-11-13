@@ -160,6 +160,17 @@ final class PickerChromeTest extends TestCase
         self::assertStringContainsString('  (no matches — backspace or Esc)', $gone, '-063: the dead end names its exits');
     }
 
+    public function testPgDnAndPgUpOnEmptyMatchSetAreHarmless(): void
+    {
+        // -099(c): the paging keys against a ZERO-row match set walked the
+        // defensive clamp in Picker and were clover-uncovered, untested
+        // legs. They must neither crash the loop nor mint a selection;
+        // the count row stays honest through both presses.
+        [$picked, $out] = $this->drive("zzzz\x1b[6~\x1b[5~\x1b", $this->threeHosts());
+        self::assertNull($picked, 'PgDn/PgUp on an empty match set cannot complete a pick');
+        self::assertStringContainsString('  (0 of 3)', $out);
+    }
+
     public function testEqualScoresPreserveConfigOrder(): void
     {
         // T3: usort() has been stable since PHP 8.0; equal-match rows keep

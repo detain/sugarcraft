@@ -399,8 +399,12 @@ CONF;
 
     public function testExpandPathTildeUser(): void
     {
-        // ~root/.ssh/key should resolve to root's home if posix is available,
-        // OR be left as literal ~root/.ssh/key if root user doesn't exist.
+        // -099(a): the old leg accepted EITHER /root/… OR the literal
+        // ~root/… — a pin that could not fail on any Linux CI (root always
+        // exists, so the resolved branch was never proven). Branch on the
+        // actual passwd lookup and pin the EXACT expected bytes for that
+        // branch: resolved home when posix sees root, untouched literal
+        // when it genuinely does not.
         $raw = <<<CONF
 Host example
     HostName example.com
@@ -409,11 +413,13 @@ CONF;
         $endpoints = $this->parse($raw);
         $this->assertCount(1, $endpoints);
         $path = $endpoints[0]->identityFiles[0];
-        // Either root's home or the literal path — never a mangled path
-        $this->assertTrue(
-            $path === '/root/.ssh/key' || $path === '~root/.ssh/key',
-            "Expected /root/.ssh/key or ~root/.ssh/key, got: $path"
-        );
+
+        $root = function_exists('posix_getpwnam') ? posix_getpwnam('root') : false;
+        if (is_array($root)) {
+            $this->assertSame($root['dir'] . '/.ssh/key', $path, 'root exists — the passwd home must be substituted');
+        } else {
+            $this->assertSame('~root/.ssh/key', $path, 'no root entry — the path stays literal, never mangled');
+        }
     }
 
     public function testQuotedHashSurvivesCommentStripping(): void
