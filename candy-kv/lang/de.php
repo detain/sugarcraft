@@ -31,5 +31,6 @@ return [
     'cli.would_delete_one'       => '1 Eintrag würde gelöscht.',
     'cli.would_delete_n'         => '{count} Einträge würden gelöscht.',
     'cli.pruned_n'               => '{count} abgelaufene Einträge entfernt.',
+    'cli.pruned_one'             => '1 abgelaufener Eintrag entfernt.',
     'cli.pruned_none'            => 'Keine abgelaufenen Einträge zum Entfernen.',
 ];

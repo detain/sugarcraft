@@ -29,5 +29,6 @@ return [
     'cli.would_delete_one'       => 'Verrà eliminata 1 voce.',
     'cli.would_delete_n'         => 'Verranno eliminate {count} voci.',
     'cli.pruned_n'               => 'Rimosse {count} voci scadute.',
+    'cli.pruned_one'             => 'Rimossa 1 voce scaduta.',
     'cli.pruned_none'            => 'Nessuna voce scaduta da rimuovere.',
 ];

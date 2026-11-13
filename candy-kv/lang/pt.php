@@ -29,5 +29,6 @@ return [
     'cli.would_delete_one'       => '1 entrada seria excluída.',
     'cli.would_delete_n'         => '{count} entradas seriam excluídas.',
     'cli.pruned_n'               => '{count} entradas expiradas removidas.',
+    'cli.pruned_one'             => '1 entrada expirada removida.',
     'cli.pruned_none'            => 'Nenhuma entrada expirada para remover.',
 ];

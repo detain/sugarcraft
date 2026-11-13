@@ -29,5 +29,6 @@ return [
     'cli.would_delete_one'       => '1개를 삭제합니다.',
     'cli.would_delete_n'         => '{count}개를 삭제합니다.',
     'cli.pruned_n'               => '만료된 항목 {count}개를 제거했습니다.',
+    'cli.pruned_one'             => '만료된 항목 1개를 제거했습니다.',
     'cli.pruned_none'            => '제거할 만료된 항목이 없습니다.',
 ];

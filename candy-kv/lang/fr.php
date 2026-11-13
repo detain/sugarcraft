@@ -31,5 +31,6 @@ return [
     'cli.would_delete_one'       => '1 entrée serait supprimée.',
     'cli.would_delete_n'         => '{count} entrées seraient supprimées.',
     'cli.pruned_n'               => '{count} entrées expirées supprimées.',
+    'cli.pruned_one'             => '1 entrée expirée supprimée.',
     'cli.pruned_none'            => 'Aucune entrée expirée à supprimer.',
 ];

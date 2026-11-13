@@ -29,5 +29,6 @@ return [
     'cli.would_delete_one'       => '1 件を削除します。',
     'cli.would_delete_n'         => '{count} 件を削除します。',
     'cli.pruned_n'               => '期限切れの {count} 件を削除しました。',
+    'cli.pruned_one'             => '期限切れの 1 件を削除しました。',
     'cli.pruned_none'            => '削除対象の期限切れエントリはありません。',
 ];

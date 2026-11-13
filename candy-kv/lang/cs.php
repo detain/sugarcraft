@@ -29,5 +29,6 @@ return [
     'cli.would_delete_one'       => '1 položka by byla smazána.',
     'cli.would_delete_n'         => '{count} položek by bylo smazáno.',
     'cli.pruned_n'               => 'Odstraněno {count} expirovaných položek.',
+    'cli.pruned_one'             => 'Odstraněna 1 expirovaná položka.',
     'cli.pruned_none'            => 'Žádné expirované položky k odstranění.',
 ];

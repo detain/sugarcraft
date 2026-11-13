@@ -430,12 +430,64 @@ final class CliContractTest extends TestCase
 
     public function testPruneRemovesExpiredEntries(): void
     {
-        $this->assertSame(0, $this->runKv(['set', 'gone-soon', 'v', '--ttl=1'])['exit']);
-        \sleep(2);
+        // Exactly one expired row must print the SINGULAR (kv-011): the
+        // prune path used to reuse cli.pruned_n blindly, so a one-row
+        // removal read "Removed 1 expired entries." — the delete path
+        // already routes n===1 through cli.deleted_one; prune now does
+        // the same. Row is stamped past-epoch in-process (the
+        // DatabaseTest trick) instead of sleeping, so the pin is fast.
+        $this->seedExpiredRow('gone-soon', 'v');
         $prune = $this->runKv(['prune']);
         $this->assertSame(0, $prune['exit']);
-        $this->assertStringContainsString('Removed 1 expired entries.', $prune['stdout']);
+        $this->assertStringContainsString('Removed 1 expired entry.', $prune['stdout']);
         $this->assertSame(1, $this->runKv(['get', 'gone-soon'])['exit']);
+    }
+
+    public function testPruneUsesPluralWordingForManyEntries(): void
+    {
+        $this->seedExpiredRow('doomed-a', '1');
+        $this->seedExpiredRow('doomed-b', '2');
+        $prune = $this->runKv(['prune']);
+        $this->assertSame(0, $prune['exit']);
+        $this->assertStringContainsString('Removed 2 expired entries.', $prune['stdout']);
+    }
+
+    public function testPruneSingularWordingHonorsGermanLocale(): void
+    {
+        // LANG-wave sibling of the English singular pin: the key must exist
+        // and route in every locale, not just en.
+        $this->seedExpiredRow('gone-soon', 'v');
+        $prune = self::spawnKv(['prune'], $this->configHome, null, ['LC_ALL' => 'de', 'LANG' => 'de']);
+        $this->assertSame(0, $prune['exit']);
+        $this->assertStringContainsString('1 abgelaufener Eintrag entfernt.', $prune['stdout']);
+    }
+
+    /**
+     * Write a live-then-expired row directly into the store the CLI will
+     * open, then stamp its expiry into the past through the SQLite handle.
+     *
+     * Mirrors DatabaseTest::testCountExcludesExpiredRows; avoids two-second
+     * real sleeps for every TTL-succession pin.
+     */
+    private function seedExpiredRow(string $key, string $value): void
+    {
+        $dir = $this->configHome . '/skate';
+        if (!\is_dir($dir)) {
+            \mkdir($dir, 0o700, true);
+        }
+        $db = new \SugarCraft\Kv\Database($dir . '/default.db', 'default');
+        $db->set($key, $value, false, 3600);
+
+        $prop = new \ReflectionProperty(\SugarCraft\Kv\Database::class, 'db');
+        $prop->setAccessible(true);
+        /** @var \SQLite3 $sqlite */
+        $sqlite = $prop->getValue($db);
+        $stmt = $sqlite->prepare('UPDATE entries SET expires_at = :epoch WHERE key = :key');
+        $stmt->bindValue(':epoch', \time() - 10, \SQLITE3_INTEGER);
+        $stmt->bindValue(':key', $key, \SQLITE3_TEXT);
+        $stmt->execute();
+        $stmt->close();
+        unset($db);
     }
 
     public function testPruneReportsNothingWhenAllAlive(): void

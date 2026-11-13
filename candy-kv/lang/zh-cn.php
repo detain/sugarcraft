@@ -29,5 +29,6 @@ return [
     'cli.would_delete_one'       => '将删除 1 个条目。',
     'cli.would_delete_n'         => '将删除 {count} 个条目。',
     'cli.pruned_n'               => '已移除 {count} 个过期条目。',
+    'cli.pruned_one'             => '已移除 1 个过期条目。',
     'cli.pruned_none'            => '没有需要移除的过期条目。',
 ];

@@ -29,5 +29,6 @@ return [
     'cli.would_delete_one'       => '1 wpis zostałby usunięty.',
     'cli.would_delete_n'         => '{count} wpisów zostałoby usuniętych.',
     'cli.pruned_n'               => 'Usunięto {count} wygasłych wpisów.',
+    'cli.pruned_one'             => 'Usunięto 1 wygasły wpis.',
     'cli.pruned_none'            => 'Brak wygasłych wpisów do usunięcia.',
 ];

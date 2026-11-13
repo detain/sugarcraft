@@ -136,14 +136,18 @@ trait SpawnBounded
     /**
      * Spawn `php bin/candy-kv <args>` against an isolated XDG_CONFIG_HOME.
      *
-     * @param list<string> $args
+     * @param list<string>              $args
+     * @param array<string, string>     $extraEnv  additional env assignments (e.g. locale probes)
      *
      * @return array{stdout: string, stderr: string, exit: int, timedOut: bool}
      */
-    protected static function spawnKv(array $args, string $xdgConfigHome, ?string $stdin = null): array
+    protected static function spawnKv(array $args, string $xdgConfigHome, ?string $stdin = null, array $extraEnv = []): array
     {
         $env = \getenv();
         $env['XDG_CONFIG_HOME'] = $xdgConfigHome;
+        foreach ($extraEnv as $name => $value) {
+            $env[$name] = $value;
+        }
 
         return self::spawnBounded(
             \array_merge([\PHP_BINARY, \dirname(__DIR__, 2) . '/bin/candy-kv'], $args),

@@ -31,5 +31,6 @@ return [
     'cli.would_delete_one'       => 'Se eliminaría 1 entrada.',
     'cli.would_delete_n'         => 'Se eliminarían {count} entradas.',
     'cli.pruned_n'               => '{count} entradas caducadas eliminadas.',
+    'cli.pruned_one'             => '1 entrada caducada eliminada.',
     'cli.pruned_none'            => 'No hay entradas caducadas que eliminar.',
 ];

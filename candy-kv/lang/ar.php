@@ -29,5 +29,6 @@ return [
     'cli.would_delete_one'       => 'سيتم حذف مدخل واحد.',
     'cli.would_delete_n'         => 'سيتم حذف {count} مدخلًا.',
     'cli.pruned_n'               => 'تمت إزالة {count} مدخلًا منتهي الصلاحية.',
+    'cli.pruned_one'             => 'تمت إزالة مدخل واحد منتهي الصلاحية.',
     'cli.pruned_none'            => 'لا توجد مدخلات منتهية الصلاحية لإزالتها.',
 ];

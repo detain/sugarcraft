@@ -312,7 +312,7 @@ function run(Store $store, string $cmd, array $argv, string $bin): void
         ArgParser::prune($argv, 2);
         $n = $store->pruneExpired();
         if ($n > 0) {
-            echo Lang::t('cli.pruned_n', ['count' => $n]) . "\n";
+            echo Lang::t($n === 1 ? 'cli.pruned_one' : 'cli.pruned_n', ['count' => $n]) . "\n";
         } else {
             echo Lang::t('cli.pruned_none') . "\n";
         }

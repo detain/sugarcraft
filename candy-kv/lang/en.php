@@ -31,5 +31,6 @@ return [
     'cli.would_delete_one'       => 'Would delete 1 entry.',
     'cli.would_delete_n'         => 'Would delete {count} entries.',
     'cli.pruned_n'               => 'Removed {count} expired entries.',
+    'cli.pruned_one'             => 'Removed 1 expired entry.',
     'cli.pruned_none'            => 'No expired entries to remove.',
 ];

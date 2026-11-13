@@ -29,5 +29,6 @@ return [
     'cli.would_delete_one'       => '1 item zou worden verwijderd.',
     'cli.would_delete_n'         => '{count} items zouden worden verwijderd.',
     'cli.pruned_n'               => '{count} verlopen items verwijderd.',
+    'cli.pruned_one'             => '1 verlopen item verwijderd.',
     'cli.pruned_none'            => 'Geen verlopen items om te verwijderen.',
 ];
