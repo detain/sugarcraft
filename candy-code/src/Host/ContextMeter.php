@@ -113,17 +113,13 @@ final class ContextMeter
      */
     public function rawTokens(array $history): int
     {
-        $total = 0;
-        foreach ($history as $msg) {
-            // A UI-only row is never sent (audit 15b-03), so it occupies none
-            // of the window this estimates.
-            if ($msg->uiOnly) {
-                continue;
-            }
-            // Script-weighted, not codepoints/4 (audit 15b-13): CJK/emoji ran
-            // 3-6x under, past what the [1.0, 3.0] calibration can correct.
-            $total += TokenEstimate::ofText($msg->content);
-            $total += 10; // role overhead
+        // A UI-only row is never sent (audit 15b-03), so it occupies none
+        // of the window this estimates. Script-weighted, not codepoints/4
+        // (audit 15b-13); S-X09: the +10 role-overhead law is shared with
+        // ContextCompactor through TokenEstimate::ofMessages().
+        $sent = array_filter($history, static fn(Message $m): bool => !$m->uiOnly);
+        $total = TokenEstimate::ofMessages(array_map(static fn(Message $m): string => $m->content, $sent));
+        foreach ($sent as $msg) {
             // Audit 15b-15: an attached file is inlined into the request and
             // an image billed as image tokens, so both occupy the window - a
             // 256 KiB `@file` must reach the tiers, not hide behind a short

@@ -1465,16 +1465,14 @@ final class ContextCompactor
      */
     private function countTokens(array $messages): int
     {
-        $total = 0;
-        foreach ($messages as $msg) {
-            $content = is_array($msg) ? ($msg['content'] ?? '') : (string) $msg;
-            // Script-weighted, the same figure Chat's estimate uses (audit
-            // 15b-13-rem): codepoints/4 read CJK and emoji 3-6x low, so every
-            // tier here fired late for those sessions.
-            $total += TokenEstimate::ofText((string) $content);
-            $total += 10; // role overhead
-        }
-        return $total;
+        // Script-weighted, the same figure Chat's estimate uses (audit
+        // 15b-13-rem): codepoints/4 read CJK and emoji 3-6x low. S-X09: the
+        // +10 role-overhead law lives once, in TokenEstimate::ofMessages().
+        return TokenEstimate::ofMessages((static function () use ($messages): \Generator {
+            foreach ($messages as $msg) {
+                yield (string) (is_array($msg) ? ($msg['content'] ?? '') : $msg);
+            }
+        })());
     }
 
     /**
