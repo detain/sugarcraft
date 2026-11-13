@@ -51,7 +51,7 @@
     },
     "suggest": {
         "ext-gd": "Required for .gif playback and animated .webp decoding (the pure-PHP routes; no ffmpeg needed). mp4/avi/webm need the ffmpeg and ffprobe binaries on $PATH — a runtime toolchain, not a Composer package.",
-        "ext-mbstring": "Used for UTF-8-safe caption clipping in the subtitle overlay (Player's mb_str_split) and for the bounded mb_strcut of paths and values in Reel, FfmpegDecoder and VideoSource error_log lines. The WebVTT parser itself makes no mb_ calls."
+        "ext-mbstring": "Used for UTF-8-safe caption clipping in the subtitle overlay (Player's mb_str_split) and for the bounded mb_strcut of paths and values in Reel, FfmpegDecoder and VideoSource error_log lines. Per-cue caption clamping (SV-VTT/081) also clips cue text at collect time."
     },
     "autoload": {
         "psr-4": {

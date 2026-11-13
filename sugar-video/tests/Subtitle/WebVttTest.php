@@ -363,4 +363,92 @@ final class WebVttTest extends TestCase
         self::assertStringNotContainsString("\xEE\x80\x80", $once, 'sentinels swept');
         self::assertStringContainsString("\xEE\x80\x82", $once, 'U+E002 image marker survives by design');
     }
+    // ── SV-VTT ceilings and the bounded cueAt ────────────────────────────────
+
+    /** 078: parse() is public API and caps its own input — a block storm that
+     * MAX_CUES would only notice mid-materialisation is refused up front. */
+    public function testATrackAboveTheByteCeilingIsRefusedTyped(): void
+    {
+        $payload = "WEBVTT\n\n" . str_repeat('x', WebVtt::MAX_VTT_BYTES + 1);
+
+        try {
+            WebVtt::parse($payload);
+            self::fail('the oversized track must be refused');
+        } catch (\InvalidArgumentException $e) {
+            self::assertStringContainsString('ceiling', $e->getMessage());
+        }
+
+        // Just-under still parses: the guard refuses payloads it names, not the
+        // legitimate files the 4 MiB read cap already admitted.
+        $ok = "WEBVTT\n\n00:00.000 --> 00:01.000\n"
+            . str_repeat('y', WebVtt::MAX_VTT_BYTES - 64);
+        self::assertFalse(WebVtt::parse($ok)->isEmpty(), 'within-ceiling track parses');
+    }
+
+    /** 081: one giant block lands CLAMPED with a visible seam, not verbatim. */
+    public function testACueTextIsClampedAtCollectTimeWithAnEllipsis(): void
+    {
+        // é is two UTF-8 bytes: 3000 of them are 6000 bytes over the 4 KiB gate.
+        $huge = str_repeat('é', 3000);
+        $vtt = WebVtt::parse("WEBVTT\n\n00:00.000 --> 00:01.000\n{$huge}");
+        $text = $vtt->cues()[0]->text;
+
+        self::assertLessThanOrEqual(WebVtt::MAX_CUE_TEXT_BYTES, strlen($text), 'within the ceiling');
+        self::assertGreaterThanOrEqual(WebVtt::MAX_CUE_TEXT_BYTES - 4, strlen($text),
+            'mb_strcut lands within one codepoint of the gate — it is not a mass-trim');
+        self::assertStringEndsWith('…', $text, 'the truncation is visible');
+        self::assertTrue(mb_check_encoding($text, 'UTF-8'), 'the byte cut never splits a codepoint');
+
+        // At-ceiling text passes untouched (clamp is >, not >=).
+        $exact = str_repeat('a', WebVtt::MAX_CUE_TEXT_BYTES);
+        $kept = WebVtt::parse("WEBVTT\n\n00:00.000 --> 00:01.000\n{$exact}")->cues()[0]->text;
+        self::assertSame($exact, $kept, 'a legal cue is never touched');
+    }
+
+    /** 084: a long caption-free gap costs logarithmic bracketing, not a
+     * contains() charge per silent cue — and tie-break semantics are untouched. */
+    public function testCueAtBracketsInsteadOfWalkingGaps(): void
+    {
+        $lines = ['WEBVTT', ''];
+        // 2000 cues packed into [0, 20) — none contains t = 50.
+        for ($i = 0; $i < 2000; $i++) {
+            $start = $i * 0.01;
+            $lines[] = sprintf('00:%02d.%03d --> 00:%02d.%03d',
+                (int) $start, (int) round(($start - (int) $start) * 1000),
+                (int) ($start + 0.005), (int) round((($start + 0.005) - (int) ($start + 0.005)) * 1000));
+            $lines[] = "dense-{$i}";
+            $lines[] = '';
+        }
+        $vtt = WebVtt::parse(implode("\n", $lines));
+
+        self::assertNull($vtt->cueAt(50.0), 'a gap past a dense history answers without the walk');
+        self::assertSame('dense-0', $vtt->cueAt(0.001), 'a cue inside the history still answers');
+        self::assertNull($vtt->cueAt(30.0), 'still null deeper into the gap');
+
+        // Overlap tie-break (latest start wins) preserved.
+        $over = WebVtt::parse("WEBVTT\n\n"
+            . "00:00.000 --> 00:10.000\nA\n\n"
+            . "00:02.000 --> 00:04.000\nB\n\n"
+            . "00:03.000 --> 00:09.000\nC\n");
+        self::assertSame('A', $over->cueAt(1.0));
+        self::assertSame('B', $over->cueAt(2.5));
+        self::assertSame('C', $over->cueAt(3.5));
+        self::assertSame('A', $over->cueAt(9.5), 'C ended at 9; A still holds');
+
+        // Construction assert: the prefix-max array backing the bracket is
+        // exactly the running maximum of ends, non-decreasing.
+        $reflected = (new \ReflectionProperty(WebVtt::class, 'maxEnds'))->getValue($over);
+        self::assertSame([10.0, 10.0, 10.0], $reflected, 'prefix maxima, one slot per cue');
+    }
+
+    /** The removed linear walk must stay removed (anti-drift). */
+    public function testTheGapWalkIsGoneFromTheSource(): void
+    {
+        $src = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Subtitle/WebVtt.php');
+
+        self::assertStringNotContainsString('while ($result !== null && $result >= 0)', $src,
+            'the unbounded walk-back arm must not return');
+        self::assertStringContainsString('$this->maxEnds[$mid] >= $seconds', $src,
+            'the bracket keeps consulting the prefix array');
+    }
 }

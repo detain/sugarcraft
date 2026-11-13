@@ -9,10 +9,12 @@ use SugarCraft\Video\Lang;
 
 /**
  * A parsed WebVTT subtitle track — a time-sorted list of {@see Cue}s with a
- * `cueAt()` lookup for the caption showing at a given playback time: a binary
- * search for the rightmost start at or before the position, then a walk back
- * over earlier cues until one contains it — O(log n) plus worst-case O(k)
- * over the cues walked back, bounded by MAX_CUES for a parsed track.
+ * `cueAt()` lookup for the caption showing at a given playback time: two binary
+ * searches — rightmost start at or before the position, and the leftmost cue
+ * whose (prefix-maximum) end reaches it — so cues that provably cannot contain
+ * the position are never even looked at (SV-VTT/084). The walk that remains is
+ * bounded by real overlap, not by caption-free gaps, and the look runs on
+ * EVERY painted frame.
  *
  * Parsing is lenient: it skips the `WEBVTT` header and any `NOTE`/`STYLE`/
  * `REGION` blocks, ignores per-cue identifiers and cue settings, strips inline
@@ -52,11 +54,57 @@ final class WebVtt
     public const MAX_CUES = 10000;
 
     /**
+     * Upper bound on the RAW text handed to {@see parse()} (SV-VTT/078).
+     *
+     * MAX_CUES counts CUES, not blocks: a payload of a million comment blocks
+     * materialises them all in preg_split before the cue cap engages. Reel
+     * caps its own file read at MAX_SUBTITLE_BYTES (4 MiB) before parsing,
+     * but parse() is public API and may be handed anything a host fetched.
+     * The ceiling sits deliberately ABOVE that read cap so a legitimate file
+     * Reel accepted is never refused here — it is the second door, sized for
+     * hosts that read their own bytes.
+     */
+    public const MAX_VTT_BYTES = 8_388_608;
+
+    /**
+     * Upper bound on one cue's cleaned text in bytes (SV-VTT/081). A single
+     * block survives four regex passes and lands verbatim on a Cue otherwise
+     * — a 4 MiB blob between two timestamps would be carried (and re-clipped
+     * by Player per frame) forever. Clamped at COLLECT time with a visible
+     * ellipsis, so the oversized payload costs its 4 KiB and moves on.
+     */
+    public const MAX_CUE_TEXT_BYTES = 4096;
+
+    /**
+     * @var list<float> prefix maximum of cue ends: $maxEnds[$i] =
+     *                max(end of cues[0..i]), non-decreasing by construction.
+     *                Backs cueAt()'s walk-back bound (SV-VTT/084).
+     */
+    private readonly array $maxEnds;
+
+    /**
      * @param list<Cue> $cues
      */
     private function __construct(
         private readonly array $cues,
     ) {
+        $maxEnds = [];
+        $best = -INF;
+        foreach ($cues as $cue) {
+            if ($cue->end > $best) {
+                $best = $cue->end;
+            }
+            $maxEnds[] = $best;
+        }
+        // Construction assert: the array cueAt() binary-searches MUST be
+        // non-decreasing — a violated premise here would silently shrink the
+        // candidate window, so it is a contract break, not user input.
+        for ($i = 1, $n = count($maxEnds); $i < $n; $i++) {
+            if ($maxEnds[$i] < $maxEnds[$i - 1]) {
+                throw new \LogicException('subtitle cue end prefix is not monotonic');
+            }
+        }
+        $this->maxEnds = $maxEnds;
     }
 
     /**
@@ -77,6 +125,15 @@ final class WebVtt
      */
     public static function parse(string $text): self
     {
+        // SV-VTT/078: own input ceiling, typed and loud — parse() is public API
+        // and MAX_CUES does not bound block materialisation.
+        if (strlen($text) > self::MAX_VTT_BYTES) {
+            throw new \InvalidArgumentException(Lang::t('subtitle.parse_too_large', [
+                'len' => (string) strlen($text),
+                'max' => (string) self::MAX_VTT_BYTES,
+            ]));
+        }
+
         // Strip a UTF-8 BOM and normalise line endings.
         $text = preg_replace('/^\xEF\xBB\xBF/', '', $text) ?? $text;
         $text = str_replace(["\r\n", "\r"], "\n", $text);
@@ -109,12 +166,17 @@ final class WebVtt
 
     /**
      * The caption text showing at $seconds, or null when nothing is.
-     * Binary-searches the sorted cue list for the rightmost cue starting at
-     * or before $seconds (O(log n)), then walks back over earlier cues until
-     * one actually contains the position or the list runs out — worst case
-     * O(k) cues walked back, bounded by MAX_CUES for a parsed track.
-     * When multiple overlapping cues contain $seconds, the one with the
-     * latest start time is returned (first matching cue from the end).
+     *
+     * SV-VTT/084: two binary searches bracket the ONLY cues that can answer.
+     * The upper bound is the rightmost cue starting at or before $seconds
+     * (unchanged); the lower bound comes from the prefix-max-of-end array —
+     * every cue at or left of the first index whose running maximum end
+     * reaches $seconds provably ENDED before it, so a gap of a thousand
+     * silent cues costs zero `contains()` calls instead of a thousand. The
+     * walk that remains spans genuine overlap only. Tie-break is untouched:
+     * among containing cues the latest start wins (first match walking back).
+     * This runs from view() on every painted frame — the old version charged
+     * O(N) per frame inside long caption-free stretches.
      */
     public function cueAt(float $seconds): ?string
     {
@@ -134,13 +196,34 @@ final class WebVtt
             }
         }
 
-        // Walk back to find the first cue that actually contains $seconds.
-        // This handles gaps between cues and overlapping cue tie-breaking.
-        while ($result !== null && $result >= 0) {
-            if ($cues[$result]->contains($seconds)) {
-                return $cues[$result]->text;
+        if ($result === null) {
+            return null;
+        }
+
+        // Lowest index whose cue could still reach $seconds: everything left of
+        // it has max(end of cues[0..i]) < $seconds — none can contain it.
+        $lo = 0;
+        $hi = $result;
+        $floor = -1;
+        while ($lo <= $hi) {
+            $mid = ($lo + $hi) >> 1;
+            if ($this->maxEnds[$mid] >= $seconds) {
+                $floor = $mid;
+                $hi = $mid - 1;
+            } else {
+                $lo = $mid + 1;
             }
-            $result--;
+        }
+        if ($floor < 0) {
+            return null;
+        }
+
+        // Walk back over the bounded candidate window [floor, result]; only
+        // genuinely overlapping cues are visited.
+        for ($j = $result; $j >= $floor; $j--) {
+            if ($cues[$j]->contains($seconds)) {
+                return $cues[$j]->text;
+            }
         }
 
         return null;
@@ -194,6 +277,12 @@ final class WebVtt
             return null;
         }
 
+        // SV-VTT/081: per-cue byte ceiling with a visible seam. cleanText
+        // guarantees valid UTF-8, and mb_strcut never splits a codepoint, so
+        // the ellipsis (3 bytes) rides inside the ceiling, not past it.
+        if (strlen($text) > self::MAX_CUE_TEXT_BYTES) {
+            $text = mb_strcut($text, 0, self::MAX_CUE_TEXT_BYTES - 3) . '…';
+        }
         return new Cue($start, $end, $text);
     }
 

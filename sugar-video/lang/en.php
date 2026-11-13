@@ -14,6 +14,7 @@ return [
     'audio.binary_missing' => 'sugar-video: neither ffplay nor mpv was found on this host — audio playback is unavailable, video continues silent',
     'subtitle.too_large' => 'sugar-video: subtitle file ({path}) exceeds the {max}-byte ceiling — ignored',
     'subtitle.cue_cap' => 'sugar-video: subtitle track truncated at {max} cues',
+    'subtitle.parse_too_large' => 'sugar-video: subtitle text is {len} bytes, above the {max}-byte ceiling — refused',
     'render.mode_unsupported' => 'sugar-video: the {mode} render mode is not supported on this terminal (its graphics escape bytes would be invisible garbage there) — this seat picks {best}; omit --mode or choose a supported one',
     'decoder.gif_budget' => 'sugar-video: GIF decode budget exceeded at frame {frame} of a {grid}-pixel grid (limit {max} resident pixels) — use a smaller terminal geometry or a shorter clip',
     'decoder.gd_missing' => 'sugar-video: this PHP has no image extension (ext-gd), so graphics render modes are unavailable',
