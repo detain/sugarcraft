@@ -441,7 +441,125 @@ final class VsGameTest extends TestCase
         $this->assertSame(0, $fresh->computerRotationsLeft);
         $this->assertInstanceOf(\Closure::class, $cmd, 'the fresh pair arms exactly one tick chain');
 
-        [$next] = $fresh->update($this->gravity());
+        [$next, $reArm] = $fresh->update(new GravityMsg($fresh->gravityChain));
         $this->assertFalse($next->over, 'the restarted match keeps playing');
+        $this->assertInstanceOf(\Closure::class, $reArm, 'the live chain answers with its next tick');
+    }
+
+    /**
+     * candy-tetris-003: the VS tick chain is generation-tagged like the
+     * solo one. The epoch bumps exactly once per restart, the armed tick
+     * carries it, and a tick still in flight from the superseded chain
+     * goes inert — no step, no computer input, no second re-arm.
+     */
+    public function testVsChainEpochBumpsOnRestartAndSupersededTicksGoInert(): void
+    {
+        $base = VsGame::start();
+        $this->assertSame(0, $base->gravityChain, 'a fresh match owns chain 0');
+
+        $over = new VsGame(
+            player: $base->player->mutate(['over' => true]),
+            computer: $base->computer,
+            over: true,
+            gravityChain: 4,
+        );
+        [$fresh, $cmd] = $over->update($this->key('r'));
+        $this->assertSame(5, $fresh->gravityChain, 'the restart bumps the epoch once');
+        $request = $cmd();
+        $msg = ($request->produce)();
+        $this->assertInstanceOf(GravityMsg::class, $msg, 'the arm fires a gravity tick');
+        $this->assertSame(5, $msg->chain, 'armed under the live epoch, never a bare 0');
+
+        [$stale, $staleArm] = $fresh->update(new GravityMsg(4)); // dead chain's in-flight tick
+        $this->assertSame($fresh, $stale, 'a superseded tick may not step the fresh pair');
+        $this->assertNull($staleArm, 'nor leak a second timer');
+
+        [$live, $liveArm] = $fresh->update(new GravityMsg(5));
+        $this->assertNotSame($fresh, $live, 'the live chain still drives the pair');
+        $this->assertInstanceOf(\Closure::class, $liveArm, 'and re-arms exactly once');
+    }
+
+    /**
+     * Discrete-event simulation of the loop VsGame would drive (same
+     * shape as {@see GameGravityChainTest}): each Cmd is invoked to a
+     * TickRequest, queued at now + seconds, and the produced Msg fed
+     * back. The return value is the number of tick timers STILL in
+     * flight when the window closes — the singleton chain must show
+     * exactly one, candy-tetris-003's leak showed one MORE per restart,
+     * with no real sleeping involved.
+     *
+     * @param list<float> $restartAt times at which the match is over and 'r' is pressed
+     */
+    private function simulateVsChain(array $restartAt, float $window = 10.0): int
+    {
+        $vs = VsGame::start();
+        $now = 0.0;
+        /** @var list<array{0: float, 1: \Closure}> $queue */
+        $queue = [];
+        $arm = static function (?\Closure $cmd) use (&$queue, &$now): void {
+            if ($cmd === null) {
+                return;
+            }
+            $request = $cmd();
+            if ($request instanceof \SugarCraft\Core\TickRequest) {
+                $queue[] = [$now + $request->seconds, $request->produce];
+            }
+        };
+        $arm($vs->init());
+
+        $pendingRestarts = array_values(array_filter($restartAt, static fn(float $t): bool => $t <= $window));
+
+        while ($queue !== [] || $pendingRestarts !== []) {
+            $nextEvent = $queue === [] ? INF : min(array_column($queue, 0));
+            $nextRestart = $pendingRestarts === [] ? INF : $pendingRestarts[0];
+
+            if ($nextRestart <= $nextEvent) {
+                $restartTime = array_shift($pendingRestarts);
+                $now = max($now, $restartTime);
+                // The bug's exact shape: a LOSS (forced over), then the
+                // very next press is 'r'. The dead chain's tick stays
+                // queued in $queue to prove the guard must catch it on
+                // ARRIVAL, not at arming.
+                $vs = new VsGame(
+                    player: $vs->player->mutate(['over' => true]),
+                    computer: $vs->computer,
+                    over: true,
+                    gravityChain: $vs->gravityChain,
+                );
+                [$vs, $cmd] = $vs->update($this->key('r'));
+                $arm($cmd);
+                continue;
+            }
+
+            if ($nextEvent > $window) {
+                break;
+            }
+            $index = array_search($nextEvent, array_column($queue, 0), true);
+            [, $produce] = $queue[$index];
+            array_splice($queue, $index, 1);
+            $now = $nextEvent;
+            [$vs, $cmd] = $vs->update($produce());
+            $arm($cmd);
+        }
+
+        return count($queue);
+    }
+
+    /**
+     * candy-tetris-003 pin: restart must never stack gravity timers.
+     * Two losses-and-restarts inside a 10 s window leave the same
+     * singleton chain the keyless baseline shows — before the epoch
+     * guard each restart leaked one more concurrent timer and the tick
+     * speed doubled permanently.
+     */
+    public function testVsRestartTwiceKeepsExactlyOneTickChain(): void
+    {
+        $this->assertSame(1, $this->simulateVsChain([]), 'baseline: the chain is a singleton');
+
+        $this->assertSame(
+            1,
+            $this->simulateVsChain([3.0, 6.0]),
+            'after two restarts exactly one tick chain may still be in flight',
+        );
     }
 }

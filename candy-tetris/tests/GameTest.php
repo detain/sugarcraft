@@ -1199,4 +1199,39 @@ final class GameTest extends TestCase
         [$stepped] = $fresh->update(new GravityMsg(1)); // the restart's own arm
         $this->assertSame(1, $stepped->piece->y, 'the fresh chain steps normally');
     }
+
+    /**
+     * candy-tetris-065: gravity got the epoch defence, the lock chain
+     * did not — a restart used to mint a fresh `lockGeneration` space
+     * while a superseded window's LockDelayMsg could still be in flight,
+     * letting the fresh board's first window arm under a tag the dead
+     * board's running tick already owned. The counter now carries across
+     * restart: monotonic, never reset.
+     */
+    public function testRestartCarriesTheLockGenerationSpaceMonotonically(): void
+    {
+        $game = Game::startWithLockDelay(new Bag(static fn(int $_max): int => 0), 500);
+
+        // Drive the dead board to its first grounded window: generation 1.
+        $steps = 0;
+        while ($game->lockWindowGeneration === null && $steps++ < 60) {
+            [$game, ] = $game->update(new GravityMsg($game->gravityChain));
+        }
+        $this->assertSame(1, $game->lockWindowGeneration, 'the dead board spent generation 1');
+
+        [$fresh] = $game->mutate(['over' => true])->update($this->key('r'));
+        $this->assertSame(1, $fresh->lockGeneration, 'the restart carries the counter instead of re-minting the space');
+
+        // Drive the fresh board to its own first window — it must arm
+        // ABOVE the carried space, not inside it.
+        $steps = 0;
+        while ($fresh->lockWindowGeneration === null && $steps++ < 60) {
+            [$fresh, ] = $fresh->update(new GravityMsg($fresh->gravityChain));
+        }
+        $this->assertSame(2, $fresh->lockWindowGeneration, 'the fresh board arms past the carried generation space');
+
+        [$after, $cmd] = $fresh->update(new LockDelayMsg(1)); // the dead board's in-flight tick
+        $this->assertNull($cmd, 'a stale lock tick may never close a live window');
+        $this->assertSame(2, $after->lockWindowGeneration, 'the live window stays the only armed generation');
+    }
 }

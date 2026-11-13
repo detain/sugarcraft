@@ -517,6 +517,13 @@ final class Game implements Model
                 // dead chain lands inert on the fresh board.
                 $fresh = $fresh->mutate([
                     'gravityChain' => $this->gravityChain + 1,
+                    // The lock generation space carries across restart
+                    // (monotonic, never reset): a superseded window's
+                    // in-flight LockDelayMsg can never collide with the
+                    // tag a window on the fresh board later arms
+                    // (candy-tetris-065 — gravity got this defence in
+                    // -003's lineage, the lock chain never did).
+                    'lockGeneration' => $this->lockGeneration,
                     // The live terminal size survives the restart: the
                     // Program only re-reports on the next SIGWINCH, and a
                     // fresh natural-size seed would re-clip a squeezed one.

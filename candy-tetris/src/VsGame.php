@@ -67,6 +67,15 @@ final class VsGame implements Model
         public readonly ?Scores $scores = null,
         /** Where {@see self::$scores} persists to at the settle. */
         public readonly ?string $scoresPath = null,
+        /**
+         * Identity tag of the live VS tick chain (candy-tetris-003: the
+         * solo game's epoch defence, mirrored). Restarts bump it so a
+         * tick still in flight from the dead chain lands inert on the
+         * fresh pair instead of stepping it and re-arming a second
+         * chain. The inner Games keep their OWN chain domain — the
+         * forward at {@see self::update()} re-stamps for them.
+         */
+        public readonly int $gravityChain = 0,
     ) {}
 
     /**
@@ -106,17 +115,18 @@ final class VsGame implements Model
 
     public function init(): ?\Closure
     {
-        return self::scheduleTick($this->player);
+        return self::scheduleTick($this->player, $this->gravityChain);
     }
 
     /**
-     * Schedule a tick for the player game.
-     * The player controls overall speed.
+     * Schedule a tick for the player game, stamped with the live chain
+     * epoch (candy-tetris-003 — the player controls overall speed; the
+     * tag decides which chain the arrival belongs to).
      */
-    private static function scheduleTick(Game $player): \Closure
+    private static function scheduleTick(Game $player, int $chain): \Closure
     {
         $interval = $player->score->gravityIntervalUs() / 1_000_000;
-        return Cmd::tick($interval, static fn(): Msg => new GravityMsg());
+        return Cmd::tick($interval, static fn(): Msg => new GravityMsg($chain));
     }
 
     public function update(Msg $msg): array
@@ -137,6 +147,15 @@ final class VsGame implements Model
             return [$this->mutate(['colorProfile' => $msg->profile]), null];
         }
 
+        // The tick chain is generation-tagged (candy-tetris-003, mirroring
+        // the solo defence): an arrival from a superseded chain is inert
+        // BEFORE any branch may treat it as a heartbeat — a stale tick
+        // must not step the fresh pair, drive the computer, or re-arm the
+        // dead chain into a second concurrent timer.
+        if ($msg instanceof GravityMsg && $msg->chain !== $this->gravityChain) {
+            return [$this, null];
+        }
+
         // Below the frame floor the VS pair freezes the way pause freezes
         // it: q still quits, the tick chain keeps its heartbeat, and a
         // resize back into fit resumes with nothing double-armed (C-2).
@@ -145,7 +164,7 @@ final class VsGame implements Model
                 return [$this, Cmd::quit()];
             }
             if ($msg instanceof GravityMsg) {
-                return [$this, self::scheduleTick($this->player)];
+                return [$this, self::scheduleTick($this->player, $this->gravityChain)];
             }
             return [$this, null];
         }
@@ -158,15 +177,18 @@ final class VsGame implements Model
             }
             if ($msg instanceof KeyMsg && $this->keys()->matches($msg, 'restart')) {
                 // Restart the pair and arm one fresh tick chain — parity
-                // with the solo game's 'r'.
+                // with the solo game's 'r'. The chain epoch bumps so the
+                // superseded chain's in-flight tick lands inert on the
+                // fresh pair (candy-tetris-003).
                 $fresh = self::start($this->bindings, $this->scores, $this->scoresPath)->mutate([
+                    'gravityChain' => $this->gravityChain + 1,
                     // The live terminal size survives the restart: the
                     // Program only re-reports on the next SIGWINCH.
                     'frameCols' => $this->frameCols,
                     'frameRows' => $this->frameRows,
                     'colorProfile' => $this->colorProfile,
                 ]);
-                return [$fresh, self::scheduleTick($fresh->player)];
+                return [$fresh, self::scheduleTick($fresh->player, $fresh->gravityChain)];
             }
             return [$this, null];
         }
@@ -191,13 +213,21 @@ final class VsGame implements Model
         // computer frozen).
         if ($this->player->paused === true) {
             if ($msg instanceof GravityMsg) {
-                return [$this, self::scheduleTick($this->player)];
+                return [$this, self::scheduleTick($this->player, $this->gravityChain)];
             }
             return [$this, null];
         }
 
-        // Process player game (KeyMsg only reaches here when not paused/quit)
-        [$newPlayer, ] = $this->player->update($msg);
+        // Process player game (KeyMsg only reaches here when not paused/quit).
+        // A tick that passed the VS-level epoch gate is re-stamped into the
+        // INNER game's own chain domain: the VS epoch guards the outer loop,
+        // the inner Game enforces its tag against its own counter, and a
+        // fresh pair after restart carries 0 while the outer epoch has moved
+        // on (candy-tetris-003; the inner chain only ever bumps via paths
+        // VS never drives — see the same law in {@see GravityMsg}'s docblock).
+        [$newPlayer, ] = $this->player->update(
+            $msg instanceof GravityMsg ? new GravityMsg($this->player->gravityChain) : $msg
+        );
 
         // Check if player's game is over (computer wins)
         if ($newPlayer->over === true) {
@@ -257,8 +287,10 @@ final class VsGame implements Model
                 'computerShiftLeft' => $shiftLeft,
             ]),
             // The tick chain is singleton: re-arm only when this message
-            // consumed the in-flight tick, never on key messages.
-            $msg instanceof GravityMsg ? self::scheduleTick($finalPlayer) : null,
+            // consumed the in-flight tick, never on key messages. The arm
+            // carries the live VS epoch so the next arrival round-trips
+            // the guard above.
+            $msg instanceof GravityMsg ? self::scheduleTick($finalPlayer, $this->gravityChain) : null,
         ];
     }
 
@@ -418,6 +450,7 @@ final class VsGame implements Model
             $changes['bindings'] ?? $this->bindings,
             $changes['scores'] ?? $this->scores,
             $changes['scoresPath'] ?? $this->scoresPath,
+            $changes['gravityChain'] ?? $this->gravityChain,
         );
     }
 }
