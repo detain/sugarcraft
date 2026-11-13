@@ -130,4 +130,42 @@ final class HelpBarTest extends TestCase
         // Original unchanged
         self::assertArrayNotHasKey('New', $bar->shortcuts());
     }
+
+    // ------------------------------------------------------------------
+    // -039 fail-fast ingress / -064 documented collision collapse
+    // ------------------------------------------------------------------
+
+    public function testConstructorRefusesNonStringKey(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('shortcut key must be a string, int given');
+
+        new HelpBar([0 => 'navigate']);
+    }
+
+    public function testConstructorRefusesNonStringDescriptionNamingTheEntry(): void
+    {
+        try {
+            new HelpBar(['Esc' => null, 'Enter' => 'select']);
+            self::fail('expected InvalidArgumentException for the null description');
+        } catch (\InvalidArgumentException $e) {
+            self::assertStringContainsString('for key "Esc"', $e->getMessage());
+            self::assertStringContainsString('null given', $e->getMessage());
+        }
+    }
+
+    public function testGuardedKeyCollisionIsLastWriteWins(): void
+    {
+        // -064: "a\x1b[2J" and "a" guard to the same visible key. The
+        // documented default collapses them, keeping the LATER description
+        // — never two rows that render identically from the user's side.
+        $bar = new HelpBar(["a\x1b[2J" => 'first', 'a' => 'second']);
+
+        self::assertSame(['a' => 'second'], $bar->shortcuts());
+
+        // Keys that differ visibly stay distinct (control bytes are the
+        // only way to collide).
+        $distinct = new HelpBar(['a' => 'first', 'b' => 'second']);
+        self::assertSame(['a' => 'first', 'b' => 'second'], $distinct->shortcuts());
+    }
 }

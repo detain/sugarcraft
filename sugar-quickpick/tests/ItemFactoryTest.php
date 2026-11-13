@@ -163,4 +163,48 @@ final class ItemFactoryTest extends TestCase
             $this->assertSame("item_" . ($i + 1), $result[$i]->value());
         }
     }
+
+    // ------------------------------------------------------------------
+    // -012 fail-fast ingress
+    // ------------------------------------------------------------------
+
+    /** @return array<string, array{0: mixed, 1: string}> value => expected type word */
+    public static function nonStringProvider(): array
+    {
+        return [
+            'null'      => [null, 'null'],
+            'bool'      => [true, 'bool'],
+            'float'     => [1.5, 'float'],
+            'int'       => [42, 'int'],
+            'array'     => [[], 'array'],
+            'object'    => [new \stdClass(), 'stdClass'],
+        ];
+    }
+
+    /** @dataProvider nonStringProvider */
+    public function testCoerceRefusesNonStringWithIndexAndType(mixed $bad, string $typeWord): void
+    {
+        try {
+            $this->factory->coerce(['apple', $bad, 'cherry']);
+            self::fail('expected InvalidArgumentException for ' . $typeWord);
+        } catch (\InvalidArgumentException $e) {
+            self::assertStringContainsString('entry 1', $e->getMessage());
+            self::assertStringContainsString($typeWord, $e->getMessage());
+        }
+    }
+
+    public function testCoerceProbeListAllThrows(): void
+    {
+        // The -012 probe list verbatim: every arm refuses instead of
+        // string-casting into a selectable row, a Warning, or an Error.
+        foreach ([true, null, 1.5, [], new \stdClass()] as $bad) {
+            $threw = false;
+            try {
+                $this->factory->coerce([$bad]);
+            } catch (\InvalidArgumentException) {
+                $threw = true;
+            }
+            self::assertTrue($threw, 'refused: ' . \get_debug_type($bad));
+        }
+    }
 }
