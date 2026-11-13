@@ -24,7 +24,10 @@ use SugarCraft\Pty\SignalForwarder;
  * rendering only. The host wires terminal events onto type()/backspace()/
  * cursor*()/selected()/hide() (see README “Wiring keyboard input”).
  *
- * Inspired by Genekkion/theHermit; developed as a native PHP project.
+ * Mirrors the state-and-rendering core of Genekkion/theHermit `list.Model`
+ * (list/model.go: shown flag, dimensions, cursor, offset, items, filtered
+ * view); the composition contract, file history, bars, and i18n catalogue
+ * are native to sugar-quickpick.
  *
  * @see https://github.com/Genekkion/theHermit
  */
