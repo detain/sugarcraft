@@ -23,12 +23,14 @@ sugar-markdown — a Markdown → ANSI renderer for PHP 8.3+, built on
 composer require sugarcraft/sugar-markdown
 ```
 
-> The `Renderer` exposes short-form aliases on every option:
-> `theme` / `sanitize` / `wordWrap` / `hyperlinks` / `baseURL` /
+> Every `with*()` builder on the `Renderer` has a short-form method
+> alias: `theme` / `sanitize` / `wordWrap` / `hyperlinks` / `baseURL` /
 > `tableWrap` / `inlineTableLinks` / `tableColumnBudget` /
 > `fenceColumnBudget` / `preservedNewLines` / `emoji` / `standardStyle` /
 > `styleSheet`. The long-form `with*` names still work — pick whichever
-> reads better at the call site.
+> reads better at the call site. These are builder-method names, not
+> constructor spellings: positional construction takes the parameter
+> names listed under “API at a glance” below.
 
 ## Quickstart
 
@@ -410,8 +412,14 @@ object.
 
 ### API at a glance
 
-- Constructors / factories: `new Renderer(?Theme, ?int $wrapWidth, ...)`,
-  `Renderer::ansi()`, `Renderer::plain()`, `Renderer::ascii()`,
+- Constructors / factories: the full 12-slot signature —
+  `new Renderer(?Theme $theme = null, ?int $wrapWidth = null,
+  bool $emitHyperlinks = true, ?string $baseUrl = null,
+  bool $tableWrap = false, bool $inlineTableLinks = true,
+  bool $tableColumnBudget = false, bool $preservedNewLines = false,
+  bool $expandEmoji = false, bool $sanitize = true,
+  bool $fenceColumnBudget = false, ?StyleSheet $styleSheetOverride = null)`;
+  plus `Renderer::ansi()`, `Renderer::plain()`, `Renderer::ascii()`,
   `Renderer::fromEnvironment()`, one-shot `Renderer::renderMarkdown($md, ?Theme)`.
 - Channels: `render()` (whole string), `stream()` (chunk generator),
   `renderSection()` (per-section — the `parseSection()` /
