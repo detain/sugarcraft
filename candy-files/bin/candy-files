@@ -84,12 +84,18 @@ if ($printCd && !stream_isatty(STDOUT)) {
     // nowhere to live unless /dev/tty answers. openTty itself falls back
     // silently to the piped pair — probe here, or a session-less launch
     // would re-mint exactly the escape soup CF-19 banished.
-    $probe = @fopen('/dev/tty', 'r+');
+    // Windows has no /dev/tty: the console is reachable through stdin when
+    // that is a terminal (openTty opens CONIN$/CONOUT$ itself).
+    $probe = PHP_OS_FAMILY === 'Windows'
+        ? (stream_isatty(STDIN) ? true : false)
+        : @fopen('/dev/tty', 'r+');
     if ($probe === false) {
         fwrite(STDERR, "candy-files: --print-cd needs a controlling terminal (/dev/tty) while stdout carries the directory; run it from an interactive shell\n");
         exit(1);
     }
-    fclose($probe);
+    if (is_resource($probe)) {
+        fclose($probe);
+    }
 }
 
 $cwd = getcwd() ?: '/';

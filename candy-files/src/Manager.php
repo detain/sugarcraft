@@ -2048,7 +2048,7 @@ final class Manager implements Model
             $path = $path === '~' ? $home : $home . substr($path, 1);
         }
         $pane = $this->activePane();
-        $full = $path !== '' && $path[0] === '/' ? $path : Pane::join($pane->cwd, $path);
+        $full = self::isAbsolutePath($path) ? $path : Pane::join($pane->cwd, $path);
         $opened = Pane::open($full, $this->lister, $pane->sort, $pane->showHidden);
         // A path the lister answers null for — missing, private, or a
         // plain file where FsLister refuses to pretend — is REFUSED with
@@ -3497,5 +3497,22 @@ final class Manager implements Model
     public function canRedo(): bool
     {
         return $this->redoStack !== [];
+    }
+
+    /**
+     * Whether a typed path is absolute on this host: a leading `/` everywhere;
+     * on Windows also `\`, UNC and drive-letter forms (`C:\x`, `C:/x`).
+     */
+    private static function isAbsolutePath(string $path): bool
+    {
+        if ($path === '') {
+            return false;
+        }
+        if ($path[0] === '/') {
+            return true;
+        }
+
+        return \PHP_OS_FAMILY === 'Windows'
+            && ($path[0] === '\\' || preg_match('#^[A-Za-z]:[\\\\/]#', $path) === 1);
     }
 }
