@@ -3188,14 +3188,12 @@ final class Renderer
      * last row, and an over-wide last row is soft-wrapped by the terminal,
      * which breaks the absolute-cursorTo repaint the tail clip protects.
      *
-     * The cut is taken on the bar with its zone sentinels REMOVED, so the
-     * `pane:menu` zone is given up rather than cut in half: a half-cut
-     * sentinel pair leaves an unclosed open, which `Scan::parse()` skips
-     * without registering a zone, and a cut through the middle of a tag
-     * leaves a lone sentinel whose would-be id bytes the scan then measures
-     * as visible text — so dropping the pair outright is the only cut that
-     * keeps the bar's cell accounting exact. The bar carries no SGR, so {@see Width::truncate()}
-     * dropping escapes loses nothing.
+     * The cut is budgeted left to right on marker-STRIPPED widths (so the
+     * painted text is exactly what cutting the stripped bar gives), and each
+     * zone is then re-wrapped around the part of its content that survived,
+     * so `pane:menu` stays clickable on a crowded bar. A zone cut to nothing
+     * is dropped whole; a sentinel pair is never cut in half. The bar carries
+     * no SGR, so {@see Width::truncate()} dropping escapes loses nothing.
      */
     private static function fitStatusBar(string $bar, int $cols): string
     {
@@ -3204,7 +3202,44 @@ final class Renderer
             return $bar;
         }
 
-        return Width::truncate($visible, max(0, $cols));
+        $cols = max(0, $cols);
+        // Budget the bar left to right from marker-stripped widths, so the
+        // visible result is exactly what a cut of the stripped bar gives, and
+        // re-wrap each zone around whatever of its content survived. A zone
+        // whose content is cut to nothing is dropped; a surviving one stays
+        // clickable (the `pane:menu` cell on a crowded bar).
+        $open = '\x{E000}';
+        $close = '\x{E001}';
+        $parts = preg_split(
+            '/(' . $open . '([A-Za-z0-9._:-]+)' . $close . '(.*?)' . $open . '\/\2' . $close . ')/su',
+            $bar,
+            -1,
+            PREG_SPLIT_DELIM_CAPTURE,
+        );
+        if ($parts === false) {
+            return Width::truncate($visible, $cols);
+        }
+
+        $out = '';
+        $room = $cols;
+        // Pieces repeat as [plain, whole-zone, id, content] ... [plain].
+        for ($i = 0, $n = \count($parts); $i < $n; $i += 4) {
+            $plain = self::stripZoneMarkers($parts[$i]);
+            $cut = $room > 0 ? Width::truncate($plain, $room) : '';
+            $out .= $cut;
+            $room -= Width::of($cut);
+
+            if (!isset($parts[$i + 3])) {
+                break;
+            }
+            $content = $room > 0 ? Width::truncate(self::stripZoneMarkers($parts[$i + 3]), $room) : '';
+            if ($content !== '') {
+                $out .= Mark::zone($parts[$i + 2], $content);
+                $room -= Width::of($content);
+            }
+        }
+
+        return $out;
     }
 
     /**
