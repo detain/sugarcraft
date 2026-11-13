@@ -10,8 +10,8 @@ declare(strict_types=1);
 
 return [
     'cli.entry_pushed' => '{duration}s vastgelegd van {project} ({language})',
-    'cli.usage' => "Gebruik: candy-codetime [--backend=file|sqlite] <command> [args]\n\nCommando's:\n  dashboard              Start het TUI-dashboard (leest het gekozen backend)\n  push                   [<project> <language>] <file> [duration] [tags] | --  Registreer een heartbeat\n  milestone              add [name] [description] | list  Beheer mijlpalen (alleen sqlite)\n  export                 <csv|json|ics> [days]  Exporteer heartbeats (standaard 7 dagen)\n  gaps                   [days]  Toon niet-vastgelegde gaten van 300 seconden of meer (standaard 7 dagen)\n  backup                 Archiveer bestanden ouder dan 30 dagen (kopiëert; verwijdert nooit)\n  help, --help, -h       Deze gebruik tonen\n  --version, -v          Versie tonen\n\nOpties:\n  --backend=file|sqlite  Opslag-backend voor push/export/gaps/dashboard (standaard: file)\n  --time=<unix>          push: heartbeat op deze unix-seconden vastleggen, niet nu\n  --sqlite               backup: de SQLite-database archiveren met VACUUM INTO (crashveilige kopie)\n  --theme=<name>         dashboard: schilderen met een genoemde palette (default, light, dracula, solarized, gruvbox, high-contrast)
-  CANDY_CODETIME_THEME   dezelfde keuze als omgevingsvariabele (een vlag gaat voor)\n  CANDY_CODETIME_DIR     Datamap (standaard: \$XDG_DATA_HOME/candy-codetime, anders \$HOME/.local/share/candy-codetime, of ./.local/share/candy-codetime als HOME niet is ingesteld)",
+    'cli.usage' => "Gebruik: candy-codetime [--backend=file|sqlite] <command> [args]\n\nCommando's:\n  dashboard              Start het TUI-dashboard (leest het gekozen backend)\n  push                   [<project> <language>] <file> [duration] [tags] | --  Registreer een heartbeat\n  milestone              add [name] [description] | list  Beheer mijlpalen (alleen sqlite)\n  export                 <csv|json|ics> [days | from [to]]  Exporteer heartbeats (standaard 7 dagen)\n  gaps                   [days | from [to]]  Toon niet-vastgelegde gaten van 300 seconden of meer (standaard 7 dagen)\n  backup                 Archiveer bestanden ouder dan 30 dagen (kopiëert; verwijdert nooit)\n  help, --help, -h       Deze gebruik tonen\n  --version, -v          Versie tonen\n\nOpties:\n  --backend=file|sqlite  Opslag-backend voor push/export/gaps/dashboard (standaard: file)\n  --time=<unix>          push: heartbeat op deze unix-seconden vastleggen, niet nu\n  --sqlite               backup: de SQLite-database archiveren met VACUUM INTO (crashveilige kopie)\n  --theme=<name>         dashboard: schilderen met een genoemde palette (default, light, dracula, solarized, gruvbox, high-contrast)
+  CANDY_CODETIME_THEME   dezelfde keuze als omgevingsvariabele (een vlag gaat voor)\n  --project=<name>       export/gaten: houd alleen heartbeats van dit project aan\n  --tag=<label>          export/gaten: houd alleen heartbeats met dit label aan\n  CANDY_CODETIME_DIR     Datamap (standaard: \$XDG_DATA_HOME/candy-codetime, anders \$HOME/.local/share/candy-codetime, of ./.local/share/candy-codetime als HOME niet is ingesteld)",
     'cli.push_usage' => 'Gebruik: candy-codetime push [<project> <language>] <file> [duration] [tags] [--time=<unix>] | candy-codetime push -- (batch JSON-regels via stdin)',
     'cli.push_missing_args' => "candy-codetime: push: verplichte argumenten ontbreken (project, language, file)",
     'cli.push_ignored' => "push: {file} kwam overeen met .sugartrackignore — overgeslagen",
@@ -40,8 +40,11 @@ return [
     'cli.milestone_entry' => "  {date}  {name}  {description}",
     'cli.milestone_sqlite_notice' => 'candy-codetime: mijlpaal: {name} opgeslagen in de sqlite-backend - de bestandopslag bevat geen mijlpalen, de databank is hier aangemaakt; het dashboard toont ze met --backend=sqlite',
 
-    'cli.export_usage' => "Gebruik: candy-codetime export <csv|json|ics> [days]",
+    'cli.export_usage' => "Gebruik: candy-codetime export <csv|json|ics> [days | from [to]]",
     'cli.export_invalid_format' => "candy-codetime: export: ongeldig formaat (gebruik csv, json of ics)",
+    'cli.export_bad_date' => 'candy-codetime: {command}: ongeldige datum "{value}" - verwacht YYYY-MM of YYYY-MM-DD',
+    'cli.export_window_too_large' => 'candy-codetime: {command}: het venster beslaat meer dan {max} dagen',
+    'cli.export_missing_filter' => 'candy-codetime: {flag} heeft een waarde nodig na het = teken',
     'cli.gaps_no_data' => "Geen gaten gevonden.",
     'cli.gaps_header' => "Niet-vastgelegde tijdsgaten:",
     'cli.gaps_entry' => "  {start} – {end}  ({seconds}s untracked)",

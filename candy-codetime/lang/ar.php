@@ -10,8 +10,8 @@ declare(strict_types=1);
 
 return [
     'cli.entry_pushed' => 'تم تسجيل {duration}s من {project} ({language})',
-    'cli.usage' => "الاستخدام: candy-codetime [--backend=file|sqlite] <command> [args]\n\nالأوامر:\n  dashboard              بدء لوحة التتبع TUI (يقرأ الواجهة الخلفية المحددة)\n  push                   [<project> <language>] <file> [duration] [tags] | --  تسجيل نبضة\n  milestone              add [name] [description] | list  إدارة الإنجازات (sqlite فقط)\n  export                 <csv|json|ics> [days]  تصدير النبضات (7 أيام افتراضيًا)\n  gaps                   [days]  عرض فترات الفراغ غير المتتبَّعة 300 ثانية أو أكثر (7 أيام افتراضيًا)\n  backup                 أرشفة ملفات أقدم من 30 يومًا (نسخ فقط؛ لا حذف أبدًا)\n  help, --help, -h       عرض هذا الاستخدام\n  --version, -v          طباعة الإصدار\n\nالخيارات:\n  --backend=file|sqlite  واجهة تخزين البيانات لـ push/export/gaps/dashboard (افتراضيًا: file)\n  --time=<unix>          push: سجّل النبض عند هذه الثواني يونكس بدل الآن\n  --sqlite               backup: أرشفة قاعدة بيانات SQLite عبر VACUUM INTO (نسخة آمنة من الأعطال)\n  --theme=<name>         لوحة: استخدم سمة ملونة مسماة (default, light, dracula, solarized, gruvbox, high-contrast)
-  CANDY_CODETIME_THEME   نفس الاختيار كمتغير بيئة (الراية أعلى أولوية)\n  CANDY_CODETIME_DIR     دليل البيانات (افتراضيًا: \$XDG_DATA_HOME/candy-codetime، وإلا \$HOME/.local/share/candy-codetime، أو ./.local/share/candy-codetime عند عدم ضبط HOME)",
+    'cli.usage' => "الاستخدام: candy-codetime [--backend=file|sqlite] <command> [args]\n\nالأوامر:\n  dashboard              بدء لوحة التتبع TUI (يقرأ الواجهة الخلفية المحددة)\n  push                   [<project> <language>] <file> [duration] [tags] | --  تسجيل نبضة\n  milestone              add [name] [description] | list  إدارة الإنجازات (sqlite فقط)\n  export                 <csv|json|ics> [days | from [to]]  تصدير النبضات (7 أيام افتراضيًا)\n  gaps                   [days | from [to]]  عرض فترات الفراغ غير المتتبَّعة 300 ثانية أو أكثر (7 أيام افتراضيًا)\n  backup                 أرشفة ملفات أقدم من 30 يومًا (نسخ فقط؛ لا حذف أبدًا)\n  help, --help, -h       عرض هذا الاستخدام\n  --version, -v          طباعة الإصدار\n\nالخيارات:\n  --backend=file|sqlite  واجهة تخزين البيانات لـ push/export/gaps/dashboard (افتراضيًا: file)\n  --time=<unix>          push: سجّل النبض عند هذه الثواني يونكس بدل الآن\n  --sqlite               backup: أرشفة قاعدة بيانات SQLite عبر VACUUM INTO (نسخة آمنة من الأعطال)\n  --theme=<name>         لوحة: استخدم سمة ملونة مسماة (default, light, dracula, solarized, gruvbox, high-contrast)
+  CANDY_CODETIME_THEME   نفس الاختيار كمتغير بيئة (الراية أعلى أولوية)\n  --project=<name>       تصدير/فجوات: احتفظ بنبضات هذا المشروع فقط\n  --tag=<label>          تصدير/فجوات: احتفظ بنبضات هذا الوسم فقط\n  CANDY_CODETIME_DIR     دليل البيانات (افتراضيًا: \$XDG_DATA_HOME/candy-codetime، وإلا \$HOME/.local/share/candy-codetime، أو ./.local/share/candy-codetime عند عدم ضبط HOME)",
     'cli.push_usage' => 'الاستخدام: candy-codetime push [<project> <language>] <file> [duration] [tags] [--time=<unix>] | candy-codetime push -- (دفعة JSON من stdin)',
     'cli.push_missing_args' => "candy-codetime: push: الوسائط المطلوبة مفقودة (project, language, file)",
     'cli.push_ignored' => "push: تطابق {file} مع .sugartrackignore — تم تخطيه",
@@ -40,8 +40,11 @@ return [
     'cli.milestone_entry' => "  {date}  {name}  {description}",
     'cli.milestone_sqlite_notice' => 'candy-codetime: علامة: {name} حُفظت في تخزين sqlite - مخزن الملفات لا يحمل علامات وأُنشئت قاعدته هنا؛ تعرض اللوحة العلامات بـ --backend=sqlite',
 
-    'cli.export_usage' => "الاستخدام: candy-codetime export <csv|json|ics> [days]",
+    'cli.export_usage' => "الاستخدام: candy-codetime export <csv|json|ics> [days | from [to]]",
     'cli.export_invalid_format' => "candy-codetime: export: صيغة غير صالحة (استخدم csv أو json أو ics)",
+    'cli.export_bad_date' => 'candy-codetime: {command}: تاريخ غير صالح "{value}" - المتوقع YYYY-MM أو YYYY-MM-DD',
+    'cli.export_window_too_large' => 'candy-codetime: {command}: تتجاوز النافذة {max} يومًا',
+    'cli.export_missing_filter' => 'candy-codetime: {flag} تحتاج قيمة بعد علامة التساوي',
     'cli.gaps_no_data' => "لم يتم العثور على فترات فراغ.",
     'cli.gaps_header' => "فترات زمنية غير متتبَّعة:",
     'cli.gaps_entry' => "  {start} – {end}  ({seconds}s untracked)",

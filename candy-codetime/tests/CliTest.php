@@ -724,16 +724,19 @@ final class CliTest extends TestCase
     public function testANonNumericDaysCountIsRefusedNotCoerced(): void
     {
         // (int) "banana" used to be 0, which the clamp rounded up to one
-        // silent day; the push duration door's law must cover [days] too.
+        // silent day; the push duration door's law must cover the window
+        // slots too. CT-S41 moved the first slot to the date door: a junk
+        // value is refused by name as a bad date (re-pin disclosed in the
+        // commit), and whole digits still take the legacy days path.
         $export = $this->runCli(['export', 'json', 'banana']);
         $this->assertSame(1, $export['exit'], $export['stdout'] . $export['stderr']);
-        $this->assertStringContainsString('whole number', $export['stderr']);
+        $this->assertStringContainsString('bad date', $export['stderr']);
         $this->assertStringContainsString('banana', $export['stderr']);
         $this->assertSame('', $export['stdout'], 'a refused count must export nothing');
 
         $gaps = $this->runCli(['gaps', 'banana']);
         $this->assertSame(1, $gaps['exit'], $gaps['stdout'] . $gaps['stderr']);
-        $this->assertStringContainsString('whole number', $gaps['stderr']);
+        $this->assertStringContainsString('bad date', $gaps['stderr']);
         $this->assertStringContainsString('banana', $gaps['stderr']);
         $this->assertSame('', $gaps['stdout'], 'a refused count must print no report');
     }
@@ -980,6 +983,130 @@ final class CliTest extends TestCase
         } finally {
             chmod($allow, 0644);
         }
+    }
+
+    // ---- CT-S41 (finding 095): dated windows and row filters.
+
+    private function seedWindowDays(): void
+    {
+        foreach ([
+            ['2025-05-31', 'may-proj', 'php'],
+            ['2025-06-15', 'june-proj', 'js'],
+            ['2025-07-01', 'july-proj', 'php'],
+        ] as [$day, $project, $language]) {
+            $beat = json_encode([
+                'time' => strtotime($day . ' 12:00:00'),
+                'project' => $project,
+                'language' => $language,
+                'file' => '/srv/' . $project . '.php',
+                'duration' => 60,
+                'tags' => $project === 'june-proj' ? ['work', 'review'] : [],
+            ], JSON_THROW_ON_ERROR);
+            file_put_contents($this->dataDir . '/' . $day . '.jsonl', $beat . "\n");
+        }
+    }
+
+    public function testADatedWindowExportsOnlyItsRowsAndBothBackendsAgreeByteWise(): void
+    {
+        $this->seedWindowDays();
+        $file = $this->runCli(['export', 'json', '2025-06-01', '2025-06-30']);
+        self::assertSame(0, $file['exit'], $file['stderr']);
+        self::assertStringContainsString('june-proj', $file['stdout']);
+        self::assertStringNotContainsString('may-proj', $file['stdout']);
+        self::assertStringNotContainsString('july-proj', $file['stdout']);
+
+        // Same window through a month form: 2025-06 expands to the month.
+        $month = $this->runCli(['export', 'json', '2025-06', '2025-06']);
+        self::assertSame($file['stdout'], $month['stdout'], 'month form agrees with explicit bounds');
+
+        // A lone FROM runs through today: June seed plus July, May excluded.
+        $open = $this->runCli(['export', 'json', '2025-06']);
+        self::assertStringContainsString('june-proj', $open['stdout']);
+        self::assertStringContainsString('july-proj', $open['stdout']);
+        self::assertStringNotContainsString('may-proj', $open['stdout']);
+
+        // The sqlite leg answers the identical bytes for the identical rows.
+        $sqliteDir = $this->dataDir . '-sqlite';
+        mkdir($sqliteDir, 0755, true);
+        $env = ['CANDY_CODETIME_DIR' => $sqliteDir];
+        foreach ([['2025-05-31', 'may-proj'], ['2025-06-15', 'june-proj'], ['2025-07-01', 'july-proj']] as [$day, $project]) {
+            $push = $this->runCli([
+                '--backend=sqlite', 'push', $project, $project === 'june-proj' ? 'js' : 'php',
+                '/srv/' . $project . '.php', '60',
+                $project === 'june-proj' ? 'work,review' : '',
+                '--time=' . strtotime($day . ' 12:00:00'),
+            ], null, $env);
+            self::assertSame(0, $push['exit'], $push['stderr']);
+        }
+        $sqlite = $this->runCli(['--backend=sqlite', 'export', 'json', '2025-06-01', '2025-06-30'], null, $env);
+        self::assertSame(0, $sqlite['exit'], $sqlite['stderr']);
+        self::assertSame($file['stdout'], $sqlite['stdout'], 'both backends agree on the window');
+        self::assertStringContainsString('work', $sqlite['stdout'], 'the June row carries its tags');
+
+        foreach (array_merge(glob($sqliteDir . '/*') ?: [], glob($sqliteDir . '/.*') ?: []) as $f) {
+            if (is_file($f)) {
+                unlink($f);
+            }
+        }
+        @rmdir($sqliteDir);
+    }
+
+    public function testBadDatesAreRefusedByNameAndOversizedWindowsWithTheirs(): void
+    {
+        $this->seedWindowDays();
+        foreach (['2024-13-01', 'garbage', '2025-06-31'] as $bad) {
+            $res = $this->runCli(['export', 'json', $bad]);
+            self::assertSame(1, $res['exit'], $bad);
+            self::assertStringContainsString('bad date', $res['stderr']);
+            self::assertStringContainsString($bad, $res['stderr']);
+        }
+        $backwards = $this->runCli(['export', 'json', '2025-07-01', '2025-06-01']);
+        self::assertSame(1, $backwards['exit']);
+        self::assertStringContainsString('bad date', $backwards['stderr']);
+
+        $huge = $this->runCli(['export', 'json', '2000-01', '2026-12']);
+        self::assertSame(1, $huge['exit'], $huge['stderr']);
+        self::assertStringContainsString('spans more than 3660', $huge['stderr']);
+    }
+
+    public function testProjectAndTagFiltersKeepExactlyTheirRows(): void
+    {
+        $this->seedWindowDays();
+        $project = $this->runCli(['export', 'json', '2025-05', '2025-07', '--project=june-proj']);
+        self::assertSame(0, $project['exit'], $project['stderr']);
+        self::assertStringContainsString('june-proj', $project['stdout']);
+        self::assertStringNotContainsString('may-proj', $project['stdout']);
+        self::assertStringNotContainsString('july-proj', $project['stdout']);
+
+        $tagged = $this->runCli(['export', 'json', '2025-05', '2025-07', '--tag=work']);
+        self::assertSame($project['stdout'], $tagged['stdout'], 'the only work-tagged row is the June one');
+
+        $untagged = $this->runCli(['export', 'csv', '2025-05', '2025-07', '--tag=nope']);
+        self::assertSame(0, $untagged['exit'], $untagged['stderr']);
+        self::assertSame('time,project,language,file,duration,tags', trim($untagged['stdout']), 'header only');
+
+        $empty = $this->runCli(['export', 'json', '--project=']);
+        self::assertSame(1, $empty['exit'], $empty['stderr']);
+        self::assertStringContainsString('needs a value', $empty['stderr']);
+    }
+
+    public function testGapsReadsTheSameWindowAndFilters(): void
+    {
+        $this->seedWindowDays();
+        $june = $this->runCli(['gaps', '2025-06', '2025-06']);
+        self::assertSame(0, $june['exit'], $june['stderr']);
+        self::assertStringContainsString('No gaps', $june['stdout'], 'one row in the window has no neighbour');
+
+        $span = $this->runCli(['gaps', '2025-05', '2025-07']);
+        self::assertSame(0, $span['exit'], $span['stderr']);
+        // Three in-window beats -> exactly the two adjacent-pair gaps.
+        self::assertSame(2, substr_count($span['stdout'], chr(226) . chr(128) . chr(147)));
+        self::assertStringContainsString('May 31', $span['stdout']);
+        self::assertStringNotContainsString('Jun 15 00:01', substr($span['stdout'], 0, strpos($span['stdout'], 'Jun 15 00:01') ?: PHP_INT_MAX) , 'first gap is May-to-June');
+
+        $tagged = $this->runCli(['gaps', '2025-05', '2025-07', '--tag=review']);
+        self::assertSame(0, $tagged['exit'], $tagged['stderr']);
+        self::assertStringContainsString('No gaps', $tagged['stdout'], 'one tagged row cannot open a gap');
     }
 
     // ---- CT-S39 (finding 059): the error-prefix policy.

@@ -10,8 +10,8 @@ declare(strict_types=1);
 
 return [
     'cli.entry_pushed' => 'zaznamenáno {duration}s projektu {project} ({language})',
-    'cli.usage' => "Použití: candy-codetime [--backend=file|sqlite] <command> [args]\n\nPříkazy:\n  dashboard              Spustí panel TUI (načítá vybraný backend)\n  push                   [<project> <language>] <file> [duration] [tags] | --  Zaznamenat heartbeat\n  milestone              add [name] [description] | list  Spravovat milníky (pouze sqlite)\n  export                 <csv|json|ics> [days]  Exportovat heartbeats (výchozí 7 dní)\n  gaps                   [days]  Zobrazit nesledované mezery alespoň 300 sekund (výchozí 7 dní)\n  backup                 Archivovat soubory starší než 30 dní (kopíruje; nikdy nemaže)\n  help, --help, -h       Zobrazit toto použití\n  --version, -v          Vytisknout verzi\n\nMožnosti:\n  --backend=file|sqlite  Backend úložiště pro push/export/gaps/dashboard (výchozí: file)\n  --time=<unix>          push: zaznamenat tep v těchto unixových sekundách místo teď\n  --sqlite               backup: archivovat databázi SQLite pomocí VACUUM INTO (bezpečná kopie)\n  --theme=<name>         dashboard: malujte pojmenovanou paletou (default, light, dracula, solarized, gruvbox, high-contrast)
-  CANDY_CODETIME_THEME   stejná volba jako proměnná prostředí (příkazová volba má přednost)\n  CANDY_CODETIME_DIR     Datový adresář (výchozí: \$XDG_DATA_HOME/candy-codetime, jinak \$HOME/.local/share/candy-codetime, nebo ./.local/share/candy-codetime když HOME není nastaven)",
+    'cli.usage' => "Použití: candy-codetime [--backend=file|sqlite] <command> [args]\n\nPříkazy:\n  dashboard              Spustí panel TUI (načítá vybraný backend)\n  push                   [<project> <language>] <file> [duration] [tags] | --  Zaznamenat heartbeat\n  milestone              add [name] [description] | list  Spravovat milníky (pouze sqlite)\n  export                 <csv|json|ics> [days | from [to]]  Exportovat heartbeats (výchozí 7 dní)\n  gaps                   [days | from [to]]  Zobrazit nesledované mezery alespoň 300 sekund (výchozí 7 dní)\n  backup                 Archivovat soubory starší než 30 dní (kopíruje; nikdy nemaže)\n  help, --help, -h       Zobrazit toto použití\n  --version, -v          Vytisknout verzi\n\nMožnosti:\n  --backend=file|sqlite  Backend úložiště pro push/export/gaps/dashboard (výchozí: file)\n  --time=<unix>          push: zaznamenat tep v těchto unixových sekundách místo teď\n  --sqlite               backup: archivovat databázi SQLite pomocí VACUUM INTO (bezpečná kopie)\n  --theme=<name>         dashboard: malujte pojmenovanou paletou (default, light, dracula, solarized, gruvbox, high-contrast)
+  CANDY_CODETIME_THEME   stejná volba jako proměnná prostředí (příkazová volba má přednost)\n  --project=<name>       export/mezery: ponechte pouze záznamy tohoto projektu\n  --tag=<label>          export/mezery: ponechte pouze záznamy s tímto štítkem\n  CANDY_CODETIME_DIR     Datový adresář (výchozí: \$XDG_DATA_HOME/candy-codetime, jinak \$HOME/.local/share/candy-codetime, nebo ./.local/share/candy-codetime když HOME není nastaven)",
     'cli.push_usage' => 'Použití: candy-codetime push [<project> <language>] <file> [duration] [tags] [--time=<unix>] | candy-codetime push -- (dávka JSON řádků ze stdin)',
     'cli.push_missing_args' => "candy-codetime: push: chybí povinné argumenty (project, language, file)",
     'cli.push_ignored' => "push: {file} odpovídá .sugartrackignore — přeskočeno",
@@ -40,8 +40,11 @@ return [
     'cli.milestone_entry' => "  {date}  {name}  {description}",
     'cli.milestone_sqlite_notice' => 'candy-codetime: milník: {name} uložen v backendu sqlite - souborový sklad nemůže obsahovat milníky, jeho databáze byla vytvořena zde; dashboard je zobrazí s --backend=sqlite',
 
-    'cli.export_usage' => "Použití: candy-codetime export <csv|json|ics> [days]",
+    'cli.export_usage' => "Použití: candy-codetime export <csv|json|ics> [days | from [to]]",
     'cli.export_invalid_format' => "candy-codetime: export: neplatný formát (použijte csv, json nebo ics)",
+    'cli.export_bad_date' => 'candy-codetime: {command}: neplatné datum "{value}" - očekáváno YYYY-MM nebo YYYY-MM-DD',
+    'cli.export_window_too_large' => 'candy-codetime: {command}: okno zahrnuje více než {max} dnů',
+    'cli.export_missing_filter' => 'candy-codetime: {flag} vyžaduje hodnotu za rovnítkem',
     'cli.gaps_no_data' => "Nebyly nalezeny žádné mezery.",
     'cli.gaps_header' => "Nesledované časové mezery:",
     'cli.gaps_entry' => "  {start} – {end}  ({seconds}s untracked)",

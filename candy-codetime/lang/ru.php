@@ -10,8 +10,8 @@ declare(strict_types=1);
 
 return [
     'cli.entry_pushed' => 'записано {duration}s: {project} ({language})',
-    'cli.usage' => "Использование: candy-codetime [--backend=file|sqlite] <command> [args]\n\nКоманды:\n  dashboard              Запустить TUI-дашборд (читает выбранный бэкенд)\n  push                   [<project> <language>] <file> [duration] [tags] | --  Записать heartbeat\n  milestone              add [name] [description] | list  Управление вехами (только sqlite)\n  export                 <csv|json|ics> [days]  Экспортировать heartbeats (по умолчанию 7 дней)\n  gaps                   [days]  Показать неотслеженные промежутки не менее 300 секунд (по умолчанию 7 дней)\n  backup                 Архивировать файлы старше 30 дней (копирует; никогда не удаляет)\n  help, --help, -h       Показать это использование\n  --version, -v          Вывести версию\n\nПараметры:\n  --backend=file|sqlite  Backend хранения для push/export/gaps/dashboard (по умолчанию: file)\n  --time=<unix>          push: записать событие на эти секунды unix, а не сейчас\n  --sqlite               backup: архивировать базу SQLite командой VACUUM INTO (надёжная копия)\n  --theme=<name>         панель: рисовать именованной палитрой (default, light, dracula, solarized, gruvbox, high-contrast)
-  CANDY_CODETIME_THEME   тот же выбор через переменную окружения (флаг важнее)\n  CANDY_CODETIME_DIR     Каталог данных (по умолчанию: \$XDG_DATA_HOME/candy-codetime, иначе \$HOME/.local/share/candy-codetime, или ./.local/share/candy-codetime если HOME не задан)",
+    'cli.usage' => "Использование: candy-codetime [--backend=file|sqlite] <command> [args]\n\nКоманды:\n  dashboard              Запустить TUI-дашборд (читает выбранный бэкенд)\n  push                   [<project> <language>] <file> [duration] [tags] | --  Записать heartbeat\n  milestone              add [name] [description] | list  Управление вехами (только sqlite)\n  export                 <csv|json|ics> [days | from [to]]  Экспортировать heartbeats (по умолчанию 7 дней)\n  gaps                   [days | from [to]]  Показать неотслеженные промежутки не менее 300 секунд (по умолчанию 7 дней)\n  backup                 Архивировать файлы старше 30 дней (копирует; никогда не удаляет)\n  help, --help, -h       Показать это использование\n  --version, -v          Вывести версию\n\nПараметры:\n  --backend=file|sqlite  Backend хранения для push/export/gaps/dashboard (по умолчанию: file)\n  --time=<unix>          push: записать событие на эти секунды unix, а не сейчас\n  --sqlite               backup: архивировать базу SQLite командой VACUUM INTO (надёжная копия)\n  --theme=<name>         панель: рисовать именованной палитрой (default, light, dracula, solarized, gruvbox, high-contrast)
+  CANDY_CODETIME_THEME   тот же выбор через переменную окружения (флаг важнее)\n  --project=<name>       export/перерывы: оставить только записи этого проекта\n  --tag=<label>          export/перерывы: оставить только записи с этой меткой\n  CANDY_CODETIME_DIR     Каталог данных (по умолчанию: \$XDG_DATA_HOME/candy-codetime, иначе \$HOME/.local/share/candy-codetime, или ./.local/share/candy-codetime если HOME не задан)",
     'cli.push_usage' => 'Использование: candy-codetime push [<project> <language>] <file> [duration] [tags] [--time=<unix>] | candy-codetime push -- (поток JSON-строк из stdin)',
     'cli.push_missing_args' => "candy-codetime: push: отсутствуют обязательные аргументы (project, language, file)",
     'cli.push_ignored' => "push: {file} совпал с .sugartrackignore — пропущено",
@@ -40,8 +40,11 @@ return [
     'cli.milestone_entry' => "  {date}  {name}  {description}",
     'cli.milestone_sqlite_notice' => 'candy-codetime: веха: {name} сохранена в sqlite-бэкенде - файловое хранилище не поддерживает вехи, его база данных создана здесь; дашборд показывает их с --backend=sqlite',
 
-    'cli.export_usage' => "Использование: candy-codetime export <csv|json|ics> [days]",
+    'cli.export_usage' => "Использование: candy-codetime export <csv|json|ics> [days | from [to]]",
     'cli.export_invalid_format' => "candy-codetime: export: недопустимый формат (используйте csv, json или ics)",
+    'cli.export_bad_date' => 'candy-codetime: {command}: недопустимая дата "{value}" - ожидалось ГГГГ-ММ или ГГГГ-ММ-ДД',
+    'cli.export_window_too_large' => 'candy-codetime: {command}: окно охватывает более {max} дней',
+    'cli.export_missing_filter' => 'candy-codetime: {flag} требует значение после знака равенства',
     'cli.gaps_no_data' => "Промежутки не найдены.",
     'cli.gaps_header' => "Неотслеженные промежутки:",
     'cli.gaps_entry' => "  {start} – {end}  ({seconds}s untracked)",

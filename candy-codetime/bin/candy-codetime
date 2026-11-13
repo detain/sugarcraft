@@ -149,6 +149,11 @@ $timeNext = false;
 // explicit flag outranks it, exactly like --backend.
 $themeOpt = null;
 $themeNext = false;
+// CT-S41 (finding 095): --project=/--tag= filter the export and gaps reads.
+// Equals form only (the documented shape); the values ride the positional
+// scan untouched for every other command.
+$projectFilter = null;
+$tagFilter = null;
 $envTheme = getenv('CANDY_CODETIME_THEME');
 if (is_string($envTheme) && $envTheme !== '') {
     $themeOpt = $envTheme;
@@ -196,12 +201,26 @@ foreach (array_slice($argv, 1) as $arg) {
         $themeOpt = substr($arg, strlen('--theme='));
         continue;
     }
+    if (str_starts_with($arg, '--project=')) {
+        $projectFilter = substr($arg, strlen('--project='));
+        continue;
+    }
+    if (str_starts_with($arg, '--tag=')) {
+        $tagFilter = substr($arg, strlen('--tag='));
+        continue;
+    }
     $positional[] = $arg;
 }
 if ($backendNext) {
     // `--backend` as the final argument: the value never arrived.
     fwrite(STDERR, Lang::t('cli.backend_invalid') . "\n");
     exit(1);
+}
+foreach ([['--project', $projectFilter], ['--tag', $tagFilter]] as [$filterFlag, $filterValue]) {
+    if ($filterValue !== null && trim($filterValue) === '') {
+        fwrite(STDERR, Lang::t('cli.export_missing_filter', ['flag' => $filterFlag]) . "\n");
+        exit(1);
+    }
 }
 if ($timeNext) {
     fwrite(STDERR, Lang::t('cli.push_invalid_time', ['value' => '']) . "\n");
@@ -670,17 +689,71 @@ if ($cmd === 'milestone') {
     exit(1);
 }
 
-if ($cmd === 'export') {
-    $format = $positional[1] ?? null;
-    // Same law as the push duration door: a non-numeric count is refused, not
-    // silently coerced to 0 (which the clamp would then round up to one day).
-    $daysRaw = $positional[2] ?? null;
-    if ($daysRaw !== null && !ctype_digit($daysRaw)) {
-        fwrite(STDERR, Lang::t('cli.invalid_days', ['value' => Sanitize::untrusted($daysRaw)]) . "\n");
+// CT-S41 (finding 095): one window resolver shared by export and gaps. A
+// first slot of whole digits keeps the legacy trailing-days shape
+// (today-(n-1)..today, clamped); otherwise the slots are ISO dates
+// (YYYY-MM or YYYY-MM-DD) that answer 'June 2025' (from only = through
+// today) and any explicit closed window. Bad shapes are refused by name,
+// never coerced — the same door law as durations and day counts.
+$resolveWindow = static function (array $slots, string $command): array {
+    $today = new \DateTimeImmutable('today');
+    $first = $slots[0] ?? null;
+    if ($first === null) {
+        return [$today->modify('-6 days'), $today];
+    }
+    if (ctype_digit($first)) {
+        $days = Store::clampRangeDays((int) $first);
+        return [$today->modify('-' . ($days - 1) . ' days'), $today];
+    }
+    $parse = static function (string $value, bool $upper) use ($command): \DateTimeImmutable {
+        if (preg_match('/^(\d{4})-(\d{2})(?:-(\d{2}))?$/', $value, $m) === 1
+            && checkdate((int) $m[2], (int) (($m[3] ?? '') === '' ? 1 : $m[3]), (int) $m[1])) {
+            $day = ($m[3] ?? '') === '' ? '01' : sprintf('%02d', (int) $m[3]);
+            $start = new \DateTimeImmutable(sprintf('%04d-%02d-%s 00:00:00', (int) $m[1], (int) $m[2], $day));
+            if (($m[3] ?? '') !== '') {
+                return $upper ? $start->modify('+1 day') : $start;
+            }
+            return $upper ? $start->modify('+1 month') : $start;
+        }
+        fwrite(STDERR, Lang::t('cli.export_bad_date', ['command' => $command, 'value' => Sanitize::untrusted($value)]) . "\n");
+        exit(1);
+    };
+    $fromDay = $parse($first, false);
+    $toEdge = isset($slots[1]) && $slots[1] !== '' ? $parse((string) $slots[1], true) : $today->modify('+1 day');
+    if ($toEdge <= $fromDay) {
+        fwrite(STDERR, Lang::t('cli.export_bad_date', ['command' => $command, 'value' => Sanitize::untrusted((string) $slots[1])]) . "\n");
         exit(1);
     }
-    // Clamp to a sane ceiling so a huge $days can't walk a century of empty days.
-    $days = $daysRaw === null ? 7 : Store::clampRangeDays((int)$daysRaw);
+    $spanDays = intdiv($toEdge->getTimestamp() - $fromDay->getTimestamp() + 86399, 86400);
+    if ($spanDays > Store::MAX_RANGE_DAYS) {
+        fwrite(STDERR, Lang::t('cli.export_window_too_large', ['command' => $command, 'max' => Store::MAX_RANGE_DAYS]) . "\n");
+        exit(1);
+    }
+    return [$fromDay, $toEdge->modify('-1 second')];
+};
+
+// CT-S41: --project/--tag post-load filters. The SAME code path runs for
+// both backends, which is also what makes the file/sqlite parity claim
+// checkable: identical bytes out of identical rows in.
+$applyFilters = static function (array $beats, ?string $project, ?string $tag): array {
+    if ($project !== null) {
+        $beats = array_values(array_filter(
+            $beats,
+            static fn(Heartbeat $hb): bool => $hb->project === $project,
+        ));
+    }
+    if ($tag !== null) {
+        $beats = array_values(array_filter(
+            $beats,
+            static fn(Heartbeat $hb): bool => in_array($tag, $hb->tags, true),
+        ));
+    }
+    return $beats;
+};
+
+if ($cmd === 'export') {
+    $format = $positional[1] ?? null;
+    [$fromDay, $endDay] = $resolveWindow(array_slice($positional, 2), 'export');
 
     if ($format === null || !in_array($format, ['csv', 'json', 'ics'], true)) {
         fwrite(STDERR, Lang::t('cli.export_invalid_format') . "\n");
@@ -688,8 +761,6 @@ if ($cmd === 'export') {
         exit(1);
     }
 
-    $endDay = new \DateTimeImmutable('today');
-    $fromDay = $endDay->modify('-' . ($days - 1) . ' days');
     try {
         $beats = $backend === 'sqlite'
             ? $sqlite()->query(
@@ -700,6 +771,8 @@ if ($cmd === 'export') {
     } catch (\Throwable $e) {
         $storageError($e);
     }
+
+    $beats = $applyFilters($beats, $projectFilter, $tagFilter);
 
     $exporter = match ($format) {
         'csv' => new CsvExporter(),
@@ -723,18 +796,7 @@ if ($cmd === 'export') {
 }
 
 if ($cmd === 'gaps') {
-    // Same law as the push duration door: a non-numeric count is refused, not
-    // silently coerced to 0 (which the clamp would then round up to one day).
-    $daysRaw = $positional[1] ?? null;
-    if ($daysRaw !== null && !ctype_digit($daysRaw)) {
-        fwrite(STDERR, Lang::t('cli.invalid_days', ['value' => Sanitize::untrusted($daysRaw)]) . "\n");
-        exit(1);
-    }
-    // Clamp to a sane ceiling so a huge $days can't walk a century of empty days.
-    $days = $daysRaw === null ? 7 : Store::clampRangeDays((int)$daysRaw);
-
-    $endDay = new \DateTimeImmutable('today');
-    $fromDay = $endDay->modify('-' . ($days - 1) . ' days');
+    [$fromDay, $endDay] = $resolveWindow(array_slice($positional, 1), 'gaps');
     try {
         $beats = $backend === 'sqlite'
             ? $sqlite()->query(
@@ -745,6 +807,7 @@ if ($cmd === 'gaps') {
     } catch (\Throwable $e) {
         $storageError($e);
     }
+    $beats = $applyFilters($beats, $projectFilter, $tagFilter);
 
     $report = new GapsReport($beats);
     $gaps = $report->gaps();

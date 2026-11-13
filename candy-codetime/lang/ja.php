@@ -10,8 +10,8 @@ declare(strict_types=1);
 
 return [
     'cli.entry_pushed' => '{duration}s を記録: {project} ({language})',
-    'cli.usage' => "使用法: candy-codetime [--backend=file|sqlite] <command> [args]\n\nコマンド:\n  dashboard              TUI ダッシュボードを開始 (選択中のバックエンドを読み取ります)\n  push                   [<project> <language>] <file> [duration] [tags] | --  ハートビートを記録\n  milestone              add [name] [description] | list  マイルストーン管理 (sqlite のみ)\n  export                 <csv|json|ics> [days]  ハートビートをエクスポート (既定 7 日)\n  gaps                   [days]  300 秒以上の未追跡ギャップを表示 (既定 7 日)\n  backup                 30 日より古いデータファイルをアーカイブ (コピーのみ。削除しません)\n  help, --help, -h       この使用法を表示\n  --version, -v          バージョンを表示\n\nオプション:\n  --backend=file|sqlite  push/export/gaps/dashboard のストレージバックエンド (既定: file)\n  --time=<unix>          push: 現在ではなく指定の Unix 秒でハートビートを記録\n  --sqlite               backup: SQLite データベースを VACUUM INTO でアーカイブ (クラッシュセーフなスナップショット)\n  --theme=<name>         ダッシュボード: 名前付きパレットで描画 (default, light, dracula, solarized, gruvbox, high-contrast)
-  CANDY_CODETIME_THEME   同じ選択を環境変数で (フラグが優先)\n  CANDY_CODETIME_DIR     データディレクトリ (既定: \$XDG_DATA_HOME/candy-codetime、未設定なら \$HOME/.local/share/candy-codetime、HOME も未設定なら ./.local/share/candy-codetime)",
+    'cli.usage' => "使用法: candy-codetime [--backend=file|sqlite] <command> [args]\n\nコマンド:\n  dashboard              TUI ダッシュボードを開始 (選択中のバックエンドを読み取ります)\n  push                   [<project> <language>] <file> [duration] [tags] | --  ハートビートを記録\n  milestone              add [name] [description] | list  マイルストーン管理 (sqlite のみ)\n  export                 <csv|json|ics> [days | from [to]]  ハートビートをエクスポート (既定 7 日)\n  gaps                   [days | from [to]]  300 秒以上の未追跡ギャップを表示 (既定 7 日)\n  backup                 30 日より古いデータファイルをアーカイブ (コピーのみ。削除しません)\n  help, --help, -h       この使用法を表示\n  --version, -v          バージョンを表示\n\nオプション:\n  --backend=file|sqlite  push/export/gaps/dashboard のストレージバックエンド (既定: file)\n  --time=<unix>          push: 現在ではなく指定の Unix 秒でハートビートを記録\n  --sqlite               backup: SQLite データベースを VACUUM INTO でアーカイブ (クラッシュセーフなスナップショット)\n  --theme=<name>         ダッシュボード: 名前付きパレットで描画 (default, light, dracula, solarized, gruvbox, high-contrast)
+  CANDY_CODETIME_THEME   同じ選択を環境変数で (フラグが優先)\n  --project=<name>       export/gaps: このプロジェクトのハートビートのみ保持\n  --tag=<label>          export/gaps: このタグ付きのハートビートのみ保持\n  CANDY_CODETIME_DIR     データディレクトリ (既定: \$XDG_DATA_HOME/candy-codetime、未設定なら \$HOME/.local/share/candy-codetime、HOME も未設定なら ./.local/share/candy-codetime)",
     'cli.push_usage' => '使用法: candy-codetime push [<project> <language>] <file> [duration] [tags] [--time=<unix>] | candy-codetime push -- (stdin からの JSON 一括)',
     'cli.push_missing_args' => "candy-codetime: push: 必須引数が不足しています (project, language, file)",
     'cli.push_ignored' => "push: {file} は .sugartrackignore に一致したためスキップしました",
@@ -40,8 +40,11 @@ return [
     'cli.milestone_entry' => "  {date}  {name}  {description}",
     'cli.milestone_sqlite_notice' => 'candy-codetime: マイルストーン: {name} は sqlite バックエンドに保存しました - ファイルストアはマイルストーンを保存できないためここにデータベースを作成しました; ダッシュボードでは --backend=sqlite で表示します',
 
-    'cli.export_usage' => "使用法: candy-codetime export <csv|json|ics> [days]",
+    'cli.export_usage' => "使用法: candy-codetime export <csv|json|ics> [days | from [to]]",
     'cli.export_invalid_format' => "candy-codetime: export: 無効な形式 (csv、json または ics を使用)",
+    'cli.export_bad_date' => 'candy-codetime: {command}: 日付 "{value}" が不正です - YYYY-MM または YYYY-MM-DD を想定',
+    'cli.export_window_too_large' => 'candy-codetime: {command}: ウィンドウが {max} 日を超えています',
+    'cli.export_missing_filter' => 'candy-codetime: {flag} は等号の後に値が必要です',
     'cli.gaps_no_data' => "ギャップは見つかりませんでした。",
     'cli.gaps_header' => "未追跡の時間ギャップ:",
     'cli.gaps_entry' => "  {start} – {end}  ({seconds}s untracked)",

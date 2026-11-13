@@ -10,8 +10,8 @@ declare(strict_types=1);
 
 return [
     'cli.entry_pushed' => '{duration}s kaydedildi: {project} ({language})',
-    'cli.usage' => "Kullanım: candy-codetime [--backend=file|sqlite] <command> [args]\n\nKomutlar:\n  dashboard              TUI panelini başlat (seçili arka ucu okur)\n  push                   [<project> <language>] <file> [duration] [tags] | --  Kalp atışı kaydet\n  milestone              add [name] [description] | list  Kilometre taşlarını yönet (yalnızca sqlite)\n  export                 <csv|json|ics> [days]  Kalp atışlarını dışa aktar (varsayılan 7 gün)\n  gaps                   [days]  300 saniye ve üzeri izlenmeyen boşlukları göster (varsayılan 7 gün)\n  backup                 30 günden eski veri dosyalarını arşivle (yalnızca kopyalar; hiçbir zaman silmez)\n  help, --help, -h       Bu kullanımı göster\n  --version, -v          Sürümü yazdır\n\nSeçenekler:\n  --backend=file|sqlite  push/export/gaps/dashboard için depolama arka ucu (varsayılan: file)\n  --time=<unix>          push: kalp atışını şimdi yerine bu unix saniyesinde kaydet\n  --sqlite               backup: SQLite veritabanını VACUUM INTO ile arşivle (çöküntüye dayanıklı kopya)\n  --theme=<name>         panel: adlandırılmış bir paletle boya (default, light, dracula, solarized, gruvbox, high-contrast)
-  CANDY_CODETIME_THEME   aynı seçim ortam değişkeni olarak (bayrak önceliklidir)\n  CANDY_CODETIME_DIR     Veri dizini (varsayılan: \$XDG_DATA_HOME/candy-codetime, değilse \$HOME/.local/share/candy-codetime, HOME de ayarlanmamışsa ./.local/share/candy-codetime)",
+    'cli.usage' => "Kullanım: candy-codetime [--backend=file|sqlite] <command> [args]\n\nKomutlar:\n  dashboard              TUI panelini başlat (seçili arka ucu okur)\n  push                   [<project> <language>] <file> [duration] [tags] | --  Kalp atışı kaydet\n  milestone              add [name] [description] | list  Kilometre taşlarını yönet (yalnızca sqlite)\n  export                 <csv|json|ics> [days | from [to]]  Kalp atışlarını dışa aktar (varsayılan 7 gün)\n  gaps                   [days | from [to]]  300 saniye ve üzeri izlenmeyen boşlukları göster (varsayılan 7 gün)\n  backup                 30 günden eski veri dosyalarını arşivle (yalnızca kopyalar; hiçbir zaman silmez)\n  help, --help, -h       Bu kullanımı göster\n  --version, -v          Sürümü yazdır\n\nSeçenekler:\n  --backend=file|sqlite  push/export/gaps/dashboard için depolama arka ucu (varsayılan: file)\n  --time=<unix>          push: kalp atışını şimdi yerine bu unix saniyesinde kaydet\n  --sqlite               backup: SQLite veritabanını VACUUM INTO ile arşivle (çöküntüye dayanıklı kopya)\n  --theme=<name>         panel: adlandırılmış bir paletle boya (default, light, dracula, solarized, gruvbox, high-contrast)
+  CANDY_CODETIME_THEME   aynı seçim ortam değişkeni olarak (bayrak önceliklidir)\n  --project=<name>       export/boşluklar: yalnızca bu projenin kayıtlarını tut\n  --tag=<label>          export/boşluklar: yalnızca bu etiketi taşıyan kayıtları tut\n  CANDY_CODETIME_DIR     Veri dizini (varsayılan: \$XDG_DATA_HOME/candy-codetime, değilse \$HOME/.local/share/candy-codetime, HOME de ayarlanmamışsa ./.local/share/candy-codetime)",
     'cli.push_usage' => 'Kullanım: candy-codetime push [<project> <language>] <file> [duration] [tags] [--time=<unix>] | candy-codetime push -- (stdin üzerinden JSON satır yığını)',
     'cli.push_missing_args' => "candy-codetime: push: zorunlu argümanlar eksik (project, language, file)",
     'cli.push_ignored' => "push: {file} .sugartrackignore ile eşleşti — atlandı",
@@ -40,8 +40,11 @@ return [
     'cli.milestone_entry' => "  {date}  {name}  {description}",
     'cli.milestone_sqlite_notice' => 'candy-codetime: esen nokta: {name} sqlite arka ucuna kaydedildi - dosya deposu esen nokta tutamaz, veritabanı burada oluşturuldu; panel --backend=sqlite ile gösterir',
 
-    'cli.export_usage' => "Kullanım: candy-codetime export <csv|json|ics> [days]",
+    'cli.export_usage' => "Kullanım: candy-codetime export <csv|json|ics> [days | from [to]]",
     'cli.export_invalid_format' => "candy-codetime: export: geçersiz biçim (csv, json veya ics kullanın)",
+    'cli.export_bad_date' => 'candy-codetime: {command}: geçersiz tarih "{value}" - YYYY-MM veya YYYY-MM-DD bekleniyordu',
+    'cli.export_window_too_large' => 'candy-codetime: {command}: pencere {max} günden uzun bir aralığı kapsıyor',
+    'cli.export_missing_filter' => 'candy-codetime: {flag} eşitlik işaretinden sonra bir değer ister',
     'cli.gaps_no_data' => "Boşluk bulunamadı.",
     'cli.gaps_header' => "İzlenmeyen zaman boşlukları:",
     'cli.gaps_entry' => "  {start} – {end}  ({seconds}s untracked)",

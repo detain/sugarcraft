@@ -10,8 +10,8 @@ declare(strict_types=1);
 
 return [
     'cli.entry_pushed' => 'registrados {duration}s de {project} ({language})',
-    'cli.usage' => "Uso: candy-codetime [--backend=file|sqlite] <command> [args]\n\nComandos:\n  dashboard              Inicia o painel TUI (lê o backend selecionado)\n  push                   [<project> <language>] <file> [duration] [tags] | --  Registrar um heartbeat\n  milestone              add [name] [description] | list  Gerenciar marcos (apenas sqlite)\n  export                 <csv|json|ics> [days]  Exportar heartbeats (7 dias por padrão)\n  gaps                   [days]  Mostrar intervalos não rastreados de pelo menos 300 segundos (7 dias por padrão)\n  backup                 Arquivar dados com mais de 30 dias (copia; nunca exclui)\n  help, --help, -h       Mostrar este uso\n  --version, -v          Imprimir a versão\n\nOpções:\n  --backend=file|sqlite  Backend de armazenamento para push/export/gaps/dashboard (padrão: file)\n  --time=<unix>          push: registra o batimento nestes segundos unix, não agora\n  --sqlite               backup: arquive o banco de dados SQLite com VACUUM INTO (cópia à prova de falhas)\n  --theme=<name>         painel: pinte com uma paleta nomeada (default, light, dracula, solarized, gruvbox, high-contrast)
-  CANDY_CODETIME_THEME   a mesma escolha como variável de ambiente (um sinal prevalece)\n  CANDY_CODETIME_DIR     Diretório de dados (padrão: \$XDG_DATA_HOME/candy-codetime, senão \$HOME/.local/share/candy-codetime, ou ./.local/share/candy-codetime quando HOME não está definido)",
+    'cli.usage' => "Uso: candy-codetime [--backend=file|sqlite] <command> [args]\n\nComandos:\n  dashboard              Inicia o painel TUI (lê o backend selecionado)\n  push                   [<project> <language>] <file> [duration] [tags] | --  Registrar um heartbeat\n  milestone              add [name] [description] | list  Gerenciar marcos (apenas sqlite)\n  export                 <csv|json|ics> [days | from [to]]  Exportar heartbeats (7 dias por padrão)\n  gaps                   [days | from [to]]  Mostrar intervalos não rastreados de pelo menos 300 segundos (7 dias por padrão)\n  backup                 Arquivar dados com mais de 30 dias (copia; nunca exclui)\n  help, --help, -h       Mostrar este uso\n  --version, -v          Imprimir a versão\n\nOpções:\n  --backend=file|sqlite  Backend de armazenamento para push/export/gaps/dashboard (padrão: file)\n  --time=<unix>          push: registra o batimento nestes segundos unix, não agora\n  --sqlite               backup: arquive o banco de dados SQLite com VACUUM INTO (cópia à prova de falhas)\n  --theme=<name>         painel: pinte com uma paleta nomeada (default, light, dracula, solarized, gruvbox, high-contrast)
+  CANDY_CODETIME_THEME   a mesma escolha como variável de ambiente (um sinal prevalece)\n  --project=<name>       export/lacunas: mantenha somente os registros deste projeto\n  --tag=<label>          export/lacunas: mantenha somente os registros com esta etiqueta\n  CANDY_CODETIME_DIR     Diretório de dados (padrão: \$XDG_DATA_HOME/candy-codetime, senão \$HOME/.local/share/candy-codetime, ou ./.local/share/candy-codetime quando HOME não está definido)",
     'cli.push_usage' => 'Uso: candy-codetime push [<project> <language>] <file> [duration] [tags] [--time=<unix>] | candy-codetime push -- (lote de linhas JSON pelo stdin)',
     'cli.push_missing_args' => "candy-codetime: push: faltam argumentos obrigatórios (project, language, file)",
     'cli.push_ignored' => "push: {file} correspondeu a .sugartrackignore — ignorado",
@@ -40,8 +40,11 @@ return [
     'cli.milestone_entry' => "  {date}  {name}  {description}",
     'cli.milestone_sqlite_notice' => 'candy-codetime: marco: {name} salvo no backend sqlite - o repositório de arquivos não suporta marcos, o banco de dados foi criado aqui; o painel mostra os marcos com --backend=sqlite',
 
-    'cli.export_usage' => "Uso: candy-codetime export <csv|json|ics> [days]",
+    'cli.export_usage' => "Uso: candy-codetime export <csv|json|ics> [days | from [to]]",
     'cli.export_invalid_format' => "candy-codetime: export: formato inválido (use csv, json ou ics)",
+    'cli.export_bad_date' => 'candy-codetime: {command}: data inválida "{value}" - esperado YYYY-MM ou YYYY-MM-DD',
+    'cli.export_window_too_large' => 'candy-codetime: {command}: a janela abrange mais de {max} dias',
+    'cli.export_missing_filter' => 'candy-codetime: {flag} precisa de um valor após o sinal de igual',
     'cli.gaps_no_data' => "Nenhum intervalo encontrado.",
     'cli.gaps_header' => "Intervalos não rastreados:",
     'cli.gaps_entry' => "  {start} – {end}  ({seconds}s untracked)",
