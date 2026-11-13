@@ -12,7 +12,14 @@ namespace SugarCraft\Dashboard\Keys;
  * - Register key combinations to actions
  * - Handle key events and dispatch to actions
  * - Support for single keys and modifier combinations
- * - Priority-based action resolution
+ *
+ * Resolution semantics (finding sugar-dashboard-106 — the old docblock
+ * advertised "priority-based" resolution that never existed): a key first
+ * checks its specific registrations, then the onAny globals; per key the
+ * FIRST registration wins and later duplicates are shadowed — on() emits
+ * an error_log warning naming the shadow at registration time so the
+ * mistake is visible in the developer's log, not silently invisible inside
+ * a running PTY.
  *
  * Mirrors keymap handling from bubble-keymap but adapted
  * to PHP with wither-style immutable setters.
@@ -85,6 +92,12 @@ final class KeyMap implements \SugarCraft\Dashboard\Foundation\SizedItem
     /**
      * Register an action for a key combination.
      *
+     * The FIRST registration for a combination is the one handle() runs;
+     * registering a second action for the same combination shadows nothing
+     * that already fires — the newcomer never runs, and the shadowing is
+     * announced via error_log so a typo-collision is diagnosable instead
+     * of a silent unreachable entry (documented first-wins policy).
+     *
      * @param callable(Key): \SugarCraft\Dashboard\Foundation\Item $action
      */
     public function on(string $key, callable $action, bool $ctrl = false, bool $alt = false, bool $shift = false): self
@@ -93,9 +106,12 @@ final class KeyMap implements \SugarCraft\Dashboard\Foundation\SizedItem
         $keyObj = new Key($key, $ctrl, $alt, $shift);
         $keyString = $keyObj->toString();
 
-        if (!isset($clone->actions[$keyString])) {
-            $clone->actions[$keyString] = [];
+        if (($clone->actions[$keyString] ?? []) !== []) {
+            // Kept in the roster for introspection (registeredKeys()/off()
+            // see the combination), but unreachable through handle().
+            error_log("KeyMap: action for '{$keyString}' is already registered; the first registration wins and this one is shadowed (finding sugar-dashboard-106 policy: first-wins).");
         }
+
         $clone->actions[$keyString][] = new KeyAction($keyString, $action);
 
         return $clone;
@@ -104,13 +120,18 @@ final class KeyMap implements \SugarCraft\Dashboard\Foundation\SizedItem
     /**
      * Register a global action that fires on any key.
      *
-     * Global actions are checked after specific actions.
+     * Global actions are checked after specific actions; the FIRST global
+     * registration wins (later ones are shadowed, same first-wins policy
+     * as on()).
      *
      * @param callable(Key): \SugarCraft\Dashboard\Foundation\Item $action
      */
     public function onAny(callable $action): self
     {
         $clone = clone $this;
+        if ($clone->globalActions !== []) {
+            error_log('KeyMap: onAny() global already registered; the first one wins and this one is shadowed (first-wins policy).');
+        }
         $clone->globalActions[] = new KeyAction('any', $action);
         return $clone;
     }
@@ -132,24 +153,27 @@ final class KeyMap implements \SugarCraft\Dashboard\Foundation\SizedItem
     /**
      * Handle a key event and return the new state.
      *
+     * Specific registrations are checked before the onAny globals; per
+     * source only the FIRST registered action executes (first-wins policy
+     * in the class docblock) — the old foreach-over-roster shape implied
+     * iteration that could never reach entry two.
+     *
      * @return array{0:Item, 1:bool} [new content, whether a key was handled]
      */
     public function handle(Key $key): array
     {
         $keyString = $key->toString();
 
-        // Check for specific action
-        if (isset($this->actions[$keyString])) {
-            foreach ($this->actions[$keyString] as $action) {
-                $newContent = $action->execute($key);
-                return [$newContent, true];
-            }
+        // Check for specific action: first registration wins.
+        $specific = $this->actions[$keyString][0] ?? null;
+        if ($specific !== null) {
+            return [$specific->execute($key), true];
         }
 
-        // Check global actions
-        foreach ($this->globalActions as $action) {
-            $newContent = $action->execute($key);
-            return [$newContent, true];
+        // Check global actions: first registration wins, same policy.
+        $global = $this->globalActions[0] ?? null;
+        if ($global !== null) {
+            return [$global->execute($key), true];
         }
 
         // No action handled the key - return this keymap unchanged

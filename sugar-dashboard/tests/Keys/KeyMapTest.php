@@ -109,6 +109,80 @@ final class KeyMapTest extends TestCase
         $this->assertTrue($hit);
     }
 
+    /**
+     * Run $with with error_log redirected to a capture file (a
+     * first-wins shadow warning must be observable, not stderr folklore).
+     */
+    private function withErrorLogCaptured(callable $with): string
+    {
+        $file = tempnam(sys_get_temp_dir(), 'dashboard-keymap-log-');
+        $previous = ini_get('error_log');
+        ini_set('error_log', $file);
+        try {
+            $with();
+        } finally {
+            ini_set('error_log', $previous === false ? '' : $previous);
+        }
+        $log = (string) file_get_contents($file);
+        unlink($file);
+        return $log;
+    }
+
+    public function testFirstRegistrationPerKeyWinsAndShadowWarns(): void
+    {
+        $calls = [];
+        $km = KeyMap::new($this->makeContent())
+            ->on('a', function (Key $k) use (&$calls) {
+                $calls[] = 'first';
+                return $this->makeContent();
+            });
+
+        $shadowed = null;
+        $log = $this->withErrorLogCaptured(function () use ($km, &$calls, &$shadowed) {
+            $shadowed = $km->on('a', function (Key $k) use (&$calls) {
+                $calls[] = 'second';
+                return $this->makeContent();
+            });
+        });
+
+        // The shadowing is announced at the registration boundary, naming
+        // the policy (finding sugar-dashboard-106: silent unreachable
+        // duplicates were the bug, not the first-wins itself).
+        $this->assertStringContainsString('shadowed', $log);
+        $this->assertStringContainsString('first-wins', $log);
+
+        [$content, $handled] = $shadowed->handle(new Key('a'));
+        $this->assertTrue($handled);
+        $this->assertSame(['first'], $calls); // the newcomer never fires
+
+        // Introspection still sees the combination, and off() clears the
+        // whole roster entry shadow and all.
+        $this->assertTrue($shadowed->has('a'));
+        $this->assertTrue($shadowed->off('a')->has('a') === false);
+    }
+
+    public function testOnAnyShadowWarnsAndFirstGlobalWins(): void
+    {
+        $calls = [];
+        $km = KeyMap::new($this->makeContent())
+            ->onAny(function (Key $k) use (&$calls) {
+                $calls[] = 'g1';
+                return $this->makeContent();
+            });
+
+        $chained = null;
+        $log = $this->withErrorLogCaptured(function () use ($km, &$calls, &$chained) {
+            $chained = $km->onAny(function (Key $k) use (&$calls) {
+                $calls[] = 'g2';
+                return $this->makeContent();
+            });
+        });
+
+        $this->assertStringContainsString('shadowed', $log);
+        $chained->handle(new Key('z'));
+        $this->assertSame(['g1'], $calls);
+    }
+
     public function testHasReturnsTrueForRegistered(): void
     {
         $km = KeyMap::new($this->makeContent())->on('b', fn(Key $k) => $this->makeContent());

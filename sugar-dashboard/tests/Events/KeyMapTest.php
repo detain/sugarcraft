@@ -330,17 +330,31 @@ final class KeyMapTest extends TestCase
             ->on('a', function () use (&$callOrder) {
                 $callOrder[] = 'first';
                 return Text::new('First');
-            })
-            ->on('a', function () use (&$callOrder) {
+            });
+
+        // D-115 (finding sugar-dashboard-106): the duplicate registration
+        // must WARN — the newcomer never runs (documented first-wins) and
+        // silently unreachable entries were the bug. Capture the boundary.
+        $logFile = tempnam(sys_get_temp_dir(), 'dashboard-keymap-');
+        $previous = ini_get('error_log');
+        ini_set('error_log', $logFile);
+        try {
+            $keymap = $keymap->on('a', function () use (&$callOrder) {
                 $callOrder[] = 'second';
                 return Text::new('Second');
             });
+        } finally {
+            ini_set('error_log', $previous === false ? '' : $previous);
+        }
+        $this->assertStringContainsString('shadowed', (string) file_get_contents($logFile));
+        unlink($logFile);
 
         $key = new Key('a');
         [$content, $handled] = $keymap->handle($key);
 
-        // First registered action should execute
+        // First registered action should execute — and only it.
         $this->assertStringContainsString('First', $content->render());
+        $this->assertSame(['first'], $callOrder);
     }
 
     public function testChainedOnCalls(): void
