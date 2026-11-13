@@ -27,6 +27,16 @@ The CLI examples below type the bare command; from a project root that means
 `vendor/bin/candy-ansi-inspect`, or put `vendor/bin` on your `PATH` (a
 `composer global require` installs it likewise).
 
+A self-contained phar is the other door: `tools/build-phar.php` seals the app
+plus its published `vendor/` into one file (`php -d phar.readonly=0
+tools/build-phar.php --out=dist/candy-ansi-inspect.phar`; the build refuses a
+linked-mode vendor or a dirty tree, so release artifacts always ship tested
+bytes, and the dev-channel CI build skips the source-tree gate only in its
+`--vendor=monorepo` dev mode). A downloaded archive — even renamed to drop the
+suffix — boots through its own frozen autoload and answers `--version` with
+the stamp it was built under; a checkout reports `dev-master` rather than
+inventing a semver for unreleased code.
+
 ## CLI
 
 ```sh
@@ -93,6 +103,7 @@ scripters:
 |------------------------------------------------------|----------|--------|-------------------------|
 | Readable file argument or piped stdin                | report   | stdout | **0**                   |
 | `--help` or `-h` (an explicit request)               | usage    | stdout | **0**                   |
+| `--version` (archive stamp, or `dev-master` in source) | version line | stdout | **0**               |
 | Exec mode (`-- cmd [args…]`)                         | report   | stdout | the child's exit status |
 | No source named: no operand *and* stdin is a terminal | usage   | stderr | **1**                   |
 | Operand is not a readable regular file               | refusal  | stderr | **1**                   |

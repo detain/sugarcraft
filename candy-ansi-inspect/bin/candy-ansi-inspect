@@ -7,6 +7,7 @@ use SugarCraft\AnsiInspect\Exec\ExecRunner;
 use SugarCraft\AnsiInspect\Inspector;
 use SugarCraft\AnsiInspect\Lang;
 use SugarCraft\AnsiInspect\StreamingInspector;
+use SugarCraft\AnsiInspect\Support\Version;
 
 // Autoload guard (house shape ported from candy-kv's bin). Three filesystem
 // roots for source installs, and — per finding 042 — a NAMED refusal instead
@@ -97,6 +98,7 @@ $sawSource = false;
 // named `0` to a stdin read).
 $asJson = false;
 $wantHelp = false;
+$wantVersion = false;
 $operand = null;
 $operandSeen = false;
 $execCmd = null;
@@ -113,6 +115,10 @@ for ($i = 1; $i < $argc; $i++) {
         $wantHelp = true;
         continue;
     }
+    if ($argv[$i] === '--version') {
+        $wantVersion = true;
+        continue;
+    }
     if (!$operandSeen) {
         $operand = $argv[$i];
         $operandSeen = true;
@@ -123,6 +129,14 @@ for ($i = 1; $i < $argc; $i++) {
 // misusage stays a stderr refusal with exit 1.
 if ($wantHelp) {
     fwrite(STDOUT, Lang::t('cli.usage') . "\n");
+    exit(0);
+}
+
+// Version self-report: same discipline as --help (flag beats any path, exit
+// 0, stdout). Outside a phar the honest answer is the checkout fallback; the
+// archive's build stamp overrides it — see Support\Version.
+if ($wantVersion) {
+    fwrite(STDOUT, Version::line());
     exit(0);
 }
 
