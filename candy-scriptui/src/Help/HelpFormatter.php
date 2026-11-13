@@ -33,19 +33,19 @@ final class HelpFormatter
                 static fn(\ReflectionAttribute $attr) => $attr->newInstance()->name,
                 $aliasAttrs
             );
-            $lines[] = sprintf('<info>Aliases:</info> %s', implode(', ', $aliases));
+            $lines[] = sprintf('<info>%s</info> %s', HelpCatalog::label('aliases', 'Aliases:'), implode(', ', $aliases));
             $lines[] = '';
         }
 
         $exampleAttrs = $ref->getAttributes(Example::class);
         if ($exampleAttrs !== []) {
-            $lines[] = '<info>Examples:</info>';
-            foreach ($exampleAttrs as $exampleAttr) {
+            $lines[] = '<info>' . HelpCatalog::label('examples', 'Examples:') . '</info>';
+            foreach ($exampleAttrs as $exampleIndex => $exampleAttr) {
                 /** @var Example */
                 $example = $exampleAttr->newInstance();
                 $line = sprintf('  %s', $example->usage);
                 if ($example->description !== '') {
-                    $line .= sprintf('  — %s', $example->description);
+                    $line .= sprintf('  — %s', HelpCatalog::exampleCaption($command, $exampleIndex, $example));
                 }
                 $lines[] = $line;
             }
@@ -53,7 +53,7 @@ final class HelpFormatter
         }
 
         if ($help !== '') {
-            $lines[] = '<info>Help:</info>';
+            $lines[] = '<info>' . HelpCatalog::label('help', 'Help:') . '</info>';
             $lines[] = $help;
             $lines[] = '';
         }

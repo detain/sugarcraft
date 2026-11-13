@@ -485,10 +485,15 @@ precedence order:
 ### Language
 
 `candy-scriptui` reads `LC_ALL`, then `LC_MESSAGES`, then `LANG` at startup
-and renders its UI and hint strings in that language — a handful of
-programmer-facing diagnostics (the `format` unknown-value refusal
-scaffolding, the `find()` did-you-mean suggestions) are English-only by
-design, and so are the `confirm` button labels' `Yes`/`No` defaults: they
+and renders its UI and hint strings in that language. The **help surface**
+is localized too: command descriptions, every option and argument text,
+`#[Example]` captions and the Aliases / Examples / Help labels come from the
+catalogs (`help.*` rows, derived from the command classes by
+`tools/gen-help-catalog.php` and pinned by `HelpDriftTest`). Residual English:
+Symfony's own section headings in `--help` output (`Usage:`, `Options:`,
+`Arguments:`, `[default: ...]`) and its global flags, the `find()`
+did-you-mean suggestions, and the `confirm` button labels' `Yes`/`No`
+defaults: they
 are the upstream-compatible answer values that `--show-output` prints, so
 that surface localizes through `--affirmative`/`--negative` rather than
 through the catalogs. The boot warning for a deprecated `CANDYSHELL_*`

@@ -21,6 +21,7 @@ use SugarCraft\ScriptUi\Command\WriteCommand;
 use SugarCraft\ScriptUi\Attribute\Alias;
 use SugarCraft\ScriptUi\Attribute\Example;
 use SugarCraft\ScriptUi\Discovery\CommandScanner;
+use SugarCraft\ScriptUi\Help\HelpCatalog;
 use SugarCraft\ScriptUi\Help\HelpFormatter;
 use SugarCraft\ScriptUi\Help\TypoSuggester;
 use SugarCraft\ScriptUi\Runtime\ColourGate;
@@ -162,7 +163,7 @@ final class Application extends SymfonyApplication
     public function __construct()
     {
         parent::__construct('candy-scriptui', self::versionString());
-        $this->addCommands([
+        $commands = [
             new StyleCommand(),
             new ChooseCommand(),
             new InputCommand(),
@@ -178,7 +179,15 @@ final class Application extends SymfonyApplication
             new FormatCommand(),
             new CompletionCommand(),
             new VersionCommand(),
-        ]);
+        ];
+        // scriptui-59: the help surface (descriptions, option/argument texts)
+        // resolves through the locale catalogs; the in-class English literal
+        // stays as the fallback. Runs here, after the bin set the locale and
+        // before Symfony snapshots the definitions.
+        foreach ($commands as $command) {
+            HelpCatalog::localize($command);
+        }
+        $this->addCommands($commands);
     }
 
     /**
