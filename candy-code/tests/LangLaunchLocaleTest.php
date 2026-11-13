@@ -209,6 +209,25 @@ final class LangLaunchLocaleTest extends TestCase
         );
     }
 
+    /**
+     * S-X08 (leftover): the preset/override notice rows take the COUNT and a
+     * whole sentence per plural class instead of an English `s` spliced onto a
+     * translated noun.
+     */
+    public function testThePresetAndOverrideRowsInflectWithoutSplicedMorphemes(): void
+    {
+        $render = static fn (string $key, int $count): string => Lang::inLocale(
+            'de',
+            static fn (): string => Lang::t($key, ['count' => $count, 'list' => 'X']),
+        );
+
+        self::assertSame('1 eingebauter Befehl durch eine Befehlsdatei bei diesem Start ersetzt: X', $render('cli.noticerow.command_overrides_one', 1));
+        self::assertSame('3 eingebaute Befehle durch eine Befehlsdatei bei diesem Start ersetzt: X', $render('cli.noticerow.command_overrides_other', 3));
+        self::assertSame('2 fremde Agent-Dateien übersprungen: X', $render('cli.noticerow.foreign_preset_skip_other', 2));
+        self::assertStringNotContainsString('Dateis', $render('cli.noticerow.agent_preset_skip_other', 2));
+        self::assertStringNotContainsString('%', $render('cli.noticerow.agent_preset_shadow_other', 2));
+    }
+
     /** Remove the launch's sandboxed home however deep the child wrote. */
     private function sweepChildHome(string $dir): void
     {

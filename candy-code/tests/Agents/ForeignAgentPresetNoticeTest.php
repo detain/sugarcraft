@@ -22,8 +22,8 @@ use SugarCraft\Code\Cli\LaunchNotices;
  * facts — but they rise as ONE seam call, mirroring how the native sibling
  * seats its skip and shadow rows.
  *
- * @see Bootstrap::FOREIGN_PRESET_SKIP_NOTICE_FORMAT
- * @see Bootstrap::FOREIGN_PRESET_CHANGE_NOTICE_FORMAT
+ * @see \SugarCraft\Code\Lang cli.noticerow.foreign_preset_skip_one
+ * @see \SugarCraft\Code\Lang cli.noticerow.foreign_preset_change_one
  */
 final class ForeignAgentPresetNoticeTest extends TestCase
 {
@@ -95,7 +95,7 @@ final class ForeignAgentPresetNoticeTest extends TestCase
             $this->assertStringContainsString(
                 // The path rides the row once: the drain strips the parser's
                 // trailing " in: {file}" because the envelope already names it.
-                sprintf(Bootstrap::FOREIGN_PRESET_SKIP_NOTICE_FORMAT, 1, '', $bad . ' (No YAML frontmatter found)'),
+                \SugarCraft\Code\Lang::t('cli.noticerow.foreign_preset_skip_one', ['count' => 1, 'list' => $bad . ' (No YAML frontmatter found)']),
                 $notices,
                 'the vanished file is reported by path with the parse error beside it',
             );

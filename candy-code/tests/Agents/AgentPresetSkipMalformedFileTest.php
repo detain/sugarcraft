@@ -211,7 +211,7 @@ final class AgentPresetSkipMalformedFileTest extends TestCase
 
         $notices = implode("\n", [...Bootstrap::launchNotices(), ...Bootstrap::launchNoticesDropped()]);
         self::assertStringContainsString(
-            sprintf(Bootstrap::AGENT_PRESET_SKIP_NOTICE_FORMAT, 1, '', $bad . ' (`name:` must be a string'),
+            \SugarCraft\Code\Lang::t('cli.noticerow.agent_preset_skip_one', ['count' => 1, 'list' => $bad . ' (`name:` must be a string']),
             $notices,
         );
         self::assertStringContainsString('`name:` must be a string, int given', $notices);

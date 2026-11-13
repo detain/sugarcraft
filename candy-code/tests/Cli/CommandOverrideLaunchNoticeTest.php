@@ -67,7 +67,7 @@ final class CommandOverrideLaunchNoticeTest extends TestCase
             'path' => $path,
         ]);
 
-        return sprintf(Bootstrap::COMMAND_OVERRIDE_NOTICE_FORMAT, 1, '', $sentence);
+        return \SugarCraft\Code\Lang::t('cli.noticerow.command_overrides_one', ['count' => 1, 'list' => $sentence]);
     }
 
     /**

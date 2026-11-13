@@ -219,16 +219,11 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         // ISS-036's override aggregate, read back by
         // CommandOverrideLaunchNoticeTest. Quoted on no page, so no
         // PAGE_QUOTES row — the PROMPT_ATTRIBUTION precedent.
-        'COMMAND_OVERRIDE_NOTICE_FORMAT' => ['method' => 'reportCommandOverrides', 'conversions' => 3],
         // Audit AG-2's skipped-preset row, read back by
         // AgentPresetSkipMalformedFileTest. Quoted on no page, so no
         // PAGE_QUOTES row — the PROMPT_ATTRIBUTION precedent below.
-        'AGENT_PRESET_SKIP_NOTICE_FORMAT' => ['method' => 'agentPresets', 'conversions' => 3],
         // ISS-031's displaced-preset row, read back by
         // AgentPresetShadowNoticeTest. Quoted on no page, so no PAGE_QUOTES row.
-        'AGENT_PRESET_SHADOW_NOTICE_FORMAT' => ['method' => 'agentPresets', 'conversions' => 3],
-        'FOREIGN_PRESET_SKIP_NOTICE_FORMAT' => ['method' => 'foreignAgentPresets', 'conversions' => 3],
-        'FOREIGN_PRESET_CHANGE_NOTICE_FORMAT' => ['method' => 'foreignAgentPresets', 'conversions' => 3],
         'LAUNCH_NOTICE_OVERFLOW_FORMAT' => ['method' => 'rows', 'conversions' => 2],
         'SESSION_RETENTION_SUMMARY_FORMAT' => ['method' => 'reportPrunedSessions', 'conversions' => 3],
         'SESSION_RETENTION_DETAIL_FORMAT' => ['method' => 'reportPrunedSessions', 'conversions' => 4],
@@ -534,7 +529,7 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         // ISS-036's override aggregate: the plural pick and the row joiner.
         // The loader's sentences arrive pre-rendered, so the body's only
         // format is the named constant.
-        'reportCommandOverrides' => ["''", "'s'", "'; '"],
+        'reportCommandOverrides' => ["'cli.noticerow.command_overrides_one'", "'cli.noticerow.command_overrides_other'", "'count'", "'list'", "'; '"],
         'rows' => ["''", "'s'"],
         // Both halves of the retention report are named, so what is left here
         // is the plural pair and the four `$row` keys the detail line reads.
@@ -602,14 +597,15 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         // 15b-14-2 that sentence is a catalogue entry, so what the body holds
         // is its key and the one parameter name it fills.
         'agentPresets' => [
-            "': '", ' (', ')', "''", "'s'", "'; '",
+            "': '", ' (', ')',
+            "'cli.noticerow.agent_preset_skip_one'", "'cli.noticerow.agent_preset_skip_other'", "'count'", "'list'", "'; '",
             "'cli.warn.presets_unavailable'", "'error'",
             // ISS-031 shadow rows: the winner joiner inside one row and the
-            // sentence joiner between the skip and shadow notices. Both are
-            // row-internal glue around data, not re-wordings of a promoted
-            // constant — the loser/winner paths and the row list all come
-            // from AGENT_PRESET_SHADOW_NOTICE_FORMAT's conversions.
-            "' — kept '", "' '",
+            // sentence joiner between the skip and shadow notices are
+            // row-internal glue around data; the two shadow sentences are
+            // catalogue keys (S-X08: one whole sentence per plural class).
+            "''", "' — kept '",
+            "'cli.noticerow.agent_preset_shadow_one'", "'cli.noticerow.agent_preset_shadow_other'", "' '",
         ],
         // ISS-088: the foreign importer's own verdicts. Body order: the
         // walk-failure sentence's catalogue key and its one parameter, then
@@ -623,12 +619,14 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
             // from a skip row so the path is named once, not twice — the
             // clip bound has to seat both the skip and the change sentence.
             "' in: '", "''", "' :'", "' '",
-            ' (', ')', "'s'", "'; '",
+            ' (', ')',
+            "'cli.noticerow.foreign_preset_skip_one'", "'cli.noticerow.foreign_preset_skip_other'", "'count'", "'list'", "'; '",
             // ISS-090(d): the fold tail's two glue literals. Row-list
-            // plumbing around the named envelopes, same bargain as the ISS-031
-            // joiners above — the COUNT rides the named format's first
-            // conversion; these words only say which rows the count folded.
+            // plumbing around the catalogue sentences (S-X08: one whole
+            // sentence per plural class); these words only say which rows
+            // the count folded.
             "' (and '", "' more)'",
+            "'cli.noticerow.foreign_preset_change_one'", "'cli.noticerow.foreign_preset_change_other'",
         ],
     ];
 
@@ -912,7 +910,7 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         // -2 in S-X08: the two prompt-budget deferral rows left sprintf() for
         // count-keyed catalogue sentences (cli.deferral.*).
         self::assertSame(
-            32,
+            27,
             $census['calls'],
             "Bootstrap.php's sprintf() call-site count moved; see this test's doc-block",
         );

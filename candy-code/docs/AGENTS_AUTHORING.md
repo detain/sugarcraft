@@ -84,7 +84,7 @@ Note that the **native** tiers no longer diverge from skills either: since
 native agent presets and native skills both give the USER tier
 precedence over the project tier — a cloned repository can add preset names but
 cannot displace the operator's own, and a displaced file is named by path in a
-launch notice (`Bootstrap::AGENT_PRESET_SHADOW_NOTICE_FORMAT`). The remaining
+launch notice (`cli.noticerow.agent_preset_shadow_*` in `lang/en.php`). The remaining
 asymmetry is foreign-vs-foreign: the claude/opencode import scan still resolves
 project-over-user.
 

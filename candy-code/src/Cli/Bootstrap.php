@@ -602,85 +602,10 @@ final class Bootstrap
         '%d command file%s could not be read and %s skipped; set %s=1 to list %s';
 
     /**
-     * The aggregate row {@see reportCommandOverrides()} raises for built-ins a
-     * surviving command file replaced this launch (ISS-036's drain half).
-     *
-     * THE SKIP ROW'S SIBLING in shape — `%d` the count, `%s` the noun plural,
-     * `%s` the rows — and promoted for the same E164 reason:
-     * {@see \SugarCraft\Code\Tests\Cli\CommandOverrideLaunchNoticeTest}
-     * reproduces the rendered span through this constant. Unlike the skip row
-     * it NAMES its rows (built-in, tier, winning path per entry, already
-     * localized by the loader): an override is not a failure to look behind,
-     * it is a fact about what just launched, and the per-name stderr line
-     * behind {@see \SugarCraft\Code\Commands\CommandLoader::DEBUG_REFUSALS_ENV}
-     * is the same sentence, not more detail. The count/plural pair mirrors the
-     * skip and skill rows so the agreement machinery is one shape.
-     */
-    public const COMMAND_OVERRIDE_NOTICE_FORMAT =
-        '%d built-in command%s replaced by a command file this launch: %s';
-
-    /**
-     * The one row {@see agentPresets()} raises for preset files
-     * {@see \SugarCraft\Code\Agents\AgentPresetRegistry::list()} skipped
-     * (audit AG-2): `%d` the count, `%s` the noun plural, `%s` the
-     * `path (reason)` rows joined by `; `.
-     *
-     * NAMES THE PATHS, unlike its skill and command siblings above, which
-     * count and point at a debug variable: a launch carries a handful of
-     * presets, not a directory of them, and the file is what the user has to
-     * open to get the agent back. One row however many, so the seam is not
-     * crowded. PROMOTED BECAUSE A SECOND PARTY READS IT (E164):
-     * {@see \SugarCraft\Code\Tests\Agents\AgentPresetSkipMalformedFileTest::testALaunchKeepsTheGoodPresetAndNoticesTheSkippedFileByPath()}
-     * reproduces the rendered span through this constant.
-     */
-    public const AGENT_PRESET_SKIP_NOTICE_FORMAT = 'skipped %d agent preset file%s: %s';
-
-    /**
-     * The one row {@see agentPresets()} raises when the same-name walk (ISS-031)
-     * displaced native preset files: `%d` the count, `%s` the noun plural, `%s`
-     * the `loser — kept winner` rows joined by `; `.
-     *
-     * The displacement is a DECISION the operator cannot otherwise see: after
-     * the user > project flip, a repository's preset yielding to the operator's
-     * own is the correct outcome, and the notice is what makes it a KNOWN one.
-     * PROMOTED BECAUSE A SECOND PARTY READS IT (E164):
-     * {@see \SugarCraft\Code\Tests\Agents\AgentPresetShadowNoticeTest} pins the
-     * rendered row through this constant.
-     */
-    public const AGENT_PRESET_SHADOW_NOTICE_FORMAT = '%d native agent preset file%s displaced by a higher-precedence file: %s';
-
-    /**
-     * The one row {@see foreignAgentPresets()} raises for foreign agent files
-     * the importer skipped (ISS-088): `%d` the count, `%s` the noun plural,
-     * `%s` the `path (reason)` rows joined by `; `.
-     *
-     * The per-file catch that keeps one broken import from costing the whole
-     * directory used to cost it its visibility too — a vanished agent is
-     * indistinguishable from an unwritten one from inside the roster.
-     * PROMOTED BECAUSE A SECOND PARTY READS IT (E164):
-     * {@see \SugarCraft\Code\Tests\Agents\ForeignAgentPresetNoticeTest} pins
-     * the rendered row through this constant.
-     */
-    public const FOREIGN_PRESET_SKIP_NOTICE_FORMAT = 'skipped %d foreign agent file%s: %s';
-
-    /**
-     * The one row {@see foreignAgentPresets()} raises when foreign imports
-     * survived only with losses (ISS-088, the "imported with changes"
-     * envelope): `%d` the count, `%s` the noun plural, `%s` the
-     * {@see \SugarCraft\Code\Agents\ForeignAgentPresetRegistry::warnings()}
-     * rows joined by `; `.
-     *
-     * The warnings already existed and named their agent; what did not exist
-     * was a reader. Same promotion reason as
-     * {@see FOREIGN_PRESET_SKIP_NOTICE_FORMAT}.
-     */
-    public const FOREIGN_PRESET_CHANGE_NOTICE_FORMAT = 'imported %d foreign agent file%s with changes: %s';
-
-    /**
      * ISS-090(d): how many per-file rows either foreign-preset notice lists.
      *
-     * The merged skip+change line already fights {@see
-     * FOREIGN_PRESET_SKIP_NOTICE_FORMAT}'s clip — ISS-088 had to de-duplicate
+     * The merged skip+change line already fights the
+     * `cli.noticerow.foreign_preset_skip_*` row's clip — ISS-088 had to de-duplicate
      * paths inside each row to keep the second sentence alive — and a bad
      * tier directory is bad for EVERY file in it: sixty rows is a wall no
      * launch notice survives being read. The byte clip bounds one line; this
@@ -1007,11 +932,6 @@ final class Bootstrap
         self::TUI_ERROR_LOG_FALLBACK_NOTICE_FORMAT => 'cli.launch.tui_error_log_fallback',
         self::TUI_ERROR_LOG_DISCARDED_NOTICE_FORMAT => 'cli.launch.tui_error_log_discarded',
         self::COMMAND_SKIP_NOTICE_FORMAT => 'cli.launch.command_skip',
-        self::COMMAND_OVERRIDE_NOTICE_FORMAT => 'cli.launch.command_overrides',
-        self::AGENT_PRESET_SKIP_NOTICE_FORMAT => 'cli.launch.agent_preset_skip',
-        self::AGENT_PRESET_SHADOW_NOTICE_FORMAT => 'cli.launch.agent_preset_shadow',
-        self::FOREIGN_PRESET_SKIP_NOTICE_FORMAT => 'cli.launch.foreign_preset_skip',
-        self::FOREIGN_PRESET_CHANGE_NOTICE_FORMAT => 'cli.launch.foreign_preset_change',
         self::LAUNCH_NOTICE_OVERFLOW_FORMAT => 'cli.launch.overflow',
         self::NARROWED_GRANT_NOTICE_FORMAT => 'cli.launch.narrowed_grant',
         self::NARROWED_GRANT_OVERFLOW_FORMAT => 'cli.launch.narrowed_grant_overflow',
@@ -3029,7 +2949,7 @@ final class Bootstrap
      * cloned repository can add names to this roster but can no longer displace
      * the operator's own presets, and a displacement of any same-name file by
      * any higher-precedence one is a launch notice, not silence
-     * ({@see AGENT_PRESET_SHADOW_NOTICE_FORMAT}).
+     * (`cli.noticerow.agent_preset_shadow_*`).
      *
      * WINNING IS PER FIELD, AND THE PROMPT IS THE ONE FIELD A PRESET MIGHT NOT
      * HAVE. A native preset declaring no prompt at all — no markdown body and no
@@ -3374,11 +3294,9 @@ final class Bootstrap
 
             $skippedRest = \count($skipped) - $skippedShown;
 
-            $notice = sprintf(
-                self::translated(self::FOREIGN_PRESET_SKIP_NOTICE_FORMAT),
-                \count($skipped),
-                \count($skipped) === 1 ? '' : 's',
-                implode('; ', $rows) . ($skippedRest > 0 ? ' (and ' . $skippedRest . ' more)' : ''),
+            $notice = Lang::t(
+                \count($skipped) === 1 ? 'cli.noticerow.foreign_preset_skip_one' : 'cli.noticerow.foreign_preset_skip_other',
+                ['count' => \count($skipped), 'list' => implode('; ', $rows) . ($skippedRest > 0 ? ' (and ' . $skippedRest . ' more)' : '')],
             );
         }
 
@@ -3386,11 +3304,9 @@ final class Bootstrap
         if ($warned !== []) {
             $warnedShown = array_slice($warned, 0, self::FOREIGN_PRESET_NOTICE_ROWS);
             $warnedRest = \count($warned) - \count($warnedShown);
-            $changeNotice = sprintf(
-                self::translated(self::FOREIGN_PRESET_CHANGE_NOTICE_FORMAT),
-                \count($warned),
-                \count($warned) === 1 ? '' : 's',
-                implode('; ', $warnedShown) . ($warnedRest > 0 ? ' (and ' . $warnedRest . ' more)' : ''),
+            $changeNotice = Lang::t(
+                \count($warned) === 1 ? 'cli.noticerow.foreign_preset_change_one' : 'cli.noticerow.foreign_preset_change_other',
+                ['count' => \count($warned), 'list' => implode('; ', $warnedShown) . ($warnedRest > 0 ? ' (and ' . $warnedRest . ' more)' : '')],
             );
             $notice = $notice === null ? $changeNotice : $notice . ' ' . $changeNotice;
         }
@@ -3503,11 +3419,9 @@ final class Bootstrap
                     $rows[] = "{$path} ({$why})";
                 }
 
-                $notice = sprintf(
-                    self::translated(self::AGENT_PRESET_SKIP_NOTICE_FORMAT),
-                    \count($skipped),
-                    \count($skipped) === 1 ? '' : 's',
-                    implode('; ', $rows),
+                $notice = Lang::t(
+                    \count($skipped) === 1 ? 'cli.noticerow.agent_preset_skip_one' : 'cli.noticerow.agent_preset_skip_other',
+                    ['count' => \count($skipped), 'list' => implode('; ', $rows)],
                 );
             }
         } catch (\Throwable $e) {
@@ -3535,11 +3449,9 @@ final class Bootstrap
                     : $loser . ' — kept ' . $winner;
             }
 
-            $shadowNotice = sprintf(
-                self::translated(self::AGENT_PRESET_SHADOW_NOTICE_FORMAT),
-                \count($shadowed),
-                \count($shadowed) === 1 ? '' : 's',
-                implode('; ', $rows),
+            $shadowNotice = Lang::t(
+                \count($shadowed) === 1 ? 'cli.noticerow.agent_preset_shadow_one' : 'cli.noticerow.agent_preset_shadow_other',
+                ['count' => \count($shadowed), 'list' => implode('; ', $rows)],
             );
             $notice = $notice === null ? $shadowNotice : $notice . ' ' . $shadowNotice;
         }
@@ -6391,11 +6303,9 @@ public static function useMaxCost(?string $maxCost): void
         }
 
         $count = \count($new);
-        self::warnLaunchRows([sprintf(
-            self::translated(self::COMMAND_OVERRIDE_NOTICE_FORMAT),
-            $count,
-            $count === 1 ? '' : 's',
-            implode('; ', $new),
+        self::warnLaunchRows([Lang::t(
+            $count === 1 ? 'cli.noticerow.command_overrides_one' : 'cli.noticerow.command_overrides_other',
+            ['count' => $count, 'list' => implode('; ', $new)],
         )]);
     }
 

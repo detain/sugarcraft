@@ -17,7 +17,7 @@ use SugarCraft\Code\Cli\Bootstrap;
  * both halves, at the registry and on the real launch path.
  *
  * @see AgentPresetRegistry::shadowedFiles()
- * @see Bootstrap::AGENT_PRESET_SHADOW_NOTICE_FORMAT
+ * @see \SugarCraft\Code\Lang cli.noticerow.agent_preset_shadow_one
  */
 final class AgentPresetShadowNoticeTest extends TestCase
 {
@@ -122,7 +122,7 @@ final class AgentPresetShadowNoticeTest extends TestCase
 
             $notices = implode("\n", [...Bootstrap::launchNotices(), ...Bootstrap::launchNoticesDropped()]);
             $this->assertStringContainsString(
-                sprintf(Bootstrap::AGENT_PRESET_SHADOW_NOTICE_FORMAT, 1, '', $projectFile . ' — kept ' . $userFile),
+                \SugarCraft\Code\Lang::t('cli.noticerow.agent_preset_shadow_one', ['count' => 1, 'list' => $projectFile . ' — kept ' . $userFile]),
                 $notices,
                 'the displaced file is reported with BOTH paths on one row',
             );
