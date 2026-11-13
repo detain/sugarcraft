@@ -92,12 +92,15 @@ function runningArchivePath(): string
 
 /**
  * Version the CLI prints: the archive's build stamp when running inside a
- * phar (the DST-1 law — InstalledVersions lies under a frozen vendor/), else
- * the compiled-in VERSION constant.
+ * phar (the DST-1 law — InstalledVersions lies under a frozen vendor/),
+ * else the compiled-in VERSION constant. A dev-channel stamp renders as
+ * `0.1.0 (dev-<sha>)` (053): the rolling channel's whole point is that
+ * every build is LOCATABLE, and the bare constant made the entire dev
+ * train print identically.
  */
 function displayVersion(): string
 {
-    return \SugarCraft\GitServer\Support\Version::resolve(runningArchivePath(), VERSION);
+    return \SugarCraft\GitServer\Support\Version::displayLabel(runningArchivePath(), VERSION);
 }
 
 function main(array $argv): int
