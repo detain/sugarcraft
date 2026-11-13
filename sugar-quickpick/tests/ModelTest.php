@@ -70,8 +70,8 @@ final class ModelTest extends TestCase
         };
 
         $start = QuickPick::new(['apple', 'banana', 'cherry'])
-            ->setWindowWidth(20)
-            ->setWindowHeight(5)
+            ->withWindowWidth(20)
+            ->withWindowHeight(5)
             ->show();
 
         $returned = $host->update($start, 'type:a');

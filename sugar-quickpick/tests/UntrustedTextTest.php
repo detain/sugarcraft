@@ -188,7 +188,7 @@ final class UntrustedTextTest extends TestCase
             'plain-apple',
         ];
 
-        $frame = QuickPick::new($items)->setPrompt('')->setWindowHeight(12)->show()
+        $frame = QuickPick::new($items)->withPrompt('')->withWindowHeight(12)->show()
             ->view(str_repeat('.', 80));
 
         self::assertStringNotContainsString("\x1b[2J", $frame);
@@ -209,7 +209,7 @@ final class UntrustedTextTest extends TestCase
 
     public function testViewStaysEscapeFreeWhenTypeInjectsControls(): void
     {
-        $quickPick = QuickPick::new(['apple'])->setPrompt('> ')->show();
+        $quickPick = QuickPick::new(['apple'])->withPrompt('> ')->show();
         $quickPick->type("a\x1b[2J");
 
         $frame = $quickPick->view(str_repeat('.', 80));
@@ -221,7 +221,7 @@ final class UntrustedTextTest extends TestCase
 
     public function testViewPromptEchoCannotCarryControls(): void
     {
-        $frame = QuickPick::new(['apple'])->setPrompt("pick\x1b]0;pwned\x07> ")->show()
+        $frame = QuickPick::new(['apple'])->withPrompt("pick\x1b]0;pwned\x07> ")->show()
             ->view(str_repeat('.', 80));
 
         self::assertStringNotContainsString("\x1b", $frame);
@@ -242,7 +242,7 @@ final class UntrustedTextTest extends TestCase
 
     public function testValuesWithNewlinesStayOnASingleFrameRow(): void
     {
-        $frame = QuickPick::new(["two\nlines", "tab\there"])->setWindowHeight(4)->setWindowWidth(24)
+        $frame = QuickPick::new(["two\nlines", "tab\there"])->withWindowHeight(4)->withWindowWidth(24)
             ->show()->view(str_repeat('.', 40));
 
         // 'two' and 'lines' never occupy separate rows, and no raw newline

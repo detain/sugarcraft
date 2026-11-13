@@ -233,7 +233,7 @@ final class QuickPickSigwinchTest extends TestCase
 
         // setOffset() invalidates nothing on its own; the clone shares the warm
         // memo, which is what makes the next assertions about the HANDLER.
-        $later = $attached->setOffset(3, 0);
+        $later = $attached->withOffset(3, 0);
         $this->assertNotNull($memo->getValue($later)->width, 'clones share the memo by handle');
 
         $handler(100, 40);

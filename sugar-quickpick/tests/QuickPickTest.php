@@ -76,7 +76,7 @@ final class QuickPickTest extends TestCase
         // Set a filter that excludes everything, then type and backspace
         // to an empty filtered set — cursor must floor at 0, not -1.
         $h = $this->makeQuickPick()
-            ->setFilterFn(static fn(Item $i): bool => false)
+            ->withFilterFn(static fn(Item $i): bool => false)
             ->show()
             ->type('a'); // all filtered out
 
@@ -214,16 +214,16 @@ final class QuickPickTest extends TestCase
     public function testFluentSetters(): void
     {
         $h = $this->makeQuickPick()
-            ->setPrompt('Search: ')
-            ->setMatchStyle("\x1b[33m")
-            ->setWindowHeight(5)
-            ->setWindowWidth(40)
+            ->withPrompt('Search: ')
+            ->withMatchStyle("\x1b[33m")
+            ->withWindowHeight(5)
+            ->withWindowWidth(40)
             ->show();
 
         $this->assertTrue($h->isShown()); // show() does set isShown
 
         // setOffset is a pure position setter — does NOT auto-show
-        $h2 = $this->makeQuickPick()->setOffset(5, 3);
+        $h2 = $this->makeQuickPick()->withOffset(5, 3);
         $this->assertFalse($h2->isShown(), 'setOffset alone must not show the overlay');
     }
 
@@ -246,7 +246,7 @@ final class QuickPickTest extends TestCase
             new FilteredItem(1, 'apple'),
             new FilteredItem(2, 'banana'),
         ])->show()
-            ->setItemFormatter(fn($item, $sel) => "[$sel] $item");
+            ->withItemFormatter(fn($item, $sel) => "[$sel] $item");
 
         // The custom formatter's marker must LAND IN THE RENDERED BYTES — not
         // merely "produce a string" (-079). Cursor 0 is selected, so the chosen
@@ -303,12 +303,12 @@ final class QuickPickTest extends TestCase
         $bg = \str_repeat("....................\n", 5);
 
         $rows  = \explode("\n", QuickPick::new([new FilteredItem(1, 'apple')])
-            ->setWindowWidth(40)->show()->type('ap')->view($bg));
+            ->withWindowWidth(40)->show()->type('ap')->view($bg));
         $this->assertStringContainsString('ap▏', $rows[0], 'the caret sits at the end of the filter');
         $this->assertStringNotContainsString('⋯', $rows[0]);
 
         $atCap = QuickPick::new([new FilteredItem(1, 'apple')])
-            ->setWindowWidth(40)->show()->type(\str_repeat('a', QuickPick::MAX_FILTER_LENGTH));
+            ->withWindowWidth(40)->show()->type(\str_repeat('a', QuickPick::MAX_FILTER_LENGTH));
         $capRows = \explode("\n", $atCap->view($bg));
         $this->assertStringContainsString('▏⋯', $capRows[0], 'the overflow indicator must survive header clipping');
     }
@@ -335,7 +335,7 @@ final class QuickPickTest extends TestCase
         $this->assertSame(5, $h->itemCount());
 
         // Set a custom filter — only items with value length > 5
-        $h = $h->setFilterFn(fn(Item $item): bool => \strlen($item->value()) > 5);
+        $h = $h->withFilterFn(fn(Item $item): bool => \strlen($item->value()) > 5);
 
         // apple(5→false), banana(6→true), cherry(6→true), date(4→false), elderberry(9→true)
         $this->assertSame(3, $h->itemCount());
@@ -367,6 +367,53 @@ final class QuickPickTest extends TestCase
         $this->assertSame('banana', $h->selected()?->value());
     }
 
+    public function testDeprecatedSetAliasesRenderByteIdenticalToTheirWithBuilders(): void
+    {
+        // -005/G1: the eight set* names stay alive as one-hop @deprecated
+        // proxies until the repo-wide setter campaign rules on removal.
+        // Indistinguishability is checked WHERE IT SHOWS — composed frame
+        // bytes, closures and ordering effects included; a mis-wired proxy
+        // hop is precisely the drift a rename campaign hides.
+        $items     = ['apple', 'banana', 'elderberry'];
+        $bg        = \implode("\n", \array_fill(0, 12, ''));
+        $formatter = static fn(string $v): string => '[' . $v . ']';
+        $filterFn  = static fn(Item $i): bool => \strlen($i->value()) > 5;
+        $ranker    = new \SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher();
+
+        $arms = [
+            'prompt'        => ['setPrompt', 'withPrompt', static fn(QuickPick $p): QuickPick => $p->show()->setPrompt('>> '), static fn(QuickPick $p): QuickPick => $p->show()->withPrompt('>> ')],
+            'matchStyle'    => ['setMatchStyle', 'withMatchStyle', static fn(QuickPick $p): QuickPick => $p->show()->type('a')->setMatchStyle("\e[1m"), static fn(QuickPick $p): QuickPick => $p->show()->type('a')->withMatchStyle("\e[1m")],
+            'windowHeight'  => ['setWindowHeight', 'withWindowHeight', static fn(QuickPick $p): QuickPick => $p->show()->setWindowHeight(5), static fn(QuickPick $p): QuickPick => $p->show()->withWindowHeight(5)],
+            'windowWidth'   => ['setWindowWidth', 'withWindowWidth', static fn(QuickPick $p): QuickPick => $p->show()->setWindowWidth(9), static fn(QuickPick $p): QuickPick => $p->show()->withWindowWidth(9)],
+            'offset'        => ['setOffset', 'withOffset', static fn(QuickPick $p): QuickPick => $p->show()->setOffset(2, 1), static fn(QuickPick $p): QuickPick => $p->show()->withOffset(2, 1)],
+            'itemFormatter' => ['setItemFormatter', 'withItemFormatter', static fn(QuickPick $p): QuickPick => $p->show()->setItemFormatter($formatter), static fn(QuickPick $p): QuickPick => $p->show()->withItemFormatter($formatter)],
+            'filterFn'      => ['setFilterFn', 'withFilterFn', static fn(QuickPick $p): QuickPick => $p->show()->type('a')->setFilterFn($filterFn), static fn(QuickPick $p): QuickPick => $p->show()->type('a')->withFilterFn($filterFn)],
+            'ranker'        => ['setRanker', 'withRanker', static fn(QuickPick $p): QuickPick => $p->show()->setRanker($ranker), static fn(QuickPick $p): QuickPick => $p->show()->withRanker($ranker)],
+        ];
+
+        foreach ($arms as [$set, $with, $viaSet, $viaWith]) {
+            $base = QuickPick::new($items);
+            $this->assertSame(
+                $viaWith($base)->view($bg),
+                $viaSet($base)->view($bg),
+                "the deprecated $set() alias must render byte-identical to $with()"
+            );
+        }
+    }
+
+    public function testEveryDeprecatedAliasCarriesTheDeprecationMarker(): void
+    {
+        // The removal ruling rides a repo-wide campaign; a tool (or human)
+        // filtering deprecated usage only sees it if the marker is on the
+        // METHOD — pin all eight docblocks.
+        foreach (['setPrompt', 'setMatchStyle', 'setWindowHeight', 'setWindowWidth', 'setOffset', 'setItemFormatter', 'setFilterFn', 'setRanker'] as $alias) {
+            $doc = (new \ReflectionMethod(QuickPick::class, $alias))->getDocComment();
+            $this->assertIsString($doc, $alias . ' must exist as the deprecated proxy');
+            $this->assertStringContainsString('@deprecated', (string) $doc, $alias . ' must be marked @deprecated');
+            $this->assertStringContainsString('with', (string) $doc, $alias . ' must name its canonical with*() replacement');
+        }
+    }
+
     /**
      * withBorder()/withStyle() used to be inert storage: the frame renderer
      * never read them (C3). These pins are render tests — they fail loud if
@@ -377,8 +424,8 @@ final class QuickPickTest extends TestCase
     public function testBorderFramesTheRenderedOverlay(): void
     {
         $h = $this->makeQuickPick()
-            ->setWindowWidth(12)
-            ->setWindowHeight(6)
+            ->withWindowWidth(12)
+            ->withWindowHeight(6)
             ->withBorder(Border::rounded())
             ->show();
 
@@ -417,8 +464,8 @@ final class QuickPickTest extends TestCase
     {
         $style = Style::new()->on('#0000ff');
         $h = $this->makeQuickPick()
-            ->setWindowWidth(12)
-            ->setWindowHeight(6)
+            ->withWindowWidth(12)
+            ->withWindowHeight(6)
             ->withStyle($style)
             ->show();
 
@@ -436,7 +483,7 @@ final class QuickPickTest extends TestCase
     {
         // Byte-pin: the borderless header+separator rows must keep their
         // exact pre-C3 spelling (existing frame pins depend on it).
-        $h = $this->makeQuickPick()->setWindowWidth(12)->show();
+        $h = $this->makeQuickPick()->withWindowWidth(12)->show();
         $lines = \explode("\n", $h->view(\str_repeat('.', 12)));
         $this->assertSame(\str_repeat('─', 12), $lines[1]);
     }
@@ -487,7 +534,7 @@ final class QuickPickTest extends TestCase
             new FilteredItem(1, '日本語'),
             new FilteredItem(2, '中文'),
             new FilteredItem(3, '한국어'),
-        ])->show()->setMatchStyle("\x1b[33m");
+        ])->show()->withMatchStyle("\x1b[33m");
 
         $h = $h->type('本');
 
@@ -506,7 +553,7 @@ final class QuickPickTest extends TestCase
             new FilteredItem(1, '👍🏽'),
             new FilteredItem(2, '👍🏿'),
             new FilteredItem(3, '👎🏽'),
-        ])->show()->setMatchStyle("\x1b[31m");
+        ])->show()->withMatchStyle("\x1b[31m");
 
         $h = $h->type('👍');
 
@@ -526,8 +573,8 @@ final class QuickPickTest extends TestCase
         // Use explicit windowWidth to avoid computeWidth() path and ensure
         // no truncateAnsi truncation of the highlighted string.
         $h = QuickPick::new([new FilteredItem(1, 'banana')])
-            ->setWindowWidth(40)
-            ->setMatchStyle("\x1b[33m")
+            ->withWindowWidth(40)
+            ->withMatchStyle("\x1b[33m")
             ->show()
             ->type('an');
 
@@ -599,8 +646,8 @@ final class QuickPickTest extends TestCase
             $items[] = new FilteredItem($i + 1, "item{$i}");
         }
         $h = QuickPick::new($items)
-            ->setWindowHeight(5)
-            ->setWindowWidth(40)
+            ->withWindowHeight(5)
+            ->withWindowWidth(40)
             ->show();
 
         // cursorBottom() moves to the last item (index 19).
@@ -624,8 +671,8 @@ final class QuickPickTest extends TestCase
             new FilteredItem(3, 'cherry'),
         ];
         $h = QuickPick::new($items)
-            ->setWindowHeight(5)
-            ->setWindowWidth(40)
+            ->withWindowHeight(5)
+            ->withWindowWidth(40)
             ->show();
 
         $bg = implode("\n", array_fill(0, 5, str_repeat(' ', 40)));
@@ -647,8 +694,8 @@ final class QuickPickTest extends TestCase
         $statusBar = new StatusBar('3 of 12');
 
         $h = QuickPick::new($items)
-            ->setWindowHeight(5)
-            ->setWindowWidth(40)
+            ->withWindowHeight(5)
+            ->withWindowWidth(40)
             ->withHelpBar($helpBar)
             ->withStatusBar($statusBar)
             ->show();
@@ -667,8 +714,8 @@ final class QuickPickTest extends TestCase
         // An item value containing an embedded newline should be sanitized
         // to a space, so it doesn't inject extra rows in the output.
         $h = QuickPick::new([new FilteredItem(1, "foo\nbar")])
-            ->setWindowHeight(3)
-            ->setWindowWidth(40)
+            ->withWindowHeight(3)
+            ->withWindowWidth(40)
             ->show();
 
         $bg = implode("\n", array_fill(0, 3, str_repeat(' ', 40)));
@@ -713,8 +760,8 @@ final class QuickPickTest extends TestCase
         // windowHeight=5 means overlay needs at least 5 lines.
         // Provide only 2 background lines — QuickPick must pad the background.
         $h = $this->makeQuickPick()
-            ->setWindowHeight(5)
-            ->setWindowWidth(20)
+            ->withWindowHeight(5)
+            ->withWindowWidth(20)
             ->show();
 
         $bg = "line1\nline2"; // only 2 lines
@@ -734,7 +781,7 @@ final class QuickPickTest extends TestCase
         // show() must come BEFORE setFilterFn so the filter is applied to allItems.
         $h = $this->makeQuickPick()
             ->show()
-            ->setFilterFn(static fn(Item $i): bool => false);
+            ->withFilterFn(static fn(Item $i): bool => false);
 
         $this->assertSame(0, $h->itemCount());
         $h = $h->cursorBottom();
@@ -748,7 +795,7 @@ final class QuickPickTest extends TestCase
         // show() must come BEFORE setFilterFn so the filter is applied to allItems.
         $h = $this->makeQuickPick()
             ->show()
-            ->setFilterFn(static fn(Item $i): bool => false);
+            ->withFilterFn(static fn(Item $i): bool => false);
 
         $this->assertNull($h->selected());
     }
@@ -792,8 +839,8 @@ final class QuickPickTest extends TestCase
         // compositeOver with background shorter than overlay should not crash;
         // lines beyond the background are skipped (destY >= count(bgLines) check).
         $h = $this->makeQuickPick()
-            ->setWindowHeight(5)
-            ->setWindowWidth(10)
+            ->withWindowHeight(5)
+            ->withWindowWidth(10)
             ->show();
 
         // Only 1 line in background, overlay needs 5+.
@@ -810,7 +857,7 @@ final class QuickPickTest extends TestCase
         // With windowWidth=0 (auto), calling type() must invalidate the memoised
         // width so the next view() recomputes rather than reusing a stale value.
         $h = $this->makeQuickPick()
-            ->setWindowWidth(0) // auto
+            ->withWindowWidth(0) // auto
             ->show();
 
         // First render — populates the memo.
@@ -835,9 +882,9 @@ final class QuickPickTest extends TestCase
         // WRONG width breaks this equality; a mere cache hit does not.
         $bg = str_repeat(str_repeat(' ', 30) . "\n", 5);
 
-        $rendered = $this->makeQuickPick()->setWindowWidth(0)->show();
+        $rendered = $this->makeQuickPick()->withWindowWidth(0)->show();
         $rendered->view($bg); // warm the memo through this handle
-        $fresh = $this->makeQuickPick()->setWindowWidth(0)->show();
+        $fresh = $this->makeQuickPick()->withWindowWidth(0)->show();
 
         $this->assertSame($fresh->view($bg), $rendered->view($bg));
     }
@@ -847,7 +894,7 @@ final class QuickPickTest extends TestCase
         // -069: the renderer never asks the ranker again. An item the last
         // filter pass carried no indices for must be re-emitted byte-for-byte
         // — host styling included — instead of crashing or re-scoring.
-        $h = $this->makeQuickPick()->show()->setMatchStyle("\x1b[33m");
+        $h = $this->makeQuickPick()->show()->withMatchStyle("\x1b[33m");
         $this->assertSame(
             '● banana',
             $this->invokeHighlightFuzzy($h, '● banana', new FilteredItem(1, 'banana')),
@@ -858,7 +905,7 @@ final class QuickPickTest extends TestCase
     {
         // Contract noise — a stored empty index list paints nothing and must
         // not corrupt the row.
-        $h = $this->makeQuickPick()->show()->setMatchStyle("\x1b[33m");
+        $h = $this->makeQuickPick()->show()->withMatchStyle("\x1b[33m");
         $this->assertSame(
             '● banana',
             $this->invokeHighlightFuzzy($h, '● banana', new FilteredItem(1, 'banana'), []),
@@ -893,8 +940,8 @@ final class QuickPickTest extends TestCase
         // the '1' of the ordinal '1. ' chrome was painted as a hit. Matching
         // is now confined to the guarded value's own cells.
         $h = QuickPick::new([new FilteredItem(1, '1apple')])
-            ->setWindowWidth(40)
-            ->setMatchStyle("\x1b[33m")
+            ->withWindowWidth(40)
+            ->withMatchStyle("\x1b[33m")
             ->show()
             ->type('1');
 
@@ -925,10 +972,10 @@ final class QuickPickTest extends TestCase
     public function testHighlightingPreservesFormatterSgr(): void
     {
         $h = QuickPick::new([new FilteredItem(1, 'banana')])
-            ->setWindowWidth(40)
-            ->setWindowHeight(6)
-            ->setItemFormatter(static fn(string $v): string => "\x1b[1m$v\x1b[0m")
-            ->setMatchStyle("\x1b[33m")
+            ->withWindowWidth(40)
+            ->withWindowHeight(6)
+            ->withItemFormatter(static fn(string $v): string => "\x1b[1m$v\x1b[0m")
+            ->withMatchStyle("\x1b[33m")
             ->show()
             ->type('an');
 
@@ -957,11 +1004,11 @@ final class QuickPickTest extends TestCase
             ->willReturn([new MatchResult('bn', 'banana', 10, [0, 2])]);
 
         $h = QuickPick::new([new FilteredItem(1, 'banana')])
-            ->setWindowWidth(40)
-            ->setWindowHeight(6)
-            ->setItemFormatter(static fn(string $v): string => "\x1b[32m$v\x1b[0m")
-            ->setMatchStyle("\x1b[33m")
-            ->setRanker($ranker)
+            ->withWindowWidth(40)
+            ->withWindowHeight(6)
+            ->withItemFormatter(static fn(string $v): string => "\x1b[32m$v\x1b[0m")
+            ->withMatchStyle("\x1b[33m")
+            ->withRanker($ranker)
             ->show()
             ->type('bn');
 
@@ -979,7 +1026,7 @@ final class QuickPickTest extends TestCase
     {
         // Indices carried from the filter pass wrap the matched runes with the
         // configured style — the consumer half of -069.
-        $h = $this->makeQuickPick()->show()->setMatchStyle("\x1b[33m"); // yellow
+        $h = $this->makeQuickPick()->show()->withMatchStyle("\x1b[33m"); // yellow
 
         // 'an' matches 'banana' at value indices 1,2; frame the row with the
         // default chrome to also pin that the shift lands INSIDE the value.
@@ -993,7 +1040,7 @@ final class QuickPickTest extends TestCase
     {
         // The style code opens before the matched character and the reset
         // closes after it, forming a proper SGR sequence.
-        $h = $this->makeQuickPick()->show()->setMatchStyle("\x1b[32m"); // green
+        $h = $this->makeQuickPick()->show()->withMatchStyle("\x1b[32m"); // green
 
         $result = $this->invokeHighlightFuzzy($h, 'hex', new FilteredItem(1, 'hex'), [1]);
 
@@ -1016,9 +1063,9 @@ final class QuickPickTest extends TestCase
             new FilteredItem(3, 'cherry'),
         ];
         $h = QuickPick::new($items)
-            ->setWindowWidth(40)
-            ->setWindowHeight(10)
-            ->setItemFormatter(static function (string $item, bool $sel, int $n = 0) use (&$calls): string {
+            ->withWindowWidth(40)
+            ->withWindowHeight(10)
+            ->withItemFormatter(static function (string $item, bool $sel, int $n = 0) use (&$calls): string {
                 $calls++;
                 return $item;
             })
@@ -1062,10 +1109,10 @@ final class QuickPickTest extends TestCase
             new FilteredItem(3, 'cherry cake'),
             new FilteredItem(4, 'date tart'),
         ])
-            ->setWindowWidth(30)
-            ->setWindowHeight(6)
-            ->setMatchStyle("\x1b[33m")
-            ->setOffset(2, 1)
+            ->withWindowWidth(30)
+            ->withWindowHeight(6)
+            ->withMatchStyle("\x1b[33m")
+            ->withOffset(2, 1)
             ->withHelpBar(new HelpBar(['Esc' => 'close', 'x' => 'nav']))
             ->withStatusBar(new StatusBar('4 items'))
             ->show()
@@ -1092,9 +1139,9 @@ final class QuickPickTest extends TestCase
             new FilteredItem(1, 'café 日本 aaa'),
             new FilteredItem(2, 'banana'),
         ])
-            ->setWindowWidth(24)
-            ->setWindowHeight(4)
-            ->setMatchStyle("\x1b[31m")
+            ->withWindowWidth(24)
+            ->withWindowHeight(4)
+            ->withMatchStyle("\x1b[31m")
             ->show()
             ->type('a');
         $bg2 = implode("\n", array_fill(0, 5, str_repeat(' ', 24)));
@@ -1159,7 +1206,7 @@ final class QuickPickTest extends TestCase
         // between the two arms.
         $pick = QuickPick::new(['alpha'])
             ->withTtySizeProvider(static fn(): array => ['cols' => 40, 'rows' => 24])
-            ->setWindowHeight(3)
+            ->withWindowHeight(3)
             ->show();
 
         $with    = $pick->view("bg\n");
@@ -1210,7 +1257,7 @@ final class QuickPickTest extends TestCase
             }
         };
 
-        $h = $this->makeQuickPick()->setRanker($ranker);
+        $h = $this->makeQuickPick()->withRanker($ranker);
         $first = $h->show()->type('an');
         $this->assertSame(['banana'], array_map(static fn($i) => $i->value(), $first->items()));
         $this->assertSame(1, $ranker->matchAllCalls, 'batch support probed once per ranker identity');
@@ -1245,7 +1292,7 @@ final class QuickPickTest extends TestCase
             }
         };
 
-        $h = $this->makeQuickPick()->setRanker($ranker)->show()->type('zz');
+        $h = $this->makeQuickPick()->withRanker($ranker)->show()->type('zz');
 
         $this->assertSame([], $h->items());
         $this->assertSame(0, $ranker->matchCalls, 'an empty batch answer is final');

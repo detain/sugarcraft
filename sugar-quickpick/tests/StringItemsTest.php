@@ -75,7 +75,7 @@ final class StringItemsTest extends TestCase
         // Use a custom formatter that produces a distinctive, verifiable marker.
         $h = QuickPick::new(['apple', 'banana', 'cherry'])
             ->show()
-            ->setItemFormatter(
+            ->withItemFormatter(
                 static fn(string $value, bool $selected): string =>
                     'ITEM:' . $value . ':' . ($selected ? 'SEL' : 'NOSEL')
             )
@@ -120,7 +120,7 @@ final class StringItemsTest extends TestCase
     {
         $h = QuickPick::new(['apple', 'banana', 'cherry'])
             ->show()
-            ->setItemFormatter(
+            ->withItemFormatter(
                 static fn(string $value, bool $selected): string =>
                     ($selected ? '[SELECTED] ' : '[        ] ') . $value
             )

@@ -203,7 +203,7 @@ final class QuickPick
 
     /**
      * All three seeds are factory-reachable through {@see new()} as well
-     * (S-28/-056); the fluent path is the filterFn builder — setFilterFn()
+     * (S-28/-056); the fluent path is the filterFn builder — withFilterFn()
      * today, canonically withFilterFn() after the naming sweep (S-24).
      *
      * @param array<array-key, string|Item> $items
@@ -265,7 +265,7 @@ final class QuickPick
         return $clone;
     }
 
-    public function setPrompt(string $prompt): self
+    public function withPrompt(string $prompt): self
     {
         $clone = clone $this;
         // The prompt feeds computeWidth(); a stale cache would keep the old
@@ -275,7 +275,7 @@ final class QuickPick
         return $clone;
     }
 
-    public function setMatchStyle(string $ansiStyle): self
+    public function withMatchStyle(string $ansiStyle): self
     {
         $clone = clone $this;
         $clone->matchStyle = $ansiStyle;
@@ -316,7 +316,7 @@ final class QuickPick
      * are visible — but are reserved for by the terminal-row budget, so
      * the whole frame still fits a short screen (-029).
      */
-    public function setWindowHeight(int $h): self
+    public function withWindowHeight(int $h): self
     {
         $clone = clone $this;
         $clone->windowHeight = \max(2, $h);
@@ -336,7 +336,7 @@ final class QuickPick
      * columns at compose time — a frame wider than the screen would
      * wrap, breaking the composite's width contract.
      */
-    public function setWindowWidth(int $w): self
+    public function withWindowWidth(int $w): self
     {
         $clone = clone $this;
         // -027: negatives used to reach view() verbatim; only `> 0` hid
@@ -353,10 +353,10 @@ final class QuickPick
      * Negative offsets would index the background from the wrong side and
      * silently smear the composite; they clamp to 0 (mm8). The column is
      * clamped at compose time so the overlay never starts past the live
-     * terminal's right edge (-063: setOffset(1000, 0) used to emit
+     * terminal's right edge (-063: withOffset(1000, 0) used to emit
      * 1023-cell rows).
      */
-    public function setOffset(int $x, int $y): self
+    public function withOffset(int $x, int $y): self
     {
         $clone = clone $this;
         $clone->xOffset = \max(0, $x);
@@ -371,7 +371,7 @@ final class QuickPick
      * whether it is currently selected, and optionally the item's number
      * (int, default 0) — it always returns the formatted display string.
      */
-    public function setItemFormatter(\Closure $fn): self
+    public function withItemFormatter(\Closure $fn): self
     {
         $clone = clone $this;
         // Item widths feed computeWidth() through the formatter; the per-item
@@ -382,7 +382,7 @@ final class QuickPick
         return $clone;
     }
 
-    public function setFilterFn(\Closure $fn): self
+    public function withFilterFn(\Closure $fn): self
     {
         $clone = clone $this;
         $clone->widthMemo->invalidate();
@@ -401,9 +401,9 @@ final class QuickPick
      *
      * Coupling rule (-050): ranking and emphasis are separate switches. A
      * ranker alone REORDERS and scores — nothing is painted until a match
-     * style is set via setMatchStyle(); with a ranker installed but an empty
+     * style is set via withMatchStyle(); with a ranker installed but an empty
      * style, the scored indices simply go unrendered. Ship both together
-     * (`->setRanker($m)->setMatchStyle("\e[33m")`) unless the reordering is
+     * (`->withRanker($m)->withMatchStyle("\e[33m")`) unless the reordering is
      * the whole point.
      *
      * Cost: the ranker re-scores the ENTIRE visible corpus on every keystroke
@@ -415,10 +415,10 @@ final class QuickPick
      *
      * The anchor bias below doubles as the escape hatch for the substring path:
      * when it rejects a legitimate late match (needle only occurs in the second
-     * half of a label), setRanker() replaces the whole rule with subsequence
+     * half of a label), withRanker() replaces the whole rule with subsequence
      * scoring.
      */
-    public function setRanker(?FuzzyMatcher $matcher): self
+    public function withRanker(?FuzzyMatcher $matcher): self
     {
         $clone = clone $this;
         $clone->widthMemo->invalidate();
@@ -428,12 +428,71 @@ final class QuickPick
         return $clone;
     }
 
+    // -------------------------------------------------------------------------
+    // Deprecated set* aliases (S-24/-005)
+    //
+    // House law names clone-returning builders with*(). These eight builders
+    // shipped as set* — the renames above are canonical and every doc in the
+    // lib speaks with*. Full removal is a BREAKING change deferred to the
+    // repo-wide campaign (CALIBER_LEARNINGS [deferred:setters-and-clone-
+    // boilerplate]); until it lands, each proxy below keeps existing hosts
+    // compiling byte-for-byte, one hop deep, zero logic.
+    // -------------------------------------------------------------------------
+
+    /** @deprecated Use {@see self::withPrompt()}; removed with the repo-wide setter campaign. */
+    public function setPrompt(string $prompt): self
+    {
+        return $this->withPrompt($prompt);
+    }
+
+    /** @deprecated Use {@see self::withMatchStyle()}; removed with the repo-wide setter campaign. */
+    public function setMatchStyle(string $ansiStyle): self
+    {
+        return $this->withMatchStyle($ansiStyle);
+    }
+
+    /** @deprecated Use {@see self::withWindowHeight()}; removed with the repo-wide setter campaign. */
+    public function setWindowHeight(int $h): self
+    {
+        return $this->withWindowHeight($h);
+    }
+
+    /** @deprecated Use {@see self::withWindowWidth()}; removed with the repo-wide setter campaign. */
+    public function setWindowWidth(int $w): self
+    {
+        return $this->withWindowWidth($w);
+    }
+
+    /** @deprecated Use {@see self::withOffset()}; removed with the repo-wide setter campaign. */
+    public function setOffset(int $x, int $y): self
+    {
+        return $this->withOffset($x, $y);
+    }
+
+    /** @deprecated Use {@see self::withItemFormatter()}; removed with the repo-wide setter campaign. */
+    public function setItemFormatter(\Closure $fn): self
+    {
+        return $this->withItemFormatter($fn);
+    }
+
+    /** @deprecated Use {@see self::withFilterFn()}; removed with the repo-wide setter campaign. */
+    public function setFilterFn(\Closure $fn): self
+    {
+        return $this->withFilterFn($fn);
+    }
+
+    /** @deprecated Use {@see self::withRanker()}; removed with the repo-wide setter campaign. */
+    public function setRanker(?FuzzyMatcher $matcher): self
+    {
+        return $this->withRanker($matcher);
+    }
+
     /**
      * Apply a border from sugar-style.
      *
      * Frames every rendered row: top/bottom rules, side runes on interior
      * rows, and the header separator joins with the border's T-runes. An
-     * explicit setWindowWidth() counts the frame (content shrinks by two);
+     * explicit withWindowWidth() counts the frame (content shrinks by two);
      * auto width adds the frame on top of the computed content width.
      * Pass null to render borderless.
      */
@@ -1193,7 +1252,7 @@ final class QuickPick
      * FIRST occurrence must start in the first half of the label — measured in
      * Unicode codepoints — the "anchor bias") and the custom filterFn.
      * Consequence: a needle that occurs only in the second half is rejected
-     * ('ry' misses 'cherry', 'e' misses 'apple'); setRanker() swaps this rule
+     * ('ry' misses 'cherry', 'e' misses 'apple'); withRanker() swaps this rule
      * for full fuzzy subsequence scoring.
      *
      * @return list<Item>
@@ -1548,7 +1607,7 @@ final class QuickPick
     private function compositeOver(array $overlayLines, int $winWidth, array $bgLines): string
     {
         // -063: an extreme x offset used to compose rows as wide as
-        // xOffset+width (setOffset(1000, 0) emitted 1023-cell lines).
+        // xOffset+width (withOffset(1000, 0) emitted 1023-cell lines).
         // Clamp the placement column to the live terminal's right edge;
         // y is bounded by the background itself (rows past it are the
         // host's own padding), so only x needs the guard.

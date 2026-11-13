@@ -34,8 +34,8 @@ $bg = str_repeat("example background line\n", 10);
 // invalidates the whole family, so re-attaching after each step is not
 // required (register the withOnResize() callback before attachSigwinch()).
 $picker = QuickPick::new($items)
-    ->setPrompt('🔍 Search: ')
-    ->setWindowHeight(10)
+    ->withPrompt('🔍 Search: ')
+    ->withWindowHeight(10)
     ->show();
 
 echo "=== QuickPick fuzzy finder — initial state ===\n";

@@ -38,8 +38,8 @@ final class QuickPickGeometryTest extends TestCase
         $items = [new FilteredItem(1, 'ab')];
         $base = QuickPick::new($items);
 
-        $narrow = $this->frame($base->setPrompt('> '), $items);
-        $wide = $this->frame($base->setPrompt('choose a very long command: '), $items);
+        $narrow = $this->frame($base->withPrompt('> '), $items);
+        $wide = $this->frame($base->withPrompt('choose a very long command: '), $items);
 
         $this->assertGreaterThan(
             Width::of($narrow[0]),
@@ -55,7 +55,7 @@ final class QuickPickGeometryTest extends TestCase
 
         $short = $this->frame($bare, $items);
         $long = $this->frame(
-            $bare->setItemFormatter(static fn(string $v): string => $v . \str_repeat('x', 40)),
+            $bare->withItemFormatter(static fn(string $v): string => $v . \str_repeat('x', 40)),
             $items
         );
 
@@ -64,7 +64,7 @@ final class QuickPickGeometryTest extends TestCase
 
     public function testAutoWidthIsClampedToTerminalColumns(): void
     {
-        $h = QuickPick::new([new FilteredItem(1, \str_repeat('w', 300))])->setWindowHeight(4);
+        $h = QuickPick::new([new FilteredItem(1, \str_repeat('w', 300))])->withWindowHeight(4);
         // Empty background rows so rendered frame rows carry the overlay
         // width alone (a wider background line would dominate the measure).
         $lines = \explode("\n", $h->show()->view(\implode("\n", \array_fill(0, 30, ''))));
@@ -105,7 +105,7 @@ final class QuickPickGeometryTest extends TestCase
         for ($i = 0; $i < 12; $i++) {
             $items[] = new FilteredItem($i + 1, "item$i");
         }
-        $h = QuickPick::new($items)->setWindowHeight(6)->setWindowWidth(40)->show()->cursorBottom();
+        $h = QuickPick::new($items)->withWindowHeight(6)->withWindowWidth(40)->show()->cursorBottom();
 
         $rendered = $h->view(\str_repeat('.', 40));
         $this->assertStringContainsString('item11', $rendered);
@@ -130,7 +130,7 @@ final class QuickPickGeometryTest extends TestCase
         // A 3-row frame now shows one item, no marker, and exactly its
         // budgeted rows — the background below stays untouched.
         $items = [new FilteredItem(1, 'one'), new FilteredItem(2, 'two'), new FilteredItem(3, 'three')];
-        $h = QuickPick::new($items)->setWindowHeight(3)->setWindowWidth(12)->show();
+        $h = QuickPick::new($items)->withWindowHeight(3)->withWindowWidth(12)->show();
 
         $lines = \explode("\n", $h->view(\implode("\n", \array_fill(0, 5, ''))));
         $this->assertStringNotContainsString('↕', \implode("\n", $lines), 'marker suppressed while it cannot fit');
@@ -153,7 +153,7 @@ final class QuickPickGeometryTest extends TestCase
                     for ($i = 0; $i < $count; $i++) {
                         $items[] = new FilteredItem($i + 1, "item$i");
                     }
-                    $handler = QuickPick::new($items)->setWindowHeight($height)->setWindowWidth(16);
+                    $handler = QuickPick::new($items)->withWindowHeight($height)->withWindowWidth(16);
                     if ($termRows !== null) {
                         $handler = $handler->withTtySizeProvider(
                             static fn(): array => ['cols' => 40, 'rows' => $termRows]
@@ -202,7 +202,7 @@ final class QuickPickGeometryTest extends TestCase
         // >=20-col host the observable pin is "never wraps the screen, and
         // the degenerate probe's fallback (80) already covers zero width".
         $cols = (new \SugarCraft\Core\Util\Tty(\STDIN))->size()['cols'] ?: 80;
-        $h = QuickPick::new(['a'])->setWindowHeight(3)->show();
+        $h = QuickPick::new(['a'])->withWindowHeight(3)->show();
         $lines = \explode("\n", $h->view(\implode("\n", \array_fill(0, 4, ''))));
         foreach ($lines as $line) {
             $this->assertLessThanOrEqual($cols, Width::of($line), 'auto frame must never exceed the terminal');
@@ -216,13 +216,13 @@ final class QuickPickGeometryTest extends TestCase
         // over-cols width composed rows that wrapped the screen.
         $items = [new FilteredItem(1, 'apple')];
         $this->assertSame(
-            $this->frame(QuickPick::new($items)->setWindowWidth(0), $items),
-            $this->frame(QuickPick::new($items)->setWindowWidth(-7), $items),
+            $this->frame(QuickPick::new($items)->withWindowWidth(0), $items),
+            $this->frame(QuickPick::new($items)->withWindowWidth(-7), $items),
             'negative widths must normalise to auto (0)'
         );
 
         $cols = (new \SugarCraft\Core\Util\Tty(\STDIN))->size()['cols'] ?: 80;
-        $lines = $this->frame(QuickPick::new($items)->setWindowWidth(100000)->setWindowHeight(3), $items);
+        $lines = $this->frame(QuickPick::new($items)->withWindowWidth(100000)->withWindowHeight(3), $items);
         $this->assertSame($cols, Width::of($lines[0]), 'an over-wide frame must clamp to the live columns');
         foreach ($lines as $line) {
             $this->assertLessThanOrEqual($cols, Width::of($line));
@@ -236,8 +236,8 @@ final class QuickPickGeometryTest extends TestCase
         // the width it was given. The frame now floors at its
         // border-consumed minimum (two runes + one content cell).
         $h = QuickPick::new(['apple'])
-            ->setWindowWidth(2)
-            ->setWindowHeight(3)
+            ->withWindowWidth(2)
+            ->withWindowHeight(3)
             ->withBorder(Border::normal())
             ->show();
         $lines = \explode("\n", $h->view(\implode("\n", \array_fill(0, 4, ''))));
@@ -253,9 +253,9 @@ final class QuickPickGeometryTest extends TestCase
         // screen's right edge.
         $cols = (new \SugarCraft\Core\Util\Tty(\STDIN))->size()['cols'] ?: 80;
         $h = QuickPick::new(['apple'])
-            ->setWindowWidth(20)
-            ->setWindowHeight(3)
-            ->setOffset(1000, 0)
+            ->withWindowWidth(20)
+            ->withWindowHeight(3)
+            ->withOffset(1000, 0)
             ->show();
         $lines = \explode("\n", $h->view(\implode("\n", \array_fill(0, 4, ''))));
 
@@ -270,10 +270,10 @@ final class QuickPickGeometryTest extends TestCase
         // -028: an empty corpus rendered a blank frame, indistinguishable
         // from a fault. It must say 'no items'; a filter that matched
         // nothing still says 'no matches' — the two states are distinct.
-        $empty = QuickPick::new([])->setWindowHeight(4)->setWindowWidth(20)->show();
+        $empty = QuickPick::new([])->withWindowHeight(4)->withWindowWidth(20)->show();
         $this->assertStringContainsString('no items', $empty->view(\str_repeat('.', 20)));
 
-        $filtered = QuickPick::new(['apple'])->setWindowHeight(4)->setWindowWidth(20)->show()->type('zz');
+        $filtered = QuickPick::new(['apple'])->withWindowHeight(4)->withWindowWidth(20)->show()->type('zz');
         $rendered = $filtered->view(\str_repeat('.', 20));
         $this->assertStringContainsString('no matches', $rendered);
         $this->assertStringNotContainsString('no items', $rendered);
@@ -281,18 +281,18 @@ final class QuickPickGeometryTest extends TestCase
 
     public function testFittingListCarriesNoMarker(): void
     {
-        $h = QuickPick::new(['apple', 'banana'])->setWindowHeight(6)->show();
+        $h = QuickPick::new(['apple', 'banana'])->withWindowHeight(6)->show();
         $this->assertStringNotContainsString('↕', $h->view(\str_repeat('.', 40)));
     }
 
     public function testNegativeOffsetsClampToOrigin(): void
     {
-        $h = QuickPick::new(['apple'])->setWindowWidth(20)->setWindowHeight(4);
+        $h = QuickPick::new(['apple'])->withWindowWidth(20)->withWindowHeight(4);
         $bg = \str_repeat('.', 40) . "\n" . \str_repeat('.', 40);
 
         $this->assertSame(
-            $h->setOffset(0, 0)->show()->view($bg),
-            $h->setOffset(-5, -9)->show()->view($bg),
+            $h->withOffset(0, 0)->show()->view($bg),
+            $h->withOffset(-5, -9)->show()->view($bg),
             'negative offsets must clamp to 0, not smear the composite (mm8)'
         );
     }
@@ -303,7 +303,7 @@ final class QuickPickGeometryTest extends TestCase
         // header + separator. Since -002 a 2-row frame carries no chrome at
         // all — the marker is suppressed while it cannot fit and the clamp
         // trims anything that would overflow the budget.
-        $h = QuickPick::new(['apple'])->setWindowHeight(1)->show();
+        $h = QuickPick::new(['apple'])->withWindowHeight(1)->show();
         $lines = \explode("\n", $h->view(''));
 
         $this->assertGreaterThanOrEqual(2, \count($lines));
@@ -315,9 +315,9 @@ final class QuickPickGeometryTest extends TestCase
         // overlay left of its column; the prefix is padded to the exact
         // offset width in display cells.
         $h = QuickPick::new(['apple'])
-            ->setWindowWidth(12)
-            ->setWindowHeight(3)
-            ->setOffset(10, 0)
+            ->withWindowWidth(12)
+            ->withWindowHeight(3)
+            ->withOffset(10, 0)
             ->show();
 
         $bg = "ab\n\n" . \str_repeat('.', 40);
@@ -341,9 +341,9 @@ final class QuickPickGeometryTest extends TestCase
         // longer than the frame emitted an over-wide row that reached the
         // terminal whenever no background column was waiting behind it.
         $h = QuickPick::new(['x'])
-            ->setWindowWidth(20)
-            ->setWindowHeight(3)
-            ->setPrompt('a prompt far longer than twenty cells: ')
+            ->withWindowWidth(20)
+            ->withWindowHeight(3)
+            ->withPrompt('a prompt far longer than twenty cells: ')
             ->show();
 
         $lines = \explode("\n", $h->view(\implode("\n", \array_fill(0, 10, ''))));
@@ -368,8 +368,8 @@ final class QuickPickGeometryTest extends TestCase
             $items[] = new FilteredItem($i + 1, "item$i");
         }
         $scrolled = QuickPick::new($items)
-            ->setWindowWidth(8)
-            ->setWindowHeight(4)
+            ->withWindowWidth(8)
+            ->withWindowHeight(4)
             ->show()
             ->cursorBottom();
 
@@ -422,7 +422,7 @@ final class QuickPickGeometryTest extends TestCase
         // truncated exactly the focused row.
         $items   = [new FilteredItem(1, 'abcdefghij')];
         $h       = QuickPick::new($items)
-            ->setItemFormatter(static fn(string $v, bool $sel): string => $sel ? $v . '::' : $v)
+            ->withItemFormatter(static fn(string $v, bool $sel): string => $sel ? $v . '::' : $v)
             ->show();
         $rows    = $this->frame($h, $items);
         $focused = null;
@@ -468,7 +468,7 @@ final class QuickPickGeometryTest extends TestCase
         // no item is re-measured: a 60-rune prompt must widen the frame.
         // Header term = prompt + filter 'a' (1) + caret '▏' (1) + PAD 5.
         $promptLong = str_repeat('p', 60) . ': ';
-        $long       = $typed->setPrompt($promptLong);
+        $long       = $typed->withPrompt($promptLong);
         $longRows   = \explode("\n", $long->view($bg));
         $this->assertSame(
             Width::of($promptLong) + 1 + 1 + 5,
@@ -486,12 +486,12 @@ final class QuickPickGeometryTest extends TestCase
     {
         $items = [new FilteredItem(1, 'ab')];
         $a     = QuickPick::new($items)
-            ->setItemFormatter(static fn(string $v): string => $v)
+            ->withItemFormatter(static fn(string $v): string => $v)
             ->show();
         $bg = \implode("\n", \array_fill(0, 30, ''));
         $a->view($bg); // warm measurements with the plain formatter
 
-        $b      = $a->setItemFormatter(static fn(string $v, bool $sel): string => $sel ? $v . \str_repeat('w', 30) : $v);
+        $b      = $a->withItemFormatter(static fn(string $v, bool $sel): string => $sel ? $v . \str_repeat('w', 30) : $v);
         $rows   = $this->frame($b, $items);
         $found  = false;
         foreach ($rows as $row) {
@@ -514,8 +514,8 @@ final class QuickPickGeometryTest extends TestCase
             $items[] = new FilteredItem($i + 1, "item$i");
         }
         $pick = QuickPick::new($items)
-            ->setWindowHeight(10)
-            ->setWindowWidth(16)
+            ->withWindowHeight(10)
+            ->withWindowWidth(16)
             ->withTtySizeProvider(static fn(): array => ['cols' => 40, 'rows' => 5])
             ->show();
 
@@ -538,13 +538,13 @@ final class QuickPickGeometryTest extends TestCase
         // the host's setWindowHeight stays the maximum, mirroring the
         // antecedent's model re-clamp.
         $tall = QuickPick::new(['a', 'b', 'c', 'd'])
-            ->setWindowHeight(10)
-            ->setWindowWidth(16)
+            ->withWindowHeight(10)
+            ->withWindowWidth(16)
             ->withTtySizeProvider(static fn(): array => ['cols' => 40, 'rows' => 20])
             ->show();
         $this->assertCount(10, \explode("\n", $tall->view('')), 'a roomy screen restores the frozen 10, not 20');
 
-        $tiny = $tall->setWindowHeight(3);
+        $tiny = $tall->withWindowHeight(3);
         $this->assertCount(3, \explode("\n", $tiny->view('')), 'a shrunk h stays shrunk on a big screen');
     }
 
@@ -555,16 +555,16 @@ final class QuickPickGeometryTest extends TestCase
         // is sized, so the total frame fits: 6 rows with a border = 4
         // windowed + 2 frame rows; 7 rows with two bars = 5 + 2.
         $bordered = QuickPick::new(['a', 'b', 'c'])
-            ->setWindowHeight(10)
-            ->setWindowWidth(16)
+            ->withWindowHeight(10)
+            ->withWindowWidth(16)
             ->withBorder(Border::normal())
             ->withTtySizeProvider(static fn(): array => ['cols' => 40, 'rows' => 6])
             ->show();
         $this->assertCount(6, \explode("\n", $bordered->view('')), 'bordered frame fits a 6-row screen exactly');
 
         $barred = QuickPick::new(['a', 'b', 'c'])
-            ->setWindowHeight(10)
-            ->setWindowWidth(16)
+            ->withWindowHeight(10)
+            ->withWindowWidth(16)
             ->withHelpBar(new HelpBar(['ctrl-q' => 'quit']))
             ->withStatusBar(new StatusBar('ready'))
             ->withTtySizeProvider(static fn(): array => ['cols' => 40, 'rows' => 7])
@@ -578,8 +578,8 @@ final class QuickPickGeometryTest extends TestCase
         // minimum (header + separator): clamping to 1 would render an
         // unusable stub instead of a slightly overflowing minimal frame.
         $pick = QuickPick::new(['a', 'b'])
-            ->setWindowHeight(10)
-            ->setWindowWidth(16)
+            ->withWindowHeight(10)
+            ->withWindowWidth(16)
             ->withTtySizeProvider(static fn(): array => ['cols' => 40, 'rows' => 1])
             ->show();
         $this->assertCount(2, \explode("\n", $pick->view('')), 'the documented floor survives a 1-row screen');

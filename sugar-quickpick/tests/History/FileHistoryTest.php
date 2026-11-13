@@ -269,4 +269,142 @@ final class FileHistoryTest extends TestCase
 
         $this->assertSame(['known'], array_map(static fn($i) => $i->value(), $items));
     }
+
+    /**
+     * S-22/-030: upstream theHermit dedupes history; here 20 identical
+     * selections through appendDistinct() must leave ONE row carrying the
+     * newest ordinal at the newest position — not 20 rows feeding the
+     * per-keystroke scan.
+     */
+    public function testAppendDistinctCollapsesRepeatsToTheNewestRow(): void
+    {
+        $history = new FileHistory($this->tmpPath);
+        for ($i = 1; $i <= 20; $i++) {
+            $history->appendDistinct(new FilteredItem($i, 'dup'));
+        }
+
+        $items = $history->all();
+
+        $this->assertCount(1, $items);
+        $this->assertSame('dup', $items[0]->value());
+        $this->assertSame(20, $items[0]->number());
+    }
+
+    /**
+     * S-22/-030: a repeat is a RE-selection — the survivor moves to the end
+     * (last-wins position), it does not stay parked where it was first seen.
+     */
+    public function testAppendDistinctMovesRepeatedValueToNewestPosition(): void
+    {
+        $history = new FileHistory($this->tmpPath);
+        $history->appendDistinct(new FilteredItem(1, 'a'));
+        $history->appendDistinct(new FilteredItem(2, 'b'));
+        $history->appendDistinct(new FilteredItem(3, 'a'));
+
+        $items = $history->all();
+
+        $this->assertSame(['b', 'a'], array_map(static fn($i) => $i->value(), $items));
+        $this->assertSame([2, 3], array_map(static fn($i) => $i->number(), $items));
+    }
+
+    /** S-22/-030: the constructor cap trims the rewrite to the newest N rows. */
+    public function testAppendDistinctTrimsToNewestCap(): void
+    {
+        $history = new FileHistory($this->tmpPath, null, 2);
+        $history->appendDistinct(new FilteredItem(1, 'a'));
+        $history->appendDistinct(new FilteredItem(2, 'b'));
+        $history->appendDistinct(new FilteredItem(3, 'c'));
+
+        $items = $history->all();
+
+        $this->assertSame(['b', 'c'], array_map(static fn($i) => $i->value(), $items));
+    }
+
+    /** S-22/-030: null cap (the default) bounds nothing — distinct rows all stay. */
+    public function testAppendDistinctWithoutCapKeepsEveryDistinctRow(): void
+    {
+        $history = new FileHistory($this->tmpPath);
+        $history->appendDistinct(new FilteredItem(1, 'a'));
+        $history->appendDistinct(new FilteredItem(2, 'b'));
+        $history->appendDistinct(new FilteredItem(3, 'c'));
+
+        $this->assertCount(3, $history->all());
+    }
+
+    /**
+     * S-22/-030: append() is the RAW journal — the acceptance clause "plain
+     * append byte-behavior unchanged" means repeats stay repeated and the
+     * cap must never trim honest appends.
+     */
+    public function testPlainAppendIgnoresDedupeAndCap(): void
+    {
+        $history = new FileHistory($this->tmpPath, null, 1);
+        $history->append(new FilteredItem(1, 'a'));
+        $history->append(new FilteredItem(2, 'a'));
+        $history->append(new FilteredItem(3, 'b'));
+
+        $items = $history->all();
+
+        $this->assertCount(3, $items);
+        $this->assertSame(['a', 'a', 'b'], array_map(static fn($i) => $i->value(), $items));
+    }
+
+    /**
+     * S-22/-030: the managed rewrite doubles as housekeeping — rows the
+     * reader already ignores (unparseable, future-format) are not carried
+     * forward, while honest rows survive.
+     */
+    public function testAppendDistinctDropsRowsTheReaderIgnores(): void
+    {
+        \file_put_contents(
+            $this->tmpPath,
+            "{\"n\":1,\"v\":\"keep\"}\n{bad json\n{\"n\":2,\"v\":\"future\",\"f\":99}\n",
+        );
+        \chmod($this->tmpPath, 0600);
+
+        $history = new FileHistory($this->tmpPath);
+        $history->appendDistinct(new FilteredItem(3, 'fresh'));
+
+        $items = $history->all();
+
+        $this->assertSame(['keep', 'fresh'], array_map(static fn($i) => $i->value(), $items));
+
+        // Byte-level: the rewrite must not launder garbage back onto disk —
+        // an assertion through all() alone could not see a carried-forward
+        // unparseable row (it stays invisible to readers).
+        $raw = (string) \file_get_contents($this->tmpPath);
+        $this->assertStringNotContainsString('bad json', $raw);
+        $this->assertStringNotContainsString('"f":99', $raw);
+    }
+
+    /**
+     * S-22/-030: the rewrite manages WHICH rows exist, never what an honest
+     * row says — surviving bytes (here a legacy no-"f" row) are re-emitted
+     * verbatim instead of being silently re-serialized into the new shape.
+     */
+    public function testAppendDistinctPreservesRawBytesOfSurvivingRows(): void
+    {
+        $legacy = '{"n":5,"v":"legacy"}';
+        \file_put_contents($this->tmpPath, $legacy . "\n");
+        \chmod($this->tmpPath, 0600);
+
+        $history = new FileHistory($this->tmpPath);
+        $history->appendDistinct(new FilteredItem(6, 'fresh'));
+
+        $raw = (string) \file_get_contents($this->tmpPath);
+
+        $this->assertStringContainsString($legacy, $raw);
+        $items = $history->all();
+        $this->assertSame(['legacy', 'fresh'], array_map(static fn($i) => $i->value(), $items));
+        $this->assertSame(5, $items[0]->number());
+    }
+
+    /** S-22/-030: a cap below 1 would keep nothing on every rewrite: a mis-set setting, refused at the door. */
+    public function testConstructorRefusesUselessCap(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('entry cap must be >= 1');
+
+        new FileHistory($this->tmpPath, null, 0);
+    }
 }

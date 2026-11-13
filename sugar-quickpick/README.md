@@ -38,14 +38,14 @@ composer require sugarcraft/sugar-quickpick
 - **ext-pcntl** — only for `attachSigwinch()`, the opt-in SIGWINCH
   re-render attach. Without it `attachSigwinch()` returns `false` and
   everything else keeps working. On a resized terminal the auto width then
-  re-probes only when some width-affecting mutation (`setPrompt`,
+  re-probes only when some width-affecting mutation (`withPrompt`,
   `withItems`, `type()`, …) drops the memoized computed width — force a
   re-measure by applying one, or build a fresh instance.
 - **A UTF-8 capable terminal** — the built-in chrome draws U+2195 `↕`
   (overflow marker), U+2500 `─` (separator), U+258F `▏` (filter caret) and
   U+22EF `⋯` (filter-cap overflow); a legacy non-UTF-8 terminal shows them
   as mojibake. Host-substitutable vs fixed: the cursor bullet (`● `) and
-  the ordinal prefix are your `setItemFormatter`'s bytes — pick any ASCII
+  the ordinal prefix are your `withItemFormatter`'s bytes — pick any ASCII
   if you must — while the separator, caret and marker live in the lang
   catalogue (`Lang::t('filter_caret')`, `'showing_range'`, …), measured
   with `Width::of()` cell maths, and are not re-flowed for narrower
@@ -65,8 +65,8 @@ $items = ['apple', 'banana', 'cherry', 'date', 'elderberry'];
 
 // Create the overlay
 $h = QuickPick::new($items)
-    ->setPrompt('> ')
-    ->setItemFormatter(fn($item, $selected) => ($selected ? '*' : ' ') . " $item");
+    ->withPrompt('> ')
+    ->withItemFormatter(fn($item, $selected) => ($selected ? '*' : ' ') . " $item");
 
 // Show and type to filter
 $h = $h->show();
@@ -103,8 +103,8 @@ $items = [
 
 // Create the overlay with Item[] and a custom filter function
 $h = QuickPick::new($items)
-    ->setFilterFn(fn($item): bool => $item->number() > 0)  // filter by custom predicate
-    ->setPrompt('> ');
+    ->withFilterFn(fn($item): bool => $item->number() > 0)  // filter by custom predicate
+    ->withPrompt('> ');
 
 // Persist selections to a JSONL file inside your app's own state directory.
 // Pick a path you own — never a predictable world-shared location like /tmp.
@@ -131,12 +131,12 @@ exactly at the halfway point is already rejected), and `e` does not match
 `apple` (its first hit is past halfway).
 When the bias hides matches that plain substring would have kept, the frame
 says so: a `N hidden by anchor bias` row counts what the rule dropped.
-These are deliberate — deep matches are usually noise — and `setRanker()` is
+These are deliberate — deep matches are usually noise — and `withRanker()` is
 the escape hatch: plug in a
 [sugar-fuzzy](https://github.com/sugarcraft/sugar-fuzzy) ranker to switch to **true subsequence matching**,
 ordering the list by descending fuzzy score and highlighting the scored runes.
 A ranker alone only REORDERS — emphasis is a separate switch: nothing is
-painted until you also set `setMatchStyle()` with an SGR string — the example
+painted until you also set `withMatchStyle()` with an SGR string — the example
 below ships both switches:
 
 ```php
@@ -150,32 +150,32 @@ $items = ['terminal', 'editor', 'compiler'];
 // the rule that runs: by default the matcher also keeps PARTIAL subsequence
 // scores, so 'editor' (t) and 'compiler' (m, l) would survive at 'tml' too.
 $h = QuickPick::new($items)
-    ->setRanker(new SmithWatermanMatcher(requireFullQuery: true))   // or any FuzzyMatcher
-    ->setMatchStyle("\e[1m")
+    ->withRanker(new SmithWatermanMatcher(requireFullQuery: true))   // or any FuzzyMatcher
+    ->withMatchStyle("\e[1m")
     ->show()
     ->type('tml');   // keeps only "terminal"; the default substring filter would miss it
 
-// setRanker(null) restores the default substring filter.
+// withRanker(null) restores the default substring filter.
 ```
 
-A custom `setFilterFn()` predicate still applies on top of the ranker.
+A custom `withFilterFn()` predicate still applies on top of the ranker.
 
 ## Features
 
 | Feature | Description |
 |---------|-------------|
-| **Fuzzy filtering** | Filter list items as you type with anchor-aware substring matching, or plug in a sugar-fuzzy ranker via `setRanker()` for true subsequence scoring |
+| **Fuzzy filtering** | Filter list items as you type with anchor-aware substring matching, or plug in a sugar-fuzzy ranker via `withRanker()` for true subsequence scoring |
 | **Overlay compositing** | Background view renders underneath; overlay chars replace background at specified positions |
 | **Background continues updating** | The QuickPick doesn't block the underlying view |
 | **Fully styleable** | Custom filter prompt, item format, matching highlight, window dimensions |
-| **String renderer** | `view()` returns strings you manage; the only terminal I/O is the STDIN geometry probe the auto-width path runs on a width-cache miss plus the screen-clamp probe every render applies (see `setWindowWidth` — a width that fits the screen renders identically everywhere) and the opt-in `attachSigwinch()` resize attach (an `ioctl` + `pcntl` handler), which you never have to call |
+| **String renderer** | `view()` returns strings you manage; the only terminal I/O is the STDIN geometry probe the auto-width path runs on a width-cache miss plus the screen-clamp probe every render applies (see `withWindowWidth` — a width that fits the screen renders identically everywhere) and the opt-in `attachSigwinch()` resize attach (an `ioctl` + `pcntl` handler), which you never have to call |
 | **Item interface** | Work with structured `Item` objects instead of raw strings |
 | **Persistent history** | `FileHistory` stores items as JSONL for session persistence |
-| **Custom filter predicates** | `setFilterFn()` lets you filter items by arbitrary criteria |
+| **Custom filter predicates** | `withFilterFn()` lets you filter items by arbitrary criteria |
 | **Border & Style composition** | `withBorder()` and `withStyle()` compose `sugar-style` `Border` and `Style` for window decoration |
 | **HelpBar / StatusBar** | `withHelpBar()` and `withStatusBar()` attach keyboard-shortcut and status-line renders below the overlay |
 | **SIGWINCH resize** | `withOnResize()` + `attachSigwinch()` forwards terminal resize events via `SignalForwarder::attachSigwinchToFd` |
-| **Colorless by design** | The frame itself emits no color — pure Unicode runes (the default row decoration is the `●` cursor dot plus plain ordinals, and `setItemFormatter()` replaces it wholesale). SGR appears only where the host opts in (`setMatchStyle()`, the item formatter, `withStyle()`) — and once opted in, those escapes go out unconditionally: honoring `NO_COLOR`/`CLICOLOR` is the host's job (skip the opt-ins on dumb terminals, or prefer the two-channel emphasis of runes that needs no color) |
+| **Colorless by design** | The frame itself emits no color — pure Unicode runes (the default row decoration is the `●` cursor dot plus plain ordinals, and `withItemFormatter()` replaces it wholesale). SGR appears only where the host opts in (`withMatchStyle()`, the item formatter, `withStyle()`) — and once opted in, those escapes go out unconditionally: honoring `NO_COLOR`/`CLICOLOR` is the host's job (skip the opt-ins on dumb terminals, or prefer the two-channel emphasis of runes that needs no color) |
 
 ## Architecture
 
@@ -209,12 +209,12 @@ public static function new(array $items = [], ?\Closure $itemFormatter = null): 
 
 The raw constructor additionally accepts a third optional `?\Closure $filterFn`
 predicate — a way to seed a custom filter without a fluent call. `new()` does
-not expose it; `setFilterFn()` (configuration below) is the fluent path.
+not expose it; `withFilterFn()` (configuration below) is the fluent path.
 
 ## API — QuickPick configuration (fluent setters)
 
 Every `set*()`/`with*()` below returns a **clone**; the receiver is never
-mutated. Bind the result (`$h = $h->setPrompt('> ');`) or the change is lost.
+mutated. Bind the result (`$h = $h->withPrompt('> ');`) or the change is lost.
 
 ```php
 // Replace items (string[] or Item[]). The filter text is KEPT and the new
@@ -222,10 +222,10 @@ mutated. Bind the result (`$h = $h->setPrompt('> ');`) or the change is lost.
 public function withItems(array $items): self
 
 // Configure the filter prompt
-public function setPrompt(string $prompt): self
+public function withPrompt(string $prompt): self
 
 // Set ANSI SGR codes for matched character highlighting (e.g. "\e[33m")
-public function setMatchStyle(string $ansiStyle): self
+public function withMatchStyle(string $ansiStyle): self
 
 // Set overlay window height in rows INCLUDING header+separator, so the
 // visible item count is height − 2 (clamped to a minimum of 2) — minus one
@@ -244,7 +244,7 @@ public function setMatchStyle(string $ansiStyle): self
 // help/status rows come off the screen first; a two-row minimum frame is
 // the floor), so a tall frozen window never spills past a short terminal
 // (-029, shrink-only: growing back recovers up to h, never past it).
-public function setWindowHeight(int $h): self
+public function withWindowHeight(int $h): self
 
 // Set overlay width. 0 (default) = auto: the computed prompt+items width is
 // clamped to min(computed, cols) — an auto frame never exceeds the live
@@ -265,13 +265,13 @@ public function setWindowHeight(int $h): self
 // used to compose wrapping rows); a border consumes two of those cells with
 // a border-consumed minimum of 3 so the runes are never sliced. That screen
 // clamp is the one geometry probe the explicit-width path still runs.
-public function setWindowWidth(int $w): self
+public function withWindowWidth(int $w): self
 
 // Position the overlay at (x, y). Pure placement: visibility is unchanged
 // (use show()/hide()), negative coordinates clamp to 0, and the column is
 // clamped at compose time so the overlay never starts past the terminal's
-// right edge (-063: setOffset(1000, 0) used to emit 1023-cell rows).
-public function setOffset(int $x, int $y): self
+// right edge (-063: withOffset(1000, 0) used to emit 1023-cell rows).
+public function withOffset(int $x, int $y): self
 
 // Custom item formatter:
 //   Closure(string $value, bool $isSelected, int $number): string
@@ -282,13 +282,13 @@ public function setOffset(int $x, int $y): self
 // plus the selection flag and the item's ordinal. Values arrive already
 // guarded (control bytes, escape sequences and forged zone sentinels are
 // stripped before you see them); SGR you add survives highlighting.
-public function setItemFormatter(\Closure $fn): self
+public function withItemFormatter(\Closure $fn): self
 
 // Custom filter predicate: Closure(Item $item): bool
 // Applied in addition to the built-in filter (contiguous substring match by
-// default; fuzzy scoring only when setRanker() is active); return false to
+// default; fuzzy scoring only when withRanker() is active); return false to
 // exclude the item
-public function setFilterFn(\Closure $fn): self
+public function withFilterFn(\Closure $fn): self
 
 // Plug in a sugar-fuzzy ranker (null restores the default substring filter).
 // When set, a non-empty filter ranks items by descending fuzzy score (true
@@ -297,7 +297,7 @@ public function setFilterFn(\Closure $fn): self
 // on the order of hundreds of ms on 20k-item lists (the substring path is
 // low double-digit ms; both figures are machine-dependent). Debounce at the
 // host or keep corpora modest.
-public function setRanker(?\SugarCraft\Fuzzy\FuzzyMatcher $matcher): self
+public function withRanker(?\SugarCraft\Fuzzy\FuzzyMatcher $matcher): self
 
 // Apply a sugar-style Border to the overlay window
 public function withBorder(?\SugarCraft\Style\Border $border): self
@@ -321,6 +321,15 @@ public function withOnResize(?\Closure $callback): self
 // Attach SIGWINCH handler via SignalForwarder::attachSigwinchToFd (requires ext-pcntl)
 public function attachSigwinch(): bool
 ```
+
+> **Naming.** These builders are canonically `with*()` (house law: a
+> clone-returning builder is a `with`-mutation; a discarded return is then
+> visibly a no-op). The historical `set*()` names (`setPrompt`,
+> `setMatchStyle`, `setWindowHeight`, `setWindowWidth`, `setOffset`,
+> `setItemFormatter`, `setFilterFn`, `setRanker`) remain as one-hop
+> `@deprecated` aliases so existing hosts keep compiling; removal rides the
+> repo-wide setter-campaign ruling and will arrive as its own breaking
+> change, never silently.
 
 ## API — QuickPick state mutations
 
@@ -445,7 +454,10 @@ $history = new FileHistory(getenv('HOME') . '/.myapp/history.jsonl');
 // exist.
 $history = new FileHistory('history.jsonl', baseDir: getenv('HOME') . '/.myapp');
 
-// Append an Item (stored as a JSON line: {"n":1,"v":"apple"}\n).
+// Append an Item as the raw journal row (stored as a JSON line:
+// {"n":1,"v":"apple","f":1}\n — "f" is the row-format stamp; rows written
+// before the stamp existed load unchanged, rows from a FUTURE format are
+// skipped whole rather than guessed at).
 // Fails LOUD — a RuntimeException when the file cannot be opened, locked,
 // or fully written, or when the path is a symlink. Nothing is ever
 // silently dropped.
@@ -455,10 +467,6 @@ $history->append(new FilteredItem(1, 'apple'));
 // scalars, arrays without a value field) are skipped.
 $items = $history->all();  // returns list<Item>
 
-// Growth policy: the file grows unbounded by design — there is no built-in
-// rotation or cap. Hosts that need one trim with clear() (or rewrite the
-// file themselves between sessions).
-
 // Clear the history: the file is truncated in place under an exclusive
 // lock (permissions and inode are preserved; no unlink-and-recreate).
 $history->clear();
@@ -466,6 +474,45 @@ $history->clear();
 // Get the history file path (absolute and confined when baseDir is set).
 $path = $history->path();
 ```
+
+## History management
+
+`append()` is a raw journal: one row per selection, forever. That is the
+right shape when every pick is an event worth keeping — but as a MRU list
+it grows the launch read into a per-keystroke scan over its own duplicates
+(upstream theHermit deduped; plain `fgets` used to slurp whole hostile
+lines). The managed API covers both halves (-030):
+
+```php
+use SugarCraft\QuickPick\History\FileHistory;
+use SugarCraft\QuickPick\FilteredItem;
+
+// appendDistinct(): append, then rewrite the row SET under one held
+// exclusive lock — an earlier row with the same value is dropped (the
+// newest occurrence keeps the newest position), and rows every reader
+// already ignores (unparseable, future-format, oversized) are not carried
+// forward. The rewrite is housekeeping for free.
+$history = new FileHistory(getenv('HOME') . '/.myapp/history.jsonl');
+$history->appendDistinct(new FilteredItem(1, 'apple'));
+$history->appendDistinct(new FilteredItem(2, 'banana'));
+$history->appendDistinct(new FilteredItem(3, 'apple')); // apple moves to newest
+// -> all(): banana, apple
+
+// Growth bound: construct with a cap and each managed rewrite keeps at
+// most that many NEWEST rows. Null (the default) is unbounded, and plain
+// append() never consults the cap — byte behavior unchanged.
+$capped = new FileHistory(getenv('HOME') . '/.myapp/history.jsonl', null, 200);
+$capped->appendDistinct(new FilteredItem(1, 'the-201st')); // oldest row trimmed
+
+// Rotation for the raw journal stays manual: clear() truncates in place
+// under the same lock, or rewrite the file yourself between sessions.
+```
+
+Read-side bound (independent of growth): a row longer than 64 KiB cannot
+have been written here, so `all()` **drops it whole** — drained to the next
+newline so following rows still read — and counts the drop in
+`droppedOversizedLines()`. The next `appendDistinct()` rewrite drops such
+rows from the file permanently.
 
 ## API — HelpBar
 

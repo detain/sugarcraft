@@ -368,9 +368,10 @@ final class FileHistorySecurityTest extends TestCase
         $item = new FilteredItem(1, 'victim-selection');
 
         foreach ([
-            'append' => static fn(FileHistory $h) => $h->append($item),
-            'read'   => static fn(FileHistory $h) => $h->all(),
-            'clear'  => static fn(FileHistory $h) => $h->clear(),
+            'append'          => static fn(FileHistory $h) => $h->append($item),
+            'append-distinct' => static fn(FileHistory $h) => $h->appendDistinct($item),
+            'read'            => static fn(FileHistory $h) => $h->all(),
+            'clear'           => static fn(FileHistory $h) => $h->clear(),
         ] as $op => $drive) {
             $path = $this->tempPath();
             file_put_contents($path, '');
@@ -496,5 +497,68 @@ final class FileHistorySecurityTest extends TestCase
         }
 
         self::assertSame([], (new FileHistory($path))->all());
+    }
+
+    /**
+     * S-22/-030: appendDistinct()'s rewrite cannot roll back (the old row
+     * set is gone by design), so its contract is DEGRADED-NOT-POISONOUS: a
+     * short write throws loud, the ragged tail stays out of every future
+     * read, and the next managed rewrite repairs the file.
+     */
+    public function testShortWriteDuringRewriteThrowsAndLeavesTheFileRepairable(): void
+    {
+        $path = $this->tempPath();
+        $history = new FileHistory($path);
+        $history->append(new FilteredItem(1, 'a'));
+        $history->append(new FilteredItem(2, 'b'));
+
+        $tornWriter = new class ($path) extends FileHistory {
+            protected function writeLine($handle, string $line): int|false
+            {
+                return \fwrite($handle, \substr($line, 0, 5));
+            }
+        };
+
+        try {
+            $tornWriter->appendDistinct(new FilteredItem(3, 'c'));
+            self::fail('expected RuntimeException for a short rewrite');
+        } catch (RuntimeException $e) {
+            self::assertStringContainsString('Short write while rewriting', $e->getMessage());
+        }
+
+        // Honest empty, never an exception: the shape gate eats the ragged tail.
+        self::assertSame([], (new FileHistory($path))->all());
+
+        (new FileHistory($path))->appendDistinct(new FilteredItem(4, 'fresh'));
+        self::assertSame(['fresh'], array_map(static fn($i) => $i->value(), (new FileHistory($path))->all()));
+    }
+
+    /**
+     * S-22/-030: the managed rewrite is a write-side operation — it joins
+     * append()/clear() in HARD-requiring the exclusive lock, throwing before
+     * a single byte moves.
+     */
+    public function testAppendDistinctRefusesToRewriteWhenTheLockFails(): void
+    {
+        $path = $this->tempPath();
+        (new FileHistory($path))->append(new FilteredItem(1, 'legacy'));
+        $bytesBefore = (string) file_get_contents($path);
+
+        $lockedOut = new class ($path) extends FileHistory {
+            /** exclusive locks refused, shared locks passed through */
+            protected function lockHandle($handle, int $operation): bool
+            {
+                return $operation === \LOCK_SH ? \flock($handle, $operation) : false;
+            }
+        };
+
+        try {
+            $lockedOut->appendDistinct(new FilteredItem(2, 'never'));
+            self::fail('expected RuntimeException for a refused exclusive lock');
+        } catch (RuntimeException $e) {
+            self::assertStringContainsString('Cannot lock QuickPick history file', $e->getMessage());
+        }
+
+        self::assertSame($bytesBefore, (string) file_get_contents($path), 'no rewrite may run when the lock fails');
     }
 }

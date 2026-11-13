@@ -28,10 +28,10 @@ echo "=== Background view ===\n{$bg}\n\n";
 
 // Show the picker overlay
 $h = QuickPick::new($items)
-    ->setPrompt('Filter: ')
-    ->setMatchStyle("\x1b[33m")
-    ->setWindowHeight(8)
-    ->setItemFormatter(fn($item, $sel) => ($sel ? '▶ ' : '  ') . $item)
+    ->withPrompt('Filter: ')
+    ->withMatchStyle("\x1b[33m")
+    ->withWindowHeight(8)
+    ->withItemFormatter(fn($item, $sel) => ($sel ? '▶ ' : '  ') . $item)
     ->show();
 
 echo "=== QuickPick overlay (filtering nothing — all shown) ===\n";

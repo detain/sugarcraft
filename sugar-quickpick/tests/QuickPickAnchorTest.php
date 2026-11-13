@@ -78,7 +78,7 @@ final class QuickPickAnchorTest extends TestCase
         $this->assertSame(0, $h->itemCount());
 
         // ...and setRanker() is the documented escape hatch.
-        $ranked = $h->setRanker($this->scoreMatcher(['cherry' => 10]))->itemCount();
+        $ranked = $h->withRanker($this->scoreMatcher(['cherry' => 10]))->itemCount();
         $this->assertSame(1, $ranked);
     }
 
@@ -107,7 +107,7 @@ final class QuickPickAnchorTest extends TestCase
             new FilteredItem(3, 'banana'),
         ])->show();
 
-        $h = $h->setRanker($this->scoreMatcher(['apple' => 10, 'banana' => 5]));
+        $h = $h->withRanker($this->scoreMatcher(['apple' => 10, 'banana' => 5]));
         $h = $h->type('a');
 
         // Both apples survive as distinct rows — the value-keyed lookup used
@@ -142,7 +142,7 @@ final class QuickPickAnchorTest extends TestCase
         $h = QuickPick::new(['apple', 'banana', 'cherry'])->show()->type('e');
         $this->assertSame(['cherry'], \array_map(static fn(Item $i): string => $i->value(), $h->items()));
 
-        $frame = $h->setWindowWidth(40)->setWindowHeight(6)->view(\str_repeat('.', 40));
+        $frame = $h->withWindowWidth(40)->withWindowHeight(6)->view(\str_repeat('.', 40));
         $this->assertStringContainsString('1 hidden by anchor bias', $frame);
     }
 
@@ -150,14 +150,14 @@ final class QuickPickAnchorTest extends TestCase
     {
         // 'a' anchors in both apple and banana — zero drops, zero hint.
         $h = QuickPick::new(['apple', 'banana'])->show()->type('a');
-        $frame = $h->setWindowWidth(40)->setWindowHeight(6)->view(\str_repeat('.', 40));
+        $frame = $h->withWindowWidth(40)->withWindowHeight(6)->view(\str_repeat('.', 40));
         $this->assertStringNotContainsString('hidden by anchor bias', $frame);
 
         // The ranker REPLACES the rule — its path must clear the census too.
         $ranked = $h
-            ->setRanker($this->scoreMatcher(['apple' => 10, 'banana' => 5]))
+            ->withRanker($this->scoreMatcher(['apple' => 10, 'banana' => 5]))
             ->type('e');
-        $rankedFrame = $ranked->setWindowWidth(40)->setWindowHeight(6)->view(\str_repeat('.', 40));
+        $rankedFrame = $ranked->withWindowWidth(40)->withWindowHeight(6)->view(\str_repeat('.', 40));
         $this->assertStringNotContainsString('hidden by anchor bias', $rankedFrame);
     }
 
@@ -168,15 +168,15 @@ final class QuickPickAnchorTest extends TestCase
         // ('e': apple substring-hit but unanchored = 1 drop, cherry anchored
         // then fn-rejected = not a drop).
         $h = QuickPick::new(['apple', 'cherry'])
-            ->setFilterFn(static fn(): bool => false)
+            ->withFilterFn(static fn(): bool => false)
             ->show()
             ->type('e');
         $this->assertSame(0, $h->itemCount());
-        $frame = $h->setWindowWidth(40)->setWindowHeight(6)->view(\str_repeat('.', 40));
+        $frame = $h->withWindowWidth(40)->withWindowHeight(6)->view(\str_repeat('.', 40));
         $this->assertStringContainsString('1 hidden by anchor bias', $frame);
         // And a needle with zero substring answers drops nothing: 'z'.
         $none = QuickPick::new(['apple', 'cherry'])->show()->type('z');
-        $noneFrame = $none->setWindowWidth(40)->setWindowHeight(6)->view(\str_repeat('.', 40));
+        $noneFrame = $none->withWindowWidth(40)->withWindowHeight(6)->view(\str_repeat('.', 40));
         $this->assertStringNotContainsString('hidden by anchor bias', $noneFrame);
         $this->assertStringContainsString('no matches', $noneFrame);
     }

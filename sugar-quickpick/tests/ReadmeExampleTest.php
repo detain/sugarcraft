@@ -23,8 +23,8 @@ final class ReadmeExampleTest extends TestCase
     public function testFuzzyRankingFlagshipExampleKeepsOnlyTerminal(): void
     {
         $pick = QuickPick::new(['terminal', 'editor', 'compiler'])
-            ->setRanker(new SmithWatermanMatcher(requireFullQuery: true))
-            ->setMatchStyle("\e[1m")
+            ->withRanker(new SmithWatermanMatcher(requireFullQuery: true))
+            ->withMatchStyle("\e[1m")
             ->show()
             ->type('tml');
 

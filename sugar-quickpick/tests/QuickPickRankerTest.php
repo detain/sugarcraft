@@ -106,7 +106,7 @@ final class QuickPickRankerTest extends TestCase
     public function testRankerOrdersByDescendingScore(): void
     {
         $h = QuickPick::new($this->fruits())
-            ->setRanker($this->scoreMatcher(['apple' => 10, 'banana' => 30, 'cherry' => 20]))
+            ->withRanker($this->scoreMatcher(['apple' => 10, 'banana' => 30, 'cherry' => 20]))
             ->show()
             ->type('x');
 
@@ -116,7 +116,7 @@ final class QuickPickRankerTest extends TestCase
     public function testRankerExcludesZeroScores(): void
     {
         $h = QuickPick::new($this->fruits())
-            ->setRanker($this->scoreMatcher(['apple' => 10, 'banana' => 0, 'cherry' => 20]))
+            ->withRanker($this->scoreMatcher(['apple' => 10, 'banana' => 0, 'cherry' => 20]))
             ->show()
             ->type('x');
 
@@ -126,7 +126,7 @@ final class QuickPickRankerTest extends TestCase
     public function testRankerTieBreaksOnOriginalOrder(): void
     {
         $h = QuickPick::new($this->fruits())
-            ->setRanker($this->scoreMatcher(['apple' => 10, 'banana' => 10, 'cherry' => 10]))
+            ->withRanker($this->scoreMatcher(['apple' => 10, 'banana' => 10, 'cherry' => 10]))
             ->show()
             ->type('x');
 
@@ -136,8 +136,8 @@ final class QuickPickRankerTest extends TestCase
     public function testRankerStillRespectsTheFilterFn(): void
     {
         $h = QuickPick::new($this->fruits())
-            ->setFilterFn(static fn(Item $i): bool => $i->value() !== 'banana')
-            ->setRanker($this->scoreMatcher(['apple' => 10, 'banana' => 30, 'cherry' => 20]))
+            ->withFilterFn(static fn(Item $i): bool => $i->value() !== 'banana')
+            ->withRanker($this->scoreMatcher(['apple' => 10, 'banana' => 30, 'cherry' => 20]))
             ->show()
             ->type('x');
 
@@ -148,7 +148,7 @@ final class QuickPickRankerTest extends TestCase
     public function testEmptyFilterWithRankerReturnsAllItemsUnranked(): void
     {
         $h = QuickPick::new($this->fruits())
-            ->setRanker($this->scoreMatcher([]))   // would match nothing if consulted
+            ->withRanker($this->scoreMatcher([]))   // would match nothing if consulted
             ->show();                              // filterText is ''
 
         self::assertSame(['apple', 'banana', 'cherry'], $this->values($h));
@@ -160,7 +160,7 @@ final class QuickPickRankerTest extends TestCase
 
         // 'tml' is a subsequence of t-e-r-m-i-n-a-l but not a contiguous substring;
         // it outranks 'train', which only aligns the leading 't'.
-        $fuzzy = QuickPick::new($items)->setRanker(new SmithWatermanMatcher())->show()->type('tml');
+        $fuzzy = QuickPick::new($items)->withRanker(new SmithWatermanMatcher())->show()->type('tml');
         self::assertContains('terminal', $this->values($fuzzy));
         self::assertSame('terminal', $this->values($fuzzy)[0], 'the full subsequence ranks first');
 
@@ -171,9 +171,9 @@ final class QuickPickRankerTest extends TestCase
 
     public function testClearingTheRankerRestoresSubstringFiltering(): void
     {
-        $base = QuickPick::new($this->fruits())->setRanker(new SmithWatermanMatcher());
+        $base = QuickPick::new($this->fruits())->withRanker(new SmithWatermanMatcher());
 
-        $restored = $base->setRanker(null)->show()->type('an');  // substring 'an' (anchored)
+        $restored = $base->withRanker(null)->show()->type('an');  // substring 'an' (anchored)
 
         // 'banana' contains 'an' near the front; apple/cherry do not.
         self::assertSame(['banana'], $this->values($restored));
@@ -182,12 +182,12 @@ final class QuickPickRankerTest extends TestCase
     public function testFuzzyHighlightWrapsTheScoredRunes(): void
     {
         $h = QuickPick::new([new FilteredItem(1, 'terminal')])
-            ->setRanker($this->indicesMatcher([0, 1]))      // highlight 'te'
-            ->setMatchStyle("\e[1m")
-            ->setItemFormatter(static fn(string $v, bool $sel): string => $v)
-            ->setWindowWidth(40)
-            ->setWindowHeight(5)
-            ->setOffset(0, 0)
+            ->withRanker($this->indicesMatcher([0, 1]))      // highlight 'te'
+            ->withMatchStyle("\e[1m")
+            ->withItemFormatter(static fn(string $v, bool $sel): string => $v)
+            ->withWindowWidth(40)
+            ->withWindowHeight(5)
+            ->withOffset(0, 0)
             ->show()
             ->type('te');
 
@@ -201,12 +201,12 @@ final class QuickPickRankerTest extends TestCase
     {
         $width = 40;
         $h = QuickPick::new([new FilteredItem(1, 'terminal')])
-            ->setRanker($this->indicesMatcher([0, 1]))      // highlight 'te'
-            ->setMatchStyle("\e[1m")
-            ->setItemFormatter(static fn (string $v, bool $sel): string => $v)
-            ->setWindowWidth($width)
-            ->setWindowHeight(5)
-            ->setOffset(0, 0)
+            ->withRanker($this->indicesMatcher([0, 1]))      // highlight 'te'
+            ->withMatchStyle("\e[1m")
+            ->withItemFormatter(static fn (string $v, bool $sel): string => $v)
+            ->withWindowWidth($width)
+            ->withWindowHeight(5)
+            ->withOffset(0, 0)
             ->show()
             ->type('te');
 
@@ -229,11 +229,11 @@ final class QuickPickRankerTest extends TestCase
         // computeWidth() (no explicit setWindowWidth) must measure in visible
         // cells: a CJK item is 本=2 cells, not 3 bytes.
         $h = QuickPick::new([new FilteredItem(1, '日本語')]) // 3 wide runes = 6 cells
-            ->setRanker($this->indicesMatcher([0]))
-            ->setMatchStyle("\e[33m")
-            ->setItemFormatter(static fn (string $v, bool $sel): string => $v)
-            ->setWindowHeight(4)
-            ->setOffset(0, 0)
+            ->withRanker($this->indicesMatcher([0]))
+            ->withMatchStyle("\e[33m")
+            ->withItemFormatter(static fn (string $v, bool $sel): string => $v)
+            ->withWindowHeight(4)
+            ->withOffset(0, 0)
             ->show()
             ->type('本');
 
@@ -280,12 +280,12 @@ final class QuickPickRankerTest extends TestCase
         };
 
         $h = QuickPick::new([new FilteredItem(1, 'apple')])
-            ->setRanker($noMatch)
-            ->setMatchStyle("\e[1m")
-            ->setItemFormatter(static fn(string $v, bool $sel): string => '* ' . $v)
-            ->setWindowWidth(40)
-            ->setWindowHeight(5)
-            ->setOffset(0, 0)
+            ->withRanker($noMatch)
+            ->withMatchStyle("\e[1m")
+            ->withItemFormatter(static fn(string $v, bool $sel): string => '* ' . $v)
+            ->withWindowWidth(40)
+            ->withWindowHeight(5)
+            ->withOffset(0, 0)
             ->show()
             ->type('a');
 
@@ -335,9 +335,9 @@ final class QuickPickRankerTest extends TestCase
 
         $bg = \implode("\n", \array_fill(0, 8, \str_repeat(' ', 40)));
         $h = QuickPick::new([new FilteredItem(1, 'apple'), new FilteredItem(2, 'grape')])
-            ->setWindowWidth(40)
-            ->setRanker($ranker)
-            ->setMatchStyle("\x1b[33m")
+            ->withWindowWidth(40)
+            ->withRanker($ranker)
+            ->withMatchStyle("\x1b[33m")
             ->show()
             ->type('ap');
 
