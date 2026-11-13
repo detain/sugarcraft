@@ -9,5 +9,5 @@ use SugarCraft\Dashboard\Layout\Grid\ItemOptions;
 
 // Radio buttons
 $component = Radio::new([["label" => "Option A"], ["label" => "Option B"], ["label" => "Option C"]], 0);
-$component->setSize(60, 15);
+$component = $component->setSize(60, 15);
 echo $component->render();

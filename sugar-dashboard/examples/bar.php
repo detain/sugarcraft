@@ -6,5 +6,5 @@ use SugarCraft\Dashboard\Plot\Chart\Bar;
 
 // Status bar
 $component = Bar::new("Demo");
-$component->setSize(60, 15);
+$component = $component->setSize(60, 15);
 echo $component->render();

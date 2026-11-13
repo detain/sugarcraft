@@ -9,5 +9,5 @@ use SugarCraft\Dashboard\Layout\Grid\ItemOptions;
 
 // Spark bar
 $component = SparklineBar::new([3.0, 5.0, 2.0, 8.0, 6.0, 4.0], 20);
-$component->setSize(60, 15);
+$component = $component->setSize(60, 15);
 echo $component->render();

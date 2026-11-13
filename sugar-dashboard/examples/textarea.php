@@ -6,5 +6,5 @@ use SugarCraft\Dashboard\Components\Form\Textarea;
 
 // Multi-line text input
 $component = Textarea::new("Demo", 3);
-$component->setSize(60, 15);
+$component = $component->setSize(60, 15);
 echo $component->render();

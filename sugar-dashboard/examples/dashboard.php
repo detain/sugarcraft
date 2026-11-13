@@ -25,5 +25,5 @@ $grid->addItem(
     new ItemOptions(column: 1)
 );
 
-$grid->setSize(80, 24);
+$grid = $grid->setSize(80, 24);
 echo $grid->render();

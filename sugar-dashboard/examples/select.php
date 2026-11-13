@@ -9,5 +9,5 @@ use SugarCraft\Dashboard\Layout\Grid\ItemOptions;
 
 // Dropdown select
 $component = Select::new([["label" => "Option 1"], ["label" => "Option 2"], ["label" => "Option 3"]]);
-$component->setSize(60, 15);
+$component = $component->setSize(60, 15);
 echo $component->render();

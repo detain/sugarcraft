@@ -6,5 +6,5 @@ use SugarCraft\Dashboard\Components\Nav\Breadcrumb;
 
 // Breadcrumb navigation
 $component = Breadcrumb::new(['Home', 'Products', 'Details']);
-$component->setSize(60, 15);
+$component = $component->setSize(60, 15);
 echo $component->render();

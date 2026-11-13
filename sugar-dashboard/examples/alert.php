@@ -9,5 +9,5 @@ use SugarCraft\Dashboard\Layout\Grid\ItemOptions;
 
 // Alert message
 $component = Alert::new("Warning: This action cannot be undone.");
-$component->setSize(60, 15);
+$component = $component->setSize(60, 15);
 echo $component->render();

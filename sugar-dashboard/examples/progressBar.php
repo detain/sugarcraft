@@ -9,5 +9,5 @@ use SugarCraft\Dashboard\Layout\Grid\ItemOptions;
 
 // Progress bar
 $component = ProgressBar::new(75);
-$component->setSize(60, 15);
+$component = $component->setSize(60, 15);
 echo $component->render();

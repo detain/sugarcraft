@@ -6,5 +6,5 @@ use SugarCraft\Dashboard\Components\Card\Metric;
 
 // Metric display
 $component = Metric::new(42.5, null);
-$component->setSize(60, 15);
+$component = $component->setSize(60, 15);
 echo $component->render();

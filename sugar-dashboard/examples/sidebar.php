@@ -9,5 +9,5 @@ use SugarCraft\Dashboard\Layout\Grid\ItemOptions;
 
 // Sidebar menu
 $component = Sidebar::new([["label" => "Home"], ["label" => "Profile"], ["label" => "Settings"]]);
-$component->setSize(60, 15);
+$component = $component->setSize(60, 15);
 echo $component->render();

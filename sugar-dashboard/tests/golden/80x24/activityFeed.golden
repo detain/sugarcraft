@@ -2,5 +2,5 @@ PHP 8.3.6 (cli) (built: Oct 19 2026 15:16:58) (NTS)
 # dimensions: 80x24 (80x24)
 # example: activityFeed
 ---
-[38;2;137;180;250m• [0m[38;2;205;214;244mAlice 
-[38;2;137;180;250m• [0m[38;2;205;214;244mBob up
+[38;2;137;180;250m• [0m[38;2;205;214;244mAlice posted a comment [0m  [38;2;
+[38;2;137;180;250m• [0m[38;2;205;214;244mBob updated status [0m      [38;2;

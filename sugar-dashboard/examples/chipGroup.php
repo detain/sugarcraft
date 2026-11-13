@@ -9,5 +9,5 @@ use SugarCraft\Dashboard\Layout\Grid\ItemOptions;
 
 // Chip group
 $component = ChipGroup::fromLabels(["PHP", "JavaScript", "Python"]);
-$component->setSize(60, 15);
+$component = $component->setSize(60, 15);
 echo $component->render();

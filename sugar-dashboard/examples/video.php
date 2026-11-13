@@ -6,5 +6,5 @@ use SugarCraft\Dashboard\Components\Media\Video;
 
 // Video player
 $component = Video::new();
-$component->setSize(60, 15);
+$component = $component->setSize(60, 15);
 echo $component->render();

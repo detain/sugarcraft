@@ -6,5 +6,5 @@ use SugarCraft\Dashboard\Components\Card\CTA;
 
 // Call to action button
 $component = CTA::new("Demo", "Demo");
-$component->setSize(60, 15);
+$component = $component->setSize(60, 15);
 echo $component->render();

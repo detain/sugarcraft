@@ -6,5 +6,5 @@ use SugarCraft\Dashboard\Components\Form\Editor;
 
 // Text editor
 $component = Editor::new(null);
-$component->setSize(60, 15);
+$component = $component->setSize(60, 15);
 echo $component->render();

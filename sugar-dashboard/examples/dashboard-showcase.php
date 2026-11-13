@@ -126,5 +126,5 @@ $grid->addItem(
 );
 
 // Set size and render
-$grid->setSize(140, 48);
+$grid = $grid->setSize(140, 48);
 echo $grid->render();

@@ -9,5 +9,5 @@ use SugarCraft\Dashboard\Layout\Grid\ItemOptions;
 
 // Leaderboard
 $component = Leaderboard::new([["rank" => 1, "label" => "Alice", "value" => "1500"], ["rank" => 2, "label" => "Bob", "value" => "1200"], ["rank" => 3, "label" => "Charlie", "value" => "1100"]]);
-$component->setSize(60, 15);
+$component = $component->setSize(60, 15);
 echo $component->render();

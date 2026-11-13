@@ -9,5 +9,5 @@ use SugarCraft\Dashboard\Layout\Grid\ItemOptions;
 
 // Combo box
 $component = ComboBox::new("Search...", [["label" => "Result 1"], ["label" => "Result 2"]]);
-$component->setSize(60, 15);
+$component = $component->setSize(60, 15);
 echo $component->render();

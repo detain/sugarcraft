@@ -6,5 +6,5 @@ use SugarCraft\Dashboard\Layout\Grid\StackedGrid;
 
 // Multi-column grid layout
 $component = new StackedGrid(new \SugarCraft\Dashboard\Layout\Grid\Options(true));
-$component->setSize(60, 15);
+$component = $component->setSize(60, 15);
 echo $component->render();

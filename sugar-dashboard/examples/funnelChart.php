@@ -9,5 +9,5 @@ use SugarCraft\Dashboard\Layout\Grid\ItemOptions;
 
 // Funnel chart
 $component = FunnelChart::new([["label" => "Visitors", "value" => 1000.0], ["label" => "Signups", "value" => 500.0], ["label" => "Paying", "value" => 200.0]]);
-$component->setSize(60, 15);
+$component = $component->setSize(60, 15);
 echo $component->render();

@@ -6,5 +6,5 @@ use SugarCraft\Dashboard\Plot\Chart\Gauge;
 
 // Gauge meter
 $component = Gauge::new(42.5);
-$component->setSize(60, 15);
+$component = $component->setSize(60, 15);
 echo $component->render();

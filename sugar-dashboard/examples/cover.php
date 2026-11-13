@@ -10,5 +10,5 @@ use SugarCraft\Dashboard\Components\Card\Text;
 
 // Cover overlay
 $component = Cover::new(new Text("Cover Overlay Content"));
-$component->setSize(60, 15);
+$component = $component->setSize(60, 15);
 echo $component->render();

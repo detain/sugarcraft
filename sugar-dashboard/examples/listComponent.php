@@ -9,5 +9,5 @@ use SugarCraft\Dashboard\Layout\Grid\ItemOptions;
 
 // List component
 $component = ListComponent::new([["label" => "Item 1"], ["label" => "Item 2"], ["label" => "Item 3"]]);
-$component->setSize(60, 15);
+$component = $component->setSize(60, 15);
 echo $component->render();

@@ -6,5 +6,5 @@ use SugarCraft\Dashboard\Components\Media\Avatar;
 
 // User avatar showing initials
 $component = Avatar::fromName("JD");
-$component->setSize(60, 15);
+$component = $component->setSize(60, 15);
 echo $component->render();

@@ -6,5 +6,5 @@ use SugarCraft\Dashboard\Components\Card\Comment;
 
 // Comment display
 $component = Comment::new("Demo", "Demo");
-$component->setSize(60, 15);
+$component = $component->setSize(60, 15);
 echo $component->render();

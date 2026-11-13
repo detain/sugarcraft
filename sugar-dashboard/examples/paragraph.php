@@ -6,5 +6,5 @@ use SugarCraft\Dashboard\Components\Card\Paragraph;
 
 // Word-wrapped paragraph
 $component = Paragraph::new("Demo");
-$component->setSize(60, 15);
+$component = $component->setSize(60, 15);
 echo $component->render();

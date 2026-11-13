@@ -25,5 +25,6 @@ PHP 8.3.6 (cli) (built: Oct 19 2026 15:16:58) (NTS)
 ┃21      ┃Ivan      ┃ivan@acme.io          ┃Engineering     ┃58        ┃active        ┃
 ┃22      ┃Judy      ┃judy@example.com      ┃Design          ┃61        ┃pending       ┃
 ┃24      ┃Laura     ┃laura@demo.net        ┃Marketing       ┃52        ┃suspended     ┃
+┃25      ┃Alice     ┃alice@acme.io         ┃Sales           ┃55        ┃active        ┃
 ┣━━━━━━━━┻━━━━━━━━━━┻━━━━━━━━━━━━━━━━━━━━━━┻━━━━━━━━━━━━━━━━┻━━━━━━━━━━┻━━━━━━━━━━━━━━┫
 ┗━━━━━━━━┻━━━━━━━━━━┻━━━━━━━━━━━━━━━━━━━━━━┻━━━━━━━━━━━━━━━━┻━━━━━━━━━━┻━━━━━━━━━━━━━━┛

@@ -9,5 +9,5 @@ use SugarCraft\Dashboard\Layout\Grid\ItemOptions;
 
 // Menu navigation
 $component = Menu::new([["label" => "File"], ["label" => "Edit"], ["label" => "View"]]);
-$component->setSize(60, 15);
+$component = $component->setSize(60, 15);
 echo $component->render();

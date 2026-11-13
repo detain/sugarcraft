@@ -9,5 +9,5 @@ use SugarCraft\Dashboard\Layout\Grid\ItemOptions;
 
 // Icon display
 $component = new Icon("★");
-$component->setSize(60, 15);
+$component = $component->setSize(60, 15);
 echo $component->render();

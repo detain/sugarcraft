@@ -6,5 +6,5 @@ use SugarCraft\Dashboard\Components\Media\FigletText;
 
 // ASCII art text
 $component = FigletText::new("Demo");
-$component->setSize(60, 15);
+$component = $component->setSize(60, 15);
 echo $component->render();

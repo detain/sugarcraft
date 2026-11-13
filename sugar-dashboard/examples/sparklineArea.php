@@ -9,5 +9,5 @@ use SugarCraft\Dashboard\Layout\Grid\ItemOptions;
 
 // Sparkline area
 $component = SparklineArea::new([1.0, 2.0, 3.0, 2.5, 4.0], 25);
-$component->setSize(60, 15);
+$component = $component->setSize(60, 15);
 echo $component->render();

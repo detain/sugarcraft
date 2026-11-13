@@ -6,5 +6,5 @@ use SugarCraft\Dashboard\Components\Card\Divider;
 
 // Horizontal divider
 $component = Divider::new(null);
-$component->setSize(60, 15);
+$component = $component->setSize(60, 15);
 echo $component->render();

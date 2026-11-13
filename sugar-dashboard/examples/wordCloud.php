@@ -6,5 +6,5 @@ use SugarCraft\Dashboard\Plot\Chart\WordCloud;
 
 // Word cloud
 $component = WordCloud::new(["Alpha", "Beta", "Gamma"]);
-$component->setSize(60, 15);
+$component = $component->setSize(60, 15);
 echo $component->render();

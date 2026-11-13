@@ -6,5 +6,5 @@ use SugarCraft\Dashboard\Components\Media\Audio;
 
 // Audio player
 $component = Audio::new();
-$component->setSize(60, 15);
+$component = $component->setSize(60, 15);
 echo $component->render();

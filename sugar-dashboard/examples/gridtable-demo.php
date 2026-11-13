@@ -44,5 +44,5 @@ $table = GridTable::new($cols, $rows)
     ->filter('a')   // Pre-apply a filter to demonstrate filtering
     ->page(1);
 
-$table->setSize(80, 20);
+$table = $table->setSize(80, 20);
 echo $table->render();

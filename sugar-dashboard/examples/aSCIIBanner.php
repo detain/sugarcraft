@@ -6,5 +6,5 @@ use SugarCraft\Dashboard\Components\Media\ASCIIBanner;
 
 // ASCII banner
 $component = ASCIIBanner::new("Demo");
-$component->setSize(60, 15);
+$component = $component->setSize(60, 15);
 echo $component->render();

@@ -9,5 +9,5 @@ use SugarCraft\Dashboard\Layout\Grid\ItemOptions;
 
 // Hint text
 $component = Hint::new("This is a helpful hint.");
-$component->setSize(60, 15);
+$component = $component->setSize(60, 15);
 echo $component->render();

@@ -9,5 +9,5 @@ use SugarCraft\Dashboard\Layout\Grid\ItemOptions;
 
 // Radar chart
 $component = RadarChart::new(["Speed", "Reliability", "Comfort"], [["label" => "Metrics", "values" => [80.0, 65.0, 90.0]]]);
-$component->setSize(60, 15);
+$component = $component->setSize(60, 15);
 echo $component->render();

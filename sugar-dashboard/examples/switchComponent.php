@@ -6,5 +6,5 @@ use SugarCraft\Dashboard\Components\Form\SwitchComponent;
 
 // Switch component
 $component = SwitchComponent::new(true);
-$component->setSize(60, 15);
+$component = $component->setSize(60, 15);
 echo $component->render();

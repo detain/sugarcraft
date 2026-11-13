@@ -6,5 +6,5 @@ use SugarCraft\Dashboard\Components\Media\QRCode;
 
 // QR code
 $component = QRCode::new("Demo");
-$component->setSize(60, 15);
+$component = $component->setSize(60, 15);
 echo $component->render();

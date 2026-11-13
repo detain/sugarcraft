@@ -9,5 +9,5 @@ use SugarCraft\Dashboard\Layout\Grid\ItemOptions;
 
 // Command palette
 $component = CommandPalette::new([["label" => "New File"], ["label" => "Open Folder"], ["label" => "Save"]]);
-$component->setSize(60, 15);
+$component = $component->setSize(60, 15);
 echo $component->render();

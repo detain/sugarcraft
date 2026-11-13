@@ -6,5 +6,5 @@ use SugarCraft\Dashboard\Components\Card\Testimonial;
 
 // Testimonial
 $component = Testimonial::new(["Alpha", "Beta", "Gamma"]);
-$component->setSize(60, 15);
+$component = $component->setSize(60, 15);
 echo $component->render();

@@ -9,5 +9,5 @@ use SugarCraft\Dashboard\Layout\Grid\ItemOptions;
 
 // Hex dump display
 $component = HexDump::new("Hello World!");
-$component->setSize(60, 15);
+$component = $component->setSize(60, 15);
 echo $component->render();

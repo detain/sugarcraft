@@ -6,5 +6,5 @@ use SugarCraft\Dashboard\Components\Card\Highlight;
 
 // Text highlight
 $component = Highlight::new("Demo");
-$component->setSize(60, 15);
+$component = $component->setSize(60, 15);
 echo $component->render();

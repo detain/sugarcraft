@@ -9,5 +9,5 @@ use SugarCraft\Dashboard\Layout\Grid\ItemOptions;
 
 // Tooltip
 $component = Tooltip::new("Hover me", "Help text appears");
-$component->setSize(60, 15);
+$component = $component->setSize(60, 15);
 echo $component->render();

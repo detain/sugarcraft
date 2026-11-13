@@ -6,5 +6,5 @@ use SugarCraft\Dashboard\Components\Media\Emoji;
 
 // Emoji display
 $component = new Emoji("Demo", null, 3, null, true);
-$component->setSize(60, 15);
+$component = $component->setSize(60, 15);
 echo $component->render();

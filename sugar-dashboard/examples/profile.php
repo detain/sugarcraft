@@ -6,5 +6,5 @@ use SugarCraft\Dashboard\Components\Card\Profile;
 
 // User profile
 $component = Profile::new("Demo", "Demo", "Demo", null);
-$component->setSize(60, 15);
+$component = $component->setSize(60, 15);
 echo $component->render();

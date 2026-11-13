@@ -9,5 +9,5 @@ use SugarCraft\Dashboard\Layout\Grid\ItemOptions;
 
 // Activity feed
 $component = ActivityFeed::new([["label" => "Alice posted a comment", "time" => "2m ago"], ["label" => "Bob updated status", "time" => "5m ago"]]);
-$component->setSize(60, 15);
+$component = $component->setSize(60, 15);
 echo $component->render();

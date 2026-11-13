@@ -9,5 +9,5 @@ use SugarCraft\Dashboard\Layout\Grid\ItemOptions;
 
 // Nano progress bar
 $component = NProgress::new(0.7);
-$component->setSize(60, 15);
+$component = $component->setSize(60, 15);
 echo $component->render();

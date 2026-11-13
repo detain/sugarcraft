@@ -9,5 +9,5 @@ use SugarCraft\Dashboard\Layout\Grid\ItemOptions;
 
 // Progress list
 $component = ProgressList::new([["label" => "Task 1", "progress" => 100], ["label" => "Task 2", "progress" => 50], ["label" => "Task 3", "progress" => 75]]);
-$component->setSize(60, 15);
+$component = $component->setSize(60, 15);
 echo $component->render();

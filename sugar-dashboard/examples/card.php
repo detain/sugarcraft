@@ -10,5 +10,5 @@ use SugarCraft\Dashboard\Layout\Grid\ItemOptions;
 
 // Card with optional title
 $component = Card::new(new Text("Card Content"));
-$component->setSize(60, 15);
+$component = $component->setSize(60, 15);
 echo $component->render();

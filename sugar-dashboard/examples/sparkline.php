@@ -6,5 +6,5 @@ use SugarCraft\Dashboard\Plot\Chart\Sparkline;
 
 // Sparkline chart
 $component = Sparkline::new(40);
-$component->setSize(60, 15);
+$component = $component->setSize(60, 15);
 echo $component->render();

@@ -9,5 +9,5 @@ use SugarCraft\Dashboard\Layout\Grid\ItemOptions;
 
 // Heatmap
 $component = Heatmap::new([[10.0, 20.0, 30.0], [15.0, 25.0, 35.0], [5.0, 15.0, 25.0]]);
-$component->setSize(60, 15);
+$component = $component->setSize(60, 15);
 echo $component->render();

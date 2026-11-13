@@ -9,5 +9,5 @@ use SugarCraft\Dashboard\Layout\Grid\ItemOptions;
 
 // Notification badge
 $component = Notification::new("3 new messages");
-$component->setSize(60, 15);
+$component = $component->setSize(60, 15);
 echo $component->render();

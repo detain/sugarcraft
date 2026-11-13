@@ -9,5 +9,5 @@ use SugarCraft\Dashboard\Layout\Grid\ItemOptions;
 
 // Empty state placeholder
 $component = EmptyState::new("No data available");
-$component->setSize(60, 15);
+$component = $component->setSize(60, 15);
 echo $component->render();
