@@ -280,19 +280,23 @@ final class PngRenderer
      */
     private function allocateColor(\GdImage $img, string $hex): int
     {
+        // cs-26: cache hit first. Values only enter the cache after passing
+        // the validator below, so a hit needs no re-match — the old order
+        // ran the regex on every call despite the WeakMap memo.
+        if (isset($this->colorCache[$img][$hex])) {
+            return $this->colorCache[$img][$hex];
+        }
+
         if (!preg_match('/^#[0-9a-fA-F]{6}$/', $hex)) {
             // hexdec(substr(...)) on malformed input silently yielded 0 —
             // a black-on-black invisibility bug. Name the bad value instead.
             throw new \InvalidArgumentException("PNG colour must be a 6-digit #rrggbb hex string, got '{$hex}'");
         }
+
         if (!isset($this->colorCache[$img])) {
             $this->colorCache[$img] = [];
         }
         $cache = &$this->colorCache[$img];
-
-        if (isset($cache[$hex])) {
-            return $cache[$hex];
-        }
 
         $r = hexdec(substr($hex, 1, 2));
         $g = hexdec(substr($hex, 3, 2));
@@ -301,6 +305,15 @@ final class PngRenderer
         $color = imagecolorallocate($img, $r, $g, $b);
         if ($color === false) {
             $color = imagecolorallocate($img, 255, 255, 255);
+        }
+        if ($color === false) {
+            // The white fallback can itself return false — the old code
+            // cached that false and handed it out until the `: int` return
+            // type TypeError'd hundreds of calls from the real cause. Loud
+            // and descriptive, at the failing call, instead.
+            throw new \RuntimeException(
+                "GD ran out of palette entries and could not even allocate the white fallback (colour '{$hex}')"
+            );
         }
 
         $cache[$hex] = $color;

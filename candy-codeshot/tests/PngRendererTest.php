@@ -263,4 +263,89 @@ final class PngRendererTest extends TestCase
             );
         }
     }
+
+    public function testExhaustedPaletteFailsLoudlyInsteadOfCachingFalse(): void
+    {
+        // cs-26: an indexed (non-truecolor) GD surface runs out of palette
+        // entries after ~256 fresh colours; imagecolorallocate then answers
+        // false AND the white fallback fails too (measured). The old code
+        // cached that false and kept serving it until the `: int` return
+        // type TypeError'd hundreds of calls from the cause. The rewrite
+        // raises a descriptive RuntimeException at the failing call —
+        // mutation-proven: on the old body this leg dies with a TypeError.
+        $renderer = PngRenderer::dark();
+        $img = imagecreate(4, 4);
+        if ($img === false) {
+            $this->markTestSkipped('GD could not create an indexed image');
+        }
+
+        $allocate = \Closure::bind(
+            /** @param \GdImage $img */
+            function (string $hex) use ($img): int {
+                return $this->allocateColor($img, $hex);
+            },
+            $renderer,
+            PngRenderer::class,
+        );
+
+        $thrown = null;
+        for ($i = 0; $i < 4096 && $thrown === null; $i++) {
+            $hex = sprintf('#%06x', ($i * 2654435761) & 0xFFFFFF);
+            try {
+                $allocate($hex);
+            } catch (\RuntimeException $e) {
+                $thrown = $e;
+            }
+        }
+
+        $this->assertInstanceOf(\RuntimeException::class, $thrown, 'palette exhaustion must fail loudly');
+        $this->assertStringContainsString('GD ran out of palette entries', (string) ($thrown?->getMessage()));
+    }
+
+    public function testSameHexReturnsTheSameCachedColour(): void
+    {
+        // cs-26 cache-first invariant: values enter the cache only after
+        // passing the validator, so a hit may skip the regex — repeated
+        // allocations of one hex must stay one identical palette int.
+        $renderer = PngRenderer::dark();
+        $img = imagecreatetruecolor(4, 4);
+        if ($img === false) {
+            $this->markTestSkipped('GD could not create a truecolor image');
+        }
+
+        $allocate = \Closure::bind(
+            function () use ($img): int {
+                return $this->allocateColor($img, '#ff5f56');
+            },
+            $renderer,
+            PngRenderer::class,
+        );
+
+        $this->assertSame($allocate(), $allocate());
+    }
+
+    public function testMalformedHexStillRejectsAfterAValidAllocation(): void
+    {
+        // The cache-first read must never swallow validation: a bad value
+        // after a cached good one still names itself at the door.
+        $renderer = PngRenderer::dark();
+        $img = imagecreatetruecolor(4, 4);
+        if ($img === false) {
+            $this->markTestSkipped('GD could not create a truecolor image');
+        }
+
+        $allocate = \Closure::bind(
+            function (string $hex) use ($img): int {
+                return $this->allocateColor($img, $hex);
+            },
+            $renderer,
+            PngRenderer::class,
+        );
+
+        $allocate('#ff5f56');
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("PNG colour must be a 6-digit #rrggbb hex string, got 'oops'");
+        $allocate('oops');
+    }
 }
