@@ -89,13 +89,16 @@ final class FrameTest extends TestCase
         $frame = $frame->setSize(15, 6);
         $rendered = $frame->render();
 
+        // The frame must honor its allocated box: 6 lines of exactly 15
+        // cells. Style width/height are CONTENT dimensions — the border is
+        // added outside them — so passing the outer $w/$h made the frame
+        // leak to 17x8 (the pre-fix comment here even pinned the leak as
+        // "actual render produces 8 lines"; finding sugar-dashboard-036's
+        // never-exceeds-the-frame invariant kills it).
         $lines = explode("\n", $rendered);
-        // With setSize(15, 6): outerH=6, borderOnlyH=4, contentH=2 after padding
-        // Actual render produces 8 lines total
-        $this->assertCount(8, $lines);
-        // Each line should be ≤ 17 chars wide (border chars extend beyond content)
+        $this->assertCount(6, $lines);
         foreach ($lines as $line) {
-            $this->assertLessThanOrEqual(17, \SugarCraft\Core\Util\Width::string($line));
+            $this->assertSame(15, \SugarCraft\Core\Util\Width::string($line));
         }
     }
 

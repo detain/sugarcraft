@@ -113,13 +113,15 @@ final class Window implements \SugarCraft\Dashboard\Foundation\SizedItem
         // Build the content
         $styledContent = $this->renderContent($contentW, $contentH);
 
-        // Build the border/frame style
+        // Build the border/frame style — Style::width/height are CONTENT box
+        // dimensions (lipgloss law): the border is added on top, so feeding
+        // the outer allocation rendered every line $w+2 and $h+2 rows wide
         $borderColor = $this->borderColor ?? Color::hex('#874BFD');
         $frameStyle = Style::new()
             ->border(Border::rounded())
             ->borderForeground($borderColor)
-            ->width($w)
-            ->height($h);
+            ->width($w - 2)
+            ->height($h - 2);
 
         // Build the inner content (title bar + styled content)
         $innerContent = $titleBar . "\n" . $styledContent;
@@ -171,13 +173,12 @@ final class Window implements \SugarCraft\Dashboard\Foundation\SizedItem
             return str_repeat(' ', $innerWidth);
         }
 
-        // Format: [controls] title or title [controls]
+        // Format: [controls] title — availableWidth already excludes the
+        // controls, so the budget subtracts only the one-cell separator
         if ($controlsStr !== '') {
-            // Controls on left, title on right (or vice versa based on preference)
-            // Using: controls on left, title truncated on right
             $titleWidth = Width::string($titleText);
             if ($titleWidth > $availableWidth - 1) {
-                $titleText = Truncate::truncate($titleText, $availableWidth - $controlsWidth - 1);
+                $titleText = Truncate::truncate($titleText, $availableWidth - 1);
             }
             return $controlsStr . $titleText . str_repeat(' ', max(0, $availableWidth - Width::string($controlsStr . $titleText)));
         }
@@ -185,7 +186,7 @@ final class Window implements \SugarCraft\Dashboard\Foundation\SizedItem
         // No controls - just centered or left-aligned title
         $titleWidth = Width::string($titleText);
         if ($titleWidth > $availableWidth) {
-            $titleText = Truncate::truncate($titleText, $availableWidth - 1);
+            $titleText = Truncate::truncate($titleText, $availableWidth);
         }
 
         return $titleText . str_repeat(' ', max(0, $availableWidth - Width::string($titleText)));

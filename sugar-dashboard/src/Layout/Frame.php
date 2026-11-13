@@ -119,12 +119,14 @@ final class Frame implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         $styledContent = $paddedStyle->render($this->renderContent($contentW, $contentH));
 
-        // Wrap in a bordered box
+        // Wrap in a bordered box — Style::width/height are CONTENT box
+        // dimensions (lipgloss law): the border lands on top, so feeding the
+        // outer allocation made every line $w+2 and every frame $h+2 rows
         $boxStyle = Style::new()
             ->border($border)
             ->borderForeground($color)
-            ->width($w)
-            ->height($h);
+            ->width($w - 2)
+            ->height($h - 2);
 
         return $boxStyle->render($styledContent);
     }

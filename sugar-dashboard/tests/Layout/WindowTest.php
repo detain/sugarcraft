@@ -9,6 +9,7 @@ use SugarCraft\Dashboard\Foundation\Item;
 use SugarCraft\Dashboard\Foundation\Sizer;
 use SugarCraft\Dashboard\Components\Card\Text;
 use SugarCraft\Dashboard\Layout\Window;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Style\VAlign;
 use PHPUnit\Framework\TestCase;
 
@@ -61,6 +62,79 @@ final class WindowTest extends TestCase
         $rendered = $window->render();
 
         $this->assertStringContainsString('My Window Title', $rendered);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Title truncation (finding sugar-dashboard-036): the controls run
+    // is charged exactly once, the canonical marker appears exactly
+    // once, and cuts never orphan a partial glyph
+    // ═══════════════════════════════════════════════════════════════
+
+    private function assertTitleLineInvariants(string $rendered, int $frameWidth): void
+    {
+        foreach (explode("\n", $rendered) as $line) {
+            $this->assertLessThanOrEqual($frameWidth, Width::string($line), 'no line may exceed the frame');
+        }
+    }
+
+    public function testTruncatedTitleWithCloseControlsChargesControlsOnce(): void
+    {
+        // w=30 → title inner=26; [X] costs 3 → available=23, budget 22 →
+        // 21 'A' + one '…' (the pre-fix double subtraction produced 18)
+        $window = Window::new(Text::new('x'), str_repeat('A', 40))
+            ->withControls(Window::ControlsClose)
+            ->setSize(30, 6);
+        $rendered = $window->render();
+
+        $this->assertStringContainsString('[X]', $rendered, 'controls must survive the truncation');
+        $this->assertSame(1, substr_count($rendered, '…'), 'exactly one ellipsis');
+        $this->assertSame(21, substr_count($rendered, 'A'), 'title keeps the full controls-free budget');
+        $this->assertTitleLineInvariants($rendered, 30);
+    }
+
+    public function testTruncatedTitleWithoutControlsUsesFullInnerWidth(): void
+    {
+        // w=20 → title inner=16; budget 16 → 15 'B' + one '…'
+        // (the stray -1 of the pre-fix no-controls branch produced 14)
+        $window = Window::new(Text::new('x'), str_repeat('B', 30))->setSize(20, 6);
+        $rendered = $window->render();
+
+        $this->assertSame(1, substr_count($rendered, '…'));
+        $this->assertSame(15, substr_count($rendered, 'B'));
+        $this->assertTitleLineInvariants($rendered, 20);
+    }
+
+    public function testWideGlyphTitleCutLandsOnFullGlyphBoundary(): void
+    {
+        // 2-cell 'あ' must never be sliced by the old max(1,$lo) floor
+        // class of bug: marker plus an even cell count of full glyphs
+        $window = Window::new(Text::new('x'), str_repeat('あ', 20))
+            ->withControls(Window::ControlsClose)
+            ->setSize(30, 6);
+        $rendered = $window->render();
+
+        $this->assertSame(1, substr_count($rendered, '…'));
+        $this->assertSame(10, substr_count($rendered, 'あ'), 'ten full glyphs fit the 21-cell cut budget');
+        $this->assertStringContainsString('[X]', $rendered);
+        $this->assertTitleLineInvariants($rendered, 30);
+    }
+
+    public function testStyledTitleTruncationKeepsStylesClosedAndSingleMarker(): void
+    {
+        $title = "\e[1;31m" . str_repeat('C', 40) . "\e[0m";
+        $window = Window::new(Text::new('x'), $title)
+            ->withControls(Window::ControlsAll)
+            ->setSize(34, 6);
+        $rendered = $window->render();
+
+        $this->assertSame(1, substr_count($rendered, '…'), 'hand-append and canonical marker are one');
+        $this->assertStringContainsString('[-][□][X]', $rendered);
+        $this->assertTitleLineInvariants($rendered, 34);
+
+        // dangling-escape probe: every raw ESC belongs to a complete CSI
+        $complete = preg_match_all('/\e\[[0-9;]*m/', $rendered);
+        $raw = substr_count($rendered, "\e");
+        $this->assertSame($raw, $complete, 'no truncated escape may dangle');
     }
 
     public function testRenderWithNullTitleShowsNoTitle(): void
