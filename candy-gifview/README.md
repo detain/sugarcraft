@@ -26,8 +26,32 @@ candy-gifview my-animation.gif density # ASCII luminance ramp
 ```
 
 With a project-local install, invoke the binary as `./vendor/bin/candy-gifview`.
+
 A rolling development phar is published on GitHub Releases under
-`candy-gifview/dev` as `candy-gifview.phar`.
+[`candy-gifview/dev`](https://github.com/detain/sugarcraft/releases/tag/candy-gifview/dev)
+as `candy-gifview.phar`. **The channel is FROZEN at the 2026-11-04 build
+(commit `f1c90bb34`)**: the sibling-pin CI wave (OD-14) has blocked phar
+rebuilds fleet-wide, and rolling builds resume only with the fleet
+phar-workflow cure. Until the release page shows an artifact newer than
+2026-11-04, prefer `composer require sugarcraft/candy-gifview`.
+
+### Verify the phar
+
+The release carries the sidecars `candy-gifview.phar.sha256`,
+`candy-gifview.phar.sha256.sig`, `candy-gifview.phar.minisig`,
+`candy-gifview.phar.commit`, and `candy-gifview.phar.pins.json` at the URL
+above. Check a download with:
+
+```bash
+sha256sum -c candy-gifview.phar.sha256   # integrity
+grep -m1 . candy-gifview.phar.commit     # which build you actually hold
+```
+
+Compare `.phar.commit` to the commit you expected (the release body names
+it). No minisign public key is anchored for this app yet — `.minisig` is
+published but there is no trusted key to verify it with (gifview has no
+self-update consumer), so `.sha256` plus `.phar.commit` are a disclosure of
+what you hold, not a cryptographic attestation of who built it.
 
 The viewer paints with pure SGR background blocks rather than a terminal
 graphics protocol (kitty/sixel/iTerm2), so it runs anywhere 24-bit colour
