@@ -105,7 +105,10 @@ final class FocusManager
             return $this->focus($ids[0]);
         }
 
-        $next = $this->ring->focus($this->focusedId)->next()->current();
+        // The ring keeps its own stale index (focus() only registers here),
+        // so the query re-anchors to the authoritative focusedId first —
+        // peekNext answers what the old mover+current() shape computed.
+        $next = $this->ring->focus($this->focusedId)->peekNext();
         return $this->focus($next ?? $ids[0]);
     }
 
@@ -122,7 +125,7 @@ final class FocusManager
             return $this->focus($ids[count($ids) - 1]);
         }
 
-        $prev = $this->ring->focus($this->focusedId)->previous()->current();
+        $prev = $this->ring->focus($this->focusedId)->peekPrevious();
         return $this->focus($prev ?? $ids[count($ids) - 1]);
     }
 

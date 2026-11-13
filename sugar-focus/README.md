@@ -235,6 +235,7 @@ perceivable (2.4.7 *Focus Visible*).
 | `focus(string $id): self` | Focus a specific registered, **enabled** region (no-op otherwise). |
 | `next(): self` / `previous(): self` | Tab / Shift-Tab traversal (wrapping, skipping disabled regions). |
 | `nextOf(string $id): ?string` / `previousOf(string $id): ?string` | Pure query: the id traversal would land on if focus sat on `$id` (focus not moved; `null` for unregistered ids). |
+| `peekNext(): ?string` / `peekPrevious(): ?string` | The ring-level pair: where `next()` / `previous()` would land from the CURRENT focus (focus not moved; `null` on an empty ring; the no-op shape answers the current id, so `peekNext() === current()` means Tab would do nothing). |
 | `focusFirst(): self` / `focusLast(): self` | Jump to the first / last **enabled** region (no-op when none is enabled). |
 | `disable(string $id): self` / `enable(string $id): self` | Exclude a region from / restore it to traversal. |
 | `isEnabled(string $id): bool` | Whether `$id` is registered and not disabled (`false` conflates unregistered with disabled — use `has()` to tell them apart). |

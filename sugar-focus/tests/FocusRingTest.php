@@ -1311,6 +1311,26 @@ final class FocusRingTest extends TestCase
         self::assertSame('a', $ring->current(), 'the query never moves focus');
     }
 
+    public function testPeekAnswersAgreeWithTheMovers(): void
+    {
+        $parked = FocusRing::of('a', 'b', 'c')->focus('a')->disable('a');
+        self::assertSame('b', $parked->peekNext(), 'a parked focus peeks to the nearest enabled ahead');
+        self::assertSame('b', $parked->next()->current(), 'peek names exactly where next() lands');
+        self::assertSame('c', $parked->peekPrevious(), 'behind a parked head wraps to the tail');
+        self::assertSame('c', $parked->previous()->current());
+        self::assertSame('a', $parked->current(), 'peeking never moved focus');
+
+        $sole = FocusRing::of('a', 'b')->focus('a')->disable('b');
+        self::assertSame('a', $sole->peekNext(), 'nowhere to move: the no-op shape answers the current id');
+        self::assertSame($sole, $sole->next(), 'the mover agrees the step is a no-op');
+
+        self::assertSame('a', FocusRing::of('a', 'b')->focus('b')->peekNext(), 'wraps like the mover');
+
+        $empty = FocusRing::new();
+        self::assertNull($empty->peekNext());
+        self::assertNull($empty->peekPrevious());
+    }
+
     public function testNextOfSkipsDisabledRegions(): void
     {
         $ring = FocusRing::of('a', 'b', 'c')->disable('b');

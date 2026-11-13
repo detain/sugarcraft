@@ -494,6 +494,30 @@ final class FocusRing implements \Countable, \IteratorAggregate, \JsonSerializab
     }
 
     /**
+     * Where next() WOULD land if it were called now, without moving focus:
+     * the ring-level sibling of {@see nextOf()}, answering about the CURRENT
+     * focus. null on an empty ring; a parked focus answers via the nearest
+     * enabled region, and a nowhere-to-move focus answers with its own id
+     * (next()'s no-op shape — callers compare ===current() to detect "Tab
+     * would do nothing").
+     */
+    public function peekNext(): ?string
+    {
+        return $this->index === -1 ? null : $this->ids[$this->landOn($this->index, 1)];
+    }
+
+    /**
+     * Where previous() WOULD land if it were called now. See
+     * {@see peekNext()} for the shared grammar (empty ring null, parked
+     * focus carried to the nearest enabled region, no-op answers the current
+     * id).
+     */
+    public function peekPrevious(): ?string
+    {
+        return $this->index === -1 ? null : $this->ids[$this->landOn($this->index, -1)];
+    }
+
+    /**
      * The single traversal routine behind {@see next()} (+1) and
      * {@see previous()} (-1), so the two directions cannot drift apart.
      */
