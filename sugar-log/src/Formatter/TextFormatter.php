@@ -281,6 +281,39 @@ final class TextFormatter implements Formatter
     }
 
     /**
+     * Create a new TextFormatter with the timestamp part switched, preserving
+     * all other settings. Used by the Logger formatter-adopt seam [PHP-02].
+     */
+    public function withReportTimestamp(bool $reportTimestamp): self
+    {
+        $child = clone $this;
+        $child->reportTimestamp = $reportTimestamp;
+        return $child;
+    }
+
+    /**
+     * Create a new TextFormatter with a different time format, preserving all
+     * other settings. Used by the Logger formatter-adopt seam [PHP-02].
+     */
+    public function withTimeFormat(?string $timeFormat): self
+    {
+        $child = clone $this;
+        $child->timeFormat = $timeFormat;
+        return $child;
+    }
+
+    /**
+     * Create a new TextFormatter with the caller part switched, preserving all
+     * other settings. Used by the Logger formatter-adopt seam [PHP-02].
+     */
+    public function withReportCaller(bool $reportCaller): self
+    {
+        $child = clone $this;
+        $child->reportCaller = $reportCaller;
+        return $child;
+    }
+
+    /**
      * Create a new TextFormatter with coloring switched, preserving all other
      * settings. Used by {@see \SugarCraft\Log\Logger}'s destination gate to
      * deliver a plain mirror of the configured formatter when the target

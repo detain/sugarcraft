@@ -98,14 +98,21 @@ final class ColorGateTest extends TestCase
         [$path, $stream] = $this->tempFile();
         $logger = Logger::new(level: Level::Debug, stream: $stream);
 
-        $first = new TextFormatter(false, null, false, true);
+        // [PHP-02 seam] Presentation state now rides the logger through the
+        // adopt seam, so the timestamp toggle happens on the logger; the two
+        // adopted TextFormatters remain DISTINCT instances — the probe is
+        // mirror freshness across identity changes, not state on the raw
+        // incoming formatter (which adoption re-seeds).
+        $logger->setReportTimestamp(false);
+        $first = new TextFormatter();
         $logger->setFormatter($first);
         $logger->info('one');
 
-        // A DIFFERENT styled formatter must not inherit the first one's
-        // cached plain mirror: this one reports timestamps, and its mirror
-        // must too (identity compare, not class compare).
-        $second = new TextFormatter(true, null, false, true);
+        // A DIFFERENT TextFormatter instance must not inherit the first one's
+        // cached plain mirror: timestamps are back on, and this formatter's
+        // mirror must carry them (identity compare, not class compare).
+        $logger->setReportTimestamp(true);
+        $second = new TextFormatter();
         $logger->setFormatter($second);
         $logger->info('two');
 

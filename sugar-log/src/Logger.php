@@ -72,6 +72,12 @@ final class Logger
 
     /**
      * @param Formatter|null $formatter Output formatter (defaults to TextFormatter).
+     *                                   A supplied TextFormatter is adopted with the
+     *                                   logger's presentation knobs winning:
+     *                                   timestamp, time format, caller reporting,
+     *                                   styles, and parts order are re-seeded from
+     *                                   this logger [PHP-02]. Non-text formatters
+     *                                   carry none of that state and are adopted as-is.
      * @param Level|null     $level     Minimum level to emit (defaults to Info).
      * @param string|null    $prefix    Prepended string on every line.
      * @param bool           $reportTimestamp Show a timestamp (main stream).
@@ -111,19 +117,21 @@ final class Logger
         $this->useColors = $useColors;
         $this->partsOrder = $partsOrder ?? PartsOrder::default();
 
-        $this->formatter = $formatter ?? new TextFormatter(
+        $this->reportTimestamp = $reportTimestamp;
+        $this->timeFormat = $timeFormat;
+        $this->reportCaller = $reportCaller;
+
+        $this->formatter = $formatter === null ? new TextFormatter(
             $reportTimestamp,
             $timeFormat,
             $reportCaller,
             $useColors,
             $this->styles,
             $this->partsOrder,
-        );
+        ) : $this->reseedTextFormatter($formatter); // [PHP-02] same adopt seam
+                                                     // as withFormatter()
         $this->minLevel = $level ?? Level::Info;
         $this->prefix = $prefix;
-        $this->reportTimestamp = $reportTimestamp;
-        $this->timeFormat = $timeFormat;
-        $this->reportCaller = $reportCaller;
         $this->fields = [];
         $this->stream = self::requireStream($stream ?? Stdio::out());
         $this->errorStream = $errorStream === null ? null : self::requireStream($errorStream);
@@ -454,7 +462,7 @@ final class Logger
     public function withFormatter(Formatter $formatter): self
     {
         $child = clone $this;
-        $child->formatter = $formatter;
+        $child->formatter = self::reseedTextFormatter($formatter);
         return $child;
     }
 
@@ -477,7 +485,31 @@ final class Logger
 
     public function setFormatter(Formatter $formatter): void
     {
-        $this->formatter = $formatter;
+        $this->formatter = self::reseedTextFormatter($formatter);
+    }
+
+    /**
+     * [PHP-02] Adopt-seam re-seed. A bare `new TextFormatter()` carries default
+     * presentation state — handing it to a Logger that had caller reporting, a
+     * custom time format, styles, or parts order configured silently lost all
+     * of it (the inverse of setStyles()/setPartsOrder(), which rewire the live
+     * formatter). When the incoming formatter is a TextFormatter, the logger's
+     * presentation knobs win. Non-text formatters (Json, Logfmt) carry none of
+     * this state and are adopted untouched; on those the Logger-side knobs
+     * simply do not apply (the constructor note says the same).
+     */
+    private function reseedTextFormatter(Formatter $formatter): Formatter
+    {
+        if (!$formatter instanceof TextFormatter) {
+            return $formatter;
+        }
+
+        return $formatter
+            ->withReportTimestamp($this->reportTimestamp)
+            ->withTimeFormat($this->timeFormat)
+            ->withReportCaller($this->reportCaller)
+            ->withStyles($this->styles)
+            ->withPartsOrder($this->partsOrder);
     }
 
     public function setMinLevel(Level $level): void

@@ -10,6 +10,7 @@ use SugarCraft\Log\Level;
 use SugarCraft\Log\Support\Stdio;
 use SugarCraft\Log\Formatter\JsonFormatter;
 use SugarCraft\Log\Formatter\LogfmtFormatter;
+use SugarCraft\Log\Formatter\TextFormatter;
 use PHPUnit\Framework\TestCase;
 
 final class LoggerTest extends TestCase
@@ -306,6 +307,73 @@ final class LoggerTest extends TestCase
         // Must still be valid JSON with level field
         $this->assertStringContainsString('"level"', $content);
         $this->assertStringContainsString('json still', $content);
+    }
+
+    public function testAdoptedTextFormatterKeepsCallerAndTimeFormat(): void
+    {
+        // [PHP-02] setFormatter() used to adopt a bare TextFormatter verbatim:
+        // the logger's caller reporting and custom time format silently
+        // vanished (the inverse of setStyles/setPartsOrder rewiring the live
+        // formatter). Adoption now re-seeds presentation state from the logger.
+        $stream = \fopen($this->tempPath, 'w');
+        $log = Logger::new(
+            formatter: new TextFormatter(), // [PHP-02] bare formatter via the ctor seam
+            level: Level::Debug,
+            reportTimestamp: true,
+            timeFormat: 'Y-m-d',
+            reportCaller: true,
+            stream: $stream,
+        );
+
+        $log->setFormatter(new TextFormatter()); // bare defaults pre-fix
+        $log->info('adopt');
+        \fclose($stream);
+
+        $content = \file_get_contents($this->tempPath);
+        $this->assertStringContainsString('adopt', $content);
+        $this->assertMatchesRegularExpression('/\d{4}-\d{2}-\d{2}/', $content, 'custom time format must survive adoption');
+        $this->assertStringContainsString('LoggerTest.php', $content, 'caller column must survive adoption');
+    }
+
+    public function testConstructorSeamAloneKeepsLoggerStateOnBareTextFormatter(): void
+    {
+        // [PHP-02] The ctor adoption must not depend on a later setFormatter()
+        // to fix its state: writing straight after Logger::new(formatter: bare)
+        // still carries caller and time format.
+        $stream = \fopen($this->tempPath, 'w');
+        $log = Logger::new(
+            formatter: new TextFormatter(),
+            level: Level::Debug,
+            reportTimestamp: true,
+            timeFormat: 'Y-m-d',
+            reportCaller: true,
+            stream: $stream,
+        );
+
+        $log->info('ctor only');
+        \fclose($stream);
+
+        $content = \file_get_contents($this->tempPath);
+        $this->assertStringContainsString('ctor only', $content);
+        $this->assertMatchesRegularExpression('/\d{4}-\d{2}-\d{2}/', $content, 'custom time format must survive ctor adoption');
+        $this->assertStringContainsString('LoggerTest.php', $content, 'caller column must survive ctor adoption');
+    }
+
+    public function testWithFormatterAdoptsTheSameSeam(): void
+    {
+        // [PHP-02] The immutable path must behave like setFormatter(): the
+        // child logger's caller + timestamp state rides into the new formatter.
+        $stream = \fopen($this->tempPath, 'w');
+        $log = Logger::new(level: Level::Debug, reportTimestamp: true, reportCaller: true, stream: $stream);
+
+        $child = $log->withFormatter(new TextFormatter());
+        $child->info('child');
+        \fclose($stream);
+
+        $content = \file_get_contents($this->tempPath);
+        $this->assertStringContainsString('child', $content);
+        $this->assertMatchesRegularExpression('/\d{4}\/\d{2}\/\d{2}/', $content);
+        $this->assertStringContainsString('LoggerTest.php', $content, 'caller column must survive withFormatter adoption');
     }
 
     public function testSetOutputRedirectsWrites(): void
