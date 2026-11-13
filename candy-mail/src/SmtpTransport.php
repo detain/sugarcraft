@@ -432,10 +432,20 @@ final class SmtpTransport implements Transport
 
         // Explicit 1.2|1.3 bitmask rather than the TLS_CLIENT catch-all: the
         // server must not be able to settle the upgrade on a legacy protocol.
-        $crypto = \stream_socket_enable_crypto($this->socket, true, self::TLS_CRYPTO_METHODS);
-        if ($crypto !== 1) {
-            // 1 = handshake completed; 0/false = failure. Treat anything else as
-            // a failed upgrade so requireTls semantics stay honest.
+        // The @ is deliberate, not laundering: a failed handshake makes PHP
+        // emit the raw OpenSSL diagnostic (certificate-verify text built from
+        // the PEER's chain) onto stderr — an untrusted-bytes egress the rest
+        // of this transport refuses to have. The failure IS handled: the
+        // return value below routes it into the named starttls_failed throw.
+        $crypto = @\stream_socket_enable_crypto($this->socket, true, self::TLS_CRYPTO_METHODS);
+        if ($crypto !== 1 && $crypto !== true) {
+            // Success signal: the docs promise 1, but a blocking-stream
+            // completion against an explicit protocol bitmask answers bool
+            // true on current PHP/OpenSSL runtimes (pinned live by
+            // TlsChannelTest — before that harness existed, requiring a strict
+            // === 1 silently failed every real STARTTLS upgrade). 0 = more
+            // data, false = failure; anything else fails loud so requireTls
+            // semantics stay honest.
             throw new \RuntimeException(Lang::t('smtp.starttls_failed'));
         }
         $this->encrypted = true;

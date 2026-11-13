@@ -519,6 +519,38 @@ final class CliTest extends TestCase
         $this->assertSame('env.example.org', $this->readProperty($fromEnv, 'heloHost'));
     }
 
+    public function testBuildTransportCarriesCaFileFromBothInputShapes(): void
+    {
+        // CM-09 arm (d) (closes 080): the CA plumbing the docs sell must be
+        // provably wired — a readable PEM via the flag AND via the env row
+        // lands on the transport, and an unusable path is refused at
+        // configuration time, never discovered mid-handshake.
+        $pem = (string) \tempnam(\sys_get_temp_dir(), 'clitls-ca-');
+        \file_put_contents($pem, "-----BEGIN CERTIFICATE-----\ntest\n-----END CERTIFICATE-----\n");
+        $this->setEnv('CANDY_MAIL_SMTP_HOST', 'smtp.invalid.example');
+        try {
+            $flagged = \SugarCraft\Mail\buildTransport(['ca_file' => $pem]);
+            $this->assertSame($pem, $this->readProperty($flagged, 'caFile'), '--ca-file reaches the transport');
+
+            $this->setEnv('CANDY_MAIL_SMTP_CA_FILE', $pem);
+            $fromEnv = \SugarCraft\Mail\buildTransport();
+            $this->assertSame($pem, $this->readProperty($fromEnv, 'caFile'), 'CANDY_MAIL_SMTP_CA_FILE reaches the transport');
+
+            $this->expectException(\InvalidArgumentException::class);
+            $this->expectExceptionMessage('not a readable regular file');
+            \SugarCraft\Mail\buildTransport(['ca_file' => $pem . '.nope']);
+        } finally {
+            // The neighbour idiom is per-test env hygiene (this class has no
+            // auto-restore): the deleted PEM must not ride the process env
+            // into the next test's buildTransport() as a phantom caFile.
+            unset($_ENV['CANDY_MAIL_SMTP_HOST']);
+            \putenv('CANDY_MAIL_SMTP_HOST');
+            unset($_ENV['CANDY_MAIL_SMTP_CA_FILE']);
+            \putenv('CANDY_MAIL_SMTP_CA_FILE');
+            \unlink($pem);
+        }
+    }
+
     public function testBuildEmailSurvivesUnsetSignatureEnv(): void
     {
         // getenv() answers false, not '' — an unguarded pass would fatal
