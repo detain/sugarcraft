@@ -48,9 +48,13 @@ final class Buffer implements \JsonSerializable
      *
      * Test-support factory — not for accurate terminal state replay. SGR
      * sequences accumulate onto the live style (code 0 within a sequence
-     * resets it first), and OSC sequences — including the OSC 8 hyperlink
-     * opens/closes toAnsi() emits — are skipped without entering the cell
-     * grid, so even linked output round-trips as text. Restoration is
+     * resets it first); every other CSI frame — cursor addressing, DEC
+     * modes, this package's own CUP/ECH/REP output, and an 'm'-terminated
+     * frame whose parameters carry private/intermediate bytes — is consumed
+     * without entering the cell grid (a direct {@see Style::fromSgr()} call
+     * still refuses malformed parameters loudly); and OSC sequences —
+     * including the OSC 8 hyperlink opens/closes toAnsi() emits — are
+     * skipped too, so even linked output round-trips as text. Restoration is
      * lossy by contract: hyperlinks are never re-attached to cells, SGRs
      * outside the parsed vocabulary are ignored, and multibyte runes are
      * split byte-wise (one byte per cell).
@@ -104,18 +108,43 @@ final class Buffer implements \JsonSerializable
                 }
 
                 if ($next === '[') {
-                    // CSI SGR sequence: find its end (m) and merge its params
-                    // onto the live style. Multi-segment styling such as
-                    // "\x1b[1m\x1b[31m" accumulates — the previous
-                    // last-segment-wins cache silently dropped bold.
-                    $end = strpos($ansi, 'm', $idx);
-                    if ($end === false) {
-                        $idx++;
-                        continue;
+                    // CSI frame: consume exactly what a terminal consumes —
+                    // parameter/intermediate bytes (0x20-0x3F) up to a final
+                    // byte (0x40-0x7E) — instead of hunting for a bare 'm'
+                    // anywhere later (which mis-swallowed private modes like
+                    // \x1b[?25l and turned non-SGR frames into throw bait or
+                    // printable garbage). Only an SGR-shaped frame (final 'm',
+                    // digits with ;/: separators, or empty == reset) touches
+                    // the live style; Multi-segment styling such as
+                    // "\x1b[1m\x1b[31m" accumulates. Every other CSI — cursor
+                    // addressing, DEC modes, this package's own CUP/ECH/REP —
+                    // is dropped without entering the grid, keeping the
+                    // documented leniency of a test-support parser.
+                    $scan = $idx + 2;
+                    while ($scan < $ansiLen) {
+                        $byte = ord($ansi[$scan]);
+                        if ($byte < 0x20 || $byte > 0x3F) {
+                            break;
+                        }
+                        $scan++;
                     }
-                    $params = substr($ansi, $idx + 2, $end - $idx - 2);
-                    $currentStyle = self::styleFromSgr($params, $currentStyle);
-                    $idx = $end + 1;
+                    if ($scan >= $ansiLen) {
+                        // Unterminated CSI: the frame swallows the rest of
+                        // the stream, exactly like a terminal holding a
+                        // pending sequence.
+                        break;
+                    }
+                    if ($ansi[$scan] === 'm') {
+                        $params = substr($ansi, $idx + 2, $scan - $idx - 2);
+                        if ($params === '' || preg_match('/^[\d;:]+$/', $params) === 1) {
+                            $currentStyle = self::styleFromSgr($params === '' ? '0' : $params, $currentStyle);
+                        }
+                        // Else: 'm' terminus polluted with private/intermediate
+                        // bytes — discard the frame (a direct Style::fromSgr()
+                        // call still refuses it loudly; that contract lives
+                        // with its own callers, not this fixture parser).
+                    }
+                    $idx = $scan + 1; // consume through the final byte
                     continue;
                 }
             }

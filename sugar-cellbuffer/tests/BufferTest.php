@@ -1617,6 +1617,76 @@ final class BufferTest extends TestCase
         $this->assertSame('B', $parsed->cellAt(1, 0)->rune());
     }
 
+    // ─── CB-22: CSI frames consume like a terminal, not by 'm'-hunt ──────
+
+    public function testFromStringDropsNonSgrCsiWithoutDepositingRunes(): void
+    {
+        // The old strpos('m') scan only found a terminator LATER in the
+        // stream; with none, `\x1b[2J` deposited '[', '2', 'J' as printable
+        // garbage which toAnsi() would re-emit verbatim. A terminal consumes
+        // the whole frame; so does the fixture parser now.
+        $parsed = Buffer::fromString("x\x1b[2Jy", 10, 1);
+
+        $this->assertSame("xy        ", $parsed->text());
+    }
+
+    public function testFromStringDropsCursorCsiAndKeepsLaterSgr(): void
+    {
+        // Old shape: with a later 'm' the params swallowed `5;5H…` and
+        // Style::fromSgr threw on the non-digit run (README-probed legacy
+        // contract). Now the CUP frame is consumed at its 'H' terminus and
+        // the SGR frame that follows still paints the pen.
+        $buf = Buffer::fromString("\x1b[5;5H\x1b[31mA", 5, 1);
+
+        $this->assertSame('A', $buf->cellAt(0, 0)->rune());
+        $style = $buf->cellAt(0, 0)->style();
+        $this->assertNotNull($style);
+        $this->assertSame(0xFF0000, $style->fg());
+    }
+
+    public function testFromStringDropsPrivateModeFrames(): void
+    {
+        // Every TEA program emits `\x1b[?25l` / `\x1b[?1049h`; these must
+        // neither throw nor leak, while ordinary SGR frames around them
+        // still apply.
+        $buf = Buffer::fromString("\x1b[?25l\x1b[1mAB\x1b[?25h\x1b[0m", 4, 1);
+
+        $this->assertSame("AB  ", $buf->text());
+        $this->assertTrue($buf->cellAt(0, 0)->style()?->hasBold());
+        // B is printed before the trailing reset, so it carries bold too —
+        // proof the DEC frames never touched the pen or the grid.
+        $this->assertTrue($buf->cellAt(1, 0)->style()?->hasBold());
+    }
+
+    public function testFromStringUnterminatedCsiSwallowsRest(): void
+    {
+        // Pending-sequence semantics: no final byte arrives, so nothing
+        // after the ESC prints — no injected garbage runes.
+        $buf = Buffer::fromString("A\x1b[1", 2, 1);
+
+        $this->assertSame('A', $buf->cellAt(0, 0)->rune());
+        $this->assertSame(' ', $buf->cellAt(1, 0)->rune());
+    }
+
+    public function testFromStringEmptySgrFrameIsAReset(): void
+    {
+        // ECMA-48: `CSI m` is `CSI 0 m`.
+        $buf = Buffer::fromString("\x1b[31m\x1b[mA", 1, 1);
+
+        $this->assertSame('A', $buf->cellAt(0, 0)->rune());
+        $this->assertNull($buf->cellAt(0, 0)->style());
+    }
+
+    public function testFromStringDropsJunkParameterSgrFrameWithoutThrowing(): void
+    {
+        // An 'm' terminus polluted with private bytes is not a pen change;
+        // the frame is dropped (direct Style::fromSgr keeps its throw law).
+        $buf = Buffer::fromString("\x1b[5;?mA", 1, 1);
+
+        $this->assertSame('A', $buf->cellAt(0, 0)->rune());
+        $this->assertNull($buf->cellAt(0, 0)->style());
+    }
+
     public function testFromStringAccumulatesMultiSegmentSgr(): void
     {
         // "\x1b[1m\x1b[31m" — last-segment-wins parsing dropped the bold.
