@@ -17,11 +17,6 @@ use SugarCraft\Style\Style;
 /**
  * Tests for TextFormatter color output, value coercion, field merging,
  * and reportTimestamp=false behavior.
- *
- * Note: Exact SGR bytes for color snapshots should be captured after
- * Step-5 (Styles wiring) is complete. Run:
- *   php -r "require 'vendor/autoload.php'; ..."
- * to capture the exact \x1b[...m sequences for each level.
  */
 final class TextFormatterTest extends TestCase
 {
@@ -40,9 +35,11 @@ final class TextFormatterTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
-    // Color snapshots (exact SGR bytes)
-    // The bytes below were captured from Styles::default() + TextFormatter after Step-5.
-    // If Styles or TextFormatter styling changes, re-capture and update.
+    // Color snapshots (exact SGR bytes, one record per arm)
+    // The palette slots reach the wire as the canonical 16-colour SGR codes
+    // (slot 8 grey -> 90, 4 blue -> 34, 3 yellow -> 33, 1 red -> 31,
+    // 5 magenta -> 35, 7 white -> 37; background slot 1 -> 41) so a terminal
+    // theme owns the exact shades. Bytes re-derived from disk at SL-12.
     // -------------------------------------------------------------------------
 
     public function testColorSnapshotForDebugLevel(): void
@@ -50,12 +47,7 @@ final class TextFormatterTest extends TestCase
         $tf = new TextFormatter(false, null, false, true);
         $line = $tf->format(Level::Debug, 'msg', [], new \DateTimeImmutable(), null, null);
 
-        // Debug uses Color::ansi(8) = grey (palette index 8)
-        // Capture: php -r "use SugarCraft\Log\Formatter\TextFormatter; ..."
-        // Expected pattern: \x1b[38;5;8m for grey foreground
-        $this->assertStringContainsString("\x1b[", $line);
-        $this->assertStringContainsString('DBG', $line);
-        $this->assertStringContainsString('msg', $line);
+        $this->assertSame("\x1b[90mDBG\x1b[0m msg\n", $line);
     }
 
     public function testColorSnapshotForInfoLevel(): void
@@ -63,9 +55,7 @@ final class TextFormatterTest extends TestCase
         $tf = new TextFormatter(false, null, false, true);
         $line = $tf->format(Level::Info, 'msg', [], new \DateTimeImmutable(), null, null);
 
-        // Info uses Color::ansi(4) = blue
-        $this->assertStringContainsString("\x1b[", $line);
-        $this->assertStringContainsString('INF', $line);
+        $this->assertSame("\x1b[34mINF\x1b[0m msg\n", $line);
     }
 
     public function testColorSnapshotForWarnLevel(): void
@@ -73,9 +63,7 @@ final class TextFormatterTest extends TestCase
         $tf = new TextFormatter(false, null, false, true);
         $line = $tf->format(Level::Warn, 'msg', [], new \DateTimeImmutable(), null, null);
 
-        // Warn uses Color::ansi(3) = yellow
-        $this->assertStringContainsString("\x1b[", $line);
-        $this->assertStringContainsString('WRN', $line);
+        $this->assertSame("\x1b[33mWRN\x1b[0m msg\n", $line);
     }
 
     public function testColorSnapshotForErrorLevel(): void
@@ -83,12 +71,9 @@ final class TextFormatterTest extends TestCase
         $tf = new TextFormatter(false, null, false, true);
         $line = $tf->format(Level::Error, 'msg', [], new \DateTimeImmutable(), null, null);
 
-        // Error uses Color::ansi(1) = red + bold
-        // SGR for bold is 1, so we expect \x1b[1;... pattern
-        $this->assertStringContainsString("\x1b[", $line);
-        $this->assertStringContainsString('ERR', $line);
-        // Bold escape sequence should be present (SGR 1 = bold, rendered as \x1b[1m)
-        $this->assertMatchesRegularExpression('/\x1b\[1m/', $line);
+        // Bold (SGR 1) and red foreground (SGR 31) arrive as separate SGRs,
+        // bold first; the full line is the pin.
+        $this->assertSame("\x1b[1m\x1b[31mERR\x1b[0m msg\n", $line);
     }
 
     public function testColorSnapshotForFatalLevel(): void
@@ -96,19 +81,13 @@ final class TextFormatterTest extends TestCase
         $tf = new TextFormatter(false, null, false, true);
         $line = $tf->format(Level::Fatal, 'msg', [], new \DateTimeImmutable(), null, null);
 
-        // Fatal is Color::ansi(7) on Color::ansi(1) + bold (Styles.php), and an
-        // explicitly chosen palette SLOT now reaches the wire as the palette
-        // code rather than as an absolute value: SGR 37/41, not 38;5;7/48;5;1.
-        // Pinning the 48; form asserted the up-conversion this test was written
-        // under, which is the behaviour that made a 16-colour theme stop
-        // deferring to the terminal's own 16 colours.
-        $this->assertStringContainsString("\x1b[", $line);
-        $this->assertStringContainsString('FTL', $line);
-        // Bold (SGR 1), palette foreground (SGR 37) and palette background
-        // (SGR 41).
-        $this->assertMatchesRegularExpression('/\x1b\[1m/', $line);
-        $this->assertMatchesRegularExpression('/\x1b\[37m/', $line);
-        $this->assertMatchesRegularExpression('/\x1b\[41m/', $line);
+        // Fatal is white on red + bold, and an explicitly chosen palette SLOT
+        // now reaches the wire as the palette code rather than as an absolute
+        // value: SGR 37/41, not 38;5;7/48;5;1. Pinning the 48; form asserted
+        // the up-conversion this test was written under, which is the
+        // behaviour that made a 16-colour theme stop deferring to the
+        // terminal's own 16 colours.
+        $this->assertSame("\x1b[1m\x1b[37m\x1b[41mFTL\x1b[0m msg\n", $line);
     }
 
     public function testNoSgrBytesWhenColorsDisabled(): void
@@ -116,9 +95,8 @@ final class TextFormatterTest extends TestCase
         $tf = new TextFormatter(false, null, false, false);
         $line = $tf->format(Level::Debug, 'msg', [], new \DateTimeImmutable(), null, null);
 
-        // No ANSI escape sequences when colors are disabled
-        $this->assertStringNotContainsString("\x1b[", $line);
-        $this->assertStringContainsString('DBG', $line);
+        // Plain mode is the same record with every SGR absent.
+        $this->assertSame("DBG msg\n", $line);
     }
 
     public function testColorSnapshotForPrefix(): void
@@ -126,9 +104,8 @@ final class TextFormatterTest extends TestCase
         $tf = new TextFormatter(false, null, false, true);
         $line = $tf->format(Level::Info, 'msg', [], new \DateTimeImmutable(), null, 'PREFIX');
 
-        // Prefix uses Color::ansi(5) = magenta
-        $this->assertStringContainsString("\x1b[", $line);
-        $this->assertStringContainsString('PREFIX', $line);
+        // Prefix rides magenta (slot 5 -> SGR 35) after the level token.
+        $this->assertSame("\x1b[34mINF\x1b[0m \x1b[35mPREFIX\x1b[0m msg\n", $line);
     }
 
     public function testColorSnapshotForCaller(): void
@@ -136,9 +113,17 @@ final class TextFormatterTest extends TestCase
         $tf = new TextFormatter(false, null, true, true);
         $line = $tf->format(Level::Info, 'msg', [], new \DateTimeImmutable(), 'file.php:10', null);
 
-        // Caller uses Color::ansi(8) = grey
-        $this->assertStringContainsString("\x1b[", $line);
-        $this->assertStringContainsString('<file.php:10>', $line);
+        // Caller rides grey (slot 8 -> SGR 90) inside the angle brackets.
+        $this->assertSame("\x1b[34mINF\x1b[0m \x1b[90m<file.php:10>\x1b[0m msg\n", $line);
+    }
+
+    public function testColorSnapshotForContextFields(): void
+    {
+        $tf = new TextFormatter(false, null, false, true);
+        $line = $tf->format(Level::Info, 'msg', ['k' => 'v'], new \DateTimeImmutable('2026-01-01 00:00:00'), null, null);
+
+        // Context pairs ride the key grey style after the plain message.
+        $this->assertSame("\x1b[34mINF\x1b[0m msg \x1b[90mk=v\x1b[0m\n", $line);
     }
 
     // -------------------------------------------------------------------------
