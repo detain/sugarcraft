@@ -60,6 +60,9 @@ final class ConversationRouter
     /** @var array<string, PlatformFace> "<platform>:<account>" (plus a bare "<platform>" fallback alias) → face */
     private array $channels = [];
 
+    /** @var array<string, PromiseInterface<string>> in-flight session.create continuations, keyed by binding key (single-flight, candy-discord-010) */
+    private array $creating = [];
+
     /** @var array<string, string> sessionId → serve status word */
     private array $busy = [];
 
@@ -644,18 +647,39 @@ final class ConversationRouter
         if ($existing !== null) {
             return \React\Promise\resolve($existing);
         }
+        // Single-flight (candy-discord-010): without the memo, two inbounds on
+        // a brand-new key during one slow create each spawn their own session.
+        // Same in-flight shape as the bundle family's TokenBroker — cleared in
+        // BOTH arms so a rejection never sticks.
+        if (isset($this->creating[$key])) {
+            return $this->creating[$key];
+        }
 
-        return $this->serve->createSession(self::grammarName($key))->then(function (array $created) use ($key, $ref): string {
-            $sessionId = (string) ($created['id'] ?? '');
-            if ($sessionId === '') {
-                throw new \RuntimeException('session.create returned no id');
-            }
-            $this->map->bind($key, $sessionId);
-            $this->map->rememberConversation($sessionId, $key, $ref);
-            $this->followNow($sessionId, $key);
+        return $this->creating[$key] = $this->serve->createSession(self::grammarName($key))->then(
+            function (array $created) use ($key, $ref): string {
+                unset($this->creating[$key]);
+                $sessionId = (string) ($created['id'] ?? '');
+                if ($sessionId === '') {
+                    throw new \RuntimeException('session.create returned no id');
+                }
+                // Re-check INSIDE the fulfilled arm: if the key got bound while
+                // this create rode the wire (/new, or a parallel adopter), the
+                // racer ADOPTS the live binding — never overwrites it.
+                $bound = $this->map->sessionIdFor($key);
+                if ($bound !== null) {
+                    return $bound;
+                }
+                $this->map->bind($key, $sessionId);
+                $this->map->rememberConversation($sessionId, $key, $ref);
+                $this->followNow($sessionId, $key);
 
-            return $sessionId;
-        });
+                return $sessionId;
+            },
+            function (\Throwable $error) use ($key): never {
+                unset($this->creating[$key]);
+                throw $error;
+            },
+        );
     }
 
     /**

@@ -420,6 +420,43 @@ final class ConversationRouterTest extends TestCase
         self::assertSame(40, $this->map->cursorForSession('sess_fixture_1'));
     }
 
+    public function testTwoInboundsOnAFreshKeyWhileCreateIsInFlightCreateOneSession(): void
+    {
+        $this->boot();
+        $this->serve->createDelayMs = 250;
+        $key = 'discord:default:chan-77';
+
+        $this->router->inbound('discord', $key, ['channelId' => 'chan-77', 'messageId' => 'm-1'], 'first', false, 'm-1');
+        self::runFor($this->loop, 50);
+        self::assertSame(1, $this->serve->createSeen, 'the create must be in flight before the race');
+
+        $this->router->inbound('discord', $key, ['channelId' => 'chan-77', 'messageId' => 'm-2'], 'second', false, 'm-2');
+        self::runFor($this->loop, 50);
+        self::assertSame(1, $this->serve->createSeen, 'the second inbound must ride the in-flight create, not start its own');
+        self::runFor($this->loop, 600);
+        self::assertSame('sess_fixture_1', $this->map->sessionIdFor($key), 'the single session ends bound to the key');
+        self::assertSame(1, $this->serve->subscribeSeen, 'one follow subscription — the rider never double-follows');
+    }
+
+    public function testARefusedCreateClearsTheFlightSoTheNextMessageRetries(): void
+    {
+        $this->boot();
+        $this->serve->createRefuses = true;
+        $key = 'discord:default:chan-78';
+
+        $this->router->inbound('discord', $key, ['channelId' => 'chan-78', 'messageId' => 'm-1'], 'first', false, 'm-1');
+        self::runFor($this->loop, 300);
+        self::assertSame(1, $this->serve->createSeen);
+        self::assertNull($this->map->sessionIdFor($key), 'a refused create leaves nothing bound');
+
+        $this->serve->createRefuses = false;
+        $this->router->inbound('discord', $key, ['channelId' => 'chan-78', 'messageId' => 'm-2'], 'second', false, 'm-2');
+        self::runFor($this->loop, 300);
+
+        self::assertSame(2, $this->serve->createSeen, 'the memo must not stay poisoned by a rejection');
+        self::assertSame('sess_fixture_1', $this->map->sessionIdFor($key));
+    }
+
     /** @param array<string,mixed> $policy */
     private function boot(array $policy = []): void
     {

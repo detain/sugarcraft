@@ -57,6 +57,8 @@ final class FakeServe
     public int $respondSeen = 0;
 
     public int $createSeen = 0;
+    public int $createDelayMs = 0;
+    public bool $createRefuses = false;
 
     public ?string $createName = null;
 
@@ -328,10 +330,17 @@ final class FakeServe
             case 'session.create':
                 $this->createSeen++;
                 $this->createName = isset($params['name']) ? (string) $params['name'] : null;
-                $this->emit($id, [
-                    'jsonrpc' => '2.0', 'id' => $rpcId,
-                    'result' => (object) ['id' => 'sess_fixture_1', 'name' => $params['name'] ?? null, 'status' => 'idle'],
-                ]);
+                $answered = $this->createRefuses
+                    ? ['jsonrpc' => '2.0', 'id' => $rpcId,
+                       'error' => ['code' => -32004, 'message' => 'fixture refuses create', 'data' => (object) ['kind' => 'fixture_refused']]]
+                    : ['jsonrpc' => '2.0', 'id' => $rpcId,
+                       'result' => (object) ['id' => 'sess_fixture_1', 'name' => $params['name'] ?? null, 'status' => 'idle']];
+                if ($this->createDelayMs > 0) {
+                    $this->loop->addTimer($this->createDelayMs / 1000.0, fn () => $this->emit($id, $answered));
+
+                    return;
+                }
+                $this->emit($id, $answered);
                 break;
             case 'session.subscribe':
                 $this->subscribeSeen++;
