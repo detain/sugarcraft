@@ -14,6 +14,11 @@ Shared async utilities for SugarCraft — cancellation tokens, subscriptions, di
 - **AsyncOps** — static helpers: `withTimeout`, `withDeadline`, `cancellable`, `singleFlight`, `retry`, `retryBounded`, `nap`, `reconnect`, `drain`, `all`, `race`, `pendingNotice`, `boundWait`, `debounce`, `throttle`
 - **AsyncCache** — promise-library-only async cache-aside: monotonic TTL, in-flight loader coalescing, optional serve-stale-on-error, optional entry bound with introspection
 
+Six packages build on this vocabulary today — sugar-forms, sugar-vterm,
+candy-sql, candy-mail, candy-git-server, and candy-codetime — with the full
+upstream-to-port mapping in
+[`docs/MATCHUPS.md`](../docs/MATCHUPS.md).
+
 ### Why async in a terminal app
 
 A TUI cannot block: blocking is a frozen screen. Every render tick needs the
@@ -519,9 +524,23 @@ $cache->fetch('weather', static fn (): PromiseInterface => resolve('ignored'))->
   callback registered before the fork fires in whichever process cancels.
   Mint these objects after forking, in the process that will use them.
 
+## Development
+
+Install dependencies and run the suite from this directory:
+
+```sh
+composer install && vendor/bin/phpunit
+```
+
+The examples under [`examples/`](examples/) are runnable demos of the public
+surface (`php examples/async-operations.php` and friends), not stubs.
+
 ## Testing with AsyncOps
 
-The suite runs on `StreamSelectLoop` and never sleeps past a test bound. Two
+The suite runs on `StreamSelectLoop` and never sleeps past a test bound. A
+green run intentionally prints a few `sugar-async: cancellation callback
+failed:` and `sugar-async: subscription disposal failed:` lines — these are
+throw-logged probes pinning the hook-failure invariant, not breakage. Two
 laws learned the hard way:
 
 - **Arm-time clock staleness.** Under ext-uv, deadlines are computed against a
