@@ -821,7 +821,7 @@ final class AsyncOpsTest extends TestCase
                 if ($attempts === 1) {
                     return \React\Promise\reject(new \RuntimeException('first failed'));
                 }
-                return 'not a promise'; // retryAttempt() throws on ->then()
+                return 'not a promise'; // the :707 guard refuses it naming the type
             },
             attempts: 3,
             baseBackoffSeconds: 0.01,
@@ -835,8 +835,8 @@ final class AsyncOpsTest extends TestCase
         });
         $loop->run(); // must return on its own: the rejection settles the cycle
 
-        $this->assertInstanceOf(\Error::class, $error);
-        $this->assertStringContainsString('then()', $error->getMessage());
+        $this->assertInstanceOf(\InvalidArgumentException::class, $error);
+        $this->assertSame('AsyncOps retry operation must return a promise; string returned.', $error->getMessage(), 'SA-30 guard vocabulary: the same InvalidArgumentException + named-type shape singleFlight and AsyncCache::fetch raise');
         $this->assertSame(2, $attempts, 'the cycle dies at the offending stage instead of keep retrying');
     }
 

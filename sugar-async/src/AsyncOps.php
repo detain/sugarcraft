@@ -21,6 +21,12 @@ use function React\Promise\resolve;
  * timer/cooldown state across calls; singleFlight() returns a stateful
  * coalescing closure.
  *
+ * The operations these helpers invoke must return a PromiseInterface:
+ * retry(), singleFlight() and AsyncCache::fetch() share one guard
+ * vocabulary, refusing a non-promise with an InvalidArgumentException that
+ * names the returned type. The refusal travels the caller's own rejection
+ * channel (the attempt's, the flight's), never a synchronous surprise.
+ *
  * Nothing here blocks the caller: every wait is expressed as a promise,
  * and every timer is armed on a supplied or shared event loop.
  *
@@ -483,7 +489,14 @@ final class AsyncOps
             $flights->begin($key, $flight);
 
             try {
-                $worker(...$args)->then(
+                $workerResult = $worker(...$args);
+                if (!$workerResult instanceof PromiseInterface) {
+                    // Same guard vocabulary as retry and AsyncCache::fetch:
+                    // name the offending type instead of letting a
+                    // then()-on-string Error ride the flight.
+                    throw new \InvalidArgumentException('AsyncOps singleFlight worker must return a promise; ' . get_debug_type($workerResult) . ' returned.');
+                }
+                $workerResult->then(
                     static function (mixed $value) use ($key, $flight, $flights, $deferred): void {
                         $flights->end($key, $flight);
                         $deferred->resolve($value);
@@ -706,6 +719,15 @@ final class AsyncOps
             $operationPromise = $operation();
         } catch (\Throwable $e) {
             $operationPromise = reject($e);
+        }
+        if (!$operationPromise instanceof PromiseInterface) {
+            // One guard vocabulary across the package (mirrors
+            // AsyncCache::fetch): a non-promise is refused by name, not by
+            // an obscure member-access failure two frames away. The refusal
+            // is terminal — a deterministic caller bug retried down the
+            // ladder just burns the budget — and travels the same rejection
+            // channel as the operation's own failure would.
+            return reject(new \InvalidArgumentException('AsyncOps retry operation must return a promise; ' . get_debug_type($operationPromise) . ' returned.'));
         }
         return $operationPromise->then(
             static fn ($value) => $value,

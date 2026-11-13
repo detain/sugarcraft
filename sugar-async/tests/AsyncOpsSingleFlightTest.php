@@ -187,7 +187,8 @@ final class AsyncOpsSingleFlightTest extends TestCase
             $error = $e;
         });
 
-        $this->assertInstanceOf(\Throwable::class, $error, 'a non-promise return must reject, never strand the caller');
+        $this->assertInstanceOf(\InvalidArgumentException::class, $error, 'a non-promise return must reject, never strand the caller');
+        $this->assertSame('AsyncOps singleFlight worker must return a promise; string returned.', $error->getMessage(), 'guard vocabulary unified with retry and AsyncCache::fetch — the type is named, not a member-access surprise two frames away');
 
         $value = null;
         $run()->then(static function ($v) use (&$value): void {
