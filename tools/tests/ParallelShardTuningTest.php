@@ -249,7 +249,7 @@ final class ParallelShardTuningTest extends TestCase
         $this->assertNotSame($pins['lpt_k4_max'], $after['lpt_k4_max']);
 
         // And a perturbed COMMENT copy fails against the UNperturbed table:
-        $staleQuote = \str_replace('lpt_k4_max=798.1', 'lpt_k4_max=443.0', (string) \file_get_contents($root . self::CI));
+        $staleQuote = \str_replace('lpt_k4_max=' . $committed['lpt_k4_max'], 'lpt_k4_max=443.0', (string) \file_get_contents($root . self::CI));
         $pinsNow = self::quotedPins($staleQuote);
         $this->assertNotSame($committed['lpt_k4_max'], $pinsNow['lpt_k4_max'], 'a 2026-09 number pasted back would go unnoticed');
     }
