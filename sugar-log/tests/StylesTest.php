@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace SugarCraft\Log\Tests;
 
 use SugarCraft\Core\Util\Color;
+use SugarCraft\Log\Level;
+use SugarCraft\Log\Logger;
+use SugarCraft\Log\Formatter\TextFormatter;
 use SugarCraft\Log\Styles;
 use SugarCraft\Style\Style;
 use PHPUnit\Framework\TestCase;
@@ -23,6 +26,48 @@ final class StylesTest extends TestCase
         $this->assertSame('DEBUG', Styles::padLevelText('DEBUG'));
         $this->assertSame('ERROR', Styles::padLevelText('ERROR'));
         $this->assertSame('FATAL', Styles::padLevelText('FATAL'));
+    }
+
+    public function testDefaultBuiltFormattersDoNotShareOneMutableStyles(): void
+    {
+        // [SL-35] DISCLOSED FLIP: before this row, two default-built
+        // TextFormatters rode the same mutable singleton, so tinting one
+        // recoloured the other. Defaults now land on independent
+        // snapshots; explicit Styles::default() passers stay coupled.
+        $a = new TextFormatter(reportTimestamp: false, useColors: true);
+        $b = new TextFormatter(reportTimestamp: false, useColors: true);
+        $prop = new \ReflectionProperty(TextFormatter::class, 'styles');
+        $this->assertNotSame($prop->getValue($a), $prop->getValue($b));
+        $this->assertNotSame(Styles::default(), $prop->getValue($a));
+
+        $time = new \DateTimeImmutable('2026-01-01 00:00:00');
+        $before = $b->format(Level::Warn, 'x', [], $time, null, null);
+        $prop->getValue($a)->levels[Level::Warn->value] = Style::new()->foreground(Color::ansi(2));
+        $this->assertSame($before, $b->format(Level::Warn, 'x', [], $time, null, null));
+
+        // The explicit ride-the-singleton path still couples (BC for
+        // deliberate sharers):
+        $shared = Styles::default();
+        $c = new TextFormatter(reportTimestamp: false, useColors: true, styles: $shared);
+        $d = new TextFormatter(reportTimestamp: false, useColors: true, styles: $shared);
+        $shared->levels[Level::Warn->value] = Style::new()->foreground(Color::ansi(3));
+        $this->assertSame(
+            $c->format(Level::Warn, 'x', [], $time, null, null),
+            $d->format(Level::Warn, 'x', [], $time, null, null)
+        );
+    }
+
+    public function testDefaultBuiltLoggerOwnsItsStylesSnapshot(): void
+    {
+        // Logger::styles() hands back a private snapshot, not the singleton
+        // (README Style ownership band pins this prose).
+        $stream = \fopen('php://memory', 'r+');
+        $log = Logger::new(stream: $stream);
+        $this->assertNotSame(Styles::default(), $log->styles());
+        $log->styles()->padLevelText = true;
+        $this->assertFalse(Styles::default()->padLevelText, 'snapshot mutation must not leak to the singleton');
+        $log->styles()->padLevelText = false;
+        \fclose($stream);
     }
 
     public function testKeyStyleReturnsStyleForKnownField(): void

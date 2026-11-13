@@ -96,14 +96,17 @@ final class Styles
     }
 
     /**
-     * The process-wide shared Styles instance every Logger and TextFormatter
-     * uses unless given its own.
+     * The process-wide shared Styles instance, now OPT-IN: Loggers and
+     * TextFormatters built without styles land on an independent
+     * {@see self::snapshot()} ([SL-35]), so this singleton only couples the
+     * callers that hand it over explicitly (`new TextFormatter(styles:
+     * Styles::default())`).
      *
-     * WARNING — this object is MUTABLE and SHARED: `$log->styles()->keys['time']
-     * = ...` recolors time for EVERY logger in the process built on defaults.
-     * For per-logger styling, hand that logger a fresh instance instead:
-     * `$log->setStyles(new Styles())` or construct the formatter with
-     * `new TextFormatter(styles: new Styles())`.
+     * WARNING — whatever rides it shares one MUTABLE object: tinting
+     * `$logger->setStyles(Styles::default())->styles()->keys['time'] = ...`
+     * recolors time for every logger and formatter deliberately riding the
+     * default. For a private palette take {@see self::snapshot()} or a fresh
+     * `new Styles()`.
      */
     public static function default(): self
     {
@@ -113,8 +116,9 @@ final class Styles
     /**
      * An INDEPENDENT copy of the shared defaults.
      *
-     * {@see self::default()} is a process-wide mutable singleton — editing it
-     * recolors every logger riding the defaults. snapshot() hands back a copy
+     * {@see self::default()} is a process-wide mutable singleton — editing
+     * it recolors every logger and formatter explicitly riding it. snapshot()
+     * hands back a copy
      * whose public arrays (and scalar knobs) can be mutated freely:
      * `$s = Styles::snapshot(); $s->levels[Level::Warn->value] = $style; $log->setStyles($s)` never leaks.
      * The Style objects inside are value objects (every mutator clones), so

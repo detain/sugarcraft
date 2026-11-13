@@ -114,7 +114,8 @@ final class Logger
         // Probe-driven color decision: disable colors when terminal cannot render them
         $useColors = Probe::colorProfile()->allowsColor();
 
-        $this->styles = Styles::default();
+        // [SL-35] Independent snapshot, not the shared singleton.
+        $this->styles = Styles::snapshot();
         $this->useColors = $useColors;
         $this->partsOrder = $partsOrder ?? PartsOrder::default();
 
@@ -611,10 +612,11 @@ final class Logger
     /**
      * Styles object for text-formatter styling.
      *
-     * Caution: the default Styles instance is process-wide shared mutable
-     * state ({@see Styles::default()}). Mutating what logger->styles()
-     * returns changes every logger that never called setStyles(). For a
-     * private palette use `$logger->setStyles(new Styles())` first.
+     * A logger built without styles owns an independent snapshot
+     * ({@see Styles::snapshot()}), so mutating what logger->styles() returns
+     * changes THIS logger only. The process-wide shared instance stays
+     * opt-in: whoever passes {@see Styles::default()} to setStyles() rides
+     * (and recolours) the singleton.
      */
     public function styles(): Styles
     {

@@ -243,9 +243,11 @@ lives in the `Logger`, not in the formatter.
 
 Override level styles via `Logger::styles()`:
 
-> **Shared singleton:** `Logger::styles()` returns the process-wide
-> `Styles::default()` instance. Mutating it changes every logger that was not
-> given its own `Styles`. For per-logger styling, build a fresh `Styles`,
+> **Style ownership:** a logger built without styles owns an independent
+> snapshot, so mutating `Logger::styles()` changes that logger only. The
+> process-wide `Styles::default()` singleton is opt-in: explicitly installed
+> via `setStyles(Styles::default())`, it couples every rider. To stay private
+> anyway, build a fresh `Styles`,
 > start from `Styles::snapshot()` — a private copy (mutable arrays fresh,
 > `Style` value-objects shared) safe to edit without touching the process
 > default — or hand one to the formatter, and install it with `setStyles()`:

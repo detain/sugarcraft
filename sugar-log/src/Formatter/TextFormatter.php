@@ -52,7 +52,11 @@ final class TextFormatter implements Formatter
         $this->timeFormat = $timeFormat;
         $this->reportCaller = $reportCaller;
         $this->useColors = $useColors ?? Probe::colorProfile()->allowsColor();
-        $this->styles = $styles ?? Styles::default();
+        // [SL-35] Default to an INDEPENDENT snapshot: riding the
+        // process-wide mutable singleton meant one formatter's tint
+        // recolored every other default-built formatter. Explicit
+        // passers (incl. Styles::default() itself) are untouched.
+        $this->styles = $styles ?? Styles::snapshot();
         $this->partsOrder = $partsOrder ?? PartsOrder::default();
     }
 
