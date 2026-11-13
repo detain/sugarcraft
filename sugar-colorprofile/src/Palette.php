@@ -239,10 +239,15 @@ final class Palette
         // check TTY). Only applies when the caller hands us a stream: with
         // $stream === null detection is env-only. The iTerm upgrade is now
         // part of the ladder, so a piped stream demotes iTerm.app to NoTTY
-        // exactly like every other rung — the old code returned TrueColor for
-        // iTerm BEFORE this gate, printing 24-bit escape vomit into pipes.
+        // exactly like every other NON-FORCED rung — the old code returned
+        // TrueColor for iTerm BEFORE this gate, printing 24-bit escape vomit
+        // into pipes. Since CP-07 the gate yields to the force legs only:
+        // upstream parity is `Detect() = isatty() || forced()`, so an
+        // explicit CLICOLOR_FORCE/FORCE_COLOR declaration outranks hardware
+        // absence while COLORTERM, TERM_PROGRAM and the TERM rungs (env
+        // reports of capability, not operator commands) stay gated.
         if ($stream !== null && \function_exists('stream_isatty')) {
-            if (!@\stream_isatty($stream)) {
+            if (!@\stream_isatty($stream) && !$chain->isForced()) {
                 return ColorProfile::NoTTY;
             }
         }

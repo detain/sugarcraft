@@ -325,6 +325,29 @@ final class DetectionChain
     }
 
     /**
+     * The two explicit force legs (ladder steps 1-2), identified by their
+     * tagged source — the answer's DEPTH never matters here: a falsy
+     * FORCE_COLOR spelling is still an operator-pinned force declaration
+     * (it just pins a colorless answer, so no pipe ever sees color vomit
+     * through this seam).
+     */
+    private const FORCE_SOURCES = ['env:CLICOLOR_FORCE', 'env:FORCE_COLOR'];
+
+    /**
+     * True when the answer came from an explicit force leg rather than a
+     * capability read or a suppression. Callers gating on TTY presence use
+     * this to yield: upstream parity is `Detect() = isatty() || forced()`
+     * (CP-07), so an operator who PINNED color through the force machinery
+     * keeps that rung even on a piped stream. Suppression legs are NOT
+     * force — NO_COLOR/CLICOLOR=0/TERM=dumb ask for less output, never
+     * for escape sequences past a pipe, so they keep the gate.
+     */
+    public function isForced(): bool
+    {
+        return \in_array($this->source, self::FORCE_SOURCES, true);
+    }
+
+    /**
      * Convert the detection level to the profile enum.
      *
      * @deprecated — {@see Profile} is a class_alias façade over

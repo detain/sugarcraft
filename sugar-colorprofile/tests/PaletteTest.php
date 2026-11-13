@@ -453,4 +453,119 @@ final class PaletteTest extends TestCase
             fclose($mem);
         }
     }
+
+    /**
+     * CP-07: the step-0 gate yields to the force legs — upstream parity is
+     * `Detect() = isatty() || forced()`. The bypass enumerates by SOURCE
+     * (env:CLICOLOR_FORCE / env:FORCE_COLOR), not by depth, so even the
+     * falsy FORCE_COLOR=0 spelling crosses the gate — colorless, so no pipe
+     * ever sees color vomit through the seam. The suite runs non-interactive
+     * and a real TTY cannot be constructed here, so the "gate did not apply"
+     * arms ride the documented $stream === null contract as controls beside
+     * each piped assertion (same php://memory shape as EnvUnificationTest's
+     * iTerm gate pin).
+     */
+    public function testForcedRungsCrossTheStreamGate(): void
+    {
+        $legs = [
+            ['CLICOLOR_FORCE' => '1'],
+            ['FORCE_COLOR' => '3', 'TERM' => 'xterm'],
+            ['FORCE_COLOR' => '2'],
+            ['FORCE_COLOR' => '1'],
+            ['FORCE_COLOR' => '0'], // colorless floor still crosses (source, not depth)
+        ];
+        $expected = [
+            Profile::TrueColor,
+            Profile::TrueColor,
+            Profile::Ansi256,
+            Profile::Ansi,
+            Profile::Ascii,
+        ];
+
+        $pipe = fopen('php://memory', 'rb');
+        $this->assertNotFalse($pipe);
+        try {
+            foreach ($legs as $index => $env) {
+                $this->assertSame(
+                    $expected[$index],
+                    Palette::detect(null, $env),
+                    'env-only control must match the rung',
+                );
+                $this->assertSame(
+                    $expected[$index],
+                    Palette::detect($pipe, $env),
+                    'forced leg ' . json_encode($env) . ' must outrank the step-0 gate',
+                );
+            }
+        } finally {
+            fclose($pipe);
+        }
+    }
+
+    public function testNonForcedCapabilityRungsStayGatedOnAPipedStream(): void
+    {
+        // Enumeration evidence for the bypass list: capability READS are not
+        // force declarations. COLORTERM's source is env:COLORTERM=truecolor,
+        // iTerm's is env:TERM_PROGRAM=iTerm.app — neither is on the list, so
+        // piping into a file stays decoration-safe by default.
+        $cases = [
+            ['COLORTERM' => 'truecolor', 'TERM' => 'xterm'],
+            ['TERM_PROGRAM' => 'iTerm.app', 'TERM' => 'xterm'],
+            ['GOOGLE_CLOUD_SHELL' => 'true', 'TERM' => 'xterm'],
+            ['TERM' => 'xterm-256color'],
+        ];
+
+        $pipe = fopen('php://memory', 'rb');
+        $this->assertNotFalse($pipe);
+        try {
+            foreach ($cases as $env) {
+                $this->assertNotSame(
+                    Profile::NoTTY,
+                    Palette::detect(null, $env),
+                    'control: env-only detection of ' . json_encode($env) . ' must be a real rung',
+                );
+                $this->assertSame(
+                    Profile::NoTTY,
+                    Palette::detect($pipe, $env),
+                    'non-forced rung must keep the gate for ' . json_encode($env),
+                );
+            }
+        } finally {
+            fclose($pipe);
+        }
+    }
+
+    public function testSuppressionDoesNotBypassTheStreamGate(): void
+    {
+        // NO_COLOR asks for LESS output, never for escape sequences past a
+        // pipe — it stays behind the gate (EnvUnificationTest's shared ladder
+        // still answers the colorless Ascii rung for it env-only).
+        $pipe = fopen('php://memory', 'rb');
+        $this->assertNotFalse($pipe);
+        try {
+            $this->assertSame(Profile::Ascii, Palette::detect(null, ['NO_COLOR' => '1']));
+            $this->assertSame(Profile::NoTTY, Palette::detect($pipe, ['NO_COLOR' => '1']));
+            $this->assertSame(Profile::Ascii, Palette::detect(null, ['CLICOLOR' => '0']));
+            $this->assertSame(Profile::NoTTY, Palette::detect($pipe, ['CLICOLOR' => '0']));
+        } finally {
+            fclose($pipe);
+        }
+    }
+
+    public function testNoColorWithClicolorForceFollowsForceAcrossTheGate(): void
+    {
+        // The deliberate step-1-over-step-3 ordering (DetectionChain step 1
+        // returns before NO_COLOR is read): force wins the env leg, and since
+        // CP-07 the gate no longer undoes that either. Pinned on both sides.
+        $env = ['NO_COLOR' => '1', 'CLICOLOR_FORCE' => '1'];
+        $this->assertSame(Profile::TrueColor, Palette::detect(null, $env));
+
+        $pipe = fopen('php://memory', 'rb');
+        $this->assertNotFalse($pipe);
+        try {
+            $this->assertSame(Profile::TrueColor, Palette::detect($pipe, $env));
+        } finally {
+            fclose($pipe);
+        }
+    }
 }

@@ -122,7 +122,7 @@ list below is duplicated in `DetectionChain`'s class docblock — that docblock
 carries the enumeration beside this prose; a ladder change must edit both (no
 drift pin guards this genre yet):
 
-1. `CLICOLOR_FORCE=1` → TrueColor (overrides every env leg — step 0 can still outrank it)
+1. `CLICOLOR_FORCE=1` → TrueColor (overrides every env leg — and since CP-07 outranks the step-0 stream gate too)
 2. `FORCE_COLOR` (non-empty) → level: numeric 3+ → TrueColor (as do `true`/`yes`/`on` in any case), `2` → Ansi256, `1` → Ansi; every other spelling (`0`/`false`/`off`/…) → `Ascii` floor (colorless — color codes dropped, decoration kept)
 3. `NO_COLOR` (set and **non**-empty; `""` = unset — the NO_COLOR standard treats any present-and-not-empty value as "off" — content never matters) → the colorless `Ascii` rung — color codes dropped, decoration (`\x1b[1m`/`\x1b[4m`) kept; this is what `Palette::withProfile(ColorProfile::Ascii)` pins, so the pin is now the same answer the env already gives
 4. `CLICOLOR=0` → `Ascii` (the colorless rung)
@@ -166,14 +166,27 @@ and the length cap lands on a character boundary, never mid-sequence.
 ### Step 0 — the output-stream TTY gate
 
 A `Palette` constructed with a **non-null stream that is not a TTY** answers
-`NoTTY` regardless of the whole ladder — including every force override.
-Measured: piped STDOUT with `FORCE_COLOR=3` gives `Palette::detect(STDOUT)` → `NoTTY`
-while `Probe::colorProfile()` → TrueColor. `ProfileWriter::wrap($stream, …)`
+`NoTTY` and outranks the ladder — **except** when the answer came from one of
+the two explicit force legs, `CLICOLOR_FORCE` or `FORCE_COLOR` (sources
+`env:CLICOLOR_FORCE` / `env:FORCE_COLOR`; CP-07, upstream's
+`Detect() = isatty() || forced()` parity: a PINNED color declaration outranks
+hardware absence). The bypass enumerates by SOURCE, not depth: a falsy
+`FORCE_COLOR` spelling is still the force machinery answering its colorless
+`Ascii` floor, so it crosses the gate colorless — no pipe ever sees color vomit
+through the seam. Capability answers (`COLORTERM`, `TERM_PROGRAM`,
+`GOOGLE_CLOUD_SHELL`, the `TERM` rungs) and suppressions (`NO_COLOR`,
+`CLICOLOR=0`, `TERM=dumb`) keep the gate: piping into a file stays
+decoration-safe by default. `NO_COLOR=1` with `CLICOLOR_FORCE=1` still lands
+on the force rung — step 1 outranks step 3 by the deliberate ordering above,
+and the gate no longer undoes it either.
+Measured: piped STDOUT with `FORCE_COLOR=3` now gives `Palette::detect(STDOUT)`
+→ `TrueColor`, at one with `Probe::colorProfile()` (before CP-07 the same
+environment answered `NoTTY` — a fork-only divergence from the env-anchored
+surfaces). `ProfileWriter::wrap($stream, …)`
 inherits the gate because it delegates to `Palette::detect($stream, …)`, and a
 `NoTTY` answer makes `ProfileWriter::write()` strip the ANSI. So every
-"overrides everything"/"past every suppression leg" claim below means every
-*env* leg: the gate can still outrank them all when the bytes are headed for a
-pipe. Surfaces that gate: `Palette::detect($stream, …)` and `ProfileWriter`
+"overrides everything"/"past every suppression leg" claim below holds
+literally: the force legs outrank the gate too. Surfaces that gate: `Palette::detect($stream, …)` and `ProfileWriter`
 with a non-TTY stream. Surfaces that never gate: `Probe`, `AsyncProbe` and
 `Probe\TerminalProbe` — they report what the environment *can* do, not where
 the bytes are about to land.
@@ -215,8 +228,8 @@ The ladder's env legs, one table row per variable, in ladder order:
 
 | Env var | Ladder step | Effect |
 |---------|-------------|--------|
-| `CLICOLOR_FORCE=1` | 1 | force TrueColor past every env suppression leg, `NO_COLOR` included (step 1; the step-0 stream TTY gate still outranks it on stream-taking surfaces). Silently re-enables color over `NO_COLOR` — see the a11y caveat under this table |
-| `FORCE_COLOR` | 2 | non-empty level override honored by **all** surfaces through the chain (step 2): numeric 3+ → TrueColor (as do `true`/`yes`/`on` in any case), `2` → Ansi256, `1` → Ansi; every other spelling (`0`/`false`/`off`/`no`/…) lands on the `Ascii` floor — decoration kept, color codes dropped. Outranks `NO_COLOR` by design — see the a11y caveat under this table |
+| `CLICOLOR_FORCE=1` | 1 | force TrueColor past every env suppression leg, `NO_COLOR` included (step 1; since CP-07 the step-0 stream TTY gate yields to it too). Silently re-enables color over `NO_COLOR` — see the a11y caveat under this table |
+| `FORCE_COLOR` | 2 | non-empty level override honored by **all** surfaces through the chain (step 2; like `CLICOLOR_FORCE` it outranks the step-0 gate since CP-07, colorless floor included): numeric 3+ → TrueColor (as do `true`/`yes`/`on` in any case), `2` → Ansi256, `1` → Ansi; every other spelling (`0`/`false`/`off`/`no`/…) lands on the `Ascii` floor — decoration kept, color codes dropped. Outranks `NO_COLOR` by design — see the a11y caveat under this table |
 | `NO_COLOR` | 3 | set to a **non-empty** value (`""` = unset — the NO_COLOR standard treats any present-and-not-empty value as "off" — content never matters) → the colorless `Ascii` rung / `NoColor` capability — color codes dropped, decoration (`\x1b[1m`/`\x1b[4m`) kept, the reading no-color.org itself states (color attributes only). Contrast: `NoTTY`'s full strip answers only hardware absence (the step-0 stream gate). Report surfaces still observe the `NoColor` capability for every suppression leg (`Probe::isNoColor()` names the `NO_COLOR` one) |
 | `CLICOLOR=0` | 4 | suppress color |
 | `TERM=dumb` | 5 | case-insensitive; suppresses color — outranks `COLORTERM` (dumb is a promise of minimal capabilities) |
@@ -271,7 +284,8 @@ land on the colorless `Ascii` rung: `Palette::rewriteSgr()` drops every color
 SGR (30-37, 40-47, 90-97, 100-107 and the 38/48/58 specs) while
 **decoration survives** — `\x1b[1m` bold and `\x1b[4m` underline pass through.
 The `NoTTY` palette (what the step-0 stream gate forces when the stream is not
-a TTY — hardware absence, not an opt-out variable) instead runs every write
+a TTY and the ladder's answer is not a force leg — hardware absence, not an
+opt-out variable; the force legs cross the gate since CP-07) instead runs every write
 through `Palette::stripAnsi()`: SGR, full ECMA-48 CSI, OSC, DCS/APC/PM/SOS
 strings, SS3, the enumerated Fe pairs (since CP-32 including `ESC Z`, `ESC %…`,
 `ESC #…` and the reserved `ESC |`/`}`/`~` pairs), and charset selectors all
@@ -533,9 +547,11 @@ Beyond the env ladder above, the library exposes a richer capability surface:
 
 ## Overriding detection
 
-- `CLICOLOR_FORCE=1` forces TrueColor past every other env variable — but the
-  step-0 stream TTY gate (above) still outranks it: on a non-TTY stream the
-  `Palette`/`ProfileWriter` answer is `NoTTY` regardless of any force.
+- `CLICOLOR_FORCE=1` forces TrueColor past every other env variable — and
+  since CP-07 past the step-0 stream TTY gate as well (upstream's
+  `isatty() || forced()` parity): on a non-TTY stream the `Palette`/
+  `ProfileWriter` answer keeps the forced rung. Non-forced rungs stay gated —
+  piping into a file is decoration-safe by default.
 - `FORCE_COLOR` picks the level (`3`/`2`/`1`, falsy → `Ascii` floor).
 - Program-side, pin the answer: `(new Palette())->withProfile(ColorProfile::Ansi)`
   (immutable clone) or `ProfileWriter::wrap(STDOUT)->withProfile(...)`.

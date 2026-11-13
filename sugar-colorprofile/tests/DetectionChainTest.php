@@ -419,4 +419,20 @@ final class DetectionChainTest extends TestCase
         // the same helper branch; '' is the exported-empty spelling.
         return ['empty' => [''], 'zero' => ['0']];
     }
+
+    public function testIsForcedNamesOnlyTheForceLegs(): void
+    {
+        // CP-07 seam: the gate's yield decision reads the SOURCE, never the
+        // depth — the falsy floor of a force leg is still force, while every
+        // capability read and suppression is not.
+        $this->assertTrue(DetectionChain::detect(['CLICOLOR_FORCE' => '1'])->isForced());
+        $this->assertTrue(DetectionChain::detect(['FORCE_COLOR' => '3'])->isForced());
+        $this->assertTrue(DetectionChain::detect(['FORCE_COLOR' => '0'])->isForced());
+
+        $this->assertFalse(DetectionChain::detect(['NO_COLOR' => '1'])->isForced(), 'suppression is not force');
+        $this->assertFalse(DetectionChain::detect(['CLICOLOR' => '0'])->isForced(), 'suppression is not force');
+        $this->assertFalse(DetectionChain::detect(['TERM' => 'dumb'])->isForced(), 'suppression is not force');
+        $this->assertFalse(DetectionChain::detect(['COLORTERM' => 'truecolor'])->isForced(), 'capability read is not force');
+        $this->assertFalse(DetectionChain::detect([])->isForced(), 'the floor is not force');
+    }
 }
