@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace SugarCraft\ScriptUi\Tests\Runtime;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Core\KeyType;
+use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\ScriptUi\Model\FilterModel;
 use SugarCraft\ScriptUi\Runtime\OptionList;
 
 /**
@@ -35,6 +38,39 @@ final class OptionListTest extends TestCase
     public function testSingleNamePassesThroughUntouched(): void
     {
         self::assertSame(['only'], OptionList::expand(['only']));
+    }
+
+    public function testEscapedCommaSurvivesAsLiteralData(): void
+    {
+        // scriptui-76: a title that contains a comma is reachable via `\,`
+        self::assertSame(['a,b'], OptionList::expand(['a\,b']));
+    }
+
+    public function testEscapeSplitMixesBothWorlds(): void
+    {
+        self::assertSame(['a,b', 'c'], OptionList::expand(['a\,b,c']));
+    }
+
+    public function testOnlyTheTwoDocumentedEscapesUnescape(): void
+    {
+        self::assertSame(['a\b'], OptionList::expand(['a\\\\b']));  // \\ -> \
+        self::assertSame(['a\nb'], OptionList::expand(['a\\nb']));   // \n stays data
+        self::assertSame(['a\\'], OptionList::expand(['a\\']));      // trailing \ verbatim
+    }
+
+    public function testCommaTitleIsPreselectableThroughFilterModel(): void
+    {
+        // The end-to-end promise of -76(a): `filter --selected 'a\,b'`
+        // marks the row literally titled "a,b".
+        $model = FilterModel::fromOptions(
+            options: ['a,b', 'c'],
+            limit: 0,
+            noLimit: true,
+            preselected: OptionList::expand(['a\\,b']),
+        );
+        $submitted = $model->update(new KeyMsg(KeyType::Enter, ''))[0];
+
+        self::assertSame(['a,b'], $submitted->selectedAll());
     }
 
     public function testBothListConsumersCallTheSharedSplitter(): void

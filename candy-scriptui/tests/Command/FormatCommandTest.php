@@ -33,6 +33,34 @@ final class FormatCommandTest extends TestCase
         FormatCommand::pickTheme('nightmare');
     }
 
+    public function testGarbageTimeoutRefusesLikeTheSiblings(): void
+    {
+        // scriptui-76(b): the old (float) cast laundered 'abc' into 0.0 and
+        // the door passed — every sibling refuses the same string.
+        $app = new \SugarCraft\ScriptUi\Application();
+        $app->setAutoExit(false);
+        $out = new \Symfony\Component\Console\Output\BufferedOutput();
+
+        $status = $app->run(new \Symfony\Component\Console\Input\StringInput('format --timeout abc'), $out);
+
+        self::assertSame(1, $status);
+        self::assertSame('', trim($out->fetch()));
+    }
+
+    public function testPositiveTimeoutStillRefusesAsInert(): void
+    {
+        // The pre-existing "no effect" leg keeps its verdict — and now a
+        // real duration spelling ('5s', -27 grammar) reaches it too.
+        $app = new \SugarCraft\ScriptUi\Application();
+        $app->setAutoExit(false);
+        $out = new \Symfony\Component\Console\Output\BufferedOutput();
+
+        $status = $app->run(new \Symfony\Component\Console\Input\StringInput('format --timeout 5s'), $out);
+
+        self::assertSame(1, $status);
+        self::assertSame('', trim($out->fetch()));
+    }
+
     public function testPickThemeAcceptsExtendedNames(): void
     {
         $this->assertInstanceOf(Theme::class, FormatCommand::pickTheme('dark'));

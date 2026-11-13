@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\ScriptUi\Command;
 
 use SugarCraft\ScriptUi\Lang;
+use SugarCraft\ScriptUi\Runtime\TimeoutGuard;
 use SugarCraft\Markdown\Renderer;
 use SugarCraft\Markdown\Theme;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -70,11 +71,20 @@ final class FormatCommand extends Command
         }
         // `format` is a pure pipe command: --timeout is structurally inert
         // here, so a caller asking for a deadline is told so loudly instead
-        // of being silently ignored.
+        // of being silently ignored. The probe runs through the SAME strict
+        // parser as every sibling (-76): a malformed value is refused like
+        // it is everywhere else, never laundered into 0.0 by a (float) cast.
         $timeoutRaw = $input->getOption('timeout');
-        if ($timeoutRaw !== null && $timeoutRaw !== '' && (float) $timeoutRaw > 0.0) {
-            fwrite(STDERR, "candy-scriptui: --timeout has no effect on 'format' (non-interactive).\n");
-            return Command::FAILURE;
+        $timeoutSeconds = 0.0;
+        if ($timeoutRaw !== null && $timeoutRaw !== '') {
+            if (!TimeoutGuard::tryParseSeconds($timeoutRaw, $timeoutSeconds)) {
+                fwrite(STDERR, Lang::t('runtime.bad_timeout', ['value' => (string) $timeoutRaw]) . "\n");
+                return Command::FAILURE;
+            }
+            if ($timeoutSeconds > 0.0) {
+                fwrite(STDERR, "candy-scriptui: --timeout has no effect on 'format' (non-interactive).\n");
+                return Command::FAILURE;
+            }
         }
 
         $file = $input->getArgument('file');
