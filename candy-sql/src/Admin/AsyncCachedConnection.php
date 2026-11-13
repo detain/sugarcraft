@@ -52,9 +52,9 @@ final class AsyncCachedConnection implements DatabaseInterface
         return $this->inner->tables();
     }
 
-    public function rows(string $table, int $limit = 100): array
+    public function rows(string $table, int $limit = 100, int $offset = 0): array
     {
-        return $this->inner->rows($table, $limit);
+        return $this->inner->rows($table, $limit, $offset);
     }
 
     public function lastInsertId(): string|int

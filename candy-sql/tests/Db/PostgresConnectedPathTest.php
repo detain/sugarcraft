@@ -34,7 +34,7 @@ final class PostgresConnectedPathTest extends TestCase
         $this->assertSame(['accounts', 'ledgers'], $db->tables());
     }
 
-    public function testRowsShipsLimitToTheWire(): void
+    public function testRowsShipsLimitOffsetToTheWire(): void
     {
         $pdo = new ScriptablePdo('pgsql');
         $pdo->on('from "widgets"', [['id' => 1]]);
@@ -43,7 +43,13 @@ final class PostgresConnectedPathTest extends TestCase
         $this->assertSame([['id' => 1]], $db->rows('widgets', 7));
         $sqls = array_column(array_filter($pdo->log, fn ($e) => $e['op'] === 'query'), 'sql');
         $built = array_values(array_filter($sqls, fn ($s) => str_contains($s, 'widgets')));
-        $this->assertMatchesRegularExpression('/LIMIT 7$/', $built[0]);
+        $this->assertMatchesRegularExpression('/LIMIT 7 OFFSET 0$/', $built[0]);
+
+        // SQL-C04: the offset leg reaches the wire so the exporter can page.
+        $db->rows('widgets', 7, 50);
+        $sqls = array_column(array_filter($pdo->log, fn ($e) => $e['op'] === 'query'), 'sql');
+        $built = array_values(array_filter($sqls, fn ($s) => str_contains($s, 'widgets')));
+        $this->assertMatchesRegularExpression('/LIMIT 7 OFFSET 50$/', $built[1]);
     }
 
     public function testQueryReturnsRowsAndAffected(): void

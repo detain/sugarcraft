@@ -43,7 +43,7 @@ final class MysqlConnectedPathTest extends TestCase
         $this->assertSame(['users', 'orders'], $db->tables());
     }
 
-    public function testRowsShipsLimitToTheWire(): void
+    public function testRowsShipsLimitOffsetToTheWire(): void
     {
         $pdo = new ScriptablePdo();
         $pdo->on('from `widgets`', [['id' => 1], ['id' => 2]]);
@@ -53,7 +53,13 @@ final class MysqlConnectedPathTest extends TestCase
         $sqls = array_column(array_filter($pdo->log, fn ($e) => $e['op'] === 'query'), 'sql');
         $built = array_values(array_filter($sqls, fn ($s) => str_contains($s, 'widgets')));
         $this->assertNotEmpty($built, 'rows() must ship a SELECT for the table');
-        $this->assertMatchesRegularExpression('/LIMIT 42$/', $built[0]);
+        $this->assertMatchesRegularExpression('/LIMIT 42 OFFSET 0$/', $built[0]);
+
+        // SQL-C04: the offset leg reaches the wire so the exporter can page.
+        $db->rows('widgets', 42, 100);
+        $sqls = array_column(array_filter($pdo->log, fn ($e) => $e['op'] === 'query'), 'sql');
+        $built = array_values(array_filter($sqls, fn ($s) => str_contains($s, 'widgets')));
+        $this->assertMatchesRegularExpression('/LIMIT 42 OFFSET 100$/', $built[1]);
     }
 
     public function testQueryReturnsRowSetForSelectAndAffectedForWrite(): void

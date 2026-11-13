@@ -23,6 +23,15 @@ use SugarCraft\Sql\Db\Identifier;
  */
 final class CsvExporter
 {
+    /**
+     * Rows per window while an export pages a table (SQL-C04).
+     *
+     * One screenful of fputcsv work per round-trip: small enough that peak
+     * memory is two pages, large enough that a million-row table stays a
+     * thousand queries rather than a million.
+     */
+    private const EXPORT_PAGE_SIZE = 500;
+
     public function __construct(private readonly DatabaseInterface $db)
     {
     }
@@ -196,14 +205,71 @@ final class CsvExporter
             throw new \RuntimeException("Cannot open file for writing: " . $path);
         }
 
+        $complete = false;
         try {
-            // Fetch all rows
-            $rows = $this->db->rows($table);
-
-            $this->writeCsv($handle, $columns, $rows);
+            // SQL-C04 (client-004/029): the old single `rows($table)` call
+            // silently stopped at the contract's 100-row default — a
+            // "backup" tool that shipped truncated files. Page until a short
+            // page arrives, writing each page straight through to the
+            // destination handle so peak memory stays at one page (no
+            // full-table buffer, no ≈2× memory-stream copy).
+            //
+            // Belt (the sketch's COUNT-verify + loud refuse): every shipped
+            // dialect honours LIMIT/OFFSET, but a dialect that ignored the
+            // window would silently under-write. COUNT first, and refuse the
+            // partial file — deleting it, never presenting it as complete —
+            // if the pages came up short (table mutated mid-export or a
+            // driver dropped the offset).
+            $expected = $this->countRows($table);
+            $this->writeCsvHeader($handle, $columns);
+            $offset = 0;
+            $written = 0;
+            do {
+                $page = $this->db->rows($table, self::EXPORT_PAGE_SIZE, $offset);
+                $this->writeCsvRows($handle, $columns, $page);
+                $written += count($page);
+                $offset += count($page);
+            } while (count($page) === self::EXPORT_PAGE_SIZE
+                && ($expected === null || $written < $expected));
+            if ($expected !== null && $written !== $expected) {
+                throw new \RuntimeException(
+                    "CSV export of {$table} wrote {$written} of {$expected} rows — the table"
+                    . " changed mid-export or the driver ignored the paging window; refusing"
+                    . " to present a partial file as complete",
+                );
+            }
+            $complete = true;
         } finally {
             fclose($handle);
+            if (!$complete) {
+                @unlink($path);
+            }
         }
+    }
+
+    /**
+     * Best-effort COUNT(*) for the SQL-C04 completeness belt.
+     *
+     * Returns null when the dialect/fake cannot answer (query error, null or
+     * empty result) — the paging loop then relies on short-page exhaustion
+     * alone instead of pretending to verify.
+     */
+    private function countRows(string $table): ?int
+    {
+        $flavor = $this->quoteFlavor();
+        $sql = 'SELECT COUNT(*) AS ' . Identifier::quote($flavor, 'export_count')
+            . ' FROM ' . Identifier::quote($flavor, $table);
+        try {
+            $result = $this->db->query($sql);
+        } catch (\PDOException) {
+            return null;
+        }
+        if ($result === null || $result === []) {
+            return null;
+        }
+        $row = reset($result);
+        $value = is_array($row) ? reset($row) : $row;
+        return is_numeric($value) ? (int) $value : null;
     }
 
     /**
@@ -215,13 +281,31 @@ final class CsvExporter
      */
     private function writeCsv($handle, array $columns, array $rows): void
     {
+        $this->writeCsvHeader($handle, $columns);
+        $this->writeCsvRows($handle, $columns, $rows);
+    }
+
+    /**
+     * @param resource $handle
+     * @param list<string> $columns
+     */
+    private function writeCsvHeader($handle, array $columns): void
+    {
         // Write header row with formula guard
         $headerRow = array_map(
             fn(string $col): string => $this->guardFormula($col),
             $columns
         );
         fputcsv($handle, $headerRow);
+    }
 
+    /**
+     * @param resource $handle
+     * @param list<string> $columns
+     * @param list<array<string,mixed>> $rows
+     */
+    private function writeCsvRows($handle, array $columns, array $rows): void
+    {
         // Write data rows with formula guard
         foreach ($rows as $row) {
             $values = array_map(

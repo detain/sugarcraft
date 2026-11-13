@@ -20,7 +20,7 @@ final class NullDatabase implements DatabaseInterface
         return [];
     }
 
-    public function rows(string $table, int $limit = 100): array
+    public function rows(string $table, int $limit = 100, int $offset = 0): array
     {
         return [];
     }

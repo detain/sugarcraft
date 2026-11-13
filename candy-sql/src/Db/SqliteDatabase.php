@@ -89,13 +89,13 @@ final class SqliteDatabase implements DatabaseInterface
     }
 
     /** @return list<array<string,mixed>> */
-    public function rows(string $table, int $limit = 100): array
+    public function rows(string $table, int $limit = 100, int $offset = 0): array
     {
         if ($this->pdo === null) {
             return [];
         }
 
-        $sql = sprintf('SELECT * FROM %s LIMIT %d', Identifier::quote(Flavor::Sqlite, $table), $limit);
+        $sql = sprintf('SELECT * FROM %s LIMIT %d OFFSET %d', Identifier::quote(Flavor::Sqlite, $table), max(0, $limit), max(0, $offset));
         $stmt = $this->pdo->query($sql);
         return $stmt === false ? [] : $stmt->fetchAll(\PDO::FETCH_ASSOC);
     }

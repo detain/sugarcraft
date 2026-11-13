@@ -22,13 +22,19 @@ interface DatabaseInterface
     public function tables(): array;
 
     /**
-     * Get rows from a specific table.
+     * Get rows from a specific table, paged.
+     *
+     * The contract is a window: at most $limit rows starting at $offset
+     * (0 = first page). Every shipped driver implements it with
+     * dialect-safe `LIMIT %d OFFSET %d`; callers that need more than one
+     * page (the exporters) loop until a short page arrives.
      *
      * @param string $table Table name
      * @param int $limit Maximum rows to return
+     * @param int $offset Rows to skip before the window
      * @return list<array<string,mixed>>
      */
-    public function rows(string $table, int $limit = 100): array;
+    public function rows(string $table, int $limit = 100, int $offset = 0): array;
 
     /**
      * Execute an arbitrary SQL query.

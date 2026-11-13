@@ -36,7 +36,7 @@ final class ReportsPageTest extends TestCase
                 return [];
             }
 
-            public function rows(string $table, int $limit = 100): array
+            public function rows(string $table, int $limit = 100, int $offset = 0): array
             {
                 return [];
             }
@@ -134,7 +134,7 @@ final class ReportsPageTest extends TestCase
     {
         $brokenDb = new class implements DatabaseInterface {
             public function tables(): array { return []; }
-            public function rows(string $table, int $limit = 100): array { return []; }
+            public function rows(string $table, int $limit = 100, int $offset = 0): array { return []; }
             public function query(string $sql): array|null {
                 if (str_contains($sql, 'SHOW FULL TABLES FROM sys')) {
                     throw new \PDOException('Table not found');
@@ -315,7 +315,7 @@ final class ReportsPageTest extends TestCase
         // Create a fake database that returns formula injection data
         $injectionDb = new class implements DatabaseInterface {
             public function tables(): array { return []; }
-            public function rows(string $table, int $limit = 100): array { return []; }
+            public function rows(string $table, int $limit = 100, int $offset = 0): array { return []; }
             public function query(string $sql): array|null {
                 if (str_contains($sql, 'SHOW FULL TABLES FROM sys')) {
                     return [['Tables_in_sys' => 'x$statement_analysis']];

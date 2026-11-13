@@ -25,7 +25,7 @@ final class SchemaNullResultTest extends TestCase
     {
         return new class implements DatabaseInterface {
             public function tables(): array { return []; }
-            public function rows(string $table, int $limit = 100): array { return []; }
+            public function rows(string $table, int $limit = 100, int $offset = 0): array { return []; }
             public function query(string $sql): array|null { return null; } // The key: always null
             public function lastInsertId(): string|int { return 0; }
             public function quote(string $value): string { return "'" . $value . "'"; }

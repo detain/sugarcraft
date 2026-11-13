@@ -73,16 +73,17 @@ final class PostgresDatabase implements DatabaseInterface
     }
 
     /** @return list<array<string,mixed>> */
-    public function rows(string $table, int $limit = 100): array
+    public function rows(string $table, int $limit = 100, int $offset = 0): array
     {
         if ($this->pdo === null) {
             return [];
         }
 
         $sql = sprintf(
-            'SELECT * FROM %s LIMIT %d',
+            'SELECT * FROM %s LIMIT %d OFFSET %d',
             Identifier::quote(Flavor::Postgres, $table),
-            $limit,
+            max(0, $limit),
+            max(0, $offset),
         );
         $stmt = $this->pdo->query($sql);
         return $stmt === false ? [] : $stmt->fetchAll();

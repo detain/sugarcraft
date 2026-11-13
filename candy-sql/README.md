@@ -957,6 +957,14 @@ $csvString = (new CsvExporter($db))->exportReportResultsToString($columns, $rows
 - **`exportReportResultsToString(columns, rows)`** — returns CSV as a string (used by ReportsPage)
 - **`importCsv(path, table)`** — imports a CSV file into a table (backtick-quoted column names)
 
+**Complete exports** — `exportCsv` pages the table through `rows(table, 500, offset)` until it
+reaches the row count, so a 100 000-row table exports in full (it no longer stops at the `rows()`
+default of 100). Each page streams straight to the destination handle, so peak memory is one page.
+A `COUNT(*)` verify runs first: if the table changed mid-export or the driver ignored the paging
+offset, the partial file is **deleted** and a `RuntimeException` is raised — a refused export never
+masquerades as a complete one. This assumes a quiescent table (no concurrent writers); a dump
+taken mid-transaction may trip the refuse leg by design.
+
 **Formula injection guard** — headers and cell values starting with `=`, `+`, `-`, `@`, tab (`\t`), or carriage return (`\r`) are prefixed with `'` to prevent spreadsheet applications from interpreting them as formulas. Leading spaces are trimmed before the guard check so `  =SUM(...)` is also protected.
 
 **Column detection** — uses `SELECT * FROM table LIMIT 0` followed by `SELECT * FROM table LIMIT 1` to extract column names driver-neutrally. Does not use SQLite PRAGMA queries.
@@ -966,6 +974,11 @@ $csvString = (new CsvExporter($db))->exportReportResultsToString($columns, $rows
 #### SqlExporter
 
 - **`exportSql(path)`** — writes all tables as INSERT statements to a SQL dump file
+
+**Complete dumps** — `exportSql` pages each table through `rows(table, 500, offset)` to the full
+row count (no more silent 100-row cap) and streams each row straight to the file. A `COUNT(*)`
+verify guards every table: a mid-dump change or a driver that dropped the paging offset deletes
+the partial file and raises `RuntimeException` rather than shipping an incomplete "complete" dump.
 
 **No CREATE TABLE** — the full CREATE TABLE statement requires driver-specific queries (`sqlite_master` for SQLite, `SHOW CREATE TABLE` for MySQL), which are not driver-neutral. The INSERT data is the primary value for data portability.
 

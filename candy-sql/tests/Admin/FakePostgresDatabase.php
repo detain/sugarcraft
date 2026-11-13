@@ -62,7 +62,7 @@ final class FakePostgresDatabase implements DatabaseInterface
     }
 
     /** @return list<array<string, mixed>> */
-    public function rows(string $table, int $limit = 100): array
+    public function rows(string $table, int $limit = 100, int $offset = 0): array
     {
         return [];
     }

@@ -43,7 +43,7 @@ final class AvailabilityCheckerTest extends TestCase
                 return [];
             }
 
-            public function rows(string $table, int $limit = 100): array
+            public function rows(string $table, int $limit = 100, int $offset = 0): array
             {
                 return [];
             }
@@ -139,7 +139,7 @@ final class AvailabilityCheckerTest extends TestCase
     {
         $brokenDb = new class implements DatabaseInterface {
             public function tables(): array { return []; }
-            public function rows(string $table, int $limit = 100): array { return []; }
+            public function rows(string $table, int $limit = 100, int $offset = 0): array { return []; }
             public function query(string $sql): array|null {
                 if (str_contains($sql, 'SHOW FULL TABLES FROM sys')) {
                     throw new \PDOException('Table not found');

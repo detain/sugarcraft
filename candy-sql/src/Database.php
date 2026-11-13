@@ -79,9 +79,9 @@ final class Database implements DatabaseInterface
     }
 
     /** @return list<array<string,mixed>> */
-    public function rows(string $table, int $limit = 100): array
+    public function rows(string $table, int $limit = 100, int $offset = 0): array
     {
-        return $this->delegate->rows($table, $limit);
+        return $this->delegate->rows($table, $limit, $offset);
     }
 
     /** @return list<array<string,mixed>>|null */

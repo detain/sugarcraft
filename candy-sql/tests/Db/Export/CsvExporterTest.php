@@ -168,6 +168,44 @@ final class CsvExporterTest extends TestCase
         unlink($csvPath);
     }
 
+    public function testExportCsvPagesToEveryRowNeverASilentHundred(): void
+    {
+        // SQL-C04 (client-004/029): the single rows($table) call stopped at
+        // the contract's 100-row default — a "backup" that silently shipped
+        // 100 of 250. Through the REAL driver now: 250 in, 250 on disk.
+        for ($i = 1; $i <= 250; $i++) {
+            $this->db->exec("INSERT INTO users (id, name, email) VALUES ($i, 'user$i', 'u$i@e.example')");
+        }
+
+        $csvPath = tempnam(sys_get_temp_dir(), 'csv');
+        $this->exporter->exportCsv($csvPath, 'users');
+        $lines = file($csvPath, FILE_IGNORE_NEW_LINES);
+        unlink($csvPath);
+
+        $this->assertCount(251, $lines, 'header + all 250 rows (was: 101 at most)');
+        $this->assertSame('id,name,email', $lines[0]);
+        $this->assertSame('1,user1,u1@e.example', $lines[1]);
+        $this->assertSame('250,user250,u250@e.example', $lines[250]);
+    }
+
+    public function testExportCsvRefusesLoudlyWhenADriverIgnoresTheOffsetWindow(): void
+    {
+        // SQL-C04 belt mirror of the SQL exporter: a driver that drops the
+        // OFFSET re-serves one full page forever — COUNT verify halts it and
+        // the refused partial file is deleted, never presented as complete.
+        $db = new OffsetDroppingCsvFakeDb();
+        $exporter = new CsvExporter($db);
+
+        $csvPath = tempnam(sys_get_temp_dir(), 'csv');
+        try {
+            $this->expectException(\RuntimeException::class);
+            $this->expectExceptionMessage('refusing to present a partial file as complete');
+            $exporter->exportCsv($csvPath, 'users');
+        } finally {
+            $this->assertFalse(file_exists($csvPath), 'the refused partial export is deleted');
+        }
+    }
+
     public function testExportReportResultsGuardsFormulaInjection(): void
     {
         $csvPath = tempnam(sys_get_temp_dir(), 'csv');
@@ -307,9 +345,11 @@ final class CsvExporterFakePgDb implements DatabaseInterface
         return ['users'];
     }
 
-    public function rows(string $table, int $limit = 100): array
+    public function rows(string $table, int $limit = 100, int $offset = 0): array
     {
-        return [];
+        // Honour the paging window (SQL-C04); this fake's table is one row,
+        // so pages past offset 0 are empty (exercises the exporter's stop leg).
+        return array_slice([['id' => 1, 'name' => 'x']], $offset, $limit);
     }
 
     public function query(string $sql): array
@@ -346,6 +386,85 @@ final class CsvExporterFakePgDb implements DatabaseInterface
     public function driverName(): string
     {
         return 'pgsql';
+    }
+
+    public function ping(): bool
+    {
+        return true;
+    }
+
+    public function databases(): array
+    {
+        return [];
+    }
+
+    public function prepare(string $sql): ?PreparedStatementInterface
+    {
+        return null;
+    }
+
+    public function dsn(): string
+    {
+        return '';
+    }
+
+    public function username(): string
+    {
+        return '';
+    }
+}
+/**
+ * Driver fake that IGNORES the paging offset (SQL-C04 belt negative pin):
+ * every window answers with a full identical page, COUNT answers 250.
+ */
+final class OffsetDroppingCsvFakeDb implements DatabaseInterface
+{
+    public function tables(): array
+    {
+        return ['users'];
+    }
+
+    public function rows(string $table, int $limit = 100, int $offset = 0): array
+    {
+        $page = [];
+        for ($i = 0; $i < max(0, $limit); $i++) {
+            $page[] = ['id' => 1];
+        }
+        return $page;
+    }
+
+    public function query(string $sql): array
+    {
+        return str_contains($sql, 'COUNT') ? [['export_count' => 250]] : [['id' => 1]];
+    }
+
+    public function exec(string $sql): int
+    {
+        return 0;
+    }
+
+    public function lastInsertId(): string|int
+    {
+        return 0;
+    }
+
+    public function quote(string $value): string
+    {
+        return "'" . str_replace("'", "''", $value) . "'";
+    }
+
+    public function close(): void
+    {
+    }
+
+    public function serverVersion(): string
+    {
+        return 'SQLite version 3.45.0';
+    }
+
+    public function driverName(): string
+    {
+        return 'sqlite';
     }
 
     public function ping(): bool

@@ -139,6 +139,135 @@ final class SqlExporterTest extends TestCase
         $this->assertStringNotContainsString('`widgets`', $content);
         $this->assertStringNotContainsString('`id`', $content);
     }
+
+    public function testExportSqlDumpsEveryRowNotJustTheFirstHundred(): void
+    {
+        // SQL-C04 (client-004): the dump used to stop at rows()' 100-row
+        // default — through the REAL driver: 250 in, 250 INSERT lines out.
+        $this->db->exec('CREATE TABLE logs (id INTEGER PRIMARY KEY, msg TEXT)');
+        for ($i = 1; $i <= 250; $i++) {
+            $this->db->exec("INSERT INTO logs (id, msg) VALUES ($i, 'line $i')");
+        }
+
+        $sqlPath = tempnam(sys_get_temp_dir(), 'sql');
+        $this->exporter->exportSql($sqlPath);
+        $content = (string) file_get_contents($sqlPath);
+        unlink($sqlPath);
+
+        $inserts = preg_grep('/^INSERT INTO/', explode("\n", $content));
+        $this->assertCount(250, $inserts, 'every row dumped (was: 100 at most)');
+        $this->assertStringContainsString("'line 250'", $content, 'the last page must reach the file');
+    }
+
+    public function testExportFakeHonoursThePagingWindowNegativePin(): void
+    {
+        // SQL-C04 acceptance: the export fakes stopped accepting-and-ignoring
+        // $limit — they window now, so the exporter loop is actually exercised.
+        $db = new SqlExporterFakePgDb();
+        $this->assertCount(1, $db->rows('widgets', 100, 0));
+        $this->assertCount(0, $db->rows('widgets', 100, 1));
+        $this->assertCount(0, $db->rows('widgets', 0, 0));
+    }
+
+    public function testExportSqlRefusesLoudlyWhenADriverIgnoresTheOffsetWindow(): void
+    {
+        // SQL-C04 belt: a dialect that drops the OFFSET would re-serve one
+        // full page forever; the COUNT verify must halt the loop and DELETE
+        // the partial file instead of shipping duplicated rows as complete.
+        $db = new OffsetDroppingSqlFakeDb();
+        $exporter = new SqlExporter($db);
+
+        $sqlPath = tempnam(sys_get_temp_dir(), 'sql');
+        try {
+            $this->expectException(\RuntimeException::class);
+            $this->expectExceptionMessage('refusing to present a partial file as complete');
+            $exporter->exportSql($sqlPath);
+        } finally {
+            $this->assertFalse(file_exists($sqlPath), 'the refused partial dump is deleted');
+        }
+    }
+}
+
+/**
+ * Driver fake that IGNORES the paging offset (SQL-C04 belt negative pin):
+ * every window request answers with a full identical page, exactly what a
+ * dialect without OFFSET would do. COUNT answers 250, so the exporter's
+ * verify leg must trip.
+ */
+final class OffsetDroppingSqlFakeDb implements DatabaseInterface
+{
+    public function tables(): array
+    {
+        return ['users'];
+    }
+
+    public function rows(string $table, int $limit = 100, int $offset = 0): array
+    {
+        $page = [];
+        for ($i = 0; $i < max(0, $limit); $i++) {
+            $page[] = ['id' => 1];
+        }
+        return $page;
+    }
+
+    public function query(string $sql): array
+    {
+        return str_contains($sql, 'COUNT') ? [['export_count' => 250]] : [['id' => 1]];
+    }
+
+    public function exec(string $sql): int
+    {
+        return 0;
+    }
+
+    public function lastInsertId(): string|int
+    {
+        return 0;
+    }
+
+    public function quote(string $value): string
+    {
+        return "'" . str_replace("'", "''", $value) . "'";
+    }
+
+    public function close(): void
+    {
+    }
+
+    public function serverVersion(): string
+    {
+        return 'SQLite version 3.45.0';
+    }
+
+    public function driverName(): string
+    {
+        return 'sqlite';
+    }
+
+    public function ping(): bool
+    {
+        return true;
+    }
+
+    public function databases(): array
+    {
+        return [];
+    }
+
+    public function prepare(string $sql): ?PreparedStatementInterface
+    {
+        return null;
+    }
+
+    public function dsn(): string
+    {
+        return '';
+    }
+
+    public function username(): string
+    {
+        return '';
+    }
 }
 
 /**
@@ -152,9 +281,11 @@ final class SqlExporterFakePgDb implements DatabaseInterface
         return ['widgets'];
     }
 
-    public function rows(string $table, int $limit = 100): array
+    public function rows(string $table, int $limit = 100, int $offset = 0): array
     {
-        return [['id' => 1, 'label' => 'x']];
+        // Honour the paging window (SQL-C04): a fake that ignores $limit/$offset
+        // makes the exporter's page loop untestable and the suite blind.
+        return array_slice([['id' => 1, 'label' => 'x']], $offset, $limit);
     }
 
     public function query(string $sql): array

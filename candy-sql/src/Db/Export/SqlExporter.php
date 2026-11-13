@@ -21,6 +21,9 @@ use SugarCraft\Sql\Db\Identifier;
  */
 final class SqlExporter
 {
+    /** Rows per window while an export pages a table (SQL-C04). */
+    private const EXPORT_PAGE_SIZE = 500;
+
     public function __construct(private readonly DatabaseInterface $db)
     {
     }
@@ -60,6 +63,7 @@ final class SqlExporter
             throw new \RuntimeException("Cannot open file for writing: {$path}");
         }
 
+        $complete = false;
         try {
             fwrite($handle, "-- SugarCraft Database Dump\n");
             fwrite($handle, "-- Generated: " . date('Y-m-d H:i:s') . "\n\n");
@@ -72,26 +76,73 @@ final class SqlExporter
                     continue;
                 }
 
-                // Get all rows and generate INSERT statements
-                $rows = $this->db->rows($table);
-                foreach ($rows as $row) {
-                    $values = array_map(
-                        fn($val): string => $this->quoteValue($val),
-                        array_values($row)
-                    );
+                // SQL-C04 (client-004): the old `rows($table)` stopped at the
+                // contract's 100-row default, silently truncating every dump.
+                // Page to exhaustion, streaming each row straight to the
+                // handle (no full-table buffer); COUNT-belt refuses a short
+                // file loudly instead of shipping a partial "complete" dump.
+                $expected = $this->countRows($table);
+                $written = 0;
+                $offset = 0;
+                do {
+                    $rows = $this->db->rows($table, self::EXPORT_PAGE_SIZE, $offset);
                     $columnsList = implode(', ', array_map(
                         fn(string $col): string => Identifier::quote($this->quoteFlavor(), $col),
                         $columns
                     ));
-                    $valuesList = implode(', ', $values);
                     $safeTable = Identifier::quote($this->quoteFlavor(), $table);
-                    fwrite($handle, "INSERT INTO {$safeTable} ({$columnsList}) VALUES ({$valuesList});\n");
+                    foreach ($rows as $row) {
+                        $values = array_map(
+                            fn($val): string => $this->quoteValue($val),
+                            array_values($row)
+                        );
+                        $valuesList = implode(', ', $values);
+                        fwrite($handle, "INSERT INTO {$safeTable} ({$columnsList}) VALUES ({$valuesList});\n");
+                    }
+                    $written += count($rows);
+                    $offset += count($rows);
+                } while (count($rows) === self::EXPORT_PAGE_SIZE
+                    && ($expected === null || $written < $expected));
+                if ($expected !== null && $written !== $expected) {
+                    throw new \RuntimeException(
+                        "SQL dump of {$table} wrote {$written} of {$expected} rows — the table"
+                        . " changed mid-dump or the driver ignored the paging window; refusing"
+                        . " to present a partial file as complete",
+                    );
                 }
                 fwrite($handle, "\n");
             }
+            $complete = true;
         } finally {
             fclose($handle);
+            if (!$complete) {
+                @unlink($path);
+            }
         }
+    }
+
+    /**
+     * Best-effort COUNT(*) for the SQL-C04 completeness belt.
+     *
+     * Null when the dialect/fake cannot answer — the loop then relies on
+     * short-page exhaustion alone rather than pretending to verify.
+     */
+    private function countRows(string $table): ?int
+    {
+        $flavor = $this->quoteFlavor();
+        $sql = 'SELECT COUNT(*) AS ' . Identifier::quote($flavor, 'export_count')
+            . ' FROM ' . Identifier::quote($flavor, $table);
+        try {
+            $result = $this->db->query($sql);
+        } catch (\PDOException) {
+            return null;
+        }
+        if ($result === null || $result === []) {
+            return null;
+        }
+        $row = reset($result);
+        $value = is_array($row) ? reset($row) : $row;
+        return is_numeric($value) ? (int) $value : null;
     }
 
     /**

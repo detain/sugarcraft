@@ -35,7 +35,7 @@ final class ReconnectExceptionFoldTest extends TestCase
             public function tables(): array { return []; }
 
             /** @return list<array<string,mixed>> */
-            public function rows(string $table, int $limit = 100): array { return []; }
+            public function rows(string $table, int $limit = 100, int $offset = 0): array { return []; }
 
             public function query(string $sql): array|null
             {
