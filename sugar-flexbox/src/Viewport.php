@@ -460,7 +460,15 @@ final readonly class Viewport
 
         $out = [];
         foreach ($window as $i => $line) {
-            $padded = $bodyWidth > 0
+            // Single pass (FBX-45): padRight already made the body
+            // EXACTLY $bodyWidth cells, and the column was reserved as
+            // the widest configured rune, so the row's final width is
+            // arithmetic — the old second padRight re-truncated and
+            // re-measured a string whose width was already known.
+            // Only the degenerate bodyWidth==0 seat (line width not
+            // pinned by arithmetic) still asks the old path.
+            $exact = $bodyWidth > 0;
+            $padded = $exact
                 ? $this->padRight($line, $bodyWidth)
                 : $line;
             if ($column !== null) {
@@ -473,7 +481,12 @@ final readonly class Viewport
                     ? $scrollbarChar
                     : $scrollbarTrack;
             }
-            $out[] = $this->padRight($padded . $sb, $this->inner->width);
+            if (!$exact) {
+                $out[] = $this->padRight($padded . $sb, $this->inner->width);
+                continue;
+            }
+            $tail = $this->inner->width - $bodyWidth - Width::string($sb);
+            $out[] = $tail > 0 ? $padded . $sb . str_repeat(' ', $tail) : $padded . $sb;
         }
         return implode("\n", $out);
     }
