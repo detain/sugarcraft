@@ -28,8 +28,9 @@ final class MysqlDatabase implements DatabaseInterface
      *
      * SSL is configured via PDO driver options, not the DSN string — the mode
      * semantics live in {@see self::sslDriverOptions()}. Every option group
-     * (modes, TLS, C11 network timeouts) is assembled in {@see
-     * self::pdoOptions()} so the connect and reconnect legs dial identically.
+     * (modes, TLS, C11 network timeouts, C15 utf8mb4 negotiation) is assembled
+     * in {@see self::pdoOptions()} so the connect and reconnect legs dial
+     * identically.
      */
     public static function connect(ConnectionConfig $config): self
     {
@@ -57,7 +58,26 @@ final class MysqlDatabase implements DatabaseInterface
     public const NETWORK_TIMEOUT_SECONDS = 30;
 
     /**
+     * The connection charset every remote MySQL dial negotiates (SQL-C15).
+     *
+     * utf8mb4: the full-Unicode default of modern MySQL/MariaDB, and the
+     * UTF-8-family precondition Identifier::quoteLiteral's doubling relies on.
+     */
+    public const CONNECTION_CHARSET = 'utf8mb4';
+
+    /**
      * The complete option set one remote MySQL dial needs.
+     *
+     * SQL-C15: MYSQL_ATTR_INIT_COMMAND negotiates a UTF-8-family connection
+     * charset (`SET NAMES utf8mb4`) on EVERY dial, connect and reconnect.
+     * Identifier::quoteLiteral's doubling is only quote-safe when the
+     * connection really runs a UTF-8/single-byte charset, and PreviewQuery's
+     * static builders (the information_schema lookups) have no live handle to
+     * call PDO::quote on — so without this, a GBK/SJIS-default server could let
+     * a byte-level prefix collision re-open a quoted identifier-valued literal.
+     * utf8mb4 is the modern MySQL/MariaDB default and a superset of the
+     * single-byte charms; fixing it at connect removes the precondition gap
+     * structurally rather than documenting it away.
      *
      * ATTR_TIMEOUT caps the connect phase; MYSQL_ATTR_READ_TIMEOUT/
      * WRITE_TIMEOUT cap every mid-flight network leg (a lock-waiting server
@@ -76,8 +96,11 @@ final class MysqlDatabase implements DatabaseInterface
             \PDO::ATTR_DEFAULT_FETCH_MODE => \PDO::FETCH_ASSOC,
             \PDO::ATTR_TIMEOUT => self::NETWORK_TIMEOUT_SECONDS,
         ];
-        // mysqlnd declares the network attrs with the pdo_mysql driver; the
+        // mysqlnd declares the driver attrs with the pdo_mysql driver; the
         // class loads on builds without it, so guard the constant refs.
+        if (defined('PDO::MYSQL_ATTR_INIT_COMMAND')) {
+            $options[\constant('PDO::MYSQL_ATTR_INIT_COMMAND')] = 'SET NAMES ' . self::CONNECTION_CHARSET;
+        }
         if (defined('PDO::MYSQL_ATTR_READ_TIMEOUT')) {
             $options[\constant('PDO::MYSQL_ATTR_READ_TIMEOUT')] = self::NETWORK_TIMEOUT_SECONDS;
         }

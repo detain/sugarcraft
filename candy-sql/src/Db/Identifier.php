@@ -66,13 +66,12 @@ final class Identifier
      *   - MySQL arm: double `\` and `'` (both grammars safe; identical results to
      *     mysql_real_escape_string for the ASCII-significant characters). The
      *     doubling is only quote-safe when the connection really negotiates a
-     *     UTF-8-family (or single-byte) charset — and this library does NOT set
-     *     one: ConnectionFactory sends no SET NAMES, no MYSQL_ATTR_INIT_COMMAND
-     *     and takes no DSN charset= parameter, so the effective charset is the
-     *     server's default_character_set from the handshake. Under a GBK- or
-     *     SJIS-style server default a byte-level prefix collision could re-open
-     *     the quote and PDO::quote's charset awareness would be required; the
-     *     live-handle preference below is the mitigation, not a doc fiction.
+     *     UTF-8-family (or single-byte) charset — and since SQL-C15 it does:
+     *     MysqlDatabase's shared dial-option builder sends
+     *     MYSQL_ATTR_INIT_COMMAND 'SET NAMES utf8mb4' on every connect and
+     *     reconnect, so a GBK/SJIS-default server can no longer let a byte-level
+     *     prefix collision re-open the quote. (A FOREIGN handle still might —
+     *     the live-handle preference below is why quote() wins when one exists.)
      *   - Postgres/SQLite arm: standard SQL, double `'` only (backslash is not an
      *     escape inside standard literals with standard_conforming_strings=on).
      *

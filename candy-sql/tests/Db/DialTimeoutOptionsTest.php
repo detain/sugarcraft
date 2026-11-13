@@ -9,14 +9,16 @@ use SugarCraft\Sql\Db\MysqlDatabase;
 use SugarCraft\Sql\Db\PostgresDatabase;
 
 /**
- * SQL-C11 transport-level dial pins.
+ * SQL-C11 transport-level dial pins + SQL-C15 charset negotiation.
  *
  * The remote connectors must always negotiate a network bound — with or
  * without pcntl, the Admin-layer alarm is not the only defence: MySQL dials
  * with connect + read/write timeouts, PostgreSQL rides libpq's
- * connect_timeout. These legs never build a real socket (the suite runs the
- * option tables through the same private seams the constructors consume),
- * so they hold on CI hosts with no database at all.
+ * connect_timeout — and every MySQL-family dial must negotiate the UTF-8
+ * charset Identifier::quoteLiteral's doubling presupposes. These legs never
+ * build a real socket (the suite runs the option tables through the same
+ * private seams the constructors consume), so they hold on CI hosts with no
+ * database at all.
  */
 final class DialTimeoutOptionsTest extends TestCase
 {
@@ -77,6 +79,42 @@ final class DialTimeoutOptionsTest extends TestCase
         );
         $this->expectException(\InvalidArgumentException::class);
         $this->mysqlOptions('bogus-mode');
+    }
+
+    public function testMysqlDialNegotiatesUtf8mb4AtConnect(): void
+    {
+        // The quote-safety precondition for every static builder that has no
+        // live handle to call PDO::quote on (PreviewQuery's information_schema
+        // lookups): the connection really runs a UTF-8-family charset.
+        if (!defined('PDO::MYSQL_ATTR_INIT_COMMAND')) {
+            self::markTestSkipped('pdo_mysql not loaded; the defined()-guard path is taken at dial time');
+        }
+
+        $options = $this->mysqlOptions('');
+
+        self::assertSame(
+            'SET NAMES ' . MysqlDatabase::CONNECTION_CHARSET,
+            $options[\constant('PDO::MYSQL_ATTR_INIT_COMMAND')] ?? null,
+            'every mysql dial must send the charset init-command',
+        );
+    }
+
+    public function testCharsetNegotiationSurvivesTheSslUnion(): void
+    {
+        if (!defined('PDO::MYSQL_ATTR_INIT_COMMAND')) {
+            self::markTestSkipped('pdo_mysql not loaded; the defined()-guard path is taken at dial time');
+        }
+
+        // The option set is assembled with `+` (base + ssl table); a TLS dial
+        // that silently dropped the init-command would re-open the very gap
+        // the negotiation closes — verified modes are the ones that matter.
+        $tls = $this->mysqlOptions('verify_identity');
+
+        self::assertSame(
+            'SET NAMES ' . MysqlDatabase::CONNECTION_CHARSET,
+            $tls[\constant('PDO::MYSQL_ATTR_INIT_COMMAND')] ?? null,
+            'TLS dials carry the charset leg too',
+        );
     }
 
     public function testBothMysqlDialSitesShareTheOneOptionBuilder(): void
