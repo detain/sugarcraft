@@ -309,14 +309,89 @@ final class ArgParser
      * @param int         $offset Offset where prune subcommand args begin.
      * @throws \InvalidArgumentException on any extra token.
      */
-    public static function prune(array $argv, int $offset): void
+    /**
+     * Parse arguments for the `prune` verb (candy-kv-025/085).
+     *
+     * `prune` takes a scope, not nothing: the default database, one named
+     * database (`--db NAME`, `--db=NAME`, or the `key@db` spelling the rest
+     * of the CLI routes by), or every database (`--all`). The three scope
+     * forms are mutually exclusive — answering a contradiction by guessing
+     * one of them is the refuse-rather-than-guess law this parser carries.
+     *
+     * @param list<string> $argv  Full argv array.
+     * @param int         $offset Offset where prune subcommand args begin.
+     * @return array{db: string|null, all: bool} db=null means the default.
+     * @throws \InvalidArgumentException on unknown flags, both-forms scope,
+     *         or surplus positionals.
+     */
+    public static function prune(array $argv, int $offset): array
     {
-        self::noArguments($argv, $offset, 'prune');
+        [$tokens, $tail] = self::splitPositional($argv, $offset);
+        $db = null;
+        $all = false;
+        $out = [];
+
+        $p = 0;
+        $count = count($tokens);
+        while ($p < $count) {
+            $arg = $tokens[$p];
+            if ($arg === '--all') {
+                $all = true;
+            } elseif (str_starts_with($arg, '--db=')) {
+                $db = substr($arg, strlen('--db='));
+            } elseif ($arg === '--db') {
+                $next = $tokens[$p + 1] ?? null;
+                if ($next === null) {
+                    throw new \InvalidArgumentException('Option --db requires a value.');
+                }
+                $p++;
+                $db = $next;
+            } elseif (self::isOptionLike($arg)) {
+                throw self::unknownOption($arg, 'prune');
+            } else {
+                $out[] = $arg;
+            }
+            $p++;
+        }
+        $out = array_merge($out, $tail);
+
+        self::refuseSurplus($out, 1, 'prune');
+
+        // A lone positional routes through the SAME escape-aware '@' law
+        // Store::set writes by: `prune cache@notes` prunes notes.db, the
+        // key part is documentation of intent only. A key with no '@'
+        // splits to the empty fallback — that scopes to the default, it
+        // is not a named database.
+        $fromPositional = null;
+        if (count($out) === 1) {
+            $routed = Store::splitKey($out[0], '')[0];
+            if ($routed === '') {
+                // `prune junk` used to be refused outright (the verb took no
+                // arguments); a bare key must not come back as a silent
+                // scope-to-default. Only the qualified key@db spelling
+                // names a database here.
+                throw new \InvalidArgumentException(
+                    'prune positional must name a database (key@db); use plain "prune" for the default database.'
+                );
+            }
+            $fromPositional = $routed;
+        }
+
+        if ($fromPositional !== null && $db !== null) {
+            throw new \InvalidArgumentException(
+                'prune names its database twice: a --db option and a key@db positional.'
+            );
+        }
+        if ($all && ($db !== null || $fromPositional !== null)) {
+            throw new \InvalidArgumentException('prune takes either --all or one named database, not both.');
+        }
+
+        return ['db' => $db ?? $fromPositional, 'all' => $all];
     }
 
     /**
      * Refuse every token following a verb that takes no options and no
-     * positionals (`prune`, `list-dbs`, the `--version` diagnostic).
+     * positionals (`list-dbs`, the `--version` diagnostic).
      *
      * One shared walk for the whole no-argument family: the usage contract
      * promises surplus positionals and unknown options fold into exit 2,

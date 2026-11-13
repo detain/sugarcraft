@@ -364,11 +364,61 @@ final class CliArgParserTest extends TestCase
         ArgParser::list(['candy-kv', 'list', 'a', 'b'], 2);
     }
 
-    public function testPruneRefusesAnyArgument(): void
+    public function testPruneRefusesUnqualifiedPositional(): void
+    {
+        // candy-kv-025 kept the old fail-shape for junk: a bare word is not
+        // a scope, only the qualified key@db spelling names a database.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('must name a database');
+        ArgParser::prune(['candy-kv', 'prune', 'oops'], 2);
+    }
+
+    public function testPruneDefaultsToNoScope(): void
+    {
+        $this->assertSame(['db' => null, 'all' => false], ArgParser::prune(['candy-kv', 'prune'], 2));
+    }
+
+    public function testPruneDbBothSpellings(): void
+    {
+        foreach ([['--db', 'notes'], ['--db=notes']] as $form) {
+            $this->assertSame(
+                ['db' => 'notes', 'all' => false],
+                ArgParser::prune(array_merge(['candy-kv', 'prune'], $form), 2),
+                implode(' ', $form),
+            );
+        }
+    }
+
+    public function testPruneQualifiedKeyPositionalRoutesToItsDatabase(): void
+    {
+        $this->assertSame(
+            ['db' => 'notes', 'all' => false],
+            ArgParser::prune(['candy-kv', 'prune', 'cache@notes'], 2),
+        );
+    }
+
+    public function testPruneRefusesContradictoryScopes(): void
+    {
+        $cases = [
+            [['--db', 'notes', 'k@other'], 'twice'],
+            [['--db=notes', '--all'], 'either --all'],
+            [['--all', 'k@other'], 'either --all'],
+        ];
+        foreach ($cases as [$args, $needle]) {
+            try {
+                ArgParser::prune(array_merge(['candy-kv', 'prune'], $args), 2);
+                $this->fail('must refuse: ' . implode(' ', $args));
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString($needle, $e->getMessage(), implode(' ', $args));
+            }
+        }
+    }
+
+    public function testPruneTrailingDbWithoutValueIsAUsageRefusal(): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('prune takes no arguments');
-        ArgParser::prune(['candy-kv', 'prune', 'oops'], 2);
+        $this->expectExceptionMessage('--db requires a value');
+        ArgParser::prune(['candy-kv', 'prune', '--db'], 2);
     }
 
     public function testNoArgumentsAnswersACleanCall(): void

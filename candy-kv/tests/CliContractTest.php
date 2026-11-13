@@ -469,25 +469,25 @@ final class CliContractTest extends TestCase
      * Mirrors DatabaseTest::testCountExcludesExpiredRows; avoids two-second
      * real sleeps for every TTL-succession pin.
      */
-    private function seedExpiredRow(string $key, string $value): void
+    private function seedExpiredRow(string $key, string $value, string $db = 'default'): void
     {
         $dir = $this->configHome . '/skate';
         if (!\is_dir($dir)) {
             \mkdir($dir, 0o700, true);
         }
-        $db = new \SugarCraft\Kv\Database($dir . '/default.db', 'default');
-        $db->set($key, $value, false, 3600);
+        $handle = new \SugarCraft\Kv\Database($dir . '/' . $db . '.db', $db);
+        $handle->set($key, $value, false, 3600);
 
         $prop = new \ReflectionProperty(\SugarCraft\Kv\Database::class, 'db');
         $prop->setAccessible(true);
         /** @var \SQLite3 $sqlite */
-        $sqlite = $prop->getValue($db);
+        $sqlite = $prop->getValue($handle);
         $stmt = $sqlite->prepare('UPDATE entries SET expires_at = :epoch WHERE key = :key');
         $stmt->bindValue(':epoch', \time() - 10, \SQLITE3_INTEGER);
         $stmt->bindValue(':key', $key, \SQLITE3_TEXT);
         $stmt->execute();
         $stmt->close();
-        unset($db);
+        unset($handle);
     }
 
     public function testPruneReportsNothingWhenAllAlive(): void
@@ -496,6 +496,80 @@ final class CliContractTest extends TestCase
         $prune = $this->runKv(['prune']);
         $this->assertSame(0, $prune['exit']);
         $this->assertStringContainsString('No expired entries to remove.', $prune['stdout']);
+    }
+
+    public function testScopedPruneRemovesOnlyItsOwnDatabase(): void
+    {
+        // candy-kv-025 bidirectional scope pin: expired rows live in BOTH
+        // databases; `prune --db other` must retire other.db's row and hold
+        // the default.db one as survivor — and the mirror call proves the
+        // scope is a door, not a default that happens to match.
+        $this->seedExpiredRow('dupe', 'default-side');
+        $this->seedExpiredRow('dupe', 'other-side', 'other');
+        $this->seedExpiredRow('alone', 'kept', 'default');
+
+        $scoped = $this->runKv(['prune', '--db', 'other']);
+        $this->assertSame(0, $scoped['exit'], $scoped['stderr']);
+        $this->assertStringContainsString('Removed 1 expired entry', $scoped['stdout']);
+        $this->assertStringContainsString('(other)', $scoped['stdout'], 'the answer must say which db it swept');
+        // default.db's two expired rows are survivors of that scoped sweep:
+        // the bare prune afterwards still finds them.
+        $bare = $this->runKv(['prune']);
+        $this->assertStringContainsString('Removed 2 expired entries', $bare['stdout']);
+    }
+
+    public function testQualifiedKeyPositionalPrunesThatDatabase(): void
+    {
+        $this->seedExpiredRow('ghost', 'gone', 'notes');
+        $run = $this->runKv(['prune', 'cache@notes']);
+        $this->assertSame(0, $run['exit'], $run['stderr']);
+        $this->assertStringContainsString('Removed 1 expired entry', $run['stdout']);
+        $this->assertStringContainsString('(notes)', $run['stdout']);
+    }
+
+    public function testPruneAllSweepsEveryDatabaseWithPerDbAccounting(): void
+    {
+        $this->seedExpiredRow('d1', 'x');
+        $this->seedExpiredRow('n1', 'y', 'notes');
+        $this->seedExpiredRow('n2', 'z', 'notes');
+        $this->seedExpiredRow('a1', 'w', 'archive');
+
+        $all = $this->runKv(['prune', '--all']);
+        $this->assertSame(0, $all['exit'], $all['stderr']);
+        $this->assertStringContainsString('Removed 1 expired entry. (archive)', $all['stdout']);
+        $this->assertStringContainsString('Removed 1 expired entry. (default)', $all['stdout']);
+        $this->assertStringContainsString('Removed 2 expired entries. (notes)', $all['stdout']);
+        // Everything expired is gone everywhere: a second sweep is silent.
+        $again = $this->runKv(['prune', '--all']);
+        $this->assertStringContainsString('No expired entries to remove.', $again['stdout']);
+    }
+
+    public function testPruneUnknownDatabaseRefusesWithoutLaundering(): void
+    {
+        // "Nothing to prune" would be a LIE about a database that does not
+        // exist — the typo class is exactly what this verb used to hide.
+        $this->seedExpiredRow('live', 'in-default');
+        $run = $this->runKv(['prune', '--db', 'othes']);
+        $this->assertSame(1, $run['exit']);
+        $this->assertStringContainsString("does not exist", $run['stderr']);
+        $this->assertStringContainsString('default', $run['stderr'], 'the refusal must name what IS present');
+    }
+
+    public function testPruneReservedSettingsDatabaseStillRefusedThroughNewDoors(): void
+    {
+        // S19's guard binds every write door; the two NEW prune doors are
+        // write doors too.
+        $run = $this->runKv(['prune', '--db', 'settings']);
+        $this->assertSame(2, $run['exit'], $run['stdout'] . $run['stderr']);
+        $this->assertStringContainsString('reserved', $run['stderr']);
+    }
+
+    public function testPruneScopeContradictionsAreUsageErrors(): void
+    {
+        foreach ([['prune', '--all', '--db', 'notes'], ['prune', '--db', 'a', 'k@b'], ['prune', 'bareword']] as $args) {
+            $run = $this->runKv($args);
+            $this->assertSame(2, $run['exit'], implode(' ', $args) . ' => ' . $run['stderr']);
+        }
     }
 
     public function testImportSingularAndPluralWording(): void

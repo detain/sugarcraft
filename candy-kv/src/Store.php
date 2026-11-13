@@ -560,6 +560,34 @@ final class Store
     }
 
     /**
+     * Remove every already-expired entry from one NAMED database (kv-025:
+     * pruneExpired() only saw the default db, so expired rows in the other
+     * files of the same store were unreachable — prune is a vault-wide
+     * hygiene job, not a default-database accident).
+     *
+     * A missing database answers 0 without creating it: the read door
+     * (database($name) with no create) yields a null handle, and no row
+     * was promised to live in a file that does not exist. Callers that
+     * must distinguish typo-from-empty ask listDatabases() themselves.
+     */
+    public function pruneDatabase(string $dbName): int
+    {
+        $this->assertWritableDatabase($dbName);
+        return $this->database($dbName)?->pruneExpired() ?? 0;
+    }
+
+    /**
+     * True for the catalogued reserved names (S19). Public so a verb can
+     * order its doors honestly: a reserved database EXISTS even though
+     * listDatabases() hides it, and the write refusal is the informative
+     * answer — not 'does not exist'.
+     */
+    public function isReservedDatabase(string $dbName): bool
+    {
+        return \in_array($dbName, self::RESERVED_DATABASES, true);
+    }
+
+    /**
      * Delete an entire database (all its entries).
      *
      * Returns false if the database did not exist OR if any of its files

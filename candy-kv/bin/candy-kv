@@ -12,7 +12,7 @@ declare(strict_types=1);
  *   candy-kv list [-k|-v] [-r] [-d DELIM] [pattern]
  *   candy-kv delete <key> [--dry-run]
  *   candy-kv list-dbs
- *   candy-kv prune
+ *   candy-kv prune [--db NAME] [--all]
  *   candy-kv import <format> <path> [--no-atomic] [--if-exists=MODE]
  *   candy-kv export <format> [db] [pattern]
  *   candy-kv --help | --version
@@ -309,10 +309,44 @@ function run(Store $store, string $cmd, array $argv, string $bin): void
         break;
 
     case 'prune':
-        ArgParser::prune($argv, 2);
-        $n = $store->pruneExpired();
+        $opts = ArgParser::prune($argv, 2);
+        if ($opts['all']) {
+            // kv-085: --all walks the same listDatabases() truth list-dbs
+            // shows. Databases with nothing expired stay silent — a
+            // survivor-counted line per healthy file is noise; the total
+            // is what the operator came for.
+            $total = 0;
+            foreach ($store->listDatabases() as $dbName) {
+                $n = $store->pruneDatabase($dbName);
+                $total += $n;
+                if ($n > 0) {
+                    echo Lang::t($n === 1 ? 'cli.pruned_one' : 'cli.pruned_n', ['count' => $n]) . ' (' . Store::sanitizeForTty($dbName) . ")\n";
+                }
+            }
+            if ($total === 0) {
+                echo Lang::t('cli.pruned_none') . "\n";
+            }
+            break;
+        }
+        $db = $opts['db'];
+        if ($db === null) {
+            $n = $store->pruneExpired();
+        } elseif (!\in_array($db, $store->listDatabases(), true) && !$store->isReservedDatabase($db)) {
+            // The named db simply is not there. Answering 'Nothing to
+            // prune' would launder a typo into success, so this refuses
+            // (exit 1, the miss class) and names what IS present. A
+            // reserved name skips this door: it exists behind the listing,
+            // and pruneDatabase() gives the informative reserved refusal.
+            $present = $store->listDatabases();
+            fwrite(STDERR, 'Database ' . Store::sanitizeForTty($db) . ' does not exist.'
+                . ($present === [] ? '' : ' Known: ' . Store::sanitizeForTty(implode(', ', $present))) . "\n");
+            exit(1);
+        } else {
+            $n = $store->pruneDatabase($db);
+        }
         if ($n > 0) {
-            echo Lang::t($n === 1 ? 'cli.pruned_one' : 'cli.pruned_n', ['count' => $n]) . "\n";
+            $suffix = $db !== null ? ' (' . Store::sanitizeForTty($db) . ')' : '';
+            echo Lang::t($n === 1 ? 'cli.pruned_one' : 'cli.pruned_n', ['count' => $n]) . $suffix . "\n";
         } else {
             echo Lang::t('cli.pruned_none') . "\n";
         }
@@ -395,7 +429,9 @@ function help(string $bin): void
                                       List entries (default: keys+values)
       {$bin} delete <key> [--dry-run]  Delete a key or glob pattern
       {$bin} list-dbs                  List all databases
-      {$bin} prune                     Remove expired entries from the default db
+      {$bin} prune [--db NAME|--all]
+                                      Remove expired entries: the default db,
+                                      one named db, or every db (--all).
       {$bin} import <format> <path> [--no-atomic] [--if-exists=MODE]
                                       Import entries (json|yaml|yml, path=- for stdin)
       {$bin} export <format> [db] [pattern]
@@ -423,6 +459,10 @@ function help(string $bin): void
       --if-exists=MODE                `import`: what a key that is already
                                       stored does — replace it (default),
                                       skip it, or refuse the import.
+      --db NAME | --db=NAME           `prune`: limit the sweep to one
+                                      database instead of the default.
+      --all                           `prune`: sweep every database in the
+                                      store (the list `list-dbs` shows).
       --                              End option processing; later tokens are
                                       data (`set backup -- --ttl=60` stores
                                       the literal value --ttl=60).
