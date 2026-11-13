@@ -251,8 +251,10 @@ named test rather than hidden — anything *else* that loses a byte is a bug:
     a stray lead (`a\xffb` → text `ab`), a lead interrupted by a non-continuation
     byte (the rune dies, the interrupting byte survives: `a\xc3(b` → `a(b`), and a
     second lead arriving before the first rune completes (`a\xe2\xe2Ab` → `aAb`)
-    all vanish with no segment. The C1 controls sugar-ansi-parser executes (`0x80`–`0x8F`,
-    `0x99`, `0x9A`) do survive, as `C1 …` sequence segments — arriving mid-sequence
+    all vanish with no segment. The C1 controls sugar-ansi-parser routes through
+    `Action::Execute` — `0x80`–`0x8F`, `0x91`–`0x97`, `0x99`, `0x9A` and `0x9C`
+    (the anywhere-table roster pinned byte-for-byte by `C1ClassificationSweepTest`)
+    — do survive, as `C1 …` sequence segments; arriving mid-sequence
     they additionally replay the abandoned prelude ahead of themselves as a
     `truncated … — cancelled` segment — the loss is confined
     to bytes the UTF-8 window rejects. Item 8 is only its end-of-stream shadow;

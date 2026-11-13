@@ -386,10 +386,11 @@ final class AnsiHandler implements Handler
         } elseif ($byte >= 0x80 && $byte <= 0x9F) {
             // C1 bytes 0x80–0x9F: the VT500 "anywhere" transition table routes
             // 0x80–0x8F, 0x91–0x97, 0x99, 0x9A and 0x9C through Action::Execute
-            // (→ Ground). The remaining C1 bytes (0x90, 0x98, 0x9A, 0x9B, 0x9D,
-            // 0x9E, 0x9F) go to Entry states and are handled via their respective
-            // dispatch callbacks (DCS/CSI/OSC/SOS/PM/APC), never reaching execute()
-            // — except 0x99/0x9A listed in the Execute set above.
+            // (→ Ground) — the byte-for-byte roster pinned by
+            // tests/C1ClassificationSweepTest.php. The six remaining C1 bytes
+            // (0x90, 0x98, 0x9B, 0x9D, 0x9E, 0x9F) open Entry states and are
+            // handled via their respective dispatch callbacks (DCS/SOS/CSI/
+            // OSC/PM/APC), never reaching execute() at all.
             // A C1 from a control-sequence state cancels it: report the
             // abandoned prelude first (wire order), then the C1 byte itself.
             if ($residue !== '') {

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\AnsiInspect\Tests;
 
 use SugarCraft\AnsiInspect\Inspector;
+use SugarCraft\AnsiInspect\Segment;
 use SugarCraft\AnsiInspect\SequenceSegment;
 use SugarCraft\AnsiInspect\StreamingInspector;
 use SugarCraft\AnsiInspect\TextSegment;
@@ -290,31 +291,80 @@ final class StreamingInspectorTest extends TestCase
     // --- Step 10: C1 bytes in streaming text ---
 
     /**
-     * C1 control bytes (0x80-0x9F range) that reach execute() are isolated
-     * as their own SequenceSegments in streaming, matching one-shot behavior.
-     * This covers bytes 0x80-0x8F, 0x91-0x97, 0x9C which have Action::Execute
-     * in the VT500 anywhere transition table.
+     * A C1 byte mid-text is isolated as its own segment — 0x86 is SSA (start
+     * of selected area) in this library's own C0C1 roster (NEL is 0x85; the
+     * former docblock here mislabelled it, and C0C1Test pins the names) —
+     * and the streamed result is BYTE-IDENTICAL to the one-shot parse,
+     * segment [1] included.
      *
-     * NOTE: The total segment count matches one-shot (3 total), but due to
-     * how sugar-ansi-parser's incremental Parser delivers C1 bytes to execute(),
-     * the C1 segment's raw/describe may be empty in streaming mode. This
-     * is a known streaming-vs-one-shot divergence for C1 bytes.
+     * The superseded docblock claimed a streaming-vs-one-shot divergence in
+     * the C1 segment while asserting only segments [0] and [2]: the segment
+     * it called unstable was never checked, so a regression blanking it
+     * stayed green (finding 024). `AnsiHandler::feed()` drives the parser one
+     * byte at a time by design, so there is no divergence to claim — the
+     * contract is full fingerprint equality, pinned below.
      */
-    public function testStreamedC1BytesAreIsolated(): void
+    public function testStreamedC1BytesAreIsolatedExactlyLikeOneShot(): void
     {
         $streaming = new StreamingInspector();
-        // 0x86 = NEL (next line) — has Action::Execute, should be isolated.
-        $segs1 = $streaming->feed("a\x86b");
-        $segs2 = $streaming->finish();
-        $allStreaming = array_merge($segs1, $segs2);
+        $allStreaming = array_merge($streaming->feed("a\x86b"), $streaming->finish());
 
-        // Total count matches one-shot (3).
         $oneShot = Inspector::parse("a\x86b");
-        $this->assertCount(count($oneShot), $allStreaming);
+        $this->assertSame(self::fingerprint($oneShot), self::fingerprint($allStreaming));
+        $this->assertInstanceOf(SequenceSegment::class, $allStreaming[1]);
+        $this->assertSame("\x86", $allStreaming[1]->raw());
+        $this->assertStringContainsString('C1 SSA', $allStreaming[1]->describe());
+    }
 
-        // Text segments should match.
-        $this->assertSame($oneShot[0]->raw(), $allStreaming[0]->raw());
-        $this->assertSame($oneShot[2]->raw(), $allStreaming[2]->raw());
+    /**
+     * `finish()` resets the handler between sessions (keeping the parser
+     * binding), and a session that ended UNTERMINATED must not glue its
+     * dangling tail onto whatever the next session feeds (finding 026: a
+     * designed contract with zero tests). Boundary leg: a lone trailing ESC
+     * ends its session inside the finish() report, and the same inspector
+     * still opens the next session from Ground.
+     */
+    public function testSessionsAfterAnUnterminatedFinishOpenClean(): void
+    {
+        $streaming = new StreamingInspector();
+        $session1 = array_merge($streaming->feed("first\x1b[31"), $streaming->finish());
+        $this->assertStringContainsString(
+            'truncated CSI',
+            $session1[count($session1) - 1]->describe(),
+            'session one keeps its own dangling tail',
+        );
+
+        $session2 = array_merge($streaming->feed("second\x1b[32m"), $streaming->finish());
+        $this->assertSame(
+            self::fingerprint(Inspector::parse("second\x1b[32m")),
+            self::fingerprint($session2),
+            'a fresh session must stream exactly like a one-shot parse of the same bytes',
+        );
+
+        // Boundary leg: lone trailing ESC.
+        $edge = new StreamingInspector();
+        $edge1 = array_merge($edge->feed("x\x1b"), $edge->finish());
+        $this->assertSame(
+            self::fingerprint(Inspector::parse("x\x1b")),
+            self::fingerprint($edge1),
+        );
+        $edge2 = array_merge($edge->feed("y"), $edge->finish());
+        $this->assertSame(['y'], array_map(static fn($s): string => $s->raw(), $edge2));
+    }
+
+    /**
+     * @param iterable<Segment> $segments
+     *
+     * @return list<string>
+     */
+    private static function fingerprint(iterable $segments): array
+    {
+        $list = is_array($segments) ? $segments : iterator_to_array($segments);
+
+        return array_map(
+            static fn(Segment $s): string => $s::class . '|' . $s->raw() . '|' . $s->describe(),
+            $list,
+        );
     }
 
     // --- End-of-stream tail: trailing bare ESC + dangling SS3 ---
