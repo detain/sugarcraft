@@ -8,7 +8,8 @@ use SugarCraft\ColorProfile\Probe;
 
 /**
  * Damped harmonic oscillator (Ryan Juckett's "Damped Springs"), with
- * under-/critically-/over-damped branches chosen by {@see $dampingRatio}.
+ * under-/critically-/over-damped branches chosen by the damping ratio —
+ * readable back off any live spring via {@see self::dampingRatio()}.
  *
  * Construct once per (deltaTime, angularFrequency, dampingRatio) tuple — the
  * coefficients are precomputed. {@see update()} integrates one frame at the
@@ -48,10 +49,11 @@ final class Spring
     private static ?bool $reducedMotionProbe = null;
 
     /**
-     * @param float  $deltaTime           seconds elapsed per integration step
-     * @param float  $angularFrequency    rad/sec (note: NOT Hz; multiply Hz by 2π)
-     * @param float  $dampingRatio        <1 = oscillating, =1 = critical, >1 = over-damped
-     * @param bool|null $reducedMotionOverride If provided, overrides Probe::reducedMotion() lookup
+     * @param float      $deltaTime              seconds elapsed per integration step; must be > 0
+     * @param float      $angularFrequency       rad/sec (note: NOT Hz; multiply Hz by 2π)
+     * @param float      $dampingRatio           <1 = oscillating, =1 = critical, >1 = over-damped
+     * @param bool|null  $reducedMotionOverride  if provided, wins over the (memoized)
+     *                                           environment lookup, evaluated per call
      */
     public function __construct(
         float $deltaTime,
@@ -61,17 +63,21 @@ final class Spring
     ) {
         $this->reducedMotionOverride = $reducedMotionOverride;
 
-        // Fail-fast at the boundary. Non-finite inputs poison the oscillator
-        // (NAN folds silently through comparisons, an INF dampingRatio flows
-        // into the over-damped branch where 0·INF produces NAN coefficients),
-        // a deltaTime of 0 freezes the state in place (identity coefficients)
-        // and a negative one integrates the oscillator backwards.
-        // Beyond that, a spring that cannot converge is ILLEGAL, not slow:
-        // ω below the numeric floor carries no restoring force (the former
-        // identity transform froze position forever), ζ = 0 oscillates with
+        // Fail-fast at the boundary.
+        //
+        // HOW non-finite inputs poison the oscillator: NAN folds silently
+        // through comparisons, and an INF dampingRatio flows into the
+        // over-damped branch where 0·INF produces NAN coefficients. A
+        // negative deltaTime integrates the oscillator backwards.
+        //
+        // A spring that cannot converge is ILLEGAL, not slow: ω below the
+        // numeric floor carries no restoring force (the former identity
+        // transform froze position forever), ζ = 0 oscillates with
         // undecaying amplitude, and ζ < 0 diverges. All three make the
-        // documented `while (!Spring::settled(...))` loop spin forever, so the
-        // constructor refuses them here and every frame downstream is trusted.
+        // documented `while (!Spring::settled(...))` loop spin forever.
+        //
+        // CONSEQUENCE: the constructor refuses every one of them here, and
+        // every frame downstream is trusted.
         if (!is_finite($deltaTime) || !is_finite($angularFrequency) || !is_finite($dampingRatio)) {
             throw new \InvalidArgumentException(Lang::t('spring.inputs_finite', [
                 'deltaTime' => $deltaTime,
@@ -80,6 +86,12 @@ final class Spring
             ]));
         }
         if ($deltaTime <= 0.0) {
+            // dt = 0 here would freeze the state in place (identity
+            // coefficients) — meaningless for an oscillator whose whole
+            // contract is one real step per update(). NOTE the deliberate
+            // asymmetry (finding 049): Projectile ACCEPTS dt = 0, where the
+            // freeze is a useful pause-the-motion idiom; the two classes
+            // rule differently ON PURPOSE, not by drift.
             throw new \InvalidArgumentException(Lang::t('spring.dt_positive', ['deltaTime' => $deltaTime]));
         }
         if ($angularFrequency < self::EPSILON) {
@@ -166,12 +178,18 @@ final class Spring
      * environment signal is probed once per process and remembered (see
      * {@see resetReducedMotionProbe()} for the test/hot-config seam); the
      * override is evaluated per call and always wins.
-     * Anything composed of springs inherits that behaviour: {@see SpringChain}
-     * advances one stage per tick, so under reduced motion its final positions
-     * land after 2n−1 ticks and it completes on tick 2n (one snap tick plus
-     * one hand-off tick per stage), while a {@see SpringCollection} ticks all
-     * members at once and snaps them all in one tick flat. {@see Projectile} and the easing curves are NOT spring-based and
-     * need application-level gating.
+     * Anything composed of springs inherits that behaviour. {@see SpringChain}
+     * advances one stage per tick: under reduced motion its final positions
+     * land after 2n−1 ticks, and it completes on tick 2n — one snap tick plus
+     * one hand-off tick per stage. A {@see SpringCollection} instead ticks
+     * all members at once and snaps them all in one tick flat.
+     * {@see Projectile} and the easing curves are NOT spring-based and need
+     * application-level gating.
+     *
+     * Every call returns a fresh pair array (finding 079: one 4-entry array
+     * per spring per frame). At 60 fps a handful of springs this is noise
+     * beside the solver work it carries; a large-N swarm should pool or
+     * reuse the arrays caller-side rather than ask this method to mutate.
      *
      * @throws \InvalidArgumentException if any input is non-finite — a NAN
      *         target would otherwise ride the snap branch verbatim and pin

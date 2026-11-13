@@ -14,12 +14,13 @@ namespace SugarCraft\Spring;
  * `$deltaTime` is the simulation step bake-in matching {@see Spring}'s
  * convention — pass the same value for every update().
  *
- * **Axis convention.** `gravity()` / `terminalGravity()` now return
- * **Y-up** vectors (`{0, -9.81, 0}` / `{0, -53, 0}`) to match the
- * upstream Charmbracelet harmonica API. If you copied an example from
- * the harmonica docs, it will fly the right direction. The previous
- * Y-down convention is still reachable as
- * `gravityYDown()` / `terminalGravityYDown()` for back-compat.
+ * **Axis convention.** `gravity()` / `terminalGravity()` return **Y-up**
+ * vectors (`{0, -9.81, 0}` / `{0, -53, 0}`) — the same values the upstream
+ * Charmbracelet harmonica API ships, so an example copied from the harmonica
+ * docs behaves here as it does there: gravity pulls toward negative Y, the
+ * "up is up" reading those docs assume. The Y-down convention stays reachable
+ * as `gravityYDown()` / `terminalGravityYDown()` for code that already maps
+ * its own coordinates downward.
  *
  * ```php
  * $p = Projectile::new(
@@ -47,11 +48,16 @@ final class Projectile
         public readonly Vector $velocity,
         public readonly Vector $acceleration,
     ) {
-        // Fail-fast: explicit Euler with a non-finite or negative step
-        // diverges (INF dt ⇒ INF displacement; NaN dt poisons every frame
-        // after the first; negative dt integrates time backwards), and a
-        // non-finite state component never returns to the finite domain —
-        // reject the poison at construction rather than propagating it.
+        // Fail-fast, by mechanism: with explicit Euler an INF dt is an INF
+        // displacement, a NaN dt poisons every frame after the first, and a
+        // negative dt integrates time backwards; a non-finite STATE
+        // component never returns to the finite domain. Refuse the poison at
+        // construction rather than propagate it.
+        //
+        // dt = 0 is deliberately ACCEPTED (finding 049): every Euler term
+        // multiplies by it, so the step degenerates to a freeze — a useful
+        // pause idiom. The opposite ruling in Spring (dt <= 0 refused) is
+        // deliberate too — see Spring::__construct's dt guard.
         if (!is_finite($deltaTime)) {
             throw new \InvalidArgumentException(Lang::t('projectile.dt_finite', ['deltaTime' => $deltaTime]));
         }
@@ -83,18 +89,24 @@ final class Projectile
      * state component that overflows to INF mid-simulation is refused by
      * their constructors with an {@see \InvalidArgumentException} naming
      * the component — callers should bound acceleration and velocity
-     * rather than discover the throw live. A deltaTime of 0 is accepted
+     * rather than discover the throw live. Concretely that is about five
+     * allocations per step (two `scale()` products, two `add()` results
+     * and the returned Projectile): noise for a bouncing ball, worth
+     * counting before driving a 500-particle swarm at frame cadence (the
+     * examples/particle.php shape). A deltaTime of 0 is accepted
      * and freezes the integrator: every Euler term is multiplied by it,
      * so the step hands back an identical state (the constructor refuses
-     * only non-finite and negative frame times).
+     * only non-finite and negative frame times; Spring's opposite dt = 0
+     * ruling is documented at its guard).
      *
      * **Mutability note.** Upstream `Projectile.Update()` returns a
      * `Point` (the new position only) and mutates the projectile in
      * place. PHP `update()` instead returns a new `Projectile` instance
      * and leaves the receiver untouched — matching the rest of the
      * SugarCraft stack's immutable-with pattern and avoiding spooky
-     * action when you keep a reference to an earlier frame for replay
-     * or debugging. The receiver keeps its old state; read the new
+     * action at a distance: keep a reference to an earlier frame for
+     * replay or debugging and it stays exactly that frame.
+     * The receiver keeps its old state; read the new
      * position off the RESULT and reassign: `$p = $p->update();`.
      */
     public function update(): self

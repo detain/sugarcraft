@@ -30,12 +30,17 @@ final readonly class SpringConfig
         public float $friction,
         public float $mass,
     ) {
-        // Boundary validation mirrors Spring's own: NAN slips past `<= 0`
-        // (every NAN comparison is false), and the former max(0.0, ·) clamps
-        // folded zero/negative tension or friction into ω = 0 / ζ = 0 —
-        // derived values that LEAK through the public readonly properties
-        // and, once handed to Spring, produce a spring that never settles.
-        // A non-converging config is refused here, at its cause.
+        // Boundary validation mirrors Spring's own.
+        //
+        // HOW the old shape leaked: NAN slips past `<= 0` (every NAN
+        // comparison is false), and the former max(0.0, ·) clamps folded
+        // zero/negative tension or friction into ω = 0 / ζ = 0.
+        //
+        // WHERE it landed: those derived values LEAK through the public
+        // readonly properties and, once handed to Spring, produce a spring
+        // that never settles.
+        //
+        // SO: a non-converging config is refused here, at its cause.
         if (!is_finite($tension) || !is_finite($friction) || !is_finite($mass)) {
             throw new \InvalidArgumentException(Lang::t('spring.config_inputs_finite', [
                 'tension' => $tension,
@@ -62,11 +67,13 @@ final readonly class SpringConfig
         $this->dampingRatio = $root === 0.0 ? INF : $friction / (2.0 * $root);
 
         // Extreme-but-finite triples (tension/mass overflow, underflow to a
-        // zero root) can still derive a non-converging spring; the derived
-        // props are public, so they must not escape poisoned. Huge ζ joins
-        // them: once ζ² − 1 rounds back to ζ² (ζ ≥ 2^26.5), the two
-        // over-damped roots are numerically indistinguishable and the baked
-        // coefficients freeze the position forever — illegal, not slow.
+        // zero root) can still derive a non-converging spring. The derived
+        // props are public, so poisoned values must not escape them.
+        //
+        // Huge ζ joins the club: once ζ² − 1 rounds back to ζ²
+        // (ζ ≥ 2^26.5), the two over-damped roots are numerically
+        // indistinguishable and the baked coefficients freeze the position
+        // forever — illegal, not slow.
         if (!is_finite($this->angularFrequency)
             || !is_finite($this->dampingRatio)
             || $this->angularFrequency <= 0.0

@@ -9,15 +9,16 @@ namespace SugarCraft\Spring;
  *
  * Mirrors upstream harmonica's package-level
  * `Gravity = Vector{0, -9.81, 0}` and `TerminalGravity = Vector{0, -53, 0}`.
- * PHP `const` expressions do NOT permit `new` initializers (the 8.1
+ * PHP `const` expressions do NOT permit `new` initializers — the 8.1
  * "new in initializers" RFC covers parameter defaults, attribute arguments
- * and global-const positions only — a class constant carrying `new` is still
- * a fatal error), so constants could not carry the vectors even if a shared
- * instance were acceptable — and it is not: a const Vector would be ONE
- * instance handed to every caller. These are exposed as static accessors
- * returning a fresh {@see Vector} per call — drop-in idioms for callers
- * translating Go reference code, with the fresh-instance contract made
- * explicit.
+ * and global-const positions only, and a class constant carrying `new` is
+ * still a fatal error. So a constant could not carry these vectors even if
+ * one shared instance were acceptable.
+ *
+ * It is not: a const Vector would be ONE instance handed to every caller.
+ * These are therefore exposed as static accessors returning a fresh
+ * {@see Vector} per call — drop-in idioms for callers translating Go
+ * reference code, with the fresh-instance contract made explicit.
  *
  * ```php
  * use SugarCraft\Spring\Gravity;
