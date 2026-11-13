@@ -703,7 +703,10 @@ $finalModel = $program->run();
 // its pop is unconditional precisely because a stranded run cannot ask
 // which layer it hit. Three exits, three payers: returned (here), thrown
 // (teardown), fatal (backstop).
-fwrite(STDOUT, Ansi::popKittyKeyboard());
+// S-H11: best-effort by design. A stdout the operator already tore down
+// (closed pipe, hung-up pty) makes a bare fwrite raise a PHP Notice on every
+// exit, so the pop is silenced and its failure is the only thing dropped.
+@fwrite(STDOUT, Ansi::popKittyKeyboard());
 
 // Step 3.D-2: the session ends HERE, once, after every way out of run() has
 // funnelled through teardown — not at the Chat's Cmd::quit() sites, which are
