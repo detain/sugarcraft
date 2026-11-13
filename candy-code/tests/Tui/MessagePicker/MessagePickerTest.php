@@ -134,6 +134,19 @@ final class MessagePickerTest extends TestCase
         $this->assertSame(MessagePickerAction::CLOSE, $escAction->kind, 'Escape still leaves');
     }
 
+    public function testHostilePromptIsInertEvenWithoutUpstreamSanitising(): void
+    {
+        $hostile = "ok\e]0;pwn\x07\e[31mred\x00\x7f\u{E000}zone\u{E001}tail";
+        $rendered = MessagePicker::open([$hostile])->view(80, 24, Theme::default());
+
+        $this->assertStringNotContainsString("\e]0;", $rendered);
+        $this->assertStringNotContainsString("\e[31m", $rendered);
+        $this->assertStringNotContainsString("\x07", $rendered);
+        $this->assertStringNotContainsString("\u{E000}", $rendered);
+        $this->assertStringNotContainsString("\u{E001}", $rendered);
+        $this->assertStringContainsString('okredzonetail', $rendered);
+    }
+
     public function testViewNamesTheRowsTheirStepsAndTheEmptyState(): void
     {
         $picker = MessagePicker::open(['ship the release', 'retry the flaky test']);

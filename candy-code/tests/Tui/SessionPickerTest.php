@@ -34,6 +34,27 @@ final class SessionPickerTest extends TestCase
         return $sessions;
     }
 
+    public function testHostileSessionFieldsAreInertInRenderedFrame(): void
+    {
+        $sessions = [[
+            'sessionId' => 's1',
+            'sessionName' => "evil\e]0;pwn\x07\e[31mname\u{E000}x",
+            'summary' => "sum\r\nmary\e[2Jz\u{E001}",
+            'gitBranch' => "br\e[1manch",
+            'lastActivity' => '2024-01-01T00:00:00Z',
+        ]];
+        $out = SessionPicker::new($sessions)->render(100, 20, Theme::default());
+
+        $this->assertStringNotContainsString("\e]0;", $out);
+        $this->assertStringNotContainsString("\e[2J", $out);
+        $this->assertStringNotContainsString("\e[31m", $out);
+        $this->assertStringNotContainsString("\e[1manch", $out);
+        $this->assertStringNotContainsString("\x07", $out);
+        $this->assertStringNotContainsString("\r", $out);
+        $this->assertStringNotContainsString("\u{E000}", $out);
+        $this->assertStringNotContainsString("\u{E001}", $out);
+    }
+
     public function testNew(): void
     {
         $sessions = $this->makeSessions();

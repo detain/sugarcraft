@@ -21,6 +21,7 @@ use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
 use SugarCraft\Style\Border;
 use SugarCraft\Style\Style;
 use SugarCraft\Code\Theme;
+use SugarCraft\Code\Tui\Components\PaneLabel;
 
 /**
  * The `/sessions` (Ctrl+R) list dialog: browse, search and manage sessions
@@ -1339,7 +1340,7 @@ final class SessionPicker
         if ($this->armedDeleteId === $row['sessionId']) {
             $children = (int) ($row['children'] ?? 0);
             $subagents = (int) ($row['subagents'] ?? 0);
-            $text = $marker . Lang::t('tui.picker.confirm_delete', ['name' => Width::truncate($row['sessionName'], 24)]);
+            $text = $marker . Lang::t('tui.picker.confirm_delete', ['name' => Width::truncate(PaneLabel::safe($row['sessionName']), 24)]);
             if ($subagents > 0) {
                 $text .= ' ' . Lang::t('tui.picker.confirm_delete_subagents', ['count' => $subagents]);
             }
@@ -1379,7 +1380,7 @@ final class SessionPicker
         }
         if ($width >= 68) {
             $model = trim(($row['provider'] ?? '') . '/' . ($row['model'] ?? ''), '/');
-            $columns[] = [16, Width::truncateMiddle($model, 16), false];
+            $columns[] = [16, Width::truncateMiddle(PaneLabel::safe($model), 16), false];
         }
         if ($width >= 60) {
             $columns[] = [6, self::badge($row), false];
@@ -1538,6 +1539,11 @@ final class SessionPicker
     /** $text cut to $width cells with a trailing ellipsis when it does not fit. */
     private static function clip(string $text, int $width): string
     {
+        // Defense in depth: Chat sanitizes session fields upstream, but this is
+        // the last seam before the frame, so a regressed caller stays inert.
+        // Leading indent is layout, not content, and survives the one-row collapse.
+        $lead = \strlen($text) - \strlen(ltrim($text, ' '));
+        $text = str_repeat(' ', $lead) . PaneLabel::safe(substr($text, $lead));
         if (Width::string($text) <= $width) {
             return $text;
         }

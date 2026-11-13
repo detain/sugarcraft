@@ -9,6 +9,7 @@ use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Theme;
+use SugarCraft\Code\Tui\Components\PaneLabel;
 use SugarCraft\Style\Border;
 use SugarCraft\Style\Style;
 
@@ -19,7 +20,6 @@ use function mb_strlen;
 use function mb_substr;
 use function max;
 use function min;
-use function preg_replace;
 use function str_repeat;
 use function str_pad;
 
@@ -166,7 +166,7 @@ final class MessagePicker
                 $style = $style->reverse();
             }
             $lines[] = $style->render(self::fit(
-                ' ' . str_pad((string) $hits[$i]['stepsBack'], 2, ' ', STR_PAD_LEFT) . ' ' . $hits[$i]['prompt'],
+                ' ' . str_pad((string) $hits[$i]['stepsBack'], 2, ' ', STR_PAD_LEFT) . ' ' . PaneLabel::safe((string) $hits[$i]['prompt']),
                 $width,
             ));
         }
@@ -276,7 +276,10 @@ final class MessagePicker
     /** Cut $text to $width cells with a trailing ellipsis; control bytes out. */
     private static function fit(string $text, int $width): string
     {
-        $text = (string) preg_replace('/[\x00-\x1f\x7f]+/u', '', $text);
+        // Last seam before the frame: strip escapes/controls/Private-Use even if
+        // a caller forgot. Leading indent is layout and survives.
+        $lead = \strlen($text) - \strlen(ltrim($text, ' '));
+        $text = str_repeat(' ', $lead) . PaneLabel::safe(substr($text, $lead));
         if ($width <= 0) {
             return '';
         }
