@@ -654,3 +654,7 @@ SugarCraft\Image
 ├── Concerns               # Shared traits (optimization carrier, render validation, raw pixels)
 └── Support                # OutputOptimizer, GdAvailability, PushToPull
 ```
+
+## PNG text metadata
+
+`PngMetadata::stamp($png, $text)` writes an A1111 infotext block into the PNG `parameters` chunk (tEXt for ASCII, compressed iTXt for UTF-8; an existing `prompt` chunk is re-synced to the first line). `PngMetadata::extract($png)` returns `['parameters' => ?string, 'prompt' => ?string]` and never throws on damaged input. Lower-level `readText`/`writeText`/`isPng`/`strategyFor` are public. Pure byte transform, chunk framing per ISO/IEC 15948.
