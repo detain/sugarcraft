@@ -130,11 +130,14 @@ use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
 // Self-contained corpus: 'terminal' is a t·m·l subsequence, no other item has all three runes.
 $items = ['terminal', 'editor', 'compiler'];
 
+// requireFullQuery: true is what makes "no other item has all three runes"
+// the rule that runs: by default the matcher also keeps PARTIAL subsequence
+// scores, so 'editor' (t) and 'compiler' (m, l) would survive at 'tml' too.
 $h = QuickPick::new($items)
-    ->setRanker(new SmithWatermanMatcher())   // or any FuzzyMatcher
+    ->setRanker(new SmithWatermanMatcher(requireFullQuery: true))   // or any FuzzyMatcher
     ->setMatchStyle("\e[1m")
     ->show()
-    ->type('tml');   // matches "terminal" (t·m·l subsequence), substring would miss it
+    ->type('tml');   // keeps only "terminal"; the default substring filter would miss it
 
 // setRanker(null) restores the default substring filter.
 ```
