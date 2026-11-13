@@ -120,7 +120,7 @@ $posterFor = static function (int $index) use ($titles): ImageSource {
 
 $grid = PosterGrid::new(cardWidth: CARD_W, posterHeight: POSTER_H, hSpacing: 2, vSpacing: 1)
     ->withViewport(60, 18)
-    ->reset(total: count($cards))
+    ->withReset(total: count($cards))
     ->withItems($cards)
     ->moveTo(2);
 
@@ -231,7 +231,7 @@ if (!$sixel->isInline()) {
     }
 
     $overlayGrid = PosterGrid::new(cardWidth: CARD_W, posterHeight: POSTER_H)->withViewport(60, 18)
-        ->reset(total: 3)->withItems($overlay);
+        ->withReset(total: 3)->withItems($overlay);
 
     $overlayFrame = $overlayGrid->render();
     echo $overlayFrame . "\n";

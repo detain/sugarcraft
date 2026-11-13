@@ -102,7 +102,7 @@ final class GridIngressAndAffordanceTest extends TestCase
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('needsFetch() expects an inclusive [int $start, int $end] pair');
 
-        $this->grid()->reset(10)->needsFetch(['start' => 1, 'end' => 2]);
+        $this->grid()->withReset(10)->needsFetch(['start' => 1, 'end' => 2]);
     }
 
     public function testNeedsFetchRefusesATruncatedPair(): void
@@ -110,14 +110,14 @@ final class GridIngressAndAffordanceTest extends TestCase
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('needsFetch() expects an inclusive');
 
-        $this->grid()->reset(10)->needsFetch([5]);
+        $this->grid()->withReset(10)->needsFetch([5]);
     }
 
     public function testNeedsFetchStillAcceptsNullAndRealPairs(): void
     {
         // The guard must not eat the documented null ("nothing fetched yet")
         // or the honest [int, int] window.
-        $grid = $this->grid()->reset(10);
+        $grid = $this->grid()->withReset(10);
 
         self::assertTrue($grid->needsFetch(null));
         self::assertFalse($grid->needsFetch([0, 20]));
@@ -125,7 +125,7 @@ final class GridIngressAndAffordanceTest extends TestCase
 
     public function testShrinkingToZeroResetsTheWindowInsteadOfFreezingIt(): void
     {
-        $grid = $this->grid()->reset(20)->moveTo(15);
+        $grid = $this->grid()->withReset(20)->moveTo(15);
         self::assertSame(15, $grid->cursorIndex());
 
         $emptied = $grid->withTotal(0);
@@ -138,9 +138,9 @@ final class GridIngressAndAffordanceTest extends TestCase
 
     public function testLoadedCountIgnoresEntriesPastTheEnd(): void
     {
-        $grid = $this->grid()->reset(2);
+        $grid = $this->grid()->withReset(2);
         $grid = $grid->withItems([0 => $this->card('a'), 1 => $this->card('b')]);
-        $grid = $this->grid()->reset(10)->withItems([
+        $grid = $this->grid()->withReset(10)->withItems([
             0 => $this->card('a'), 1 => $this->card('b'), 9 => $this->card('j'), 14 => $this->card('past'),
         ]);
 
@@ -153,7 +153,7 @@ final class GridIngressAndAffordanceTest extends TestCase
 
     public function testPositionTextReportsCursorOverTotal(): void
     {
-        $grid = $this->grid()->reset(12)->moveTo(2);
+        $grid = $this->grid()->withReset(12)->moveTo(2);
         self::assertSame('  (3/12)', $grid->positionText());
 
         self::assertSame('', $grid->withTotal(0)->positionText(), 'empty grid prints nothing');
@@ -162,7 +162,7 @@ final class GridIngressAndAffordanceTest extends TestCase
     public function testFitsViewportDetectsSubCellScreens(): void
     {
         // cardWidth 10, posterHeight 4 → cellHeight 6.
-        $grid = $this->grid()->reset(4);
+        $grid = $this->grid()->withReset(4);
 
         self::assertTrue($grid->fitsViewport());
         self::assertTrue($grid->fitsViewport(cols: 10, rows: 6), 'exactly one cell fits');

@@ -68,7 +68,7 @@ final class PosterGrid
 
     /**
      * A new empty grid laid out with the given card geometry. Feed it a viewport
-     * ({@see withViewport()}) and a result set ({@see reset()} / {@see withItems()}).
+     * ({@see withViewport()}) and a result set ({@see withReset()} / {@see withItems()}).
      */
     public static function new(int $cardWidth, int $posterHeight, int $hSpacing = 2, int $vSpacing = 1): self
     {
@@ -81,7 +81,7 @@ final class PosterGrid
      * Begin a fresh result set of $total items (e.g. after a filter/sort
      * change): drops all cached cards and returns the cursor to the top.
      */
-    public function reset(int $total): self
+    public function withReset(int $total): self
     {
         $clone = clone $this;
         $clone->items = [];
@@ -308,7 +308,7 @@ final class PosterGrid
     /**
      * One forward-jump law for the nav verbs: clamp to the last index BEFORE
      * the addition, never after it (sugar-gallery-034) — a host seeding
-     * reset(PHP_INT_MAX) for an unknown-length remote used to turn pageDown()
+     * withReset(PHP_INT_MAX) for an unknown-length remote used to turn pageDown()
      * at the sentinel edge into an int→float overflow and a TypeError inside
      * synced(). Backward jumps cannot overflow and stay with synced()'s
      * clamp.

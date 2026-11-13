@@ -55,7 +55,7 @@ $cards = [
 
 $grid = PosterGrid::new(cardWidth: CARD_W, posterHeight: POSTER_H, hSpacing: 2, vSpacing: 1)
     ->withViewport(60, 18)   // → 3 columns × 2 rows
-    ->reset(total: 6)
+    ->withReset(total: 6)
     ->withItems($cards)
     ->moveTo(2);             // put the cursor on "Interstellar"
 

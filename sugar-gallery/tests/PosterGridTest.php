@@ -18,7 +18,7 @@ final class PosterGridTest extends TestCase
      */
     private function grid(int $total): PosterGrid
     {
-        return PosterGrid::new(10, 3, 2, 1)->withViewport(48, 18)->reset($total);
+        return PosterGrid::new(10, 3, 2, 1)->withViewport(48, 18)->withReset($total);
     }
 
     /** @param int[] $indices @return array<int, PosterCard> */
@@ -62,7 +62,7 @@ final class PosterGridTest extends TestCase
         // reset(PHP_INT_MAX) for an unknown-length remote used to hit
         // cursor + page-size overflowing int → float inside pageDown(), and
         // synced()'s int parameter TypeErrored on the way in.
-        $sentinel = $this->grid(0)->reset(PHP_INT_MAX)->moveTo(PHP_INT_MAX - 1);
+        $sentinel = $this->grid(0)->withReset(PHP_INT_MAX)->moveTo(PHP_INT_MAX - 1);
         self::assertSame(PHP_INT_MAX - 1, $sentinel->cursorIndex());
 
         $paged = $sentinel->pageDown();
@@ -97,7 +97,7 @@ final class PosterGridTest extends TestCase
         $g = $this->grid(50)->moveTo(40);
         self::assertGreaterThan(0, $g->scrollRow());
 
-        $g = $g->reset(20);
+        $g = $g->withReset(20);
         self::assertSame(20, $g->total());
         self::assertSame(0, $g->cursorIndex());
         self::assertSame(0, $g->scrollRow());
@@ -528,7 +528,7 @@ final class PosterGridTest extends TestCase
         // empty-state.
         $g = PosterGrid::new(16, 9)->withViewport(80, 24);
         self::assertSame('', $g->render());
-        self::assertSame('', $g->reset(0)->render(focused: true, zones: null));
+        self::assertSame('', $g->withReset(0)->render(focused: true, zones: null));
     }
 
     public function testRightAndLeftWalkByCellAcrossRowBoundaries(): void
@@ -536,7 +536,7 @@ final class PosterGridTest extends TestCase
         // The README edge truth (docs-review-1017 m1): ← → move by ONE CELL
         // and therefore wrap onto the next/previous row at the row edges —
         // they are index steps, not within-row clamps.
-        $g = PosterGrid::new(10, 4, 0, 0)->withViewport(20, 24)->reset(4);
+        $g = PosterGrid::new(10, 4, 0, 0)->withViewport(20, 24)->withReset(4);
         self::assertSame(2, $g->columns());
 
         $walk = [];

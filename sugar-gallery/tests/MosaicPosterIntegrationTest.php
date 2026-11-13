@@ -375,7 +375,7 @@ final class MosaicPosterIntegrationTest extends TestCase
     {
         return PosterGrid::new(self::CARD_WIDTH, self::POSTER_HEIGHT, self::H_SPACING, self::V_SPACING)
             ->withViewport(self::VIEWPORT_COLS, self::VIEWPORT_ROWS)
-            ->reset($total);
+            ->withReset($total);
     }
 
     /**

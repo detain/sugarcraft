@@ -37,7 +37,7 @@ use SugarCraft\Gallery\PosterCard;
 
 $grid = PosterGrid::new(cardWidth: 16, posterHeight: 9)
     ->withViewport($cols, $rows)
-    ->reset(total: 5000);          // a fresh result set
+    ->withReset(total: 5000);          // a fresh result set
 
 // Keyboard nav (map your keys to these — all clamp + keep the cursor on screen):
 $grid = $grid->right();            // ← → step one cell (crosses row edges)
@@ -389,7 +389,7 @@ entries the total shrank past do not count), `cursorIndex()`, `cursorRow()`,
 index is fetched), `isEmpty()`.
 Geometry: `columns()` = `max(1, intdiv(cols + hSpacing, cardWidth + hSpacing))`,
 `visibleRows()`, `totalRows()`, `cellHeight()` (= `posterHeight + 2`).
-Result set: `reset($total)`, `withTotal($total)` (keeps cached cards, clamps the
+Result set: `withReset($total)`, `withTotal($total)` (keeps cached cards, clamps the
 cursor), `withItem()` / `withItems()`, `withoutItemsOutside([$a, $b])`,
 `withViewport($cols, $rows)`.
 Window: `visibleRange($overscan)`, `visibleCards($overscan)`,
