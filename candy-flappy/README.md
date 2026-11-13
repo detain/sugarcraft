@@ -252,7 +252,7 @@ defaults could not produce.
 - To reset the leaderboard: `rm ~/.config/.candy-flappy/scores.json`.
 - Colour posture follows `sugar-core`'s `ColorProfile::detect()`:
   `NO_COLOR` forces the ASCII posture; `CLICOLOR_FORCE` / `FORCE_COLOR` can
-  force colour on where detection would demure (and let the CLI draw into a
+  force colour on where detection would otherwise withhold colour (and let the CLI draw into a
   pipe on purpose); a non-TTY stdout is refused by the CLI before launch
   (stderr, exit 1), and a `TERM=dumb` terminal gets the plain refusal screen.
 
