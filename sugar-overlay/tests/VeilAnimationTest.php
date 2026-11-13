@@ -238,16 +238,18 @@ final class VeilAnimationTest extends TestCase
 
     public function testAnimateFadeAtProgressZeroReturnsBackgroundUnchanged(): void
     {
+        // The shipped truth: at progress 0 Fade::apply returns the EMPTY
+        // string (nothing of the overlay is painted) and the scrim is
+        // round(opacity * 0) = 0, so the frame is a pure background
+        // passthrough — same shape as the SCALE p=0 leg.
         $v = Veil::new()->withAnimation(AnimationKind::FADE);
 
         $bg = "..........";
-        $fg = "X";
 
-        // At progress 0, Fade returns fg unchanged, composite uses it
-        $result = $v->animate($fg, $bg, Position::TOP, Position::LEFT, 0.0);
-        // At progress 0, Fade::apply returns fg unchanged
-        // composite with non-empty fg should work normally
-        $this->assertNotEmpty($result);
+        $this->assertSame(
+            $bg,
+            $v->withoutSession()->animate('X', $bg, Position::TOP, Position::LEFT, 0.0),
+        );
     }
 
     public function testAnimateFadeAtProgressOneReturnsComposited(): void
@@ -257,9 +259,11 @@ final class VeilAnimationTest extends TestCase
         $bg = "..........";
         $fg = "X";
 
-        $result = $v->animate($fg, $bg, Position::TOP, Position::LEFT, 1.0);
-        // At progress 1, Fade::apply returns fg unchanged
-        $this->assertNotEmpty($result);
+        // At progress 1 the fade is transparent to brightness: Fade::apply
+        // returns the fg bytes unchanged and the scrim is full, so the
+        // frame is the plain composited line.
+        $result = $v->withoutSession()->animate($fg, $bg, Position::TOP, Position::LEFT, 1.0);
+        $this->assertSame('X.........', $result);
     }
 
     public function testAnimateFadeRendersVisibleProgress(): void
@@ -288,10 +292,12 @@ final class VeilAnimationTest extends TestCase
         $bg = "..........";
         $fg = "X";
 
-        $result = $v->animate($fg, $bg, Position::TOP, Position::LEFT, 0.5);
-        // Fade returns foreground unchanged (terminal limitation)
-        // Result should be the composited output with X visible
-        $this->assertStringContainsString('X', $result);
+        // The "terminal limitation" comment described the pre-SO-12 no-op
+        // era and is false today: mid-progress the fade paints the gray
+        // pen — opacity 50 at the curve's midpoint → level round(255 *
+        // 50/100) = 128 (derived once from the shipped chain).
+        $result = $v->withoutSession()->animate($fg, $bg, Position::TOP, Position::LEFT, 0.5);
+        $this->assertSame("\e[38;2;128;128;128mX\e[39m.........", $result);
     }
 
     public function testCompositeWithoutAnimationWorksNormally(): void

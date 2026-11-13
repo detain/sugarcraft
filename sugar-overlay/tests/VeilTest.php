@@ -1020,10 +1020,15 @@ final class VeilTest extends TestCase
         $bg = "....................\n....................";
         $fg = "Fade";
 
-        $result = $v->animate($fg, $bg, Position::TOP, Position::LEFT, 0.5);
+        // Not the old "terminal limitations" no-op: the fade paints the
+        // word through the gray pen (opacity 50 at the midpoint → level
+        // 128, derived once) over undimmed background dots.
+        $result = $v->withoutSession()->animate($fg, $bg, Position::TOP, Position::LEFT, 0.5);
 
-        // Fade animation returns foreground unchanged (terminal limitations)
-        $this->assertStringContainsString('Fade', $result);
+        $this->assertSame(
+            "\e[38;2;128;128;128mFade\e[39m................\n....................",
+            $result,
+        );
     }
 
     public function testAnimateWithScaleAnimation(): void
