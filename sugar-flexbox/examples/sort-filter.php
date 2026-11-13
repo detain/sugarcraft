@@ -48,10 +48,10 @@ echo "\n";
 // string, so without this the cursor row renders with no marker bytes.
 $table = $table->withCursorStyle('1;36');
 
-// Toggle sort on Name, THEN move the cursor: sortBy()/sortByNext()/filter()
-// reset the cursor to row 0 because the view reorders underneath it, so a
-// cursor set before a sort is wiped out. (previous sort was column 2; a
-// different column starts ascending)
+// Toggle sort on Name, then place the cursor: the sort carries the selection
+// with its row, and withCursor() checks the index against the settled view —
+// setting it last keeps this walkthrough linear. (previous sort was column 2;
+// a different column starts ascending)
 $table = $table->sortByNext(0)->withCursor(2);
 echo "=== After sortByNext() (Name asc) then setCursor(2) ===\n";
 echo $table->render();

@@ -530,15 +530,6 @@ final class TableTest extends TestCase
         $this->assertSame(['y', 'x'], $this->dataColumn($t2, 0));
     }
 
-    // Helper
-    private function getCursorRow(Table $t): int
-    {
-        $reflection = new \ReflectionClass($t);
-        $prop = $reflection->getProperty('cursorRow');
-        $prop->setAccessible(true);
-        return $prop->getValue($t);
-    }
-
     /**
      * Ordered values of one column across the rendered data rows.
      *

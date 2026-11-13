@@ -161,11 +161,13 @@ echo $atCursor->render();
 echo $atCursor->currentCell(0), "\n";
 ```
 
-Sorting and filtering reset the cursor to row 0 — the view reorders
-underneath it — so move the cursor *after* the last `withSort()`/`sortByNext()`/
-`withFilter()` call. `withCursor()` does not clamp: an index past the end simply
-falls off the view, and `currentRow()`/`currentCell()` answer `null` until the
-cursor lands back inside.
+The cursor is guarded at its door: `withCursor()` throws unless the index
+addresses the settled materialized view (a pending sort or filter is resolved
+first). Sorting and filtering carry the selection with the row it stood on —
+matched by stored cell values, the first identical row wins — and a selection
+whose row a filter drops lands back at row 0. `cursor()` answers the raw index
+(`null` only while the view holds no rows); `currentRow()` and `currentCell()`
+answer that row's stored values or `null`.
 
 ## Viewport Quick Start
 
