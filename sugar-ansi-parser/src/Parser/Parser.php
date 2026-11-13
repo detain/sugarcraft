@@ -373,13 +373,35 @@ final class Parser
      * NOT a silent clear: this FLUSHES first, so an in-flight
      * OSC/DCS/SOS/PM/APC sequence **dispatches** to the handler with whatever
      * payload arrived (end-of-stream semantics), then all accumulated state
-     * clears. A consumer that wants to abandon a mid-stream string without
-     * receiving its dispatch has no API for that today — the dispatch is the
-     * documented behaviour of {@see flush()}, which reset() delegates to.
+     * clears. A consumer that wants to abandon a mid-stream string WITHOUT
+     * receiving its dispatch uses {@see discard()} — the admission this
+     * docblock used to make (finding sugar-ansi-parser-020) is now an API.
      */
     public function reset(): void
     {
         $this->flush();
+        $this->clear();
+    }
+
+    /**
+     * Abandon everything in flight WITHOUT dispatching: the anti-verb of
+     * {@see reset()}.
+     *
+     * reset() flushes first (an in-flight string sequence dispatches
+     * end-of-stream style); discard() throws it away: pending payloads
+     * clear, in-progress UTF-8 assembly is abandoned (no U+FFFD even in
+     * $replaceMalformed mode — emission is a dispatch too), the
+     * stringOverflow latch dies unread, and the machine lands in Ground.
+     * Either way the next sequence starts clean — the difference is only
+     * what the handler still gets to see.
+     */
+    public function discard(): void
+    {
+        $this->state = self::S_GROUND;
+        $this->utf8Buffer = '';
+        $this->utf8Need = 0;
+        // clear() resets params/subparams/cmd AND the string buffer with its
+        // overflow latch (sap-06).
         $this->clear();
     }
 

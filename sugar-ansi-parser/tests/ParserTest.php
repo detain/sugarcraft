@@ -74,6 +74,69 @@ final class ParserTest extends TestCase
         $this->assertSame(0, $parser->currentState()->value);
     }
 
+    public function testDiscardAbandonsInFlightStringsWithoutDispatch(): void
+    {
+        // sap-07 (finding 020): discard() is the anti-verb of reset().
+        $handler = new DebugHandler();
+        $parser  = new Parser($handler);
+
+        $parser->feed("\x1b]0;half an osc");
+        $parser->feed("\x1bPqhalf a dcs");
+        $parser->discard();
+
+        $this->assertSame([], $handler->filter('osc'), 'discard must not dispatch OSC');
+        $this->assertSame([], $handler->filter('dcs'), 'discard must not dispatch DCS');
+        $this->assertSame(State::Ground, $parser->currentState());
+
+        // The next sequence starts clean: no 'half an osc' bleed-through.
+        $parser->feed("\x1b]1;fresh\x07");
+        $osc = $handler->filter('osc');
+        $this->assertCount(1, $osc);
+        $this->assertSame('1;fresh', $osc[0]['detail']);
+    }
+
+    public function testResetKeepsItsFlushSemantics(): void
+    {
+        // Regression pin beside the discard() arms: reset() must STILL
+        // dispatch the in-flight string (the documented flush-first law).
+        $handler = new DebugHandler();
+        $parser  = new Parser($handler);
+
+        $parser->feed("\x1b]0;in flight");
+        $parser->reset();
+
+        $this->assertCount(1, $handler->filter('osc'), 'reset() flush semantics unchanged');
+    }
+
+    public function testDiscardAbandonsUtf8AssemblyWithoutEmission(): void
+    {
+        // Emission is a dispatch too: even $replaceMalformed mode must stay
+        // silent under discard(), where flush()/reset() would print U+FFFD.
+        $handler = new DebugHandler();
+        $parser  = new Parser($handler, true);
+
+        $parser->feed("b\xE4\xB8"); // 'b' then an incomplete 3-byte rune
+        $parser->discard();
+
+        $this->assertSame(
+            ['b'],
+            array_map(static fn(array $e): string => $e['detail'], $handler->filter('print')),
+            'no partial-rune residue and no replacement char may surface',
+        );
+        $this->assertSame(State::Ground, $parser->currentState());
+
+        // Contrast arm (documented behaviour, unchanged): reset() under the
+        // same flag DOES emit the replacement character.
+        $flushed = new DebugHandler();
+        $flushParser = new Parser($flushed, true);
+        $flushParser->feed("c\xE4\xB8");
+        $flushParser->reset();
+        $this->assertSame(
+            ['c', "\xEF\xBF\xBD"],
+            array_map(static fn(array $e): string => $e['detail'], $flushed->filter('print')),
+        );
+    }
+
     public function testResetClearsStaleParams(): void
     {
         $handler = new DebugHandler();

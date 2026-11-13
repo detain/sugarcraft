@@ -270,11 +270,12 @@ product:
   sequences like anywhere else; their UTF-8-encoded forms (C2 80-C2 9F) are
   legal text — see the assistive notes below.
 - **`reset()` is not silent:** it flushes first, so an in-flight
-  OSC/DCS/SOS/PM/APC **dispatches** to the handler before state clears. To
-  abandon a stream without a dispatch there is none yet; call `reset()`
-  accepting the trailing flush (end-of-stream semantics). The flush recovers
-  *string* states only: an in-flight CSI/ESC sequence and a half-read DCS
-  prelude end undispatched.
+  OSC/DCS/SOS/PM/APC **dispatches** to the handler before state clears. The
+  abandon verb is `discard()`: no dispatch, no replacement-character emission
+  even in `$replaceMalformed` mode (a pending rune's emission would itself be
+  output) — the machine just lands in Ground and the next sequence starts
+  clean. The flush recovers *string* states only: an in-flight CSI/ESC
+  sequence and a half-read DCS prelude end undispatched either way.
 - **`DebugHandler` has no cap:** its public `$log` grows one row per dispatched
   action, forever; it is a development mirror, not a production sink.
 
