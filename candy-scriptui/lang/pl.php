@@ -32,6 +32,7 @@ return [
     'cursor_mode.unknown' => 'nieznany tryb kursora: {mode}',
     'runtime.no_terminal' => '{command} wymaga interaktywnego terminala; brak dostępnego terminala sterującego.',
     'runtime.bad_timeout' => 'Nieprawidłowa wartość --timeout \'{value}\' — oczekowano liczby sekund nieujemnej (0 wyłącza limit).',
+    'runtime.bad_number' => 'Nieprawidłowa wartość {flag}: \'{value}\' — oczekowano liczby całkowitej nieujemnej.',
     'runtime.unknown_choice' => 'Nieprawidłowa wartość dla {option}: \'{value}\'. Dozwolone: {allowed}.',
     'hints.choose' => '↑/↓ przejdź · spacja przełącza (wiele) · enter wybierz · esc anuluj',
     'hints.filter' => 'wpisuj aby filtrować · ↑/↓ przejdź · tab przełącza (wiele) · enter wybierz · esc anuluj',

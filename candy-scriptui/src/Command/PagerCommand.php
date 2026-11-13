@@ -10,6 +10,7 @@ use SugarCraft\ScriptUi\Model\PagerModel;
 use SugarCraft\ScriptUi\Runtime\InteractiveRuntime;
 use SugarCraft\ScriptUi\Runtime\SignalExit;
 use SugarCraft\ScriptUi\Runtime\TimeoutGuard;
+use SugarCraft\ScriptUi\Runtime\PositiveInt;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -49,6 +50,15 @@ final class PagerCommand extends Command
             return Command::FAILURE;
         }
 
+        try {
+            $width  = PositiveInt::parse('width', $input->getOption('width'));
+            $height = PositiveInt::parse('height', $input->getOption('height'));
+        } catch (\InvalidArgumentException $e) {
+            // Refuse a typo'd geometry BEFORE reading the file/stdin.
+            fwrite(STDERR, $e->getMessage() . "\n");
+            return Command::FAILURE;
+        }
+
         $file = $input->getOption('file');
         if (is_string($file) && $file !== '') {
             $raw = @file_get_contents($file);
@@ -64,17 +74,17 @@ final class PagerCommand extends Command
         // feeding the viewport, so long source lines stay visible
         // without horizontal scroll.
         if ((bool) $input->getOption('soft-wrap')) {
-            $width = (int) $input->getOption('width');
-            if ($width <= 0) {
-                $width = \SugarCraft\ScriptUi\Runtime\Geometry::columnsOrNull() ?? 80;
+            $wrapWidth = $width;
+            if ($wrapWidth <= 0) {
+                $wrapWidth = \SugarCraft\ScriptUi\Runtime\Geometry::columnsOrNull() ?? 80;
             }
-            $raw = self::prewrapSoftWrap($raw, $width);
+            $raw = self::prewrapSoftWrap($raw, $wrapWidth);
         }
 
         $model   = PagerModel::fromContent(
             $raw,
-            (int)    $input->getOption('width'),
-            (int)    $input->getOption('height'),
+            $width,
+            $height,
             (bool)   $input->getOption('show-line-numbers'),
             (string) $input->getOption('match'),
         );

@@ -47,6 +47,7 @@ return [
     'cursor_mode.unknown' => 'unknown --cursor-mode: {mode}',
     'runtime.no_terminal' => '{command} needs an interactive terminal; no controlling terminal is available.',
     'runtime.bad_timeout' => 'Invalid --timeout value \'{value}\' — expected a non-negative number of seconds (0 disables the deadline).',
+    'runtime.bad_number' => 'Invalid {flag} value \'{value}\' — expected a non-negative whole number.',
     'runtime.unknown_choice' => 'Invalid value for {option}: \'{value}\'. Allowed: {allowed}.',
     'hints.choose' => '↑/↓ move · space toggle (multi) · enter select · esc cancel',
     'hints.filter' => 'type to filter · ↑/↓ move · tab toggle (multi) · enter select · esc cancel',

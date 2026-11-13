@@ -8,6 +8,7 @@ use SugarCraft\Core\Program;
 use SugarCraft\ScriptUi\Lang;
 use SugarCraft\ScriptUi\Model\FilterModel;
 use SugarCraft\ScriptUi\Runtime\OptionList;
+use SugarCraft\ScriptUi\Runtime\PositiveInt;
 use SugarCraft\ScriptUi\Runtime\InteractiveRuntime;
 use SugarCraft\ScriptUi\Runtime\SignalExit;
 use SugarCraft\ScriptUi\Runtime\TimeoutGuard;
@@ -83,10 +84,20 @@ final class FilterCommand extends Command
         $cursor = $input->getOption('indicator') ?? $input->getOption('cursor');
         $unselected = $input->getOption('unselected-prefix');
 
+        try {
+            $height = PositiveInt::parse('height', $input->getOption('height'));
+            $limit  = PositiveInt::parse('limit', $input->getOption('limit'));
+            $width  = PositiveInt::parse('width', $input->getOption('width'));
+        } catch (\InvalidArgumentException $e) {
+            // A typo'd number must not silently relocate the mode.
+            fwrite(STDERR, $e->getMessage() . "\n");
+            return Command::FAILURE;
+        }
+
         $model   = FilterModel::fromOptions(
             options:          $lines,
-            height:           (int)    $input->getOption('height'),
-            limit:            (int)    $input->getOption('limit'),
+            height:           $height,
+            limit:            $limit,
             noLimit:          (bool)   $input->getOption('no-limit'),
             header:           (string) $input->getOption('header'),
             preselected:      OptionList::expand((array) $input->getOption('selected')),
@@ -95,7 +106,7 @@ final class FilterCommand extends Command
             cursorPrefix:     is_string($cursor) ? $cursor : null,
             unselectedPrefix: is_string($unselected) ? $unselected : null,
             fuzzy:            (bool) $input->getOption('fuzzy'),
-            width:            (int) $input->getOption('width'),
+            width:            $width,
         );
         $loop    = \React\EventLoop\Loop::get();
         $options = InteractiveRuntime::programOptions(

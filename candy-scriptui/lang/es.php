@@ -45,6 +45,7 @@ return [
     'cursor_mode.unknown' => 'modo de cursor desconocido: {mode}',
     'runtime.no_terminal' => '{command} necesita una terminal interactiva; no hay terminal de control disponible.',
     'runtime.bad_timeout' => 'Valor de --timeout no válido \'{value}\': se espera un número de segundos no negativo (0 desactiva el plazo).',
+    'runtime.bad_number' => 'Valor de {flag} no válido: \'{value}\' — se esperaba un número entero no negativo.',
     'runtime.unknown_choice' => 'Valor no válido para {option}: \'{value}\'. Permitidos: {allowed}.',
     'hints.choose' => '↑/↓ mover · espacio alterna (múltiple) · enter seleccionar · esc cancelar',
     'hints.filter' => 'escribe para filtrar · ↑/↓ mover · tab alterna (múltiple) · enter seleccionar · esc cancelar',

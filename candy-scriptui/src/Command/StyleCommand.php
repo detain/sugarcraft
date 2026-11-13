@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\ScriptUi\Command;
 
 use SugarCraft\ScriptUi\Style\StyleBuilder;
+use SugarCraft\ScriptUi\Runtime\PositiveInt;
 use SugarCraft\ScriptUi\Lang;
 use SugarCraft\ScriptUi\Attribute\Example;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -92,8 +93,8 @@ final class StyleCommand extends Command
                 'faint'              => $input->getOption('faint'),
                 'padding'            => $input->getOption('padding'),
                 'margin'             => $input->getOption('margin'),
-                'width'              => $input->getOption('width'),
-                'height'             => $input->getOption('height'),
+                'width'              => PositiveInt::optional('width', $input->getOption('width')),
+                'height'             => PositiveInt::optional('height', $input->getOption('height')),
                 'align'              => $input->getOption('align'),
                 'border'             => $input->getOption('border'),
                 'border-foreground'  => $input->getOption('border-foreground'),

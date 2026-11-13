@@ -11,6 +11,7 @@ use SugarCraft\ScriptUi\Runtime\CursorMode;
 use SugarCraft\ScriptUi\Runtime\InteractiveRuntime;
 use SugarCraft\ScriptUi\Runtime\SignalExit;
 use SugarCraft\ScriptUi\Runtime\TimeoutGuard;
+use SugarCraft\ScriptUi\Runtime\PositiveInt;
 use SugarCraft\ScriptUi\Attribute\Example;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -62,13 +63,22 @@ final class InputCommand extends Command
             return Command::FAILURE;
         }
 
+        try {
+            $charLimit = PositiveInt::parse('char-limit', $input->getOption('char-limit'));
+            $width     = PositiveInt::parse('width', $input->getOption('width'));
+        } catch (\InvalidArgumentException $e) {
+            // A typo'd number must not silently relocate the mode.
+            fwrite(STDERR, $e->getMessage() . "\n");
+            return Command::FAILURE;
+        }
+
         $model   = InputModel::newPrompt(
             placeholder: (string) $input->getOption('placeholder'),
             password:    (bool)   $input->getOption('password'),
             prompt:      (string) $input->getOption('prompt'),
             value:       (string) $input->getOption('value'),
-            charLimit:   (int)    $input->getOption('char-limit'),
-            width:       (int)    $input->getOption('width'),
+            charLimit:   $charLimit,
+            width:       $width,
             header:      (string) $input->getOption('header'),
         );
         $loop    = \React\EventLoop\Loop::get();

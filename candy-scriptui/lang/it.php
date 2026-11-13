@@ -32,6 +32,7 @@ return [
     'cursor_mode.unknown' => 'modalità cursore sconosciuta: {mode}',
     'runtime.no_terminal' => '{command} richiede un terminale interattivo; nessun terminale di controllo disponibile.',
     'runtime.bad_timeout' => 'Valore di --timeout non valido \'{value}\' — previsto un numero di secondi non negativo (0 disattiva il termine).',
+    'runtime.bad_number' => 'Valore di {flag} non valido \'{value}\' — era previsto un numero intero non negativo.',
     'runtime.unknown_choice' => 'Valore non valido per {option}: \'{value}\'. Consentiti: {allowed}.',
     'hints.choose' => '↑/↓ sposta · spazio alterna (multipla) · invio seleziona · esc annulla',
     'hints.filter' => 'digita per filtrare · ↑/↓ sposta · tab alterna (multipla) · invio seleziona · esc annulla',

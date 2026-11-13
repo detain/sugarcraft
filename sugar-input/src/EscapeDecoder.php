@@ -181,10 +181,10 @@ final class EscapeDecoder
     /** Bytes swallowed past the cap while draining an over-long string toward its terminator */
     private int $stringDiscarded = 0;
 
-    /** Lifetime count of terminal replies drained into TerminalReplyEvent */
+    /** Terminal replies drained into TerminalReplyEvent, zeroed by reset() */
     private int $drainedReplyCount = 0;
 
-    /** Lifetime count of complete-but-unrecognized sequences consumed silently */
+    /** Complete-but-unrecognized sequences consumed silently, zeroed by reset() */
     private int $droppedUnknownCount = 0;
 
     /** Protocol toggles gating mouse / Kitty / focus / paste parsing. */
@@ -2225,8 +2225,9 @@ final class EscapeDecoder
     }
 
     /**
-     * Lifetime count of unsolicited terminal replies drained into
-     * TerminalReplyEvent. Distinguishes "recognized and drained" from the
+     * Count of unsolicited terminal replies drained into TerminalReplyEvent
+     * since the last reset() — the counters measure one decoder epoch, not a
+     * process lifetime. Distinguishes "recognized and drained" from the
      * silent drops counted by droppedUnknownCount().
      */
     public function drainedReplyCount(): int
@@ -2235,8 +2236,9 @@ final class EscapeDecoder
     }
 
     /**
-     * Lifetime count of complete-but-unrecognized sequences consumed with no
-     * event (unknown CSI finals, malformed runs, unknown Kitty key codes).
+     * Count of complete-but-unrecognized sequences consumed with no event
+     * (unknown CSI finals, malformed runs, unknown Kitty key codes) since the
+     * last reset(); reset() clears it along with the state.
      */
     public function droppedUnknownCount(): int
     {

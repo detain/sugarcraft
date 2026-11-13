@@ -11,6 +11,7 @@ use SugarCraft\ScriptUi\Runtime\CursorMode;
 use SugarCraft\ScriptUi\Runtime\InteractiveRuntime;
 use SugarCraft\ScriptUi\Runtime\SignalExit;
 use SugarCraft\ScriptUi\Runtime\TimeoutGuard;
+use SugarCraft\ScriptUi\Runtime\PositiveInt;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -63,13 +64,24 @@ final class WriteCommand extends Command
             return Command::FAILURE;
         }
 
+        try {
+            $width     = PositiveInt::parse('width', $input->getOption('width'));
+            $height    = PositiveInt::parse('height', $input->getOption('height'));
+            $charLimit = PositiveInt::parse('char-limit', $input->getOption('char-limit'));
+            $maxLines  = PositiveInt::parse('max-lines', $input->getOption('max-lines'));
+        } catch (\InvalidArgumentException $e) {
+            // A typo'd number must not silently relocate the mode.
+            fwrite(STDERR, $e->getMessage() . "\n");
+            return Command::FAILURE;
+        }
+
         $model   = WriteModel::newPrompt(
             placeholder:     (string) $input->getOption('placeholder'),
-            width:           (int)    $input->getOption('width'),
-            height:          (int)    $input->getOption('height'),
+            width:           $width,
+            height:          $height,
             value:           (string) $input->getOption('value'),
-            charLimit:       (int)    $input->getOption('char-limit'),
-            maxLines:        (int)    $input->getOption('max-lines'),
+            charLimit:       $charLimit,
+            maxLines:        $maxLines,
             prompt:          (string) $input->getOption('prompt'),
             showLineNumbers: (bool)   $input->getOption('show-line-numbers'),
             header:          (string) $input->getOption('header'),

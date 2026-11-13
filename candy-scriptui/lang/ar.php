@@ -32,6 +32,7 @@ return [
     'cursor_mode.unknown' => 'وضع مؤشر غير معروف: {mode}',
     'runtime.no_terminal' => '{command} يحتاج إلى طرفية تفاعلية؛ لا يوجد طرف تحكّم متاح.',
     'runtime.bad_timeout' => 'قيمة --timeout غير صالحة \'{value}\' — يُتوقَّع عدد ثوانٍ غير سالب (0 يعطّل المهلة).',
+    'runtime.bad_number' => 'قيمة {flag} غير صالحة: \'{value}\' — مطلوب عدد صحيح غير سالب.',
     'runtime.unknown_choice' => 'قيمة غير صالحة لـ{option}: \'{value}\'. المسموح: {allowed}.',
     'hints.choose' => '↑/↓ تحرّك · مسافة تبديل (متعدد) · enter اختيار · esc إلغاء',
     'hints.filter' => 'اكتب للتصفية · ↑/↓ تحرّك · tab تبديل (متعدد) · enter اختيار · esc إلغاء',

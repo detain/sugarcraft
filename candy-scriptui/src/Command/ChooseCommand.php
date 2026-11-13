@@ -8,6 +8,7 @@ use SugarCraft\Core\Program;
 use SugarCraft\ScriptUi\Lang;
 use SugarCraft\ScriptUi\Model\ChooseModel;
 use SugarCraft\ScriptUi\Runtime\OptionList;
+use SugarCraft\ScriptUi\Runtime\PositiveInt;
 use SugarCraft\ScriptUi\Runtime\InteractiveRuntime;
 use SugarCraft\ScriptUi\Runtime\SignalExit;
 use SugarCraft\ScriptUi\Runtime\TimeoutGuard;
@@ -59,8 +60,15 @@ final class ChooseCommand extends Command
         }
         /** @var list<string> $options */
         $options = $input->getArgument('options');
-        $height  = (int) $input->getOption('height');
-        $limit   = (int) $input->getOption('limit');
+        try {
+            $height = PositiveInt::parse('height', $input->getOption('height'));
+            $limit  = PositiveInt::parse('limit', $input->getOption('limit'));
+            $width  = PositiveInt::parse('width', $input->getOption('width'));
+        } catch (\InvalidArgumentException $e) {
+            // A typo'd number must not silently relocate the mode.
+            fwrite(STDERR, $e->getMessage() . "\n");
+            return Command::FAILURE;
+        }
         $noLimit = (bool) $input->getOption('no-limit');
         $ordered = (bool) $input->getOption('ordered');
         $header  = (string) $input->getOption('header');
@@ -94,7 +102,7 @@ final class ChooseCommand extends Command
             $ordered,
             cursorPrefix:     is_string($cursor) ? $cursor : null,
             unselectedPrefix: is_string($unselected) ? $unselected : null,
-            width:            (int) $input->getOption('width'),
+            width:            $width,
         );
         $loop    = \React\EventLoop\Loop::get();
         $options = InteractiveRuntime::programOptions(

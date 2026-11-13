@@ -45,6 +45,7 @@ return [
     'cursor_mode.unknown' => 'unbekannter Cursor-Modus: {mode}',
     'runtime.no_terminal' => '{command} benötigt ein interaktives Terminal; kein steuerndes Terminal verfügbar.',
     'runtime.bad_timeout' => 'Ungültiger --timeout-Wert \'{value}\' — erwartet wird eine nicht negative Sekundenanzahl (0 deaktiviert die Frist).',
+    'runtime.bad_number' => 'Ungültiger {flag}-Wert \'{value}\' — erwartet wird eine nicht negative Ganzzahl.',
     'runtime.unknown_choice' => 'Ungültiger Wert für {option}: \'{value}\'. Erlaubt: {allowed}.',
     'hints.choose' => '↑/↓ bewegen · Leertaste umschalten (Mehrfach) · Enter auswählen · Esc abbrechen',
     'hints.filter' => 'tippen zum Filtern · ↑/↓ bewegen · Tab umschalten (Mehrfach) · Enter auswählen · Esc abbrechen',

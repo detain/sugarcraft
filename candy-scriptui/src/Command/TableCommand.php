@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\ScriptUi\Command;
 
 use SugarCraft\ScriptUi\Lang;
+use SugarCraft\ScriptUi\Runtime\PositiveInt;
 use SugarCraft\Style\Align;
 use SugarCraft\Style\Border;
 use SugarCraft\Style\Table\Table;
@@ -55,6 +56,14 @@ final class TableCommand extends Command
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
+        try {
+            $height = PositiveInt::parse('height', $input->getOption('height'));
+        } catch (\InvalidArgumentException $e) {
+            // Refuse a typo'd height BEFORE reading the input.
+            fwrite(STDERR, $e->getMessage() . "\n");
+            return Command::FAILURE;
+        }
+
         $file = $input->getOption('file');
         if (is_string($file) && $file !== '') {
             $raw = @file_get_contents($file);
@@ -157,7 +166,6 @@ final class TableCommand extends Command
         $rendered = $table->render();
 
         // --height caps the rendered output to N rows.
-        $height = (int) $input->getOption('height');
         if ($height > 0) {
             $lines = explode("\n", $rendered);
             if (count($lines) > $height) {

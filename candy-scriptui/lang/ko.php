@@ -32,6 +32,7 @@ return [
     'cursor_mode.unknown' => '알 수 없는 커서 모드: {mode}',
     'runtime.no_terminal' => '{command}에는 대화형 터미널이 필요합니다. 제어 터미널을 사용할 수 없습니다.',
     'runtime.bad_timeout' => '--timeout 값 \'{value}\'이(가) 잘못되었습니다 — 0 이상의 초 수를 입력하세요 (0이면 제한 없음).',
+    'runtime.bad_number' => '{flag} 값 \'{value}\'이(가) 올바르지 않습니다 — 음수가 아닌 정수가 필요합니다.',
     'runtime.unknown_choice' => '{option}의 값 \'{value}\'이(가) 잘못되었습니다. 허용: {allowed}.',
     'hints.choose' => '↑/↓ 이동 · space 선택 전환 (복수) · enter 선택 · esc 취소',
     'hints.filter' => '입력으로 필터 · ↑/↓ 이동 · tab 선택 전환 (복수) · enter 선택 · esc 취소',

@@ -32,6 +32,7 @@ return [
     'cursor_mode.unknown' => 'bilinmeyen imleç modu: {mode}',
     'runtime.no_terminal' => '{command} etkileşimli bir uçbirim gerektirir; denetim uçbirimi yok.',
     'runtime.bad_timeout' => 'Geçersiz --timeout değeri \'{value}\' — negatif olmayan bir saniye sayısı bekleniyor (0 son tarihi kapatır).',
+    'runtime.bad_number' => '{flag} değeri \'{value}\' geçersiz — negatif olmayan bir tam sayı bekleniyor.',
     'runtime.unknown_choice' => '{option} için geçersiz değer: \'{value}\'. İzin verilenler: {allowed}.',
     'hints.choose' => '↑/↓ taşı · boşluk değiştir (çoklu) · enter seç · esc iptal',
     'hints.filter' => 'filtrelemek için yaz · ↑/↓ taşı · sekme değiştir (çoklu) · enter seç · esc iptal',

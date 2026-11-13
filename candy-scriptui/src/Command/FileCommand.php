@@ -11,6 +11,7 @@ use SugarCraft\ScriptUi\Model\FileModel;
 use SugarCraft\ScriptUi\Runtime\InteractiveRuntime;
 use SugarCraft\ScriptUi\Runtime\SignalExit;
 use SugarCraft\ScriptUi\Runtime\TimeoutGuard;
+use SugarCraft\ScriptUi\Runtime\PositiveInt;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
@@ -65,6 +66,14 @@ final class FileCommand extends Command
         $allowDirs  = $directoryFlag;
         $allowFiles = $fileFlag || !$directoryFlag;
 
+        try {
+            $height = PositiveInt::parse('height', $input->getOption('height'));
+        } catch (\InvalidArgumentException $e) {
+            // Refuse a typo'd height BEFORE painting anything.
+            fwrite(STDERR, $e->getMessage() . "\n");
+            return Command::FAILURE;
+        }
+
         $header = (string) $input->getOption('header');
         if ($header !== '') {
             // UI chrome, not result data — rides the paint stream (CC2).
@@ -73,7 +82,7 @@ final class FileCommand extends Command
 
         $model   = FileModel::newPrompt(
             cwd:        $cwd,
-            height:     (int) $input->getOption('height'),
+            height:     $height,
             allowDirs:  $allowDirs,
             allowFiles: $allowFiles,
             showHidden: (bool) $input->getOption('all'),

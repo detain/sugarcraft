@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\ScriptUi\Lang;
 use SugarCraft\ScriptUi\Runtime\ColourGate;
+use SugarCraft\ScriptUi\Runtime\PositiveInt;
 use SugarCraft\Style\Style;
 
 /**
@@ -73,12 +74,12 @@ final class StyleBuilder
 
         $width = $flags['width'] ?? null;
         if ($width !== null && $width !== '' && $width !== false) {
-            $s = $s->width((int) $width);
+            $s = $s->width(PositiveInt::parse('width', $width));
         }
 
         $height = $flags['height'] ?? null;
         if ($height !== null && $height !== '' && $height !== false) {
-            $s = $s->height((int) $height);
+            $s = $s->height(PositiveInt::parse('height', $height));
         }
 
         $align = $flags['align'] ?? null;
