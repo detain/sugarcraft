@@ -69,7 +69,7 @@ Mark `docs/plans/AUDIT_*.md` items ✅ inline where they live; skip `credit upst
 - A bare `composer update` in a lib swaps symlinked siblings for Packagist copies, so a suite figure is uninterpretable unless you know the mode: `php scripts/refresh-deps.php --status` reports it, `--mode=linked` restores the development wiring.
 - `vhs.yml` `all=(...)` array hand-maintained; `ci.yml` dynamic via `scripts/affected-libs.php`.
 - CI shards `candy-code` through `scripts/parallel-tests.sh`, fail-closed against the pinned `candy-code/tests/Config/Support/suite-figure.json` — adding tests means refreshing it, and a new test file must also land in `scripts/parallel-tests-durations.tsv` (unlisted files run in zero shards).
-- Keep SVN creds in `.github/workflows/tests.yml` HARDCODED — repo secrets don't exist yet.
+- SVN credential placement (owner doctrine): IF a `.github/workflows/tests.yml` (or any svn workflow) ever exists, its creds stay HARDCODED — repo secrets don't exist yet. (tests.yml never landed on master; this rulebook line was date-stamped on 2026-11-12 — truth at `docs/old/repo_map_updates.md:191`.)
 - Run sub-agents ONE AT A TIME — concurrent writes to `docs/MATCHUPS.md`/`README.md` collide.
 - Pass ALL external-CLI flags every invocation via `escapeshellarg((string)($field ?? ''))`.
 - Bash CWD does NOT persist across calls — anchor with absolute paths or chain `&&`.

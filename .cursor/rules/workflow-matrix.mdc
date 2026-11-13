@@ -12,7 +12,7 @@ alwaysApply: false
 - `ci.yml` special cases — `candy-code` test + coverage cells shard via `scripts/parallel-tests.sh` (K = cores, capped at 4) from `scripts/parallel-tests-durations.tsv`, fail-closed against the pinned `candy-code/tests/Config/Support/suite-figure.json`; coverage shards merge via `scripts/merge-clover.php`. `path-repo-check` ends with `php tools/check-child-lifetimes.php`. The `tools-guards` job name is pinned by `tools/tests/CheckPathReposTest.php` — rename both together.
 - `.github/workflows/vhs.yml` — hand-maintained `all=(...)` bash array around line ~51-64. Once a lib is in the array, every `.vhs/*.tape` it owns auto-renders. Don't commit rendered GIFs — the `commit` job does that.
 - `.github/workflows/sync-sugarcraft.yml` — pushes each subdir to `github.com/sugarcraft/<slug>`. Run `./scripts/bootstrap-org-repos.sh` first.
-- `.github/workflows/tests.yml` — SVN credentials HARDCODED. Do NOT refactor to `${{ secrets.SVN_USER }}` — secrets don't exist in repo settings yet.
+- SVN credential placement (owner doctrine): IF an svn workflow (e.g. a future `.github/workflows/tests.yml`) ever exists, its credentials stay HARDCODED. Do NOT refactor to `${{ secrets.SVN_USER }}` — secrets don't exist in repo settings yet. (tests.yml never landed on master; rulebook entry re-framed 2026-11-12 — truth at `docs/old/repo_map_updates.md:191`.)
 
 **Cache keys**: bump EVERY `-vN-` key in lockstep (`vendor-vN`, `vendor-cov-vN`, `vendor-stan-vN`, `vendor-win-vN`, `vendor-mac-vN`) — a partial bump leaves a shadowed `vendor/` re-resolving to the stale lock.
 

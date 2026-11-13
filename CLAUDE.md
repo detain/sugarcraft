@@ -56,7 +56,7 @@ Ship-as-you-go: `git commit` → `git push` → `unset GITHUB_TOKEN && gh pr cre
 - New `sugarcraft/*` deps are a `require` bump only — siblings resolve from Packagist. Never commit a `repositories[]` entry in a lib manifest (hard fatal for split-repo clones) or a per-lib `composer.lock` (makes CI's path-repo injection a no-op). Verify `php tools/check-path-repos.php --no-lib-path-repos`.
 - `.github/workflows/vhs.yml` `all=(...)` array hand-maintained; `ci.yml` auto-discovers via `scripts/affected-libs.php`. GIFs re-rendered by `candy-vcr` (not upstream vhs); GIFs are committed.
 - CI shards `candy-code` through `scripts/parallel-tests.sh`, fail-closed against the pinned `candy-code/tests/Config/Support/suite-figure.json` — adding tests means refreshing it, and a new test file must also land in `scripts/parallel-tests-durations.tsv` (unlisted files run in zero shards).
-- Keep SVN creds in `.github/workflows/tests.yml` HARDCODED — repo secrets don't exist yet.
+- SVN credential placement (owner doctrine): IF a `.github/workflows/tests.yml` (or any svn workflow) ever exists, its creds stay HARDCODED — repo secrets don't exist yet. (tests.yml never landed on master; this rulebook line was date-stamped on 2026-11-12 — truth at `docs/old/repo_map_updates.md:191`.)
 - Per-lib `composer.lock`/`vendor/` go stale, and a bare `composer update` silently replaces symlinked siblings with Packagist copies — check with `php scripts/refresh-deps.php --status` and restore local wiring with `php scripts/refresh-deps.php --mode=linked` before trusting a local phpunit failure.
 - Run sub-agents ONE AT A TIME — concurrent writes to `docs/MATCHUPS.md`/`README.md` collide. Bash CWD does NOT persist — anchor absolute paths or chain `&&`.
 

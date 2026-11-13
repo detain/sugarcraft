@@ -1,5 +1,12 @@
 # Code quality + bug audit — agent prompt template
 
+> **Historical erratum (2026-11-12):** `.github/workflows/tests.yml` referenced
+> below never landed on master (no git history; see
+> `docs/old/repo_map_updates.md:191`). The SVN credential-placement doctrine
+> survives, re-framed in `AGENTS.md`: IF an svn workflow ever exists, its creds
+> stay hardcoded. Treat every `tests.yml` line in this document as historical.
+
+
 Sweeps every lib for anti-patterns, dead code, security issues, and
 performance bottlenecks. Surfaces findings; fixes the unambiguous
 ones; leaves judgment-calls flagged for the user.
