@@ -36,17 +36,18 @@ final class FlexboxTest extends TestCase
 
     public function testFlexItemRatioAndBasisWorkInLayout(): void
     {
-        // Create a FlexBox with items having different ratios and bases
+        // Exact-cell pin (finding-014): with BOTH items basis-paid the ratio
+        // never moves a byte — basis wins and the allocations are 5+5 in a
+        // 20-wide box; contains-only asserts could not see that.
         $box = FlexBox::row(
             FlexItem::new('A')->withRatio(1)->withBasis(5),
             FlexItem::new('B')->withRatio(2)->withBasis(5),
         );
 
-        // Should render without error and produce output
-        $output = $box->render(20, 2);
-        $this->assertIsString($output);
-        $this->assertStringContainsString('A', $output);
-        $this->assertStringContainsString('B', $output);
+        $this->assertSame(
+            ['A    B    ', '          '],
+            \explode("\n", $box->render(20, 2)),
+        );
     }
 
     public function testFlexBoxRow(): void
@@ -74,28 +75,34 @@ final class FlexboxTest extends TestCase
 
     public function testFlexBoxRenderRow(): void
     {
+        // Exact-cell pin (finding-014): two ratio-1 items split 20 down the
+        // middle (10+10); every byte of the frame is now under test, so a
+        // gap/allocation off-by-one outside the single assembly test fails.
         $box = FlexBox::row(
             FlexItem::new('LEFT'),
             FlexItem::new('RIGHT'),
         );
 
-        $result = $box->render(20, 3);
-        $this->assertIsString($result);
-        $this->assertStringContainsString('LEFT', $result);
-        $this->assertStringContainsString('RIGHT', $result);
+        $this->assertSame(
+            ['LEFT      RIGHT     ', '                    ', '                    '],
+            \explode("\n", $box->render(20, 3)),
+        );
     }
 
     public function testFlexBoxRenderColumn(): void
     {
+        // Exact-cell pin (finding-014): column mode divides the 6-row axis
+        // 3+3 between the two default-ratio items; TOP owns lines 0-2 and
+        // BOTTOM lines 3-5 (row-OWNERSHIP, not just presence).
         $box = FlexBox::column(
             FlexItem::new('TOP'),
             FlexItem::new('BOTTOM'),
         );
 
-        $result = $box->render(20, 6);
-        $this->assertIsString($result);
-        $this->assertStringContainsString('TOP', $result);
-        $this->assertStringContainsString('BOTTOM', $result);
+        $this->assertSame(
+            ['TOP                 ', '                    ', '                    ', 'BOTTOM              ', '                    ', '                    '],
+            \explode("\n", $box->render(20, 6)),
+        );
     }
 
     public function testFlexBoxWithAlign(): void
@@ -184,17 +191,55 @@ final class FlexboxTest extends TestCase
 
     /**
      * withGap(n) inserts n spaces between items in row mode.
+     * Exact-cell pin (finding-014): box 20, gap 3 → usable 17 split
+     * floor-first (9/8); the frame is A+8 pad, THREE gap spaces, B+7 pad.
+     * Shifting the gap constant ±1 flips this red — the off-by-one the
+     * old contains-only asserts could not see.
      */
     public function testFlexBoxRowWithGap(): void
     {
         $box = FlexBox::row(FlexItem::new('A'), FlexItem::new('B'))
             ->withGap(3);
 
-        $output = $box->render(20, 2);
+        $this->assertSame(
+            ['A           B       ', '                    '],
+            \explode("\n", $box->render(20, 2)),
+        );
+    }
 
-        // A + 3 spaces + B should fit within 20 width.
-        $this->assertStringContainsString('A', $output);
-        $this->assertStringContainsString('B', $output);
+    /**
+     * Ratio/basis mix on exact cells (finding-014): a basis-5 item beside a
+     * ratio-2 and a default ratio-1 item leaves 6 free cells in an 11-wide
+     * box, split 4/2 by ratio — every allocation edge is byte-pinned.
+     */
+    public function testFlexBoxRatioBasisMixExactCells(): void
+    {
+        $box = FlexBox::row(
+            FlexItem::new('A')->withBasis(5),
+            FlexItem::new('B')->withRatio(2),
+            FlexItem::new('C'),
+        );
+
+        $this->assertSame(
+            ['A    B   C '],
+            \explode("\n", $box->render(11, 1)),
+        );
+    }
+
+    /**
+     * Single-cell floor of the ratio split (finding-014): usable 6 minus a
+     * 1-cell gap leaves 5 for two ratio-1 items — floor gives 2/2, the
+     * leftover cell rides the FIRST item in order (3/2), never the box.
+     */
+    public function testFlexBoxLeftoverCellGoesToFirstFlexItem(): void
+    {
+        $box = FlexBox::row(FlexItem::new('A'), FlexItem::new('B'))
+            ->withGap(1);
+
+        $this->assertSame(
+            ['A   B '],
+            \explode("\n", $box->render(6, 1)),
+        );
     }
 
     /**
