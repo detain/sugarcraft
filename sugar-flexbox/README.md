@@ -110,8 +110,9 @@ Every dimension is in **cells**, and allocation follows one deterministic model 
 1. **Basis first.** Each item's `withBasis(cells)` reserves a fixed main-axis slice
    (row: width, column: height), clamped to the container: ANY positive basis is a
    fixed-size item that never grows — even one that also carries a ratio takes exactly
-   its basis and is excluded from the flex pool. `withWidth()` is a legacy alias of
-   `withBasis()` — in column mode the reserved axis is the HEIGHT, so prefer `withBasis`.
+   its basis and is excluded from the flex pool. `withWidth()` is a deprecated alias of
+   `withBasis()` (REMOVED-IN: 2.0.0) — in column mode the reserved axis is the HEIGHT, so the
+   direction-flavoured name lies in half the modes; `withBasis` names the axis by role.
 2. **Gaps next.** `n` items cost `(n - 1) x gap` cells before any ratio math; the gap is
    clamped at render time if the budget cannot pay for it.
 3. **Ratios split the rest.** Remaining cells are shared by grow ratios with an exact-sum
@@ -334,6 +335,7 @@ sugar-flexbox v2.0.0. Migrating is a name swap with no behavior change:
 | `Flexbox\Table` | `Table` | `setCursor()` | `withCursor()` |
 | `Flexbox\Table` | `Table` | `currentRow()` | `rawCurrentRow()` |
 | `Flexbox\Table` | `Table` | `currentCell()` | `rawCurrentCell()` |
+| `Flexbox\Flex` | `FlexItem` | `withWidth()` | `withBasis()` |
 | `Flexbox\Table` | `Column` | `make()` | `new()` |
 
 ## License

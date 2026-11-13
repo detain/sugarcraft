@@ -27,7 +27,7 @@ final class ReadmeTruthPinsTest extends TestCase
         'withLinkedViewport',
         'halfPageUp',
         'halfPageDown',
-        'legacy alias of',
+        'deprecated alias of',
         '27/27/26',
         'decorative',
         // FBX-46: the control-character sweep spelled exactly, and the

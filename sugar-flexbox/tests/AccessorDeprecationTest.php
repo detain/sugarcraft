@@ -6,6 +6,7 @@ namespace SugarCraft\Flexbox\Tests;
 
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Flexbox\Flex\FlexItem;
 use SugarCraft\Flexbox\Table\Column;
 use SugarCraft\Flexbox\Table\Table;
 use SugarCraft\Flexbox\Viewport;
@@ -48,6 +49,7 @@ final class AccessorDeprecationTest extends TestCase
             'Table::sortBy' => [Table::class, 'sortBy', 'withSort', [0, true], 'equal'],
             'Table::filter' => [Table::class, 'filter', 'withFilter', ['li'], 'equal'],
             'Table::setCursor' => [Table::class, 'setCursor', 'withCursor', [0], 'equal'],
+            'FlexItem::withWidth' => [FlexItem::class, 'withWidth', 'withBasis', [10], 'equal'],
             // The trust-renamed pair (FBX-49): forwarders answer with the
             // exact stored strings, structurally identical to the raw* twins.
             'Table::currentRow' => [Table::class, 'currentRow', 'rawCurrentRow', [], 'same'],
@@ -89,6 +91,7 @@ final class AccessorDeprecationTest extends TestCase
             Viewport::class => Viewport::new(40, 12),
             Table::class => Table::new()->withColumn(Column::make('Name', 10))->withRow(['Alice']),
             Column::class => Column::new('Name', 10),
+            FlexItem::class => FlexItem::new('sample'),
             default => self::fail("no fixture for {$class}"),
         };
     }
@@ -230,7 +233,7 @@ final class AccessorDeprecationTest extends TestCase
         sort($found);
         sort($expected);
         $this->assertSame($expected, $found, 'src/ census drifted from the tested pairs');
-        $this->assertCount(16, $found);
+        $this->assertCount(17, $found);
     }
 
     /**
@@ -253,7 +256,7 @@ final class AccessorDeprecationTest extends TestCase
             $rows,
             PREG_SET_ORDER
         );
-        $this->assertCount(16, $rows, 'README Accessor-deprecation table must list exactly the swept pairs');
+        $this->assertCount(17, $rows, 'README Accessor-deprecation table must list exactly the swept pairs');
         $tabled = [];
         foreach ($rows as $row) {
             $tabled[$row['class'] . '::' . $row['legacy']] = $row['bare'];

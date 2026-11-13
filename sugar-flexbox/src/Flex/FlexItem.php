@@ -171,12 +171,13 @@ final class FlexItem
     }
 
     /**
-     * Alias of withBasis(): the fixed main-axis reservation. Named for the
-     * row case — in a column box this same value is the item's HEIGHT in
-     * cells, not its width.
+     * Alias of withBasis(): the fixed MAIN-AXIS reservation. The name is
+     * row-flavoured — in a column box this same value is the item's
+     * HEIGHT in cells, not its width — which makes it an orthographic
+     * trap (finding-065: direction-flipping names lie in half the modes).
+     *
+     * @deprecated Use {@see self::withBasis()}, which names the axis by
+     *     role, not by direction. REMOVED-IN: 2.0.0.
      */
-    public function withWidth(int $width): self
-    {
-        return $this->withBasis($width);
-    }
+    public function withWidth(int $width): self { return $this->withBasis($width); }
 }
