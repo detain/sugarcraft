@@ -1734,11 +1734,14 @@ final class StdioMcpServer implements McpServer
      * stderr while waiting for write-readiness — the same drain law every
      * internal leg obeys, so a full stderr pipe can never wedge this side.
      *
-     * Embedders that previously hand-framed their own writes around this
-     * transport's private leg (register nit n29: the newline-delimited stdio
-     * copies around this transport in candy-code — notably
-     * `ClaudeCodeMcpClient::writeAll`) call THIS instead of re-deriving the
-     * delimiter. It carries no exchange lock and no dead-holder salvage
+     * This is the seam for an embedder already driving a started
+     * StdioMcpServer that must emit one raw frame: callers holding the
+     * transport call THIS instead of re-deriving the delimiter. A named
+     * NON-consumer for the record: candy-code's `ClaudeCodeMcpClient::writeAll`
+     * writes the same line-delimited shape but never holds this transport
+     * (it drives its own child's pipe directly), so it has no seam here to
+     * call; resemblance is not usage. It carries no exchange lock and no
+     * dead-holder salvage
      * prefix on purpose: full request/response
      * sequencing (lock, reply matching, half-line recovery) lives in
      * {@see self::request()} and {@see self::notify()}, which are preferred
