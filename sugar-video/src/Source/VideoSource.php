@@ -125,7 +125,16 @@ final class VideoSource
                 $width = (int) ($stream['width'] ?? 0);
                 $height = (int) ($stream['height'] ?? 0);
                 $duration = (float) ($stream['duration'] ?? '0');
-                $fps = self::parseFrameRate($stream['r_frame_rate'] ?? '0/1');
+                // SV-L77/077: a hostile-but-valid blob with an ARRAY (or any
+                // non-string) at r_frame_rate must not escape the public
+                // fromFfprobeJson boundary as an undocumented TypeError —
+                // the numeric neighbours above answer with silent casts, but
+                // parseFrameRate's typed string parameter has no cast to
+                // hide behind, so the shape check happens HERE: a
+                // non-conforming rate is "unknown" (0/1), exactly what a
+                // missing key would say.
+                $rate = $stream['r_frame_rate'] ?? '0/1';
+                $fps = self::parseFrameRate(is_string($rate) ? $rate : '0/1');
             }
 
             if ($codecType === 'audio') {

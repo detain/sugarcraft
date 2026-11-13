@@ -443,6 +443,40 @@ final class VideoSourceTest extends TestCase
     }
 
     /**
+     * @testdox L77: a non-string r_frame_rate degrades to unknown, not to a TypeError
+     *
+     * fromFfprobeJson is a public boundary: hostile-but-valid JSON with an
+     * ARRAY at the rate key used to raise an undocumented TypeError escaping
+     * every consumer's catch (strict_types, typed string parameter). The
+     * shape check answers the same 0.0 a missing key would — and the rest of
+     * the stream still parses, because a bad rate is not a bad file.
+     */
+    public function testFromFfprobeJsonDegradesNonStringFrameRate(): void
+    {
+        $json = json_encode([
+            'streams' => [
+                [
+                    'codec_type' => 'video',
+                    'width' => 1920,
+                    'height' => 1080,
+                    'duration' => '60.0',
+                    'r_frame_rate' => ['nested', 'hostility'],
+                ],
+            ],
+        ]);
+        $source = VideoSource::fromFfprobeJson('/video.mp4', (string) $json);
+
+        $this->assertSame(0.0, $source->fps, 'a non-string rate is unknown, not fatal (SV-L77/077)');
+        $this->assertSame(1920, $source->width, 'the rest of the stream still answers');
+        $this->assertSame(1080, $source->height);
+
+        // An object at the key is the sibling shape (json_decode gives arrays
+        // for both list and map) — same graceful 0.0.
+        $boolish = json_encode(['streams' => [['codec_type' => 'video', 'width' => 8, 'height' => 6, 'r_frame_rate' => true]]]);
+        $this->assertSame(0.0, VideoSource::fromFfprobeJson('/video.mp4', (string) $boolish)->fps);
+    }
+
+    /**
      * @testdox fromFfprobeJson parseFrameRate handles frame rate with no slash
      */
     public function testFromFfprobeJsonHandlesFrameRateWithoutSlash(): void
