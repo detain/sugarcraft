@@ -72,8 +72,9 @@ final class SqliteBackendTest extends TestCase
 
     public function testAWriteProtectedDestinationCopiesToOneOwnedLine(): void
     {
-        // CT-S20 probe (third leg): AutoBackup's copy() failure is a checked
-        // throw; the raw copy() warning beside it was the leak.
+        // CT-S20 probe (third leg), CT-S24 refresh: AutoBackup's archive-path
+        // failures are checked throws; the raw fopen()/copy() warnings beside
+        // them were the leak.
         $dataDir = $this->dbPath . '-seed-dir';
         $backupDir = $this->dbPath . '-locked-backups';
         mkdir($dataDir);
@@ -95,7 +96,10 @@ final class SqliteBackendTest extends TestCase
         if ($out === 'rotated') {
             $this->markTestSkipped('this user (root?) cannot be denied a write into a 0500 directory');
         }
-        $this->assertStringContainsString('failed to copy', $out);
+        // CT-S24 note: the refusal moved — with the run-lock the first
+        // un-writable touch is the lock file itself, and that row must be
+        // owned too (@-suppressed fopen, one RuntimeException line).
+        $this->assertStringContainsString('could not open the backup lock file', $out);
         $this->assertSame('', $err, 'zero PHP Warning bytes on stderr: ' . $err);
         foreach (glob($backupDir . '/*') ?: [] as $stray) {
             unlink($stray);

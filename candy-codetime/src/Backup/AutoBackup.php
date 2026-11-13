@@ -29,17 +29,38 @@ final class AutoBackup
     ) {}
 
     /**
-     * Archive data files older than keepDays (copy-only — nothing is ever
+     * Archive day files older than keepDays (copy-only — nothing is ever
      * deleted from the data directory; the "rotating" in the class name is
      * an archive cadence, not a retention sweeper).
      *
-     * The backup directory is created lazily, only when there is something to
-     * put in it: a no-op run that still mkdirs leaves an empty sibling behind.
+     * Destination names key on the LOGICAL DAY embedded in the source file
+     * name (mtime-day fallback for names that carry no day), never on the
+     * age at the moment of archiving: a backfilled old day file re-archives
+     * into the SAME destination it already owns and refreshes it, instead of
+     * minting diverging copies of one day. The directory slug carries a short
+     * digest of the real path, so two same-basename roots can never quietly
+     * shadow each other's archive. (These names differ from the first
+     * release's mtime-keyed ones: stale-format archives are not recognised,
+     * so their days are re-copied once under the canonical name — deleting
+     * the superseded stale files after that is safe, the append-only sources
+     * still hold every byte the copies did.)
+     *
+     * A present destination is not a reason to skip: the day files are
+     * append-only, so a source larger than its archived copy is a strict
+     * superset of it, and gets re-copied.
+     *
+     * Copies run through a temporary file plus rename, under a non-blocking
+     * exclusive lock inside the backup directory, so overlapping runs can
+     * never interleave into one destination. Lock and directory exist only
+     * when there is work: a no-op run must not mkdir, and a failed creation
+     * must never read as "0 copied".
      *
      * @param int $keepDays number of days to keep
-     * @return int number of files copied
+     * @return int number of archived copies written (new and refreshed)
      *
-     * @throws \RuntimeException if the backup directory cannot be created, a
+     * @throws \RuntimeException if the backup directory or lock file cannot
+     *                          be created, another backup run holds the lock,
+     *                          two distinct sources map to one destination, a
      *                          file copy fails, or an archived copy cannot be
      *                          made owner-private — a backup must never fail
      *                          silently (silent failure is undetected data
@@ -58,52 +79,140 @@ final class AutoBackup
             }
 
             $files = glob($dir . '/*.jsonl') ?: [];
+            sort($files);
             foreach ($files as $file) {
                 $mtime = @filemtime($file);
-                if ($mtime === false) {
+                if ($mtime === false || $mtime >= $cutoff) {
                     continue;
                 }
-                if ($mtime < $cutoff) {
-                    $pending[] = [
-                        $file,
-                        $this->backupDir . '/' . basename($dir) . '_' . basename($file) . '.' . date('Y-m-d', $mtime),
-                    ];
+                $dest = $this->destination($dir, $file, $mtime);
+                $owner = $pending[$dest] ?? null;
+                if ($owner !== null && $owner !== $file) {
+                    throw new \RuntimeException(
+                        'candy-codetime: ' . $owner . ' and ' . $file
+                        . ' both archive to ' . basename($dest)
+                        . ' — refusing to guess which one owns it',
+                    );
                 }
+                $pending[$dest] = $file;
             }
         }
 
-        if ($pending === []) {
+        // An existing archive satisfies its source only when it is at least
+        // as large and at least as new: append-only means growth never
+        // retracts, so a bigger or later source is a superset of the copy.
+        $todo = [];
+        foreach ($pending as $dest => $file) {
+            if (!self::archiveSatisfies($dest, $file)) {
+                $todo[] = [$file, $dest];
+            }
+        }
+
+        if ($todo === []) {
             return 0;
         }
 
-        // 0700 under a narrowed umask, before any payload exists. Store owns
-        // the law; the label keeps a failure honest about which directory.
+        // 0700 under a narrowed umask, before the lock or any payload exists.
+        // Store owns the law; the label keeps a failure honest about which
+        // directory.
         Store::ensurePrivateDir($this->backupDir, 'backup directory');
 
+        $lockPath = $this->backupDir . '/.lock';
+        $lock = @fopen($lockPath, 'c');
+        if ($lock === false) {
+            throw new \RuntimeException('candy-codetime: could not open the backup lock file at ' . $lockPath);
+        }
+        Store::ensurePrivateFile($lockPath, 'backup lock file');
+        if (@flock($lock, LOCK_EX | LOCK_NB) === false) {
+            fclose($lock);
+            throw new \RuntimeException(
+                'candy-codetime: another backup run is already writing to ' . $this->backupDir
+                . ' — refusing to overlap',
+            );
+        }
+
         $count = 0;
-        foreach ($pending as [$file, $dest]) {
-            if (is_file($dest)) {
-                continue;
+        try {
+            foreach ($todo as [$file, $dest]) {
+                // Copy to a temp file and rename into place: a crash mid-copy
+                // leaves the previous archive intact and at most an orphan
+                // .tmp behind, and no reader ever sees a half-written
+                // destination. @ keeps copy()'s raw PHP Warning off an owned
+                // line (CT-S20 law).
+                $tmp = $dest . '.tmp';
+                if (!@copy($file, $tmp)) {
+                    @unlink($tmp);
+                    throw new \RuntimeException("candy-codetime: failed to copy {$file} to {$dest}");
+                }
+                // copy() creates the destination from the process umask, NOT
+                // from the source mode (measured: a 0600 source lands 0644
+                // under umask 022) — tightening is a separate, mandatory
+                // step, and it runs before the rename so the canonical name
+                // never exists in a loose state.
+                Store::ensurePrivateFile($tmp, 'archived heartbeat file');
+                if (is_file($dest) && !@unlink($dest)) {
+                    @unlink($tmp);
+                    throw new \RuntimeException("candy-codetime: could not replace the stale archive at {$dest}");
+                }
+                if (!@rename($tmp, $dest)) {
+                    @unlink($tmp);
+                    throw new \RuntimeException("candy-codetime: could not move the archived copy into place at {$dest}");
+                }
+                ++$count;
             }
-            // Throw on a failed copy rather than silently skipping it:
-            // a swallowed copy failure means an aged data file is being
-            // rotated out with no archived copy — data loss.
-            // CT-S20: a write-protected destination already throws below;
-            // @ keeps copy()'s raw PHP Warning from doubling the owned line.
-            if (!@copy($file, $dest)) {
-                throw new \RuntimeException("candy-codetime: failed to copy {$file} to {$dest}");
-            }
-            // copy() creates the destination from the process umask, NOT from
-            // the source mode (measured: a 0600 source lands 0644 under umask
-            // 022) — so tightening is a separate, mandatory step.
-            Store::ensurePrivateFile($dest, 'archived heartbeat file');
-            ++$count;
+        } finally {
+            @flock($lock, LOCK_UN);
+            fclose($lock);
         }
 
         return $count;
     }
 
     /**
+     * The canonical archive destination for a source day file: directory
+     * identity (basename plus a short digest of the real path, so two
+     * same-basename roots can never collide) and the logical day embedded in
+     * the file name — with the mtime day only as fallback for names that
+     * carry no day. Keying on the day rather than the age-at-archive is what
+     * lets a backfill refresh its existing copy instead of orphaning it.
+     */
+    private function destination(string $dir, string $file, int $mtime): string
+    {
+        $day = basename($file, '.jsonl');
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $day) !== 1) {
+            $day = date('Y-m-d', $mtime);
+        }
+
+        $root = realpath($dir) ?: $dir;
+
+        return $this->backupDir . '/' . basename($dir) . '_' . substr(hash('sha256', $root), 0, 8) . '_' . $day . '.jsonl';
+    }
+
+    /**
+     * Whether an existing archive already carries everything its source has:
+     * at least as large and at least as new (append-only day files grow and
+     * never shrink, so size is the superset predicate and mtime the
+     * tie-breaker for touch-only changes).
+     */
+    private static function archiveSatisfies(string $dest, string $file): bool
+    {
+        if (!is_file($dest)) {
+            return false;
+        }
+
+        $srcSize = @filesize($file);
+        $dstSize = @filesize($dest);
+        $srcMtime = @filemtime($file);
+        $dstMtime = @filemtime($dest);
+        if ($srcSize === false || $dstSize === false || $srcMtime === false || $dstMtime === false) {
+            return false;
+        }
+
+        return $srcSize <= $dstSize && $srcMtime <= $dstMtime;
+    }
+
+    /**
+     * Crash-safe archive    /**
      * Crash-safe archive of the SQLite database via VACUUM INTO.
      *
      * Unlike copy() over a .db file — which races WAL sidecars and captures
@@ -167,6 +276,14 @@ final class AutoBackup
         if (!is_dir($this->backupDir)) {
             return [];
         }
-        return glob($this->backupDir . '/*') ?: [];
+        $all = glob($this->backupDir . '/*') ?: [];
+
+        // The run-lock and any orphaned temp file are machinery, not
+        // archives — listBackups() answers "what can I restore?".
+        return array_values(array_filter(
+            $all,
+            static fn(string $path): bool => !str_starts_with(basename($path), '.')
+                && !str_ends_with($path, '.tmp'),
+        ));
     }
 }

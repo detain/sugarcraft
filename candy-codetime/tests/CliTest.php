@@ -570,8 +570,10 @@ final class CliTest extends TestCase
             $check->close();
         } finally {
             foreach ([$this->dataDir, $this->dataDir . '-backups'] as $d) {
-                foreach (glob($d . '/*') ?: [] as $f) {
-                    @unlink($f);
+                foreach (array_merge(glob($d . '/*') ?: [], glob($d . '/.*') ?: []) as $f) {
+                    if (is_file($f)) {
+                        @unlink($f);
+                    }
                 }
             }
         }
@@ -603,8 +605,10 @@ final class CliTest extends TestCase
             $this->assertStringContainsString('backup --sqlite', $res['stderr']);
         } finally {
             foreach ([$this->dataDir, $this->dataDir . '-backups'] as $d) {
-                foreach (glob($d . '/*') ?: [] as $f) {
-                    @unlink($f);
+                foreach (array_merge(glob($d . '/*') ?: [], glob($d . '/.*') ?: []) as $f) {
+                    if (is_file($f)) {
+                        @unlink($f);
+                    }
                 }
             }
         }
@@ -628,8 +632,10 @@ final class CliTest extends TestCase
             // The archive dir is a sibling of the data dir; the glob-based
             // tearDown only empties files, so sweep both shapes here.
             foreach ([$single, $single . '-backups'] as $d) {
-                foreach (glob($d . '/*') ?: [] as $f) {
-                    @unlink($f);
+                foreach (array_merge(glob($d . '/*') ?: [], glob($d . '/.*') ?: []) as $f) {
+                    if (is_file($f)) {
+                        @unlink($f);
+                    }
                 }
                 @rmdir($d);
             }
@@ -647,8 +653,10 @@ final class CliTest extends TestCase
             $this->assertStringContainsString('archived 2 files', $res['stdout']);
         } finally {
             foreach ([$many, $many . '-backups'] as $d) {
-                foreach (glob($d . '/*') ?: [] as $f) {
-                    @unlink($f);
+                foreach (array_merge(glob($d . '/*') ?: [], glob($d . '/.*') ?: []) as $f) {
+                    if (is_file($f)) {
+                        @unlink($f);
+                    }
                 }
                 @rmdir($d);
             }

@@ -21,10 +21,10 @@ final class AutoBackupTest extends TestCase
 
     protected function tearDown(): void
     {
-        $backupFiles = glob($this->backupDir . '/*');
+        $backupFiles = array_merge(glob($this->backupDir . '/*') ?: [], glob($this->backupDir . '/.*') ?: []);
         foreach ($backupFiles as $f) {
             if (is_file($f)) {
-                unlink($f);
+                @unlink($f);
             }
         }
         if (is_dir($this->backupDir)) {
@@ -265,16 +265,14 @@ final class AutoBackupTest extends TestCase
      */
     public function testRotateThrowsWhenCopyFails(): void
     {
+        if (function_exists('posix_geteuid') && posix_geteuid() === 0) {
+            $this->markTestSkipped('root bypasses file permission modes');
+        }
         $mtime = time() - (40 * 86400);
         $file = $this->dataDir . '/2024-01-15.jsonl';
         file_put_contents($file, '{"time":1}');
+        chmod($file, 0o000);
         touch($file, $mtime);
-
-        mkdir($this->backupDir, 0755, true);
-        // rotate() builds this deterministic dest path; make it a directory so
-        // copy() cannot write a file there.
-        $dest = $this->backupDir . '/' . basename($this->dataDir) . '_' . basename($file) . '.' . date('Y-m-d', $mtime);
-        mkdir($dest, 0755, true);
 
         $backup = new AutoBackup($this->backupDir, [$this->dataDir]);
 
@@ -284,7 +282,135 @@ final class AutoBackupTest extends TestCase
             $backup->rotate(30);
         } finally {
             restore_error_handler();
+            chmod($file, 0o644);
+        }
+    }
+
+    /**
+     * CT-S24: copies land through a temp file plus rename. Something standing
+     * at the canonical destination (the planted directory the pre-CT-S24
+     * naming trick used) must make the run FAIL LOUDLY, not sneak a partial
+     * archive past under a mangled name.
+     */
+    public function testRotateFailsLoudlyWhenSomethingStandsAtTheDestination(): void
+    {
+        $mtime = time() - (40 * 86400);
+        $file = $this->dataDir . '/2024-06-15.jsonl';
+        file_put_contents($file, '{"time":1}');
+        touch($file, $mtime);
+
+        $dest = $this->backupDir . '/' . basename($this->dataDir) . '_'
+            . substr(hash('sha256', realpath($this->dataDir) ?: $this->dataDir), 0, 8)
+            . '_2024-06-15.jsonl';
+        mkdir($this->backupDir, 0o700, true);
+        mkdir($dest, 0o700);
+
+        $backup = new AutoBackup($this->backupDir, [$this->dataDir]);
+
+        set_error_handler(static fn (): bool => true);
+        try {
+            try {
+                $backup->rotate(30);
+                $this->fail('a destination blocked by a planted directory must refuse, not half-archive');
+            } catch (\RuntimeException $e) {
+                $this->assertStringContainsString('could not move the archived copy into place', $e->getMessage());
+            }
+        } finally {
+            restore_error_handler();
             @rmdir($dest);
+        }
+    }
+
+    /**
+     * CT-S24 (finding 025): the destination keys on the logical day, so a
+     * backfilled day file REFRESHES its existing archive instead of minting
+     * diverging copies of the same day.
+     */
+    public function testABackfillRefreshesTheSameCanonicalDestination(): void
+    {
+        $file = $this->dataDir . '/2024-07-01.jsonl';
+        $row = json_encode(['time' => 1719814800, 'project' => 'p', 'language' => 'php', 'file' => '/x/a.php', 'duration' => 60, 'tags' => []]) . "\n";
+        file_put_contents($file, $row);
+        $aged = time() - (90 * 86400);
+        touch($file, $aged);
+
+        $backup = new AutoBackup($this->backupDir, [$this->dataDir]);
+        $this->assertSame(1, $backup->rotate(30));
+        $first = $backup->listBackups();
+        $this->assertCount(1, $first);
+
+        // Backfill adds a row, the file ages again, rotate runs once more:
+        // same destination name, grown to the source's size.
+        file_put_contents($file, $row, FILE_APPEND | LOCK_EX);
+        touch($file, $aged);
+        $this->assertSame(1, $backup->rotate(30));
+        $second = $backup->listBackups();
+        $this->assertCount(1, $second, 'one day owns exactly one canonical archive');
+        $this->assertSame($first[0], $second[0]);
+        $this->assertSame(2, substr_count((string) file_get_contents($second[0]), "\n"));
+        $this->assertSame(filesize($file), filesize($second[0]));
+    }
+
+    /**
+     * CT-S24 (finding 050): two same-basename roots archive side by side —
+     * the path digest in the slug keeps each root on its own destination.
+     */
+    public function testTwoSameBasenameRootsArchiveSideBySide(): void
+    {
+        $alpha = $this->dataDir . '/alpha/proj';
+        $beta = $this->dataDir . '/beta/proj';
+        mkdir($alpha, 0o700, true);
+        mkdir($beta, 0o700, true);
+        $aged = time() - (40 * 86400);
+        file_put_contents($alpha . '/2024-08-01.jsonl', '{"time":1}' . "\n");
+        file_put_contents($beta . '/2024-08-01.jsonl', '{"time":2}' . "\n\n");
+        touch($alpha . '/2024-08-01.jsonl', $aged);
+        touch($beta . '/2024-08-01.jsonl', $aged);
+
+        $backup = new AutoBackup($this->backupDir, [$alpha, $beta]);
+        try {
+            $this->assertSame(2, $backup->rotate(30));
+            $list = $backup->listBackups();
+            $this->assertCount(2, $list);
+            $this->assertNotSame(basename($list[0]), basename($list[1]));
+            $sizes = [filesize($list[0]), filesize($list[1])];
+            sort($sizes);
+            $this->assertSame([11, 12], $sizes, 'each root archives its own bytes, neither shadows the other');
+        } finally {
+            @unlink($alpha . '/2024-08-01.jsonl');
+            @unlink($beta . '/2024-08-01.jsonl');
+            @rmdir($alpha);
+            @rmdir($beta);
+            @rmdir($this->dataDir . '/alpha');
+            @rmdir($this->dataDir . '/beta');
+        }
+    }
+
+    /**
+     * CT-S24 (finding 089): an overlapping run refuses instead of queueing
+     * half-copies into the same destination.
+     */
+    public function testRotateRefusesToOverlapAConcurrentRun(): void
+    {
+        $file = $this->dataDir . '/2024-09-01.jsonl';
+        file_put_contents($file, '{"time":1}');
+        touch($file, time() - (40 * 86400));
+
+        mkdir($this->backupDir, 0o700, true);
+        $lock = fopen($this->backupDir . '/.lock', 'c');
+        $this->assertNotFalse($lock);
+        $this->assertNotFalse(flock($lock, LOCK_EX | LOCK_NB));
+        $backup = new AutoBackup($this->backupDir, [$this->dataDir]);
+        try {
+            try {
+                $backup->rotate(30);
+                $this->fail('an overlapping run must refuse, not queue behind the lock');
+            } catch (\RuntimeException $e) {
+                $this->assertStringContainsString('already writing', $e->getMessage());
+            }
+        } finally {
+            @flock($lock, LOCK_UN);
+            fclose($lock);
         }
     }
 

@@ -88,7 +88,7 @@ calendar date, matching the store layout.)
 | `milestone` | `add [name] [description]` \| `list` | Manage release markers. `name` and `description` are read for `add` only. Milestones live only in SQLite, so this command uses the sqlite backend regardless of `--backend` (a `milestone add` into a file-only data dir says so on stderr before it creates the database); the sqlite dashboard marks the milestone days with `*` under the weekday row. |
 | `export` | `<csv\|json\|ics> [days]` | Dump heartbeats for the last N days (default 7, clamped to [1, 3660]; a non-numeric count is refused with a one-line error and exit 1). Output goes to STDOUT — redirect it to a file to save it. |
 | `gaps` | `[days]` | List untracked stretches of at least 300 seconds within the last N days (default 7, days clamped to [1, 3660]; a non-numeric count is refused with a one-line error and exit 1). |
-| `backup` | — | Archive day files (`*.jsonl`) older than 30 days into `<dir>-backups/`. Copies only — it never deletes your data, and archives are never pruned either. A byte copy of a live `.db` would be a torn snapshot, so plain `backup` refuses the SQLite database (the reminder you see when a `.db` is present points at `backup --sqlite`, which runs a crash-safe `VACUUM INTO` snapshot into `<dir>-backups/`). Nothing trims the live database: it grows until you remove it yourself. |
+| `backup` | — | Archive day files (`*.jsonl`) older than 30 days into `<dir>-backups/`. Copies only — it never deletes your data, and archives are never pruned either. Archives are named after the source directory and the file's logical day, so a backfilled day *refreshes* its existing archive instead of minting a second diverging copy, and two same-basename roots can never shadow each other. Overlapping runs refuse on a lock file rather than interleaving into one destination. A byte copy of a live `.db` would be a torn snapshot, so plain `backup` refuses the SQLite database (the reminder you see when a `.db` is present points at `backup --sqlite`, which runs a crash-safe `VACUUM INTO` snapshot into `<dir>-backups/`). Nothing trims the live database: it grows until you remove it yourself. |
 | `help`, `--help`, `-h` | — | Print usage. |
 | `--version`, `-v` | — | Print the version. |
 
@@ -280,7 +280,7 @@ that cannot be drawn are counted
 | `Dashboard` | SugarCraft Model — window shifts one day per press (`←/→`), reload (`r`), quit; reads through a `HeartbeatReader`. |
 | `Renderer` | View — header + ranking panes + Sparkline timeline (SugarCharts); colour-ladder aware (honours the detected `ColorProfile`). |
 | `Report\GapsReport` | Pure gap detection over sorted heartbeats (threshold 300 s). |
-| `Backup\AutoBackup` | Copy-only archiver; throws loudly on any failed copy. |
+| `Backup\AutoBackup` | Copy-only archiver; temp-file-plus-rename copies under a run lock; throws loudly on any failure. |
 | `Ignore\SugarTrackIgnore` | `.sugartrackignore` matcher used by `push`. |
 | `Milestone` | Value object for sqlite markers. |
 | `Export\CsvExporter` / `JsonExporter` / `IcalExporter` | `export` formats behind `ExporterInterface` (the tabular pair shares `TabularExporterInterface`). |
