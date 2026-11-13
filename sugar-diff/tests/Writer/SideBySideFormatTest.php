@@ -221,4 +221,66 @@ final class SideBySideFormatTest extends TestCase
             );
         }
     }
+
+    /**
+     * Scaling pin for #103: pairing one changed region must cost time linear
+     * in its rows. A whole-file replacement (the degraded fallback) queues
+     * 100 000 removals followed by 100 000 additions in a single run — when
+     * the queue was consumed with array_shift, every pairing re-indexed all
+     * remaining rows (~9 s measured for the shift shape, tens of ms for the
+     * cursor). Arms are deliberately generous so this is a regression alarm,
+     * not a tight wall-clock budget: the ratio arm compares against a linear
+     * walk that allocates the same number of row objects (same cost class, so
+     * GC and allocator pressure hit both sides equally), and the absolute arm
+     * sits two orders of magnitude above the cursor cost while an order of
+     * magnitude below the old shift cost.
+     */
+    public function testPairingAHundredThousandRowRunScalesLinearly(): void
+    {
+        $n = 100_000;
+        $before = [];
+        $after = [];
+        for ($i = 0; $i < $n; $i++) {
+            $before[] = "old line $i";
+            $after[] = "new line $i";
+        }
+        $diff = Diff::compute(
+            implode("\n", $before) . "\n",
+            implode("\n", $after) . "\n",
+            DiffOptions::new()->withMaxLcsCells(64),
+        );
+        unset($before, $after);
+
+        $body = $diff->hunks[0]->lines();
+        $this->assertSame(2 * $n, count($body), 'the fixture must really be one whole-file replacement run');
+
+        // Linear reference of the same cost class: one object allocation and
+        // one append per body row with no pairing logic — deliberately the
+        // generous side (2 allocations per produced row, so the constant
+        // factor below only ever favours the measured walk).
+        $t0 = hrtime(true);
+        $reference = [];
+        foreach ($body as $line) {
+            $reference[] = new SideBySideRow($line, null);
+        }
+        $referenceNs = max(hrtime(true) - $t0, 1);
+        $this->assertCount(2 * $n, $reference);
+        unset($reference);
+
+        $t0 = hrtime(true);
+        $rows = SideBySideFormat::rows($diff);
+        $elapsedNs = hrtime(true) - $t0;
+
+        $this->assertCount($n, $rows, 'every removal must pair with its addition — a lone null would still finish fast');
+        $this->assertLessThanOrEqual(
+            10 * $referenceNs,
+            $elapsedNs,
+            sprintf('pairing %d rows cost %.1f ms against a %.1f ms linear walk of the same region', $n, $elapsedNs / 1e6, $referenceNs / 1e6),
+        );
+        $this->assertLessThan(
+            2_000_000_000,
+            $elapsedNs,
+            sprintf('pairing %d rows cost %.1f ms — the quadratic shift shape is back', $n, $elapsedNs / 1e6),
+        );
+    }
 }

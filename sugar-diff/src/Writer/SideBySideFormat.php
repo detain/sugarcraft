@@ -137,6 +137,7 @@ final class SideBySideFormat
     private static function appendPairRun(array &$rows, array $run): void
     {
         $pending = [];
+        $next = 0;
         foreach ($run as $line) {
             if ($line->kind === LineKind::Delete) {
                 $pending[] = $line;
@@ -144,23 +145,28 @@ final class SideBySideFormat
             }
 
             if ($line->kind === LineKind::Insert) {
-                // An addition whose region has no removal waiting stands
-                // alone on the right; otherwise it replaces the oldest one.
-                $rows[] = $pending === []
-                    ? new SideBySideRow(null, $line)
-                    : new SideBySideRow(array_shift($pending), $line);
+                // An addition whose region has no unpaired removal waiting
+                // stands alone on the right; otherwise it replaces the oldest
+                // one. The queue is consumed by cursor, never array_shift:
+                // shifting re-indexed every remaining row on each pairing, so
+                // one k-row changed region cost O(k^2) writes (#103 — 365 ms
+                // at k=20 000, seconds at 100 000).
+                $rows[] = $next < count($pending)
+                    ? new SideBySideRow($pending[$next++], $line)
+                    : new SideBySideRow(null, $line);
                 continue;
             }
 
             // Context closes the run: whatever stayed unpaired is leftover.
-            foreach ($pending as $orphan) {
+            foreach (array_slice($pending, $next) as $orphan) {
                 $rows[] = new SideBySideRow($orphan, null);
             }
             $pending = [];
+            $next = 0;
             $rows[] = new SideBySideRow($line, $line);
         }
 
-        foreach ($pending as $orphan) {
+        foreach (array_slice($pending, $next) as $orphan) {
             $rows[] = new SideBySideRow($orphan, null);
         }
     }
