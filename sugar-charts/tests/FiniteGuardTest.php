@@ -16,7 +16,7 @@ use SugarCraft\Charts\Heatmap\HeatPoint;
 use SugarCraft\Charts\LineChart\LineChart;
 use SugarCraft\Charts\LineChart\Streamline;
 use SugarCraft\Charts\LineChart\Waveline;
-use SugarCraft\Charts\OHLC\Bar as OhlcBar;
+use SugarCraft\Charts\OHLC\Candle as OhlcBar;
 use SugarCraft\Charts\Scatter\Scatter;
 use SugarCraft\Charts\Sparkline\Sparkline;
 use PHPUnit\Framework\TestCase;
@@ -81,8 +81,8 @@ final class FiniteGuardTest extends TestCase
         yield 'Waveline::push INF'    => [static fn(float $v) => Waveline::new()->push(1.0, $v), INF];
 
         // Audit F8: OHLC bar candles had no ingestion door at all.
-        yield 'OHLC\Bar ctor NaN'     => [static fn(float $v) => new OhlcBar(1.0, $v, 0.0, 1.0), NAN];
-        yield 'OHLC\Bar ctor INF'     => [static fn(float $v) => new OhlcBar(1.0, 2.0, $v, 1.0), INF];
+        yield 'OHLC\Candle ctor NaN'     => [static fn(float $v) => new OhlcBar(1.0, $v, 0.0, 1.0), NAN];
+        yield 'OHLC\Candle ctor INF'     => [static fn(float $v) => new OhlcBar(1.0, 2.0, $v, 1.0), INF];
 
         // Audit F7: the Aggregation trio stored anything it was handed.
         yield 'MovingAverage::add NaN' => [static fn(float $v) => MovingAverage::new(3)->add($v), NAN];

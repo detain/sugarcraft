@@ -33,8 +33,8 @@ use SugarCraft\Style\Style;
  *
  * ```php
  * $bars = [
- *     new Bar(open: 100.0, high: 110.0, low: 95.0,  close: 108.0),
- *     new Bar(open: 108.0, high: 112.0, low: 100.0, close: 102.0),
+ *     new Candle(open: 100.0, high: 110.0, low: 95.0,  close: 108.0),
+ *     new Candle(open: 108.0, high: 112.0, low: 100.0, close: 102.0),
  *     // ...
  * ];
  * echo OHLCChart::new($bars, 30, 10)->view();
@@ -65,7 +65,7 @@ final class OHLCChart implements ChromeAccessors
     public readonly string $bodyDoji;
     public readonly string $wick;
     /**
-     * @param list<Bar>                            $bars
+     * @param list<Candle>                            $bars
      * @param list<array{label: string, color: string}> $legendItems
      */
     private function __construct(
@@ -103,7 +103,7 @@ final class OHLCChart implements ChromeAccessors
         // runes and the bar element type, covering new(), push(),
         // withBars()/bars() and withBodyRunes()/withWickRune() rebuilds.
         foreach ($bars as $bar) {
-            if (!$bar instanceof Bar) {
+            if (!$bar instanceof Candle) {
                 throw new \InvalidArgumentException(Lang::t('ohlc.bar_type', [
                     'given' => get_debug_type($bar),
                 ]));
@@ -115,7 +115,7 @@ final class OHLCChart implements ChromeAccessors
         $this->wick        = Rune::cell($wick, 'OHLC wick rune');
     }
 
-    /** @param list<Bar> $bars */
+    /** @param list<Candle> $bars */
     public static function new(array $bars = [], int $width = 40, int $height = 12): self
     {
         return new self(
@@ -138,7 +138,7 @@ final class OHLCChart implements ChromeAccessors
      * Replace the full bar set (the explicit replace door — it stores
      * exactly what is given, windowing applies to {@see push()} only).
      *
-     * @param list<Bar> $bars
+     * @param list<Candle> $bars
      */
     public function withBars(array $bars): self
     {
@@ -156,7 +156,7 @@ final class OHLCChart implements ChromeAccessors
      * than at render time. Growing `$width` later cannot resurrect
      * dropped bars; {@see withBars()} is the full-replace door.
      */
-    public function push(Bar $bar): self
+    public function push(Candle $bar): self
     {
         $bars   = [...$this->bars, $bar];
         $window = $this->width > 0 ? $this->width : 1;
@@ -270,7 +270,7 @@ final class OHLCChart implements ChromeAccessors
 
     // ─── Short-form Aliases ─────────────────────────────────────────────
 
-    /** @param list<Bar> $bars */
+    /** @param list<Candle> $bars */
     public function bars(array $bars): self                    { return $this->withBars($bars); }
     public function size(int $w, int $h): self                 { return $this->withSize($w, $h); }
     public function axes(bool $on = true): self                 { return $this->withAxes($on); }
@@ -424,7 +424,7 @@ final class OHLCChart implements ChromeAccessors
     /**
      * Internal copy-with-overrides helper.
      *
-     * @param list<Bar>                            $bars
+     * @param list<Candle>                            $bars
      * @param list<array{label: string, color: string}> $legendItems
      */
     /**

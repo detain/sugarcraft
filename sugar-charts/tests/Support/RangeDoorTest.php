@@ -10,7 +10,7 @@ use SugarCraft\Charts\Aggregation\Resample;
 use SugarCraft\Charts\BarChart\BarChart;
 use SugarCraft\Charts\Heatmap\Heatmap;
 use SugarCraft\Charts\LineChart\LineChart;
-use SugarCraft\Charts\OHLC\Bar as OhlcBar;
+use SugarCraft\Charts\OHLC\Candle as OhlcBar;
 use SugarCraft\Charts\OHLC\OHLCChart;
 use SugarCraft\Charts\Scatter\Scatter;
 use SugarCraft\Charts\Sparkline\Sparkline;

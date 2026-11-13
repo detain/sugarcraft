@@ -10,7 +10,7 @@ use SugarCraft\Charts\Heatmap\Heatmap;
 use SugarCraft\Charts\Legend\Legend;
 use SugarCraft\Charts\LineChart\LineChart;
 use SugarCraft\Charts\LineChart\TimeSeries;
-use SugarCraft\Charts\OHLC\Bar;
+use SugarCraft\Charts\OHLC\Candle;
 use SugarCraft\Charts\OHLC\OHLCChart;
 use SugarCraft\Charts\Picture\Picture;
 use SugarCraft\Charts\Picture\Protocol;
@@ -60,7 +60,7 @@ final class NoColorParityTest extends TestCase
             ],
             'OHLCChart (bodies)' => [
                 static fn(): string => OHLCChart::new(
-                    [new Bar(open: 100.0, high: 110.0, low: 95.0, close: 108.0)], 10, 10,
+                    [new Candle(open: 100.0, high: 110.0, low: 95.0, close: 108.0)], 10, 10,
                 )->view(),
                 true,
             ],

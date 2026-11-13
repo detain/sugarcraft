@@ -63,6 +63,10 @@ echo LineChart::new([1, 4, 2, 8, 6, 3, 7], 30, 6)->view() . PHP_EOL;
 > exactly the classes that expose the matching `with*()` setter — `style()` is on
 > `Sparkline`, while neither `BarChart` nor `LineChart` carries `colors()`, `style()`
 > or `palette()`. The per-class registry is pinned by `tests/AliasCompletenessTest.php`.
+> The OHLC row value object is `Charts\OHLC\Candle` (CH-57; it was `OHLC\Bar`,
+> which collided with `BarChart\Bar`). `OHLC\Bar` still resolves via a
+> `class_alias` seat and is `@deprecated` (REMOVED-IN 2.0.0).
+>
 > The legend indicator rune is set with `withLegendIndicator()` / `legendIndicator()`
 > (CH-58); the old `withLegendStyle()` / `legendStyle()` names forward to it and
 > are `@deprecated` (REMOVED-IN 2.0.0).

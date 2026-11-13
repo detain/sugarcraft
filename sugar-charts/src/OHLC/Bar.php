@@ -4,49 +4,13 @@ declare(strict_types=1);
 
 namespace SugarCraft\Charts\OHLC;
 
-use SugarCraft\Charts\Lang;
-
-use SugarCraft\Charts\Support\Finite;
-
 /**
- * One Open / High / Low / Close bar for {@see OHLCChart}. Mirrors
- * ntcharts' `ohlc` bar value. Immutable.
+ * CH-57 (sugar-charts-089): `OHLC\Bar` collided with `BarChart\Bar` — two
+ * public classes, one short name. The candle value object is now
+ * {@see Candle}; this file declares no class of its own and only keeps the
+ * old FQN resolvable through the autoloader for one minor, house alias
+ * seat as in sugar-widgets.
  *
- * `$open` and `$close` define the body; `$high` and `$low` extend the
- * wick. A bullish bar (`$close > $open`) renders with one glyph; a
- * bearish bar (`$close < $open`) with another.
+ * @deprecated Use SugarCraft\Charts\OHLC\Candle; REMOVED-IN 2.0.0.
  */
-final class Bar
-{
-    public function __construct(
-        public readonly float $open,
-        public readonly float $high,
-        public readonly float $low,
-        public readonly float $close,
-    ) {
-        // a non-finite price poisons the chart's range scan exactly
-        // like non-finite data anywhere else — rejected at this sole door.
-        Finite::assert($open);
-        Finite::assert($high);
-        Finite::assert($low);
-        Finite::assert($close);
-        // a wick whose high sits below its low cannot be drawn —
-        // the former behavior was a silently blank bar. Throwing matches the
-        // sibling ingestion-door style (BarChart\Bar, HeatPoint). Body
-        // containment (low<=min(o,c)<=max(o,c)<=high) is deliberately NOT
-        // enforced: coarse real-world feeds legitimately emit bodies poking
-        // past recorded wicks, and the renderer clamps those anyway.
-        if ($high < $low) {
-            throw new \InvalidArgumentException(Lang::t('ohlc.high_below_low', [
-                'high' => (string) $high,
-                'low' => (string) $low,
-            ]));
-        }
-    }
-
-    public function isBullish(): bool { return $this->close > $this->open; }
-    public function isBearish(): bool { return $this->close < $this->open; }
-
-    public function bodyTop(): float    { return max($this->open, $this->close); }
-    public function bodyBottom(): float { return min($this->open, $this->close); }
-}
+class_alias(Candle::class, Bar::class);

@@ -10,7 +10,7 @@ use SugarCraft\Charts\Chart\Position;
 use SugarCraft\Charts\Heatmap\Heatmap;
 use SugarCraft\Charts\LineChart\LineChart;
 use SugarCraft\Charts\LineChart\Waveline;
-use SugarCraft\Charts\OHLC\Bar;
+use SugarCraft\Charts\OHLC\Candle;
 use SugarCraft\Charts\OHLC\OHLCChart;
 use SugarCraft\Charts\Picture\Picture;
 use SugarCraft\Charts\Scatter\Scatter;
@@ -42,7 +42,7 @@ final class SizeContractTest extends TestCase
             'LineChart' => [LineChart::new([1.0, 2.0, 3.0, 2.5], self::W, 4)->withLegendItems($items)->withLegend(true)->withLegendPosition(Position::Bottom), self::W],
             'BarChart'  => [BarChart::new([['a', 1.0], ['b', 2.0]], self::W, 4)->withLegendItems($items)->withLegend(true)->withLegendPosition(Position::Bottom), self::W],
             'Scatter'   => [Scatter::new([[1, 2], [3, 4]], self::W, 4)->withLegendItems($items)->withLegend(true)->withLegendPosition(Position::Bottom), self::W],
-            'OHLCChart' => [OHLCChart::new([new Bar(open: 100.0, high: 110.0, low: 95.0, close: 108.0)], self::W, 4)->withLegendItems($items)->withLegend(true)->withLegendPosition(Position::Bottom), self::W],
+            'OHLCChart' => [OHLCChart::new([new Candle(open: 100.0, high: 110.0, low: 95.0, close: 108.0)], self::W, 4)->withLegendItems($items)->withLegend(true)->withLegendPosition(Position::Bottom), self::W],
             'Heatmap'   => [Heatmap::new([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]], 6, 3), 6],
             'Sparkline' => [Sparkline::new([1.0, 2.0, 3.0], self::W), self::W],
             'Waveline'  => [Waveline::new([[0, 5], [1, 4], [2, 5], [3, 6], [4, 5]], self::W, 4), self::W],
@@ -77,8 +77,8 @@ final class SizeContractTest extends TestCase
             'BarChart'  => [$framed([BarChart::new([['a', 1.0], ['b', 2.0], ['gamma', 1.5]], self::W, 4)])],
             'Scatter'   => [$framed([Scatter::new([[1, 2], [3, 4]], self::W, 4)])],
             'OHLCChart' => [$framed([OHLCChart::new([
-                new Bar(open: 100.0, high: 110.0, low: 95.0, close: 108.0),
-                new Bar(open: 105.0, high: 120.0, low: 100.0, close: 115.0),
+                new Candle(open: 100.0, high: 110.0, low: 95.0, close: 108.0),
+                new Candle(open: 105.0, high: 120.0, low: 100.0, close: 115.0),
             ], self::W, 4)])],
         ];
     }

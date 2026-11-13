@@ -10,7 +10,7 @@ use SugarCraft\Charts\Heatmap\Heatmap;
 use SugarCraft\Charts\LineChart\LineChart;
 use SugarCraft\Charts\LineChart\TimeSeries;
 use SugarCraft\Charts\LineChart\Waveline;
-use SugarCraft\Charts\OHLC\Bar;
+use SugarCraft\Charts\OHLC\Candle;
 use SugarCraft\Charts\OHLC\OHLCChart;
 use SugarCraft\Charts\Scatter\Scatter;
 use SugarCraft\Charts\Sparkline\Sparkline;
@@ -74,7 +74,7 @@ final class RangePinTest extends TestCase
             ],
             'OHLC min above candles' => [
                 static fn(): string => OHLCChart::new(
-                    [new Bar(open: 100.0, high: 110.0, low: 95.0, close: 108.0)],
+                    [new Candle(open: 100.0, high: 110.0, low: 95.0, close: 108.0)],
                     20,
                     5,
                 )->withMin(500.0)->view(),

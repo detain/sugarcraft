@@ -37,7 +37,7 @@ use SugarCraft\Charts\LineChart\LineChart;
 use SugarCraft\Charts\LineChart\Streamline;
 use SugarCraft\Charts\LineChart\TimeSeries;
 use SugarCraft\Charts\LineChart\Waveline;
-use SugarCraft\Charts\OHLC\Bar as PriceBar;
+use SugarCraft\Charts\OHLC\Candle as PriceBar;
 use SugarCraft\Charts\OHLC\OHLCChart;
 use SugarCraft\Charts\Scatter\Scatter;
 use SugarCraft\Charts\Sparkline\Sparkline;

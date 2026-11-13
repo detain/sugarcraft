@@ -12,7 +12,7 @@ use SugarCraft\Charts\Heatmap\Heatmap;
 use SugarCraft\Charts\LineChart\LineChart;
 use SugarCraft\Charts\LineChart\TimeSeries;
 use SugarCraft\Charts\LineChart\Waveline;
-use SugarCraft\Charts\OHLC\Bar;
+use SugarCraft\Charts\OHLC\Candle;
 use SugarCraft\Charts\OHLC\OHLCChart;
 use SugarCraft\Charts\Scatter\Scatter;
 use SugarCraft\Charts\Sparkline\Sparkline;
@@ -79,7 +79,7 @@ final class EmptyRenderContractTest extends TestCase
             'BarChart'       => [static fn(): string => BarChart::new([['a', 1.0]], 0, 4)->view()],
             'Scatter'        => [static fn(): string => Scatter::new([[1.0, 2.0]], 0, 4)->view()],
             'OHLCChart'      => [static fn(): string => OHLCChart::new(
-                [new Bar(open: 1.0, high: 2.0, low: 0.5, close: 1.5)], 0, 4)->view()],
+                [new Candle(open: 1.0, high: 2.0, low: 0.5, close: 1.5)], 0, 4)->view()],
             'Heatmap'        => [static fn(): string => Heatmap::new([[1.0]])->withSize(0, 4)->view()],
             'Waveline'       => [static fn(): string => Waveline::new([[1.0, 2.0]], 0, 4)->view()],
             'TimeSeries'     => [static fn(): string => TimeSeries::new([[$stamp(), 1.0]], 0, 4)->view()],

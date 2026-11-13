@@ -12,7 +12,7 @@ use SugarCraft\Charts\Chart\Chart;
 use SugarCraft\Charts\Heatmap\Heatmap;
 use SugarCraft\Charts\LineChart\LineChart;
 use SugarCraft\Charts\LineChart\TimeSeries;
-use SugarCraft\Charts\OHLC\Bar;
+use SugarCraft\Charts\OHLC\Candle;
 use SugarCraft\Charts\OHLC\OHLCChart;
 use SugarCraft\Charts\Picture\Picture;
 use SugarCraft\Charts\Picture\Protocol;
@@ -82,7 +82,7 @@ final class RenderMemoTest extends TestCase
         $bars = [];
         for ($i = 0; $i < 2000; $i++) {
             $open = 100.0 + sin($i / 9.0) * 20;
-            $bars[] = new Bar(open: $open, high: $open + 12.0, low: $open - 9.0, close: $open + sin($i) * 8.0);
+            $bars[] = new Candle(open: $open, high: $open + 12.0, low: $open - 9.0, close: $open + sin($i) * 8.0);
         }
         $this->assertMemoised(OHLCChart::new($bars, self::WIDE, self::TALL));
     }

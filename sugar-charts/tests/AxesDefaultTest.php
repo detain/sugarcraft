@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Charts\Tests;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Charts\OHLC\Bar;
+use SugarCraft\Charts\OHLC\Candle;
 use SugarCraft\Charts\OHLC\OHLCChart;
 use SugarCraft\Charts\Scatter\Scatter;
 use SugarCraft\Core\Util\Width;
@@ -34,7 +34,7 @@ final class AxesDefaultTest extends TestCase
 
     public function testOhlcDefaultsToPriceGutter(): void
     {
-        $bar = new Bar(open: 100.0, high: 110.0, low: 95.0, close: 108.0);
+        $bar = new Candle(open: 100.0, high: 110.0, low: 95.0, close: 108.0);
         $out = OHLCChart::new([$bar, $bar], 24, 8)->view();
         $this->assertStringContainsString('│', $out);
         $this->assertStringContainsString('110', $out);
@@ -45,7 +45,7 @@ final class AxesDefaultTest extends TestCase
     {
         // Candles carry '│' wicks by design — the opt-out proof is the
         // disappearance of the endpoint digits, not of every frame glyph.
-        $bar = new Bar(open: 100.0, high: 110.0, low: 95.0, close: 108.0);
+        $bar = new Candle(open: 100.0, high: 110.0, low: 95.0, close: 108.0);
         $out = OHLCChart::new([$bar, $bar], 24, 8)->withAxes(false)->view();
         $this->assertStringNotContainsString('110', $out);
         $this->assertStringNotContainsString('95', $out);
@@ -55,7 +55,7 @@ final class AxesDefaultTest extends TestCase
     {
         foreach ([
             Scatter::new([[1.0, 2.0], [3.0, 7.0]], 20, 5)->view(),
-            OHLCChart::new([new Bar(open: 100.0, high: 110.0, low: 95.0, close: 108.0)], 20, 6)->view(),
+            OHLCChart::new([new Candle(open: 100.0, high: 110.0, low: 95.0, close: 108.0)], 20, 6)->view(),
         ] as $out) {
             foreach (explode("\n", $out) as $row) {
                 $this->assertLessThanOrEqual(20, Width::string($row), 'gutter may not overrun width');

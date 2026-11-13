@@ -30,8 +30,8 @@ final class ChromeParityTest extends TestCase
             'BarChart'  => [BarChart::new([['a', 1.0], ['b', 2.0]], 30, 4)],
             'Scatter'   => [Scatter::new([[1, 2], [3, 4]], 30, 4)],
             'OHLCChart' => [OHLCChart::new([
-                new \SugarCraft\Charts\OHLC\Bar(open: 100.0, high: 110.0, low: 95.0, close: 108.0),
-                new \SugarCraft\Charts\OHLC\Bar(open: 105.0, high: 120.0, low: 100.0, close: 115.0),
+                new \SugarCraft\Charts\OHLC\Candle(open: 100.0, high: 110.0, low: 95.0, close: 108.0),
+                new \SugarCraft\Charts\OHLC\Candle(open: 105.0, high: 120.0, low: 100.0, close: 115.0),
             ], 30, 4)],
         ];
     }

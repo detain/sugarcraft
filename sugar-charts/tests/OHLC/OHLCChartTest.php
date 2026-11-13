@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Charts\Tests\OHLC;
 
-use SugarCraft\Charts\OHLC\Bar;
+use SugarCraft\Charts\OHLC\Candle;
 use SugarCraft\Charts\OHLC\OHLCChart;
 use SugarCraft\Charts\Chart\Position;
 use SugarCraft\Core\Util\Color;
@@ -21,7 +21,7 @@ final class OHLCChartTest extends TestCase
 
     public function testSingleBullishBarRendersBodyAndWick(): void
     {
-        $bar = new Bar(open: 100.0, high: 110.0, low: 95.0, close: 108.0);
+        $bar = new Candle(open: 100.0, high: 110.0, low: 95.0, close: 108.0);
         $out = OHLCChart::new([$bar], 1, 16)->view();
         // Bullish body glyph appears (within wick span).
         $this->assertStringContainsString('█', $out);
@@ -30,8 +30,8 @@ final class OHLCChartTest extends TestCase
 
     public function testBearishUsesDifferentBodyGlyph(): void
     {
-        $bull = new Bar(open: 100, high: 110, low: 95, close: 108);
-        $bear = new Bar(open: 108, high: 112, low: 100, close: 102);
+        $bull = new Candle(open: 100, high: 110, low: 95, close: 108);
+        $bear = new Candle(open: 108, high: 112, low: 100, close: 102);
         // CH-09 disclosed: at width 5 the default price gutter squeezed
         // both candles into one column and the later wick overwrote the
         // earlier body; the pin is about glyph choice, so opt out.
@@ -43,13 +43,13 @@ final class OHLCChartTest extends TestCase
 
     public function testIsBullishAndBearishHelpers(): void
     {
-        $this->assertTrue((new Bar(1, 5, 0, 3))->isBullish());
-        $this->assertTrue((new Bar(3, 5, 0, 1))->isBearish());
+        $this->assertTrue((new Candle(1, 5, 0, 3))->isBullish());
+        $this->assertTrue((new Candle(3, 5, 0, 1))->isBearish());
     }
 
     public function testCustomBodyRunes(): void
     {
-        $bar = new Bar(1, 5, 0, 3);
+        $bar = new Candle(1, 5, 0, 3);
         $out = OHLCChart::new([$bar], 1, 12)
             ->withBodyRunes('+', '-')
             ->view();
@@ -58,7 +58,7 @@ final class OHLCChartTest extends TestCase
 
     public function testPushAppendsBar(): void
     {
-        $c = OHLCChart::new([])->push(new Bar(1, 5, 0, 3));
+        $c = OHLCChart::new([])->push(new Candle(1, 5, 0, 3));
         $this->assertCount(1, $c->bars);
     }
 
@@ -66,7 +66,7 @@ final class OHLCChartTest extends TestCase
 
     public function testWithXLabelAddsLabelAtBottom(): void
     {
-        $bar = new Bar(open: 100.0, high: 110.0, low: 95.0, close: 108.0);
+        $bar = new Candle(open: 100.0, high: 110.0, low: 95.0, close: 108.0);
         $out = OHLCChart::new([$bar], 12, 3) // lib-reviews-1103 M5: x-label clips to width
             ->withXLabel('Trading Day')
             ->view();
@@ -77,7 +77,7 @@ final class OHLCChartTest extends TestCase
     {
         // CH-03: the y-label is a gutter title, printed once at the vertical
         // center (was stamped on every row).
-        $bar = new Bar(open: 100.0, high: 110.0, low: 95.0, close: 108.0);
+        $bar = new Candle(open: 100.0, high: 110.0, low: 95.0, close: 108.0);
         $out = OHLCChart::new([$bar], 28, 3) // lib-reviews-1103 M5: y-label budget is a quarter of the width
             ->withYLabel('Price $')
             ->view();
@@ -97,7 +97,7 @@ final class OHLCChartTest extends TestCase
 
     public function testWithLegendShowsLegendWhenEnabled(): void
     {
-        $bar = new Bar(open: 100.0, high: 110.0, low: 95.0, close: 108.0);
+        $bar = new Candle(open: 100.0, high: 110.0, low: 95.0, close: 108.0);
         $chart = OHLCChart::new([$bar], 6, 3)
             ->withLegend(true)
             ->withLegendItems([['label' => 'AAPL', 'color' => 'green']]);
@@ -106,7 +106,7 @@ final class OHLCChartTest extends TestCase
 
     public function testWithLegendFalseDisablesLegend(): void
     {
-        $bar = new Bar(open: 100.0, high: 110.0, low: 95.0, close: 108.0);
+        $bar = new Candle(open: 100.0, high: 110.0, low: 95.0, close: 108.0);
         $chart = OHLCChart::new([$bar], 6, 3)
             ->withLegend(true)
             ->withLegend(false);
@@ -115,7 +115,7 @@ final class OHLCChartTest extends TestCase
 
     public function testWithLegendPositionChangesPosition(): void
     {
-        $bar = new Bar(open: 100.0, high: 110.0, low: 95.0, close: 108.0);
+        $bar = new Candle(open: 100.0, high: 110.0, low: 95.0, close: 108.0);
         $chart = OHLCChart::new([$bar], 6, 3)
             ->withLegend(true)
             ->withLegendPosition(Position::Top);
@@ -124,7 +124,7 @@ final class OHLCChartTest extends TestCase
 
     public function testWithLegendStyleCustomizesIndicator(): void
     {
-        $bar = new Bar(open: 100.0, high: 110.0, low: 95.0, close: 108.0);
+        $bar = new Candle(open: 100.0, high: 110.0, low: 95.0, close: 108.0);
         $chart = OHLCChart::new([$bar], 6, 3)
             ->withLegend(true)
             ->withLegendIndicator('◆');
@@ -135,7 +135,7 @@ final class OHLCChartTest extends TestCase
 
     public function testWithTitleSetsTitle(): void
     {
-        $bar = new Bar(open: 100.0, high: 110.0, low: 95.0, close: 108.0);
+        $bar = new Candle(open: 100.0, high: 110.0, low: 95.0, close: 108.0);
         $chart = OHLCChart::new([$bar], 6, 3)
             ->withTitle('AAPL Stock');
         $this->assertSame('AAPL Stock', $chart->title);
@@ -145,7 +145,7 @@ final class OHLCChartTest extends TestCase
 
     public function testFluentInterfaceChaining(): void
     {
-        $bar = new Bar(open: 100.0, high: 110.0, low: 95.0, close: 108.0);
+        $bar = new Candle(open: 100.0, high: 110.0, low: 95.0, close: 108.0);
         $chart = OHLCChart::new([$bar], 20, 6)
             ->withXLabel('Trading Day')
             ->withYLabel('Price $')
@@ -178,21 +178,21 @@ final class OHLCChartTest extends TestCase
 
     public function testWithSizeNegativeDimensionsThrows(): void
     {
-        $chart = OHLCChart::new([new Bar(1, 5, 0, 3)]);
+        $chart = OHLCChart::new([new Candle(1, 5, 0, 3)]);
         $this->expectException(\InvalidArgumentException::class);
         $chart->withSize(-5, 10);
     }
 
     public function testWithSizeNegativeHeightThrows(): void
     {
-        $chart = OHLCChart::new([new Bar(1, 5, 0, 3)]);
+        $chart = OHLCChart::new([new Candle(1, 5, 0, 3)]);
         $this->expectException(\InvalidArgumentException::class);
         $chart->withSize(10, -5);
     }
 
     public function testToStringRendersView(): void
     {
-        $bar = new Bar(open: 100.0, high: 110.0, low: 95.0, close: 108.0);
+        $bar = new Candle(open: 100.0, high: 110.0, low: 95.0, close: 108.0);
         $chart = OHLCChart::new([$bar], 6, 3);
         $this->assertSame($chart->view(), (string) $chart);
     }
@@ -201,7 +201,7 @@ final class OHLCChartTest extends TestCase
 
     public function testWithLegendTopPosition(): void
     {
-        $bar = new Bar(open: 100.0, high: 110.0, low: 95.0, close: 108.0);
+        $bar = new Candle(open: 100.0, high: 110.0, low: 95.0, close: 108.0);
         $chart = OHLCChart::new([$bar], 6, 3)
             ->withLegend(true)
             ->withLegendPosition(Position::Top)
@@ -211,7 +211,7 @@ final class OHLCChartTest extends TestCase
 
     public function testWithLegendBottomPosition(): void
     {
-        $bar = new Bar(open: 100.0, high: 110.0, low: 95.0, close: 108.0);
+        $bar = new Candle(open: 100.0, high: 110.0, low: 95.0, close: 108.0);
         $chart = OHLCChart::new([$bar], 6, 3)
             ->withLegend(true)
             ->withLegendPosition(Position::Bottom)
@@ -221,7 +221,7 @@ final class OHLCChartTest extends TestCase
 
     public function testWithLegendLeftPosition(): void
     {
-        $bar = new Bar(open: 100.0, high: 110.0, low: 95.0, close: 108.0);
+        $bar = new Candle(open: 100.0, high: 110.0, low: 95.0, close: 108.0);
         $chart = OHLCChart::new([$bar], 6, 3)
             ->withLegend(true)
             ->withLegendPosition(Position::Left)
@@ -231,7 +231,7 @@ final class OHLCChartTest extends TestCase
 
     public function testViewWithLegendTopRendersLegendAboveChart(): void
     {
-        $bar = new Bar(open: 100.0, high: 110.0, low: 95.0, close: 108.0);
+        $bar = new Candle(open: 100.0, high: 110.0, low: 95.0, close: 108.0);
         $out = OHLCChart::new([$bar], 20, 3)
             ->withLegend(true)
             ->withLegendPosition(Position::Top)
@@ -243,7 +243,7 @@ final class OHLCChartTest extends TestCase
 
     public function testViewWithLegendBottomRendersLegendBelowChart(): void
     {
-        $bar = new Bar(open: 100.0, high: 110.0, low: 95.0, close: 108.0);
+        $bar = new Candle(open: 100.0, high: 110.0, low: 95.0, close: 108.0);
         $out = OHLCChart::new([$bar], 20, 3)
             ->withLegend(true)
             ->withLegendPosition(Position::Bottom)
@@ -255,7 +255,7 @@ final class OHLCChartTest extends TestCase
 
     public function testViewWithLegendLeftRendersLegendAlongsideChart(): void
     {
-        $bar = new Bar(open: 100.0, high: 110.0, low: 95.0, close: 108.0);
+        $bar = new Candle(open: 100.0, high: 110.0, low: 95.0, close: 108.0);
         $out = OHLCChart::new([$bar], 20, 3)
             ->withLegend(true)
             ->withLegendPosition(Position::Left)
@@ -268,7 +268,7 @@ final class OHLCChartTest extends TestCase
 
     public function testWithTitleBottomPosition(): void
     {
-        $bar = new Bar(open: 100.0, high: 110.0, low: 95.0, close: 108.0);
+        $bar = new Candle(open: 100.0, high: 110.0, low: 95.0, close: 108.0);
         $out = OHLCChart::new([$bar], 20, 3)
             ->withTitle('Bottom Title', Position::Bottom)
             ->view();
@@ -282,21 +282,21 @@ final class OHLCChartTest extends TestCase
      */
     public function testWithTitleLeftPositionThrows(): void
     {
-        $bar = new Bar(open: 100.0, high: 110.0, low: 95.0, close: 108.0);
+        $bar = new Candle(open: 100.0, high: 110.0, low: 95.0, close: 108.0);
         $this->expectException(\InvalidArgumentException::class);
         OHLCChart::new([$bar], 20, 3)->withTitle('Left Title', Position::Left);
     }
 
     public function testWithTitleRightPositionThrows(): void
     {
-        $bar = new Bar(open: 100.0, high: 110.0, low: 95.0, close: 108.0);
+        $bar = new Candle(open: 100.0, high: 110.0, low: 95.0, close: 108.0);
         $this->expectException(\InvalidArgumentException::class);
         OHLCChart::new([$bar], 20, 3)->withTitle('Right Title', Position::Right);
     }
 
     public function testWithTitleTopPositionRendered(): void
     {
-        $bar = new Bar(open: 100.0, high: 110.0, low: 95.0, close: 108.0);
+        $bar = new Candle(open: 100.0, high: 110.0, low: 95.0, close: 108.0);
         $out = OHLCChart::new([$bar], 20, 3)
             ->withTitle('Top Title', Position::Top)
             ->view();
@@ -308,14 +308,14 @@ final class OHLCChartTest extends TestCase
 
     public function testWithMinSetsBoundary(): void
     {
-        $bar = new Bar(open: 100.0, high: 110.0, low: 95.0, close: 108.0);
+        $bar = new Candle(open: 100.0, high: 110.0, low: 95.0, close: 108.0);
         $chart = OHLCChart::new([$bar], 6, 3)->withMin(50.0);
         $this->assertNotNull($chart->min);
     }
 
     public function testWithMaxSetsBoundary(): void
     {
-        $bar = new Bar(open: 100.0, high: 110.0, low: 95.0, close: 108.0);
+        $bar = new Candle(open: 100.0, high: 110.0, low: 95.0, close: 108.0);
         $chart = OHLCChart::new([$bar], 6, 3)->withMax(200.0);
         $this->assertNotNull($chart->max);
     }
@@ -324,14 +324,14 @@ final class OHLCChartTest extends TestCase
 
     public function testWithWickRuneChangesWick(): void
     {
-        $bar = new Bar(open: 100.0, high: 110.0, low: 95.0, close: 108.0);
+        $bar = new Candle(open: 100.0, high: 110.0, low: 95.0, close: 108.0);
         $out = OHLCChart::new([$bar], 3, 16)->withWickRune('!')->view();
         $this->assertStringContainsString('!', $out);
     }
 
     public function testWithColorsSetsBothColors(): void
     {
-        $bar = new Bar(open: 100.0, high: 110.0, low: 95.0, close: 108.0);
+        $bar = new Candle(open: 100.0, high: 110.0, low: 95.0, close: 108.0);
         $chart = OHLCChart::new([$bar], 3, 16)
             ->withColors(\SugarCraft\Core\Util\Color::ansi(12), \SugarCraft\Core\Util\Color::ansi(9));
         $this->assertNotNull($chart->bullishColor);
@@ -342,7 +342,7 @@ final class OHLCChartTest extends TestCase
 
     public function testWithLegendItemsAppearsInView(): void
     {
-        $bar = new Bar(open: 100.0, high: 110.0, low: 95.0, close: 108.0);
+        $bar = new Candle(open: 100.0, high: 110.0, low: 95.0, close: 108.0);
         $out = OHLCChart::new([$bar], 20, 3)
             ->withLegend(true)
             ->withLegendItems([
@@ -356,7 +356,7 @@ final class OHLCChartTest extends TestCase
 
     public function testShortFormAliasesAll(): void
     {
-        $bar = new Bar(open: 100.0, high: 110.0, low: 95.0, close: 108.0);
+        $bar = new Candle(open: 100.0, high: 110.0, low: 95.0, close: 108.0);
         $chart = OHLCChart::new([$bar], 20, 6)
             ->bars([$bar])
             ->size(20, 6)
@@ -379,14 +379,14 @@ final class OHLCChartTest extends TestCase
 
     public function testViewWithZeroWidthReturnsEmpty(): void
     {
-        $bar = new Bar(open: 100.0, high: 110.0, low: 95.0, close: 108.0);
+        $bar = new Candle(open: 100.0, high: 110.0, low: 95.0, close: 108.0);
         $out = OHLCChart::new([$bar], 0, 10)->view();
         $this->assertSame('', $out);
     }
 
     public function testViewWithZeroHeightReturnsEmpty(): void
     {
-        $bar = new Bar(open: 100.0, high: 110.0, low: 95.0, close: 108.0);
+        $bar = new Candle(open: 100.0, high: 110.0, low: 95.0, close: 108.0);
         $out = OHLCChart::new([$bar], 10, 0)->view();
         $this->assertSame('', $out);
     }
@@ -395,7 +395,7 @@ final class OHLCChartTest extends TestCase
     {
         $bars = [];
         for ($i = 0; $i < 20; $i++) {
-            $bars[] = new Bar(open: $i * 10, high: $i * 10 + 5, low: $i * 10 - 5, close: $i * 10 + 3);
+            $bars[] = new Candle(open: $i * 10, high: $i * 10 + 5, low: $i * 10 - 5, close: $i * 10 + 3);
         }
         // With width=5, only last 5 bars should be rendered
         $out = OHLCChart::new($bars, 5, 16)->view();
@@ -405,7 +405,7 @@ final class OHLCChartTest extends TestCase
     public function testEqualMinMaxAdjustsRange(): void
     {
         // When all bars have same high/low values, max == min
-        $bar = new Bar(open: 100.0, high: 100.0, low: 100.0, close: 100.0);
+        $bar = new Candle(open: 100.0, high: 100.0, low: 100.0, close: 100.0);
         $out = OHLCChart::new([$bar], 3, 16)->view();
         // Should still render without division-by-zero
         $this->assertNotEmpty($out);
@@ -422,8 +422,8 @@ final class OHLCChartTest extends TestCase
     {
         // sugar-charts-020: the replace door was unpinned — a copy that
         // merged instead of replaced would sail through CI.
-        $bull = new Bar(open: 100, high: 110, low: 90, close: 105);
-        $bear = new Bar(open: 100, high: 110, low: 90, close: 95);
+        $bull = new Candle(open: 100, high: 110, low: 90, close: 105);
+        $bear = new Candle(open: 100, high: 110, low: 90, close: 95);
         $chart    = OHLCChart::new([$bull, $bull], 8, 6);
         $replaced = $chart->withBars([$bear, $bear]);
         // A replace equals a fresh chart built from the new set alone.
@@ -443,7 +443,7 @@ final class OHLCChartTest extends TestCase
         // the renderer slices away anyway.
         $bars = [];
         for ($i = 0; $i < 7; $i++) {
-            $bars[] = new Bar((float) $i, (float) $i + 2, (float) $i - 1, (float) $i + 1);
+            $bars[] = new Candle((float) $i, (float) $i + 2, (float) $i - 1, (float) $i + 1);
         }
         $c = OHLCChart::new([], 3, 8);
         foreach ($bars as $b) {
@@ -461,9 +461,9 @@ final class OHLCChartTest extends TestCase
         // sugar-charts-101: open == close used to satisfy neither direction
         // predicate yet render the bearish ▒ — a no-change period read as a
         // down period. Bullish ≠ doji ≠ bearish bytes.
-        $bull = new Bar(open: 100, high: 110, low: 90, close: 105);
-        $doji = new Bar(open: 100, high: 110, low: 90, close: 100);
-        $bear = new Bar(open: 100, high: 110, low: 90, close: 95);
+        $bull = new Candle(open: 100, high: 110, low: 90, close: 105);
+        $doji = new Candle(open: 100, high: 110, low: 90, close: 100);
+        $bear = new Candle(open: 100, high: 110, low: 90, close: 95);
         $plainBull = self::plain(OHLCChart::new([$bull], 8, 7)->view());
         $plainDoji = self::plain(OHLCChart::new([$doji], 8, 7)->view());
         $plainBear = self::plain(OHLCChart::new([$bear], 8, 7)->view());
@@ -482,9 +482,9 @@ final class OHLCChartTest extends TestCase
         // Identical runes for every arm: any color difference on an 'X' is
         // the selection arm, nothing else. ansi(10)=92 bullish, ansi(7)=37
         // doji, ansi(9)=91 bearish.
-        $bull = new Bar(open: 100, high: 110, low: 90, close: 105);
-        $doji = new Bar(open: 100, high: 110, low: 90, close: 100);
-        $bear = new Bar(open: 100, high: 110, low: 90, close: 95);
+        $bull = new Candle(open: 100, high: 110, low: 90, close: 105);
+        $doji = new Candle(open: 100, high: 110, low: 90, close: 100);
+        $bear = new Candle(open: 100, high: 110, low: 90, close: 95);
         $chart = OHLCChart::new([$bull, $doji, $bear], 24, 8)
             ->withBodyRunes('X', 'X', 'X')
             ->withWickRune('o');

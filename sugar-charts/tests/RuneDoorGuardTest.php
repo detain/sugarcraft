@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Charts\LineChart\LineChart;
 use SugarCraft\Charts\LineChart\TimeSeries;
 use SugarCraft\Charts\MarkLine;
-use SugarCraft\Charts\OHLC\Bar;
+use SugarCraft\Charts\OHLC\Candle;
 use SugarCraft\Charts\OHLC\OHLCChart;
 use SugarCraft\Charts\Scatter\Scatter;
 
@@ -71,7 +71,7 @@ final class RuneDoorGuardTest extends TestCase
     public function testOhlcBarsElementDoorRefusesNonBarAtEveryRebuild(): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        OHLCChart::new([], 8, 4)->withBars([new Bar(1.0, 2.0, 0.5, 1.5), 42]);
+        OHLCChart::new([], 8, 4)->withBars([new Candle(1.0, 2.0, 0.5, 1.5), 42]);
     }
 
     public function testTimeSeriesPointTuplesAreValidatedAtConstruction(): void

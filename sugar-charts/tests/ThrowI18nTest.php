@@ -11,7 +11,7 @@ use SugarCraft\Charts\Aggregation\MovingAverage;
 use SugarCraft\Charts\Aggregation\Resample;
 use SugarCraft\Charts\Lang;
 use SugarCraft\Charts\MarkLine;
-use SugarCraft\Charts\OHLC\Bar;
+use SugarCraft\Charts\OHLC\Candle;
 use SugarCraft\Charts\Support\Range;
 use SugarCraft\Core\I18n\T;
 
@@ -37,7 +37,7 @@ final class ThrowI18nTest extends TestCase
                 'Invalid x range: min (20) must not exceed max (10) — a lone pinned end that excludes the whole data set leaves no drawable domain',
             ],
             'ohlc.high-below-low' => [
-                static fn () => new Bar(1.0, 2.0, 5.0, 3.0),
+                static fn () => new Candle(1.0, 2.0, 5.0, 3.0),
                 'Invalid OHLC bar: high (2) must not be below low (5)',
             ],
             'markline.empty-dataset' => [
@@ -105,7 +105,7 @@ final class ThrowI18nTest extends TestCase
         T::setLocale('de');
         try {
             try {
-                new Bar(1.0, 2.0, 5.0, 3.0);
+                new Candle(1.0, 2.0, 5.0, 3.0);
                 self::fail('expected refusal');
             } catch (InvalidArgumentException $e) {
                 self::assertStringContainsString('darf nicht unter', $e->getMessage());
@@ -159,7 +159,7 @@ final class ThrowI18nTest extends TestCase
         // a refusal bypassed the catalog (CH-46) — it will never translate.
         $files = [
             'Support/Range.php',
-            'OHLC/Bar.php',
+            'OHLC/Candle.php',
             'MarkLine.php',
             'Aggregation/MovingAverage.php',
             'Aggregation/BucketByTime.php',
