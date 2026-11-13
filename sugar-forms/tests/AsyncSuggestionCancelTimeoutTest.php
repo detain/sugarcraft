@@ -6,6 +6,7 @@ namespace SugarCraft\Forms\Tests;
 
 use PHPUnit\Framework\TestCase;
 use React\EventLoop\Loop;
+use SugarCraft\Forms\Tests\Support\DeterministicPump;
 use SugarCraft\Forms\Tests\Support\LoopHygiene;
 use React\EventLoop\StreamSelectLoop;
 use React\Promise\Deferred;
@@ -33,8 +34,10 @@ use SugarCraft\Forms\Field\Select;
  *       kill — unset means never-timeout exactly as before).
  *
  * Loop hygiene mirrors {@see AsyncSuggestionsTest}: a fresh StreamSelectLoop
- * per test via Loop::set() in setUp (arm-time clock refresh; no
- * ext-uv/LoopPin exposure).
+ * per test via Loop::set() in setUp, and SF-31's DeterministicPump replaces
+ * the old fixed wall-clock stop-pumps. Waits are OBSERVED by pumping loop
+ * iterations until the awaited settle lands; the wall budgets exist only to
+ * fail loud on a genuinely missing event, never to race CI jitter.
  */
 final class AsyncSuggestionCancelTimeoutTest extends TestCase
 {
@@ -42,6 +45,13 @@ final class AsyncSuggestionCancelTimeoutTest extends TestCase
         setUp as private hygieneSetUp;
         tearDown as private hygieneTearDown;
     }
+    use DeterministicPump;
+
+    /** Fail-loud bound on legs whose event is loop-ordering, not a deadline. */
+    private const F2_SETTLE_BUDGET = 2.0;
+
+    /** The opted-in per-fetch wall ceiling the timeout leg arms (6.5). */
+    private const F2_FETCH_CEILING_SECONDS = 0.02;
 
     protected function setUp(): void
     {
@@ -82,9 +92,17 @@ final class AsyncSuggestionCancelTimeoutTest extends TestCase
 
         // Second keystroke supersedes the first fetch's cancellation token.
         [$f, $cmd2] = $f->update(new KeyMsg(KeyType::Char, 'b'));
-        self::f2RunLoopFor(0.1);
+        self::assertTrue(
+            self::pumpUntil(
+                static function () use (&$resolved): bool {
+                    return $resolved['settled'];
+                },
+                self::F2_SETTLE_BUDGET,
+            ),
+            'superseded fetch must settle, not hang',
+        );
+        self::advance();
 
-        $this->assertTrue($resolved['settled'], 'superseded fetch must settle, not hang');
         $this->assertNull($resolved['error'], 'cancellation must no longer reject (6.6)');
         $this->assertNull($resolved['value'], 'cancellation resolves with null');
         $this->assertNotNull(self::f2AsyncCmdFrom($cmd2), 'latest keystroke still schedules its own fetch');
@@ -105,7 +123,16 @@ final class AsyncSuggestionCancelTimeoutTest extends TestCase
             static function ($v) use (&$settledValue): void { $settledValue = $v; },
             static function (\Throwable $e) use (&$error): void { $error = $e; },
         );
-        self::f2RunLoopFor(0.15);
+        self::assertTrue(
+            self::pumpUntil(
+                static function () use (&$error): bool {
+                    return $error !== null;
+                },
+                self::F2_SETTLE_BUDGET,
+            ),
+            'a rejected fetcher must reject the awaiting promise',
+        );
+        self::advance();
 
         // Polarity twin of the cancel pin: genuine fetch failures keep rejecting.
         $this->assertInstanceOf(\RuntimeException::class, $error);
@@ -117,7 +144,7 @@ final class AsyncSuggestionCancelTimeoutTest extends TestCase
     {
         $fetcher = static fn(string $v): PromiseInterface => (new Deferred())->promise();
 
-        $f = Input::new('k')->withAsyncSuggestions($fetcher, 1, null, 0.02);
+        $f = Input::new('k')->withAsyncSuggestions($fetcher, 1, null, self::F2_FETCH_CEILING_SECONDS);
         [$f] = $f->focus();
         [$f, $cmd] = $f->update(new KeyMsg(KeyType::Char, 'a'));
 
@@ -128,9 +155,20 @@ final class AsyncSuggestionCancelTimeoutTest extends TestCase
             static function ($v) use (&$resolvedValue): void { $resolvedValue = $v; },
             static function (\Throwable $e) use (&$error): void { $error = $e; },
         );
-        self::f2RunLoopFor(0.3);
-
-        $this->assertInstanceOf(TimeoutException::class, $error, '6.5: opted-in ceiling must fire on a stalled fetch');
+        // The product arms a real wall clock here (6.5); this is the one leg
+        // SF-31 cannot de-wall — the budget is jitter-sized around that
+        // ceiling, and green termination is the ceiling firing itself.
+        self::assertTrue(
+            self::pumpUntil(
+                static function () use (&$error): bool {
+                    return $error !== null;
+                },
+                self::jitterBudget(self::F2_FETCH_CEILING_SECONDS),
+            ),
+            'the ceiling timer must fire on a stalled fetch',
+        );
+        self::advance();
+        $this->assertInstanceOf(TimeoutException::class, $error, '6.5: opted-in ceiling must reject with the typed exception');
         $this->assertSame('unsentinel', $resolvedValue);
     }
 
@@ -138,7 +176,13 @@ final class AsyncSuggestionCancelTimeoutTest extends TestCase
     {
         $fetcher = static function (string $v): PromiseInterface {
             $d = new Deferred();
-            Loop::addTimer(0.04, static fn() => $d->resolve(['late-arrival']));
+            // SF-31: "late" is loop-order lateness (two future-tick beats),
+            // not a 40 ms wall the 1 ms debounce could race — the promise
+            // still resolves after the fetch was dispatched, which is the
+            // contract this leg pins.
+            Loop::futureTick(static function () use ($d): void {
+                Loop::futureTick(static fn() => $d->resolve(['late-arrival']));
+            });
             return $d->promise();
         };
 
@@ -155,7 +199,16 @@ final class AsyncSuggestionCancelTimeoutTest extends TestCase
             static function ($v) use (&$captured): void { $captured = $v; },
             static function (\Throwable $e) use (&$error): void { $error = $e; },
         );
-        self::f2RunLoopFor(0.4);
+        self::assertTrue(
+            self::pumpUntil(
+                static function () use (&$captured, &$error): bool {
+                    return $captured !== null || $error !== null;
+                },
+                self::jitterBudget(0.001),
+            ),
+            'a fetch that resolves at its own (loop-late) pace must land',
+        );
+        self::advance();
 
         $this->assertNull($error);
         $this->assertInstanceOf(FormSuggestionsReadyMsg::class, $captured);
@@ -209,8 +262,15 @@ final class AsyncSuggestionCancelTimeoutTest extends TestCase
         [$f] = $f->focus();
         [$f, $cmd1] = $f->update(new KeyMsg(KeyType::Char, 'a'));
         $first  = self::f2Capture(self::f2AsyncCmdFrom($cmd1));
-        self::f2RunLoopFor(0.05);
-        self::assertArrayHasKey('a', $inFlight, 'fixture: debounce fired and the fetch is in flight');
+        self::assertTrue(
+            self::pumpUntil(
+                static function () use (&$inFlight): bool {
+                    return isset($inFlight['a']);
+                },
+                self::jitterBudget(0.001),
+            ),
+            'fixture: debounce fired and the fetch is in flight',
+        );
 
         // Non-Char edit changes the buffer: this is where supersession must land.
         [$f, $cmd2] = $f->update(new KeyMsg(KeyType::Backspace));
@@ -218,17 +278,40 @@ final class AsyncSuggestionCancelTimeoutTest extends TestCase
 
         // The superseded fetch's late arrival must not surface as a Msg.
         $inFlight['a']->resolve(['stale-for-a']);
-        self::f2RunLoopFor(0.05);
-        self::assertTrue($first['settled'], 'superseded fetch must settle, not hang');
+        self::assertTrue(
+            self::pumpUntil(
+                static function () use ($first): bool {
+                    return (bool) $first['settled'];
+                },
+                self::F2_SETTLE_BUDGET,
+            ),
+            'superseded fetch must settle, not hang',
+        );
         self::assertNull($first['error']);
         self::assertNull($first['value'], 'stale arrival must resolve null, never a SuggestionsReadyMsg');
         self::assertFalse($second['settled'], 'the re-armed fetch awaits its own fetcher');
-        self::assertArrayHasKey('', $inFlight, 'Backspace must re-arm a fetch on the post-edit (empty) value');
+        self::assertTrue(
+            self::pumpUntil(
+                static function () use (&$inFlight): bool {
+                    return isset($inFlight['']);
+                },
+                self::jitterBudget(0.001),
+            ),
+            'Backspace must re-arm a fetch on the post-edit (empty) value',
+        );
 
         // The re-armed fetch delivers.
         $inFlight['']->resolve(['fresh-for-empty']);
-        self::f2RunLoopFor(0.05);
-        self::assertTrue($second['settled']);
+        self::assertTrue(
+            self::pumpUntil(
+                static function () use ($second): bool {
+                    return (bool) $second['settled'];
+                },
+                self::F2_SETTLE_BUDGET,
+            ),
+            'the re-armed fetch must land',
+        );
+        self::advance();
         self::assertInstanceOf(FormSuggestionsReadyMsg::class, $second['value']);
         self::assertSame(['fresh-for-empty'], $second['value']->suggestions);
     }
@@ -252,15 +335,30 @@ final class AsyncSuggestionCancelTimeoutTest extends TestCase
         [$f] = $f->focus();
         [$f, $cmd1] = $f->update(new KeyMsg(KeyType::Char, 'a'));
         $box = self::f2Capture(self::f2AsyncCmdFrom($cmd1));
-        self::f2RunLoopFor(0.05);
-        self::assertArrayHasKey('a', $inFlight, 'fixture: debounce fired and the fetch is in flight');
+        self::assertTrue(
+            self::pumpUntil(
+                static function () use (&$inFlight): bool {
+                    return isset($inFlight['a']);
+                },
+                self::jitterBudget(0.001),
+            ),
+            'fixture: debounce fired and the fetch is in flight',
+        );
 
         [$f, $cmd2] = $f->update(new KeyMsg(KeyType::Left));
         self::assertNull($cmd2, 'cursor-only key must neither cancel nor re-arm (value unchanged)');
 
         $inFlight['a']->resolve(['still-valid']);
-        self::f2RunLoopFor(0.05);
-        self::assertTrue($box['settled']);
+        self::assertTrue(
+            self::pumpUntil(
+                static function () use ($box): bool {
+                    return (bool) $box['settled'];
+                },
+                self::F2_SETTLE_BUDGET,
+            ),
+            'the alive fetch must settle on arrival',
+        );
+        self::advance();
         self::assertInstanceOf(FormSuggestionsReadyMsg::class, $box['value'], 'arrival on unchanged text must land');
         self::assertSame(['still-valid'], $box['value']->suggestions);
     }
@@ -363,12 +461,6 @@ final class AsyncSuggestionCancelTimeoutTest extends TestCase
             }
         }
         self::fail('batch carried no AsyncCmd');
-    }
-
-    private static function f2RunLoopFor(float $seconds): void
-    {
-        Loop::addTimer($seconds, static fn() => Loop::stop());
-        Loop::run();
     }
 }
 

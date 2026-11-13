@@ -17,6 +17,7 @@ use SugarCraft\Forms\FormSuggestionsReadyMsg;
 use SugarCraft\Forms\Field\Input;
 use SugarCraft\Forms\Field\Select;
 use SugarCraft\Forms\Lang;
+use SugarCraft\Forms\Tests\Support\DeterministicPump;
 
 /**
  * Tests for async suggestions with debounce.
@@ -25,6 +26,11 @@ use SugarCraft\Forms\Lang;
  * - Method exists and returns correct type
  * - API is correctly configured
  * - The scheduling mechanism works
+ *
+ * SF-31 (sugar-forms-037): every wait is ORDER-based — pumpUntil observes the
+ * awaited transition, advance drains a few explicit iterations to prove what
+ * did not happen did not happen — never a wall-clock race. The generous
+ * budgets exist only to fail loud on a missing event.
  */
 final class AsyncSuggestionsTest extends TestCase
 {
@@ -32,6 +38,14 @@ final class AsyncSuggestionsTest extends TestCase
         setUp as private hygieneSetUp;
         tearDown as private hygieneTearDown;
     }
+    use DeterministicPump;
+
+    /**
+     * SF-31 named budget: wall ceiling for a guarded-fetch settle pump
+     * (debounce legs arm at 10-100 ms; this is 10x the jitter budget of the
+     * widest of them — a margin, never the assertion).
+     */
+    private const S02_SETTLE_BUDGET = 2.0;
 
     protected function setUp(): void
     {
@@ -219,10 +233,22 @@ final class AsyncSuggestionsTest extends TestCase
         $asyncCmd1();
         $asyncCmd2();
 
-        // Run the event loop long enough for any uncancelled debounce to fire
-        // (200ms = 2x debounce window to ensure the second debounce has time to fire if not cancelled)
-        Loop::addTimer(0.25, static fn () => Loop::stop());
-        Loop::run();
+        // SF-31: order, not walls. Pump until the surviving (second) debounce
+        // is OBSERVED to fire, then drain explicit iterations so a leaked
+        // first-debounce fire would run before the count asserts. The
+        // cancellation itself is semantic — the old 0.25s stop-timer only
+        // raced jitter around the same guarantee.
+        $budget = self::jitterBudget(0.1); // keystroke #2's debounce window
+        self::assertTrue(
+            self::pumpUntil(
+                function () use (&$fetcherInvokedCount): bool {
+                    return $fetcherInvokedCount >= 1;
+                },
+                $budget,
+            ),
+            'the surviving debounce must fire within its jitter budget',
+        );
+        self::advance();
 
         // Assert: the fetcher was only called once (for the second debounce),
         // because the first debounce was cancelled before its timer fired.
@@ -260,9 +286,17 @@ final class AsyncSuggestionsTest extends TestCase
         // Execute the combined cmd (schedules debounce timer on the loop)
         $combinedCmd();
 
-        // Run the event loop past the debounce window.
-        Loop::addTimer(0.2, static fn () => Loop::stop());
-        Loop::run();
+        // SF-31: observe the fire by ordering, not by wall racing.
+        self::assertTrue(
+            self::pumpUntil(
+                function () use (&$fetcherInvokedCount): bool {
+                    return $fetcherInvokedCount >= 1;
+                },
+                self::jitterBudget(0.1),
+            ),
+            'the debounce must fire within its jitter budget',
+        );
+        self::advance();
 
         // The fetcher must have been called exactly once.
         // Before the fix: $asyncCmd was dropped, so fetcher was never invoked.
@@ -302,9 +336,17 @@ final class AsyncSuggestionsTest extends TestCase
         // Execute the combined cmd
         $combinedCmd();
 
-        // Run the event loop past the debounce window.
-        Loop::addTimer(0.2, static fn () => Loop::stop());
-        Loop::run();
+        // SF-31: ordered observation replaces the wall-clock debounce race.
+        self::assertTrue(
+            self::pumpUntil(
+                function () use (&$fetcherInvokedCount): bool {
+                    return $fetcherInvokedCount >= 1;
+                },
+                self::jitterBudget(0.1),
+            ),
+            'the debounce must fire within its jitter budget',
+        );
+        self::advance();
 
         $this->assertSame(1, $fetcherInvokedCount, 'Async fetcher must fire in Select even when inner cmd is present');
     }
@@ -332,16 +374,10 @@ final class AsyncSuggestionsTest extends TestCase
         self::fail('batch carried no AsyncCmd');
     }
 
-    private static function s02Pump(float $seconds): void
-    {
-        Loop::addTimer($seconds, static fn () => Loop::stop());
-        Loop::run();
-    }
-
     /**
      * @return array{0: mixed, 1: ?\Throwable} [fulfilment, rejection] captured from a promise
      */
-    private static function s02Settle(AsyncCmd $async, float $pumpSeconds = 0.2): array
+    private static function s02Settle(AsyncCmd $async): array
     {
         $fulfilled = null;
         $rejected  = null;
@@ -353,7 +389,19 @@ final class AsyncSuggestionsTest extends TestCase
                 $rejected = $e;
             }
         );
-        self::s02Pump($pumpSeconds);
+        // SF-31: the settle is OBSERVED (pumpUntil), then explicit ticks are
+        // drained so a double-settle could land before the asserts. The old
+        // fixed 0.2s pump only raced the same guarantee.
+        self::assertTrue(
+            self::pumpUntil(
+                function () use (&$fulfilled, &$rejected): bool {
+                    return $fulfilled !== null || $rejected !== null;
+                },
+                self::S02_SETTLE_BUDGET,
+            ),
+            'the guarded fetch must settle within the named budget',
+        );
+        self::advance();
         return [$fulfilled, $rejected];
     }
 
@@ -376,13 +424,14 @@ final class AsyncSuggestionsTest extends TestCase
         self::assertInstanceOf(\RuntimeException::class, $rejected);
         self::assertSame('boom-fetch', $rejected->getMessage());
 
-        // And the loop is still alive for the program's next beat.
+        // And the loop is still alive for the program's next beat — observed
+        // with a future-tick beat (SF-31: a timer here would re-arm the very
+        // wall-clock admission this suite removes).
         $alive = false;
-        Loop::addTimer(0.01, static function () use (&$alive): void {
+        Loop::futureTick(static function () use (&$alive): void {
             $alive = true;
-            Loop::stop();
         });
-        Loop::run();
+        self::advance(2);
         self::assertTrue($alive, 'the event loop must survive a throwing fetcher');
     }
 
