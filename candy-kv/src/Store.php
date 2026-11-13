@@ -208,29 +208,25 @@ final class Store
      * Stored values are attacker-controlled: a raw `list` would let a
      * poisoned value smuggle terminal escape sequences (cursor moves, colour
      * resets, even window-title rewrites) straight onto the operator's screen.
-     * This collapses a value to a single, C0-control-free line (the exact
-     * scope of that guarantee is in the bullets below):
+     * This collapses a value to a single, control-free preview line:
      *
      *  - A non-UTF-8 (binary) payload becomes a `<binary N bytes>` placeholder
      *    (N = raw byte length) instead of dumping raw bytes at the terminal.
-     *  - C0 control bytes are stripped — ESC (0x1b) among them, `controlChars()`
-     *    is not SGR-preserving — and \n / \r / \t fold to spaces via
-     *    {@see Sanitize::controlChars()}: a deliberate single-line preview.
-     *  - DEL (0x7f) is removed here because it falls outside that C0 range. The
-     *    paired ESC sweep is belt-and-braces redundancy: `controlChars()` has
-     *    already deleted every 7-bit ESC (0x1b), so neither path can leave a
-     *    0x1b or 0x7f byte on the preview line — that is the precise, and only,
-     *    guarantee. This is NOT a general control sweep: a well-formed UTF-8
-     *    encoding of a C1 control (e.g. `\xC2\x9B` = U+009B, the 8-bit CSI
-     *    introducer) satisfies the `preg_match('//u')` binary gate above and
-     *    survives both this regex and `controlChars()` (C0-only), so it reaches
-     *    the terminal verbatim. A bare 0x80-0x9F byte cannot — it is invalid
-     *    UTF-8 and is routed to the `<binary N bytes>` placeholder. Extending
-     *    this preview to C1 is a separate risk class and deliberately not done
-     *    here. {@see Sanitize::untrusted()} is the stronger sink — it removes
-     *    whole ESC-introduced sequences rather than leaving their printable
-     *    residue — but it, too, passes a UTF-8-encoded C1 through untouched, so
-     *    neither policy here neutralises the 8-bit introducer itself.
+     *  - {@see Sanitize::untrusted()} is the scrubber: it deletes C0 controls,
+     *    DEL, whole ESC-introduced sequences, and — crucially — the UTF-8
+     *    encodings of the C1 controls (`\xC2\x80`–`\xC2\x9F`), so a poisoned
+     *    value cannot reach the terminal with U+009B (the 8-bit CSI
+     *    introducer), which many terminals decode and EXECUTE even though it
+     *    is well-formed UTF-8. An earlier version of this method hand-rolled
+     *    a C0-only scrub and justified skipping that class by claiming
+     *    `untrusted()` also passed encoded C1 through — that premise was
+     *    factually wrong against the vendored sanitizer (kv-005); a bare
+     *    `\xC2\x9B` pair from a synced store survived and landed verbatim on
+     *    the `list` output line.
+     *  - TAB, LF, CR fold to spaces (a deliberate single-line preview;
+     *    `untrusted()` alone preserves them), and a final byte-class sweep
+     *    re-asserts the guarantee so no residual 0x00-0x1f, 0x7f or C1 pair —
+     *    e.g. printable residue of a malformed ESC sequence — survives.
      *
      * @param string $value Raw stored value (already base64-decoded for binary).
      */
@@ -241,8 +237,10 @@ final class Store
             return '<binary ' . \strlen($value) . ' bytes>';
         }
 
-        $safe = Sanitize::controlChars($value);
-        return \preg_replace('/[\x1b\x7f]/', '', $safe) ?? $safe;
+        $safe = Sanitize::untrusted($value);
+        $safe = \str_replace(["\r\n", "\n", "\r", "\t"], ' ', $safe);
+
+        return \preg_replace('/[\x00-\x1f\x7f]|\xC2[\x80-\x9F]/', '', $safe) ?? $safe;
     }
 
     /**

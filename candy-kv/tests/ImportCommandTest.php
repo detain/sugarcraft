@@ -264,7 +264,10 @@ final class ImportCommandTest extends TestCase
         $this->assertSame(1, $res['exit'], $res['stderr']);
         $this->assertStringContainsString('Import failed:', $res['stderr']);
         $this->assertStringContainsString('array value', $res['stderr'], 'the diagnostic must stay informative');
-        $this->assertStringContainsString('[31mRED', $res['stderr'], 'printable residue survives the escape strip');
+        // kv-005: the scrubber deletes whole ESC-introduced sequences, so even
+        // the printable residue ([31m) no longer rides a stderr diagnostic.
+        $this->assertStringContainsString('RED', $res['stderr'], 'the entry name must stay visible');
+        $this->assertStringNotContainsString('[31m', $res['stderr'], 'sequence residue must not survive either');
         $this->assertStringNotContainsString("\x1b", $res['stderr'], 'raw ESC must never ride a stderr diagnostic');
     }
 
@@ -289,7 +292,9 @@ final class ImportCommandTest extends TestCase
 
         $this->assertSame(1, $res['exit'], $res['stderr']);
         $this->assertStringContainsString('Export failed:', $res['stderr']);
-        $this->assertStringContainsString('[31mX', $res['stderr'], 'printable residue survives the escape strip');
+        // kv-005: whole ESC-introduced sequences are deleted, residue included.
+        $this->assertStringContainsString('X', $res['stderr'], 'the key must stay visible');
+        $this->assertStringNotContainsString('[31m', $res['stderr'], 'sequence residue must not survive either');
         $this->assertStringNotContainsString("\x1b", $res['stderr'], 'raw ESC must never ride a stderr diagnostic');
     }
 

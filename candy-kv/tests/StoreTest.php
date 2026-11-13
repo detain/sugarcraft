@@ -542,10 +542,23 @@ final class StoreTest extends TestCase
 
     public function testSanitizeForTtyStripsEscSequences(): void
     {
-        // A poisoned value must not be able to emit an SGR/OSC escape.
+        // A poisoned value must not be able to emit an SGR/OSC escape. Since
+        // kv-005 the scrubber is Sanitize::untrusted(), which deletes whole
+        // ESC-introduced sequences instead of leaving their printable residue.
         $out = Store::sanitizeForTty("\x1b[31mRED\x1b[0m");
         $this->assertStringNotContainsString("\x1b", $out);
-        $this->assertSame('[31mRED[0m', $out);
+        $this->assertSame('RED', $out);
+    }
+
+    public function testSanitizeForTtyRemovesTheEncodedC1Introducer(): void
+    {
+        // kv-005 snapshot pin: the exact byte pair `list` handed the terminal
+        // from a poisoned/synced store under the old C0-only scrub. A terminal
+        // decodes \xC2\x9B (U+009B) and EXECUTES it as 8-bit CSI, so it must
+        // not survive a control-free preview line.
+        $this->assertSame('q"p', Store::sanitizeForTty("\xC2\x9B" . 'q"p'));
+        // The whole encoded-C1 band, not just CSI.
+        $this->assertSame('ab', Store::sanitizeForTty("a\xC2\x80\xC2\x9Fb"));
     }
 
     public function testSanitizeForTtyStripsC0AndDelControls(): void
