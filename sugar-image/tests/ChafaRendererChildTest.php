@@ -383,6 +383,106 @@ final class ChafaRendererChildTest extends TestCase
     }
 
     /**
+     * @testdox the leave-side settle reaps and the repaint memo never replays a failure
+     */
+    public function testAFailedRenderIsNotMemoised(): void
+    {
+        $this->plantFakeChafa();
+        ChafaRenderer::reset();
+        ChafaRenderer::available(); // pre-seed the probe: this file counts RENDERS, not probes
+
+        $log = $this->touch('memo-fail-counter');
+        putenv('FAKE_CHAFA_LOG=' . $log);
+
+        putenv('FAKE_CHAFA_MODE=fail');
+        try {
+            (new ChafaRenderer())->render($this->source(), 10, 10);
+            $this->fail('exit 3 must still be a typed refusal');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('exit code 3', $e->getMessage());
+        }
+
+        $cache = new \ReflectionProperty(ChafaRenderer::class, 'renderCache');
+        $cache->setAccessible(true);
+        $this->assertCount(0, $cache->getValue(), 'a failure has no bytes to hand to the next attempt');
+
+        putenv('FAKE_CHAFA_MODE');
+        $this->assertSame('MOCK-ANSI-BYTES', (new ChafaRenderer())->render($this->source(), 10, 10));
+        $this->assertSame(2, substr_count((string) file_get_contents($log), 'started'), 'the retry must face a fresh spawn, not a cached failure');
+        $this->assertCount(1, $cache->getValue());
+    }
+
+    /**
+     * @testdox an unchanged repaint spawns zero children; geometry, config, and bytes each get their own slot
+     */
+    public function testTheRepaintMemoSpawnsOncePerDistinctFrame(): void
+    {
+        $this->plantFakeChafa();
+        ChafaRenderer::reset();
+        ChafaRenderer::available();
+
+        $log = $this->touch('memo-counter');
+        putenv('FAKE_CHAFA_LOG=' . $log);
+
+        $renderer = new ChafaRenderer();
+        $narrow   = new ChafaRenderer(['--colors=16']);
+
+        $first = $renderer->render($this->source(), 10, 10);
+        $this->assertSame($first, $renderer->render($this->source(), 10, 10), 'a repaint answers the exact bytes of the encode it replaced');
+
+        // Three further distinct keys: geometry, config, content.
+        $renderer->render($this->source(), 12, 10);
+        $narrow->render($this->source(), 10, 10);
+        $other = ImageSource::fromString((string) base64_decode(
+            'R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw=='
+        )); // 1x1 white — different bytes, same geometry
+        $renderer->render($other, 10, 10);
+
+        // Every repeat of every key: still no additional child.
+        $renderer->render($this->source(), 10, 10);
+        $renderer->render($this->source(), 12, 10);
+        $narrow->render($this->source(), 10, 10);
+        $renderer->render($other, 10, 10);
+
+        $this->assertSame(
+            4,
+            substr_count((string) file_get_contents($log), 'started'),
+            'four distinct frames, four spawns — the repaints are free',
+        );
+
+        $cache = new \ReflectionProperty(ChafaRenderer::class, 'renderCache');
+        $cache->setAccessible(true);
+        $this->assertCount(4, $cache->getValue());
+    }
+
+    /**
+     * @testdox the memo is a bounded FIFO, not a per-frame leak
+     */
+    public function testTheRepaintMemoEvictsPastItsCap(): void
+    {
+        $this->plantFakeChafa();
+        ChafaRenderer::reset();
+        ChafaRenderer::available();
+
+        $log = $this->touch('memo-cap-counter');
+        putenv('FAKE_CHAFA_LOG=' . $log);
+
+        $renderer = new ChafaRenderer();
+        for ($width = 10; $width < 19; $width++) {
+            $renderer->render($this->source(), $width, 10); // nine distinct keys
+        }
+
+        $cache = new \ReflectionProperty(ChafaRenderer::class, 'renderCache');
+        $cache->setAccessible(true);
+        $this->assertCount(8, $cache->getValue(), 'the cap is the contract: eight frames, not nine');
+
+        $renderer->render($this->source(), 10, 10); // the oldest key was evicted — it pays a spawn again
+        $this->assertSame(10, substr_count((string) file_get_contents($log), 'started'));
+        $renderer->render($this->source(), 10, 10); // and the re-encode is memoised once more
+        $this->assertSame(10, substr_count((string) file_get_contents($log), 'started'), 'a live slot must answer without a spawn');
+    }
+
+    /**
      * Write an executable fake `chafa` into a private dir and arm it as
      * the SUGAR_IMAGE_CHAFA override (absolute path), publishing its pid
      * to a file so every test can prove the parent actually reaped it.

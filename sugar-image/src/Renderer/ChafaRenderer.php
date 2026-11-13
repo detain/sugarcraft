@@ -102,6 +102,19 @@ final class ChafaRenderer implements Renderer, ConfigFingerprintProvider
     private static ?string $version = null;
 
     /**
+     * Successful renders, keyed by (bytes|geometry|config fingerprint),
+     * insertion-ordered and capped at {@see RENDER_MEMO_MAX} so a
+     * long-lived TUI pays a bounded, known frame size of memory for the
+     * repaint fast path (finding 103). Cleared by {@see reset()}.
+     *
+     * @var array<string,string>
+     */
+    private static array $renderCache = [];
+
+    /** Bound of the repaint memo — eight frames of ANSI, then FIFO. */
+    private const RENDER_MEMO_MAX = 8;
+
+    /**
      * Reused per-process scratch file for the chafa input image, plus the
      * content hash of whatever is currently written to it.
      *
@@ -221,6 +234,21 @@ final class ChafaRenderer implements Renderer, ConfigFingerprintProvider
         }
 
         $size = "{$width}x{$effectiveHeight}";
+
+        // A TUI re-painting the SAME unchanged source every tick used to
+        // pay the full child cost each time (finding 103). The
+        // scratch-reuse half already skipped the rewrite; this is the
+        // other half — the encoded ANSI is memoised keyed by
+        // (bytes, geometry, config fingerprint incl. binary identity),
+        // so an unchanged repaint spawns nothing at all. Only successes
+        // are stored: one transient chafa failure must not replay stale
+        // bytes forever, it must face a fresh attempt.
+        $memoKey = hash('xxh3', $image->bytes . '|' . $size . '|' . $this->configFingerprint());
+        $cached  = self::$renderCache[$memoKey] ?? null;
+        if ($cached !== null) {
+            return $cached;
+        }
+
         $cmd = [$binary, '--size=' . $size];
         if ($this->format !== null) {
             $cmd[] = '--format=' . $this->format;
@@ -279,6 +307,8 @@ final class ChafaRenderer implements Renderer, ConfigFingerprintProvider
                     ])
                 );
             }
+
+            self::rememberRender($memoKey, $stdout);
         } finally {
             // Every settle path — success, failure, or a throw between
             // the spawn and here — releases the sink file, and since
@@ -315,6 +345,21 @@ final class ChafaRenderer implements Renderer, ConfigFingerprintProvider
 
         if ($process !== false && is_resource($process) && !$reaped) {
             self::reap($process);
+        }
+    }
+
+    /**
+     * Store one successful encode, evicting oldest-first at the cap.
+     * PHP arrays keep insertion order; because a live hit never
+     * re-inserts, "oldest inserted" is a cheap FIFO — good enough for
+     * eight slots and it keeps the memo a constant few frames of RAM.
+     */
+    private static function rememberRender(string $key, string $ansi): void
+    {
+        self::$renderCache[$key] = $ansi;
+
+        if (count(self::$renderCache) > self::RENDER_MEMO_MAX) {
+            unset(self::$renderCache[array_key_first(self::$renderCache)]);
         }
     }
 
@@ -568,6 +613,7 @@ final class ChafaRenderer implements Renderer, ConfigFingerprintProvider
     {
         self::$available   = null;
         self::$version     = null;
+        self::$renderCache = [];
         self::$reapWaitMs  = null;
         self::$termGraceMs = null;
         self::$drainBudgetMs = null;
