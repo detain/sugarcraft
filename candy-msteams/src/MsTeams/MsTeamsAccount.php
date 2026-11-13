@@ -17,6 +17,7 @@ use React\EventLoop\LoopInterface;
 use React\EventLoop\TimerInterface;
 use React\Promise\PromiseInterface;
 use SugarCraft\Code\Backend\PendingAsk;
+use SugarCraft\Code\Lang;
 
 /**
  * One Teams account's face: webhook activities in, serviceUrl REST out
@@ -868,15 +869,15 @@ final class MsTeamsAccount implements PlatformFace, StreamingFace
         if ($isDm && $this->strCfg('dmPolicy', 'pairing') === 'disabled') {
             return; // a disabled DM door has nothing to welcome anyone into
         }
-        $lines = ['candy-code is connected to this conversation. Send a message to start a session, or type /help for the commands.'];
+        $lines = [Lang::t('channels.msteams.welcome.connected')];
         if ($isDm) {
             if ($this->strCfg('dmPolicy', 'pairing') === 'pairing' && !$this->pairing->isPaired($this->account, $authorId)) {
-                $lines[] = 'Pairing is required before the bot answers. Send any message and an approver will get your code.';
+                $lines[] = Lang::t('channels.msteams.welcome.pairing_required');
             }
         } else {
             $lines[] = $this->groupServed($conversationId)
-                ? 'Mention me to ask something.'
-                : 'This conversation is not on the group allowlist yet, so the bot stays quiet here until an admin adds it under channels.msteams.groups.';
+                ? Lang::t('channels.msteams.welcome.group_mention')
+                : Lang::t('channels.msteams.welcome.group_not_allowlisted', ['path' => 'channels.msteams.groups']);
         }
 
         $this->rest->sendActivity($serviceUrl, $conversationId, [
@@ -933,6 +934,17 @@ final class MsTeamsAccount implements PlatformFace, StreamingFace
      * never seen by this account returns null, a seen one whose door has
      * since closed returns a rejected promise. The text takes the same
      * redaction and chunking as a reply.
+     *
+     * How a host calls it: obtain the ref from an INBOUND activity this
+     * account already served, i.e. `['conversationId' => $activity['conversation']['id']]`
+     * (the Teams conversation id, e.g. `19:…@thread.tacv2` or a personal chat id),
+     * and call it on the account instance that received that activity (the
+     * account name is part of the lookup). The bundle records each served
+     * conversation in its session store, so the ref survives a restart, but
+     * a conversation the bot has never received an activity in cannot be
+     * notified. Only `conversationId` is read: the serviceUrl is taken from the
+     * stored activity, never from the caller, so a host cannot redirect the
+     * post to another service.
      *
      * @param array<string,mixed> $conversationRef at least `conversationId`; any caller serviceUrl is ignored
      *

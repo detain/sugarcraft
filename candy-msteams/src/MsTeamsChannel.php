@@ -43,7 +43,7 @@ use SugarCraft\Code\Server\StateDir;
 require_once __DIR__ . '/autoload.php';
 
 /**
- * The `@candy/msteams` channel root (§8): Microsoft Teams dialogs, over
+ * The `sugarcraft/candy-msteams` channel root (§8): Microsoft Teams dialogs, over
  * the INVERSE transport.
  *
  * Discord keeps a websocket to its platform and dials the local serve;
@@ -175,6 +175,14 @@ final class MsTeamsChannel implements ChannelInterface, AcceptsHttpRequests
             if ($triple === null) {
                 $this->log->warn('channels.msteams.account_without_credentials', ['account' => $account]);
                 continue;
+            }
+            if (!CredentialStore::isTenantGuid($triple['tenantId'])) {
+                // Loud and whole-channel: a non-GUID tenant would refuse every
+                // activity silently at the tenant floor. The value is not echoed —
+                // it is a roster secret.
+                ($context->log)("channels.msteams: account '{$account}' tenantId is not a directory GUID (8-4-4-4-12 hex) — refusing to start. Use the Directory (tenant) ID, not 'common', 'organizations' or a domain name.");
+
+                return;
             }
             $credentials[$account] = $triple;
             $secrets[] = $triple['appPassword'];

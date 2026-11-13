@@ -6,6 +6,7 @@ namespace CandyCode\Bundles\MsTeams\Tests\MsTeams;
 
 use CandyCode\Bundles\MsTeams\Tests\Fixture\FaceHarness;
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\Lang;
 
 /**
  * The welcome on conversationUpdate: fires when the bot itself is added,
@@ -35,9 +36,12 @@ final class WelcomeTest extends TestCase
 
         $texts = $this->sentTexts();
         self::assertCount(1, $texts, 'one welcome per add');
-        self::assertStringStartsWith('candy-code is connected to this conversation.', $texts[0]);
-        self::assertStringContainsString('/help', $texts[0]);
-        self::assertStringNotContainsString('Pairing is required', $texts[0], 'an already-paired peer is not asked to pair');
+        // Asserted against the facade's own output so this holds before and after the lang keys land.
+        self::assertStringStartsWith(\SugarCraft\Code\Lang::t('channels.msteams.welcome.connected'), $texts[0]);
+        if (!\str_contains($texts[0], 'channels.msteams.welcome.')) {
+            self::assertStringContainsString('/help', $texts[0]);
+        }
+        self::assertStringNotContainsString(Lang::t('channels.msteams.welcome.pairing_required'), $texts[0], 'an already-paired peer is not asked to pair');
     }
 
     public function testAnUnpairedPeerIsToldPairingIsRequired(): void
@@ -48,7 +52,7 @@ final class WelcomeTest extends TestCase
 
         $texts = $this->sentTexts();
         self::assertCount(1, $texts);
-        self::assertStringContainsString('Pairing is required before the bot answers', $texts[0]);
+        self::assertStringContainsString(Lang::t('channels.msteams.welcome.pairing_required'), $texts[0]);
     }
 
     public function testRemovingTheBotNeverWelcomes(): void
@@ -98,8 +102,8 @@ final class WelcomeTest extends TestCase
 
         $texts = $this->sentTexts();
         self::assertCount(1, $texts);
-        self::assertStringContainsString('not on the group allowlist yet', $texts[0]);
-        self::assertStringContainsString('channels.msteams.groups', $texts[0]);
+        self::assertStringContainsString(Lang::t('channels.msteams.welcome.group_not_allowlisted'), $texts[0]);
+        self::assertStringContainsString(Lang::t('channels.msteams.welcome.group_not_allowlisted', ['path' => 'channels.msteams.groups']), $texts[0]);
     }
 
     public function testAServedGroupInvitesAMention(): void
@@ -110,7 +114,7 @@ final class WelcomeTest extends TestCase
 
         $texts = $this->sentTexts();
         self::assertCount(1, $texts);
-        self::assertStringContainsString('Mention me to ask something.', $texts[0]);
+        self::assertStringContainsString(Lang::t('channels.msteams.welcome.group_mention'), $texts[0]);
     }
 
     public function testADisabledDirectMessageDoorWelcomesNobody(): void

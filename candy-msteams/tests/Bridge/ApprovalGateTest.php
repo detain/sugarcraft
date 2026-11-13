@@ -169,10 +169,11 @@ final class ApprovalGateTest extends TestCase
 
     public function testACardSubmitWithAForgedNonceIsRefused(): void
     {
-        $this->presentAsk();
+        // A roster makes `always` valid; the actor is the approver so the
+        // verdict reaches the nonce/binding wall this test pins.
+        $this->presentAsk(['approvals' => ['approvers' => ['boss']]]);
 
-        // 'once': an empty roster refuses `always` before the binding wall, and this test pins the wall.
-        $this->router->answerByAskId('ask_9', 'once', ['userId' => 'peer-1', 'name' => 'P'], 'cafebabe01', self::DM_KEY, 'card');
+        $this->router->answerByAskId('ask_9', 'always', ['userId' => 'boss', 'name' => 'B'], 'cafebabe01', self::DM_KEY, 'card');
         self::runFor($this->loop, 300);
 
         self::assertSame(0, $this->serve->respondSeen, 'a crafted value naming the ask id must never reach the permission wire');
@@ -252,14 +253,14 @@ final class ApprovalGateTest extends TestCase
 
     public function testARetiredAskCannotBeDoubleAnsweredByItsOldCard(): void
     {
-        $nonce = $this->presentAsk();
-        $this->router->answerByAskId('ask_9', 'once', ['userId' => 'peer-1', 'name' => 'P'], $nonce, self::DM_KEY, 'card');
+        $nonce = $this->presentAsk(['approvals' => ['approvers' => ['boss']]]);
+        $this->router->answerByAskId('ask_9', 'once', ['userId' => 'boss', 'name' => 'B'], $nonce, self::DM_KEY, 'card');
         self::runFor($this->loop, 300);
         self::assertSame(1, $this->serve->respondSeen);
 
         $this->pushSettled($this->envelope('permission.resolved', 81, ['askId' => 'ask_9', 'reply' => 'once']));
 
-        $this->router->answerApproval('sess_fixture_1', 'ask_9', 'once', ['userId' => 'peer-1', 'name' => 'P'], $nonce, self::DM_KEY, 'card');
+        $this->router->answerApproval('sess_fixture_1', 'ask_9', 'always', ['userId' => 'boss', 'name' => 'B'], $nonce, self::DM_KEY, 'card');
         self::runFor($this->loop, 300);
 
         self::assertSame(1, $this->serve->respondSeen, 'retirement must clear the binding — the old card is dead');
@@ -318,7 +319,7 @@ final class ApprovalGateTest extends TestCase
     private function assertContainsRefusal(): void
     {
         foreach ($this->face->delivered as $chunk) {
-            if (\str_contains($chunk, 'Approval answer refused')) {
+            if (\str_contains($chunk, \SugarCraft\Code\Lang::t('channels.msteams.approval.refused'))) {
                 return;
             }
         }

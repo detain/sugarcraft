@@ -125,6 +125,17 @@ final class JwtTest extends TestCase
         $this->expectRefusal(self::token(['exp' => time() - 120]), 'exp');
     }
 
+    public function testATokenWithoutAnExpClaimRefuses(): void
+    {
+        $now = time();
+        // Signed properly, so only the missing exp can be what refuses it.
+        $compact = self::sign(['alg' => 'RS256', 'typ' => 'JWT', 'kid' => self::$kid], [
+            'aud' => self::APP_ID, 'iss' => 'https://api.botframework.com', 'iat' => $now, 'nbf' => $now,
+        ]);
+
+        $this->expectRefusal($compact, 'exp', 'no exp claim');
+    }
+
     public function testNotYetValidTokenRefuses(): void
     {
         $this->expectRefusal(self::token(['nbf' => time() + 120]), 'nbf');

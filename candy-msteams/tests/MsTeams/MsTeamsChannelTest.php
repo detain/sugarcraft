@@ -74,6 +74,43 @@ final class MsTeamsChannelTest extends TestCase
         self::assertSame([], $channel->faceNames());
     }
 
+    public function testAMultiTenantAuthorityNameRefusesToStartLoudly(): void
+    {
+        $this->writeUserConfig(['channels.msteams' => ['enabled' => true]]);
+        $store = new CredentialStore(CredentialStore::defaultPath());
+        $store->writeMsteamsPairing('default', [], [], [
+            'appId' => 'app-common', 'appPassword' => 'common-secret', 'tenantId' => 'common',
+        ]);
+
+        $lines = [];
+        $channel = new MsTeamsChannel();
+        $channel->start($this->context(static function (string $line) use (&$lines): void {
+            $lines[] = $line;
+        }));
+
+        self::assertSame([], $channel->faceNames(), 'a non-GUID tenant boots no face');
+        self::assertStringContainsString('refusing to start', \implode("\n", $lines));
+        self::assertStringNotContainsString('common-secret', \implode("\n", $lines), 'the secret never reaches the log');
+    }
+
+    public function testAnEmptyTenantBootsNoFace(): void
+    {
+        $this->writeUserConfig(['channels.msteams' => ['enabled' => true]]);
+        $store = new CredentialStore(CredentialStore::defaultPath());
+        $store->writeMsteamsPairing('default', [], [], [
+            'appId' => 'app-empty', 'appPassword' => 'empty-secret', 'tenantId' => '',
+        ]);
+
+        $lines = [];
+        $channel = new MsTeamsChannel();
+        $channel->start($this->context(static function (string $line) use (&$lines): void {
+            $lines[] = $line;
+        }));
+
+        self::assertSame([], $channel->faceNames());
+        self::assertStringContainsString('no_usable_accounts', \implode("\n", $lines));
+    }
+
     public function testABogusTransportOverrideRefusesToStartLoudly(): void
     {
         $this->writeUserConfig(['channels.msteams' => [
@@ -111,7 +148,7 @@ final class MsTeamsChannelTest extends TestCase
         $this->writeUserConfig(['channels.msteams' => ['enabled' => true]]);
         $store = new CredentialStore(CredentialStore::defaultPath());
         $store->writeMsteamsPairing('default', [], [], [
-            'appId' => 'app-chan', 'appPassword' => 'chan-secret', 'tenantId' => 'ten-chan',
+            'appId' => 'app-chan', 'appPassword' => 'chan-secret', 'tenantId' => '0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d',
         ]);
 
         $channel = new MsTeamsChannel();
@@ -243,7 +280,7 @@ final class MsTeamsChannelTest extends TestCase
         $this->writeUserConfig(['channels.msteams' => ['enabled' => true]]);
         $store = new CredentialStore(CredentialStore::defaultPath());
         $store->writeMsteamsPairing('default', [], [], [
-            'appId' => 'app-p4b', 'appPassword' => 'p4b-secret', 'tenantId' => 'tenant-p4b-41',
+            'appId' => 'app-p4b', 'appPassword' => 'p4b-secret', 'tenantId' => '1d2c3b4a-5f6e-4d7c-8b9a-0f1e2d3c4b5a',
         ]);
 
         $channel = new MsTeamsChannel();
@@ -256,10 +293,10 @@ final class MsTeamsChannelTest extends TestCase
             self::assertInstanceOf(TextSafety::class, $roster, 'the started channel owns the live roster');
 
             $tokenFailure = 'msteams token exchange failed: POST https://login.microsoftonline.com/'
-                . 'tenant-p4b-41/oauth2/v2/token returned 400 Bad Request (client_secret p4b-secret)';
+                . '1d2c3b4a-5f6e-4d7c-8b9a-0f1e2d3c4b5a/oauth2/v2/token returned 400 Bad Request (client_secret p4b-secret)';
             $red = $roster->outbound($tokenFailure);
 
-            self::assertStringNotContainsString('tenant-p4b-41', $red, 'the tenant id is a roster secret');
+            self::assertStringNotContainsString('1d2c3b4a-5f6e-4d7c-8b9a-0f1e2d3c4b5a', $red, 'the tenant id is a roster secret');
             self::assertStringNotContainsString('p4b-secret', $red, 'the app password already was');
             self::assertStringContainsString('[redacted]', $red);
         } finally {
@@ -341,7 +378,7 @@ final class MsTeamsChannelTest extends TestCase
         ]]);
         $store = new CredentialStore(CredentialStore::defaultPath());
         $store->writeMsteamsPairing('default', [], [], [
-            'appId' => 'app-p4b', 'appPassword' => 'p4b-secret', 'tenantId' => 'ten-p4b',
+            'appId' => 'app-p4b', 'appPassword' => 'p4b-secret', 'tenantId' => '0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d',
         ]);
 
         $channel = new MsTeamsChannel();

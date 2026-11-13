@@ -60,6 +60,15 @@ final class CredentialStoreTest extends TestCase
         self::assertSame(['default'], $again->msteamsAccounts());
     }
 
+    public function testOnlyADirectoryGuidIsAcceptedAsATenant(): void
+    {
+        self::assertTrue(CredentialStore::isTenantGuid('0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d'));
+        self::assertTrue(CredentialStore::isTenantGuid('0A1B2C3D-4E5F-4A6B-8C7D-9E0F1A2B3C4D'));
+        foreach (['common', 'organizations', 'consumers', '', 'contoso.onmicrosoft.com', ' 0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d', '0a1b2c3d4e5f4a6b8c7d9e0f1a2b3c4d', '0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4'] as $bad) {
+            self::assertFalse(CredentialStore::isTenantGuid($bad), 'refused tenant: ' . $bad);
+        }
+    }
+
     public function testAnIncompleteTripleReadsAsNull(): void
     {
         $store = new CredentialStore($this->path);

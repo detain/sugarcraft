@@ -49,6 +49,17 @@ final class CredentialStore
     public const APP_PASSWORD_ENV = 'MSTEAMS_APP_PASSWORD';
     public const TENANT_ID_ENV = 'MSTEAMS_TENANT_ID';
 
+    /**
+     * A directory GUID, the only tenant shape the single-tenant bot accepts.
+     * `common`/`organizations`/domain names are valid authority paths, but
+     * the tenant floor compares activities against this exact value, so a
+     * shared name would refuse every conversation.
+     */
+    public static function isTenantGuid(string $value): bool
+    {
+        return \preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $value) === 1;
+    }
+
     public function __construct(
         private readonly string $path,
     ) {

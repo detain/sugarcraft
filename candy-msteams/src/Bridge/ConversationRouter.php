@@ -15,6 +15,7 @@ use CandyCode\Bundles\MsTeams\Support\QueueGate;
 use CandyCode\Bundles\MsTeams\Support\SessionMap;
 use CandyCode\Bundles\MsTeams\Support\TextSafety;
 use React\EventLoop\LoopInterface;
+use SugarCraft\Code\Lang;
 use React\Promise\PromiseInterface;
 
 /**
@@ -619,7 +620,7 @@ final class ConversationRouter
         }
         $channel = $this->channelFor($key);
         if ($channel !== null) {
-            $this->deliver($channel, $ref, '⛔ "always" needs a configured approver (channels.msteams approvals.approvers). Answer once or deny, or ask an approver.');
+            $this->deliver($channel, $ref, Lang::t('channels.msteams.approval.always_needs_approver'));
         }
     }
 
@@ -639,7 +640,7 @@ final class ConversationRouter
         }
         $channel = $this->channelFor($key);
         if ($channel !== null) {
-            $this->deliver($channel, $ref, '⛔ Approval answer refused: it did not match the card presented here (a forged or stale submit). The question is still open — answer with the card buttons or `/approve <askId> once|always|deny`.');
+            $this->deliver($channel, $ref, Lang::t('channels.msteams.approval.refused'));
         }
     }
 

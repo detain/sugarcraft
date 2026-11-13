@@ -115,7 +115,12 @@ final class Jwt
         if (isset($claims['nbf']) && (int) $claims['nbf'] > $now + self::CLOCK_LEEWAY_SECONDS) {
             throw new JwtException('token is not yet valid', 'nbf');
         }
-        if (isset($claims['exp']) && (int) $claims['exp'] < $now - self::CLOCK_LEEWAY_SECONDS) {
+        // Required, not optional: an exp-less token would otherwise live forever
+        // on a replayed request, so absence refuses like an expired one.
+        if (!isset($claims['exp'])) {
+            throw new JwtException('token has no exp claim', 'exp');
+        }
+        if ((int) $claims['exp'] < $now - self::CLOCK_LEEWAY_SECONDS) {
             throw new JwtException('token has expired', 'exp');
         }
 
