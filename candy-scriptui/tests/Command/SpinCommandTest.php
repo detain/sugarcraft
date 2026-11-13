@@ -99,8 +99,8 @@ final class SpinCommandTest extends TestCase
         // match argv verbatim (the harness factory used to discard it).
         $this->assertSame(\defined('SIGTERM') ? \SIGTERM : 15, $fake->lastSignal);
         $this->assertSame(['sleep', '9999'], $fake->spawnArgv);
-        $this->assertFalse($fake->spawnCaptureStdout);
-        $this->assertFalse($fake->spawnCaptureStderr);
+        $this->assertTrue($fake->spawnCaptureStdout, 'scriptui-09: the spinner arm always captures child stdout');
+        $this->assertTrue($fake->spawnCaptureStderr, 'scriptui-09: the spinner arm always captures child stderr');
     }
 
     /**
@@ -303,7 +303,7 @@ final class SpinCommandTest extends TestCase
         $this->assertTrue($fake->stderrRead, '--show-error must read the child stderr');
         $this->assertFalse($fake->stdoutRead, 'stdout must not be read when only --show-error is set');
         $this->assertTrue($fake->spawnCaptureStderr, '--show-error must be threaded into the spawn capture flags');
-        $this->assertFalse($fake->spawnCaptureStdout, 'stdout capture must follow --show-output only');
+        $this->assertTrue($fake->spawnCaptureStdout, 'scriptui-09: the spinner arm captures by default — only the PRINT follows the flags (the stdoutRead pin above holds that)');
     }
 
     /**

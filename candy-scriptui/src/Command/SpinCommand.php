@@ -102,8 +102,8 @@ final class SpinCommand extends Command
             ->addOption('style',       null, InputOption::VALUE_REQUIRED,
                 'Spinner style: line | dot | mini-dot | points | pulse | globe | meter | jump | moon | monkey | hamburger | ellipsis.', 'dot')
             ->addOption('spinner',     's', InputOption::VALUE_REQUIRED, 'Alias for --style (gum compat).', null)
-            ->addOption('show-output', null, InputOption::VALUE_NONE,    'Print captured stdout after the command exits.')
-            ->addOption('show-error',  null, InputOption::VALUE_NONE,    'Print captured stderr after the command exits.')
+            ->addOption('show-output', null, InputOption::VALUE_NONE,    'Print captured stdout after the command exits (it is captured silently by default).')
+            ->addOption('show-error',  null, InputOption::VALUE_NONE,    'Print captured stderr after the command exits (it is captured silently by default).')
             ->addOption('show-stdout', null, InputOption::VALUE_NONE,    'Alias for --show-output.')
             ->addOption('show-stderr', null, InputOption::VALUE_NONE,    'Alias for --show-error.')
             ->addOption('align',       'a',  InputOption::VALUE_REQUIRED, 'Title position relative to the spinner: left | right.', 'left')
@@ -160,7 +160,20 @@ final class SpinCommand extends Command
         }
 
         try {
-            $process = ($this->processFactory)($argv, $showOutput, $showError);
+            // scriptui-09 (candy-scriptui-053): the spinner arm always
+            // captures the child stdio — inherited descriptors used to
+            // leak child bytes onto OUR stdout even though nothing was
+            // "shown" (option help and gum's default-silent posture imply
+            // the opposite). Silence is now real: capture, bounded
+            // retention (-03), print only on the flags. The headless arm
+            // keeps inherited passthrough — there the wrapper contract IS
+            // the child's stream (-06 purity pins).
+            $headless = $this->usesDefaultProgram && InteractiveRuntime::isHeadless();
+            $process = ($this->processFactory)(
+                $argv,
+                $headless ? $showOutput : true,
+                $headless ? $showError : true,
+            );
         } catch (PtyException $e) {
             // scriptui-08: a spawn-stage refusal (native Windows
             // unsupported, or a plain spawn failure) reaches the user as
@@ -179,7 +192,7 @@ final class SpinCommand extends Command
         // modes never touch a redirected data channel. Injected program
         // factories (every deterministic test) keep the Program arm exactly
         // as before.
-        $code = $this->usesDefaultProgram && InteractiveRuntime::isHeadless()
+        $code = $headless
             ? $this->runHeadless($process, $loop, $timeoutSeconds)
             : $this->runSpinner($process, $loop, $timeoutSeconds, $title, $style, $align);
 

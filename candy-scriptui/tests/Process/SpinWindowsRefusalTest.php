@@ -160,7 +160,7 @@ final class SpinWindowsRefusalTest extends TestCase
         self::assertLessThan(1600, $refusal - $guard, 'the guard must open immediately around the refusal throw');
 
         $cmd = (string) file_get_contents(__DIR__ . '/../../src/Command/SpinCommand.php');
-        $factory = strpos($cmd, '($this->processFactory)($argv');
+        $factory = strpos($cmd, '($this->processFactory)(');
         $catch   = strpos($cmd, 'catch (PtyException');
         self::assertIsInt($factory);
         self::assertIsInt($catch, 'SpinCommand must catch spawn-stage refusals');
