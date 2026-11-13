@@ -1,6 +1,6 @@
 # VHS tape — tab management in dual-pane file manager.
 # t duplicates tab, Tab swaps panes, Ctrl+w closes tab.
-# Render with: `vhs candy-files/.vhs/tabs.tape`
+# Render with: `cd candy-files && vhs .vhs/tabs.tape`
 Output .vhs/tabs.gif
 
 Set FontSize 14

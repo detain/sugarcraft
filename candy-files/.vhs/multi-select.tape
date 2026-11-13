@@ -1,7 +1,7 @@
 # VHS tape — multi-select in dual-pane file manager.
 # Space toggles selection on each entry.
-# Uses a temp directory so delete is safe.
-# Render with: `vhs candy-files/.vhs/multi-select.tape`
+# Seeds its own /tmp fixture so the demo never depends on leftover state.
+# Render with: `cd candy-files && vhs .vhs/multi-select.tape`
 Output .vhs/multi-select.gif
 
 Set FontSize 14
@@ -10,7 +10,11 @@ Set Height 480
 Set TypingSpeed 60ms
 Set Theme "TokyoNight"
 
-Type "./bin/candy-files /tmp/candy-files-test /tmp"
+Type "mkdir -p /tmp/candy-files-demo && touch /tmp/candy-files-demo/alpha.txt /tmp/candy-files-demo/beta.txt /tmp/candy-files-demo/gamma.txt /tmp/candy-files-demo/delta.txt"
+Enter
+Sleep 400ms
+
+Type "./bin/candy-files /tmp/candy-files-demo /tmp"
 Enter
 Sleep 800ms
 

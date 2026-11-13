@@ -1,6 +1,6 @@
 # VHS tape — sort cycling in dual-pane file manager.
 # Press s repeatedly to cycle through all 6 sort modes.
-# Render with: `vhs candy-files/.vhs/sort-cycle.tape`
+# Render with: `cd candy-files && vhs .vhs/sort-cycle.tape`
 Output .vhs/sort-cycle.gif
 
 Set FontSize 14

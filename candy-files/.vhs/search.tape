@@ -1,6 +1,6 @@
 # VHS tape — search mode in dual-pane file manager.
 # Type "/" to enter search, type query, navigate results, open.
-# Render with: `vhs candy-files/.vhs/search.tape`
+# Render with: `cd candy-files && vhs .vhs/search.tape`
 Output .vhs/search.gif
 
 Set FontSize 14
