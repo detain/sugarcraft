@@ -980,4 +980,70 @@ final class CliTest extends TestCase
         $this->assertSame('cap', $row['project']);
         $this->assertEqualsWithDelta(time(), (int) $row['time'], 60, 'stamped at the moment it was read in');
     }
+
+    public function testPushCarriesATagListIntoTheFileBackendAndEveryExportShowsIt(): void
+    {
+        // CT-S29: the typed door gains the last positional rung — a comma-list
+        // the store and exporters already knew how to carry.
+        $res = $this->runCli(
+            ['push', 'proj', 'php', '/x/a.php', '60', 'work,side project, x ,'],
+            null,
+            ['CANDY_CODETIME_DIR' => $this->dataDir],
+        );
+        self::assertSame(0, $res['exit'], $res['stderr']);
+
+        $res = $this->runCli(
+            ['--backend=file', 'export', 'json', '2'],
+            null,
+            ['CANDY_CODETIME_DIR' => $this->dataDir],
+        );
+        $rows = json_decode($res['stdout'], true);
+        self::assertIsArray($rows);
+        self::assertSame(['work', 'side project', 'x'], $rows[0]['tags']);
+
+        $res = $this->runCli(
+            ['--backend=file', 'export', 'csv', '2'],
+            null,
+            ['CANDY_CODETIME_DIR' => $this->dataDir],
+        );
+        self::assertStringContainsString('"work,side project,x"', $res['stdout']);
+    }
+
+    public function testPushTagsReachTheSqliteDoorAsWell(): void
+    {
+        $res = $this->runCli(
+            ['--backend=sqlite', 'push', 'proj', 'php', '/x/b.php', '60', 'learning'],
+            null,
+            ['CANDY_CODETIME_DIR' => $this->dataDir],
+        );
+        self::assertSame(0, $res['exit'], $res['stderr']);
+
+        $res = $this->runCli(
+            ['--backend=sqlite', 'export', 'json', '2'],
+            null,
+            ['CANDY_CODETIME_DIR' => $this->dataDir],
+        );
+        $rows = json_decode($res['stdout'], true);
+        self::assertIsArray($rows);
+        self::assertSame(['learning'], $rows[0]['tags']);
+    }
+
+    public function testPushWithoutTheTagsRungStoresAnEmptyList(): void
+    {
+        $res = $this->runCli(
+            ['push', 'proj', 'php', '/x/c.php', '60'],
+            null,
+            ['CANDY_CODETIME_DIR' => $this->dataDir],
+        );
+        self::assertSame(0, $res['exit'], $res['stderr']);
+
+        $res = $this->runCli(
+            ['--backend=file', 'export', 'json', '2'],
+            null,
+            ['CANDY_CODETIME_DIR' => $this->dataDir],
+        );
+        $rows = json_decode($res['stdout'], true);
+        self::assertIsArray($rows);
+        self::assertSame([], $rows[0]['tags']);
+    }
 }

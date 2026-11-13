@@ -391,7 +391,22 @@ if ($cmd === 'push') {
         }
         $duration = (int)($durationRaw ?? 60);
         $duration = max(0, min($duration, Heartbeat::MAX_DURATION_SECONDS));  // clamp to [0, 1 year]
-        $hb = new Heartbeat($hbTime, $project, $language, $file, $duration);
+        // CT-S29: the last rung of the positional ladder. Tags already lived
+        // everywhere at rest — the column, the JSONL row, all three exporters —
+        // and only the typed door lost them. A comma-list labels the beat the
+        // same way a plugin-written row does; blank members are noise, not
+        // tags, so they fall out.
+        $tagsRaw = $positional[5] ?? null;
+        $tags = [];
+        if ($tagsRaw !== null) {
+            foreach (explode(',', $tagsRaw) as $tag) {
+                $tag = trim($tag);
+                if ($tag !== '') {
+                    $tags[] = $tag;
+                }
+            }
+        }
+        $hb = new Heartbeat($hbTime, $project, $language, $file, $duration, $tags);
         try {
             if ($backend === 'sqlite') {
                 $sqlite()->insert($hb);
