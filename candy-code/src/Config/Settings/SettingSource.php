@@ -12,11 +12,15 @@ use SugarCraft\Code\Config\LayeredSettings;
  * here, and nowhere else:
  *
  *   default < project settings.json < project settings.local.json
- *           < ~/.candy-code/settings.json < config.json < session < env < flag
+ *           < ~/.candy-code/settings.json < config.json < session < managed
+ *           < env < flag
  *
  * That is today's file order ({@see \SugarCraft\Code\Config\LayeredSettings})
  * with the session overlay the settings design reserves inserted above the files
- * and below the environment.
+ * and below the environment. The machine-wide managed file sits above the
+ * session (a person being managed cannot undo it by re-choosing in the settings
+ * view) and still below the environment and flags, exactly as
+ * `Bootstrap::mergedConfig()` lays it; SettingSourceOrderTest pins the equality.
  */
 enum SettingSource: string
 {
@@ -26,6 +30,7 @@ enum SettingSource: string
     case UserSettings = 'user-settings';
     case UserConfig = 'user-config';
     case Session = 'session';
+    case Managed = 'managed';
     case Env = 'env';
     case Flag = 'flag';
 
@@ -48,6 +53,7 @@ enum SettingSource: string
             self::UserSettings => '~/' . LayeredSettings::dir() . '/' . LayeredSettings::USER_FILE,
             self::UserConfig => 'config.json',
             self::Session => 'this session',
+            self::Managed => 'managed settings',
             self::Env => 'environment',
             self::Flag => 'command-line flag',
         };

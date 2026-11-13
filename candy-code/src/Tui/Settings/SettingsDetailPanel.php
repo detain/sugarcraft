@@ -170,6 +170,7 @@ final class SettingsDetailPanel
             SettingSource::UserSettings => Lang::t('tui.settings.source.user_settings'),
             SettingSource::UserConfig => Lang::t('tui.settings.source.user_config'),
             SettingSource::Session => Lang::t('tui.settings.source.session'),
+            SettingSource::Managed => Lang::t('tui.settings.source.managed'),
             SettingSource::Env => Lang::t('tui.settings.source.env'),
             SettingSource::Flag => Lang::t('tui.settings.source.flag'),
         };
@@ -194,6 +195,7 @@ final class SettingsDetailPanel
             SettingSource::Default => '○',
             SettingSource::ProjectShared, SettingSource::ProjectLocal => '◆',
             SettingSource::UserSettings, SettingSource::UserConfig => '●',
+            SettingSource::Managed => '▣',
             SettingSource::Session => '◐',
             SettingSource::Env, SettingSource::Flag => '■',
         };

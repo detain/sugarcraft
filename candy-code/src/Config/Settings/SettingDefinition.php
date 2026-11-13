@@ -277,7 +277,7 @@ final class SettingDefinition
      * project-settable, from the two project files; a strict key comes from
      * `settings.json` through the permission reader instead; anything else is
      * `config.json` alone. The session overlay is offered to every key that is
-     * not frozen for the process.
+     * not frozen for the process; the managed file is offered to layered keys.
      *
      * @return list<SettingSource>
      */
@@ -296,6 +296,11 @@ final class SettingDefinition
         $sources[] = SettingSource::UserConfig;
         if ($this->applyMode !== ApplyMode::Frozen) {
             $sources[] = SettingSource::Session;
+        }
+
+        // The managed file carries only the layered alphabet (systemLayer()).
+        if ($this->layered) {
+            $sources[] = SettingSource::Managed;
         }
 
         if ($this->envVar !== null) {

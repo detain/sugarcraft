@@ -357,6 +357,7 @@ final class SettingsSchemaTest extends TestCase
                 SettingSource::UserSettings,
                 SettingSource::UserConfig,
                 SettingSource::Session,
+                SettingSource::Managed,
                 SettingSource::Env,
                 SettingSource::Flag,
             ],

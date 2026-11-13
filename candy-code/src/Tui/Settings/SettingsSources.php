@@ -78,6 +78,7 @@ final class SettingsSources
             $projectTrusted ?? false,
             $userSettingsDir,
             $userConfigPath,
+            \SugarCraft\Code\Cli\Bootstrap::systemConfigPath(),
         )->withEnvironment($env)->withFlags($flags)->withDefaults(self::TUI_DEFAULTS)
             // The session tier (N-P3): values saved "for this session only"
             // are process state, not a file, and outrank every file.

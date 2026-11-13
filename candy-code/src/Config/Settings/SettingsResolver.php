@@ -44,7 +44,9 @@ final class SettingsResolver
     }
 
     /**
-     * The four settings files as the launch would read them.
+     * The settings files as the launch would read them, plus the managed file
+     * when `$managedConfigPath` is given (filtered to the layered alphabet, as
+     * {@see LayeredSettings::systemLayer()} does for the real read).
      *
      * `$projectTrusted` is the caller's answer to the trust question, exactly
      * as {@see LayeredSettings::projectLayer()} requires: an untrusted project
@@ -56,6 +58,7 @@ final class SettingsResolver
         bool $projectTrusted,
         ?string $userSettingsDir,
         ?string $userConfigPath,
+        ?string $managedConfigPath = null,
     ): self {
         $resolver = self::new();
         if ($projectRoot !== null) {
@@ -74,6 +77,10 @@ final class SettingsResolver
 
         if ($userConfigPath !== null) {
             $resolver = $resolver->withLayer(SettingSource::UserConfig, LayeredSettings::decodedFile($userConfigPath), $userConfigPath);
+        }
+
+        if ($managedConfigPath !== null) {
+            $resolver = $resolver->withLayer(SettingSource::Managed, LayeredSettings::systemLayer($managedConfigPath), $managedConfigPath);
         }
 
         return $resolver;
