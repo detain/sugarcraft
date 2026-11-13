@@ -248,4 +248,66 @@ final class AnsiParserTest extends TestCase
         }
         self::assertStringContainsString('safe', $text);
     }
+
+    /**
+     * cs-24 (-039): the parser's per-rune validation must be OFF — the
+     * line-level normalise above the door already guarantees well-formed
+     * UTF-8, so `new Parser($handler, false)` is the byte-identical hot
+     * shape. Structural pin: the call site carries the false literal.
+     */
+    public function testParserIsConstructedWithValidationDisabled(): void
+    {
+        $src = (string) \file_get_contents(__DIR__ . '/../src/AnsiParser.php');
+        self::assertMatchesRegularExpression(
+            '/new\s+Parser\(\s*\$handler,\s*false\s*\)/',
+            $src,
+            'AnsiParser must feed the parser a line already validated by the line-level normalise (replaceMalformed stays false)',
+        );
+        self::assertStringContainsString('mb_convert_encoding($line', $src, 'the line-level UTF-8 door must stay in place');
+    }
+
+    /**
+     * cs-24 (-043): the cube intensities live in a class constant, and the
+     * constant still equals the canonical xterm formula for every 6..231
+     * index (old code recomputed the local array per call; formula equality
+     * here is the zero-behaviour proof for that band).
+     */
+    public function testXtermLevelsIsAConstantMatchingTheCubeFormula(): void
+    {
+        $levels = (new \ReflectionClass(AnsiParser::class))->getConstant('XTERM_LEVELS');
+        self::assertSame([0, 95, 135, 175, 215, 255], $levels);
+
+        for ($i = 16; $i <= 231; $i++) {
+            $idx  = $i - 16;
+            $want = \sprintf(
+                '#%02x%02x%02x',
+                $levels[intdiv($idx, 36)],
+                $levels[intdiv($idx, 6) % 6],
+                $levels[$idx % 6],
+            );
+            self::assertSame($want, AnsiParser::xterm256ToHex($i), "cube index {$i}");
+        }
+    }
+
+    /**
+     * cs-24 (-040): applySgr dispatches opcodes directly — no closure-per
+     * parameter, no variable-variable writes. Structural pin over the method
+     * source: neither `fn(` nor `$$` may appear inside its body.
+     */
+    public function testApplySgrDispatchesWithoutClosuresOrVariableVars(): void
+    {
+        $method = new \ReflectionMethod(\SugarCraft\CodeShot\SgrStateHandler::class, 'applySgr');
+        $file   = (string) \file_get_contents((string) $method->getFileName());
+        $body   = implode(
+            "\n",
+            \array_slice(
+                explode("\n", $file),
+                $method->getStartLine() - 1,
+                $method->getEndLine() - $method->getStartLine() + 1,
+            ),
+        );
+
+        self::assertStringNotContainsString('fn(', $body, 'applySgr must not build closures per parameter (cs-24)');
+        self::assertStringNotContainsString('$$', $body, 'applySgr must not write state through variable-vars (cs-24)');
+    }
 }

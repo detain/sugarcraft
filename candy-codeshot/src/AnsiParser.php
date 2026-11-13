@@ -36,6 +36,15 @@ final class AnsiParser
     ];
 
     /**
+     * The six xterm cube intensities (cs-24, -043). A class constant, not a
+     * per-call local: the 6..231 colour band is a hot path and the table is
+     * pure data.
+     *
+     * @var list<int>
+     */
+    private const XTERM_LEVELS = [0, 95, 135, 175, 215, 255];
+
+    /**
      * Parse one line of ANSI text into a list of styled segments.
      *
      * @return list<Segment>
@@ -64,11 +73,16 @@ final class AnsiParser
 
         // Feed a UTF-8-clean line so the strict parser replaces malformed
         // bytes instead of forwarding them verbatim into the document (M12).
+        // The door is the line-level normalise above: once mb_check_encoding
+        // passes (or mb_convert_encoding has substituted), every rune in the
+        // line is well-formed, so the parser's per-rune re-validation is pure
+        // duplicate work — cs-24 (-039) turns it off. U+FFFD tail behaviour is
+        // unchanged: the normalise above already owns it.
         if (!mb_check_encoding($line, 'UTF-8')) {
             $line = mb_convert_encoding($line, 'UTF-8', 'UTF-8');
         }
 
-        $parser = new Parser($handler, true);
+        $parser = new Parser($handler, false);
         // The flattened `list<int>` a handler receives cannot distinguish
         // `38:2::80:160:240` (one parameter group) from `38;2;80;160;240`, so
         // the handler reads the ECMA-48 sub-parameter flags the parser PUSHES
@@ -111,12 +125,11 @@ final class AnsiParser
             return sprintf('#%02x%02x%02x', $g, $g, $g);
         }
         $idx = $i - 16;
-        $levels = [0, 95, 135, 175, 215, 255];
         return sprintf(
             '#%02x%02x%02x',
-            $levels[intdiv($idx, 36)],
-            $levels[intdiv($idx, 6) % 6],
-            $levels[$idx % 6],
+            self::XTERM_LEVELS[intdiv($idx, 36)],
+            self::XTERM_LEVELS[intdiv($idx, 6) % 6],
+            self::XTERM_LEVELS[$idx % 6],
         );
     }
 }

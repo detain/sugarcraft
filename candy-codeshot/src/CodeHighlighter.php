@@ -51,6 +51,16 @@ final class CodeHighlighter
     ) {}
 
     /**
+     * Memoised `$hex => opening SGR` (cs-24, -042). Keyed by the colour itself,
+     * so a shared preset instance can never hand one theme's opener to another:
+     * equal keys mean equal bytes by construction. Empty string marks a colour
+     * too malformed to wrap.
+     *
+     * @var array<string,string>
+     */
+    private array $sgrOpenCache = [];
+
+    /**
      * Build a highlighter whose {@see TokenKind::Plain} colour tracks the given
      * theme's foreground. Syntax accents come from the theme's own token slots
      * when it carries them (imported VS Code / chroma themes repaint CODE from
@@ -139,12 +149,24 @@ final class CodeHighlighter
      */
     private function wrap(string $hex, string $text): string
     {
-        $rgb = self::hexToRgb($hex);
-        if ($rgb === null) {
+        // cs-24 (-042): the SGR opener depends only on $hex, so it is built
+        // once per colour and memoised; single-line tokens (the overwhelming
+        // majority) skip explode/implode entirely. Byte-identical output —
+        // the corpus snapshot pins prove it.
+        if (!isset($this->sgrOpenCache[$hex])) {
+            $rgb = self::hexToRgb($hex);
+            $this->sgrOpenCache[$hex] = $rgb === null
+                ? ''
+                : \sprintf("\x1b[38;2;%d;%d;%dm", $rgb[0], $rgb[1], $rgb[2]);
+        }
+        $open = $this->sgrOpenCache[$hex];
+        if ($open === '' || $text === '') {
             return $text;
         }
-        [$r, $g, $b] = $rgb;
-        $open  = "\x1b[38;2;{$r};{$g};{$b}m";
+        if (!\str_contains($text, "\n")) {
+            return $open . $text . "\x1b[0m";
+        }
+
         $reset = "\x1b[0m";
 
         $lines = explode("\n", $text);

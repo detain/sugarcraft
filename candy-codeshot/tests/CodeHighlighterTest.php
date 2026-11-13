@@ -168,4 +168,48 @@ final class CodeHighlighterTest extends TestCase
         $this->assertSame('#0550ae', $h->number, 'null slot falls back to the light heuristic');
         $this->assertSame('#404040', $h->comment);
     }
+
+    /**
+     * cs-24 (-042): the memoised hex→SGR opener cache and the single-line
+     * fast path must be transparent — same bytes on first call (cold cache),
+     * second call (warm cache) and a virgin instance (separate cache).
+     */
+    public function testWrapMemoisationIsByteTransparent(): void
+    {
+        $code     = "<?php\nfunction f(): int { \$x = 'lit'; /* c\n\nm */ return 42; }\n";
+        $h        = CodeHighlighter::forTheme(Theme::dark());
+        $cold     = $h->highlight($code, 'php');
+        $warm     = $h->highlight($code, 'php');
+        $virgin   = CodeHighlighter::forTheme(Theme::dark())->highlight($code, 'php');
+
+        self::assertSame($cold, $warm, 'warm cache must not shift a byte');
+        self::assertSame($cold, $virgin, 'per-instance caches must agree');
+        self::assertStringContainsString("\x1b[38;2;", $cold, 'the fixture must actually carry highlighted tokens');
+    }
+
+    /**
+     * cs-24 (-042): wrap() fast path, fragment loop and the invalid-colour
+     * sentinel pinned directly (same Closure::bind genre as the PngRenderer
+     * palette pins). Expected bytes are the formula, not a second execution
+     * of the code under test: single-line = open+text+reset; multi-line
+     * wraps every non-empty fragment and leaves empty ones bare; a
+     * non-hex colour echoes the text unwrapped; and a warm cache call is
+     * byte-identical to the cold one.
+     */
+    public function testWrapFastPathFragmentLoopAndSentinel(): void
+    {
+        $h     = CodeHighlighter::forTheme(Theme::dark());
+        $wrap  = \Closure::bind(
+            fn(string $hex, string $text): string => $this->wrap($hex, $text),
+            $h,
+            CodeHighlighter::class,
+        );
+        $open  = "\x1b[38;2;255;121;198m"; // #ff79c6 — dracula pink
+        $reset = "\x1b[0m";
+
+        self::assertSame($open . 'a' . $reset, $wrap('#ff79c6', 'a'), 'single-line fast path');
+        self::assertSame($open . 'a' . $reset . "\n\n" . $open . 'b' . $reset, $wrap('#ff79c6', "a\n\nb"), 'empty fragments stay bare');
+        self::assertSame($open . 'a' . $reset, $wrap('#ff79c6', 'a'), 'warm cache is byte-transparent');
+        self::assertSame('nope', $wrap('banana', 'nope'), 'invalid colour echoes the text unwrapped');
+    }
 }
