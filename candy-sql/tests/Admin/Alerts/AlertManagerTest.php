@@ -358,4 +358,53 @@ final class AlertManagerTest extends TestCase
 
         return ConnectionCounters::fromSnapshot($snapshot, $maxConnections);
     }
+
+    /**
+     * Documented-limitation truth (adminpages-003): every checkAllMetrics()
+     * watch is MySQL-keyed, so a pg-shaped snapshot — numbackends screaming
+     * at 999, log_min_duration_statement far past the slow-query budget —
+     * fires nothing. This is the pg arm the alert suite never had (it only
+     * ever fed MySQL shapes, making the limitation unfalsifiable). If a pg
+     * wiring lands without this pin and the README's Watched-metrics note
+     * being updated, that leg goes red here first.
+     */
+    public function testPgShapedSnapshotNeverMatchesTheMysqlKeyedWatches(): void
+    {
+        $manager = AlertManager::new()->withThresholds(AlertThresholds::standard());
+
+        $alerts = $manager->checkAllMetrics(
+            ['pg_stat_database.numbackends' => '999', 'pg_stat_database.xact_commit' => '10'],
+            ['log_min_duration_statement' => '99999'],
+        );
+
+        $this->assertSame([], $alerts, 'the MySQL-keyed seam must stay provably blind to pg shapes until the wiring leg lands');
+    }
+
+    /**
+     * Pin the deprecation surface (adminpages-012): the counters pair stays
+     * public (embedder readers) but must carry the removal horizon and a
+     * reason, and the class usage example must teach the wired seam —
+     * checkAllMetrics — not the deprecated one.
+     */
+    public function testUnwiredCounterPairCarriesTheRemovalHorizon(): void
+    {
+        foreach (['checkConnectionUsage', 'checkAndDispatch'] as $method) {
+            $doc = (new \ReflectionMethod(AlertManager::class, $method))->getDocComment();
+            $this->assertIsString($doc, $method . ' must keep a docblock');
+            $this->assertStringContainsString('@deprecated', (string) $doc, $method . ' must be deprecated');
+            $this->assertStringContainsString(
+                \SugarCraft\Sql\Tests\AccessorDeprecationTest::MARKER,
+                (string) $doc,
+                $method . ' needs the machine-readable removal horizon',
+            );
+        }
+
+        $classDoc = (new \ReflectionClass(AlertManager::class))->getDocComment();
+        $this->assertIsString($classDoc);
+        $this->assertStringContainsString(
+            'checkAllMetrics($statusVariables, $serverVariables)',
+            (string) $classDoc,
+            'the advertised usage must be the wired seam',
+        );
+    }
 }

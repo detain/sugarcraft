@@ -217,7 +217,7 @@ these tables.
 | `Admin\Alerts\Alert` | Immutable alert value object: severity, metric, message, value, threshold, firedAt, metricKind. Factory helpers: `::warning()`, `::critical()`, `::info()`. `toToastMessage()` formats based on `MetricKind` — `Ratio` multiplies by 100 (percentage), `Seconds` appends "s", `Count` renders as integer. |
 | `Admin\Alerts\AlertThresholds` | Immutable threshold configuration with fluent `with*()` builders. Presets: `::new()` (bare), `::standard()` (60%/80%), `::strict()` (50%/70%). Watches connection usage, aborted rate, slow query time, thread running, connection errors. |
 | `Admin\Alerts\AlertNotifier` | Toast notification dispatcher. Mute-safe by default (no factory = all calls no-op). `::withDefaults()` bootstraps a standard factory. `notify(Alert)`, `notifyWarning()`, `notifyCritical()`, `notifyError()`, `notifyInfo()`, `view()` composites toast over a background viewport. |
-| `Admin\Alerts\AlertManager` | Stateless alert checker. `checkConnectionUsage(ConnectionCounters)` and `checkAllMetrics(statusVariables, serverVariables)` return `array<string, Alert>`. Each alert carries a `MetricKind` (`Ratio`, `Seconds`, `Count`) that controls how its value is formatted in toast messages. `checkAndDispatch()` combines check + notify in one call. No state held between calls. |
+| `Admin\Alerts\AlertManager` | Stateless alert checker. `checkAllMetrics(statusVariables, serverVariables)` returns `array<string, Alert>` and is the app's only wired alert seam (dashboard tick; MySQL-keyed watches). Each alert carries a `MetricKind` (`Ratio`, `Seconds`, `Count`) that controls how its value is formatted in toast messages. The counters pair `checkConnectionUsage(ConnectionCounters)`/`checkAndDispatch()` is public but unwired — deprecated toward 2.0.0 (see Alerting → Watched metrics). No state held between calls. |
 | `Admin\PerfSchema\PerfSchemaPage` | Performance Schema configuration page with 7 tabs (Easy Setup, Instruments, Consumers, Actors, Objects, Threads, Options). Version-gated loading: `setup_actors` table skipped on <5.6; `setup_objects.ENABLED` column omitted on <5.6.3; `setup_timers` (mutable) used on <8.0 vs `performance_timers` (read-only) on >=8.0. Threads tab shows `INSTRUMENTED` column from `performance_schema.threads`. `[c]` stages a commit — the page lists the prepared statements and waits for `[y]`; any other key cancels (destructive-confirmation parity with the kill and SET GLOBAL prompts). `[r]` reverts. |
 | `Admin\PerfSchema\SetupTimers` | Mutable model for a PS timer entry. On MySQL <8.0, loaded from `performance_schema.setup_timers` and can be modified via `withTimerName()`. `isDirty()` tracks unsaved changes; `commitStatements()` returns a fully-literal statement — e.g. `UPDATE performance_schema.setup_timers SET TIMER_NAME = 'MICROSECOND' WHERE NAME = 'wait/cpu'` — with identifiers backtick-quoted and values interpolated as escaped quoted literals (no `?` placeholders: MySQL has no native placeholder in the SET-value position, and PDO_MYSQL's emulation does the client-side quoting). On MySQL >=8.0, loaded from `performance_schema.performance_timers` as clean (read-only) instances. |
 | `Admin\PerfSchema\SetupThreads` | Mutable model for a PS thread entry carrying `INSTRUMENTED` flag. `withInstrumented(bool)` toggles; `isDirty()` tracks changes; `instrumentedFragment()` generates a `THREAD_ID=N AND INSTRUMENTED='YES'/'NO'` SQL fragment for CommitPlanner's batch UPDATE (wiring deferred to a planned follow-up). |
@@ -385,7 +385,7 @@ $rows     = $provider->fetchProcesslist();      // performance_schema.threads, S
 
 Available providers:
 - **`MysqlAdminProvider`** — adapter over `ServerContext`: `SHOW GLOBAL STATUS`, `SHOW GLOBAL VARIABLES`, and `SHOW PLUGINS` are issued by the context; the provider adds `fetchProcesslist()` (Performance Schema `performance_schema.threads`, falling back to `SHOW FULL PROCESSLIST`)
-- **`PostgresAdminProvider`** — `pg_stat_database`, `pg_settings`, `pg_stat_activity`. `fetchStatusVariables()` maps `pg_stat_database` fields (`numbackends`, `xact_commit`, `xact_rollback`, `blks_read`, `blks_hit`, `tup_returned`, `tup_fetched`, `tup_inserted`, `tup_updated`, `tup_deleted`) into prefixed keys alongside a derived `pg_settings.shared_buffers` byte count. Implements `checkAllMetrics()` with computed PostgreSQL metrics (connection usage, cache hit rate, transaction rates, throughput) and `checkConnectionUsage()` with threshold alerts.
+- **`PostgresAdminProvider`** — `pg_stat_database`, `pg_settings`, `pg_stat_activity`. `fetchStatusVariables()` maps `pg_stat_database` fields (`numbackends`, `xact_commit`, `xact_rollback`, `blks_read`, `blks_hit`, `tup_returned`, `tup_fetched`, `tup_inserted`, `tup_updated`, `tup_deleted`) into prefixed keys alongside a derived `pg_settings.shared_buffers` byte count. Its `checkAllMetrics()`/`checkConnectionUsage()` compute PostgreSQL rates and thresholds but are an **unwired island** (zero production callers, hardcoded 60 %/80 % verdicts; see the class docblock): the app's alert path is `AlertManager`'s MySQL-keyed seam, so PostgreSQL never alerts in-app — adoption behind the `Alert` value objects is an open owner-gated leg.
 
 ## Result table
 
@@ -552,20 +552,22 @@ $manager = AlertManager::new()
     ->withThresholds(AlertThresholds::standard())
     ->withNotifier(AlertNotifier::withDefaults(muted: false));
 
-// Or combine check + dispatch in one call. The manager owns the notifier
-// (there is no standalone $notifier in scope, and AlertManager has no
-// notify() method); checkAndDispatch does the immutable notify-loop for
-// you and hands back the updated notifier:
-['alerts' => $alerts, 'notifier' => $notifier] = $manager->checkAndDispatch($counters);
-
-// Manual loop when the alerts are needed before dispatch — seed the
-// notifier from the manager (nullable) and carry it through notify(),
-// which returns a new AlertNotifier rather than mutating:
-$alerts = $manager->checkConnectionUsage($counters);
+// Evaluate the wired metric set and dispatch — the manual loop is the
+// whole story (the manager owns the notifier: there is no standalone
+// $notifier in scope and AlertManager has no notify() method; seed it
+// from the manager (nullable) and carry it through notify(), which
+// returns a new AlertNotifier rather than mutating):
+$statusVars = $context->statusVariables();   // SHOW GLOBAL STATUS rows
+$serverVars = $context->serverVariables();   // SHOW GLOBAL VARIABLES rows
+$alerts = $manager->checkAllMetrics($statusVars, $serverVars);
 $notifier = $manager->notifier() ?? AlertNotifier::new();
 foreach ($alerts as $alert) {
     $notifier = $notifier->notify($alert);
 }
+
+// checkConnectionUsage($counters) and checkAndDispatch($counters) remain
+// public until their 2.0.0 horizon — the unwired counters pair, deprecated
+// per the Watched metrics note below.
 ```
 
 ### Severity levels
@@ -586,14 +588,21 @@ foreach ($alerts as $alert) {
 
 ### Watched metrics
 
-| Metric | What it checks |
-|--------|----------------|
-| `connection_usage` | `threads_connected / max_connections` |
-| `aborted_rate` | `aborted_connects / total_connections` |
-| `thread_running` | `threads_running / max_connections` |
-| `slow_query` | `long_query_time` server variable |
-| `connection_errors` | `Connection_errors_total` status variable |
-| `max_connections` | `threads_connected / max_connections` (alias for connection_usage) |
+| Metric | What it checks | Reachable through |
+|--------|----------------|-------------------|
+| `slow_query` | `long_query_time` server variable | `AlertManager::checkAllMetrics()` — the dashboard tick |
+| `connection_errors` | `Connection_errors_total` status variable | `AlertManager::checkAllMetrics()` — the dashboard tick |
+| `max_connections` | `threads_connected / max_connections` | `AlertManager::checkAllMetrics()` — the dashboard tick |
+| `connection_usage` | `threads_connected / max_connections` from a live `ConnectionCounters` | `checkConnectionUsage()`/`checkAndDispatch()` — **unwired**, deprecated toward 2.0.0 (no candy-sql caller ever supplies counters; the dashboard covers the same signal via `max_connections`) |
+| `aborted_rate` | `aborted_connects / total_connections` | same unwired counters pair — deprecated toward 2.0.0 |
+| `thread_running` | `threads_running / max_connections` | same unwired counters pair — deprecated toward 2.0.0 |
+
+**Flavour limitation:** every `checkAllMetrics()` watch reads MySQL-named keys. A PostgreSQL
+snapshot (`pg_stat_database.numbackends`, `log_min_duration_statement`) matches none of them,
+so **PostgreSQL never alerts** in the shipped app — current design, documented as such
+(`AlertManager::checkAllMetrics()` docblock). `PostgresAdminProvider::checkAllMetrics()`/
+`checkConnectionUsage()` compute the pg-side numbers but are an unwired island; adopting them
+behind the `Alert` value objects + user-configurable thresholds is an open owner-gated leg.
 
 ### DashboardPage integration
 
@@ -613,7 +622,7 @@ $alerts = $manager->checkAllMetrics($statusVars, $serverVars);
 // is merged into $this->pendingAlerts, which renderFooter() renders.
 ```
 
-**The in-app channel is the footer badge.** The constructor installs `AlertNotifier::withDefaults(muted: true)` (`DashboardPage::__construct()`), so toasts are no-ops in-app; while alerts are pending, `renderFooter()` draws an amber `[!] N alert(s)  [a] dismiss` strip, and `[a]` (`withClearAlerts()`) clears them. Toasts are the embedder opt-in: pass a live notifier via `withAlertNotifier(AlertNotifier::withDefaults(muted: false))`, or drive `AlertManager::checkAndDispatch()` directly as in the example above.
+**The in-app channel is the footer badge.** The constructor installs `AlertNotifier::withDefaults(muted: true)` (`DashboardPage::__construct()`), so toasts are no-ops in-app; while alerts are pending, `renderFooter()` draws an amber `[!] N alert(s)  [a] dismiss` strip, and `[a]` (`withClearAlerts()`) clears them. Toasts are the embedder opt-in: pass a live notifier via `withAlertNotifier(AlertNotifier::withDefaults(muted: false))`, or drive `AlertManager::checkAllMetrics()` against a notifier yourself as in the example above.
 
 **Alert dedup (state-transition only):** `checkAlerts()` maintains a `$breachedAlertKeys` array tracking which alert keys were breached at the last poll. It computes `array_diff_key` between current and previous breach keys and only fires a toast for newly-breached entries — a threshold that persists across poll ticks does **not** re-fire the toast. This prevents alert storms for continuously-breached thresholds (e.g., a stuck connection at 90% utilization). The `[a]` key dismisses all pending alerts and resets the breach-tracking state so the same alert can re-fire if the threshold is cleared and breached again. `AlertNotifier` is mute-safe by default — running without a toast factory is a silent no-op. The live predicate is `hasActiveAlert()` (there is no `hasAlerts()`).
 

@@ -21,6 +21,21 @@ use SugarCraft\Sql\Db\Flavor;
  *   pg_read_all_stats role, or sessions of the same user
  * - pg_stat_database / pg_settings are readable by PUBLIC on stock clusters
  *
+ * The checkAllMetrics()/checkConnectionUsage() pair is an ISLAND
+ * (adminpages-011, SQL-P05 doc verdict): not interface members, zero
+ * production callers — the dashboard's only alert seam is
+ * AlertManager::checkAllMetrics(), whose watches are MySQL-keyed, so
+ * PostgreSQL never alerts in-app (adminpages-003). The pair also diverges
+ * from the AlertManager doctrine it would have to meet before adoption:
+ * raw float/string arrays where Alert value objects belong, hardcoded
+ * 60 %/80 % verdicts that ignore AlertThresholds the user can configure,
+ * a fabricated max_connections fallback of 100, and two different
+ * elapsed-time clamps inside one file (checkAllMetrics folds
+ * elapsed <= 0 to 1.0 s while its own computeRate returns a zero rate —
+ * neither is the Sampler's rate law). Wiring this island behind the Alert
+ * VOs + user thresholds, or deleting it, is the separate owner-gated leg;
+ * both methods stay public and functional until that ruling.
+ *
  * @see AdminProviderInterface
  */
 final class PostgresAdminProvider implements AdminProviderInterface
@@ -294,6 +309,10 @@ final class PostgresAdminProvider implements AdminProviderInterface
     /**
      * Compute PostgreSQL metrics (rates and ratios) from pg_stat_database.
      *
+     * ISLAND — zero production callers (see class docblock, adminpages-011):
+     * the wired alert seam is AlertManager::checkAllMetrics(), which never
+     * reaches pg shapes (adminpages-003).
+     *
      * Uses time deltas between calls to compute per-second rates for
      * tuple operations and block I/O. Also computes cache hit ratio.
      *
@@ -396,6 +415,10 @@ final class PostgresAdminProvider implements AdminProviderInterface
 
     /**
      * Compute connection usage and fire alerts when thresholds are exceeded.
+     *
+     * ISLAND — zero production callers, and its 60 %/80 % verdicts are
+     * hardcoded, ignoring the AlertThresholds a user can configure (see
+     * class docblock, adminpages-011).
      *
      * Uses numbackends / max_connections to compute usage ratio.
      * Warning threshold: 60%, Critical threshold: 80%.

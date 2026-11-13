@@ -13,12 +13,16 @@ use SugarCraft\Sql\Admin\Connections\ConnectionCounters;
  * contexts. No state is held between calls; each check() invocation
  * is independent.
  *
- * Usage:
+ * Production path: DashboardPage drives checkAllMetrics() from its poll tick
+ * — that is the only wired alert seam in the app. The counters pair
+ * (checkConnectionUsage()/checkAndDispatch()) is a public but unwired
+ * convenience surface with zero production callers (adminpages-012) and is
+ * deprecated toward the 2.0.0 horizon:
  *   $manager = AlertManager::new()
  *       ->withThresholds(AlertThresholds::standard())
  *       ->withNotifier(AlertNotifier::withDefaults());
  *
- *   $alerts = $manager->checkConnectionUsage($counters);
+ *   $alerts = $manager->checkAllMetrics($statusVariables, $serverVariables);
  *   foreach ($alerts as $alert) {
  *       $notifier = $notifier->notify($alert);
  *   }
@@ -62,6 +66,12 @@ final class AlertManager
 
     /**
      * Check connection counters and fire alerts for any thresholds exceeded.
+     *
+     * @deprecated REMOVED-IN: 2.0.0 — unwired convenience surface (adminpages-012):
+     *             nothing in candy-sql calls it, while the dashboard's own tick
+     *             covers the same signal through checkAllMetrics()'s
+     *             max_connections watch. Hosts that already feed a live
+     *             ConnectionCounters may keep calling it until the horizon.
      *
      * @return array<string, Alert>  Map of alert key -> Alert instance
      */
@@ -129,6 +139,16 @@ final class AlertManager
 
     /**
      * Check status and server variables for threshold violations.
+     *
+     * The dashboard's only wired alert seam (DashboardPage::checkAlerts()).
+     * Key doctrine (adminpages-003): every watch below reads MySQL-named
+     * status/variable keys (`long_query_time`, `Connection_errors_total`,
+     * `max_connections` + `Threads_connected`). A pg-shaped snapshot
+     * (`pg_stat_database.numbackends`, `log_min_duration_statement`) matches
+     * nothing behind the `??` defaults — PostgreSQL never alerts through
+     * this seam, by current design, not by accident. Wiring pg metrics
+     * through here (or adopting PostgresAdminProvider's computed island
+     * behind the Alert VOs) is a separate owner-gated leg.
      *
      * @param array<string, string> $statusVariables  SHOW GLOBAL STATUS output
      * @param array<string, string> $serverVariables  SHOW GLOBAL VARIABLES output
@@ -228,6 +248,11 @@ final class AlertManager
      *
      * This is a convenience method that combines checkConnectionUsage with notifier dispatch.
      * Returns the alerts and an updated notifier separately.
+     *
+     * @deprecated REMOVED-IN: 2.0.0 — inherits its target's verdict (adminpages-012):
+     *             zero production callers; embedders wanting check + dispatch over
+     *             the wired metric set loop checkAllMetrics() against a notifier
+     *             themselves, exactly as DashboardPage does.
      *
      * @return array{alerts: array<string, Alert>, notifier: AlertNotifierInterface}
      */
