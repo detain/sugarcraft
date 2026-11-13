@@ -462,21 +462,36 @@ final class Cli
     }
 
     /**
-     * Stat-shaped change token for a path — dev+ino+size+mtime_ns, or
-     * ['missing'] when stat fails (deleted between frames: keep watching,
+     * Stat-shaped change token for a path — dev+ino+size+mtime (second
+     * granularity on the real stat; seam injections may carry mtime_ns) — or
+     * ['missing'] when stat fails (deleted between frames: keep watching;
      * chicle keeps polling too). $stat is the injectable seam; null uses the
-     * real @stat so a transient permission blip never fakes a change.
+     * real @stat so a transient permission blip never fakes a change — after
+     * clearing PHP's per-process stat cache for this path first. The cache
+     * survives external writes (another process saved the file; our poll
+     * would answer stale forever), which is exactly the bug the watch host
+     * test catches.
      *
      * @param ?\Closure(string): (array<string|int,mixed>|false) $stat
      */
     private static function changeToken(string $path, ?\Closure $stat): array
     {
-        $s = $stat === null ? @stat($path) : $stat($path);
+        if ($stat !== null) {
+            // The injected seam stays cache-free: hermetic pins own their data.
+            $s = $stat($path);
+        } else {
+            \clearstatcache(false, $path);
+            $s = @stat($path);
+        }
         if (!is_array($s)) {
             return ['missing'];
         }
 
-        return [$s['dev'], $s['ino'], $s['size'], $s['mtime_ns']];
+        // A real stat() carries NO mtime_ns member (verified key set), only
+        // second-granularity mtime; the ?? keeps fabricated seam shapes on
+        // nanoseconds while production falls back silently instead of
+        // warning on every poll tick.
+        return [$s['dev'], $s['ino'], $s['size'], $s['mtime_ns'] ?? $s['mtime']];
     }
 
     /**
@@ -485,12 +500,14 @@ final class Cli
      * chicle's run_watch (chafa.c:908-955) destroys and recreates the
      * animation whenever the file's change counter moves; it deliberately
      * distrusts timestamps alone and re-reads on every tick. We deviate in
-     * two disclosed ways: the token folds dev+ino+size+mtime_ns so a
-     * replace-by-rename is caught (timestamp-only granularity misses it),
-     * and a decode failure adopts the token anyway — a half-written file
-     * must not re-decode every 10 ms, the next real change re-mints it.
-     * Stale frames keep playing through a broken state, exactly chicle's
-     * if (media_loader) guard shape.
+     * two disclosed ways: the token folds dev+ino+size+mtime so a
+     * replace-by-rename is caught where the host filesystem exposes stable
+     * dev/ino — on FAT/exFAT, SMB/CIFS and synthetic-inode mounts dev/ino
+     * collapse and the token degrades to size+mtime (and real stat answers
+     * are second-granular); and a decode failure adopts the token anyway —
+     * a half-written file must not re-decode every 10 ms, the next real
+     * change re-mints it. Stale frames keep playing through a broken state,
+     * exactly chicle's if (media_loader) guard shape.
      *
      * @param ?\Closure(string): (array<string|int,mixed>|false) $watchStat
      * @param ?\Closure(string, int, int): array{string, list<\SugarCraft\Animation\Frame>} $decode
