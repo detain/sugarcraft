@@ -23,6 +23,7 @@ return [
     'log.bad_format' => 'nieprawidłowy ciąg --format: {format}',
     'spinner.unknown_style'   => 'nieznany styl spinera: {name}',
     'spinner.windows_unsupported' => 'spin nie może uruchamiać poleceń na natywnym systemie Windows: backend procesów nie jest tu obsługiwany — użyj zamiast tego WSL.',
+    'spinner.output_truncated' => '…[truncated]',
     'format.unknown_theme'    => 'nieznany motyw: {name}',
     'io.read_failed' => 'nie można odczytać pliku: {path}',
     'io.write_failed' => 'nie można zapisać do pliku: {path}',

@@ -23,6 +23,7 @@ return [
     'log.bad_format' => '无效的 --format 字符串：{format}',
     'spinner.unknown_style'   => '未知微调器样式：{name}',
     'spinner.windows_unsupported' => 'spin 无法在原生 Windows 上运行命令：该平台的进程后端不受支持——请改用 WSL。',
+    'spinner.output_truncated' => '…[truncated]',
     'format.unknown_theme'    => '未知主题：{name}',
     'io.read_failed' => '无法读取文件：{path}',
     'io.write_failed' => '无法写入文件：{path}',

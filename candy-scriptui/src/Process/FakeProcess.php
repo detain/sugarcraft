@@ -82,6 +82,10 @@ final class FakeProcess implements Process
     public function stderr(): string    { $this->stderrRead = true; return $this->bufferedStderr; }
     public function stdoutBytes(): string { return $this->bufferedStdout; }
     public function stderrBytes(): string { return $this->bufferedStderr; }
+    public int $droppedStdout = 0;
+    public int $droppedStderr = 0;
+    public function stdoutDropped(): int  { return $this->droppedStdout; }
+    public function stderrDropped(): int  { return $this->droppedStderr; }
 
     /** Convenience: simulate the child finishing with the given code. */
     public function finish(int $code = 0): void

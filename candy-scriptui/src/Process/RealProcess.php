@@ -49,6 +49,18 @@ final class RealProcess implements Process
     public const DRAIN_MAX_BYTES_PER_CALL = 4_194_304;
 
     /**
+     * scriptui-03 (candy-scriptui-007): hard ceiling on bytes RETAINED per
+     * capture slot. `--show-output`/`--show-error` need the raw copy for
+     * the post-run print (gum parity), but an unbounded buffer turns a
+     * chatty child into O(n) RSS growth — peak memory used to be ≈ 2× the
+     * child's total output (the drain loop's copy on top of the buffer).
+     * Beyond the cap the HEAD is kept, overflow bytes are counted and
+     * dropped, and spin says so with one `…[truncated]` line on STDERR;
+     * the child's exit code is never affected.
+     */
+    public const CAPTURE_CAP_BYTES = 8_388_608;
+
+    /**
      * setsid-helper arm for hosts without a usable setsid(1) (stock macOS
      * ships none): the helper session-leads itself, then REPLACES its image
      * with the real command, so the tracked pid stays the group leader and
@@ -74,6 +86,11 @@ final class RealProcess implements Process
     private string $bufferedStdout = '';
 
     private string $bufferedStderr = '';
+
+    /** scriptui-03: bytes seen past {@see CAPTURE_CAP_BYTES}, per slot (head kept, tail dropped). */
+    private int $droppedStdout = 0;
+
+    private int $droppedStderr = 0;
 
     private bool $closed = false;
 
@@ -269,13 +286,47 @@ final class RealProcess implements Process
                     break;
                 }
                 $budget -= \strlen($chunk);
-                if ($slot === 0) {
-                    $this->bufferedStdout .= $chunk;
-                } else {
-                    $this->bufferedStderr .= $chunk;
-                }
+                $this->retain($slot, $chunk);
             }
         }
+    }
+
+    /**
+     * Append a drained chunk to its slot buffer under the capture cap:
+     * the head up to {@see CAPTURE_CAP_BYTES} is retained, every byte
+     * beyond it is counted in the slot's dropped tally instead of living
+     * in RSS (scriptui-03: bounded memory for unbounded children).
+     */
+    private function retain(int $slot, string $chunk): void
+    {
+        if ($slot === 0) {
+            $room = self::CAPTURE_CAP_BYTES - \strlen($this->bufferedStdout);
+            if (\strlen($chunk) > $room) {
+                $this->droppedStdout += \strlen($chunk) - \max(0, $room);
+                $chunk = $room > 0 ? \substr($chunk, 0, $room) : '';
+            }
+            $this->bufferedStdout .= $chunk;
+            return;
+        }
+
+        $room = self::CAPTURE_CAP_BYTES - \strlen($this->bufferedStderr);
+        if (\strlen($chunk) > $room) {
+            $this->droppedStderr += \strlen($chunk) - \max(0, $room);
+            $chunk = $room > 0 ? \substr($chunk, 0, $room) : '';
+        }
+        $this->bufferedStderr .= $chunk;
+    }
+
+    /** Bytes of captured stdout dropped past the capture cap (scriptui-03). */
+    public function stdoutDropped(): int
+    {
+        return $this->droppedStdout;
+    }
+
+    /** Bytes of captured stderr dropped past the capture cap (scriptui-03). */
+    public function stderrDropped(): int
+    {
+        return $this->droppedStderr;
     }
 
     /**

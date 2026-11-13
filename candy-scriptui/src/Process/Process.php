@@ -55,4 +55,14 @@ interface Process extends \SugarCraft\Pty\Contract\Process
 
     /** Captured stderr bytes (drains first). */
     public function stderr(): string;
+
+    /**
+     * scriptui-03: bytes seen past the capture cap for stdout
+     * (0 when every drained byte was retained). Non-zero means the
+     * post-run print shows the head only.
+     */
+    public function stdoutDropped(): int;
+
+    /** scriptui-03: bytes seen past the capture cap for stderr. */
+    public function stderrDropped(): int;
 }

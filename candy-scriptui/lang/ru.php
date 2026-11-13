@@ -23,6 +23,7 @@ return [
     'log.bad_format' => 'недопустимая строка --format: {format}',
     'spinner.unknown_style'   => 'неизвестный стиль спиннера: {name}',
     'spinner.windows_unsupported' => 'spin не может запускать команды в нативном Windows: процессный бэкенд там не поддерживается — используйте WSL.',
+    'spinner.output_truncated' => '…[truncated]',
     'format.unknown_theme'    => 'неизвестная тема: {name}',
     'io.read_failed' => 'не удалось прочитать файл: {path}',
     'io.write_failed' => 'не удалось записать в файл: {path}',

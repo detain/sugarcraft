@@ -192,6 +192,13 @@ final class SpinCommand extends Command
         if ($showError) {
             fwrite(STDERR, $process->stderr());
         }
+        // scriptui-03: a capped capture shows the head and says so — one
+        // notice line on the diagnostics stream, the child's exit code
+        // untouched (truncation is a capture limit, not the child failing).
+        if (($showOutput && $process->stdoutDropped() > 0)
+            || ($showError && $process->stderrDropped() > 0)) {
+            fwrite(STDERR, Lang::t('spinner.output_truncated') . "\n");
+        }
         $process->close();
         return $code;
     }

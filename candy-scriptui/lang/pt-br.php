@@ -23,6 +23,7 @@ return [
     'log.bad_format' => 'string --format inválida: {format}',
     'spinner.unknown_style'   => 'estilo de spinner desconhecido: {name}',
     'spinner.windows_unsupported' => 'o spin não pode executar comandos no Windows nativo: o back-end de processos não é compatível — use o WSL em vez disso.',
+    'spinner.output_truncated' => '…[truncated]',
     'format.unknown_theme'    => 'tema desconhecido: {name}',
     'io.read_failed' => 'não foi possível ler o arquivo: {path}',
     'io.write_failed' => 'não foi possível gravar no arquivo: {path}',

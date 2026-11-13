@@ -23,6 +23,7 @@ return [
     'log.bad_format' => '잘못된 --format 문자열: {format}',
     'spinner.unknown_style'   => '알 수 없는 스피너 스타일: {name}',
     'spinner.windows_unsupported' => 'spin은 네이티브 Windows에서 명령을 실행할 수 없습니다. 프로세스 백엔드가 지원되지 않습니다. 대신 WSL을 사용하세요.',
+    'spinner.output_truncated' => '…[truncated]',
     'format.unknown_theme'    => '알 수 없는 테마: {name}',
     'io.read_failed' => '파일을 읽을 수 없음: {path}',
     'io.write_failed' => '파일에 쓸 수 없음: {path}',
