@@ -1187,6 +1187,21 @@ final class GameTest extends TestCase
         return $g->update(self::key(KeyType::Char, 'n'))[0];
     }
 
+    public function testWithPickerOpensTheOverlayOnAnUntouchedBoard(): void
+    {
+        $g = Game::start(10, 10, 12, static fn(int $_): int => 0);
+        $p = $g->withPicker();
+
+        $this->assertTrue($p->picking);
+        $this->assertNull($p->form);
+        $this->assertSame($g->board, $p->board, '--pick is a door in front of the plain launch, not a new board');
+        $this->assertStringContainsString(Lang::t('ui.picker_title'), $p->view());
+
+        [$back] = $p->update(self::key(KeyType::Escape));
+        $this->assertFalse($back->picking, 'Esc walks back to the default board');
+        $this->assertSame($g->board, $back->board);
+    }
+
     public function testNOpensThePickerAndEscWalksBackUnharmed(): void
     {
         $g = Game::start(5, 5, 3, static fn(int $_): int => 0);

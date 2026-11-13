@@ -193,6 +193,18 @@ final class Game implements Model
         return $this->mutate(['frameCols' => $cols, 'frameRows' => $rows]);
     }
 
+    /**
+     * Open the new-game picker overlay on this game's board: the opt-in
+     * `--pick` launch lands here, so the first frame is the same overlay
+     * `n` opens mid-game. The board underneath is the plain 10x10 default,
+     * which is also where q/Esc walk back to, so the picker is a door in
+     * front of the unchanged launch contract rather than a different one.
+     */
+    public function withPicker(): self
+    {
+        return $this->mutate(['picking' => true, 'form' => null]);
+    }
+
     public static function start(int $width = 10, int $height = 10, int $mines = 12, ?\Closure $rand = null, ?Stats $stats = null, ?string $statsPath = null, ?string $notice = null): self
     {
         return new self(

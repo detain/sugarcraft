@@ -59,6 +59,7 @@ Every block accepts the same options:
 candy-minesweeper 16 10                          # 16 wide by 10 tall — positional order is COLUMNS then ROWS
 candy-minesweeper [width] [height] [mines]       # custom board (validated — the rules are just below)
 candy-minesweeper --easy | --standard | --medium | --expert
+candy-minesweeper --pick                         # open the board picker first (also `-p`)
 candy-minesweeper --version                      # print the version and exit (also `-v`)
 candy-minesweeper --help                         # usage (also `-h`)
 ```
@@ -68,6 +69,8 @@ Library use and worked wiring ship as a runnable example: `php examples/play.php
 The phar is published under the `candy-minesweeper/latest` release tag; its real sidecar set is `candy-minesweeper.phar.sha256`, `candy-minesweeper.phar.sha256.sig`, `candy-minesweeper.phar.minisig` and `candy-minesweeper.phar.minisig.sha256` — the command that works today is `sha256sum -c candy-minesweeper.phar.sha256` (minisig verification ships wired for the self-updating apps only; this app carries no pinned key). **The phar channels are currently FROZEN:** the live `candy-minesweeper/latest` artifact is the build at `f1c90bb34` (2026-11-04), and the 2026-11-05 sibling-pin wave blocks new publish builds fleet-wide; the versioned `v*` release train shares the same wall. Until the fleet cure lands, the Composer paths above are the only fresh channel. After the cure, builds additionally carry `…phar.commit` and `…phar.pins.json` provenance sidecars, and note that the dev matrix publishes push-AFFECTED apps — not literally every push.
 
 ## Arguments
+
+`--pick` (or `-p`) opens the same board picker `n` shows mid-game as the very first frame: `1`–`4` start a preset, `c` opens the custom form, and `q`/`Esc` walk back to the plain 10×10 board underneath. It is opt-in — a bare launch is unchanged — and it is refused (exit 1) together with a preset flag or positional dimensions, since the picker is itself the choice of board.
 
 A preset flag and positional dimensions are mutually exclusive: giving both is refused with exit 1 rather than silently dropping one of them, and giving two preset flags is likewise refused instead of letting the last one win. Any unknown option is refused with exit 1 and the usage text printed on stderr, rather than being ignored.
 

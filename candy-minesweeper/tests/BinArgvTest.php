@@ -89,6 +89,31 @@ final class BinArgvTest extends TestCase
         $this->assertStringContainsString('more than one preset flag', $err);
     }
 
+    public function testPickCannotBeCombinedWithAPresetOrDimensions(): void
+    {
+        foreach ([['--pick', '--easy'], ['-p', '10', '10'], ['--expert', '--pick']] as $args) {
+            [$code, , $err] = self::runBinary($args);
+            $this->assertSame(1, $code, implode(' ', $args));
+            $this->assertStringContainsString('--pick cannot be combined', $err, implode(' ', $args));
+        }
+    }
+
+    public function testHelpTeachesThePickFlag(): void
+    {
+        [$code, $out] = self::runBinary(['--help']);
+        $this->assertSame(0, $code);
+        $this->assertStringContainsString('-p | --pick', $out);
+    }
+
+    public function testPickLaunchShowsThePickerFirstUnderAPty(): void
+    {
+        foreach (['--pick', '-p'] as $flag) {
+            [$code, $out] = PtyLaunch::run([$flag], rows: 40, cols: 100, quitKey: "\x03");
+            $this->assertStringContainsString('choose a board', $out, $flag . ' paints the picker first: ' . PtyLaunch::printable($out));
+            $this->assertSame(0, $code, $flag . ' Ctrl+C quits the overlay: ' . PtyLaunch::printable($out));
+        }
+    }
+
     public function testUnknownOptionStillRefused(): void
     {
         [$code, , $err] = self::runBinary(['--frobnicate']);

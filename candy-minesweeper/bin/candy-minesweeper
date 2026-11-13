@@ -125,6 +125,7 @@ if ($profile === ColorProfile::Ascii || $profile === ColorProfile::NoTty) {
  *   candy-minesweeper                        # default 10×10, 12 mines
  *   candy-minesweeper [width] [height] [mines]   # custom board
  *   candy-minesweeper --easy|--standard|--medium|--expert   # preset
+ *   candy-minesweeper -p | --pick            # open the board picker first
  *
  * A preset flag and custom dimensions are mutually exclusive, and only one
  * preset may be given; violating either rule is an error, not a silent
@@ -149,6 +150,7 @@ const CLI_PATH_CAP = 4096;
 $slotPath = Game::savePath();
 $usage = "usage: candy-minesweeper --easy | --standard | --medium | --expert\n"
       . "       candy-minesweeper [width] [height] [mines]\n"
+      . "       candy-minesweeper -p | --pick    open the board picker first\n"
       . "       board sizes are columns (width) then rows (height) —\n"
       . "       e.g. candy-minesweeper 16 10 starts 16 wide by 10 tall\n"
       . "       keys:   hjkl/arrows move · Home/End row · PgUp/PgDn half-page\n"
@@ -252,6 +254,7 @@ function integerArgument(array $positional, int $index, string $name, string $us
 }
 
 $preset = null;
+$pick = false;
 $positional = [];
 $presets = [
     '--easy'     => Difficulty::Easy,
@@ -271,6 +274,10 @@ foreach ($args as $arg) {
     }
     if ($arg === '--') {
         $afterOptions = true;
+        continue;
+    }
+    if ($arg === '--pick' || $arg === '-p') {
+        $pick = true;
         continue;
     }
     if (isset($presets[$arg])) {
@@ -294,6 +301,13 @@ if ($preset !== null && $positional !== []) {
     // Refuse loudly: silently letting the preset win turns `--expert 10 10`
     // into a game the player did not ask for, with no signal anything moved.
     fwrite(STDERR, "candy-minesweeper: a preset flag and custom dimensions are mutually exclusive\n");
+    fwrite(STDERR, $usage);
+    exit(1);
+}
+if ($pick && ($preset !== null || $positional !== [])) {
+    // The picker IS the choice of board; a second, silent source of truth
+    // would turn one of the two into a lie, so the pair is refused.
+    fwrite(STDERR, "candy-minesweeper: --pick cannot be combined with a preset flag or custom dimensions\n");
     fwrite(STDERR, $usage);
     exit(1);
 }
@@ -342,6 +356,10 @@ if ($preset !== null) {
         exit(1);
     }
     $game = Game::start($w, $h, $m, stats: $stats, statsPath: $statsPath, notice: $resumeNotice);
+}
+
+if ($pick) {
+    $game = $game->withPicker();
 }
 
 // A game nobody can see or steer is refused before anything paints: with
