@@ -146,14 +146,16 @@ simply unused.
   hint collapses to a short form before any line could wrap past the window
   width.
 
-The palette is hardcoded light-on-dark. Against the `#1a1b26` background the
-amber bird reads 14.06:1, the green pipes 11.43:1 and the crash pink 5.95:1;
-against that same dark field the `·` parallax dots sit at ~1.4:1 —
-decorative scenery, never information. On a white background the primaries
-invert to 1.26:1, 1.54:1 and 2.97:1: no light-background palette is
-provided, so use a dark terminal theme. The status hint that carries the
-keyboard instructions sits at roughly 3.6:1, below the 4.5:1 WCAG small-text
-line — low-vision players may struggle to read it.
+The palette is hardcoded light-on-dark, and every ratio below is derived
+from the constants in `src/Renderer.php` by `tools/contrast.php` — re-run
+that script after a palette edit. Against the dark `#1a1b26` field the
+amber bird reads 13.72:1, the green pipes 11.21:1 and the crash pink
+5.89:1, while the `·` parallax dots sit at 1.37:1 — decorative scenery,
+never information. On white the primaries invert to 1.25:1, 1.52:1 and
+2.90:1: no light-background palette is provided, so use a dark terminal
+theme. The status hint that carries the keyboard instructions sits at
+3.71:1, below the 4.5:1 WCAG small-text line — low-vision players may
+struggle to read it.
 
 Play happens on the alternate screen (`ProgramOptions(useAltScreen: true)`,
 DECSET 1049), so your normal scrollback is restored untouched on exit.

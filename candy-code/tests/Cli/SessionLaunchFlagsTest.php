@@ -11,6 +11,7 @@ use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Cli\Help;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Session\EnhancedSessionStore;
+use SugarCraft\Code\Tests\Support\DrainsSharedLoopTrait;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 
 /**
@@ -22,6 +23,7 @@ use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
  */
 final class SessionLaunchFlagsTest extends TestCase
 {
+    use DrainsSharedLoopTrait;
     use HomeSandboxTrait;
 
     private string $tmpHome;

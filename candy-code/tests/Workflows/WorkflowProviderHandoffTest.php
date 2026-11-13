@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Tests\Workflows;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Agents\AgentWorkerPool;
 use SugarCraft\Code\Agents\ProcessExecutor;
+use SugarCraft\Code\Tests\Support\DrainsSharedLoopTrait;
 use SugarCraft\Code\Workflows\Tasks;
 use SugarCraft\Code\Workflows\WorkflowBuilder;
 use SugarCraft\Code\Workflows\WorkflowEngine;
@@ -27,6 +28,8 @@ use SugarCraft\Code\Workflows\WorkflowRegistry;
  */
 final class WorkflowProviderHandoffTest extends TestCase
 {
+    use DrainsSharedLoopTrait;
+
     // E670 (PSR-12 properties-before-methods): the launch-pin pair sat below
     // the test methods it serves. Zero behaviour change — declaration order of
     // properties is semantically inert.

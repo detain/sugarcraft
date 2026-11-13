@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Cli;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\Tests\Support\DrainsSharedLoopTrait;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Code\Agents\Agent;
@@ -70,6 +71,8 @@ use SugarCraft\Code\Tui\Components\AgentDashboardPane;
  */
 final class AgentManagerWiringTest extends TestCase
 {
+    use DrainsSharedLoopTrait;
+
     // Used for its CHAIN constant only. The trait's clear/restore helpers are
     // instance methods and this class's fixture is class-level, so the loop is
     // spelled out in setUpBeforeClass()/tearDownAfterClass() below — but the

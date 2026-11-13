@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Config\LayeredSettings;
 use SugarCraft\Code\Config\StatusLineCommand;
+use SugarCraft\Code\Tests\Support\DrainsSharedLoopTrait;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 
 /**
@@ -25,6 +26,7 @@ use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
  */
 final class BootstrapStatusLineWiringTest extends TestCase
 {
+    use DrainsSharedLoopTrait;
     use HomeSandboxTrait;
 
     private ?string $home = null;

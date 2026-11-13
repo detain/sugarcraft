@@ -26,6 +26,7 @@ use SugarCraft\Code\Providers\CompleteResponse;
 use SugarCraft\Code\Providers\ProviderInterface;
 use SugarCraft\Code\Runtime;
 use SugarCraft\Code\Skills\SkillRegistry;
+use SugarCraft\Code\Tests\Support\DrainsSharedLoopTrait;
 use SugarCraft\Code\Tools\BuiltIn\Read;
 use SugarCraft\Code\Tools\BuiltIn\TaskTool;
 use SugarCraft\Code\Tools\ToolCall;
@@ -58,6 +59,7 @@ use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
  */
 final class TaskToolWiringTest extends TestCase
 {
+    use DrainsSharedLoopTrait;
     use HomeSandboxTrait;
 
     /** @var string */

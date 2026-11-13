@@ -18,6 +18,7 @@ use SugarCraft\Code\Messages\ToolResultMessage;
 use SugarCraft\Code\Providers\CompleteResponse;
 use SugarCraft\Code\Providers\ProviderInterface;
 use SugarCraft\Code\Runtime;
+use SugarCraft\Code\Tests\Support\DrainsSharedLoopTrait;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 use SugarCraft\Code\Tests\Support\McpLaunchEnabledTrait;
 use SugarCraft\Code\Tools\McpToolBridge;
@@ -103,6 +104,7 @@ use SugarCraft\Code\Tools\ToolCall;
  */
 final class McpToolWiringTest extends TestCase
 {
+    use DrainsSharedLoopTrait;
     use HomeSandboxTrait;
     use McpLaunchEnabledTrait;
 

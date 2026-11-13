@@ -14,6 +14,7 @@ use SugarCraft\Code\Agents\ProcessExecutor;
 use SugarCraft\Code\Agents\SubAgent;
 use SugarCraft\Code\Providers\CompleteRequest;
 use SugarCraft\Code\Support\ProcessTree;
+use SugarCraft\Code\Tests\Support\DrainsSharedLoopTrait;
 
 /**
  * Audit F-E2-rem / WF-1-rem: the pool's CANCEL path kills a forked worker the
@@ -32,6 +33,8 @@ use SugarCraft\Code\Support\ProcessTree;
  */
 final class AgentWorkerPoolCancelTreeTest extends TestCase
 {
+    use DrainsSharedLoopTrait;
+
     /** A worker that is still asleep when the test ends was never killed. */
     private const CANCEL_FIXTURE_SLEEP_SECONDS = 10;
 

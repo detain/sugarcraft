@@ -13,6 +13,7 @@ use SugarCraft\Code\Chat;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Role;
 use SugarCraft\Code\Tests\Support\BackendSelectionEnvSandboxTrait;
+use SugarCraft\Code\Tests\Support\DrainsSharedLoopTrait;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 use SugarCraft\Code\ToolResult;
 
@@ -35,6 +36,7 @@ use SugarCraft\Code\ToolResult;
  */
 final class TabChatFactoryTest extends TestCase
 {
+    use DrainsSharedLoopTrait;
     use BackendSelectionEnvSandboxTrait;
     use HomeSandboxTrait;
 
