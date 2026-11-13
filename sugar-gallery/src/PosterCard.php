@@ -436,8 +436,9 @@ final readonly class PosterCard
         return implode("\n", $lines);
     }
 
-    /** Cap on the shared fitted-body memo before oldest-half eviction kicks in. */
-    private const FIT_CACHE_CAP = 2048;
+    /** Cap on the shared fitted-body memo; the eviction law itself has one
+     *  home at {@see RenderMemo::evictIfFull()} (sugar-gallery-046). */
+    private const FIT_CACHE_CAP = RenderMemo::CACHE_CAP;
 
     /**
      * The poster/image/placeholder body rows for this card at the given
@@ -485,9 +486,7 @@ final readonly class PosterCard
             $lines = array_fill(0, $posterHeight, str_repeat('░', $width));
         }
 
-        if (count($cache) >= self::FIT_CACHE_CAP) {
-            $cache = array_slice($cache, self::FIT_CACHE_CAP >> 1, null, true);
-        }
+        $cache = RenderMemo::evictIfFull($cache);
         $cache[$key] = $lines;
 
         return $lines;

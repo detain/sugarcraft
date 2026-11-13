@@ -54,7 +54,9 @@ final class PosterGrid
      */
     private static array $boxCache = [];
 
-    private const BOX_CACHE_CAP = 2048;
+    /** Cap on the shared boxed-cell memo; the eviction law itself has one
+     *  home at {@see RenderMemo::evictIfFull()} (sugar-gallery-046). */
+    private const BOX_CACHE_CAP = RenderMemo::CACHE_CAP;
 
     private int $total = 0;
     private int $cursor = 0;
@@ -774,9 +776,7 @@ final class PosterGrid
 
         $boxed = implode("\n", $lines);
 
-        if (count(self::$boxCache) >= self::BOX_CACHE_CAP) {
-            self::$boxCache = array_slice(self::$boxCache, self::BOX_CACHE_CAP >> 1, null, true);
-        }
+        self::$boxCache = RenderMemo::evictIfFull(self::$boxCache);
         self::$boxCache[$key] = $boxed;
 
         return $boxed;
