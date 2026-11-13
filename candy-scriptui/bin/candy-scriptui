@@ -92,6 +92,17 @@ foreach (\SugarCraft\Core\Util\LegacyEnv::import([
     ]) . "\n");
 }
 
+// Symfony's Terminal::getWidth()/getHeight() shell out to `mode CON` on Windows,
+// which swallows a file-redirected stdin. Pre-seeding COLUMNS/LINES (when the
+// caller has not) makes it answer from the environment instead.
+if (\PHP_OS_FAMILY === 'Windows') {
+    foreach (['COLUMNS' => 80, 'LINES' => 24] as $name => $fallback) {
+        if (getenv($name) === false) {
+            putenv($name . '=' . $fallback);
+        }
+    }
+}
+
 // Application::run() returns the process exit code; forwarding it is the
 // package's raison d'être — shell scripts gate on `candy-scriptui confirm`.
 exit((new Application())->run());

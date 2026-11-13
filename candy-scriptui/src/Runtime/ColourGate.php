@@ -148,8 +148,20 @@ final class ColourGate
     public static function termIsDumb(): bool
     {
         $term = self::env('TERM');
+        if ($term === 'dumb') {
+            return true;
+        }
+        if ($term === null || $term === '') {
+            // Native Windows consoles export no TERM at all; what says whether
+            // they take escapes is whether VT processing is on for stdout.
+            if (\PHP_OS_FAMILY === 'Windows' && \function_exists('sapi_windows_vt100_support') && \defined('STDOUT')) {
+                return !@\sapi_windows_vt100_support(\STDOUT);
+            }
 
-        return $term === null || $term === '' || $term === 'dumb';
+            return true;
+        }
+
+        return false;
     }
 
     /**
