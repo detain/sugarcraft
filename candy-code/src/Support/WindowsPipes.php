@@ -33,6 +33,14 @@ final class WindowsPipes
     public const POLL_MICROSECONDS = 10_000;
 
     /**
+     * How long a caller keeps draining after the child exits, when it has no
+     * deadline of its own. Bytes the child wrote before exiting are already
+     * in the pipe; this grace exists only so a backgrounded grandchild that
+     * keeps the pipe fed cannot hold the drain open forever.
+     */
+    public const EXIT_DRAIN_GRACE_SECONDS = 1.0;
+
+    /**
      * Whether THIS PHP runtime has the blocking-pipe behavior. That depends on
      * the real OS PHP runs on, never on WindowsShell's injectable family: on
      * Linux, fstat() of a pipe always reports size 0, so the fstat-driven

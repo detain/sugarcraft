@@ -103,6 +103,10 @@ final class SuiteSkipRosterTest extends TestCase
     private const WINDOWS_CAPTURE_PIPE_ENTRY =
         'SugarCraft\\Code\\Tests\\Windows\\WindowsBashSmokeTest::testCaptureReadsDoNotBlockOnASilentLivePipe';
 
+    /** The Windows chatty-child key — the private `WINDOWS_CHATTY_TIMEOUT`, by literal; same predicate. */
+    private const WINDOWS_CHATTY_TIMEOUT_ENTRY =
+        'SugarCraft\\Code\\Tests\\Windows\\WindowsBashSmokeTest::testAChildThatNeverStopsWritingStillTimesOut';
+
     /** The LANE-CC macOS setsid-preference key: the roster's private `SETSID_PREFERENCE`, by literal; same predicate. */
     private const SETSID_ENTRY =
         'SugarCraft\\Code\\Tests\\Support\\ProcessContainmentPhpSetsidTest::testARealSetsidIsStillPreferredWhenPresent';
@@ -306,6 +310,7 @@ final class SuiteSkipRosterTest extends TestCase
                         self::WINDOWS_BASH_TREE_KILL_ENTRY => SuiteSkipRoster::EXPECTED[self::WINDOWS_BASH_TREE_KILL_ENTRY],
                         self::WINDOWS_PTYRUN_CONPTY_ENTRY => SuiteSkipRoster::EXPECTED[self::WINDOWS_PTYRUN_CONPTY_ENTRY],
                         self::WINDOWS_CAPTURE_PIPE_ENTRY => SuiteSkipRoster::EXPECTED[self::WINDOWS_CAPTURE_PIPE_ENTRY],
+                        self::WINDOWS_CHATTY_TIMEOUT_ENTRY => SuiteSkipRoster::EXPECTED[self::WINDOWS_CHATTY_TIMEOUT_ENTRY],
                     ]) + (ProcessContainment::locateOnPath('setsid') !== ''
                     ? []
                     : [
@@ -315,7 +320,7 @@ final class SuiteSkipRosterTest extends TestCase
                 . 'smokes stay rostered, so the effective roster must be the const minus exactly '
                 . 'its GitignoreAwareness key (and minus the premise and the rename arm wherever '
                 . 'phar writing is possible, and minus the jail arm wherever bubblewrap starts, '
-                . 'and minus the four Windows smoke arms wherever this host IS Windows, '
+                . 'and minus the five Windows smoke arms wherever this host IS Windows, '
                 . 'and minus the setsid-preference arm wherever a native setsid(1) is located on PATH), '
                 . 'reasons intact',
             );

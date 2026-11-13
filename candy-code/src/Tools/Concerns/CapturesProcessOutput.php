@@ -292,6 +292,13 @@ trait CapturesProcessOutput
                 if ($onWait !== null) {
                     $onWait();
                 }
+                // Checked on EVERY pass, reads included: a child that writes
+                // without pause (`yes`) always has bytes waiting, and a
+                // deadline consulted only on idle passes would never fire.
+                if ($deadline !== null && microtime(true) >= $deadline) {
+                    $timedOut = true;
+                    break;
+                }
                 $got = false;
                 foreach ([$pipes[1], $pipes[2]] as $pipe) {
                     $chunk = WindowsPipes::readAvailable($pipe);
@@ -307,10 +314,22 @@ trait CapturesProcessOutput
                 if (($status['running'] ?? false) !== true) {
                     $windowsExit = (int) ($status['exitcode'] ?? -1);
                     // Bytes written between the last pass and the exit are
-                    // still in the pipe; take them before reporting.
+                    // still in the pipe; take them before reporting. Bounded:
+                    // a backgrounded grandchild can keep the pipe fed forever
+                    // after the shell exits, so the drain stops at the
+                    // deadline (and counts as a timeout, so the tree kill
+                    // runs) or, unbounded runs, after a short fixed grace.
+                    $drainUntil = min(
+                        $deadline ?? \INF,
+                        microtime(true) + WindowsPipes::EXIT_DRAIN_GRACE_SECONDS,
+                    );
                     foreach ([$pipes[1], $pipes[2]] as $pipe) {
                         while (($chunk = WindowsPipes::readAvailable($pipe)) !== '') {
                             $keep($pipe, $chunk);
+                            if (microtime(true) >= $drainUntil) {
+                                $timedOut = $deadline !== null && microtime(true) >= $deadline;
+                                break 2;
+                            }
                         }
                     }
                     break;
@@ -318,10 +337,6 @@ trait CapturesProcessOutput
                 $sleep = WindowsPipes::POLL_MICROSECONDS;
                 if ($deadline !== null) {
                     $remaining = $deadline - microtime(true);
-                    if ($remaining <= 0.0) {
-                        $timedOut = true;
-                        break;
-                    }
                     $sleep = max(1, min($sleep, (int) ceil($remaining * 1_000_000)));
                 }
                 usleep($sleep);

@@ -1,8 +1,8 @@
 {
-    "tests": 33104,
-    "assertions": 801240,
+    "tests": 33105,
+    "assertions": 801247,
     "failures": 0,
-    "skipped": 8,
+    "skipped": 9,
     "measured_at": "2026-11-13",
     "php": "8.3.6",
     "command": "php vendor/bin/phpunit -c phpunit.xml --log-junit <file> (cwd=candy-code, linked siblings, monorepo sandbox root)",

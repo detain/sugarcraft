@@ -2118,7 +2118,7 @@ candy-code/tests/Palette/PaletteStateQueryCapTest.php	0.000	2
 candy-code/tests/Server/OperatorDiagnosticRulingTest.php	0.000	1
 candy-code/tests/Support/SharedLoopResidueGuardTest.php	0.000	1
 candy-code/tests/AssistantMsgTest.php	0.000	2
-candy-code/tests/Windows/WindowsBashSmokeTest.php	0.000	3
+candy-code/tests/Windows/WindowsBashSmokeTest.php	0.000	4
 candy-code/tests/Chat/PermissionMatchedRuleTest.php	0.000	1
 candy-code/tests/Windows/WindowsPtyRunSmokeTest.php	0.000	1
 candy-code/tests/Protocol/Methods/TodoMethodsTest.php	0.000	2

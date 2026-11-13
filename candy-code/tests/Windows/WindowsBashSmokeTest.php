@@ -137,6 +137,30 @@ final class WindowsBashSmokeTest extends TestCase
     }
 
     /**
+     * A child that never stops writing must still hit its deadline. The
+     * Windows capture arm reads whatever fstat reports waiting; checking the
+     * deadline only on passes that read nothing meant `yes` (always bytes
+     * waiting) could run forever. The deadline is now checked on every pass.
+     */
+    public function testAChildThatNeverStopsWritingStillTimesOut(): void
+    {
+        if (!SuiteSkipRoster::windowsSmokeRuns()) {
+            self::markTestSkipped('the Windows capture arm only runs on a Windows PHP runtime');
+        }
+
+        $started = microtime(true);
+        $result = (new Bash())->execute([
+            'command' => 'yes',
+            'description' => 'Windows chatty-child timeout smoke',
+            'timeout' => 2,
+        ]);
+        $elapsed = microtime(true) - $started;
+
+        self::assertTrue($result->isError(), 'a timed-out run answers as an error');
+        self::assertLessThan(15.0, $elapsed, 'the deadline fired while output was still flowing');
+    }
+
+    /**
      * The capture engine's read primitive on a REAL Windows proc_open pipe.
      *
      * On this host stream_set_blocking() cannot unblock such a pipe and the
