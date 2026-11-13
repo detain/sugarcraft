@@ -61,7 +61,7 @@ final class CliTest extends TestCase
         // emits the payload as a report — the guard must refuse the wrapper.
         [$code, $stdout, $stderr] = self::runCli('data://text/plain,injected');
         $this->assertSame(1, $code);
-        $this->assertStringContainsString('not a readable file', $stderr);
+        $this->assertStringContainsString('cannot read', $stderr);
         $this->assertStringNotContainsString('injected', $stdout);
     }
 
@@ -69,7 +69,7 @@ final class CliTest extends TestCase
     {
         [$code, , $stderr] = self::runCli('/no/such/candy-ansi-inspect/input/file');
         $this->assertSame(1, $code);
-        $this->assertStringContainsString('not a readable file', $stderr);
+        $this->assertStringContainsString('cannot read', $stderr);
     }
 
     public function testFileLiterallyNamedZeroIsInspectedNotDemotedToStdin(): void
@@ -98,7 +98,7 @@ final class CliTest extends TestCase
         // the caller never named.
         [$code, $stdout, $stderr] = self::runCliWithStdin("piped \x1b[31m text", ['']);
         $this->assertSame(1, $code, $stderr);
-        $this->assertStringContainsString('not a readable file', $stderr);
+        $this->assertStringContainsString('cannot read', $stderr);
         $this->assertSame('', $stdout);
     }
 
@@ -198,7 +198,7 @@ final class CliTest extends TestCase
         try {
             [$code, $stdout, $stderr] = self::runCli($tmp);
             $this->assertSame(1, $code, 'unreadable file must exit 1, got: ' . $stderr);
-            $this->assertStringContainsString('not a readable file', $stderr);
+            $this->assertStringContainsString('cannot read', $stderr);
             $this->assertStringNotContainsString('PHP Warning', $stderr);
             $this->assertSame('', $stdout);
         } finally {
@@ -226,12 +226,12 @@ final class CliTest extends TestCase
         [$code, $stdout, $stderr] = self::runCli('/no/such/de-locale-probe', ['LANG' => 'de']);
         $this->assertSame(1, $code, $stderr);
         $this->assertStringContainsString($german, $stderr);
-        $this->assertStringNotContainsString('not a readable file', $stderr);
+        $this->assertStringNotContainsString('cannot read', $stderr);
         $this->assertSame('', $stdout);
 
         // Polarity: with no locale env at all the same refusal stays English.
         [, , $english] = self::runCli('/no/such/de-locale-probe', ['PATH' => '/usr/bin:/bin']);
-        $this->assertStringContainsString('not a readable file', $english);
+        $this->assertStringContainsString('cannot read', $english);
         $this->assertStringNotContainsString($german, $english);
     }
 

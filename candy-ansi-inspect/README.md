@@ -86,8 +86,8 @@ cannot be read is refused the same way (the gate is "is this a readable regular
 file", not "can we fake an empty report"): exit status **1** with the refusal
 on stderr, never a PHP warning followed by a misleading zero. The refusal
 string's wording is
-`not a readable file: {path}`, and it fires for every path that is not a
-readable file — not-a-file and not-readable alike.
+`cannot read: {path}`, and it fires for every path that cannot be read as a
+regular file — not-a-file, a directory, and not-readable alike.
 
 ## Library
 
