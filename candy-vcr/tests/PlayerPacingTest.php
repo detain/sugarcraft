@@ -88,6 +88,44 @@ final class PlayerPacingTest extends TestCase
         $this->assertTrue($result->programQuitCleanly);
     }
 
+    /**
+     * VCR-S27 follow-up (found by the S28 work): dispatching Quit stops the
+     * loop, so a batch that already SENT a Msg to the program must yield
+     * first — one loop iteration is the flush window for the frame render
+     * the program's frame timer armed. Without the split, the final frame
+     * dies with the loop and replay screens go stale under fast trackers.
+     * Output-only batches have nothing pending and run straight into Quit;
+     * that is what the [0.0, 2.0] control test above pins.
+     */
+    public function testQuitAfterSentMsgSplitsTheBatchForOneFlushYield(): void
+    {
+        $events = [
+            new Event(t: 0.0, kind: EventKind::Output, payload: ['b' => 'a']),
+            new Event(t: 1.0, kind: EventKind::Input, payload: ['b' => 'x']),
+            new Event(t: 2.0, kind: EventKind::Output, payload: ['b' => 'b']),
+            new Event(t: 3.0, kind: EventKind::Quit, payload: []),
+        ];
+
+        $loop = new FakeClockLoop();
+        $result = (new Player(new Cassette(self::stubHeader(), $events)))
+            ->play(
+                self::neverSelfQuitFactory(),
+                speed: Player::SPEED_INSTANT,
+                timeoutSeconds: 2.0,
+                loop: $loop,
+            );
+
+        $armed = $loop->oneShotIntervals();
+        $yields = array_values(array_filter($armed, static fn (float $s): bool => $s === Player::INSTANT_YIELD_SECONDS));
+        $this->assertCount(1, $yields, 'exactly the pre-Quit flush yield, no per-event pacing');
+        // Arm order: initial step, cap safety-net (armed at play setup),
+        // then the flush yield discovered at the Quit boundary.
+        $this->assertSame([0.0, 2.0, Player::INSTANT_YIELD_SECONDS], $armed);
+        $this->assertSame(2, $result->outputCount);
+        $this->assertSame(1, $result->inputCount);
+        $this->assertTrue($result->programQuitCleanly);
+    }
+
     public function testRealtimeKeepsOneTimerPerEventDelta(): void
     {
         // Control arm: the batching must not leak into REALTIME pacing —

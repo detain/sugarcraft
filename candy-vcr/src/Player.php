@@ -291,7 +291,28 @@ final class Player
                     // replay cost scale with the timer floor instead of
                     // the work. Realtime keeps one delta timer per event.
                     $batchEnd = min($eventCount, $i + self::INSTANT_BATCH);
+                    $batchStart = $i;
+                    $batchSentMsg = false;
                     do {
+                        if (
+                            $events[$i]->kind === EventKind::Quit
+                            && $i > $batchStart
+                            && $batchSentMsg
+                        ) {
+                            // VCR-S27 follow-up: dispatching Quit stops the
+                            // loop, and a final frame render armed on the
+                            // program's frame timer dies with it. When this
+                            // batch already sent a Msg, yield once (the same
+                            // inter-event budget pre-batching code had) so
+                            // pending renders flush before teardown. A batch
+                            // whose only program-visible work is Quit itself
+                            // has nothing to flush and runs straight through.
+                            $loop->addTimer(self::INSTANT_YIELD_SECONDS, $step);
+                            return;
+                        }
+                        if ($events[$i]->kind === EventKind::Input || $events[$i]->kind === EventKind::Resize) {
+                            $batchSentMsg = true;
+                        }
                         $this->dispatchInline(
                             $events[$i],
                             $program,
