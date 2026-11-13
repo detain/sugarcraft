@@ -366,7 +366,10 @@ final class Color
     /**
      * Emit a 16-color ANSI foreground escape using 4-bit SGR.
      *
-     * @see https://github.com/charmbracelet/colorprofile — Color.ToANSI16Foreground
+     * @see https://github.com/muesli/termenv — the ANSIColor foreground SGR
+     *      grammar this mirrors. (No Color.ToANSI16Foreground exists in
+     *      charmbracelet/colorprofile — CP-56 attribution fix, see the
+     *      corrected upstream-symbol note in the research doc, 2026-11-12.)
      */
     public function toAnsi16Foreground(): string
     {
@@ -444,7 +447,10 @@ final class Color
      * Fail fast: an index outside 0–15 is not a color — it used to
      * silently emit an off-by-N SGR code (e.g. -1 → "29", a cursor movement).
      *
-     * @see https://github.com/charmbracelet/colorprofile — Color.ANSI16SGR
+     * @see https://en.wikipedia.org/wiki/ANSI_escape_code#3/4-bit — the
+     *      30-37/90-97/40-47/100-107 grid is ECMA-48/xterm standard, not a
+     *      Go-library symbol. (No Color.ANSI16SGR exists in
+     *      charmbracelet/colorprofile — CP-56 attribution fix.)
      *
      * @throws \OutOfBoundsException when $idx is not an ANSI 16 slot
      */
@@ -474,7 +480,11 @@ final class Color
      * handing callers the black or white end of the ramp for a typo. The
      * constructor clamp is the documented deliberate exception.
      *
-     * @see https://github.com/charmbracelet/colorprofile — Color.FromANSI256Index
+     * @see https://en.wikipedia.org/wiki/ANSI_escape_code#8-bit — the cube
+     *      and gray-ramp layout is the xterm 256-color palette;
+     *      colorprofile indexes these slots but carries no decoder method.
+     *      (No Color.FromANSI256Index exists in charmbracelet/colorprofile —
+     *      CP-56 attribution fix.)
      *
      * @throws \OutOfBoundsException when $idx is not an ANSI 256 slot
      */

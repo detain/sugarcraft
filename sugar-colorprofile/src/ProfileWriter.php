@@ -8,7 +8,10 @@ namespace SugarCraft\ColorProfile;
  * ProfileWriter — stream wrapper that automatically degrades ANSI color
  * sequences to match the terminal's detected color profile.
  *
- * Mirrors colorprofile.NewWriter / ProfileWriter in the Go library.
+ * Conceptual mirror of termenv.Writer's degrade-on-write contract and
+ * colorprofile's profile detection (CP-56 attribution fix: no symbol named
+ * NewWriter/ProfileWriter ships in charmbracelet/colorprofile — see the
+ * corrected upstream-symbol note in the research doc, 2026-11-12).
  *
  * Usage:
  *   $w = ProfileWriter::wrap(STDOUT);

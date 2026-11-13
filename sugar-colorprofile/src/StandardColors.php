@@ -7,9 +7,12 @@ namespace SugarCraft\ColorProfile;
 /**
  * Standard 16-color ANSI palette as named {@see Color} objects.
  *
- * Mirrors the standard ANSI 16-color palette from the Go colorprofile
- * package. Use these as readable shortcuts in place of
- * `new Color(0xcd, 0x00, 0x00)`.
+ * The standard ANSI 16-color palette at xterm's default RGB values — a
+ * conceptual mirror of the 4-bit colors termenv's ANSIColor names. Use these
+ * as readable shortcuts in place of `new Color(0xcd, 0x00, 0x00)`.
+ * (CP-56 attribution fix: the Go colorprofile package defines no palette
+ * table — see the corrected upstream-symbol note in the research doc,
+ * 2026-11-12.)
  *
  * CAUTION: these are public MUTABLE statics — an assignment anywhere in the
  * process rewrites the value for every reader, and nothing pins them against
