@@ -63,7 +63,12 @@ final class DefaultChannelHandlerTest extends TestCase
         $this->assertFalse($handler->ptyAllocated());
     }
 
-    public function testHandlePtyReqWithZeroColsUsesSessionCols(): void
+    /**
+     * Zero-declared message + zero-declared session lands on the 80/24
+     * final fallback. (Renamed from `...UsesSessionCols`, which described
+     * a branch this case never exercised — audit 019.)
+     */
+    public function testHandlePtyReqWithNothingDeclaredFallsBackToTheDefaultShape(): void
     {
         $handler = new DefaultChannelHandler();
         $session = new Session(
@@ -76,6 +81,26 @@ final class DefaultChannelHandlerTest extends TestCase
 
         $this->assertSame(80, $handler->cols());
         $this->assertSame(24, $handler->rows());
+    }
+
+    /**
+     * The middle leg — a message that declares zero takes a POSITIVE
+     * session size before the 80/24 floor is ever consulted. Deleting
+     * that leg used to keep the suite green (audit 019); now it reddens.
+     */
+    public function testHandlePtyReqWithZeroMsgDimensionsTakesAPositiveSessionSize(): void
+    {
+        $handler = new DefaultChannelHandler();
+        $session = new Session(
+            user: 'alice', clientHost: '127.0.0.1', clientPort: 1, serverHost: '127.0.0.1',
+            serverPort: 22, term: 'xterm', cols: 120, rows: 50, tty: null,
+            command: null, lang: 'C',
+        );
+
+        $handler->handlePtyReq(new PtyReqMsg(wantPty: true, cols: 0, rows: 0), $session);
+
+        $this->assertSame(120, $handler->cols());
+        $this->assertSame(50, $handler->rows());
     }
 
     public function testHandleWindowChangeUpdatesColsAndRows(): void
@@ -361,6 +386,12 @@ final class DefaultChannelHandlerTest extends TestCase
         $handler->handleShell(new ShellMsg(wantShell: true), $this->fakeSession());
 
         $this->assertArrayNotHasKey('LD_PRELOAD', $capturedEnv);
+        // Accessor contract beside the child-env veto (audit 088): envVars()
+        // returns the RAW peer-supplied map — deny/allow filtering happens
+        // only inside buildEnv, never at store time. Moving the filter to
+        // store time would change what embedders reading the accessor see,
+        // and must move this pin with it.
+        $this->assertArrayHasKey('LD_PRELOAD', $handler->envVars());
         // Floor PATH is always present (as a baseline), but client-supplied PATH
         // from EnvMsg is never merged since PATH is in DANGEROUS_VARS.
         // The floor PATH comes from getenv('PATH') ?: '/usr/local/bin:/usr/bin:/bin'
@@ -641,6 +672,58 @@ final class DefaultChannelHandlerTest extends TestCase
         $this->assertSame('SSH-2.0-wish', $captured->serverVersion);
         $this->assertSame(132, $captured->cols);
         $this->assertSame(43, $captured->rows);
+    }
+
+    /**
+     * The geometry re-derivation asymmetry, documented by test (audit 087):
+     * `spawnShell` recomputes child size via `withSize` (session → handler →
+     * 80/24) while `spawnWithExec` hands the peer's session straight through.
+     * Both legs are pinned under identical conditions on one handler: an
+     * undeclared session size beside a pty-req that did declare one. Shell
+     * sees the declared size; exec sees the raw zeros. If the paths are ever
+     * unified this pin must be re-read, not just flipped — the divergence is
+     * shipped behaviour either way round.
+     */
+    public function testSpawnWithExecCarriesTheOriginalSessionGeometryWhileShellReDerives(): void
+    {
+        $captured = null;
+        $spy = new class($captured) implements ChildSpawner {
+            private mixed $sink;
+
+            public function __construct(mixed &$sink)
+            {
+                $this->sink = &$sink;
+            }
+
+            public function runChild(Session $session, array $cmd, ?array $env = null): int
+            {
+                $this->sink = $session;
+
+                return 0;
+            }
+
+            public function signalChild(int $signal): void {}
+        };
+
+        $session = new Session(
+            user: 'alice', clientHost: '127.0.0.1', clientPort: 1, serverHost: '127.0.0.1',
+            serverPort: 22, term: 'xterm', cols: 0, rows: 0, tty: '/dev/pts/0',
+            command: null, lang: 'C',
+        );
+
+        $handler = new DefaultChannelHandler($spy, null, [], null, ['/bin/ls']);
+        $handler->handlePtyReq(new PtyReqMsg(wantPty: true, cols: 120, rows: 50), $session);
+
+        $handler->handleExec(new ExecMsg('/bin/ls -l'), $session);
+        $this->assertInstanceOf(Session::class, $captured);
+        $this->assertSame(0, $captured->cols, 'the exec path must carry the session untouched');
+        $this->assertSame(0, $captured->rows);
+
+        $captured = null;
+        $handler->handleShell(new ShellMsg(wantShell: true), $session);
+        $this->assertInstanceOf(Session::class, $captured);
+        $this->assertSame(120, $captured->cols, 'the shell path must re-derive from the handler size');
+        $this->assertSame(50, $captured->rows);
     }
 
     /**
