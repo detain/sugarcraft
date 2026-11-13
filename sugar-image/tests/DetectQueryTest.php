@@ -27,6 +27,26 @@ use SugarCraft\Image\TermDb;
  */
 final class DetectQueryTest extends TestCase
 {
+    /**
+     * Upper bound for the fast-path timing legs (SI-47, finding 056).
+     *
+     * These legs used to demand < 250 ms: the old number was the
+     * strictest value that still separated a correct early-breaking
+     * read (~1 ms) from the mutations it guards (a deleted pair-break
+     * or byte-cap rides the full 300 ms colour window). On the
+     * saturated shared runners the 250 ms upper leg was the flake
+     * source this file keeps hitting (21-sample ext-uv precedent in
+     * tests/bootstrap.php), and a review adjudicated the trade: one
+     * named ceiling at 500 ms absorbs scheduler stalls, and the
+     * 300 ms-signature mutations lose their TIMING pin here — the
+     * value pins on the same legs (parsed colours, flood bails) and
+     * the re-arm budget leg (assertGreaterThanOrEqual(250) /
+     * assertLessThan(700)) still pin the window law itself. Lower
+     * bounds deliberately stay literal: a read that gets FASTER than
+     * its floor is a bug no load can explain.
+     */
+    private const FAST_PATH_CEILING_MS = 500;
+
     /** @var array<string,string|false> */
     private array $savedEnv = [];
 
@@ -303,7 +323,16 @@ final class DetectQueryTest extends TestCase
 
         @fwrite($pair['write'], "\x1b]10;?\x1b\\\x1b]11;?\x1b\\"); // echo chunk
         @fflush($pair['write']);
-        usleep(60_000);                                            // real terminals lag echo
+        // Load-bearing wall-clock gap, not a sleep-for-sleep's-sake (SI-47,
+        // finding 057): the mutation this leg guards is a terminator loosened
+        // to match the echo shape. If the reply bytes arrived in the SAME
+        // queue drain as the echo, a whole-buffer parse would answer
+        // correctly and the loosened terminator would hide — the 60 ms is the
+        // only thing that makes "broke on echo" observably different from
+        // "read to the reply". It is a floor on the WRITER side, never a
+        // ceiling on the reader (that is the FAST_PATH_CEILING_MS leg), so
+        // scheduler delay can only widen the straddle, never fake a pass.
+        usleep(60_000);
         @fwrite($pair['write'], "\x1b]10;rgb:11/22/33\x1b\\\x1b]11;rgb:44/55/66\x1b\\");
         @fflush($pair['write']);
 
@@ -354,7 +383,7 @@ final class DetectQueryTest extends TestCase
 
         $this->assertSame('0d0e0f', $fg);
         $this->assertSame('fedcba', $bg);
-        $this->assertLessThan(250, $tookMs, 'the read ignored the complete pair and spent the window (' . $tookMs . ' ms)');
+        $this->assertLessThan(self::FAST_PATH_CEILING_MS, $tookMs, 'the read ignored the complete pair and spent the window (' . $tookMs . ' ms)');
     }
 
     /**
@@ -450,7 +479,7 @@ final class DetectQueryTest extends TestCase
         $this->assertSame('6a7b8c', $fg, 'the staggered fg reply did not land');
         $this->assertSame('deadbe', $bg, 'the read broke on the lone fg reply — the pair-completion && early-exited as ||');
         $this->assertGreaterThanOrEqual(40, $tookMs, 'both replies arrived before any stagger could exist (' . $tookMs . ' ms)');
-        $this->assertLessThan(250, $tookMs, 'the pair break did not fire once the complete reply was in hand (' . $tookMs . ' ms)');
+        $this->assertLessThan(self::FAST_PATH_CEILING_MS, $tookMs, 'the pair break did not fire once the complete reply was in hand (' . $tookMs . ' ms)');
     }
 
     /**
@@ -469,7 +498,7 @@ final class DetectQueryTest extends TestCase
 
         $this->assertNull($fg);
         $this->assertNull($bg);
-        $this->assertLessThan(250, $tookMs, 'the byte cap did not end the flood read (' . $tookMs . ' ms)');
+        $this->assertLessThan(self::FAST_PATH_CEILING_MS, $tookMs, 'the byte cap did not end the flood read (' . $tookMs . ' ms)');
     }
 
     // -------------------------------------------------------------------------
@@ -532,7 +561,7 @@ final class DetectQueryTest extends TestCase
 
         $this->assertNull($cap->defaultFg);
         $this->assertNull($cap->defaultBg);
-        $this->assertLessThan(250, $tookMs, 'a non-interactive probe still spent a colour window (' . $tookMs . ' ms)');
+        $this->assertLessThan(self::FAST_PATH_CEILING_MS, $tookMs, 'a non-interactive probe still spent a colour window (' . $tookMs . ' ms)');
     }
 
     // -------------------------------------------------------------------------

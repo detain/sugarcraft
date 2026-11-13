@@ -259,6 +259,15 @@ final class DetectTmuxTest extends TestCase
         // exec- replaces the shell with sleep so TERM reaches the sleeper
         // directly (TmuxPassthroughTest's hang-fake lesson); 10× the probe's
         // budget. The deadline must bound the WAIT, not inherit the child's.
+        // Why the child costs a full second (SI-47, finding 058): Detect's
+        // TIMEOUT_MS (100 ms) is a private const — the timeout is not a
+        // configurable seam, so the only lever is making the mutant answer
+        // late by a wide margin. A 200 ms sleeper would still pass a correct
+        // probe but lets a half-broken deadline (reads 150 ms, then returns)
+        // squeak under the 0.9 s bound; 1 s guarantees anything that inherits
+        // the child's clock dies on this leg. The wait itself is bounded by
+        // the deadline, so the suite pays ~100 ms, not the second — the
+        // child is reaped at the deadline, exec- TERM reaching the sleeper.
         $this->plantFakeTmuxReply("exec sleep 1; printf '%s\\n' 'sixel'", 0);
         $pair = $this->createStreamPair();
         Detect::setProbeStdin($pair['read']);
