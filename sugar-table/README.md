@@ -233,7 +233,7 @@ $t = $t->SortBy('city')
 ```
 
 - Repeating `SortBy()` on the sole active sort key with the SAME direction
-  silently flips that column's direction (the header-toggle behaviour)
+  silently flips that column's direction (the header-toggle behavior)
 - An unknown column key throws `InvalidArgumentException`
 - `ClearSort()` removes all sorting
 
@@ -785,7 +785,7 @@ Every cell value, column title and expanded-detail line passes through
 `Sanitize::value()` (`src/Sanitize.php`) on its way to the buffer, so untrusted
 data cannot emit escape sequences:
 
-- Control bytes are neutralised — TAB, every other C0 byte and DEL become `·`,
+- Control bytes are neutralized — TAB, every other C0 byte and DEL become `·`,
   C1 codepoints are replaced, and invalid UTF-8 is repaired to `U+FFFD` rather
   than silently dropped. Raw ANSI arriving inside a value (a `\x1b[2J` off the
   network) paints as visible junk (`·[2J`) and is never honored. Newlines
@@ -808,9 +808,9 @@ data cannot emit escape sequences:
   human reads.
 - Style channels are parse-restricted: SGR strings given to `withStyle`,
   `withHeaderStyle` or a `StyleFunc` are parsed into a structured attribute set
-  (canonicalised to 24-bit at render), never echoed as raw bytes.
+  (canonicalized to 24-bit at render), never echoed as raw bytes.
 
-This is terminal-injection defence, not HTML escaping — the output is ANSI for
+This is terminal-injection defense, not HTML escaping — the output is ANSI for
 a terminal. One bypass is deliberate: casting a `StyledCell` to string emits
 its raw value wrapped in its SGR codes **unsanitized** (see the string-cast
 warning under Rows); render untrusted content only through `View()`. Pinned by
@@ -822,16 +822,16 @@ warning under Rows); render untrusted content only through `View()`. Pinned by
 What the renderer does for you:
 
 - **Selection is pure reverse video** (`ESC[0;7m`) composed over the row's
-  winning style — it needs no colour channel, so the cursor row stays readable
+  winning style — it needs no color channel, so the cursor row stays readable
   on light and dark palettes alike. A cursorless table is one call away:
   `withSelectable(false)`.
 - **Zebra striping is a fixed black-on-white inversion** (`30;47` on even
   stripes, odd stripes plain) rather than a dimmed grey — again readable
-  without a colour vocabulary. Enable it with `$table->withZebra(true)`.
+  without a color vocabulary. Enable it with `$table->withZebra(true)`.
 - **The empty-state message is translatable** (`no_data`, see
   Internationalization) instead of a silent blank box.
 
-Known limits — there is no colour-blind or a11y mode:
+Known limits — there is no color-blind or a11y mode:
 
 - No `NO_COLOR`, non-TTY or plain-text degrade path exists: SGR sequences are
   always emitted (only the Security section's sanitisation ever removes bytes).
@@ -874,7 +874,7 @@ Border variants, by the glyphs they paint at the eight frame positions
 - `Border::markdownBorder()` — `|`/`-` pipes for Markdown-compatible output;
   visual style only, no SGR frame
 
-Header cells default to `1;37` (bold + ANSI colour slot 7). Slot colours resolve
+Header cells default to `1;37` (bold + ANSI color slot 7). Slot colors resolve
 through a fixed TrueColor table — slot 7 renders as `#E5E5E5`, which can vanish on
 light terminal themes. Palette-adaptive hosts should pass `withHeaderStyle('1')`
 (bold only, terminal default foreground) or `withHeaderStyle('')`.
@@ -1290,15 +1290,15 @@ function(int $row, int $col, string $value): SugarCraft\CellBuffer\Style|SugarCr
   restricted attribute set (see the cheat table below); anything outside that
   vocabulary is dropped. The `38;5`/`48;5` codes expand to 24-bit through the
   fixed xterm cube (levels 0/51/102/153/204/255), and the frame emits
-  canonicalised 24-bit SGR.
-  *Golden tests note:* because output is canonicalised, golden byte
+  canonicalized 24-bit SGR.
+  *Golden tests note:* because output is canonicalized, golden byte
   comparisons must never assume the input codes survive to the frame —
   compare against the emitted 24-bit form.
 - **Returns `SugarCraft\CellBuffer\Style`** — the buffer-level style value;
   converted to its SGR codes and folded through the same parser.
 - **Returns `SugarCraft\Style\Style`** — the declarative sugar-style object;
-  flattened to its opening attribute codes (adaptive/complete colour pairs
-  resolve through the active colour profile first).
+  flattened to its opening attribute codes (adaptive/complete color pairs
+  resolve through the active color profile first).
 
 One rule covers all three: **anything else throws** `InvalidArgumentException`
 naming the `(row, col)` cell (audit ST-23) — an int, a bool, an array, or a

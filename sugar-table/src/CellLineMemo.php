@@ -20,7 +20,7 @@ namespace SugarCraft\Table;
  * is no stale-across-frames state to invalidate.
  *
  * Keys are the Column instance (by id) and the effective width; the value is
- * the per-row lines in rendered order. Wrapping is the column's behaviour and
+ * the per-row lines in rendered order. Wrapping is the column's behavior and
  * the two passes iterate the same `$rows` viewport slice, so row position —
  * not row identity — is the pairing contract: a replayed group cannot be
  * mispaired, and storing the column by id with a strong anchor rules out an

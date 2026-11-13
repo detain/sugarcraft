@@ -554,7 +554,7 @@ final class Table
         // (audit ST-24/070, default arm): both sides are int lists by the
         // time they meet — hiddenCols is normalizeHiddenIndexes'd and a
         // non-int frozen entry dies at the prefix check above — so loose
-        // and strict agree here and the guard stays behaviour-identical.
+        // and strict agree here and the guard stays behavior-identical.
         $overlap = \array_intersect($sorted, $this->hiddenCols);
         if ($overlap !== []) {
             throw new \InvalidArgumentException(
@@ -1419,7 +1419,7 @@ final class Table
      * returns only the keys of columns where filterable === true.
      *
      * When NO column has $filterable === true (back-compat default):
-     * returns ALL column keys so existing search/filter behaviour is unchanged.
+     * returns ALL column keys so existing search/filter behavior is unchanged.
      *
      * @return list<string>
      */
@@ -1514,7 +1514,7 @@ final class Table
                         // ST-31: no per-haystack strtolower — case folding is
                         // stripos's own job (the Filter path has always done
                         // exactly this; matching its precedent also keeps the
-                        // two paths' UTF-8 folding behaviour identical).
+                        // two paths' UTF-8 folding behavior identical).
                         if (\stripos(self::plainText($val), $searchLower) !== false) {
                             return true;
                         }
@@ -1540,7 +1540,7 @@ final class Table
             }
 
             // PHP's usort is stable: comparing equal decorated pairs keeps
-            // insertion order — the documented tie behaviour (multi-key
+            // insertion order — the documented tie behavior (multi-key
             // comparators resolve on their own; a full tie is row order).
             $keys = $this->sortColumns;
             \usort($decorated, static function (array $a, array $b) use ($keys): int {
@@ -2875,9 +2875,9 @@ final class Table
             // render('') exposes the per-attribute opening sequences and a
             // trailing reset; keep every attribute sequence and drop only
             // whole-sequence resets — digit 0 is a legitimate payload value
-            // inside 38;2/48;2 colour parameters and must survive verbatim.
+            // inside 38;2/48;2 color parameters and must survive verbatim.
             // The table composes bare code strings itself (mergeStyle owns
-            // the ordering). Adaptive/complete colour pairs resolve through
+            // the ordering). Adaptive/complete color pairs resolve through
             // the caller's active profile, the same reading render() uses.
             \preg_match_all('/\e\[([0-9;]*)m/', $result->render(''), $groups);
             $codes = [];
@@ -3150,7 +3150,7 @@ final class Table
     }
 
     /**
-     * Map an SGR colour index (0-7, bright variant when {@see $bright}) to a
+     * Map an SGR color index (0-7, bright variant when {@see $bright}) to a
      * packed 24-bit RGB int. The triples come from sugar-core's canonical
      * xterm table — slot 4 = `#0000EE` (`main.h DEF_COLOR4 "blue2"`), slot 12
      * = `#5C5CFF` (`DEF_COLOR12 "rgb:5c/5c/ff"`) — indexed from
