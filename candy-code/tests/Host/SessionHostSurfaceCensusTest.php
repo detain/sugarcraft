@@ -179,7 +179,7 @@ final class SessionHostSurfaceCensusTest extends TestCase
             "  private static probeHealth(string \$url): bool hidden\n",
             "  private static protocol(SugarCraft\\Code\\Server\\ServerConfig \$config, React\\EventLoop\\LoopInterface \$loop, ?Closure \$log = null, ?SugarCraft\\Code\\Server\\Auth\\AuthContext \$auth = null): SugarCraft\\Code\\Protocol\\Dispatcher hidden\n",
             "  private static qrCleartextHost(string \$loginUrl): ?string hidden\n",
-            "  private static readReport(\$stream, float \$seconds): ?array hidden\n",
+            "  private static readReport(\$stream, float \$seconds, ?int \$daemonPid = null): ?array hidden\n",
             "  private static reportChannelBuckets(array \$buckets): void hidden\n",
             "  public static run(SugarCraft\\Code\\Cli\\ParsedArgs \$args): int public\n",
             "  private static serve(SugarCraft\\Code\\Cli\\ParsedArgs \$args, SugarCraft\\Code\\Server\\ServerConfig \$config, SugarCraft\\Code\\Server\\StateDir \$state, SugarCraft\\Code\\Server\\Auth\\TokenStore \$tokens, SugarCraft\\Code\\Server\\Http\\StaticFiles \$static, ?SugarCraft\\Code\\Server\\ParentPidWatchdog \$watchdog, bool \$detached, Closure \$report): int hidden\n",
