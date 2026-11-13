@@ -136,8 +136,9 @@ session event. The notices at launch exist to keep that decision visible.
 
 ### Worked example: the `sugarcraft/candy-discord` bundle
 
-The reference bundle shipped in this repository lives at `candy-discord/` and
-declares one `channel` entrypoint. Installing it exercises every rule above:
+The reference bundle shipped in this repository — source at `candy-discord/`,
+installed at `~/.candy-code/bundles/candy-discord` — declares one `channel`
+entrypoint. Installing it exercises every rule above:
 
 1. Place (or `bundles install`) the directory at `~/.candy-code/bundles/candy-discord`,
    add `"candy-discord"` to `trustedBundleChannels`, and launch once — the

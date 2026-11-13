@@ -64,8 +64,9 @@ deploy. Verify in your server; the bundle deploys them on startup when
 
 ## Credentials store and env fallback
 
-The bot token lives in the same 0600 channels store as the other channel
-credentials, under `platforms.discord.accounts.<name>.token`. The bundle never
+The bot token lives in the 0600 channels store at `~/.candy-code/channels.json`
+— the same file the other channel credentials use — under
+`platforms.discord.accounts.<name>.token`. The bundle never
 reads it from settings, and it never writes it to logs: the token and the
 pairing codes are registered as redaction secrets.
 
@@ -95,7 +96,13 @@ settings map carries the policy; `enabled` is the switch:
 }
 ```
 
-Launch candy-code once to list the bundle, add `candy-discord` to
+Installation: the bundle is loaded from
+`~/.candy-code/bundles/candy-discord` — place the directory there, or run
+`candy-code bundles install <path>` (and `bundles install <name>@<marketplace>`
+once it is published to an added marketplace). The `candy-discord/` directory
+in this repository is the source tree, not the install path.
+
+Then launch candy-code once to list the bundle, add `candy-discord` to
 `trustedBundleChannels`, and launch again so it loads. This follows the same
 first-launch-lists, second-launch-loads rule as every bundle. The keys are
 documented in the [settings reference](#settings-reference).
