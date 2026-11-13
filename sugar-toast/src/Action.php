@@ -57,12 +57,21 @@ final class Action
      * Parse the label down to printable text + CSI-SGR styling (Law 2: data
      * is trusted after this boundary, so no render path re-validates it).
      *
-     * Kept: full CSI parameter/intermediate/final sequences whose final
-     * byte is `m` (SGR), rewritten in canonical form. Dropped: OSC strings
-     * (BEL- or ST-terminated), DCS/APC/PM/SOS strings, non-SGR CSI
-     * sequences, any remaining bare ESC byte, all C0 controls (TAB and DEL
-     * included), and C1 controls. The PUA zone sentinels U+E000/U+E001 are
-     * outside every drop set and survive untouched, exactly as documented.
+     * Kept: CSI SGR sequences — parameter bytes `[0-9;]` with optional
+     * intermediates and final `m`, rewritten in canonical form. Dropped: OSC
+     * strings (BEL- or ST-terminated), DCS/APC/PM/SOS strings, non-SGR CSI
+     * sequences (DEC-private `?…m` included), any remaining bare ESC byte,
+     * all C0 controls (TAB and DEL included), and C1 controls. The PUA zone
+     * sentinels U+E000/U+E001 are outside every drop set and survive
+     * untouched, exactly as documented.
+     *
+     * Ordered-arm law regression note: the kept arm once admitted `?` as a
+     * parameter byte, so `ESC[?1049m`-shaped DEC-private m-finals were
+     * re-emitted canonically — a project-tier label could then flip the
+     * host's alt-screen or bracketed-paste mode, making the sentence above
+     * ("non-SGR CSI can never be mistaken for a kept sequence") false. The
+     * `?` lives only in the drop-arm class now; do not "tidy" the two
+     * parameter classes into one shared pattern, the asymmetry IS the law.
      *
      * @throws \InvalidArgumentException when nothing printable remains
      */
@@ -74,12 +83,12 @@ final class Action
         // version of this function ate the ESC bytes of the sequences it
         // promised to keep.
         $out = \preg_replace_callback(
-            '/\x1b\[(?<sgr>[0-9;?]*)(?<si>[ -\/]*)m'            // kept: CSI SGR (canonical rewrite)
+            '/\x1b\[(?<sgr>[0-9;]*)(?<si>[ -\/]*)m'             // kept: CSI SGR (canonical rewrite); no '?' — DEC-private m-finals belong to the drop arm
             . '|\x1b\][\s\S]*?(?:\x07|\x1b\\\\)'                // OSC terminated (BEL or ST): framing+payload die, following text lives
             . '|\x1b\][\s\S]*'                                  // unterminated OSC: fail-closed swallow
             . '|\x1b[\x50\x58\x5e\x5f][\s\S]*?(?:\x07|\x1b\\\\)' // DCS/APC/PM/SOS terminated
             . '|\x1b[\x50\x58\x5e\x5f][\s\S]*'                  // …and fail-closed swallow
-            . '|\x1b\[[0-9;?]*[ -\/]*[@-~]'                     // non-SGR CSI: dropped
+            . '|\x1b\[[0-9;?]*[ -\/]*[@-~]'                     // non-SGR CSI (incl. DEC-private ?…m): dropped
             . '|\x1b'                                           // bare ESC: dropped
             . '|[\x{00}-\x{1F}\x{7F}-\x{9F}]/u',                // C0 (TAB/LF/CR all), DEL, C1
             static fn (array $m): string => isset($m['sgr'])
@@ -92,7 +101,7 @@ final class Action
             // C1 classes dropped — matches the cell grid's own behaviour of
             // reproducing malformed bytes rather than executing them.
             $out = \preg_replace_callback(
-                '/\x1b\[(?<sgr>[0-9;?]*)(?<si>[ -\/]*)m|\x1b\][\s\S]*?(?:\x07|\x1b\\\\)|\x1b\][\s\S]*|\x1b[\x50\x58\x5e\x5f][\s\S]*?(?:\x07|\x1b\\\\)|\x1b[\x50\x58\x5e\x5f][\s\S]*|\x1b\[[0-9;?]*[ -\/]*[@-~]|\x1b|[\x00-\x1F\x7F]/',
+                '/\x1b\[(?<sgr>[0-9;]*)(?<si>[ -\/]*)m|\x1b\][\s\S]*?(?:\x07|\x1b\\\\)|\x1b\][\s\S]*|\x1b[\x50\x58\x5e\x5f][\s\S]*?(?:\x07|\x1b\\\\)|\x1b[\x50\x58\x5e\x5f][\s\S]*|\x1b\[[0-9;?]*[ -\/]*[@-~]|\x1b|[\x00-\x1F\x7F]/',
                 static fn (array $m): string => isset($m['sgr'])
                     ? "\x1b[{$m['sgr']}{$m['si']}m"
                     : '',
