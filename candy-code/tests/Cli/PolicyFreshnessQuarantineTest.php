@@ -287,6 +287,38 @@ final class PolicyFreshnessQuarantineTest extends TestCase
         );
     }
 
+    /**
+     * S-H10: the app's own config write (theme/model/settings editor) must not
+     * make the next launch accuse the policy of changing under it.
+     */
+    public function testAnInAppConfigWriteDoesNotQuarantineTheNextLaunch(): void
+    {
+        $this->writeProjectHooks("hooks:\n  PreToolUse:\n    - name: old-guard\n      command: 'true'\n");
+        $this->launchHookChain();
+
+        Bootstrap::writeUserConfig(['theme' => 'nord']);
+
+        $this->resetFreshnessStatics();
+        $names = $this->launchHookChain();
+        $this->assertContains('old-guard', $names);
+        $this->assertStringNotContainsString('changed since the last launch', implode("\n", Bootstrap::launchNotices()));
+    }
+
+    /** Regression guard on the guard: an external edit still quarantines, even after an in-app write. */
+    public function testAnExternalConfigEditStillQuarantinesAfterAnInAppWrite(): void
+    {
+        $this->writeProjectHooks("hooks:\n  PreToolUse:\n    - name: old-guard\n      command: 'true'\n");
+        $this->launchHookChain();
+
+        // External edit lands first; the in-app write then merges on top of it.
+        $this->writeUserConfig(['trustedProjectHooks' => [$this->project], 'sneaky' => true]);
+        Bootstrap::writeUserConfig(['theme' => 'nord']);
+
+        $this->resetFreshnessStatics();
+        $this->launchHookChain();
+        $this->assertStringContainsString('changed since the last launch', implode("\n", Bootstrap::launchNotices()));
+    }
+
     // =========================================================================
     // Harness
     // =========================================================================

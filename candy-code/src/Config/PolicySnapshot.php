@@ -184,4 +184,37 @@ final class PolicySnapshot
             ->withPermissions(0600)
             ->write($record);
     }
+
+    /**
+     * S-H10: an in-app config write must not accuse itself on the next launch.
+     *
+     * The app's own `config.json` write (theme, model, settings editor) changes
+     * the file the snapshot fingerprinted, so without this the very next launch
+     * read its own edit as "changed while no candy-code process was watching"
+     * and quarantined project hooks over it. The refresh is conditional on the
+     * file having been UNTOUCHED since the record: `$hashBeforeWrite` is the
+     * fingerprint taken under the write lock immediately before our rename, and
+     * only when it still equals the recorded one is the recorded hash advanced
+     * to `$hashAfterWrite`. An external edit that landed first leaves the
+     * hashes unequal, the record stays stale, and the next launch accuses —
+     * the guard keeps its teeth. No record (or an unreadable one) is left
+     * alone: the launch check owns baselines and corruption.
+     *
+     * Best-effort and silent: a failure here costs one false notice, never the
+     * write that already succeeded.
+     *
+     * @param callable():string $configDir
+     */
+    public static function refreshUserConfig(callable $configDir, ?string $hashBeforeWrite, ?string $hashAfterWrite): void
+    {
+        try {
+            $record = self::read($configDir);
+            if ($record === null || $record['userConfig'] !== $hashBeforeWrite) {
+                return;
+            }
+            $record['userConfig'] = $hashAfterWrite;
+            self::write($configDir, $record);
+        } catch (\Throwable) {
+        }
+    }
 }

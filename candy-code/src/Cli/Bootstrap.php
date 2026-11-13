@@ -5314,6 +5314,8 @@ public static function useMaxCost(?string $maxCost): void
                 return;
             }
 
+            $hashBeforeWrite = PolicySnapshot::fingerprint($target);
+
             $decided = $change($existing);
             if ($decided === null) {
                 return;
@@ -5372,6 +5374,16 @@ public static function useMaxCost(?string $maxCost): void
             // process umask. 0600 is kept deliberately — this file now carries the
             // launch's permission policy, so it is nobody else's business.
             @chmod($target, 0600);
+
+            // S-H10: tell the policy-freshness record this edit was ours.
+            try {
+                $snapshotDir = static fn (): string => self::trustedConfigDirPath();
+                if ($path === $snapshotDir() . '/config.json') {
+                    PolicySnapshot::refreshUserConfig($snapshotDir, $hashBeforeWrite, PolicySnapshot::fingerprint($target));
+                }
+            } catch (\Throwable) {
+                // Best-effort: the write already succeeded.
+            }
         } finally {
             TimedFileLock::release($lock);
             fclose($lock);
