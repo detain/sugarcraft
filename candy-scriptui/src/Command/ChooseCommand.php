@@ -42,8 +42,9 @@ final class ChooseCommand extends Command
             ->addOption('selected', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, 'Pre-selected option(s) (multi mode); repeatable, comma-separated lists are split.', [])
             ->addOption('select-if-one', null, InputOption::VALUE_NONE, 'Auto-pick when exactly one option is supplied.')
             ->addOption('output-delimiter', null, InputOption::VALUE_REQUIRED, 'Separator for multi-select output.', "\n")
-            ->addOption('cursor', null, InputOption::VALUE_REQUIRED, 'Glyph rendered before the highlighted item.', '> ')
-            ->addOption('cursor-prefix', null, InputOption::VALUE_REQUIRED, 'Alias for --cursor.', null)
+            ->addOption('cursor', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, 'Glyph(s) rendered before the highlighted item; repeatable (gum cycles a per-item list) and comma-split.', ['> '])
+            ->addOption('cursor-prefix', null, InputOption::VALUE_REQUIRED, 'Alias for --cursor (single glyph).', null)
+            ->addOption('selected-prefix', null, InputOption::VALUE_REQUIRED, 'Glyph rendered before checked items (multi mode; default check mark).', null)
             ->addOption('unselected-prefix', null, InputOption::VALUE_REQUIRED, 'Glyph rendered before non-cursor items.', null)
             ->addOption('show-help', null, InputOption::VALUE_NONE,    'Alias for --help (gum compat).')
             ->addOption('no-selected', null, InputOption::VALUE_REQUIRED, 'Message printed (with a non-zero exit) when the user exits without a selection.', null)
@@ -112,7 +113,15 @@ final class ChooseCommand extends Command
         }
 
         // --cursor-prefix is an alias for --cursor; user-supplied wins.
-        $cursor = $input->getOption('cursor-prefix') ?? $input->getOption('cursor');
+        // scriptui-44 (finding 062): --cursor is a repeatable, comma-split
+        // per-item list (gum's ♠♥♣♦ invocation); --cursor-prefix stays the
+        // single-glyph alias and, when given, wins over --cursor exactly as
+        // before. --selected-prefix overrides the tick glyph for checked
+        // rows (multi mode).
+        $prefixAlias = $input->getOption('cursor-prefix');
+        $cursorCycle = is_string($prefixAlias)
+            ? [$prefixAlias]
+            : OptionList::expand((array) $input->getOption('cursor'));
         $unselected = $input->getOption('unselected-prefix');
 
         $model   = ChooseModel::fromOptions(
@@ -123,10 +132,11 @@ final class ChooseCommand extends Command
             $header,
             $preselected,
             $ordered,
-            cursorPrefix:     is_string($cursor) ? $cursor : null,
             unselectedPrefix: is_string($unselected) ? $unselected : null,
             width:            $width,
             typeToFilter:     $typeToFilter,
+            cursorCycle:      $cursorCycle,
+            selectedPrefix:   (string) ($input->getOption('selected-prefix') ?? ''),
         );
         $loop    = \React\EventLoop\Loop::get();
         $options = InteractiveRuntime::programOptions(loop: $loop, 

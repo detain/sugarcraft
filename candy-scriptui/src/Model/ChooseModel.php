@@ -12,6 +12,7 @@ use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Forms\Util\RenderSafe;
 use SugarCraft\ScriptUi\Lang;
 use SugarCraft\ScriptUi\Runtime\Emphasis;
@@ -48,6 +49,12 @@ final class ChooseModel implements Model
         ?string $unselectedPrefix = null,
         int $width = 0,
         bool $typeToFilter = true,
+        // scriptui-44 (finding 062): gum's --cursor is a REPEATABLE per-item
+        // list (the ♠♥♣♦ invocation). More than one glyph switches the
+        // frame to the model's own per-row renderer (ItemList carries a
+        // single prefix — the per-item cycling is a candy-side leg).
+        array $cursorCycle = [],
+        string $selectedPrefix = '',
     ): self {
         // scriptui-15: options and the preselection list stay RAW — they
         // are the DATA channel (the selection is emitted verbatim by
@@ -68,6 +75,15 @@ final class ChooseModel implements Model
         if ($cursorPrefix !== null) {
             $list = $list->withCursorPrefix($cursorPrefix);
         }
+        // Paint strings — sanitised like the placeholder leg (scriptui-18),
+        // never part of the emitted DATA channel. The historical single
+        // glyph keeps riding ItemList's own prefix; a longer cycle is
+        // consumed by the model's per-row renderer.
+        $cursorCycle    = array_values(array_map(static fn($g) => Sanitize::cellValue((string) $g), $cursorCycle));
+        $selectedPrefix = $selectedPrefix === '' ? '' : Sanitize::cellValue($selectedPrefix);
+        if (count($cursorCycle) === 1) {
+            $list = $list->withCursorPrefix($cursorCycle[0]);
+        }
         if ($unselectedPrefix !== null) {
             $list = $list->withUnselectedPrefix($unselectedPrefix);
         }
@@ -86,7 +102,7 @@ final class ChooseModel implements Model
                 }
             }
         }
-        return new self($list, false, false, $multi, $cap, $checked, $ordered, typeToFilter: $typeToFilter);
+        return new self($list, false, false, $multi, $cap, $checked, $ordered, typeToFilter: $typeToFilter, cursorCycle: $cursorCycle, selectedPrefix: $selectedPrefix);
     }
 
     /**
@@ -107,6 +123,10 @@ final class ChooseModel implements Model
         // scriptui-43: printable keys start filtering immediately (gum
         // parity) unless --no-filter opted out.
         public readonly bool $typeToFilter = true,
+        // scriptui-44 (finding 062): per-item cursor glyphs (cycled) and the
+        // tick glyph for checked rows; both are paint strings.
+        public readonly array $cursorCycle = [],
+        public readonly string $selectedPrefix = '',
     ) {}
 
     public function init(): ?\Closure
@@ -184,7 +204,11 @@ final class ChooseModel implements Model
 
     public function view(): string
     {
-        $body = $this->multi ? $this->markedBody() : Emphasis::stripDecor($this->list->view());
+        // scriptui-44: a per-item cursor cycle is a per-row decision
+        // ItemList cannot express — those frames (and every multi frame)
+        // ride the model's own mirror renderer.
+        $useCustom = $this->multi || count($this->cursorCycle) > 1;
+        $body = $useCustom ? $this->markedBody() : Emphasis::stripDecor($this->list->view());
         if ($this->multi) {
             // Append a status line: '(N selected)'.
             $count = $this->selectedCount();
@@ -238,15 +262,23 @@ final class ChooseModel implements Model
         $top    = max(0, $this->list->offset);
         $window = array_slice($visible, $top, $this->list->height);
         $cursor = $this->list->index();
+        $cycleN = count($this->cursorCycle);
+        $tick   = $this->selectedPrefix !== '' ? $this->selectedPrefix . ' ' : "\u{2713} ";
         foreach ($window as $i => $item) {
             $idx       = $top + $i;
             $itemTitle = RenderSafe::clean($item->title());
             if ($idx === $cursor) {
-                $lines[] = $this->list->cursorPrefix . Emphasis::sgr(Ansi::REVERSE) . $itemTitle . Emphasis::reset();
+                $glyph = $cycleN > 0 ? $this->cursorCycle[$idx % $cycleN] : $this->list->cursorPrefix;
+                // A ticked row keeps its tick UNDER the cursor — the old
+                // "reverse video already flags it" excuse left multi users
+                // unable to tell which row they had just ticked until they
+                // moved away.
+                $ticked = !empty($this->checked[$idx]);
+                $lines[] = $glyph . ($ticked ? $tick : '') . Emphasis::sgr(Ansi::REVERSE) . $itemTitle . Emphasis::reset();
             } else {
                 $orig    = array_search($item, $this->list->items, true);
                 $lines[] = $orig !== false && !empty($this->checked[$orig])
-                    ? "\u{2713} " . $itemTitle
+                    ? $tick . $itemTitle
                     : $this->list->unselectedPrefix . $itemTitle;
             }
             if ($this->list->showDescription && $item->description() !== '') {
@@ -366,6 +398,8 @@ final class ChooseModel implements Model
             interrupted: $interrupted ?? $this->interrupted,
             refusedEmpty: $refusedEmpty ?? $this->refusedEmpty,
             typeToFilter: $this->typeToFilter,
+            cursorCycle:  $this->cursorCycle,
+            selectedPrefix: $this->selectedPrefix,
         );
     }
 

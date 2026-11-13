@@ -82,12 +82,15 @@ final class SelectionKeyingTest extends TestCase
             $submitted->selectedAll(),
             'toggling two duplicate-title rows yields TWO entries, not zero (old untick-the-first-copy collapse)',
         );
-        // Row 2 was never touched — the mark paints on exactly the one
-        // non-cursor ticked row (row 1 keeps cursor bytes by contract:
-        // the reverse video IS its highlight).
-        self::assertSame(1, substr_count($m->view(), "\u{2713}"));
+        // Row 2 was never touched — marks paint on BOTH ticked rows now:
+        // scriptui-44's per-row visibility leg puts the tick under the
+        // cursor too (a multi user must see what they just ticked without
+        // moving away). Row 0 is the ticked non-cursor row, row 1 the
+        // ticked cursor row.
+        self::assertSame(2, substr_count($m->view(), "\u{2713}"));
         $lines = explode("\n", $m->view());
         self::assertStringStartsWith("\u{2713}", $lines[0]);
+        self::assertStringStartsWith("> \u{2713}", $lines[1], 'the cursor row carries glyph, tick, then reverse video');
         self::assertStringStartsWith('  ', $lines[2], 'unticked row 2 keeps the plain prefix');
     }
 
