@@ -183,16 +183,6 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
             . '`2>err.log`. See RendererAdaptiveSizeDescriptorTest in sugar-animation.',
         ],
 
-        // ---- candy-gifview ------------------------------------------------
-        'candy-gifview/src/Cli.php::SizeIoctl::query(1)' => [
-            DescriptorSinkScanner::LITERAL_INT,
-            'CORRECT. viewportCells(). The literal 1 is STDOUT\'s descriptor -- the site '
-            . 'arrived verbatim from sugar-animation\'s old bin in the rename campaign step 1.3 '
-            . 'with the `(int) STDOUT` cast (resource id 2, i.e. STDERR) already replaced, '
-            . 'behind a core `stream_isatty(STDOUT)` gate. See BinSizeQueryPolarityTest in '
-            . 'candy-gifview, the app-package twin of the sugar-animation pin above.',
-        ],
-
         // ---- candy-image ------------------------------------------------
         'candy-image/src/Cli.php::SizeIoctl::query(1)' => [
             DescriptorSinkScanner::LITERAL_INT,
@@ -540,18 +530,31 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
             'NOT A LIBC CALL, stop() draining listeners: close(1001, $reason) -- the RFC6455 going-away '
             . 'code on the same Ws\Connection method.',
         ],
+        // The four CLOSE_SIGNED_OUT rows are keyed by file order (the ordinal
+        // is positional), so they are listed in the order the calls appear.
         'candy-code/src/Server/Server.php::->close(self::CLOSE_SIGNED_OUT)' => [
             DescriptorSinkScanner::VARIABLE,
-            'NOT A LIBC CALL, closeExpiredSessions() signing out an expired cookie session\'s socket: '
-            . 'close(4001, ...) with a private-range status code on Ws\Connection::close(int $code, '
+            'NOT A LIBC CALL, closeViewerSockets() ending every socket of a just-revoked share token: '
+            . 'close(4001, ...) with a private-range status code on Ws\\Connection::close(int $code, '
             . 'string $reason) -- the number is a WebSocket code, never a descriptor.',
         ],
         'candy-code/src/Server/Server.php::->close(self::CLOSE_SIGNED_OUT) #2' => [
             DescriptorSinkScanner::VARIABLE,
+            'NOT A LIBC CALL, closeDeadViewerSockets() sweeping sockets whose share token expired: the '
+            . 'same Ws\\Connection::close(int $code, string $reason) with the same 4001 alias, judged '
+            . 'separately as the ordinal demands.',
+        ],
+        'candy-code/src/Server/Server.php::->close(self::CLOSE_SIGNED_OUT) #3' => [
+            DescriptorSinkScanner::VARIABLE,
+            'NOT A LIBC CALL, closeExpiredSessions() signing out an expired cookie session\'s socket: '
+            . 'the same Ws\\Connection::close(int $code, string $reason) with the 4001 alias -- a '
+            . 'WebSocket status code, never a descriptor.',
+        ],
+        'candy-code/src/Server/Server.php::->close(self::CLOSE_SIGNED_OUT) #4' => [
+            DescriptorSinkScanner::VARIABLE,
             'NOT A LIBC CALL, closeSessionSockets() ending every socket of a just-revoked session '
-            . '(sign-out callback): the same Ws\Connection::close(int $code, string $reason) with the '
-            . 'same 4001 alias -- the second spelling-identical site in the file, judged separately '
-            . 'as the ordinal demands.',
+            . '(sign-out callback): the same Ws\\Connection::close(int $code, string $reason) with the '
+            . 'same 4001 alias.',
         ],
         'candy-code/src/Server/Workspace/WorkspaceHostClient.php::->close($reason)' => [
             DescriptorSinkScanner::VARIABLE,
@@ -569,13 +572,12 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
             'NOT A LIBC CALL, the handler-exception refusal: $this->close(1011, \'internal error\') on the '
             . 'same method -- status code, not descriptor.',
         ],
-        'candy-code/src/Server/Ws/Connection.php::->close($code===Frame::CLOSE_NO_STATUS?Frame::CLOSE_NORMAL:$code)' => [
-            DescriptorSinkScanner::UNCLASSIFIED,
-            'NOT A LIBC CALL, onControl() echoing the client\'s close frame: the ternary picks between two '
-            . 'int STATUS codes. classify() answers UNCLASSIFIED for an operator-laden expression rooted '
-            . 'in a variable because its accessor-chain control fixture pins `$a ? 1 : 2` to that answer '
-            . '-- naming ternaries would mean unpinning the control, and either branch here could in '
-            . 'principle hide anything. The per-site judgement is the honest resolution.',
+        'candy-code/src/Server/Ws/Connection.php::->close(self::echoableCloseCode($code))' => [
+            DescriptorSinkScanner::VARIABLE,
+            'NOT A LIBC CALL, onControl() echoing the client\'s close frame: $this->close() into this '
+            . 'class\'s own close(int $code, string $reason). echoableCloseCode(int): int always returns an '
+            . 'int WebSocket status (4000-4999 passthrough, a SENDABLE_CLOSE_CODES member, else 1000), so '
+            . 'no descriptor, null or double-close is possible; close() is idempotent via $this->closed.',
         ],
         'candy-code/src/Server/Ws/Outbox.php::->close(self::CLOSE_TRY_AGAIN_LATER)' => [
             DescriptorSinkScanner::VARIABLE,
