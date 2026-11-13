@@ -6,13 +6,24 @@ on:
     paths:
       - 'scripts/Dockerfile.vhs-runner'
       - '.github/workflows/vhs-runner-php-image.yml'
-  release:
-    types: [published]
+  # RT-24: the old `release: [published]` trigger rebuilt this image on every
+  # app tag release (22+), even though its content depends ONLY on
+  # scripts/Dockerfile.vhs-runner — the tag event changes nothing it builds.
+  # The path-push above + workflow_dispatch cover every real rebuild.
   workflow_dispatch:
 
 permissions:
   contents: read
   packages: write
+
+# RT-24: concurrent triggers could interleave `:latest` retags (vhs.yml has
+# had concurrency since its own hardening; the already-fixed image-workflow
+# class — candy-code-image.yml — uses a queued single publisher, NOT
+# cancel-in-progress: true: cancelling mid-push is exactly how a stale
+# `:latest` survives a newer build).
+concurrency:
+  group: vhs-runner-php-image
+  cancel-in-progress: false
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
