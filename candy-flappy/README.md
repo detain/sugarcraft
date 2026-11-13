@@ -148,13 +148,12 @@ simply unused.
 
 The palette is hardcoded light-on-dark. Against the `#1a1b26` background the
 amber bird reads 14.06:1, the green pipes 11.43:1 and the crash pink 5.95:1;
-on a white background those become 1.26:1, 1.54:1 and 2.97:1 — a light
-terminal should expect the colours to invert (the `·` parallax dot field,
-~1.35:1 there, is declared decorative scenery, not information). The status
-hint that carries the keyboard instructions sits at roughly 3.6:1, below the
-4.5:1 WCAG small-text line: low-vision players may struggle to read it, and
-lightening or bolding it is a deliberate behaviour decision, not a
-documentation fix.
+against that same dark field the `·` parallax dots sit at ~1.4:1 —
+decorative scenery, never information. On a white background the primaries
+invert to 1.26:1, 1.54:1 and 2.97:1: no light-background palette is
+provided, so use a dark terminal theme. The status hint that carries the
+keyboard instructions sits at roughly 3.6:1, below the 4.5:1 WCAG small-text
+line — low-vision players may struggle to read it.
 
 Play happens on the alternate screen (`ProgramOptions(useAltScreen: true)`,
 DECSET 1049), so your normal scrollback is restored untouched on exit.
