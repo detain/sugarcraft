@@ -385,4 +385,58 @@ final class TableColumnWidthTest extends TestCase
         // And it still renders without error.
         $this->assertIsString($t->View());
     }
+
+    /** @return array<int, int> the live content-width memo */
+    private function contentMemoOf(Table $t): array
+    {
+        $p = new \ReflectionProperty(Table::class, 'contentWidthCache');
+        $p->setAccessible(true);
+        return $p->getValue($t);
+    }
+
+    /**
+     * ST-06 pin: the fixed-point solve feeds computeColumnWidths() several
+     * diverging seed widths; each one used to pay a COLD full row scan for
+     * every content-sized column. The memo means one scan serves them all.
+     */
+    public function testDivergingSeedWidthsReuseContentScans(): void
+    {
+        $t = Table::fromColumns([
+            Column::new('id', 'ID', 4),
+            Column::new('body', 'Body', 6)->withColumnWidth(ColumnWidth::Dynamic),
+            Column::new('pct', 'Pct', 5)->withColumnWidth(ColumnWidth::Percent, 30.0),
+        ])->withRows([
+            Row::new(RowData::from(['id' => '1', 'body' => 'a much wider body cell', 'pct' => 'x'])),
+            Row::new(RowData::from(['id' => '2', 'body' => 'short', 'pct' => 'yy'])),
+        ]);
+
+        $first  = $t->computeColumnWidths(100);
+        $this->assertSame([1], \array_keys($this->contentMemoOf($t)), 'only the Dynamic column needs a content scan');
+
+        $second = $t->computeColumnWidths(240);
+        $this->assertSame([1], \array_keys($this->contentMemoOf($t)), 'the second seed width must not re-scan');
+        $this->assertNotSame($first, $second, 'percent/dynamic values must still re-resolve per seed');
+    }
+
+    /**
+     * ST-06 counter-pin: the memo is exactly as alive as widthSolveCache —
+     * replacing rows drops it, so a wider newcomer is measured, never
+     * answered from a stale scan.
+     */
+    public function testContentMemoInvalidatedByRowReplacement(): void
+    {
+        $t = Table::fromColumns([
+            Column::new('id', 'ID', 4),
+            Column::new('body', 'Body', 6)->withColumnWidth(ColumnWidth::Content),
+        ])->withRows([Row::new(RowData::from(['id' => '1', 'body' => 'tiny']))]);
+
+        $narrow = $t->computeColumnWidths(100);
+        $this->assertSame([1], \array_keys($this->contentMemoOf($t)));
+
+        $wider = $t->withRows([Row::new(RowData::from(['id' => '1', 'body' => 'far wider than tiny']))]);
+        $this->assertSame([], $this->contentMemoOf($wider), 'row replacement must drop the memo');
+
+        $resolved = $wider->computeColumnWidths(100);
+        $this->assertGreaterThan($narrow[1], $resolved[1], 'new content width must be measured, not replayed');
+    }
 }

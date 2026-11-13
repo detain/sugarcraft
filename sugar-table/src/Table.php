@@ -163,6 +163,18 @@ final class Table
      */
     private array $widthSolveCache = [];
 
+    /**
+     * Per-column cache for contentWidthForColumn(): the content max width
+     * depends only on the rows and the column definition, so every seed
+     * width in computeTotalWidth()'s fixed-point solve wants the SAME
+     * number — yet each of the (up to WIDTH_CONVERGE_MAX) diverging solve
+     * iterations used to re-scan the entire row set. Keyed by column index,
+     * cleared by invalidateRenderCaches() exactly like widthSolveCache.
+     *
+     * @var array<int, int>
+     */
+    private array $contentWidthCache = [];
+
     /** Max widthSolveCache entries; real UIs bounce between only a few widths. */
     private const WIDTH_SOLVE_CACHE_MAX = 8;
 
@@ -246,6 +258,7 @@ final class Table
     {
         $this->filteredSortedCache = null;
         $this->widthSolveCache = [];
+        $this->contentWidthCache = [];
     }
 
     /**
@@ -1424,7 +1437,7 @@ final class Table
             // Apply Dynamic/Content/Flex as content-based or share-based width
             foreach ($this->columns as $i => $col) {
                 if ($widths[$i] === null) {
-                    $contentLen = $this->contentWidthForColumn($col);
+                    $contentLen = $this->contentWidthForColumn($i);
                     if ($col->columnWidth === ColumnWidth::Flex) {
                         // Flex: take its weighted share verbatim, ignoring
                         // content (it is truncated to fit) — the basis for an
@@ -1483,9 +1496,17 @@ final class Table
 
     /**
      * Estimate the maximum content width for a column from row data.
+     * Memoized per column index (ST-06): the converge loop used to pay a
+     * fresh full row scan per seed width — sixteen cold scans of identical
+     * numbers.
      */
-    private function contentWidthForColumn(Column $col): int
+    private function contentWidthForColumn(int $colIndex): int
     {
+        if (isset($this->contentWidthCache[$colIndex])) {
+            return $this->contentWidthCache[$colIndex];
+        }
+
+        $col   = $this->columns[$colIndex];
         // Sanitize title and measure display width (not byte length)
         $title = Sanitize::value($col->title, false);
         $maxLen = Width::of($title);
@@ -1503,7 +1524,7 @@ final class Table
             }
         }
 
-        return $maxLen;
+        return $this->contentWidthCache[$colIndex] = $maxLen;
     }
 
     // -------------------------------------------------------------------------
