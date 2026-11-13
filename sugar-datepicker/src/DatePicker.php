@@ -1180,8 +1180,19 @@ final class DatePicker
                 // them is correct; advancing used to shift later cells right).
                 continue;
             }
+            if ($gw >= 2 && $colCursor + 1 >= $buf->width()) {
+                // Edge straddle: a wide cluster at the last column degrades to
+                // a blank — glyph dropped, one column consumed. This mirrors
+                // sugar-cellbuffer's placeWithPair law explicitly instead of
+                // leaning on it, so the painted columns always sum to the
+                // declared width whatever the sibling internals do.
+                $buf = $buf->withCellAt($colCursor, $row, Cell::blank());
+                $colCursor += 1;
+
+                continue;
+            }
             $buf = $buf->withCellAt($colCursor, $row, new Cell($cluster, $style, null, $gw));
-            if ($gw === 2 && $colCursor + 1 < $buf->width()) {
+            if ($gw === 2) {
                 $buf = $buf->withCellAt($colCursor + 1, $row, Cell::continuation());
             }
             $colCursor += $gw;

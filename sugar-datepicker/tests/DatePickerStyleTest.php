@@ -193,7 +193,36 @@ final class DatePickerStyleTest extends TestCase
         $buf = Buffer::new(5, 3);
         $result = $this->invokePlaceStringAt($buf, 0, 0, "\xe4\xb8\x80\xe4\xb8\x80\xe4\xb8\x80", null);
 
-        $this->assertInstanceOf(Buffer::class, $result);
+        // Three 2-column glyphs into a 5-wide row: two full pairs, then the
+        // edge straddler degrades to a blank (sugar-cellbuffer pair law),
+        // never a 2-paint in a 1-column space.
+        $row = [0, 1, 2, 3, 4];
+        $painted = 0;
+        $runes = [];
+        $widths = [];
+        foreach ($row as $col) {
+            $cell = $result->cellAt($col, 0);
+            $runes[] = $cell->rune();
+            $widths[] = $cell->width();
+            $painted += $cell->width();
+        }
+
+        $this->assertSame(['一', '', '一', '', ' '], $runes);
+        $this->assertSame([2, 0, 2, 0, 1], $widths);
+        $this->assertSame($buf->width(), $painted, 'painted columns must equal the declared width');
+        $this->assertSame(1, $result->cellAt(4, 0)->width(), 'last column must never hold a 2-wide lead');
+    }
+
+    public function testPlaceStringAtDegradesWideClusterStraddlingBufferEdgeMidway(): void
+    {
+        // Start col 3 of a 5-wide buffer with 'a' + one 2-col glyph: the
+        // glyph lands on the final column and degrades, consuming one column.
+        $buf = Buffer::new(5, 1);
+        $result = $this->invokePlaceStringAt($buf, 3, 0, "a\xe4\xb8\x80", null);
+
+        $this->assertSame('a', $result->cellAt(3, 0)->rune());
+        $this->assertSame(' ', $result->cellAt(4, 0)->rune());
+        $this->assertSame(1, $result->cellAt(4, 0)->width());
     }
 
     public function testBuildRangeWithBothDatesInViewMonth(): void
