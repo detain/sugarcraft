@@ -114,6 +114,68 @@ final class BoundedCommandTest extends TestCase
         self::assertNotSame(0, $result['code']);
     }
 
+    /**
+     * S16 (finding 030): the pump's byte cap — stdout keeps its HEAD and
+     * the overflow is flagged, never silently absorbed into memory the
+     * synchronous caller owns.
+     */
+    public function testFloodedStdoutKeepsItsHeadAndFlagsTruncation(): void
+    {
+        $result = BoundedCommand::run(
+            ['/bin/sh', '-c', "dd if=/dev/zero bs=65536 count=4 2>/dev/null | tr '\\0' A"],
+            10.0,
+            [],
+            1024
+        );
+
+        self::assertSame(0, $result['code']);
+        self::assertTrue($result['truncated'], 'an overflow must be flagged, never swallowed');
+        $joined = \implode('', $result['output']);
+        self::assertSame(1024, \strlen($joined), 'exactly the head survives, byte for byte');
+        self::assertSame('A', \substr($joined, 0, 1));
+    }
+
+    /**
+     * S16 (finding 030): stderr keeps its TAIL — the decisive fatal line
+     * (git writes it last) survives a flood of earlier noise, which the
+     * head-keeping shape would have thrown away.
+     */
+    public function testFloodedStderrKeepsTheDecisiveTail(): void
+    {
+        $failed = BoundedCommand::run(
+            ['/bin/sh', '-c', "dd if=/dev/zero bs=1024 count=8 2>/dev/null | tr '\\0' X >&2; echo 'FATAL: decisive line' >&2; exit 7"],
+            10.0,
+            [],
+            128
+        );
+
+        self::assertSame(7, $failed['code']);
+        self::assertTrue($failed['truncated']);
+        // the X flood never ends in a newline, so the decisive line rides
+        // glued to the tail of it — what matters is that its TEXT is
+        // present in what survived, where a head-keeping window would
+        // have thrown the verdict away entirely.
+        self::assertStringContainsString('FATAL: decisive line', \implode("\n", $failed['output']), 'the tail must survive the flood');
+        self::assertContains(
+            'candy-git-server: stream output exceeded the byte cap; the remainder was discarded',
+            $failed['output'],
+            'a truncated failure says so out loud'
+        );
+    }
+
+    /**
+     * S16 (finding 031): runRaw is the byte-exact contract — a CRLF
+     * stream round-trips untouched, no line-split, no implode.
+     */
+    public function testRunRawDeliversBytesWithoutLineTranslation(): void
+    {
+        $raw = BoundedCommand::runRaw(['/bin/sh', '-c', "printf 'a\\r\\nb\\r\\n'"]);
+
+        self::assertSame(0, $raw['code']);
+        self::assertSame("a\r\nb\r\n", $raw['stdout'], 'CRLF survives the runner (the old split/implode turned it into LF)');
+        self::assertFalse($raw['truncated']);
+    }
+
     public function testMetacharactersAreArgumentsNotShellSyntax(): void
     {
         $marker = $this->markerPath();

@@ -22,6 +22,15 @@ namespace SugarCraft\GitServer\Support;
  * Output is stdout-only on success; stderr is appended on failure so
  * error messages keep the context they were quoted from before.
  *
+ * S16 (findings 030, 031): the pump now carries the byte cap its
+ * long-lived siblings already had — stdout keeps its HEAD (a data read
+ * that overflowed is flagged so callers refuse the partial bytes rather
+ * than serve a silent prefix), stderr keeps its TAIL (a git fatal line
+ * arrives last, and the decisive text must survive a flood of progress
+ * noise). runRaw() skips the line-split entirely: callers who treat
+ * stdout as BYTES (Repo::readFile serving blob content) get them
+ * exactly, CRLF included, no round-trip through the line vocabulary.
+ *
  * Kill-tree boundary (S15): the TERM→KILL escalation signals THIS direct
  * child only — a git that spawned helpers is not signalled transitively.
  * Safe here because argv-only spawning never puts a shell between us and
@@ -31,6 +40,10 @@ final class BoundedCommand
 {
     /** Generous for metadata reads; fetch overrides with its own budget. */
     public const DEFAULT_TIMEOUT_SECONDS = 10.0;
+
+    /** Per-stream byte ceiling (S16, finding 030): no git child, however
+     *  chatty, can grow a synchronous caller's memory without bound. */
+    public const DEFAULT_MAX_OUTPUT_BYTES = 8 * 1024 * 1024;
 
     private const TICK_MICROSECONDS = 50_000;
     private const CHUNK_BYTES = 65536;
@@ -80,15 +93,82 @@ final class BoundedCommand
     }
 
     /**
+     * Line-oriented contract (the historical shape every metadata parser
+     * here depends on): stdout split into lines, stderr merged in on
+     * failure only.
+     *
      * @param list<string> $argv program and its arguments (no shell)
      * @param array<string, string> $extraEnv merged over the inherited environment
      *
-     * @return array{code: int, output: list<string>}
+     * @return array{code: int, output: list<string>, truncated: bool}
      */
-    public static function run(array $argv, float $timeoutSeconds = self::DEFAULT_TIMEOUT_SECONDS, array $extraEnv = []): array
+    public static function run(array $argv, float $timeoutSeconds = self::DEFAULT_TIMEOUT_SECONDS, array $extraEnv = [], ?int $maxOutputBytes = null): array
+    {
+        $raw = self::spawn($argv, $timeoutSeconds, $extraEnv, $maxOutputBytes ?? self::DEFAULT_MAX_OUTPUT_BYTES);
+        $stderr = $raw['stderr'];
+        if ($raw['timedOut']) {
+            $stderr .= ($stderr === '' ? '' : "\n")
+                . 'candy-git-server: command timed out after ' . $timeoutSeconds . 's';
+        }
+        if ($raw['truncated']) {
+            $stderr .= ($stderr === '' ? '' : "\n")
+                . 'candy-git-server: stream output exceeded the byte cap; the remainder was discarded';
+        }
+
+        $merged = $raw['code'] === 0 || $stderr === '' ? $raw['stdout'] : $raw['stdout'] . ($raw['stdout'] === '' ? '' : "\n") . $stderr;
+
+        return [
+            'code' => $raw['code'],
+            'truncated' => $raw['truncated'],
+            // An empty stream is an empty line list — preg_split('') would
+            // hand back [''] and every parser here filters by truthiness,
+            // but callers counting tags/branches must see zero entries.
+            'output' => $merged === '' ? [] : (\preg_split('/\r?\n/', \rtrim($merged, "\r\n")) ?: []),
+        ];
+    }
+
+    /**
+     * Byte-exact contract (S16, finding 031): stdout arrives as written,
+     * no line-split and no implode — a CRLF file round-trips as CRLF.
+     * Callers serving blob content use this so the bytes they hand out
+     * are the repository's bytes.
+     *
+     * @param list<string> $argv program and its arguments (no shell)
+     * @param array<string, string> $extraEnv merged over the inherited environment
+     *
+     * @return array{code: int, stdout: string, stderr: string, truncated: bool}
+     */
+    public static function runRaw(array $argv, float $timeoutSeconds = self::DEFAULT_TIMEOUT_SECONDS, array $extraEnv = [], ?int $maxOutputBytes = null): array
+    {
+        $raw = self::spawn($argv, $timeoutSeconds, $extraEnv, $maxOutputBytes ?? self::DEFAULT_MAX_OUTPUT_BYTES);
+        $timedOut = $raw['timedOut'];
+        unset($raw['timedOut']);
+        if ($timedOut) {
+            $raw['stderr'] .= ($raw['stderr'] === '' ? '' : "\n")
+                . 'candy-git-server: command timed out after ' . $timeoutSeconds . 's';
+        }
+
+        return $raw;
+    }
+
+    /**
+     * Shared spawn/pump/reap core for both output contracts.
+     *
+     * @param list<string> $argv
+     * @param array<string, string> $extraEnv
+     *
+     * @return array{code: int, stdout: string, stderr: string, truncated: bool, timedOut: bool}
+     */
+    private static function spawn(array $argv, float $timeoutSeconds, array $extraEnv, int $maxOutputBytes): array
     {
         if ($argv === []) {
-            return ['code' => 127, 'output' => ['candy-git-server: no command given']];
+            return [
+                'code' => 127,
+                'stdout' => '',
+                'stderr' => 'candy-git-server: no command given',
+                'truncated' => false,
+                'timedOut' => false,
+            ];
         }
 
         // S15: every call first sweeps parked handles from earlier
@@ -115,7 +195,10 @@ final class BoundedCommand
         if ($proc === false) {
             return [
                 'code' => 127,
-                'output' => ['candy-git-server: cannot launch ' . $argv[0]],
+                'stdout' => '',
+                'stderr' => 'candy-git-server: cannot launch ' . $argv[0],
+                'truncated' => false,
+                'timedOut' => false,
             ];
         }
         @\fclose($pipes[0]);
@@ -124,6 +207,7 @@ final class BoundedCommand
 
         $stdout = '';
         $stderr = '';
+        $truncated = false;
         $closeCode = -1;
         $stdoutOpen = true;
         $stderrOpen = true;
@@ -163,9 +247,29 @@ final class BoundedCommand
                     continue; // non-blocking not-ready read; try again next tick
                 }
                 if ($stream === $pipes[1]) {
-                    $stdout .= $chunk;
+                    // S16: stdout keeps its HEAD — a data read past the
+                    // cap is flagged, and callers that care about
+                    // integrity (Repo::readFile) refuse the partial bytes.
+                    $room = $maxOutputBytes - \strlen($stdout);
+                    if ($room <= 0) {
+                        $truncated = true;
+
+                        continue;
+                    }
+                    if (\strlen($chunk) > $room) {
+                        $stdout .= \substr($chunk, 0, $room);
+                        $truncated = true;
+                    } else {
+                        $stdout .= $chunk;
+                    }
                 } else {
+                    // S16: stderr keeps its TAIL — a git fatal arrives
+                    // last; a rolling window survives any flood before it.
                     $stderr .= $chunk;
+                    if (\strlen($stderr) > $maxOutputBytes) {
+                        $stderr = \substr($stderr, -$maxOutputBytes);
+                        $truncated = true;
+                    }
                 }
             }
         }
@@ -226,19 +330,13 @@ final class BoundedCommand
         if ($code === null) {
             $code = $closeCode >= 0 ? $closeCode : -1;
         }
-        if ($timedOut) {
-            $stderr .= ($stderr === '' ? '' : "\n")
-                . 'candy-git-server: command timed out after ' . $timeoutSeconds . 's';
-        }
-
-        $merged = $code === 0 || $stderr === '' ? $stdout : $stdout . ($stdout === '' ? '' : "\n") . $stderr;
 
         return [
             'code' => $code,
-            // An empty stream is an empty line list — preg_split('') would
-            // hand back [''] and every parser here filters by truthiness,
-            // but callers counting tags/branches must see zero entries.
-            'output' => $merged === '' ? [] : (\preg_split('/\r?\n/', \rtrim($merged, "\r\n")) ?: []),
+            'stdout' => $stdout,
+            'stderr' => $stderr,
+            'truncated' => $truncated,
+            'timedOut' => $timedOut,
         ];
     }
 }

@@ -173,7 +173,10 @@ final class GitProtocolTest extends TestCase
         $this->assertNotNull($headHash);
 
         $result = $repo->readFile($headHash, 'file.txt');
-        $this->assertSame('hello', $result);
+        // S16 (finding 031): bytes, not a line-reconstruction — the blob
+        // is "hello\n" and that trailing newline is content, disclosed
+        // re-anchor from the old implode contract.
+        $this->assertSame("hello\n", $result);
     }
 
     public function testRepoReadmeReturnsNullWhenNoReadme(): void

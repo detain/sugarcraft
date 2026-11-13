@@ -361,8 +361,14 @@ final class Repo
     public function tags(): array
     {
         $result = BoundedCommand::run(['git', '-C', $this->path, 'tag']);
+        if ($result['code'] !== 0) {
+            return [];
+        }
 
-        return $result['code'] === 0 ? $result['output'] : [];
+        // S16 (finding 088): the identical trim/filter legs branches()
+        // applies — same stream shape, same handling, no stray \r and no
+        // '' entries leaking to callers.
+        return \array_values(\array_filter(\array_map('trim', $result['output']), static fn ($l) => $l !== ''));
     }
 
     /**
@@ -396,16 +402,53 @@ final class Repo
     /**
      * Read a file from the repo at a given commit + path.
      *
-     * @return string|null  null if not found
+     * S16 (finding 031): the bytes handed back are the blob's bytes —
+     * runRaw skips the line-split, so a CRLF file no longer round-trips
+     * as LF and a trailing newline is content, not noise. And exit!=0 is
+     * no longer one big shrug: "that object/path is not here" is the
+     * honest null the API promised, while a REPOSITORY fault (unreadable
+     * dir, corrupt objects) is logged with the child's own verdict
+     * before the same null — a browse 404 and a broken repo stay
+     * distinguishable by whoever holds the log.
+     *
+     * @return string|null  null if not found (or the repo itself failed)
      */
     public function readFile(string $commitHash, string $path): ?string
     {
-        $result = BoundedCommand::run(['git', '-C', $this->path, 'show', $commitHash . ':' . $path]);
-        if ($result['code'] !== 0) {
+        $result = BoundedCommand::runRaw(['git', '-C', $this->path, 'show', $commitHash . ':' . $path]);
+        if ($result['code'] === 0) {
+            if ($result['truncated']) {
+                // Partial bytes are a lie with a Content-Length: refuse
+                // honestly instead of serving a silent prefix (finding 030).
+                \error_log("candy-git-server: {$this->path}: {$commitHash}:{$path} exceeds the bounded output cap; refusing partial content");
+
+                return null;
+            }
+
+            return $result['stdout'];
+        }
+
+        if (self::isNotFoundFault($result['stderr'])) {
             return null;
         }
 
-        return \implode("\n", $result['output']);
+        \error_log("candy-git-server: {$this->path}: git show {$commitHash}:{$path} failed (code {$result['code']}): "
+            . \trim(\substr($result['stderr'], -400)));
+
+        return null;
+    }
+
+    /**
+     * The git fatal family that means "this rev/path simply is not
+     * here" — the ordinary browse miss. Anything else that fails at
+     * exit 128 is the repository's fault, not the reader's.
+     */
+    private static function isNotFoundFault(string $stderr): bool
+    {
+        return \preg_match(
+            '/does not exist|exists on disk, but not in|bad object|unknown revision|not a valid object name|ambiguous argument|bad revision/i',
+            $stderr
+        ) === 1;
     }
 
     /**

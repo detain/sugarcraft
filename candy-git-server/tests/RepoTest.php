@@ -140,4 +140,127 @@ final class RepoTest extends TestCase
         $this->assertSame(Visibility::Private, $r->visibility);
         $this->assertFalse($r->isVisiblePublic(), 'a handle that was never published reads as public');
     }
+
+    // -------------------------------------------------------------------------
+    // S16: readFile byte fidelity + fault distinction, tags symmetry
+    // -------------------------------------------------------------------------
+
+    /**
+     * S16 (finding 031): the blob's bytes are the answer. A CRLF file
+     * round-trips as CRLF (the old line-split+implode turned it into LF),
+     * and a trailing newline is content, not noise to be trimmed.
+     */
+    public function testReadFileDeliversTheBlobsExactCRLFBytes(): void
+    {
+        $repo = $this->committedFixtureRepo('crlf');
+        $hash = $repo->refs()['refs/heads/master'];
+
+        $this->assertSame("a\r\nb\r\n", $repo->readFile($hash, 'crlf.txt'));
+    }
+
+    /**
+     * S16 (finding 031): the ordinary browse miss — "that path is not in
+     * this rev" — answers the promised null SILENTLY. A missing object
+     * is not a fault worth a log line.
+     */
+    public function testReadingAMissingPathIsNullWithoutALogLine(): void
+    {
+        $repo = $this->committedFixtureRepo('quiet');
+        $hash = $repo->refs()['refs/heads/master'];
+
+        $log = $this->captureErrorLog(function () use ($repo, $hash): void {
+            $this->assertNull($repo->readFile($hash, 'ghost.txt'));
+        });
+
+        $this->assertStringNotContainsString('git show', $log, 'a not-found miss must not masquerade as a fault');
+    }
+
+    /**
+     * S16 (finding 031): but a REPOSITORY fault (here: the path holds no
+     * repo at all) is no longer conflated with the miss — the child's
+     * own verdict reaches the log before the honest null.
+     */
+    public function testARepositoryFaultIsLoggedBeforeTheNull(): void
+    {
+        $repo = Repo::new('broken', $this->createRepoPath('not-a-repo'));
+
+        $log = $this->captureErrorLog(function () use ($repo): void {
+            $this->assertNull($repo->readFile('HEAD', 'anything.txt'));
+        });
+
+        $this->assertStringContainsString('git show', $log);
+        $this->assertStringContainsString('not a git repository', $log, 'the child verdict must be in the log');
+    }
+
+    /**
+     * S16 (finding 030): a blob past the bounded output cap is REFUSED —
+     * partial bytes served as file content are a lie, so the answer is
+     * null plus a log line naming the cap, never a silent prefix.
+     */
+    public function testABlobPastTheOutputCapIsRefusedNotServedPrefixTruncated(): void
+    {
+        $path = $this->createRepoPath('flood');
+        \exec('git -c init.defaultBranch=master init ' . \escapeshellarg($path) . ' 2>/dev/null');
+        \file_put_contents($path . '/big.bin', \str_repeat('Z', 16 * 1024 * 1024));
+        \exec(
+            'git -C ' . \escapeshellarg($path) . ' add big.bin && ' .
+            'git -C ' . \escapeshellarg($path) . ' -c user.email=t@example.com -c user.name=T commit -m big 2>/dev/null'
+        );
+        $repo = Repo::new('flood', $path);
+        $hash = $repo->refs()['refs/heads/master'];
+
+        $log = $this->captureErrorLog(function () use ($repo, $hash): void {
+            $this->assertNull($repo->readFile($hash, 'big.bin'), 'overflowed content must be refused');
+        });
+
+        $this->assertStringContainsString('exceeds the bounded output cap', $log);
+    }
+
+    /**
+     * S16 (finding 088): tags() handles the same stream shape with the
+     * same trim/filter legs as branches() — behavior plus a structural
+     * symmetry pin so a future edit cannot silently re-stray the \r.
+     */
+    public function testTagsTrimAndFilterExactlyLikeBranches(): void
+    {
+        $src = (string) \file_get_contents(\dirname(__DIR__) . '/src/Repo.php');
+        $symmetryLeg = \substr_count($src, "\\array_values(\\array_filter(\\array_map('trim', \$result['output'])");
+        $this->assertSame(2, $symmetryLeg, 'branches() and tags() must share the identical trim/filter shape');
+
+        $repo = $this->committedFixtureRepo('tagged');
+        \exec('git -C ' . \escapeshellarg($repo->path()) . ' tag v1.0 && ' .
+              'git -C ' . \escapeshellarg($repo->path()) . ' tag v2.0 2>/dev/null');
+
+        $this->assertSame(['v1.0', 'v2.0'], $repo->tags(), 'clean entries, no stray CR, no empty line');
+    }
+
+    /** A repo holding one master commit with crlf.txt + file.txt inside. */
+    private function committedFixtureRepo(string $name): Repo
+    {
+        $path = $this->createRepoPath($name);
+        \exec('git -c init.defaultBranch=master init ' . \escapeshellarg($path) . ' 2>/dev/null');
+        \file_put_contents($path . '/crlf.txt', "a\r\nb\r\n");
+        \file_put_contents($path . '/file.txt', "hello\n");
+        \exec(
+            'git -C ' . \escapeshellarg($path) . ' add . && ' .
+            'git -C ' . \escapeshellarg($path) . ' -c user.email=t@example.com -c user.name=T commit -m initial 2>/dev/null'
+        );
+
+        return Repo::new($name, $path);
+    }
+
+    /** Route error_log() to a private file for the call and hand back what landed. */
+    private function captureErrorLog(callable $fn): string
+    {
+        $log = $this->tmpDir . '/errlog-' . \uniqid('', true);
+        $previous = \ini_get('error_log');
+        \ini_set('error_log', $log);
+        try {
+            $fn();
+        } finally {
+            \ini_set('error_log', $previous === false ? '' : $previous);
+        }
+
+        return \is_file($log) ? (string) \file_get_contents($log) : '';
+    }
 }
