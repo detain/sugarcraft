@@ -46,6 +46,19 @@ final class RenderSession
     private bool $diffWasCalled = false;
 
     /**
+     * One encoder per session instead of one per frame. encode() resets all
+     * cursor/style/link state at entry (sugar-cellbuffer DiffEncoder), so a
+     * reused instance emits byte-identical output while skipping a fresh
+     * allocation on every diff.
+     */
+    private DiffEncoder $encoder;
+
+    public function __construct()
+    {
+        $this->encoder = new DiffEncoder();
+    }
+
+    /**
      * Returns true when there is no prior output or the dimensions differ,
      * meaning the next composite must emit a full frame.
      */
@@ -155,8 +168,7 @@ final class RenderSession
         $this->previousFrame = $current;
         $this->previousOutput = $output;
 
-        $encoder = new DiffEncoder();
-        return $encoder->encode($ops);
+        return $this->encoder->encode($ops);
     }
 
     /**

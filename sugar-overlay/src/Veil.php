@@ -66,6 +66,14 @@ final class Veil
     /** @var RenderSession Mutable diff/session state shared across with*() clones */
     private readonly RenderSession $session;
 
+    /**
+     * Lazily-built frame→buffer factory for the diff session. Allocated
+     * once per instance instead of once per emitted frame; it reads no
+     * instance state beyond the private method reference, so sharing it
+     * across with*() clones is byte-equivalent.
+     */
+    private ?\Closure $bufferFactory = null;
+
     /** @var Position|null Vertical position anchor for per-veil positioning */
     private readonly ?Position $vPosition;
 
@@ -650,7 +658,19 @@ final class Veil
     ): string {
         $bgLines  = $this->splitLines($background);
         $bgHeight = \count($bgLines);
-        $bgWidth  = $this->maxLineWidth($bgLines);
+        // One tokenize per row (sugar-overlay-003): widths, the covered-row
+        // clips and both prefix/suffix splits all fold from these segment
+        // lists — the same numbers the old repeated MarkedFrame::measure()/
+        // take()/drop() string walks produced, at one walk per row instead
+        // of 7-10 per frame.
+        $bgSegs   = [];
+        $bgWidths = [];
+        foreach ($bgLines as $r => $line) {
+            $segs        = MarkedFrame::segments($line);
+            $bgSegs[$r]  = $segs;
+            $bgWidths[$r] = MarkedFrame::measureSegments($segs);
+        }
+        $bgWidth = $bgWidths === [] ? 0 : \max($bgWidths);
 
         // Border chrome is unconditional: a set border wraps the foreground
         // before any measurement, so anchoring and diffing see the bordered
@@ -663,7 +683,14 @@ final class Veil
 
         $fgLines  = $this->splitLines($foreground);
         $fgHeight = \count($fgLines);
-        $fgWidth  = $this->maxLineWidth($fgLines);
+        $fgSegs   = [];
+        $fgWidths = [];
+        foreach ($fgLines as $r => $line) {
+            $segs         = MarkedFrame::segments($line);
+            $fgSegs[$r]   = $segs;
+            $fgWidths[$r] = MarkedFrame::measureSegments($segs);
+        }
+        $fgWidth = $fgWidths === [] ? 0 : \max($fgWidths);
 
         if ($bgHeight === 0 || $bgWidth === 0) {
             // A background with no cells is no canvas to clip against, so the
@@ -710,6 +737,7 @@ final class Veil
         // background bounds so that animations (e.g. SLIDE at progress 0) can
         // position the overlay fully off-screen without showing a sliver.
         $output = [];
+        $pen    = $this->dimPen();
         for ($row = 0; $row < $bgHeight; $row++) {
             $bgLine = $bgLines[$row];
             $fy = $row - $y;
@@ -730,7 +758,7 @@ final class Veil
             // ends at or left of column 0 (negative xOffset, or an anchor
             // centre where fg is wider than bg) shows nothing — including a
             // zero-width line, whose drop below lands at x=0.
-            if ($x + MarkedFrame::measure($fgLines[$fy]) <= 0) {
+            if ($x + $fgWidths[$fy] <= 0) {
                 $output[$row] = $this->dimLine($bgLine);
                 continue;
             }
@@ -740,28 +768,33 @@ final class Veil
             // ANSI walkers charge the marker bytes, so a marked line would
             // anchor, clip and splice as though those cells were visible).
             // Drop the head when x < 0 so off-screen-left columns never leak
-            // onto col 0, then truncate to the room left.
-            $fgLine = $x < 0
-                ? MarkedFrame::take(MarkedFrame::drop($fgLines[$fy], -$x), $bgWidth)
-                : MarkedFrame::take($fgLines[$fy], $bgWidth - $x);
-            $fgVis  = MarkedFrame::measure($fgLine);
+            // onto col 0, then truncate to the room left. All three ops fold
+            // from the row's cached segment list; $fgCarried is exactly the
+            // segments that re-tokenize the clipped bytes for isolation.
+            if ($x < 0) {
+                [, , $shifted] = MarkedFrame::dropSegments($fgSegs[$fy], -$x);
+                [$fgLine, $fgVis, $fgCarried] = MarkedFrame::takeSegments($shifted, $bgWidth);
+            } else {
+                [$fgLine, $fgVis, $fgCarried] = MarkedFrame::takeSegments($fgSegs[$fy], $bgWidth - $x);
+            }
 
             // Compute prefix/suffix from the background; with the head clipped
             // the overlay always starts at column max(0, x).
             $prefixWidth = \max(0, $x);
-            $prefix = MarkedFrame::take($bgLine, $prefixWidth);
-            $prefix .= \str_repeat(' ', $prefixWidth - MarkedFrame::measure($prefix));
+            [$prefix, $prefVis, $prefCarried] = MarkedFrame::takeSegments($bgSegs[$row], $prefixWidth);
+            $prefix .= \str_repeat(' ', $prefixWidth - $prefVis);
             $cut = $prefixWidth + $fgVis;
-            $suffix = MarkedFrame::drop($bgLine, $cut);
-            // MarkedFrame::drop() drops a wide backdrop grapheme straddling the
-            // cut WHOLE — it consumes its right-half cell one column BEYOND
+            [$suffix, $suffixVis] = MarkedFrame::dropSegments($bgSegs[$row], $cut);
+            // MarkedFrame::dropSegments() drops a wide backdrop grapheme straddling
+            // the cut WHOLE — it consumes its right-half cell one column BEYOND
             // the overlay footprint. Without a replacement the rest of the
             // row slides left and the composite is a cell narrower than the
             // backdrop (e.g. 'abcde語fgh' + 'ZZZ' at x=3 yielded 9 cells).
-            // Measure the shortfall cell-aware and blank the straddled cell
-            // so every composited row keeps the backdrop's exact width; the
-            // left edge needs no twin because the pad above already re-blanks.
-            $straddled = MarkedFrame::measure($bgLine) - $cut - MarkedFrame::measure($suffix);
+            // The shortfall is the row's cached width minus the cut minus the
+            // surviving tail width; blank it so every composited row keeps the
+            // backdrop's exact width (the left edge needs no twin because the
+            // pad above already re-blanks).
+            $straddled = $bgWidths[$row] - $cut - $suffixVis;
             if ($straddled > 0) {
                 $suffix = \str_repeat(' ', $straddled) . $suffix;
             }
@@ -770,9 +803,18 @@ final class Veil
             // color pen (crop mid-style, no trailing reset) must not bleed
             // that pen into the next segment — the dim wrap and the reset
             // order below make each of the three segments self-contained.
-            $dp = $this->dimLine($prefix);
-            $output[$row] = $dp . MarkedFrame::isolation($dp) . $fgLine
-                . MarkedFrame::isolation($fgLine) . $this->dimLine($suffix);
+            // The neutralizers fold from the carried segment lists: the pad
+            // spaces appended after the take contribute no SGR, so they are
+            // invisible to the fold exactly as re-walking the bytes would see.
+            if ($pen === null || $prefix === '') {
+                $dp        = $prefix;
+                $dpCarried = $prefCarried;
+            } else {
+                $dp        = $pen['open'] . $prefix . $pen['close'];
+                $dpCarried = \array_merge([$pen['openSeg']], $prefCarried, [$pen['closeSeg']]);
+            }
+            $output[$row] = $dp . MarkedFrame::isolationSegments($dpCarried) . $fgLine
+                . MarkedFrame::isolationSegments($fgCarried) . $this->dimLine($suffix);
         }
 
         return $this->emitFrame(\implode("\n", $output), $bgWidth, $bgHeight);
@@ -804,7 +846,7 @@ final class Veil
             $fullOutput,
             $width,
             $height,
-            fn(string $out, int $w, int $h): Buffer => $this->bufferFromOutput($out, $w, $h),
+            $this->bufferFactory ??= fn (string $out, int $w, int $h): Buffer => $this->bufferFromOutput($out, $w, $h),
         );
     }
 
@@ -833,19 +875,45 @@ final class Veil
      */
     private function dimLine(string $line): string
     {
-        $opacity = $this->backdropOpacity;
-        if ($opacity === 0 || $line === '') {
+        $pen = $this->dimPen();
+        if ($pen === null || $line === '') {
             return $line;
         }
 
-        // Default terminal foreground (approx white) blended toward black
-        // by the opacity percentage. Formula: new = original * (1 - opacity/100)
+        return $pen['open'] . $line . $pen['close'];
+    }
+
+    /**
+     * The dim pen when a backdrop opacity is armed, or null.
+     *
+     * One source of truth for both the wrap bytes ({@see dimLine()}) and
+     * the SGR segments the compositor's pen-isolation folds over — the
+     * segs re-tokenize exactly as the emitted bytes would (sugar-overlay-003:
+     * the isolation walk of a just-dimmed prefix was a pure re-scan).
+     *
+     * Default terminal foreground (approx white) blended toward black
+     * by the opacity percentage. Formula: new = original * (1 - opacity/100)
+     *
+     * @return null|array{open:string, close:string, openSeg:array{kind:string,bytes:string,width:int,id:string}, closeSeg:array{kind:string,bytes:string,width:int,id:string}}
+     */
+    private function dimPen(): ?array
+    {
+        $opacity = $this->backdropOpacity;
+        if ($opacity === 0) {
+            return null;
+        }
+
         $factor = 1.0 - ($opacity / 100.0);
         $r = (int) \round(255 * $factor);
         $g = (int) \round(255 * $factor);
         $b = (int) \round(255 * $factor);
 
-        return "\e[38;2;{$r};{$g};{$b}m{$line}\e[39m";
+        return [
+            'open'  => "\e[38;2;{$r};{$g};{$b}m",
+            'close' => "\e[39m",
+            'openSeg'  => ['kind' => 'sgr', 'bytes' => "\e[38;2;{$r};{$g};{$b}m", 'width' => 0, 'id' => "38;2;{$r};{$g};{$b}"],
+            'closeSeg' => ['kind' => 'sgr', 'bytes' => "\e[39m", 'width' => 0, 'id' => '39'],
+        ];
     }
 
     /**

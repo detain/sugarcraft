@@ -45,8 +45,19 @@ final class MarkedFrame
      */
     public static function measure(string $line): int
     {
+        return self::measureSegments(self::segments($line));
+    }
+
+    /**
+     * {@see measure()} over an already-tokenized row — the shared walk the
+     * compositor carries (SO-03: tokenize each row ONCE per composite).
+     *
+     * @param list<array{kind:string, bytes:string, width:int, id:string}> $segments
+     */
+    public static function measureSegments(array $segments): int
+    {
         $width = 0;
-        foreach (self::segments($line) as $seg) {
+        foreach ($segments as $seg) {
             $width += $seg['width'];
         }
 
@@ -71,14 +82,37 @@ final class MarkedFrame
             return '';
         }
 
+        return self::takeSegments(self::segments($line), $max)[0];
+    }
+
+    /**
+     * {@see take()} over an already-tokenized row.
+     *
+     * Returns the cut bytes, their display width (so callers never re-walk
+     * the output to measure it), and the segments that were EMITTED — that
+     * list re-tokenizes as itself, so carrying it forward (a take of a
+     * drop, a pen-fold over a dim wrap) is exactly a second walk of the
+     * bytes, at zero tokenizer cost.
+     *
+     * @param list<array{kind:string, bytes:string, width:int, id:string}> $segments
+     * @return array{0:string, 1:int, 2:list<array{kind:string, bytes:string, width:int, id:string}>}
+     */
+    public static function takeSegments(array $segments, int $max): array
+    {
+        if ($max <= 0) {
+            return ['', 0, []];
+        }
+
         $out = '';
         $width = 0;
         $pastBudget = false;
         /** @var string|null id of the zone open at (or after) the cut */
         $zone = null;
         $linkActive = false;
+        /** @var list<array{kind:string, bytes:string, width:int, id:string}> $emitted */
+        $emitted = [];
 
-        foreach (self::segments($line) as $seg) {
+        foreach ($segments as $seg) {
             switch ($seg['kind']) {
                 case 'text':
                     if ($pastBudget) {
@@ -92,12 +126,14 @@ final class MarkedFrame
                     }
                     $out .= $seg['bytes'];
                     $width += $seg['width'];
+                    $emitted[] = $seg;
                     break;
 
                 case 'zone-open':
                     if (!$pastBudget && $width < $max) {
                         $out .= $seg['bytes'];
                         $zone = $seg['id'];
+                        $emitted[] = $seg;
                     }
                     // Past the budget (or with the budget exactly spent — no
                     // content of this zone can survive) a whole new zone is
@@ -111,12 +147,14 @@ final class MarkedFrame
                         if ($zone === $seg['id']) {
                             $zone = null;
                         }
+                        $emitted[] = $seg;
                     } elseif ($zone !== null && $zone === $seg['id']) {
                         // The zone opened before the cut and its real close
                         // arrived after it — keeping the original bytes is
                         // byte-faithful balance; the synth at the end skips it.
                         $out .= $seg['bytes'];
                         $zone = null;
+                        $emitted[] = $seg;
                     }
                     break;
 
@@ -124,14 +162,17 @@ final class MarkedFrame
                     if (!$pastBudget && $width < $max) {
                         $out .= $seg['bytes'];
                         $linkActive = $seg['id'] !== '';
+                        $emitted[] = $seg;
                     } elseif ($seg['id'] === '' && $linkActive) {
                         $out .= $seg['bytes'];
                         $linkActive = false;
+                        $emitted[] = $seg;
                     }
                     break;
 
                 default: // 'sgr', 'esc'
                     $out .= $seg['bytes'];
+                    $emitted[] = $seg;
             }
         }
 
@@ -142,7 +183,7 @@ final class MarkedFrame
             $out .= self::LINK_CLOSE;
         }
 
-        return $out;
+        return [$out, $width, $emitted];
     }
 
     /**
@@ -162,16 +203,44 @@ final class MarkedFrame
             return $line;
         }
 
-        $segments = self::segments($line);
+        return self::dropSegments(self::segments($line), $skip)[0];
+    }
+
+    /**
+     * {@see drop()} over an already-tokenized row, returning the tail bytes,
+     * their display width, and the segments they re-tokenize as (head-phase
+     * escapes first, then the zone replay if one survives, then the tail) —
+     * so a take-of-a-drop chain never re-walks the intermediate string.
+     *
+     * @param list<array{kind:string, bytes:string, width:int, id:string}> $segments
+     * @return array{0:string, 1:int, 2:list<array{kind:string, bytes:string, width:int, id:string}>}
+     */
+    public static function dropSegments(array $segments, int $skip): array
+    {
+        if ($skip <= 0) {
+            // Nothing to drop: the walk is total, so the segments re-emit
+            // the row byte-for-byte.
+            return [
+                \implode('', \array_column($segments, 'bytes')),
+                self::measureSegments($segments),
+                $segments,
+            ];
+        }
+
         $count = \count($segments);
         $head = '';
         $tail = '';
         $replay = '';
         $width = 0;
+        $tailWidth = 0;
         $index = 0;
         $straddle = false;
         /** @var string|null id of the zone currently open in the walk */
         $zone = null;
+        /** @var list<array{kind:string, bytes:string, width:int, id:string}> $headSegs */
+        $headSegs = [];
+        /** @var list<array{kind:string, bytes:string, width:int, id:string}> $tailSegs */
+        $tailSegs = [];
 
         // Head phase: walk until $skip visible cells have been dropped.
         while ($index < $count) {
@@ -198,18 +267,21 @@ final class MarkedFrame
                 // replay below carries only a zone that survives into the tail.
             } else {
                 $head .= $seg['bytes'];
+                $headSegs[] = $seg;
             }
             $index++;
         }
 
         if ($index >= $count && !$straddle) {
             // The drop consumed (or overshot) every visible cell.
-            return '';
+            return ['', 0, []];
         }
 
         if ($zone !== null) {
             $replay = self::envelope($zone);
         }
+        // Captured NOW: the tail phase reassigns $zone as envelopes pair off.
+        $replayZone = $zone;
         if ($straddle) {
             $index++; // the straddling cluster is consumed whole, never emitted
         }
@@ -220,6 +292,7 @@ final class MarkedFrame
             $seg = $segments[$index];
             if ($seg['kind'] === 'zone-open') {
                 $tail .= $seg['bytes'];
+                $tailSegs[] = $seg;
                 $zone = $seg['id'];
                 continue;
             }
@@ -237,6 +310,7 @@ final class MarkedFrame
                     continue;
                 }
                 $tail .= $seg['bytes'];
+                $tailSegs[] = $seg;
                 $zone = null;
                 continue;
             }
@@ -244,9 +318,21 @@ final class MarkedFrame
                 $seenText = true;
             }
             $tail .= $seg['bytes'];
+            $tailWidth += $seg['width'];
+            $tailSegs[] = $seg;
         }
 
-        return $head . $replay . $tail;
+        // The degenerate case can clear $replay AFTER the head phase set it;
+        // build the carried segment list from the surviving bytes' sources.
+        $segs = $headSegs;
+        if ($replay !== '') {
+            $segs[] = ['kind' => 'zone-open', 'bytes' => $replay, 'width' => 0, 'id' => (string) $zone];
+        }
+        foreach ($tailSegs as $seg) {
+            $segs[] = $seg;
+        }
+
+        return [$head . $replay . $tail, $tailWidth, $segs];
     }
 
     /**
@@ -261,10 +347,20 @@ final class MarkedFrame
      */
     public static function isolation(string $line): string
     {
+        return self::isolationSegments(self::segments($line));
+    }
+
+    /**
+     * {@see isolation()} over an already-tokenized row.
+     *
+     * @param list<array{kind:string, bytes:string, width:int, id:string}> $segments
+     */
+    public static function isolationSegments(array $segments): string
+    {
         $fg = false;
         $bg = false;
 
-        foreach (self::segments($line) as $seg) {
+        foreach ($segments as $seg) {
             if ($seg['kind'] !== 'sgr') {
                 continue;
             }
@@ -321,7 +417,12 @@ final class MarkedFrame
     }
 
     /**
-     * Tokenize one row into zero- and one/two-cell segments.
+     * Tokenize one row into zero- and one/two-cell segments — THE one walk.
+     *
+     * Every geometry/clipping operation in this class is a fold over this
+     * list; the compositor tokenizes each row once per composite and feeds
+     * the lists to the `…Segments` variants (sugar-overlay-003: the old hot
+     * path re-tokenized every row 7-10 times per frame).
      *
      * Walk parity with Veil::paintRow(): CSI runs to its final byte, OSC
      * terminates at BEL or ST — and an ESC not followed by the ST backslash
@@ -334,7 +435,7 @@ final class MarkedFrame
      *         kind ∈ text | sgr | osc8 | esc | zone-open | zone-close.
      *         id carries SGR params, the OSC 8 URI, or the zone id.
      */
-    private static function segments(string $line): array
+    public static function segments(string $line): array
     {
         /** @var list<array{kind:string, bytes:string, width:int, id:string}> $out */
         $out = [];
