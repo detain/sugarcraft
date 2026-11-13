@@ -168,6 +168,35 @@ final class Style
         return self::defaultProfile();
     }
 
+    /**
+     * Scoped gate over the ambient default profile: pins `$profile` for
+     * the duration of `$callable`, then restores whatever was in force —
+     * `finally`-guarded, so an exception thrown inside still unwinds
+     * cleanly. Collapses the per-callsite save/restore ritual (finding
+     * 020) into one call; nesting is safe (each gate reinstalls its own
+     * predecessor) and `null` behaves as in {@see setDefaultProfile()}
+     * (TrueColor minting inside the block).
+     *
+     * Interim seam: the 2.0 plan moves ambient capability onto the
+     * Renderer-carried profile and retires this static gate.
+     *
+     * @template T
+     *
+     * @param callable(): T $callable
+     *
+     * @return T
+     */
+    public static function withDefaultProfile(?ColorProfile $profile, callable $callable): mixed
+    {
+        $previous = self::$defaultProfile;
+        self::$defaultProfile = $profile;
+        try {
+            return $callable();
+        } finally {
+            self::$defaultProfile = $previous;
+        }
+    }
+
     public static function new(): self
     {
         return new self(profile: self::$defaultProfile ?? ColorProfile::TrueColor);

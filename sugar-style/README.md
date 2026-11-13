@@ -535,6 +535,25 @@ Style::setDefaultProfile(ColorProfile::Ascii);
 Style::setDefaultProfile($had); // always, e.g. in tearDown
 ```
 
+A scoped gate means you never hand-roll that ritual:
+
+```php
+use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Style\Style;
+
+$out = Style::withDefaultProfile(ColorProfile::Ascii, static function (): string {
+    return Style::new()->bold()->render('hi'); // minted Ascii inside the gate
+});
+// the previous ambient is back in force here — even if the closure threw
+```
+
+`withDefaultProfile()` restores in a `finally`, nests cleanly (each gate
+reinstalls its own predecessor), and treats `null` exactly like the
+setter does (TrueColor minting inside the block). It is the interim
+seam for tests and one-off blocks: the 2.0 plan moves ambient capability
+onto a Renderer-carried profile, and this static gate retires with the
+move.
+
 ## Color blending utilities
 
 `Util\Color` ships the lipgloss-equivalent helpers:

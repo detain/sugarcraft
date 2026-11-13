@@ -81,4 +81,88 @@ final class StyleAmbientProfileTest extends TestCase
             Style::new()->foreground(Color::hex('#ff0000'))->render('hi'),
         );
     }
+
+    // ---- ST-11: scoped default-profile gate (finding 020) --------------
+
+    public function testScopedGateCollapsesTheSaveRestoreRitual(): void
+    {
+        // One call, no manual $had/$was bookkeeping: minted Ascii inside,
+        // ambient untouched after.
+        $out = Style::withDefaultProfile(
+            ColorProfile::Ascii,
+            static fn (): string => Style::new()->foreground(Color::hex('#ff0000'))->render('hi'),
+        );
+        self::assertSame('hi', $out);
+        self::assertNull(Style::defaultProfile());
+        self::assertSame(
+            "\x1b[38;2;255;0;0mhi\x1b[0m",
+            Style::new()->foreground(Color::hex('#ff0000'))->render('hi'),
+        );
+    }
+
+    public function testScopedGateIsByteIdenticalToTheRitual(): void
+    {
+        $ritual = static function (): string {
+            $had = Style::defaultProfile();
+            Style::setDefaultProfile(ColorProfile::Ansi256);
+            try {
+                return Style::new()->foreground(Color::hex('#ff0000'))->render('hi');
+            } finally {
+                Style::setDefaultProfile($had);
+            }
+        };
+        $gated = static fn (): string => Style::withDefaultProfile(
+            ColorProfile::Ansi256,
+            static fn (): string => Style::new()->foreground(Color::hex('#ff0000'))->render('hi'),
+        );
+        self::assertSame($ritual(), $gated());
+        self::assertSame("\x1b[38;5;196mhi\x1b[0m", $gated());
+    }
+
+    public function testScopedGateRestoresThroughNestingInOrder(): void
+    {
+        Style::setDefaultProfile(ColorProfile::Ansi256); // outer ambient pinned
+        $inner = Style::withDefaultProfile(
+            ColorProfile::Ascii,
+            static fn (): string => Style::new()->foreground(Color::hex('#ff0000'))->render('hi'),
+        );
+        self::assertSame('hi', $inner);
+        // The gate reinstalls ITS predecessor — the pinned Ansi256 —
+        // not a blanket null.
+        self::assertSame(
+            "\x1b[38;5;196mhi\x1b[0m",
+            Style::new()->foreground(Color::hex('#ff0000'))->render('hi'),
+        );
+        self::assertSame(ColorProfile::Ansi256, Style::defaultProfile());
+    }
+
+    public function testScopedGateNullMintsTrueColorUnderPinnedAmbient(): void
+    {
+        Style::setDefaultProfile(ColorProfile::Ascii);
+        $out = Style::withDefaultProfile(
+            null,
+            static fn (): string => Style::new()->foreground(Color::hex('#ff0000'))->render('hi'),
+        );
+        self::assertSame("\x1b[38;2;255;0;0mhi\x1b[0m", $out);
+        self::assertSame(ColorProfile::Ascii, Style::defaultProfile());
+    }
+
+    public function testScopedGateRestoresEvenWhenTheCallableThrows(): void
+    {
+        Style::setDefaultProfile(ColorProfile::Ansi256);
+        try {
+            Style::withDefaultProfile(ColorProfile::Ascii, static function (): string {
+                throw new \LogicException('boom');
+            });
+            self::fail('the exception must propagate out of the gate');
+        } catch (\LogicException $e) {
+            self::assertSame('boom', $e->getMessage());
+        }
+        self::assertSame(ColorProfile::Ansi256, Style::defaultProfile());
+    }
+
+    public function testScopedGateReturnsTheCallableValue(): void
+    {
+        self::assertSame(42, Style::withDefaultProfile(ColorProfile::Ascii, static fn (): int => 42));
+    }
 }
