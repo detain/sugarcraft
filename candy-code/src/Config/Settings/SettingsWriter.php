@@ -471,12 +471,12 @@ final class SettingsWriter
             return $path;
         }
 
-        $lock = @fopen($path . '.mutate.lock', 'c');
-        if ($lock === false) {
-            throw new \RuntimeException("{$path} could not be locked for writing");
+        try {
+            $lock = TimedFileLock::guard($path . '.mutate.lock');
+        } catch (\RuntimeException $e) {
+            throw new \RuntimeException("{$path} could not be locked for writing (" . $e->getMessage() . ')', 0, $e);
         }
         try {
-            TimedFileLock::acquire($lock, \LOCK_EX, $path);
             $decided = $run($this->current($tier));
             if ($decided === null) {
                 return null;
@@ -489,8 +489,7 @@ final class SettingsWriter
 
             return $path;
         } finally {
-            TimedFileLock::release($lock);
-            fclose($lock);
+            $lock->release();
         }
     }
 

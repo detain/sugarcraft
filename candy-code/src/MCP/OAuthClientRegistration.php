@@ -800,7 +800,7 @@ final class OAuthClientRegistration
             throw new \RuntimeException("Failed to create auth directory: {$dir}");
         }
 
-        $lock = $this->acquireAuthLock();
+        $lock = TimedFileLock::guard($this->authFilePath . '.lock');
 
         try {
             $raw = $this->readRawAuth();
@@ -827,48 +827,14 @@ final class OAuthClientRegistration
             $this->authCache = $this->decodeEntries($raw);
             $this->authCacheSignature = $this->fileSignature();
         } finally {
-            TimedFileLock::release($lock);
-            fclose($lock);
+            $lock->release();
         }
     }
 
-    /**
-     * Take the exclusive lock that serialises {@see mutateAuthFile()}.
-     *
-     * A SIDECAR, never the auth file itself: every write replaces the file's
-     * inode by rename(), so a lock held on it would guard a file no longer on
-     * disk while the next writer locked the new inode unopposed. The sidecar is
-     * never unlinked for the same reason. Created under umask 077 — it holds no
-     * bytes, but whoever can open it can hold it and stall this user's logins.
-     * Fails CLOSED: a write that went ahead without the lock is exactly the
-     * lost update the lock exists to prevent.
-     *
-     * @return resource
-     */
-    private function acquireAuthLock(): mixed
-    {
-        $lockPath = $this->authFilePath . '.lock';
-
-        $umask = umask(0077);
-        try {
-            $fp = @fopen($lockPath, 'c');
-        } finally {
-            umask($umask);
-        }
-
-        if ($fp === false) {
-            throw new \RuntimeException("Failed to open auth lock file: {$lockPath}");
-        }
-
-        try {
-            TimedFileLock::acquire($fp, \LOCK_EX, $lockPath);
-        } catch (\RuntimeException $e) {
-            fclose($fp);
-            throw $e;
-        }
-
-        return $fp;
-    }
+    // The exclusive SIDECAR lock that serialises mutateAuthFile() is
+    // TimedFileLock::guard() (sugar-core LockFile, rider R6). A sidecar, never
+    // the auth file itself: every write replaces that file's inode by rename(),
+    // so a lock on it would guard a file no longer on disk. Fails CLOSED.
 
     /**
      * The auth file decoded, `[]` when it is missing or empty (nothing to

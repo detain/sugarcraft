@@ -5296,8 +5296,7 @@ public static function useMaxCost(?string $maxCost): void
                 // Best-effort: the write already succeeded.
             }
         } finally {
-            TimedFileLock::release($lock);
-            fclose($lock);
+            $lock->release();
         }
     }
 
@@ -5447,32 +5446,15 @@ public static function useMaxCost(?string $maxCost): void
      * matters here (a write that went ahead without the lock is the lost
      * update this exists to prevent).
      *
-     * @return resource|null
+     * @return \SugarCraft\Core\Util\LockGuard|null
      */
-    private static function acquireUserConfigLock(string $path)
+    private static function acquireUserConfigLock(string $path): ?\SugarCraft\Core\Util\LockGuard
     {
-        $lockPath = \dirname($path) . '/.' . basename($path) . '.lock';
-
-        $umask = umask(0077);
         try {
-            $fp = @fopen($lockPath, 'c');
-        } finally {
-            umask($umask);
-        }
-
-        if ($fp === false) {
-            return null;
-        }
-
-        try {
-            TimedFileLock::acquire($fp, \LOCK_EX, $lockPath);
+            return TimedFileLock::guard(\dirname($path) . '/.' . basename($path) . '.lock');
         } catch (\RuntimeException) {
-            fclose($fp);
-
             return null;
         }
-
-        return $fp;
     }
 
     /**

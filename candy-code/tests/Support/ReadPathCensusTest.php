@@ -890,11 +890,6 @@ final class ReadPathCensusTest extends TestCase
         'MCP/OAuthClientRegistration.php|file_get_contents' => [
             'SELF_LOCATED — `~/.local/share/candy-code/mcp-auth.json`, written by this class',
         ],
-        'MCP/OAuthClientRegistration.php|fopen' => [
-            'SELF_LOCATED — acquireAuthLock(): the `mcp-auth.json.lock` sidecar beside the auth '
-                . 'file, created by this process under umask 077 and opened `c` only for the timed '
-                . 'LOCK_EX that serialises the read-merge-write; no byte of it is read',
-        ],
         'Memory/AutoMemoryConsolidator.php|file_get_contents' => [
             'SELF_LOCATED — readState(): the `.auto-memory-<key>.json` throttle this class writes beside '
                 . 'the home store\'s notes (roadmap 5.2); decoded as JSON, never executed',

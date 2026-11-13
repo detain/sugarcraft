@@ -179,12 +179,8 @@ final class McpTrustPins
         if (!is_dir(\dirname($this->path))) {
             @mkdir(\dirname($this->path), 0700, true);
         }
-        $lock = @fopen($lockPath, 'c');
-        if ($lock === false) {
-            throw new \RuntimeException("{$lockPath} could not be opened for locking");
-        }
+        $guard = TimedFileLock::guard($lockPath);
         try {
-            TimedFileLock::acquire($lock, \LOCK_EX, $lockPath);
             $roots = self::load($this->path)->roots;
             foreach ($this->replaced as $root => $_) {
                 $roots[$root] = $this->roots[$root];
@@ -196,8 +192,7 @@ final class McpTrustPins
             );
             AtomicFileWriter::write($this->path, $json . "\n", 0600);
         } finally {
-            TimedFileLock::release($lock);
-            fclose($lock);
+            $guard->release();
         }
     }
 

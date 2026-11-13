@@ -103,4 +103,32 @@ final class TimedFileLockTest extends TestCase
     {
         $this->assertSame(5.0, TimedFileLock::DEFAULT_WAIT_SECONDS, 'the E137 default drifted from the SQLite busyTimeout it mirrors');
     }
+
+    public function testGuardTakesAndReleasesTheSidecarThroughTheLibrary(): void
+    {
+        $guard = TimedFileLock::guard($this->path . '.side', 0.0);
+        $probe = \fopen($this->path . '.side', 'c');
+        $this->assertFalse(\flock($probe, \LOCK_EX | \LOCK_NB), 'guard holds the flock');
+
+        $guard->release();
+        $this->assertTrue(\flock($probe, \LOCK_EX | \LOCK_NB), 'release frees it');
+        \fclose($probe);
+        @\unlink($this->path . '.side');
+    }
+
+    public function testGuardThrowsNamingTheWaitAndPathWhenContended(): void
+    {
+        $this->assertTrue(\flock($this->held, \LOCK_EX));
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessageMatches('/Timed out after 0\.1s waiting for the exclusive lock on .*another process holds it/');
+        TimedFileLock::guard($this->path, 0.1);
+    }
+
+    public function testGuardOnAnUnopenablePathSaysSoRatherThanBlamingAHolder(): void
+    {
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('could not be opened for locking');
+        TimedFileLock::guard('/nonexistent-dir-' . \bin2hex(\random_bytes(3)) . '/x.lock', 0.0);
+    }
 }

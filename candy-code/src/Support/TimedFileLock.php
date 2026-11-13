@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Support;
 
+use SugarCraft\Core\Util\LockFile;
+use SugarCraft\Core\Util\LockGuard;
+
 /**
  * The package's ONE bounded-lock implementation (E679).
  *
@@ -59,6 +62,37 @@ final class TimedFileLock
 
             \usleep(self::POLL_MICROSECONDS);
         }
+    }
+
+    /**
+     * The path-level door: take an exclusive lock on the sidecar $lockPath
+     * through sugar-core's LockFile (rider R6) — the poll loop, the 0600
+     * create, the pid note and the stale-holder sweep stated once, in the
+     * library. For callers whose lock file is a SIDECAR (holds no payload).
+     * Callers that lock a DATA file's own handle, or probe a lock they must
+     * not write into (StateDir, gcLockIsHeld, SiblingSpendLedger), keep the
+     * handle-based {@see acquire()}: LockFile records its pid INSIDE the file.
+     *
+     * @throws \RuntimeException when the sidecar cannot be opened, or is still
+     *         held by a live process after the wait (same wording as
+     *         {@see acquire()})
+     */
+    public static function guard(string $lockPath, float $waitSeconds = self::DEFAULT_WAIT_SECONDS): LockGuard
+    {
+        $guard = LockFile::on($lockPath)->tryAcquire($waitSeconds);
+        if ($guard !== null) {
+            return $guard;
+        }
+        $openable = is_file($lockPath) ? is_writable($lockPath) : is_writable(\dirname($lockPath));
+        if (!$openable) {
+            throw new \RuntimeException("{$lockPath} could not be opened for locking");
+        }
+
+        throw new \RuntimeException(sprintf(
+            'Timed out after %.1fs waiting for the exclusive lock on %s — another process holds it.',
+            $waitSeconds,
+            $lockPath,
+        ));
     }
 
     /** Release an acquired lock — the one-liner, named so releases read alike everywhere. */
