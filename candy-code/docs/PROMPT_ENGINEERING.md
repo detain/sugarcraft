@@ -313,7 +313,8 @@ compaction or rewind. A different session id arriving is no longer such a point:
 memo is bucketed per session id anyway, and a serve-mode hub that multiplexes sessions on one
 backend now keeps every session's warm prefix instead of rebuilding a full repo and symbol map on
 each hop. `EngineBackend` reads that point off the history each turn runs on
-(`SessionPromptMemo::observeTurn()`): a history that no longer starts with the previous turn's rows. An edit to `CLAUDE.md` mid-session therefore takes effect at
+(`SessionPromptMemo::observeTurn()`): a history that no longer starts with the previous turn's rows. `/clear` and `/compact` also re-freeze explicitly
+(`EngineBackend::refreshPromptLayers()`), so `/context` and `/context --raw` read rebuilt layers before the next turn runs. An edit to `CLAUDE.md` mid-session therefore takes effect at
 the next of those points — the trade Claude Code and Aider make, immediacy for a prefix that does
 not move. Inputs that legitimately change a layer inside a session are part of its memo slot
 instead of being frozen: the project root, the model name, the `/rules` toggle set and the

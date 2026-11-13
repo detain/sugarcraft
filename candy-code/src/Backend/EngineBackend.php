@@ -78,7 +78,7 @@ use SugarCraft\Code\Tools\ToolResult;
  * works in the typed {@see \SugarCraft\Code\Messages\Message} hierarchy.
  * Conversion happens here at the seam.
  */
-final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromptSections, DumpsSystemPrompt, ObservesReasoning, InteractiveTurn, SummarisesWithCache
+final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromptSections, DumpsSystemPrompt, RefreshesPromptLayers, ObservesReasoning, InteractiveTurn, SummarisesWithCache
 {
     /**
      * IDLE ceiling on a forked completion child in {@see completeAsync()} -
@@ -890,6 +890,17 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
     public function sessionPromptMemo(): SessionPromptMemo
     {
         return $this->sessionPromptMemo;
+    }
+
+    /**
+     * S-X03: re-freeze this session's prompt layers now — the owner's side of
+     * the refresh points {@see completeAsync()} detects itself; see
+     * {@see RefreshesPromptLayers} for why both exist.
+     */
+    public function refreshPromptLayers(): void
+    {
+        $this->sessionPromptMemo->forget($this->sessionId);
+        $this->instructionLoader?->refresh();
     }
 
     /**

@@ -7316,6 +7316,12 @@ final class Chat implements Model
         return $this->backend;
     }
 
+    /** S-X03: `/clear` and `/compact` re-freeze the backend's prompt layers now ({@see Backend\RefreshesPromptLayers}). */
+    private function refreshFrozenPromptLayers(): void
+    {
+        $this->backend instanceof \SugarCraft\Code\Backend\RefreshesPromptLayers && $this->backend->refreshPromptLayers();
+    }
+
     /**
      * Swap the backend — also the live half of a settings save that rebuilds
      * the engine ({@see applySettings()}), which only ever calls this between
@@ -11869,6 +11875,7 @@ final class Chat implements Model
             switch ($effect->kind) {
                 case \SugarCraft\Code\Host\Commands\CommandEffectKind::ClearTranscript:
                     $history = [];
+                    $this->refreshFrozenPromptLayers(); // S-X03
                     // VIS-1-P2: the summary is on screen again the moment the
                     // transcript empties — schedule a fresh off-view gather so
                     // its expensive rows describe the now, not the launch.
@@ -14423,6 +14430,8 @@ final class Chat implements Model
         bool $tierNotice = false,
         ?CompactionSource $source = null,
     ): array {
+        $this->refreshFrozenPromptLayers(); // S-X03: the one funnel every /compact route builds through
+
         return [
             'history' => $this->compactionService()->compactedHistory(
                 $this->compactor,

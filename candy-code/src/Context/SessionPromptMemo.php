@@ -33,9 +33,14 @@ namespace SugarCraft\Code\Context;
  * and rulebooks, project memory, the repo map and the static `<env>` lines are
  * read ONCE per session, at the first prompt build, and stay frozen until the
  * session's entries are dropped with {@see forget()} — on `/clear`, or after
- * a compaction or `/rewind` rewrote the history. The owner does not
- * have to be told which of those happened: {@see observeTurn()} sees each of
- * them in the history the next turn runs on. An edit to CLAUDE.md
+ * a compaction or `/rewind` rewrote the history. A TURN does not have to be
+ * told which of those happened: {@see observeTurn()} sees each of them in the
+ * history the turn runs on. What reads the prompt BETWEEN the rewrite and
+ * that turn (`/context`, `/context --raw`) runs no turn, so `/clear` and
+ * `/compact` also drop the layers explicitly (S-X03, via
+ * {@see \SugarCraft\Code\Backend\RefreshesPromptLayers}) — the two calls agree, and a
+ * double forget costs one re-read of unchanged bytes. A session switch is
+ * neither call's business (ISS-054). An edit to CLAUDE.md
  * made mid-session therefore takes effect at the next of those points, not on
  * the next step; that trades immediacy for a prefix that does not move, which
  * is the trade the surveyed agents make (crush_report IV.4). The immediacy is
