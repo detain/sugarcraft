@@ -575,9 +575,10 @@ final class ImageSource
      * Decoders that already hold decoded pixels (a video frame, a generator
      * canvas) can hand them straight over instead of paying a container
      * round-trip (`imagepng()` → `fromString()`) per frame. The buffer is
-     * rastered into a truecolor GD image in a single O(n) pass and encoded
-     * once through {@see self::fromGd()}, so the resulting ImageSource is a
-     * PNG container identical to what that round-trip would have produced —
+     * framed as a minimal lossless PNG and decoded by GD in C (no
+     * per-pixel interpreter work), then encoded once through
+     * {@see self::fromGd()}, so the resulting ImageSource is a PNG
+     * container identical to what that round-trip would have produced —
      * minus the intermediate encode.
      *
      * `$hasAlpha` selects RGBA (4 bytes/pixel, 255 = opaque); without it the
@@ -622,36 +623,25 @@ final class ImageSource
         // canvas is refused before GD allocates the pixel buffer.
         self::guardPixelCount($width, $height, $maxPixels);
 
-        $img = imagecreatetruecolor($width, $height);
+        // The payload is wrapped in a minimal PNG container (native RGB(A)
+        // byte order, filter zero, no per-pixel work) and handed to GD's C
+        // decoder in one pass. The old path paid imagesetpixel — plus
+        // imagecolorallocatealpha per translucent pixel — once per pixel in
+        // userland (up to 2x MAX_PIXELS = 100M interpreter-to-C calls on a
+        // legal frame); the container route pays three O(n) string passes
+        // and one decode, and lands bit-identical pixels, proven by the
+        // byte-equality parity harness in ImageSourceFromRgbTest.
+        $img = @imagecreatefromstring(self::pngFromRawPixels($bytes, $width, $height, $hasAlpha));
         if ($img === false) {
             throw new \RuntimeException(Lang::t('image_source.gd_alloc_failed'));
         }
 
         if ($hasAlpha) {
-            // Write pixels verbatim (no blending against the black default) and
-            // carry the alpha byte through to the PNG encode in fromGd().
+            // Preserve what the decode loaded (no blending against the black
+            // default) and carry the alpha byte through to the PNG encode in
+            // fromGd() — the same two flags the per-pixel loop set.
             imagealphablending($img, false);
             imagesavealpha($img, true);
-        }
-
-        $offset = 0;
-        for ($y = 0; $y < $height; $y++) {
-            for ($x = 0; $x < $width; $x++) {
-                $r = ord($bytes[$offset]);
-                $g = ord($bytes[$offset + 1]);
-                $b = ord($bytes[$offset + 2]);
-                // Truecolor images accept the packed 0xRRGGBB int directly —
-                // no palette allocation, no per-pixel array.
-                $color = ($r << 16) | ($g << 8) | $b;
-                if ($hasAlpha) {
-                    // Byte alpha is 0..255 opaque-at-255; GD wants 0..127
-                    // opaque-at-0. Integer scale keeps the pass allocation-free.
-                    $a = intdiv((255 - ord($bytes[$offset + 3])) * 127, 255);
-                    $color = imagecolorallocatealpha($img, $r, $g, $b, $a);
-                }
-                imagesetpixel($img, $x, $y, $color);
-                $offset += $channels;
-            }
         }
 
         try {
@@ -659,6 +649,86 @@ final class ImageSource
         } finally {
             imagedestroy($img);
         }
+    }
+
+    /**
+     * Wrap a raw RGB24/RGBA buffer as a minimal valid PNG byte string.
+     *
+     * PNG stores rows top-to-bottom in RGB(A) order — exactly the caller's
+     * byte order — so the whole transform is per-row filter-zero framing,
+     * one zlib pass, and four chunk headers. The alpha plane is the only
+     * byte that must move: the 0..255 wire alpha is pre-quantized through
+     * {@see self::rawRgbAlphaTable()} so GD's own PNG decode reproduces,
+     * for every input byte, the GD alpha 0..127 value the legacy per-pixel
+     * loop computed — the identity the FromRgb suite pins byte-for-byte.
+     * A 32-bit BMP would have needed no table, but this GD ignores the
+     * BMP alpha channel entirely (measured: every A decodes opaque); a
+     * TGA/BMP reorders to BGR and pays an extra swap pass.
+     *
+     * Deliberately internal-only: it is NOT a PNG encoder for callers
+     * (no metadata, no interlace, no adaptive filtering) and carries the
+     * caller's already-validated length — guardPixelCount must have run.
+     */
+    private static function pngFromRawPixels(string $bytes, int $width, int $height, bool $hasAlpha): string
+    {
+        if ($hasAlpha) {
+            $pixels = $width * $height;
+            // C-speed stride table: keep the RGB bytes verbatim, map the
+            // whole buffer through the 256-entry alpha table, and re-OR only
+            // the alpha lanes. strtr cannot be stride-aware alone; masking
+            // makes the collateral damage position-independent.
+            $bytes = ($bytes & str_repeat("\xFF\xFF\xFF\x00", $pixels))
+                | (strtr($bytes, self::rawIdentityBytes(), self::rawRgbAlphaTable())
+                   & str_repeat("\x00\x00\x00\xFF", $pixels));
+        }
+
+        $rowLen = $width * ($hasAlpha ? 4 : 3);
+        $rows   = "\x00" . implode("\x00", str_split($bytes, $rowLen));
+
+        return "\x89PNG\r\n\x1a\n"
+            . self::pngRawChunk('IHDR', pack('N', $width) . pack('N', $height) . chr(8) . chr($hasAlpha ? 6 : 2) . chr(0) . chr(0) . chr(0))
+            . self::pngRawChunk('IDAT', gzcompress($rows))
+            . self::pngRawChunk('IEND', '');
+    }
+
+    /** Frame a payload as length+type+data+crc(type.data) — PNG spec §5.3, the law {@see PngMetadata::chunk()} reads. */
+    private static function pngRawChunk(string $type, string $data): string
+    {
+        return pack('N', strlen($data)) . $type . $data . pack('N', crc32($type . $data) & 0xFFFFFFFF);
+    }
+
+    /** 0x00..0xFF — the identity domain of the alpha-prefilter table. */
+    private static function rawIdentityBytes(): string
+    {
+        static $identity = null;
+        if ($identity === null) {
+            $identity = '';
+            for ($i = 0; $i < 256; $i++) {
+                $identity .= chr($i);
+            }
+        }
+
+        return $identity;
+    }
+
+    /**
+     * Wire-alpha prefilter: for input byte A, the PNG alpha byte whose
+     * libgd decode (gdA = 127 - A'/2, verified for all 256 values on this
+     * build) reproduces intdiv((255 - A) * 127, 255) — the exact quantizer
+     * the legacy fromRgb loop applied. Even A round-trips to itself under
+     * either reading; the table is what keeps the ODD bytes honest.
+     */
+    private static function rawRgbAlphaTable(): string
+    {
+        static $table = null;
+        if ($table === null) {
+            $table = '';
+            for ($a = 0; $a < 256; $a++) {
+                $table .= chr(2 * (127 - intdiv((255 - $a) * 127, 255)));
+            }
+        }
+
+        return $table;
     }
 
     /**
