@@ -54,6 +54,21 @@ final class Libc
     /** Lazily-loaded libutil FFI handle (Linux only, for openpty). */
     private static ?\FFI $ffiUtil = null;
 
+    /** Which library path {@see libutil()} actually selected (PTY-28 test surface). */
+    private static ?string $ffiUtilSource = null;
+
+    /**
+     * The candidate library {@see libutil()} bound openpty against —
+     * null before the first load. Test surface for the override
+     * precedence pins; production code decides nothing from it.
+     *
+     * @internal
+     */
+    public static function libutilSource(): ?string
+    {
+        return self::$ffiUtilSource;
+    }
+
     /**
      * Return the cached FFI handle, loading the libc cdef on first call.
      *
@@ -358,6 +373,7 @@ CPROTO;
     {
         self::$ffi = null;
         self::$ffiUtil = null;
+        self::$ffiUtilSource = null;
     }
 
     /**
@@ -366,8 +382,30 @@ CPROTO;
      * On Darwin this method returns the regular libc handle since
      * openpty is already in libSystem.B.dylib. On Windows it throws.
      *
-     * @throws PtyException if the platform is unsupported or the
-     *                      library cannot be loaded
+     * TEST SURFACE (PTY-28, sugar-pty-083): this loader has ZERO
+     * production callers — verified by grep at this commit and earlier
+     * by the P2 pass. The Linux hot path opens ptys through the
+     * posix_openpt quartet on the MAIN cdef handle, not through
+     * openpty(3); Darwin gets openpty from libSystem. Nothing real
+     * ever needs this handle except tests and diagnostics that want
+     * the openpty symbol specifically.
+     *
+     * The `SUGARCRAFT_LIBC` override (validated through
+     * {@see libraryPath()}, same security rules) is attempted FIRST
+     * (sugar-pty-011): on musl/Alpine sysroots openpty lives in the
+     * overriding libc itself, and before this commit this method
+     * ignored the env completely and hard-loaded `libutil.so.1`.
+     * Candidates are proven by `dlopen`+`dlsym` before the cdef is
+     * pointed at them, because `FFI::cdef()` on glibc resolves symbols
+     * LAZILY — a cdef against a library lacking openpty succeeds and
+     * the later call jumps through a null stub (measured on PHP 8.3:
+     * segfault, not a catchable error). `libutil.so.1` stays the
+     * classic home on glibc; `libc.so.6` last covers the glibc ≥ 2.38
+     * merge and any future stub-free packaging.
+     *
+     * @internal public only for the test surface above.
+     * @throws PtyException if the platform is unsupported or no
+     *                     candidate library resolves the openpty cdef
      * @return \FFI the libutil FFI handle (contains openpty on Linux)
      */
     public static function libutil(): \FFI
@@ -380,6 +418,8 @@ CPROTO;
         }
 
         if (PHP_OS_FAMILY === 'Darwin') {
+            self::$ffiUtilSource = self::libraryPath();
+
             return self::lib();
         }
 
@@ -387,22 +427,101 @@ CPROTO;
             return self::$ffiUtil;
         }
 
+        $override = \getenv('SUGARCRAFT_LIBC');
+        if (\is_string($override) && $override !== '') {
+            // Validate the override NOW — libraryPath() throws on the
+            // documented security shape, and that refusal propagates.
+            $candidates = [self::libraryPath(), self::DEFAULT_LINUX_UTILS, self::DEFAULT_LINUX];
+        } else {
+            $candidates = [self::DEFAULT_LINUX_UTILS, self::DEFAULT_LINUX];
+        }
+
         $libutilCdef = <<<'CPROTO'
 int openpty(int *amaster, int *aslave, char *name, void *termp, void *winp);
 int close(int fd);
 CPROTO;
 
-        try {
-            self::$ffiUtil = \FFI::cdef($libutilCdef, self::DEFAULT_LINUX_UTILS);
-        } catch (\FFI\Exception $e) {
-            throw new PtyException(
-                'Failed to load libutil from \'' . self::DEFAULT_LINUX_UTILS . '\': ' . $e->getMessage(),
-                0,
-                $e,
-            );
+        $verdicts = self::openptyCandidateVerdicts($candidates);
+        foreach ($candidates as $candidate) {
+            if ($verdicts[$candidate] === 'has-openpty') {
+                self::$ffiUtil = \FFI::cdef($libutilCdef, $candidate);
+                self::$ffiUtilSource = $candidate;
+
+                return self::$ffiUtil;
+            }
         }
 
-        return self::$ffiUtil;
+        if (($verdicts[$candidates[0]] ?? '') === 'unverifiable') {
+            // Pre-PTY-28 floor when the probe itself cannot bind:
+            // cdef each candidate in order, catching load failures.
+            // (A late-binding host may still hand back a handle whose
+            // openpty call fails — exactly the old behaviour.)
+            foreach ($candidates as $candidate) {
+                try {
+                    self::$ffiUtil = \FFI::cdef($libutilCdef, $candidate);
+                    self::$ffiUtilSource = $candidate;
+
+                    return self::$ffiUtil;
+                } catch (\FFI\Exception) {
+                    continue;
+                }
+            }
+        }
+
+        $report = [];
+        foreach ($verdicts as $candidate => $verdict) {
+            $report[] = '\'' . $candidate . '\' ' . $verdict;
+        }
+
+        throw new PtyException(
+            'Failed to load openpty from any candidate (' . \implode(' | ', $report) . ')'
+            . (\is_string($override) && $override !== '' ? '' : '; set SUGARCRAFT_LIBC if your libc exports it under another path'),
+        );
+    }
+
+    /**
+     * dlopen+dlsym verdicts per candidate, in order. The probe handle
+     * binds against the running PHP binary's own scope (it is always
+     * linked with libc), so no library path guessing is involved here.
+     *
+     * @param list<string> $candidates
+     * @return array<string, string>
+     */
+    private static function openptyCandidateVerdicts(array $candidates): array
+    {
+        try {
+            $probe = \FFI::cdef(
+                'void *dlopen(const char *filename, int flag);
+                 void *dlsym(void *handle, const char *symbol);
+                 int dlclose(void *handle);'
+            );
+        } catch (\FFI\Exception) {
+            // No probe available (would be an ancient/broken FFI):
+            // treat every candidate as unverifiable and let the cdef
+            // itself answer — the pre-PTY-28 shape, kept as a floor.
+            $verdicts = [];
+            foreach ($candidates as $candidate) {
+                $verdicts[$candidate] = 'unverifiable';
+            }
+
+            return $verdicts;
+        }
+
+        $verdicts = [];
+        foreach ($candidates as $candidate) {
+            $handle = $probe->dlopen($candidate, 1); // RTLD_LAZY — a failed load yields PHP null here
+            if ($handle === null || \FFI::isNull($handle)) {
+                $verdicts[$candidate] = 'not-loadable';
+                continue;
+            }
+            $symbol = $probe->dlsym($handle, 'openpty');
+            $probe->dlclose($handle);
+            $verdicts[$candidate] = ($symbol === null || \FFI::isNull($symbol))
+                ? 'no-openpty'
+                : 'has-openpty';
+        }
+
+        return $verdicts;
     }
 
     private function __construct() {}
