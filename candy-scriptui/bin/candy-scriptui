@@ -58,10 +58,11 @@ if ($archive !== '') {
 // lowercases; T::translate() then falls back territory → base language →
 // English, so de_DE.UTF-8 lands on lang/de.php and pt_BR on lang/pt-br.php.
 \SugarCraft\Core\I18n\T::setLocale(\SugarCraft\Core\I18n\T::detect());
-// Pre-rename env compatibility: CANDYSHELL_* was this app's // @rename-keep
-// option-fallback prefix before the 2026-10 rename to candy-scriptui. Import any // @rename-keep
-// old-prefix exports under the new CANDY_SCRIPTUI_* name (new name always wins),
-// then warn once per var.
+// Pre-rename env compatibility: CANDYSHELL_* was this app's option-fallback
+// prefix before the 2026-10 rename to candy-scriptui. Import any old-prefix
+// exports under the new CANDY_SCRIPTUI_* name (new name always wins), then
+// warn once per var.
+// @rename-keep
 foreach (\SugarCraft\Core\Util\LegacyEnv::import([
     'CANDYSHELL_' => 'CANDY_SCRIPTUI_', // @rename-keep
 ]) as $legacyVar) {
