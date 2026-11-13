@@ -270,7 +270,16 @@ final class Transitions
         $setRange($DI, 0x1C, 0x1F, Action::None->value, $DI);
         $setRange($DI, 0x20, 0x2F, Action::Collect->value, $DI);
         $set($DI, 0x7F, Action::None->value, $DI);
-        $setRange($DI, 0x30, 0x3F, Action::Start->value, $DS);
+        // A digit/private byte after intermediates is not a DCS command —
+        // VT500 ignores the band in-state. The previous Start -> DcsString
+        // row FORGED the byte into the command position (finding
+        // sugar-ansi-parser-014): ESC P / 1 dispatched final=ord('1').
+        // BC note: parser-produced streams with `ESC P <intermediates>
+        // <digit>` now stay open (next real final wins, or the sequence is
+        // abandoned at ST/ESC) where they previously mis-dispatched — that
+        // is the fix. Hand-built Dcs objects and external payloads are
+        // unaffected; the legal finals row below is untouched.
+        $setRange($DI, 0x30, 0x3F, Action::None->value, $DI);
         $setRange($DI, 0x40, 0x7E, Action::Start->value, $DS);
 
         // DcsParam

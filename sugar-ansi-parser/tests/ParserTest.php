@@ -642,6 +642,37 @@ final class ParserTest extends TestCase
         $this->assertSame(ord(' '), $dcs[0]['detail']['intermediate']);
     }
 
+    public function testDcsDigitAfterIntermediatesNeverForgesACommand(): void
+    {
+        // sap-04 (finding 014) behavioral pins. Before the row fix,
+        // `ESC P / 1 payload ST` dispatched dcsDispatch(final=49) — the
+        // digit forged into the command byte. Now the digit is ignored
+        // in-state: the FIRST LEGAL FINAL (0x40-0x7E) wins, and a prelude
+        // that never reaches one dispatches nothing at all.
+        $handler = new DebugHandler();
+        (new Parser($handler))->parseComplete("\x1bP/1payload\x9c");
+
+        $dcs = $handler->filter('dcs');
+        $this->assertCount(1, $dcs);
+        $this->assertSame(ord('p'), $dcs[0]['detail']['final'], 'the digit must not become the command');
+        $this->assertSame(ord('/'), $dcs[0]['detail']['intermediate']);
+        $this->assertSame('ayload', $dcs[0]['detail']['data']);
+
+        $abandoned = new DebugHandler();
+        (new Parser($abandoned))->parseComplete("\x1bP/1\x9c");
+        $this->assertSame([], $abandoned->filter('dcs'), 'a digit-only prelude must not forge any command');
+
+        // The legal entry leg `ESC P <params> <final>` is untouched (the
+        // annotation's verify requirement for start()'s OR-in).
+        $legal = new DebugHandler();
+        (new Parser($legal))->parseComplete("\x1bP1qdata\x1b\\");
+
+        $legalDcs = $legal->filter('dcs');
+        $this->assertCount(1, $legalDcs);
+        $this->assertSame(ord('q'), $legalDcs[0]['detail']['final']);
+        $this->assertSame([1], $legalDcs[0]['detail']['params']);
+    }
+
     public function testEmptyFirstParamDefaultsToOne(): void
     {
         $handler = new DebugHandler();

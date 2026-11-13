@@ -115,6 +115,28 @@ final class TransitionsTest extends TestCase
         $this->assertSame(State::Ground->value, Transitions::nextState($entry));
     }
 
+    public function testDcsIntermediateDigitBandStaysInState(): void
+    {
+        // sap-04 (finding 014): 0x30-0x3F in DcsIntermediate is ignored
+        // IN-STATE. The former Start -> DcsString row forged the
+        // non-final byte into the DCS command position.
+        foreach ([ord('0'), ord('9'), ord('<'), ord('='), ord('>'), ord('?')] as $byte) {
+            $entry = Transitions::get(State::DcsIntermediate->value, $byte);
+            $this->assertSame(Action::None->value, Transitions::action($entry), 'byte 0x' . dechex($byte));
+            $this->assertSame(
+                State::DcsIntermediate->value,
+                Transitions::nextState($entry),
+                'byte 0x' . dechex($byte) . ' must not leave DcsIntermediate',
+            );
+        }
+
+        // And the legal final-command row (0x40-0x7E) still opens the
+        // string — it must never follow the digit band's lead.
+        $entry = Transitions::get(State::DcsIntermediate->value, ord('q'));
+        $this->assertSame(Action::Start->value, Transitions::action($entry));
+        $this->assertSame(State::DcsString->value, Transitions::nextState($entry));
+    }
+
     public function testOscStringPutForPrintable(): void
     {
         $entry = Transitions::get(State::OscString->value, ord('A'));
