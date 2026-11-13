@@ -80,65 +80,68 @@ final class SlideTest extends TestCase
 
     public function testSlideFromLeftAnchor(): void
     {
+        // easeOut(0.5) = 0.6846 → factor 1 - 0.6846 = 0.3154, width 3 cols
+        // → round(3 * 0.3154) = 1 column still out, NEGATIVE on the LEFT.
         $slide = new Slide();
         $result = $slide->apply("ABC", 0.5, Position::TOP, Position::LEFT);
 
-        // A LEFT anchor enters from off-screen left: NEGATIVE column offset.
-        $this->assertLessThan(0, $result['horizontalOffset']);
+        $this->assertSame(-1, $result['horizontalOffset']);
     }
 
     public function testSlideFromRightAnchor(): void
     {
+        // The RIGHT mirror of the LEFT leg: same magnitude, POSITIVE sign.
         $slide = new Slide();
         $result = $slide->apply("ABC", 0.5, Position::TOP, Position::RIGHT);
 
-        // A RIGHT anchor starts right of its final column (off-screen): POSITIVE.
-        $this->assertGreaterThan(0, $result['horizontalOffset']);
+        $this->assertSame(1, $result['horizontalOffset']);
     }
 
     public function testSlideFromBottomAnchor(): void
     {
+        // 4 rows, factor 0.3154 → round(4 * 0.3154) = 1 row below: POSITIVE
+        // at a BOTTOM anchor, exact not just signed.
         $slide = new Slide();
-        // Use multi-line content so vertical offset rounds to non-zero
         $result = $slide->apply("A\nB\nC\nD", 0.5, Position::BOTTOM, Position::LEFT);
 
-        // A BOTTOM anchor starts below the last row (off-screen): POSITIVE.
-        $this->assertGreaterThan(0, $result['verticalOffset']);
+        $this->assertSame(1, $result['verticalOffset']);
     }
 
     public function testSlideFromBottomRightAnchor(): void
     {
+        // 4 rows x 4 cols at factor 0.3154 → exactly one step out on BOTH
+        // axes, positive for a BOTTOM-RIGHT entry.
         $slide = new Slide();
-        // Use content with both height and width for non-zero offsets
         $result = $slide->apply("ABCD\nEFGH\nIJKL\nMNOP", 0.5, Position::BOTTOM, Position::RIGHT);
 
-        // Enters from off-screen bottom-right: positive on both axes.
-        $this->assertGreaterThan(0, $result['verticalOffset']);
-        $this->assertGreaterThan(0, $result['horizontalOffset']);
+        $this->assertSame(1, $result['verticalOffset']);
+        $this->assertSame(1, $result['horizontalOffset']);
     }
 
     public function testSlideFromTopLeftAnchor(): void
     {
+        // Same 4x4 geometry as the BOTTOM-RIGHT leg, negated for a
+        // TOP-LEFT entry: one step out on each axis.
         $slide = new Slide();
-        // Use content with both height and width for non-zero offsets
         $result = $slide->apply("ABCD\nEFGH\nIJKL\nMNOP", 0.5, Position::TOP_LEFT, Position::LEFT);
 
-        // Enters from off-screen top-left: negative on both axes.
-        $this->assertLessThan(0, $result['verticalOffset']);
-        $this->assertLessThan(0, $result['horizontalOffset']);
+        $this->assertSame(-1, $result['verticalOffset']);
+        $this->assertSame(-1, $result['horizontalOffset']);
     }
 
     public function testSlideWithCustomEasing(): void
     {
-        $slide = new Slide(CubicBezier::easeIn());
-        $result1 = $slide->apply("ABC", 0.5, Position::TOP, Position::LEFT);
+        // easeIn(0.5) = 0.3154 vs easeOut(0.5) = 0.6846 on a 3-col, 1-row
+        // travel: factors 0.6846 vs 0.3154 → 2 cols/1 row out vs 1 col/0
+        // rows out. The offsets actually differ by curve — pinned as bytes,
+        // not as an isInt class.
+        $easeIn = (new Slide(CubicBezier::easeIn()))->apply("ABC", 0.5, Position::TOP, Position::LEFT);
+        $easeOut = (new Slide(CubicBezier::easeOut()))->apply("ABC", 0.5, Position::TOP, Position::LEFT);
 
-        $slide2 = new Slide(CubicBezier::easeOut());
-        $result2 = $slide2->apply("ABC", 0.5, Position::TOP, Position::LEFT);
-
-        // Different easing should produce different offsets
-        $this->assertIsInt($result1['horizontalOffset']);
-        $this->assertIsInt($result2['horizontalOffset']);
+        $this->assertSame(-1, $easeIn['verticalOffset']);
+        $this->assertSame(-2, $easeIn['horizontalOffset']);
+        $this->assertSame(0, $easeOut['verticalOffset']);
+        $this->assertSame(-1, $easeOut['horizontalOffset']);
     }
 
     public function testTrailingNewlineDoesNotAddATravelRow(): void

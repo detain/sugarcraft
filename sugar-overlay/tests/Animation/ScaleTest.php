@@ -36,31 +36,29 @@ final class ScaleTest extends TestCase
 
     public function testApplyAtMidProgressReturnsSubset(): void
     {
+        // easeOut(0.5) = 0.6846 → visible = max(1, round(5 * 0.6846)) = 3,
+        // centred on index 2 → B, C, D exactly (derived once from shipped
+        // math; the 1.x centre-expansion leg relies on the same numbers).
         $scale = new Scale();
-        $result = $scale->apply("A\nB\nC\nD\nE", 0.5);
-        $lines = \explode("\n", $result);
-
-        // At 50% progress, should show fewer than all 5 lines
-        $this->assertLessThan(5, \count($lines));
+        $this->assertSame("B\nC\nD", $scale->apply("A\nB\nC\nD\nE", 0.5));
     }
 
     public function testApplyCenterExpandsOutward(): void
     {
+        // Exact expansion steps, not a monotonicity hand-wave: 0.5 reveals
+        // the centred 3-line window, 0.75 the whole 5-line block.
         $scale = new Scale();
-
-        $result50 = $scale->apply("A\nB\nC\nD\nE", 0.5);
-        $result75 = $scale->apply("A\nB\nC\nD\nE", 0.75);
-
-        // More progress = more lines visible
-        $this->assertLessThanOrEqual(\count(\explode("\n", $result75)), \count(\explode("\n", $result50)));
+        $this->assertSame("B\nC\nD", $scale->apply("A\nB\nC\nD\nE", 0.5));
+        $this->assertSame("A\nB\nC\nD\nE", $scale->apply("A\nB\nC\nD\nE", 0.75));
     }
 
     public function testApplyWithCustomEasing(): void
     {
+        // easeIn(0.5) = 0.3154 → visible = max(1, round(3 * 0.3154)) = 1 →
+        // only the centre row B. The default curve would show "B\nC" at the
+        // same progress, so an ignored easing parameter reddens here.
         $scale = new Scale(CubicBezier::easeIn());
-        $result = $scale->apply("A\nB\nC", 0.5);
-
-        $this->assertNotEmpty($result);
+        $this->assertSame("B", $scale->apply("A\nB\nC", 0.5));
     }
 
     public function testApplyEmptyStringReturnsEmpty(): void
@@ -73,27 +71,30 @@ final class ScaleTest extends TestCase
 
     public function testApplySingleLine(): void
     {
+        // The reveal floor is 1 line, so a lone row is shown whole.
         $scale = new Scale();
-        $result = $scale->apply('X', 0.5);
-
-        // Single line should always show at least 1 line at any progress > 0
-        $this->assertNotEmpty($result);
+        $this->assertSame('X', $scale->apply('X', 0.5));
     }
 
     public function testApplyUsesDefaultEasingWhenNoneProvided(): void
     {
-        // When Scale is constructed without custom easing,
-        // the private easing() method should return CubicBezier::easeOut()
-        // This exercises the null-coalescing fallback in easing()
-        $scale = new Scale();
-        $result1 = $scale->apply("A\nB\nC", 0.3);
-        $result2 = $scale->apply("A\nB\nC", 0.7);
-
-        // Different progress values with default easing should produce different results
-        $this->assertIsString($result1);
-        $this->assertIsString($result2);
-        // At 0.3 progress, fewer lines visible than at 0.7 progress
-        $this->assertLessThanOrEqual(\count(\explode("\n", $result2)), \count(\explode("\n", $result1)));
+        // The shipped default IS CubicBezier::easeOut(): byte identity with
+        // an explicitly-easeOut Scale across the reveal range is the real
+        // contract of the null-coalescing fallback in easing().
+        $default = new Scale();
+        $explicit = new Scale(CubicBezier::easeOut());
+        foreach ([0.3, 0.5, 0.7] as $progress) {
+            $this->assertSame(
+                $explicit->apply("A\nB\nC\nD\nE", $progress),
+                $default->apply("A\nB\nC\nD\nE", $progress),
+                "default easing drifted from easeOut at p=$progress",
+            );
+        }
+        // And the curve's shape still shows on 5 rows: two centred at 0.3,
+        // three at 0.5, four (still not all) at 0.7.
+        $this->assertSame("B\nC", $default->apply("A\nB\nC\nD\nE", 0.3));
+        $this->assertSame("B\nC\nD", $default->apply("A\nB\nC\nD\nE", 0.5));
+        $this->assertSame("A\nB\nC\nD", $default->apply("A\nB\nC\nD\nE", 0.7));
     }
 
     /**
@@ -157,13 +158,10 @@ final class ScaleTest extends TestCase
      */
     public function testScaleWithEvenLineCount(): void
     {
+        // Even content height still resolves deterministically: visible 3
+        // of 4, startLine floors to the top of the centred window → A, B, C.
         $scale = new Scale();
-        $result = $scale->apply("A\nB\nC\nD", 0.5);
-        $lines = \explode("\n", $result);
-
-        // At 50% progress, fewer than all 4 lines should be visible
-        $this->assertLessThan(4, \count($lines), 'At 50% progress, fewer than all lines should be visible');
-        $this->assertNotEmpty($lines[0]);
+        $this->assertSame("A\nB\nC", $scale->apply("A\nB\nC\nD", 0.5));
     }
 
     public function testTrailingNewlineDoesNotAddARevealRow(): void

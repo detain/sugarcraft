@@ -79,20 +79,24 @@ final class FadeTest extends TestCase
 
     public function testApplyWithCustomEasing(): void
     {
+        // Derived once from the shipped chain: easeIn(0.5) = 0.3154 →
+        // opacity round(100 * 0.3154) = 32 → gray round(255 * 32/100) = 82.
+        // The byte differs from the default curve's 128 at the same
+        // progress, so an easing parameter that was ignored reddens here.
         $fade = new Fade(CubicBezier::easeIn());
-        $result = $fade->apply('X', 0.5);
-
-        $this->assertStringContainsString('X', $result);
+        $this->assertSame("\e[38;2;82;82;82mX\e[39m", $fade->apply('X', 0.5));
     }
 
     public function testApplyWithMultilineContent(): void
     {
+        // Every row carries the pen — an escape on row 1 must not wash out
+        // rows 2 and 3 (the re-pin law seen one row at a time).
         $fade = new Fade();
-        $result = $fade->apply("A\nB\nC", 0.5);
-
-        $this->assertStringContainsString('A', $result);
-        $this->assertStringContainsString('B', $result);
-        $this->assertStringContainsString('C', $result);
+        $pen = "\e[38;2;128;128;128m";
+        $this->assertSame(
+            $pen . "A\e[39m\n" . $pen . "B\e[39m\n" . $pen . "C\e[39m",
+            $fade->apply("A\nB\nC", 0.5),
+        );
     }
 
     // ─── opacity() ───────────────────────────────────────────────────────────
@@ -111,11 +115,14 @@ final class FadeTest extends TestCase
 
     public function testOpacityAtMidProgress(): void
     {
+        // The shipped default curve is NOT linear: it reaches 19% opacity
+        // at p=0.3 and 81% at p=0.7 (a linear map would give 30/70), while
+        // its symmetric midpoint stays at 50. Derived once from the
+        // shipped chain, pinned off-centre so a linear stub reddens here.
         $fade = new Fade();
-        // At mid-progress with default easeInOut, opacity should be somewhere between 0 and 100
-        $opacity = $fade->opacity(0.5);
-        $this->assertGreaterThan(0, $opacity);
-        $this->assertLessThan(100, $opacity);
+        $this->assertSame(19, $fade->opacity(0.3));
+        $this->assertSame(50, $fade->opacity(0.5));
+        $this->assertSame(81, $fade->opacity(0.7));
     }
 
     public function testOpacityAtNegativeProgressClampsToZero(): void
