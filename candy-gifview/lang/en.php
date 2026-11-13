@@ -3,6 +3,13 @@
 /**
  * English (default) translations for candy-gifview.
  *
+ * cli.no_autoload has no runtime consumer that could bind before autoload;
+ * the bin shim prints the literal below with a hardcoded fwrite, because
+ * translation cannot run before the vendor autoload exists. The key is kept
+ * in every locale file so translators document (and parity tests see) the
+ * exact string the bin exits with — LangTest pins the en value byte-equal
+ * to the bin literal.
+ *
  * @return array<string, string>
  */
 
