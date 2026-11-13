@@ -419,6 +419,11 @@ inherit it. The `disabledSkills` vetoes ride across untouched: reload
 rediscovers skills, it does not overrule the operator. Trust is the boot
 walk's exactly — same loaders, same requirement doors, same origin badges.
 
+A reload also reports the files it skipped. Any SKILL.md the walk could not
+load is named in the `/skills reload` reply with its reason, and it is put in
+the transcript once (the same once-per-file ledger the launch uses), so a
+broken skill is known the moment it breaks rather than at the next launch.
+
 The model is told what moved, not left to notice silently: the roster as of
 the session generation's first assembly is frozen by
 `SkillRosterDiffTracker` (the skill sibling of
@@ -738,6 +743,10 @@ refused directory from `refusedDirectories()`, the launch prints one bounded
 summary line (to stderr **and** to the session transcript, so it survives the
 alt screen), and `CANDY_CODE_DEBUG_SKILLS=1` puts the per-file lines back on
 stderr. See [`ENVIRONMENT.md`](ENVIRONMENT.md).
+
+`/skills` lists every skipped file and every refused directory under the
+table, one line each, with its reason. The launch summary only counts them;
+the listing is where the reason is.
 
 **A skill that loads but declares a key nothing acts on is named too.** The
 launch adds one aggregated row (stderr and transcript) for every skill that

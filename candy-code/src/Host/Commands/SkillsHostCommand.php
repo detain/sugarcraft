@@ -10,6 +10,7 @@ use SugarCraft\Code\Commands\TranscriptTable;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Skills\LearnedSkills;
 use SugarCraft\Code\Skills\ProposedSkills;
+use SugarCraft\Code\Cli\LaunchContext;
 use SugarCraft\Code\Skills\SkillLoader;
 use SugarCraft\Code\Skills\SkillManager;
 use SugarCraft\Code\Skills\SkillProposal;
@@ -266,10 +267,41 @@ final class SkillsHostCommand implements HostCommand
             $lines[] = '';
             $lines[] = Lang::t('host.skills.installed.skips', ['count' => $unattributed]);
         }
+        // The reason, not just the count: a file that was skipped is a skill
+        // the user wrote and expects to be offered, and the one place they can
+        // learn why is here (the launch notice only says that something was).
+        $skipLines = self::skipLines($loader->skipped(), $loader->refusedDirectories());
+        if ($skipLines !== []) {
+            $lines[] = '';
+            $lines[] = Lang::t('host.skills.installed.skip_header');
+            foreach ($skipLines as $skipLine) {
+                $lines[] = $skipLine;
+            }
+        }
         $lines[] = '';
         $lines[] = Lang::t('host.skills.installed.footer');
 
         return implode("\n", $lines);
+    }
+
+    /**
+     * One line per skipped SKILL.md or refused directory, with its reason.
+     *
+     * @param array<string, string> $skipped path => reason
+     * @param array<string, string> $refused directory => reason
+     * @return list<string>
+     */
+    public static function skipLines(array $skipped, array $refused): array
+    {
+        $lines = [];
+        foreach ([...$skipped, ...$refused] as $path => $reason) {
+            $lines[] = '  ' . Lang::t('host.skills.installed.skip_line', [
+                'path' => PermissionsCommand::reportField((string) $path),
+                'reason' => PermissionsCommand::reportField($reason),
+            ]);
+        }
+
+        return $lines;
     }
 
     /** The drafts waiting for review, one line each. */
@@ -548,7 +580,8 @@ MARKDOWN;
         }
 
         $fresh = new SkillRegistry();
-        (new SkillManager(new SkillLoader(), $fresh))->loadAll(
+        $loader = new SkillLoader();
+        (new SkillManager($loader, $fresh))->loadAll(
             $context->projectRoot(),
             \SugarCraft\Code\Cli\Bootstrap::bundles($context->projectRoot()),
         );
@@ -559,10 +592,22 @@ MARKDOWN;
         $removed = \count(\array_diff($before, $after));
         $registry->replaceAll($fresh->all());
 
-        return CommandResult::reply($text, Lang::t('host.skills.reload.done', [
+        // A skip found by a reload is announced now, not only at the next
+        // launch: the ledger is merged and the launch's own once-per-path
+        // reporter runs, so a file that was already reported is not repeated.
+        LaunchContext::extendSkillSkips($loader->skipped());
+        \SugarCraft\Code\Cli\Bootstrap::reportSkillSkips();
+
+        $reply = Lang::t('host.skills.reload.done', [
             'added' => (string) $added,
             'removed' => (string) $removed,
             'total' => (string) \count($registry->all()),
-        ]));
+        ]);
+        $skipLines = self::skipLines($loader->skipped(), $loader->refusedDirectories());
+        if ($skipLines !== []) {
+            $reply .= "\n" . Lang::t('host.skills.installed.skip_header') . "\n" . \implode("\n", $skipLines);
+        }
+
+        return CommandResult::reply($text, $reply);
     }
 }
