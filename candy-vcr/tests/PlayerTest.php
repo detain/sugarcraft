@@ -21,6 +21,7 @@ use SugarCraft\Vcr\Event;
 use SugarCraft\Vcr\EventKind;
 use SugarCraft\Vcr\Player;
 use SugarCraft\Vcr\Recorder;
+use SugarCraft\Vcr\Tests\Support\ConvergedFrameProbe;
 use SugarCraft\Vcr\Tests\Support\Stream;
 
 /**
@@ -149,7 +150,8 @@ final class PlayerTest extends TestCase
      * the renderer's tick to produce frame-body bytes — without
      * frames, the cassette has only setup/teardown bytes and any
      * downstream replay-equality test is trivially "equal".
-     * Quit is driven externally by an addTimer.
+     * Quit is driven externally by the ConvergedFrameProbe — an
+     * event, not a wall-clock timer (finding 013).
      */
     private function recordSession(int $quitAfter): string
     {
@@ -179,13 +181,19 @@ final class PlayerTest extends TestCase
         // Pipe a few key bytes through the input stream so the
         // recorder captures them as `input` events; sends via
         // $program->send() bypass the input parser and aren't
-        // recorded, which would defeat the round-trip test. 20 ms
-        // is well over the 1 ms tick interval so renders fire and
-        // emit frame body bytes.
+        // recorded, which would defeat the round-trip test.
         $loop->futureTick(static function () use ($writer): void {
             fwrite($writer, 'abc');
         });
-        $loop->addTimer(0.020, static fn () => $program->quit());
+        // The model makes EXACTLY 6 update() calls — the three startup
+        // Msgs (WindowSizeMsg, EnvMsg, ColorProfileMsg) plus the three
+        // KeyMsgs from the piped 'abc' input — so it converges on
+        // `tick: 6`. Quit is event-driven on that frame (finding 013):
+        // the old `addTimer(0.020, quit)` raced the input read + render
+        // under load, recording `quit` AHEAD of the final `output`
+        // frame and making replay comparisons flaky.
+        $finalFrame = 'tick: 6';
+        ConvergedFrameProbe::arm($loop, $program, $output, $finalFrame);
         $loop->addTimer(2.0, static fn () => $loop->stop());
         $program->run();
 

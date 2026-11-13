@@ -15,6 +15,7 @@ use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Vcr\Assert\ScreenAssertion;
 use SugarCraft\Vcr\Player;
 use SugarCraft\Vcr\Recorder;
+use SugarCraft\Vcr\Tests\Support\ConvergedFrameProbe;
 use SugarCraft\Vcr\Tests\Support\Stream;
 
 /**
@@ -120,24 +121,9 @@ final class ScreenRoundTripTest extends TestCase
         $loop->futureTick(static function () use ($writer): void {
             fwrite($writer, 'abc');
         });
-        // Re-arming probe: quit only once the converged frame has actually
-        // been rendered (and therefore recorded). Reads the in-memory output
-        // stream without disturbing its write pointer.
-        $probe = null;
-        $probe = static function () use (&$probe, $program, $loop, $output, $finalFrame): void {
-            $pos = ftell($output);
-            rewind($output);
-            $written = stream_get_contents($output);
-            if ($pos !== false) {
-                fseek($output, $pos);
-            }
-            if (is_string($written) && str_contains($written, $finalFrame)) {
-                $program->quit();
-                return;
-            }
-            $loop->futureTick($probe);
-        };
-        $loop->futureTick($probe);
+        // Re-arming probe (shared helper): quit only once the converged
+        // frame has actually been rendered (and therefore recorded).
+        ConvergedFrameProbe::arm($loop, $program, $output, $finalFrame);
         $loop->addTimer(2.0, static fn () => $loop->stop());
         $program->run();
 
