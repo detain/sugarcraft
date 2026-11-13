@@ -913,7 +913,13 @@ src census, and the table's agreement with it.
 
 ## Internationalization
 
-`src/Lang.php` is a thin facade over the shared sugar-core translation registry with the `sql` namespace baked in, and `lang/` ships 16 locales — but the translated surface is currently one message: the `database.no_file` SQLite refusal (`Database::open()`, `SqliteDatabase::open()`); everything else the UI prints is untranslated English.
+`src/Lang.php` is a thin facade over the shared sugar-core translation registry with the `sql` namespace baked in, and `lang/` ships 16 locales (`ar cs de en es fr it ja ko nl pl pt-br pt ru tr zh-cn`) with identical key sets and placeholders.
+
+Translated surface: pane titles, the per-pane help footers, the status bar and its `[PAUSED]` badge, every `App` status/error line (query run, history, favorites, export/import prompts, destructive-statement confirmation, EXPLAIN, paging), the connection picker, the cell-edit and completion copy, the admin pages' chrome (pane labels, dashboard header, loading/error screens, Debug, Reports, Connections, Variables) and the error lines raised by `ConnectionFactory`, `CsvExporter`, `SqlExporter` and `DmlRunner`.
+
+Three tests hold the line: `tests/LocaleParityTest.php` (every locale has en's keys and `{placeholders}`, and every `Lang::t()` key in `src/`/`bin/` exists), `tests/NoRawLiteralsGuardTest.php` (a token-level census of raw English literals under `src/`, ratcheted against `tests/Support/raw-literals-baseline.json`: it may fall, never grow, and the baseline must be lowered in the same change), and `tests/LocalePrefixTest.php`.
+
+What is still English, deliberately and listed in that baseline: SQL fragments, MySQL/Postgres metric-catalog titles and descriptions (`WidgetCatalog`, `PostgresWidgetCatalog`, `ServerStatusPage` row labels, `MetricsColumn` gauge captions), the Performance Schema "Easy Setup" copy, developer-facing exception messages (driver/`ssl-mode` option validation, `AlertThresholds`, catalog loaders), and the `bin/candy-sql` `--help` text. Moving one of those means adding its key to all 16 files and lowering the baseline.
 
 ## Known limitations
 
