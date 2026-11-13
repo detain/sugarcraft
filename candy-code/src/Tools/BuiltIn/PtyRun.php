@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Tools\BuiltIn;
 
+use SugarCraft\AnsiParser\Codec\KeySequence;
 use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Support\ProcessContainment;
 use SugarCraft\Code\Support\PtyDriver;
@@ -97,49 +98,12 @@ final readonly class PtyRun implements Tool, AcceptsWorktreeJail, AcceptsHeartbe
      * glyph — because a driven program only believes what a terminal sends
      * (the repo's Python-PTY-harness audit lesson: literal `→` bytes ride the
      * paste/IME path and exercise a completely different parser).
+     *
+     * S-T11 (R8): the table is the family's single encode table,
+     * {@see KeySequence::TABLE} in sugar-ansi-parser; this alias keeps the
+     * `PtyRun::KEY_TOKENS` vocabulary the shells protocol and tests spell.
      */
-    public const KEY_TOKENS = [
-        'Enter' => "\r",
-        'Esc' => "\x1b",
-        'Tab' => "\t",
-        'Backspace' => "\x7f",
-        'Up' => "\x1b[A",
-        'Down' => "\x1b[B",
-        'Right' => "\x1b[C",
-        'Left' => "\x1b[D",
-        'Home' => "\x1b[H",
-        'End' => "\x1b[F",
-        'PageUp' => "\x1b[5~",
-        'PageDown' => "\x1b[6~",
-        'Delete' => "\x1b[3~",
-        'Insert' => "\x1b[2~",
-        'C-a' => "\x01",
-        'C-b' => "\x02",
-        'C-c' => "\x03",
-        'C-d' => "\x04",
-        'C-e' => "\x05",
-        'C-f' => "\x06",
-        'C-g' => "\x07",
-        'C-h' => "\x08",
-        'C-i' => "\x09",
-        'C-j' => "\x0a",
-        'C-k' => "\x0b",
-        'C-l' => "\x0c",
-        'C-m' => "\x0d",
-        'C-n' => "\x0e",
-        'C-o' => "\x0f",
-        'C-p' => "\x10",
-        'C-q' => "\x11",
-        'C-r' => "\x12",
-        'C-s' => "\x13",
-        'C-t' => "\x14",
-        'C-u' => "\x15",
-        'C-v' => "\x16",
-        'C-w' => "\x17",
-        'C-x' => "\x18",
-        'C-y' => "\x19",
-        'C-z' => "\x1a",
-    ];
+    public const KEY_TOKENS = KeySequence::TABLE;
 
     /** Backslash escapes understood inside `send`. */
     private const CHAR_ESCAPES = [
@@ -331,8 +295,9 @@ final readonly class PtyRun implements Tool, AcceptsWorktreeJail, AcceptsHeartbe
                 $close = \strpos($template, '>', $i + 1);
                 if ($close !== false) {
                     $name = \substr($template, $i + 1, $close - $i - 1);
-                    if (isset(self::KEY_TOKENS[$name])) {
-                        $out .= self::KEY_TOKENS[$name];
+                    $keyBytes = KeySequence::encode($name);
+                    if ($keyBytes !== null) {
+                        $out .= $keyBytes;
                         $i = $close;
 
                         continue;

@@ -502,4 +502,11 @@ final class ShellsInputTest extends TestCase
             static fn (string $line): bool => \str_starts_with($line, 'shells.input: '),
         ));
     }
+
+    public function testKeyTokensAreTheFamilysSingleEncodeTable(): void
+    {
+        // S-T11: no app-side copy of the key-name table survives.
+        self::assertSame(\SugarCraft\AnsiParser\Codec\KeySequence::TABLE, PtyRun::KEY_TOKENS);
+        self::assertSame("\x1b[A", \SugarCraft\AnsiParser\Codec\KeySequence::encode('Up'));
+    }
 }

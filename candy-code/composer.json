@@ -46,6 +46,7 @@
         "aws/aws-sdk-php": "^3.300",
         "google/cloud-ai-platform": "^1.0",
         "symfony/yaml": "^7.4",
+        "sugarcraft/sugar-ansi-parser": "@dev",
         "sugarcraft/sugar-core": "@dev",
         "sugarcraft/sugar-forms": "@dev",
         "sugarcraft/sugar-style": "@dev",
