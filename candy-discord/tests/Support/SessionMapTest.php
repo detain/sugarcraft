@@ -42,6 +42,15 @@ final class SessionMapTest extends TestCase
         return new SessionMap($this->path);
     }
 
+    private function rawVersion(): int
+    {
+        $pdo = new \PDO('sqlite:' . $this->path);
+        $version = (int) $pdo->query('PRAGMA user_version')->fetchColumn();
+        $pdo = null;
+
+        return $version;
+    }
+
     // ── inbound claim machine (043, discord-25) ────────────────────────
 
     public function testAFreshClaimAnswersOnceAndTheLiveDuplicateStaysSuppressed(): void
@@ -100,6 +109,70 @@ final class SessionMapTest extends TestCase
         $map = $this->map();
         self::assertNotNull($map->inboundState('discord', 'old-1'), 'the ALTER added the state column');
         self::assertTrue($map->claimInbound('discord', 'old-1'), 'a legacy row reads as an orphan (stale) and re-claims');
+    }
+
+    // ── schema version gate (041, discord-24) ──────────────────────────
+
+    public function testAFreshStoreIsStampedAtTheCurrentSchemaVersion(): void
+    {
+        $this->map();
+        self::assertSame(SessionMap::SCHEMA_VERSION, $this->rawVersion(), 'creation stamps the version');
+        $this->map()->claimInbound('discord', 'v-1');
+
+        $this->map();
+        self::assertSame(SessionMap::SCHEMA_VERSION, $this->rawVersion(), 'reopening a versioned store leaves it alone');
+    }
+
+    public function testALegacyZeroVersionStoreMigratesOnceAndStamps(): void
+    {
+        $pdo = new \PDO('sqlite:' . $this->path);
+        $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
+        $pdo->exec('CREATE TABLE bindings (key TEXT PRIMARY KEY, session_id TEXT NOT NULL, last_seq INTEGER NOT NULL DEFAULT 0, peer_id TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)');
+        $pdo->exec('CREATE TABLE seen_inbound (platform TEXT NOT NULL, inbound_id TEXT NOT NULL, seen_at INTEGER NOT NULL, PRIMARY KEY (platform, inbound_id))');
+        $pdo->exec("INSERT INTO bindings (key, session_id, last_seq, peer_id, created_at, updated_at) VALUES ('discord:default:c1', 's-1', 3, 'p', 1, 1)");
+        $pdo = null;
+
+        $map = $this->map();
+        self::assertSame(SessionMap::SCHEMA_VERSION, $this->rawVersion(), 'the ladder stamps after migrating');
+        self::assertSame(['discord:default:c1'], $map->bindingsOfSession('s-1'), 'legacy rows survive the stamp');
+    }
+
+    public function testAFutureSchemaVersionIsRefusedWithTheRepairNamed(): void
+    {
+        $this->map();
+        $pdo = new \PDO('sqlite:' . $this->path);
+        $pdo->exec('PRAGMA user_version = 99');
+        $pdo = null;
+
+        try {
+            $this->map();
+            self::fail('a future schema must not open');
+        } catch (\RuntimeException $e) {
+            self::assertStringContainsString('schema version 99', $e->getMessage());
+            self::assertStringContainsString('delete the file', $e->getMessage(), 'the refusal names the repair');
+        }
+    }
+
+    // ── bindings horizon sweep (042, discord-24) ───────────────────────
+
+    public function testTheBindingsSweepReleasesStaleRowsAndKeepsFreshOnes(): void
+    {
+        $map = $this->map();
+        $map->bind('discord:default:c-old', 's-old');
+        $map->bind('discord:default:c-new', 's-new');
+        $map->rememberConversation('s-old', 'discord:default:c-old', ['channelId' => 'c-old']);
+        $map->rememberConversation('s-new', 'discord:default:c-new', ['channelId' => 'c-new']);
+
+        $back = new \PDO('sqlite:' . $this->path);
+        $back->exec('UPDATE bindings SET updated_at = 1 WHERE session_id = \'s-old\'');
+        $back->exec("UPDATE last_conversation SET updated_at = 1 WHERE session_id = 's-old'");
+        $back = null;
+
+        $map->sweepStaleBindings();
+        self::assertSame([], $map->bindingsOfSession('s-old'), 'the stale binding is gone');
+        self::assertNull($map->lastConversation('s-old'), 'its reply-ref follows');
+        self::assertSame(['discord:default:c-new'], $map->bindingsOfSession('s-new'), 'the fresh pair survives');
+        self::assertNotNull($map->lastConversation('s-new'));
     }
 
     /**

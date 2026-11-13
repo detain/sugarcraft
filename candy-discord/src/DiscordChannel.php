@@ -231,6 +231,8 @@ final class DiscordChannel implements ChannelInterface
         // the 7-day keep. (m09)
         $this->pruneTimer = $this->loop->addPeriodicTimer(21600.0, function (): void {
             $this->map?->pruneSeen(7);
+            // (042) the bindings/reply-refs sweep rides the same cadence.
+            $this->map?->sweepStaleBindings();
         });
     }
 

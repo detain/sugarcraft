@@ -25,6 +25,25 @@ namespace CandyCode\Bundles\Discord\Support;
  */
 final class SessionMap
 {
+    /**
+     * The schema's own version (041), gated the way CredentialStore gates
+     * its file (CURRENT_VERSION + loud refusal): three tables were created
+     * by versionless code, so version 0 with existing tables is the legacy
+     * shape — the ladder migrates it once and stamps. A FUTURE version is
+     * refused loudly with the repair named; sidecar rows are caches of
+     * bindings and reply-refs, never history worth an automatic rewind.
+     */
+    public const SCHEMA_VERSION = 1;
+
+    /**
+     * (042) how long a binding/reply-ref may sit untouched before the
+     * periodic sweep releases it. Deliberately a constant, not a settings
+     * key: a second help-blob fan-out was refused — a future tunable key
+     * is a REPORT row. 180 d amply outlives any real conversation while
+     * keeping the store from growing monotonically forever.
+     */
+    public const BINDING_HORIZON_DAYS = 180;
+
     private \PDO $db;
 
     public function __construct(
@@ -49,6 +68,14 @@ final class SessionMap
             $db->exec('PRAGMA journal_mode = WAL');
             $db->exec('PRAGMA busy_timeout = 5000');
             $db->exec('PRAGMA synchronous = NORMAL');
+            // Version gate (041) before any shape is touched.
+            $version = (int) $db->query('PRAGMA user_version')->fetchColumn();
+            if ($version > self::SCHEMA_VERSION) {
+                throw new \RuntimeException(
+                    "session store {$path} carries schema version {$version}; this build understands " . self::SCHEMA_VERSION
+                    . ' — delete the file to repair: bindings and reply-refs are caches, never history',
+                );
+            }
             $db->exec(<<<'SQL'
                 CREATE TABLE IF NOT EXISTS bindings (
                     key        TEXT PRIMARY KEY,
@@ -91,6 +118,13 @@ final class SessionMap
             // hitting the duplicate suppress. Runs inside the private
             // window so the write cannot leak sidecars past the 0600 law.
             $db->exec("UPDATE seen_inbound SET state = 'stale' WHERE state = 'pending'");
+            if ($version === 0) {
+                // The one-shot ladder: every known legacy shape is already
+                // handled above (CREATE IF NOT EXISTS met the tables, the
+                // ALTER met the state column). Stamp so the next open pays
+                // only the version read.
+                $db->exec('PRAGMA user_version = ' . self::SCHEMA_VERSION);
+            }
         } finally {
             \umask($priorUmask);
         }
@@ -302,6 +336,20 @@ final class SessionMap
     {
         $stmt = $this->db->prepare('DELETE FROM seen_inbound WHERE seen_at < :cutoff');
         $stmt->execute(['cutoff' => \time() - $days * 86_400]);
+    }
+
+    /**
+     * (042) Release bindings and reply-refs untouched past the horizon.
+     * A binding older than months belongs to a conversation nobody will
+     * resume from the sidecar; the router's bind() re-creates what a fresh
+     * inbound needs, so the sweep is pure janitor work. Rides the
+     * pruneSeen cadence at the DiscordChannel call site.
+     */
+    public function sweepStaleBindings(int $days = self::BINDING_HORIZON_DAYS): void
+    {
+        $cutoff = \time() - $days * 86_400;
+        $this->db->prepare('DELETE FROM bindings WHERE updated_at < :c')->execute(['c' => $cutoff]);
+        $this->db->prepare('DELETE FROM last_conversation WHERE updated_at < :c')->execute(['c' => $cutoff]);
     }
 
     /** @return list<string> */

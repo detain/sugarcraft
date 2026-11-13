@@ -1015,6 +1015,12 @@ final class DiscordAccount implements PlatformFace
                 $this->rest->patch('/channels/' . $channelId, ['archived' => true])->then(
                     function () use ($channelId): void {
                         unset($this->threadSeen[$channelId]);
+                        // (042) the thread is gone from the live world: its
+                        // binding must not linger claimable forever — stale
+                        // rows kept archived reply-refs alive by monotonic
+                        // growth. The human re-opens by mentioning again,
+                        // and bind() recreates what a fresh inbound needs.
+                        $this->router->releaseBinding(Keys::channelKey('discord', $this->account, $channelId));
                         $this->log->info('discord_thread_archived', ['account' => $this->account, 'channel' => $channelId]);
                     },
                     function (\Throwable $e) use ($channelId): void {

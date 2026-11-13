@@ -11,6 +11,7 @@ use CandyCode\Bundles\Discord\Discord\DiscordAccount;
 use CandyCode\Bundles\Discord\Discord\Gateway;
 use CandyCode\Bundles\Discord\Discord\Rest;
 use CandyCode\Bundles\Discord\Support\CredentialStore;
+use CandyCode\Bundles\Discord\Support\Keys;
 use CandyCode\Bundles\Discord\Support\Log;
 use CandyCode\Bundles\Discord\Support\PairingCodes;
 use CandyCode\Bundles\Discord\Support\SessionMap;
@@ -252,6 +253,19 @@ final class DiscordAccountTest extends TestCase
         self::assertInstanceOf(TimerInterface::class, $timer);
 
         return $timer->getInterval();
+    }
+
+    public function testAnArchivedThreadReleasesItsBinding(): void
+    {
+        // (042) archive is the terminal release arm: the sidecar must not
+        // keep an archived thread's binding claimable forever.
+        $this->buildFace([]);
+        $map = new SessionMap($this->tempDir . '/sessions.db');
+        $map->bind(Keys::channelKey('discord', 'default', 'th1'), 'sess-th');
+        self::assertSame(['discord:default:th1'], $map->bindingsOfSession('sess-th'));
+        $this->face->archiveThread('th1');
+        $this->settle();
+        self::assertSame([], $map->bindingsOfSession('sess-th'), 'the archived thread released its binding');
     }
 
     public function testTheThreadProbeArchivesOnlyRealThreads(): void

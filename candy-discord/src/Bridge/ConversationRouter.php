@@ -157,6 +157,12 @@ final class ConversationRouter
         $this->map->confirmInbound($platform, $inboundId);
     }
 
+    /** (042) an archived thread releases its binding so the sidecar stops growing monotonically. */
+    public function releaseBinding(string $key): void
+    {
+        $this->map->forget($key);
+    }
+
     /**
      * One inbound human message.
      *
