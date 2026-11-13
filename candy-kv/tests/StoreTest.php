@@ -291,6 +291,100 @@ final class StoreTest extends TestCase
         );
     }
 
+    /**
+     * kv-075/kv-068: saveTo hands out atomically via a sibling temp and
+     * rename. The old fopen('wb') followed a symlinked target and
+     * rewrote the victim through the link; the new path replaces the
+     * link itself and never writes through it.
+     */
+    public function testSaveToReplacesSymlinkedTargetInsteadOfWritingThroughIt(): void
+    {
+        $this->store->set('token', 'fresh');
+        $dir = $this->tmpDir . '/out';
+        \mkdir($dir, 0o700, true);
+        $victim = $dir . '/victim';
+        \file_put_contents($victim, 'victim-bytes');
+        $target = $dir . '/target';
+        \symlink($victim, $target);
+
+        $this->assertTrue($this->store->saveTo('token', $target));
+        $this->assertSame('victim-bytes', \file_get_contents($victim));
+        $this->assertSame('fresh', \file_get_contents($target));
+        $this->assertFalse(\is_link($target));
+    }
+
+    /**
+     * kv-075: a saveTo that cannot deliver leaves the previous bytes
+     * exactly as they were — the bool false now honestly means
+     * "nothing happened", and no .tmp residue survives the failure.
+     */
+    public function testSaveToFailureLeavesOriginalUntouched(): void
+    {
+        $this->store->set('token', 'fresh');
+        $dir = $this->tmpDir . '/sealed';
+        \mkdir($dir, 0o700, true);
+        $target = $dir . '/out.bin';
+        \file_put_contents($target, 'OLD-ORIGINAL');
+        \chmod($dir, 0o500); // the temp file cannot be created
+        try {
+            $this->assertFalse($this->store->saveTo('token', $target));
+        } finally {
+            \chmod($dir, 0o700);
+        }
+        $this->assertSame('OLD-ORIGINAL', \file_get_contents($target));
+        $this->assertFileDoesNotExist($target . '.tmp');
+    }
+
+    /**
+     * kv-068: the handed-out secret lands 0600 whatever the umask says.
+     */
+    public function testSaveToCreatesFileAtZeroSixHundred(): void
+    {
+        $this->store->set('token', 'secret-payload');
+        $target = $this->tmpDir . '/drop.bin';
+
+        $this->assertTrue($this->store->saveTo('token', $target));
+        $this->assertSame(0o600, \fileperms($target) & 0o7777);
+    }
+
+    /**
+     * kv-076: a sidecar that outlives the sweep downgrades the delete
+     * from "done" to false — recoverable residue means the database is
+     * not gone, even though the main file is.
+     */
+    public function testDeleteDatabaseReportsFailureOnSurvivingSidecar(): void
+    {
+        $path = $this->tmpDir . '/sidecar.db';
+        $db = new Database($path, 'sidecar');
+        $db->set('x', 'v');
+        $db->close(); // sidecars checkpoint away — the planted directory can now exist
+        \mkdir($path . '-wal'); // a directory survives any unlink attempt
+
+        try {
+            $this->assertFalse($this->store->deleteDatabase('sidecar'));
+            $this->assertFileDoesNotExist($path);
+        } finally {
+            \rmdir($path . '-wal');
+        }
+    }
+
+    /**
+     * kv-074: the 0700 law re-asserts on every write-path open — a
+     * data directory planted at 0755 by other software is tightened
+     * the first time candy-kv writes through it.
+     */
+    public function testWriteTightensPreexistingLooseDataDirectory(): void
+    {
+        $dir = $this->tmpDir . '/loosedir';
+        \mkdir($dir, 0o755, true);
+        \chmod($dir, 0o755);
+        $store = new Store($dir, 'testdb');
+
+        $store->set('k', 'v');
+
+        $this->assertSame(0o700, \fileperms($dir) & 0o7777);
+    }
+
     public function testDataDir(): void
     {
         $this->assertSame($this->tmpDir, $this->store->dataDir());

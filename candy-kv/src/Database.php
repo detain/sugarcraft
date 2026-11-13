@@ -65,6 +65,15 @@ final class Database
      */
     public function __construct(string $path, string $name, bool $create = true)
     {
+        // A secrets path must be the file itself, never a pointer at
+        // someone else's file: SQLite follows symlinks happily, so a
+        // planted link at a database path would redirect every write —
+        // and every tightening below — to its target (kv-070).
+        if (\is_link($path)) {
+            throw new \RuntimeException(
+                \sprintf('Refusing to use symlinked key-value store file: %s', $path)
+            );
+        }
         $flags = \SQLITE3_OPEN_READWRITE | ($create ? \SQLITE3_OPEN_CREATE : 0);
         try {
             $this->db = new \SQLite3($path, $flags);
@@ -103,16 +112,27 @@ final class Database
      * SQLite creates files with the process umask, which is commonly 022
      * — leaving stored tokens world-readable. A file we cannot tighten
      * is refused loudly rather than silently exposed.
+     *
+     * The tight test is the FULL permission word, not just the group and
+     * other bits: 0o4600 reads "no 0o077 leak" yet carries setuid, and a
+     * secrets file is never allowed to grow privilege bits (kv-070). A
+     * sidecar that is a symlink is refused outright — tightening through
+     * it would chmod someone else's file.
      */
     private function secureFilePermissions(string $path): void
     {
         foreach ([$path, $path . '-wal', $path . '-shm'] as $file) {
+            if (\is_link($file)) {
+                throw new \RuntimeException(
+                    \sprintf('Refusing to use symlinked key-value store file: %s', $file)
+                );
+            }
             if (!\is_file($file)) {
                 continue;
             }
             \clearstatcache(true, $file);
             $perms = @\fileperms($file);
-            if ($perms !== false && ($perms & 0o077) === 0) {
+            if ($perms !== false && ($perms & 0o7777) === 0o600) {
                 continue;
             }
             if (!@\chmod($file, 0o600)) {

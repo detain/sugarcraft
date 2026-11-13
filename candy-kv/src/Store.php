@@ -465,22 +465,61 @@ final class Store
             return false;
         }
         $bytes = $entry->rawValue();
-        // The payload is secret material: create/tighten to 0600 BEFORE any
-        // byte is written (file_put_contents would publish the whole value
-        // at umask mode, typically 0644). @-suppressed open failure is
-        // reported via the bool return.
-        $handle = @\fopen($filePath, 'wb');
+        // Secret material is handed out atomically (kv-075): 'wb'
+        // truncated any previous target BEFORE writability was proven,
+        // so a write that died mid-flight left half a secret posing as
+        // the new value and destroyed the old one. The payload goes to
+        // a sibling temp file first and rename() flips it into place —
+        // every failure path below leaves the original bytes untouched,
+        // so the bool return honestly means "nothing happened".
+        //
+        // 'xb' also refuses to pre-follow a symlink at the temp path;
+        // rename() replaces the destination link itself rather than
+        // writing through it, which the old fopen('wb') silently did
+        // (kv-068). The temp lives in the target's own directory —
+        // rename() is not atomic across filesystems.
+        $tempPath = $filePath . '.tmp';
+        $handle = @\fopen($tempPath, 'xb');
         if ($handle === false) {
             return false;
         }
-        @\chmod($filePath, 0o600);
         try {
+            // Tighten to 0600 BEFORE any byte lands. (The finding
+            // suggested fchmod on the open handle; that function lives
+            // in ext-posix, which neither this runtime nor the fleet
+            // convention guarantees. The window it closed is empty
+            // here by construction: 'xb' just created this file and no
+            // payload has been written, so the path-based chmod meets
+            // an empty file. Failure is fatal — a secret whose mode we
+            // cannot guarantee is not written at all (kv-068,
+            // Database::secureFilePermissions precedent).)
+            if (!@\chmod($tempPath, 0o600)) {
+                throw new \RuntimeException(
+                    \sprintf('Cannot set 0600 permissions on key-value store file: %s', $filePath)
+                );
+            }
             $written = @\fwrite($handle, $bytes);
+            if ($written === false || $written !== \strlen($bytes)) {
+                return false; // partial write: the temp is residue, not a value
+            }
+            if (!@\fflush($handle)) {
+                return false;
+            }
+            $stat = \fstat($handle);
+            if ($stat === false || ($stat['size'] ?? -1) !== \strlen($bytes)) {
+                return false; // the bytes on disk are not the whole value
+            }
+            // Flip into place while the handle is still ours. rename()
+            // replaces an existing destination (and a destination
+            // symlink itself) atomically on POSIX.
+            return @\rename($tempPath, $filePath);
         } finally {
             @\fclose($handle);
+            // Any path that did not rename leaves no residue behind.
+            if (\is_file($tempPath)) {
+                @\unlink($tempPath);
+            }
         }
-
-        return $written !== false && $written === \strlen($bytes);
     }
 
     /**
@@ -540,14 +579,34 @@ final class Store
             $this->databases[$dbName]->close();
             unset($this->databases[$dbName]);
         }
-        $removedAll = true;
+        $removedAll = $this->removeDatabaseFiles($path);
+        // kv-076: a second live connection can re-mint -wal/-shm after
+        // a single sweep saw them gone, and sidecars carrying
+        // recoverable rows make a "successful" delete a lie. Sweep once
+        // more after the first pass and report the state at the LAST
+        // look: any survivor — unlinked file, planted directory, or
+        // dangling link — means the database is not gone. (A holder
+        // keeping bytes alive through an already-unlinked inode is a
+        // race no unlink loop can close; genuinely sealing it needs
+        // flock discipline around open and teardown.)
+        return $this->removeDatabaseFiles($path) && $removedAll;
+    }
+
+    /**
+     * One pass over the main file and WAL sidecars: unlink what is
+     * there, then look again. True only when all three paths are empty.
+     */
+    private function removeDatabaseFiles(string $path): bool
+    {
+        $gone = true;
         foreach ([$path, $path . '-wal', $path . '-shm'] as $file) {
-            if (\is_file($file) && !@\unlink($file)) {
-                $removedAll = false;
+            @\unlink($file);
+            \clearstatcache(true, $file);
+            if (\file_exists($file) || \is_link($file)) {
+                $gone = false;
             }
         }
-
-        return $removedAll && !\file_exists($path);
+        return $gone;
     }
 
     // -------------------------------------------------------------------------
@@ -618,17 +677,26 @@ final class Store
             return null;
         }
 
-        if ($create && !\is_dir($this->dataDir)) {
-            // Fail loud: a silently-skipped mkdir would defer the real error
-            // to an opaque SQLite open failure on a path that does not exist.
-            // mkdir is umask-filtered, so re-assert 0700 on what we created:
-            // this directory holds secrets.
-            if (!@\mkdir($this->dataDir, 0o700, true) && !\is_dir($this->dataDir)) {
-                throw new \RuntimeException(
-                    \sprintf('Cannot create the key-value data directory: %s', $this->dataDir)
-                );
+        if ($create) {
+            if (!\is_dir($this->dataDir)) {
+                // Fail loud: a silently-skipped mkdir would defer the real
+                // error to an opaque SQLite open failure on a path that
+                // does not exist.
+                if (!@\mkdir($this->dataDir, 0o700, true) && !\is_dir($this->dataDir)) {
+                    throw new \RuntimeException(
+                        \sprintf('Cannot create the key-value data directory: %s', $this->dataDir)
+                    );
+                }
             }
-            if (!@\chmod($this->dataDir, 0o700)) {
+            // The 0700 law is RE-ASSERTED on every write-path open, not
+            // only when we mint the directory (kv-074): mkdir is
+            // umask-filtered, and a directory planted by other software
+            // at 0755 would otherwise keep the database FILE NAMES
+            // (passwords.db) enumerable for the store's whole lifetime.
+            // Skip the syscall when the mode is already exactly right.
+            \clearstatcache(true, $this->dataDir);
+            $dirPerms = @\fileperms($this->dataDir);
+            if (($dirPerms === false || ($dirPerms & 0o7777) !== 0o700) && !@\chmod($this->dataDir, 0o700)) {
                 throw new \RuntimeException(
                     \sprintf('Cannot set 0700 permissions on the key-value data directory: %s', $this->dataDir)
                 );

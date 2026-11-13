@@ -485,4 +485,63 @@ final class DatabaseTest extends TestCase
         }
         $this->db->close();
     }
+
+    // ─── Secrets-path entanglement and stray privilege bits (candy-kv-070) ──
+
+    public function testSymlinkedDatabasePathIsRefusedBeforeAnyOpen(): void
+    {
+        $victim = $this->tmpDir . '/victim.db';
+        (new Database($victim, 'victim'))->set('a', 'b');
+        $link = $this->tmpDir . '/linked.db';
+        \symlink($victim, $link);
+
+        try {
+            new Database($link, 'linked');
+            $this->fail('A symlinked secret path was opened.');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString(
+                'Refusing to use symlinked key-value store file',
+                $e->getMessage()
+            );
+        }
+        // The victim still holds only its own content: the refused open
+        // wrote nothing through the link.
+        $probe = new Database($victim, 'victim', false);
+        $this->assertSame('b', $probe->get('a')?->value);
+    }
+
+    public function testStickyModeBitOnDatabaseFileIsTightened(): void
+    {
+        $path = $this->tmpDir . '/sticky.db';
+        \touch($path);
+        // Sticky, not setuid: the kernel strips setuid on the first write,
+        // so a setuid probe would "pass" even with the loose 0o077-only
+        // gate. Sticky bits survive writes — only an exact-mode gate can
+        // clear them (kv-070).
+        \chmod($path, 0o1600);
+
+        $db = new Database($path, 'sticky');
+        $db->set('k', 'v');
+
+        $this->assertSame(0o600, \fileperms($path) & 0o7777);
+        $db->close();
+    }
+
+    public function testSymlinkedWalSidecarIsRefused(): void
+    {
+        $path = $this->tmpDir . '/sidecarlink.db';
+        $db = new Database($path, 'sidecarlink');
+        $db->set('k', 'v');
+        $db->close();
+        \symlink($this->tmpDir . '/elsewhere', $path . '-wal');
+
+        try {
+            new Database($path, 'sidecarlink');
+            $this->fail('A symlinked WAL sidecar was tolerated.');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('-wal', $e->getMessage());
+        } finally {
+            \unlink($path . '-wal');
+        }
+    }
 }
