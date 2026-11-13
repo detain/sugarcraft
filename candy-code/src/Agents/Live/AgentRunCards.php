@@ -310,6 +310,10 @@ final class AgentRunCards
      * Read-modify-write $path under an exclusive lock on its sibling `.lock`,
      * the new card renamed into place so a reader never sees half of one.
      *
+     * Deliberately local: sugar-core's AtomicJsonFile has no mutate-under-lock
+     * yet (one lock across read AND write), so this stays the single
+     * local shape until it does. @see R1a
+     *
      * @param \Closure(?array<string, mixed>): ?array<string, mixed> $change
      *
      * @return array<string, mixed>|null
