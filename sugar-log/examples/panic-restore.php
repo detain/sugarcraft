@@ -28,7 +28,7 @@ echo "=== Tty::restoreLast() (standalone) ===\n";
 
 Tty::restoreLast(); // First call: save state (idempotent no-op if already saved)
 
-// [M22] The demo used to block on fgets(STDIN) waiting for a keypress,
+// The demo used to block on fgets(STDIN) waiting for a keypress,
 // which hung any non-interactive run (CI, pipes, docs guards). The save /
 // restore pair is what is being demonstrated, and it needs no input: show
 // an intermediate step, then restore.

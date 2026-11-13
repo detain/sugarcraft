@@ -171,10 +171,8 @@ final class Logger
     }
 
     /**
-     * Emit a line at Info level, bypassing the minimum-level filter.
-     *
-     * The formatted output still carries the Info level label — "bypasses
-     * the filter", not "prints bare".
+     * Unlike the level methods, this bypasses the minimum-level filter —
+     * but it does not print bare: the Info level label still renders.
      */
     public function print(string $message, array $context = []): void
     {

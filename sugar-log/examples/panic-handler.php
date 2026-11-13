@@ -13,8 +13,7 @@ require __DIR__ . '/../vendor/autoload.php';
 
 use SugarCraft\Log\Log;
 
-// Install the panic handler BEFORE any code that might panic.
-// This must be called early—before any risky operations.
+// Install the panic handler early — before any code that might panic.
 Log::installPanicHandler();
 
 echo "Panic handler installed. Triggering a fatal error...\n";
