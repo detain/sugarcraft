@@ -39,6 +39,20 @@ use SugarCraft\Style\Style;
  *     ->withLegendPosition(Position::Bottom)
  *     ->view();
  * ```
+ *
+ * Layout posture (sugar-charts-047): the track glyphs (`█`, the
+ * U+2581… eighth-block caps, the U+2589… right blocks and the `┤└─` box
+ * frame) are East_Asian_Width=Ambiguous, and BarChart composes its rows
+ * as cell-indexed RAW strings. This lib therefore assumes the fleet
+ * width canon — Ambiguous = 1 (sugar-core Width policy: PHP mb_strwidth,
+ * every terminal in this fleet and every golden agree). On a host
+ * configured to paint Ambiguous slots 2 cells (GNU wcwidth / legacy CJK
+ * wcwidth tables) each bar row overruns its declared width and wraps;
+ * that host is out of the fleet matrix by policy, and
+ * {@see \SugarCraft\Charts\Tests\BarChartWideHostTest} holds a tripwire
+ * that reddens the moment the canon moves, so the assumption can never
+ * rot silently. An ASCII line-set fallback (TUI-07) stays deferred with
+ * a CALIBER_LEARNINGS note.
  */
 final class BarChart implements ChromeAccessors
 {
