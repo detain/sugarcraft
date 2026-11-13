@@ -12,6 +12,7 @@ use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\ScriptUi\Lang;
 use SugarCraft\ScriptUi\Runtime\Emphasis;
 use SugarCraft\ScriptUi\Runtime\Geometry;
@@ -46,7 +47,8 @@ final class PagerModel implements Model
         // now (the initial WindowSizeMsg then keeps it current on resize);
         // fall back to the historical 80x20 when nothing is knowable.
         $rows   = Geometry::rowsOrNull();
-        $width  = $width  > 0 ? $width  : (Geometry::columnsOrNull() ?? 80);
+        $cols   = Geometry::columnsOrNull();
+        $width  = $width  > 0 ? $width  : ($cols ?? 80);
         // Auto height reserves the hint footer rows; the historical
         // 20-row fallback (no knowable size) keeps pinned output stable.
         $height = $height > 0 ? $height : ($rows !== null ? max(1, $rows - self::HINT_ROWS - $frameRows) : 20);
@@ -71,7 +73,7 @@ final class PagerModel implements Model
             $content = self::numberLines($content);
         }
         $vp = Viewport::new($width, max(1, $height))->setContent($content);
-        return new self($vp, false, terminalRows: $rows ?? 0, frameRows: $frameRows);
+        return new self($vp, false, terminalRows: $rows ?? 0, frameRows: $frameRows, terminalCols: $cols ?? 0);
     }
 
     /**
@@ -114,6 +116,11 @@ final class PagerModel implements Model
         public readonly bool $interrupted = false,
         public readonly int $terminalRows = 0,
         public readonly int $frameRows = 0,
+        // scriptui-16 (finding 010): terminal columns at launch / last
+        // resize (0 = not knowable). A footer line wider than the terminal
+        // wraps into the rows budget the HINT_ROWS reservation just freed
+        // — the too-narrow leg yields (gum hides its help line).
+        public readonly int $terminalCols = 0,
     ) {}
 
     public function init(): ?\Closure
@@ -136,7 +143,7 @@ final class PagerModel implements Model
                 // 'q'/Esc are a normal finish (exit 0); Ctrl+C is a
                 // cancellation and the command must exit 130, not pretend
                 // the page was read to the end.
-                return [new self($this->viewport, true, $msg->ctrl && $msg->rune === 'c', $this->terminalRows, $this->frameRows), Cmd::quit()];
+                return [new self($this->viewport, true, $msg->ctrl && $msg->rune === 'c', $this->terminalRows, $this->frameRows, $this->terminalCols), Cmd::quit()];
             }
         }
         if ($msg instanceof WindowSizeMsg) {
@@ -150,12 +157,16 @@ final class PagerModel implements Model
             $rows   = max(1, $msg->rows);
             $height = max(1, $rows - self::HINT_ROWS - $this->frameRows);
             if ($width !== $this->viewport->width || $height !== $this->viewport->height || $rows !== $this->terminalRows) {
-                return [new self($this->viewport->withSize($width, $height), $this->exited, $this->interrupted, $rows, $this->frameRows), null];
+                return [new self($this->viewport->withSize($width, $height), $this->exited, $this->interrupted, $rows, $this->frameRows, $width), null];
             }
             return [$this, null];
         }
         [$next, $cmd] = $this->viewport->update($msg);
-        return [new self($next, false), $cmd];
+        // scriptui-16: the navigation arm used to rebuild with fresh
+        // defaults — one scroll key erased the launch census the footer
+        // gates read (rows and cols both fell to 0, frameRows to 0). The
+        // geometry state now travels.
+        return [new self($next, false, $this->interrupted, $this->terminalRows, $this->frameRows, $this->terminalCols), $cmd];
     }
 
     public function view(): string
@@ -169,7 +180,21 @@ final class PagerModel implements Model
             // On terminals too short to hold footer + one content row the
             // footer yields (the scriptui-20 never-exceed contract wins
             // over discoverability at 2 rows).
-            $body .= "\n" . Lang::t('hints.pager') . "\n" . Lang::t('hints.pager.more');
+            // scriptui-16 (finding 010): the same yield law horizontally —
+            // a footer line wider than the terminal would wrap over the
+            // very rows budget HINT_ROWS freed, so each line hides when it
+            // cannot fit unwrapped.
+            $footers = [Lang::t('hints.pager'), Lang::t('hints.pager.more')];
+            if ($this->terminalCols > 0) {
+                $cols = $this->terminalCols;
+                $footers = array_values(array_filter(
+                    $footers,
+                    static fn(string $line): bool => Width::string($line) <= $cols
+                ));
+            }
+            foreach ($footers as $footerLine) {
+                $body .= "\n" . $footerLine;
+            }
         }
         return $body;
     }

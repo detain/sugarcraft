@@ -513,15 +513,27 @@ update arms, and those arms are exercised by the model tests.
   `0` = auto. The interactive lists size only their width from the
   terminal the same way (overridable with `--width`, `0` = auto); their
   height is the visible item count (`--height`), a literal defaulting
-  to 10 and never read from the terminal. When nothing is knowable the
-  historical literals (lists 60 cells, pager 80×20) keep piped output
+  to 10 and never read from the terminal. An explicit `--width` is still
+  capped by the terminal columns, so a frame can never emit a line wider
+  than the screen. `input` and `write` take the same width rule: an unset
+  `--width` resolves to the terminal columns minus the line chrome (the
+  prompt and, for `write`, the line-number gutter), and an explicit one is
+  capped by the columns. When nothing is knowable the historical literals
+  (lists 60 cells, pager 80×20, editors unbounded) keep piped output
   byte-stable.
 - `pager` re-fits live on resize. The list views do not re-flow live
   (sugar-forms `ItemList` exposes resize, but `--width` is a launch-time
   cap there — following SIGWINCH would silently widen explicitly-sized
   lists; see the sugar-forms seam note below).
-- `choose`, `filter`, and `pager` paint a one-line keybinding hint under
-  the live view (removed from the resolved/final frame).
+- `choose`, `filter`, and `pager` paint a keybinding hint under the live
+  view (`pager`'s footer spans two lines now; all are removed from the
+  resolved/final frame). A hint line the terminal is too narrow to hold
+  unwrapped is dropped rather than wrapped (gum's posture — a wrapped hint
+  would shove the list and status out of the frame), and with a rows budget
+  known at launch the composed frame is clipped to those rows, so the hint
+  and status yield from the bottom up before the ever-reachable list body.
+  When nothing is knowable (a redirected or piped run) every hint line is
+  painted exactly as before.
 - `choose` / `filter` / `pager` / `write` / `file` accept
   `--no-alt-screen` to render inline. Note the flip side: entering the
   alternate screen (the default) **erases** the rendered frames on exit —

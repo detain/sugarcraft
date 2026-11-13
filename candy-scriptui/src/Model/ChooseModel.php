@@ -72,6 +72,11 @@ final class ChooseModel implements Model
         $auto  = $width <= 0;
         $cols  = Geometry::columnsOrNull();
         $width = $auto ? ($cols ?? 60) : min($width, $cols ?? $width);
+        // scriptui-16 (finding 010): the raw terminal census at launch feeds
+        // the hint-width gate and the frame-rows clip (0 = unknowable →
+        // the historical always-paint-everything frame).
+        $terminalCols = $cols ?? 0;
+        $terminalRows = Geometry::rowsOrNull() ?? 0;
         $items = array_map(static fn(string $o) => new StringItem($o), $options);
         $list  = ItemList::new($items, $width, max(1, $height))->withShowDescription(false);
         if ($cursorPrefix !== null) {
@@ -104,7 +109,7 @@ final class ChooseModel implements Model
                 }
             }
         }
-        return new self($list, false, false, $multi, $cap, $checked, $ordered, typeToFilter: $typeToFilter, cursorCycle: $cursorCycle, selectedPrefix: $selectedPrefix);
+        return new self($list, false, false, $multi, $cap, $checked, $ordered, typeToFilter: $typeToFilter, cursorCycle: $cursorCycle, selectedPrefix: $selectedPrefix, terminalCols: $terminalCols, terminalRows: $terminalRows);
     }
 
     /**
@@ -129,6 +134,13 @@ final class ChooseModel implements Model
         // tick glyph for checked rows; both are paint strings.
         public readonly array $cursorCycle = [],
         public readonly string $selectedPrefix = '',
+        // scriptui-16 (finding 010): terminal census at launch (0 = not
+        // knowable). The keybinding hint is dropped when the terminal is
+        // narrower than the hint (gum's posture — a wrapped hint pushes the
+        // list out of the rows budget), and the composed frame never
+        // exceeds the rows known at launch.
+        public readonly int $terminalCols = 0,
+        public readonly int $terminalRows = 0,
     ) {}
 
     public function init(): ?\Closure
@@ -210,31 +222,52 @@ final class ChooseModel implements Model
         // ItemList cannot express — those frames (and every multi frame)
         // ride the model's own mirror renderer.
         $useCustom = $this->multi || count($this->cursorCycle) > 1;
-        // scriptui-14 (finding 004) belt: clip the composed body line-wise
-        // regardless of the drawing path. The delegated ItemList::view()
-        // carries its own SF-002 clip stage in the development tree, but a
-        // published sibling copy without it must not silently re-open the
-        // overflow — Width::truncateAnsi is idempotent on rows already
-        // within budget, so when both stages run nothing changes byte-wise.
-        $body = implode("\n", $this->clipLines(explode("\n",
-            $useCustom ? $this->markedBody() : Emphasis::stripDecor($this->list->view())
-        )));
+        $raw = $useCustom ? $this->markedBody() : Emphasis::stripDecor($this->list->view());
         if ($this->multi) {
-            // Append a status line: '(N selected)'.
+            // Append a status line: '(N selected)'. Composed BEFORE the
+            // clip belt so a huge count on a narrow terminal still cannot
+            // emit a wrapped tail.
             $count = $this->selectedCount();
             $cap = $this->limit > 0 ? "/{$this->limit}" : '';
-            $body .= "\n[" . $count . $cap . " selected]";
+            $raw .= "\n[" . $count . $cap . " selected]";
         }
+        $body = implode("\n", $this->clipLines(explode("\n", $raw)));
         if (!$this->submitted && !$this->aborted && !$this->refusedEmpty) {
             // In-app keybinding discoverability (gum's list help line).
             // scriptui-57 (109): the space clause only exists in multi
             // mode — single-select choose used to advertise a tick key
             // that does nothing there.
-            $body .= "\n" . ($this->multi
+            $hint = $this->multi
                 ? Lang::t('hints.choose.multi')
-                : Lang::t('hints.choose'));
+                : Lang::t('hints.choose');
+            // scriptui-16 (finding 010): a hint the terminal cannot hold
+            // wraps over several physical rows and shoves the list and the
+            // status line out of the frame budget — gum hides it instead.
+            // With no knowable width the historical always-paint shape
+            // stands (piped/cron frames byte-stable, -57 discoverability).
+            if ($this->terminalCols <= 0 || Width::string($hint) <= $this->terminalCols) {
+                $body .= "\n" . $hint;
+            }
         }
-        return $body;
+        return $this->fitRows($body);
+    }
+
+    /**
+     * scriptui-16 (finding 010): the composed frame never paints past the
+     * rows known at launch — over-long frames are cut at the row boundary
+     * (bottom-up yield: the hint and status give way first, exactly the
+     * lines a too-short terminal was previously wrapping in). rows == 0
+     * means nothing is knowable: the historical unbounded frame.
+     */
+    private function fitRows(string $body): string
+    {
+        $rows = $this->terminalRows;
+        if ($rows <= 0) {
+            return $body;
+        }
+        $lines = explode("\n", $body);
+
+        return implode("\n", array_slice($lines, 0, $rows));
     }
 
     /**
@@ -442,6 +475,8 @@ final class ChooseModel implements Model
             typeToFilter: $this->typeToFilter,
             cursorCycle:  $this->cursorCycle,
             selectedPrefix: $this->selectedPrefix,
+            terminalCols: $this->terminalCols,
+            terminalRows: $this->terminalRows,
         );
     }
 

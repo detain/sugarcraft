@@ -80,6 +80,10 @@ final class FilterModel implements Model
         $auto  = $width <= 0;
         $cols  = Geometry::columnsOrNull();
         $width = $auto ? ($cols ?? 60) : min($width, $cols ?? $width);
+        // scriptui-16 (finding 010): raw launch census for the hint-width
+        // gate and the frame-rows clip (see ChooseModel).
+        $terminalCols = $cols ?? 0;
+        $terminalRows = Geometry::rowsOrNull() ?? 0;
         $items = array_map(static fn(string $o) => new StringItem($o), $options);
         $list  = ItemList::new($items, $width, max(1, $height))->withShowDescription(false);
         if ($cursorPrefix !== null) {
@@ -132,6 +136,8 @@ final class FilterModel implements Model
             placeholder: $placeholder,
             promptGlyph: $prompt,
             tailRows: $tailRows,
+            terminalCols: $terminalCols,
+            terminalRows: $terminalRows,
         );
         if ($fuzzy && $value !== '') {
             $filterText = $list->filterValue();
@@ -173,6 +179,10 @@ final class FilterModel implements Model
         // BELOW the cursor (0 = unset, the top-anchored historical window).
         public readonly string $promptGlyph = '',
         public readonly int $tailRows = 0,
+        // scriptui-16 (finding 010): terminal census at launch (0 = not
+        // knowable) — see ChooseModel for the hint gate / rows clip law.
+        public readonly int $terminalCols = 0,
+        public readonly int $terminalRows = 0,
         ?FuzzyMatcher $matcher = null,
     ) {
         $this->matcher = $matcher ?? new SmithWatermanMatcher();
@@ -341,23 +351,39 @@ final class FilterModel implements Model
         // keeps the cursor top-anchored. Single-select plain runs otherwise
         // delegate byte-for-byte as they always did.
         $needsCustom  = $this->multi || $this->promptGlyph !== '' || $this->tailRows > 0;
-        // scriptui-14 belt: same model-side clip for both custom bodies and
-        // the delegated ItemList path (idempotent where the widget already
-        // clips), so no shipped vendor copy can re-widen the frame.
-        $body = implode("\n", $this->clipLines(explode("\n",
-            $fuzzyActive
-                ? $this->fuzzyView()
-                : ($needsCustom ? $this->markedBody() : Emphasis::stripDecor($this->list->view()))
-        )));
+        $raw = $fuzzyActive
+            ? $this->fuzzyView()
+            : ($needsCustom ? $this->markedBody() : Emphasis::stripDecor($this->list->view()));
         if ($this->multi) {
             $count = count(array_filter($this->checked));
             $cap = $this->limit > 0 ? "/{$this->limit}" : '';
-            $body .= "\n[" . $count . $cap . " selected]";
+            $raw .= "\n[" . $count . $cap . " selected]";
         }
+        // scriptui-14 belt: model-side clip for every drawing path.
+        $body = implode("\n", $this->clipLines(explode("\n", $raw)));
         if (!$this->submitted && !$this->aborted) {
-            $body .= "\n" . Lang::t('hints.filter');
+            $hint = Lang::t('hints.filter');
+            // scriptui-16 (finding 010): hint yields to a too-narrow
+            // terminal instead of wrapping the frame (see ChooseModel).
+            if ($this->terminalCols <= 0 || Width::string($hint) <= $this->terminalCols) {
+                $body .= "\n" . $hint;
+            }
         }
-        return $this->ghostFilterLine($body);
+        return $this->fitRows($this->ghostFilterLine($body));
+    }
+
+    /**
+     * scriptui-16 (finding 010): frame never paints past the rows known at
+     * launch; 0 rows = historical unbounded frame (see ChooseModel::fitRows).
+     */
+    private function fitRows(string $body): string
+    {
+        $rows = $this->terminalRows;
+        if ($rows <= 0) {
+            return $body;
+        }
+
+        return implode("\n", array_slice(explode("\n", $body), 0, $rows));
     }
 
     /**
@@ -694,6 +720,8 @@ final class FilterModel implements Model
             placeholder:    $this->placeholder,
             promptGlyph:    $this->promptGlyph,
             tailRows:       $this->tailRows,
+            terminalCols:   $this->terminalCols,
+            terminalRows:   $this->terminalRows,
         );
     }
 
