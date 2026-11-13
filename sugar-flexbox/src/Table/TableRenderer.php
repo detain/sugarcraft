@@ -51,17 +51,15 @@ final class TableRenderer
     {
         $lines = $table->buildLines();
 
-        $fullOutput = \implode("\n", $lines);
-
-        // Compute output dimensions from the rendered content.
+        // Output box from the column ARITHMETIC, never from a Width::string
+        // scan of just-built lines: header, ruler and every data row pad or
+        // clamp to exactly Σ width + sep-cells × joints, and asking the
+        // sugar-core memo what a line measures costs more than building it
+        // did once the distinct strings pass the memo's 2048-entry cap (the
+        // half-slice eviction turns steady-state frames into a 4× penalty —
+        // the LRU/cap raise itself is an owed sugar-core closeout row).
         $height = \count($lines);
-        $width = 0;
-        foreach ($lines as $line) {
-            $w = Width::string($line);
-            if ($w > $width) {
-                $width = $w;
-            }
-        }
+        $width = $table->computeTotalWidth();
 
         // A changed size still re-emits, but NEVER drop the old frame bare
         // on a SHRINK (finding 004): cells right of the narrower box and
@@ -85,16 +83,18 @@ final class TableRenderer
         }
 
         // First frame — and any frame that only grew: emit full output.
+        // The string is imploded only on this path; delta frames never pay
+        // for bytes nobody will print (finding 053's copy leg).
         if ($this->previousFrame === null || ($dimensionChanged && !$shrank)) {
-            $this->previousFrame = $this->bufferFromOutput($fullOutput, $width, $height);
-            return $fullOutput;
+            $this->previousFrame = $this->bufferFromOutput($lines, $width, $height);
+            return \implode("\n", $lines);
         }
 
         // Subsequent frames: compute the delta. A shrink diffs both operands
         // padded to the union canvas so erased regions emit; the stored
         // frame returns to logical size because the canvas margin has by
         // now been cleared on screen.
-        $currentFrame = $this->bufferFromOutput($fullOutput, $width, $height);
+        $currentFrame = $this->bufferFromOutput($lines, $width, $height);
         $ops = $dimensionChanged
             ? $this->paintOnCanvas($currentFrame, max($previousWidth, $width), max($previousHeight, $height))
                 ->diff($this->paintOnCanvas($this->previousFrame, max($previousWidth, $width), max($previousHeight, $height)))
@@ -132,7 +132,7 @@ final class TableRenderer
     }
 
     /**
-     * Build a Buffer from a multi-line string output.
+     * Build a Buffer from the rendered lines.
      *
      * Each line is walked once, splitting it into literal runs tagged with
      * the SGR state active at that point (attributes accumulate exactly as
@@ -143,13 +143,12 @@ final class TableRenderer
      * glyph that would straddle the right edge is clipped there (a
      * continuation pair cannot be forged at the boundary).
      *
-     * @param string $output Multi-line string from render()
-     * @param int    $width  Buffer width in cells
-     * @param int    $height Buffer height in rows
+     * @param list<string> $lines Rendered lines from Table::buildLines()
+     * @param int          $width Buffer width in cells
+     * @param int          $height Buffer height in rows
      */
-    private function bufferFromOutput(string $output, int $width, int $height): Buffer
+    private function bufferFromOutput(array $lines, int $width, int $height): Buffer
     {
-        $lines = \explode("\n", $output);
         $grid = [];
 
         for ($row = 0; $row < $height; $row++) {

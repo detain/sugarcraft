@@ -370,7 +370,9 @@ final class TableRendererTest extends TestCase
     {
         $m = new \ReflectionMethod(TableRenderer::class, 'bufferFromOutput');
         $m->setAccessible(true);
-        return $m->invoke(new TableRenderer(), $line, $w, $h);
+        // bufferFromOutput takes the rendered LINES list (FBX-16): one line
+        // in, a one-line canvas out.
+        return $m->invoke(new TableRenderer(), [$line], $w, $h);
     }
 
     public function testStyleAttributionIsPerClusterNotPerByte(): void
