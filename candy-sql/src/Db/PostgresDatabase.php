@@ -89,7 +89,19 @@ final class PostgresDatabase implements DatabaseInterface
         return $stmt === false ? [] : $stmt->fetchAll();
     }
 
-    /** @return list<array<string,mixed>>|null */
+    /**
+     * Run a typed statement and materialise the complete result set.
+     *
+     * client-028 (honest bound): this is the full-fetch path by design —
+     * exports and `affected` summaries need every row (SQL-C04's contract).
+     * The QUERY display it feeds is bounded only at paint time: ResultTable
+     * windows the viewport height (client-006) while the array behind it
+     * holds the whole `SELECT * FROM huge_table`. A `SELECT` returning
+     * unbounded rows therefore allocates unbounded memory before the first
+     * painted row; add your own LIMIT until the bounded-display leg lands.
+     *
+     * @return list<array<string,mixed>>|null null when the handle is gone
+     */
     public function query(string $sql): array|null
     {
         if ($this->pdo === null) {
