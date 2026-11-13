@@ -436,6 +436,10 @@ final class InProcessTransportContextTest extends TestCase
             public function size(): array { return ['cols' => 80, 'rows' => 24, 'xpix' => 0, 'ypix' => 0]; }
             public function stream(): mixed { return $this->stream; }
 
+            public function setBlocking(bool $blocking): void
+            {
+            }
+
             public function close(): void
             {
                 $this->closed = true;

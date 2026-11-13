@@ -140,6 +140,7 @@ final class StubMasterPty implements MasterPty
     public function resize(int $cols, int $rows): void { $this->resizeCalls++; }
     public function size(): array { return ['cols' => 80, 'rows' => 24, 'xpix' => 0, 'ypix' => 0]; }
     public function stream(): mixed { return $this->stream; }
+    public function setBlocking(bool $blocking): void {}
     public function close(): void { $this->closed = true; if (\is_resource($this->stream)) { @\fclose($this->stream); } }
     public function isClosed(): bool { return $this->closed; }
 }

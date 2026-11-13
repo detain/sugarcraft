@@ -109,6 +109,9 @@ $master = new class implements MasterPty {
     {
         return $this->stream;
     }
+    public function setBlocking(bool $blocking): void
+    {
+    }
     public function close(): void
     {
         $this->closed = true;
