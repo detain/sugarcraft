@@ -288,6 +288,138 @@ final class ModelTest extends TestCase
         ];
     }
 
+    // -----------------------------------------------------------------
+    // dp-36: printable affordances (h/j/k/l/t/space) through the Model.
+    // -----------------------------------------------------------------
+
+    public static function printableMovementProvider(): array
+    {
+        // Seed 2026-05-15 aims the cursor at index 19 (May 2026 firstDow=5).
+        return [
+            'h left'  => ['h', 18],
+            'j down'  => ['j', 26],
+            'k up'    => ['k', 12],
+            'l right' => ['l', 20],
+        ];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('printableMovementProvider')]
+    public function testPrintableRunesMoveTheCursor(string $rune, int $expectedIndex): void
+    {
+        $model = Model::new(new \DateTimeImmutable('2026-05-15'));
+        $this->assertSame(19, $model->picker()->cursorIndex(), 'seed sanity');
+
+        [$next, $cmd] = $model->update(new KeyMsg(KeyType::Char, rune: $rune));
+        $this->assertNull($cmd);
+        $this->assertSame($expectedIndex, $next->picker()->cursorIndex());
+    }
+
+    public function testBareSpaceTogglesSelectionInSingleMode(): void
+    {
+        // space = no-move Enter for toggle purposes: select, then clear.
+        $model = Model::new(new \DateTimeImmutable('2026-05-15'));
+        $idxBefore = $model->picker()->cursorIndex();
+
+        $model = $model->update(new KeyMsg(KeyType::Char, rune: ' '))[0];
+        $this->assertTrue($model->picker()->isSelecting());
+        $this->assertSame('2026-05-15', $model->picker()->selectedDate()?->format('Y-m-d'));
+        $this->assertSame($idxBefore, $model->picker()->cursorIndex(), 'toggle must not move');
+
+        $model = $model->update(new KeyMsg(KeyType::Space))[0];
+        $this->assertFalse($model->picker()->isSelecting());
+        $this->assertNull($model->picker()->selectedDate());
+    }
+
+    public function testSpaceIsInertInRangeMode(): void
+    {
+        // The range step machine speaks Enter only; a stray space changes
+        // nothing and announces nothing (the refusal gate mirrors the arm).
+        $store = new EventStore();
+        $picker = DatePicker::new(new \DateTimeImmutable('2026-05-15'))->withRangeMode(true);
+        $model = new Model($picker, $store);
+
+        [$next, ] = $model->update(new KeyMsg(KeyType::Space));
+        $this->assertSame($picker, $next->picker());
+        $this->assertFalse($store->hasEvents(), 'inert means inert — no refusal either');
+    }
+
+    public function testTJumpsToPinnedTodayThroughTheModel(): void
+    {
+        $picker = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
+            ->withToday(new \DateTimeImmutable('2026-12-25'));
+        $store = new EventStore();
+        $model = Model::new(picker: $picker, store: $store);
+
+        $model = $model->update(new KeyMsg(KeyType::Char, rune: 't'))[0];
+        $this->assertSame(12, $model->picker()->viewMonth());
+        $this->assertSame('2026-12-25', $model->picker()->dateAtCursor()?->format('Y-m-d'));
+
+        $types = array_column($store->release(), 'type');
+        $this->assertContains(PickerEvent::MONTH_CHANGED, $types, 'the jump is a transition');
+    }
+
+    public function testRefusedSpaceAnnouncesLikeEnter(): void
+    {
+        // No-move Enter, no-move refusal: dimmed day + bare space announces
+        // out_of_bounds exactly as Enter does (dp-09 seam, dp-36 gate).
+        $store = new EventStore();
+        $picker = DatePicker::new(new \DateTimeImmutable('2026-05-15'))
+            ->withMinDate(new \DateTimeImmutable('2026-05-16'));
+        $model = (new Model($picker, $store))
+            ->update(new KeyMsg(KeyType::Left))[0];   // cursor onto dimmed May 14
+        $store->release();
+
+        $model = $model->update(new KeyMsg(KeyType::Char, rune: ' '))[0];
+
+        $events = $store->release();
+        $this->assertCount(1, $events);
+        $this->assertSame(PickerEvent::SELECTION_REFUSED, $events[0]['type']);
+        $this->assertSame('out_of_bounds', $events[0]['payload']['reason']);
+        $this->assertNull($model->picker()->selectedDate());
+    }
+
+    public static function printableNonStealProvider(): array
+    {
+        $cases = [];
+        foreach (['h', 'j', 'k', 'l', 't', ' ', 'H', 'Q'] as $rune) {
+            foreach (['ctrl', 'alt', 'shift'] as $chord) {
+                $cases["{$rune}+{$chord}"] = [$rune, $chord];
+            }
+        }
+
+        return $cases;
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('printableNonStealProvider')]
+    public function testChordsNeverStealPrintableArms(string $rune, string $chord): void
+    {
+        $model = Model::new(new \DateTimeImmutable('2026-05-15'));
+        $before = self::stateFingerprint($model->picker());
+
+        [$next, ] = $model->update(new KeyMsg(
+            KeyType::Char,
+            rune: $rune,
+            alt: $chord === 'alt',
+            ctrl: $chord === 'ctrl',
+            shift: $chord === 'shift',
+        ));
+
+        $this->assertSame($before, self::stateFingerprint($next->picker()),
+            "'{$rune}' under '{$chord}' belongs to the host");
+    }
+
+    public function testUnboundRunesStayInert(): void
+    {
+        $model = Model::new(new \DateTimeImmutable('2026-05-15'));
+        $before = self::stateFingerprint($model->picker());
+
+        foreach (['q', 'x', '1', 'é'] as $rune) {
+            [$next, ] = $model->update(new KeyMsg(KeyType::Char, rune: $rune));
+            $this->assertSame($before, self::stateFingerprint($next->picker()),
+                "unbound rune '{$rune}' must not move the picker");
+        }
+    }
+
     public function testEscapeInSingleModeRecordsDateCleared(): void
     {
         // MT4: clearing a selection was event-silent; a host watching the store

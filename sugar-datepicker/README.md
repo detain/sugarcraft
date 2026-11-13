@@ -353,7 +353,7 @@ garbage paste. Bind quit to a named key or an explicit, labelled chord.
 ## Keyboard handling
 
 `handleKey()` is the non-TEA wire surface; `Model` is the TEA one. Both
-channels' vocabularies, in one table (dp-10):
+channels' vocabularies, in one table (dp-10, printables added by dp-36):
 
 | Action | `handleKey()` string (`KEY_*` value) | Model `KeyMsg` type |
 |---|---|---|
@@ -362,25 +362,36 @@ channels' vocabularies, in one table (dp-10):
 | Select / arm or complete a range leg | `enter` | `KeyType::Enter` |
 | Clear selection / cancel range | `esc` (BC wire value) or `escape` (sugar-core spelling) — both act | `KeyType::Escape` |
 | Month back / forward | `pgup`, `pgdn` | `KeyType::PageUp`, `KeyType::PageDown` |
-| Year jump / jump-to-today | programmatic only: `goToPreviousYear()`, `goToNextYear()`, `goToToday()` | — |
+| Vim-style cursor moves | — (Model channel only) | bare lowercase runes `h`/`j`/`k`/`l` on `KeyType::Char` |
+| Jump to today | — (Model channel only) | bare rune `t` on `KeyType::Char` |
+| Toggle selection (no-move Enter) | — (Model channel only) | `space` — `KeyType::Space` or `KeyType::Char` with `rune=' '`; single mode only |
+| Year jump | programmatic only: `goToPreviousYear()`, `goToNextYear()` | — |
 
 Unrecognized keys are surfaced through `error_log('datepicker: unknown key …')`
 and leave the receiver unchanged (loud at integration time, state-safe at
 runtime — no throw). A TEA application never needs to call `handleKey()`: the
 `Model` maps every `KeyType` arm itself.
 
-Honest limitations: there is no month-wrap on arrow keys (they clamp at the grid
-edge and can rest on empty lead-in/trailing cells, where Enter is refused in
-every mode — dp-26), and no
-typeahead year entry. The year/today jumps stay programmatic on purpose:
-upstream's Focus enum, tab-cycling and per-focus arrows were DROPPED in this
-port (single-cursor design — an intentional divergence, not an omission), so no
-key vocabulary exists for them. Home and End land on the first/last
+Honest limitations — three upstream features are deliberate divergences, not
+omissions: (1) upstream's `Focus` enum, tab-cycling and per-focus arrows are
+DROPPED here (single-cursor design, so no key vocabulary exists for them);
+(2) upstream's replaceable-every-binding `key.Binding` seam is NOT ported —
+the mapping is a fixed table (`KEY_*` constants plus the dp-36 printable
+arms), and rebinding is a host-layer job: match the keys you want in your own
+input reducer and call the public picker methods (`moveCursorLeft()`,
+`goToNextMonth()`, `toggleSelection()`, …) or emit your own `KeyMsg`
+equivalents — every action the fixed table can take is also a public method;
+(3) there is no month-wrap on arrow keys and no typeahead year entry (arrows
+clamp at the grid edge and can rest on empty lead-in/trailing cells, where
+Enter is refused in every mode — dp-26).
+Home and End land on the first/last
 **selectable** day of the viewed month: the jump scans past dimmed
 min/max-violating days, and a whole month outside the window leaves the cursor
-in place. Chord policy: through the `Model`, the four action keys Enter,
-Escape, PageUp and PageDown are host-reserved under ANY chord — Ctrl, Alt or
-Shift held — so a chat host's Shift+Enter newline is never hijacked. The arrows
+in place. Chord policy: through the `Model`, the action keys Enter,
+Escape, PageUp, PageDown and the printable bindings h/j/k/l/t/space are
+host-reserved under ANY chord — Ctrl, Alt or Shift held — so a chat host's
+Shift+Enter newline (or a terminal's Ctrl+L) is never hijacked, and a shifted
+'H' is not silently a left arrow either. The arrows
 and Home/End are the deliberate terminal-compatibility exception: they act bare
 and chorded alike. `PageUp`/`PageDown` step one month on both channels; larger
 jumps between months and years go through the `goTo*()` methods.

@@ -68,14 +68,18 @@ final class Model implements \SugarCraft\Core\Model
      * mode), Escape to clearDate in single mode — in range mode Escape clears
      * the pending range and never the selection — and Home/End to the
      * first/last selectable day (the jump scans past dimmed bound-violating
-     * days — see handleKey() dp-11 contract).
+     * days — see handleKey() dp-11 contract). dp-36 routes upstream's
+     * printable affordances through the same table: bare lowercase h/j/k/l
+     * move the cursor, t jumps to today, and space (own KeyType or Char
+     * rune) toggles the selection as a no-move Enter in single mode.
      * Records events to the EventStore when one is injected — and this is the
      * ONLY recording channel: {@see DatePicker::handleKey()} is the non-TEA
      * imperative surface and records nothing by design (see {@see PickerEvent}).
      *
      * Chord policy (single source of truth, pinned in full by
-     * {@see ModelTest::testChordMatrix()}): the four ACTION keys
-     * Enter/Escape/PageUp/PageDown are reserved to the host under ANY chord —
+     * {@see ModelTest::testChordMatrix()}): the action keys
+     * Enter/Escape/PageUp/PageDown and the printable arms are reserved to the
+     * host under ANY chord —
      * Ctrl, Alt or Shift held means the key is ignored, so a chat host's
      * Shift+Enter newline is never hijacked. The six NAVIGATION keys
      * Left/Right/Up/Down/Home/End keep the deliberate terminal-compatibility
@@ -107,7 +111,7 @@ final class Model implements \SugarCraft\Core\Model
      * stepping resolve here, so there is exactly one source of truth for the
      * key → action mapping (no second hand-restated table). The one chord
      * policy: `$chorded` names all three modifier legs (Ctrl|Alt|Shift), and
-     * it gates exactly the four ACTION arms; the navigation arms stay
+     * it gates the four ACTION arms plus the dp-36 printable arms; the navigation arms stay
      * reachable under every chord by design.
      */
     private function applyKey(DatePicker $picker, KeyMsg $msg): DatePicker
@@ -121,12 +125,28 @@ final class Model implements \SugarCraft\Core\Model
             $msg->type === KeyType::Down   => $picker->moveCursorDown(),
             $msg->type === KeyType::Home   => $picker->handleKey(DatePicker::KEY_HOME),
             $msg->type === KeyType::End    => $picker->handleKey(DatePicker::KEY_END),
+            // dp-36: upstream's printable affordances, routed verbatim — bare
+            // lowercase runes only, never under a chord (a host's Ctrl/Cmd
+            // combo or shifted 'H' must not be stolen by the picker).
+            $msg->type === KeyType::Char && !$chorded && $msg->rune === 'h' => $picker->moveCursorLeft(),
+            $msg->type === KeyType::Char && !$chorded && $msg->rune === 'j' => $picker->moveCursorDown(),
+            $msg->type === KeyType::Char && !$chorded && $msg->rune === 'k' => $picker->moveCursorUp(),
+            $msg->type === KeyType::Char && !$chorded && $msg->rune === 'l' => $picker->moveCursorRight(),
+            $msg->type === KeyType::Char && !$chorded && $msg->rune === 't' => $picker->goToToday(),
+            self::isToggleSpace($msg) && !$chorded && !$picker->isRangeMode() => $picker->toggleSelection(),
             $msg->type === KeyType::PageUp   && !$chorded => $picker->goToPreviousMonth(),
             $msg->type === KeyType::PageDown && !$chorded => $picker->goToNextMonth(),
             $msg->type === KeyType::Enter  && !$chorded => $picker->handleKey(DatePicker::KEY_ENTER),
             $msg->type === KeyType::Escape && !$chorded => $picker->handleKey(DatePicker::KEY_ESCAPE),
             default                       => $picker,
         };
+    }
+
+    /** Space arrives either as its own KeyType or as a Char rune, per parser. */
+    private static function isToggleSpace(KeyMsg $msg): bool
+    {
+        return $msg->type === KeyType::Space
+            || ($msg->type === KeyType::Char && $msg->rune === ' ');
     }
 
     /**
@@ -154,12 +174,16 @@ final class Model implements \SugarCraft\Core\Model
             ]);
         }
 
-        // Refused Enter (dp-09): the acted key would have applied nothing on
-        // the pre-key state. Chorded Enter never acted (host-reserved) and so
-        // cannot be refused. Computed off $prev because a refusal is exactly
-        // "next == prev on the selection channels".
+        // Refused selection key (dp-09, printables routed by dp-36): the acted
+        // key would have applied nothing on the pre-key state. Chorded keys
+        // never acted (host-reserved) and so cannot be refused. Computed off
+        // $prev because a refusal is exactly "next == prev on the selection
+        // channels". Toggle-space is a no-move Enter, so it refuses identically
+        // — but only where it acts at all (single mode).
         $chorded = $msg->ctrl || $msg->alt || $msg->shift;
-        if ($msg->type === KeyType::Enter && !$chorded) {
+        $selectKey = ($msg->type === KeyType::Enter && !$chorded)
+            || (self::isToggleSpace($msg) && !$chorded && !$prev->isRangeMode());
+        if ($selectKey) {
             $reason = $prev->selectionRefusal();
             if ($reason !== null) {
                 $this->store->record(PickerEvent::SELECTION_REFUSED, [

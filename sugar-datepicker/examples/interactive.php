@@ -107,17 +107,19 @@ final class InteractiveDemo implements CoreModel
     }
 
     /**
-     * The script: three single-mode legs (two cursor moves, a selection),
-     * Escape clearing it, a range-mode flip, then a range leg that produces
-     * range_started and a completed date_selected — all four wire events.
+     * The script: three single-mode legs (two cursor moves — routed through
+     * the dp-36 printable runes 'j'/'l' to demo the Char arm, the same events
+     * the arrow keys produce — and a selection), Escape clearing it, a
+     * range-mode flip, then a range leg (bare arrow + Enters) that produces
+     * range_started and a completed date_selected — all four wire kinds.
      *
      * @return list<array{label: string, msg: Msg}>
      */
     private static function buildScript(): array
     {
         return [
-            ['label' => 'Down',       'msg' => new KeyMsg(KeyType::Down)],
-            ['label' => 'Right',      'msg' => new KeyMsg(KeyType::Right)],
+            ['label' => 'j-down',    'msg' => new KeyMsg(KeyType::Char, rune: 'j')],
+            ['label' => 'l-right',   'msg' => new KeyMsg(KeyType::Char, rune: 'l')],
             ['label' => 'Enter',      'msg' => new KeyMsg(KeyType::Enter)],
             ['label' => 'Escape',     'msg' => new KeyMsg(KeyType::Escape)],
             ['label' => 'range-mode', 'msg' => new RangeModeMsg()],
