@@ -653,13 +653,22 @@ final class McpClient
         if ($pipes === []) {
             return [];
         }
-        $read = $direction === 'read' ? $pipes : [];
-        $write = $direction === 'write' ? $pipes : [];
-        $except = null;
-        if (@stream_select($read, $write, $except, 0) <= 0) {
-            return [];
+        if (\SugarCraft\Code\Support\WindowsPipes::runtimeNeedsIt()) {
+            // select() calls an empty proc_open pipe ready on Windows. Read
+            // readiness is what fstat says is waiting; the library's own
+            // Windows writeLine arm paces stdin, so a write is always offered.
+            $ready = $direction === 'read'
+                ? array_filter($pipes, static fn($p): bool => \SugarCraft\Code\Support\WindowsPipes::available($p) > 0)
+                : $pipes;
+        } else {
+            $read = $direction === 'read' ? $pipes : [];
+            $write = $direction === 'write' ? $pipes : [];
+            $except = null;
+            if (@stream_select($read, $write, $except, 0) <= 0) {
+                return [];
+            }
+            $ready = $direction === 'read' ? $read : $write;
         }
-        $ready = $direction === 'read' ? $read : $write;
         $names = [];
         foreach ($ready as $pipe) {
             $names[$owner[(int) $pipe]] = true;

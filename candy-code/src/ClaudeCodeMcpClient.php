@@ -533,13 +533,17 @@ final class ClaudeCodeMcpClient
         $this->pipes = $pipes;
         $this->connected = true;
 
-        // Set non-blocking mode on stdout so we can read without blocking the TUI
-        stream_set_blocking($pipes[1], false);
-        stream_set_blocking($pipes[0], false);
-        // AND fd 2, which is DRAINED in readMessages() — see drainStderr().
-        // It was opened as a pipe and never read, and a pipe nobody reads
-        // blocks the writer at one buffer.
-        stream_set_blocking($pipes[2], false);
+        // Windows pipes cannot be made non-blocking; every read there is an
+        // fstat-sized read instead (see WindowsPipes).
+        if (!\SugarCraft\Code\Support\WindowsPipes::runtimeNeedsIt()) {
+            // Set non-blocking mode on stdout so we can read without blocking the TUI
+            stream_set_blocking($pipes[1], false);
+            stream_set_blocking($pipes[0], false);
+            // AND fd 2, which is DRAINED in readMessages() — see drainStderr().
+            // It was opened as a pipe and never read, and a pipe nobody reads
+            // blocks the writer at one buffer.
+            stream_set_blocking($pipes[2], false);
+        }
 
         // THE SPEC'S HANDSHAKE, IN ORDER (audit MCP-3): `initialize` is a
         // REQUEST, the client WAITS for its result, and only then announces
@@ -874,7 +878,16 @@ final class ClaudeCodeMcpClient
 
             // `@` for EINTR: a signal mid-select is a retry, and under
             // `failOnWarning="true"` the warning alone would red a passing run.
-            $ready = @stream_select($read, $write, $except, 0, $slice);
+            if (\SugarCraft\Code\Support\WindowsPipes::runtimeNeedsIt()) {
+                // select() calls an empty pipe ready on Windows: ask fstat.
+                $ready = \SugarCraft\Code\Support\WindowsPipes::available($pipes[1]) > 0
+                    || (isset($pipes[2]) && is_resource($pipes[2]) && \SugarCraft\Code\Support\WindowsPipes::available($pipes[2]) > 0) ? 1 : 0;
+                if ($ready === 0) {
+                    usleep(min($slice, \SugarCraft\Code\Support\WindowsPipes::POLL_MICROSECONDS));
+                }
+            } else {
+                $ready = @stream_select($read, $write, $except, 0, $slice);
+            }
             $this->drainStderr();
 
             if ($ready === false) {
@@ -1184,6 +1197,29 @@ final class ClaudeCodeMcpClient
             // deliberately NOT counted as progress, see {@see WRITE_IDLE_SECONDS}.
             $this->drainStderr();
 
+            if (\SugarCraft\Code\Support\WindowsPipes::runtimeNeedsIt()) {
+                // select() cannot say when a Windows pipe write would block, so
+                // the payload goes in pipe-buffer-sized pieces with liveness
+                // checked between them (an MCP server reads stdin continuously;
+                // a dead one fails the write rather than holding it).
+                if (!$this->serverIsRunning()) {
+                    return $offset;
+                }
+                $written = @fwrite($pipes[0], substr($payload, $offset, \SugarCraft\Code\Support\WindowsPipes::PIPE_BUFFER_BYTES));
+                if ($written === false) {
+                    return $offset;
+                }
+                if ($written === 0) {
+                    usleep(1000);
+
+                    continue;
+                }
+                $lastProgress = microtime(true);
+                $offset += $written;
+
+                continue;
+            }
+
             $write = [$pipes[0]];
             $read = [];
             $except = [];
@@ -1339,7 +1375,9 @@ final class ClaudeCodeMcpClient
         }
 
         while (true) {
-            $chunk = fread($pipes[1], self::READ_CHUNK_SIZE);
+            $chunk = \SugarCraft\Code\Support\WindowsPipes::runtimeNeedsIt()
+                ? \SugarCraft\Code\Support\WindowsPipes::readAvailable($pipes[1], self::READ_CHUNK_SIZE)
+                : fread($pipes[1], self::READ_CHUNK_SIZE);
             if ($chunk === false || $chunk === '') {
                 break;
             }
@@ -1544,12 +1582,16 @@ final class ClaudeCodeMcpClient
         // That is the worst shape for a regression to take, because CI reports
         // a stuck job rather than a failed assertion. Making the drain set its
         // own precondition means the mode does not exist.
-        stream_set_blocking($this->pipes[2], false);
+        if (!\SugarCraft\Code\Support\WindowsPipes::runtimeNeedsIt()) {
+            stream_set_blocking($this->pipes[2], false);
+        }
 
         // Bounded per pass rather than "until EOF": a child writing faster than
         // this reads must not be able to hold the caller here forever.
         for ($i = 0; $i < 16; $i++) {
-            $chunk = @fread($this->pipes[2], self::READ_CHUNK_SIZE);
+            $chunk = \SugarCraft\Code\Support\WindowsPipes::runtimeNeedsIt()
+                ? \SugarCraft\Code\Support\WindowsPipes::readAvailable($this->pipes[2], self::READ_CHUNK_SIZE)
+                : @fread($this->pipes[2], self::READ_CHUNK_SIZE);
             if (!is_string($chunk) || $chunk === '') {
                 break;
             }

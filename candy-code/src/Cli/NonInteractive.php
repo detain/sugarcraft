@@ -2534,6 +2534,10 @@ final class NonInteractive
      */
     private static function stdinFirstByteArrived($stream): bool
     {
+        if (\SugarCraft\Code\Support\WindowsPipes::runtimeNeedsIt()) {
+            return self::stdinFirstByteArrivedWindows($stream);
+        }
+
         $read = [$stream];
         $write = null;
         $except = null;
@@ -2549,6 +2553,46 @@ final class NonInteractive
         }
 
         return $ready > 0;
+    }
+
+    /**
+     * Windows twin of {@see stdinFirstByteArrived()}: select() cannot watch
+     * Windows stdio. A console waits on its handle, a pipe is polled with
+     * fstat for the grace, and anything else (a redirected file, an in-memory
+     * fixture) proceeds to the ordinary read.
+     *
+     * @param resource $stream
+     */
+    private static function stdinFirstByteArrivedWindows($stream): bool
+    {
+        $graceMs = (int) (self::STDIN_FIRST_BYTE_GRACE_SECONDS * 1000);
+
+        $console = \SugarCraft\Core\Util\Tty\WindowsConsoleInput::forStdin();
+        if ($console !== null) {
+            try {
+                $kernel32 = \SugarCraft\Core\Util\Tty\Kernel32::self();
+
+                return $kernel32->waitForSingleObject($kernel32->stdIn(), $graceMs) === 0;
+            } catch (\Throwable) {
+                return true;
+            }
+        }
+
+        $stat = @\fstat($stream);
+        $type = \is_array($stat) ? ((int) ($stat['mode'] ?? 0) & 0170000) : 0;
+        if ($type !== 0010000) { // not a FIFO/pipe: a file or fixture reads without hanging
+            return true;
+        }
+
+        $deadline = \microtime(true) + self::STDIN_FIRST_BYTE_GRACE_SECONDS;
+        do {
+            if (\SugarCraft\Code\Support\WindowsPipes::available($stream) > 0) {
+                return true;
+            }
+            \usleep(\SugarCraft\Code\Support\WindowsPipes::POLL_MICROSECONDS);
+        } while (\microtime(true) < $deadline);
+
+        return false;
     }
 
     /**

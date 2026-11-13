@@ -7,6 +7,7 @@ namespace SugarCraft\Code\LSP;
 use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Support\ProcessContainment;
 use SugarCraft\Code\Support\ProcessReaper;
+use SugarCraft\Code\Support\WindowsPipes;
 use SugarCraft\McpClient\RequestIdSequence;
 
 /**
@@ -388,20 +389,24 @@ final class LspConnection implements LspConnectionInterface
         // {@see \SugarCraft\Code\MCP\StdioMcpServer::start()} that it returns
         // false for a `proc_open()` pipe, which is an STDIO stream and not a
         // socket. Non-blocking plus the caller's poll is the shape that works.
-        stream_set_blocking($this->pipes[1], false);
+        // Windows pipes cannot be made non-blocking: reads there are
+        // fstat-sized (WindowsPipes) and writes go in pipe-buffer pieces.
+        if (!WindowsPipes::runtimeNeedsIt()) {
+            stream_set_blocking($this->pipes[1], false);
 
-        // NON-BLOCKING STDERR TOO, and it is DRAINED — see drainStderr(). fd 2
-        // is a pipe nothing here ever read, and a pipe nobody reads stops the
-        // writer at one buffer.
-        stream_set_blocking($this->pipes[2], false);
+            // NON-BLOCKING STDERR TOO, and it is DRAINED — see drainStderr(). fd 2
+            // is a pipe nothing here ever read, and a pipe nobody reads stops the
+            // writer at one buffer.
+            stream_set_blocking($this->pipes[2], false);
 
-        // AND FD 0. It was the one pipe left blocking, and that is the whole of
-        // {@see writeMessage()}'s first defect: a server parked in `write(2)` on
-        // a full stderr pipe stops reading stdin, and a blocking `fwrite()` here
-        // then held the only thread that could have drained stderr and released
-        // it. Non-blocking is also what makes the partial-write loop possible at
-        // all — a blocking pipe never returns a short count.
-        stream_set_blocking($this->pipes[0], false);
+            // AND FD 0. It was the one pipe left blocking, and that is the whole of
+            // {@see writeMessage()}'s first defect: a server parked in `write(2)` on
+            // a full stderr pipe stops reading stdin, and a blocking `fwrite()` here
+            // then held the only thread that could have drained stderr and released
+            // it. Non-blocking is also what makes the partial-write loop possible at
+            // all — a blocking pipe never returns a short count.
+            stream_set_blocking($this->pipes[0], false);
+        }
 
         // A fresh child is a fresh stream: whatever desynchronised the last one
         // is not this one's problem.
@@ -995,9 +1000,20 @@ final class LspConnection implements LspConnectionInterface
             $read = [];
             $except = [];
 
-            // `@` for EINTR: a signal arriving mid-select is a retry, and under
-            // `failOnWarning="true"` the warning alone would red a passing run.
-            $ready = @stream_select($read, $write, $except, 0, self::WRITE_POLL_MICROS);
+            if (WindowsPipes::runtimeNeedsIt()) {
+                // select() cannot say when a Windows pipe write would block, so
+                // it goes in pipe-buffer pieces with liveness checked between.
+                if (!$this->serverIsRunning()) {
+                    return $this->abandonWrite($total, strlen($message), $owed);
+                }
+                $ready = 1;
+                $chunkOut = substr($message, 0, WindowsPipes::PIPE_BUFFER_BYTES);
+            } else {
+                $chunkOut = $message;
+                // `@` for EINTR: a signal arriving mid-select is a retry, and under
+                // `failOnWarning="true"` the warning alone would red a passing run.
+                $ready = @stream_select($read, $write, $except, 0, self::WRITE_POLL_MICROS);
+            }
 
             if ($ready === false) {
                 $consecutiveSelectFailures++;
@@ -1026,7 +1042,7 @@ final class LspConnection implements LspConnectionInterface
             if (!$this->recordFrameProgress($total - strlen($message), true)) {
                 return $this->abandonWrite($total, strlen($message), $owed);
             }
-            $written = @fwrite($this->pipes[0], $message);
+            $written = @fwrite($this->pipes[0], $chunkOut);
             $this->recordFrameProgress($total - strlen($message) + (is_int($written) ? $written : 0), false);
 
             if ($written === false) {
@@ -1503,7 +1519,9 @@ final class LspConnection implements LspConnectionInterface
             return false;
         }
 
-        $chunk = @fread($this->pipes[1], 8192);
+        $chunk = WindowsPipes::runtimeNeedsIt()
+            ? WindowsPipes::readAvailable($this->pipes[1], 8192)
+            : @fread($this->pipes[1], 8192);
         if ($chunk === false || $chunk === '') {
             return false;
         }
@@ -1594,12 +1612,16 @@ final class LspConnection implements LspConnectionInterface
         // waits for a child that may have nothing more to say, so without this
         // the method's correctness depends on a line in another method, and
         // losing that line turns a test failure into a hung CI job.
-        stream_set_blocking($this->pipes[2], false);
+        if (!WindowsPipes::runtimeNeedsIt()) {
+            stream_set_blocking($this->pipes[2], false);
+        }
 
         // Bounded per pass rather than "until EOF": a server writing faster
         // than this loop reads must not be able to hold the poll here forever.
         for ($i = 0; $i < 16; $i++) {
-            $chunk = @fread($this->pipes[2], 8192);
+            $chunk = WindowsPipes::runtimeNeedsIt()
+                ? WindowsPipes::readAvailable($this->pipes[2], 8192)
+                : @fread($this->pipes[2], 8192);
             if (!is_string($chunk) || $chunk === '') {
                 break;
             }

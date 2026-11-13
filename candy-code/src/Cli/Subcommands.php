@@ -46,6 +46,7 @@ use SugarCraft\Code\Session\SessionRow;
 use SugarCraft\Code\Session\TitleSource;
 use SugarCraft\Code\Share\ShareStore;
 use SugarCraft\Code\Support\SqliteConnect;
+use SugarCraft\Code\Support\WindowsPipes;
 use SugarCraft\Code\Util\Exporter;
 use SugarCraft\Core\Util\Proc\BoundedShutdown;
 use SugarCraft\Core\Util\Sanitize;
@@ -5396,16 +5397,31 @@ final class Subcommands
             }
 
             \fclose($pipes[0]);
-            \stream_set_blocking($pipes[1], false);
-            \stream_set_blocking($pipes[2], false);
 
             $out = '';
             $err = '';
-            $open = [$pipes[1], $pipes[2]];
             $deadline = \hrtime(true) / 1_000_000_000 + self::BUNDLE_CLONE_TIMEOUT_SECONDS;
             $timedOut = false;
 
-            while ($open !== []) {
+            if (WindowsPipes::runtimeNeedsIt()) {
+                // select() calls an empty Windows pipe ready and fread() then
+                // parks: poll with fstat until the child exits or the deadline.
+                $drained = WindowsPipes::drainUntilExit(
+                    [1 => $pipes[1], 2 => $pipes[2]],
+                    WindowsPipes::runningProbe($process),
+                    microtime(true) + self::BUNDLE_CLONE_TIMEOUT_SECONDS,
+                );
+                $out = $drained['buffers'][1];
+                $err = $drained['buffers'][2];
+                $timedOut = $drained['timedOut'];
+                $open = [$pipes[1], $pipes[2]];
+            } else {
+                \stream_set_blocking($pipes[1], false);
+                \stream_set_blocking($pipes[2], false);
+                $open = [$pipes[1], $pipes[2]];
+            }
+
+            while ($open !== [] && !WindowsPipes::runtimeNeedsIt()) {
                 $now = \hrtime(true) / 1_000_000_000;
                 if ($now >= $deadline) {
                     $timedOut = true;

@@ -12,6 +12,7 @@ use SugarCraft\Code\Acp\AcpServer;
 use SugarCraft\Code\Context\CompactorConfig;
 use SugarCraft\Code\Host\SessionHub;
 use SugarCraft\Code\Lang;
+use SugarCraft\Code\Support\WindowsPipes;
 
 /**
  * `candy-code acp` — candy-code as an Agent Client Protocol agent, for an
@@ -113,16 +114,35 @@ final class Acp
         // answered with ONE malformed frame ('{'), so the peer gets its parse
         // error instead of a half line reaching the server.
         $lines = new Reader(self::MAX_LINE_BYTES);
-        $stream = new ReadableResourceStream($in, $loop);
-        $stream->on('data', static function (string $chunk) use ($lines, $server): void {
+        $onData = static function (string $chunk) use ($lines, $server): void {
             foreach ($lines->feed($chunk) as $line) {
                 $server->receive($line);
             }
             for ($oversized = $lines->takeOversized(); $oversized > 0; $oversized--) {
                 $server->receive('{');
             }
-        });
-        $stream->on('close', $stop);
+        };
+        if (WindowsPipes::runtimeNeedsIt()) {
+            // ReadableResourceStream cannot run on Windows (stream_set_blocking
+            // fails on stdio pipes, and select() calls an empty one ready), so
+            // stdin is polled: fstat reports what is waiting, and a handle fstat
+            // can no longer stat is the editor having closed it.
+            $loop->addPeriodicTimer(WindowsPipes::POLL_MICROSECONDS / 1_000_000, static function () use ($in, $onData, $stop): void {
+                if (!\is_resource($in) || @\fstat($in) === false) {
+                    $stop();
+
+                    return;
+                }
+                $chunk = WindowsPipes::readAvailable($in, 65536);
+                if ($chunk !== '') {
+                    $onData($chunk);
+                }
+            });
+        } else {
+            $stream = new ReadableResourceStream($in, $loop);
+            $stream->on('data', $onData);
+            $stream->on('close', $stop);
+        }
 
         if (\function_exists('pcntl_signal')) {
             foreach ([\SIGINT, \SIGTERM] as $signal) {
@@ -182,6 +202,11 @@ final class Acp
                 return;
             }
             if ($written === 0) {
+                if (WindowsPipes::runtimeNeedsIt()) {
+                    \usleep(WindowsPipes::POLL_MICROSECONDS);
+
+                    continue;
+                }
                 $read = null;
                 $except = null;
                 $write = [$out];

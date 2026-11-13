@@ -9,6 +9,7 @@ use SugarCraft\Code\Providers\CompleteRequest;
 use SugarCraft\Code\Background\BackgroundSupervisor;
 use SugarCraft\Code\Support\ProcessContainment;
 use SugarCraft\Code\Support\ProcessReaper;
+use SugarCraft\Code\Support\WindowsPipes;
 use SugarCraft\Code\Tools\Tool;
 
 /**
@@ -222,13 +223,16 @@ final class ProcessExecutor implements ExecutorInterface
         $this->lastHeartbeat[$agent->id] = time();
 
         // Use non-blocking reads so we can enforce timeouts and heartbeats
-        stream_set_blocking($process['stdout'], false);
+        if (!WindowsPipes::runtimeNeedsIt()) {
+            stream_set_blocking($process['stdout'], false);
+        }
 
         $timeout = $this->timeoutFor($agent);
         $timeoutDeadline = $timeout !== null ? time() + $timeout : null;
 
         // Read until we get a complete or error message
-        while (!feof($process['stdout'])) {
+        $rbuf = '';
+        while (!self::stdoutAtEof($process, $rbuf)) {
             $heartbeatDeadline = $this->effectiveHeartbeatDeadline($agent->id);
             $checkDeadline = $timeoutDeadline !== null
                 ? min($heartbeatDeadline, $timeoutDeadline)
@@ -239,7 +243,7 @@ final class ProcessExecutor implements ExecutorInterface
             $read = [$process['stdout']];
             $write = null;
             $except = null;
-            $changed = @stream_select($read, $write, $except, 0, $timeoutUsec);
+            $changed = self::waitReadable($process, $rbuf, $read, $write, $except, (int) $timeoutUsec);
 
             if ($changed === false) {
                 $this->closeProcess($process);
@@ -289,7 +293,7 @@ final class ProcessExecutor implements ExecutorInterface
             }
 
             // Data is ready — read it
-            $line = fgets($process['stdout']);
+            $line = self::readLine($process, $rbuf);
             if ($line !== false && $line !== '') {
                 $buffer .= $line;
                 $message = json_decode(trim($line), true);
@@ -407,12 +411,15 @@ final class ProcessExecutor implements ExecutorInterface
         $this->lastHeartbeat[$agent->id] = time();
 
         // Use non-blocking reads for timeout and heartbeat enforcement
-        stream_set_blocking($process['stdout'], false);
+        if (!WindowsPipes::runtimeNeedsIt()) {
+            stream_set_blocking($process['stdout'], false);
+        }
 
         $timeout = $this->timeoutFor($agent);
         $timeoutDeadline = $timeout !== null ? time() + $timeout : null;
 
-        while (!feof($process['stdout'])) {
+        $rbuf = '';
+        while (!self::stdoutAtEof($process, $rbuf)) {
             $heartbeatDeadline = $this->effectiveHeartbeatDeadline($agent->id);
             $checkDeadline = $timeoutDeadline !== null
                 ? min($heartbeatDeadline, $timeoutDeadline)
@@ -423,7 +430,7 @@ final class ProcessExecutor implements ExecutorInterface
             $read = [$process['stdout']];
             $write = null;
             $except = null;
-            $changed = @stream_select($read, $write, $except, 0, $timeoutUsec);
+            $changed = self::waitReadable($process, $rbuf, $read, $write, $except, (int) $timeoutUsec);
 
             if ($changed === false || $changed === 0) {
                 $now = time();
@@ -473,7 +480,7 @@ final class ProcessExecutor implements ExecutorInterface
                 return;
             }
 
-            $line = fgets($process['stdout']);
+            $line = self::readLine($process, $rbuf);
             if ($line === false || $line === '') {
                 continue;
             }
@@ -710,9 +717,12 @@ final class ProcessExecutor implements ExecutorInterface
         }
 
         // Disable blocking on stdout to allow non-blocking reads
-        stream_set_blocking($pipes[0], false);
-        stream_set_blocking($pipes[1], false);
-        stream_set_blocking($pipes[2], false);
+        // Windows pipes cannot be made non-blocking; reads there are fstat polls.
+        if (!WindowsPipes::runtimeNeedsIt()) {
+            stream_set_blocking($pipes[0], false);
+            stream_set_blocking($pipes[1], false);
+            stream_set_blocking($pipes[2], false);
+        }
 
         $processDescriptor = [
             'process' => $process,
@@ -806,6 +816,81 @@ final class ProcessExecutor implements ExecutorInterface
     private function stopTracking(string $agentId): void
     {
         unset($this->lastHeartbeat[$agentId], $this->processes[$agentId], $this->heartbeatLeaseUntil[$agentId]);
+    }
+
+    /**
+     * Windows-aware EOF for the worker's stdout. POSIX asks feof(); a Windows
+     * pipe never reports EOF, so the end is the worker's exit with nothing left
+     * waiting in the pipe or in the line buffer.
+     *
+     * @param array<string, mixed> $process
+     */
+    private static function stdoutAtEof(array $process, string $rbuf): bool
+    {
+        if (!WindowsPipes::runtimeNeedsIt()) {
+            return feof($process['stdout']);
+        }
+
+        return $rbuf === ''
+            && !self::childIsAlive($process['process'])
+            && WindowsPipes::available($process['stdout']) === 0;
+    }
+
+    /**
+     * stream_select() over the worker's stdout, or its Windows equivalent: an
+     * fstat poll (select() calls an empty Windows pipe ready) that also drains
+     * the worker's stderr, which nothing else reads and which stalls the worker
+     * at one 4 KiB pipe buffer.
+     *
+     * @param array<string, mixed> $process
+     * @param array<int, resource> $read
+     * @param mixed $write
+     * @param mixed $except
+     * @return int|false
+     */
+    private static function waitReadable(array $process, string $rbuf, array &$read, &$write, &$except, int $timeoutUsec): int|false
+    {
+        if (!WindowsPipes::runtimeNeedsIt()) {
+            return @stream_select($read, $write, $except, 0, $timeoutUsec);
+        }
+
+        if (isset($process['stderr']) && is_resource($process['stderr'])) {
+            WindowsPipes::readAvailable($process['stderr'], 65536);
+        }
+        if (str_contains($rbuf, "\n") || WindowsPipes::available($process['stdout']) > 0
+            || !self::childIsAlive($process['process'])) {
+            return 1;
+        }
+        usleep(min($timeoutUsec, WindowsPipes::POLL_MICROSECONDS));
+
+        return 0;
+    }
+
+    /**
+     * One line from the worker's stdout: fgets() on POSIX, a buffered
+     * fstat-sized read on Windows (false until a whole line, or the worker's
+     * exit leaves a final unterminated one).
+     *
+     * @param array<string, mixed> $process
+     */
+    private static function readLine(array $process, string &$rbuf): string|false
+    {
+        if (!WindowsPipes::runtimeNeedsIt()) {
+            return fgets($process['stdout']);
+        }
+
+        $rbuf .= WindowsPipes::readAvailable($process['stdout'], 65536);
+        $nl = strpos($rbuf, "\n");
+        if ($nl === false) {
+            if ($rbuf === '' || self::childIsAlive($process['process'])) {
+                return false;
+            }
+            $nl = strlen($rbuf) - 1;
+        }
+        $line = substr($rbuf, 0, $nl + 1);
+        $rbuf = (string) substr($rbuf, $nl + 1);
+
+        return $line;
     }
 
     /**

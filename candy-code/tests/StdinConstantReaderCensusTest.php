@@ -388,6 +388,10 @@ final class StdinConstantReaderCensusTest extends TestCase
         'sugar-core/src/Util/Tty/WindowsBackend.php' => ['STDIN'],
         'sugar-core/src/WorkerPool.php' => ['php://fd/0'],
         'sugar-image/src/Detect.php' => ['STDIN'],
+        // Windows-only arm of StreamInputDriver: a closed fd 0 never reaches the
+        // uri compare (the ctor's is_resource() guard throws first, and a closed
+        // stdin yields no console reader), so it degrades by refusal, not by read.
+        'sugar-input/src/Driver/StreamInputDriver.php' => ['php://stdin'],
         'candy-code/src/Agents/ProcessExecutor.php' => ['STDIN'],
         // §7 closeout (C-TUI waves): the alternate-screen probe. stream_isatty
         // on a CLOSED descriptor 0 answers false — the safe direction, and the

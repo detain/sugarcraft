@@ -10,6 +10,7 @@ use React\Promise\PromiseInterface;
 use SugarCraft\Code\Backend;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Support\ProcessContainment;
+use SugarCraft\Code\Support\WindowsPipes;
 
 /**
  * Backend that shells out to an external command. The command
@@ -120,11 +121,37 @@ final class CommandBackend implements Backend, TracksActiveChildren
             return Message::assistant('_[error: failed to encode history]_')->withUiOnly()->withError();
         }
 
-        $spawned = $this->spawn();
+        // Windows: the history rides a staged file descriptor (a stdin pipe
+        // write blocks past 4 KiB) and the output pipes are polled, since
+        // select()/non-blocking reads do not work on proc_open pipes there.
+        $staged = WindowsPipes::runtimeNeedsIt() ? WindowsPipes::stageStdin($payload) : null;
+        $spawned = $this->spawn($staged);
         if ($spawned instanceof Message) {
+            if ($staged !== null) {
+                @unlink($staged);
+            }
+
             return $spawned;
         }
         [$proc, $pipes] = $spawned;
+
+        if ($staged !== null) {
+            $drained = WindowsPipes::drainUntilExit(
+                [1 => $pipes[1], 2 => $pipes[2]],
+                WindowsPipes::runningProbe($proc),
+                microtime(true) + 86400 * 365,
+            );
+            $this->forgetActiveChild($proc);
+            foreach ($pipes as $pipe) {
+                if (is_resource($pipe)) {
+                    fclose($pipe);
+                }
+            }
+            $exit = proc_close($proc);
+            @unlink($staged);
+
+            return self::finish($exit, $drained['buffers'][1], $drained['buffers'][2]);
+        }
 
         // ALL THREE PIPES NON-BLOCKING, AND ONE BLOCKING `stream_select()` OVER
         // ALL OF THEM. This used to be a blocking `fwrite($pipes[0], $payload)`
@@ -298,16 +325,25 @@ final class CommandBackend implements Backend, TracksActiveChildren
             return $deferred->promise();
         }
 
-        $spawned = $this->spawn();
+        $staged = WindowsPipes::runtimeNeedsIt() ? WindowsPipes::stageStdin($payload) : null;
+        $spawned = $this->spawn($staged);
         if ($spawned instanceof Message) {
+            if ($staged !== null) {
+                @unlink($staged);
+            }
             $deferred->resolve($spawned);
 
             return $deferred->promise();
         }
         [$proc, $pipes] = $spawned;
 
-        foreach ($pipes as $pipe) {
-            stream_set_blocking($pipe, false);
+        if ($staged !== null) {
+            // The staged file IS the stdin; nothing is left to write.
+            $payload = '';
+        } else {
+            foreach ($pipes as $pipe) {
+                stream_set_blocking($pipe, false);
+            }
         }
 
         $loop = Loop::get();
@@ -319,7 +355,7 @@ final class CommandBackend implements Backend, TracksActiveChildren
 
         $timer = $loop->addPeriodicTimer(
             self::POLL_INTERVAL_SECONDS,
-            function () use (&$payload, &$stdout, &$stderr, &$running, &$settled, &$timer, $proc, $pipes, $loop, $deferred, $cancellation): void {
+            function () use (&$payload, &$stdout, &$stderr, &$running, &$settled, &$timer, $proc, $pipes, $loop, $deferred, $cancellation, $staged): void {
                 if ($settled) {
                     return;
                 }
@@ -333,7 +369,7 @@ final class CommandBackend implements Backend, TracksActiveChildren
                 // E673: ProcessContainment::terminate() turns that 9 into a
                 // group kill when the wrapped child measurably leads its own
                 // group, so the command's own children die with the turn.
-                $reap = function (int $signal) use (&$settled, &$timer, $proc, $pipes, $loop): int {
+                $reap = function (int $signal) use (&$settled, &$timer, $proc, $pipes, $loop, $staged): int {
                     $settled = true;
                     if ($timer !== null) {
                         $loop->cancelTimer($timer);
@@ -352,7 +388,12 @@ final class CommandBackend implements Backend, TracksActiveChildren
                         }
                     }
 
-                    return proc_close($proc);
+                    $code = proc_close($proc);
+                    if ($staged !== null) {
+                        @unlink($staged);
+                    }
+
+                    return $code;
                 };
 
                 try {
@@ -367,11 +408,19 @@ final class CommandBackend implements Backend, TracksActiveChildren
                         }
                     }
 
-                    while (($chunk = fread($pipes[1], 65536)) !== false && $chunk !== '') {
-                        $stdout .= $chunk;
-                    }
-                    while (($chunk = fread($pipes[2], 65536)) !== false && $chunk !== '') {
-                        $stderr .= $chunk;
+                    // Sampled before the reads on Windows: an exit seen with
+                    // nothing left waiting is the EOF a Windows pipe never shows.
+                    $exitedFirst = $staged !== null && !proc_get_status($proc)['running'];
+                    if ($staged !== null) {
+                        $stdout .= WindowsPipes::readAvailable($pipes[1], 65536);
+                        $stderr .= WindowsPipes::readAvailable($pipes[2], 65536);
+                    } else {
+                        while (($chunk = fread($pipes[1], 65536)) !== false && $chunk !== '') {
+                            $stdout .= $chunk;
+                        }
+                        while (($chunk = fread($pipes[2], 65536)) !== false && $chunk !== '') {
+                            $stderr .= $chunk;
+                        }
                     }
 
                     // Polled rather than checked once up front: Chat's
@@ -399,6 +448,15 @@ final class CommandBackend implements Backend, TracksActiveChildren
                     // holds this open — unbounded, precisely as it is unbounded
                     // for `complete()`; the difference is that here the loop is
                     // alive and the cancel branch above can still end it.
+                    if ($staged !== null) {
+                        if ($exitedFirst && WindowsPipes::available($pipes[1]) === 0 && WindowsPipes::available($pipes[2]) === 0) {
+                            $exit = $reap(0);
+                            $deferred->resolve(self::finish($exit, $stdout, $stderr));
+                        }
+
+                        return;
+                    }
+
                     if (!$running && feof($pipes[1]) && feof($pipes[2])) {
                         $exit = $reap(0);
                         $deferred->resolve(self::finish($exit, $stdout, $stderr));
@@ -483,15 +541,24 @@ final class CommandBackend implements Backend, TracksActiveChildren
      *
      * @return array{0:resource,1:array<int,resource>}|Message
      */
-    private function spawn(): array|Message
+    private function spawn(?string $stdinFile = null): array|Message
     {
         $pipes = [];
+        $descriptors = [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ];
+        if ($stdinFile !== null) {
+            // Windows: the history is a staged file, not a pipe write.
+            $descriptors[0] = ['file', $stdinFile, 'r'];
+        }
         // E672/E674: choke-point spec + fail-fast env (the 3-arg form used to
         // inherit the environment verbatim — PATH to a pager-rich world and a
         // controlling terminal it had no business holding).
         $proc = @proc_open(
             ProcessContainment::spawnSpec($this->command),
-            self::DESCRIPTOR,
+            $descriptors,
             $pipes,
             null,
             ProcessContainment::env()
