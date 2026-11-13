@@ -40,8 +40,9 @@ use SugarCraft\Core\Util\ColorProfile;
  * refuses to play instead of emitting escape codes nobody can render; the
  * ASCII tier draws plain glyphs.
  *
- * The PRNG is injected as a `Closure(int): int` so tests pin a
- * specific pipe layout without touching the runtime.
+ * The PRNG is injected as a `Closure(int $maxInclusive): int` so tests
+ * pin a specific pipe layout without touching the runtime — the parameter
+ * name carries the inclusive-endpoint law the closure must honour.
  *
  * The top edge is a wall — touching row < 0 crashes immediately,
  * same as the floor (row >= HEIGHT).
@@ -129,7 +130,7 @@ final class Game implements Model
         /** Null until the Program reports the detected profile (M7/M8). */
         public readonly ?ColorProfile $colorProfile = null,
     ) {
-        $this->rand = $rand ?? static fn(int $max): int => random_int(0, $max);
+        $this->rand = $rand ?? static fn(int $maxInclusive): int => random_int(0, $maxInclusive);
         $this->configDir = $configDir;
         $this->highScoreFilePath = self::scoreFilePath($configDir);
     }
