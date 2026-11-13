@@ -54,6 +54,16 @@ can be painted directly. The input may itself be a sub-area: pass
 `new Region($x, $y, $w, $h)` (say, a span inset by borders) and the walk
 places panes within it.
 
+When `SugarCraft\Style\Layout\Constraint` is also in scope (sugar-style's own
+class shares the final name), alias this lib's and call the factories through
+the alias:
+
+```php
+use SugarCraft\Constraints\Constraint\Constraint as Cell;
+
+$cellFill = Cell::fill(1);   // same object as Constraint::fill(1), unambiguous name
+```
+
 At width 10 there is not enough room for both: the fixed pane keeps what it
 can take first and the elastic pane collapses — `[10, 0]`. That degradation
 is silent by design (see [Degradation](#degradation)).
@@ -62,7 +72,7 @@ A tour of every constraint type in one 100-column row, with real outputs:
 
 ```php
 $rects = $solver->solve(Region::fromSize(100, 20), Direction::Horizontal, [
-    Constraint::length(20),      // exactly 20 cells
+    Constraint::length(20),      // 20 cells — survives here only because the set's Min and Fill catch the reclaim (ladder step 6)
     Constraint::min(10),         // floor: stays 10 — Fill and Max ate the slack
     Constraint::fill(1),         // gets 1 cell
     Constraint::percentage(30),  // 30% of the span: 30
@@ -102,7 +112,7 @@ Dock\* (DockLayout/DockGeometry/DockSlot/Side)   standalone IDE-dock surface, no
 - `Constraint::min(int $n)` — soft floor of `$n` cells. It grows only when **slack**
   (what the fixed reservation leaves over) survives Fill and Max
   (proportional clamp under demand); on its own it absorbs the whole span.
-- `Constraint::max(int $n)` — ceiling, greedy: takes slack up to the cap.
+- `Constraint::max(int $n)` — ceiling, greedy: takes slack up to the cap, and its clamp pass can hand cells back to the rest of the set (ladder step 6).
 - `Constraint::fill(int $weight = 1)` — proportional claim on the slack left
   after the **fixed reservation** (Length plus resolved Percentage/Ratio —
   step 2 below).

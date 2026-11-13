@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace SugarCraft\Constraints\Constraint;
 
 /**
- * Upper-bound size cap; takes slack greedily up to the cap.
+ * Upper-bound size cap; takes slack greedily up to the cap, and its clamp pass
+ * can give cells BACK to the other types (Min first, then Fill, then
+ * everything else — README Tiling guarantee ladder step 6).
  *
  * Note: `Max(0)` is an explicit collapse request (the region is clamped to
  * zero width) and is intentionally allowed — it must not be mistaken for an

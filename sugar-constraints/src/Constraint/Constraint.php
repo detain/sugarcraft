@@ -16,10 +16,14 @@ namespace SugarCraft\Constraints\Constraint;
  */
 abstract class Constraint
 {
-    private function __construct() {}
-
     /**
      * Fixed character-cell count.
+     *
+     * Plain "fixed" overstates it — unless the set carries neither Min nor
+     * Fill AND a Max clamp hands cells back, the reclaim ladder inflates it:
+     * [length(10), max(5)]@100 solves to [95, 5]. See the README Tiling
+     * guarantee (ladder step 6) and
+     * {@see \SugarCraft\Constraints\GreedySolver::applyMaxClamp()}.
      *
      * Mirrors ratatui `Constraint::Length(n)`.
      */
@@ -73,7 +77,10 @@ abstract class Constraint
 
     /**
      * Upper-bound size cap; takes slack greedily (proportional to its cap
-     * among the slack consumers) but never more than `$n`.
+     * among the slack consumers) but never more than `$n`. The clamp pass can
+     * also give cells BACK from this type when the greedy share rode over the
+     * cap — the hand-back rides Min first, then Fill, and reaches
+     * Length/Percentage/Ratio only in a set with neither.
      *
      * Mirrors ratatui `Constraint::Max(n)`.
      */

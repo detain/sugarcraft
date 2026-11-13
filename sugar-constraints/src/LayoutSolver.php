@@ -28,7 +28,9 @@ namespace SugarCraft\Constraints;
  *    misleading negative-width `InvalidArgumentException`. Documented, not
  *    guarded: terminal frames never approach that scale.
  *
- * Mirrors ratatui's layout constraint solving.
+ * Mirrors ratatui's layout constraint solving (divergence: Length can inflate
+ * under the Max reclaim ladder — ratatui's never does; README Tiling
+ * guarantee, ladder step 6).
  *
  * The contract is `solve()` alone. Construction lives on the concrete classes
  * (`GreedySolver::new()`/`::greedy()`/`::compat()`, the deprecated
