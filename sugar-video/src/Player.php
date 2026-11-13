@@ -199,8 +199,10 @@ final class Player implements Model
     /**
      * Open a video file and return a Player ready for Program::run().
      *
-     * Probes the video to get FPS and dimensions, creates the appropriate
-     * decoder, and returns a Player in the paused state at frame 0.
+     * Probes the video to get FPS and dimensions (SV-M39/039: an explicit
+     * $fpsOverride skips the metadata probe outright), creates the
+     * appropriate decoder, and returns a Player paused AT frame 0 — the
+     * first advance pulls frame 1, matching the seek-path playhead exactly.
      *
      * Leaving $mode unset auto-detects the terminal's best rendering mode —
      * the same ladder {@see Reel::play()} resolves through, so both entry
@@ -209,7 +211,13 @@ final class Player implements Model
      * @param string     $videoPath    Path to the video file (mp4, gif, avi, etc.)
      * @param int       $cellsW       Target terminal cell width
      * @param int       $cellsH       Target terminal cell height
-     * @param float|null $fpsOverride FPS override (null = auto from probe)
+     * @param float|null $fpsOverride FPS override; SV-M39/039: supplying it
+     *                            skips the metadata probe ENTIRELY — no
+     *                            ffprobe child, and as a consequence
+     *                            totalFrames is unknown (0) so the stream
+     *                            ends by decoder exhaustion, and no audio
+     *                            companion is built (its presence is a
+     *                            probe answer). Null = auto from the probe.
      * @param Mode|null  $mode         Rendering mode (decoder resolution matches it);
      *                                null (default) = probe the terminal and pick the
      *                                best available mode
@@ -262,7 +270,18 @@ final class Player implements Model
         // callers leave it null and get the live probe.
         $mode ??= $autoModeChooser !== null ? $autoModeChooser() : RendererFactory::autoMode();
 
-        $source = VideoSource::probe($videoPath, $hostRestricted);
+        // SV-M39/039: an explicit fps override is the caller declaring they
+        // know the stream. fps is then the ONLY probe product the Player
+        // still consumes — duration feeds totalFrames and hasAudio feeds the
+        // audio companion, both of which the override caller has implicitly
+        // opted out of by refusing to wait for metadata — so the ffprobe
+        // child is skipped entirely rather than spawned and ignored. The
+        // documented trade (see @param): totalFrames stays 0 and end-of-
+        // stream answers by decoder exhaustion, and no audio companion is
+        // built. Callers wanting the timeline and audio leave it null.
+        $source = $fpsOverride !== null
+            ? VideoSource::unprobed($videoPath)
+            : VideoSource::probe($videoPath, $hostRestricted);
 
         // FPS from probe, default 24 if not available. Use override when set.
         $fps = $fpsOverride ?? ($source->fps > 0.0 ? $source->fps : 24.0);
@@ -306,14 +325,20 @@ final class Player implements Model
             $posterFailure = Sanitize::untrusted($failure->getMessage());
         }
 
-        // Rewind after the poster so playback still starts at frame 0.
-        // In-place decoders (injected, ffmpeg-class with a seek budget) just
-        // reopen; byte-based decoders (GIF/WebP — reopensInPlace() false means
-        // "rebuild via the factory", their reopen re-reads bytes in place,
-        // equally cheap here) reopen off the same path argument.
-        if ($poster !== null) {
-            $decoder->reopen($videoPath, $cellsW, $cellsH, $fps, $mode, 0.0, $headers);
-        }
+        // SV-M39/039: the poster pull IS frame 0 — after it the decoder
+        // cursor sits one PAST the grabbed content, which is precisely the
+        // invariant every other playhead update maintains ("currentFrame is
+        // the frame at frameIndex; the next pull belongs to frameIndex+1" —
+        // true for rebuildDecoderAt's walk landings, for the seconds route,
+        // and for every openForTest double). The old open() then REOPENED to
+        // rewind: a full close plus a SECOND decode child (for a factory-
+        // owned source a fresh ffmpeg with ≤1.5s grace reap, for a network
+        // source a cold re-establish of the whole fetch) whose only product
+        // was letting the first advance replay frame 0 — desyncing natural
+        // playback one content frame behind the index every seek reports.
+        // Retaining the grabbed frame deletes the reopen: one decode child
+        // per open, first paint byte-identical, and the first tick now
+        // shows frame 1 — the frame the playhead actually promises.
 
         // Player starts paused; the first tick is scheduled when playback begins.
         // SV-M19: an unset budget is no longer "walk the whole catch-up

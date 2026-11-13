@@ -73,6 +73,20 @@ final class VideoSource
     }
 
     /**
+     * The metadata-free VO: everything a probe would answer stays unknown
+     * (zero dimensions, zero duration/fps, no audio). SV-M39/039 — a caller
+     * who pins fps themselves is declaring they know the stream, and fps is
+     * the ONLY probe product {@see Player::open()} still needs then, so the
+     * ffprobe child is skipped wholesale rather than consulted and ignored.
+     * Distinct from a FAILED probe's empty default because it is a choice,
+     * not a degradation: no child was ever spawned.
+     */
+    public static function unprobed(string $path): self
+    {
+        return new self($path, 0, 0, 0.0, 0.0, false);
+    }
+
+    /**
      * Construct a VideoSource from a path and raw ffprobe JSON output.
      *
      * Expected JSON structure (simplified):

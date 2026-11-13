@@ -207,7 +207,10 @@ $reel = $reel->withHeaders(['Cookie' => 'session=…']);
 from a host that already owns a `Program`/event loop, use `Reel::toPlayer()` to
 get the `Player` model **paused** and mount it yourself. Building the model
 opens the source: probing spawns a short-lived `ffprobe` child that is reaped
-at once, and sources routed through ffmpeg (`mp4`/`avi`/`webm`, plus remote
+at once (pinning the frame rate — `withFps`/`$fpsOverride` — skips the probe
+child entirely, and with it the duration timeline and the audio companion:
+those are probe answers), and sources routed through ffmpeg (`mp4`/`avi`/
+`webm`, plus remote
 `.gif`/`.webp`) spawn their `ffmpeg` decoder child immediately — a host that
 mounts and never starts must still call `stop()` to release it. Locally
 decoded GIFs and animated WebP ride pure PHP/GD in-process and cost no child.
@@ -395,7 +398,11 @@ Playback starts paused — `Space` is the first key you will press.
 
 Opening a source starts no motion. `Player::open()` pulls a single poster
 frame and returns the model **paused** — the first screen is a still with
-real content, and nothing decodes or repaints on its own. `Reel::play()`
+real content, and nothing decodes or repaints on its own. The poster IS
+frame 0 (SV-M39): the model keeps it instead of rewinding the decoder, so
+opening costs exactly one decode child, and the first advance after `Space`
+shows frame 1 — the playhead never replays what the poster already painted.
+`Reel::play()`
 runs that same model, so even the one-line quickstart waits for `Space`
 before a single frame moves.
 

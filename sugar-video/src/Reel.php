@@ -375,6 +375,12 @@ final class Reel
     /**
      * Set a target FPS override. Pass null to use auto-detect from video probe.
      * Returns a new Reel (immutable).
+     *
+     * SV-M39/039: pinning fps also SKIPS the metadata probe entirely (the
+     * player trusts your number) — so the duration stays unknown (the
+     * timeline ends by decoder exhaustion, not a totalFrames countdown) and
+     * no audio companion is built (whether the source HAS audio is a probe
+     * answer). Leave fps null to keep the probed timeline and audio.
      */
     public function withFps(?float $fps): self
     {

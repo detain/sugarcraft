@@ -2375,7 +2375,12 @@ final class PlayerTest extends TestCase
             proc_close($gen);
             $this->assertFileExists($clip);
 
-            $player = Player::open($clip, 40, 20, 15.0, Mode::HalfBlock);
+            // SV-M39/039: fps is left to the probe — pinning it would now
+            // skip the metadata child, and this test PROVES the probe ran
+            // (the duration below is its answer). The clip is generated at
+            // exactly rate=15, so the probed pacing number is the historical
+            // pinned one, not a host-dependent guess.
+            $player = Player::open($clip, 40, 20, null, Mode::HalfBlock);
             $this->assertEqualsWithDelta(3.0, $player->duration(), 0.5, 'probed duration ~3s');
 
             $a = $player->frameAt(0.2);

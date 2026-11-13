@@ -280,7 +280,11 @@ final class DecoderSeamTest extends TestCase
         $this->assertSame(7, $player->cellPxW);
         $this->assertSame(14, $player->cellPxH);
 
-        $frame = $player->decoder->next();
+        // SV-M39/039: open() RETAINS its poster grab as the first paint — for
+        // this single-frame clip the poster IS the only decoded content, so
+        // the geometry proof moves from a re-pull to the retained frame (a
+        // re-pull would correctly answer null: nothing is left).
+        $frame = $player->currentFrame;
         $this->assertNotNull($frame, 'the 12x8 clip must yield a frame');
         $this->assertSame(84, $frame->w, '12 cells x 7px per cell');
         $this->assertSame(112, $frame->h, '8 cells x 14px per cell');
@@ -306,7 +310,9 @@ final class DecoderSeamTest extends TestCase
         $this->assertSame(10, $player->cellPxW);
         $this->assertSame(20, $player->cellPxH);
 
-        $frame = $player->decoder->next();
+        // SV-M39/039: the retained poster carries the BC geometry proof (see
+        // the measured-cellPx sibling above).
+        $frame = $player->currentFrame;
         $this->assertNotNull($frame, 'the 12x8 clip must yield a frame');
         $this->assertSame(120, $frame->w);
         $this->assertSame(160, $frame->h);
