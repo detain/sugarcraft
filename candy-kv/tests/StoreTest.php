@@ -650,6 +650,38 @@ final class StoreTest extends TestCase
         $this->assertFalse($method->invoke($this->store, 'plainkey'));
     }
 
+    // ─── kv-043: escaped-glob get helpers ────────────────────────────────
+
+    public function testHasRawGlobFlagsUnescapedGlobBytesOnly(): void
+    {
+        $this->assertTrue(Store::hasRawGlob('user-*'));
+        $this->assertTrue(Store::hasRawGlob('q?mark'));
+        $this->assertTrue(Store::hasRawGlob('*leading'), 'offset 0 has no lookback — raw');
+        $this->assertFalse(Store::hasRawGlob('ra\\*wt'), 'the \\* spelling is exact-key intent');
+        $this->assertFalse(Store::hasRawGlob('plain'));
+    }
+
+    public function testUnescapeGlobKeyDropsOnlyGlobBackslashes(): void
+    {
+        $this->assertSame('ra*wt', Store::unescapeGlobKey('ra\\*wt'));
+        $this->assertSame('a?b', Store::unescapeGlobKey('a\\?b'));
+        // The grammar has no \\ self-escape (kv-007): a backslash before
+        // anything else stays literal text, mirroring globToLike.
+        $this->assertSame('keep\other', Store::unescapeGlobKey('keep\other'));
+        $this->assertSame('plain', Store::unescapeGlobKey('plain'));
+    }
+
+    public function testGlobCharKeysRoundTripThroughTheLibraryDoor(): void
+    {
+        // The Store API never gated glob bytes (only the CLI did); pin that
+        // a raw-glob key stores and reads back exactly, so the bin law sits
+        // on top of a faithful library door.
+        $this->store->set('a*b', 'one');
+        $this->store->set('q?mark', 'two');
+        $this->assertSame('one', $this->store->get('a*b'));
+        $this->assertSame('two', $this->store->get('q?mark'));
+    }
+
     // ─── Data dir resolution, mkdir fail-loud, setWithTtl ───────────────
 
     public function testResolveDataDirPrefersXdgThenHome(): void

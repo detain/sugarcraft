@@ -310,6 +310,42 @@ final class CliContractTest extends TestCase
         $this->assertStringContainsString('red', $safe['stdout']);
     }
 
+    public function testGetReachesGlobCharKeysThroughTheEscapedSpelling(): void
+    {
+        // kv-043: keys whose name carries * or ? were creatable and
+        // listable yet unfetchable — the gate judged raw bytes, so even
+        // the `\*` escape (exact-key intent per the pattern law) died at
+        // the door. QA dead-key roster replayed here: ra*wt, q?mark.
+        $this->assertSame(0, $this->runKv(['set', 'ra*wt', 'v1'])['exit']);
+        $this->assertSame(0, $this->runKv(['set', 'q?mark', 'v2'])['exit']);
+
+        $hit = $this->runKv(['get', 'ra\\*wt']);
+        $this->assertSame(0, $hit['exit'], $hit['stderr']);
+        $this->assertSame('v1', $hit['stdout']);
+
+        $hit = $this->runKv(['get', 'q\\?mark']);
+        $this->assertSame(0, $hit['exit'], $hit['stderr']);
+        $this->assertSame('v2', $hit['stdout']);
+
+        // Raw unescaped glob stays the pattern refusal — wildcards are
+        // list/delete territory, never a fetch.
+        $refused = $this->runKv(['get', 'ra*wt']);
+        $this->assertSame(2, $refused['exit']);
+        $this->assertStringContainsString('list', $refused['stderr']);
+    }
+
+    public function testGetAnswersBackslashStoredLegacyKeysByTheirOwnSpelling(): void
+    {
+        // The pre-kv-043 habit `set 'weird\*key'` stored the backslash and
+        // star verbatim (the roster's fourth dead key). When the decoded
+        // form misses, the literal argv bytes are tried — legacy rows keep
+        // answering to their own name.
+        $this->assertSame(0, $this->runKv(['set', 'weird\\*key', 'v3'])['exit']);
+        $hit = $this->runKv(['get', 'weird\\*key']);
+        $this->assertSame(0, $hit['exit'], $hit['stderr']);
+        $this->assertSame('v3', $hit['stdout']);
+    }
+
     public function testExportSurvivesLegacyInvalidUtf8Value(): void
     {
         // A pre-auto-detect entry: raw non-UTF-8 bytes stored with binary=false.

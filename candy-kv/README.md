@@ -26,7 +26,7 @@ pane build one on top of `Store::list()`.
 
 - **Multi-database** — separate stores with the `key@dbname` suffix; the SQLite file for a name is created the first time something is written to it (reads of a missing database just see emptiness)
 - **Binary-safe** — values containing NUL bytes or invalid UTF-8 are stored base64-encoded with the binary flag (auto-detected; `--binary`/`--text` override); binary entries export as base64 envelopes and reimport byte-exact
-- **Glob patterns** — `list` and `delete` accept `*` and `?`; matching is case-sensitive and character-wise (the pattern compiles to SQLite LIKE over the stored text, so `?` spans one character, not one byte), `\*`/`\?` stand for literals; `get` takes an exact key only — and that gate is a raw-byte check, so a key whose *name* contains `*` or `?` is unreachable through `get` even when spelled `\*`/`\?` (the backslash does not hide the byte). Reach such keys with `list`/`delete` escape literals, `saveTo()`, or `export`.
+- **Glob patterns** — `list` and `delete` accept `*` and `?`; matching is case-sensitive and character-wise (the pattern compiles to SQLite LIKE over the stored text, so `?` spans one character, not one byte), `\*`/`\?` stand for literals; `get` takes an exact key only — and a `get` argument may spell that exact key with the same escapes: `get 'ra\*wt'` reads the key `ra*wt`. Raw unescaped `*`/`?` in a `get` argument stay the pattern refusal.
 - **Ordered, filterable listing** — forward or reverse, keys only, values only, or full entries
 - **SQLite-backed** — one file per database under `$XDG_CONFIG_HOME/skate/` (or `~/.config/skate/`; see Data directory)
 - **Iterable streams** — `list()` yields results without loading everything into memory
@@ -253,6 +253,13 @@ backslash or carries a doubled-backslash `@` (`bs\`, `a\\@b`) are refused
 loudly at every door — `set`, `get`, `delete`, import, and qualified export
 — instead of being silently rewritten and re-routed; keep such bytes out of
 keys (store them base64 or in the value).
+
+Glob characters `*`/`?` in a key name are reachable by `get` through the
+pattern engine's own escape: `get 'ra\*wt'` fetches the literal key `ra*wt`
+(the backslash-unescaped form is tried first, then the raw argument, so keys
+written before this rule keep answering). A `get` argument carrying an
+*unescaped* `*`/`?` is still refused as a pattern — wildcards are for
+`list`/`delete`, never a fetch.
 
 ### Import / Export
 

@@ -183,19 +183,32 @@ function run(Store $store, string $cmd, array $argv, string $bin): void
             usage($bin, 'cli.usage_get');
         }
         // get() is exact-key by design; glob patterns belong to list.
-        if (\strpbrk($opts['key'], '*?') !== false) {
+        // kv-043: the gate judges the SPELLING, not any raw glob byte.
+        // A `*`/`?` escaped as `\*`/`\?` is exact-key intent by definition
+        // (the pattern engine's own unescape law), so such keys stayed
+        // creatable and listable yet unfetchable. Raw unescaped glob bytes
+        // remain the pattern refusal — wildcards never mean get.
+        $key = $opts['key'];
+        if (Store::hasRawGlob($key)) {
             fwrite(STDERR, Lang::t('cli.pattern_not_supported', ['bin' => $bin]) . "\n");
             exit(2);
         }
         // Single query; null = miss (an existing key holding '' is a hit).
-        $entry = $store->entry($opts['key']);
+        // The decoded spelling is tried first, then the literal argv bytes:
+        // a key stored by the pre-kv-043 habit of typing `set 'ra\*wt'`
+        // (backslash and all) keeps answering to its own name.
+        $decoded = Store::unescapeGlobKey($key);
+        $entry = $store->entry($decoded);
+        if ($entry === null && $decoded !== $key) {
+            $entry = $store->entry($key);
+        }
         if ($entry === null) {
             // Suggestions are CLI policy. Everything echoed here may be
             // attacker-chosen (typo key, poisoned store keys) → sanitize.
-            $suggestion = $store->suggestionFor($opts['key']);
+            $suggestion = $store->suggestionFor($decoded);
             $line = $suggestion !== null
                 ? Lang::t('store.did_you_mean', ['key' => Store::sanitizeForTty($suggestion)])
-                : Lang::t('cli.key_not_found', ['key' => Store::sanitizeForTty($opts['key'])]);
+                : Lang::t('cli.key_not_found', ['key' => Store::sanitizeForTty($key)]);
             fwrite(STDERR, $line . "\n");
             exit(1);
         }
@@ -388,7 +401,8 @@ function help(string $bin): void
       *  matches any characters;  ?  matches one character.
       Patterns apply to list and delete; get is exact-key.
       Matching is case-sensitive and character-wise; a literal * or ? can be
-      introduced with a backslash.
+      introduced with a backslash. get answers to that same spelling:
+      {$bin} get 'ra\*wt'  reads the key  ra*wt.
 
     Database suffix:
       Use key@dbname to target a specific database.

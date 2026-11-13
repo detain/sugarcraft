@@ -706,6 +706,37 @@ final class Store
     }
 
     /**
+     * kv-043: true when $key carries a `*` or `?` byte that is NOT spelled
+     * with the pattern engine's escape. Same single-backslash lookback the
+     * '@' split applies — the grammar has no `\\` self-escape (kv-007), so
+     * "escaped" always means "one backslash immediately before it".
+     */
+    public static function hasRawGlob(string $key): bool
+    {
+        for ($i = 0, $len = \strlen($key); $i < $len; $i++) {
+            if (($key[$i] === '*' || $key[$i] === '?') && ($i === 0 || $key[$i - 1] !== '\\')) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * kv-043: the pattern engine's unescape as a pure key mapping — drop the
+     * backslash that spells a literal `*`/`?` (`\*` → `*`, `\?` → `?`).
+     * Every other backslash stays exactly as typed: the grammar has no
+     * self-escape, so `\<x>` for other x is literal text, mirroring
+     * Database::globToLike's "a backslash before anything else stays
+     * literal" law. This is what makes a `get` arg spelled `ra\*wt` name
+     * the key `ra*wt` instead of dying at the pattern gate.
+     */
+    public static function unescapeGlobKey(string $key): string
+    {
+        return \preg_replace('/\\\\([*?])/', '$1', $key) ?? $key;
+    }
+
+    /**
      * Resolve the data directory: $XDG_CONFIG_HOME/skate, then
      * $HOME/.config/skate, then the passwd entry's home directory.
      *
