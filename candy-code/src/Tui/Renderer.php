@@ -2433,7 +2433,15 @@ final class Renderer
         $region = $a->dock()->resolve(new Region(0, 0, $cols, $rows))->regionFor($firstPane->value);
 
         if ($region !== null) {
-            return $region->width;
+            // G-06 (candy-code-once-007): the solver keeps a side below its
+            // own minimum when raising it would starve the centre, so a
+            // layout restored at a wider size resolves here to a few-column
+            // sliver — a ghost slot and an orphan border. Too narrow to host
+            // the side means the side is not painted, exactly as when the
+            // ladder drops it; the dock (and so the persisted choice of
+            // which panes are shown) is untouched, and the pane is back the
+            // moment the terminal is wide enough.
+            return $region->width < self::dockMinimums($a)[1] ? 0 : $region->width;
         }
 
         if ($a->isDocked($firstPane)) {

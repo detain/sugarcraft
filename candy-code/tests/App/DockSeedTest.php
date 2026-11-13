@@ -251,10 +251,13 @@ final class DockSeedTest extends TestCase
         // legacy quarter never re-enters once the dock has been mutated.
         foreach ($measured as $cols => $width) {
             $region = $dock->resolve(new Region(0, 0, $cols, 40))->regionFor('tools');
+            // G-06: a region narrower than the dock's own side minimum is a
+            // sliver the band cannot host, so it paints as the ladder's zero.
+            $regionWidth = $region?->width ?? 0;
             self::assertSame(
-                $region?->width ?? 0,
+                $regionWidth < $dock->sideMinCols ? 0 : $regionWidth,
                 $width,
-                "docked side at {$cols} must follow the region, zero when the ladder drops it",
+                "docked side at {$cols} must follow the region, zero when the ladder drops it or the band cannot host the side minimum",
             );
         }
 
