@@ -10,9 +10,12 @@ use SugarCraft\Core\Msg\SuggestionsReadyMsg;
 use SugarCraft\Forms\Field\Select;
 use SugarCraft\Forms\Form;
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Forms\Tests\Support\LoopHygiene;
 
 final class SelectTest extends TestCase
 {
+    use LoopHygiene;
+
     public function testInitialValueIsFirstOption(): void
     {
         $f = Select::new('lang')->withOptions('PHP', 'Go', 'Rust');

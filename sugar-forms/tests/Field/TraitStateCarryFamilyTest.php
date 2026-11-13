@@ -16,6 +16,7 @@ use SugarCraft\Forms\Field\Note;
 use SugarCraft\Forms\Field\Select;
 use SugarCraft\Forms\Field\Slider;
 use SugarCraft\Forms\Field\Text;
+use SugarCraft\Forms\Tests\Support\LoopHygiene;
 
 /**
  * E741 family guard (round 85, lane u4): the HasHideFunc / HasDynamicLabels
@@ -30,6 +31,8 @@ use SugarCraft\Forms\Field\Text;
  */
 final class TraitStateCarryFamilyTest extends TestCase
 {
+    use LoopHygiene;
+
     /**
      * @return array<string, array{0: class-string, 1: string}>
      */

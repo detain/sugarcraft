@@ -6,6 +6,7 @@ namespace SugarCraft\Forms\Tests;
 
 use PHPUnit\Framework\TestCase;
 use React\EventLoop\Loop;
+use SugarCraft\Forms\Tests\Support\LoopHygiene;
 use React\EventLoop\StreamSelectLoop;
 use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
@@ -37,9 +38,23 @@ use SugarCraft\Forms\Field\Select;
  */
 final class AsyncSuggestionCancelTimeoutTest extends TestCase
 {
+    use LoopHygiene {
+        setUp as private hygieneSetUp;
+        tearDown as private hygieneTearDown;
+    }
+
     protected function setUp(): void
     {
+        $this->hygieneSetUp();
+
+        // Ensure a fresh loop for each test — the instance is restored (and
+        // the restored one residue-checked) by SF-30's LoopHygiene tearDown.
         Loop::set(new StreamSelectLoop());
+    }
+
+    protected function tearDown(): void
+    {
+        $this->hygieneTearDown();
     }
 
     public function testSupersededFetchResolvesQuietlyWithNull(): void

@@ -16,6 +16,7 @@ use SugarCraft\Forms\Field\Select;
 use SugarCraft\Forms\Form;
 use SugarCraft\Forms\Group;
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Forms\Tests\Support\LoopHygiene;
 
 /**
  * Plan 5.2 (round 89 lane y3) — Form::validateAsync(): the SAME progressive
@@ -25,6 +26,8 @@ use PHPUnit\Framework\TestCase;
  */
 final class FormAsyncValidateTest extends TestCase
 {
+    use LoopHygiene;
+
     private static function settled(?string $error): PromiseInterface
     {
         $d = new Deferred();

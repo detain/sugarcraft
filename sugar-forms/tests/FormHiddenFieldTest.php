@@ -12,6 +12,7 @@ use SugarCraft\Forms\Field\Note;
 use SugarCraft\Forms\Form;
 use SugarCraft\Forms\Group;
 use SugarCraft\Forms\Theme;
+use SugarCraft\Forms\Tests\Support\LoopHygiene;
 
 /**
  * Field-level `isHidden()` is enforced by Form, as the {@see \SugarCraft\Forms\Field}
@@ -23,6 +24,8 @@ use SugarCraft\Forms\Theme;
  */
 final class FormHiddenFieldTest extends TestCase
 {
+    use LoopHygiene;
+
     private static function hidden(): \Closure
     {
         return static fn(array $v): bool => true;

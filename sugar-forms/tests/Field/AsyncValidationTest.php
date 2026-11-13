@@ -12,6 +12,7 @@ use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Forms\Field\Input;
 use SugarCraft\Forms\Field\Text;
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Forms\Tests\Support\LoopHygiene;
 
 /**
  * Plan 5.2 (round 89 lane y3) — async validation on Input/Text.
@@ -22,6 +23,8 @@ use PHPUnit\Framework\TestCase;
  */
 final class AsyncValidationTest extends TestCase
 {
+    use LoopHygiene;
+
     private static function settled(?string $error): PromiseInterface
     {
         $d = new Deferred();
