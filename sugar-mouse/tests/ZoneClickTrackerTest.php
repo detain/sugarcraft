@@ -399,4 +399,72 @@ final class ZoneClickTrackerTest extends TestCase
         $result = $this->tracker->track(MouseEvent::release(1, 5, 0), new Zone('row', 1, 1, 5, 1));
         self::assertNull($result, 'id equality alone must not resurrect a click over moved content');
     }
+
+    // ─── SM-S13: silent-drop contract, observeRelease, deprecated setPressZone ───
+
+    public function testObserveReleaseAgreementTrueAndNonConsuming(): void
+    {
+        $zone = $this->buildZone('btn', 'PRESS');
+        $this->tracker->track(MouseEvent::press(1, 1, 0), $zone);
+
+        self::assertTrue($this->tracker->observeRelease(MouseEvent::release(1, 1, 0), $zone));
+        // Observation left the pending press intact — the real track() fires.
+        self::assertInstanceOf(ClickResult::class, $this->tracker->track(MouseEvent::release(1, 1, 0), $zone));
+        // Consumed: nothing left to agree with.
+        self::assertFalse($this->tracker->observeRelease(MouseEvent::release(1, 1, 0), $zone));
+    }
+
+    public function testObserveReleaseDistinguishesForgottenReHitFromMovedZone(): void
+    {
+        $zone = $this->buildZone('btn', 'PRESS');
+        $this->tracker->track(MouseEvent::press(1, 1, 0), $zone);
+
+        // Caller forgot to re-resolve: false now, but true once handed the hit.
+        self::assertFalse($this->tracker->observeRelease(MouseEvent::release(1, 1, 0), null));
+        self::assertTrue($this->tracker->observeRelease(MouseEvent::release(1, 1, 0), $zone));
+
+        // The silent-drop pin: a track() Release with null re-hit swallows
+        // the pending press outright — after it, even the agreeing answer
+        // is false because there is nothing pending any more.
+        self::assertNull($this->tracker->track(MouseEvent::release(1, 1, 0), null));
+        self::assertFalse($this->tracker->observeRelease(MouseEvent::release(1, 1, 0), $zone));
+    }
+
+    public function testMovedPressZoneObservesFalseBothWays(): void
+    {
+        // Boxes chosen so the release point sits inside BOTH the stored
+        // press box and the reflowed one — the only gate that can refuse
+        // here is the id+box AGREEMENT arm, not containment.
+        $pressZone = new Zone('row', 1, 1, 10, 5);
+        $this->tracker->track(MouseEvent::press(1, 5, 0), $pressZone);
+
+        self::assertTrue($this->tracker->observeRelease(
+            MouseEvent::release(1, 5, 0),
+            new Zone('row', 1, 1, 10, 5)
+        ), 'same id, same box agrees');
+        self::assertFalse($this->tracker->observeRelease(
+            MouseEvent::release(1, 5, 0),
+            new Zone('row', 1, 1, 5, 5)
+        ), 'same id, reflowed box must not observe as a click');
+        self::assertFalse($this->tracker->observeRelease(
+            MouseEvent::release(1, 5, 0),
+            new Zone('other', 1, 1, 10, 5)
+        ), 'another control slid under the cursor');
+    }
+
+    public function testSetPressZoneMisorderedBeforePressIsSilentNoOp(): void
+    {
+        $zone = $this->buildZone('btn', 'PRESS');
+        // Wrong order: no pending button exists yet — documented silent no-op.
+        $this->tracker->setPressZone($zone, 0);
+        $this->tracker->track(MouseEvent::press(1, 1, 0));
+
+        // The press stored a NULL zone (in-order injection never happened):
+        // observeRelease's null-press-zone arm refuses, and the agreeing
+        // release still drops — misordering cannot smuggle a click through,
+        // and it cannot throw either.
+        self::assertFalse($this->tracker->observeRelease(MouseEvent::release(1, 1, 0), $zone));
+        self::assertNull($this->tracker->track(MouseEvent::release(1, 1, 0), $zone));
+        self::assertFalse($this->tracker->observeRelease(MouseEvent::release(1, 1, 0), $zone));
+    }
 }

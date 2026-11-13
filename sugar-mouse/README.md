@@ -687,6 +687,15 @@ integration bug:
 `Zones\Zone::toMouseEvent()` is the one public bridge (Core → primitive,
 wheel type matched first so it becomes `Scroll`, not `Press`).
 
+A `ZoneClickTracker::track()` null on Release is silent **by design** —
+forgotten re-hit zone, a zone that moved between frames, and a
+press-with-nothing all collapse to the same null (a lost click beats
+firing the wrong control). `observeRelease($event, $hit)` answers "would
+this release complete the click?" without consuming the pending press, so
+you can tell the first cause from the other two. The two-call
+`setPressZone()` is a deprecated order-coupled vestige: calling it before
+`track(Press)` is a documented no-op — pass the press zone in `track()`.
+
 ### Tips
 
 - Each id should be unique within a `Manager`. Use

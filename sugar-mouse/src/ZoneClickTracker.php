@@ -23,7 +23,7 @@ namespace SugarCraft\Mouse;
  *
  * There are two ways to supply the press zone:
  *   1. Preferred (one-call):  track($event, $scanner->hit($event->x, $event->y))
- *   2. Legacy (two-call):   track($event);  setPressZone($zone, $button)
+ *   2. Legacy (two-call, deprecated):  track($event);  setPressZone($zone, $button)
  *
  * Either way the RELEASE call must carry its own fresh re-resolution of the
  * release coordinate against the CURRENT frame: the click fires only when
@@ -59,6 +59,13 @@ final class ZoneClickTracker
      *                                two-call pattern.
      *
      * @return ClickResult|null null when no click completes this tick.
+     *                          SILENT BY DESIGN: a forgotten re-hit zone on
+     *                          the Release call, a zone that moved between
+     *                          frames, and a press that hit nothing all
+     *                          collapse to the same null — a lost click
+     *                          beats firing the wrong control. Use
+     *                          {@see self::observeRelease()} to ask why
+     *                          without consuming the pending press.
      */
     public function track(MouseEvent $event, ?Zone $hitZone = null): ?ClickResult
     {
@@ -124,10 +131,52 @@ final class ZoneClickTracker
     }
 
     /**
+     * Read-only view of the release-agreement gate: would a track() call
+     * with THIS release event and re-hit zone complete the click? Answers
+     * without consuming the pending press, so a caller can distinguish "I
+     * forgot to re-resolve" (false with null, true once passed the fresh
+     * hit) from "the zone genuinely moved" (false either way) — the silent
+     * null from track() cannot tell those apart, and misclick-protection
+     * consumers want to know which one they hit.
+     *
+     * Non-Release events, or buttons with no pending press, report false.
+     */
+    public function observeRelease(MouseEvent $event, ?Zone $hitZone = null): bool
+    {
+        if ($event->action !== MouseAction::Release) {
+            return false;
+        }
+
+        $btn = $event->button;
+        if (isset($this->pending[$btn]) === false) {
+            return false;
+        }
+
+        $pending = $this->pending[$btn];
+        if ($pending['zone'] === null) {
+            return false;
+        }
+
+        if ($pending['zone']->inBounds($event) === false) {
+            return false;
+        }
+
+        return $hitZone !== null && self::agrees($pending['zone'], $hitZone);
+    }
+
+    /**
      * Inject the zone that was hit at the time of the press event.
      * Call this immediately after track(Press) when you have the zone.
      * The Release call must still carry the fresh re-hit zone for the
      * Release-agreement gate — setPressZone() only stores the press half.
+     *
+     * @deprecated Two-call order-coupled vestige of the press half (SM-S13):
+     *             calling it BEFORE track(Press) is a silent no-op (there is
+     *             no pending button to attach to yet), and calling it twice
+     *             or late silently races the press state. Prefer the one-call
+     *             pattern track($press, $scanner->hit(...)). The method stays
+     *             working for existing callers; its misordered no-op is
+     *             pinned by tests, not fixed into a throw.
      */
     public function setPressZone(Zone $zone, int $button): void
     {
