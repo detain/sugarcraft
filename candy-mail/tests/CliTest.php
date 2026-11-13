@@ -558,6 +558,38 @@ final class CliTest extends TestCase
         \SugarCraft\Mail\buildTransport();
     }
 
+    /**
+     * CM-07: the missing-value hint must name the inline form the caller can
+     * actually run. The template supplies the dashes of its hint slot, so the
+     * old raw-token substitution forged 'use ----to=VALUE', and a short -f
+     * has to be advised as --from=VALUE — the glued '=' form is long-option
+     * only, so repeating the alias would promise a syntax that refuses.
+     */
+    public function testMissingValueHintNamesTheCanonicalInlineForm(): void
+    {
+        foreach ([['--to', '--to=VALUE'], ['-f', '--from=VALUE'], ['--reply-to', '--reply-to=VALUE']] as [$flag, $want]) {
+            try {
+                \SugarCraft\Mail\parseArgs(['candy-mail', $flag]);
+                $this->fail("expected a missing-value refusal for {$flag}");
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString('use ' . $want, $e->getMessage(), "{$flag} hint must carry the canonical inline form");
+                $this->assertStringNotContainsString('----', $e->getMessage(), "{$flag} must not forge extra dashes");
+            }
+        }
+    }
+
+    /**
+     * The helper itself: dashes stripped, alias resolved, bare name returned
+     * for the template's own `--{option}=VALUE` slot.
+     */
+    public function testCanonicalFlagNameResolvesAliasesAndStripsDashes(): void
+    {
+        $this->assertSame('to', \SugarCraft\Mail\canonicalFlagName('--to'));
+        $this->assertSame('from', \SugarCraft\Mail\canonicalFlagName('-f'));
+        $this->assertSame('attach', \SugarCraft\Mail\canonicalFlagName('-a'));
+        $this->assertSame('subject', \SugarCraft\Mail\canonicalFlagName('--subject'));
+    }
+
     private function readProperty(object $subject, string $name): mixed
     {
         $property = new \ReflectionProperty($subject, $name);
