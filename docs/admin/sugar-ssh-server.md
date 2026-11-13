@@ -146,15 +146,20 @@ snippet): `is_writable()` on each directory and existing file, and log
 ### Language
 
 Sixteen catalogues ship under `sugar-ssh-server/lang/`, and **nothing in
-this stack selects among them**: no code path calls `T::setLocale()`, so
-every notice — the throttle's fail-open announcement, the exec refusal,
-`Unauthorized. (…)` — is rendered from `lang/en.php` regardless of what the
-connecting user's environment claims.
+this stack selects among them implicitly**: the one code path that calls
+`T::setLocale()` is `Server::withLocale()`, applied at `serve()` entry
+only when you arm it. An unarmed server renders every notice — the
+throttle's fail-open announcement, the exec refusal, `Unauthorized. (…)`
+— from `lang/en.php` regardless of what the connecting user's environment
+claims.
 
-Pin the locale once at entry-script start if you want a translated service:
+Pin the locale once at entry-script start if you want a translated
+service, through either door:
 
 ```php
-\SugarCraft\Core\I18n\T::setLocale('de');
+$server = Server::new()->withLocale('de'); // re-stamped at every serve()
+
+\SugarCraft\Core\I18n\T::setLocale('de');  // or the manual write, once
 ```
 
 Do not use `T::detect()` on an internet-facing listener. It reads

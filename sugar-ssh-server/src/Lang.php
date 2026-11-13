@@ -14,12 +14,16 @@ use SugarCraft\Core\I18n\Lang as BaseLang;
  * {@see ../lang/en.php} and its fifteen siblings. (audit MINOR 19 named the
  * old namespace here, which had been renamed away with the library.)
  *
- * **Nothing here selects a locale (audit MAJOR 15).** The base class threads
- * no locale argument, and no code in this library calls
- * `T::setLocale()`, so every message this facade produces arrives in
- * English whatever the sixteen catalogues on disk contain. Selection is a
- * deliberate operator decision, made once at entry-script start:
+ * **Nothing here selects a locale implicitly (audit MAJOR 15).** The base
+ * class threads no locale argument, so an unarmed server renders every
+ * message this facade produces in English whatever the sixteen catalogues
+ * on disk contain. The one shipped code path that calls `T::setLocale()`
+ * is `Server::withLocale()` — armed by you at boot, applied at `serve()`
+ * entry, and only there. Selection stays a deliberate operator decision,
+ * made once at entry-script start through either door:
  *
+ *     $server->withLocale('de');
+ *     // or, without the Server door:
  *     \SugarCraft\Core\I18n\T::setLocale('de');
  *
  * Do not reach for `T::detect()` here. It reads `LC_ALL`, `LC_MESSAGES` and

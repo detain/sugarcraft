@@ -533,7 +533,8 @@ final class DocSurfaceTruthTest extends TestCase
         );
         $this->assertStringContainsString("'sshserver'` namespace baked in", $lang);
         $this->assertStringNotContainsString("'wish'`", $lang, 'audit MINOR 19: the facade must not teach a namespace that was renamed away');
-        $this->assertStringContainsString('Nothing here selects a locale (audit MAJOR 15)', $lang);
+        $this->assertStringContainsString('Nothing here selects a locale implicitly (audit MAJOR 15)', $lang);
+        $this->assertStringContainsString('Server::withLocale()', $lang, 'the facade docblock must point at the shipped arming door');
         $this->assertStringContainsString('Do not reach for `T::detect()`', $lang);
 
         $readme = $this->readme();
@@ -547,6 +548,7 @@ final class DocSurfaceTruthTest extends TestCase
         );
         $readme = (string) \preg_replace('/\s+/', ' ', $readme);
         $this->assertStringContainsString('T::setLocale', $readme);
+        $this->assertStringContainsString('->withLocale(', $readme, 'ssrv-10: both locale doors must be named where operators read');
         $this->assertStringContainsString('connecting peer choose the language', $readme);
 
         $guide = $this->adminGuide();
@@ -555,7 +557,7 @@ final class DocSurfaceTruthTest extends TestCase
         }
         $this->assertStringContainsString('### Language', $guide);
         $guide = (string) \preg_replace('/\s+/', ' ', $guide);
-        $this->assertStringContainsString('no code path calls `T::setLocale()`', $guide);
+        $this->assertStringContainsString('the one code path that calls `T::setLocale()` is `Server::withLocale()`', $guide);
         $this->assertStringContainsString('Peer-asserted', $guide);
         $this->assertStringContainsString('| `SSH_SERVER_LOG` |', $guide);
     }

@@ -325,6 +325,11 @@ of the file reports success to whichever cron entry or CI step asked.
 [`docs/admin/sugar-ssh-server.md`](../docs/admin/sugar-ssh-server.md#exit-status)
 tabulates the three.
 
+**Language.** Call `->withLocale('de')` on the Server (or run
+`\SugarCraft\Core\I18n\T::setLocale()` yourself) — nothing selects a
+locale implicitly, and the peer never does; see
+[Language](#language-nothing-selects-it-for-you).
+
 ### 4. Connect
 
 ```
@@ -585,14 +590,18 @@ transport.
 ## Language: nothing selects it for you
 
 Sixteen catalogues ship under `lang/`, and by default **none of them is
-selected**. Nothing in this library calls `T::setLocale()`, so every notice —
+selected**. Nothing in this library calls `T::setLocale()` implicitly —
+the one shipped door is `Server::withLocale()`, which applies it at
+`serve()` entry when you arm it. An unarmed server renders every notice —
 the throttle's fail-open announcement, the exec refusal, the
-`Unauthorized. (…)` line — is rendered from `lang/en.php`. Choosing a
-language is a one-line decision at the top of your entry script:
+`Unauthorized. (…)` line — from `lang/en.php`. Choosing a language is a
+one-line decision at the top of your entry script, through either door:
 
 ```php
 use SugarCraft\Core\I18n\T;
 
+$server = Server::new()->withLocale('de'); // applied at every serve()
+// or, without the Server door:
 T::setLocale('de'); // once, before building the Server
 ```
 

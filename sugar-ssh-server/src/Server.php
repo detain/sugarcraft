@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\SshServer;
 
+use SugarCraft\Core\I18n\T;
 use SugarCraft\SshServer\Middleware\Keepalive;
 use SugarCraft\SshServer\Transport\InProcessTransport;
 
@@ -33,8 +34,11 @@ use SugarCraft\SshServer\Transport\InProcessTransport;
  *   1. `Server::new()` constructs an empty stack with the default
  *      InProcess transport.
  *   2. `->withTransport($t)` overrides the transport (optional).
- *   3. `->use($middleware)` appends middleware in registration order.
- *   4. `->serve()` builds a {@see Session} from the SSH env vars
+ *   3. `->withLocale($code)` arms a message language for the run
+ *      (optional; nothing selects a locale implicitly, and the peer
+ *      never does).
+ *   4. `->use($middleware)` appends middleware in registration order.
+ *   5. `->serve()` builds a {@see Session} from the SSH env vars
  *      (or accepts an injected Session for tests), then asks the
  *      transport to run the stack.
  *
@@ -92,6 +96,9 @@ final class Server
 
     private Transport $transport;
 
+    /** Locale armed by {@see withLocale()}; null means "never touch the global". */
+    private ?string $locale = null;
+
     public function __construct()
     {
         $this->transport = new InProcessTransport();
@@ -139,6 +146,37 @@ final class Server
     public function transport(): Transport
     {
         return $this->transport;
+    }
+
+    /**
+     * Arm a catalogue locale for the notices this server renders.
+     *
+     * Immutable: clone-and-return, the {@see withTransport()} polarity —
+     * the arm APPENDS nothing to the middleware stack. `serve()` calls
+     * `T::setLocale($code)` at its entry when, and only when, this was
+     * called; an unarmed server never touches the global locale, so the
+     * invisible-by-default defect (audit sugar-ssh-server-013) is fixed
+     * by an opt-in door rather than an implicit pick.
+     *
+     * **Process-wide side effect.** `T::setLocale()` writes a global:
+     * every `serve()` on an armed server re-stamps the whole process.
+     * Embeddings hosting several differently-armed servers in one
+     * process must keep their runs serialised — each entry overwrites
+     * the previous arm.
+     *
+     * **The peer never selects.** `Session::$lang` (sshd's `LANG`, when
+     * `AcceptEnv` lets it through at all) stays input to logs, not a
+     * setting, and `T::detect()` stays out of this library for the same
+     * reason — see the README Language section. An unknown `$code` is
+     * harmless: catalogue lookup falls back to English.
+     *
+     * @param string $code Catalogue code under `lang/` ('de', 'fr', ...; see LOCALES.md)
+     */
+    public function withLocale(string $code): self
+    {
+        $new = clone $this;
+        $new->locale = $code;
+        return $new;
     }
 
     /**
@@ -191,6 +229,10 @@ final class Server
      * exit($server->serve());
      * ```
      *
+     * **Locale.** When {@see withLocale()} armed one, the process-wide
+     * catalogue locale is set here first; an unarmed server leaves it
+     * exactly as the entry script found it.
+     *
      * @param Context|null $ctx Root context for the run — pass a
      *                          cancellable context to make the M1
      *                          cancel-propagation machinery reachable
@@ -199,6 +241,9 @@ final class Server
      */
     public function serve(?Session $session = null, ?Context $ctx = null): int
     {
+        if ($this->locale !== null) {
+            T::setLocale($this->locale);
+        }
         $session ??= Session::fromEnvironment();
         return $this->transport->run($ctx ?? Context::background(), $session, $this->stack);
     }

@@ -294,4 +294,110 @@ final class ServerTest extends TestCase
 
         $this->assertCount(2, $log, 'both middlewares run for a server reached through the original receiver');
     }
+
+    /**
+     * ssrv-10: `withLocale()` is the `withTransport()` polarity — the
+     * receiver it was called off stays unarmed, the clone arms its own
+     * `serve()` entries.
+     */
+    public function testWithLocaleReturnsANewInstanceAndLeavesTheReceiverUnarmed(): void
+    {
+        $prev = \SugarCraft\Core\I18n\T::locale();
+        \SugarCraft\Core\I18n\T::setLocale('en');
+        $observed = [];
+        $transport = new class ($observed) implements \SugarCraft\SshServer\Transport {
+            /** @param array<string,string> $observed */
+            public function __construct(private array &$observed) {}
+
+            public function run(Context $ctx, Session $session, array $stack): int
+            {
+                $this->observed['locale'] = \SugarCraft\Core\I18n\T::locale();
+
+                return 0;
+            }
+        };
+
+        try {
+            $server = Server::new()->withTransport($transport);
+            $armed = $server->withLocale('de');
+            $this->assertNotSame($server, $armed);
+
+            $server->serve($this->fakeSession());
+            $this->assertSame('en', $observed['locale'], 'the receiver of withLocale() stays unarmed');
+
+            $armed->serve($this->fakeSession());
+            $this->assertSame('de', $observed['locale'], 'the armed clone stamps the locale at serve() entry');
+        } finally {
+            \SugarCraft\Core\I18n\T::setLocale($prev);
+        }
+    }
+
+    /**
+     * ssrv-10: an armed server renders a known catalogue key in German
+     * through the canned notice path, right where the transport runs.
+     */
+    public function testArmedLocaleRendersTheCatalogueDuringServe(): void
+    {
+        $prev = \SugarCraft\Core\I18n\T::locale();
+        \SugarCraft\Core\I18n\T::setLocale('en');
+
+        try {
+            $observed = [];
+            $transport = new class ($observed) implements \SugarCraft\SshServer\Transport {
+                /** @param array<string,string> $observed */
+                public function __construct(private array &$observed) {}
+
+                public function run(Context $ctx, Session $session, array $stack): int
+                {
+                    $this->observed['notice'] = \SugarCraft\SshServer\Lang::t('auth.reject_user', ['name' => 'alice']);
+
+                    return 0;
+                }
+            };
+
+            Server::new()->withTransport($transport)->withLocale('de')->serve($this->fakeSession());
+
+            $this->assertSame(
+                'Benutzer nicht erlaubt: alice',
+                $observed['notice'],
+                'armed serve() entries render catalogue keys in the armed language',
+            );
+        } finally {
+            \SugarCraft\Core\I18n\T::setLocale($prev);
+        }
+    }
+
+    /**
+     * ssrv-10: when unarmed, the default is hands-off — an entry script
+     * that ran `T::setLocale()` itself keeps its choice across an
+     * unarmed `serve()`, and the arm adds zero call sites (invisible-
+     * by-default fixed by opt-in, not by an implicit pick).
+     */
+    public function testAnUnarmedServeLeavesTheGlobalLocaleAlone(): void
+    {
+        $prev = \SugarCraft\Core\I18n\T::locale();
+        \SugarCraft\Core\I18n\T::setLocale('fr');
+
+        try {
+            $observed = [];
+            $transport = new class ($observed) implements \SugarCraft\SshServer\Transport {
+                /** @param array<string,string> $observed */
+                public function __construct(private array &$observed) {}
+
+                public function run(Context $ctx, Session $session, array $stack): int
+                {
+                    $this->observed['locale'] = \SugarCraft\Core\I18n\T::locale();
+
+                    return 0;
+                }
+            };
+
+            Server::new()->withTransport($transport)->serve($this->fakeSession());
+
+            $this->assertSame('fr', $observed['locale'], 'an unarmed serve() must not restamp mid-run');
+            $this->assertSame('fr', \SugarCraft\Core\I18n\T::locale(), 'an unarmed serve() adds zero T::setLocale calls');
+        } finally {
+            \SugarCraft\Core\I18n\T::setLocale($prev);
+        }
+    }
 }
