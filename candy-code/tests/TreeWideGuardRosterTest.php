@@ -680,7 +680,20 @@ final class TreeWideGuardRosterTest extends TestCase
         // tearDown() unlinks the cert/key pair writeTlsFixture() made inside the
         // sys_get_temp_dir() cc-cmp-tlsargs-* dir setUp() created; the scandir is
         // that unlink walk, confined to the test's own sandbox.
-        'Cli/ServeArgsTest.php' => ['scandir($this->tlsDir)'],
+        'Cli/ServeArgsTest.php' => ['scandir($this->tlsDir)', "glob(\$dir.'/{,.}*',GLOB_BRACE)"],
+        // tearDown() empties the sys_get_temp_dir() home setUp() made, including
+        // the dotfiles; the two server-state globs read the sandboxed home's own
+        // `.candy-code/server` directory the foreground serve under test wrote.
+        'Cli/ServeForegroundSigtermTest.php' => [
+            "glob(\$this->home.'/.candy-code/server/server.json')",
+            "glob(\$this->home.'/.candy-code/server/*.sock')",
+            "glob(\$path.'/{,.}*',\\GLOB_BRACE)",
+        ],
+        // removeTree() of the sys_get_temp_dir() sandbox root (and its fake home) the test made.
+        'Config/ConcurrentConfigWriteTest.php' => [
+            "glob(\$this->root.'/{,.}*',\\GLOB_BRACE)",
+            "glob(\$this->root.'/home/{,.}*',\\GLOB_BRACE)",
+        ],
         // wf-driver D1: removePresetScratch() in tearDown() unlinks-then-rmdir's
         // the sys_get_temp_dir() cc-session-id-preset-* scratch the child-witness
         // legs build (fake HOME, session.db, endpoint bodies); scandir($path) is
@@ -758,7 +771,6 @@ final class TreeWideGuardRosterTest extends TestCase
         'LSP/LspLauncherAutoDetectTest.php' => ['scandir($dirs[$i])'],
         // sweepChildHome() empties the 0700 sandbox HOME the ISS-125 locale
         // launch made (however deep the child wrote) before removing it.
-        'LangLaunchLocaleTest.php' => ['RecursiveDirectoryIterator($dir,\FilesystemIterator::SKIP_DOTS)'],
         // C-MCP-3.d: tearDown() empties the mcp-background registry the
         // test's own forked child created under its sandboxed HOME.
         'MCP/McpBackgroundCallTest.php' => ['scandir($registry)'],
