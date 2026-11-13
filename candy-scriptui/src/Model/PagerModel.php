@@ -23,6 +23,15 @@ use SugarCraft\ScriptUi\Runtime\Geometry;
  */
 final class PagerModel implements Model
 {
+    /**
+     * Rows the view() footer (hints.pager line) occupies. Every height
+     * derivation that is expressed in terminal rows must subtract the
+     * same number, or the frame grows one line past the screen
+     * (scriptui-20: bottom-bleed in alt-screen / stray hint lines into
+     * scrollback inline).
+     */
+    private const HINT_ROWS = 1;
+
     public static function fromContent(
         string $content,
         int $width = 0,
@@ -37,7 +46,7 @@ final class PagerModel implements Model
         $width  = $width  > 0 ? $width  : (Geometry::columnsOrNull() ?? 80);
         // Auto height reserves one row for the hint footer; the historical
         // 20-row fallback (no knowable size) keeps pinned output stable.
-        $height = $height > 0 ? $height : ($rows !== null ? max(1, $rows - 1) : 20);
+        $height = $height > 0 ? $height : ($rows !== null ? max(1, $rows - self::HINT_ROWS) : 20);
         // Multi-line untrusted paint: control/escape bytes out, CR mapped to
         // LF so overwrite tricks cannot reach the viewport (cluster 12).
         $content = \SugarCraft\Core\Util\Sanitize::untrustedForDisplay($content);
@@ -117,8 +126,12 @@ final class PagerModel implements Model
         if ($msg instanceof WindowSizeMsg) {
             // Re-fit the viewport to the live terminal size; content that
             // was pre-wrapped by --soft-wrap at launch keeps its shape.
+            // scriptui-20: the reservation from fromContent() must survive
+            // the re-fit — the viewport takes rows minus the footer rows,
+            // never the full terminal height, so the composed frame stays
+            // within the screen.
             $width  = max(1, $msg->cols);
-            $height = max(1, $msg->rows);
+            $height = max(1, $msg->rows - self::HINT_ROWS);
             if ($width !== $this->viewport->width || $height !== $this->viewport->height) {
                 return [new self($this->viewport->withSize($width, $height), $this->exited, $this->interrupted), null];
             }
