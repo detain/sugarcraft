@@ -216,10 +216,14 @@ named test rather than hidden — anything *else* that loses a byte is a bug:
    as only `mX`, and `ESC[31 CAN mX` as CAN + `mX` — CAN's `execute` callback
    flushes the byte window while an illegal byte leaves no callback at all, and
    a Ground-state window at EOF is dropped. Over-report for as long as the
-   stream continues; enumerate-and-pin the survivors. A CAN/SUB inside a
+   stream continues; enumerate-and-pin the survivors. Executed bytes that are
+   NOT cancels keep the window: `ESC[1; CR` at end of stream reports CR *and*
+   the truncated `ESC[1;`, and a C1 control cancel replays the prelude ahead
+   of its own segment. A CAN/SUB inside a
    *string payload* state is item 11, not this one.
    (`testCancelledSequenceIsLostExactlyAsTheParserLosesIt`,
-   `testEscCancelledSequenceIsReportedAsCancelledResidue`)
+   `testEscCancelledSequenceIsReportedAsCancelledResidue`,
+   `testMidSequenceC0AndC1ExecuteKeepTheirPrelude`)
 8. A truncated UTF-8 rune at end of stream is dropped, because that is not an
    escape-sequence state for `Parser::flush()` to report.
    (`testTruncatedUtf8TailIsDroppedExactlyAsTheParserDropsIt`)
@@ -237,7 +241,9 @@ named test rather than hidden — anything *else* that loses a byte is a bug:
     byte (the rune dies, the interrupting byte survives: `a\xc3(b` → `a(b`), and a
     second lead arriving before the first rune completes (`a\xe2\xe2Ab` → `aAb`)
     all vanish with no segment. The C1 controls sugar-ansi-parser executes (`0x80`–`0x8F`,
-    `0x99`, `0x9A`) do survive, as `C1 …` sequence segments — the loss is confined
+    `0x99`, `0x9A`) do survive, as `C1 …` sequence segments — arriving mid-sequence
+    they additionally replay the abandoned prelude ahead of themselves as a
+    `truncated … — cancelled` segment — the loss is confined
     to bytes the UTF-8 window rejects. Item 8 is only its end-of-stream shadow;
     surfacing these as reported elements needs a sugar-ansi-parser callback (the parser's
     `replaceMalformed` flag is not enough — it never re-checks a ground-state byte

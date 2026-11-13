@@ -29,7 +29,9 @@ use SugarCraft\AnsiParser\Parser\State;
  * arrives as an Execute echo — the abandoned prelude is still over-reported by
  * {@see recoverCancelledResidue()} whenever a later dispatch can observe it,
  * which also covers the undocumented fourth member of that family, the
- * anywhere-ESC cancel), CAN/SUB arriving inside a string payload state —
+ * anywhere-ESC cancel; a C1 control cancel reports the same prelude
+ * immediately, ahead of its own segment), CAN/SUB arriving inside a string
+ * payload state —
  * OSC, DCS after its final byte, SOS, PM, APC — where the sequence now reaches
  * this handler truncated at the cancel byte and the cancel byte is consumed
  * un-echoed as the terminator (sugar-ansi-parser 35dda61c0; README deviation 11), a
@@ -66,7 +68,10 @@ final class AnsiHandler implements Handler
      * The parser only reports completed sequences, so a stream cut mid-CSI
      * would otherwise lose its bytes with nobody the wiser. Keeping the
      * window lets {@see finishPending()} hand back whatever is still in
-     * flight once the stream ends.
+     * flight once the stream ends. A dispatch consumes the whole window;
+     * an Execute echo consumes only the text it just flushed plus its own
+     * byte, so a C0 that leaves the parser in its control-sequence state
+     * does not blindside the sequence already in flight (finding 009).
      */
     private string $inFlightBytes = '';
 
@@ -309,40 +314,80 @@ final class AnsiHandler implements Handler
         $this->awaitingStringTerminator = false;
         $this->abortX10Arm();
 
+        // The flushed pending text and the echoed byte are the only bytes an
+        // Execute legitimately consumes from the window (finding 009). A C0
+        // byte that is not CAN/SUB leaves the parser in its control-sequence
+        // state (Transitions: CsiParam stays on 0x00-0x17/0x19/0x1C-0x1F), so
+        // whatever else the window holds is still the live sequence's prelude
+        // and must survive to a later dispatch or the end-of-stream tail
+        // report; a C1 control cancels the sequence here and now, so that
+        // prelude is reported immediately, ahead of the C1 segment.
+        $pending = $this->textBuf;
+        $this->flushPendingSs3();
+        $this->flushText();
+        $residue = $this->residueAfterExecute($pending, $byte);
+
         if ($byte >= 0x00 && $byte <= 0x1F && $byte !== 0x1B) {
-            $this->flushPendingSs3();
-            $this->flushText();
             $this->segments[] = new SequenceSegment(
                 chr($byte),
                 'C0 ' . C0C1::c0Name($byte),
             );
-            $this->inFlightBytes = '';
-        }
-        // DEL (0x7F) belongs to the C0 set of ISO 6429 even though it sits
-        // outside the 0x00–0x1F range the branch above covers, and the VT500
-        // anywhere table routes it through Action::Execute while in Ground.
-        // Before step 10.16 it matched neither branch and vanished — exactly
-        // the kind of unlisted byte loss the README fidelity contract forbids.
-        if ($byte === 0x7F) {
-            $this->flushPendingSs3();
-            $this->flushText();
+            // CAN/SUB keep README deviation 7's documented floor: the parser
+            // cancels without handing this handler the abandoned prelude, and
+            // the byte window is flushed with it (pinned in ByteFidelityTest).
+            $this->inFlightBytes = ($byte === 0x18 || $byte === 0x1A) ? '' : $residue;
+        } elseif ($byte === 0x7F) {
+            // DEL (0x7F) belongs to the C0 set of ISO 6429 even though it sits
+            // outside the 0x00–0x1F range the branch above covers, and the VT500
+            // anywhere table routes it through Action::Execute while in Ground.
+            // Before step 10.16 it matched neither branch and vanished — exactly
+            // the kind of unlisted byte loss the README fidelity contract forbids.
+            // Mid-sequence the table gives it None (no callback), so the residue
+            // this branch can ever see is empty unless a future table change
+            // routes it Execute-in-place; retaining is the faithful default.
             $this->segments[] = new SequenceSegment(chr($byte), 'DEL (delete)');
-            $this->inFlightBytes = '';
-        }
-        // C1 bytes 0x80–0x9F: the VT500 "anywhere" transition table routes
-        // 0x80–0x8F, 0x91–0x97, and 0x9C through Action::Execute (→ Ground).
-        // The remaining C1 bytes (0x90, 0x98, 0x9A, 0x9B, 0x9D, 0x9E,
-        // 0x9F) go to Entry states and are handled via their respective
-        // dispatch callbacks (DCS/CSI/OSC/SOS/PM/APC), never reaching execute().
-        if ($byte >= 0x80 && $byte <= 0x9F) {
-            $this->flushPendingSs3();
-            $this->flushText();
+            $this->inFlightBytes = $residue;
+        } elseif ($byte >= 0x80 && $byte <= 0x9F) {
+            // C1 bytes 0x80–0x9F: the VT500 "anywhere" transition table routes
+            // 0x80–0x8F, 0x91–0x97, 0x99, 0x9A and 0x9C through Action::Execute
+            // (→ Ground). The remaining C1 bytes (0x90, 0x98, 0x9A, 0x9B, 0x9D,
+            // 0x9E, 0x9F) go to Entry states and are handled via their respective
+            // dispatch callbacks (DCS/CSI/OSC/SOS/PM/APC), never reaching execute()
+            // — except 0x99/0x9A listed in the Execute set above.
+            // A C1 from a control-sequence state cancels it: report the
+            // abandoned prelude first (wire order), then the C1 byte itself.
+            if ($residue !== '') {
+                $this->segments[] = new SequenceSegment(
+                    $residue,
+                    Inspector::describeTruncated($residue) . ' — cancelled',
+                );
+            }
             $this->segments[] = new SequenceSegment(
                 chr($byte),
                 'C1 ' . C0C1::c1Name($byte),
             );
             $this->inFlightBytes = '';
         }
+    }
+
+    /**
+     * Window contents left after an Execute consumed its flushed text
+     * prefix and its own echoed byte.
+     *
+     * Purely positional: the flushed text can only ever sit at the head of
+     * the window and the executed byte at its tail (feed() appends before
+     * the parser runs), so peeling both is byte-exact.
+     */
+    private function residueAfterExecute(string $pendingText, int $byte): string
+    {
+        $tail = $this->inFlightBytes;
+        if ($pendingText !== '' && str_starts_with($tail, $pendingText)) {
+            $tail = substr($tail, strlen($pendingText));
+        }
+        if ($tail !== '' && substr($tail, -1) === chr($byte)) {
+            $tail = substr($tail, 0, -1);
+        }
+        return $tail;
     }
 
     public function csiDispatch(int $final, array $params, int $prefix, int $intermediate): void

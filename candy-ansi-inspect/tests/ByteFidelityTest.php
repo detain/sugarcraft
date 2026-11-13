@@ -831,6 +831,38 @@ final class ByteFidelityTest extends TestCase
         }
     }
 
+    public function testMidSequenceC0AndC1ExecuteKeepTheirPrelude(): void
+    {
+        // AIP-10 / finding 009: an executed C0/C1 byte mid-sequence used to
+        // discard the byte window with it, losing the sequence's bytes at EOF.
+        // A C0 that is not a cancel leaves the parser in its control-sequence
+        // state, so the window keeps the prelude for the tail report; a C1
+        // control does cancel the sequence, so the prelude is replayed ahead
+        // of the C1 segment. CAN/SUB keep README deviation 7's floor (last
+        // two cases — their prelude stays invisible, and no byte is
+        // double-counted by this test).
+        $cases = [
+            "\x1b[1;\r"           => ["\r", "\x1b[1;"],
+            "\x1b[1;\rx"          => ["\r", "\x1b[1;x"],
+            "hi\x1b[1;\r"         => ["hi", "\r", "\x1b[1;"],
+            "\x1b[31\x84X"        => ["\x1b[31", "\x84", "X"],
+            "\x1b[31\x9c"         => ["\x1b[31", "\x9c"],
+            // Unmoved floors: the CAN-cancel prelude stays unreported.
+            "\x1b[1;\r\x18"       => ["\r", "\x18"],
+            "\x1b[31\x1amX"        => ["\x1a", "mX"],
+        ];
+
+        foreach ($cases as $input => $expected) {
+            $segments = Inspector::parse($input);
+
+            $this->assertSame(
+                $expected,
+                array_map(static fn($segment): string => $segment->raw(), $segments),
+                bin2hex($input),
+            );
+        }
+    }
+
     public function testCancelByteInsideStringStateDispatchesTheTruncatedPayload(): void
     {
         // 2026-10-23 (r1024/inspect, README deviation 11): sugar-ansi-parser
