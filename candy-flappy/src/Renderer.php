@@ -120,7 +120,7 @@ final class Renderer
             ->foreground(Color::hex(self::AMBER))
             ->render($field);
 
-        $scoreText = "score: {$g->score}";
+        $scoreText = Lang::t('ui.score', ['score' => $g->score]);
         $score = Style::new()->bold()->foreground(Color::hex(self::AMBER))
             ->render($scoreText);
         $highScore = $g->highScore();
@@ -128,12 +128,12 @@ final class Renderer
             $highScoreLine = '';
             $highScorePlain = '';
             if ($g->newRecord && $g->score > 0) {
-                $highScorePlain = " 🏆 NEW HIGH SCORE: {$highScore}";
+                $highScorePlain = Lang::t('ui.new_best', ['best' => $highScore]);
                 $highScoreLine = Style::new()->bold()->foreground(Color::hex(self::GREEN))
                     ->render($highScorePlain) . '   ';
                 $highScorePlain .= '   ';
             } elseif ($highScore > 0) {
-                $highScorePlain = " best: {$highScore}";
+                $highScorePlain = Lang::t('ui.best', ['best' => $highScore]);
                 $highScoreLine = Style::new()->foreground(Color::hex(self::HINT))
                     ->render($highScorePlain) . '   ';
                 $highScorePlain .= '   ';
@@ -141,8 +141,8 @@ final class Renderer
             $hintPlain = self::pickHint(
                 $g,
                 $scoreText . $highScorePlain,
-                '💥 splat — press r to try again, q to quit',
-                '💥 splat — r retry · q quit',
+                Lang::t('ui.crash_full'),
+                Lang::t('ui.crash_short'),
             );
             $hint = Style::new()->foreground(Color::hex(self::CRASH))->bold()
                 ->render($hintPlain);
@@ -153,7 +153,7 @@ final class Renderer
         $bestPlain = '';
         $bestLine = '';
         if ($highScore > 0) {
-            $bestPlain = " best: {$highScore}";
+            $bestPlain = Lang::t('ui.best', ['best' => $highScore]);
             $bestLine = Style::new()->foreground(Color::hex(self::HINT))
                 ->render($bestPlain) . '    ';
         }
@@ -169,15 +169,15 @@ final class Renderer
             $hintPlain = self::pickHint(
                 $g,
                 $prefixCells,
-                'press space/⏎/↑/w to start · r restart · q quit',
-                'space to start · q quit',
+                Lang::t('ui.ready_full'),
+                Lang::t('ui.ready_short'),
             );
         } else {
             $hintPlain = self::pickHint(
                 $g,
                 $prefixCells,
-                'space/⏎/↑/w flap · r restart · q quit',
-                'space flap · q quit',
+                Lang::t('ui.live_full'),
+                Lang::t('ui.live_short'),
             );
         }
         $hint = Style::new()->foreground(Color::hex(self::HINT))
@@ -224,40 +224,40 @@ final class Renderer
         }
         $rows[] = '+' . str_repeat('-', $w) . '+';
 
-        $scoreText = "score: {$g->score}";
+        $scoreText = Lang::t('ui.score', ['score' => $g->score]);
         if ($g->crashed === true) {
             $highScore = $g->highScore();
             $recordPlain = '';
             if ($g->newRecord && $g->score > 0) {
-                $recordPlain = " NEW HIGH SCORE: {$highScore}   ";
+                $recordPlain = Lang::t('ui.plain_new_best', ['best' => $highScore]) . '   ';
             } elseif ($highScore > 0) {
-                $recordPlain = " best: {$highScore}   ";
+                $recordPlain = Lang::t('ui.best', ['best' => $highScore]) . '   ';
             }
             $hint = self::pickHint(
                 $g,
                 $scoreText . $recordPlain,
-                'x splat - press r to try again, q to quit',
-                'x splat - r retry - q quit',
+                Lang::t('ui.plain_crash_full'),
+                Lang::t('ui.plain_crash_short'),
             );
             return implode("\n", $rows) . "\n " . $scoreText . $recordPlain . '    ' . $hint . "\n";
         }
         $bestPlain = '';
         if ($g->highScore() > 0) {
-            $bestPlain = " best: {$g->highScore()}";
+            $bestPlain = Lang::t('ui.best', ['best' => $g->highScore()]);
         }
         if ($g->started === false) {
             $hint = self::pickHint(
                 $g,
                 $scoreText . $bestPlain,
-                'press space/Enter/^/w to start . r retry . q quit',
-                'space to start . q quit',
+                Lang::t('ui.plain_ready_full'),
+                Lang::t('ui.plain_ready_short'),
             );
         } else {
             $hint = self::pickHint(
                 $g,
                 $scoreText . $bestPlain,
-                'space/Enter/^/w flap . r restart . q quit',
-                'space flap . q quit',
+                Lang::t('ui.plain_live_full'),
+                Lang::t('ui.plain_live_short'),
             );
         }
         return implode("\n", $rows) . "\n " . $scoreText . $bestPlain . '    ' . $hint . "\n";
@@ -265,15 +265,17 @@ final class Renderer
 
     private static function refusal(): string
     {
-        return "candy-flappy needs an interactive terminal.\n"
-            . "No usable colour capability was detected (non-TTY stdout or TERM=dumb).\n";
+        return Lang::t('notty.line1') . "\n"
+            . Lang::t('notty.line2') . "\n";
     }
 
     private static function tooSmallNotice(Game $g): string
     {
-        return "candy-flappy needs a " . Game::MIN_COLS . "x" . Game::MIN_ROWS . " terminal;"
-            . " this one is {$g->frameCols}x{$g->frameRows}.\n"
-            . "Resize the window and the game resumes right here.\n";
+        return Lang::t('size.notice', [
+            'need' => Game::MIN_COLS . 'x' . Game::MIN_ROWS,
+            'have' => "{$g->frameCols}x{$g->frameRows}",
+        ]) . "\n"
+            . Lang::t('size.resume') . "\n";
     }
 
     /**

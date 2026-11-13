@@ -27,6 +27,11 @@ metadata, so the CLI runs a named launch preflight instead: it prints the
 missing extension(s) and exits 2 rather than dying mid-first-frame with an
 undefined-function error.
 
+The in-game text is localized through a `lang/` catalogue (16 locales;
+`lang/en.php` is the source of truth, and the active locale is picked up
+from `$LANG`/`$LC_ALL`). The CLI's own usage and refusal lines deliberately
+stay English so they remain parseable even when the locale is broken.
+
 ## Install & run
 
 ```bash

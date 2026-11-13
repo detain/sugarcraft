@@ -59,6 +59,9 @@ if ($unknown !== []) {
     exit(2);
 }
 
+// flappy-05 mirroring bin/candy-flappy: in-game text follows the locale.
+\SugarCraft\Core\I18n\T::setLocale(\SugarCraft\Core\I18n\T::detect());
+
 // flappy-56 mirroring flappy-01: a pipe gets a plain refusal, not escape
 // bytes into a buffer. The colour force-rungs opt back in on purpose.
 $forceRung = static fn (string $name): bool => (string) (getenv($name) ?? '') !== ''

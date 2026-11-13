@@ -1,0 +1,33 @@
+<?php
+
+/**
+ * Portuguese translations for candy-flappy. Keys mirror en.php exactly;
+ * {placeholder} tokens, key names and separators are contract (LocaleParityTest).
+ *
+ * @return array<string, string>
+ */
+
+declare(strict_types=1);
+
+return [
+    'ui.score'               => 'pontos: {score}',
+    'ui.best'                => ' melhor: {best}',
+    'ui.new_best'            => ' 🏆 NOVO RECORDE: {best}',
+    'ui.plain_new_best'      => ' NOVO RECORDE: {best}',
+    'ui.crash_full'          => '💥 splat — pressione r para tentar de novo, q para sair',
+    'ui.crash_short'         => '💥 splat — r de novo · q sair',
+    'ui.ready_full'          => 'espaço/⏎/↑/w para começar · r reiniciar · q sair',
+    'ui.ready_short'         => 'espaço para começar · q sair',
+    'ui.live_full'           => 'espaço/⏎/↑/w bate · r reiniciar · q sair',
+    'ui.live_short'          => 'espaço bate · q sair',
+    'ui.plain_crash_full'    => 'x splat - pressione r para tentar de novo, q para sair',
+    'ui.plain_crash_short'   => 'x splat - r de novo - q sair',
+    'ui.plain_ready_full'    => 'espaco/Enter/^/w para comecar . r reiniciar . q sair',
+    'ui.plain_ready_short'   => 'espaco para comecar . q sair',
+    'ui.plain_live_full'     => 'espaco/Enter/^/w bate . r reiniciar . q sair',
+    'ui.plain_live_short'    => 'espaco bate . q sair',
+    'notty.line1'            => 'o candy-flappy precisa de um terminal interativo.',
+    'notty.line2'            => 'Nenhuma capacidade de cor utilizável detetada (stdout não-TTY ou TERM=dumb).',
+    'size.notice'            => 'o candy-flappy precisa de um terminal {need}; este tem {have}.',
+    'size.resume'            => 'Redimensione a janela e o jogo continua exatamente aqui.',
+];

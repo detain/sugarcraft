@@ -129,6 +129,13 @@ if ($unknown !== []) {
     exit(2);
 }
 
+// flappy-05 (finding -005): the renderer's in-game text is translated
+// (house pattern, cf. candy-minesweeper): in-game strings route through
+// Lang::t, and without this call T's 'en' default would make the shipped
+// locales unreachable. The bin's OWN usage/refusal prose stays English on
+// purpose — it must be parseable even when the terminal's locale is broken.
+\SugarCraft\Core\I18n\T::setLocale(\SugarCraft\Core\I18n\T::detect());
+
 // flappy-35 (finding -084): the frozen-vendor phar bypasses composer
 // metadata entirely, and sugar-core's cell-width maths hard-requires intl +
 // mbstring — missing extensions used to surface as an undefined-function
