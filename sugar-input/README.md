@@ -175,6 +175,29 @@ One-disposition law: a process holds exactly one `SIGWINCH` handler and
 your handler). Responding to resizes needs no handler of your own — poll
 `read()`; it returns the fresh dimensions.
 
+Wiring the two loop-shaped drivers, copy-paste true against the current
+constructors:
+
+```php
+use React\EventLoop\Loop;                    // react/event-loop
+use React\Stream\ReadableResourceStream;     // react/stream
+
+$driver = new ReactInputDriver(new ReadableResourceStream(STDIN, Loop::get()));
+$driver->on('data', static function (Event $event): void { /* one decoded event per emit */ });
+```
+
+```php
+$resize = new SignalResizeDriver();  // side-effect free, no arguments in production
+if ($resize->arm()) {                 // false without ext-pcntl: degrade, don't crash
+    // poll $resize->read() from your loop tick; it returns the fresh dimensions
+}
+```
+
+Both `SignalResizeDriver` constructor parameters are `@internal` test
+seams (`$commandRunner`, `$ttyProbe`); production construction takes no
+arguments, and PHP cannot seal a constructor parameter, so the boundary
+lives in the docblocks and here.
+
 ### Terminal setup is the host's duty
 
 This library never writes to the terminal. It only decodes what it is handed,
@@ -199,7 +222,8 @@ A paste larger than `PasteEvent::MAX_SIZE` (1 MiB) is handled in two phases:
 the head is announced exactly once as a `PasteEvent` with `content` clipped
 to the cap, `truncated` set, and `truncationNotice()` — a localized one-liner
 suitable for showing the user why their paste looks short (`lang/en.php`;
-locale resolution follows sugar-core's `I18n\Lang`). The REMAINING BODY IS
+locale resolution follows sugar-core's `I18n\Lang` — English-only today: the
+key resolves through sugar-core's fallback and lands on `en`). The REMAINING BODY IS
 THEN DISCARDED — counted by `discardedPasteBytes()` — until the real
 `CSI 201 ~` terminator arrives. Overflow bytes are never re-decoded as
 keystrokes: an injected 1 MiB+ paste can end up commanding your input loop,
@@ -224,6 +248,12 @@ never re-surfaced as its own event.
 | `PasteEvent` | `content`, `truncated`, `truncationNotice(): ?string` |
 | `ResizeEvent` | `cols`, `rows` — produced by `SignalResizeDriver` (see [Input drivers](#input-drivers)) |
 | `TerminalReplyEvent` | `family`, `params` (head-clamped to `MAX_PARAMS`, overflow counted in `paramsDropped`), `raw`, `body`, `truncated` |
+
+Every event class is also host-constructable: the named factories
+`KeyEvent::plain()` / `KeyEvent::esc()` and `MouseEvent::scrollUp()` /
+`scrollDown()` / `scrollLeft()` / `scrollRight()` cover the common shapes,
+and the `MouseEvent::ACTION_*` / `MouseEvent::BUTTON_*` constants make a
+direct `MouseEvent` constructor call readable.
 
 Control characters surface as `KeyEvent` pairing a character with the Ctrl
 modifier — 0x01 arrives as key `a` with `modifiers` carrying Ctrl, and the

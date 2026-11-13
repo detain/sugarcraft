@@ -98,16 +98,19 @@ final class SignalResizeDriver implements InputDriver
 
     /**
      * @var callable(string): (string|null|false) Executes one built command;
-     *      internal seam so tests can capture the command string without a
+     *      seam so tests can capture the command string without a
      *      shell. Defaults to `shell_exec()`.
+     * @internal Test seam, not public API — PHP cannot seal a constructor
+     *      parameter, so the boundary is stated here and in the README.
      */
     private $commandRunner;
 
     /**
      * @var callable(): (array{cols:int, rows:int}) First-arm probe of the
-     *      kernel terminal size; internal seam so tests keep the tput last
+     *      kernel terminal size; seam so tests keep the tput last
      *      resort reachable on hosts whose terminal answers the real ioctl.
      *      Defaults to sugar-core's Tty over STDOUT.
+     * @internal Test seam, not public API — same boundary note as above.
      */
     private $ttyProbe;
 
