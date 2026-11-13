@@ -288,7 +288,8 @@ final class ServerStatusPage extends PageBase
 
     private function renderHeader(): string
     {
-        $version = $this->context->versionString();
+        // Server-controlled banner text — sanitize at the egress (adminpages-006).
+        $version = CellValue::sanitize($this->context->versionString());
         $flavor = $this->context->flavor();
 
         $title = Style::new()->bold()->foreground(Color::hex('#22d3ee'))->render('Server Status');
@@ -496,7 +497,13 @@ final class ServerStatusPage extends PageBase
      */
     private function resolveValue(?string $value): ?string
     {
-        return ($value === null || $value === '') ? null : $value;
+        // SHOW VARIABLES values are server-controlled: sanitize on the way to
+        // the DefinitionList rows (adminpages-006 — the grid widgets downstream
+        // render, they do not neutralize).
+        if ($value === null || $value === '') {
+            return null;
+        }
+        return CellValue::sanitize($value);
     }
 
     /**
@@ -514,7 +521,11 @@ final class ServerStatusPage extends PageBase
             $value = '...' . substr($value, -37);
         }
 
-        return $value;
+        // Sanitize AFTER the byte-truncation (adminpages-006, the codified
+        // cut→sanitize order): a SHOW VARIABLES path is server-controlled, and
+        // the substr above measures raw bytes, so a cut landing mid-UTF-8 (or
+        // an ESC inside the path) must not survive into the row.
+        return CellValue::sanitize($value);
     }
 
     /**

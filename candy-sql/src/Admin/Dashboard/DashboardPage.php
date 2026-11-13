@@ -15,6 +15,7 @@ use SugarCraft\Sql\Admin\QueryLogger;
 use SugarCraft\Sql\Admin\ServerContextInterface;
 use SugarCraft\Sql\Db\Flavor;
 use SugarCraft\Sql\Db\Version;
+use SugarCraft\Sql\CellValue;
 use SugarCraft\Sql\Renderer;
 use SugarCraft\Constraints\Region;
 use SugarCraft\Constraints\Direction;
@@ -236,6 +237,13 @@ final class DashboardPage extends PageBase
         if (strlen($sql) > $sqlBudget) {
             $sql = substr($sql, 0, $sqlBudget - 1) . '…';
         }
+        // Sanitize AFTER the byte-truncation (DebugPage's codified order): a
+        // cut landing mid-UTF-8, or an ESC riding inside the SQL/server echo,
+        // must never reach the terminal — and the budget clamp above measures
+        // raw bytes on purpose so the cut cannot split an escape sequence
+        // wide open. (adminpages-006: this row builder consumes
+        // QueryLogger::entries() raw, NOT the sanitized displayLines().)
+        $sql = CellValue::sanitize($sql);
         $sqlStyled = Style::new()->foreground(Color::hex('#cdd6f4'))->render($sql);
 
         $rows = $entry['rows'] > 0
@@ -243,7 +251,10 @@ final class DashboardPage extends PageBase
             : '';
 
         $err = $entry['error'] !== null
-            ? ' ' . Style::new()->foreground(Color::hex('#f38ba8'))->render('⚠ ' . $entry['error'])
+            // Driver/server error text is hostile input: sanitize before it
+            // is painted (adminpages-006; displayLines() sanitizes its own
+            // copy, this raw-entries channel must not be the exception).
+            ? ' ' . Style::new()->foreground(Color::hex('#f38ba8'))->render('⚠ ' . CellValue::sanitize($entry['error']))
             : '';
 
         return "  {$time} {$type} {$sqlStyled}{$rows}{$err}";
@@ -697,7 +708,9 @@ final class DashboardPage extends PageBase
 
     private function renderHeader(): string
     {
-        $version = $this->context->versionString();
+        // VERSION() banner is server-controlled text: sanitize before the
+        // header concatenation (adminpages-006).
+        $version = CellValue::sanitize($this->context->versionString());
         $status = $this->paused ? ' [PAUSED]' : '';
 
         if ($this->isPostgres) {

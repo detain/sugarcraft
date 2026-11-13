@@ -8,6 +8,7 @@ use SugarCraft\Dashboard\Components\Card\Card;
 use SugarCraft\Dashboard\Components\Card\DefinitionList;
 use SugarCraft\Sql\Admin\Format;
 use SugarCraft\Sql\Admin\ServerContextInterface;
+use SugarCraft\Sql\CellValue;
 
 /**
  * Info card displaying server connection details and uptime.
@@ -41,16 +42,19 @@ final class ServerInfoCard
         $serverVars = $this->context->serverVariables();
         $statusVars = $this->context->statusVariables();
 
+        // Hostname/Socket/Version are server-controlled strings and the
+        // DefinitionList renders without neutralizing (adminpages-006).
         $host = $serverVars['Hostname'] ?? $this->resolveHost();
+        $host = is_string($host) ? CellValue::sanitize($host) : null;
 
         $socket = $serverVars['Socket'] ?? null;
-        $socket = ($socket !== null && $socket !== '') ? $socket : null;
+        $socket = ($socket !== null && $socket !== '') ? CellValue::sanitize($socket) : null;
 
         $port = $serverVars['Port'] ?? $serverVars['mysqlx_port'] ?? null;
         $port = ($port !== null && (int) $port > 0) ? (string) (int) $port : null;
 
         $version = $this->context->versionString();
-        $version = $version !== '' ? $version : null;
+        $version = $version !== '' ? CellValue::sanitize($version) : null;
 
         $uptimeStr = $statusVars['Uptime'] ?? null;
         $uptime = $uptimeStr !== null ? (int) $uptimeStr : null;

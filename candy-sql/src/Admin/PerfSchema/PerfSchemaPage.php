@@ -218,7 +218,12 @@ final class PerfSchemaPage extends PageBase implements RowNavigable
                 if (strlen($sql) > 100) {
                     $sql = substr($sql, 0, 97) . '...';
                 }
-                $lines[] = '  ' . Style::new()->foreground(Color::hex('#cdd6f4'))->render($sql);
+                // cut→sanitize (adminpages-026): the statement text may itself
+                // carry ESC bytes (it is persisted server-side — and the cut
+                // measures raw bytes), so the confirmation preview must not
+                // become the one channel that paints an escape at the prompt
+                // the user is about to answer with 'y'.
+                $lines[] = '  ' . Style::new()->foreground(Color::hex('#cdd6f4'))->render(CellValue::sanitize($sql));
             }
             $lines[] = '';
         } elseif ($this->actionMessage !== null) {
