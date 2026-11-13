@@ -111,7 +111,7 @@ final class BucketByTimeTest extends TestCase
 
     public function testFluentInterface(): void
     {
-        $bucketer = BucketByTime::create(10, fn(array $v) => array_sum(array_column($v, 'value')));
+        $bucketer = BucketByTime::new(10, fn(array $v) => array_sum(array_column($v, 'value')));
         $result = $bucketer
             ->add(5, 10.0)
             ->add(12, 20.0)
@@ -123,6 +123,6 @@ final class BucketByTimeTest extends TestCase
     public function testRejectNonPositiveInterval(): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        BucketByTime::create(0);
+        BucketByTime::new(0);
     }
 }

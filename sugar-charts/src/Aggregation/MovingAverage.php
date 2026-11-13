@@ -53,16 +53,7 @@ final class MovingAverage
         return new self($windowSize, $centered);
     }
 
-    /**
-     * @deprecated Use {@see self::new()}; kept as an alias for callers of
-     *             the original pandas-style spelling.
-     */
-    public static function create(int $windowSize, bool $centered = false): self
-    {
-        return self::new($windowSize, $centered);
-    }
-
-    /**
+        /**
      * Append a single value.
      *
      * @throws \InvalidArgumentException when $value is NaN or ±INF

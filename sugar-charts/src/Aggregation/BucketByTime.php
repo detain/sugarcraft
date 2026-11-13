@@ -35,7 +35,7 @@ final class BucketByTime
      */
     public static function sum(int $intervalSeconds, array $timestampedValues = [], int $offsetSeconds = 0): array
     {
-        return self::create($intervalSeconds, fn(array $v) => array_sum(array_column($v, 'value')), $offsetSeconds)
+        return self::new($intervalSeconds, fn(array $v) => array_sum(array_column($v, 'value')), $offsetSeconds)
             ->bucket($timestampedValues);
     }
 
@@ -44,7 +44,7 @@ final class BucketByTime
      */
     public static function mean(int $intervalSeconds, array $timestampedValues = [], int $offsetSeconds = 0): array
     {
-        return self::create($intervalSeconds, function (array $v): float {
+        return self::new($intervalSeconds, function (array $v): float {
             $vals = array_column($v, 'value');
             return count($vals) === 0 ? 0.0 : array_sum($vals) / count($vals);
         }, $offsetSeconds)->bucket($timestampedValues);
@@ -55,7 +55,7 @@ final class BucketByTime
      */
     public static function min(int $intervalSeconds, array $timestampedValues = [], int $offsetSeconds = 0): array
     {
-        return self::create($intervalSeconds, fn(array $v) => min(array_column($v, 'value')), $offsetSeconds)
+        return self::new($intervalSeconds, fn(array $v) => min(array_column($v, 'value')), $offsetSeconds)
             ->bucket($timestampedValues);
     }
 
@@ -64,7 +64,7 @@ final class BucketByTime
      */
     public static function max(int $intervalSeconds, array $timestampedValues = [], int $offsetSeconds = 0): array
     {
-        return self::create($intervalSeconds, fn(array $v) => max(array_column($v, 'value')), $offsetSeconds)
+        return self::new($intervalSeconds, fn(array $v) => max(array_column($v, 'value')), $offsetSeconds)
             ->bucket($timestampedValues);
     }
 
@@ -73,7 +73,7 @@ final class BucketByTime
      */
     public static function first(int $intervalSeconds, array $timestampedValues = [], int $offsetSeconds = 0): array
     {
-        return self::create($intervalSeconds, fn(array $v) => $v[0]['value'] ?? null, $offsetSeconds)
+        return self::new($intervalSeconds, fn(array $v) => $v[0]['value'] ?? null, $offsetSeconds)
             ->bucket($timestampedValues);
     }
 
@@ -82,7 +82,7 @@ final class BucketByTime
      */
     public static function last(int $intervalSeconds, array $timestampedValues = [], int $offsetSeconds = 0): array
     {
-        return self::create($intervalSeconds, fn(array $v) => end($v)['value'] ?? null, $offsetSeconds)
+        return self::new($intervalSeconds, fn(array $v) => end($v)['value'] ?? null, $offsetSeconds)
             ->bucket($timestampedValues);
     }
 
@@ -95,16 +95,7 @@ final class BucketByTime
         return new self($intervalSeconds, $aggregator, $offsetSeconds);
     }
 
-    /**
-     * @deprecated Use {@see self::new()}; kept as an alias for callers of
-     *             the original spelling.
-     */
-    public static function create(int $intervalSeconds, ?\Closure $aggregator = null, int $offsetSeconds = 0): self
-    {
-        return self::new($intervalSeconds, $aggregator, $offsetSeconds);
-    }
-
-    /**
+        /**
      * Add a single timestamped point.
      *
      * @throws \InvalidArgumentException when $value is NaN or ±INF

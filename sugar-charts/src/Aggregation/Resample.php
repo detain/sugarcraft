@@ -90,16 +90,7 @@ final class Resample
         return new self($targetIntervalSeconds, $startTimestamp);
     }
 
-    /**
-     * @deprecated Use {@see self::new()}; kept as an alias for callers of
-     *             the original pandas-style spelling.
-     */
-    public static function create(int $targetIntervalSeconds, int $startTimestamp = 0): self
-    {
-        return self::new($targetIntervalSeconds, $startTimestamp);
-    }
-
-    /**
+        /**
      * Add a single timestamped point.
      *
      * @throws \InvalidArgumentException when $value is NaN or ±INF

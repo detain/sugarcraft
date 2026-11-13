@@ -79,7 +79,7 @@ final class ResampleTest extends TestCase
 
     public function testFluentInterface(): void
     {
-        $resampler = Resample::create(10);
+        $resampler = Resample::new(10);
         $result = $resampler
             ->add(5, 15.0)
             ->add(15, 25.0)
@@ -105,7 +105,7 @@ final class ResampleTest extends TestCase
             ['ts' => 20, 'value' => 30.0],
         ];
 
-        $result = Resample::create(15, 0)->resample($denseData);
+        $result = Resample::new(15, 0)->resample($denseData);
         $this->assertNotEmpty($result);
     }
 }

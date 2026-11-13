@@ -82,7 +82,7 @@ final class MovingAverageTest extends TestCase
 
     public function testFluentInterface(): void
     {
-        $ma = MovingAverage::create(3)
+        $ma = MovingAverage::new(3)
             ->add(10.0)
             ->add(20.0)
             ->add(30.0);
@@ -100,7 +100,7 @@ final class MovingAverageTest extends TestCase
 
     public function testClearResetsValues(): void
     {
-        $ma = MovingAverage::create(3)
+        $ma = MovingAverage::new(3)
             ->add(10.0)
             ->add(20.0);
 
@@ -111,12 +111,12 @@ final class MovingAverageTest extends TestCase
     public function testRejectNonPositiveWindow(): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        MovingAverage::create(0);
+        MovingAverage::new(0);
     }
 
     public function testAddMany(): void
     {
-        $ma = MovingAverage::create(2)->addMany([10.0, 20.0, 30.0]);
+        $ma = MovingAverage::new(2)->addMany([10.0, 20.0, 30.0]);
         $sma = $ma->computeSimple();
 
         $this->assertCount(3, $sma);
