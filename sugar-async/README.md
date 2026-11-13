@@ -36,7 +36,7 @@ exactly one request.
 - PHP 8.3+
 - `react/event-loop: ^1.6`
 - `react/promise: ^3.3`
-- `sugarcraft/sugar-core` (shared i18n Lang base)
+- `sugarcraft/sugar-core` (shared `Lang` base class; this lib's message catalogue is English-literals-by-design, see LangTest)
 
 ## Installation
 

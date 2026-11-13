@@ -10,8 +10,11 @@ use SugarCraft\Core\I18n\Lang as BaseLang;
  * Per-library translation facade for sugar-async.
  *
  * Wraps the shared {@see \SugarCraft\Core\I18n\T} registry with the
- * 'async' namespace baked in. Translated strings live in
- * {@see ../lang/en.php}.
+ * 'async' namespace baked in. This library's messages are English literals
+ * at their sites; the catalogue in ../lang/en.php is empty scaffolding, not
+ * a live translation set. Until a wiring decision lands, every Lang::t()
+ * call falls through the base chain (exact → base → en → raw key) and
+ * returns the namespaced key itself.
  *
  * @extends BaseLang
  */
