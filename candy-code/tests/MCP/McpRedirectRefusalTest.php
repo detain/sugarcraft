@@ -11,6 +11,7 @@ use GuzzleHttp\Psr7\Response;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Psr\Http\Message\RequestInterface;
+use SugarCraft\Code\Commands\McpAuthCommand;
 use SugarCraft\Code\MCP\HttpMcpServer;
 use SugarCraft\Code\MCP\OAuthClientRegistration;
 
@@ -36,8 +37,9 @@ use SugarCraft\Code\MCP\OAuthClientRegistration;
  *
  * The SSE transport's POST-side pin lives with its socket-pair harness in
  * SseMcpServerTest; the GET-side refusal pin predates this round there.
- * Stdio has no HTTP egress at all, and the curl metadata fetch in
- * McpAuthCommand never set CURLOPT_FOLLOWLOCATION.
+ * Stdio has no HTTP egress at all. The curl metadata fetch in
+ * McpAuthCommand used to set CURLOPT_FOLLOWLOCATION => true (S-N01); its
+ * pins are at the bottom of this class.
  */
 final class McpRedirectRefusalTest extends TestCase
 {
@@ -286,5 +288,94 @@ final class McpRedirectRefusalTest extends TestCase
                 static fn(array $e): bool => str_contains((string) $e[0]->getUri(), 'evil.example'),
             ),
         ));
+    }
+
+    public function testMetadataFetchRefusesARedirectAndNeverContactsTheTarget(): void
+    {
+        [$proc, $port, $dir] = $this->startMetadataServer();
+        try {
+            try {
+                McpAuthCommand::fetchOAuthMetadata("http://127.0.0.1:{$port}/redirect");
+                self::fail('a 3xx metadata answer must throw');
+            } catch (\RuntimeException $e) {
+                self::assertStringContainsString('HTTP 302', $e->getMessage());
+                self::assertStringContainsString('does not follow redirects', $e->getMessage());
+            }
+            self::assertFileDoesNotExist($dir . '/canary-hit', 'the redirect target was contacted');
+        } finally {
+            $this->stopMetadataServer($proc, $dir);
+        }
+    }
+
+    public function testMetadataFetchStillReadsADirect200Document(): void
+    {
+        [$proc, $port, $dir] = $this->startMetadataServer();
+        try {
+            self::assertSame(
+                ['token_endpoint' => 'https://h/token'],
+                McpAuthCommand::fetchOAuthMetadata("http://127.0.0.1:{$port}/ok"),
+            );
+        } finally {
+            $this->stopMetadataServer($proc, $dir);
+        }
+    }
+
+    /** @return array{0: resource, 1: int, 2: string} */
+    private function startMetadataServer(): array
+    {
+        $dir = sys_get_temp_dir() . '/mcp_redirect_meta_' . uniqid((string) getmypid(), true);
+        mkdir($dir, 0700, true);
+        file_put_contents($dir . '/router.php', <<<'PHP'
+            <?php
+            $path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+            header('Content-Type: application/json');
+            if ($path === '/redirect') {
+                http_response_code(302);
+                header('Location: /canary');
+            } elseif ($path === '/canary') {
+                file_put_contents(__DIR__ . '/canary-hit', '1');
+                echo json_encode(['token_endpoint' => 'https://evil/token']);
+            } else {
+                echo json_encode(['token_endpoint' => 'https://h/token']);
+            }
+            PHP);
+
+        $probe = stream_socket_server('tcp://127.0.0.1:0');
+        self::assertNotFalse($probe);
+        $name = (string) stream_socket_get_name($probe, false);
+        fclose($probe);
+        $port = (int) substr($name, (int) strrpos($name, ':') + 1);
+
+        $proc = proc_open(
+            [PHP_BINARY, '-S', '127.0.0.1:' . $port, $dir . '/router.php'],
+            [0 => ['file', '/dev/null', 'r'], 1 => ['file', '/dev/null', 'w'], 2 => ['file', '/dev/null', 'w']],
+            $pipes,
+            $dir,
+        );
+        self::assertIsResource($proc);
+
+        $deadline = microtime(true) + 5.0;
+        while (microtime(true) < $deadline) {
+            $socket = @fsockopen('127.0.0.1', $port, $errno, $errstr, 0.2);
+            if ($socket !== false) {
+                fclose($socket);
+
+                return [$proc, $port, $dir];
+            }
+            usleep(50_000);
+        }
+        $this->stopMetadataServer($proc, $dir);
+        self::fail('metadata fixture server did not start');
+    }
+
+    /** @param resource $proc */
+    private function stopMetadataServer($proc, string $dir): void
+    {
+        proc_terminate($proc, 9);
+        proc_close($proc);
+        foreach (glob($dir . '/*') ?: [] as $f) {
+            @unlink($f);
+        }
+        @rmdir($dir);
     }
 }

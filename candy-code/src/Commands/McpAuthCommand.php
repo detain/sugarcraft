@@ -672,6 +672,11 @@ final class McpAuthCommand
      * is read after the exchange, so the request options above stay exactly
      * the policy they were.
      *
+     * S-N01: redirects are NOT followed (CURLOPT_FOLLOWLOCATION off) and a
+     * 3xx answer throws by name, matching the Guzzle MCP transports and
+     * {@see \SugarCraft\Code\MCP\OAuthClientRegistration}; discovery reads
+     * the throw as "not here".
+     *
      * @return array<string, mixed>
      */
     public static function fetchOAuthMetadata(string $url): array
@@ -684,7 +689,7 @@ final class McpAuthCommand
         curl_setopt_array($ch, [
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_TIMEOUT => 10,
-            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_FOLLOWLOCATION => false,
             CURLOPT_SSL_VERIFYPEER => true,
             CURLOPT_HTTPHEADER => ['Accept: application/json'],
         ]);
@@ -697,6 +702,16 @@ final class McpAuthCommand
 
         if ($errno !== 0) {
             throw new \RuntimeException("cURL error {$errno}: {$error}");
+        }
+
+        if ($status >= 300 && $status <= 399) {
+            // S-N01: same posture as every MCP transport (allow_redirects=false).
+            // The discovered document names the token and registration
+            // endpoints that later receive credentials, so a hop to another
+            // host must not be able to substitute it silently.
+            throw new \RuntimeException(
+                "HTTP {$status} from metadata URL: the metadata fetch was redirected, and OAuth discovery does not follow redirects (a redirect could substitute the authorization server)",
+            );
         }
 
         if ($status < 200 || $status > 299) {
