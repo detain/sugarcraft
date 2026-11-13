@@ -283,6 +283,19 @@ final class HookRegistry
 
         // Validate the pattern compiles before use
         if (@preg_match($compiled, '') === false) {
+            // Cannot be fail-closed into "matching" (there is no pattern to
+            // trust), so the hook is skipped — but a skip nobody hears about
+            // is a guard that silently never fires. Record and warn once per
+            // pattern, as the runtime-failure arm below does.
+            if (!isset($this->matcherFailures[$pattern])) {
+                RuntimeNoticeSink::warn(sprintf(
+                    'A hook matcher is not a valid pattern: %s (%s). The hook was skipped and will never fire — fix the matcher.',
+                    $pattern,
+                    preg_last_error_msg(),
+                ));
+            }
+            $this->matcherFailures[$pattern] = preg_last_error_msg();
+
             return false;
         }
 

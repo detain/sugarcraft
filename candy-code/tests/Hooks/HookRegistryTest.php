@@ -351,6 +351,26 @@ final class HookRegistryTest extends TestCase
         }
     }
 
+    /** A matcher that does not compile is skipped, but recorded and warned once rather than silently. */
+    public function testUncompilableMatcherIsRecordedNotWhispered(): void
+    {
+        $this->registry->register($this->createHook('BadPattern', HookEvent::PreToolUse, 'x', '(unclosed'));
+        RuntimeNoticeSink::reset();
+        RuntimeNoticeSink::arm(crossFork: false);
+
+        try {
+            $first = $this->registry->findMatches('PreToolUse', 'Read');
+            $this->registry->findMatches('PreToolUse', 'Read');
+            $notices = RuntimeNoticeSink::drain();
+        } finally {
+            RuntimeNoticeSink::reset();
+        }
+
+        $this->assertSame([], $first, 'an uncompilable matcher still skips the hook');
+        $this->assertArrayHasKey('(unclosed', $this->registry->matcherFailures());
+        $this->assertCount(1, $notices, 'one notice per pattern, not per call');
+    }
+
     /** The failure log stays empty when every matcher evaluates normally. */
     public function testMatcherFailuresIsEmptyWhenNothingFails(): void    {
         $this->registry->register($this->createHook('OrdinaryHook', HookEvent::PreToolUse, 'Read', '^Read$'));
