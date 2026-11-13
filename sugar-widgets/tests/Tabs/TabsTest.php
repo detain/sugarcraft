@@ -23,7 +23,7 @@ final class TabsTest extends TestCase
     private function focused(Tabs $t = null): Tabs
     {
         $t = $t ?? $this->tabs();
-        [$t, ] = $t->focus();
+        $t = $t->focus();
         return $t;
     }
 
@@ -199,7 +199,7 @@ final class TabsTest extends TestCase
     {
         $t = $this->tabs();
         $this->assertFalse($t->focused);
-        [$t, ] = $t->focus();
+        $t = $t->focus();
         $this->assertTrue($t->focused);
     }
 
@@ -399,7 +399,7 @@ final class TabsTest extends TestCase
     {
         $manager = \SugarCraft\Mouse\Zones\Manager::newPrefix('test');
         $t = $this->tabs()->withZoneManager($manager);
-        [$t, ] = $t->focus();
+        $t = $t->focus();
 
         // Click on tab-1 (Profile).
         $zone = new \SugarCraft\Mouse\Zones\Zone('test-tab-1', 7, 1, 14, 1);
@@ -429,7 +429,7 @@ final class TabsTest extends TestCase
         $manager = \SugarCraft\Mouse\Zones\Manager::newPrefix('test');
         // Tab 2 is outside the default scroll window when width is small.
         $t = $this->tabs()->withWidth(15)->withZoneManager($manager);
-        [$t, ] = $t->focus();
+        $t = $t->focus();
 
         $zone = new \SugarCraft\Mouse\Zones\Zone('test-tab-2', 30, 1, 38, 1);
         $mouse = new \SugarCraft\Core\Msg\MouseMsg(35, 1, \SugarCraft\Core\MouseButton::Left, \SugarCraft\Core\MouseAction::Press);
@@ -496,7 +496,7 @@ final class TabsTest extends TestCase
         $t = $this->tabs(['A', 'B', 'C', 'D', 'E'])
             ->withWidth(10)
             ->withScrollOffset(0)
-            ->focus()[0];
+            ->focus();
 
         // With width=10 and labels ['A','B','C','D','E'], each ' A ' = 3 cells.
         // At scrollOffset=0: only tab A fits (cursor=3), tab B needs 9 total (fits),
@@ -599,7 +599,7 @@ final class TabsTest extends TestCase
      */
     public function testActiveBeyondLeftEllipsizedWindowSurvivesGuard(): void
     {
-        $t = Tabs::new(['A', 'B', 'C', 'D', 'E'], 9)->focus()[0];
+        $t = Tabs::new(['A', 'B', 'C', 'D', 'E'], 9)->focus();
         for ($i = 0; $i < 4; $i++) {
             [$t, ] = $t->update(new KeyMsg(KeyType::Tab));
         }
@@ -729,7 +729,7 @@ final class TabsTest extends TestCase
      */
     public function testFocusUnderlinesTheActiveTab(): void
     {
-        [$focused, ] = Tabs::new(['Home', 'Profile'])->withWidth(200)->focus();
+        $focused = Tabs::new(['Home', 'Profile'])->withWidth(200)->focus();
         $blurred = Tabs::new(['Home', 'Profile'])->withWidth(200);
 
         $this->assertStringContainsString("\x1b[1;4m Home \x1b[0m", $focused->view());
@@ -748,7 +748,7 @@ final class TabsTest extends TestCase
     public function testZoneIdWithTabPrefixEmbeddedRoutesByLastSegment(): void
     {
         $t = Tabs::new(['A', 'B', 'C', 'D', 'E']);
-        [$t, ] = $t->focus();
+        $t = $t->focus();
 
         // First "tab-" says 4 (valid index!), last says 1 — 1 is the truth.
         $zone = new \SugarCraft\Mouse\Zones\Zone('tab-4table-tab-1', 7, 1, 14, 1);

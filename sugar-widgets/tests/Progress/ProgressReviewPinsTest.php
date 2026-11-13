@@ -52,7 +52,7 @@ final class ProgressReviewPinsTest extends TestCase
     public function testSpringCacheSurvivesAnimationCopies(): void
     {
         $bar = AnimatedProgress::new(40)->withWidth(40);
-        [$moving, $cmd] = $bar->setPercent(0.5);
+        [$moving, $cmd] = $bar->setPercentWithCmd(0.5);
         self::assertNotNull($cmd);
 
         $prop = new \ReflectionProperty(AnimatedProgress::class, 'spring');

@@ -424,12 +424,10 @@ final class Tabs implements Model
         return $this->copy(wrap: false);
     }
 
-    /**
-     * @return array{0:self, 1:?\Closure}
-     */
-    public function focus(): array
+    /** Take focus; companion to {@see blur()} — a pure value verb. */
+    public function focus(): self
     {
-        return [$this->copy(focused: true), null];
+        return $this->copy(focused: true);
     }
 
     public function blur(): self

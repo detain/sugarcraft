@@ -28,5 +28,5 @@ echo "\x1b[36mDefault rendering\x1b[0m\n";
 echo $table->view() . "\n\n";
 
 echo "\x1b[36mWith focus on row 3\x1b[0m\n";
-[$focused] = $table->focus();
+$focused = $table->focus();
 echo $focused->moveDown()->moveDown()->view() . "\n";

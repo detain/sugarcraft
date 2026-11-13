@@ -365,12 +365,10 @@ final class Table implements Model
         return $this->cursor;
     }
 
-    /**
-     * @return array{0:self, 1:?\Closure}
-     */
-    public function focus(): array
+    /** Take focus; companion to {@see blur()} — a pure value verb. */
+    public function focus(): self
     {
-        return [$this->mutate(focused: true), null];
+        return $this->mutate(focused: true);
     }
 
     /** Release focus; companion to {@see focus()}. */

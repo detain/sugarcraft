@@ -23,7 +23,7 @@ final class AnimatedProgressTest extends TestCase
     public function testSetPercentSchedulesTickAndAnimates(): void
     {
         $p = AnimatedProgress::new()->withFps(60.0);
-        [$next, $cmd] = $p->setPercent(0.5);
+        [$next, $cmd] = $p->setPercentWithCmd(0.5);
         $this->assertSame(0.5, $next->target);
         $this->assertTrue($next->isAnimating());
         $this->assertNotNull($cmd);
@@ -36,8 +36,8 @@ final class AnimatedProgressTest extends TestCase
     public function testSetPercentClampsToZeroOne(): void
     {
         $p = AnimatedProgress::new();
-        [$over, ]  = $p->setPercent(1.5);
-        [$under, ] = $p->setPercent(-0.5);
+        [$over, ]  = $p->setPercentWithCmd(1.5);
+        [$under, ] = $p->setPercentWithCmd(-0.5);
         $this->assertSame(1.0, $over->target);
         $this->assertSame(0.0, $under->target);
     }
@@ -45,7 +45,7 @@ final class AnimatedProgressTest extends TestCase
     public function testTickAdvancesTowardTarget(): void
     {
         $p = AnimatedProgress::new()->withFps(60.0);
-        [$p, ] = $p->setPercent(1.0);
+        [$p, ] = $p->setPercentWithCmd(1.0);
         // Drive a few ticks and expect current to advance from 0 toward 1.
         for ($i = 0; $i < 5; $i++) {
             [$p, ] = $p->update(new SpringTickMsg($p->id, $p->epoch));
@@ -57,17 +57,17 @@ final class AnimatedProgressTest extends TestCase
     public function testIncrAndDecrAdjustTarget(): void
     {
         $p = AnimatedProgress::new();
-        [$p, ] = $p->setPercent(0.5);
-        [$incr, ] = $p->incrPercent(0.2);
+        [$p, ] = $p->setPercentWithCmd(0.5);
+        [$incr, ] = $p->incrPercentWithCmd(0.2);
         $this->assertEqualsWithDelta(0.7, $incr->target, 1e-9);
-        [$decr, ] = $p->decrPercent(0.3);
+        [$decr, ] = $p->decrPercentWithCmd(0.3);
         $this->assertEqualsWithDelta(0.2, $decr->target, 1e-9);
     }
 
     public function testJumpToSnapsAndStopsAnimating(): void
     {
         $p = AnimatedProgress::new();
-        [$p, ] = $p->setPercent(1.0);
+        [$p, ] = $p->setPercentWithCmd(1.0);
         $this->assertTrue($p->isAnimating());
         $p = $p->jumpTo(0.8);
         $this->assertSame(0.8, $p->current);
@@ -86,7 +86,7 @@ final class AnimatedProgressTest extends TestCase
     public function testEventuallySettlesWithinTolerance(): void
     {
         $p = AnimatedProgress::new()->withFps(60.0);
-        [$p, ] = $p->setPercent(1.0);
+        [$p, ] = $p->setPercentWithCmd(1.0);
         // Run a long sequence of ticks; the bar should settle.
         for ($i = 0; $i < 5000 && $p->isAnimating(); $i++) {
             [$p, ] = $p->update(new SpringTickMsg($p->id, $p->epoch));
@@ -98,7 +98,7 @@ final class AnimatedProgressTest extends TestCase
     public function testViewRendersCurrentPercentNotTarget(): void
     {
         $p = AnimatedProgress::new()->withFps(60.0);
-        [$p, ] = $p->setPercent(1.0);
+        [$p, ] = $p->setPercentWithCmd(1.0);
         // After one tick current is non-zero but well below 1.0; view()
         // must reflect current, not target.
         [$p, ] = $p->update(new SpringTickMsg($p->id, $p->epoch));
@@ -205,8 +205,8 @@ final class AnimatedProgressTest extends TestCase
 
     public function testConcurrentBarsAdvanceOnlyTheirOwnChain(): void
     {
-        [$a, ] = AnimatedProgress::new()->withFps(60.0)->setPercent(1.0);
-        [$b, ] = AnimatedProgress::new()->withFps(60.0)->setPercent(1.0);
+        [$a, ] = AnimatedProgress::new()->withFps(60.0)->setPercentWithCmd(1.0);
+        [$b, ] = AnimatedProgress::new()->withFps(60.0)->setPercentWithCmd(1.0);
         $bBefore = $b;
         for ($i = 0; $i < 5; $i++) {
             [$a, ] = $a->update(new SpringTickMsg($a->id, $a->epoch));
@@ -223,8 +223,8 @@ final class AnimatedProgressTest extends TestCase
 
     public function testStaleEpochTickIsRefused(): void
     {
-        [$p1, ] = AnimatedProgress::new()->setPercent(0.5);
-        [$p2, ] = $p1->setPercent(0.8); // new generation bumps the epoch
+        [$p1, ] = AnimatedProgress::new()->setPercentWithCmd(0.5);
+        [$p2, ] = $p1->setPercentWithCmd(0.8); // new generation bumps the epoch
         $this->assertSame($p1->epoch + 1, $p2->epoch);
         [$stale, $cmd] = $p2->update(new SpringTickMsg($p1->id, $p1->epoch));
         $this->assertSame($p2, $stale, 'in-flight tick from the previous generation is refused');
@@ -233,7 +233,7 @@ final class AnimatedProgressTest extends TestCase
 
     public function testNaNPercentClampsToEmptyBarNotFull(): void
     {
-        [$p, ] = AnimatedProgress::new()->setPercent(NAN);
+        [$p, ] = AnimatedProgress::new()->setPercentWithCmd(NAN);
         $this->assertSame(0.0, $p->target);
         $p = $p->jumpTo(NAN);
         $this->assertSame(0.0, $p->current);
@@ -244,7 +244,7 @@ final class AnimatedProgressTest extends TestCase
     {
         // withFps(0.5): the single clock floors the rate at 1 — the old
         // (int) truncation handed Spring::fps(0) and died on first tick.
-        [$p, ] = AnimatedProgress::new()->withFps(0.5)->setPercent(1.0);
+        [$p, ] = AnimatedProgress::new()->withFps(0.5)->setPercentWithCmd(1.0);
         [$moved, $cmd] = $p->update(new SpringTickMsg($p->id, $p->epoch));
         $this->assertGreaterThan(0.0, $moved->current);
         $this->assertNotNull($cmd);

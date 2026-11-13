@@ -38,7 +38,7 @@ $tree = Tree::new(
     Node::leaf('TODO.md',             '~/TODO.md'),
 )->withSize(60, 12);
 
-[$tree, ] = $tree->focus();
+$tree = $tree->focus();
 
 $model = new class($tree) implements Model {
     public function __construct(private readonly Tree $tree) {}

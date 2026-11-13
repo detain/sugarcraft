@@ -228,7 +228,7 @@ final class Tree implements Model
     public function isFocused(): bool { return $this->focused; }
 
     /** Take focus. */
-    public function focus(): array { return [$this->copy(focused: true), null]; }
+    public function focus(): self { return $this->copy(focused: true); }
 
     /** Release focus; companion to {@see focus()}. */
     public function blur(): self { return $this->copy(focused: false); }

@@ -32,7 +32,7 @@ final class TreeReviewPinsTest extends TestCase
             cursorPrefix: ">\u{1B}[0m ",
             leafGlyph: "L\u{E000}",
         );
-        [$focused] = $styled->focus();
+        $focused = $styled->focus();
 
         // controlChars folds the ESC payload; the sentinel is swept.
         self::assertStringNotContainsString("\u{1B}", $styled->cursorPrefix);

@@ -146,6 +146,31 @@ Reduced motion is gated per component: `AnimatedProgress` honours
 hosts that follow WCAG 2.2.2 must stop forwarding those ticks when the
 user asks for reduced motion.
 
+### Verb return-shape parity
+
+The house law (W-10): a value verb returns `self`; only `update()` — and
+the explicitly command-carrying `*WithCmd` / state-machine verbs — return
+the `[model, ?Cmd]` tuple that the Program dispatches. `subscriptions()`
+already carries the tick-arming capability, so nothing else needs to.
+
+| Component | Value verbs (`self`) | Command-carrying (`[model, ?Cmd]`) |
+|---|---|---|
+| `Progress` | `withPercent` / `incrPercent` / `decrPercent` / `with*` | `update()` (pass-through) |
+| `AnimatedProgress` | `setPercent` / `incrPercent` / `decrPercent` / `jumpTo` / `with*` | `setPercentWithCmd` / `incrPercentWithCmd` / `decrPercentWithCmd`, `update()` |
+| `Timer` | `stop` / `reset` / `withInterval` | `start()` / `toggle()`, `update()` |
+| `Stopwatch` | `stop` / `reset` / `withInterval` | `start()` / `toggle()`, `update()` |
+| `Tabs` / `Table` / `Tree` | `focus` / `blur` / `with*` / cursor moves | `update()` |
+| `Paginator` | `with*` | `update()` |
+| `Help` | `with*` — not a `Model`; `update()`/`updateWithBinding()` are bespoke `self` verbs (rationale in its docblock) | — |
+
+`AnimatedProgress` previously contradicted *itself* (`setPercent` array
+vs `jumpTo` self), and `focus()` wrapped an always-`null` command on
+Tabs/Table/Tree while `blur()` returned `self` — both are now resolved;
+dropping the empty tuple from `focus()` carries zero lost capability
+(no in-repo consumer needed the null), and the old array flows migrate to
+the `*WithCmd` spellings. A static→animated drop-in that calls
+`withPercent`-style verbs compiles without a `TypeError` either way.
+
 ## Quickstart — TextInput with autocomplete
 
 > `TextInput` (and `Spinner`) are deprecated `sugar-forms` re-exports.
@@ -211,7 +236,7 @@ $bar = AnimatedProgress::new()
     ->withWidth(40)
     ->withDefaultGradient();
 
-[$bar, $cmd] = $bar->setPercent(0.75);
+[$bar, $cmd] = $bar->setPercentWithCmd(0.75);
 // dispatch $cmd via the Program — ticks re-fire from inside update()
 // until the bar settles within 5e-4 of the target.
 ```

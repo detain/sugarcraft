@@ -47,7 +47,7 @@ final class TreeVisibleRowsTest extends FrameworkTestCase
     public function testCollapseRebuildsProjectionAndLeavesOriginalIntact(): void
     {
         $tree = $this->nested();
-        [$focused, ] = $tree->focus();
+        $focused = $tree->focus();
         $collapsed = $focused->collapseAtCursor(); // cursor 0 = 'src'
 
         $this->assertCount(5, $tree->visibleRows(), 'original tree must never mutate (E736/4.1)');
@@ -63,7 +63,7 @@ final class TreeVisibleRowsTest extends FrameworkTestCase
     public function testDeepExpandKeepsSiblingsAndPathsValid(): void
     {
         $tree = $this->nested();
-        [$focused, ] = $tree->focus();
+        $focused = $tree->focus();
         $open = $focused->cursorDown(); // down to 'inner' (index 1)
         $this->assertSame('inner', $open->selectedNode()?->label);
         $reopened = $open->expandAtCursor();          // no-op: already expanded

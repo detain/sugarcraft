@@ -28,7 +28,7 @@ final class TreeTest extends TestCase
 
     private function focused(Tree $t): Tree
     {
-        [$t, ] = $t->focus();
+        $t = $t->focus();
         return $t;
     }
 
@@ -205,9 +205,8 @@ final class TreeTest extends TestCase
         $t = $this->sample();
         $this->assertFalse($t->isFocused());
 
-        [$t, $cmd] = $t->focus();
+        $t = $t->focus(); // pure value verb (W-10 parity: focus never carried a command)
         $this->assertTrue($t->isFocused());
-        $this->assertNull($cmd);
 
         $t = $t->blur();
         $this->assertFalse($t->isFocused());

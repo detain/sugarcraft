@@ -29,7 +29,7 @@ $tabs = Tabs::new($labels, 60)
     ->withActiveStyle(Style::new()->bold()->foreground(\SugarCraft\Core\Util\Color::ansi(14)))
     ->withInactiveStyle(Style::new()->foreground(\SugarCraft\Core\Util\Color::ansi(8)));
 
-[$tabs, ] = $tabs->focus();
+$tabs = $tabs->focus();
 
 $model = new class($tabs, $labels) implements Model {
     public function __construct(

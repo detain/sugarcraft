@@ -7,7 +7,8 @@ namespace SugarCraft\Widgets\Progress;
 use SugarCraft\Core\Msg;
 
 /**
- * Tick dispatched by {@see AnimatedProgress::setPercent()}. Each tick
+ * Tick dispatched by {@see AnimatedProgress::setPercentWithCmd()} (and
+ * re-issued by the in-flight chain). Each tick
  * advances the spring integrator; the model re-issues the Cmd until the
  * bar settles.
  *

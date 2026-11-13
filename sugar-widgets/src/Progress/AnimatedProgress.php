@@ -17,14 +17,15 @@ use SugarCraft\Core\Util\ColorProfile;
  * Wraps a static {@see Progress} with `(currentPercent, velocity,
  * targetPercent)` state that's integrated forward via a SugarSpring
  * {@see Spring} on every animation tick. Mirrors charmbracelet/bubbles'
- * `Progress` Model — `SetPercent` / `IncrPercent` / `DecrPercent`
- * return Cmds that schedule the first tick; subsequent ticks come
+ * `Progress` Model — the `*WithCmd` verbs return the model plus a Cmd
+ * that schedules the first tick (plain `setPercent`/`incrPercent`/
+ * `decrPercent` are the value-verb spellings); subsequent ticks come
  * back through `update()` and re-issue themselves until the bar
  * settles within tolerance of the target.
  *
  * ```php
  * $bar = AnimatedProgress::new()->withWidth(40)->withDefaultGradient();
- * [$bar, $cmd] = $bar->setPercent(0.5);   // schedule the animation
+ * [$bar, $cmd] = $bar->setPercentWithCmd(0.5);   // schedule the animation
  * // dispatch $cmd via the Program; SpringTickMsg's flow back into update().
  * ```
  *
@@ -143,29 +144,53 @@ final class AnimatedProgress implements Model
     }
 
     /**
-     * Move toward `$percent` in animated steps. Returns the new model
-     * plus a Cmd that fires the first tick. Subsequent ticks re-fire
+     * Move toward `$percent` in animated steps (value verb — pairs with
+     * {@see view()}; the animation chain is armed by the WithCmd forms
+     * below or by the self-reissuing ticks inside `update()` once a chain
+     * is in flight). Bumps the generation epoch, so ticks still in flight
+     * from the superseded transition are refused.
+     */
+    public function setPercent(float $percent): self
+    {
+        $clamped = self::clampPercent($percent);
+        return $this->copy(target: $clamped, animating: true, epoch: $this->epoch + 1);
+    }
+
+    /**
+     * Command-carrying companion of {@see setPercent()}: the new model plus
+     * the Cmd that fires the first tick. Subsequent ticks re-fire
      * automatically inside `update()` until the bar settles.
      *
      * @return array{0:self, 1:?\Closure}
      */
-    public function setPercent(float $percent): array
+    public function setPercentWithCmd(float $percent): array
     {
-        $clamped = self::clampPercent($percent);
-        $next = $this->copy(target: $clamped, animating: true, epoch: $this->epoch + 1);
+        $next = $this->setPercent($percent);
         return [$next, $next->scheduleTick()];
     }
 
-    /** @return array{0:self, 1:?\Closure} */
-    public function incrPercent(float $delta): array
+    /** Value verb; see {@see setPercent()}. Mirrors Bubbles' `IncrPercent`. */
+    public function incrPercent(float $delta): self
     {
         return $this->setPercent($this->target + $delta);
     }
 
     /** @return array{0:self, 1:?\Closure} */
-    public function decrPercent(float $delta): array
+    public function incrPercentWithCmd(float $delta): array
+    {
+        return $this->setPercentWithCmd($this->target + $delta);
+    }
+
+    /** Value verb; see {@see setPercent()}. Mirrors Bubbles' `DecrPercent`. */
+    public function decrPercent(float $delta): self
     {
         return $this->setPercent($this->target - $delta);
+    }
+
+    /** @return array{0:self, 1:?\Closure} */
+    public function decrPercentWithCmd(float $delta): array
+    {
+        return $this->setPercentWithCmd($this->target - $delta);
     }
 
     /** Snap the displayed percent to `$p` instantly without animating. */
