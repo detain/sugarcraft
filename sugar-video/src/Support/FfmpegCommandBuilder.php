@@ -93,22 +93,46 @@ final class FfmpegCommandBuilder
     }
 
     /**
+     * Redirect budget for the network transports when a host allowlist is
+     * active: zero — ffmpeg/ffplay/ffprobe must not follow ANY hop.
+     *
+     * WHY (SSRF): the allowlist validates the URL STRING Reel was handed —
+     * the first hop only. Left on defaults, a listed host answering
+     * `302 → http://169.254.169.254/…` reaches exactly the internal targets
+     * the allowlist exists to keep away, and the policy never sees it. With
+     * an allowlist bound, a legitimate CDN redirect fails loudly at
+     * open instead: the operator adds the redirect TARGET to the allowlist.
+     * Without an allowlist the transport default is kept (no behavior
+     * change for unrestricted callers).
+     */
+    public const ALLOWED_MAX_REDIRECTS = 0;
+
+    /**
      * The http/https protocol reconnect block, as input options (so BEFORE `-i`).
      *
      * A momentary drop or a slow signed-URL response would otherwise end the
      * stream; `delay_max 4` bounds the total retry window so a dead host still
      * fails rather than hanging playback behind an invisible reconnect loop.
      *
+     * @param bool $hostRestricted when a Reel host allowlist is bound, the
+     *               block also pins {@see ALLOWED_MAX_REDIRECTS} so the child
+     *               cannot ride a redirect out of the allowlist.
      * @return list<string>
      */
-    public static function networkReconnectFlags(): array
+    public static function networkReconnectFlags(bool $hostRestricted = false): array
     {
-        return [
+        $flags = [
             '-reconnect', '1',
             '-reconnect_streamed', '1',
             '-reconnect_on_network_error', '1',
             '-reconnect_delay_max', '4',
         ];
+
+        if ($hostRestricted) {
+            array_push($flags, '-max_redirects', (string) self::ALLOWED_MAX_REDIRECTS);
+        }
+
+        return $flags;
     }
 
     /**
@@ -190,10 +214,15 @@ final class FfmpegCommandBuilder
      *                            empty set (the local-file case) adds nothing,
      *                            so the argv stays what it was before headers
      *                            were ever threaded here.
+     * @param bool          $hostRestricted a bound Reel allowlist also pins
+     *                            `-max_redirects` (see {@see ALLOWED_MAX_REDIRECTS})
+     *                            for a network source, so the audio child cannot
+     *                            ride a redirect out of the policy the video
+     *                            path was checked against.
      *
      * @return list<string>
      */
-    public static function ffplayAudioCommand(string $binary, string $source, int $seekMs, HttpHeaders $headers): array
+    public static function ffplayAudioCommand(string $binary, string $source, int $seekMs, HttpHeaders $headers, bool $hostRestricted = false): array
     {
         $cmd = [$binary, '-nodisp', '-autoexit'];
         if ($seekMs > 0) {
@@ -202,6 +231,9 @@ final class FfmpegCommandBuilder
         // Input options must precede the file they apply to; ffplay has exactly
         // one input, so everything lands before it.
         array_push($cmd, ...self::headerInputFlags($headers));
+        if ($hostRestricted && self::isNetworkSource($source)) {
+            array_push($cmd, '-max_redirects', (string) self::ALLOWED_MAX_REDIRECTS);
+        }
         $cmd[] = $source;
 
         return $cmd;
@@ -212,16 +244,23 @@ final class FfmpegCommandBuilder
      * `--start=`, then the header fields and the source.
      *
      * @param int          $seekMs Milliseconds to start from; 0 omits `--start=`.
+     * @param bool         $hostRestricted a bound Reel allowlist pins
+     *                            `max_redirects=0` on mpv's libavformat http
+     *                            stream (same AVOption as the ffmpeg family
+     *                            uses), closing the identical redirect escape.
      *
      * @return list<string>
      */
-    public static function mpvAudioCommand(string $binary, string $source, int $seekMs, HttpHeaders $headers): array
+    public static function mpvAudioCommand(string $binary, string $source, int $seekMs, HttpHeaders $headers, bool $hostRestricted = false): array
     {
         $cmd = [$binary, '--no-video', '--really-quiet'];
         if ($seekMs > 0) {
             $cmd[] = '--start=' . self::secondsFromMillis($seekMs) . 's';
         }
         array_push($cmd, ...self::mpvHeaderFieldFlags($headers));
+        if ($hostRestricted && self::isNetworkSource($source)) {
+            $cmd[] = '--stream-lavf-o=max_redirects=' . self::ALLOWED_MAX_REDIRECTS;
+        }
         $cmd[] = $source;
 
         return $cmd;

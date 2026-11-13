@@ -59,6 +59,7 @@ class AudioPlayer
         private readonly ?\Closure $clock = null,
         array $headers = [],
         private bool $muted = false,
+        private readonly bool $hostRestricted = false,
     ) {
         $this->seekMs = $startMs ?? 0;
 
@@ -382,14 +383,14 @@ class AudioPlayer
         // Prefer ffplay.
         $ffplayPath = Probe::ffplay();
         if ($ffplayPath !== null) {
-            return FfmpegCommandBuilder::ffplayAudioCommand($ffplayPath, $this->videoPath, $this->seekMs, $this->headers);
+            return FfmpegCommandBuilder::ffplayAudioCommand($ffplayPath, $this->videoPath, $this->seekMs, $this->headers, $this->hostRestricted);
         }
 
         // Fall back to mpv. --no-video keeps it audio-only (no window);
         // --really-quiet suppresses its status output on our discarded pipes.
         $mpvPath = Probe::mpv();
         if ($mpvPath !== null) {
-            return FfmpegCommandBuilder::mpvAudioCommand($mpvPath, $this->videoPath, $this->seekMs, $this->headers);
+            return FfmpegCommandBuilder::mpvAudioCommand($mpvPath, $this->videoPath, $this->seekMs, $this->headers, $this->hostRestricted);
         }
 
         return null;

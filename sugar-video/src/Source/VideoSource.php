@@ -132,8 +132,13 @@ final class VideoSource
      * (path unchanged, w=0, h=0, duration=0.0, fps=0.0, hasAudio=false).
      *
      * @param string $path Absolute or relative path to the video file
+     * @param bool   $hostRestricted true when the calling Reel carries a bound
+     *        host allowlist: an http(s) probe then pins `-max_redirects 0`
+     *        (same SSRF transport law as the decoder — see
+     *        {@see FfmpegCommandBuilder::ALLOWED_MAX_REDIRECTS}), so even the
+     *        metadata child cannot be redirected out of the allowlist.
      */
-    public static function probe(string $path): self
+    public static function probe(string $path, bool $hostRestricted = false): self
     {
         $ffprobe = Probe::ffprobe();
         if ($ffprobe === null) {
@@ -165,8 +170,11 @@ final class VideoSource
             'json',
             '-show_format',
             '-show_streams',
-            $path,
         ];
+        if ($hostRestricted && FfmpegCommandBuilder::isNetworkSource($path)) {
+            array_push($cmd, '-max_redirects', (string) FfmpegCommandBuilder::ALLOWED_MAX_REDIRECTS);
+        }
+        $cmd[] = $path;
 
         $devNull = DIRECTORY_SEPARATOR === '\\' ? '\\\\.\\NUL' : '/dev/null';
         $descriptorSpec = [

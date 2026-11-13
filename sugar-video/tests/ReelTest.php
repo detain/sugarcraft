@@ -402,6 +402,77 @@ final class ReelTest extends TestCase
     }
 
     /**
+     * @testdox SV-H2: a bound allowlist translates into the zero-redirect transport pin
+     *
+     * Load-bearing: drop the hostRestricted threading in Reel/Player::open and
+     * the restricted assertion reddens (the policy must reach the transport,
+     * not just the first-hop string check).
+     */
+    public function testABoundAllowlistPutsThePlayerInRestrictedTransportMode(): void
+    {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('GD not available');
+        }
+
+        $gif = Synthetic::generate(
+            sys_get_temp_dir() . '/sugar-video-h2-' . getmypid() . '-' . bin2hex(random_bytes(4)) . '.gif',
+            16,
+            8,
+            4,
+            4,
+        );
+
+        $read = static fn (Player $p): bool => (new \ReflectionProperty(Player::class, 'hostRestricted'))->getValue($p);
+
+        try {
+            $restricted = $this->withoutPathBinaries(
+                static fn (): Player => Reel::open($gif)->withAllowedHosts(['cdn.example'])->toPlayer(),
+            );
+            try {
+                $this->assertTrue($read($restricted), 'a bound allowlist must restrict the transport of every child');
+            } finally {
+                $restricted->stop();
+            }
+
+            $unrestricted = $this->withoutPathBinaries(static fn (): Player => Reel::open($gif)->toPlayer());
+            try {
+                $this->assertFalse($read($unrestricted), 'no allowlist keeps the historical transport defaults');
+            } finally {
+                $unrestricted->stop();
+            }
+        } finally {
+            @unlink($gif);
+        }
+    }
+
+    /**
+     * @testdox SV-H2 (076): parser-divergent raw authorities are refused, not trusted
+     *
+     * Each shape is one that two URL parsers can read as two different hosts;
+     * under a host allowlist sugar-video refuses the shape outright instead of
+     * betting on one parser's verdict.
+     *
+     * @return array<string, array{0: string}>
+     */
+    public static function divergentAuthorityUrls(): array
+    {
+        return [
+            'backslash in the authority' => ['https://evil\\.example/clip.mp4'],
+            'semicolon parameter split' => ['https://trusted.example;evil.test/clip.mp4'],
+            'userinfo host shift' => ['https://user@trusted.example/clip.mp4'],
+            'percent-encoded delimiter' => ['https://trusted.example%40evil.test/clip.mp4'],
+        ];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('divergentAuthorityUrls')]
+    public function testAuthoritySpecialsAreRefusedBeforeTheHostIsTrusted(string $url): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Remote host not in allowlist');
+        Reel::openUrl($url, allowedHosts: ['trusted.example']);
+    }
+
+    /**
      * @testdox M10: the allowlist is asserted at every build site, not just the setters
      */
     public function testTheAllowlistGatesEveryRemoteBuildPath(): void

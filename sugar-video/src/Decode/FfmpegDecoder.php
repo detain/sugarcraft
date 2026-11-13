@@ -184,6 +184,7 @@ final class FfmpegDecoder implements Decoder
     public function __construct(
         private readonly int $cellPxW = 10,
         private readonly int $cellPxH = 20,
+        private readonly bool $hostRestricted = false,
     ) {
         $this->headers = HttpHeaders::none();
     }
@@ -284,7 +285,7 @@ final class FfmpegDecoder implements Decoder
         // No escaping needed; proc_open passes args directly with no shell.
         // The parsed $headers (not the raw array) go in: they were validated at
         // the boundary above, so buildCommand trusts them and only assembles argv.
-        $cmd = self::buildCommand($ffmpegPath, $source, $this->frameW, $this->frameH, $fps, $startSec, $this->graphics, $padW, $padH, $this->headers);
+        $cmd = self::buildCommand($ffmpegPath, $source, $this->frameW, $this->frameH, $fps, $startSec, $this->graphics, $padW, $padH, $this->headers, $this->hostRestricted);
 
         // stderr goes to a PRIVATE TEMP FILE when we can make one, else the OS
         // null device — never a pipe (an unread stderr pipe deadlocks ffmpeg
@@ -364,7 +365,7 @@ final class FfmpegDecoder implements Decoder
      *
      * @return list<string>
      */
-    public static function buildCommand(string $ffmpegPath, string $source, int $frameW, int $frameH, float $fps, float $startSec = 0.0, bool $graphics = false, ?int $padW = null, ?int $padH = null, ?HttpHeaders $headers = null): array
+    public static function buildCommand(string $ffmpegPath, string $source, int $frameW, int $frameH, float $fps, float $startSec = 0.0, bool $graphics = false, ?int $padW = null, ?int $padH = null, ?HttpHeaders $headers = null, bool $hostRestricted = false): array
     {
         $padW ??= $frameW;
         $padH ??= $frameH;
@@ -374,7 +375,7 @@ final class FfmpegDecoder implements Decoder
         $network = FfmpegCommandBuilder::isNetworkSource($source);
 
         if ($network) {
-            array_push($cmd, ...FfmpegCommandBuilder::networkReconnectFlags());
+            array_push($cmd, ...FfmpegCommandBuilder::networkReconnectFlags($hostRestricted));
 
             // Authenticated passthrough: emit the header blob / user agent only
             // for a network source. A local path omits them (open() already

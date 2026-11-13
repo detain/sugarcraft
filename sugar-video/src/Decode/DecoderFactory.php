@@ -47,9 +47,14 @@ final class DecoderFactory
      * @param int $cellPxH Pixel height of a terminal cell
      * @param array<array-key, string> $headers HTTP request headers for an http(s)
      *        source, forwarded verbatim to the decoder's open(). Empty for a local file.
+     * @param bool $hostRestricted true when the caller's Reel carries a bound host
+     *        allowlist: the ffmpeg child is then pinned to zero redirects
+     *        ({@see FfmpegCommandBuilder::ALLOWED_MAX_REDIRECTS}) so a redirect
+     *        cannot carry playback out of the allowlist. Survives every reopen —
+     *        it is constructor state on the decoder instance.
      * @return Decoder
      */
-    public static function new(string $source, int $cellsW, int $cellsH, float $fps, ?Mode $mode = null, float $startSec = 0.0, int $cellPxW = 10, int $cellPxH = 20, array $headers = []): Decoder
+    public static function new(string $source, int $cellsW, int $cellsH, float $fps, ?Mode $mode = null, float $startSec = 0.0, int $cellPxW = 10, int $cellPxH = 20, array $headers = [], bool $hostRestricted = false): Decoder
     {
         $isGif = preg_match('/\.gif$/i', $source) === 1;
         $isNetwork = FfmpegDecoder::isNetworkSource($source);
@@ -60,7 +65,7 @@ final class DecoderFactory
             // die on a bogus path and its headers would have nowhere to ride.
             // Missing ffmpeg then fails loudly in FfmpegDecoder::open().
             // The same is true of a remote .webp — animated sniffing is local-only.
-            $decoder = new FfmpegDecoder($cellPxW, $cellPxH);
+            $decoder = new FfmpegDecoder($cellPxW, $cellPxH, $hostRestricted);
         } elseif ($isGif) {
             $decoder = new GifDecoder($cellPxW, $cellPxH);
         } elseif (self::isLocalAnimatedWebp($source)) {
@@ -69,7 +74,7 @@ final class DecoderFactory
             // — silently handing the file to ffmpeg would show one base frame.
             $decoder = new AnimatedWebpDecoder($cellPxW, $cellPxH);
         } elseif (Probe::hasFFmpeg()) {
-            $decoder = new FfmpegDecoder($cellPxW, $cellPxH);
+            $decoder = new FfmpegDecoder($cellPxW, $cellPxH, $hostRestricted);
         } elseif (is_file($source) && GifDecoder::isGifFile($source)) {
             // M4: no ffmpeg here, but the bytes ARE a gif (extensionless or
             // mislabelled) — the pure-PHP reader genuinely covers it.

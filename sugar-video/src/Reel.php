@@ -136,7 +136,13 @@ final class Reel
      * that looks external can still reach an internal/link-local host (e.g.
      * cloud metadata at `http://169.254.169.254/…`). The scheme check alone does
      * NOT prevent that. Pass $allowedHosts to restrict playback to a set of
-     * trusted hosts; a URL whose host is not allowlisted is rejected up front.
+     * trusted hosts; a URL whose host is not allowlisted is rejected up front,
+     * parser-divergent raw authorities (`\ ; @ %` in the authority) are refused
+     * outright, and — while the allowlist is bound — every network child
+     * (ffprobe, ffmpeg, ffplay/mpv) is pinned to ZERO redirects, so a listed
+     * host cannot answer with a 302 into the internal range. The policy is
+     * therefore "first-hop string + no-redirect transport": a legitimate
+     * redirecting CDN must have its redirect TARGET allowlisted too.
      * When $allowedHosts is null the previous unrestricted behavior is kept, but
      * a warning is logged noting the remote URL is being fed to ffmpeg.
      *
@@ -592,6 +598,7 @@ final class Reel
             $cellPxH,
             $subtitles,
             $this->headers,
+            hostRestricted: $this->allowedHosts !== null,
         );
 
         // M24: the audio opt-out applies at build time.
@@ -652,6 +659,7 @@ final class Reel
             $cellPxH,
             $subtitles,
             $this->headers,
+            hostRestricted: $this->allowedHosts !== null,
         );
 
         // M24: the opt-out is applied to the built player.
@@ -756,11 +764,26 @@ final class Reel
     /**
      * Reject a remote URL whose host is not in $allowedHosts.
      *
+     * Belt AND braces (076): the host check runs against `parse_url`'s answer,
+     * but different URL parsers disagree about authority-embedded specials —
+     * a backslash is a path separator to some, `;` splits params, `@` moves
+     * the host boundary, `%`-escapes decode into all of them. One parser's
+     * "trusted.example" is another's request to an attacker-chosen host, so
+     * any raw authority containing `\\ ; @ %` is refused outright instead of
+     * being trusted to one parser's verdict.
+     *
      * @param list<string> $allowedHosts
-     * @throws \InvalidArgumentException When the host is missing or not allowlisted.
+     * @throws \InvalidArgumentException When the host is missing or not allowlisted,
+     *               or when the raw authority carries parser-divergent specials.
      */
     private static function assertHostAllowed(string $url, array $allowedHosts): void
     {
+        if (preg_match('~^https?://[^/?#]*[\\\\;@%]~i', $url) === 1) {
+            throw new \InvalidArgumentException(
+                'Remote host not in allowlist: (malformed authority)'
+            );
+        }
+
         $host = self::hostOf($url);
         $allowed = array_map('strtolower', $allowedHosts);
         if ($host === '' || !in_array($host, $allowed, true)) {

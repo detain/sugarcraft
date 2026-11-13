@@ -120,6 +120,54 @@ final class AudioHeaderPassthroughTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
+    // SV-H2: the allowlist's zero-redirect transport pin, audio side
+    // -------------------------------------------------------------------------
+
+    public function testRestrictedFfplayPinsZeroRedirectsForNetworkSources(): void
+    {
+        $argv = FfmpegCommandBuilder::ffplayAudioCommand('/usr/bin/ffplay', self::SOURCE, 0, HttpHeaders::none(), true);
+
+        $idx = array_search('-max_redirects', $argv, true);
+        self::assertIsInt($idx, 'a bound allowlist must pin redirects on the audio child too');
+        self::assertSame('0', $argv[$idx + 1]);
+        self::assertLessThan(count($argv) - 1, $idx, 'input options precede the source');
+    }
+
+    public function testRestrictedMpvPinsZeroRedirectsThroughTheLavfOption(): void
+    {
+        $argv = FfmpegCommandBuilder::mpvAudioCommand('/usr/bin/mpv', self::SOURCE, 0, HttpHeaders::none(), true);
+        self::assertContains('--stream-lavf-o=max_redirects=0', $argv);
+    }
+
+    public function testRestrictingALocalAudioSourceChangesNoBytes(): void
+    {
+        // The pin is a network-transport policy; a local file argv must stay
+        // byte-identical whether or not a (vacuous) allowlist is bound.
+        self::assertSame(
+            FfmpegCommandBuilder::ffplayAudioCommand('/usr/bin/ffplay', '/tmp/local.mp4', 0, HttpHeaders::none()),
+            FfmpegCommandBuilder::ffplayAudioCommand('/usr/bin/ffplay', '/tmp/local.mp4', 0, HttpHeaders::none(), true),
+        );
+        self::assertSame(
+            FfmpegCommandBuilder::mpvAudioCommand('/usr/bin/mpv', '/tmp/local.mp4', 0, HttpHeaders::none()),
+            FfmpegCommandBuilder::mpvAudioCommand('/usr/bin/mpv', '/tmp/local.mp4', 0, HttpHeaders::none(), true),
+        );
+    }
+
+    public function testRestrictedAudioPlayerCarriesThePinThroughItsWiring(): void
+    {
+        // Proves the AudioPlayer constructor → buildCommand thread, not just
+        // the builder: revert the ctor param and the stubbed argv goes bare.
+        $argv = null;
+        $this->withStubbedBinaries(['ffplay'], static function () use (&$argv): void {
+            $audio = new AudioPlayer(self::SOURCE, null, null, [], false, true);
+            $argv = self::argvOf($audio);
+        });
+
+        self::assertNotNull($argv);
+        self::assertContains('-max_redirects', $argv);
+    }
+
+    // -------------------------------------------------------------------------
     // The audio wrapper carries them, per source kind
     // -------------------------------------------------------------------------
 

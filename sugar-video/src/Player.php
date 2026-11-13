@@ -131,6 +131,7 @@ final class Player implements Model
         private readonly ?WindowSizeMsg $pendingResize = null,
         public readonly ?string $failure = null,
         public readonly bool $audioMuted = false,
+        private readonly bool $hostRestricted = false,
     ) {
     }
 
@@ -184,8 +185,15 @@ final class Player implements Model
      *                            path stays hermetic under hostile CI environments
      *                            (TERM/COLORTERM churn). Default null = resolve via
      *                            {@see RendererFactory::autoMode()}.
+     * @param bool         $hostRestricted true when the caller's Reel binds a host
+     *                            allowlist: every network child (ffprobe probe,
+     *                            ffmpeg decode — including all seek/resize rebuilds —
+     *                            and the audio companion) is pinned to zero HTTP
+     *                            redirects so a 302 cannot ride out of the allowlist
+     *                            (SSRF transport law, see
+     *                            {@see FfmpegCommandBuilder::ALLOWED_MAX_REDIRECTS}).
      */
-    public static function open(string $videoPath, int $cellsW, int $cellsH, ?float $fpsOverride = null, ?Mode $mode = null, bool $loop = false, string $ramp = 'standard', int $cellPxW = 10, int $cellPxH = 20, ?WebVtt $subtitles = null, array $headers = [], float $frameBudgetMs = 0.0, ?\Closure $autoModeChooser = null): self
+    public static function open(string $videoPath, int $cellsW, int $cellsH, ?float $fpsOverride = null, ?Mode $mode = null, bool $loop = false, string $ramp = 'standard', int $cellPxW = 10, int $cellPxH = 20, ?WebVtt $subtitles = null, array $headers = [], float $frameBudgetMs = 0.0, ?\Closure $autoModeChooser = null, bool $hostRestricted = false): self
     {
         // m11: every pacing site divides by fps (Cmd::tick(1.0/fps)); refuse a
         // non-positive override at the boundary before a Model can exist. The
@@ -201,7 +209,7 @@ final class Player implements Model
         // callers leave it null and get the live probe.
         $mode ??= $autoModeChooser !== null ? $autoModeChooser() : RendererFactory::autoMode();
 
-        $source = VideoSource::probe($videoPath);
+        $source = VideoSource::probe($videoPath, $hostRestricted);
 
         // FPS from probe, default 24 if not available. Use override when set.
         $fps = $fpsOverride ?? ($source->fps > 0.0 ? $source->fps : 24.0);
@@ -213,7 +221,7 @@ final class Player implements Model
         // Decoder resolution is keyed to the render mode (HalfBlock decodes at
         // 2× cell height; graphics modes at cells·cellPx). Seek recreates the
         // decoder with the current mode and the same cell geometry.
-        $decoder = DecoderFactory::new($videoPath, $cellsW, $cellsH, $fps, $mode, 0.0, $cellPxW, $cellPxH, $headers);
+        $decoder = DecoderFactory::new($videoPath, $cellsW, $cellsH, $fps, $mode, 0.0, $cellPxW, $cellPxH, $headers, $hostRestricted);
 
         // Audio companion factory: creates AudioPlayer on demand. The factory
         // is threaded through the Player so tests can inject a spy subclass.
@@ -226,7 +234,7 @@ final class Player implements Model
         // Audio companion is created when the source has audio but is NOT
         // started here — the Player starts it on first play (see updateKey)
         // so audio and the video wall clock share the same t0.
-        $audioPlayer = $source->hasAudio ? $audioFactory($videoPath, null, $headers) : null;
+        $audioPlayer = $source->hasAudio ? $audioFactory($videoPath, null, $headers, $hostRestricted) : null;
 
         // Build and cache the renderer for direct-render modes (Sixel/Kitty/iTerm2/Ansi256).
         // The renderer is rebuilt on mode change or resize via mutate(['renderer' => ...]).
@@ -279,6 +287,7 @@ final class Player implements Model
             subtitles: $subtitles,
             renderer: $renderer,
             headers: $headers,
+            hostRestricted: $hostRestricted,
             frameBudgetMs: $frameBudgetMs,
             failure: $posterFailure,
         );
@@ -310,7 +319,7 @@ final class Player implements Model
      *                                decoder; '' for a pure injected stream.
      * @param bool     $loop          Restart from frame 0 at end-of-stream.
      * @param string   $ramp          Luma ramp name: 'minimal', 'standard', 'dense'.
-     * @param \Closure|null $audioFactory Factory fn(string $path, ?int $startMs, array $headers): AudioPlayer.
+     * @param \Closure|null $audioFactory Factory fn(string $path, ?int $startMs, array $headers, bool $hostRestricted): AudioPlayer.
      * @param AudioPlayer|null $audioPlayer Initial audio companion (null = silent).
      * @param bool     $paused        Start paused (default true).
      * @param int      $cellPxW       Pixel width of one terminal cell.
@@ -1470,7 +1479,7 @@ final class Player implements Model
             $decoder = $this->decoder;
         } else {
             $this->decoder->close();                 // F21: never leak the old ffmpeg process
-            $decoder = DecoderFactory::new($this->videoPath, $cellsW, $cellsH, $this->fps, $mode, 0.0, $this->cellPxW, $this->cellPxH, $this->headers);
+            $decoder = DecoderFactory::new($this->videoPath, $cellsW, $cellsH, $this->fps, $mode, 0.0, $this->cellPxW, $this->cellPxH, $this->headers, hostRestricted: $this->hostRestricted);
         }
         $frame = null;
         $landed = 0;
@@ -1674,7 +1683,7 @@ final class Player implements Model
             );
         }
 
-        $decoder = DecoderFactory::new($this->videoPath, $this->cellsW, $this->cellsH, $this->fps, $this->mode, max(0.0, $sec), $this->cellPxW, $this->cellPxH, $this->headers);
+        $decoder = DecoderFactory::new($this->videoPath, $this->cellsW, $this->cellsH, $this->fps, $this->mode, max(0.0, $sec), $this->cellPxW, $this->cellPxH, $this->headers, hostRestricted: $this->hostRestricted);
         try {
             $frame = $decoder->next(); // with -ss, the first frame is at/near $sec
         } finally {
@@ -1694,12 +1703,12 @@ final class Player implements Model
      * parameter had to be edited in three places at once — the precise drift the
      * audit keeps flagging.
      *
-     * @return \Closure(string,?int,array<array-key,string>):AudioPlayer
+     * @return \Closure(string,?int,array<array-key,string>,bool):AudioPlayer
      */
     private static function defaultAudioFactory(): \Closure
     {
-        return static fn (string $path, ?int $startMs = null, array $headers = []): AudioPlayer
-            => new AudioPlayer($path, $startMs, null, $headers);
+        return static fn (string $path, ?int $startMs = null, array $headers = [], bool $hostRestricted = false): AudioPlayer
+            => new AudioPlayer($path, $startMs, null, $headers, false, $hostRestricted);
     }
 
     /**
@@ -1792,7 +1801,7 @@ final class Player implements Model
         }
 
         $this->decoder->close(); // never leak the old ffmpeg process
-        $decoder = DecoderFactory::new($this->videoPath, $cellsW, $cellsH, $this->fps, $mode, max(0.0, $startSec), $this->cellPxW, $this->cellPxH, $this->headers);
+        $decoder = DecoderFactory::new($this->videoPath, $cellsW, $cellsH, $this->fps, $mode, max(0.0, $startSec), $this->cellPxW, $this->cellPxH, $this->headers, hostRestricted: $this->hostRestricted);
         $frame = $decoder->next(); // with -ss, the first frame IS the seek target
 
         return [$decoder, $frame];
@@ -1814,7 +1823,7 @@ final class Player implements Model
         // Re-present the source headers on the respawned companion:
         // every seek/loop/mode rebuild used to drop them, so audio worked only
         // on an unauthenticated URL.
-        $newAudio = $factory($this->videoPath, $startMs, $this->headers);
+        $newAudio = $factory($this->videoPath, $startMs, $this->headers, $this->hostRestricted);
         // M24: a muted session stays muted across every respawn.
         if ($this->audioMuted) {
             $newAudio->mute();
@@ -1903,6 +1912,7 @@ final class Player implements Model
             subtitles: array_key_exists('subtitles', $changes) ? $changes['subtitles'] : $this->subtitles,
             renderer: array_key_exists('renderer', $changes) ? $changes['renderer'] : $this->renderer,
             headers: $this->headers, // pinned — the source's request headers outlive any rebuild
+            hostRestricted: $this->hostRestricted, // SV-H2: the zero-redirect transport policy likewise
             frameBudgetMs: $this->frameBudgetMs, // pinned for the player's lifetime
             failure: array_key_exists('failure', $changes) ? $changes['failure'] : $this->failure,
             // Carried, not pinned: a tick, seek or mode switch that happens inside

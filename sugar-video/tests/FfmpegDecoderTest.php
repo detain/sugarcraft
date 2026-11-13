@@ -9,6 +9,7 @@ use SugarCraft\Video\Decode\FfmpegDecoder;
 use SugarCraft\Video\Decode\RgbFrame;
 use SugarCraft\Video\Render\Mode;
 use SugarCraft\Video\Source\Probe;
+use SugarCraft\Video\Support\FfmpegCommandBuilder;
 use SugarCraft\Video\Tests\Concerns\CapturesErrorLog;
 use SugarCraft\Video\Tests\Concerns\HidesPathBinaries;
 
@@ -670,6 +671,64 @@ PHP;
         $this->assertNotContains('-reconnect', $cmd);
         $this->assertNotContains('-reconnect_streamed', $cmd);
         $this->assertContains('/tmp/movie.mkv', $cmd);
+    }
+
+    /**
+     * @testdox SV-H2: the reconnect flags default is byte-identical to the historic block
+     */
+    public function testNetworkReconnectFlagsDefaultIsUnchanged(): void
+    {
+        $this->assertSame([
+            '-reconnect', '1',
+            '-reconnect_streamed', '1',
+            '-reconnect_on_network_error', '1',
+            '-reconnect_delay_max', '4',
+        ], FfmpegCommandBuilder::networkReconnectFlags());
+    }
+
+    /**
+     * @testdox SV-H2: a bound allowlist appends the zero-redirect transport pin
+     */
+    public function testNetworkReconnectFlagsPinRedirectsWhenHostRestricted(): void
+    {
+        $this->assertSame(
+            [
+                '-reconnect', '1',
+                '-reconnect_streamed', '1',
+                '-reconnect_on_network_error', '1',
+                '-reconnect_delay_max', '4',
+                '-max_redirects', '0',
+            ],
+            FfmpegCommandBuilder::networkReconnectFlags(true),
+        );
+        $this->assertSame(0, FfmpegCommandBuilder::ALLOWED_MAX_REDIRECTS, 'zero redirects — the allowlist is a first-hop policy');
+    }
+
+    /**
+     * @testdox SV-H2: a restricted network decode command carries -max_redirects 0 before -i
+     */
+    public function testHostRestrictedNetworkCommandCarriesZeroRedirectPin(): void
+    {
+        $cmd = FfmpegDecoder::buildCommand('/usr/bin/ffmpeg', 'https://srv/media/m1/stream?sig=x', 80, 48, 24.0, 0.0, false, null, null, null, true);
+
+        $redirectIdx = array_search('-max_redirects', $cmd, true);
+        $inputIdx = array_search('-i', $cmd, true);
+        $this->assertIsInt($redirectIdx, 'allowlisted playback must pin the redirect budget');
+        $this->assertSame('0', $cmd[$redirectIdx + 1]);
+        $this->assertIsInt($inputIdx);
+        $this->assertLessThan($inputIdx, $redirectIdx, '-max_redirects is an input option — before -i');
+    }
+
+    /**
+     * @testdox SV-H2: the redirect pin never touches a local-source argv
+     */
+    public function testHostRestrictedLocalCommandIsByteIdentical(): void
+    {
+        $restricted = FfmpegDecoder::buildCommand('/usr/bin/ffmpeg', '/tmp/movie.mkv', 80, 48, 24.0, 0.0, false, null, null, null, true);
+        $unrestricted = FfmpegDecoder::buildCommand('/usr/bin/ffmpeg', '/tmp/movie.mkv', 80, 48, 24.0);
+
+        $this->assertSame($unrestricted, $restricted);
+        $this->assertNotContains('-max_redirects', FfmpegDecoder::buildCommand('/usr/bin/ffmpeg', 'https://srv/s.mkv', 80, 48, 24.0), 'no allowlist, no behavior change');
     }
 
     /**

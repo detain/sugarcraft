@@ -172,6 +172,13 @@ schemes (`rtsp://`, `rtmp://`, …) are not opened by `openUrl()`. Calling
 `openUrl()` without `allowedHosts:` also logs a one-line SSRF advisory
 (`ssrf.no_allowlist`, host only — never the path or query): ffmpeg resolves DNS
 and follows redirects, so an unbounded remote URL can reach internal hosts.
+With an allowlist bound the policy is "first-hop string + no-redirect transport":
+parser-divergent raw authorities (a backslash, `;`, `@`, or `%` in the host
+region) are refused outright, and every network child — `ffprobe`, the `ffmpeg`
+decoder, and the audio companion — is pinned to `max_redirects=0`
+(`FfmpegCommandBuilder::ALLOWED_MAX_REDIRECTS`), so a listed host cannot answer
+with a 302 into the internal range. A legitimate redirecting CDN must have its
+redirect TARGET allowlisted too.
 Every child the library spawns — the transient `ffprobe` probe, the `ffmpeg`
 decoder, and the `ffplay`/`mpv` audio companion — starts with a scrubbed copy
 of the parent environment: any variable whose *name* contains
