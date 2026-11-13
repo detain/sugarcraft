@@ -674,7 +674,8 @@ final class Style
      * what {@see render()} expands it to at the DEFAULT. Setting a non-default
      * width here re-opens that gap — content laid out by this Style will not
      * measure the same as `Width::string()` reports — so a caller that also
-     * budgets with `Width` must expand the tabs itself before measuring.
+     * budgets with `Width` must expand the tabs itself before measuring,
+     * through {@see expandTabs()} (the exact render-side transform, exported).
      */
     public function tabWidth(int $w): self
     {
@@ -682,6 +683,26 @@ final class Style
             throw new \InvalidArgumentException(Lang::t('style.tabwidth_nonneg'));
         }
         return $this->with(tabWidth: $w, propsAdded: ['tabWidth']);
+    }
+
+    /**
+     * Expand `\t` characters in $content the way {@see render()} does: each
+     * tab becomes $tabWidth spaces; 0 (or less) keeps them literal, matching
+     * the `tabWidth()` contract. Closes the split-brain noted there for
+     * width-budgeting callers (sugar-table fitting, core `fitCell`):
+     *
+     *     $cells = Width::string(Style::expandTabs($line, $style->getTabWidth()));
+     *
+     * For unstyled content the output is byte-identical to
+     * `Style::new()->tabWidth($w)->render($line)` — pinned — and render()
+     * itself runs through this method, so the two can never drift.
+     */
+    public static function expandTabs(string $content, int $tabWidth = Width::TAB_WIDTH): string
+    {
+        if ($tabWidth <= 0 || !str_contains($content, "\t")) {
+            return $content;
+        }
+        return str_replace("\t", str_repeat(' ', $tabWidth), $content);
     }
 
     /**
@@ -1325,13 +1346,13 @@ final class Style
         if ($content === '' && $this->boundString !== null) {
             $content = $this->boundString;
         }
-        // Tab expansion (before any width measurements). The default width
-        // is Width::TAB_WIDTH so that Width::string() of the expanded result
+        // Tab expansion (before any width measurements) through the exported
+        // expandTabs() helper — one transform, so a caller pre-expanding for
+        // Width budgets gets byte-identical layout. The default width is
+        // Width::TAB_WIDTH so that Width::string() of the expanded result
         // equals Width::string() of the input — see the tabWidth() note and
         // Width::TAB_WIDTH's domain note for where that stops holding.
-        if ($this->tabWidth > 0 && str_contains($content, "\t")) {
-            $content = str_replace("\t", str_repeat(' ', $this->tabWidth), $content);
-        }
+        $content = self::expandTabs($content, $this->tabWidth);
         // Inline mode collapses newlines into spaces and zeroes vertical
         // padding/margin so the result is one line.
         if ($this->inline) {

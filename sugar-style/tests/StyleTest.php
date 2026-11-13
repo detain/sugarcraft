@@ -1679,6 +1679,33 @@ final class StyleTest extends TestCase
         $this->assertStringContainsString("\t", Style::new()->tabWidth(0)->render("a\tb"));
     }
 
+    // ---- expandTabs() helper (finding 049) ------------------------------
+
+    public function testExpandTabsBytes(): void
+    {
+        $this->assertSame('a   b', Style::expandTabs("a\tb", 3));
+        $this->assertSame('a    b    c', Style::expandTabs("a\tb\tc", 4));
+        $this->assertSame("a\tb", Style::expandTabs("a\tb", 0), '0 keeps tabs literal, same contract as tabWidth()');
+        $this->assertSame("a\tb", Style::expandTabs("a\tb", -2), 'negative fails safe to literal');
+        $this->assertSame('plain', Style::expandTabs('plain', 3), 'tab-free content is identity');
+        $this->assertSame('a' . str_repeat(' ', Width::TAB_WIDTH) . 'b', Style::expandTabs("a\tb"), 'default width is Width::TAB_WIDTH');
+    }
+
+    public function testExpandTabsIsByteIdenticalToRenderForPlainStyles(): void
+    {
+        // render() runs through the helper — pre-expand and rendered agree
+        // on every width, which is exactly what the split-brain note owed
+        // width-budgeting callers.
+        $this->assertSame(Style::new()->tabWidth(3)->render("a\tb"), Style::expandTabs("a\tb", 3));
+        $this->assertSame(Style::new()->render("a\tb"), Style::expandTabs("a\tb"));
+        $this->assertSame(Style::new()->tabWidth(0)->render("a\tb"), Style::expandTabs("a\tb", 0));
+        $this->assertSame(
+            1 + 2 + 1,
+            Width::string(Style::expandTabs("x\ty", 2)),
+            'the helper lets a Width-budgeting caller close the non-default gap up front',
+        );
+    }
+
     /**
      * The SIGN of the residual disagreement between `Width::string()` and
      * `Style::render()`, asserted separately from its magnitude — because the
