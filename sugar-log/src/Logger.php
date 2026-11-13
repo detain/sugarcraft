@@ -547,6 +547,33 @@ final class Logger
         }
     }
 
+    /**
+     * Change the timestamp format in place (parity with charm's SetTimeFormat).
+     *
+     * null reverts to the active formatter's default. A live TextFormatter is
+     * re-seeded through its immutable wither, so its class and every other
+     * formatter option survive; Json/Logfmt resolve their format at
+     * construction and keep it. The Logger-side value is retained either way
+     * and flows into any TextFormatter adopted later through the adopt seam.
+     */
+    public function setTimeFormat(?string $timeFormat): void
+    {
+        $this->timeFormat = $timeFormat;
+        if ($this->formatter instanceof TextFormatter) {
+            $this->formatter = $this->formatter->withTimeFormat($timeFormat);
+        }
+    }
+
+    /**
+     * Clone-with-time-format twin of setTimeFormat().
+     */
+    public function withTimeFormat(?string $timeFormat): self
+    {
+        $child = clone $this;
+        $child->setTimeFormat($timeFormat);
+        return $child;
+    }
+
     public function setPrefix(?string $prefix): void
     {
         $this->prefix = $prefix;

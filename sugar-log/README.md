@@ -216,7 +216,11 @@ argument, `$timeFormat` — a `DateTime` format string; it defaults to
 `DateTimeInterface::ATOM` because machine parsers pin timestamps to that
 shape, so change it deliberately, not casually. A `TextFormatter` line's
 timestamp defaults to `Y/m/d H:i:s` — full date, then time (the sample output
-below shows that default). Inside a **text** line,
+below shows that default).
+Mid-process changes exist too: `setTimeFormat()`/`withTimeFormat()`
+re-seed a live `TextFormatter` through its immutable wither (class and every
+other option preserved); `Json`/`Logfmt` keep the format they resolved at
+construction. Inside a **text** line,
 array context values render as `[a b c]`: elements joined positionally,
 associative keys not shown — use JSON or logfmt when key names matter.
 

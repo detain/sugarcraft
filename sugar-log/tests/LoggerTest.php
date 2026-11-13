@@ -980,4 +980,67 @@ final class LoggerTest extends TestCase
 
         return $blocker . '/deeper/nested.log';
     }
+
+    public function testSetTimeFormatSwitchesTheActiveTextFormatterMidProcess(): void
+    {
+        $stream = \fopen('php://memory', 'w+');
+        $logger = Logger::new(stream: $stream);
+        $logger->info('before');
+        $logger->setTimeFormat(\DateTimeInterface::ATOM);
+        $logger->info('after');
+        \rewind($stream);
+        $bytes = \stream_get_contents($stream);
+
+        // Shapes, not wall-clock values: seconds digits are wildcards, so the
+        // assertion cannot race the clock across the two writes.
+        $this->assertMatchesRegularExpression('/^\d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2} INF before$/m', $bytes);
+        $this->assertMatchesRegularExpression('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2} INF after$/m', $bytes);
+    }
+
+    public function testTimeFormatKnobPreservesFormatterClassAndOtherOptions(): void
+    {
+        $stream = \fopen('php://memory', 'w+');
+        $logger = Logger::new(stream: $stream, reportCaller: true);
+        $logger->setTimeFormat('H:i:s');
+        $logger->info('caller-kept');
+        \rewind($stream);
+        $bytes = \stream_get_contents($stream);
+        // The short format is live AND the caller column survived the re-seed.
+        $this->assertMatchesRegularExpression('/^\d{2}:\d{2}:\d{2} INF <LoggerTest.php:\d+> caller-kept$/m', $bytes);
+
+        // A Json formatter adopted after this point is untouched: it keeps the
+        // ATOM shape it resolved at construction.
+        $json = new JsonFormatter();
+        $logger->setFormatter($json);
+        $logger->setTimeFormat(\DateTimeInterface::ATOM);
+        $this->assertSame($json, $logger->formatter());
+
+        // But the Logger-side value flows into a TextFormatter adopted later
+        // through the SL-14 seam.
+        $stream2 = \fopen('php://memory', 'w+');
+        $pick = Logger::new(stream: $stream2, reportCaller: false);
+        $pick->setTimeFormat('H:i:s');
+        $pick->setFormatter(new TextFormatter());
+        $pick->info('adopted');
+        \rewind($stream2);
+        $this->assertMatchesRegularExpression('/^\d{2}:\d{2}:\d{2} INF adopted$/m', \stream_get_contents($stream2));
+    }
+
+    public function testWithTimeFormatClonesAndNullRevertsToDefault(): void
+    {
+        $stream = \fopen('php://memory', 'w+');
+        $logger = Logger::new(stream: $stream);
+        $child = $logger->withTimeFormat('H:i:s');
+        $this->assertNotSame($logger, $child);
+        $child->info('child-line');
+        $logger->info('parent-line');
+        $child->setTimeFormat(null);
+        $child->info('reverted');
+        \rewind($stream);
+        $bytes = \stream_get_contents($stream);
+
+        $this->assertMatchesRegularExpression('/^\d{2}:\d{2}:\d{2} INF child-line$/m', $bytes);
+        $this->assertMatchesRegularExpression('/^\d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2} INF parent-line$/m', $bytes);
+        $this->assertMatchesRegularExpression('/^\d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2} INF reverted$/m', $bytes);
+    }
 }
