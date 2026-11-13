@@ -50,6 +50,15 @@ final class LFSHandler
     public const MAX_OBJECT_BYTES = 268435456;
 
     /**
+     * Entries one batch request may carry (026). The ceiling is
+     * work-bounding, not protocol: real LFS clients batch in the tens or
+     * low hundreds, while every accepted entry costs at least a stat
+     * walk — and the download arm is reachable anonymously whenever the
+     * read lever is up. 1,000 keeps honest clients far from the line.
+     */
+    public const MAX_BATCH_OBJECTS = 1000;
+
+    /**
      * @param LFSStorageBackendInterface|null $storageBackend 050: THE
      *        swap point — null builds the default LocalStorageBackend
      *        over $lfsPath; an implementation replaces storage
@@ -205,6 +214,21 @@ final class LFSHandler
         $transfers = $request['transfers'] ?? null;
         if (\is_array($transfers) && !\in_array('basic', $transfers, true)) {
             return [$operation, ['error' => ['code' => 400, 'message' => 'Unsupported transfer type']]];
+        }
+
+        // 026: parse the entries at the gate, where every batch shape is
+        // answerable before ANY work happens. The old loop fed a scalar
+        // 'objects' straight into foreach — a swallowed warning and a
+        // silently-empty batch — and counted nothing at all, so one
+        // callback (anonymous download while the read lever is up) could
+        // queue thousands of stat walks per object. An explicit null IS
+        // a (malformed) statement about the batch contents; an absent
+        // key keeps its established empty-list leniency.
+        if (\array_key_exists('objects', $request) && !\is_array($request['objects'])) {
+            return [$operation, ['error' => ['code' => 400, 'message' => 'Invalid objects']]];
+        }
+        if (\count($request['objects'] ?? []) > self::MAX_BATCH_OBJECTS) {
+            return [$operation, ['error' => ['code' => 400, 'message' => 'Too many objects in batch']]];
         }
 
         return [$operation, null];

@@ -138,6 +138,19 @@ final class LFSHandlerAsyncTest extends TestCase
         $this->assertSame(['error' => ['code' => 403, 'message' => 'Access denied']], $result);
     }
 
+    public function testAsyncBatchRefusesNonArrayObjectsAtTheGate(): void
+    {
+        // 026: the async wave shares the sync gate — a scalar 'objects'
+        // resolves the 400 answer instead of arming a promise over a
+        // foreach warning.
+        $repo = $this->createRepo();
+        $handler = new LFSHandler($repo, null, $this->tmpDir . '/lfs', publicBaseUrl: '');
+
+        $result = $this->awaitBatch($handler, ['operation' => 'download', 'objects' => 'not-an-array']);
+
+        $this->assertSame(['error' => ['code' => 400, 'message' => 'Invalid objects']], $result);
+    }
+
     // -------------------------------------------------------------------------
     // Error isolation
     // -------------------------------------------------------------------------

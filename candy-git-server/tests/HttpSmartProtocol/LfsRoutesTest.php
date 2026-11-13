@@ -161,6 +161,21 @@ final class LfsRoutesTest extends TestCase
         $this->assertSame(400, $result['status']);
     }
 
+    public function testBatchRefusesScalarObjectsWithFourHundred(): void
+    {
+        // 026: a scalar 'objects' used to reach the handler's foreach as
+        // a swallowed warning and come back a silently-empty 200 batch;
+        // the route surface now answers the shape failure with 400.
+        $result = $this->request(
+            'POST',
+            '/testrepo.git/info/lfs/objects/batch',
+            '{"operation":"download","objects":"not-an-array"}',
+        );
+
+        $this->assertSame(400, $result['status']);
+        $this->assertStringContainsString('Invalid objects', $result['body']);
+    }
+
     public function testBatchRejectsNonPostMethod(): void
     {
         $result = $this->request('GET', '/testrepo.git/info/lfs/objects/batch');

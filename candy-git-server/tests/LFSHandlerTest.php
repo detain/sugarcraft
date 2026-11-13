@@ -87,6 +87,40 @@ final class LFSHandlerTest extends TestCase
         $this->assertSame('Access denied', $result['error']['message']);
     }
 
+    public function testHandleBatchRefusesNonArrayObjectsAtTheGate(): void
+    {
+        // 026: a string 'objects' used to be swallowed by the foreach —
+        // a warning nobody saw and a silently-empty 200 batch. The shape
+        // is now a parse failure answered at the gate, before any work.
+        $repo = $this->createRepo();
+        $handler = new LFSHandler($repo, $this->createUser(), $this->tmpDir, publicBaseUrl: '');
+
+        foreach (['string' => 'not-an-array', 'int' => 7, 'null' => null] as $arm => $objects) {
+            $result = $handler->handleBatch(['operation' => 'download'] + ['objects' => $objects]);
+            $this->assertSame(400, $result['error']['code'], "the {$arm} arm did not refuse");
+            $this->assertSame('Invalid objects', $result['error']['message']);
+        }
+    }
+
+    public function testHandleBatchCapsEntryCountAtTheNamedCeiling(): void
+    {
+        // 026: entries are work — one stat walk minimum each, and the
+        // download arm is anonymously reachable while the read lever is
+        // up. The cap is named, exact, and refuses with 400.
+        $repo = $this->createRepo();
+        $handler = new LFSHandler($repo, $this->createUser(), $this->tmpDir, publicBaseUrl: '');
+
+        $at = \array_fill(0, LFSHandler::MAX_BATCH_OBJECTS, ['oid' => \str_repeat('a', 64), 'size' => 1]);
+        $refused = $handler->handleBatch(['operation' => 'download', 'objects' => \array_merge($at, [['oid' => \str_repeat('b', 64), 'size' => 1]])]);
+
+        $this->assertSame(400, $refused['error']['code']);
+        $this->assertSame('Too many objects in batch', $refused['error']['message']);
+
+        $accepted = $handler->handleBatch(['operation' => 'download', 'objects' => $at]);
+        $this->assertArrayNotHasKey('error', $accepted, 'an exactly-at-cap batch is honest work');
+        $this->assertCount(LFSHandler::MAX_BATCH_OBJECTS, $accepted['objects']);
+    }
+
     public function testHandleBatchWithDefaultDownloadOperation(): void
     {
         $repo = $this->createRepo();
