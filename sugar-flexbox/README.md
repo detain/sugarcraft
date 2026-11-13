@@ -32,12 +32,14 @@ The library carries the house i18n plumbing (`src/Lang.php` plus locale files un
 - **Filterable** — keeps rows where any cell contains a Unicode case-folded substring ('ärger' finds 'Ärger', 'strasse' finds 'Straße'; ext-intl adds full accent folding — without it, letters still case-fold but accented words keep their code-point neighbourhood); matching runs on the stored raw strings, not the render-time sanitized text
 - **Configurable columns** — title, width (0 = hidden: the column contributes no cell, joint, or ruler cluster), alignment, formatter (`Column::new()`, `withAlign()`, `withStyle()`, `withFormatter()`); the render pipeline runs formatter → sanitize → truncate/pad, so a formatter's output is sanitized like any other cell value and cannot smuggle color to the screen — styling belongs to `withStyle()`
 - **Cell styling** — per-column ANSI style support
+- **Themeable borders** — `withSeparator()` themes the column joint; `withRulerChars($fill, $joint)` themes the ruler's two runes under the same ingress (sanitized, exactly one cell each or the door refuses by name), so an ASCII theme renders a fully ASCII frame. Defaults ('─' / '┬') are byte-identical to every frame ever shipped
 - **Cursor tracking** — get current row/cell on selection. Note the cursor
   style is empty by default, so `withCursor()` alone marks nothing on screen —
   call `withCursorStyle()` to paint the cursor row. The style wraps the whole
   row, separator joints included, so the focused row renders solid; pair it
   with `withCursorMarker('> ')` for focus a colour-less host can still see —
-  the marker rides inside the first column's allocated width, so frame
+  the marker rides inside the first column's allocated width (the first
+  VISIBLE one when width-0 columns hide parts of the frame), so frame
   dimensions never move.
 - **Delta rendering** — the stateful `TableRenderer` emits only the cells that changed between frames (see Buffer diffing below)
 

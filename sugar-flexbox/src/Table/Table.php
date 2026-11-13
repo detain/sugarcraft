@@ -76,6 +76,10 @@ final class Table
     /** Separator string between cells. */
     private string $separator = ' │ ';
 
+    /** Ruler fill/joint runes (FBX-42) — themable like the separator, default unicode exactly as shipped. */
+    private string $rulerFill = '─';
+    private string $rulerJointChar = '┬';
+
     /**
      * The visible $rows view is derived state; these two fields make it
      * LAZY so N appends do not cost N sorts (m5). Reads go through
@@ -392,6 +396,39 @@ final class Table
     }
 
     /**
+     * Theme the ruler's two runes: the horizontal fill and the column
+     * joint (default '─' / '┬', byte-identical to every frame ever
+     * rendered). ASCII-themed tables mixed unicode rulers under ASCII
+     * separators until the ruler characters rode the same ingress as
+     * the separator: sanitized, and STRICTLY one cell — a multi-cell
+     * or zero-cell rune would desync the ruler line from the header
+     * width arithmetic that FBX-16/FBX-34 welded together, so the door
+     * refuses anything but a single-cell grapheme, loudly and by name.
+     */
+    public function withRulerChars(string $fill, string $joint): self
+    {
+        $cleanFill   = self::assertRulerRune($fill, 'ruler fill');
+        $cleanJoint  = self::assertRulerRune($joint, 'ruler joint');
+        $clone = clone $this;
+        $clone->rulerFill = $cleanFill;
+        $clone->rulerJointChar = $cleanJoint;
+        $clone->layoutVersion++;
+        return $clone;
+    }
+
+    private static function assertRulerRune(string $rune, string $what): string
+    {
+        $clean = \SugarCraft\Core\Util\Sanitize::untrusted($rune);
+        if (\SugarCraft\Core\Util\Width::string($clean) !== 1) {
+            $cells = \SugarCraft\Core\Util\Width::string($clean);
+            throw new \InvalidArgumentException(
+                "The {$what} must measure exactly one terminal cell; received a string measuring {$cells} cells. An off-by-one ruler rune desyncs every frame's width arithmetic."
+            );
+        }
+        return $clean;
+    }
+
+    /**
      * Paint only the view rows in [$from, $to) (open-ended when $to is
      * null). This is the virtualization door for large tables: a 24-line
      * viewport never renders the cells of 20k rows, only its window.
@@ -569,7 +606,7 @@ final class Table
         // 3 cells wide, producing '─┬─' exactly as before.
         $sepParts = [];
         foreach ($visibleCols as $col) {
-            $sepParts[] = \str_repeat('─', $col->width);
+            $sepParts[] = \str_repeat($this->rulerFill, $col->width);
         }
         $lines[] = \implode($this->rulerJoint(), $sepParts);
 
@@ -945,7 +982,7 @@ final class Table
         }
         $left  = intdiv($sepWidth - 1, 2);
         $right = $sepWidth - 1 - $left;
-        return \str_repeat('─', $left) . '┬' . \str_repeat('─', $right);
+        return \str_repeat($this->rulerFill, $left) . $this->rulerJointChar . \str_repeat($this->rulerFill, $right);
     }
 
     private function padHeader(string $text, int $width, string $align): string

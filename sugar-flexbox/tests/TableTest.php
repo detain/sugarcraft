@@ -722,6 +722,67 @@ final class TableTest extends TestCase
         $this->assertSame('100', $t->withCursor(0)->currentCell(0), 'the settled view still heads with 100');
     }
 
+    // ---- themable ruler runes (FBX-42) ----------------------------------
+
+    public function testAnAsciiThemeRendersAnAllAsciiFrame(): void
+    {
+        $t = Table::new()
+            ->addColumn(Column::new('A', 3))
+            ->addColumn(Column::new('B', 3))
+            ->withSeparator('|')
+            ->withRulerChars('-', '+')
+            ->withRow(['1', '2']);
+
+        $this->assertSame(
+            ['A  |B  ', '---+---', '1  |2  '],
+            $t->buildLines(),
+            'the ruler stops smuggling unicode into an ASCII frame'
+        );
+        $this->assertMatchesRegularExpression('/^[\x20-\x7E]*$/m', \implode("\n", $t->buildLines()));
+    }
+
+    public function testTheRulerCharDoorRefusesOffByOneRunes(): void
+    {
+        $t = Table::new()->addColumn(Column::new('A', 3));
+
+        try {
+            $t->withRulerChars('--', '+');
+            $this->fail('a two-cell fill must refuse');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('ruler fill', $e->getMessage());
+        }
+
+        try {
+            $t->withRulerChars('-', '');
+            $this->fail('a zero-cell joint must refuse');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('ruler joint', $e->getMessage());
+        }
+
+        // Two runes measure two cells: refused too, so the ruler can
+        // never outgrow the header arithmetic.
+        try {
+            $t->withRulerChars('──', '+');
+            $this->fail('a two-cell fill must refuse');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('2 cells', $e->getMessage());
+        }
+    }
+
+    public function testDefaultRulerRunesStayTheShippedBytes(): void
+    {
+        // Zero-move guard: with the door added in FBX-42, the DEFAULT
+        // ruler is still '─' fill with a '┬' struck from the separator's
+        // cell width — the whole suite's goldens are the loud version of
+        // this pin.
+        $t = Table::new()
+            ->addColumn(Column::new('A', 2))
+            ->addColumn(Column::new('B', 2))
+            ->withRow(['1', '2']);
+
+        $this->assertSame(['A  │ B ', '───┬───', '1  │ 2 '], $t->buildLines());
+    }
+
     // ---- hidden (width-0) columns (FBX-34) ------------------------------
 
     public function testHiddenMiddleColumnEmitsNeitherCellNorJoint(): void
