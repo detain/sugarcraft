@@ -65,6 +65,13 @@ final class KeyBinding
          * for the one place that reads it.
          */
         public readonly ?string $yieldsToShellReason = null,
+        /**
+         * The slash command this chord runs, without its slash ("agents"), or
+         * null for a binding that does not run one. The `/help` and `/` popup
+         * shortcut column reads it, so a command's shortcut is stated once,
+         * here, and not hand-copied onto the command's own spec.
+         */
+        public readonly ?string $command = null,
     ) {}
 
     public static function new(
@@ -74,8 +81,9 @@ final class KeyBinding
         string $context,
         ?string $dormantReason = null,
         ?string $yieldsToShellReason = null,
+        ?string $command = null,
     ): self {
-        return new self($id, $keys, $description, $context, $dormantReason, $yieldsToShellReason);
+        return new self($id, $keys, $description, $context, $dormantReason, $yieldsToShellReason, $command);
     }
 
     /** Whether the in-app reference lists this row. */

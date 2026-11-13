@@ -213,6 +213,7 @@ trait HandlesKeys
             // ticks until this update() returns, and killTreeAsync's own
             // shutdown function finishes the walk if it does not get there.
             $this->abandonActiveBackendChildren(true);
+            $this->abandonActiveHookGroups();
 
             return [$this, Cmd::quit()];
         }

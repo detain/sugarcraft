@@ -443,6 +443,28 @@ final class KeyBindingRegistry
      * Null answers for an id the registry does not declare, overridden or
      * not; validation rejects unknown ids before they could be registered.
      */
+    /**
+     * The chord a live row bound to slash command $name shows, as the table
+     * currently answers it (a `keybindings` override wins, an unbound row
+     * answers null). Read by `/help` and the `/` popup, so the shortcut column
+     * can never disagree with `/keys`.
+     */
+    public static function commandShortcut(string $name): ?string
+    {
+        foreach (self::live() as $binding) {
+            if ($binding->command !== $name) {
+                continue;
+            }
+            if (isset(self::$suppressed[$binding->id])) {
+                return null;
+            }
+
+            return self::chordFor($binding->id);
+        }
+
+        return null;
+    }
+
     public static function chordFor(string $id): ?string
     {
         $override = self::$overrides[$id] ?? null;
@@ -1087,7 +1109,7 @@ final class KeyBindingRegistry
                     . 'cover. See chatCtrlRunesYieldedToShell() for the dual-claim rule this is the '
                     . 'first instance of.',
             ),
-            KeyBinding::new('chat.agents', 'Ctrl+A', Lang::t('keys.chat.agents'), $c),
+            KeyBinding::new('chat.agents', 'Ctrl+A', Lang::t('keys.chat.agents'), $c, command: 'agents'),
             // C-AGT-4.b: the PRIMARY-agent cycle, beside the roster command
             // it complements — Ctrl+A lists the agents, Alt+A picks one to
             // run the session as, between turns.
