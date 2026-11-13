@@ -30,8 +30,8 @@ final class GreedySolverTest extends TestCase
     {
         $rects = GreedySolver::solveStatic(
             new Region(0, 0, 100, 24),
-            [Constraint::length(20), Constraint::length(30), Constraint::length(25)],
-            Direction::Horizontal
+            Direction::Horizontal,
+            [Constraint::length(20), Constraint::length(30), Constraint::length(25)]
         );
 
         $this->assertCount(3, $rects);
@@ -44,8 +44,8 @@ final class GreedySolverTest extends TestCase
     {
         $rects = GreedySolver::solveStatic(
             new Region(0, 0, 80, 30),
-            [Constraint::length(3), Constraint::length(10), Constraint::length(1)],
-            Direction::Vertical
+            Direction::Vertical,
+            [Constraint::length(3), Constraint::length(10), Constraint::length(1)]
         );
 
         $this->assertCount(3, $rects);
@@ -59,8 +59,8 @@ final class GreedySolverTest extends TestCase
         // Total length 120 > area 80, should truncate proportionally
         $rects = GreedySolver::solveStatic(
             new Region(0, 0, 80, 24),
-            [Constraint::length(60), Constraint::length(60)],
-            Direction::Horizontal
+            Direction::Horizontal,
+            [Constraint::length(60), Constraint::length(60)]
         );
 
         $this->assertCount(2, $rects);
@@ -78,8 +78,8 @@ final class GreedySolverTest extends TestCase
         // floor loss goes to the first Min so the sizes tile the area.
         $rects = GreedySolver::solveStatic(
             new Region(0, 0, 100, 24),
-            [Constraint::min(20), Constraint::min(30), Constraint::min(25)],
-            Direction::Horizontal
+            Direction::Horizontal,
+            [Constraint::min(20), Constraint::min(30), Constraint::min(25)]
         );
 
         $this->assertCount(3, $rects);
@@ -93,8 +93,8 @@ final class GreedySolverTest extends TestCase
         // Total mins 100 > area 50, should truncate proportionally
         $rects = GreedySolver::solveStatic(
             new Region(0, 0, 50, 24),
-            [Constraint::min(60), Constraint::min(40)],
-            Direction::Horizontal
+            Direction::Horizontal,
+            [Constraint::min(60), Constraint::min(40)]
         );
 
         $this->assertCount(2, $rects);
@@ -121,7 +121,7 @@ final class GreedySolverTest extends TestCase
         Direction $dir,
         array $expected
     ): void {
-        $rects = GreedySolver::solveStatic($area, $constraints, $dir);
+        $rects = GreedySolver::solveStatic($area, $dir, $constraints);
 
         $sizes = array_map(
             static fn(Region $r): int => $dir === Direction::Horizontal ? $r->width : $r->height,
@@ -193,8 +193,8 @@ final class GreedySolverTest extends TestCase
     {
         $rects = GreedySolver::solveStatic(
             new Region(0, 0, 90, 24),
-            [Constraint::fill(), Constraint::fill(), Constraint::fill()],
-            Direction::Horizontal
+            Direction::Horizontal,
+            [Constraint::fill(), Constraint::fill(), Constraint::fill()]
         );
 
         $this->assertCount(3, $rects);
@@ -207,8 +207,8 @@ final class GreedySolverTest extends TestCase
     {
         $rects = GreedySolver::solveStatic(
             new Region(0, 0, 80, 50),
-            [Constraint::fill(), Constraint::fill()],
-            Direction::Vertical
+            Direction::Vertical,
+            [Constraint::fill(), Constraint::fill()]
         );
 
         $this->assertCount(2, $rects);
@@ -222,8 +222,8 @@ final class GreedySolverTest extends TestCase
         // 1-part=10, 2-parts=20, 3-parts=30
         $rects = GreedySolver::solveStatic(
             new Region(0, 0, 60, 24),
-            [Constraint::fill(1), Constraint::fill(2), Constraint::fill(3)],
-            Direction::Horizontal
+            Direction::Horizontal,
+            [Constraint::fill(1), Constraint::fill(2), Constraint::fill(3)]
         );
 
         $this->assertCount(3, $rects);
@@ -239,8 +239,8 @@ final class GreedySolverTest extends TestCase
         // fill gets all slack = 70.
         $rects = GreedySolver::solveStatic(
             new Region(0, 0, 100, 24),
-            [Constraint::length(20), Constraint::min(10), Constraint::fill(1)],
-            Direction::Horizontal
+            Direction::Horizontal,
+            [Constraint::length(20), Constraint::min(10), Constraint::fill(1)]
         );
 
         $this->assertCount(3, $rects);
@@ -256,8 +256,8 @@ final class GreedySolverTest extends TestCase
         // Header 3, body min 10 (fills), status 1 — vertical split of 30-height area
         $rows = GreedySolver::solveStatic(
             new Region(0, 0, 100, 30),
-            [Constraint::length(3), Constraint::min(10), Constraint::length(1)],
-            Direction::Vertical
+            Direction::Vertical,
+            [Constraint::length(3), Constraint::min(10), Constraint::length(1)]
         );
 
         $this->assertCount(3, $rows);
@@ -272,8 +272,8 @@ final class GreedySolverTest extends TestCase
         $body = new Region(0, 3, 100, 26);
         $cols = GreedySolver::solveStatic(
             $body,
-            [Constraint::length(20), Constraint::min(20), Constraint::fill(1)],
-            Direction::Horizontal
+            Direction::Horizontal,
+            [Constraint::length(20), Constraint::min(20), Constraint::fill(1)]
         );
 
         $this->assertCount(3, $cols);
@@ -288,8 +288,8 @@ final class GreedySolverTest extends TestCase
     {
         $rects = GreedySolver::solveStatic(
             new Region(0, 0, 100, 24),
-            [],
-            Direction::Horizontal
+            Direction::Horizontal,
+            []
         );
         $this->assertSame([], $rects);
     }
@@ -298,8 +298,8 @@ final class GreedySolverTest extends TestCase
     {
         $rects = GreedySolver::solveStatic(
             new Region(0, 0, 100, 24),
-            [Constraint::length(50)],
-            Direction::Horizontal
+            Direction::Horizontal,
+            [Constraint::length(50)]
         );
         $this->assertCount(1, $rects);
         $this->assertEquals(self::region(0, 0, 50, 24), $rects[0]);
@@ -312,8 +312,8 @@ final class GreedySolverTest extends TestCase
         // Percentage(30) of 100 = 30
         $rects = GreedySolver::solveStatic(
             new Region(0, 0, 100, 24),
-            [Constraint::percentage(30), Constraint::percentage(70)],
-            Direction::Horizontal
+            Direction::Horizontal,
+            [Constraint::percentage(30), Constraint::percentage(70)]
         );
 
         $this->assertCount(2, $rects);
@@ -327,8 +327,8 @@ final class GreedySolverTest extends TestCase
         // Percentage = 50 (50% of total area = 50).
         $rects = GreedySolver::solveStatic(
             new Region(0, 0, 100, 24),
-            [Constraint::length(20), Constraint::percentage(50)],
-            Direction::Horizontal
+            Direction::Horizontal,
+            [Constraint::length(20), Constraint::percentage(50)]
         );
 
         $this->assertCount(2, $rects);
@@ -342,8 +342,8 @@ final class GreedySolverTest extends TestCase
         // Percentage = 30 (30% of 100). Fill gets remainder = 70.
         $rects = GreedySolver::solveStatic(
             new Region(0, 0, 100, 24),
-            [Constraint::percentage(30), Constraint::fill(1)],
-            Direction::Horizontal
+            Direction::Horizontal,
+            [Constraint::percentage(30), Constraint::fill(1)]
         );
 
         $this->assertCount(2, $rects);
@@ -358,8 +358,8 @@ final class GreedySolverTest extends TestCase
         // Ratio(1, 3) of 90 = 30; Ratio(2, 3) of 90 = 60
         $rects = GreedySolver::solveStatic(
             new Region(0, 0, 90, 24),
-            [Constraint::ratio(1, 3), Constraint::ratio(2, 3)],
-            Direction::Horizontal
+            Direction::Horizontal,
+            [Constraint::ratio(1, 3), Constraint::ratio(2, 3)]
         );
 
         $this->assertCount(2, $rects);
@@ -373,8 +373,8 @@ final class GreedySolverTest extends TestCase
         // Fixed: 10. Remaining: 90. Ratio(1, 2) = 50% of total = 50.
         $rects = GreedySolver::solveStatic(
             new Region(0, 0, 100, 24),
-            [Constraint::length(10), Constraint::ratio(1, 2)],
-            Direction::Horizontal
+            Direction::Horizontal,
+            [Constraint::length(10), Constraint::ratio(1, 2)]
         );
 
         $this->assertCount(2, $rects);
@@ -390,8 +390,8 @@ final class GreedySolverTest extends TestCase
         // Max greedily takes slack (80), clamp to 30; reclaimed goes to Length
         $rects = GreedySolver::solveStatic(
             new Region(0, 0, 100, 24),
-            [Constraint::length(20), Constraint::max(30)],
-            Direction::Horizontal
+            Direction::Horizontal,
+            [Constraint::length(20), Constraint::max(30)]
         );
 
         $this->assertCount(2, $rects);
@@ -405,8 +405,8 @@ final class GreedySolverTest extends TestCase
         // Max gets 80, clamps to 10 (reclaims 70), goes to Fill
         $rects = GreedySolver::solveStatic(
             new Region(0, 0, 100, 24),
-            [Constraint::length(20), Constraint::max(10), Constraint::fill(1)],
-            Direction::Horizontal
+            Direction::Horizontal,
+            [Constraint::length(20), Constraint::max(10), Constraint::fill(1)]
         );
 
         $this->assertCount(3, $rects);
@@ -421,8 +421,8 @@ final class GreedySolverTest extends TestCase
         // Fill gets slack (3) + reclaimed (47) = 50
         $rects = GreedySolver::solveStatic(
             new Region(0, 0, 100, 24),
-            [Constraint::length(30), Constraint::max(20), Constraint::fill(1)],
-            Direction::Horizontal
+            Direction::Horizontal,
+            [Constraint::length(30), Constraint::max(20), Constraint::fill(1)]
         );
 
         $this->assertCount(3, $rects);
@@ -437,8 +437,8 @@ final class GreedySolverTest extends TestCase
         // Max gets 50, clamps to 30 (reclaims 20), goes to Percentage
         $rects = GreedySolver::solveStatic(
             new Region(0, 0, 100, 24),
-            [Constraint::percentage(50), Constraint::max(30)],
-            Direction::Horizontal
+            Direction::Horizontal,
+            [Constraint::percentage(50), Constraint::max(30)]
         );
 
         $this->assertCount(2, $rects);
@@ -454,8 +454,8 @@ final class GreedySolverTest extends TestCase
         // No eligible recipients for reclaimed → stays unused
         $rects = GreedySolver::solveStatic(
             new Region(0, 0, 100, 24),
-            [Constraint::max(10), Constraint::max(20)],
-            Direction::Horizontal
+            Direction::Horizontal,
+            [Constraint::max(10), Constraint::max(20)]
         );
 
         $this->assertCount(2, $rects);
@@ -469,8 +469,8 @@ final class GreedySolverTest extends TestCase
         // Max gets 30 (50-20), clamps to 5 (reclaims 25), goes to Min
         $rects = GreedySolver::solveStatic(
             new Region(0, 0, 50, 24),
-            [Constraint::length(20), Constraint::min(10), Constraint::max(5)],
-            Direction::Horizontal
+            Direction::Horizontal,
+            [Constraint::length(20), Constraint::min(10), Constraint::max(5)]
         );
 
         $this->assertCount(3, $rects);
@@ -486,8 +486,8 @@ final class GreedySolverTest extends TestCase
         // $reclaimed would be 0, early return at line 237
         $rects = GreedySolver::solveStatic(
             new Region(0, 0, 100, 24),
-            [Constraint::length(30), Constraint::max(80)],
-            Direction::Horizontal
+            Direction::Horizontal,
+            [Constraint::length(30), Constraint::max(80)]
         );
 
         $this->assertCount(2, $rects);
@@ -502,8 +502,8 @@ final class GreedySolverTest extends TestCase
         // Total = 28, no rounding needed
         $rects = GreedySolver::solveStatic(
             new Region(0, 0, 28, 24),
-            [Constraint::min(7), Constraint::min(7), Constraint::max(15)],
-            Direction::Horizontal
+            Direction::Horizontal,
+            [Constraint::min(7), Constraint::min(7), Constraint::max(15)]
         );
 
         $this->assertCount(3, $rects);
@@ -522,8 +522,8 @@ final class GreedySolverTest extends TestCase
         // Total = 53 + 26 = 79 (1 lost to rounding)
         $rects = GreedySolver::solveStatic(
             new Region(0, 0, 80, 24),
-            [Constraint::min(100), Constraint::min(50)],
-            Direction::Horizontal
+            Direction::Horizontal,
+            [Constraint::min(100), Constraint::min(50)]
         );
 
         $this->assertCount(2, $rects);
@@ -586,7 +586,7 @@ final class GreedySolverTest extends TestCase
         $constraints = [Constraint::length(20), Constraint::min(10), Constraint::fill(1)];
         $region = new Region(0, 0, 100, 24);
 
-        $staticRects = GreedySolver::solveStatic($region, $constraints, Direction::Horizontal);
+        $staticRects = GreedySolver::solveStatic($region, Direction::Horizontal, $constraints);
         $instanceRects = (GreedySolver::new())->solve($region, Direction::Horizontal, $constraints);
 
         $this->assertCount(count($staticRects), $instanceRects);
@@ -604,8 +604,8 @@ final class GreedySolverTest extends TestCase
         // Rounding remainder goes to first Fill
         $rects = GreedySolver::solveStatic(
             new Region(0, 0, 100, 24),
-            [Constraint::fill(1), Constraint::fill(1), Constraint::fill(1)],
-            Direction::Horizontal
+            Direction::Horizontal,
+            [Constraint::fill(1), Constraint::fill(1), Constraint::fill(1)]
         );
 
         $this->assertCount(3, $rects);
@@ -621,8 +621,8 @@ final class GreedySolverTest extends TestCase
         // Max greedily takes 50, clamps to 5 (reclaims 45), goes to Length
         $rects = GreedySolver::solveStatic(
             new Region(0, 0, 80, 24),
-            [Constraint::length(30), Constraint::max(5)],
-            Direction::Horizontal
+            Direction::Horizontal,
+            [Constraint::length(30), Constraint::max(5)]
         );
 
         $this->assertCount(2, $rects);
@@ -637,8 +637,8 @@ final class GreedySolverTest extends TestCase
         // Percentage = 50. Max gets 50, clamps to 10 (reclaims 40), goes to Percentage
         $rects = GreedySolver::solveStatic(
             new Region(0, 0, 100, 24),
-            [Constraint::percentage(50), Constraint::max(10)],
-            Direction::Horizontal
+            Direction::Horizontal,
+            [Constraint::percentage(50), Constraint::max(10)]
         );
 
         $this->assertCount(2, $rects);
@@ -653,8 +653,8 @@ final class GreedySolverTest extends TestCase
         // Ratio = 50. Max gets 50, clamps to 10 (reclaims 40), goes to Ratio
         $rects = GreedySolver::solveStatic(
             new Region(0, 0, 100, 24),
-            [Constraint::ratio(1, 2), Constraint::max(10)],
-            Direction::Horizontal
+            Direction::Horizontal,
+            [Constraint::ratio(1, 2), Constraint::max(10)]
         );
 
         $this->assertCount(2, $rects);
@@ -669,8 +669,8 @@ final class GreedySolverTest extends TestCase
         // This exercises the early return when no recipients exist
         $rects = GreedySolver::solveStatic(
             new Region(0, 0, 100, 24),
-            [Constraint::max(10), Constraint::max(20)],
-            Direction::Horizontal
+            Direction::Horizontal,
+            [Constraint::max(10), Constraint::max(20)]
         );
 
         $this->assertCount(2, $rects);
@@ -685,8 +685,8 @@ final class GreedySolverTest extends TestCase
         // Create a scenario where reclaimed space doesn't divide evenly
         $rects = GreedySolver::solveStatic(
             new Region(0, 0, 100, 24),
-            [Constraint::length(30), Constraint::max(15), Constraint::fill(1)],
-            Direction::Horizontal
+            Direction::Horizontal,
+            [Constraint::length(30), Constraint::max(15), Constraint::fill(1)]
         );
 
         $this->assertCount(3, $rects);
@@ -709,8 +709,8 @@ final class GreedySolverTest extends TestCase
     {
         $rects = GreedySolver::solveStatic(
             new Region(5, 7, 80, 30),
-            [Constraint::length(3), Constraint::length(10), Constraint::length(1)],
-            Direction::Vertical
+            Direction::Vertical,
+            [Constraint::length(3), Constraint::length(10), Constraint::length(1)]
         );
 
         $this->assertCount(3, $rects);
@@ -742,8 +742,8 @@ final class GreedySolverTest extends TestCase
     {
         $rects = GreedySolver::solveStatic(
             new Region(5, 7, 100, 24),
-            [Constraint::length(20), Constraint::length(30), Constraint::length(25)],
-            Direction::Horizontal
+            Direction::Horizontal,
+            [Constraint::length(20), Constraint::length(30), Constraint::length(25)]
         );
 
         $this->assertCount(3, $rects);
@@ -771,8 +771,8 @@ final class GreedySolverTest extends TestCase
     {
         $rects = GreedySolver::solveStatic(
             new Region(0, 0, 100, 24),
-            [Constraint::percentage(33), Constraint::percentage(33), Constraint::percentage(33)],
-            Direction::Horizontal
+            Direction::Horizontal,
+            [Constraint::percentage(33), Constraint::percentage(33), Constraint::percentage(33)]
         );
 
         $this->assertCount(3, $rects);
@@ -788,8 +788,8 @@ final class GreedySolverTest extends TestCase
     {
         $rects = GreedySolver::solveStatic(
             new Region(0, 0, 100, 24),
-            [Constraint::ratio(1, 3), Constraint::ratio(1, 3), Constraint::ratio(1, 3)],
-            Direction::Horizontal
+            Direction::Horizontal,
+            [Constraint::ratio(1, 3), Constraint::ratio(1, 3), Constraint::ratio(1, 3)]
         );
 
         $this->assertCount(3, $rects);
@@ -811,8 +811,8 @@ final class GreedySolverTest extends TestCase
     {
         $rects = GreedySolver::solveStatic(
             new Region(0, 0, 90, 24),
-            [Constraint::max(20), Constraint::fill(0), Constraint::fill(0)],
-            Direction::Horizontal
+            Direction::Horizontal,
+            [Constraint::max(20), Constraint::fill(0), Constraint::fill(0)]
         );
 
         $this->assertCount(3, $rects);
@@ -833,8 +833,8 @@ final class GreedySolverTest extends TestCase
     {
         $rects = GreedySolver::solveStatic(
             new Region(0, 0, 100, 24),
-            [Constraint::ratio(1, 2), Constraint::ratio(1, 2)],
-            Direction::Horizontal
+            Direction::Horizontal,
+            [Constraint::ratio(1, 2), Constraint::ratio(1, 2)]
         );
 
         $this->assertCount(2, $rects);
@@ -878,8 +878,8 @@ final class GreedySolverTest extends TestCase
 
             $rects = GreedySolver::solveStatic(
                 new Region(0, 0, $total, 24),
-                $constraints,
-                Direction::Horizontal
+                Direction::Horizontal,
+                $constraints
             );
 
             $sum = array_sum(array_map(static fn($r) => $r->width, $rects));
@@ -903,8 +903,8 @@ final class GreedySolverTest extends TestCase
     {
         $rects = GreedySolver::solveStatic(
             Region::fromSize(0, 0),
-            [Constraint::fill(1), Constraint::length(5), Constraint::percentage(50)],
-            Direction::Horizontal
+            Direction::Horizontal,
+            [Constraint::fill(1), Constraint::length(5), Constraint::percentage(50)]
         );
 
         $this->assertCount(3, $rects);
@@ -923,7 +923,7 @@ final class GreedySolverTest extends TestCase
      */
     public function testGreedyOutputTilesRegionExactly(Region $region, array $constraints, Direction $dir): void
     {
-        $rects = GreedySolver::solveStatic($region, $constraints, $dir);
+        $rects = GreedySolver::solveStatic($region, $dir, $constraints);
         $this->assertNotEmpty($rects, 'Non-empty constraint list must produce at least one rect');
 
         $axis = $dir === Direction::Horizontal ? 'width' : 'height';

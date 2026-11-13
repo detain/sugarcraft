@@ -276,8 +276,8 @@ final class GreedySolverCompatTest extends TestCase
         // The static parity entry point never picks up the compat toggles.
         $rects = GreedySolver::solveStatic(
             new Region(0, 0, 80, 5),
-            [Constraint::length(60), Constraint::length(60)],
-            Direction::Horizontal
+            Direction::Horizontal,
+            [Constraint::length(60), Constraint::length(60)]
         );
 
         $this->assertSame([40, 40], self::widths($rects));

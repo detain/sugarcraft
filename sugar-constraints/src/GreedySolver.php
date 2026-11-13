@@ -264,17 +264,16 @@ final class GreedySolver implements LayoutSolver
      * Static convenience for the default (floor / remainder-first / truncating)
      * behaviour — reachable without holding an instance.
      *
-     * NOTE the transposed parameter order relative to {@see solve()}: this
-     * legacy entry takes (area, constraints, direction), the instance method
-     * takes (region, direction, constraints). New code should prefer solve();
-     * the signature is frozen because external call-sites already pass these
-     * three arguments positionally. The compat() toggles are reachable only
-     * via an instance.
+     * NOTE the 2026-11 signature reorder: the legacy entry used to take
+     * (area, constraints, direction), transposed against the instance method.
+     * A repo-wide grep found no positional callers outside this lib's own
+     * tests, so the order now matches {@see solve()} exactly. The compat()
+     * toggles remain reachable only via an instance.
      *
      * @param list<Constraint> $constraints
      * @return list<Region>
      */
-    public static function solveStatic(Region $area, array $constraints, Direction $dir): array
+    public static function solveStatic(Region $area, Direction $dir, array $constraints): array
     {
         return (new self())->solve($area, $dir, $constraints);
     }

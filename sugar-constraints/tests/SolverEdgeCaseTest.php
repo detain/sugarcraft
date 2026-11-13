@@ -92,8 +92,8 @@ final class SolverEdgeCaseTest extends TestCase
         // (its only peer is itself) → 70.
         $rects = GreedySolver::solveStatic(
             Region::fromSize(100, 10),
-            [Constraint::percentage(30), Constraint::min(10)],
-            Direction::Horizontal
+            Direction::Horizontal,
+            [Constraint::percentage(30), Constraint::min(10)]
         );
 
         $this->assertSame([30, 70], array_map(static fn(Region $r): int => $r->width, $rects));
@@ -107,8 +107,8 @@ final class SolverEdgeCaseTest extends TestCase
     {
         $rects = GreedySolver::solveStatic(
             Region::fromSize(50, 8),
-            [Constraint::max(50)],
-            Direction::Horizontal
+            Direction::Horizontal,
+            [Constraint::max(50)]
         );
 
         $this->assertCount(1, $rects);
@@ -121,8 +121,8 @@ final class SolverEdgeCaseTest extends TestCase
         // the whole remainder (1) lands on the first Fill.
         $rects = GreedySolver::solveStatic(
             Region::fromSize(50, 8),
-            [Constraint::fill(1), Constraint::max(50)],
-            Direction::Horizontal
+            Direction::Horizontal,
+            [Constraint::fill(1), Constraint::max(50)]
         );
 
         $this->assertSame([1, 49], array_map(static fn(Region $r): int => $r->width, $rects));
@@ -137,8 +137,8 @@ final class SolverEdgeCaseTest extends TestCase
         // proportional pass must still round-trip to an exact tiling.
         $rects = GreedySolver::solveStatic(
             Region::fromSize(101, 5),
-            [Constraint::fill(PHP_INT_MAX), Constraint::fill(PHP_INT_MAX)],
-            Direction::Horizontal
+            Direction::Horizontal,
+            [Constraint::fill(PHP_INT_MAX), Constraint::fill(PHP_INT_MAX)]
         );
 
         $this->assertSame([51, 50], array_map(static fn(Region $r): int => $r->width, $rects));
@@ -151,8 +151,8 @@ final class SolverEdgeCaseTest extends TestCase
         // whole rounding remainder (1 cell) rides the first Fill → [100, 0].
         $rects = GreedySolver::solveStatic(
             Region::fromSize(100, 5),
-            [Constraint::fill(PHP_INT_MAX), Constraint::fill(1)],
-            Direction::Horizontal
+            Direction::Horizontal,
+            [Constraint::fill(PHP_INT_MAX), Constraint::fill(1)]
         );
 
         $this->assertSame([100, 0], array_map(static fn(Region $r): int => $r->width, $rects));
@@ -167,8 +167,8 @@ final class SolverEdgeCaseTest extends TestCase
         // floored against the 2/3 scale and none may go negative.
         $rects = GreedySolver::solveStatic(
             Region::fromSize(100, 4),
-            [Constraint::length(60), Constraint::min(90)],
-            Direction::Horizontal
+            Direction::Horizontal,
+            [Constraint::length(60), Constraint::min(90)]
         );
 
         $widths = array_map(static fn(Region $r): int => $r->width, $rects);
@@ -189,8 +189,8 @@ final class SolverEdgeCaseTest extends TestCase
         // intentional slack — nothing may inflate the Length.
         $rects = GreedySolver::solveStatic(
             Region::fromSize(100, 3),
-            [Constraint::length(10)],
-            Direction::Horizontal
+            Direction::Horizontal,
+            [Constraint::length(10)]
         );
 
         $this->assertSame([10], array_map(static fn(Region $r): int => $r->width, $rects));
@@ -203,8 +203,8 @@ final class SolverEdgeCaseTest extends TestCase
         // Height 60 → Percentage(30)=18, Min(10) absorbs the 32-cell slack → 42.
         $rects = GreedySolver::solveStatic(
             Region::fromSize(30, 60),
-            [Constraint::percentage(30), Constraint::min(10)],
-            Direction::Vertical
+            Direction::Vertical,
+            [Constraint::percentage(30), Constraint::min(10)]
         );
 
         $this->assertSame([18, 42], array_map(static fn(Region $r): int => $r->height, $rects));
