@@ -38,6 +38,32 @@ final class SqliteBackendTest extends TestCase
         }
     }
 
+    public function testInsertRefusesInvalidUtf8BeforeItCanPoisonTheStore(): void
+    {
+        $overrides = [
+            'project'  => ['project' => "\xff\xfebad"],
+            'language' => ['language' => "\xffbad"],
+            'file'     => ['file' => "src/\xff.php"],
+        ];
+        foreach ($overrides as $leg => $override) {
+            $hb = new Heartbeat(...array_merge([
+                'time'     => 1718900000,
+                'project'  => 'ok',
+                'language' => 'php',
+                'file'     => 'src/Ok.php',
+                'duration' => 60,
+                'tags'     => [],
+            ], $override));
+            try {
+                $this->backend->insert($hb);
+                $this->fail("the $leg bind leg must refuse invalid UTF-8, not store it");
+            } catch (\RuntimeException $e) {
+                $this->assertStringContainsString('not valid UTF-8', $e->getMessage());
+            }
+        }
+        $this->assertCount(0, $this->backend->query(0, 2000000000), 'a refused insert leaves nothing behind');
+    }
+
     public function testInsertAndQuery(): void
     {
         $hb = new Heartbeat(

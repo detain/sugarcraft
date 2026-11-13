@@ -104,6 +104,16 @@ final class SqliteBackend implements HeartbeatReader
 
     public function insert(Heartbeat $hb): void
     {
+        // One law at both doors: the file lane refuses invalid UTF-8 through
+        // json_encode's JSON_THROW_ON_ERROR, so the sqlite bind legs must not
+        // quietly swallow the same bytes — a stored poison turns every later
+        // `export json` into a fatal (JsonExporter cannot encode it).
+        foreach ([$hb->project, $hb->language, $hb->file] as $text) {
+            if (!\mb_check_encoding($text, 'UTF-8')) {
+                throw new \RuntimeException('candy-codetime: heartbeat text is not valid UTF-8, refusing to store it');
+            }
+        }
+
         try {
             $tags = json_encode($hb->tags, JSON_THROW_ON_ERROR);
         } catch (\JsonException $e) {

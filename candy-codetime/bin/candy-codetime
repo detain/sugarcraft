@@ -207,6 +207,22 @@ $storageError = static function (\Throwable $e): never {
     exit(1);
 };
 
+/**
+ * Write the whole payload to STDOUT. Unlike a bare fwrite, a short or failed
+ * write (broken pipe, full disk) cannot pass off a truncated export as an
+ * exit-0 success — it routes through the same one-line-error-and-exit-1 law
+ * as every other failure.
+ */
+$writeStdout = static function (string $payload) use ($storageError): void {
+    while ($payload !== '') {
+        $written = @fwrite(STDOUT, $payload);
+        if ($written === false || $written === 0) {
+            $storageError(new RuntimeException('candy-codetime: output could not be written in full'));
+        }
+        $payload = substr($payload, $written);
+    }
+};
+
 // Show usage for help flags or unknown commands
 if ($cmd === 'help' || $cmd === '--help' || $cmd === '-h') {
     fwrite(STDOUT, Lang::t('cli.usage') . "\n");
@@ -463,8 +479,16 @@ if ($cmd === 'export') {
     // A stored name is untrusted data: control bytes must not paint the
     // terminal when the dump is piped to one. JSON already escapes them, so
     // the sweep is a no-op there; tab/newline survive, so record structure
-    // is untouched.
-    fwrite(STDOUT, Sanitize::untrusted($exporter->export('candy-codetime', $beats)));
+    // is untouched. The encode itself sits inside the net: a row poisoned
+    // before the UTF-8 door existed (a legacy db written under the raw
+    // bind legs) must surface as a one-line error and exit 1 — never the
+    // old bare PHP fatal at exit 255.
+    try {
+        $payload = Sanitize::untrusted($exporter->export('candy-codetime', $beats));
+    } catch (\Throwable $e) {
+        $storageError($e);
+    }
+    $writeStdout($payload);
     exit(0);
 }
 

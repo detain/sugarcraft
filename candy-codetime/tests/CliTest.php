@@ -684,4 +684,41 @@ final class CliTest extends TestCase
         $this->assertStringContainsString('"project": "myproj"', $export['stdout'], 'a raw-echoed line must be readable by the store');
         $this->assertStringContainsString('"duration": 60', $export['stdout']);
     }
+
+    public function testSqlitePushRefusesInvalidUtf8LikeTheFileDoor(): void
+    {
+        if (!extension_loaded('sqlite3')) {
+            $this->markTestSkipped('sqlite3 extension not loaded');
+        }
+        $res = $this->runCli(['--backend=sqlite', 'push', "\xff\xfebad", 'php', 'src/x.php', '60']);
+        $this->assertSame(1, $res['exit'], 'the sqlite door must refuse what the file door refuses: ' . $res['stdout'] . $res['stderr']);
+        $this->assertStringContainsString('storage error', $res['stderr']);
+    }
+
+    public function testExportOfPoisonedLegacyDatabaseIsALineErrorNeverAFatal(): void
+    {
+        if (!extension_loaded('sqlite3')) {
+            $this->markTestSkipped('sqlite3 extension not loaded');
+        }
+        // Poison the store the way the pre-fix lib itself did: raw bytes past
+        // the bind legs, bypassing every validation added since.
+        $db = new \SQLite3($this->dataDir . '/candy-codetime.db');
+        $db->exec('CREATE TABLE heartbeats (id INTEGER PRIMARY KEY, time INTEGER, project TEXT, language TEXT, file TEXT, duration INTEGER, tags TEXT)');
+        $stmt = $db->prepare('INSERT INTO heartbeats (time, project, language, file, duration, tags) VALUES (:t, :p, :l, :f, :d, :g)');
+        $stmt->bindValue(':t', time() - 3600, SQLITE3_INTEGER);
+        $stmt->bindValue(':p', "\xff\xfebad");
+        $stmt->bindValue(':l', 'php');
+        $stmt->bindValue(':f', 'src/x.php');
+        $stmt->bindValue(':d', 60, SQLITE3_INTEGER);
+        $stmt->bindValue(':g', '[]');
+        $stmt->execute();
+        $db->close();
+
+        $res = $this->runCli(['--backend=sqlite', 'export', 'json', '30']);
+        $this->assertNotSame(255, $res['exit'], 'a poisoned row must never surface as a bare PHP fatal');
+        $this->assertSame(1, $res['exit'], $res['stdout'] . $res['stderr']);
+        $this->assertStringContainsString('storage error', $res['stderr']);
+        $this->assertSame(1, substr_count($res['stderr'], "\n"), 'exactly one error line: ' . $res['stderr']);
+        $this->assertSame('', $res['stdout'], 'a failed export writes no partial payload');
+    }
 }
