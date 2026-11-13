@@ -6,6 +6,7 @@ namespace SugarCraft\Sql\Tests\Schema;
 
 use SugarCraft\Sql\Db\Flavor;
 use SugarCraft\Sql\Db\DatabaseInterface;
+use SugarCraft\Sql\Db\Identifier;
 use SugarCraft\Sql\Db\SqliteDatabase;
 use SugarCraft\Sql\Schema\SchemaColumn;
 use SugarCraft\Sql\Schema\SchemaForeignKey;
@@ -152,6 +153,30 @@ final class SqliteSchemaProviderTest extends TestCase
         $fks = $provider->foreignKeys('simple');
 
         $this->assertSame([], $fks);
+    }
+
+    public function testIdentifierChokeParityAcrossHostileNames(): void
+    {
+        // client-025: the retired local safeIdent wrapper (" + doubling + ")
+        // is byte-identical to the Identifier Sqlite arm — the parity corpus
+        // that justified deleting the second grammar copy.
+        $corpus = ['plain', 'a"b', '"', '""', 'a""b', '\\"', 'x`y', 'ünïcødé', '', ' drop table'];
+        $db = $this->memoryDb();
+        $provider = new SqliteSchemaProvider($db);
+        foreach ($corpus as $name) {
+            $legacy = '"' . str_replace('"', '""', $name) . '"';
+            $this->assertSame($legacy, Identifier::quote(Flavor::Sqlite, $name));
+            // And the provider legs survive hostile names end to end:
+            $provider->columns($name);   // PRAGMA on a missing/weird table answers []
+            $provider->indexes($name);
+            $provider->foreignKeys($name);
+        }
+        // A quoted-in-name table round-trips through the same grammar:
+        $db->exec('CREATE TABLE `weird"name` (id INTEGER)');
+        $this->assertSame(['id'], array_map(
+            static fn ($c) => $c->name,
+            $provider->columns('weird"name'),
+        ));
     }
 
     public function testNullQueryResultsFoldToEmptyLists(): void

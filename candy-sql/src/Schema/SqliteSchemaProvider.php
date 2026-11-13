@@ -6,6 +6,7 @@ namespace SugarCraft\Sql\Schema;
 
 use SugarCraft\Sql\Db\Flavor;
 use SugarCraft\Sql\Db\DatabaseInterface;
+use SugarCraft\Sql\Db\Identifier;
 
 /**
  * SQLite schema provider using PRAGMA queries.
@@ -46,8 +47,7 @@ final class SqliteSchemaProvider implements SchemaProviderInterface
      */
     public function columns(string $table): array
     {
-        $safeTable = $this->safeIdent($table);
-        $result = $this->db->query("PRAGMA table_info(\"{$safeTable}\")") ?? [];
+        $result = $this->db->query('PRAGMA table_info(' . Identifier::quote(Flavor::Sqlite, $table) . ')') ?? [];
 
         $columns = [];
         foreach ($result as $row) {
@@ -68,14 +68,12 @@ final class SqliteSchemaProvider implements SchemaProviderInterface
      */
     public function indexes(string $table): array
     {
-        $safeTable = $this->safeIdent($table);
-        $result = $this->db->query("PRAGMA index_list(\"{$safeTable}\")") ?? [];
+        $result = $this->db->query('PRAGMA index_list(' . Identifier::quote(Flavor::Sqlite, $table) . ')') ?? [];
 
         $indexes = [];
         foreach ($result as $row) {
             $idxName = (string) ($row['name'] ?? '');
-            $safeIdx = $this->safeIdent($idxName);
-            $idxInfo = $this->db->query("PRAGMA index_info(\"{$safeIdx}\")") ?? [];
+            $idxInfo = $this->db->query('PRAGMA index_info(' . Identifier::quote(Flavor::Sqlite, $idxName) . ')') ?? [];
 
             $columns = [];
             foreach ($idxInfo as $info) {
@@ -96,8 +94,7 @@ final class SqliteSchemaProvider implements SchemaProviderInterface
      */
     public function foreignKeys(string $table): array
     {
-        $safeTable = $this->safeIdent($table);
-        $result = $this->db->query("PRAGMA foreign_key_list(\"{$safeTable}\")") ?? [];
+        $result = $this->db->query('PRAGMA foreign_key_list(' . Identifier::quote(Flavor::Sqlite, $table) . ')') ?? [];
 
         $fks = [];
         foreach ($result as $row) {
@@ -118,8 +115,7 @@ final class SqliteSchemaProvider implements SchemaProviderInterface
      */
     public function dropTable(string $table): void
     {
-        $safeTable = $this->safeIdent($table);
-        $this->db->exec("DROP TABLE IF EXISTS \"{$safeTable}\"");
+        $this->db->exec('DROP TABLE IF EXISTS ' . Identifier::quote(Flavor::Sqlite, $table));
     }
 
     /**
@@ -128,13 +124,5 @@ final class SqliteSchemaProvider implements SchemaProviderInterface
     public function withFlavor(Flavor $flavor): self
     {
         return $this;
-    }
-
-    /**
-     * Escape identifier for safe SQL inclusion.
-     */
-    private function safeIdent(string $name): string
-    {
-        return str_replace('"', '""', $name);
     }
 }
