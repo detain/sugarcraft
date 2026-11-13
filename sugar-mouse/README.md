@@ -89,7 +89,7 @@ Two state idioms share this package, split by layer:
 | Layer | Classes | Contract |
 |---|---|---|
 | Primitive | `Selection`, `ZoneClickTracker`, `Scanner` | Mutates in place; `begin()` / `dragTo()` / `track()` update the receiver and return a plain value (`bool` / `?ClickResult` / chainable `$this`) |
-| Zones trackers | `DragTracker`, `ZoneHoverTracker`, `ClickCounter` | Fork-returning; `update()` yields a `[tracker, ?Msg]` pair and the caller rebinds the returned tracker after every event |
+| Zones trackers | `DragTracker`, `ZoneHoverTracker`, `MultiClickTracker` | Fork-returning; `update()` yields a `[tracker, ?Msg]` pair and the caller rebinds the returned tracker after every event |
 
 The split is deliberate — a live gesture is sequential state, and the
 primitive machines are ports of in-place codebases — but the ecosystem
@@ -108,7 +108,7 @@ drift-latched dragging flag, the release/copy record, and the highlight
 repaint.
 
 The `Zones` layer (`Manager`, `Zones`, `Zone` adapter, `ZoneHoverTracker`,
-`DragTracker`, `ClickCounter`) is documented in its own section below.
+`DragTracker`, `MultiClickTracker`) is documented in its own section below.
 
 ## Sentinel design and trust boundary
 
@@ -222,12 +222,12 @@ Concrete parity rules:
 - Drag needs a no-motion fallback — a select-then-choose-destination
   keyboard flow — since terminals without `1002`/`1003` report no
   cross-boundary moves at all.
-- Never gate a command on tracker state alone (hover zone, `ClickCounter`
+- Never gate a command on tracker state alone (hover zone, `MultiClickTracker`
   streak): the keyboard path must reach the same command without pointer
   history.
-- A multi-click affordance (`ClickCounter` streaks) is a timed pointer
+- A multi-click affordance (`MultiClickTracker` streaks) is a timed pointer
   gesture — build a keyboard or single-action twin for the same command,
-  and consider surfacing `ClickCounter`'s `clickIntervalMs` as an
+  and consider surfacing `MultiClickTracker`'s `clickIntervalMs` as an
   app-exposed setting: the 500 ms default is a pointer-timing tolerance,
   and users with tremor or reduced dexterity may need it wider (cf. WCAG
   guidance on user-controlled timing).
@@ -299,7 +299,7 @@ one, and the trackers need different reporting:
 
 | Mode | Reports | Needed by |
 |---|---|---|
-| `1000` | press / release / wheel | `ZoneClickTracker`, `ClickCounter` (clean press+release pairs, clicks) |
+| `1000` | press / release / wheel | `ZoneClickTracker`, `MultiClickTracker` (clean press+release pairs, clicks) |
 | `1002` | 1000 + drag (button held, crossing a cell) | `DragTracker` boundary crossings while pressed |
 | `1003` | all motion, button held or not | `ZoneHoverTracker` (enter/exit with no press at all) |
 | `1006` | SGR-style extended coordinates: reports arrive as `CSI < b ; x ; y M|m` — `M` press, `m` release, `b` the button code plus modifier bits | any of the above beyond row/col 223, where legacy X10 single-byte coordinates saturate |
@@ -325,7 +325,7 @@ and fold xterm's wheel pair (`MouseAction::BUTTON_WHEEL_UP` /
 `BUTTON_WHEEL_DOWN`) into one wheel event.
 Consequence: the hover tracker reacts to press and motion reports —
 enter/exit fire on a plain `1000` press — but wheel reports are inert for
-all three `Zones` trackers — hover, drag and `ClickCounter` alike (a scroll
+all three `Zones` trackers — hover, drag and `MultiClickTracker` alike (a scroll
 is not a press; see `MouseWheelMsg` gates). Press-free hover needs motion
 reporting (`1003`); the drag tracker's cross-boundary moves need at least
 `1002`; click trackers work on plain `1000` reporting alone.
@@ -612,7 +612,7 @@ gesture before anything else can claim it: `ZoneDragEndMsg(origin, null)`
 the stealing Press starts nothing, and the next Press opens the new drag.
 
 **Click vs. zero-distance drag:** a press and release in the same spot of
-the same zone satisfies both state machines — `ClickCounter` counts it and
+the same zone satisfies both state machines — `MultiClickTracker` counts it and
 `DragTracker` emits `ZoneDragStartMsg` followed by `ZoneDragEndMsg` with
 `currentZone === originZone`. The Start firing on the Press itself means a
 plain click inside a zone flashes the drag UI for one event pair unless the
@@ -634,11 +634,14 @@ not been taken.
 
 ### Click tracking
 
-`ClickCounter` wraps a `Manager` and tracks double/triple click
-streaks inside zones. It emits `DoubleClickMsg` on the second press
+`MultiClickTracker` wraps a `Manager` and tracks double/triple click
+streaks inside zones (renamed from `ClickCounter` — the old name collided
+with upstream's `NewZoneClickTracker`, a different machine than this lib's
+own `ZoneClickTracker`; `ClickCounter` remains loadable as a deprecated
+alias). It emits `DoubleClickMsg` on the second press
 and `TripleClickMsg` on the third press — all within a configurable
 click interval (default 500 ms — a pointer-timing tolerance, not a law:
-`ClickCounter::new(manager, clickIntervalMs: N)` widens the window, and
+`new MultiClickTracker($manager, clickIntervalMs: N)` widens the window, and
 apps should consider exposing it as a setting for users with tremor or
 reduced dexterity, per the Accessibility section). The streak resets when the interval
 expires or when a PRESS lands in a different zone (or outside every zone);
@@ -648,11 +651,11 @@ with plain mode-`1000` reporting (see
 
 ```php
 use SugarCraft\Mouse\Zones\Manager;
-use SugarCraft\Mouse\Zones\ClickCounter;
+use SugarCraft\Mouse\Zones\MultiClickTracker;
 use SugarCraft\Mouse\Zones\Msg\DoubleClickMsg;
 use SugarCraft\Mouse\Zones\Msg\TripleClickMsg;
 
-$counter = new ClickCounter($manager);
+$counter = new MultiClickTracker($manager);
 // $manager must already have run scan() to populate zone registry.
 
 [$counter, $msg] = $counter->update($mouseMsg);
@@ -792,9 +795,9 @@ you can tell the first cause from the other two. The two-call
 | `ZoneDragStartMsg` | `originZone / currentZone` | Zone where drag started; zone at current cursor |
 | `ZoneDragMoveMsg` | `originZone / currentZone` | Fixed origin zone; zone cursor just crossed into |
 | `ZoneDragEndMsg` | `originZone / currentZone` | Zone drag started from; zone at release |
-| `ClickCounter` | `__construct(manager, clickIntervalMs)` | Track double/triple click streaks |
-| `ClickCounter` | `update(mouseMsg)` | Process press event, return double/triple msg |
-| `ClickCounter` | `clickCount()` | Current streak count (0 = no streak) |
+| `MultiClickTracker` | `__construct(manager, clickIntervalMs)` | Track double/triple click streaks |
+| `MultiClickTracker` | `update(mouseMsg)` | Process press event, return double/triple msg |
+| `MultiClickTracker` | `clickCount()` | Current streak count (0 = no streak) |
 | `DoubleClickMsg` | `zone` | Zone of the second press |
 | `TripleClickMsg` | `zone` | Zone of the third press |
 

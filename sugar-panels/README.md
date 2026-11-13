@@ -334,8 +334,10 @@ boundaries (a grapheme is atomic, so one wider than the region — a CJK glyph i
 a one-column box — is emitted as its own oversized chunk and then clipped).
 Only *height* overflow is dropped without a trace: the wrapped continuations
 consume the row budget, and lines past the interior height are not painted at
-all. A bordered box given fewer rows or columns than its two frame lines
-collapses to what fits. Nothing warns, because the renderer has no channel to
+all. A bordered box given fewer than two rows or two columns declines to draw its
+frame at all — a box one cell wide or tall paints nothing — yet its parent still
+counts the one-cell slot the node measured, so the space goes to an invisible
+box rather than degrading to a visibly truncated rule. Nothing warns, because the renderer has no channel to
 warn on and a TUI host repainting per frame does not want one. One hazard rides
 the reflow: a line that already fits passes through verbatim, but a line that
 needed re-wrapping is re-joined with single spaces — an intentional run of

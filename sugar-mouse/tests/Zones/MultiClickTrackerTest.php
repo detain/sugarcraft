@@ -8,13 +8,13 @@ use SugarCraft\Core\MouseAction;
 use SugarCraft\Core\MouseButton;
 use SugarCraft\Core\Msg\MouseMsg;
 use SugarCraft\Core\Msg\MouseWheelMsg;
-use SugarCraft\Mouse\Zones\ClickCounter;
+use SugarCraft\Mouse\Zones\MultiClickTracker;
 use SugarCraft\Mouse\Zones\Manager;
 use SugarCraft\Mouse\Zones\Msg\DoubleClickMsg;
 use SugarCraft\Mouse\Zones\Msg\TripleClickMsg;
 use PHPUnit\Framework\TestCase;
 
-final class ClickCounterTest extends TestCase
+final class MultiClickTrackerTest extends TestCase
 {
     private function press(int $x, int $y): MouseMsg
     {
@@ -50,7 +50,7 @@ final class ClickCounterTest extends TestCase
     public function testSingleClickEmitsNoMsg(): void
     {
         $m = $this->buildManager();
-        $counter = new ClickCounter($m);
+        $counter = new MultiClickTracker($m);
 
         [$next, $msg] = $counter->update($this->press(2, 1));
 
@@ -61,7 +61,7 @@ final class ClickCounterTest extends TestCase
     public function testSecondClickInSameZoneWithinIntervalEmitsDoubleClickMsg(): void
     {
         $m = $this->buildManager();
-        $counter = new ClickCounter($m);
+        $counter = new MultiClickTracker($m);
 
         // First click.
         [$counter] = $counter->update($this->press(2, 1));
@@ -76,7 +76,7 @@ final class ClickCounterTest extends TestCase
     public function testThirdClickInSameZoneWithinIntervalEmitsTripleClickMsg(): void
     {
         $m = $this->buildManager();
-        $counter = new ClickCounter($m);
+        $counter = new MultiClickTracker($m);
 
         // First click.
         [$counter] = $counter->update($this->press(2, 1));
@@ -93,7 +93,7 @@ final class ClickCounterTest extends TestCase
     public function testFourthClickEmitsNoMsg(): void
     {
         $m = $this->buildManager();
-        $counter = new ClickCounter($m);
+        $counter = new MultiClickTracker($m);
 
         [$counter] = $counter->update($this->press(2, 1));
         [$counter] = $counter->update($this->press(2, 1));
@@ -107,7 +107,7 @@ final class ClickCounterTest extends TestCase
     public function testClickOutsideZoneDoesNotStartStreak(): void
     {
         $m = $this->buildManager();
-        $counter = new ClickCounter($m);
+        $counter = new MultiClickTracker($m);
 
         // Click in empty area.
         [$counter] = $counter->update($this->press(50, 1));
@@ -121,7 +121,7 @@ final class ClickCounterTest extends TestCase
     public function testZoneChangeResetsStreak(): void
     {
         $m = $this->buildManager();
-        $counter = new ClickCounter($m);
+        $counter = new MultiClickTracker($m);
 
         // Click in zone A.
         [$counter] = $counter->update($this->press(2, 1));
@@ -135,7 +135,7 @@ final class ClickCounterTest extends TestCase
     public function testMotionEventIsNoOp(): void
     {
         $m = $this->buildManager();
-        $counter = new ClickCounter($m);
+        $counter = new MultiClickTracker($m);
 
         [$counter] = $counter->update($this->press(2, 1));
         // Motion — should not affect streak.
@@ -148,7 +148,7 @@ final class ClickCounterTest extends TestCase
     public function testClickCountReturnsZeroInitially(): void
     {
         $m = $this->buildManager();
-        $counter = new ClickCounter($m);
+        $counter = new MultiClickTracker($m);
 
         $this->assertSame(0, $counter->clickCount());
     }
@@ -156,7 +156,7 @@ final class ClickCounterTest extends TestCase
     public function testWithManagerReturnsNewInstance(): void
     {
         $m = $this->buildManager();
-        $counter = new ClickCounter($m);
+        $counter = new MultiClickTracker($m);
 
         $m2 = Manager::newUnprefixed();
         $m2->scan($m2->mark('x', 'X'));
@@ -169,7 +169,7 @@ final class ClickCounterTest extends TestCase
     public function testDoubleClickAfterZoneChangeToSameZoneEmitsDoubleClick(): void
     {
         $m = $this->buildManager();
-        $counter = new ClickCounter($m);
+        $counter = new MultiClickTracker($m);
 
         // Click in zone A.
         [$counter] = $counter->update($this->press(2, 1));
@@ -189,7 +189,7 @@ final class ClickCounterTest extends TestCase
     {
         $m = $this->buildManager();
         // Very short interval (1ms) to force expiry.
-        $counter = new ClickCounter($m, 1);
+        $counter = new MultiClickTracker($m, 1);
 
         // First click.
         [$counter] = $counter->update($this->press(2, 1));
@@ -202,7 +202,7 @@ final class ClickCounterTest extends TestCase
     {
         $m = $this->buildManager();
         $t = 1000.0;
-        $counter = new ClickCounter($m, 500, static function () use (&$t): float {
+        $counter = new MultiClickTracker($m, 500, static function () use (&$t): float {
             return $t;
         });
 
@@ -231,7 +231,7 @@ final class ClickCounterTest extends TestCase
     {
         $m = $this->buildManager();
         $t = 0.0;
-        $counter = new ClickCounter($m, 500, static function () use (&$t): float {
+        $counter = new MultiClickTracker($m, 500, static function () use (&$t): float {
             return $t;
         });
 
@@ -251,7 +251,7 @@ final class ClickCounterTest extends TestCase
     public function testWithManagerCarriesTheStreak(): void
     {
         $m = $this->buildManager();
-        $counter = new ClickCounter($m);
+        $counter = new MultiClickTracker($m);
         [$counter] = $counter->update($this->press(2, 1));
         $this->assertSame(1, $counter->clickCount());
 
@@ -274,7 +274,7 @@ final class ClickCounterTest extends TestCase
     public function testUpdateLeavesOriginalUnchanged(): void
     {
         $m = $this->buildManager();
-        $counter = new ClickCounter($m);
+        $counter = new MultiClickTracker($m);
 
         // Capture original state.
         $old = $counter;
@@ -303,7 +303,7 @@ final class ClickCounterTest extends TestCase
     {
         $m = $this->buildManager();
         $t = 0.0;
-        $counter = new ClickCounter($m, 1, static function () use (&$t): float {
+        $counter = new MultiClickTracker($m, 1, static function () use (&$t): float {
             return $t;
         });
 
@@ -329,7 +329,7 @@ final class ClickCounterTest extends TestCase
     public function testWheelReportsDoNotAdvanceTheStreak(): void
     {
         $m = $this->buildManager();
-        $counter = new ClickCounter($m);
+        $counter = new MultiClickTracker($m);
 
         [$counter, $msg] = $counter->update($this->press(2, 1));
         $this->assertNull($msg);
@@ -356,7 +356,7 @@ final class ClickCounterTest extends TestCase
     public function testWheelDoesNotResetStreakInsideOrOutside(): void
     {
         $m = $this->buildManager();
-        $counter = new ClickCounter($m);
+        $counter = new MultiClickTracker($m);
 
         [$counter] = $counter->update($this->press(2, 1));
         [$counter] = $counter->update($this->wheel(50, 1)); // wheel over no zone
@@ -375,12 +375,27 @@ final class ClickCounterTest extends TestCase
      */
     public function testDefaultClockIsMonotonicNotWallClock(): void
     {
-        $counter = new ClickCounter($this->buildManager());
+        $counter = new MultiClickTracker($this->buildManager());
         $method  = new \ReflectionMethod($counter, 'nowSeconds');
 
         $seconds = $method->invoke($counter);
 
         $this->assertGreaterThan(0.0, $seconds);
         $this->assertLessThan(1e8, $seconds, 'default clock must not return epoch-scale seconds');
+    }
+
+    /**
+     * SM-S30 back-compat pin: the deprecated `ClickCounter` symbol must
+     * resolve to exactly this class — one class object, not a copy.
+     */
+    public function testDeprecatedClickCounterAliasResolvesToOneClass(): void
+    {
+        $viaAlias = new \SugarCraft\Mouse\Zones\ClickCounter($this->buildManager());
+        $this->assertInstanceOf(MultiClickTracker::class, $viaAlias);
+        $this->assertSame(
+            MultiClickTracker::class,
+            \get_class($viaAlias),
+            'the deprecated alias must resolve to the renamed class, not a duplicate',
+        );
     }
 }

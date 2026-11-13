@@ -23,6 +23,14 @@
 > needs an upstream clone — a could-not-verify leg deferred to the
 > researcher lane for a later re-merge pass.
 
+> **Rename note (2026-11-13, sugar-mouse SM-S30).** The streak counter
+> proposed below as `ClickCounter` shipped as `Zones\MultiClickTracker`;
+> the old name survives only as a deprecated `class_alias`. The
+> plan-history mentions below (the `NewZoneClickTracker`-shaped name and
+> the `src/ClickCounter.php` checklist line) are left in their original
+> spelling deliberately — they record the proposal, not the shipped
+> symbol.
+
 ---
 
 ## 1. Library Comparisons by Language

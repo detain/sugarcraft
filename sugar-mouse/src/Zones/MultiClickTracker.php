@@ -18,13 +18,19 @@ use SugarCraft\Mouse\Zones\Msg\TripleClickMsg;
  *
  * Usage:
  *
- *   $counter = new ClickCounter($manager);
+ *   $counter = new MultiClickTracker($manager);
  *   [$counter, $msg] = $counter->update($mouseMsg);
  *   if ($msg instanceof DoubleClickMsg) { ... }
  *   if ($msg instanceof TripleClickMsg) { ... }
  *
  * Extends bubblezone — upstream ships no double/triple-click machinery
  * (its own gap table records click count as not built-in).
+ *
+ * Renamed from `ClickCounter`: the old name mirrored upstream's own
+ * `NewZoneClickTracker` (a single-click dedup machine) while this lib's
+ * `ZoneClickTracker` — the primitive it shadows — is a different one.
+ * The neutral name says what it counts (a multi-click streak). The old
+ * class name survives as a deprecated alias; see `ClickCounter.php`.
  *
  * dedup overlap with {@see \SugarCraft\Mouse\ZoneClickTracker} deferred: the
  * primitive's ZoneClickTracker does Press+Release single-click dedup, NOT the
@@ -34,7 +40,7 @@ use SugarCraft\Mouse\Zones\Msg\TripleClickMsg;
  * intentionally not done. This class hit-tests via {@see Manager}, whose
  * geometry already flows through the primitive SSOT.
  */
-final class ClickCounter
+final class MultiClickTracker
 {
     /** How many consecutive clicks have occurred in the current streak. */
     private int $clickCount = 0;

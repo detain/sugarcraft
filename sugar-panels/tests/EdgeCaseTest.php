@@ -450,6 +450,30 @@ final class EdgeCaseTest extends TestCase
         $this->assertStringNotContainsString('L7', $result);
     }
 
+    public function testBorderedLeafOneCellWideMeasuresButPaintsNothing(): void
+    {
+        // A bordered box needs two frame lines on each axis. A leaf capped to one
+        // column still MEASURES that one column (so its parent reserves the slot),
+        // but drawBorder declines to draw when the region is < 2 wide, and the
+        // content interior (width - 2) is negative — so the box paints nothing at
+        // all. The layout spends a column on an invisible box; nothing warns. This
+        // pins both halves of that asymmetry (README *Small viewports*).
+        $n = Node::leaf('x')->withBorder(true)->withMaxWidth(1);
+
+        // (1) The reserved footprint the parent lays out against.
+        $this->assertSame(1, $n->totalWidth());
+
+        // (2) The painted field is one column of blanks — no frame, no content.
+        $body = self::body($this->panels->render($n, 1, 3));
+        $rows = \explode("\n", $body);
+        $this->assertCount(3, $rows);
+        foreach ($rows as $row) {
+            $this->assertSame(' ', $row);
+        }
+        $this->assertStringNotContainsString('x', $body);
+        $this->assertStringNotContainsString('╭', $body);
+    }
+
     public function testRenderHorizontalWithZeroSpacingAndNoFlex(): void
     {
         // Verifies the no-flex path in renderHorizontal: spacing=0 with no flex
