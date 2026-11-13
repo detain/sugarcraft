@@ -52,7 +52,10 @@ $rects = $solver->solve(Region::fromSize(100, 20), Direction::Horizontal, [
 output `x`/`y` are offsets **inside the input region**, so each returned box
 can be painted directly. The input may itself be a sub-area: pass
 `new Region($x, $y, $w, $h)` (say, a span inset by borders) and the walk
-places panes within it.
+places panes within it. The constraint array must be a **list**: `solve()`
+refuses keyed or sparse arrays at the boundary with `InvalidArgumentException`
+("Constraints must be a list (sequential array of Constraint); got a keyed or
+sparse array") — and `demandOf()` shares the same guard.
 
 When `SugarCraft\Style\Layout\Constraint` is also in scope (sugar-style's own
 class shares the final name), alias this lib's and call the factories through
@@ -102,6 +105,10 @@ Constraint (abstract class)      lives in the Constraint\ namespace, factories o
 Region                           x/y/width/height box — solver input AND output
 Dock\* (DockLayout/DockGeometry/DockSlot/Side)   standalone IDE-dock surface, no solver call
 ```
+
+The static factories are instance-side only: `LayoutSolver::greedy()` through
+the interface name is a PHP fatal (interface statics are bodyless) — construct
+a concrete class.
 
 ## Constraint types
 
@@ -336,6 +343,10 @@ stack — but treat the pane ids as the only identity contract. Dropped panes
 are ABSENT from `$geometry->regions` (the iterable tell), while `regionFor()`
 answers the same `null` for them as for never-docked ids and degenerate
 frames — compare against the input `DockLayout` to tell them apart.
+To read the plan's intent rather than its result: `slots(Side)` lists the
+docked `DockSlot`s in order, `columnShare(Side)` answers the effective
+`num`/`denom` pair (the read-back door for clamps), and `isEmpty()` on the
+geometry is true only for a degenerate frame.
 
 **Degradation ladder.** `resolve()` never throws on small frames: a side
 column is raised to `sideMinCols` only while the center keeps `centerMinCols`;
@@ -357,6 +368,8 @@ share, a tightened side caps at 1/2 minus that share, that is
 default right share of 1/3 the left side caps at 1/6: on a 100-column frame
 that floors to 16 columns, which `resolve()` then raises to the 20-column side
 minimum while the centre keeps its 24; on a 300-column frame the cap is 49.
+Those 24/20 floors are the `withMinimums($centerMinCols, $sideMinCols)` pair —
+the ladder reads them per frame.
 The mutator stores the **effective** share — read `columnShare($side)` back to
 observe a clamp that fired; hosts that would rather hear about it at the call
 use `withColumnShareExact()`, which refuses a clamped request with
