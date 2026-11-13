@@ -8,7 +8,6 @@ use SugarCraft\Code\Agents\Agent;
 use SugarCraft\Code\Agents\AgentResult;
 use SugarCraft\Code\Agents\AgentStatus;
 use SugarCraft\Code\Host\SpendLedger;
-use SugarCraft\Code\Lang;
 
 /**
  * Represents a single background session running an agent in a child process.
@@ -21,6 +20,9 @@ use SugarCraft\Code\Lang;
  */
 final class BackgroundSession
 {
+    /** Model-facing announcement text: English by G-13, never Lang::t. */
+    public const OUTPUT_NONE = 'Output: (none)';
+
     /**
      * The most of a settled session's output {@see announcement()} quotes —
      * the size `tools.spillAboveChars` keeps inline for a tool result, which is
@@ -316,7 +318,7 @@ final class BackgroundSession
 
         $output = rtrim($this->output);
         if ($output === '') {
-            $lines[] = Lang::t('background.task.output.none');
+            $lines[] = self::OUTPUT_NONE;
         } else {
             $length = mb_strlen($output, 'UTF-8');
             if ($length > $maxOutputChars) {

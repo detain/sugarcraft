@@ -8,6 +8,7 @@ use React\EventLoop\Loop;
 use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
 use SugarCraft\Core\Cmd;
+use SugarCraft\Code\Background\BackgroundSession;
 use SugarCraft\Code\Backend\CancellationToken;
 use SugarCraft\Code\App\BangShellResultMsg;
 use SugarCraft\Code\Lang;
@@ -265,7 +266,7 @@ final class BangShell
             "[The user ran a shell command: %s]\n%s\n%s",
             self::printable($command),
             $status,
-            $output === '' ? Lang::t('background.task.output.none') : "Output:\n" . $output,
+            $output === '' ? BackgroundSession::OUTPUT_NONE : "Output:\n" . $output,
         ));
     }
 
