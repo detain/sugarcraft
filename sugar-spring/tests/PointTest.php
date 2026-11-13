@@ -131,11 +131,29 @@ final class PointTest extends TestCase
         $this->assertSame($originalZ, $p->z);
     }
 
-    public function testConstructorRefusesNonFiniteComponents(): void
+    /**
+     * @dataProvider nonFiniteComponentProvider
+     */
+    public function testConstructorRefusesNonFiniteComponents(string $axis, float $value): void
     {
-        // Mirrors VectorTest (security m4): the ctor is the trust boundary.
+        // Same trust boundary, symmetric coverage with VectorTest's grid
+        // (finding 064: Point tested one leg where Vector tested three —
+        // a dropped z-check would have sailed through here).
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('Point components must be finite');
-        new Point(1.0, NAN, 3.0);
+        new Point(
+            $axis === 'x' ? $value : 1.0,
+            $axis === 'y' ? $value : 2.0,
+            $axis === 'z' ? $value : 3.0,
+        );
+    }
+
+    public static function nonFiniteComponentProvider(): iterable
+    {
+        foreach (['x', 'y', 'z'] as $axis) {
+            yield "{$axis} NaN"  => [$axis, NAN];
+            yield "{$axis} INF"  => [$axis, INF];
+            yield "{$axis} -INF" => [$axis, -INF];
+        }
     }
 }

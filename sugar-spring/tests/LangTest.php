@@ -66,10 +66,26 @@ final class LangTest extends TestCase
         $this->assertSame('float', $easeMethod->getReturnType()->getName());
     }
 
-    public function testEasingEnumHasCases(): void
+    public function testEasingEnumHasExactlyTheDocumentedSixteenCases(): void
     {
-        $cases = Easing::cases();
-        $this->assertGreaterThan(0, count($cases));
+        // Finding 064: assertGreaterThan(0, count(...)) could never fail —
+        // any non-empty enum satisfied it while `count(Easing::cases()) == 16`
+        // is asserted prose. Pin the roster itself, exactly, once, here.
+        $names = array_map(static fn(Easing $case): string => $case->name, Easing::cases());
+        sort($names);
+
+        $documented = [
+            'BackIn', 'BackInOut', 'BackOut',
+            'BounceIn', 'BounceInOut', 'BounceOut',
+            'CubicIn', 'CubicInOut', 'CubicOut',
+            'ElasticIn', 'ElasticInOut', 'ElasticOut',
+            'Linear',
+            'QuadraticIn', 'QuadraticInOut', 'QuadraticOut',
+        ];
+        sort($documented);
+
+        $this->assertCount(16, $names);
+        $this->assertSame($documented, $names, 'the Easing case roster is public API surface — a rename or a new case is a disclosed change, not a silent count move');
     }
 
     public function testCubicBezierHasEaseSamplerMethod(): void
