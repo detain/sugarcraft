@@ -20,6 +20,7 @@ return [
     'decoder.text_sampled' => 'sugar-video: this PHP has no image extension (ext-gd), so GIF frames are sampled as text',
     'source.probe_missing' => 'sugar-video: ffprobe was not found on this host — duration, fps, and audio detection are unavailable',
     'decoder.ffmpeg_missing' => 'ffmpeg not found on this host; mp4/avi/webm playback requires ffmpeg',
+    'decoder.windows_refused' => 'ffmpeg video decode is not available on Windows: the frame pump reads the child pipes with stream_select(), which is documented-unsupported on Windows — a failed select reads as "no data", so playback would black-screen silently while ffmpeg keeps producing frames nobody drains (SV-M44). GIF playback remains available there; play mp4/avi/webm/stream sources on a Linux or macOS host until the pump is reworked — see the README "Windows" notes.',
     'decoder.ffmpeg_exit' => 'sugar-video: ffmpeg exited with code {code} before the stream ended ({source})',
     'source.unparseable' => 'sugar-video: ffprobe could not decode any video stream from {source} (exit code {code}) — the file is corrupt or not a video',
     'decoder.webp_gd_missing' => 'this PHP cannot decode WebP (GD lacks WebP support); animated WebP playback requires it — ffmpeg has no animated-WebP decoder, so there is no external fallback',

@@ -210,6 +210,16 @@ final class FfmpegDecoder implements Decoder
      */
     public function open(string $source, int $cellsW, int $cellsH, float $fps, ?Mode $mode = null, float $startSec = 0.0, array $headers = []): void
     {
+        // SV-M44 (owner-gate default leg, route a): LOUD refusal of the ffmpeg
+        // video path on Windows. stream_select() on proc_open pipes is
+        // documented-unsupported there — a failed select answers "no data"
+        // until the deadline, which looks like silent black playback with a
+        // live child. Better a clear error than a lie. The blocking-read and
+        // file-sink pump reworks stay open follow-ups (README "Windows").
+        if (self::runningOnWindows()) {
+            throw new \RuntimeException(Lang::t('decoder.windows_refused'));
+        }
+
         // Re-opening a live instance must not orphan the previous ffmpeg child
         // and its stdout fd — close() is idempotent, so this is free on the
         // normal first open() and correct on any second one.
@@ -760,6 +770,23 @@ final class FfmpegDecoder implements Decoder
                 'source' => self::describePath(AudioPlayer::redactCredentials($this->source)),
             ]) . ($detail !== '' ? ' — ffmpeg said: ' . $detail : '')
         );
+    }
+
+    /**
+     * SV-M44 host-shape seam: the live answer is the real OS family; the
+     * testing override (same shape as {@see \SugarCraft\Video\Render\RendererFactory::setDiagnoseForTesting()}
+     * elsewhere in this lib) lets the Windows refusal arms run on any runner.
+     */
+    private static ?bool $windowsForTesting = null;
+
+    public static function setWindowsHostForTesting(?bool $isWindows): void
+    {
+        self::$windowsForTesting = $isWindows;
+    }
+
+    private static function runningOnWindows(): bool
+    {
+        return self::$windowsForTesting ?? (\PHP_OS_FAMILY === 'Windows');
     }
 
     /**

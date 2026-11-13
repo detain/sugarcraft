@@ -1593,6 +1593,46 @@ PHP;
         }
     }
 
+    /**
+     * @testdox SV-M44 (gate default-leg, route a): a Windows host loudly refuses the ffmpeg video path before any spawn
+     */
+    public function testTheWindowsHostRefusesFfmpegVideoWithGuidance(): void
+    {
+        // A stub ffmpeg that would mark its spawn — the refusal must happen
+        // before it, so the marker staying absent IS the load-bearing pin.
+        $dir = sys_get_temp_dir() . '/sugar-video-win-' . bin2hex(random_bytes(6));
+        mkdir($dir);
+        $marker = $dir . '/spawned';
+        file_put_contents($dir . '/ffmpeg', "#!/bin/sh\ntouch " . $marker . "\nexit 0\n");
+        chmod($dir . '/ffmpeg', 0755);
+        $savedPath = getenv('PATH');
+        putenv('PATH=' . $dir);
+        Probe::clearBinaryCacheForTesting();
+        FfmpegDecoder::setWindowsHostForTesting(true);
+
+        try {
+            $thrown = null;
+            try {
+                (new FfmpegDecoder())->open('/tmp/whatever.mp4', 8, 6, 24.0);
+            } catch (\RuntimeException $e) {
+                $thrown = $e;
+            }
+
+            $this->assertNotNull($thrown, 'the Windows ffmpeg path must refuse, not black-screen');
+            $this->assertStringContainsString('Windows', $thrown->getMessage());
+            $this->assertStringContainsString('stream_select', $thrown->getMessage(), 'the refusal must name the mechanism');
+            $this->assertStringContainsString('GIF', $thrown->getMessage(), 'the refusal must point at what still works');
+            $this->assertFileDoesNotExist($marker, 'nothing may be spawned on the refused route');
+        } finally {
+            FfmpegDecoder::setWindowsHostForTesting(null);
+            putenv($savedPath === false ? 'PATH' : 'PATH=' . $savedPath);
+            Probe::clearBinaryCacheForTesting();
+            @unlink($marker);
+            @unlink($dir . '/ffmpeg');
+            @rmdir($dir);
+        }
+    }
+
     public function testTheMissingSourceRefusalNeverEchoesUrlCredentials(): void
     {
         $dir = sys_get_temp_dir() . '/sugar-video-cred-' . bin2hex(random_bytes(6));

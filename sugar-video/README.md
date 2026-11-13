@@ -495,6 +495,17 @@ reinvented: [sugar-image](../sugar-image) (image → cell renderers),
   re-open latency on resume, and the audio clock is quantised to the last
   pause boundary rather than frame-exact.
 
+- **Video decode via ffmpeg is refused on Windows.** The frame pump drains
+  ffmpeg's stdout with `stream_select()`, which is documented-unsupported on
+  Windows — a failed select answers "no data", so a Windows spawn would
+  black-screen silently while the child kept producing frames nobody read
+  (SV-M44, owner-gated route (a): loud refusal beats a silent lie).
+  `FfmpegDecoder::open()` throws a guidance error there instead; GIF playback
+  (pure-PHP `GifDecoder`) remains available on Windows, and mp4/avi/webm/stream
+  sources play on Linux/macOS hosts. The blocking-read and file-sink pump
+  reworks that would lift the refusal are open follow-ups gated on a Windows
+  CI leg.
+
 - **Audio headers are forwarded, but only in the two dialects `ffplay`/`mpv`
   understand.** The request headers given to `Reel::openUrl()` ride on ffmpeg's
   video input (`-headers`/`-user_agent`) *and* on the audio companion: `ffplay`
