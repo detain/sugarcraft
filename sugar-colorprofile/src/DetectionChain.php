@@ -26,17 +26,28 @@ namespace SugarCraft\ColorProfile;
  *                                   → ascii (disable color, keep decoration)
  *  3. NO_COLOR (set and NON-empty; "" = unset per no-color.org) → ascii
  *     (colorless: color codes dropped, decoration kept)
- *  4. CLICOLOR=0                  → ascii (same colorless routing)
+ *  4. CLICOLOR=0                  → ascii (same colorless routing; the positive
+ *     CLICOLOR=1 leg upstream honors is a deliberate omission — the floor answer
+ *     is already ansi)
  *  5. TERM=dumb (case-insensitive) → ascii (same colorless routing)
- *  6. COLORTERM=24bit|truecolor|yes → truecolor
- *  7. TERM_PROGRAM=iTerm.app      → truecolor (inline image + 24-bit history)
- *  8. WT_SESSION (set, non-empty) → truecolor  (Windows Terminal)
- *  9. GOOGLE_CLOUD_SHELL (set, non-empty) → truecolor
- * 10. TMUX or STY set + base TERM begins screen/tmux → ansi256
- * 11. TERM contains -256color, or equals xterm-kitty/xterm-ghostty
- *     (case-insensitive) → ansi256
- * 12. TERM begins xterm/screen/tmux (case-insensitive) → ansi
- * 13. Default → ansi
+ *  6. TMUX/STY set + base TERM begins "screen" → ansi256 — the
+ *     multiplexer cap BEFORE COLORTERM (screen never forwards 24-bit and
+ *     COLORTERM survives multiplexer inheritance)
+ *  7. COLORTERM=truecolor|24bit → truecolor; COLORTERM=yes → ansi256 (the
+ *     community-verified-terminal list reads "yes" as a 256-color promise —
+ *     legacy VTE lied with it; the rung stays inside phase-2's promotion reach)
+ *  8. TERM_PROGRAM=iTerm.app      → truecolor (inline image + 24-bit history)
+ *  9. WT_SESSION (set, non-empty) → truecolor  (Windows Terminal)
+ * 10. GOOGLE_CLOUD_SHELL="true" (exact) → truecolor (Cloud Shell's image sets
+ *     "true"; any other value, "false" or "1" included, carries no promise)
+ * 11. TMUX/STY set + base TERM begins "tmux" → ansi256 (behind COLORTERM —
+ *     the tmux leg may honestly report truecolor)
+ * 12. TERM contains -256color, or equals xterm-kitty/xterm-ghostty
+ *     (case-insensitive) → ansi256 (termenv promotes kitty/ghostty to
+ *     truecolor by NAME; this fork keeps the 256 promise and defers name-
+ *     based promotion to phase-2 terminfo — WezTerm has no TERM-only twin)
+ * 13. TERM begins xterm/screen/tmux (case-insensitive) → ansi
+ * 14. Default → ansi
  *
  * Steps 1-2 outrank step 3 deliberately: FORCE_COLOR/CLICOLOR_FORCE are
  * active "give me color anyway" overrides (chalk/support-colors convention),
@@ -124,7 +135,10 @@ final class DetectionChain
         }
 
         // 4. CLICOLOR=0 → colorless rung (same routing as NO_COLOR: a declared
-        //    color-off preference, decoration intact).
+        //    color-off preference, decoration intact). The positive CLICOLOR=1
+        //    leg upstream honors is a DELIBERATE omission here (CP-09): this
+        //    ladder's floor answer is already ANSI, so reading the leg would
+        //    change behavior on no host that needs it.
         if (Env::value($resolved, 'CLICOLOR') === '0') {
             return new self(self::LEVEL_ASCII, 'env:CLICOLOR=0', $term);
         }
@@ -142,58 +156,89 @@ final class DetectionChain
             return new self(self::LEVEL_ASCII, 'env:TERM=dumb', $term);
         }
 
-        // 6. COLORTERM=24bit|truecolor|yes → truecolor
+        // 6. Multiplexer cap, screen leg (CP-09): TMUX/STY set and base TERM
+        //    begins "screen" → ANSI256 BEFORE COLORTERM. GNU screen never
+        //    forwards the 24-bit set, and COLORTERM survives screen/tmux
+        //    inheritance — evaluated after it, the cap could be inherited
+        //    away and screen users would receive 24-bit escape garbage. The
+        //    tmux leg stays behind COLORTERM (step 11): modern tmux forwards
+        //    truecolor when its overrides advertise RGB, so tmux+COLORTERM
+        //    may still pass — the documented split pinned by tests.
+        $tmux = Env::value($resolved, 'TMUX');
+        $sty = Env::value($resolved, 'STY');
+        $inTmux = $tmux !== null && $tmux !== '';
+        $inScreen = $sty !== null && $sty !== '';
+        if (($inTmux || $inScreen) && str_starts_with($termLower, 'screen')) {
+            return new self(
+                self::LEVEL_ANSI256,
+                'env:TMUX|STY+' . ($inTmux ? 'TMUX' : 'STY'),
+                $term,
+            );
+        }
+
+        // 7. COLORTERM: truecolor|24bit → truecolor; "yes" → ansi256 (CP-09).
+        //    termenv parity: legacy VTE builds advertised 24-bit support with
+        //    the lie COLORTERM=yes, and the community-verified-terminal list
+        //    treats "yes" as a 256-color promise at most. The demotion keeps
+        //    the rung "some color" AND leaves it inside the Probe phase-2
+        //    promotion gate (which runs only on Ansi/Ansi256), so a genuine
+        //    RGB terminfo can still raise it back.
         $colorterm = Env::value($resolved, 'COLORTERM');
         if ($colorterm !== null) {
             $ctLower = strtolower($colorterm);
-            if ($ctLower === '24bit' || $ctLower === 'truecolor' || $ctLower === 'yes') {
+            if ($ctLower === '24bit' || $ctLower === 'truecolor') {
                 return new self(self::LEVEL_TRUECOLOR, Env::sanitize('env:COLORTERM=' . $colorterm), $term);
+            }
+            if ($ctLower === 'yes') {
+                return new self(self::LEVEL_ANSI256, Env::sanitize('env:COLORTERM=' . $colorterm), $term);
             }
         }
 
-        // 7. TERM_PROGRAM=iTerm.app → truecolor (iTerm2 renders 24-bit since
+        // 8. TERM_PROGRAM=iTerm.app → truecolor (iTerm2 renders 24-bit since
         //    forever; the legacy rung Palette used to special-case pre-TTY).
         if (Env::value($resolved, 'TERM_PROGRAM') === 'iTerm.app') {
             return new self(self::LEVEL_TRUECOLOR, 'env:TERM_PROGRAM', $term);
         }
 
-        // 8. WT_SESSION (set, non-empty) → truecolor (Windows Terminal)
+        // 9. WT_SESSION (set, non-empty) → truecolor (Windows Terminal)
         $wtSession = Env::value($resolved, 'WT_SESSION');
         if ($wtSession !== null && $wtSession !== '') {
             return new self(self::LEVEL_TRUECOLOR, 'env:WT_SESSION', $term);
         }
 
-        // 9. GOOGLE_CLOUD_SHELL set and non-empty → truecolor. Any non-empty
-        //    value declares the environment; the Cloud Shell image itself sets
-        //    "1"/"true" historically, and a boolean-style "false" is a
-        //    deliberate unsetting only by UNSETTING the variable (the variable
-        //    existing as unsettable false is not a Google contract).
-        $gcs = Env::value($resolved, 'GOOGLE_CLOUD_SHELL');
-        if ($gcs !== null && $gcs !== '') {
+        // 10. GOOGLE_CLOUD_SHELL === "true" → truecolor (CP-09). Upstream's
+        //    grant is the exact string: the Cloud Shell image sets "true",
+        //    and any other value ("false", "1", a path, anything) carries no
+        //    24-bit promise. One-way behavior change from the previous
+        //    set-and-non-empty test: "false" and "1" no longer force.
+        if (Env::value($resolved, 'GOOGLE_CLOUD_SHELL') === 'true') {
             return new self(self::LEVEL_TRUECOLOR, 'env:GOOGLE_CLOUD_SHELL', $term);
         }
 
-        // 10. TMUX||STY + base TERM screen/tmux → ansi256
-        $tmux = Env::value($resolved, 'TMUX');
-        $sty = Env::value($resolved, 'STY');
-        $inTmux = $tmux !== null && $tmux !== '';
-        $inScreen = $sty !== null && $sty !== '';
-        if ($inTmux || $inScreen) {
-            if (str_starts_with($termLower, 'screen') || str_starts_with($termLower, 'tmux')) {
-                return new self(
-                    self::LEVEL_ANSI256,
-                    'env:TMUX|STY+' . ($inTmux ? 'TMUX' : 'STY'),
-                    $term,
-                );
-            }
+        // 11. Multiplexer cap, tmux leg: TMUX/STY set and base TERM begins
+        //     "tmux" → ansi256 (behind COLORTERM — the screen/tmux split is
+        //     the CP-09 documented answer: modern tmux may forward truecolor,
+        //     GNU screen never does). The screen prefix was capped at step 6.
+        if (($inTmux || $inScreen) && str_starts_with($termLower, 'tmux')) {
+            return new self(
+                self::LEVEL_ANSI256,
+                'env:TMUX|STY+' . ($inTmux ? 'TMUX' : 'STY'),
+                $term,
+            );
         }
 
-        // 11. TERM=xterm-kitty|xterm-ghostty|*-256color → ansi256
+        // 12. TERM=xterm-kitty|xterm-ghostty|*-256color → ansi256.
+        //     Name divergence (CP-09): termenv classifies kitty/ghostty as
+        //     TrueColor by NAME, this fork keeps the 256 promise the TERM
+        //     value itself carries and defers name-based promotion to the
+        //     Probe phase-2 terminfo leg — the DetectionChainTest pins for
+        //     these two are intentional, and WezTerm has no TERM-only twin
+        //     to pin at all.
         if (str_contains($termLower, '-256color') || $termLower === 'xterm-kitty' || $termLower === 'xterm-ghostty') {
             return new self(self::LEVEL_ANSI256, Env::sanitize('env:TERM=' . $term), $term);
         }
 
-        // 12. TERM=xterm*|screen*|tmux* → ansi
+        // 13. TERM=xterm*|screen*|tmux* → ansi
         if (
             str_starts_with($termLower, 'xterm')
             || str_starts_with($termLower, 'screen')
@@ -202,7 +247,7 @@ final class DetectionChain
             return new self(self::LEVEL_ANSI, Env::sanitize('env:TERM=' . $term), $term);
         }
 
-        // 13. Default → ansi
+        // 14. Default → ansi
         return new self(self::LEVEL_ANSI, 'fallback:default', $term);
     }
 

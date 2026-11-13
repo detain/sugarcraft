@@ -74,7 +74,7 @@ final class DetectionChainTest extends TestCase
                 DetectionChain::LEVEL_ASCII,
                 'env:CLICOLOR=0',
             ],
-            // COLORTERM=24bit|truecolor|yes → truecolor
+            // COLORTERM=24bit|truecolor → truecolor; yes → ansi256 (CP-09 split)
             'colorterm_24bit returns truecolor' => [
                 ['COLORTERM' => '24bit', 'TERM' => 'xterm'],
                 DetectionChain::LEVEL_TRUECOLOR,
@@ -85,9 +85,9 @@ final class DetectionChainTest extends TestCase
                 DetectionChain::LEVEL_TRUECOLOR,
                 'env:COLORTERM=truecolor',
             ],
-            'colorterm_yes returns truecolor' => [
+            'colorterm_yes returns ansi256 (CP-09 — legacy marker, 256-color promise only)' => [
                 ['COLORTERM' => 'yes', 'TERM' => 'xterm'],
-                DetectionChain::LEVEL_TRUECOLOR,
+                DetectionChain::LEVEL_ANSI256,
                 'env:COLORTERM=yes',
             ],
             // TERM=dumb → ascii (colorless rung — CP-05)
@@ -114,11 +114,44 @@ final class DetectionChainTest extends TestCase
                 DetectionChain::LEVEL_TRUECOLOR,
                 'env:GOOGLE_CLOUD_SHELL',
             ],
+            // CP-09: the grant is the exact string "true" — one-way tightening,
+            // "false" and "1" no longer force (they were honored by the old
+            // set-and-non-empty test). The fall-through answer pins the gate
+            // closed, not just the absence of a grant.
+            'google_cloud_shell false no longer forces (CP-09)' => [
+                ['GOOGLE_CLOUD_SHELL' => 'false', 'TERM' => 'xterm'],
+                DetectionChain::LEVEL_ANSI,
+                'env:TERM=xterm',
+            ],
+            'google_cloud_shell 1 no longer forces (CP-09)' => [
+                ['GOOGLE_CLOUD_SHELL' => '1', 'TERM' => 'xterm'],
+                DetectionChain::LEVEL_ANSI,
+                'env:TERM=xterm',
+            ],
             // TMUX + screen* → ansi256
             'tmux with screen returns ansi256' => [
                 ['TMUX' => '12345', 'TERM' => 'screen-256color'],
                 DetectionChain::LEVEL_ANSI256,
                 'env:TMUX|STY+TMUX',
+            ],
+            // CP-09 split caps: the screen leg runs BEFORE COLORTERM (an
+            // inherited COLORTERM must not undo the cap — GNU screen never
+            // forwards 24-bit), the tmux leg runs BEHIND it (modern tmux may
+            // honestly forward truecolor). Twin pins document the split.
+            'screen cap outranks inherited COLORTERM (CP-09)' => [
+                ['TMUX' => '12345', 'TERM' => 'screen-256color', 'COLORTERM' => 'truecolor'],
+                DetectionChain::LEVEL_ANSI256,
+                'env:TMUX|STY+TMUX',
+            ],
+            'sty screen cap outranks inherited COLORTERM (CP-09)' => [
+                ['STY' => '12345', 'TERM' => 'screen', 'COLORTERM' => 'truecolor'],
+                DetectionChain::LEVEL_ANSI256,
+                'env:TMUX|STY+STY',
+            ],
+            'tmux twin passes under COLORTERM (CP-09 split)' => [
+                ['TMUX' => '12345', 'TERM' => 'tmux-256color', 'COLORTERM' => 'truecolor'],
+                DetectionChain::LEVEL_TRUECOLOR,
+                'env:COLORTERM=truecolor',
             ],
             'tmux with tmux returns ansi256' => [
                 ['TMUX' => '12345', 'TERM' => 'tmux-256color'],

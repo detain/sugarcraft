@@ -115,7 +115,7 @@ final class ProbeTest extends TestCase
                 ColorProfile::Ascii,
             ],
 
-            // 5. COLORTERM=24bit|truecolor|yes → TrueColor
+            // 5. COLORTERM=truecolor|24bit → TrueColor; yes → Ansi256 (CP-09)
             'colorterm_24bit returns TrueColor' => [
                 ['COLORTERM' => '24bit'],
                 ColorProfile::TrueColor,
@@ -124,9 +124,9 @@ final class ProbeTest extends TestCase
                 ['COLORTERM' => 'truecolor'],
                 ColorProfile::TrueColor,
             ],
-            'colorterm_yes returns TrueColor' => [
+            'colorterm_yes returns Ansi256' => [
                 ['COLORTERM' => 'yes'],
-                ColorProfile::TrueColor,
+                ColorProfile::Ansi256,
             ],
 
             // 6. WT_SESSION set → TrueColor (Windows Terminal)

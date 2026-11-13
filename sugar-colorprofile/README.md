@@ -105,7 +105,7 @@ and `Profile::ANSI` keep resolving through deprecated constant bridges.
 
 ## The detection ladder
 
-The color-depth answer comes from one canonical 13-step chain (`DetectionChain`) —
+The color-depth answer comes from one canonical 14-step chain (`DetectionChain`) —
 canonical across every surface of this library; `sugar-core` carries a separate
 fork with its own ladder, see Fleet integration below.
 `Probe`, `Palette` and `Probe\TerminalProbe` all consult it, so the same
@@ -127,16 +127,26 @@ drift pin guards this genre yet):
 3. `NO_COLOR` (set and **non**-empty; `""` = unset — the NO_COLOR standard treats any present-and-not-empty value as "off" — content never matters) → the colorless `Ascii` rung — color codes dropped, decoration (`\x1b[1m`/`\x1b[4m`) kept; this is what `Palette::withProfile(ColorProfile::Ascii)` pins, so the pin is now the same answer the env already gives
 4. `CLICOLOR=0` → `Ascii` (the colorless rung)
 5. `TERM=dumb` (case-insensitive) → `Ascii` (the colorless rung)
-6. `COLORTERM=24bit|truecolor|yes` → TrueColor (`yes` is the legacy "this is a
-   color terminal" marker, honored here as TrueColor — beyond its historical
-   meaning; pin a profile explicitly if you want the conservative reading)
-7. `TERM_PROGRAM=iTerm.app` (exact spelling, case-sensitive) → TrueColor (inline image + 24-bit history)
-8. `WT_SESSION` (set, non-empty) → TrueColor (Windows Terminal)
-9. `GOOGLE_CLOUD_SHELL` (set, non-empty) → TrueColor
-10. `TMUX` or `STY` set + base TERM begins `screen`/`tmux` → Ansi256
-11. TERM contains `-256color`, or equals `xterm-kitty`/`xterm-ghostty` (case-insensitive) → Ansi256
-12. TERM begins `xterm`/`screen`/`tmux` (case-insensitive) → Ansi
-13. Default → Ansi
+6. `TMUX`/`STY` set + base TERM begins `screen` → Ansi256 — the multiplexer cap
+   runs **before** `COLORTERM` (CP-09): GNU screen never forwards the 24-bit set,
+   and `COLORTERM` survives multiplexer inheritance, so evaluating the cap after
+   it would let an inherited variable undo the cap
+7. `COLORTERM=truecolor|24bit` → TrueColor; `COLORTERM=yes` → Ansi256 (CP-09 —
+   `yes` is the legacy "this is a color terminal" marker, a 256-color promise,
+   not a 24-bit one; legacy VTE builds advertised it falsely. The `yes` rung
+   stays inside Phase 2's promotion reach, so a genuine RGB terminfo still
+   raises it back)
+8. `TERM_PROGRAM=iTerm.app` (exact spelling, case-sensitive) → TrueColor (inline image + 24-bit history)
+9. `WT_SESSION` (set, non-empty) → TrueColor (Windows Terminal)
+10. `GOOGLE_CLOUD_SHELL` set to exactly `true` → TrueColor (CP-09: any other
+    value — `false` and `1` included — carries no 24-bit promise; one-way
+    tightening of the old set-and-non-empty grant)
+11. `TMUX` or `STY` set + base TERM begins `tmux` → Ansi256 (behind `COLORTERM`
+    — modern tmux may honestly forward truecolor; the screen/tmux split is the
+    documented answer, pinned by twin tests)
+12. TERM contains `-256color`, or equals `xterm-kitty`/`xterm-ghostty` (case-insensitive) → Ansi256 (termenv promotes kitty/ghostty to TrueColor by NAME; this fork keeps the 256 promise the TERM value carries and defers name-based promotion to Phase-2 terminfo — WezTerm has no TERM-only twin)
+13. TERM begins `xterm`/`screen`/`tmux` (case-insensitive) → Ansi
+14. Default → Ansi
 
 Steps 1-2 outrank step 3 **deliberately**: `FORCE_COLOR`/`CLICOLOR_FORCE` are an
 active "give me color anyway" override (the chalk/support-colors convention),
@@ -210,12 +220,13 @@ The ladder's env legs, one table row per variable, in ladder order:
 | `NO_COLOR` | 3 | set to a **non-empty** value (`""` = unset — the NO_COLOR standard treats any present-and-not-empty value as "off" — content never matters) → the colorless `Ascii` rung / `NoColor` capability — color codes dropped, decoration (`\x1b[1m`/`\x1b[4m`) kept, the reading no-color.org itself states (color attributes only). Contrast: `NoTTY`'s full strip answers only hardware absence (the step-0 stream gate). Report surfaces still observe the `NoColor` capability for every suppression leg (`Probe::isNoColor()` names the `NO_COLOR` one) |
 | `CLICOLOR=0` | 4 | suppress color |
 | `TERM=dumb` | 5 | case-insensitive; suppresses color — outranks `COLORTERM` (dumb is a promise of minimal capabilities) |
-| `COLORTERM=24bit\|truecolor\|yes` | 6 | TrueColor (exact value match, case-insensitive); `yes` is the legacy color-terminal marker, promoted here beyond its historical "some color" meaning |
-| `TERM_PROGRAM` | 7 | `iTerm.app` (exact spelling, case-sensitive) → TrueColor rung (step 7); phase 3 additionally maps WezTerm/vscode/Ghostty → TrueColor, iTerm.app → ITerm2, Hyper → Hyperlinks |
-| `WT_SESSION` | 8 | set, non-empty → Windows Terminal, TrueColor |
-| `GOOGLE_CLOUD_SHELL` | 9 | set to any non-empty value (even `false`) → TrueColor |
-| `TMUX` / `STY` | 10 | set + base TERM already begins `screen*`/`tmux*` → Ansi256 (step 10). Under tmux/screen the inner TERM *is* the base — no re-anchoring to the outer terminal happens |
-| `TERM` | 11-12 | ladder levels: `*-256color`/`xterm-kitty`/`xterm-ghostty` → Ansi256; `xterm*`/`screen*`/`tmux*` prefix → Ansi (all case-insensitive) |
+| `TMUX` / `STY` | 6 | set + base TERM begins `screen*` → capped at Ansi256 **before** `COLORTERM` is consulted (CP-09): GNU screen never forwards the 24-bit set and `COLORTERM` survives multiplexer inheritance — the cap cannot be inherited away. Under tmux/screen the inner TERM *is* the base — no re-anchoring to the outer terminal happens |
+| `COLORTERM` | 7 | `truecolor`/`24bit` → TrueColor (exact value match, case-insensitive); `yes` → Ansi256 — the legacy "this is a color terminal" marker is a 256-color promise, not a 24-bit one (CP-09 demotion from the old TrueColor grant; a Phase-2 terminfo that proves RGB still raises the rung back) |
+| `TERM_PROGRAM` | 8 | `iTerm.app` (exact spelling, case-sensitive) → TrueColor rung (step 8); phase 3 additionally maps WezTerm/vscode/Ghostty → TrueColor, iTerm.app → ITerm2, Hyper → Hyperlinks |
+| `WT_SESSION` | 9 | set, non-empty → Windows Terminal, TrueColor |
+| `GOOGLE_CLOUD_SHELL` | 10 | set to exactly `true` → TrueColor; any other value (`false` and `1` included) carries no 24-bit promise — CP-09 one-way tightening of the old set-and-non-empty grant |
+| `TMUX` / `STY` | 11 | set + base TERM begins `tmux*` → Ansi256, consulted **behind** `COLORTERM` — modern tmux may honestly forward truecolor (the screen/tmux split behind step 6, pinned by twin tests) |
+| `TERM` | 12-13 | ladder levels: `*-256color`/`xterm-kitty`/`xterm-ghostty` → Ansi256; `xterm*`/`screen*`/`tmux*` prefix → Ansi (all case-insensitive) |
 | `REDUCE_MOTION` / `PREFERS_REDUCED_MOTION` | — | non-empty and not `0/false/no/off` → `Probe::reducedMotion()` true (motion preference, outside the color ladder) |
 
 **Accessibility caveat for the force rows.** An exported `FORCE_COLOR`/

@@ -118,7 +118,7 @@ final class TerminalProbeTest extends TestCase
                 [Capability::NoColor, Capability::BasicAscii],
             ],
 
-            // 5. COLORTERM=24bit|truecolor|yes → TrueColor
+            // 5. COLORTERM=truecolor|24bit → TrueColor; yes → Color256 (CP-09)
             'colorterm_24bit returns TrueColor' => [
                 ['COLORTERM' => '24bit'],
                 [Capability::TrueColor, Capability::BasicAscii],
@@ -127,9 +127,9 @@ final class TerminalProbeTest extends TestCase
                 ['COLORTERM' => 'truecolor'],
                 [Capability::TrueColor, Capability::BasicAscii],
             ],
-            'colorterm_yes returns TrueColor' => [
+            'colorterm_yes returns Color256' => [
                 ['COLORTERM' => 'yes'],
-                [Capability::TrueColor, Capability::BasicAscii],
+                [Capability::Color256, Capability::BasicAscii],
             ],
 
             // 6. WT_SESSION set → TrueColor (Windows Terminal)

@@ -43,7 +43,7 @@ final class Palette
     /**
      * Detect the terminal color profile from the environment.
      *
-     * The full 13-step ladder (CLICOLOR_FORCE, FORCE_COLOR, NO_COLOR,
+     * The full 14-step ladder (CLICOLOR_FORCE, FORCE_COLOR, NO_COLOR,
      * CLICOLOR, TERM=dumb, COLORTERM, TERM_PROGRAM, WT_SESSION,
      * GOOGLE_CLOUD_SHELL, TMUX/STY, TERM depth rungs) runs through the shared
      * {@see DetectionChain} — Probe, TerminalProbe and Palette all take the
@@ -213,7 +213,7 @@ final class Palette
 
     private static function detectProfile($stream, array $env): ColorProfile
     {
-        // The complete 13-step environment ladder — CLICOLOR_FORCE,
+        // The complete 14-step environment ladder — CLICOLOR_FORCE,
         // FORCE_COLOR, NO_COLOR, CLICOLOR=0, TERM=dumb, COLORTERM,
         // TERM_PROGRAM=iTerm.app, WT_SESSION, GOOGLE_CLOUD_SHELL, TMUX/STY
         // and the TERM depth rungs — lives in DetectionChain so Probe,

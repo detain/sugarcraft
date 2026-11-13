@@ -10,7 +10,7 @@ use SugarCraft\ColorProfile\Probe\TerminfoParser;
 /**
  * Static probe for terminal color profile and environment-based color detection.
  *
- * The environment answer comes from the canonical 13-step ladder in
+ * The environment answer comes from the canonical 14-step ladder in
  * {@see DetectionChain} (steps 1-13: CLICOLOR_FORCE, FORCE_COLOR, NO_COLOR,
  * CLICOLOR=0, TERM=dumb, COLORTERM, TERM_PROGRAM, WT_SESSION,
  * GOOGLE_CLOUD_SHELL, TMUX/STY, TERM depth rungs, default) — Probe adds the
