@@ -85,6 +85,47 @@ further guarantees:
   returns — and hands back an already-spent handle, so nothing is retained for
   a cancellation that has already happened.
 
+### Cancellation cookbook
+
+Unregistration exists and is the discipline every long-lived consumer needs:
+`onCancel()` hands back a `Subscription`, and `AsyncOps::cancellable()` is the
+extract-and-dispose idiom the library's own wrappers use.
+
+```php
+use SugarCraft\Async\{AsyncOps, CancellationSource};
+use React\Promise\Deferred;
+
+$source = CancellationSource::new();
+$token = $source->token();
+$fired = [];
+
+// Drop-the-registration: keep the handle onCancel() returns and
+// unsubscribe() before the token fires — the hook never runs, and the
+// token never accumulates a closure it will never call.
+$dropped = $token->onCancel(static function () use (&$fired): void {
+    $fired[] = 'dropped-hook';
+});
+$dropped->unsubscribe();
+
+// Extract-and-dispose: cancellable() ties a promise's lifetime to the
+// token; a cancel() on the source rejects the guard with an
+// OperationCancelledException carrying the label.
+$work = (new Deferred())->promise();
+$guarded = AsyncOps::cancellable($work, $token, null, 'checkout');
+$guarded->then(null, static function (\Throwable $e) use (&$fired): void {
+    $fired[] = $e::class;
+});
+
+$token->onCancel(static function () use (&$fired): void {
+    $fired[] = 'kept-hook';
+});
+$source->cancel();
+
+// The dropped registration never ran; the kept hook and the guard's
+// rejection did.
+echo implode("\n", $fired), "\n";
+```
+
 Cancellation is not an error. Happy paths resolve; catch cancellation as its own
 arm, not as a failed request:
 

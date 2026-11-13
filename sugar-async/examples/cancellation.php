@@ -21,15 +21,18 @@ require __DIR__ . '/../vendor/autoload.php';
 $source = CancellationSource::new();
 $token = $source->token();
 
-// Registrations are Subscriptions: unsubscribe and the hook never runs.
-$dropped = $token->onCancel(static function (): void {
+// Registrations are Subscriptions: unsubscribe() drops the callback — it never fires.
+$fireCount = 0;
+$dropped = $token->onCancel(static function () use (&$fireCount): void {
+    $fireCount++;
     echo "never printed\n";
 });
 $dropped->unsubscribe();
 
 // Hooks fire in registration order, exactly once; a throwing hook is logged,
 // never propagated into the canceller.
-$token->onCancel(static function (): void {
+$token->onCancel(static function () use (&$fireCount): void {
+    $fireCount++;
     echo "cleanup ran\n";
 });
 
@@ -46,4 +49,7 @@ $guarded->then(
 );
 
 $source->cancel();
+// register → use → unsubscribe → count: one registration was dropped and one
+// kept, so the cancel ran exactly one of the two hooks.
+echo "hooks fired: {$fireCount} of 2 registrations\n";
 echo $token->isCancelled() ? "token is cancelled\n" : "unreachable\n";
