@@ -302,6 +302,23 @@ final class MdViewModel implements Model
     public function view(): string
     {
         $body = $this->viewport->view();
+        // Horizontal-scroll right-clip (finding 001, mdview's defensive leg):
+        // Viewport::view() left-shifts with Width::dropAnsi when xOffset > 0
+        // and skips the right truncation, sugar-core's Renderer maps frame
+        // lines 1:1 to rows with no clipping of its own and never disables
+        // DECAWM — an over-viewport row wraps and smears every subsequent
+        // row, tearing the alt screen in the DEFAULT mode (width 0 hands
+        // paragraphs as single long lines to exactly this path). The
+        // root fix belongs to sugar-forms (its xOffset branch); until that
+        // leg lands, the consumer clips its own frame: every emitted line
+        // is ANSI-aware truncated to the viewport width, so the frame
+        // always satisfies Width::of(line) <= width.
+        if ($this->viewport->xOffset > 0 && $this->viewport->width > 0) {
+            $body = implode("\n", array_map(
+                fn (string $line): string => Width::truncateAnsi($line, $this->viewport->width),
+                explode("\n", $body),
+            ));
+        }
         if ($this->documentName === null) {
             return $body;
         }

@@ -6,6 +6,7 @@ namespace SugarCraft\MdView\Tests;
 
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\MdView\MdViewModel;
 use SugarCraft\MdView\ReloadTickMsg;
 use PHPUnit\Framework\TestCase;
@@ -260,5 +261,39 @@ final class MdViewModelTest extends TestCase
         // height of 0 should be clamped to 1
         $m = MdViewModel::fromContent("line1\nline2", 80, 0);
         $this->assertStringContainsString('line1', $m->view());
+    }
+
+    public function testScrolledFrameLinesNeverExceedViewportWidth(): void
+    {
+        // Finding 001 (the alt-screen tear class): Viewport::view() left-
+        // shifts without right-clipping when xOffset > 0, and sugar-core's
+        // Renderer maps frame lines 1:1 to rows without clipping — one
+        // over-viewport row auto-wraps and smears every row below it.
+        // Every frame line at EVERY non-zero scroll position must satisfy
+        // Width::of(line) <= width.
+        $rows = [str_repeat('abcdefghij', 30), 'short', str_repeat('x', 250)];
+        $m    = MdViewModel::fromContent(implode("\n", $rows), 40, 5);
+        for ($step = 0; $step < 12; $step++) {
+            [$m] = $m->update(new KeyMsg(KeyType::Right));
+            $this->assertGreaterThan(0, $m->viewport->xOffset);
+            foreach (explode("\n", $m->view()) as $line) {
+                $this->assertLessThanOrEqual(40, Width::of($line), 'scrolled frame row exceeds the viewport width');
+            }
+        }
+    }
+
+    public function testScrolledDocumentFrameKeepsHeaderAndBodyInsideWidth(): void
+    {
+        // The header leg of the same tear: document mode prepends the
+        // status line; body rows are clipped, the header is exact-width.
+        $m = MdViewModel::fromContent(str_repeat('long ', 60) . "\ntail", 30, 4)
+            ->withDocument('doc.md');
+        [$m] = $m->update(new KeyMsg(KeyType::Right));
+        $frame = explode("\n", $m->view());
+        $this->assertCount(3, $frame, 'header + two content rows');
+        $this->assertSame(30, Width::of($frame[0]), 'header is padded to exactly the width');
+        $this->assertLessThanOrEqual(30, Width::of($frame[1]));
+        // dropAnsi-then-clip is the plain column window [6, 36) at one step.
+        $this->assertSame(substr(str_repeat('long ', 60), 6, 30), $frame[1], 'visible window is the exact scrolled slice');
     }
 }
