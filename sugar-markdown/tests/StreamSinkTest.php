@@ -65,7 +65,10 @@ final class StreamSinkTest extends TestCase
         $path = $this->scratchPath();
         file_put_contents($path, "seed bytes\n");
 
-        foreach (['r', 'rb'] as $mode) {
+        // `r#` is the trap case: the `#` suffix used to satisfy the old
+        // unanchored character class, admitting a read-only handle that
+        // would only fail mid-render.
+        foreach (['r', 'rb', 'r#'] as $mode) {
             $handle = fopen($path, $mode);
             $this->assertNotFalse($handle);
 

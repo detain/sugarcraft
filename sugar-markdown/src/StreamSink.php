@@ -37,9 +37,12 @@ final class StreamSink
     /** @param resource $stream */
     /**
      * Stream open modes that accept writes (single source of truth shared
-     * with {@see \SugarCraft\Markdown\Renderer::write()}).
+     * with {@see \SugarCraft\Markdown\Renderer::write()}): a leading
+     * writable mode character (w/a/x/c) or an explicit `+` read/write
+     * modifier. Read-only spellings — including modifier-suffixed ones
+     * like `r#` — are refused at the door, never mid-render.
      */
-    public const WRITABLE_MODE_PATTERN = '/[waxc#]|\\+/';
+    public const WRITABLE_MODE_PATTERN = '/^[waxc]|\+/';
 
     private function __construct(mixed $stream, private readonly bool $owned)
     {
