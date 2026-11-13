@@ -845,6 +845,66 @@ final class DefaultChannelHandlerTest extends TestCase
         $this->assertSame([], DefaultChannelHandler::decodeCommandString(''));
     }
 
+    /**
+     * The documented tokenizer edges (audit 086), pinned against the
+     * POSIX double-quote rule now implemented (audit 007): a backslash
+     * inside `"…"` escapes only `$`, backtick, `"` and `\` — before any
+     * other character it stays literal itself.
+     */
+    public function testTheDoubleQuoteEscapeRuleIsThePosixOne(): void
+    {
+        $this->assertSame(
+            ['a"b'],
+            DefaultChannelHandler::decodeCommandString('"a\\"b"'),
+            'the sending shell escapes the quote; the decoder must recover it',
+        );
+        $this->assertSame(
+            ['C:\\path'],
+            DefaultChannelHandler::decodeCommandString('"C:\\\\path"'),
+        );
+        $this->assertSame(
+            ['C:\\path'],
+            DefaultChannelHandler::decodeCommandString('"C:\path"'),
+            'before a non-escape character the backslash is literal — Windows paths survive',
+        );
+        $this->assertSame(
+            ['a$b'],
+            DefaultChannelHandler::decodeCommandString('"a\\$b"'),
+            'the escape restores the byte only — $HOME is still literal text, never a lookup',
+        );
+        $this->assertSame(
+            ['ab'],
+            DefaultChannelHandler::decodeCommandString("\"a\\\nb\""),
+            'backslash-newline inside quotes is a line continuation',
+        );
+        $this->assertSame(
+            ['a\\'],
+            DefaultChannelHandler::decodeCommandString('"a\\'),
+            'a trailing backslash that never met its next char keeps its byte',
+        );
+    }
+
+    public function testUnclosedQuotesAndTrailingBackslashesKeepTheirDocumentedShape(): void
+    {
+        // (a) the swallow leg: an unclosed single quote takes the rest of
+        // the string as one token.
+        $this->assertSame(
+            ['echo', 'unclosed rest'],
+            DefaultChannelHandler::decodeCommandString("echo 'unclosed rest"),
+        );
+        // (c) outside quotes, a trailing backslash meets end-of-string and
+        // is simply dropped.
+        $this->assertSame(
+            ['ls'],
+            DefaultChannelHandler::decodeCommandString('ls \\'),
+        );
+        // The escape leg that motivated the rule: one token with a space.
+        $this->assertSame(
+            ['foo bar'],
+            DefaultChannelHandler::decodeCommandString('foo\\ bar'),
+        );
+    }
+
     public function testTheDormantDispatchTruthIsOnTheClassAndInTheReadme(): void
     {
         $doc = (string) \file_get_contents(\dirname(__DIR__, 2) . '/src/Channel/DefaultChannelHandler.php');

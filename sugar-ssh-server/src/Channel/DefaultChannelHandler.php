@@ -515,14 +515,20 @@ final class DefaultChannelHandler implements ChannelHandler
     /**
      * Split a command string into argv tokens.
      *
-     * Handles basic quoting (single and double) and backslash escapes
-     * outside single quotes (consumes the next char literally so
-     * `foo\ bar` → one token `foo bar`). Inside single quotes a
-     * backslash is literal (POSIX). Empty quoted args (`cmd ''`) are
-     * preserved as empty-string tokens.
+     * Handles basic quoting (single and double) and backslash escapes.
+     * Outside quotes, `\` consumes the next char literally so
+     * `foo\ bar` → one token `foo bar`. Inside `"…"`, `\` escapes
+     * only `$`, backtick, `"`, `\` (and a newline continues the line);
+     * before anything else the backslash is literal, so Windows paths
+     * like `"C:\path"` survive verbatim while `"a\"b"` recovers the
+     * double quote the sending shell escaped (POSIX). Inside single
+     * quotes a backslash is always literal. Empty quoted args (`cmd ''`)
+     * are preserved as empty-string tokens.
      *
      * This is a pragmatic tokenizer, NOT full POSIX word-splitting —
-     * no `$()`, backticks, variable expansion, or globbing. Tokens go
+     * no `$()`, backticks, variable expansion, or globbing (the
+     * double-quote escapes above restore quoting bytes only; `$HOME`
+     * stays literal text, never a lookup). Tokens go
      * to `runChild()` as argv with no shell, so the divergence is safe
      * but documented. It is also the decoder an embedder uses for the
      * `SSH_ORIGINAL_COMMAND` a ForceCommand child receives: that
@@ -570,6 +576,23 @@ final class DefaultChannelHandler implements ChannelHandler
             } elseif ($inSingle && $ch === "'") {
                 // Inside single quotes, backslash is literal — no special handling.
                 $inSingle = false;
+            } elseif ($inDouble && $ch === '\\') {
+                // POSIX double-quote rule: inside `"…"`, a backslash
+                // escapes exactly `$`, backtick, `"` and `\`, and a
+                // following newline is a line continuation; before any
+                // other character the backslash is literal itself.
+                $next = $i + 1 < $len ? $command[$i + 1] : null;
+                if ($next === '"' || $next === '$' || $next === '`' || $next === '\\') {
+                    $current .= $next;
+                    $i++;
+                } elseif ($next === "\n") {
+                    $i++;
+                } else {
+                    // Literal backslash — including the trailing-`\`-at-
+                    // end-of-string leg, which keeps its byte rather
+                    // than swallowing it.
+                    $current .= $ch;
+                }
             } elseif ($inDouble && $ch === '"') {
                 // Emit empty-string token for `''` or `""` before clearing.
                 if ($quoteOpened && $current === '') {
