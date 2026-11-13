@@ -396,7 +396,7 @@ trait HttpClientDefaults
                         && $failure->getPrevious() === null
                     ) {
                         throw new \GuzzleHttp\Exception\ConnectException(
-                            'Response headers did not arrive for ' . (string) $request->getUri()
+                            'Response headers did not arrive for ' . (string) $request->getUri()->withUserInfo('')->withQuery('')->withFragment('')
                                 . ' within ' . self::streamHeaderTimeoutSeconds() . 's of the connection being established; '
                                 . 'the TCP connect itself succeeded. If this server queues work behind the HTTP layer, raise '
                                 . 'the `streamHeaderTimeoutSeconds` setting - `connectTimeoutSeconds` is no longer what caps this wait.',
@@ -469,7 +469,7 @@ trait HttpClientDefaults
             // StreamHandler blames this on "Connection refused" too - the one
             // failure class whose honest prose costs nothing extra to emit.
             return new \GuzzleHttp\Promise\RejectedPromise(new \GuzzleHttp\Exception\ConnectException(
-                'Could not resolve host `' . $host . '` for ' . (string) $uri . ': ' . $errstr,
+                'Could not resolve host `' . $host . '` for ' . (string) $uri->withUserInfo('')->withQuery('')->withFragment('') . ': ' . $errstr,
                 $request,
             ));
         }

@@ -384,6 +384,24 @@ final class ProviderConnectTimeoutTest extends TestCase
         $this->assertFalse($reached, 'the transport must not be dialed after the probe answered DNS');
     }
 
+    /** S-P08: credentials in the userinfo or query never reach the exception text. */
+    public function testTheUnresolvableHostMessageNeverLeaksUserInfoQueryOrFragment(): void
+    {
+        $inner = static fn (RequestInterface $r, array $o): PromiseInterface => new FulfilledPromise(new Response(200));
+        $client = self::buildSeamClient(['handler' => $inner]);
+
+        try {
+            $client->request('POST', 'https://user:pw-secret@candy-preflight.invalid/v1/x?api_key=KEY-SECRET#frag-secret', ['stream' => true, 'json' => [], 'proxy' => false]);
+            $this->fail('expected a ConnectException');
+        } catch (\GuzzleHttp\Exception\ConnectException $e) {
+            $msg = $e->getMessage();
+            $this->assertStringContainsString('candy-preflight.invalid/v1/x', $msg);
+            foreach (['pw-secret', 'KEY-SECRET', 'frag-secret'] as $secret) {
+                $this->assertStringNotContainsString($secret, $msg);
+            }
+        }
+    }
+
     /**
      * ISS-024: once the probe HAS connected, StreamHandler's catch-all
      * "Connection refused" is a known lie — the remaining failure it can be
