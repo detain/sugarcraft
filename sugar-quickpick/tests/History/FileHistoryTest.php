@@ -101,6 +101,9 @@ final class FileHistoryTest extends TestCase
                 . "42\n\"str\"\ntrue\nnull\n[1,2]\n"
                 . \json_encode(['n' => 2, 'v' => 'third']) . "\n",
         );
+        // fd-trust verification (S-16) refuses group/other-accessible
+        // history files, so this hand-planted fixture tightens itself first.
+        \chmod($this->tmpPath, 0600);
 
         $history = new FileHistory($this->tmpPath);
         $items = $history->all();
@@ -116,6 +119,7 @@ final class FileHistoryTest extends TestCase
     {
         // Write corrupt lines that would throw JsonException during read.
         \file_put_contents($this->tmpPath, "{bad}\n{also bad}\n");
+        \chmod($this->tmpPath, 0600); // S-16 fd-trust: hand-planted fixtures must be private
 
         $history = new FileHistory($this->tmpPath);
 

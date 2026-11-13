@@ -20,16 +20,18 @@ use SugarCraft\QuickPick\Item;
  *
  *  - Files this instance CREATES are opened exclusively (fopen 'x') and
  *    chmod'ed 0600 BEFORE the first payload line rides the inode. The chmod
- *    is best-effort — its failure is suppressed, so if the tightening is
- *    refused the create mode follows the process umask and nothing is
- *    signalled; verify the mode yourself if 0600 is load-bearing (a loud
- *    refusal is an open owner decision).
- *  - A symlinked history path is REFUSED by every operation (and at
- *    construction when $baseDir is set): an attacker who can plant
- *    `/tmp/quickpick.jsonl` before the victim runs the first append would
- *    otherwise have the victim's selection written through the link to any
- *    file the victim can write, and have arbitrary content read back into
- *    the victim's terminal.
+ *    is best-effort, but the effect is no longer unobserved: {@see
+ *    self::verifyHandle()} re-checks the mode on the open descriptor, so a
+ *    refused tightening fails LOUD instead of publishing an umask-wide file.
+ *  - A symlinked history path is refused by every operation, and every
+ *    successful fopen is re-verified against the OPEN descriptor (dev+inode
+ *    identity vs a fresh lstat of the path, private ownership on non-create
+ *    arms): an attacker who plants `/tmp/quickpick.jsonl` as a link before
+ *    the victim's first append gets the write refused either by the pre-open
+ *    check or by the post-open identity check. The residual race window runs
+ *    only from the pre-open check to the identity check — path-only checks
+ *    cannot close it, fd-based verification can shrink it. (Construction
+ *    with $baseDir adds the confine jail; see {@see self::__construct()}.)
  *  - append() fails LOUD ({@see \RuntimeException}) instead of silently
  *    dropping data; a PHP fopen warning printed into a live TUI frame is
  *    worse than useless.
@@ -142,6 +144,67 @@ final class FileHistory
     }
 
     /**
+     * Verify a freshly-opened handle still points at a file we trust.
+     *
+     * Path-based checks (rejectSymlink, the confine jail) can only speak for
+     * the moment they run; between a check and an fopen BY PATH an attacker
+     * can swap the target. fstat() on the OPEN descriptor is immune: it
+     * reports the inode the descriptor actually landed on, so a swap before
+     * the open — or a symlink standing at the path — surfaces as an identity
+     * mismatch, and a swap after the open cannot redirect the descriptor.
+     *
+     *  - (a) identity: the handle's device+inode must equal a fresh lstat of
+     *    the path. lstat (not stat) is deliberate: a symlink at the path
+     *    reports the LINK's inode, never the target's. Arms on filesystems
+     *    that report a zeroed identity (some NFS mounts) skip (a) rather
+     *    than refuse honest files.
+     *  - (b) trust: on non-create arms the inode must belong to this user
+     *    AND carry no group/other bits — a hostile 0644 pre-plant on a
+     *    shared /tmp receives nothing, exactly like a link. The create arm
+     *    reaches that state by construction (exclusive open, chmod 0600
+     *    before payload); if the tightening is refused there, this check
+     *    throws instead of publishing the file.
+     *
+     * Windows skips both arms: PHP's dev/ino reporting there is unreliable
+     * and POSIX mode/uid semantics do not exist. The suite's CI floor is
+     * Linux; this is POSIX strengthening, not cross-platform law.
+     *
+     * @param resource $handle
+     *
+     * @throws \RuntimeException on identity mismatch, foreign ownership, or
+     *                           a group/other-accessible mode
+     */
+    private function verifyHandle($handle, string $op): void
+    {
+        if (\DIRECTORY_SEPARATOR === '\\') {
+            return;
+        }
+
+        $fd   = \fstat($handle);
+        \clearstatcache(true, $this->path);
+        $path = \lstat($this->path);
+
+        if ($fd === false || $path === false) {
+            throw new \RuntimeException(
+                \sprintf('Cannot verify QuickPick history file during %s: %s', $op, $this->path),
+            );
+        }
+
+        $identityKnown = ($fd['ino'] !== 0 || $fd['dev'] !== 0) && ($path['ino'] !== 0 || $path['dev'] !== 0);
+        if ($identityKnown && ($fd['dev'] !== $path['dev'] || $fd['ino'] !== $path['ino'])) {
+            throw new \RuntimeException(
+                \sprintf('QuickPick history handle does not match its path during %s (possible symlink swap): %s', $op, $this->path),
+            );
+        }
+
+        if ($fd['uid'] !== \getmyuid() || ($fd['mode'] & 0077) !== 0) {
+            throw new \RuntimeException(
+                \sprintf('QuickPick history file is not private to this user during %s: %s (uid %d, mode %o)', $op, $this->path, $fd['uid'], $fd['mode'] & 0777),
+            );
+        }
+    }
+
+    /**
      * Append an item to the history file.
      *
      * Creates the file exclusively when it does not exist yet and chmod's it
@@ -153,9 +216,11 @@ final class FileHistory
      * not die over one malformed byte.
      *
      * @throws \RuntimeException when the path is a symlink, the file cannot
-     *                           be opened, the exclusive lock cannot be
-     *                           taken, or the line cannot be fully written
-     *                           (silent loss was the old failure mode)
+     *                           be opened, the opened handle fails
+     *                           {@see self::verifyHandle()}, the exclusive
+     *                           lock cannot be taken, or the line cannot be
+     *                           fully written (silent loss was the old
+     *                           failure mode)
      */
     public function append(Item $item): void
     {
@@ -170,8 +235,8 @@ final class FileHistory
         $handle = false;
         if ($creating) {
             // Exclusive create: 'x' refuses (returns false) if anything
-            // raced us to the path, so we never append through a link or
-            // pre-empted inode planted between the check and the open.
+            // raced us to the path. What it cannot promise is WHICH inode
+            // a later fopen('a') lands on — that is verifyHandle's job.
             $handle = @\fopen($this->path, 'x');
             if ($handle === false && \is_link($this->path)) {
                 throw new \RuntimeException(
@@ -196,6 +261,7 @@ final class FileHistory
                 // shared /tmp must not offer.
                 @\chmod($this->path, 0600);
             }
+            $this->verifyHandle($handle, 'append');
             if (\flock($handle, \LOCK_EX) === false) {
                 throw new \RuntimeException(
                     \sprintf('Cannot lock QuickPick history file: %s', $this->path),
@@ -227,7 +293,8 @@ final class FileHistory
      *
      * @throws \RuntimeException when the path is a symlink (reading through
      *                           a planted link is how forged control strings
-     *                           get delivered into the terminal)
+     *                           get delivered into the terminal) or the
+     *                           opened handle fails {@see self::verifyHandle()}
      */
     public function all(): array
     {
@@ -244,6 +311,7 @@ final class FileHistory
 
         $items = [];
         try {
+            $this->verifyHandle($handle, 'read');
             \flock($handle, \LOCK_SH);
             while (($line = \fgets($handle)) !== false) {
                 $line = \trim($line);
@@ -281,8 +349,10 @@ final class FileHistory
      * shape could destroy (or be redirected through) a file the clearer
      * never owned.
      *
-     * @throws \RuntimeException when the path is a symlink, or the file
-     *                           exists but cannot be opened for writing
+     * @throws \RuntimeException when the path is a symlink, the file
+     *                           exists but cannot be opened for writing, or
+     *                           the opened handle fails
+     *                           {@see self::verifyHandle()}
      */
     public function clear(): void
     {
@@ -300,6 +370,7 @@ final class FileHistory
         }
 
         try {
+            $this->verifyHandle($handle, 'clear');
             \flock($handle, \LOCK_EX);
             \ftruncate($handle, 0);
             \flock($handle, \LOCK_UN);

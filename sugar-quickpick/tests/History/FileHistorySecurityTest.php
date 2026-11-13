@@ -217,4 +217,79 @@ final class FileHistorySecurityTest extends TestCase
 
         self::assertSame([1], array_map(static fn($i) => $i->number(), $history->all()));
     }
+
+    /**
+     * S-16/-008: the pre-open symlink check cannot speak for the inode the
+     * open LANDS on. A regular-but-readable-by-others file (the classic
+     * shared-/tmp pre-plant: attacker creates the path first, world can
+     * write, victim happily appends) must be refused on the OPEN descriptor,
+     * not just on the path.
+     */
+    public function testEveryOperationRefusesAPrePlantedNonPrivateFile(): void
+    {
+        $item = new FilteredItem(1, 'victim-selection');
+
+        foreach ([
+            'append' => static fn(FileHistory $h) => $h->append($item),
+            'read'   => static fn(FileHistory $h) => $h->all(),
+            'clear'  => static fn(FileHistory $h) => $h->clear(),
+        ] as $op => $drive) {
+            $path = $this->tempPath();
+            file_put_contents($path, '');
+            chmod($path, 0644);
+
+            $history = new FileHistory($path);
+            try {
+                $drive($history);
+                self::fail("{$op}() through a group-readable history file must throw");
+            } catch (RuntimeException $e) {
+                self::assertStringContainsString('not private to this user', $e->getMessage());
+                self::assertStringContainsString("during {$op}", $e->getMessage());
+            }
+
+            self::assertSame('', (string) file_get_contents($path), "{$op}() must not write to a hostile pre-plant");
+        }
+    }
+
+    /** S-16: the same file at 0600 IS trusted — the refusal is about the bits, not the hand-plant. */
+    public function testAPrePlantedPrivateFilePassesVerificationAndReads(): void
+    {
+        $path = $this->tempPath();
+        file_put_contents($path, json_encode(['n' => 4, 'v' => 'honest-row']) . "\n");
+        chmod($path, 0600);
+
+        $items = (new FileHistory($path))->all();
+
+        self::assertCount(1, $items);
+        self::assertSame('honest-row', $items[0]->value());
+    }
+
+    /**
+     * S-16/-007 deterministic superset of the swap-during-open race (which
+     * single-threaded tests cannot schedule): a handle whose device+inode
+     * differ from the path's fresh lstat is the symlinked/crossed-inode
+     * state, and it must throw on the identity arm BEFORE the mode arm.
+     */
+    public function testIdentityCheckRefusesAHandleLandingOnADifferentInode(): void
+    {
+        $historyPath = $this->tempPath();
+        (new FileHistory($historyPath))->append(new FilteredItem(1, 'anchor'));
+
+        $foreign = $this->tempPath('-foreign.txt');
+        file_put_contents($foreign, '');
+        chmod($foreign, 0600); // private AND foreign inode: only the identity arm can catch this
+
+        $handle = fopen($foreign, 'r');
+        self::assertNotFalse($handle);
+
+        $verify = new \ReflectionMethod(FileHistory::class, 'verifyHandle');
+
+        try {
+            $this->expectException(RuntimeException::class);
+            $this->expectExceptionMessage('does not match its path');
+            $verify->invoke(new FileHistory($historyPath), $handle, 'read');
+        } finally {
+            fclose($handle);
+        }
+    }
 }
