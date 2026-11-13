@@ -9,7 +9,6 @@
 declare(strict_types=1);
 
 return [
-    'canvas.dim_nonneg'        => 'canvas breedte/hoogte moet >= 0 zijn',
     'braillegrid.dim_positive' => 'BrailleGrid kolommen/rijen moeten > 0 zijn',
     'sparkline.width_nonneg'   => 'sparkline-breedte moet >= 0 zijn',
     'barchart.dim_nonneg'      => 'staafdiagram breedte/hoogte moet >= 0 zijn',
@@ -43,4 +42,7 @@ return [
 
     // LineChart/TimeSeries.php withTimeFormat door
     'timeseries.time_format' => 'TimeSeries wijst tijdnotaties af die de runtime niet kan weergeven: {fmt}',
+
+    // Canvas/Canvas.php off-switch closure (CH-08)
+    'canvas.dim_positive' => 'canvasbreedte en -hoogte moeten elk >= 1 zijn',
 ];

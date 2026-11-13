@@ -10,7 +10,6 @@ declare(strict_types=1);
 
 return [
     // Canvas/Canvas.php
-    'canvas.dim_nonneg'        => 'Canvas-Breite/-Höhe muss >= 0 sein',
 
     // Canvas/BrailleGrid.php
     'braillegrid.dim_positive' => 'BrailleGrid-Spalten/-Zeilen müssen > 0 sein',
@@ -60,4 +59,7 @@ return [
 
     // LineChart/TimeSeries.php withTimeFormat door
     'timeseries.time_format' => 'TimeSeries verwirft Zeitformate, die die Laufzeitumgebung nicht rendern kann: {fmt}',
+
+    // Canvas/Canvas.php off-switch closure (CH-08)
+    'canvas.dim_positive' => 'Breite und Höhe der Leinwand müssen je >= 1 sein',
 ];

@@ -9,7 +9,6 @@
 declare(strict_types=1);
 
 return [
-    'canvas.dim_nonneg'        => 'عرض/ارتفاع اللوحة يجب أن يكون >= 0',
     'braillegrid.dim_positive' => 'أعمدة/صفوف BrailleGrid يجب أن تكون > 0',
     'sparkline.width_nonneg'   => 'عرض خط الرسم يجب أن يكون >= 0',
     'barchart.dim_nonneg'      => 'عرض/ارتفاع الرسم البياني الشريطي يجب أن يكون >= 0',
@@ -43,4 +42,7 @@ return [
 
     // LineChart/TimeSeries.php withTimeFormat door
     'timeseries.time_format' => 'TimeSeries يرفض تنسيقات الوقت التي لا يستطيع وقت التشغيل عرضها: {fmt}',
+
+    // Canvas/Canvas.php off-switch closure (CH-08)
+    'canvas.dim_positive' => 'يجب أن يكون عرض ولوحة كل منهما >= 1',
 ];

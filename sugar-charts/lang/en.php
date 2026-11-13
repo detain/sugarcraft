@@ -10,7 +10,6 @@ declare(strict_types=1);
 
 return [
     // Canvas/Canvas.php
-    'canvas.dim_nonneg'        => 'canvas width/height must be >= 0',
 
     // Canvas/BrailleGrid.php
     'braillegrid.dim_positive' => 'BrailleGrid cols/rows must be > 0',
@@ -66,4 +65,7 @@ return [
 
     // LineChart/TimeSeries.php withTimeFormat door
     'timeseries.time_format' => 'TimeSeries rejects time formats the runtime cannot render: {fmt}',
+
+    // Canvas/Canvas.php off-switch closure (CH-08)
+    'canvas.dim_positive' => 'canvas width and height must each be >= 1',
 ];

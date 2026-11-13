@@ -330,6 +330,11 @@ final class TimeSeries
 
     public function view(): string
     {
+        // CH-08 (sugar-charts-087): zero dims are no longer a renderable
+        // size (Canvas refuses <1×1) — the honest answer is ''.
+        if ($this->width < 1 || $this->height < 1) {
+            return '';
+        }
         if ($this->points === []) {
             return (new \SugarCraft\Charts\Canvas\Canvas($this->width, $this->height))->view();
         }

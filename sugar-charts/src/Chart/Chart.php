@@ -77,14 +77,24 @@ abstract class Chart implements ChromeAccessors
     /**
      * Compose and return the full chart output with legend, title, and labels.
      *
-     * Empty-data contract (LineChart): with no data the composed output is
-     * a blank width×height canvas (right-trimmed empty rows), not '' — see
-     * BarChart::view() for the '' family and EmptyRenderContractTest for
-     * the pinned shapes.
+     * Family empty-render rule (sugar-charts-087), stated once here and
+     * pinned by EmptyRenderContractTest: a declared width or height below 1
+     * renders '' on EVERY renderer (zero is no longer an off-switch —
+     * Canvas itself refuses <1×1 outright), empty data renders '' on the
+     * grid renderers, and LineChart's declared divergence is a blank
+     * width×height canvas for empty data / progress ≤ 0. Sparkline keeps
+     * its stamped width×spaces divergence; TimeSeries adds the
+     * '[no points in range]' notice for a filtered-empty window.
      */
     public function view(): string
     {
         $chart = $this->renderChart();
+
+        // CH-08: zero dims render '' no matter what chrome is stacked on
+        // top — an extras column over a nonexistent canvas is noise.
+        if ($this->width < 1 || $this->height < 1) {
+            return '';
+        }
 
         // NOTE: the early return deliberately does NOT test showDataLabels.
         // No composer at this level draws value labels (LineChart's

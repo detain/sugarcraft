@@ -9,7 +9,6 @@
 declare(strict_types=1);
 
 return [
-    'canvas.dim_nonneg'        => 'ширина/высота холста должна быть >= 0',
     'braillegrid.dim_positive' => 'столбцы/строки BrailleGrid должны быть > 0',
     'sparkline.width_nonneg'   => 'ширина спарклайна должна быть >= 0',
     'barchart.dim_nonneg'      => 'ширина/высота столбчатой диаграммы должна быть >= 0',
@@ -43,4 +42,7 @@ return [
 
     // LineChart/TimeSeries.php withTimeFormat door
     'timeseries.time_format' => 'TimeSeries отклоняет форматы времени, которые среда выполнения не может отрисовать: {fmt}',
+
+    // Canvas/Canvas.php off-switch closure (CH-08)
+    'canvas.dim_positive' => 'ширина и высота холста должны быть не менее 1',
 ];

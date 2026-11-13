@@ -9,7 +9,6 @@
 declare(strict_types=1);
 
 return [
-    'canvas.dim_nonneg'        => 'la larghezza/altezza del canvas deve essere >= 0',
     'braillegrid.dim_positive' => 'le colonne/righe di BrailleGrid devono essere > 0',
     'sparkline.width_nonneg'   => 'la larghezza dello sparkline deve essere >= 0',
     'barchart.dim_nonneg'      => 'la larghezza/altezza del grafico a barre deve essere >= 0',
@@ -43,4 +42,7 @@ return [
 
     // LineChart/TimeSeries.php withTimeFormat door
     'timeseries.time_format' => 'TimeSeries rifiuta i formati ora che il runtime non può renderizzare: {fmt}',
+
+    // Canvas/Canvas.php off-switch closure (CH-08)
+    'canvas.dim_positive' => 'larghezza e altezza della tela devono essere ciascuna >= 1',
 ];

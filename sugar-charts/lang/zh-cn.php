@@ -9,7 +9,6 @@
 declare(strict_types=1);
 
 return [
-    'canvas.dim_nonneg'        => '画布宽/高必须 >= 0',
     'braillegrid.dim_positive' => 'BrailleGrid 列/行必须 > 0',
     'sparkline.width_nonneg'   => '迷你图宽度必须 >= 0',
     'barchart.dim_nonneg'      => '条形图宽/高必须 >= 0',
@@ -43,4 +42,7 @@ return [
 
     // LineChart/TimeSeries.php withTimeFormat door
     'timeseries.time_format' => 'TimeSeries 拒绝运行时无法渲染的时间格式：{fmt}',
+
+    // Canvas/Canvas.php off-switch closure (CH-08)
+    'canvas.dim_positive' => '画布宽度和高度必须各自 >= 1',
 ];

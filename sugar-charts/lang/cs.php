@@ -9,7 +9,6 @@
 declare(strict_types=1);
 
 return [
-    'canvas.dim_nonneg'        => 'šířka/výška canvas musí být >= 0',
     'braillegrid.dim_positive' => 'sloupce/řádky BrailleGrid musí být > 0',
     'sparkline.width_nonneg'   => 'šířka sparkline musí být >= 0',
     'barchart.dim_nonneg'      => 'šířka/výška sloupcového grafu musí být >= 0',
@@ -43,4 +42,7 @@ return [
 
     // LineChart/TimeSeries.php withTimeFormat door
     'timeseries.time_format' => 'TimeSeries zamítá formáty času, které prostředí nedokáže vykreslit: {fmt}',
+
+    // Canvas/Canvas.php off-switch closure (CH-08)
+    'canvas.dim_positive' => 'šířka a výška plátna musí být každá >= 1',
 ];

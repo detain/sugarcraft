@@ -26,8 +26,8 @@ final class Canvas implements \SugarCraft\Charts\Support\CellGrid
         public readonly int $width,
         public readonly int $height,
     ) {
-        if ($width < 0 || $height < 0) {
-            throw new \InvalidArgumentException(Lang::t('canvas.dim_nonneg'));
+        if ($width < 1 || $height < 1) {
+            throw new \InvalidArgumentException(Lang::t('canvas.dim_positive'));
         }
         $this->clear();
     }

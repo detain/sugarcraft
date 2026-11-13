@@ -687,7 +687,12 @@ final class LineChart extends Chart
      */
     protected function renderChart(): string
     {
-        if ($this->width === 0 || $this->height === 0 || ($this->data === [] && $this->datasets === [])) {
+        // CH-08 (sugar-charts-087): zero dims are no longer a renderable
+        // size (Canvas refuses <1×1) — the honest answer is ''.
+        if ($this->width < 1 || $this->height < 1) {
+            return '';
+        }
+        if ($this->data === [] && $this->datasets === []) {
             return (new Canvas($this->width, $this->height))->view();
         }
 

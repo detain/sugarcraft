@@ -161,7 +161,10 @@ final class Waveline
 
     public function view(): string
     {
-        if ($this->width === 0 || $this->height === 0 || $this->points === []) {
+        if ($this->width < 1 || $this->height < 1) {
+            return '';
+        }
+        if ($this->points === []) {
             return (new Canvas($this->width, $this->height))->view();
         }
         $xs = array_map(static fn(array $p): float => (float) $p[0], $this->points);

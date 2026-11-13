@@ -9,7 +9,6 @@
 declare(strict_types=1);
 
 return [
-    'canvas.dim_nonneg'        => 'tuval genişlik/yüksekliği >= 0 olmalıdır',
     'braillegrid.dim_positive' => 'BrailleGrid sütun/satır > 0 olmalıdır',
     'sparkline.width_nonneg'   => 'sparkline genişliği >= 0 olmalıdır',
     'barchart.dim_nonneg'      => 'çubuk grafik genişlik/yüksekliği >= 0 olmalıdır',
@@ -43,4 +42,7 @@ return [
 
     // LineChart/TimeSeries.php withTimeFormat door
     'timeseries.time_format' => 'TimeSeries, çalışma zamanının oluşturamadığı saat biçimlerini reddeder: {fmt}',
+
+    // Canvas/Canvas.php off-switch closure (CH-08)
+    'canvas.dim_positive' => 'tuval genişliği ve yüksekliği her biri >= 1 olmalıdır',
 ];

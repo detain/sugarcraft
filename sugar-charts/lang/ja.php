@@ -9,7 +9,6 @@
 declare(strict_types=1);
 
 return [
-    'canvas.dim_nonneg'        => 'キャンバスの幅/高さは >= 0 である必要があります',
     'braillegrid.dim_positive' => 'BrailleGrid の列/行は > 0 である必要があります',
     'sparkline.width_nonneg'   => 'スパークラインの幅は >= 0 である必要があります',
     'barchart.dim_nonneg'      => '棒グラフの幅/高さは >= 0 である必要があります',
@@ -43,4 +42,7 @@ return [
 
     // LineChart/TimeSeries.php withTimeFormat door
     'timeseries.time_format' => 'TimeSeries はランタイムで描画できない時刻フォーマットを拒否します: {fmt}',
+
+    // Canvas/Canvas.php off-switch closure (CH-08)
+    'canvas.dim_positive' => 'キャンバスの幅と高さはそれぞれ 1 以上である必要があります',
 ];

@@ -18,9 +18,18 @@ final class CanvasTest extends TestCase
         $this->assertSame("\n", $c->view());
     }
 
-    public function testZeroDimensionsRender(): void
+    public function testZeroDimensionsAreRefused(): void
     {
-        $this->assertSame('', (new Canvas(0, 0))->view());
+        // CH-08 (sugar-charts-087): 0×0 was an off-switch that let a "blank
+        // canvas" leak through layout math; the constructor now refuses it.
+        $this->expectException(\InvalidArgumentException::class);
+        new Canvas(0, 0);
+    }
+
+    public function testNegativeDimensionsAreRefused(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        new Canvas(-2, 5);
     }
 
     public function testSetAndGetCell(): void

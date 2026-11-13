@@ -9,7 +9,6 @@
 declare(strict_types=1);
 
 return [
-    'canvas.dim_nonneg'        => '캔버스 너비/높이는 >= 0이어야 합니다',
     'braillegrid.dim_positive' => 'BrailleGrid 열/행은 > 0이어야 합니다',
     'sparkline.width_nonneg'   => '스파클라인 너비는 >= 0이어야 합니다',
     'barchart.dim_nonneg'      => '막대 그래프 너비/높이는 >= 0이어야 합니다',
@@ -43,4 +42,7 @@ return [
 
     // LineChart/TimeSeries.php withTimeFormat door
     'timeseries.time_format' => 'TimeSeries는 런타임에서 렌더링할 수 없는 시간 형식을 거부합니다: {fmt}',
+
+    // Canvas/Canvas.php off-switch closure (CH-08)
+    'canvas.dim_positive' => '캔버스 너비와 높이는 각각 1 이상이어야 합니다',
 ];
