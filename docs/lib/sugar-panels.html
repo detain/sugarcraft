@@ -196,10 +196,10 @@ Bottom bar</code></pre>
             <div class="feature"><strong>Borders</strong><span>Preset or custom border styles per panel.</span></div>
             <div class="feature"><strong>Nested layouts</strong><span>Arbitrarily deep nesting — grids within grids.</span></div>
             <div class="feature"><strong>Word-wrap</strong><span>Text reflows inside the region at render time.</span></div>
-            <div class="feature"><strong>ANSI-aware</strong><span>Styled content places by visible columns; a clipped or unbalanced span is auto-reset so colour stays inside its box.</span></div>
+            <div class="feature"><strong>ANSI-aware</strong><span>Styled content is placed by visible columns; a clipped or unbalanced span is auto-reset so colour stays inside its box.</span></div>
             <div class="feature"><strong>Diff rendering</strong><span>Self-positioning delta frames repaint only the cells that changed — light SSH payloads, no full-screen flicker.</span></div>
             <div class="feature"><strong>Trust boundary</strong><span>Hostile text is repaired, not rejected: UTF-8 mended, zone sentinels stripped, stray controls normalised at the paint choke.</span></div>
-            <div class="feature"><strong>Flex / grow</strong><span>withFlex/withGrow children fill leftover space — fixed header/status, filling content.</span></div>
+            <div class="feature"><strong>Flex / grow</strong><span>withFlex/withGrow children fill leftover space — fixed headers and status bars, a content pane that fills.</span></div>
 
     </div>
     <p>Styled content stays <strong>trusted input</strong> — escape sequences ride through by design; see the README's Trust boundary section.</p>
@@ -228,7 +228,7 @@ Bottom bar</code></pre>
 <tr><td>SugarPanels</td><td>render(Node, int $width, int $height)</td><td>Paint one frame to an ANSI string; throws InvalidArgumentException on a viewport outside the documented ranges</td></tr>
 <tr><td>SugarPanels</td><td>resetPreviousFrame()</td><td>Drop the frame cache — the next render() repaints full, without erasing</td></tr>
 <tr><td>SugarPanels</td><td>MAX_VIEWPORT_DIMENSION</td><td>4096 cells — largest viewport side accepted</td></tr>
-<tr><td>SugarPanels</td><td>MAX_VIEWPORT_CELLS</td><td>1 000 000 cells — largest viewport area accepted</td></tr>
+<tr><td>SugarPanels</td><td>MAX_VIEWPORT_CELLS</td><td>1 000 000 cells — largest viewport area accepted (printed as 1000000 in the exception message)</td></tr>
 <tr><td>Node</td><td>leaf(string)</td><td>Static leaf constructor</td></tr>
 <tr><td>Node</td><td>horizontal(Node ...)</td><td>Static horizontal constructor</td></tr>
 <tr><td>Node</td><td>vertical(Node ...)</td><td>Static vertical constructor</td></tr>

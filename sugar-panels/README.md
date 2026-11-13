@@ -21,12 +21,12 @@ sugar-panels — a box-drawing layout engine that composes terminal content into
 - **Box-drawing borders** — Unicode box-drawing glyphs (╭ ╮ ╰ ╯ │ ─), any sugar-style `Border` style
 - **No-border mode** — `noBorder()` flattens a subtree: neither its frames nor its dividers are painted, so adjacent panels touch (to hide one box's own frame without touching its neighbours' rules, use `withBorder(false)`)
 - **Leaf padding** — inner whitespace around painted content; containers ignore it, their children fill the box
-- **ANSI-aware content** — styled/coloured leaf text places by *visible* columns: escape sequences ride with the grapheme they style (zero width), wide graphemes keep their two columns, and a clipped or unbalanced span is auto-reset so colour never bleeds past the box
+- **ANSI-aware content** — styled/coloured leaf text **is placed** by *visible* columns: escape sequences ride with the grapheme they style (zero width), wide graphemes keep their two columns, and a clipped or unbalanced span is auto-reset so colour never bleeds past the box
 - **Word-wrap at paint time** — a leaf line wider than its region is re-wrapped to fit at cell boundaries; over-long words split at grapheme boundaries, and only height overflow is dropped (see *Small viewports*)
 - **Flex / grow children** — `withFlex(int)` / `withGrow()`: a fixed child claims its **natural size** (widest visible line, floored by `minWidth`), a flex child fills the leftover by weight — so "sidebar = fixed, content = FILL" works without hand-counting columns
 - **Dimension hints** — `min*` floors the natural size, `max*` caps the node's **total footprint** (frame + padding + content), and the cap is what a flex basis claims
 - **Natural sizing** — `totalWidth()` / `totalHeight()` report the footprint a node asks for, measured from content
-- **Constraint-solved sizing** — flex distribution and the legacy `min*` hint split share one engine: `SugarCraft\Constraints\GreedySolver` from `sugarcraft/sugar-constraints` solves both dispatch paths, so a row's child regions tile the available span by the same arithmetic
+- **Constraint-solved sizing** — flex distribution and the legacy `min*` hint split share one engine, two parity modes (default + compat): `SugarCraft\Constraints\GreedySolver` from `sugarcraft/sugar-constraints` solves the hint path in its default configuration and the flex pass in compat mode
 - **Leaf content** — leaf nodes take `string` (cast a `Stringable` yourself; the signature is strict)
 - **Stateful diff renderer** — first paint and every resize emit the full frame; later same-size renders emit only diff ops from the per-instance frame cache. Every frame with at least one column is self-positioning (see *Frame protocol*). Call `resetPreviousFrame()` whenever terminal state may be unknown (clear, alt-screen switch, text capture). Outputs plain ANSI strings; works with any TUI framework
 - **Immutable nodes** — every `with*()` returns a *new* `Node`; an existing node is never modified, so keep the chained result
@@ -256,7 +256,7 @@ There is no focus or active-panel facet — see
 | `$panels->render(Node, int $width, int $height)` | Paint one frame; throws `InvalidArgumentException` on a viewport outside the documented ranges |
 | `$panels->resetPreviousFrame()` | Drop the frame cache — next `render()` repaints full, without erasing |
 | `SugarPanels::MAX_VIEWPORT_DIMENSION` | 4096 cells — largest viewport side accepted |
-| `SugarPanels::MAX_VIEWPORT_CELLS` | 1 000 000 cells — largest viewport area accepted |
+| `SugarPanels::MAX_VIEWPORT_CELLS` | 1 000 000 cells — largest viewport area accepted (printed as 1000000 in the exception message) |
 
 ### `Node`
 
@@ -271,12 +271,12 @@ There is no focus or active-panel facet — see
 | `->withMaxWidth(int)` / `->withMaxHeight(int)` | Cap on the node's painted footprint (frame + padding + content). `0` means no cap. Margin rides **outside** the cap: the claimed footprint is cap + margin, and `totalWidth()` / `totalHeight()` say so |
 | `->withPadding(int)` | Inner padding (cells) — leaf nodes only; ignored on containers |
 | `->withBorder(bool)` | Show/hide **this node's own** frame — **on by default** for leaves and containers; the chosen style survives a `false → true` round-trip (contrast `noBorder()`, which flattens a whole subtree) |
-| `->withSpacing(int)` | Gap between children (cells). At `0` the divider shares the previous child's boundary, and it declines to overwrite a glyph that is already painted |
+| `->withSpacing(int)` | Gap between children (cells). At `0` the divider shares the previous child's boundary, and it declines to overwrite a glyph that is already painted; at spacing ≥ 1 no rule is drawn — use a dedicated divider child (e.g. 1-cell `Node::leaf('')`) |
 | `->withContent(string)` | Replace leaf content (new node) — a container paints its children, so content stored there is inert |
 | `->withFlex(int)` | Fill leftover space by weight (0 = fixed, natural size) |
 | `->withGrow()` | Shorthand for `withFlex(1)` |
 | `->withBorderStyle(?Border)` | Border char set from sugar-style |
-| `->withStyle(?Style)` | Style (colour, attributes) from sugar-style |
+| `->withStyle(?Style)` | Style (colour, attributes) from sugar-style; styles the leaf content, not the frame |
 | `->withTitle(string)` | Box title text, painted into the top border (one line; newlines are flattened) |
 | `->withMargin(int $top, ...)` | Outer margin (top/right/bottom/left) |
 | `->withAlignH(?Align)` | Horizontal text alignment (null clears) |
@@ -361,7 +361,7 @@ the whole grid.
 | Input | Behaviour |
 |-------|-----------|
 | `render()` viewport width/height | Negative, or larger than `MAX_VIEWPORT_DIMENSION` per side, or more than `MAX_VIEWPORT_CELLS` in total → `InvalidArgumentException` **before** anything is allocated. A viewport is host input (a winsize read, a tmux resize), so the failure is loud rather than an out-of-memory death |
-| `render()` zero width or height | Valid: nothing paints, no escape bytes are emitted, and no diff state is left behind — a collapsed pane cannot poison the next size. The raw shape is degenerate though: zero height returns the empty string, zero width returns `height − 1` bare newlines — still no protocol, but a host that writes them to a real terminal will scroll |
+| `render()` zero width or height | Valid: nothing paints, no escape bytes are emitted, and no diff state is left behind — a collapsed pane cannot poison the next size. The raw shape is degenerate though: zero height returns the empty string, zero width returns `height - 1` bare newlines — still no protocol, but a host that writes them to a real terminal will scroll |
 | `withMin*` / `withMax*` / `withPadding` / `withSpacing` / `withMargin` / `withFlex` | Negative values clamp to `0`; `max*` of `0` means "no cap". Nothing throws — a hint is a hint |
 | A container whose children collapse to zero columns | The container's own frame is painted first, then the children are skipped, so the layout still reads as a panel |
 | Leaf / title content | Repaired, not rejected (see *Trust boundary*) |
@@ -380,13 +380,14 @@ frame at all — a box one cell wide or tall paints nothing — yet its parent s
 counts the one-cell slot the node measured, so the space goes to an invisible
 box rather than degrading to a visibly truncated rule. Nothing warns, because the renderer has no channel to
 warn on and a TUI host repainting per frame does not want one. One hazard rides
-the reflow: a line that already fits passes through verbatim, but a line that
-needed re-wrapping is re-joined with single spaces — an intentional run of
-whitespace (column alignment in a table, padded key bindings in a hint)
-therefore collapses on wrapped lines and not on their neighbours. If alignment
-matters, pre-wrap content narrower than the region.
+the reflow. A line that already fits passes through verbatim, but a line that
+needed re-wrapping is re-joined with single spaces. The consequence is therefore
+that an intentional run of whitespace (column alignment in a table, padded key
+bindings in a hint) collapses on wrapped lines and not on their neighbours. If
+alignment matters, pre-wrap content narrower than the region.
 
-Ask the model first: `totalWidth()` / `totalHeight()` return the footprint a node
+Ask the TEA model (the application-state object returned by `update()`) first:
+`totalWidth()` / `totalHeight()` return the footprint a node
 claims **before word-wrap** — the unwrapped rectangle. The renderer reflows long
 lines at paint time and rows past the interior height are simply not painted, so
 a host that sized the viewport to the claim can still render into silence: a
@@ -417,7 +418,7 @@ content and titles as they enter a `Node`:
 - The mouse zone sentinels (`U+E000` / `U+E001`) are stripped. They are ordinary
   private-use text, so an escape-aware sweep would not notice them, and a forged
   pair in panel content could otherwise claim screen regions from a `sugar-mouse`
-  host. Other private-use codepoints — the image markers in `U+E002..` — pass
+  host. Other private-use codepoints — the image markers from `U+E002` onward — pass
   through.
 - `CR` and `CRLF` become `LF`, and `TAB` becomes `sugar-core`'s tab stop. A
   carriage return reaching the grid repaints the frame's own rows from column
@@ -483,7 +484,7 @@ php examples/basic.php
 ```
 
 Every example is executed by the suite (`tests/ReadmeSnippetsTest.php`), so a
-snippet that drifts from the API fails CI rather than misleading a reader.
+snippet that drifts from the API fails CI rather than misleads a reader.
 
 ## Internationalization
 
