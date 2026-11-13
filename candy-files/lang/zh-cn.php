@@ -97,4 +97,5 @@ return [
     'cli.dir_missing' => '{side}目录 {reason}：{dir}',
     'cli.reason_missing' => '不存在',
     'cli.reason_unreadable' => '不可读',
+    'status.deleted_trash_hint' => '已移入会话回收站 — 退出后永久删除（在此之前可用 u 恢复）',
 ];

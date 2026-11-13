@@ -97,4 +97,5 @@ return [
     'cli.dir_missing' => 'الدليل ({side}) {reason}: {dir}',
     'cli.reason_missing' => 'غير موجود',
     'cli.reason_unreadable' => 'غير قابل للقراءة',
+    'status.deleted_trash_hint' => 'إلى سلة المهملات لهذه الجلسة — تُحذف نهائيًا عند الخروج (u يسترجع حتى ذلك الحين)',
 ];

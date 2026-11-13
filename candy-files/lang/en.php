@@ -108,4 +108,5 @@ Usage:
     'cli.dir_missing' => '{side} directory {reason}: {dir}',
     'cli.reason_missing' => 'does not exist',
     'cli.reason_unreadable' => 'is not readable',
+    'status.deleted_trash_hint' => 'moved to session trash — deleted forever when you quit (u restores until then)',
 ];

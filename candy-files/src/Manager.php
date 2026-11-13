@@ -947,6 +947,15 @@ final class Manager implements Model
             $permanentCount > 0 => Lang::t('status.deleted_permanent', ['count' => count($deletedItems), 'permanent' => $permanentCount]),
             default => Lang::t('status.deleted', ['count' => count($deletedItems)]),
         };
+        // CF-42 (closes 014, 069): a delete that reached the session trash
+        // must say how short the recovery window is — the bytes live in a
+        // 0700 per-process root that the shutdown handler wipes, so after
+        // quitting "deleted" really means gone. No hint over a fully
+        // permanent removal (EXDEV or trash-root failure): there is
+        // nothing there to recover, and a trash promise would lie.
+        if (count($deletedItems) > $permanentCount) {
+            $msg .= ' ' . Lang::t('status.deleted_trash_hint');
+        }
         // Build new undo stack with this deletion
         $newUndoStack = $this->undoStack;
         if ($deletedItems !== []) {

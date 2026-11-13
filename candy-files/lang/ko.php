@@ -97,4 +97,5 @@ return [
     'cli.dir_missing' => '{side} 디렉터리 {dir} {reason}',
     'cli.reason_missing' => '존재하지 않음',
     'cli.reason_unreadable' => '읽을 수 없음',
+    'status.deleted_trash_hint' => '세션 휴지통으로 이동 — 종료하면 영구 삭제됩니다 (그 전까지 u로 복원)',
 ];

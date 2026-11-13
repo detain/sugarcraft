@@ -97,4 +97,5 @@ Utilisation :
     'cli.dir_missing' => 'répertoire ({side}) {reason} : {dir}',
     'cli.reason_missing' => 'n\'existe pas',
     'cli.reason_unreadable' => 'n\'est pas lisible',
+    'status.deleted_trash_hint' => 'déplacé dans la corbeille de session — supprimé définitivement à la fermeture (u restaure jusque-là)',
 ];

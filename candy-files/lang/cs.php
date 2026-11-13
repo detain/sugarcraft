@@ -97,4 +97,5 @@ Použití:
     'cli.dir_missing' => 'adresář ({side}) {reason}: {dir}',
     'cli.reason_missing' => 'neexistuje',
     'cli.reason_unreadable' => 'nelze číst',
+    'status.deleted_trash_hint' => 'přesunuto do koše této relace — po ukončení smazáno navždy (do té doby obnoví klávesa u)',
 ];

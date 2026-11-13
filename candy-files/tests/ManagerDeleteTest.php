@@ -8,6 +8,7 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Files\ConfirmState;
 use SugarCraft\Files\Entry;
+use SugarCraft\Files\Lang;
 use SugarCraft\Files\Manager;
 use PHPUnit\Framework\TestCase;
 
@@ -210,8 +211,11 @@ final class ManagerDeleteTest extends TestCase
         $this->assertSame(ConfirmState::DeleteSelected, $armed->confirm);
         [$deleted] = $armed->update(new KeyMsg(KeyType::Char, 'y'));
 
-        $this->assertSame('deleted 1 entries (1 skipped)', $deleted->status,
+        // CF-42: the trashed legs now append the ephemerality hint; the
+        // honest count leg must still read exactly, hint excluded.
+        $this->assertStringStartsWith('deleted 1 entries (1 skipped)', $deleted->status,
             'count must report ACTIONS APPLIED, not the arm-time intention');
+        $this->assertStringEndsWith(' ' . Lang::t('status.deleted_trash_hint'), $deleted->status);
         $this->assertFileDoesNotExist($this->tmpDir . '/keep.txt');
     }
 

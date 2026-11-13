@@ -97,4 +97,5 @@ return [
     'cli.dir_missing' => '{side}のディレクトリ {dir} {reason}',
     'cli.reason_missing' => 'が存在しません',
     'cli.reason_unreadable' => 'を読み取れません',
+    'status.deleted_trash_hint' => 'セッショントラッシュに移動 — 終了すると完全削除されます (それまでは u で復元)',
 ];

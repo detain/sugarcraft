@@ -97,4 +97,5 @@ Kullanım:
     'cli.dir_missing' => '{side} dizini {reason}: {dir}',
     'cli.reason_missing' => 'mevcut değil',
     'cli.reason_unreadable' => 'okunamıyor',
+    'status.deleted_trash_hint' => 'oturum çöpüne taşındı — çıkıldığında kalıcı olarak silinir (o zamana kadar u ile geri alınır)',
 ];

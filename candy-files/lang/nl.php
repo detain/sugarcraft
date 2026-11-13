@@ -97,4 +97,5 @@ Gebruik:
     'cli.dir_missing' => 'map ({side}) {reason}: {dir}',
     'cli.reason_missing' => 'bestaat niet',
     'cli.reason_unreadable' => 'is niet leesbaar',
+    'status.deleted_trash_hint' => 'verplaatst naar de sessie-prullenmand — definitief verwijderd zodra u stopt (u herstelt tot dan)',
 ];

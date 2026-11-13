@@ -97,4 +97,5 @@ Użycie:
     'cli.dir_missing' => 'katalog ({side}) {reason}: {dir}',
     'cli.reason_missing' => 'nie istnieje',
     'cli.reason_unreadable' => 'nie jest czytelny',
+    'status.deleted_trash_hint' => 'przeniesiono do kosza sesji — trwale usunięte po zamknięciu (do tego czasu przywraca klawisz u)',
 ];

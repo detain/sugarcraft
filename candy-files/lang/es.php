@@ -97,4 +97,5 @@ Uso:
     'cli.dir_missing' => 'directorio ({side}) {reason}: {dir}',
     'cli.reason_missing' => 'no existe',
     'cli.reason_unreadable' => 'no se puede leer',
+    'status.deleted_trash_hint' => 'movido a la papelera de la sesión — eliminado definitivamente al salir (u restaura hasta entonces)',
 ];

@@ -97,4 +97,5 @@ return [
     'cli.dir_missing' => 'каталог ({side}) {reason}: {dir}',
     'cli.reason_missing' => 'не существует',
     'cli.reason_unreadable' => 'не читается',
+    'status.deleted_trash_hint' => 'перемещено в корзину сеанса — будет удалено безвозвратно при выходе (до этого восстанавливается клавишей u)',
 ];
