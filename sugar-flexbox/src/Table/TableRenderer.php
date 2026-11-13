@@ -110,6 +110,13 @@ final class TableRenderer
             : $currentFrame->diff($this->previousFrame);
         $this->previousFrame = $currentFrame;
 
+        // An unchanged frame must stay silent: DiffEncoder::encode() opens
+        // EVERY stream with an unconditional home CUP (216b32c12) — even an
+        // empty one — so an op-less diff would yank the cursor home for
+        // nothing on every idle redraw.
+        if ($ops === []) {
+            return '';
+        }
         $encoder = new DiffEncoder();
         return $encoder->encode($ops);
     }

@@ -364,6 +364,19 @@ final class TableRendererTest extends TestCase
         $this->assertSame('', trim($frame3), 'an unchanged frame must stay silent');
     }
 
+    /**
+     * DiffEncoder opens every stream with a home CUP, even an empty one
+     * (216b32c12); an op-less delta must still be ZERO bytes, not trim()-empty.
+     */
+    public function testUnchangedFrameEmitsZeroBytesNotAHomeAnchor(): void
+    {
+        $t = (new Table())->addColumn(Column::make('Name', 10))->addRow(['Alice']);
+        $renderer = new TableRenderer();
+        $renderer->render($t);
+        self::assertSame('', $renderer->render($t));
+        self::assertSame('', $renderer->render($t));
+    }
+
     // ---- style attribution correctness (byte-vs-cluster + accumulation) --
 
     /** @return \SugarCraft\CellBuffer\Buffer */
