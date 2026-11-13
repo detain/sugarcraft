@@ -914,7 +914,12 @@ final class SmtpTransport implements Transport
     private static function mimeNameParams(string $attr, string $filename): array
     {
         if (\preg_match('/^[\x20-\x7E]*$/', $filename) === 1 && !\str_contains($filename, '"')) {
-            return ['plain' => "{$attr}=\"{$filename}\"", 'extended' => null];
+            // Plain quoted-string — but STILL through the escaper: a
+            // backslash is legal printable ASCII and an unescaped one
+            // swallows the closing quote (`report\` used to emit
+            // filename="report\", letting the remainder of the parameter
+            // list hide behind what is now an open quote, RFC 2045 §3).
+            return ['plain' => "{$attr}=\"" . self::quoteMimeParam($filename) . '"', 'extended' => null];
         }
 
         $ascii   = \preg_replace('/[^\x21-\x7E]/u', '_', $filename)

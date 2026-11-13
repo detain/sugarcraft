@@ -150,6 +150,32 @@ final class SmtpMimeEdgeTest extends TestCase
         }
     }
 
+
+    public function testBackslashFilenamesCannotOpenQuoteInThePlainBranch(): void
+    {
+        // CM-47: a printable name without a double quote used to be emitted
+        // verbatim into the quoted-string — `report\` shipped
+        // filename="report\", and the swallowed closing quote lets the rest
+        // of the parameter list hide behind an open quoted-string (RFC 2045
+        // section 3). Backslashes are now doubled in the plain branch; both
+        // the embedded and the trailing-backslash shape are pinned.
+        $transport = new SmtpTransport('smtp.example.com', 587);
+        $email = new Email(
+            from:        ['from@example.com'],
+            to:          ['to@example.com'],
+            attachments: [
+                Attachment::fromContent('one', 'report\\.txt'),
+                Attachment::fromContent('two', 'report\\'),
+            ],
+        );
+
+        $mime = $this->buildMime($transport, $email);
+
+        // Wire bytes must read filename="report\\.txt" and filename="report\\".
+        $this->assertStringContainsString('filename="report\\\\.txt"', $mime);
+        $this->assertStringContainsString('filename="report\\\\"', $mime);
+    }
+
     public function testBuildMimeMessageEndsWithBoundaryTerminator(): void
     {
         $transport = new SmtpTransport('smtp.example.com', 587);
