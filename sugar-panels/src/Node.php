@@ -70,7 +70,7 @@ final class Node
     ) {
         $this->kind        = $kind;
         // Every string that can reach the grid enters through this choke point
-        // (leaf(), withContent() and with() all land here), so the paint
+        // (leaf(), withContent() and mutate() all land here), so the paint
         // boundary is applied once, here, and cannot be routed around.
         $this->content     = Sanitize::painted($content);
         $this->children    = $children;
@@ -130,22 +130,22 @@ final class Node
     public function withMinWidth(int $w): self
     {
         // Clamp negatives to 0 — a dimension can never be < 0. Mirrors withFlex().
-        return $this->with(minWidth: \max(0, $w));
+        return $this->mutate(minWidth: \max(0, $w));
     }
 
     public function withMaxWidth(int $w): self
     {
-        return $this->with(maxWidth: \max(0, $w));
+        return $this->mutate(maxWidth: \max(0, $w));
     }
 
     public function withMinHeight(int $h): self
     {
-        return $this->with(minHeight: \max(0, $h));
+        return $this->mutate(minHeight: \max(0, $h));
     }
 
     public function withMaxHeight(int $h): self
     {
-        return $this->with(maxHeight: \max(0, $h));
+        return $this->mutate(maxHeight: \max(0, $h));
     }
 
     /**
@@ -156,7 +156,7 @@ final class Node
      */
     public function withFlex(int $weight): self
     {
-        return $this->with(flex: \max(0, $weight));
+        return $this->mutate(flex: \max(0, $weight));
     }
 
     /** Shorthand for {@see withFlex}(1): this child fills the leftover space. */
@@ -168,7 +168,7 @@ final class Node
     public function withPadding(int $cells): self
     {
         // Clamp negatives to 0 — padding can never be < 0. Mirrors withFlex().
-        return $this->with(padding: \max(0, $cells));
+        return $this->mutate(padding: \max(0, $cells));
     }
 
     public function withBorder(bool $show): self
@@ -179,13 +179,13 @@ final class Node
         $borderStyle = $show === true
             ? ($this->borderStyle ?? Border::rounded())
             : $this->borderStyle;
-        return $this->with(border: $show, borderStyle: $borderStyle, borderStyleSet: true);
+        return $this->mutate(border: $show, borderStyle: $borderStyle, borderStyleSet: true);
     }
 
     public function withSpacing(int $cells): self
     {
         // Clamp negatives to 0 — spacing can never be < 0. Mirrors withFlex().
-        return $this->with(spacing: \max(0, $cells));
+        return $this->mutate(spacing: \max(0, $cells));
     }
 
     /**
@@ -196,7 +196,7 @@ final class Node
      */
     public function withBorderStyle(?Border $b): self
     {
-        return $this->with(borderStyle: $b, borderStyleSet: true);
+        return $this->mutate(borderStyle: $b, borderStyleSet: true);
     }
 
     /**
@@ -205,7 +205,7 @@ final class Node
      */
     public function withStyle(?Style $s): self
     {
-        return $this->with(style: $s, styleSet: true);
+        return $this->mutate(style: $s, styleSet: true);
     }
 
     /**
@@ -214,7 +214,7 @@ final class Node
      */
     public function withTitle(string $t): self
     {
-        return $this->with(title: $t, titleSet: true);
+        return $this->mutate(title: $t, titleSet: true);
     }
 
     /**
@@ -234,7 +234,7 @@ final class Node
         $left   ??= $right;
         // Clamp negatives to 0 — a margin can never be < 0. Mirrors withFlex().
         $margin = [\max(0, $top), \max(0, $right), \max(0, $bottom), \max(0, $left)];
-        return $this->with(margin: $margin, marginSet: true);
+        return $this->mutate(margin: $margin, marginSet: true);
     }
 
     /**
@@ -243,7 +243,7 @@ final class Node
      */
     public function withAlignH(?Align $a): self
     {
-        return $this->with(alignH: $a, alignHSet: true);
+        return $this->mutate(alignH: $a, alignHSet: true);
     }
 
     /**
@@ -252,12 +252,12 @@ final class Node
      */
     public function withAlignV(?VAlign $v): self
     {
-        return $this->with(alignV: $v, alignVSet: true);
+        return $this->mutate(alignV: $v, alignVSet: true);
     }
 
     public function withContent(string $content): self
     {
-        return $this->with(content: $content);
+        return $this->mutate(content: $content);
     }
 
     // -------------------------------------------------------------------------
@@ -451,7 +451,7 @@ final class Node
      *
      * @param array{int,int,int,int}|null $margin
      */
-    private function with(
+    private function mutate(
         ?string $content = null,
         ?int $minWidth = null,
         ?int $maxWidth = null,
