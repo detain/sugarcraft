@@ -237,6 +237,30 @@ The band's endpoints are published too: `DatePicker::MIN_TOTAL_WIDTH` (21,
 plus the 4-cell week column when enabled) and `DatePicker::MAX_TOTAL_WIDTH`
 (63).
 
+### Sizing for hosts
+
+Every render is exactly nine rows:
+
+| Row | Content |
+|-----|---------|
+| 0   | header (`May 2026`, locale template) |
+| 1   | day-name abbreviations |
+| 2   | `─` separator |
+| 3–8 | six week rows |
+
+- **Clamped to the band, never rejected.** A request below the natural floor
+  clamps UP (a host asking for 10 columns receives 21, or 25 with the week
+  gutter — more than asked), and a request above 63 clamps DOWN to
+  `MAX_TOTAL_WIDTH`. `renderWidth()` is the oracle of that law.
+- **Height never clips or scrolls.** On a six-row region, rows 7–8 simply fall
+  off the bottom — measuring the container is the host's duty; reserve nine
+  rows (or place the widget in scrollable chrome).
+- **The separator is box-drawing `─` (U+2500):** the grid assumes a UTF-8
+  output charset and will mojibake on latin1/CP437 hosts.
+- **The ISO week column renders LEFT**, shifting the seven-cell band four
+  columns right — the geometry `hitTest()` mirrors, so coordinate math must
+  use the same flag.
+
 **Mouse seam.** `hitTest($col, $row)` maps a character coordinate of a
 rendered view to the `DateTimeImmutable` under it, or `null` — header,
 day-name row, separator, the week-number gutter, blank lead-in/trailing cells,
