@@ -728,29 +728,56 @@ final class LineChart extends Chart
 
         // Compute a global axis range covering every series so each
         // line stays comparable on the same scale.
-        $dataMin = null;
-        $dataMax = null;
-        // Single pass over every series: accumulating into one merged
-        // array re-copies all samples once per dataset (O(series × total)).
-        foreach ([[$this->data], array_values($this->datasets)] as $group) {
-            foreach ($group as $values) {
-                foreach ($values as $v) {
-                    $f = (float) $v;
-                    if ($dataMin === null || $f < $dataMin) {
-                        $dataMin = $f;
-                    }
-                    if ($dataMax === null || $f > $dataMax) {
-                        $dataMax = $f;
+        if ($this->min !== null && $this->max !== null) {
+            // sugar-charts-037: both ends pinned — every sample's scan
+            // answer is discarded by Range::resolve anyway (the pins win
+            // unconditionally, min>max is refused at the ctor door), so
+            // the O(total-samples) pass is skipped outright. Empty data
+            // still renders the honest blank canvas, established by the
+            // cheap counts below. Full per-instance render memoization is
+            // deliberately NOT here (CH-34 owns the single memo seam).
+            [$min, $max] = [$this->min, $this->max];
+            if ($max == $min) {
+                $max = $min + 1.0;
+            }
+            // Emptiness without touching a single sample value:
+            $hasPoints = $this->data !== [];
+            if (!$hasPoints) {
+                foreach ($this->datasets as $values) {
+                    if ($values !== []) {
+                        $hasPoints = true;
+                        break;
                     }
                 }
             }
-        }
-        if ($dataMin === null) {
-            return $canvas->view();
-        }
-        [$min, $max] = Range::resolve($this->min, $this->max, $dataMin, $dataMax, 'Y');
-        if ($max == $min) {
-            $max = $min + 1.0;
+            if (!$hasPoints) {
+                return $canvas->view();
+            }
+        } else {
+            $dataMin = null;
+            $dataMax = null;
+            // Single pass over every series: accumulating into one merged
+            // array re-copies all samples once per dataset (O(series × total)).
+            foreach ([[$this->data], array_values($this->datasets)] as $group) {
+                foreach ($group as $values) {
+                    foreach ($values as $v) {
+                        $f = (float) $v;
+                        if ($dataMin === null || $f < $dataMin) {
+                            $dataMin = $f;
+                        }
+                        if ($dataMax === null || $f > $dataMax) {
+                            $dataMax = $f;
+                        }
+                    }
+                }
+            }
+            if ($dataMin === null) {
+                return $canvas->view();
+            }
+            [$min, $max] = Range::resolve($this->min, $this->max, $dataMin, $dataMax, 'Y');
+            if ($max == $min) {
+                $max = $min + 1.0;
+            }
         }
 
         // Resolve labels — explicit lists win, formatters fill in
