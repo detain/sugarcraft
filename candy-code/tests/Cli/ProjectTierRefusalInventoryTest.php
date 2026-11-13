@@ -365,6 +365,12 @@ final class ProjectTierRefusalInventoryTest extends TestCase
 
         // User-tier: rooted at `~`, so nobody but the user chose the location.
         'Agents/ForeignAgentPresetRegistry.php|.config/opencode' => self::USER,
+        // SystemPromptMemo::keyFor() stats the working tree's `.git/index` for
+        // its mtime ONLY, as one input to a cache fingerprint: no byte is read,
+        // nothing is refused or trusted, and the worst a hostile index does is
+        // change a hash. A user-tier read of git's own metadata, like the
+        // bundlesGitSha() pair below.
+        'Agents/SystemPromptMemo.php|.git/index' => self::USER,
         'Agents/Team.php|.candy-code/teams' => self::USER,
         'Agents/TeamManager.php|.candy-code/teams' => self::USER,
         // INT-4: the user's Claude Code settings file, read for its `hooks`
@@ -485,10 +491,6 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         // and not the checkout under analysis. Still gated, because a
         // package-relative path is one a symlink can move just as easily.
         'Providers/ProviderFactory.php|.candy-code/config.dev.json' => self::PACKAGE,
-        // rv-enduser-3 (lane f-app-launch 2026-10-14): the REQUIRED_KEY_ENVS hint
-        // NAMES the operator's own user-tier file inside an error message; it
-        // loads nothing, resolves nothing, and serves no project tier at all.
-        'Providers/ProviderFactory.php|.candy-code/config.json' => self::USER,
 
         // INT-3 (plan_comparison W5, lane w5d): the foreign command floor
         // reads the claude/opencode trees the skills side already classifies
@@ -613,7 +615,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
      *
      * This walks `src/` with `token_get_all()`, takes every string literal, and
      * pulls out every `.<dot-dir>/<segment>` it contains, KEYED BY THE FILE IT
-     * APPEARS IN. On this tree that is NINETY-FIVE occurrences — one per entry
+     * APPEARS IN. On this tree that is NINETY-FOUR occurrences — one per entry
      * in {@see DOT_PATHS} — of SIXTY-FOUR distinct paths. THIRTY-SEVEN of those
      * occurrences are repository-chosen by this file's own definition
      * ({@see repositoryChosenPaths()}: class `REPOSITORY` or class `BOTH`), and
@@ -844,7 +846,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
             50 => 'FIFTY', 51 => 'FIFTY-ONE', 52 => 'FIFTY-TWO', 53 => 'FIFTY-THREE',
             54 => 'FIFTY-FOUR', 55 => 'FIFTY-FIVE', 56 => 'FIFTY-SIX', 57 => 'FIFTY-SEVEN',
             58 => 'FIFTY-EIGHT', 59 => 'FIFTY-NINE', 60 => 'SIXTY', 61 => 'SIXTY-ONE',
-            62 => 'SIXTY-TWO', 63 => 'SIXTY-THREE', 64 => 'SIXTY-FOUR'];
+            62 => 'SIXTY-TWO', 63 => 'SIXTY-THREE', 64 => 'SIXTY-FOUR', 65 => 'SIXTY-FIVE'];
         $repoWords = [13 => 'THIRTEEN', 14 => 'FOURTEEN', 15 => 'FIFTEEN',
             16 => 'SIXTEEN', 17 => 'SEVENTEEN', 18 => 'EIGHTEEN', 19 => 'NINETEEN', 20 => 'TWENTY',
             21 => 'TWENTY-ONE', 22 => 'TWENTY-TWO',
