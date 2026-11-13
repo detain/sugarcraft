@@ -209,7 +209,7 @@ $composite = Subscriptions::compose(
 );
 
 $composite->unsubscribe(); // cleanup runs once; the registration is dropped
-$source->cancel();         // the dropped callback no longer runs — the leak guard
+$source->cancel();         // the dropped callback can no longer run — this is the leak guard
 ```
 
 For handles that arrive over time the composite doubles as a running
