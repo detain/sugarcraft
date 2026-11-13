@@ -15,6 +15,12 @@ declare(strict_types=1);
  * never mutates its own archive, so the shipped php.ini default of On is
  * exactly right for users.
  *
+ * WHO RUNS IT: `.github/workflows/release-app-phar.yml` on `candy-codetime/v*`
+ * and `candy-codetime/dev` tags — the release carries the .phar plus its
+ * .sha256, .sha256.sig and .minisig sidecars. There is no self-update: the
+ * published file is inert payload, and a user upgrades by downloading the
+ * new one (README Install documents exactly that to end users).
+ *
  * REPRODUCIBILITY OF THE STAMP: `metadata['built_at']` honors
  * SOURCE_DATE_EPOCH when the environment exports one (the release workflow
  * pins it to the tag's commit date; the stamp is then that instant in UTC and

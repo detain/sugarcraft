@@ -165,6 +165,15 @@
 
     <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/candy-codetime</code></pre>
+    <p>A signed single-file build ships with every release: download
+    <code>candy-codetime.phar</code> with its <code>.sha256</code> (and
+    minisig) sidecars, verify the digest, and run
+    <code>php candy-codetime.phar</code> on stock PHP — the app never
+    rewrites its own archive and there is no self-update channel, so an
+    upgrade is a new download. Inside an archive <code>--version</code>
+    prints the release build stamp (the frozen <code>vendor/</code> would
+    otherwise report the build root's dev guess), and
+    <code>SOURCE_DATE_EPOCH</code> keeps rebuilds of a tag byte-stable.</p>
 
     <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-shell"># Editor plugin / cron / git hook pushes a heartbeat:

@@ -35,6 +35,17 @@ BIN="$(composer global config bin-dir --absolute)"
 
 Or from a clone: `composer install && php bin/candy-codetime`.
 
+A signed single-file build ships with every `candy-codetime/v*` release:
+download `candy-codetime.phar` with its `candy-codetime.phar.sha256` digest
+(and the `.sha256.sig` / `.minisig` minisig sidecars), verify it, and run
+`php candy-codetime.phar` on stock PHP. The ini default `phar.readonly=On` is
+the right runtime setting — the app never rewrites its own archive, and there
+is deliberately no self-update channel: upgrading means downloading the new
+file. Inside an archive, `--version` prints the release build stamp, because
+the frozen `vendor/` would otherwise make Composer report the build root's dev
+guess; the release workflow pins `SOURCE_DATE_EPOCH`, so rebuilds of a tag
+agree byte-wise on that stamp. `tools/build-phar.php` documents the build.
+
 ## Quick start
 
 ```bash
