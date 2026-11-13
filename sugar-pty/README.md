@@ -8,7 +8,9 @@ sugar-pty — pseudo-terminal primitives for PHP 8.3+, the building blocks for
 driving child processes inside terminal UIs. It opens a master/slave PTY pair
 and spawns a child with its stdio wired to the slave. Bytes are pumped between
 the host and the child in both directions. Host resizes are forwarded into the
-child via `TIOCSWINSZ`.
+child via `TIOCSWINSZ`. At the pump layer the bytes are opaque — interpreting
+them is always opt-in: `Expect` matches needles, `PtyInputDecoder` decodes
+key/mouse events off the master, and `AnsiOutputParser` inspects SGR state.
 
 **Status**: Linux + macOS, and Windows ConPTY through `Windows\ConPtySystem`
 (FFI — Windows 10 1809 or newer, PHP 8.4 or newer; see Backend selection).
@@ -128,7 +130,7 @@ exceptions at the package root.
 |---|---|
 | `$system->open(int $cols=80, int $rows=24): PtyPair` (`PtySystemFactory::new()`) | The canonical path: on Darwin `openpty()` first (single call), falling back to the quartet — `posix_openpt + grantpt + unlockpt + ptsname_r` — on -1; on Linux the same quartet is used directly. The master fd is `FD_CLOEXEC` (children never inherit it, so closing it delivers the hangup) and the requested winsize is applied at open best-effort — a refused ioctl surfaces as 0×0 until the next resize rather than failing the open. Returns a `PtyPair` exposing `master()` and `slave()`: on the contract path `master()` is a `PosixMasterPty` (`fd()` / `isClosed()`; the slave path lives on the pair — `slavePath()` / `slave()` — the master object carries none), while the legacy `Master` value object (readonly fd + slavePath) belongs to the deprecated `Pty` facade. A `0 x 0` request is kernel-legal and yields an actual 0x0 geometry until something resizes it — children that query the size then see zeros, so pass real dimensions (or `resize()` once known). The deprecated `Pty::open($cols, $rows)` facade delegates here, so both paths share exactly this implementation. |
 | `$pty->spawn(array $cmd, ?array $env = null, ?int $cols = null, ?int $rows = null, bool $controllingTerminal = false): Child` *(facade)* | `proc_open` with slave-path descriptors, same geometry rule as `$pair->slave()->spawn(...)` — omit `$cols`/`$rows` to keep the current winsize (the facade no longer stomps it with 80×24 defaults). `$env` follows proc_open semantics: `null` inherits the full parent environment, a non-null array REPLACES it entirely (merge explicitly — see Quickstart; an EMPTY array means an EMPTY environment on every backend, Windows included). TIOCSWINSZ is applied before the spawn (throws, no child, on failure) and re-asserted best-effort after it, because macOS zeroes the winsize when the child's slave descriptors open. Pass `controllingTerminal: true` to route through `bin/pty-shim.php` so the child claims the slave PTY as its ctty (Ctrl+C → SIGINT, job control); requires ext-pcntl. |
-| `$pair->slave()->spawn(array $cmd, ?array $env, ?int $cols=null, ?int $rows=null, bool $controllingTerminal=false): Child` | Same `$env` replace-vs-null semantics. Window size is a property of the pty, not of the controlling-terminal relationship, so an explicit `$cols`/`$rows` is applied on every spawn (before it, throwing with no child on failure, then re-asserted best-effort after it for macOS) — like `creack/pty.StartWithSize()`. Omit both to keep the size the pair was opened or last resized with (`creack/pty.Start()`, portable-pty `spawn_command()`); pass one to keep the other half. The parent's slave handle is opened `O_CLOEXEC`, so the child holds the slave only at fds 0-2. |
+| `$pair->slave()->spawn(array $cmd, ?array $env, ?int $cols=null, ?int $rows=null, bool $controllingTerminal=false): Child` | Same `$env` replace-vs-null semantics. Window size is a property of the pty, not of the controlling-terminal relationship, so an explicit `$cols`/`$rows` is applied on every spawn (before it, throwing with no child on failure, then re-asserted best-effort after it for macOS) — like `creack/pty.StartWithSize()`. Omit both to keep the size the pair was opened or last resized with (`creack/pty.Start()`, portable-pty `spawn_command()`); pass one to keep the other half. The child never holds the slave beyond fds 0–2, per platform: on Linux the parent holds **no** slave handle at all (the pair carries the path; each `spawn()` opens the slave `O_CLOEXEC` itself and dup2s it into the stdio slots), on Darwin the parent additionally holds a winsize-anchor slave fd marked `FD_CLOEXEC` (best-effort — an anchor it cannot mark is dropped rather than leaked into children). |
 | `$master->read(int $len=8192, ?float $timeout=0.05): ?string` | `null` on timeout (idle), `''` on confirmed EOF, bytes otherwise. EINTR-safe. The default is finite on purpose — pass `null` explicitly for a mode-governed blocking read that parks until data or EOF arrives. |
 | `$master->write(string $bytes): int` | Returns bytes written. |
 | `$master->setBlocking(bool $blocking): void` | Toggles non-blocking mode on the master — a contract member since PTY-13, so the lever no longer requires reaching through `stream()`; `PosixMasterPty` flips the `php://fd/` resource and `ConPtyMasterPty` throws (no POSIX blocking mode exists there — poll `read($len, $timeout)`). The deprecated `$pty->setBlocking()` facade delegates here unchanged. The pumps save and restore this mode around their own temporary flips, so your setting stands outside a `PosixPump`/`ReactPump` run. |
@@ -209,7 +211,7 @@ Both methods default to `pcntl_async_signals(true)` so handlers
 fire between PHP opcodes; pass `async: false` if your event loop
 already polls `pcntl_signal_dispatch()` itself.
 
-Caveats for the raw-fd form: the example's `open(2)` fd is **not**
+Caveats for the raw-fd form: the snippet above's `open(2)` fd is **not**
 `O_CLOEXEC`, so it leaks into any child the process later spawns
 (including the `stty` helpers the Darwin resize fallback runs) and
 nothing in the lib ever closes it — `Libc::lib()->close($ttyFd)`
@@ -592,7 +594,7 @@ $opts = (new PumpOptions())
 
 - [`examples/spawn-bash.php`](examples/spawn-bash.php) — The simplest end-to-end slice: `PtySystemFactory::new()->open()` → `$pair->slave()->spawn(['bash', ...])` → drain master → reap. Start here.
 - [`examples/pump-output.php`](examples/pump-output.php) — Long-running counter; demonstrates non-blocking read with timeout, line-by-line pumping.
-- [`examples/resize-forwarding.php`](examples/resize-forwarding.php) — Wire `SignalForwarder` to deliver host SIGWINCH into the child PTY's TIOCSWINSZ; observe the child's `tput cols / lines` flip mid-stream.
+- [`examples/resize-forwarding.php`](examples/resize-forwarding.php) — Wire `SignalForwarder` to deliver host SIGWINCH into the child PTY's TIOCSWINSZ; observe the child's `tput cols / lines` flip mid-stream. (This is the `attachSigwinch()` object form with a size-provider closure; the raw `open(2)`-fd variant is the snippet above the Caveats paragraph in [Resize forwarding](#resize-forwarding).)
 - [`examples/multi-pump.php`](examples/multi-pump.php) — Multiplex several PTY sessions through one `MultiPump` tick loop with per-session prefixes.
 - [`examples/expect-login.php`](examples/expect-login.php) — `Expect` round-trip: send a token through the master, match it inside a bounded timeout, tear the child down with an explicit kill + wait, then close the master.
 
