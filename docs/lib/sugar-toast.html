@@ -251,6 +251,9 @@ echo $toast-&gt;view($bg);</code></pre>
 <tr><td>Action</td><td>new(string $label, \Closure(): void $callback)</td><td>Factory</td></tr>
 <tr><td>Action</td><td>$label: non-empty-string</td><td>User-visible button label (readonly; normalized at construction — inline SGR kept, other control/escape constructs stripped, printable-empty refused)</td></tr>
 <tr><td>Action</td><td>$callback: \Closure(): void</td><td>Invoked when action is triggered (readonly)</td></tr>
+<tr><td>Toast</td><td>withTypeRegistry(?AlertTypeRegistry): self</td><td>Register custom alert types; string types resolve registry-first, then the built-ins</td></tr>
+<tr><td>AlertTypeRegistry</td><td>new(): self / with(AlertTypeDefinition): self / resolve(string $key): ?AlertTypeDefinition / keys(): list&lt;string&gt;</td><td>Immutable registry of custom types (bubbleup RegisterNewAlertType, as a value)</td></tr>
+<tr><td>AlertTypeDefinition</td><td>new(string $key, string $prefix, ?Color $color = null, ToastType $base = Info, ?string $label = null, ?string $asciiPrefix = null): self</td><td>Custom type: key, header glyph/prefix, icon colour, base severity; validated at construction</td></tr>
 <tr><td>HistoryLog</td><td>new(array $entries = []): self</td><td>Factory mirroring the sibling ::new()s; seeds a log from a list&lt;Alert&gt; (garbage throws, same fail-fast door)</td></tr>
 <tr><td>HistoryLog</td><td>push(Alert, ?int $limit = null): self</td><td>Append alert (evicting oldest past $limit), return new immutable log</td></tr>
 <tr><td>HistoryLog</td><td>all(): list&lt;Alert&gt;</td><td>Return all recorded alerts</td></tr>

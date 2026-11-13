@@ -94,19 +94,34 @@ Each type also provides a localised label via `ToastType::label()` (e.g.
 
 `alert()` accepts either a `ToastType` enum case or a case-insensitive string
 (`"error"`/`"ERROR"`, `"warning"`, `"info"`, `"success"`). Passing an unknown
-string throws `InvalidArgumentException`.
+string throws `InvalidArgumentException` unless a registry resolves it.
 
-**These four are the whole vocabulary — custom alert types are unsupported.**
-Upstream bubbleup registers custom types
-(`RegisterNewAlertType(AlertDefinition{Key, ForeColor, Prefix})`); sugar-toast
-deliberately dropped that seam, so no key/glyph/prefix can be added at
-runtime and an unknown name is a hard throw, not a registration hook. The
-parity path for a bespoke look is a styled built-in: choose the severity you
-want the icon and label to carry, then override its colours per alert with
-`withBackgroundColor()`/`withForegroundColor()`/`withBorderColor()` (see
-Styled Alerts). If you are migrating from bubbleup with custom types, map
-each `AlertDefinition` onto the nearest built-in plus colour overrides
-before you hit the throw.
+**Custom alert types** ride a registry value, mirroring bubbleup's
+`RegisterNewAlertType(AlertDefinition{Key, ForeColor, Prefix})` without its
+process-global state (every `Toast` here is immutable):
+
+```php
+use SugarCraft\Core\Util\Color;
+use SugarCraft\Toast\{AlertTypeDefinition, AlertTypeRegistry, Toast, ToastType};
+
+$registry = AlertTypeRegistry::new()->with(
+    AlertTypeDefinition::new('deploy', '🚀', Color::hex('#a855f7'), base: ToastType::Success)
+);
+$toast = Toast::new()->withTypeRegistry($registry)->alert('deploy', 'v2.4 is live');
+```
+
+A definition carries the `key`, the header `prefix`/glyph, an optional icon
+`color`, and a `base` built-in that supplies what a definition cannot own:
+the translated severity word under `withAccessibleText()` and the ASCII
+fallback letter (override either with `label:` / `asciiPrefix:`; under
+`SymbolSet::Ascii` the base's `[S]`-style prefix shows unless you set
+`asciiPrefix`). String types resolve registry-first, then the four built-ins,
+so a definition keyed `error` re-skins the built-in. An unregistered unknown
+string still throws `InvalidArgumentException` naming the known keys. Keys are
+`[a-z][a-z0-9_-]*` (lookups are case-insensitive); prefixes are validated
+(no control or private-use characters, at most 8 cells) because they are
+spliced into the painted frame. The resulting `Alert` carries the definition
+in `->definition`; its `->type` is the base severity.
 
 ## Positions
 
@@ -638,6 +653,12 @@ already over the new cap survive until the next push evicts them.
 | `Alert` | `withBackgroundColor(?Color)` | Override box background (`null` = no fill, plain render) |
 | `Alert` | `withForegroundColor(?Color)` | Override text colour (`null` = terminal default, not the type colour) |
 | `Alert` | `withBorderColor(?Color)` | Override border colour (`null` = terminal default, not the type colour) |
+| `->withTypeRegistry(?AlertTypeRegistry)` | Register custom alert types; string types resolve registry-first, then built-ins |
+| `AlertTypeRegistry` | `new(): self` | Empty immutable registry |
+| `AlertTypeRegistry` | `with(AlertTypeDefinition): self` | A registry with the definition added (same key replaces) |
+| `AlertTypeRegistry` | `resolve(string $key): ?AlertTypeDefinition` | Case-insensitive lookup |
+| `AlertTypeRegistry` | `keys(): list<string>` | Registered keys |
+| `AlertTypeDefinition` | `new(string $key, string $prefix, ?Color $color = null, ToastType $base = Info, ?string $label = null, ?string $asciiPrefix = null): self` | Custom type: key, header glyph/prefix, icon colour, base severity; validated at construction |
 | `Action` | `new(string $label, \Closure(): void $callback)` | Factory |
 | `Action` | `->label: non-empty-string` | Button label (non-empty string; readonly) — inline SGR kept, other control/escape constructs stripped, printable-empty refused |
 | `Action` | `->callback: \Closure(): void` | Callback (readonly) |

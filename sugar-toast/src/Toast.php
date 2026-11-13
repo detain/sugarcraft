@@ -22,10 +22,10 @@ use SugarCraft\Core\Util\Width;
  * are bounded by maxConcurrent + the Overflow strategy; runnable demos live
  * in examples/ (basic.php, types.php, accessibility.php).
  *
- * Design antecedent: DaltonSW/bubbleup. Custom alert types (its
- * RegisterNewAlertType seam) are unsupported here by design: string types
- * resolve only to the four built-ins, and styled built-ins plus per-Alert
- * colour overrides are the parity path (README 'Alert Types').
+ * Design antecedent: DaltonSW/bubbleup. Its RegisterNewAlertType seam is
+ * the immutable {@see AlertTypeRegistry} handed to withTypeRegistry():
+ * string types resolve registry-first, then the four built-ins (README
+ * 'Alert Types').
  *
  * @see https://github.com/DaltonSW/bubbleup
  */
@@ -76,9 +76,9 @@ final class Toast
 
     /**
      * Action buttons rendered per alert. Extra
-     * buttons fold into a visible '+N more' row instead of growing the box
-     * without bound; hidden actions stay reachable via the Alert in
-     * history()/activeAlerts(), just not clickable.
+     * buttons fold into a '[+N more]' row (expandable by the host, see
+     * withActionsExpanded()) instead of growing the box without bound;
+     * hidden actions stay reachable via the Alert in history()/activeAlerts().
      */
     public const MAX_ACTIONS_PER_ALERT = 64;
 
@@ -159,6 +159,9 @@ final class Toast
 
     /** History log of dismissed alerts. */
     private HistoryLog $historyLog;
+
+    /** Custom alert types; null = built-ins only. */
+    private ?AlertTypeRegistry $typeRegistry = null;
 
     /**
      * Alerts whose action fold the host expanded. Holds the Alert instances
@@ -253,6 +256,18 @@ final class Toast
             );
         }
         return $this->mutate(['duration' => $seconds]);
+    }
+
+    /**
+     * Register custom alert types (bubbleup's `RegisterNewAlertType`, as a
+     * value). String types passed to alert()/progressToast() then resolve
+     * registry-first and fall back to the four built-ins, so a registered
+     * `deploy` type paints its own prefix/colour while an unregistered
+     * unknown string still throws.
+     */
+    public function withTypeRegistry(?AlertTypeRegistry $registry): self
+    {
+        return $this->mutate(['typeRegistry' => $registry]);
     }
 
     /**
@@ -435,13 +450,10 @@ final class Toast
         if ($ttlSeconds !== null) {
             $expiresAt = \microtime(true) + $ttlSeconds;
         }
-        $resolvedType = $type instanceof ToastType
-            ? $type
-            : ToastType::tryFrom(\strtolower($type))
-                ?? throw new \InvalidArgumentException("Unknown toast type: {$type}");
+        [$resolvedType, $definition] = $this->resolveType($type);
 
         $clone = clone $this;
-        $alert = new Alert($resolvedType, $message, $expiresAt, null, $actions ?? [], id: $id);
+        $alert = new Alert($resolvedType, $message, $expiresAt, null, $actions ?? [], id: $id, definition: $definition);
         if ($expiresAt === null && $clone->duration !== null) {
             $alert = $alert->withExpiry($clone->duration);
         }
@@ -477,13 +489,10 @@ final class Toast
         if ($ttlSeconds !== null) {
             $expiresAt = \microtime(true) + $ttlSeconds;
         }
-        $resolvedType = $type instanceof ToastType
-            ? $type
-            : ToastType::tryFrom(\strtolower($type))
-                ?? throw new \InvalidArgumentException("Unknown toast type: {$type}");
+        [$resolvedType, $definition] = $this->resolveType($type);
 
         $clone = clone $this;
-        $alert = (new Alert($resolvedType, $message, $expiresAt, null, $actions ?? [], id: $id))->withProgress($progress);
+        $alert = (new Alert($resolvedType, $message, $expiresAt, null, $actions ?? [], id: $id, definition: $definition))->withProgress($progress);
         if ($expiresAt === null && $clone->duration !== null) {
             $alert = $alert->withExpiry($clone->duration);
         }
@@ -1312,6 +1321,29 @@ final class Toast
     }
 
     /**
+     * @return array{0:ToastType,1:?AlertTypeDefinition}
+     */
+    private function resolveType(ToastType|string $type): array
+    {
+        if ($type instanceof ToastType) {
+            return [$type, null];
+        }
+        $definition = $this->typeRegistry?->resolve($type);
+        if ($definition !== null) {
+            return [$definition->base, $definition];
+        }
+        $builtin = ToastType::tryFrom(\strtolower($type));
+        if ($builtin === null) {
+            $known = \array_merge(
+                \array_map(static fn (ToastType $t): string => $t->value, ToastType::cases()),
+                $this->typeRegistry?->keys() ?? []
+            );
+            throw new \InvalidArgumentException("Unknown toast type: {$type} (known: " . \implode(', ', $known) . '; register custom types via withTypeRegistry())');
+        }
+        return [$builtin, null];
+    }
+
+    /**
      * Expand (or collapse) one alert's `[+N more]` action fold: the alert
      * then shows up to {@see MAX_EXPANDED_ACTIONS} buttons and every one is a
      * hit rect. $alertIndex addresses {@see activeAlerts()} like
@@ -1607,8 +1639,13 @@ final class Toast
         $hiddenActions = \count($alert->actions) - \count($actions);
 
         $width = $this->resolveWidth(Width::string($message ?? ''), $capWidth);
-        $icon  = $alert->type->icon($this->symbols);
-        $color = $alert->type->color();
+        $def   = $alert->definition;
+        $icon  = $def === null
+            ? $alert->type->icon($this->symbols)
+            : ($this->symbols === SymbolSet::Ascii ? ($def->asciiPrefix ?? $alert->type->asciiPrefix()) : $def->prefix);
+        $color = $def?->color !== null
+            ? \sprintf('38;2;%d;%d;%d', $def->color->r, $def->color->g, $def->color->b)
+            : $alert->type->color();
 
         // Inner content width (between the two vertical borders).
         $inner = \max(1, $width - 2);
@@ -1629,7 +1666,7 @@ final class Toast
             // icon-drop degrade below can remove it along with the icon at
             // hopeless widths (ellipsize, never delete: the message keeps
             // priority over the word).
-            $prefix .= $alert->type->label() . ' ';
+            $prefix .= ($def?->label ?? $alert->type->label()) . ' ';
         }
 
         // Top / bottom borders: '─' is a 3-byte UTF-8 grapheme but one
@@ -1664,7 +1701,7 @@ final class Toast
                 // by construction at any width where a message cell also
                 // fits. At inner <= 1 the message keeps priority: nothing
                 // survives, and that floor is the documented law.
-                $letter = \trim($alert->type->asciiPrefix(), '[]');
+                $letter = \trim($def?->asciiPrefix ?? $alert->type->asciiPrefix(), '[]');
                 if ($inner >= Width::string($letter) + 1) {
                     $prefix = $letter;
                     $iconCells = Width::string($prefix);

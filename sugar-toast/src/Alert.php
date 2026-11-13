@@ -51,6 +51,8 @@ final class Alert
      *        appending a second box — progress toasts once had no
      *        lifecycle at all. null = anonymous, always
      *        appends.
+     * @param AlertTypeDefinition|null $definition  Custom type (registry-resolved by
+     *        Toast::alert()/progressToast()); $type then holds its base severity. null = a plain built-in
      * @throws \InvalidArgumentException when $progress is non-finite, when
      *         $expiresAt is non-finite or below the epoch floor, or when
      *         $actions is not a list of Action instances
@@ -66,6 +68,7 @@ final class Alert
         public readonly ?Color $borderColor = null,
         public readonly bool $persistent = false,
         public readonly ?string $id = null,
+        public readonly ?AlertTypeDefinition $definition = null,
     ) {
         if ($expiresAt !== null && (!\is_finite($expiresAt) || $expiresAt < self::EPOCH_FLOOR)) {
             throw new \InvalidArgumentException('Alert $expiresAt ' . self::EXPIRY_RULE . $expiresAt);
@@ -119,6 +122,7 @@ final class Alert
         ?Color $borderColor = null,
         bool $persistent = false,
         ?string $id = null,
+        ?AlertTypeDefinition $definition = null,
     ): self {
         return (new self($type, $message))->mutate([
             'expiresAt' => $expiresAt,
@@ -129,6 +133,7 @@ final class Alert
             'borderColor' => $borderColor,
             'persistent' => $persistent,
             'id' => $id,
+            'definition' => $definition,
         ]);
     }
 
@@ -163,6 +168,7 @@ final class Alert
             borderColor: $pick('borderColor', $this->borderColor),
             persistent: $pick('persistent', $this->persistent),
             id: $pick('id', $this->id),
+            definition: $pick('definition', $this->definition),
         );
     }
 
