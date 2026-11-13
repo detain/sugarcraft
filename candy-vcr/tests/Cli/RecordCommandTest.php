@@ -242,4 +242,123 @@ final class RecordCommandTest extends TestCase
             }
         }
     }
+
+    /**
+     * Finding 002 acceptance: the README's flagship shape — a BARE
+     * command name after `--` — must work. `pcntl_exec` never PATH-searches,
+     * so RecordCommand pre-resolves argv[0]; this records `sh -c` exactly
+     * as shipped in docs (README:299-304).
+     */
+    public function testBareCommandNameIsPathResolvedEndToEnd(): void
+    {
+        $this->requirePtySyscalls();
+
+        $cassette = \tempnam(\sys_get_temp_dir(), 'rec-bare-');
+        $this->assertIsString($cassette);
+
+        $cmd = new RecordCommand(Stream::devNull());
+        $stdout = Stream::memory();
+        $stderr = Stream::memory();
+
+        try {
+            $rc = $cmd->run(
+                ['--force', '--output', $cassette, '--', 'sh', '-c', 'echo bare-path-ok'],
+                $stdout,
+                $stderr,
+            );
+            $this->assertSame(0, $rc, 'bare `sh` must PATH-resolve and record cleanly');
+
+            $reader = new JsonlFormat();
+            $loaded = $reader->read($cassette);
+            $blob = '';
+            foreach ($loaded->events as $event) {
+                if ($event->kind === EventKind::Output) {
+                    $blob .= Scalars::string($event->payload['b'] ?? '', 'recorded output bytes');
+                }
+            }
+            $this->assertStringContainsString('bare-path-ok', $blob, 'PATH-resolved spawn must record real program output');
+            $this->assertStringNotContainsString('No such file', $blob, 'the errno-2 warning must never masquerade as output');
+        } finally {
+            if (\is_resource($stdout)) {
+                \fclose($stdout);
+            }
+            if (\is_resource($stderr)) {
+                \fclose($stderr);
+            }
+            if (\file_exists($cassette)) {
+                @\unlink($cassette);
+            }
+        }
+    }
+
+    /**
+     * An unresolvable name fails loud at argv-parse time: exit 2 with a
+     * `command not found:` line, and no cassette is opened at all (the old
+     * behavior recorded the pty error text into a plausible-looking file).
+     */
+    public function testUnknownBareCommandFailsLoudBeforeRecording(): void
+    {
+        $cassette = \tempnam(\sys_get_temp_dir(), 'rec-miss-');
+        $this->assertIsString($cassette);
+        @\unlink($cassette);
+
+        $cmd = new RecordCommand(Stream::devNull());
+        $stdout = Stream::memory();
+        $stderr = Stream::memory();
+
+        try {
+            $rc = $cmd->run(
+                ['--force', '--output', $cassette, '--', 'vcr-no-such-command-xyz'],
+                $stdout,
+                $stderr,
+            );
+            $this->assertSame(2, $rc);
+            \rewind($stderr);
+            $err = (string) \stream_get_contents($stderr);
+            $this->assertStringContainsString('command not found: vcr-no-such-command-xyz', $err);
+            $this->assertFileDoesNotExist($cassette, 'a refused spawn must never lay down a cassette');
+        } finally {
+            if (\is_resource($stdout)) {
+                \fclose($stdout);
+            }
+            if (\is_resource($stderr)) {
+                \fclose($stderr);
+            }
+            if (\file_exists($cassette)) {
+                @\unlink($cassette);
+            }
+        }
+    }
+
+    public function testExistingButNonExecutablePathFailsLoud(): void
+    {
+        $notExecutable = \tempnam(\sys_get_temp_dir(), 'rec-nox-');
+        $this->assertIsString($notExecutable);
+        \chmod($notExecutable, 0o644);
+
+        $cmd = new RecordCommand(Stream::devNull());
+        $stdout = Stream::memory();
+        $stderr = Stream::memory();
+
+        try {
+            $rc = $cmd->run(
+                ['--force', '--output', $notExecutable . '.cas', '--', $notExecutable],
+                $stdout,
+                $stderr,
+            );
+            $this->assertSame(2, $rc);
+            \rewind($stderr);
+            $err = (string) \stream_get_contents($stderr);
+            $this->assertStringContainsString('command not found: ' . $notExecutable, $err);
+            $this->assertFileDoesNotExist($notExecutable . '.cas');
+        } finally {
+            if (\is_resource($stdout)) {
+                \fclose($stdout);
+            }
+            if (\is_resource($stderr)) {
+                \fclose($stderr);
+            }
+            @\unlink($notExecutable);
+        }
+    }
 }

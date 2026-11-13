@@ -121,6 +121,18 @@ final class RecordCommand implements DocumentedCommand
         $rows = $opts['rows'];
         $ctty = $opts['ctty'];
         $cmd  = $opts['cmd'];
+        // Finding 002: the shim's pcntl_exec carries execve semantics — a
+        // bare argv[0] like `vim` (every README example) never gets a PATH
+        // search and dies errno-2 *inside* the pty, recording the warning
+        // text as if it were program output. Resolve through PATH here, at
+        // argv-parse time, so the documented shape works and an unknown
+        // name fails loud before any terminal is opened.
+        $resolved = self::resolveExecutable($cmd[0]);
+        if ($resolved === null) {
+            \fwrite($stderr, "candy-vcr record: command not found: {$cmd[0]}\n");
+            return 2;
+        }
+        $cmd[0] = $resolved;
         $captureEnv = $opts['captureEnv'];
         $envRegex   = $opts['envRegex'];
         $captureAll = $opts['captureAll'];
@@ -424,6 +436,55 @@ final class RecordCommand implements DocumentedCommand
             $shell = self::FALLBACK_SHELL;
         }
         return [$shell, '-l'];
+    }
+
+    /**
+     * Turn a command name into a spawnable absolute path (finding 002).
+     *
+     * An argv[0] that names a path (contains a separator, or a Windows
+     * drive prefix) must simply exist and be executable; a bare name is
+     * searched across `PATH` exactly the way a shell would, honouring
+     * `PATHEXT` on Windows. Returns null when nothing resolves, so the
+     * caller can fail loud at argv-parse time instead of letting
+     * `pcntl_exec` return errno-2 down inside the pty.
+     */
+    private static function resolveExecutable(string $bin): ?string
+    {
+        if ($bin === '') {
+            return null;
+        }
+        if (\str_contains($bin, '/') || \str_contains($bin, '\\') || \preg_match('/^[A-Za-z]:/', $bin) === 1) {
+            return \is_file($bin) && \is_executable($bin) ? $bin : null;
+        }
+
+        $path = (string) (\getenv('PATH') ?: '');
+        if ($path === '') {
+            return null;
+        }
+
+        $extensions = [''];
+        if (\DIRECTORY_SEPARATOR === '\\') {
+            $pathExt = (string) (\getenv('PATHEXT') ?: '.COM;.EXE;.BAT;.CMD');
+            foreach (\explode(PATH_SEPARATOR, $pathExt) as $ext) {
+                if ($ext !== '') {
+                    $extensions[] = $ext;
+                }
+            }
+        }
+
+        foreach (\explode(PATH_SEPARATOR, $path) as $dir) {
+            if ($dir === '') {
+                continue;
+            }
+            foreach ($extensions as $ext) {
+                $candidate = $dir . \DIRECTORY_SEPARATOR . $bin . $ext;
+                if (\is_file($candidate) && \is_executable($candidate)) {
+                    return $candidate;
+                }
+            }
+        }
+
+        return null;
     }
 
     /**
