@@ -13,8 +13,8 @@ namespace SugarCraft\Image\Support;
  * generators. This bridge runs the producer inside a {@see \Fiber}: each
  * `$write` suspends and hands its bytes out as the next yielded chunk, so the
  * producer only advances as far as the consumer pumps — the callback never
- * "collects then replays", which would reintroduce the whole-buffer freeze
- * Exists to remove.
+ * "collects then replays", which would reintroduce exactly the whole-buffer
+ * freeze this bridge exists to remove.
  *
  * Abandonment semantics: dropping the generator before exhaustion discards
  * the fiber's stack. Objects held only there (the GD canvas inside the
