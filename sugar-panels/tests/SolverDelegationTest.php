@@ -56,7 +56,7 @@ final class SolverDelegationTest extends TestCase
         $panels = SugarPanels::new();
         $m = new \ReflectionMethod(SugarPanels::class, 'distribute');
         $m->setAccessible(true);
-        return $m->invoke($panels, $available, $weights, \array_sum($weights), $spacing, $borderPad);
+        return $m->invoke($panels, $available, $weights, $spacing, $borderPad);
     }
 
     /**

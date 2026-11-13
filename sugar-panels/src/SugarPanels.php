@@ -513,8 +513,7 @@ final class SugarPanels
             $offsets = $this->distributeFlex($availableW, $bases, $flexes, $sp, $b);
         } else {
             $weights = \array_map(fn(Node $c) => $c->minWidth > 0 ? $c->minWidth : 1, $children);
-            $totalWeight = \array_sum($weights);
-            $offsets = $this->distribute($availableW, $weights, $totalWeight, $sp, $b);
+            $offsets = $this->distribute($availableW, $weights, $sp, $b);
         }
 
         // Render each child. distribute() already bakes the border pad into
@@ -600,8 +599,7 @@ final class SugarPanels
             $offsets = $this->distributeFlex($availableH, $bases, $flexes, $sp, $b);
         } else {
             $weights = \array_map(fn(Node $c) => $c->minHeight > 0 ? $c->minHeight : 1, $children);
-            $totalWeight = \array_sum($weights);
-            $offsets = $this->distribute($availableH, $weights, $totalWeight, $sp, $b);
+            $offsets = $this->distribute($availableH, $weights, $sp, $b);
         }
 
         for ($i = 0; $i < $n; $i++) {
@@ -1351,16 +1349,21 @@ final class SugarPanels
      * @param list<int> $weights
      * @return list<int> Starting offsets for each child
      */
-    private function distribute(int $available, array $weights, int $totalWeight, int $spacing, int $borderPad): array
+    private function distribute(int $available, array $weights, int $spacing, int $borderPad): array
     {
         $n = \count($weights);
         $contentSpan = $available - $spacing * \max(0, $n - 1);
 
-        // All-zero weights → equal split (the old division-by-zero guard). The
-        // min-share floor applies the identical guard internally, but doing it
+        // All-zero weights: fall back to equal split (legacy parity, pinned).
+        // This is the ONLY consumer of the weight total — the guard is derived
+        // from $weights directly (rather than a caller-passed sum that read like
+        // general normalization) so its narrow purpose is obvious and a future
+        // reader cannot mistake it for dead code: Constraint::fill(0) would map
+        // every child to a zero-weight fill and break the byte-for-byte sweep.
+        // The min-share floor applies the identical guard internally; doing it
         // here keeps the mapped Fill weights faithful to the pre-migration
-        // arithmetic; in practice weights are minWidth/minHeight-derived (>= 1).
-        if ($totalWeight === 0) {
+        // arithmetic. In practice weights are minWidth/minHeight-derived (>= 1).
+        if (\array_sum($weights) === 0) {
             $weights = \array_fill(0, $n, 1);
         }
 
