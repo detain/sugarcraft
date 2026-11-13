@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Support;
 
+use React\EventLoop\LoopInterface;
+
 /**
  * Bounded shutdown for a `proc_open()` child: SIGTERM, a polled grace period,
  * then signal 9 — and only then `proc_close()`.
@@ -195,6 +197,102 @@ final class ProcessReaper
         // caller's reap is then the least-bad option left (see the class
         // docblock for why no watchdog covers this).
         return self::waitBounded($isGone, $killGrace);
+    }
+
+    /**
+     * The same ladder as {@see escalate()}, driven by loop timers instead of
+     * `usleep()`: the TERM and KILL waits each tick on `$loop` at the poll
+     * cadence, so a wedged child costs the loop NOTHING while it waits. The
+     * gateway recycles hosts on its own event loop; the sync ladder would
+     * freeze every other connection's frames for up to both budgets. CLI call
+     * sites keep the sync variant — they have no loop to yield to.
+     *
+     * Same rung order, same literal-9 doctrine. `$done` receives whether the
+     * child is gone by the end of the budgets.
+     *
+     * @param callable(int):mixed $signal
+     * @param callable():bool $isGone
+     * @param callable(bool):void|null $done
+     * @param callable():void|null $onEscalate
+     */
+    public static function escalateAsync(
+        LoopInterface $loop,
+        callable $signal,
+        callable $isGone,
+        ?callable $done = null,
+        float $terminateGrace = self::TERMINATE_GRACE_SECONDS,
+        float $killGrace = self::KILL_GRACE_SECONDS,
+        ?callable $onEscalate = null,
+    ): void {
+        $finish = static function (bool $gone) use ($done): void {
+            if ($done !== null) {
+                $done($gone);
+            }
+        };
+
+        $signal(15);
+        $killed = false;
+        $deadline = \microtime(true) + $terminateGrace;
+        $timer = null;
+        $timer = $loop->addPeriodicTimer(self::POLL_INTERVAL_US / 1_000_000, static function () use (&$timer, &$killed, &$deadline, $loop, $signal, $isGone, $finish, $killGrace, $onEscalate): void {
+            if ($isGone()) {
+                $loop->cancelTimer($timer);
+                $finish(true);
+
+                return;
+            }
+            if (\microtime(true) < $deadline) {
+                return;
+            }
+            if ($killed) {
+                $loop->cancelTimer($timer);
+                $finish($isGone());
+
+                return;
+            }
+            if ($onEscalate !== null) {
+                $onEscalate();
+            }
+            $signal(9);
+            $killed = true;
+            $deadline = \microtime(true) + $killGrace;
+        });
+    }
+
+    /**
+     * Async twin of {@see terminateAndClose()}: ladder on loop timers, then
+     * `proc_close()` once the child is gone (or the budgets ran out — the
+     * least-bad reap, as in the sync path). `$then` gets the exit status.
+     *
+     * @param callable(?int):void|null $then
+     */
+    public static function terminateAndCloseAsync(LoopInterface $loop, mixed $process, ?int $groupPid = null, ?callable $then = null): void
+    {
+        $finish = static function (?int $status) use ($then): void {
+            if ($then !== null) {
+                $then($status);
+            }
+        };
+        if (!\is_resource($process)) {
+            $finish(null);
+
+            return;
+        }
+        if (!self::isRunning($process)) {
+            $finish(\proc_close($process));
+
+            return;
+        }
+        self::escalateAsync(
+            $loop,
+            static function (int $signal) use ($process, $groupPid): void {
+                self::signal($process, $groupPid, $signal);
+            },
+            static fn (): bool => !self::isRunning($process),
+            static function (bool $gone) use ($process, $finish): void {
+                $finish(\is_resource($process) ? \proc_close($process) : null);
+            },
+        );
     }
 
     /**

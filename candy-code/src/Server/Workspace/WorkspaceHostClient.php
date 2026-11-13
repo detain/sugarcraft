@@ -294,19 +294,28 @@ final class WorkspaceHostClient
      * stops on either), then the TERM→KILL reap ladder over its process
      * group, so its turn children go with it. Idempotent.
      */
-    public function stop(string $reason = 'stopped by the gateway'): void
+    public function stop(string $reason = 'stopped by the gateway', ?LoopInterface $loop = null): void
     {
         $this->rpc->close($reason);
-        $this->exited($reason);
+        $this->exited($reason, $loop);
     }
 
-    private function exited(string $reason): void
+    /**
+     * @param LoopInterface|null $loop when given, the reap ladder runs on loop
+     *        timers (a wedged child must not freeze the gateway's loop clock);
+     *        null keeps the blocking ladder for the CLI/destructor seats.
+     */
+    private function exited(string $reason, ?LoopInterface $loop = null): void
     {
         if (\is_resource($this->stdin)) {
             @\fclose($this->stdin);
         }
         if (\is_resource($this->process)) {
-            ProcessReaper::terminateAndClose($this->process, $this->groupPid);
+            if ($loop !== null) {
+                ProcessReaper::terminateAndCloseAsync($loop, $this->process, $this->groupPid);
+            } else {
+                ProcessReaper::terminateAndClose($this->process, $this->groupPid);
+            }
         }
         $this->process = null;
         if (!$this->running) {

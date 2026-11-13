@@ -639,7 +639,7 @@ final class Gateway implements MessageHandler
     {
         $host = $this->hosts[$root] ?? null;
         if ($host !== null) {
-            $host->stop($reason);
+            $host->stop($reason, $this->loop);
             $this->lost($root, $host);
         }
     }
