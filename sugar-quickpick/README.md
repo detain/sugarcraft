@@ -41,6 +41,17 @@ composer require sugarcraft/sugar-quickpick
   re-probes only when some width-affecting mutation (`setPrompt`,
   `withItems`, `type()`, …) drops the memoized computed width — force a
   re-measure by applying one, or build a fresh instance.
+- **A UTF-8 capable terminal** — the built-in chrome draws U+2195 `↕`
+  (overflow marker), U+2500 `─` (separator), U+258F `▏` (filter caret) and
+  U+22EF `⋯` (filter-cap overflow); a legacy non-UTF-8 terminal shows them
+  as mojibake. Host-substitutable vs fixed: the cursor bullet (`● `) and
+  the ordinal prefix are your `setItemFormatter`'s bytes — pick any ASCII
+  if you must — while the separator, caret and marker live in the lang
+  catalogue (`Lang::t('filter_caret')`, `'showing_range'`, …), measured
+  with `Width::of()` cell maths, and are not re-flowed for narrower
+  locales by the frame arithmetic. The shipped `en` catalogue is the
+  default chrome text: adding a locale file changes the chrome rows only,
+  never the geometry.
 
 ## Quick Start — string items
 

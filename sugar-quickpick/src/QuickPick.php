@@ -789,7 +789,12 @@ final class QuickPick
      */
     private function filterChrome(): string
     {
-        return $this->filterAtCap() ? '▏⋯' : '▏';
+        // S-15 (-013): the caret and the overflow indicator live in the lang
+        // catalogue as one glyph-substitutable unit. This is their single
+        // source — the header clip and the width maths both measure what
+        // this returns, so a locale that swaps the caret re-flows correctly
+        // for free.
+        return $this->filterAtCap() ? Lang::t('filter_overflow') : Lang::t('filter_caret');
     }
 
     /**
@@ -1063,7 +1068,7 @@ final class QuickPick
 
         if ($markerNeeded) {
             $lines[] = Width::padRight(
-                \sprintf('  ↕ showing %d-%d of %d', $top + 1, $top + $maxShow, $count),
+                Lang::t('showing_range', ['from' => $top + 1, 'to' => $top + $maxShow, 'total' => $count]),
                 $winWidth
             );
         } elseif ($count === 0) {
@@ -1072,16 +1077,15 @@ final class QuickPick
             // -028 an empty corpus with no filter active prints 'no
             // items' (nothing to pick); a filter that matched nothing
             // prints 'no matches' (the filter is the problem).
-            $lines[] = Width::padRight($filter !== '' ? '  no matches' : '  no items', $winWidth);
+            $lines[] = Width::padRight($filter !== '' ? Lang::t('no_matches') : Lang::t('no_items'), $winWidth);
         }
 
         // -032: the anchor rule is documented, but a silent drop still reads
         // as "the search is broken". Say what the bias hid — on a drop, not
-        // on a rule. Chrome string hardcoded at this single seat; the S-15
-        // Lang pass wraps every chrome row here together.
+        // on a rule. Catalogue-wrapped with the rest of the chrome rows (S-15).
         if ($this->anchorDropped > 0) {
             $lines[] = Width::padRight(
-                \sprintf('  %d hidden by anchor bias', $this->anchorDropped),
+                Lang::t('anchor_hidden', ['count' => $this->anchorDropped]),
                 $winWidth
             );
         }
