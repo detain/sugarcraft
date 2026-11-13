@@ -43,6 +43,15 @@ final class RefusalLangStabilityTest extends TestCase
 {
     use PinsEnglishLocaleTrait;
 
+    protected function setUp(): void
+    {
+        // NonInteractive::$askWasUnattended is process-static and consumed by
+        // the first refusalFrom() read: a headless-prompt test earlier in the
+        // same process that never reads it back would hand the German leg an
+        // `unattended` key the English leg no longer sees. Drain it first.
+        (new ReflectionMethod(NonInteractive::class, 'takeUnattendedAsk'))->invoke(null);
+    }
+
     /**
      * Runs one callable under German and under English and hands back both
      * results. The trait has already pinned `en`; the explicit setLocale in
