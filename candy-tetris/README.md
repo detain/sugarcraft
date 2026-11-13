@@ -13,7 +13,7 @@
 
 ![demo](.vhs/play.gif)
 
-Tetris built on the SugarCraft stack. SugarCraft runtime, SugarStyle for the rounded borders and per-piece colours, uniform-shuffled 7-bag (with an injectable source for deterministic tests), ghost piece, hard drop, hold, level-driven gravity ramp, NES-style base scoring with Guideline bonuses (T-Spin, back-to-back, combo, perfect clear).
+Tetris built on the SugarCraft stack: SugarCraft runtime, SugarStyle for the rounded borders and per-piece colours, a uniform-shuffled 7-bag (with an injectable source for deterministic tests), ghost piece, hard drop, hold, and a level-driven gravity ramp. Scoring is NES-style at its base; the Guideline bonuses ride on top — T-Spin, back-to-back, combo, and perfect clear.
 
 ## Run it
 
@@ -73,8 +73,8 @@ The printed commit is the tested SHA the build sealed; compare it with
 
 The interface is localized: sixteen catalogues ship (ar, cs, de, en, es,
 fr, it, ja, ko, nl, pl, pt, pt-br, ru, tr, zh-cn) and the launcher picks
-one from `$LC_ALL` / `$LANG` at start-up; an unset or unknown environment
-falls back to English.
+one from `$LC_ALL`, then `$LC_MESSAGES`, then `$LANG` at start-up — an empty name or
+`C`/`POSIX` does not count; an unset or unknown environment falls back to English.
 
 `--version` short-circuits wherever it appears in the argv — even alongside a
 bogus flag — and exits 0. Any *other* unrecognised flag is refused with a usage
@@ -184,6 +184,9 @@ The edges, honestly:
 
 ### First run
 
+Two nouns this section leans on: the **record** is the persistent score
+file (`scores.json`) — the best score, the games settled, and the mark of
+this first-run card having been seen; the **on-ramp** is that card itself.
 A solo launch whose record has never seen the on-ramp opens on a card over
 the fresh board: what to do (clear lines), what loses (reaching the top),
 which keys start play, and the versus affordance (`candy-tetris -v`). The
