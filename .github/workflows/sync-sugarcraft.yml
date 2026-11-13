@@ -196,6 +196,9 @@ jobs:
           # Packagist (new lib) just logs a non-200 and the sync continues.
           PACKAGIST_USERNAME: detain
           PACKAGIST_TOKEN: ${{ secrets.PACKAGIST_API_TOKEN }}
+          # CS-02: release-tag propagation consults the synced commit for
+          # <lib>/v* tags (see push_one below).
+          HEAD_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
 
@@ -379,6 +382,24 @@ jobs:
               fi
             fi
             retry_git_push git push --force "$push_url" "$sha:refs/heads/master"
+            # CS-02 (candy-starter-002): a <lib>/v* release tag riding the
+            # synced commit propagates to the split repo so Packagist can
+            # see a stable version channel — re-anchored onto the split SHA,
+            # because the monorepo tag object names a monorepo commit the
+            # split repo has never seen. Release recipe (the tag MINT is an
+            # owner action, OG-2 — and only ever cut one once the
+            # release-app-phar type:project green-skip is in place, else the
+            # tag detonates a red phar-release run): tag the monorepo tip
+            # candy-starter/vX.Y.Z, push master, and this sync carries the
+            # tag to refs/tags + the already-drained Packagist ping re-crawls.
+            if [ -n "${HEAD_SHA:-}" ]; then
+              while IFS= read -r rel_tag; do
+                [ -n "$rel_tag" ] || continue
+                echo "! $lib: propagating release tag $rel_tag onto split SHA $sha"
+                git tag -f "$rel_tag" "$sha" >/dev/null 2>&1
+                retry_git_push git push --force "$push_url" "refs/tags/$rel_tag"
+              done < <(git tag --points-at "$HEAD_SHA" --list "$lib/v*")
+            fi
             : >"$pushdir/$lib.ok"
             echo "✓ synced $lib ($sha)"
           }

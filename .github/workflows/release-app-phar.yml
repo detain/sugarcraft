@@ -105,6 +105,20 @@ jobs:
             echo "proceed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          if [ "$app" = 'candy-starter' ] \
+             || [ "$(php -r '$j = json_decode(file_get_contents($argv[1]), true); echo $j["type"] ?? "";' "$app/composer.json" 2>/dev/null || true)" = 'project' ]; then
+            # CS-02 (candy-starter-002): a create-project template is not a
+            # phar — its release vehicle is the tagged dist Composer itself
+            # downloads. Before this skip existed, minting the first
+            # candy-starter/v* tag was guaranteed to detonate the build-phar
+            # door below (a template has no tools/build-phar.php BY DESIGN),
+            # which is exactly why no tag ever shipped. type:project answers
+            # green for every template-shaped package; the name arm keeps the
+            # intent explicit for the fleet's flagship skeleton.
+            echo "::notice::$app is a create-project template (composer type: project) — it releases via tagged dist, not phar; skipping green"
+            echo "proceed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           if [ ! -f "$app/tools/build-phar.php" ]; then
             # A version tag on an app without build plumbing is a mistake
             # worth a red X: silently skipping would let release intent rot
