@@ -116,8 +116,10 @@ final class Table
     // Per-cell style callback: (int $row, int $col, string $value): Style|string
     // $col is the 0-based column INDEX into Columns() — not the column key
     // string. Hidden columns keep their index (they are skipped, not renumbered).
-    /** @var callable|null */
-    private $styleFunc = null;
+    // Stored as a Closure (audit ST-48, finding 057): `callable` is not a
+    // legal property type, and the fromCallable wrap at the single ingress
+    // pins the slot's shape for static analysis.
+    private ?\Closure $styleFunc = null;
 
     // Border chars
     private string $borderTopLeft  = '┌';
@@ -681,7 +683,7 @@ final class Table
     public function withStyleFunc(?callable $fn): self
     {
         $clone = clone $this;
-        $clone->styleFunc = $fn;
+        $clone->styleFunc = $fn === null ? null : \Closure::fromCallable($fn);
         return $clone;
     }
 

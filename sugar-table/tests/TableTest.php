@@ -297,6 +297,21 @@ final class TableTest extends TestCase
         $this->assertTrue($t->Rows()[0]->zebra);
     }
 
+    /**
+     * ST-48 (finding 057): the styleFunc slot stores a Closure — the only
+     * legal property shape for the callable contract, wrapped at ingress.
+     */
+    public function testStyleFuncStorageIsClosure(): void
+    {
+        $fn = static fn (int $row): string => '';
+        $t = $this->makeTable()->withStyleFunc($fn);
+        $stored = (new \ReflectionProperty(Table::class, 'styleFunc'))->getValue($t);
+        $this->assertInstanceOf(\Closure::class, $stored);
+
+        $cleared = (new \ReflectionProperty(Table::class, 'styleFunc'))->getValue($t->withStyleFunc(null));
+        $this->assertNull($cleared);
+    }
+
     public function testClearSort(): void
     {
         $t = $this->makeTable()->SortBy('name', false)->ClearSort();
