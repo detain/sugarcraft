@@ -69,7 +69,7 @@ final class SecretHygieneTest extends TestCase
             $blob = \serialize($transport);
             $this->fail('serialize() must refuse a credential-holding transport, produced: ' . $blob);
         } catch (\RuntimeException $e) {
-            $this->assertStringContainsString('cannot be serialized', $e->getMessage());
+            $this->assertStringContainsString('cannot be serialised', $e->getMessage());
         }
     }
 
@@ -80,7 +80,7 @@ final class SecretHygieneTest extends TestCase
             \serialize($transport);
             $this->fail('serialize() must refuse a credential-holding transport');
         } catch (\RuntimeException $e) {
-            $this->assertStringContainsString('cannot be serialized', $e->getMessage());
+            $this->assertStringContainsString('cannot be serialised', $e->getMessage());
         }
     }
 
@@ -100,7 +100,7 @@ final class SecretHygieneTest extends TestCase
             eval('$resurrected = ' . $export . ';');
             $this->fail('var_export() resurrection must throw');
         } catch (\RuntimeException $e) {
-            $this->assertStringContainsString('cannot be serialized', $e->getMessage());
+            $this->assertStringContainsString('cannot be serialised', $e->getMessage());
         }
     }
 

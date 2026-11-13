@@ -984,7 +984,7 @@ final class BinDispatchTest extends TestCase
     {
         // POP_KERNEL_PANIC maps to a CANDY_MAIL_KERNEL_PANIC nothing ever
         // reads; the old code printed a warning inventing a migration target.
-        // Silence is the honest behavior for an inert import.
+        // Silence is the honest behaviour for an inert import.
         $result = $this->runCli(['--version'], extraEnv: ['POP_KERNEL_PANIC' => '1']);
 
         $this->assertSame(0, $result['status']);

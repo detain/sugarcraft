@@ -71,7 +71,7 @@ final class Email
         // bytes: NUL/BEL/etc. inside text survive into wire bytes that
         // downstream filters and terminals choke on.
         // Tab and newlines are kept; CR exists only to form CRLF, which the
-        // renderer normalizes anyway.
+        // renderer normalises anyway.
         $this->body         = self::stripStrayControl($body);
         $this->cc           = $this->sanitizeAddressList($cc);
         $this->bcc          = $this->sanitizeAddressList($bcc);

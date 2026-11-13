@@ -130,7 +130,7 @@ final class Attachment
      *
      * Every public factory reads eagerly, so `$content` is normally already
      * set; the path re-read below is defense-in-depth for a future factory
-     * that defers the read, not a behavior reachable through today's API.
+     * that defers the read, not a behaviour reachable through today's API.
      *
      * @throws \RuntimeException if the path is set but the file cannot be read
      */
@@ -301,7 +301,7 @@ final class Attachment
     /**
      * Normalise a path to native filesystem form or refuse it (CM-50).
      *
-     * A wrapper URL is not a file: phar:// triggers UNSERIALIZATION OF THE
+     * A wrapper URL is not a file: phar:// triggers PHP's unserialize() ON THE
      * ARCHIVE'S METADATA the moment any reader touches it (mime_content_type,
      * file_exists, filesize all do) — a gadget surface no mail send needs,
      * and data:// would silently feed attacker-chosen bytes through the

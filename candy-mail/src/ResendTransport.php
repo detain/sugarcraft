@@ -133,7 +133,7 @@ final class ResendTransport implements Transport
     }
 
     /**
-     * Refuse serialization outright — the API key would ride the wire
+     * Refuse serialisation outright — the API key would ride the wire
      * of any cache/session that stored this transport. Build it where used.
      *
      * @throws \RuntimeException always

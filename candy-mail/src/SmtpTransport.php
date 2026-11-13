@@ -273,7 +273,7 @@ final class SmtpTransport implements Transport
     }
 
     /**
-     * Refuse serialization outright: a serialized transport is a
+     * Refuse serialisation outright: a serialised transport is a
      * plaintext credential on disk or in a cache, and unserialize() of it
      * resurrected a live credentialed sender. Transports are cheap to build
      * where they are used; there is nothing worth persisting in one.

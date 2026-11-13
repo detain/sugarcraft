@@ -31,7 +31,7 @@ return [
     'smtp.auth_unavailable' => 'The SMTP server {host} did not advertise AUTH; refusing to relay unauthenticated because credentials are configured',
     'smtp.response_too_long' => 'SMTP server response exceeded the size limit',
     'smtp.response_timeout' => 'SMTP server response exceeded the time budget',
-    'transport.not_serializable' => 'A transport holding credentials cannot be serialized or re-imported; construct it where it is used',
+    'transport.not_serializable' => 'A transport holding credentials cannot be serialised or re-imported; construct it where it is used',
 
     // Email.php
     'email.crlf_in_address' => 'CRLF injection detected in email address',
