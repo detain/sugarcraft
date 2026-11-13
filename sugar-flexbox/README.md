@@ -187,7 +187,7 @@ $lines = implode("\n", array_map(
     range(1, 50),
 )) . "\n";
 
-$viewport = Viewport::withContent($lines, 80, 24);
+$viewport = Viewport::fromContent($lines, 80, 24);
 $viewport = $viewport->showScrollbar(true);
 
 // Viewport is a plain immutable component, not a Core\Model: drive it from
@@ -299,6 +299,7 @@ sugar-flexbox v2.0.0. Migrating is a name swap with no behavior change:
 | `Flexbox` | `Viewport` | `withScrollbar()` | `showScrollbar()` |
 | `Flexbox` | `Viewport` | `setWidth()` | `withSize()` |
 | `Flexbox` | `Viewport` | `setHeight()` | `withSize()` |
+| `Flexbox` | `Viewport` | `withContent()` | `fromContent()` |
 | `Flexbox\Table` | `Table` | `addColumn()` | `withColumn()` |
 | `Flexbox\Table` | `Table` | `addRow()` | `withRow()` |
 | `Flexbox\Table` | `Table` | `sortBy()` | `withSort()` |

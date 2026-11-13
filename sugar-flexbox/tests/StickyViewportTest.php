@@ -14,7 +14,7 @@ final class StickyViewportTest extends TestCase
 
     public function testWithStickyHeaderRejectsNegative(): void
     {
-        $vp = Viewport::withContent("one\ntwo\nthree", 20, 4)->withStickyHeader(-5);
+        $vp = Viewport::fromContent("one\ntwo\nthree", 20, 4)->withStickyHeader(-5);
         // Negative is clamped to 0; falls through to normal rendering.
         $view = $vp->view();
         $this->assertStringContainsString('one', $view);
@@ -24,7 +24,7 @@ final class StickyViewportTest extends TestCase
 
     public function testWithStickyHeaderZeroIsNoOp(): void
     {
-        $vp = Viewport::withContent("line1\nline2\nline3", 20, 3)->withStickyHeader(0);
+        $vp = Viewport::fromContent("line1\nline2\nline3", 20, 3)->withStickyHeader(0);
         $this->assertStringContainsString('line1', $vp->view());
     }
 
@@ -32,7 +32,7 @@ final class StickyViewportTest extends TestCase
 
     public function testWithStickyFooterRejectsNegative(): void
     {
-        $vp = Viewport::withContent("one\ntwo\nthree", 20, 4)->withStickyFooter(-5);
+        $vp = Viewport::fromContent("one\ntwo\nthree", 20, 4)->withStickyFooter(-5);
         // Negative is clamped to 0; falls through to normal rendering.
         $view = $vp->view();
         $this->assertStringContainsString('one', $view);
@@ -41,7 +41,7 @@ final class StickyViewportTest extends TestCase
 
     public function testWithStickyFooterZeroIsNoOp(): void
     {
-        $vp = Viewport::withContent("line1\nline2\nline3", 20, 3)->withStickyFooter(0);
+        $vp = Viewport::fromContent("line1\nline2\nline3", 20, 3)->withStickyFooter(0);
         $this->assertStringContainsString('line3', $vp->view());
     }
 
@@ -52,7 +52,7 @@ final class StickyViewportTest extends TestCase
         // Use content that exceeds viewport height so scrolling is possible.
         $content = "header1\nheader2\nscrollable1\nscrollable2\nscrollable3\nfooter1";
         // stickyHeader=2, stickyFooter=1, viewport height=6, content has 6 lines
-        $vp = Viewport::withContent($content, 20, 6)
+        $vp = Viewport::fromContent($content, 20, 6)
             ->withStickyHeader(2)
             ->withStickyFooter(1)
             ->setYOffset(0);
@@ -75,7 +75,7 @@ final class StickyViewportTest extends TestCase
         $content = implode("\n", $lines);
 
         // stickyHeader=2, stickyFooter=1, viewport height=6
-        $vp = Viewport::withContent($content, 20, 50)
+        $vp = Viewport::fromContent($content, 20, 50)
             ->withStickyHeader(2)
             ->withStickyFooter(1);
 
@@ -94,7 +94,7 @@ final class StickyViewportTest extends TestCase
     {
         $content = "header1\nmiddle1\nmiddle2\nmiddle3\nmiddle4\nfooter1";
         // stickyHeader=1, stickyFooter=1, viewport height=6, content has 6 lines
-        $vp = Viewport::withContent($content, 20, 6)
+        $vp = Viewport::fromContent($content, 20, 6)
             ->withStickyHeader(1)
             ->withStickyFooter(1)
             ->setYOffset(0);
@@ -115,7 +115,7 @@ final class StickyViewportTest extends TestCase
         }
         $content = implode("\n", $lines);
 
-        $vp = Viewport::withContent($content, 20, 50)
+        $vp = Viewport::fromContent($content, 20, 50)
             ->withStickyHeader(1)
             ->withStickyFooter(1);
 
@@ -133,7 +133,7 @@ final class StickyViewportTest extends TestCase
     public function testStickyHeaderAndFooterBothRendered(): void
     {
         $content = "H1\nH2\nscroll1\nscroll2\nscroll3\nF1";
-        $vp = Viewport::withContent($content, 20, 6)
+        $vp = Viewport::fromContent($content, 20, 6)
             ->withStickyHeader(2)
             ->withStickyFooter(1)
             ->setYOffset(0);
@@ -151,7 +151,7 @@ final class StickyViewportTest extends TestCase
     public function testStickyHeaderAndFooterWithScrollOffset(): void
     {
         $content = "H1\nH2\nM1\nM2\nM3\nF1";
-        $vp = Viewport::withContent($content, 20, 6)
+        $vp = Viewport::fromContent($content, 20, 6)
             ->withStickyHeader(2)
             ->withStickyFooter(1);
 
@@ -168,7 +168,7 @@ final class StickyViewportTest extends TestCase
 
     public function testViewFallsThroughToInnerWhenNoStickyRegions(): void
     {
-        $vp = Viewport::withContent("line1\nline2\nline3", 20, 3)
+        $vp = Viewport::fromContent("line1\nline2\nline3", 20, 3)
             ->withStickyHeader(0)
             ->withStickyFooter(0);
 
@@ -180,14 +180,14 @@ final class StickyViewportTest extends TestCase
 
     public function testStickyHeaderReturnsNewInstance(): void
     {
-        $a = Viewport::withContent("line1\nline2", 20, 3);
+        $a = Viewport::fromContent("line1\nline2", 20, 3);
         $b = $a->withStickyHeader(1);
         $this->assertNotSame($a, $b);
     }
 
     public function testStickyFooterReturnsNewInstance(): void
     {
-        $a = Viewport::withContent("line1\nline2", 20, 3);
+        $a = Viewport::fromContent("line1\nline2", 20, 3);
         $b = $a->withStickyFooter(1);
         $this->assertNotSame($a, $b);
     }
@@ -202,7 +202,7 @@ final class StickyViewportTest extends TestCase
         }
         $content = implode("\n", $lines);
 
-        $vp = Viewport::withContent($content, 20, 10)
+        $vp = Viewport::fromContent($content, 20, 10)
             ->withStickyHeader(2)
             ->withStickyFooter(1);
 
@@ -222,7 +222,7 @@ final class StickyViewportTest extends TestCase
         }
         $content = implode("\n", $lines);
 
-        $vp = Viewport::withContent($content, 20, 10)
+        $vp = Viewport::fromContent($content, 20, 10)
             ->withStickyHeader(1)
             ->withStickyFooter(1);
 
@@ -238,7 +238,7 @@ final class StickyViewportTest extends TestCase
     public function testStickyHeaderClampedToViewportHeight(): void
     {
         // stickyHeader=5, stickyFooter=1, height=6 → header clamped to 5 (6-1=5)
-        $vp = Viewport::withContent("1\n2\n3\n4\n5\n6", 20, 6)
+        $vp = Viewport::fromContent("1\n2\n3\n4\n5\n6", 20, 6)
             ->withStickyHeader(5)
             ->withStickyFooter(1);
 
@@ -250,7 +250,7 @@ final class StickyViewportTest extends TestCase
     public function testStickyFooterClampedToViewportHeight(): void
     {
         // stickyHeader=1, stickyFooter=5, height=6 → footer clamped to 5 (6-1=5)
-        $vp = Viewport::withContent("1\n2\n3\n4\n5\n6", 20, 6)
+        $vp = Viewport::fromContent("1\n2\n3\n4\n5\n6", 20, 6)
             ->withStickyHeader(1)
             ->withStickyFooter(5);
 
@@ -268,7 +268,7 @@ final class StickyViewportTest extends TestCase
      */
     public function testStickyWithScrollbarNeverExceedsRequestedWidth(): void
     {
-        $vp = Viewport::withContent(\implode("\n", \range(1, 50)), 20, 6)
+        $vp = Viewport::fromContent(\implode("\n", \range(1, 50)), 20, 6)
             ->withStickyHeader(1)
             ->withVerticalScrollbar(\SugarCraft\Flexbox\Scrollbar::vertical());
 
@@ -284,7 +284,7 @@ final class StickyViewportTest extends TestCase
         // With sticky regions on a one-line document, the old footer clamp
         // ignored the document length and repeated the same line as header
         // AND footer — the screen reader read it twice.
-        $v = Viewport::withContent('only line', 20, 6)
+        $v = Viewport::fromContent('only line', 20, 6)
             ->withStickyHeader(1)
             ->withStickyFooter(1);
         $view = $v->view();
@@ -302,7 +302,7 @@ final class StickyViewportTest extends TestCase
         // breaking the absolute claim in the feature list ("a row can never
         // appear in both regions"). The middle must stop at total - footer
         // and blank padding fills the rest.
-        $v = Viewport::withContent("l1\nl2\nl3", 20, 10)
+        $v = Viewport::fromContent("l1\nl2\nl3", 20, 10)
             ->withStickyHeader(2)
             ->withStickyFooter(2);
         $view = $v->view();
@@ -321,7 +321,7 @@ final class StickyViewportTest extends TestCase
         // Same defect without any header: 4 lines in a 5-row frame with
         // footer 3 let the 2-row middle window slice rows 0..1 while the
         // footer re-rendered rows 1..3 — l2 appeared twice.
-        $v = Viewport::withContent("l1\nl2\nl3\nl4", 20, 5)
+        $v = Viewport::fromContent("l1\nl2\nl3\nl4", 20, 5)
             ->withStickyFooter(3);
         $view = $v->view();
         $lines = explode("\n", $view);
@@ -338,7 +338,7 @@ final class StickyViewportTest extends TestCase
         // base view() clamps only when no scrollbar is shown and the
         // offset is zero); every painted row must be exactly `width` cells.
         $wide = str_repeat('0123456789', 10);
-        $v = Viewport::withContent($wide, 10, 3)->withStickyHeader(1);
+        $v = Viewport::fromContent($wide, 10, 3)->withStickyHeader(1);
         $lines = explode("\n", $v->view());
         foreach ($lines as $i => $line) {
             $this->assertSame(10, \SugarCraft\Core\Util\Width::string($line), "row $i");
@@ -355,7 +355,7 @@ final class StickyViewportTest extends TestCase
             static fn (int $n): string => 'line ' . $n,
             range(1, 20),
         ));
-        $v = Viewport::withContent($content, 10, 5)
+        $v = Viewport::fromContent($content, 10, 5)
             ->withStickyHeader(1)
             ->withScrollbar()
             ->withScrollbarRunes("\u{6771}", '│');
@@ -369,7 +369,7 @@ final class StickyViewportTest extends TestCase
     public function testWithSizeRejectsNegativeDimensions(): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        Viewport::withContent('x', 20, 5)->withSize(40, -1);
+        Viewport::fromContent('x', 20, 5)->withSize(40, -1);
     }
 
     // ---- withVerticalScrollbar accepts THIS lib's wrapper (shadowing trap) --
@@ -384,7 +384,7 @@ final class StickyViewportTest extends TestCase
             static fn (int $n): string => 'line ' . $n,
             range(1, 30),
         ));
-        $plain = Viewport::withContent($content, 20, 6)
+        $plain = Viewport::fromContent($content, 20, 6)
             ->withVerticalScrollbar(Scrollbar::vertical());
         $sticky = $plain->withStickyHeader(1);
 
@@ -411,7 +411,7 @@ final class StickyViewportTest extends TestCase
             range(1, 30),
         ));
         $bar = Scrollbar::vertical()->withThumbChar("\u{6771}");
-        $v = Viewport::withContent($content, 20, 6)
+        $v = Viewport::fromContent($content, 20, 6)
             ->withVerticalScrollbar($bar)
             ->withStickyHeader(1);
         $view = $v->view();
@@ -426,7 +426,7 @@ final class StickyViewportTest extends TestCase
         // The documented companion is sugar-flexbox's own Scrollbar; the
         // parameter historically type-hinted the shadowing widgets import,
         // so the honest example threw a TypeError at the delegate boundary.
-        $vp = Viewport::withContent(\implode("\n", \range(1, 20)), 20, 6)
+        $vp = Viewport::fromContent(\implode("\n", \range(1, 20)), 20, 6)
             ->withScrollbar()
             ->withVerticalScrollbar(Scrollbar::vertical());
 
@@ -456,7 +456,7 @@ final class StickyViewportTest extends TestCase
 
     public function testStickyOffsetZeroPaintsLeadingWindows(): void
     {
-        $vp = Viewport::withContent(self::horizontalContent(), 10, 4)
+        $vp = Viewport::fromContent(self::horizontalContent(), 10, 4)
             ->withStickyHeader(1)
             ->withStickyFooter(1);
         $this->assertSame(
@@ -469,7 +469,7 @@ final class StickyViewportTest extends TestCase
 
     public function testStickyMidOffsetDropsLeftCellsFromEveryRegion(): void
     {
-        $vp = Viewport::withContent(self::horizontalContent(), 10, 4)
+        $vp = Viewport::fromContent(self::horizontalContent(), 10, 4)
             ->withStickyHeader(1)
             ->withStickyFooter(1)
             ->setXOffset(9);
@@ -486,7 +486,7 @@ final class StickyViewportTest extends TestCase
 
     public function testStickyRightmostOffsetPinsTailWindowsAndQueryState(): void
     {
-        $vp = Viewport::withContent(self::horizontalContent(), 10, 4)
+        $vp = Viewport::fromContent(self::horizontalContent(), 10, 4)
             ->withStickyHeader(1)
             ->withStickyFooter(1)
             ->scrollRight(10);
@@ -503,7 +503,7 @@ final class StickyViewportTest extends TestCase
 
     public function testStickyQueryStateAgreesWithPaintedPixelsMidScroll(): void
     {
-        $mid = Viewport::withContent(self::horizontalContent(), 10, 4)
+        $mid = Viewport::fromContent(self::horizontalContent(), 10, 4)
             ->withStickyHeader(1)
             ->withStickyFooter(1)
             ->setXOffset(5);
@@ -517,7 +517,7 @@ final class StickyViewportTest extends TestCase
 
     public function testStickyHeaderOnlyAndFooterOnlySliceToo(): void
     {
-        $headerOnly = Viewport::withContent(self::horizontalContent(), 10, 4)
+        $headerOnly = Viewport::fromContent(self::horizontalContent(), 10, 4)
             ->withStickyHeader(1)
             ->setXOffset(9);
         $this->assertSame(
@@ -525,7 +525,7 @@ final class StickyViewportTest extends TestCase
             $headerOnly->view(),
         );
 
-        $footerOnly = Viewport::withContent(self::horizontalContent(), 10, 3)
+        $footerOnly = Viewport::fromContent(self::horizontalContent(), 10, 3)
             ->withStickyFooter(1)
             ->setXOffset(9);
         $this->assertSame(
@@ -538,7 +538,7 @@ final class StickyViewportTest extends TestCase
     {
         // The plain path answers through the delegate, which drops the left
         // cells without a right clamp; the sticky fix must not regress it.
-        $vp = Viewport::withContent('0123456789abcdefghij', 10, 1)->setXOffset(4);
+        $vp = Viewport::fromContent('0123456789abcdefghij', 10, 1)->setXOffset(4);
         $this->assertSame('456789abcdefghij', $vp->view());
     }
 }

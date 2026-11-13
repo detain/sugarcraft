@@ -19,7 +19,7 @@ final class ViewportDelegatorTest extends TestCase
     {
         // Create content that exceeds viewport width so horizontal scroll is possible
         $wideContent = str_repeat("Very long line content here\n", 10);
-        $vp = Viewport::withContent($wideContent, 20, 10);
+        $vp = Viewport::fromContent($wideContent, 20, 10);
         $vp2 = $vp->scrollLeft(2);
 
         $this->assertNotSame($vp, $vp2);
@@ -28,7 +28,7 @@ final class ViewportDelegatorTest extends TestCase
     public function testScrollRightReturnsNewInstance(): void
     {
         $wideContent = str_repeat("Very long line content here\n", 10);
-        $vp = Viewport::withContent($wideContent, 20, 10);
+        $vp = Viewport::fromContent($wideContent, 20, 10);
         $vp2 = $vp->scrollRight(3);
 
         $this->assertNotSame($vp, $vp2);
@@ -36,7 +36,7 @@ final class ViewportDelegatorTest extends TestCase
 
     public function testAtLeftmostReturnsTrueAtZeroOffset(): void
     {
-        $vp = Viewport::withContent(\implode("\n", \range(1, 50)), 20, 10);
+        $vp = Viewport::fromContent(\implode("\n", \range(1, 50)), 20, 10);
         $this->assertTrue($vp->atLeftmost());
     }
 
@@ -50,7 +50,7 @@ final class ViewportDelegatorTest extends TestCase
             static fn (int $n): string => str_repeat('x', 40) . $n,
             range(1, 5),
         ));
-        $vp = Viewport::withContent($content, 20, 5);
+        $vp = Viewport::fromContent($content, 20, 5);
         $this->assertFalse($vp->atRightmost(), 'wide content starts away from the right edge');
         $this->assertTrue($vp->atLeftmost());
 
@@ -62,7 +62,7 @@ final class ViewportDelegatorTest extends TestCase
 
     public function testHorizontalScrollPercent(): void
     {
-        $vp = Viewport::withContent(\implode("\n", \range(1, 50)), 20, 10);
+        $vp = Viewport::fromContent(\implode("\n", \range(1, 50)), 20, 10);
         $percent = $vp->horizontalScrollPercent();
 
         $this->assertIsFloat($percent);
@@ -72,7 +72,7 @@ final class ViewportDelegatorTest extends TestCase
 
     public function testWithHorizontalStepReturnsNewInstance(): void
     {
-        $vp = Viewport::withContent(\implode("\n", \range(1, 50)), 20, 10);
+        $vp = Viewport::fromContent(\implode("\n", \range(1, 50)), 20, 10);
         $vp2 = $vp->withHorizontalStep(5);
 
         $this->assertNotSame($vp, $vp2);
@@ -82,7 +82,7 @@ final class ViewportDelegatorTest extends TestCase
 
     public function testWithMouseWheelEnabledReturnsNewInstance(): void
     {
-        $vp = Viewport::withContent(\implode("\n", \range(1, 50)), 20, 10);
+        $vp = Viewport::fromContent(\implode("\n", \range(1, 50)), 20, 10);
         $vp2 = $vp->withMouseWheelEnabled(true);
 
         $this->assertNotSame($vp, $vp2);
@@ -90,7 +90,7 @@ final class ViewportDelegatorTest extends TestCase
 
     public function testWithMouseWheelDeltaReturnsNewInstance(): void
     {
-        $vp = Viewport::withContent(\implode("\n", \range(1, 50)), 20, 10);
+        $vp = Viewport::fromContent(\implode("\n", \range(1, 50)), 20, 10);
         $vp2 = $vp->withMouseWheelDelta(5);
 
         $this->assertNotSame($vp, $vp2);
@@ -100,7 +100,7 @@ final class ViewportDelegatorTest extends TestCase
 
     public function testWithSmoothScrollReturnsNewInstance(): void
     {
-        $vp = Viewport::withContent(\implode("\n", \range(1, 50)), 20, 10);
+        $vp = Viewport::fromContent(\implode("\n", \range(1, 50)), 20, 10);
         $vp2 = $vp->withSmoothScroll(true);
 
         $this->assertNotSame($vp, $vp2);
@@ -108,7 +108,7 @@ final class ViewportDelegatorTest extends TestCase
 
     public function testWithScrollbarRunesReturnsNewInstance(): void
     {
-        $vp = Viewport::withContent(\implode("\n", \range(1, 50)), 20, 10);
+        $vp = Viewport::fromContent(\implode("\n", \range(1, 50)), 20, 10);
         $vp2 = $vp->withScrollbarRunes('█', '░');
 
         $this->assertNotSame($vp, $vp2);
@@ -130,7 +130,7 @@ final class ViewportDelegatorTest extends TestCase
 
     public function testWithSizeReturnsNewInstance(): void
     {
-        $vp = Viewport::withContent("hello\nworld", 20, 10);
+        $vp = Viewport::fromContent("hello\nworld", 20, 10);
         $vp2 = $vp->withSize(40, 20);
 
         $this->assertNotSame($vp, $vp2);
@@ -143,7 +143,7 @@ final class ViewportDelegatorTest extends TestCase
         // BC spelling (FBX-06 collapsed sizing onto withSize; the roster
         // pins the equality) — single-dimension resize must still answer
         // a NEW Viewport keeping the other dimension.
-        $vp = Viewport::withContent("hello\nworld", 20, 10);
+        $vp = Viewport::fromContent("hello\nworld", 20, 10);
         $vp2 = $vp->setWidth(30);
 
         $this->assertNotSame($vp, $vp2);
@@ -154,7 +154,7 @@ final class ViewportDelegatorTest extends TestCase
     public function testSetHeightReturnsNewInstance(): void
     {
         // BC spelling (FBX-06) — see the setWidth twin above.
-        $vp = Viewport::withContent("hello\nworld", 20, 10);
+        $vp = Viewport::fromContent("hello\nworld", 20, 10);
         $vp2 = $vp->setHeight(15);
 
         $this->assertNotSame($vp, $vp2);
@@ -162,12 +162,27 @@ final class ViewportDelegatorTest extends TestCase
         $this->assertEquals($vp->withSize(20, 15), $vp2);
     }
 
+    public function testInstanceMisuseOfTheStaticFactoryThrowsLoudly(): void
+    {
+        // FBX-22: PHP resolved $vp->withContent(...) to the static
+        // factory, which silently rebuilt a DEFAULT 80x24 box and threw
+        // the receiver's geometry away — the probe that named the whole
+        // vocabulary problem. The BC forwarder now refuses the misuse
+        // by name; the pure-static call still constructs (covered by
+        // the roster's equality leg).
+        $vp = Viewport::new(20, 4);
+
+        $this->expectException(\BadMethodCallException::class);
+        $this->expectExceptionMessage('use setContent() on the instance');
+        $vp->withContent('anything');
+    }
+
     // ---- X offset delegators ----------------------------------------------
 
     public function testSetXOffsetReturnsNewInstance(): void
     {
         $wideContent = str_repeat("Very long line content here that exceeds width\n", 5);
-        $vp = Viewport::withContent($wideContent, 20, 10);
+        $vp = Viewport::fromContent($wideContent, 20, 10);
         $vp2 = $vp->setXOffset(5);
 
         $this->assertNotSame($vp, $vp2);
@@ -177,7 +192,7 @@ final class ViewportDelegatorTest extends TestCase
 
     public function testXOffsetDefaultsToZero(): void
     {
-        $vp = Viewport::withContent(\implode("\n", \range(1, 50)), 20, 10);
+        $vp = Viewport::fromContent(\implode("\n", \range(1, 50)), 20, 10);
         $this->assertSame(0, $vp->xOffset());
     }
 
@@ -190,7 +205,7 @@ final class ViewportDelegatorTest extends TestCase
             static fn (int $n): string => 'line ' . $n,
             range(1, 30),
         ));
-        $vp = Viewport::withContent($content, 20, 6)
+        $vp = Viewport::fromContent($content, 20, 6)
             ->withVerticalScrollbar(Scrollbar::vertical());
 
         $view = $vp->view();
@@ -207,8 +222,8 @@ final class ViewportDelegatorTest extends TestCase
             static fn (int $n): string => 'line ' . $n,
             range(1, 30),
         ));
-        $a = Viewport::withContent($content, 20, 6)->showScrollbar(true)->view();
-        $b = Viewport::withContent($content, 20, 6)->withScrollbar(true)->view();
+        $a = Viewport::fromContent($content, 20, 6)->showScrollbar(true)->view();
+        $b = Viewport::fromContent($content, 20, 6)->withScrollbar(true)->view();
 
         $this->assertSame($a, $b);
         $this->assertStringContainsString('█', $a, 'the armed plain toggle paints the rune bar');
@@ -225,7 +240,7 @@ final class ViewportDelegatorTest extends TestCase
             static fn (int $n): string => str_repeat('x', 92) . $n,
             range(1, 10),
         ));
-        $vp = Viewport::withContent($content, 40, 4)->showScrollbar(true);
+        $vp = Viewport::fromContent($content, 40, 4)->showScrollbar(true);
         foreach (explode("\n", $vp->view()) as $i => $line) {
             $this->assertSame(40, \SugarCraft\Core\Util\Width::string($line), "repro row $i");
         }
@@ -237,7 +252,7 @@ final class ViewportDelegatorTest extends TestCase
             static fn (int $n): string => 'line ' . $n,
             range(1, 30),
         ));
-        $vp = Viewport::withContent($content, 20, 6)
+        $vp = Viewport::fromContent($content, 20, 6)
             ->withScrollbarRunes("\u{6771}", '│')
             ->showScrollbar(true);
         foreach (explode("\n", $vp->view()) as $i => $line) {
@@ -255,7 +270,7 @@ final class ViewportDelegatorTest extends TestCase
             static fn (int $n): string => 'line ' . $n,
             range(1, 30),
         ));
-        $view = Viewport::withContent($content, 20, 6)->showScrollbar(true)->view();
+        $view = Viewport::fromContent($content, 20, 6)->showScrollbar(true)->view();
         $expected = "line 1             █\n"
             . "line 2             │\n"
             . "line 3             │\n"
@@ -271,7 +286,7 @@ final class ViewportDelegatorTest extends TestCase
             static fn (int $n): string => str_repeat('y', 40),
             range(1, 12),
         ));
-        $vp = Viewport::withContent($content, 20, 4)->showScrollbar(true)->setXOffset(15);
+        $vp = Viewport::fromContent($content, 20, 4)->showScrollbar(true)->setXOffset(15);
         foreach (explode("\n", $vp->view()) as $i => $line) {
             $this->assertSame(20, \SugarCraft\Core\Util\Width::string($line), "offset+bar row $i");
         }
@@ -284,8 +299,8 @@ final class ViewportDelegatorTest extends TestCase
             range(1, 30),
         ));
         $this->assertSame(
-            Viewport::withContent($content, 20, 6)->view(),
-            Viewport::withContent($content, 20, 6)->showScrollbar(false)->view(),
+            Viewport::fromContent($content, 20, 6)->view(),
+            Viewport::fromContent($content, 20, 6)->showScrollbar(false)->view(),
             'bar off is literally the old path',
         );
     }
@@ -358,7 +373,7 @@ final class ViewportDelegatorTest extends TestCase
             range(1, 5),
         )); // each line 41 cells in a 20-wide box
 
-        $vp = Viewport::withContent($content, 20, 5)->withHorizontalStep(7);
+        $vp = Viewport::fromContent($content, 20, 5)->withHorizontalStep(7);
         $right = new \SugarCraft\Core\Msg\KeyMsg(\SugarCraft\Core\KeyType::Right);
 
         [$once,] = $vp->update($right);
@@ -423,6 +438,6 @@ final class ViewportDelegatorTest extends TestCase
 
     private function fifty(): Viewport
     {
-        return Viewport::withContent(\implode("\n", \range(1, 50)), 20, 10);
+        return Viewport::fromContent(\implode("\n", \range(1, 50)), 20, 10);
     }
 }

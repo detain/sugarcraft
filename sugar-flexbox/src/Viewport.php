@@ -51,9 +51,68 @@ final readonly class Viewport
         return new self(WidgetsViewport::new($width, $height));
     }
 
-    public static function withContent(string $content, int $width = 80, int $height = 24): self
+    /**
+     * Construct a content-carrying viewport. The factory verb is
+     * fromContent() (FBX-22): the old name read as the fluent
+     * with*Content setter and PHP happily resolved `\$vp->withContent()`
+     * to the static — silently rebuilding an 80×24 box and discarding
+     * the receiver's geometry. Instance content changes are
+     * {@see self::setContent()}.
+     */
+    public static function fromContent(string $content, int $width = 80, int $height = 24): self
     {
         return new self(WidgetsViewport::new($width, $height)->setContent($content));
+    }
+
+    /**
+     * BC factory for the retired name — deliberately PRIVATE (FBX-22):
+     * PHP 8 binds no \$this when a public static answers an instance
+     * call, so an in-method misuse guard was unstatable. With this seat
+     * private, BOTH external call forms route through the hooks below
+     * and are answered on their own terms: `Viewport::withContent(...)`
+     * still constructs (the hooks delegate here), while
+     * \$vp->withContent(...) — the misuse that used to silently rebuild
+     * a default 80x24 box and discard the receiver's geometry — throws
+     * a named refusal.
+     *
+     * @deprecated Use {@see self::fromContent()} to construct with
+     *     content, or {@see self::setContent()} to change an instance's
+     *     content — the old name impersonated that fluent verb (finding-006).
+     *     REMOVED-IN: 2.0.0.
+     */
+    private static function withContent(string $content, int $width = 80, int $height = 24): self { return self::fromContent($content, $width, $height); }
+
+    /**
+     * Instance-style calls of names this class does not expose. The
+     * only DEPRECATED name routed here is withContent, refused with a
+     * pointer to the two honest verbs; anything else reproduces the
+     * engine's own undefined-method Error verbatim, so typos keep the
+     * exact failure they had before this hook existed.
+     */
+    public function __call(string $name, array $arguments): never
+    {
+        if ($name === 'withContent') {
+            throw new \BadMethodCallException(
+                'Viewport::withContent() called on an instance would silently rebuild a default 80x24 box — use setContent() on the instance, or Viewport::fromContent() to construct'
+            );
+        }
+        throw new \Error(\sprintf('Call to undefined method %s::%s()', \get_class($this), $name));
+    }
+
+    /**
+     * Static-style calls of names this class does not expose:
+     * withContent still constructs through the private BC seat; every
+     * other name keeps the engine's undefined-method Error.
+     */
+    public static function __callStatic(string $name, array $arguments): mixed
+    {
+        if ($name === 'withContent') {
+            // Named passthrough keeps the seat's one-line law; a stray
+            // 4th argument fails with the engine's own arity Error.
+            /** @phpstan-ignore-next-line methodVisibility */
+            return self::withContent($arguments[0] ?? '', $arguments[1] ?? 80, $arguments[2] ?? 24);
+        }
+        throw new \Error(\sprintf('Call to undefined method %s::%s()', self::class, $name));
     }
 
     // ---- sticky positioning --------------------------------------------

@@ -32,14 +32,14 @@ final class ViewportQueryTest extends TestCase
 
     public function testWithContentCreatesViewportWithContent(): void
     {
-        $vp = Viewport::withContent("line1\nline2", 20, 3);
+        $vp = Viewport::fromContent("line1\nline2", 20, 3);
         $this->assertStringContainsString('line1', $vp->view());
         $this->assertStringContainsString('line2', $vp->view());
     }
 
     public function testWithContentTrimsContent(): void
     {
-        $vp = Viewport::withContent("line1\nline2\nline3\nline4\nline5", 20, 3);
+        $vp = Viewport::fromContent("line1\nline2\nline3\nline4\nline5", 20, 3);
         // content exceeds viewport height
         $this->assertSame(5, $vp->totalLineCount());
     }
@@ -48,7 +48,7 @@ final class ViewportQueryTest extends TestCase
 
     public function testGotoTop(): void
     {
-        $vp = Viewport::withContent(\implode("\n", \range(1, 50)), 20, 10);
+        $vp = Viewport::fromContent(\implode("\n", \range(1, 50)), 20, 10);
         $scrolled = $vp->setYOffset(20);
         $top = $scrolled->gotoTop();
         $this->assertSame(0, $top->yOffset());
@@ -56,7 +56,7 @@ final class ViewportQueryTest extends TestCase
 
     public function testGotoBottom(): void
     {
-        $vp = Viewport::withContent(\implode("\n", \range(1, 50)), 20, 10);
+        $vp = Viewport::fromContent(\implode("\n", \range(1, 50)), 20, 10);
         $bottom = $vp->gotoBottom();
         // Should be near the bottom
         $this->assertGreaterThanOrEqual(30, $bottom->yOffset());
@@ -64,7 +64,7 @@ final class ViewportQueryTest extends TestCase
 
     public function testPageUp(): void
     {
-        $vp = Viewport::withContent(\implode("\n", \range(1, 50)), 20, 10);
+        $vp = Viewport::fromContent(\implode("\n", \range(1, 50)), 20, 10);
         $scrolled = $vp->setYOffset(20);
         $paged = $scrolled->pageUp();
         $this->assertSame(10, $paged->yOffset());
@@ -72,7 +72,7 @@ final class ViewportQueryTest extends TestCase
 
     public function testPageDown(): void
     {
-        $vp = Viewport::withContent(\implode("\n", \range(1, 50)), 20, 10);
+        $vp = Viewport::fromContent(\implode("\n", \range(1, 50)), 20, 10);
         $scrolled = $vp->setYOffset(5);
         $paged = $scrolled->pageDown();
         $this->assertSame(15, $paged->yOffset());
@@ -80,7 +80,7 @@ final class ViewportQueryTest extends TestCase
 
     public function testHalfPageUp(): void
     {
-        $vp = Viewport::withContent(\implode("\n", \range(1, 50)), 20, 10);
+        $vp = Viewport::fromContent(\implode("\n", \range(1, 50)), 20, 10);
         $scrolled = $vp->setYOffset(10);
         $half = $scrolled->halfPageUp();
         $this->assertSame(5, $half->yOffset());
@@ -88,7 +88,7 @@ final class ViewportQueryTest extends TestCase
 
     public function testHalfPageDown(): void
     {
-        $vp = Viewport::withContent(\implode("\n", \range(1, 50)), 20, 10);
+        $vp = Viewport::fromContent(\implode("\n", \range(1, 50)), 20, 10);
         $scrolled = $vp->setYOffset(5);
         $half = $scrolled->halfPageDown();
         $this->assertSame(10, $half->yOffset());
@@ -98,32 +98,32 @@ final class ViewportQueryTest extends TestCase
 
     public function testTotalLineCount(): void
     {
-        $vp = Viewport::withContent("1\n2\n3\n4\n5", 20, 3);
+        $vp = Viewport::fromContent("1\n2\n3\n4\n5", 20, 3);
         $this->assertSame(5, $vp->totalLineCount());
     }
 
     public function testVisibleLineCount(): void
     {
-        $vp = Viewport::withContent("1\n2\n3\n4\n5", 20, 3);
+        $vp = Viewport::fromContent("1\n2\n3\n4\n5", 20, 3);
         $this->assertSame(3, $vp->visibleLineCount());
     }
 
     public function testAtTopWhenAtBeginning(): void
     {
-        $vp = Viewport::withContent(\implode("\n", \range(1, 50)), 20, 10);
+        $vp = Viewport::fromContent(\implode("\n", \range(1, 50)), 20, 10);
         $this->assertTrue($vp->atTop());
     }
 
     public function testAtTopWhenScrolled(): void
     {
-        $vp = Viewport::withContent(\implode("\n", \range(1, 50)), 20, 10)->setYOffset(5);
+        $vp = Viewport::fromContent(\implode("\n", \range(1, 50)), 20, 10)->setYOffset(5);
         $this->assertFalse($vp->atTop());
     }
 
     public function testAtBottomWhenAtEnd(): void
     {
         $lines = \range(1, 50);
-        $vp = Viewport::withContent(\implode("\n", $lines), 20, 10);
+        $vp = Viewport::fromContent(\implode("\n", $lines), 20, 10);
         // Go to bottom
         $bottom = $vp->gotoBottom();
         $this->assertTrue($bottom->atBottom());
@@ -131,19 +131,19 @@ final class ViewportQueryTest extends TestCase
 
     public function testAtBottomWhenNotAtEnd(): void
     {
-        $vp = Viewport::withContent(\implode("\n", \range(1, 50)), 20, 10)->setYOffset(5);
+        $vp = Viewport::fromContent(\implode("\n", \range(1, 50)), 20, 10)->setYOffset(5);
         $this->assertFalse($vp->atBottom());
     }
 
     public function testScrollPercentAtTop(): void
     {
-        $vp = Viewport::withContent(\implode("\n", \range(1, 50)), 20, 10);
+        $vp = Viewport::fromContent(\implode("\n", \range(1, 50)), 20, 10);
         $this->assertSame(0.0, $vp->scrollPercent());
     }
 
     public function testScrollPercentAtMiddle(): void
     {
-        $vp = Viewport::withContent(\implode("\n", \range(1, 50)), 20, 10)->setYOffset(20);
+        $vp = Viewport::fromContent(\implode("\n", \range(1, 50)), 20, 10)->setYOffset(20);
         $percent = $vp->scrollPercent();
         $this->assertGreaterThan(0.0, $percent);
         $this->assertLessThan(1.0, $percent);
@@ -152,14 +152,14 @@ final class ViewportQueryTest extends TestCase
     public function testScrollPercentAtBottom(): void
     {
         $lines = \range(1, 50);
-        $vp = Viewport::withContent(\implode("\n", $lines), 20, 10);
+        $vp = Viewport::fromContent(\implode("\n", $lines), 20, 10);
         $bottom = $vp->gotoBottom();
         $this->assertSame(1.0, $bottom->scrollPercent());
     }
 
     public function testYOffset(): void
     {
-        $vp = Viewport::withContent(\implode("\n", \range(1, 50)), 20, 10)->setYOffset(7);
+        $vp = Viewport::fromContent(\implode("\n", \range(1, 50)), 20, 10)->setYOffset(7);
         $this->assertSame(7, $vp->yOffset());
     }
 
@@ -167,7 +167,7 @@ final class ViewportQueryTest extends TestCase
 
     public function testAtTopAfterGotoTop(): void
     {
-        $vp = Viewport::withContent(\implode("\n", \range(1, 50)), 20, 10)->setYOffset(20);
+        $vp = Viewport::fromContent(\implode("\n", \range(1, 50)), 20, 10)->setYOffset(20);
         $top = $vp->gotoTop();
         $this->assertTrue($top->atTop());
     }
@@ -175,7 +175,7 @@ final class ViewportQueryTest extends TestCase
     public function testAtBottomAfterGotoBottom(): void
     {
         $lines = \range(1, 50);
-        $vp = Viewport::withContent(\implode("\n", $lines), 20, 10);
+        $vp = Viewport::fromContent(\implode("\n", $lines), 20, 10);
         $bottom = $vp->gotoBottom();
         $this->assertTrue($bottom->atBottom());
     }
@@ -184,7 +184,7 @@ final class ViewportQueryTest extends TestCase
 
     public function testWithVerticalScrollbarReturnsNewInstance(): void
     {
-        $vp = Viewport::withContent(\implode("\n", \range(1, 50)), 20, 10);
+        $vp = Viewport::fromContent(\implode("\n", \range(1, 50)), 20, 10);
         // The parameter is THIS lib's Scrollbar (historically: the shadowed
         // widgets import made the signature silently accept only the foreign
         // type). Unwraps to the widgets scrollbar the inner viewport stores.
@@ -208,7 +208,7 @@ final class ViewportQueryTest extends TestCase
      */
     public function testWithVerticalScrollbarRefusesTheForeignScrollbarType(): void
     {
-        $vp = Viewport::withContent("a\nb\nc", 20, 3);
+        $vp = Viewport::fromContent("a\nb\nc", 20, 3);
         $this->expectException(\TypeError::class);
         $vp->withVerticalScrollbar(\SugarCraft\Widgets\Scrollbar\Scrollbar::vertical());
     }
@@ -217,7 +217,7 @@ final class ViewportQueryTest extends TestCase
 
     public function testInitDelegatesToInner(): void
     {
-        $vp = Viewport::withContent("content", 20, 3);
+        $vp = Viewport::fromContent("content", 20, 3);
         // init() returns whatever the inner BitsViewport returns
         $init = $vp->init();
         // May be null or a Closure depending on BitsViewport state
@@ -226,7 +226,7 @@ final class ViewportQueryTest extends TestCase
 
     public function testUpdateReturnsArrayWithModel(): void
     {
-        $vp = Viewport::withContent("content\nmore", 20, 3);
+        $vp = Viewport::fromContent("content\nmore", 20, 3);
         $msg = new TickMsg(0);
         [$model, $cmd] = $vp->update($msg);
         $this->assertInstanceOf(Viewport::class, $model);
@@ -236,7 +236,7 @@ final class ViewportQueryTest extends TestCase
 
     public function testSetYOffsetClampsToValidRange(): void
     {
-        $vp = Viewport::withContent(\implode("\n", \range(1, 20)), 20, 10);
+        $vp = Viewport::fromContent(\implode("\n", \range(1, 20)), 20, 10);
         // Setting offset beyond max should clamp
         $excessive = $vp->setYOffset(100);
         // The offset gets clamped by the inner BitsViewport
@@ -246,7 +246,7 @@ final class ViewportQueryTest extends TestCase
     public function testSetXOffsetClampsToValidRange(): void
     {
         $wideContent = str_repeat("Very long line content here\n", 5);
-        $vp = Viewport::withContent($wideContent, 20, 3);
+        $vp = Viewport::fromContent($wideContent, 20, 3);
         $excessive = $vp->setXOffset(1000);
         // Should be clamped
         $this->assertLessThanOrEqual(100, $excessive->xOffset());
@@ -254,7 +254,7 @@ final class ViewportQueryTest extends TestCase
 
     public function testLineUpClampsToZero(): void
     {
-        $vp = Viewport::withContent(\implode("\n", \range(1, 20)), 20, 10);
+        $vp = Viewport::fromContent(\implode("\n", \range(1, 20)), 20, 10);
         $up = $vp->setYOffset(2)->lineUp(10);
         $this->assertSame(0, $up->yOffset());
     }
@@ -262,7 +262,7 @@ final class ViewportQueryTest extends TestCase
     public function testLineDownClampsToMax(): void
     {
         $lines = \range(1, 20);
-        $vp = Viewport::withContent(\implode("\n", $lines), 20, 10);
+        $vp = Viewport::fromContent(\implode("\n", $lines), 20, 10);
         $down = $vp->setYOffset(15)->lineDown(10);
         // Should clamp to max offset
         $this->assertGreaterThanOrEqual(10, $down->yOffset());
@@ -272,7 +272,7 @@ final class ViewportQueryTest extends TestCase
 
     public function testEmptyContentViewport(): void
     {
-        $vp = Viewport::withContent("", 20, 10);
+        $vp = Viewport::fromContent("", 20, 10);
         // Empty string split by \n gives [""], count = 1
         $this->assertSame(1, $vp->totalLineCount());
         // visibleLineCount = min(total, height) = min(1, 10) = 1
@@ -286,7 +286,7 @@ final class ViewportQueryTest extends TestCase
     public function testPaintScrollbarWithStickyFrameIsBoxyWithABarColumn(): void
     {
         $content = "H1\nH2\nM1\nM2\nM3\nM4\nM5\nF1";
-        $vp = Viewport::withContent($content, 20, 8)
+        $vp = Viewport::fromContent($content, 20, 8)
             ->withStickyHeader(2)
             ->withStickyFooter(1)
             ->showScrollbar(true)
@@ -322,7 +322,7 @@ final class ViewportQueryTest extends TestCase
 
         $starts = [];
         foreach ([0, 4, 8, 12, 16, 20, 24] as $y) {
-            $vp = Viewport::withContent($content, 20, 6)
+            $vp = Viewport::fromContent($content, 20, 6)
                 ->showScrollbar(true)
                 ->setYOffset($y);
             $rows = explode("\n", $vp->view());

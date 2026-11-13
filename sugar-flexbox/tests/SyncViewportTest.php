@@ -13,8 +13,8 @@ final class SyncViewportTest extends TestCase
 
     public function testSyncWithReturnsNewInstance(): void
     {
-        $a = Viewport::withContent("left content\nline2\nline3", 40, 24);
-        $b = Viewport::withContent("right content\nline2\nline3", 40, 24);
+        $a = Viewport::fromContent("left content\nline2\nline3", 40, 24);
+        $b = Viewport::fromContent("right content\nline2\nline3", 40, 24);
 
         $synced = $a->syncWith($b);
 
@@ -23,8 +23,8 @@ final class SyncViewportTest extends TestCase
 
     public function testSyncWithEstablishesSyncRelationship(): void
     {
-        $a = Viewport::withContent("left\nright\ncontent", 40, 24);
-        $b = Viewport::withContent("right\nleft\ncontent", 40, 24);
+        $a = Viewport::fromContent("left\nright\ncontent", 40, 24);
+        $b = Viewport::fromContent("right\nleft\ncontent", 40, 24);
 
         $syncedA = $a->syncWith($b);
 
@@ -33,14 +33,14 @@ final class SyncViewportTest extends TestCase
 
     public function testIsSyncedIsFalseByDefault(): void
     {
-        $vp = Viewport::withContent("some\ncontent\nhere", 40, 24);
+        $vp = Viewport::fromContent("some\ncontent\nhere", 40, 24);
         $this->assertFalse($vp->isSynced());
     }
 
     public function testIsSyncedIsTrueAfterSyncWith(): void
     {
-        $a = Viewport::withContent("left\ncontent", 40, 24);
-        $b = Viewport::withContent("right\ncontent", 40, 24);
+        $a = Viewport::fromContent("left\ncontent", 40, 24);
+        $b = Viewport::fromContent("right\ncontent", 40, 24);
 
         $synced = $a->syncWith($b);
 
@@ -49,8 +49,8 @@ final class SyncViewportTest extends TestCase
 
     public function testSyncWithBothViewportsAreIndependent(): void
     {
-        $a = Viewport::withContent("A content here", 40, 24);
-        $b = Viewport::withContent("B different content", 40, 24);
+        $a = Viewport::fromContent("A content here", 40, 24);
+        $b = Viewport::fromContent("B different content", 40, 24);
 
         $syncedA = $a->syncWith($b);
 
@@ -62,9 +62,9 @@ final class SyncViewportTest extends TestCase
 
     public function testSyncWithCanBeOverwritten(): void
     {
-        $a = Viewport::withContent("A\nB\nC", 40, 10);
-        $b = Viewport::withContent("1\n2\n3", 40, 10);
-        $c = Viewport::withContent("alpha\nbeta\ngamma", 40, 10);
+        $a = Viewport::fromContent("A\nB\nC", 40, 10);
+        $b = Viewport::fromContent("1\n2\n3", 40, 10);
+        $c = Viewport::fromContent("alpha\nbeta\ngamma", 40, 10);
 
         // A synced with B, then B synced with C (B's syncWith overwrites).
         $ab = $a->syncWith($b);
@@ -85,8 +85,8 @@ final class SyncViewportTest extends TestCase
         }
         $content = implode("\n", $lines);
 
-        $a = Viewport::withContent($content, 40, 10);
-        $b = Viewport::withContent($content, 40, 10);
+        $a = Viewport::fromContent($content, 40, 10);
+        $b = Viewport::fromContent($content, 40, 10);
 
         $synced = $a->syncWith($b)->setYOffset(1);
 
@@ -96,8 +96,8 @@ final class SyncViewportTest extends TestCase
 
     public function testSetContentPreservesSyncRelationship(): void
     {
-        $a = Viewport::withContent("original\ncontent", 40, 24);
-        $b = Viewport::withContent("other\npanel", 40, 24);
+        $a = Viewport::fromContent("original\ncontent", 40, 24);
+        $b = Viewport::fromContent("other\npanel", 40, 24);
 
         $synced = $a->syncWith($b)->setContent("new\ncontent\nhere");
 
@@ -113,8 +113,8 @@ final class SyncViewportTest extends TestCase
         }
         $content = implode("\n", $lines);
 
-        $a = Viewport::withContent($content, 40, 24);
-        $b = Viewport::withContent($content, 40, 24);
+        $a = Viewport::fromContent($content, 40, 24);
+        $b = Viewport::fromContent($content, 40, 24);
 
         $synced = $a->syncWith($b)->setYOffset(5);
 
@@ -133,8 +133,8 @@ final class SyncViewportTest extends TestCase
         $leftContent = implode("\n", $lines);
         $rightContent = str_replace('function', 'func', $leftContent);
 
-        $left = Viewport::withContent($leftContent, 40, 24);
-        $right = Viewport::withContent($rightContent, 40, 24);
+        $left = Viewport::fromContent($leftContent, 40, 24);
+        $right = Viewport::fromContent($rightContent, 40, 24);
 
         // Caller establishes sync relationship.
         $leftSynced = $left->syncWith($right);

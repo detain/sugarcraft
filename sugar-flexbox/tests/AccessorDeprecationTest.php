@@ -62,11 +62,18 @@ final class AccessorDeprecationTest extends TestCase
             // needs the OTHER dimension from the receiver, so the BC leg
             // reshapes the canonical call through a closure instead of
             // passing the same args twice. The structural leg keeps the
-            // one-line + marker law and relaxes only the same-arity check.
+            // one-line + marker law; for reshape rows it validates the
+            // delegation expression (and the same-arity equality is
+            // skipped, since the two legs take different args).
             'Viewport::setWidth' => [Viewport::class, 'setWidth', 'withSize', [30], 'equal',
                 static fn (Viewport $v): array => [30, $v->height()]],
             'Viewport::setHeight' => [Viewport::class, 'setHeight', 'withSize', [15], 'equal',
                 static fn (Viewport $v): array => [$v->width(), 15]],
+            // The factory-name misuse guard (FBX-22): one line, same args,
+            // but the canonical call sits inside a ternary that REFUSES
+            // instance misuse instead of silently resetting geometry —
+            // the reshape flag relaxes exactly the body-shape check here.
+            'Viewport::withContent' => [Viewport::class, 'withContent', 'fromContent', ['abc', 20, 10], 'equal-static'],
         ];
     }
 
@@ -95,6 +102,13 @@ final class AccessorDeprecationTest extends TestCase
         $object = self::fixture($class);
         $this->assertTrue(method_exists($object, $bare), $class . "::" . $bare . "() must exist");
         $bareArgs = $reshape !== null ? $reshape($object) : $args;
+        if ($mode === 'equal-static') {
+            // The BC seat is private behind __callStatic (FBX-22): the
+            // comparison must take the static leg BOTH external forms
+            // actually have in common.
+            $this->assertEquals($class::$bare(...$bareArgs), $class::$legacy(...$args));
+            return;
+        }
         if ($mode === 'equal') {
             $this->assertEquals($object->{$bare}(...$bareArgs), $object->{$legacy}(...$args));
             return;
@@ -117,18 +131,35 @@ final class AccessorDeprecationTest extends TestCase
         $this->assertStringContainsString('@deprecated', $doc);
         $this->assertStringContainsString(self::MARKER, $doc);
         $this->assertStringContainsString('{@see self::' . $bare . '()}', $doc);
-        $this->assertTrue($method->isPublic());
+        if ($mode === 'equal-static') {
+            // The hook-hidden BC seat (FBX-22): deliberately PRIVATE —
+            // both external call forms reach it through the class's
+            // __call/__callStatic routing, which the equality leg and
+            // the misuse pin exercise.
+            $this->assertTrue($method->isPrivate());
+        } else {
+            $this->assertTrue($method->isPublic());
+        }
         $lines = array_slice(
             file($method->getFileName()),
             $method->getStartLine() - 1,
             $method->getEndLine() - $method->getStartLine() + 1
         );
         $this->assertCount(1, $lines, $class . '::' . $legacy . ' must be a single-line forwarder');
-        $argsPat = $reshape !== null ? '[^;]*' : '(\$\w+(, \$\w+)*)?';
-        $this->assertMatchesRegularExpression(
-            '/public (?:static )?function ' . preg_quote($legacy, '/') . '\(.*\)[^{]*\{ return (?:\$this->|self::)' . preg_quote($bare, '/') . '\(' . $argsPat . '\); \}\s*$/',
-            $lines[0]
-        );
+        if ($reshape !== null) {
+            // Reshaped or guarded body: still ONE line delegating to the
+            // bare name, but the call may sit inside an expression (the
+            // FBX-22 misuse refusal wraps it in a ternary).
+            $this->assertMatchesRegularExpression(
+                '/(?:public|private) (?:static )?function ' . preg_quote($legacy, '/') . '\(.*\)[^{]*\{ return [^;]*' . preg_quote($bare, '/') . '\([^;]*\)[^;]*; \}\s*$/',
+                $lines[0]
+            );
+        } else {
+            $this->assertMatchesRegularExpression(
+                '/(?:public|private) (?:static )?function ' . preg_quote($legacy, '/') . '\(.*\)[^{]*\{ return (?:\$this->|self::)' . preg_quote($bare, '/') . '\((\$\w+(, \$\w+)*)?\); \}\s*$/',
+                $lines[0]
+            );
+        }
         $bareMethod = new \ReflectionMethod($class, $bare);
         $this->assertTrue($bareMethod->isPublic());
         $this->assertStringNotContainsString(self::MARKER, (string) $bareMethod->getDocComment());
@@ -171,6 +202,8 @@ final class AccessorDeprecationTest extends TestCase
                     if (
                         $tokens[$k]->id === T_WHITESPACE
                         || $tokens[$k]->id === T_PUBLIC
+                        || $tokens[$k]->id === T_PRIVATE
+                        || $tokens[$k]->id === T_PROTECTED
                         || $tokens[$k]->id === T_STATIC
                         || $tokens[$k]->id === T_FINAL
                         || $tokens[$k]->id === T_ABSTRACT
@@ -192,7 +225,7 @@ final class AccessorDeprecationTest extends TestCase
         sort($found);
         sort($expected);
         $this->assertSame($expected, $found, 'src/ census drifted from the tested pairs');
-        $this->assertCount(13, $found);
+        $this->assertCount(14, $found);
     }
 
     /**
@@ -215,7 +248,7 @@ final class AccessorDeprecationTest extends TestCase
             $rows,
             PREG_SET_ORDER
         );
-        $this->assertCount(13, $rows, 'README Accessor-deprecation table must list exactly the swept pairs');
+        $this->assertCount(14, $rows, 'README Accessor-deprecation table must list exactly the swept pairs');
         $tabled = [];
         foreach ($rows as $row) {
             $tabled[$row['class'] . '::' . $row['legacy']] = $row['bare'];
