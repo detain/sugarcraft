@@ -115,7 +115,13 @@ final class LangParityTest extends TestCase
             }
             self::assertNotNull($start, "locale {$locale}: usage lost its command block");
             $described = [];
-            foreach (array_slice($lines, (int) $start, 8) as $line) {
+            // Block-bounded, not a fixed row count (CT-S42): the command
+            // block ends at the first blank line, so a new verb rides the
+            // guard without a re-pin.
+            foreach (array_slice($lines, (int) $start) as $line) {
+                if (trim($line) === '') {
+                    break;
+                }
                 $verb = explode(',', substr($line, 2))[0];
                 $described[trim(explode(' ', trim($verb))[0])] = $line;
             }
@@ -138,6 +144,7 @@ final class LangParityTest extends TestCase
         'export' => '<csv|json|ics> [days | from [to]]',
         'gaps' => '[days | from [to]]',
         'backup' => '',
+        'forget' => '--project=<name> [--file-prefix=<path>] [--apply]',
         'help' => '',
         '--version' => '',
     ];
@@ -163,11 +170,11 @@ final class LangParityTest extends TestCase
         // The two help/version rows have no numbers of their own, and the row
         // that the rotation left them with does: the `--backend` default reads
         // "(default: file)" in every locale.
-        $digitless = ['help', '--version'];
+        $digitless = ['forget', 'help', '--version'];
 
         foreach (self::usageRows() as $locale => $commands) {
             $this->assertSame(
-                ['dashboard', 'push', 'milestone', 'export', 'gaps', 'backup', 'help', '--version'],
+                ['dashboard', 'push', 'milestone', 'export', 'gaps', 'backup', 'forget', 'help', '--version'],
                 array_keys($commands),
                 "locale {$locale}: the usage command rows drifted out of shape",
             );

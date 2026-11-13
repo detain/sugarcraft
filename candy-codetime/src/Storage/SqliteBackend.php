@@ -267,6 +267,95 @@ final class SqliteBackend implements HeartbeatReader
     }
 
     /**
+     * Beat-matching WHERE builder for the forget door (CT-S42). Byte
+     * semantics on the prefix leg: `substr(file, 1, length(?)) = ?` because
+     * SQLite LIKE folds ASCII case — the path map must be matched exactly
+     * the way the file backend matches it with str_starts_with().
+     *
+     * @return array{0: string, 1: list<string>} [clause, ordered values]
+     */
+    private static function forgetWhere(?string $project, ?string $filePrefix): array
+    {
+        $clauses = [];
+        $values = [];
+        if ($project !== null) {
+            $clauses[] = 'project = ?';
+            $values[] = $project;
+        }
+        if ($filePrefix !== null) {
+            $clauses[] = 'substr(file, 1, length(?)) = ?';
+            $values[] = $filePrefix;
+            $values[] = $filePrefix;
+        }
+        return [implode(' AND ', $clauses), $values];
+    }
+
+    /**
+     * Bind the ordered value list onto a forget statement.
+     *
+     * @param \SQLite3Stmt $stmt
+     * @param list<string> $values
+     */
+    private static function bindForget($stmt, array $values): void
+    {
+        foreach ($values as $offset => $value) {
+            $stmt->bindValue($offset + 1, $value, \SQLITE3_TEXT);
+        }
+    }
+
+    /** Count stored beats the forget door would remove (CT-S42). */
+    public function countMatched(?string $project, ?string $filePrefix): int
+    {
+        if ($project === null && $filePrefix === null) {
+            throw new \RuntimeException('refusing to match every beat: the forget door needs a filter');
+        }
+        [$where, $values] = self::forgetWhere($project, $filePrefix);
+        $stmt = @$this->db->prepare('SELECT count(*) FROM heartbeats WHERE ' . $where);
+        if ($stmt === false) {
+            throw new \RuntimeException('sqlite prepare failed: ' . $this->db->lastErrorMsg());
+        }
+        self::bindForget($stmt, $values);
+        $result = @$stmt->execute();
+        if ($result === false) {
+            $stmt->close();
+            throw new \RuntimeException('sqlite forget count failed: ' . $this->db->lastErrorMsg());
+        }
+        $row = $result->fetchArray(\SQLITE3_NUM);
+        $result->finalize();
+        $stmt->close();
+        return (int) ($row[0] ?? 0);
+    }
+
+    /**
+     * Delete the matching beats (CT-S42). Parameterized all the way — the
+     * filter values arrive as bound text, never interpolated.
+     */
+    public function forget(?string $project, ?string $filePrefix): int
+    {
+        if ($project === null && $filePrefix === null) {
+            throw new \RuntimeException('refusing to delete every beat: the forget door needs a filter');
+        }
+        [$where, $values] = self::forgetWhere($project, $filePrefix);
+        $stmt = @$this->db->prepare('DELETE FROM heartbeats WHERE ' . $where);
+        if ($stmt === false) {
+            throw new \RuntimeException('sqlite prepare failed: ' . $this->db->lastErrorMsg());
+        }
+        self::bindForget($stmt, $values);
+        $result = @$stmt->execute();
+        if ($result === false) {
+            $stmt->close();
+            throw new \RuntimeException('sqlite forget failed: ' . $this->db->lastErrorMsg());
+        }
+        $result->finalize();
+        $stmt->close();
+        $changes = @$this->db->querySingle('SELECT changes()');
+        if ($changes === false) {
+            throw new \RuntimeException('sqlite changes() lookup failed: ' . $this->db->lastErrorMsg());
+        }
+        return (int) $changes;
+    }
+
+    /**
      * @return list<Milestone>
      */
     public function milestones(): array

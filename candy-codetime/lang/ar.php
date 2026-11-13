@@ -10,8 +10,8 @@ declare(strict_types=1);
 
 return [
     'cli.entry_pushed' => 'تم تسجيل {duration}s من {project} ({language})',
-    'cli.usage' => "الاستخدام: candy-codetime [--backend=file|sqlite] <command> [args]\n\nالأوامر:\n  dashboard              بدء لوحة التتبع TUI (يقرأ الواجهة الخلفية المحددة)\n  push                   [<project> <language>] <file> [duration] [tags] | --  تسجيل نبضة\n  milestone              add [name] [description] | list  إدارة الإنجازات (sqlite فقط)\n  export                 <csv|json|ics> [days | from [to]]  تصدير النبضات (7 أيام افتراضيًا)\n  gaps                   [days | from [to]]  عرض فترات الفراغ غير المتتبَّعة 300 ثانية أو أكثر (7 أيام افتراضيًا)\n  backup                 أرشفة ملفات أقدم من 30 يومًا (نسخ فقط؛ لا حذف أبدًا)\n  help, --help, -h       عرض هذا الاستخدام\n  --version, -v          طباعة الإصدار\n\nالخيارات:\n  --backend=file|sqlite  واجهة تخزين البيانات لـ push/export/gaps/dashboard (افتراضيًا: file)\n  --time=<unix>          push: سجّل النبض عند هذه الثواني يونكس بدل الآن\n  --sqlite               backup: أرشفة قاعدة بيانات SQLite عبر VACUUM INTO (نسخة آمنة من الأعطال)\n  --theme=<name>         لوحة: استخدم سمة ملونة مسماة (default, light, dracula, solarized, gruvbox, high-contrast)
-  CANDY_CODETIME_THEME   نفس الاختيار كمتغير بيئة (الراية أعلى أولوية)\n  --project=<name>       تصدير/فجوات: احتفظ بنبضات هذا المشروع فقط\n  --tag=<label>          تصدير/فجوات: احتفظ بنبضات هذا الوسم فقط\n  CANDY_CODETIME_DIR     دليل البيانات (افتراضيًا: \$XDG_DATA_HOME/candy-codetime، وإلا \$HOME/.local/share/candy-codetime، أو ./.local/share/candy-codetime عند عدم ضبط HOME)",
+    'cli.usage' => "الاستخدام: candy-codetime [--backend=file|sqlite] <command> [args]\n\nالأوامر:\n  dashboard              بدء لوحة التتبع TUI (يقرأ الواجهة الخلفية المحددة)\n  push                   [<project> <language>] <file> [duration] [tags] | --  تسجيل نبضة\n  milestone              add [name] [description] | list  إدارة الإنجازات (sqlite فقط)\n  export                 <csv|json|ics> [days | from [to]]  تصدير النبضات (7 أيام افتراضيًا)\n  gaps                   [days | from [to]]  عرض فترات الفراغ غير المتتبَّعة 300 ثانية أو أكثر (7 أيام افتراضيًا)\n  backup                 أرشفة ملفات أقدم من 30 يومًا (نسخ فقط؛ لا حذف أبدًا)\n  forget                 --project=<name> [--file-prefix=<path>] [--apply]  يحذف النبضات المطابقة للمرشّح (محاولة ما لم تستخدم --apply)\n  help, --help, -h       عرض هذا الاستخدام\n  --version, -v          طباعة الإصدار\n\nالخيارات:\n  --backend=file|sqlite  واجهة تخزين البيانات لـ push/export/gaps/dashboard (افتراضيًا: file)\n  --time=<unix>          push: سجّل النبض عند هذه الثواني يونكس بدل الآن\n  --sqlite               backup: أرشفة قاعدة بيانات SQLite عبر VACUUM INTO (نسخة آمنة من الأعطال)\n  --theme=<name>         لوحة: استخدم سمة ملونة مسماة (default, light, dracula, solarized, gruvbox, high-contrast)
+  CANDY_CODETIME_THEME   نفس الاختيار كمتغير بيئة (الراية أعلى أولوية)\n  --project=<name>       تصدير/فجوات: احتفظ بنبضات هذا المشروع فقط\n  --tag=<label>          تصدير/فجوات: احتفظ بنبضات هذا الوسم فقط\n  --file-prefix=<path>   forget: النبضات التي يبدأ مسارها المحفوظ بهذا البادئة فقط\n  --apply                forget: احذف النبضات المطابقة بدل المحاولة\n  CANDY_CODETIME_DIR     دليل البيانات (افتراضيًا: \$XDG_DATA_HOME/candy-codetime، وإلا \$HOME/.local/share/candy-codetime، أو ./.local/share/candy-codetime عند عدم ضبط HOME)",
     'cli.push_usage' => 'الاستخدام: candy-codetime push [<project> <language>] <file> [duration] [tags] [--time=<unix>] | candy-codetime push -- (دفعة JSON من stdin)',
     'cli.push_missing_args' => "candy-codetime: push: الوسائط المطلوبة مفقودة (project, language, file)",
     'cli.push_ignored' => "push: تطابق {file} مع .sugartrackignore — تم تخطيه",
@@ -53,6 +53,14 @@ return [
     'cli.backup_none' => "backup: لا جديد للأرشفة",
     'cli.backup_sqlite_notice' => 'candy-codetime: backup: هذه الأرشفة تغطي ملفات اليوم فقط — قاعدة بيانات SQLite في {db} تتطلب backup --sqlite (نسخة آمنة من الأعطال)',
     'cli.backup_sqlite_done' => 'backup: تمت أرشفة قاعدة البيانات إلى {file}',
+    'cli.forget_usage' => 'الاستخدام: candy-codetime forget --project=<name> [--file-prefix=<path>] [--apply]',
+    'cli.forget_no_filter' => 'candy-codetime: يحتاج forget إلى واحد على الأقل من --project=<name> أو --file-prefix=<path> - أرفض محو كل شيء',
+    'cli.forget_missing_filter' => 'candy-codetime: يحتاج {flag} إلى قيمة بعد علامة التساوي',
+    'cli.forget_dry_files' => 'forget: {count} نبضة مطابقة في ملفات الأيام',
+    'cli.forget_dry_db' => 'forget: {count} نبضة مطابقة في قاعدة sqlite',
+    'cli.forget_none' => 'forget: لا شيء محفوظ يطابق هذا المرشّح',
+    'cli.forget_hint' => 'forget: محاولة - لم يُحذف شيء; شغّل backup أولاً ثم كرر مع --apply',
+    'cli.forget_done' => 'forget: حُذفت {files} نبضة من ملفات الأيام و{db} من القاعدة',
     'cli.unknown_command' => "candy-codetime: أمر غير معروف: {command}",
     'cli.legacy_env_deprecated' => "candy-codetime: المتغير {variable} مهمل؛ استخدم CANDY_CODETIME_DIR بدلاً منه.",
     'cli.migration_notice' => "candy-codetime: {notice}",

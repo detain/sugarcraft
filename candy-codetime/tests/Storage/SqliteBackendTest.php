@@ -456,4 +456,49 @@ final class SqliteBackendTest extends TestCase
             $this->assertStringContainsString('does not understand', $error->getMessage());
         }
     }
+
+    // CT-S42: the forget door on the sqlite backend.
+
+    public function testForgetFiltersProjectAndFilePrefixAndReportsChanges(): void
+    {
+        $beat = static fn (int $t, string $project, string $file): Heartbeat => new Heartbeat(
+            time: $t, project: $project, language: 'php', file: $file, duration: 60,
+        );
+        $this->backend->insert($beat(1719000000, 'p1', 'a.php'));
+        $this->backend->insert($beat(1719000100, 'p1', 'b.txt'));
+        $this->backend->insert($beat(1719000200, 'p2', 'c.php'));
+
+        $this->assertSame(2, $this->backend->countMatched('p1', null));
+        $this->assertSame(2, $this->backend->forget('p1', null));
+        $this->assertCount(1, $this->backend->query(0, time() + 86400));
+
+        $this->assertSame(1, $this->backend->countMatched(null, 'c'));
+        $this->assertSame(1, $this->backend->forget(null, 'c'));
+        $this->assertSame(0, $this->backend->countMatched(null, 'a'));
+    }
+
+    public function testForgetPrefixMatchesBytesNotLikeCasings(): void
+    {
+        // SQLite LIKE would fold ASCII case and over-delete; the substr leg
+        // must agree with the file backend's str_starts_with exactly.
+        $this->backend->insert(new Heartbeat(time: 1719000000, project: 'p', language: 'php', file: 'A.php', duration: 60));
+        $this->assertSame(0, $this->backend->countMatched(null, 'a'));
+        $this->assertSame(1, $this->backend->countMatched(null, 'A.'));
+    }
+
+    public function testForgetRefusesToMatchEveryBeat(): void
+    {
+        try {
+            $this->backend->countMatched(null, null);
+            $this->fail('the filterless door opened silently');
+        } catch (\RuntimeException $error) {
+            $this->assertStringContainsString('needs a filter', $error->getMessage());
+        }
+        try {
+            $this->backend->forget(null, null);
+            $this->fail('the filterless door opened silently');
+        } catch (\RuntimeException $error) {
+            $this->assertStringContainsString('needs a filter', $error->getMessage());
+        }
+    }
 }

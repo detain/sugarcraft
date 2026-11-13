@@ -836,6 +836,71 @@ if ($cmd === 'gaps') {
     exit(0);
 }
 
+if ($cmd === 'forget') {
+    // CT-S42: privacy-first without a forget door is half a promise. The
+    // door acts on BOTH stores regardless of the selected backend — data
+    // the user asked to forget must not survive in whichever half they
+    // happened not to be looking at. Dry run is the default; removal
+    // demands --apply.
+    $forgetPrefix = null;
+    $forgetApply = false;
+    foreach (array_slice($positional, 1) as $arg) {
+        if ($arg === '--apply') {
+            $forgetApply = true;
+            continue;
+        }
+        if ($arg === '--file-prefix') {
+            $forgetPrefix = '';
+            continue;
+        }
+        if (str_starts_with($arg, '--file-prefix=')) {
+            $forgetPrefix = substr($arg, strlen('--file-prefix='));
+        }
+    }
+    if ($forgetPrefix !== null && trim($forgetPrefix) === '') {
+        fwrite(STDERR, Lang::t('cli.forget_missing_filter', ['flag' => '--file-prefix']) . "\n");
+        exit(1);
+    }
+    $forgetProject = $projectFilter;
+    if ($forgetProject === null && $forgetPrefix === null) {
+        fwrite(STDERR, Lang::t('cli.forget_no_filter') . "\n");
+        fwrite(STDOUT, Lang::t('cli.forget_usage') . "\n");
+        exit(1);
+    }
+    $drops = static function (Heartbeat $hb) use ($forgetProject, $forgetPrefix): bool {
+        return ($forgetProject === null || $hb->project === $forgetProject)
+            && ($forgetPrefix === null || str_starts_with($hb->file, $forgetPrefix));
+    };
+    $fileMatched = $store->countMatched($drops);
+    $store->invalidate();
+    $dbMatched = 0;
+    if (is_file($dbPath)) {
+        $dbMatched = $sqlite()->countMatched($forgetProject, $forgetPrefix);
+    }
+    if (!$forgetApply) {
+        if ($fileMatched === 0 && $dbMatched === 0) {
+            fwrite(STDOUT, Lang::t('cli.forget_none') . "\n");
+            exit(0);
+        }
+        fwrite(STDOUT, Lang::t('cli.forget_dry_files', ['count' => $fileMatched]) . "\n");
+        fwrite(STDOUT, Lang::t('cli.forget_dry_db', ['count' => $dbMatched]) . "\n");
+        fwrite(STDOUT, Lang::t('cli.forget_hint') . "\n");
+        exit(0);
+    }
+    $filesRemoved = $store->forget($drops);
+    $store->invalidate();
+    $dbRemoved = 0;
+    if (is_file($dbPath)) {
+        $dbRemoved = $sqlite()->forget($forgetProject, $forgetPrefix);
+    }
+    if ($filesRemoved === 0 && $dbRemoved === 0) {
+        fwrite(STDOUT, Lang::t('cli.forget_none') . "\n");
+        exit(0);
+    }
+    fwrite(STDOUT, Lang::t('cli.forget_done', ['files' => $filesRemoved, 'db' => $dbRemoved]) . "\n");
+    exit(0);
+}
+
 if ($cmd === 'backup') {
     $dataDir = $store->dir;
     $backupDir = $dataDir . '-backups';

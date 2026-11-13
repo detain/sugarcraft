@@ -10,8 +10,8 @@ declare(strict_types=1);
 
 return [
     'cli.entry_pushed' => '{duration}s を記録: {project} ({language})',
-    'cli.usage' => "使用法: candy-codetime [--backend=file|sqlite] <command> [args]\n\nコマンド:\n  dashboard              TUI ダッシュボードを開始 (選択中のバックエンドを読み取ります)\n  push                   [<project> <language>] <file> [duration] [tags] | --  ハートビートを記録\n  milestone              add [name] [description] | list  マイルストーン管理 (sqlite のみ)\n  export                 <csv|json|ics> [days | from [to]]  ハートビートをエクスポート (既定 7 日)\n  gaps                   [days | from [to]]  300 秒以上の未追跡ギャップを表示 (既定 7 日)\n  backup                 30 日より古いデータファイルをアーカイブ (コピーのみ。削除しません)\n  help, --help, -h       この使用法を表示\n  --version, -v          バージョンを表示\n\nオプション:\n  --backend=file|sqlite  push/export/gaps/dashboard のストレージバックエンド (既定: file)\n  --time=<unix>          push: 現在ではなく指定の Unix 秒でハートビートを記録\n  --sqlite               backup: SQLite データベースを VACUUM INTO でアーカイブ (クラッシュセーフなスナップショット)\n  --theme=<name>         ダッシュボード: 名前付きパレットで描画 (default, light, dracula, solarized, gruvbox, high-contrast)
-  CANDY_CODETIME_THEME   同じ選択を環境変数で (フラグが優先)\n  --project=<name>       export/gaps: このプロジェクトのハートビートのみ保持\n  --tag=<label>          export/gaps: このタグ付きのハートビートのみ保持\n  CANDY_CODETIME_DIR     データディレクトリ (既定: \$XDG_DATA_HOME/candy-codetime、未設定なら \$HOME/.local/share/candy-codetime、HOME も未設定なら ./.local/share/candy-codetime)",
+    'cli.usage' => "使用法: candy-codetime [--backend=file|sqlite] <command> [args]\n\nコマンド:\n  dashboard              TUI ダッシュボードを開始 (選択中のバックエンドを読み取ります)\n  push                   [<project> <language>] <file> [duration] [tags] | --  ハートビートを記録\n  milestone              add [name] [description] | list  マイルストーン管理 (sqlite のみ)\n  export                 <csv|json|ics> [days | from [to]]  ハートビートをエクスポート (既定 7 日)\n  gaps                   [days | from [to]]  300 秒以上の未追跡ギャップを表示 (既定 7 日)\n  backup                 30 日より古いデータファイルをアーカイブ (コピーのみ。削除しません)\n  forget                 --project=<name> [--file-prefix=<path>] [--apply]  フィルタに一致する保存ビートを削除 (--apply なしは試行)\n  help, --help, -h       この使用法を表示\n  --version, -v          バージョンを表示\n\nオプション:\n  --backend=file|sqlite  push/export/gaps/dashboard のストレージバックエンド (既定: file)\n  --time=<unix>          push: 現在ではなく指定の Unix 秒でハートビートを記録\n  --sqlite               backup: SQLite データベースを VACUUM INTO でアーカイブ (クラッシュセーフなスナップショット)\n  --theme=<name>         ダッシュボード: 名前付きパレットで描画 (default, light, dracula, solarized, gruvbox, high-contrast)
+  CANDY_CODETIME_THEME   同じ選択を環境変数で (フラグが優先)\n  --project=<name>       export/gaps: このプロジェクトのハートビートのみ保持\n  --tag=<label>          export/gaps: このタグ付きのハートビートのみ保持\n  --file-prefix=<path>   forget: 保存パスがこの接頭辞で始まるビートのみ\n  --apply                forget: 試行ではなく一致ビートを実際に削除\n  CANDY_CODETIME_DIR     データディレクトリ (既定: \$XDG_DATA_HOME/candy-codetime、未設定なら \$HOME/.local/share/candy-codetime、HOME も未設定なら ./.local/share/candy-codetime)",
     'cli.push_usage' => '使用法: candy-codetime push [<project> <language>] <file> [duration] [tags] [--time=<unix>] | candy-codetime push -- (stdin からの JSON 一括)',
     'cli.push_missing_args' => "candy-codetime: push: 必須引数が不足しています (project, language, file)",
     'cli.push_ignored' => "push: {file} は .sugartrackignore に一致したためスキップしました",
@@ -53,6 +53,14 @@ return [
     'cli.backup_none' => "backup: アーカイブする新しいファイルはありません",
     'cli.backup_sqlite_notice' => 'candy-codetime: backup: このコマンドは日次ファイルのみアーカイブします — SQLite データベース {db} は backup --sqlite でクラッシュセーフにコピーできます',
     'cli.backup_sqlite_done' => 'backup: データベースを {file} にアーカイブしました',
+    'cli.forget_usage' => '使い方: candy-codetime forget --project=<name> [--file-prefix=<path>] [--apply]',
+    'cli.forget_no_filter' => 'candy-codetime: forget には --project=<name> か --file-prefix=<path> が最低 1 つ必要です - 全消去は拒否します',
+    'cli.forget_missing_filter' => 'candy-codetime: {flag} にはイコールの後に値が必要です',
+    'cli.forget_dry_files' => 'forget: 日次ファイルに一致ビート {count} 件',
+    'cli.forget_dry_db' => 'forget: sqlite データベースに一致ビート {count} 件',
+    'cli.forget_none' => 'forget: そのフィルタに一致する保存データはありません',
+    'cli.forget_hint' => 'forget: 試行 - 何も削除していません。先に backup を実行し、--apply で再実行してください',
+    'cli.forget_done' => 'forget: 日次ファイルから {files} 件、データベースから {db} 件削除しました',
     'cli.unknown_command' => "candy-codetime: 不明なコマンド: {command}",
     'cli.legacy_env_deprecated' => "candy-codetime: {variable} は非推奨です。代わりに CANDY_CODETIME_DIR を設定してください。",
     'cli.migration_notice' => "candy-codetime: {notice}",

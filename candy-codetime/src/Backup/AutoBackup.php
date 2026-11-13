@@ -19,6 +19,11 @@ use SugarCraft\CodeTime\Store;
  * file), because an archive of the day files IS the privacy-sensitive payload:
  * the README promises the path map is never world-readable, and a sibling
  * directory at the umask default would break that promise with one cron tick.
+ *
+ * The trim companion is the forget door (CT-S42): `candy-codetime forget`
+ * removes stored beats, this class only copies — so an archive taken before
+ * a `forget --apply` is the documented undo path, and nothing here ever
+ * prunes.
  */
 final class AutoBackup
 {

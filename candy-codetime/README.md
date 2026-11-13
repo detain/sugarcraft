@@ -102,7 +102,8 @@ calendar date, matching the store layout.)
 | `milestone` | `add [name] [description]` \| `list` | Manage release markers. `name` and `description` are read for `add` only. Milestones live only in SQLite, so this command uses the sqlite backend regardless of `--backend` (a `milestone add` into a file-only data dir says so on stderr before it creates the database); the sqlite dashboard marks the milestone days with `*` under the weekday row. |
 | `export` | `<csv\|json\|ics> [days]` \| `from [to]` | Dump heartbeats for the last N days (default 7, clamped to [1, 3660]; a non-numeric count is refused with a one-line error and exit 1), or for an explicit dated window: `from`/`to` are `YYYY-MM` or `YYYY-MM-DD` — `export json 2025-06 2025-06` is June 2025, a lone `from` runs through today. A window wider than 3660 days is refused like any oversized range. `--project=<name>` / `--tag=<label>` keep only the rows they match (same filter on both backends). Output goes to STDOUT — redirect it to a file to save it. |
 | `gaps` | `[days]` \| `from [to]` | List untracked stretches of at least 300 seconds in the last N days or the dated window named by `from [to]` (same doors, filters, and clamps as `export`). |
-| `backup` | — | Archive day files (`*.jsonl`) older than 30 days into `<dir>-backups/`. Copies only — it never deletes your data, and archives are never pruned either. Archives are named after the source directory and the file's logical day, so a backfilled day *refreshes* its existing archive instead of minting a second diverging copy, and two same-basename roots can never overwrite one another's archives. Overlapping runs refuse on a lock file rather than interleaving into one destination. A byte copy of a live `.db` would be a torn snapshot, so plain `backup` refuses the SQLite database (the reminder you see when a `.db` is present points at `backup --sqlite`, which runs a crash-safe `VACUUM INTO` snapshot into `<dir>-backups/`). Nothing trims the live database: it grows until you remove it yourself. |
+| `forget` | `--project=<name> [--file-prefix=<path>] [--apply]` | Remove stored beats matching the filter from **both** stores — day files and the SQLite database, regardless of the selected backend. Dry run by default: it counts the matches and changes nothing. `--apply` rewrites the day files (temp-file rewrite; non-matching lines stay byte-identical, a fully emptied day is unlinked) and runs a parameterized `DELETE` on the database. Lines that fail to parse are never removed — only provably matching beats go. Run `backup` first: the archive is the undo path. |
+| `backup` | — | Archive day files (`*.jsonl`) older than 30 days into `<dir>-backups/`. Copies only — it never deletes your data, and archives are never pruned either. Archives are named after the source directory and the file's logical day, so a backfilled day *refreshes* its existing archive instead of minting a second diverging copy, and two same-basename roots can never overwrite one another's archives. Overlapping runs refuse on a lock file rather than interleaving into one destination. A byte copy of a live `.db` would be a torn snapshot, so plain `backup` refuses the SQLite database (the reminder you see when a `.db` is present points at `backup --sqlite`, which runs a crash-safe `VACUUM INTO` snapshot into `<dir>-backups/`). Nothing trims the live database: it grows until you use the `forget` door. |
 | `help`, `--help`, `-h` | — | Print usage. |
 | `--version`, `-v` | — | Print the version. |
 
@@ -252,6 +253,13 @@ With the file backend, fix or drop the offending JSON line in the day file,
 then press `r` in the dashboard to reload it (or `q` and reopen). With the
 sqlite backend, open the database with `sqlite3` and fix the row in
 `heartbeats`.
+
+To *remove* rather than fix, there is a supported door: `forget
+--project=<name> [--file-prefix=<path>]` counts the matches as a dry run,
+and `--apply` removes them from both stores. Lines that fail to parse are
+never touched, so a corrupt line still only goes by hand. Run `backup`
+before `--apply` — the archive is the undo path (day-file archives name the
+logical day; the database needs `backup --sqlite`).
 
 ### Privacy
 

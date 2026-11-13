@@ -727,4 +727,57 @@ public function testAppendValidatesTheFullWrittenLineCount(): void
         $store->loadDay($epoch->modify('+3 days'));
         $this->assertSame($epoch->modify('+3 days')->format('Y-m-d'), array_key_last($probe->getValue($store)), 'a served day rotates to the protected tail');
     }
+
+    // CT-S42: the forget door on the file backend.
+
+    public function testForgetRemovesMatchingLinesAndKeepsOthersByteIdentical(): void
+    {
+        $secret = json_encode(['time' => 1719000000, 'project' => 'secret', 'language' => 'php', 'file' => '/home/dev/a.php', 'duration' => 60, 'tags' => []]);
+        $keep = json_encode(['time' => 1719000100, 'project' => 'public', 'language' => 'php', 'file' => '/home/dev/b.php', 'duration' => 60, 'tags' => []]);
+        $garbage = 'this line is not json at all';
+        $timeless = '{"project": "secret", "language": "php", "file": "/home/dev/c.php", "duration": 60}';
+        $file = $this->tmp . '/2026-05-03.jsonl';
+        file_put_contents($file, $secret . "\n" . $keep . "\n" . $garbage . "\n" . $timeless . "\n");
+
+        $store = new Store($this->tmp);
+        $drops = static fn (Heartbeat $hb): bool => $hb->project === 'secret';
+
+        $this->assertSame(1, $store->countMatched($drops));
+        $this->assertSame(1, $store->forget($drops));
+
+        $lines = file($file, FILE_IGNORE_NEW_LINES);
+        $this->assertSame([$keep, $garbage, $timeless], $lines, 'survivors stay byte for byte; the unprovable timeless row survives too');
+    }
+
+    public function testForgetUnlinksAFullyEmptiedDayAndLeavesUntouchedDaysAlone(): void
+    {
+        $line = static fn (int $t, string $project): string => json_encode(['time' => $t, 'project' => $project, 'language' => 'php', 'file' => '/x.php', 'duration' => 60, 'tags' => []]);
+        $gone = $this->tmp . '/2026-05-03.jsonl';
+        $kept = $this->tmp . '/2026-05-04.jsonl';
+        file_put_contents($gone, $line(1719000000, 'secret') . "\n");
+        $keptBytes = $line(1719003600, 'public') . "\n";
+        file_put_contents($kept, $keptBytes);
+
+        $store = new Store($this->tmp);
+        $removed = $store->forget(static fn (Heartbeat $hb): bool => $hb->project === 'secret');
+
+        $this->assertSame(1, $removed);
+        $this->assertFileDoesNotExist($gone);
+        $this->assertStringEqualsFile($kept, $keptBytes, 'a day without matches is never rewritten');
+    }
+
+    public function testForgetRewritesUnderThePrivateModeLaw(): void
+    {
+        $secret = json_encode(['time' => 1719000000, 'project' => 'secret', 'language' => 'php', 'file' => '/x.php', 'duration' => 60, 'tags' => []]);
+        $keep = json_encode(['time' => 1719000100, 'project' => 'public', 'language' => 'php', 'file' => '/y.php', 'duration' => 60, 'tags' => []]);
+        $file = $this->tmp . '/2026-05-03.jsonl';
+        file_put_contents($file, $secret . "\n" . $keep . "\n");
+        chmod($file, 0644);
+
+        $store = new Store($this->tmp);
+        $this->assertSame(1, $store->forget(static fn (Heartbeat $hb): bool => $hb->project === 'secret'));
+
+        clearstatcache();
+        $this->assertSame(0600, fileperms($file) & 0777, 'the rewrite lands tightened, never loose at the canonical name');
+    }
 }

@@ -172,6 +172,157 @@ final class Store implements HeartbeatReader
     }
 
     /**
+     * Count beats the forget door would remove (CT-S42). Lines that do not
+     * parse are never counted: a beat whose identity cannot be proven is a
+     * beat that survives. Reading populates the day cache, so callers that
+     * stop at the count must invalidate() before reading again (the CLI
+     * forget arm does).
+     *
+     * @param callable(Heartbeat): bool $drops true removes that beat
+     */
+    public function countMatched(callable $drops): int
+    {
+        $count = 0;
+        foreach ($this->dayFiles() as $file) {
+            foreach ($this->readDayLines($file) as [$line, $heartbeat]) {
+                if ($heartbeat !== null && $drops($heartbeat)) {
+                    ++$count;
+                }
+            }
+        }
+        return $count;
+    }
+
+    /**
+     * Rewrite every day file excluding the beats the door matches (CT-S42).
+     *
+     * Privacy without a forget button is half a promise, and the append-only
+     * law was written for crash recovery, not as an argument against deletion
+     * the user explicitly asks for. The rewrite honours every write contract:
+     * non-matching lines are re-emitted byte for byte (a line that merely
+     * failed to parse survives verbatim too — unprovable, so kept), the
+     * replacement is written to a fresh temp file under the same private-mode
+     * law and renamed into place, and a day emptied completely is unlinked
+     * rather than left as a zero-byte husk. Never a plain truncate.
+     *
+     * @param callable(Heartbeat): bool $drops true removes that beat
+     * @return int beats removed across all day files
+     */
+    public function forget(callable $drops): int
+    {
+        $removed = 0;
+        foreach ($this->dayFiles() as $file) {
+            $kept = [];
+            $dropped = 0;
+            foreach ($this->readDayLines($file) as [$line, $heartbeat]) {
+                if ($heartbeat !== null && $drops($heartbeat)) {
+                    ++$dropped;
+                    continue;
+                }
+                $kept[] = $line;
+            }
+            if ($dropped === 0) {
+                continue; // Untouched byte for byte.
+            }
+            $removed += $dropped;
+            if ($kept === []) {
+                if (!@unlink($file)) {
+                    throw new \RuntimeException("could not remove the emptied day file {$file}");
+                }
+                $this->invalidate();
+                continue;
+            }
+            $temp = $file . '.forget.tmp';
+            $handle = @fopen($temp, 'x');
+            if ($handle === false) {
+                throw new \RuntimeException("could not open the forget rewrite at {$temp}");
+            }
+            try {
+                foreach ($kept as $line) {
+                    if (fwrite($handle, $line . "\n") === false) {
+                        throw new \RuntimeException("failed to rewrite {$temp} while forgetting beats");
+                    }
+                }
+            } finally {
+                fclose($handle);
+            }
+            self::ensurePrivateFile($temp, 'day file rewrite');
+            if (!@rename($temp, $file)) {
+                @unlink($temp);
+                throw new \RuntimeException("could not move the day file rewrite into place at {$file}");
+            }
+            $this->invalidate();
+        }
+        return $removed;
+    }
+
+    /** @return list<string> day file paths, deterministic name order */
+    private function dayFiles(): array
+    {
+        if (!is_dir($this->dir)) {
+            return [];
+        }
+        $files = glob($this->dir . '/*.jsonl');
+        if ($files === false) {
+            return [];
+        }
+        sort($files);
+        return $files;
+    }
+
+    /**
+     * Read one day file into [raw line, parsed heartbeat|null] pairs without
+     * touching the day cache (the forget door must see on-disk truth, and an
+     * unparseable line must survive verbatim).
+     *
+     * @return list<array{0: string, 1: ?Heartbeat}>
+     */
+    private function readDayLines(string $file): array
+    {
+        $lines = [];
+        $handle = @fopen($file, 'rb');
+        if ($handle === false) {
+            throw new \RuntimeException("day file {$file} could not be read while forgetting");
+        }
+        try {
+            while (($raw = fgets($handle, self::MAX_LINE_BYTES + 8)) !== false) {
+                $eol = str_ends_with($raw, "\n");
+                $text = rtrim($raw, "\r\n");
+                if (!$eol && strlen($raw) === self::MAX_LINE_BYTES + 7) {
+                    // Over-cap rows are unprovable beats: keep them byte
+                    // intact by continuing to the real end of line before
+                    // recording (an interrupted fgets must never split a
+                    // survivor into two rewrite lines).
+                    while (($more = fgets($handle, self::MAX_LINE_BYTES + 8)) !== false) {
+                        $text .= rtrim($more, "\r\n");
+                        if (str_ends_with($more, "\n")) {
+                            break;
+                        }
+                    }
+                    $lines[] = [$text, null];
+                    continue;
+                }
+                if ($text === '') {
+                    continue;
+                }
+                $row = json_decode($text, true);
+                $heartbeat = null;
+                if (is_array($row)) {
+                    try {
+                        $heartbeat = Heartbeat::fromArray($row);
+                    } catch (\Throwable) {
+                        $heartbeat = null;
+                    }
+                }
+                $lines[] = [$text, $heartbeat];
+            }
+        } finally {
+            fclose($handle);
+        }
+        return $lines;
+    }
+
+    /**
      * Stop the store writing to stderr; counting continues (CT-S19). The
      * dashboard launcher calls this the moment the alt screen takes over, so
      * mid-session reloads can never spray raw bytes into a sync frame.

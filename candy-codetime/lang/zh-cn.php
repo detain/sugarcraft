@@ -10,8 +10,8 @@ declare(strict_types=1);
 
 return [
     'cli.entry_pushed' => '已记录 {duration}s：{project} ({language})',
-    'cli.usage' => "用法: candy-codetime [--backend=file|sqlite] <command> [args]\n\n命令:\n  dashboard              启动 TUI 仪表盘（读取所选后端）\n  push                   [<project> <language>] <file> [duration] [tags] | --  记录心跳\n  milestone              add [name] [description] | list  管理里程碑 (仅 sqlite)\n  export                 <csv|json|ics> [days | from [to]]  导出心跳 (默认 7 天)\n  gaps                   [days | from [to]]  显示至少 300 秒的未跟踪空档 (默认 7 天)\n  backup                 归档 30 天前的数据文件 (仅复制; 绝不删除)\n  help, --help, -h       显示此用法\n  --version, -v          打印版本\n\n选项:\n  --backend=file|sqlite  push/export/gaps/dashboard 的存储后端 (默认: file)\n  --time=<unix>          push: 将心跳记录到指定的 unix 秒，而不是现在\n  --sqlite               backup：用 VACUUM INTO 归档 SQLite 数据库（崩溃安全快照）\n  --theme=<name>         仪表盘：使用命名调色板绘制 (default, light, dracula, solarized, gruvbox, high-contrast)
-  CANDY_CODETIME_THEME   以环境变量给出同样选择（命令行开关优先）\n  --project=<name>       export/gaps：仅保留此项目的记录\n  --tag=<label>          export/gaps：仅保留带此标签的记录\n  CANDY_CODETIME_DIR     数据目录 (默认: \$XDG_DATA_HOME/candy-codetime，未设置时用 \$HOME/.local/share/candy-codetime，HOME 也未设置时用 ./.local/share/candy-codetime)",
+    'cli.usage' => "用法: candy-codetime [--backend=file|sqlite] <command> [args]\n\n命令:\n  dashboard              启动 TUI 仪表盘（读取所选后端）\n  push                   [<project> <language>] <file> [duration] [tags] | --  记录心跳\n  milestone              add [name] [description] | list  管理里程碑 (仅 sqlite)\n  export                 <csv|json|ics> [days | from [to]]  导出心跳 (默认 7 天)\n  gaps                   [days | from [to]]  显示至少 300 秒的未跟踪空档 (默认 7 天)\n  backup                 归档 30 天前的数据文件 (仅复制; 绝不删除)\n  forget                 --project=<name> [--file-prefix=<path>] [--apply]  删除匹配筛选的存储心跳（不加 --apply 仅预演）\n  help, --help, -h       显示此用法\n  --version, -v          打印版本\n\n选项:\n  --backend=file|sqlite  push/export/gaps/dashboard 的存储后端 (默认: file)\n  --time=<unix>          push: 将心跳记录到指定的 unix 秒，而不是现在\n  --sqlite               backup：用 VACUUM INTO 归档 SQLite 数据库（崩溃安全快照）\n  --theme=<name>         仪表盘：使用命名调色板绘制 (default, light, dracula, solarized, gruvbox, high-contrast)
+  CANDY_CODETIME_THEME   以环境变量给出同样选择（命令行开关优先）\n  --project=<name>       export/gaps：仅保留此项目的记录\n  --tag=<label>          export/gaps：仅保留带此标签的记录\n  --file-prefix=<path>   forget：仅存储路径以此前缀开头的心跳\n  --apply                forget：实际删除匹配的心跳，而非预演\n  CANDY_CODETIME_DIR     数据目录 (默认: \$XDG_DATA_HOME/candy-codetime，未设置时用 \$HOME/.local/share/candy-codetime，HOME 也未设置时用 ./.local/share/candy-codetime)",
     'cli.push_usage' => '用法: candy-codetime push [<project> <language>] <file> [duration] [tags] [--time=<unix>] | candy-codetime push -- (stdin 批量 JSON 行)',
     'cli.push_missing_args' => "candy-codetime: push: 缺少必需参数 (project, language, file)",
     'cli.push_ignored' => "push: {file} 匹配 .sugartrackignore — 已跳过",
@@ -53,6 +53,14 @@ return [
     'cli.backup_none' => "backup: 没有可归档的新文件",
     'cli.backup_sqlite_notice' => 'candy-codetime: backup：此命令仅归档每日文件 — SQLite 数据库 {db} 请用 backup --sqlite 以获得崩溃安全副本',
     'cli.backup_sqlite_done' => 'backup：数据库已归档到 {file}',
+    'cli.forget_usage' => '用法：candy-codetime forget --project=<name> [--file-prefix=<path>] [--apply]',
+    'cli.forget_no_filter' => 'candy-codetime: forget 需要 --project=<name> 与 --file-prefix=<path> 至少其一 - 拒绝清空全部',
+    'cli.forget_missing_filter' => 'candy-codetime: {flag} 需要在等号后提供值',
+    'cli.forget_dry_files' => 'forget: 日文件中匹配 {count} 条心跳',
+    'cli.forget_dry_db' => 'forget: sqlite 数据库中匹配 {count} 条心跳',
+    'cli.forget_none' => 'forget: 没有存储记录匹配该筛选',
+    'cli.forget_hint' => 'forget: 预演 - 未删除任何数据；请先运行 backup，再加 --apply 重试',
+    'cli.forget_done' => 'forget: 已从日文件删除 {files} 条、从数据库删除 {db} 条',
     'cli.unknown_command' => "candy-codetime: 未知命令: {command}",
     'cli.legacy_env_deprecated' => "candy-codetime: {variable} 已弃用；请改为设置 CANDY_CODETIME_DIR。",
     'cli.migration_notice' => "candy-codetime: {notice}",

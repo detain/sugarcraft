@@ -1484,4 +1484,63 @@ final class CliTest extends TestCase
         $res = $this->runCli(['--theme', 'light', 'export', 'csv'], null, ['CANDY_CODETIME_DIR' => $this->dataDir]);
         $this->assertSame(0, $res['exit']);
     }
+
+    // CT-S42: the forget door through the CLI.
+
+    public function testForgetDryRunCountsBothStoresAndChangesNothing(): void
+    {
+        $env = ['CANDY_CODETIME_DIR' => $this->dataDir];
+        $this->assertSame(0, $this->runCli(['push', 'secret', 'php', '/home/dev/a.php', '60'], null, $env)['exit']);
+        $this->assertSame(0, $this->runCli(['--backend=sqlite', 'push', 'secret', 'php', '/home/dev/b.php', '60'], null, $env)['exit']);
+        $this->assertSame(0, $this->runCli(['push', 'public', 'php', '/home/dev/c.php', '60'], null, $env)['exit']);
+
+        $result = $this->runCli(['--project=secret', 'forget'], null, $env);
+
+        $this->assertSame(0, $result['exit']);
+        $this->assertStringContainsString('forget: 1 matching beats in the day files', $result['stdout']);
+        $this->assertStringContainsString('forget: 1 matching beats in the sqlite database', $result['stdout']);
+        $this->assertStringContainsString('dry run', $result['stdout']);
+        // Nothing left yet, from either store.
+        $fileExport = $this->runCli(['--backend=file', 'export', 'json', '30'], null, $env)['stdout'];
+        $dbExport = $this->runCli(['--backend=sqlite', 'export', 'json', '30'], null, $env)['stdout'];
+        $this->assertStringContainsString('secret', $fileExport);
+        $this->assertStringContainsString('secret', $dbExport);
+    }
+
+    public function testForgetApplyRemovesFromBothStoresAndKeepsSurvivorsByteIntact(): void
+    {
+        $env = ['CANDY_CODETIME_DIR' => $this->dataDir];
+        $this->assertSame(0, $this->runCli(['push', 'secret', 'php', '/home/dev/a.php', '60'], null, $env)['exit']);
+        $this->assertSame(0, $this->runCli(['--backend=sqlite', 'push', 'secret', 'php', '/home/dev/b.php', '60'], null, $env)['exit']);
+        $garbage = 'this line is not json at all';
+        $dayFile = $this->dataDir . '/' . date('Y-m-d') . '.jsonl';
+        file_put_contents($dayFile, $garbage . "\n", FILE_APPEND);
+
+        $result = $this->runCli(['--project=secret', 'forget', '--apply'], null, $env);
+
+        $this->assertSame(0, $result['exit']);
+        $this->assertStringContainsString('forget: removed 1 beats from the day files and 1 from the database', $result['stdout']);
+        $this->assertStringNotContainsString('secret', $this->runCli(['--backend=file', 'export', 'json', '30'], null, $env)['stdout']);
+        $this->assertStringNotContainsString('secret', $this->runCli(['--backend=sqlite', 'export', 'json', '30'], null, $env)['stdout']);
+        $this->assertStringContainsString($garbage, (string) file_get_contents($dayFile), 'the unparseable line survives verbatim');
+    }
+
+    public function testForgetWithoutAFilterIsRefusedAndUsageIsShown(): void
+    {
+        $result = $this->runCli(['forget'], null, ['CANDY_CODETIME_DIR' => $this->dataDir]);
+
+        $this->assertSame(1, $result['exit']);
+        $this->assertStringContainsString('forget needs at least one', $result['stderr']);
+        $this->assertStringContainsString('refusing to wipe everything', $result['stderr']);
+        $this->assertStringContainsString('Usage: candy-codetime forget', $result['stdout']);
+    }
+
+    public function testForgetRefusesAnEmptyFilterValue(): void
+    {
+        $result = $this->runCli(['forget', '--file-prefix='], null, ['CANDY_CODETIME_DIR' => $this->dataDir]);
+
+        $this->assertSame(1, $result['exit']);
+        $this->assertStringContainsString('--file-prefix', $result['stderr']);
+        $this->assertStringContainsString('needs a value', $result['stderr']);
+    }
 }

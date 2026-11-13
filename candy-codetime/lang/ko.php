@@ -10,8 +10,8 @@ declare(strict_types=1);
 
 return [
     'cli.entry_pushed' => '{duration}s 기록됨: {project} ({language})',
-    'cli.usage' => "사용법: candy-codetime [--backend=file|sqlite] <command> [args]\n\n명령:\n  dashboard              TUI 대시보드를 시작합니다 (선택한 백엔드 사용)\n  push                   [<project> <language>] <file> [duration] [tags] | --  하트비트 기록\n  milestone              add [name] [description] | list  마일스톤 관리 (sqlite 전용)\n  export                 <csv|json|ics> [days | from [to]]  하트비트 내보내기 (기본 7일)\n  gaps                   [days | from [to]]  300초 이상의 추적되지 않은 공백 표시 (기본 7일)\n  backup                 30일보다 오래된 데이터 파일 보관 (복사만 하며 삭제하지 않음)\n  help, --help, -h       이 사용법 표시\n  --version, -v          버전 출력\n\n옵션:\n  --backend=file|sqlite  push/export/gaps/dashboard 의 저장 백엔드 (기본값: file)\n  --time=<unix>          push: 지금 대신 지정 unix 초에 하트비트 기록\n  --sqlite               backup: SQLite 데이터베이스를 VACUUM INTO로 보관 (충격에 안전한 스냅샷)\n  --theme=<name>         대시보드: 이름이 지정된 팔레트로 칠하기 (default, light, dracula, solarized, gruvbox, high-contrast)
-  CANDY_CODETIME_THEME   동일한 선택을 환경 변수로 (플래그가 우선)\n  --project=<name>       export/gaps: 이 프로젝트의 하트비트만 유지\n  --tag=<label>          export/gaps: 이 태그가 있는 하트비트만 유지\n  CANDY_CODETIME_DIR     데이터 디렉터리 (기본값: \$XDG_DATA_HOME/candy-codetime, 미설정 시 \$HOME/.local/share/candy-codetime, HOME도 미설정 시 ./.local/share/candy-codetime)",
+    'cli.usage' => "사용법: candy-codetime [--backend=file|sqlite] <command> [args]\n\n명령:\n  dashboard              TUI 대시보드를 시작합니다 (선택한 백엔드 사용)\n  push                   [<project> <language>] <file> [duration] [tags] | --  하트비트 기록\n  milestone              add [name] [description] | list  마일스톤 관리 (sqlite 전용)\n  export                 <csv|json|ics> [days | from [to]]  하트비트 내보내기 (기본 7일)\n  gaps                   [days | from [to]]  300초 이상의 추적되지 않은 공백 표시 (기본 7일)\n  backup                 30일보다 오래된 데이터 파일 보관 (복사만 하며 삭제하지 않음)\n  forget                 --project=<name> [--file-prefix=<path>] [--apply]  필터와 일치하는 저장 비트 삭제 (--apply 없으면 미리보기)\n  help, --help, -h       이 사용법 표시\n  --version, -v          버전 출력\n\n옵션:\n  --backend=file|sqlite  push/export/gaps/dashboard 의 저장 백엔드 (기본값: file)\n  --time=<unix>          push: 지금 대신 지정 unix 초에 하트비트 기록\n  --sqlite               backup: SQLite 데이터베이스를 VACUUM INTO로 보관 (충격에 안전한 스냅샷)\n  --theme=<name>         대시보드: 이름이 지정된 팔레트로 칠하기 (default, light, dracula, solarized, gruvbox, high-contrast)
+  CANDY_CODETIME_THEME   동일한 선택을 환경 변수로 (플래그가 우선)\n  --project=<name>       export/gaps: 이 프로젝트의 하트비트만 유지\n  --tag=<label>          export/gaps: 이 태그가 있는 하트비트만 유지\n  --file-prefix=<path>   forget: 저장 경로가 이 접두사로 시작하는 비트만\n  --apply                forget: 미리보기 대신 일치하는 비트를 실제로 삭제\n  CANDY_CODETIME_DIR     데이터 디렉터리 (기본값: \$XDG_DATA_HOME/candy-codetime, 미설정 시 \$HOME/.local/share/candy-codetime, HOME도 미설정 시 ./.local/share/candy-codetime)",
     'cli.push_usage' => '사용법: candy-codetime push [<project> <language>] <file> [duration] [tags] [--time=<unix>] | candy-codetime push -- (stdin 일괄 JSON 줄)',
     'cli.push_missing_args' => "candy-codetime: push: 필수 인자가 없습니다 (project, language, file)",
     'cli.push_ignored' => "push: {file} 이 .sugartrackignore 와 일치하여 건너뛰었습니다",
@@ -53,6 +53,14 @@ return [
     'cli.backup_none' => "backup: 새로 보관할 항목이 없습니다",
     'cli.backup_sqlite_notice' => 'candy-codetime: backup: 이 명령은 일별 파일만 보관합니다 — SQLite 데이터베이스 {db}는 backup --sqlite로 안전 복사',
     'cli.backup_sqlite_done' => 'backup: 데이터베이스를 {file}(으)로 보관했습니다',
+    'cli.forget_usage' => '사용법: candy-codetime forget --project=<name> [--file-prefix=<path>] [--apply]',
+    'cli.forget_no_filter' => 'candy-codetime: forget에는 --project=<name> 또는 --file-prefix=<path> 중 최소 하나가 필요합니다 - 전체 삭제를 거부합니다',
+    'cli.forget_missing_filter' => 'candy-codetime: {flag}에는 등호 뒤에 값이 필요합니다',
+    'cli.forget_dry_files' => 'forget: 일별 파일에 일치 비트 {count}개',
+    'cli.forget_dry_db' => 'forget: sqlite 데이터베이스에 일치 비트 {count}개',
+    'cli.forget_none' => 'forget: 그 필터와 일치하는 저장 데이터가 없습니다',
+    'cli.forget_hint' => 'forget: 미리보기 - 삭제되지 않았습니다. 먼저 backup을 실행하고 --apply로 다시 실행하세요',
+    'cli.forget_done' => 'forget: 일별 파일에서 {files}개, 데이터베이스에서 {db}개 삭제했습니다',
     'cli.unknown_command' => "candy-codetime: 알 수 없는 명령: {command}",
     'cli.legacy_env_deprecated' => "candy-codetime: {variable} 은(는) 지원이 중단되었습니다. 대신 CANDY_CODETIME_DIR 을 설정하세요.",
     'cli.migration_notice' => "candy-codetime: {notice}",
