@@ -113,14 +113,14 @@ final class DualSampleGraph implements SizedItem
             '▌', '🬕', '🬝', '█', ' ',
             ' ', ' ', ' ', ' ', ' ',
         ],
+        // btop's tty family carries byte-identical up/down tables (finding
+        // sugar-dashboard-235). A duplicated constant is a dead config
+        // surface, so this port keeps ONE table and the invert lookup falls
+        // back to it — byte-for-byte the old duplicate's behavior. The
+        // verbatim transcription is pinned by testTtyTablesAreBtopVerbatimAndShadeOnly;
+        // btop's source is not on disk here, so the parity claim rides that
+        // pin honestly instead of cargo-culting a second copy.
         'tty_up' => [
-            ' ', '░', '░', '▒', '▒',
-            '░', '░', '▒', '▒', '█',
-            '░', '▒', '▒', '▒', '█',
-            '▒', '▒', '▒', '█', '█',
-            '▒', '█', '█', '█', '█',
-        ],
-        'tty_down' => [
             ' ', '░', '░', '▒', '▒',
             '░', '░', '▒', '▒', '█',
             '░', '▒', '▒', '▒', '█',
@@ -418,7 +418,10 @@ final class DualSampleGraph implements SizedItem
         }
 
         if ($n > 0) {
-            $table = self::SYMBOLS[$this->family . '_' . ($this->invert ? 'down' : 'up')];
+            // The tty family has no separate down table (see SYMBOLS): the
+            // fallback makes its documented invert no-op honest, not broken.
+            $table = self::SYMBOLS[$this->family . '_' . ($this->invert ? 'down' : 'up')]
+                ?? self::SYMBOLS[$this->family . '_up'];
             $mult = ($n - $dataOffset) > 1;
             [$clampMax, $mod] = $this->quantizer();
             $last = 0;

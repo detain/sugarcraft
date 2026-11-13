@@ -101,8 +101,20 @@ final class DualSampleGraphTest extends TestCase
             '▒', '█', '█', '█', '█',
         ];
         $this->assertSame($btop, DualSampleGraph::SYMBOLS['tty_up']);
-        $this->assertSame($btop, DualSampleGraph::SYMBOLS['tty_down']);
+        // D-162 (finding 235) DISCLOSED: the byte-identical duplicate
+        // 'tty_down' key is gone — one table, fallback-routed — and the
+        // invert no-op is pinned behaviorally below instead of as a
+        // duplicated constant.
+        $this->assertArrayNotHasKey('tty_down', DualSampleGraph::SYMBOLS);
         $this->assertNotContains('▓', $btop);
+    }
+
+    public function testInvertIsANoOpForTheTtyFamily(): void
+    {
+        $data = [4, 5, 29, 30, 54, 55, 79, 80, 100, 0];
+        $up = DualSampleGraph::new(5, 1, DualSampleGraph::FAMILY_TTY, false)->withData(...$data);
+        $down = DualSampleGraph::new(5, 1, DualSampleGraph::FAMILY_TTY, true)->withData(...$data);
+        $this->assertSame(self::plain($up), self::plain($down));
     }
 
     public function testBlock2TablesMatchSextantPacking(): void
@@ -151,9 +163,17 @@ final class DualSampleGraphTest extends TestCase
 
     public function testEveryTableHas25Entries(): void
     {
-        $this->assertCount(8, DualSampleGraph::SYMBOLS);
+        // D-162 (finding 235): 7 tables, not 8 — the tty family's
+        // byte-identical '_down' duplicate was dead config surface and is
+        // deleted; its invert no-op rides the SYMBOLS fallback and the
+        // behavioral pin in testInvertIsANoOpForTheTtyFamily.
+        $this->assertCount(7, DualSampleGraph::SYMBOLS);
         foreach (DualSampleGraph::FAMILIES as $family) {
             $this->assertArrayHasKey($family . '_up', DualSampleGraph::SYMBOLS);
+            if ($family === DualSampleGraph::FAMILY_TTY) {
+                $this->assertArrayNotHasKey($family . '_down', DualSampleGraph::SYMBOLS);
+                continue;
+            }
             $this->assertArrayHasKey($family . '_down', DualSampleGraph::SYMBOLS);
         }
         foreach (DualSampleGraph::SYMBOLS as $name => $table) {
