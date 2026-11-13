@@ -87,6 +87,12 @@ final class AmdSysfs implements Backend
                 'temp' => $temp,
                 'tempMem' => Hwmon::temp($hwmon, ['mem'], false),
                 'power' => $power,
+                // Stable attribute paths, resolved once (S-P24).
+                'powerCap' => Hwmon::first($hwmon, 'power1_cap'),
+                'freq1' => Hwmon::first($hwmon, 'freq1_input'),
+                'freq2' => Hwmon::first($hwmon, 'freq2_input'),
+                'pwm' => Hwmon::first($hwmon, 'pwm1'),
+                'pwmMax' => Hwmon::first($hwmon, 'pwm1_max'),
                 'peak' => 0.0,
             ];
         }
@@ -123,17 +129,16 @@ final class AmdSysfs implements Backend
 
                 continue;
             }
-            $hwmon = $c['hwmon'];
             $watts = Hwmon::micro($c['power']);
-            $cap = Hwmon::micro(Hwmon::first($hwmon, 'power1_cap'));
+            $cap = Hwmon::micro($c['powerCap']);
             $peak = max($c['peak'], $watts);
             $cards[$i]['peak'] = $peak;
             [$sclk, $sclkMax] = self::dpm("$dev/pp_dpm_sclk");
             [$mclk, $mclkMax] = self::dpm("$dev/pp_dpm_mclk");
-            $freq1 = Hwmon::micro(Hwmon::first($hwmon, 'freq1_input'));
-            $freq2 = Hwmon::micro(Hwmon::first($hwmon, 'freq2_input'));
-            $pwm = $hwmon === null ? null : Read::int("$hwmon/pwm1");
-            $pwmMax = $hwmon === null ? 255 : (Read::int("$hwmon/pwm1_max") ?? 255);
+            $freq1 = Hwmon::micro($c['freq1']);
+            $freq2 = Hwmon::micro($c['freq2']);
+            $pwm = $c['pwm'] === null ? null : Read::int($c['pwm']);
+            $pwmMax = $c['pwmMax'] === null ? 255 : (Read::int($c['pwmMax']) ?? 255);
 
             // Named args: the 26-slot positional record silently swaps two
             // same-typed sentinels on any reorder (candy-top-077).

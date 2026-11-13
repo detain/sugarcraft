@@ -75,6 +75,11 @@ final class IntelSysfs implements Backend
                 'cardDir' => $paths->sys('class/drm/' . $card->name),
                 'hwmon' => $hwmon,
                 'temp' => Hwmon::temp($hwmon, ['pkg']),
+                // Attribute paths are stable per bound card (S-P24): resolved
+                // once here instead of re-stat'ed up to 3x per tick.
+                'energyPath' => Hwmon::first($hwmon, 'energy1_input'),
+                'powerIn' => Hwmon::first($hwmon, 'power1_input'),
+                'powerCap' => Hwmon::first($hwmon, 'power1_max', 'power1_cap'),
                 'energy' => null,
                 'peak' => self::POWER_FLOOR,
             ];
@@ -95,18 +100,26 @@ final class IntelSysfs implements Backend
             [$coreClock, $coreClockMax] = self::clocks($card, $c['cardDir']);
 
             $watts = Sentinel::UNMEASURED;
-            $energyPath = Hwmon::first($c['hwmon'], 'energy1_input');
+            $energyPath = $c['energyPath'];
             $energy = Hwmon::micro($energyPath);
             $cards[$i]['energy'] = $energy >= 0 ? [$energy, $now] : null;
             if ($energy >= 0 && $c['energy'] !== null && $now > $c['energy'][1] && $energy >= $c['energy'][0]) {
                 $watts = ($energy - $c['energy'][0]) / ($now - $c['energy'][1]);
             } elseif ($energyPath === null) {
-                $watts = Hwmon::micro(Hwmon::first($c['hwmon'], 'power1_input'));
+                $watts = Hwmon::micro($c['powerIn']);
             }
-            $limit = Hwmon::micro(Hwmon::first($c['hwmon'], 'power1_max', 'power1_cap'));
+            // power1_max may vanish (driver reload): a lost winner
+            // re-resolves the preference order once; the stable case is a
+            // single stat instead of the old full-candidate sweep (S-P24).
+            $capPath = $c['powerCap'];
+            if ($capPath === null || !is_file($capPath)) {
+                $capPath = Hwmon::first($c['hwmon'], 'power1_max', 'power1_cap');
+                $cards[$i]['powerCap'] = $capPath;
+            }
+            $limit = Hwmon::micro($capPath);
             $peak = max($c['peak'], $watts);
             $cards[$i]['peak'] = $peak;
-            $hasPower = $energyPath !== null || Hwmon::first($c['hwmon'], 'power1_input') !== null;
+            $hasPower = $energyPath !== null || $c['powerIn'] !== null;
 
             $util = $scan->utilization($card->busId);
             // Named args: the 26-slot positional record silently swaps two

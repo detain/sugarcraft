@@ -161,6 +161,10 @@ final class Net
     {
         $lines = explode("\n", $text);
         $header = null;
+        // Tail offsets of the byte columns, resolved once with the header
+        // instead of an array_search per row (S-P24).
+        $iOff = null;
+        $oOff = null;
         $out = [];
         $linkLocal = [];
         foreach ($lines as $line) {
@@ -170,21 +174,23 @@ final class Net
             }
             if ($cols[0] === 'Name') {
                 $header = $cols;
+                $ib = array_search('Ibytes', $cols, true);
+                $ob = array_search('Obytes', $cols, true);
+                $iOff = $ib === false ? null : count($cols) - (int) $ib;
+                $oOff = $ob === false ? null : count($cols) - (int) $ob;
                 continue;
             }
             if ($header === null || count($cols) < 4) {
                 continue;
             }
-            $ib = array_search('Ibytes', $header, true);
-            $ob = array_search('Obytes', $header, true);
-            if ($ib === false || $ob === false) {
-                return null;
+            if ($iOff === null || $oOff === null) {
+                return null; // header without the byte columns (checked per row as before)
             }
             $raw = $cols[0];
             $name = rtrim($raw, '*');
             if (str_starts_with($cols[2], '<Link#')) {
-                $rx = $cols[count($cols) - (count($header) - $ib)] ?? '';
-                $tx = $cols[count($cols) - (count($header) - $ob)] ?? '';
+                $rx = $cols[count($cols) - $iOff] ?? '';
+                $tx = $cols[count($cols) - $oOff] ?? '';
                 if (!ctype_digit($rx) || !ctype_digit($tx)) {
                     continue;
                 }
