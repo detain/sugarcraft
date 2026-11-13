@@ -41,6 +41,14 @@ final class DebugPage extends PageBase implements RowNavigable
     private int $cursor = 0;
     private int $scrollOffset = 0;
 
+    /**
+     * client-032: `f` toggles the error-pinned lane view — housekeeping
+     * (STATUS/VARIABLES pairs every 1-1.7 s) turns the main ring over in
+     * ~40-60 s, so without this an admin poll failure is invisible by the
+     * time the operator opens the Debug page.
+     */
+    private bool $errorsOnly = false;
+
     public function __construct(
         ServerContextInterface $context,
     ) {
@@ -68,7 +76,7 @@ final class DebugPage extends PageBase implements RowNavigable
      */
     protected function build(): string
     {
-        $entries = QueryLogger::entries();
+        $entries = $this->errorsOnly ? QueryLogger::errorEntries() : QueryLogger::entries();
 
         $lines = [];
         $lines[] = $this->renderHeader();
@@ -107,6 +115,15 @@ final class DebugPage extends PageBase implements RowNavigable
         if ($ch === 'c') {
             QueryLogger::clear();
             return [$this->withResetCursor(), null];
+        }
+
+        // f toggles the error-pinned lane (client-032)
+        if ($ch === 'f') {
+            $next = clone $this;
+            $next->errorsOnly = !$this->errorsOnly;
+            $next->cursor = 0;
+            $next->scrollOffset = 0;
+            return [$next, null];
         }
 
         // q quits (handled by parent controller)
@@ -177,12 +194,16 @@ final class DebugPage extends PageBase implements RowNavigable
 
     private function renderHeader(): string
     {
-        $entryCount = \count(QueryLogger::entries());
+        $entryCount = \count($this->errorsOnly ? QueryLogger::errorEntries() : QueryLogger::entries());
         $title = Style::new()->bold()->foreground(Color::hex('#f59e0b'))->render('Debug Log');
 
         $counter = Style::new()->foreground(Color::hex('#6b7280'))->render(" ({$entryCount} entries)");
 
-        return "{$title}{$counter}";
+        $filter = $this->errorsOnly
+            ? Style::new()->bold()->foreground(Color::hex('#ef4444'))->render('  [errors only]')
+            : '';
+
+        return "{$title}{$counter}{$filter}";
     }
 
     /**
@@ -278,7 +299,7 @@ final class DebugPage extends PageBase implements RowNavigable
     private function renderFooter(): string
     {
         return Style::new()->foreground(Color::hex('#6b7280'))
-            ->render('[j/k] nav  [c] clear  [q] back');
+            ->render('[j/k] nav  [f] errors-only  [c] clear  [q] back');
     }
 
     // ─── Accessors ───────────────────────────────────────────────────────────

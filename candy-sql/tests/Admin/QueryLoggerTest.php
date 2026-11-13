@@ -114,4 +114,70 @@ final class QueryLoggerTest extends TestCase
         $this->assertNotEmpty($lines);
         $this->assertStringNotContainsString('s3cr3t!', $lines[0]);
     }
+
+    public function testRedactionConsumesStandardDoubledQuoteDialect(): void
+    {
+        // client-006: `(?:\\.|(?!\2).)*` tolerated backslash escapes but a
+        // SQL-standard doubled quote ended the match, persisting the tail:
+        // `'it''expensive'` -> `'***''expensive'` (plaintext leak).
+        QueryLogger::log('query', "CREATE USER u IDENTIFIED BY 'it''expensive'", 0);
+        $sql = QueryLogger::entries()[0]['sql'];
+        $this->assertStringNotContainsString('expensive', $sql);
+        $this->assertStringContainsString("IDENTIFIED BY '***'", $sql);
+
+        QueryLogger::clear();
+        QueryLogger::log('query', 'SET PASSWORD = "a""b"', 0);
+        $sql = QueryLogger::entries()[0]['sql'];
+        $this->assertStringNotContainsString('b"', $sql);
+        $this->assertStringContainsString("PASSWORD = '***'", $sql);
+
+        QueryLogger::clear();
+        QueryLogger::log('query', "CREATE USER u IDENTIFIED BY 'it\'s\'secret'", 0);
+        $this->assertStringNotContainsString('secret', QueryLogger::entries()[0]['sql']);
+
+        QueryLogger::clear();
+        QueryLogger::log('query', "ALTER USER u IDENTIFIED WITH caching_sha2_password BY 'p''w'", 0);
+        $this->assertStringNotContainsString('w\'', QueryLogger::entries()[0]['sql']);
+        $this->assertStringContainsString("BY '***'", QueryLogger::entries()[0]['sql']);
+    }
+
+    public function testErrorEntriesRideThePinnedLaneImmuneToRingScrollOut(): void
+    {
+        // client-032: housekeeping floods the 100-entry ring in ~40-60 s and
+        // the error scrolled out with it — the failure nobody could see.
+        QueryLogger::log('error', 'SHOW ENGINE INNODB STATUS', 0, 'deadlock detected');
+        $planted = QueryLogger::entries()[0];
+        for ($i = 0; $i < 150; $i++) {
+            QueryLogger::log('status', 'SHOW GLOBAL STATUS', 5);
+        }
+        $this->assertNotContains($planted, QueryLogger::entries(), 'planted error scrolled out of the ring');
+        $lane = QueryLogger::errorEntries();
+        $this->assertCount(1, $lane);
+        $this->assertSame('deadlock detected', $lane[0]['error']);
+
+        // clear() sweeps both.
+        QueryLogger::clear();
+        $this->assertSame([], QueryLogger::errorEntries());
+    }
+
+    public function testDebugPageErrorsOnlyToggle(): void
+    {
+        // The `f` filter reads the lane.
+        QueryLogger::log('error', 'SELECT boom', 0, 'no such table: boom');
+        for ($i = 0; $i < 150; $i++) {
+            QueryLogger::log('status', 'SHOW GLOBAL STATUS', 5);
+        }
+        $page = \SugarCraft\Sql\Admin\Debug\DebugPage::new(
+            new \SugarCraft\Sql\Admin\ServerContext(new FakeDatabase()),
+        );
+        // The very flood that hid the failure before client-032: the ring
+        // view has already scrolled past the error...
+        $this->assertStringNotContainsString('boom', $page->view());
+        // ...and the `f` lane reads where it survived.
+        [$filtered, ] = $page->update(new \SugarCraft\Core\Msg\KeyMsg(\SugarCraft\Core\KeyType::Char, 'f'));
+        $this->assertStringContainsString('[errors only]', $filtered->view());
+        $this->assertStringNotContainsString('SHOW GLOBAL STATUS', $filtered->view());
+        [$back, ] = $filtered->update(new \SugarCraft\Core\Msg\KeyMsg(\SugarCraft\Core\KeyType::Char, 'f'));
+        $this->assertStringNotContainsString('[errors only]', $back->view());
+    }
 }

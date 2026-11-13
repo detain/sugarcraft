@@ -23,6 +23,19 @@ final class QueryLogger
     private const MAX_ENTRIES = 100;
 
     /**
+     * Error-pinned lane (client-032): entries carrying an error are ALSO
+     * kept here, where the STATUS/VARIABLES housekeeping that floods the
+     * main ring (every 1-1.7 s, turning it over in ~40-60 s) can never
+     * scroll them out — the ring WAS the only error surface; the Debug
+     * page's `f` toggle reads this lane.
+     *
+     * @var list<array{timestamp: float, type: string, sql: string, rows: int, error: string|null}>
+     */
+    private static array $errorEntries = [];
+
+    private const MAX_ERROR_ENTRIES = 50;
+
+    /**
      * Log a query execution.
      *
      * Credential material is redacted before the entry is retained: this log is
@@ -40,6 +53,13 @@ final class QueryLogger
             'rows' => $rows,
             'error' => $error === null ? null : self::redact($error),
         ];
+
+        if ($error !== null) {
+            self::$errorEntries[] = self::$entries[array_key_last(self::$entries)];
+            if (count(self::$errorEntries) > self::MAX_ERROR_ENTRIES) {
+                self::$errorEntries = array_slice(self::$errorEntries, -self::MAX_ERROR_ENTRIES);
+            }
+        }
 
         // Keep only the most recent entries
         if (count(self::$entries) > self::MAX_ENTRIES) {
@@ -59,7 +79,10 @@ final class QueryLogger
      *
      * Patterns run in order (each on the previous result), so the function form
      * is handled before the bare `PASSWORD '...'` form. The quoted-string body
-     * tolerates backslash escapes so an embedded quote doesn't cut redaction short.
+     * tolerates BOTH escape dialects so an embedded quote never cuts redaction
+     * short: backslash escapes (MySQL default) and SQL-standard doubling
+     * (`''` inside `'...'`) — client-006: `'it''expensive'` used to persist
+     * `'***''expensive'`, leaking the tail past the first doubled quote.
      * Each pattern's quote character class accepts both `'...'` and `"..."`
      * literals: MySQL accepts double-quoted strings by default, so
      * `IDENTIFIED BY "secret"` must redact exactly like the single-quoted form.
@@ -67,10 +90,10 @@ final class QueryLogger
     private static function redact(string $sql): string
     {
         $patterns = [
-            '/(IDENTIFIED\s+WITH\s+\S+\s+(?:BY|AS)\s+)([\'"])(?:\\\\.|(?!\2).)*\2/i',
-            '/(IDENTIFIED\s+BY\s+(?:PASSWORD\s+)?)([\'"])(?:\\\\.|(?!\2).)*\2/i',
-            '/(PASSWORD\s*\(\s*)([\'"])(?:\\\\.|(?!\2).)*\2(\s*\))/i',
-            '/(PASSWORD\s*=?\s*)([\'"])(?:\\\\.|(?!\2).)*\2/i',
+            '/(IDENTIFIED\s+WITH\s+\S+\s+(?:BY|AS)\s+)([\'"])(?:\\\\.|\2\2|(?!\2).)*\2/i',
+            '/(IDENTIFIED\s+BY\s+(?:PASSWORD\s+)?)([\'"])(?:\\\\.|\2\2|(?!\2).)*\2/i',
+            '/(PASSWORD\s*\(\s*)([\'"])(?:\\\\.|\2\2|(?!\2).)*\2(\s*\))/i',
+            '/(PASSWORD\s*=?\s*)([\'"])(?:\\\\.|\2\2|(?!\2).)*\2/i',
         ];
         $replacements = [
             "$1'***'",
@@ -93,6 +116,17 @@ final class QueryLogger
     }
 
     /**
+     * The error-pinned lane: every entry that carried an error, immune to
+     * housekeeping scroll-out from the main ring (client-032).
+     *
+     * @return list<array{timestamp: float, type: string, sql: string, rows: int, error: string|null}>
+     */
+    public static function errorEntries(): array
+    {
+        return self::$errorEntries;
+    }
+
+    /**
      * BC forwarder for the pre-rename accessor name.
      *
      * @deprecated The `get`-prefixed form breaks the house bare-accessor
@@ -107,6 +141,7 @@ final class QueryLogger
     public static function clear(): void
     {
         self::$entries = [];
+        self::$errorEntries = [];
     }
 
     /**
