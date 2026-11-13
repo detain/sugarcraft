@@ -482,4 +482,83 @@ final class AnimatedWebpDecoderTest extends TestCase
             self::assertStringContainsString('file://***@example.invalid/missing.webp', $e->getMessage());
         }
     }
+
+    // ---- SV-H8: ceilings fire inside parseContainer, not after it ----
+
+    public function testThePixelBudgetRefusesInsideParseWithoutMaterialisingLaterStills(): void
+    {
+        AnimatedWebpDecoder::setWebpCapableForTesting(true);
+        // 2048x2048 canvas sits exactly AT MAX_CANVAS_PIXELS; the total
+        // pixel budget is blown at frame 9 — but every still payload here
+        // is 512 KiB, so walking the whole container would materialise
+        // ~30 MB of copies before any post-parse check ran. The refusal
+        // must happen at the tally, so process peak stays far below the
+        // 32 MiB assert ceiling a complete materialisation breaks through.
+        $le24 = static fn (int $v): string => chr($v & 255) . chr(($v >> 8) & 255) . chr(($v >> 16) & 255);
+        $chunks = [
+            ['fourcc' => 'VP8X', 'payload' => "\x02\x00\x00\x00" . $le24(2047) . $le24(2047)],
+            ['fourcc' => 'ANIM', 'payload' => "\x00\x00\x00\x00" . pack('v', 0)],
+        ];
+        for ($f = 0; $f < 60; $f++) {
+            $chunks[] = ['fourcc' => 'ANMF', 'payload' => $le24(0) . $le24(0) . $le24(2047) . $le24(2047) . $le24(100) . "\x00" . str_repeat("\x11", 512 * 1024)];
+        }
+        $path = $this->file(AnimatedWebpBytes::container($chunks), 'balloon.webp');
+
+        memory_reset_peak_usage();
+        $baseline = memory_get_usage(true);
+        try {
+            (new AnimatedWebpDecoder())->open($path, 8, 4, 10.0);
+            self::fail('the pixel ceiling did not refuse');
+        } catch (\RuntimeException $e) {
+            // "(2048x2048, 9 frames)" is the tally spy: the refusal names
+            // the frame at which the budget was crossed, so a parse that
+            // walked the container and checked after materialisation (the
+            // old shape — it would report all 60) cannot pass this pin.
+            self::assertStringContainsString('canvas/pixel ceilings (2048x2048, 9 frames)', $e->getMessage());
+        }
+        self::assertLessThan(
+            80 * 1024 * 1024,
+            memory_get_peak_usage(true) - $baseline,
+            'parse materialised past the ceiling instead of refusing at the tally',
+        );
+    }
+
+    public function testAChunkStepStormRefusesAtTheParseBudget(): void
+    {
+        AnimatedWebpDecoder::setWebpCapableForTesting(true);
+        // Zero-size filler chunks: each costs a loop step and carries no
+        // frame. With the 10k parse budget the walk refuses; without it,
+        // this container parsed to completion and died later as "no ANMF
+        // frames" — a bounded but WRONG refusal (the sniffers already
+        // carry the same budget; the main loop was the odd one out).
+        $le24 = static fn (int $v): string => chr($v & 255) . chr(($v >> 8) & 255) . chr(($v >> 16) & 255);
+        $chunks = [
+            ['fourcc' => 'VP8X', 'payload' => "\x02\x00\x00\x00" . $le24(31) . $le24(31)],
+        ];
+        for ($c = 0; $c < 12_001; $c++) {
+            $chunks[] = ['fourcc' => 'PADD', 'payload' => ''];
+        }
+        $path = $this->file(AnimatedWebpBytes::container($chunks), 'storm.webp');
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('chunk-step parse budget');
+        (new AnimatedWebpDecoder())->open($path, 8, 4, 10.0);
+    }
+
+    public function testAFifoSourceIsRefusedAsNotARegularFile(): void
+    {
+        if (!function_exists('posix_mkfifo')) {
+            self::markTestSkipped('ext-posix is unavailable for the FIFO fixture');
+        }
+        AnimatedWebpDecoder::setWebpCapableForTesting(true);
+        $dir = sys_get_temp_dir() . '/reel-webp-fifo-' . getmypid() . '-' . bin2hex(random_bytes(4));
+        self::assertNotFalse(mkdir($dir, 0700));
+        $this->dirs[] = $dir;
+        $fifo = $dir . '/pipe.webp';
+        self::assertNotFalse(posix_mkfifo($fifo, 0600));
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('video source not found');
+        (new AnimatedWebpDecoder())->open($fifo, 8, 4, 10.0);
+    }
 }

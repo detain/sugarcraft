@@ -87,6 +87,10 @@ final class AnimatedWebpDecoder implements Decoder
     /** Chunk-walk step ceiling in isAnimated() — bounded so a pathological header chain cannot spin. */
     private const MAX_CHUNK_STEPS = 10_000;
 
+    /** Type gate for the post-open fstat — mirrors GifDecoder's sibling constants. */
+    private const STAT_TYPE_MASK = 0170000;
+    private const STAT_REGULAR_BIT = 0100000;
+
     /** ANMF payload header size: 3+3+3+3 offset/size + 3 duration + 1 blend/dispose flags. */
     private const ANMF_HEADER_BYTES = 16;
 
@@ -232,21 +236,33 @@ final class AnimatedWebpDecoder implements Decoder
             throw new \RuntimeException('video source not found: ' . AudioPlayer::redactCredentials($source));
         }
 
-        // Sibling capture gate: refuse above-ceiling sources before the read.
-        // The stat leg is the pre-read refusal; when a wrapper hides the
-        // size (@stat false) the capped read + strlen leg below still fails
-        // closed, so the file is never fully slurped either way.
-        $size = @stat($source);
-        if (is_array($size) && (int) $size['size'] > self::MAX_SOURCE_BYTES) {
-            throw new \RuntimeException(sprintf(
-                'animated WebP source is %d bytes, above the %d byte ceiling: %s',
-                (int) $size['size'],
-                self::MAX_SOURCE_BYTES,
-                AudioPlayer::redactCredentials($source),
-            ));
+        // Sibling capture gate, GifDecoder::readBoundedBytes-shaped: the path
+        // is opened exactly once and the post-open fstat on the LIVE HANDLE
+        // is the authority (a pre-read @stat is size-only — no type bit — and
+        // a swap between stat and slurp is the classic TOCTOU plant). The
+        // capped read carries one byte of over-read so a source that yields
+        // more than the ceiling fails loud instead of silently truncating.
+        $handle = @fopen($source, 'rb');
+        if ($handle === false) {
+            throw new \RuntimeException('could not read animated WebP source: ' . AudioPlayer::redactCredentials($source));
         }
-
-        $bytes = @file_get_contents($source, false, null, 0, self::MAX_SOURCE_BYTES + 1);
+        try {
+            $afterOpen = fstat($handle);
+            if (!is_array($afterOpen) || (($afterOpen['mode'] & self::STAT_TYPE_MASK) !== self::STAT_REGULAR_BIT)) {
+                throw new \RuntimeException('animated WebP source is not a regular file: ' . AudioPlayer::redactCredentials($source));
+            }
+            if ((int) $afterOpen['size'] > self::MAX_SOURCE_BYTES) {
+                throw new \RuntimeException(sprintf(
+                    'animated WebP source is %d bytes, above the %d byte ceiling: %s',
+                    (int) $afterOpen['size'],
+                    self::MAX_SOURCE_BYTES,
+                    AudioPlayer::redactCredentials($source),
+                ));
+            }
+            $bytes = stream_get_contents($handle, self::MAX_SOURCE_BYTES + 1);
+        } finally {
+            fclose($handle);
+        }
         if ($bytes === false) {
             throw new \RuntimeException('could not read animated WebP source: ' . AudioPlayer::redactCredentials($source));
         }
@@ -259,17 +275,13 @@ final class AnimatedWebpDecoder implements Decoder
             ));
         }
 
-        $frames = self::parseContainer($bytes, $canvasW, $canvasH, $this->loopCount);
+        $frames = self::parseContainer($bytes, $canvasW, $canvasH, $this->loopCount, AudioPlayer::redactCredentials($source));
         if ($frames === []) {
             throw new \RuntimeException('not an animated WebP (no ANMF frames): ' . AudioPlayer::redactCredentials($source));
         }
-        if (count($frames) > self::MAX_FRAMES) {
-            throw new \RuntimeException(sprintf(
-                'animated WebP exceeds the %d frame ceiling: %s',
-                self::MAX_FRAMES,
-                AudioPlayer::redactCredentials($source),
-            ));
-        }
+        // Final net for out-of-order containers (ANMF chunks ahead of the
+        // VP8X declaration): the running tallies inside parseContainer are
+        // canvas-aware and cannot fire before the canvas is known.
         if ($canvasW * $canvasH > self::MAX_CANVAS_PIXELS || count($frames) * $canvasW * $canvasH > self::MAX_TOTAL_PIXELS) {
             throw new \RuntimeException(sprintf(
                 'animated WebP exceeds the canvas/pixel ceilings (%dx%d, %d frames): %s',
@@ -405,13 +417,21 @@ final class AnimatedWebpDecoder implements Decoder
     // -------------------------------------------------------------------------
 
     /**
-     * Walk the RIFF chunk list into frame descriptors.
+     * Walk the RIFF chunk list into frame descriptors — the ceilings are
+     * RUNNING tallies, not a post-hoc check: the frame count and the
+     * canvas×frames pixel budget refuse AT the ceiling, before the next
+     * still is extracted, so the frames list can never outgrow what the
+     * class docblock promises to cap "up front" (a legal-size hostile file
+     * used to materialise every chunk's still copy here and only then meet
+     * the checks in open()).
+     *
+     * @param string $label credential-redacted source, for refusal messages
      *
      * @param-out int $canvasW
      * @param-out int $canvasH
      * @return list<array{x:int,y:int,duration:int,noBlend:bool,dispose:bool,still:string}>
      */
-    private static function parseContainer(string $bytes, &$canvasW, &$canvasH, &$loop): array
+    private static function parseContainer(string $bytes, &$canvasW, &$canvasH, &$loop, string $label = 'source'): array
     {
         $loop = 0;
         $canvasW = 0;
@@ -424,7 +444,13 @@ final class AnimatedWebpDecoder implements Decoder
 
         $i = 12;
         $len = strlen($bytes);
-        while ($i + 8 <= $len) {
+        // Same 10k step budget the public sniffers carry: a zero-size-chunk
+        // storm (64 MiB of 8-byte chunks ≈ 8.4M iterations) must refuse,
+        // not spin through the whole container.
+        for ($step = 0; $step < self::MAX_CHUNK_STEPS; $step++) {
+            if ($i + 8 > $len) {
+                break;
+            }
             $fourcc = substr($bytes, $i, 4);
             $size = unpack('V', substr($bytes, $i + 4, 4))[1];
             $payloadEnd = $i + 8 + $size;
@@ -443,6 +469,15 @@ final class AnimatedWebpDecoder implements Decoder
                 // flags(1) reserved(3) canvasW-1(3) canvasH-1(3)
                 $canvasW = self::le24($payload, 4) + 1;
                 $canvasH = self::le24($payload, 7) + 1;
+                if ($canvasW * $canvasH > self::MAX_CANVAS_PIXELS) {
+                    throw new \RuntimeException(sprintf(
+                        'animated WebP exceeds the canvas/pixel ceilings (%dx%d, %d frames): %s',
+                        $canvasW,
+                        $canvasH,
+                        count($frames),
+                        $label,
+                    ));
+                }
             } elseif ($fourcc === 'ANIM') {
                 if (strlen($payload) < 6) {
                     throw new \RuntimeException(sprintf('malformed animated WebP: short ANIM chunk (%d bytes)', strlen($payload)));
@@ -452,6 +487,23 @@ final class AnimatedWebpDecoder implements Decoder
             } elseif ($fourcc === 'ANMF') {
                 if (strlen($payload) < self::ANMF_HEADER_BYTES) {
                     throw new \RuntimeException(sprintf('malformed animated WebP: short ANMF chunk (frame %d, %d bytes)', count($frames) + 1, strlen($payload)));
+                }
+                if (count($frames) + 1 > self::MAX_FRAMES) {
+                    throw new \RuntimeException(sprintf(
+                        'animated WebP exceeds the %d frame ceiling: %s',
+                        self::MAX_FRAMES,
+                        $label,
+                    ));
+                }
+                if ($canvasW > 0 && $canvasH > 0
+                    && (count($frames) + 1) * $canvasW * $canvasH > self::MAX_TOTAL_PIXELS) {
+                    throw new \RuntimeException(sprintf(
+                        'animated WebP exceeds the canvas/pixel ceilings (%dx%d, %d frames): %s',
+                        $canvasW,
+                        $canvasH,
+                        count($frames) + 1,
+                        $label,
+                    ));
                 }
                 // x/y are stored in half-units per the container spec (stored*2).
                 // Width/height fields are NOT trusted: the spec's half-unit
@@ -473,6 +525,16 @@ final class AnimatedWebpDecoder implements Decoder
             }
 
             $i += 8 + $size + ($size & 1);
+        }
+
+        // Loop exited on the step budget (not at end-of-container): hostile
+        // padding, refuse — silently returning a prefix parse would bless it.
+        if ($i + 8 <= $len) {
+            throw new \RuntimeException(sprintf(
+                'animated WebP exceeds the %d chunk-step parse budget: %s',
+                self::MAX_CHUNK_STEPS,
+                $label,
+            ));
         }
 
         if ($canvasW === 0 || $canvasH === 0) {
