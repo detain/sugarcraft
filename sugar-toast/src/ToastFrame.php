@@ -25,7 +25,7 @@ use SugarCraft\Core\Util\Width;
 final class ToastFrame
 {
     /**
-     * @param list<array{action:Action,alert:Alert,alertIndex:int,actionIndex:int,row:int,col:int,width:int}> $rects
+     * @param list<array{action:Action,alert:Alert,alertIndex:int,actionIndex:int,row:int,col:int,width:int,fold:int}> $rects
      */
     public function __construct(
         /** Column of the top-most (newest, paint-order last) box's top-left cell. */
@@ -64,7 +64,7 @@ final class ToastFrame
      * Absolute frame cells of every painted action button — the same
      * structure {@see actionAt()} walks.
      *
-     * @return list<array{action:Action,alert:Alert,alertIndex:int,actionIndex:int,row:int,col:int,width:int}>
+     * @return list<array{action:Action,alert:Alert,alertIndex:int,actionIndex:int,row:int,col:int,width:int,fold:int}>
      */
     public function actionRects(): array
     {
@@ -80,7 +80,7 @@ final class ToastFrame
     public function actionAt(int $col, int $row): ?Action
     {
         foreach (\array_reverse($this->rects) as $rect) {
-            if ($rect['row'] === $row && $col >= $rect['col'] && $col < $rect['col'] + $rect['width']) {
+            if (($rect['fold'] ?? 0) === 0 && $rect['row'] === $row && $col >= $rect['col'] && $col < $rect['col'] + $rect['width']) {
                 return $rect['action'];
             }
         }
@@ -127,5 +127,22 @@ final class ToastFrame
             $rects,
             ['x' => $col, 'y' => $row, 'width' => $bw, 'height' => $bh],
         );
+    }
+
+    /**
+     * The activeAlerts() index whose `[+N more]` fold row covers frame
+     * position ($col, $row), or null. Fold rects ride actionRects() flagged
+     * by a non-zero 'fold' (the hidden-button count) but never answer
+     * {@see actionAt()} — hosts invoking the returned Action's callback must
+     * not mistake the fold for a button; this is its own door.
+     */
+    public function foldAt(int $col, int $row): ?int
+    {
+        foreach (\array_reverse($this->rects) as $rect) {
+            if (($rect['fold'] ?? 0) > 0 && $rect['row'] === $row && $col >= $rect['col'] && $col < $rect['col'] + $rect['width']) {
+                return $rect['alertIndex'];
+            }
+        }
+        return null;
     }
 }

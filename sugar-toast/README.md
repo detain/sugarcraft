@@ -145,7 +145,7 @@ replaces them, so under `Enqueue` the queue length only ever grows.
 Per-alert SIZE is bounded too: `Toast::MAX_MESSAGE_CELLS` (fixed at 8192)
 truncates an over-long message with a visible `" …[truncated]"` marker, and
 `Toast::MAX_ACTIONS_PER_ALERT` (fixed at 64) paints only the first 64 buttons
-— the rest fold into a visible dim `"+N more"` prose row (brackets are the button shape; the fold wears neither and never lands in `actionRects()`). The caps bind the RENDER
+— the rest fold into a pressable `"[+N more]"` row that is a rect in `actionRects()` (flagged by a non-zero `fold`) and expands through `expandAt()` / `withActionsExpanded()` up to `Toast::MAX_EXPANDED_ACTIONS` (512); past that ceiling it is dim bracketless prose again. The caps bind the RENDER
 only: the full message text and the complete action list still ride the
 `Alert` into history and `activeAlerts()`, so nothing is silently lost to a
 host that reads the data instead of the pixels.
@@ -409,7 +409,7 @@ job — and sugar-toast ships the geometry to do it with. `Action` is a value ob
 with `readonly string $label` (normalised at construction: only inline SGR
 survives, see "Security & Trust Boundary") and `readonly \Closure(): void
 $callback`. `actionRects()` returns a hit-test rectangle for every rendered
-button — `{action, alert, alertIndex, actionIndex, row, col, width}` in the
+button — `{action, alert, alertIndex, actionIndex, row, col, width, fold}` in the
 same absolute frame coordinates `view()` composites in — and `actionAt()`
 answers "which action covers this cell?". sugar-toast stays zone-neutral:
 it emits no mouse zones and pulls in no mouse dependency; the host owns
@@ -451,6 +451,18 @@ foreach ($toast->actionRects($background, $cols, $rows) as $n => $rect) {
 }
 ```
 
+**The `[+N more]` fold.** An alert with more than 64 buttons ends in a
+`[+N more]` row. It appears in `actionRects()` as one extra rect whose
+`fold` is the hidden-button count (`0` on every real button) and whose
+`action` is a harmless no-op stand-in — `actionAt()` never returns it, so
+existing dispatch loops are unaffected, though a hotkey table built by
+enumerating rects should skip `fold > 0` entries. The mouse door is
+`$next = $toast->expandAt($col, $row)` (a new `Toast` with that alert
+expanded, or `null` when the cell is not a fold row); the keyboard door is
+`$toast->withActionsExpanded($alertIndex)` (`activeAlerts()` index space;
+pass `false` to collapse). Expansion is host state on the immutable `Toast`,
+so the host re-renders with the returned instance.
+
 `actionRects()`/`actionAt()`/`activeAlerts()` all ignore expired alerts, so
 the clickable set is exactly what is on screen.
 
@@ -462,9 +474,9 @@ allowed — but arguments that DIFFER from the last render throw
 `\LogicException` instead of quietly describing a screen nobody is
 looking at. `frame()` hands the whole thing over as a value: composed
 `rows`, the top box's `x`/`y`, `actionRects()`, `actionAt($col, $row)`,
-and `boxRows()` — the frame as lines, which over an empty background are
-just the box rows, so parsing rendered ANSI to locate the box is no longer
-required.
+`boxRows()` — the frame as lines — and `placeAt($col, $row)`, which hands
+back just the boxes' bounding rectangle re-anchored at a host-chosen cell,
+so parsing rendered ANSI to locate (or inset) the box is no longer required.
 
 ## Styled Alerts
 
@@ -592,9 +604,12 @@ already over the new cap survive until the next push evicts them.
 | `->dismiss() / clear() / pruneExpired()` | Lifecycle: `dismiss()` files every queued alert into history and mutes rendering until `clear()`; `clear()` resets the dismissed state but files nothing into history; `pruneExpired()` drops expired alerts silently — see History Log |
 | `->history(): list<Alert>` | Every recorded alert — dismissed, `DropOldest` evictees, `DropNewest` refusals; cumulative, `clear()` never resets it — see History Log |
 | `->activeAlerts(): list<Alert>` | The live queue exactly as `view()` sees it — the index space `cancelAlert()`/`extendAlert()`/`actionRects()` share |
-| `->actionRects(?string $background = null, ?int $viewportWidth = null, ?int $viewportHeight = null): list<array{action:Action,alert:Alert,alertIndex:int,actionIndex:int,row:int,col:int,width:int}>` | Frame cells of every painted `[Label]` button — omitted args read the last render, mismatched args throw; the `"+N more"` fold is prose, never a rect |
+| `->actionRects(?string $background = null, ?int $viewportWidth = null, ?int $viewportHeight = null): list<array{action:Action,alert:Alert,alertIndex:int,actionIndex:int,row:int,col:int,width:int,fold:int}>` | Frame cells of every painted `[Label]` button — omitted args read the last render, mismatched args throw; the expandable `[+N more]` fold is a rect flagged `fold > 0` |
 | `->frame(?string $background = null, ?int $viewportWidth = null, ?int $viewportHeight = null): ?ToastFrame` | The rendered frame as a value object (`boxRows()`/`actionRects()`/`actionAt()`); `null` when nothing renders |
 | `->actionAt(int $col, int $row, ?string $background = null, ?int $viewportWidth = null, ?int $viewportHeight = null): ?Action` | The dispatch door: which Action (if any) covers a frame cell — top-most (newest) box wins where rows overlap |
+| `->withActionsExpanded(int $alertIndex, bool $on = true): self` | Expand (or collapse) one alert's `[+N more]` action fold — `activeAlerts()` index; out of range is a no-op |
+| `->expandAt(int $col, int $row, ?string $background = null, ?int $viewportWidth = null, ?int $viewportHeight = null): ?Toast` | The mouse door for the fold: the Toast with that alert expanded when the cell is a `[+N more]` row, else `null` |
+| `ToastFrame::foldAt(int $col, int $row): ?int` | `activeAlerts()` index whose fold row covers the cell, or `null` |
 | `ToastFrame::boxRows(): list<string>` | The composed frame as lines (no trailing-newline artefact) — the full viewport-sized frame; use `placeAt()` for the box rectangle alone |
 | `ToastFrame::placeAt(int $col, int $row): ToastFrame` | Re-anchor the painted boxes at a host-chosen cell (inset): a frame whose `boxRows()` are only the boxes' bounding rectangle, background stripped, with `x`/`y`/`bounds` and every hit rect translated to the new origin |
 | `Lang::t(string $key, array $params = []): string` | Translate a known key ('dismiss', 'count', 'more', 'truncated', 'hidden', 'type.*') — see Internationalization |

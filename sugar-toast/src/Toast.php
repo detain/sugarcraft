@@ -82,6 +82,14 @@ final class Toast
      */
     public const MAX_ACTIONS_PER_ALERT = 64;
 
+    /**
+     * Action buttons rendered once the host EXPANDED an alert's fold
+     * ({@see withActionsExpanded()}). Still a hard ceiling — the render
+     * budget the 64 cap protects does not vanish on a click; past this the
+     * fold is dim prose again and the rest stays reachable via the Alert.
+     */
+    public const MAX_EXPANDED_ACTIONS = 512;
+
     // Configuration
     private int $maxWidth   = 50;
     private int $minWidth   = 0;
@@ -151,6 +159,16 @@ final class Toast
 
     /** History log of dismissed alerts. */
     private HistoryLog $historyLog;
+
+    /**
+     * Alerts whose action fold the host expanded. Holds the Alert instances
+     * themselves (identity, not spl_object_id): a retained reference keeps an
+     * id from being recycled onto a different alert and expanding it by
+     * accident. Pruned to the live queue on every expansion write.
+     *
+     * @var list<Alert>
+     */
+    private array $expanded = [];
 
     // -------------------------------------------------------------------------
     // Factory
@@ -1294,6 +1312,44 @@ final class Toast
     }
 
     /**
+     * Expand (or collapse) one alert's `[+N more]` action fold: the alert
+     * then shows up to {@see MAX_EXPANDED_ACTIONS} buttons and every one is a
+     * hit rect. $alertIndex addresses {@see activeAlerts()} like
+     * cancelAlert(); out of range is a no-op returning the same instance.
+     * The keyboard-driven twin of {@see expandAt()}.
+     */
+    public function withActionsExpanded(int $alertIndex, bool $on = true): self
+    {
+        $active = $this->activeAlerts();
+        if (!isset($active[$alertIndex])) {
+            return $this;
+        }
+        $target = $active[$alertIndex];
+        $expanded = \array_values(\array_filter(
+            $this->expanded,
+            static fn (Alert $a): bool => $a !== $target && \in_array($a, $active, true)
+        ));
+        if ($on) {
+            $expanded[] = $target;
+        }
+        return $this->mutate(['expanded' => $expanded]);
+    }
+
+    /**
+     * The mouse door for the fold: when ($col, $row) lies on a painted
+     * `[+N more]` row, the Toast with that alert expanded; null anywhere
+     * else. Hosts do `$next = $toast->expandAt($c, $r); if ($next !== null)
+     * { $toast = $next; }` beside their actionAt() dispatch. Same frame-args
+     * contract as {@see actionAt()}.
+     */
+    public function expandAt(int $col, int $row, ?string $background = null, ?int $viewportWidth = null, ?int $viewportHeight = null): ?self
+    {
+        [$bg, $w, $h] = $this->resolveFrameArgs(__FUNCTION__, $background, $viewportWidth, $viewportHeight);
+        $index = $this->frame($bg, $w, $h)?->foldAt($col, $row);
+        return $index === null ? null : $this->withActionsExpanded($index);
+    }
+
+    /**
      * The live queue exactly as {@see view()} sees it: queue order, expired
      * alerts filtered: before this accessor existed, cancelAlert() and
      * extendAlert() indexed a RAW queue the host could not observe, so a
@@ -1322,7 +1378,7 @@ final class Toast
      * own mouse events through actionAt() (or drive keyboards from this same
      * surface) and invoke the returned Action's callback themselves.
      *
-     * @return list<array{action:Action, alert:Alert, alertIndex:int, actionIndex:int, row:int, col:int, width:int}>
+     * @return list<array{action:Action, alert:Alert, alertIndex:int, actionIndex:int, row:int, col:int, width:int, fold:int}>
      */
     public function actionRects(?string $background = null, ?int $viewportWidth = null, ?int $viewportHeight = null): array
     {
@@ -1371,7 +1427,7 @@ final class Toast
     /**
      * @param array $layout
      *
-     * @return list<array{action:Action,alert:Alert,alertIndex:int,actionIndex:int,row:int,col:int,width:int}>
+     * @return list<array{action:Action,alert:Alert,alertIndex:int,actionIndex:int,row:int,col:int,width:int,fold:int}>
      */
     private function computeRects(array $layout): array
     {
@@ -1408,6 +1464,28 @@ final class Toast
                     'row' => $row,
                     'col' => $placed['x'] + 1,
                     'width' => \max(1, Width::string($shown)),
+                    'fold' => 0,
+                ];
+            }
+            $hiddenCount = \count($alert->actions) - $count;
+            if ($hiddenCount > 0 && !$this->isExpanded($alert)) {
+                // The expandable '[+N more]' row sits on the last row before
+                // the closing border. 'fold' = hidden-button count (0 on a
+                // real button); the Action is a no-op stand-in so dispatch
+                // loops that invoke it stay harmless — the real door is
+                // expandAt().
+                $label = '[' . Lang::t('more', ['count' => $hiddenCount]) . ']';
+                $shown = Ansi::strip(Width::string($label) > $inner ? Width::truncateMiddle($label, $inner) : $label);
+                $rects[] = [
+                    'action' => Action::new($label, static function (): void {
+                    }),
+                    'alert' => $alert,
+                    'alertIndex' => $alertIndex,
+                    'actionIndex' => $count,
+                    'row' => $placed['y'] + $boxHeight - 2,
+                    'col' => $placed['x'] + 1,
+                    'width' => \max(1, Width::string($shown)),
+                    'fold' => $hiddenCount,
                 ];
             }
         }
@@ -1633,16 +1711,26 @@ final class Toast
         }
         if ($hiddenActions > 0) {
             // Folded buttons stay on the Alert (history()/activeAlerts());
-            // the frame says so instead of growing a row per button. The
-            // row is prose, NOT affordance: buttons paint as '[Label]', so
-            // the fold wears no brackets and rides dim, and actionRects()
-            // never lists it — a click there hits nothing. The wording rides
-            // the 'more' lang key (README i18n section).
+            // the frame says so instead of growing a row per button. While
+            // the fold is EXPANDABLE it paints as a '[+N more]' button
+            // and actionRects() lists it with its 'fold' count; the host
+            // fires expandAt()/withActionsExpanded(). Past the expanded
+            // ceiling there is nothing left to expand, so it falls back to
+            // dim bracketless prose and no rect. Wording rides the 'more'
+            // lang key (README i18n section).
             $more = Lang::t('more', ['count' => $hiddenActions]);
-            $middleLines[] = $v . "\x1b[2m" . Width::padRight(
-                Width::truncateMiddle($more, $inner),
-                $inner
-            ) . "\x1b[0m" . $v;
+            if (!$this->isExpanded($alert)) {
+                $label = '[' . $more . ']';
+                $middleLines[] = $v . Width::padRight(
+                    Width::string($label) > $inner ? Width::truncateMiddle($label, $inner) : $label,
+                    $inner
+                ) . $v;
+            } else {
+                $middleLines[] = $v . "\x1b[2m" . Width::padRight(
+                    Width::truncateMiddle($more, $inner),
+                    $inner
+                ) . "\x1b[0m" . $v;
+            }
         }
 
         $lines = [$top, ...$middleLines, $bottom];
@@ -1668,14 +1756,21 @@ final class Toast
 
     /**
      * The actions {@see renderAlert()} and {@see actionRects()} render — the
-     * FIRST {@see MAX_ACTIONS_PER_ALERT} of the alert's list, so the painted
+     * FIRST {@see MAX_ACTIONS_PER_ALERT} (or {@see MAX_EXPANDED_ACTIONS} once
+     * expanded) of the alert's list, so the painted
      * buttons and the hit-map agree by construction (one source of truth).
      *
      * @return list<Action>
      */
     private function visibleActions(Alert $alert): array
     {
-        return \array_slice($alert->actions, 0, self::MAX_ACTIONS_PER_ALERT);
+        $cap = $this->isExpanded($alert) ? self::MAX_EXPANDED_ACTIONS : self::MAX_ACTIONS_PER_ALERT;
+        return \array_slice($alert->actions, 0, $cap);
+    }
+
+    private function isExpanded(Alert $alert): bool
+    {
+        return \in_array($alert, $this->expanded, true);
     }
 
     /**
