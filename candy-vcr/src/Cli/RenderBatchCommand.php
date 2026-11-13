@@ -13,6 +13,7 @@ use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
+use Symfony\Component\Process\Process;
 
 #[AsCommand(name: 'render-batch')]
 final class RenderBatchCommand extends Command
@@ -29,6 +30,7 @@ final class RenderBatchCommand extends Command
             ->addOption('encoder', 'e', InputOption::VALUE_OPTIONAL, Lang::t('opt.encoder'), 'ffmpeg')
             ->addOption('theme', 't', InputOption::VALUE_OPTIONAL, Lang::t('opt.theme'), 'TokyoNight')
             ->addOption('fps', null, InputOption::VALUE_OPTIONAL, Lang::t('opt.fps'), '30')
+            ->addOption('jobs', 'j', InputOption::VALUE_OPTIONAL, Lang::t('opt.jobs'), '1')
             ->addOption('strict', null, InputOption::VALUE_NONE, Lang::t('opt.strict'));
     }
 
@@ -61,6 +63,16 @@ final class RenderBatchCommand extends Command
 
         $strict = (bool) $input->getOption('strict');
 
+        // --jobs=N parallelizes across render-tape child processes. It is
+        // refused loudly when not a positive integer; jobs=1 (the default)
+        // keeps the in-process serial path byte-identical to before.
+        $jobsRaw = (string) $input->getOption('jobs');
+        if (!preg_match('/^\d+$/', $jobsRaw) || (int) $jobsRaw < 1) {
+            $output->writeln('<error>' . Lang::t('batch.jobs_invalid', ['value' => $jobsRaw]) . '</error>');
+            return 1;
+        }
+        $jobs = (int) $jobsRaw;
+
         $themeOpt = $input->getOption('theme');
         $themeName = is_string($themeOpt) ? $themeOpt : 'TokyoNight';
 
@@ -92,22 +104,6 @@ final class RenderBatchCommand extends Command
         $progressBar->setMessage('');
         $progressBar->start();
 
-        $renderer = TapeToGif::create([
-            'fps' => $fps,
-            'backend' => $backend,
-            'encoder' => $encoderType,
-            'fontFamily' => $fontFamily,
-        ]);
-
-        $renderOptions = [
-            'fps' => $fps,
-            'backend' => $backend,
-            'encoder' => $encoderType,
-            'theme' => $themeName,
-            'fontFamily' => $fontFamily,
-            'strict' => $strict,
-        ];
-
         $successCount = 0;
         $failCount = 0;
         $startTime = microtime(true);
@@ -118,48 +114,79 @@ final class RenderBatchCommand extends Command
         /** @var array<string, string> $claimedOutputs gif path => tape that claimed it */
         $claimedOutputs = [];
 
-        foreach ($tapeFiles as $tapeFile) {
-            $label = $this->displayLabel($tapeFile, $dir);
-            $progressBar->setMessage($label);
+        if ($jobs > 1) {
+            [$results, $successCount, $failCount] = $this->renderParallel(
+                $tapeFiles,
+                $dir,
+                $jobs,
+                $outputDir,
+                $backend,
+                $encoderType,
+                $themeName,
+                $fontFamily,
+                $fps,
+                $strict,
+                $progressBar,
+            );
+        } else {
+            $renderer = TapeToGif::create([
+                'fps' => $fps,
+                'backend' => $backend,
+                'encoder' => $encoderType,
+                'fontFamily' => $fontFamily,
+            ]);
 
-            $targetDir = $outputDir ?? dirname($tapeFile);
-            $outputGif = $targetDir . DIRECTORY_SEPARATOR . (preg_replace('/\.tape$/', '.gif', basename($tapeFile)) ?: basename($tapeFile) . '.gif');
+            $renderOptions = [
+                'fps' => $fps,
+                'backend' => $backend,
+                'encoder' => $encoderType,
+                'theme' => $themeName,
+                'fontFamily' => $fontFamily,
+                'strict' => $strict,
+            ];
 
-            // Two tapes named alike in different subdirectories, sent to one
-            // --output-dir, would silently overwrite each other's GIF. Refuse
-            // the second one loudly instead.
-            if (isset($claimedOutputs[$outputGif])) {
-                $results[$tapeFile] = [
-                    'status' => 'FAIL: ' . Lang::t('batch.claimed', ['gif' => $outputGif, 'tape' => $claimedOutputs[$outputGif]]),
-                    'time' => 0.0,
-                ];
-                $failCount++;
+            foreach ($tapeFiles as $tapeFile) {
+                $label = $this->displayLabel($tapeFile, $dir);
+                $progressBar->setMessage($label);
+
+                $outputGif = $this->outputGifFor($tapeFile, $outputDir);
+
+                // Two tapes named alike in different subdirectories, sent to one
+                // --output-dir, would silently overwrite each other's GIF. Refuse
+                // the second one loudly instead.
+                if (isset($claimedOutputs[$outputGif])) {
+                    $results[$tapeFile] = [
+                        'status' => 'FAIL: ' . Lang::t('batch.claimed', ['gif' => $outputGif, 'tape' => $claimedOutputs[$outputGif]]),
+                        'time' => 0.0,
+                    ];
+                    $failCount++;
+                    $progressBar->advance();
+                    $progressBar->display();
+                    continue;
+                }
+                $claimedOutputs[$outputGif] = $tapeFile;
+
+                $fileStart = microtime(true);
+
+                try {
+                    $renderer->render($tapeFile, $outputGif, $renderOptions);
+
+                    $elapsed = microtime(true) - $fileStart;
+                    // Keyed by the full path: with -r two tapes may share a
+                    // basename, and a basename key would let the later one
+                    // overwrite the earlier verdict (and both rows then print
+                    // the same status).
+                    $results[$tapeFile] = ['status' => 'OK', 'time' => $elapsed];
+                    $successCount++;
+                } catch (\Throwable $e) {
+                    $elapsed = microtime(true) - $fileStart;
+                    $results[$tapeFile] = ['status' => 'FAIL: ' . $e->getMessage(), 'time' => $elapsed];
+                    $failCount++;
+                }
+
                 $progressBar->advance();
                 $progressBar->display();
-                continue;
             }
-            $claimedOutputs[$outputGif] = $tapeFile;
-
-            $fileStart = microtime(true);
-
-            try {
-                $renderer->render($tapeFile, $outputGif, $renderOptions);
-
-                $elapsed = microtime(true) - $fileStart;
-                // Keyed by the full path: with -r two tapes may share a
-                // basename, and a basename key would let the later one
-                // overwrite the earlier verdict (and both rows then print
-                // the same status).
-                $results[$tapeFile] = ['status' => 'OK', 'time' => $elapsed];
-                $successCount++;
-            } catch (\Throwable $e) {
-                $elapsed = microtime(true) - $fileStart;
-                $results[$tapeFile] = ['status' => 'FAIL: ' . $e->getMessage(), 'time' => $elapsed];
-                $failCount++;
-            }
-
-            $progressBar->advance();
-            $progressBar->display();
         }
 
         $progressBar->finish();
@@ -222,6 +249,192 @@ final class RenderBatchCommand extends Command
             return substr($tapeFile, strlen($prefix));
         }
         return $tapeFile;
+    }
+
+    /**
+     * The .gif path a tape renders to: the batch output dir (or the tape's own
+     * directory) plus the basename with its extension swapped.
+     */
+    private function outputGifFor(string $tapeFile, ?string $outputDir): string
+    {
+        $targetDir = $outputDir ?? dirname($tapeFile);
+        return $targetDir . DIRECTORY_SEPARATOR . (preg_replace('/\.tape$/', '.gif', basename($tapeFile)) ?: basename($tapeFile) . '.gif');
+    }
+
+    /**
+     * The CLI entry a render-tape child process should run: the current
+     * script, with the CANDY_VCR_CLI override for embedders and tests that
+     * host the Application in-process (there SCRIPT_FILENAME names the host
+     * binary, not candy-vcr). A phar path works unchanged — `php x.phar`
+     * executes the archive stub.
+     */
+    private function cliEntry(): string
+    {
+        $override = getenv('CANDY_VCR_CLI');
+        if (is_string($override) && $override !== '') {
+            return $override;
+        }
+        $script = (string) ($_SERVER['SCRIPT_FILENAME'] ?? '');
+        if ($script !== '' && is_file($script)) {
+            return $script;
+        }
+        $argv0 = (string) ($_SERVER['argv'][0] ?? '');
+        return $argv0 !== '' && is_file($argv0) ? $argv0 : 'candy-vcr';
+    }
+
+    /**
+     * Optional replacement for the render-tape child spawn. Production is
+     * null (real Symfony Process); tests inject a factory to observe pool
+     * pacing without paying real renders.
+     *
+     * @var (callable(list<string>): Process)|null
+     */
+    private $processFactory = null;
+
+    /**
+     * @param (callable(list<string>): Process)|null $factory
+     */
+    public function setProcessFactory(?callable $factory): void
+    {
+        $this->processFactory = $factory;
+    }
+
+    /**
+     * Parallel branch: keeps at most $jobs render-tape child processes alive,
+     * each rendering exactly one tape to exactly the path the serial loop
+     * would have used, so the per-tape claim table refuses second writers
+     * with the same wording and order (pending is consumed in sorted order).
+     * The parent never renders — it polls, advances the progress bar as
+     * children exit, and turns a non-zero child exit into the FAIL row.
+     *
+     * @param list<string> $tapeFiles
+     * @return array{0: array<string, array{status: string, time: float}>, 1: int, 2: int}
+     */
+    private function renderParallel(
+        array $tapeFiles,
+        string $dir,
+        int $jobs,
+        ?string $outputDir,
+        string $backend,
+        string $encoderType,
+        string $themeName,
+        string $fontFamily,
+        float $fps,
+        bool $strict,
+        ProgressBar $progressBar,
+    ): array {
+        $results = [];
+        $successCount = 0;
+        $failCount = 0;
+        /** @var array<string, string> $claimedOutputs */
+        $claimedOutputs = [];
+        $pending = $tapeFiles;
+        /** @var array<int, array{tape: string, process: Process, start: float}> $running */
+        $running = [];
+        $entry = $this->cliEntry();
+
+        while ($pending !== [] || $running !== []) {
+            while (count($running) < $jobs && $pending !== []) {
+                $tapeFile = (string) array_shift($pending);
+                $progressBar->setMessage($this->displayLabel($tapeFile, $dir));
+                $outputGif = $this->outputGifFor($tapeFile, $outputDir);
+
+                if (isset($claimedOutputs[$outputGif])) {
+                    $results[$tapeFile] = [
+                        'status' => 'FAIL: ' . Lang::t('batch.claimed', ['gif' => $outputGif, 'tape' => $claimedOutputs[$outputGif]]),
+                        'time' => 0.0,
+                    ];
+                    $failCount++;
+                    $progressBar->advance();
+                    $progressBar->display();
+                    continue;
+                }
+                $claimedOutputs[$outputGif] = $tapeFile;
+
+                $argv = [
+                    \PHP_BINARY,
+                    $entry,
+                    'render-tape',
+                    $tapeFile,
+                    '-o', $outputGif,
+                    '-b', $backend,
+                    '-e', $encoderType,
+                    '-t', $themeName,
+                    '-f', $fontFamily,
+                    '--fps', (string) $fps,
+                ];
+                if ($strict) {
+                    $argv[] = '--strict';
+                }
+
+                $process = $this->spawnProcess($argv);
+                // Serial rendering has no per-tape deadline, so neither may
+                // the pool: Symfony's 300s default must not kill a huge tape
+                // that the serial path would still be working on.
+                $process->setTimeout(0);
+                $process->start();
+                $running[spl_object_id($process)] = ['tape' => $tapeFile, 'process' => $process, 'start' => microtime(true)];
+            }
+
+            foreach ($running as $id => $worker) {
+                if ($worker['process']->isRunning()) {
+                    continue;
+                }
+                // isRunning() already reported the exit; wait() reaps without
+                // blocking and keeps the Symfony Process bookkeeping honest.
+                $exitCode = $worker['process']->wait();
+                unset($running[$id]);
+
+                $elapsed = microtime(true) - $worker['start'];
+                if ($exitCode === 0) {
+                    $results[$worker['tape']] = ['status' => 'OK', 'time' => $elapsed];
+                    $successCount++;
+                } else {
+                    $reason = $this->childFailureReason($worker['process'], $exitCode);
+                    $results[$worker['tape']] = ['status' => 'FAIL: ' . $reason, 'time' => $elapsed];
+                    $failCount++;
+                }
+                $progressBar->advance();
+                $progressBar->display();
+            }
+
+            if ($pending !== [] || $running !== []) {
+                usleep(2000);
+            }
+        }
+
+        return [$results, $successCount, $failCount];
+    }
+
+    /**
+     * First meaningful line of the child's stderr (de-decorated, capped) so
+     * the FAIL row names the real cause; the exit code stays visible when the
+     * child said nothing.
+     */
+    private function childFailureReason(Process $process, int $exitCode): string
+    {
+        $stderr = $process->getErrorOutput();
+        $lines = preg_split('/\R/', trim(strip_tags($stderr)) ?: '') ?: [];
+        foreach (array_reverse($lines) as $line) {
+            $line = trim($line);
+            if ($line !== '') {
+                return mb_strimwidth($line, 0, 200, '…');
+            }
+        }
+
+        return Lang::t('batch.child_failed', ['code' => $exitCode]);
+    }
+
+    /**
+     * @param list<string> $argv
+     */
+    private function spawnProcess(array $argv): Process
+    {
+        if ($this->processFactory !== null) {
+            return ($this->processFactory)($argv);
+        }
+
+        return new Process($argv);
     }
 
     /**
