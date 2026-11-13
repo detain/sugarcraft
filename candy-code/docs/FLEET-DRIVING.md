@@ -212,8 +212,13 @@ is the run's per-stage record: every tool run writes
 `<user workflows dir>/.running/plan-<sha8>-<n>.json` as its stages settle, so
 once the killed writer is gone the record reads `orphaned` and
 `candy-code workflow resume <runId>` (or `/workflow resume <runId>`) continues
-after the settled prefix. The run ID rode the tool result the killed process
-never printed, so a driver has to find it on disk.
+after the settled prefix. The run ID is announced when the run is claimed
+(before any stage dispatches), as the line `workflow run <id> started (resume:
+candy-code workflow resume <id>)`: on stderr in `-p` mode, and on the Workflow
+row's live line in the TUI. The JSON result is only written on a normal return,
+so a killed `-p` process leaves stderr as the one place the ID survives; a
+driver that captures stderr can read it there, and otherwise must find the
+record on disk. A launch that silences diagnostics loses the stderr copy too.
 
 The native verb is different. `candy-code workflow run` calls
 `WorkflowEngine::run()`, which takes the interruptible default: a signal
@@ -238,5 +243,6 @@ writes the cooperative pause record first, and the verb's pause observer
 6. For saved-workflow fan-out prefer the native `candy-code workflow run` verb
    over hand-rolled `-p` lanes; signal-stopping it leaves a resume point
    (`candy-code workflow resume <id>`). The model-mediated `-p '/workflow'`
-   route leaves only its crash record, under a run ID stdout never names —
-   budget time there.
+   route leaves its crash record, and its run ID appears only on stderr (the
+   claim-time line) — a driver that discards stderr must read the record under
+   `.running/` instead; budget time there.

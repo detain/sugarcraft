@@ -154,11 +154,13 @@ final class WorkflowToolResumeTest extends TestCase
         $document = WorkflowToolTest::document($result->content());
         $this->assertSame(['a said answer 1'], $document['announcements']);
 
-        $this->assertSame([SubAgentActivity::OP_STARTED, SubAgentActivity::OP_PROGRESS, SubAgentActivity::OP_FINISHED], array_map(static fn (SubAgentActivity $b): string => $b->op, $beats));
-        $this->assertSame([1, 2, 3], array_map(static fn (SubAgentActivity $b): int => $b->seq, $beats));
+        // The claim-time run-ID line is the second beat: the TUI's only live-line view of it.
+        $this->assertSame([SubAgentActivity::OP_STARTED, SubAgentActivity::OP_PROGRESS, SubAgentActivity::OP_PROGRESS, SubAgentActivity::OP_FINISHED], array_map(static fn (SubAgentActivity $b): string => $b->op, $beats));
+        $this->assertSame([1, 2, 3, 4], array_map(static fn (SubAgentActivity $b): int => $b->seq, $beats));
         $this->assertSame('call-7', $beats[0]->parentCallId);
-        $this->assertSame('a said answer 1', $beats[1]->items[0]->delta);
-        $this->assertSame(SubAgentActivity::OUTCOME_COMPLETE, $beats[2]->outcome);
+        $this->assertMatchesRegularExpression('/^workflow run plan-[0-9a-f]{8}-1 started \(resume: candy-code workflow resume plan-[0-9a-f]{8}-1\)$/', $beats[1]->items[0]->delta);
+        $this->assertSame('a said answer 1', $beats[2]->items[0]->delta);
+        $this->assertSame(SubAgentActivity::OUTCOME_COMPLETE, $beats[3]->outcome);
         $this->assertCount(1, array_unique(array_map(static fn (SubAgentActivity $b): string => $b->id, $beats)));
     }
 

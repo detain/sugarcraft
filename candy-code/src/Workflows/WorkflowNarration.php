@@ -48,8 +48,18 @@ final class WorkflowNarration
     public function sink(): \Closure
     {
         return function (string $line, array $meta): void {
-            $this->beat(SubAgentActivity::OP_PROGRESS, [ActivityItem::text($line)]);
+            $this->say($line);
         };
+    }
+
+    /**
+     * One line as the row's latest text. The run-ID line rides this too: the
+     * Workflow tool's live row is the only transcript-visible place a TUI user
+     * sees a run ID before its result arrives, and a killed run never gets one.
+     */
+    public function say(string $line): void
+    {
+        $this->beat(SubAgentActivity::OP_PROGRESS, [ActivityItem::text($line)]);
     }
 
     public function started(): void

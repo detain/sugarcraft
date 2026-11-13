@@ -333,12 +333,14 @@ final readonly class WorkflowTool implements Tool, BuildsFromCatalog, DelegatesT
 
         $narration = new WorkflowNarration($this->subAgentEmitter, $toolCallId, $workflow->name);
         $workflows->setAnnouncementSink($narration->sink());
-        // Through Log::raw, not a bare STDERR write: in the TUI that lands in the
-        // error log file instead of over the alternate screen, and in -p it is
-        // stderr. Printed when the run is claimed, because a killed process never
-        // reaches the result that carries this ID.
-        $workflows->setRunStartedSink(static function (string $runId): void {
-            Log::raw(sprintf('workflow run %s started (resume: candy-code workflow resume %s)', $runId, $runId));
+        // Announced when the run is claimed, because a killed process never reaches
+        // the result that carries this ID. The TUI sees it on the Workflow row's
+        // live line (the narration channel, the only transcript-side surface this
+        // tool has); -p sees it on stderr via Log::raw.
+        $workflows->setRunStartedSink(static function (string $runId) use ($narration): void {
+            $line = sprintf('workflow run %s started (resume: candy-code workflow resume %s)', $runId, $runId);
+            $narration->say($line);
+            Log::raw($line);
         });
         $narration->started();
 
