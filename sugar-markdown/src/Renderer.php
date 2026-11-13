@@ -760,7 +760,8 @@ final class Renderer
      * CommonMark collapses runs of blank lines; with this on, every run of
      * blank lines between two blocks survives into {@see render()}'s output
      * at the position it held in the source (runs between the items of a
-     * list excepted: lists render tight). Mirrors
+     * list excepted: lists render tight — a dated port decision, see
+     * {@see renderList()}). Mirrors
      * charmbracelet/glamour.WithPreservedNewLines. The stream family buffers while it is on
      * ({@see defersStreaming()}).
      */
@@ -1435,7 +1436,8 @@ final class Renderer
      * every block carries its source lines, so each run is restored where it
      * stood. Only ever adds: a block already followed by enough blank lines
      * is left alone. (A run inside a list item does not survive: a list
-     * renders its items tight.)
+     * renders its items tight — the dated port decision stamped at
+     * {@see renderList()}.)
      */
     private function padBlankLines(string $rendered, AbstractBlock $block, AbstractBlock $next): string
     {
@@ -1665,6 +1667,18 @@ final class Renderer
         }
     }
 
+    /**
+     * Lists ALWAYS render tight — items stack with no blank lines even when
+     * the source carries them (a "loose" list by CommonMark's definition,
+     * probed byte-equal for both `preservedNewLines` states). Port decision
+     * stamped 2026-11 (sugar-markdown-078): CommonMark, goldmark and glamour
+     * all honour loose spacing, but replicating it here would shift bytes
+     * across the whole golden corpus and every consumer snapshot built on
+     * tight output; {@see withPreservedNewLines()} therefore deliberately
+     * does not extend into list interiors ({@see padBlankLines()}). Honouring
+     * loose spacing stays owner-gated (behaviour change + golden churn via
+     * UPDATE_GOLDENS), not taken in a hygiene pass.
+     */
     private function renderList(ListBlock $list): string
     {
         // Past the nesting ceiling the list flattens: item content renders,

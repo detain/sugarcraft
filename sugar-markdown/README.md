@@ -286,7 +286,9 @@ $writer->close();
 - Inline code, fenced code blocks (with regex syntax highlighting for
   PHP / JS / TS / JSON / Python / Go / Bash / SQL / Rust / Java / C / C++ /
   Ruby / YAML / HTML / CSS), indented code.
-- Bullet + ordered + nested lists.
+- Bullet + ordered + nested lists — items always render tight; loose-list
+  spacing (blank lines between items) is not honoured, unlike CommonMark and
+  glamour — a dated port decision (see the `renderList()` docblock).
 - Block quotes (▎-prefixed).
 - GFM tables (rounded border, via the sugar-style table renderer
   `SugarCraft\Style\Table\Table`).
