@@ -551,7 +551,19 @@ final class StdioMcpServer implements McpServer
      */
     private static function printableDiagnostic(string $text): string
     {
-        return preg_replace('/[\x00-\x1F\x7F-\x9F]+/u', ' ', $text) ?? '';
+        $swept = preg_replace('/[\x00-\x1F\x7F-\x9F]+/u', ' ', $text);
+        if ($swept !== null) {
+            return $swept;
+        }
+
+        // The subject is not valid UTF-8 (a Latin-1 stderr line, raw binary).
+        // A /u sweep REFUSES the whole string, so the old `?? ''` fallback
+        // blinded the diagnostic on the one path built to be honest. Sweep
+        // byte-wise instead — every target byte is ASCII anyway — collapsing
+        // runs of anything outside printable ASCII to a single space (the
+        // same face the /u mode shows), and leave a marker so the reader
+        // knows bytes were lost rather than that the server said nothing.
+        return (preg_replace('/[^\x20-\x7E]+/', ' ', $text) ?? '') . ' [non-UTF-8]';
     }
 
     /**

@@ -16,6 +16,9 @@ declare(strict_types=1);
  *  --osc8            answers tools/call with an error whose message carries
  *                    an OSC-8 hyperlink + BEL, and stderr carrying CSI —
  *                    every control byte must be swept from diagnostics.
+ *  --latin1          writes a raw Latin-1 (invalid UTF-8) stderr line —
+ *                    the /u sweep refuses it, so the diagnostic must fall
+ *                    back to a byte-wise ASCII sweep + marker, never blank.
  *  --slow-handshake  sleeps 1.4 s before answering initialize, so a
  *                    start(onWait:) beat must fire at least once inside it.
  *  --bad-tool-name   advertises a tool whose name carries a raw NUL
@@ -40,6 +43,10 @@ if ($mode === '--noisy') {
 
 if ($mode === '--osc8') {
     fwrite(STDERR, "fatal \x1b[31mred\x1b[0m\r\n");
+}
+
+if ($mode === '--latin1') {
+    fwrite(STDERR, "cause: caf\xe9 exploded \x80\x07\n");
 }
 
 while (($line = fgets(STDIN)) !== false) {

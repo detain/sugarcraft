@@ -115,6 +115,24 @@ final class StdioMcpServerFailureDiagnosticsTest extends TestCase
         self::assertStringContainsString('red', $error, 'the stderr words stay too');
     }
 
+    public function testALatin1StderrLineYieldsAnHonestNonBlankDiagnostic(): void
+    {
+        $server = $this->spawn('hostile_handshake_server.php', ['--latin1']);
+        $server->start();
+        $server->stop();
+
+        $tail = $server->stderrTail();
+
+        // A /u preg sweep returns null on invalid UTF-8, and the old
+        // `?? ''` fallback turned a Latin-1 cause into the empty string.
+        // The ASCII region must survive a byte-wise sweep, marked as such.
+        self::assertNotSame('', $tail, 'an undecodable stderr line must not blind the diagnostic');
+        self::assertStringContainsString('cause: caf', $tail, 'the ASCII region of the cause survives');
+        self::assertStringContainsString('[non-UTF-8]', $tail);
+        self::assertStringNotContainsString(chr(0xE9), $tail, 'raw Latin-1 bytes must not ride the diagnostic path');
+        self::assertStringNotContainsString(chr(7), $tail, 'control bytes are swept in byte mode too');
+    }
+
     public function testStartBeatsThroughASlowHandshake(): void
     {
         $server = $this->spawn('hostile_handshake_server.php', ['--slow-handshake']);
