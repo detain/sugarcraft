@@ -8,6 +8,7 @@ Watching", and a
 [sugar-image](https://github.com/sugarcraft/sugar-image)), so this lib pulls
 in no image decoder. It is a **library, not a viewer app** — no binary ships;
 a runnable pure-PHP demo lives at [`examples/poster-grid.php`](examples/poster-grid.php).
+There is **no in-tree consumer yet** — the examples are the current integration proof.
 
 ## Install
 
@@ -49,7 +50,7 @@ $grid = $grid->moveTo(2600);       // jump (e.g. an A–Z letter offset)
 ```
 
 The lib owns **no** keys — these methods are yours to map however you like (the
-arrow/vim legend below is illustrative; there is no built-in help-key set):
+legends in this section are illustrative; there is no built-in help-key set):
 
 ```php
 return match ($key) {
@@ -61,15 +62,14 @@ return match ($key) {
 
 It also owns **no colour**: every frame ships unstyled text, and any SGR you see
 in output rode in on *your* card bytes (`withPoster()` / `withStyledTitle()`).
-Theming is entirely yours. (One heads-up for narrow layouts: four chrome glyphs
-are East-Asian-Ambiguous width — `●` `U+25CF` and `○` `U+25CB` (the rail
-selection bullets), `▓` `U+2593` (the filled leg of the progress bar) and `…`
-`U+2026` (truncation ellipsis). Most modern terminals render them single-cell,
-but a user's ambiguous-width setting moves them, no font install required. The
-other two are neutral by codepoint and stay put: the focus marker is `▸`
-`U+25B8` — the *small* black triangular right, not the ambiguous large `▶`
-`U+25B6` it is so easily confusable with — and the skeleton/placeholder shade
-is `░` `U+2591`.)
+Theming is entirely yours. Six chrome glyphs matter at narrow layouts, and they
+split four-and-two. (Four are East-Asian-Ambiguous width — `●` `U+25CF` and `○` `U+25CB`
+(the rail selection bullets), `▓` `U+2593` (the filled leg of the progress bar) and `…`
+`U+2026` (truncation ellipsis). Most modern terminals render them single-cell, but
+a user's ambiguous-width setting can widen them by a cell — no font install required.
+The other two are neutral by codepoint and stay put: the focus marker is `▸`
+`U+25B8` — the *small* black triangular right, not the ambiguous large `▶` `U+25B6`
+it is so easily confusable with — and the skeleton/placeholder shade is `░` `U+2591`.)
 
 ### Owner-driven paging (the `need-range` pattern)
 
@@ -153,7 +153,8 @@ empty-state in its own chrome (`PosterGrid::emptyMessage()` hands you the
 localised `grid.empty` sentence if you want the library's wording). Need the
 position readout without the chrome? `positionText()` returns the
 `  (n/total)` counter string (`''` when there is nothing to position), and
-`fitsViewport($cols, $rows)` answers whether a single cell fits at all — below
+`fitsViewport($cols, $rows)` answers whether a single cell fits at all — with no
+arguments it checks against the grid's own current viewport — below
 `cardWidth` × `cellHeight` the layout silently floors at one column and one
 row, so a too-narrow viewport *lies*; detect it with this predicate instead.
 
@@ -175,7 +176,7 @@ on an unfetched cell triggers a load rather than a selection.
 ```php
 use SugarCraft\Gallery\Rail;
 
-$rail = new Rail('Continue Watching', $cards);
+$rail = Rail::new('Continue Watching', $cards);
 $rail = $rail->moveCursor(+1, Rail::perRow($railWidth, $cardWidth));
 echo $rail->render($railWidth, focused: true, cardWidth: 16, posterHeight: 9);
 ```
@@ -184,11 +185,11 @@ The heading (field: `title`) rides the **same** title guard as a card —
 `AnsiGuard::stripControls()`
 plus a rail-width clamp — and the empty state is localised
 (`Lang::t('rail.empty')`, see [Internationalisation](#internationalisation)).
-`moveCursor()` takes a *delta*; to restore an arbitrary `(cursor, scroll)` pair
-(e.g. returning to a remembered position) construct via `new Rail(...)` — its
-third and fourth arguments are `(cursor, scroll)`: the cursor is clamped into
-the card list, and the scroll to at or below it (`[0, cursor]`), both on
-construction.
+`moveCursor()` takes a *delta*. To restore an arbitrary `(cursor, scroll)` pair —
+e.g. returning to a remembered position — construct via `Rail::new(...)`: its
+third and fourth arguments are that pair. A stale pair is clamped on
+construction, not restored verbatim: the cursor lands inside the card list and
+the scroll at or below it (`[0, cursor]`).
 
 ## PosterCard — one tile
 
@@ -274,9 +275,12 @@ php examples/poster-grid-mosaic.php   # …and a PHP built with ext-gd
 composer pulls neither automatically — `suggest` entries are advisory. The library
 itself needs **PHP >= 8.3 and zero extensions** (its runtime deps are sugar-core, sugar-style
 and sugar-mouse); ext-gd is required only by sugar-image, which the mosaic
-example and the integration tests use. Both examples are non-interactive
-one-shot dumps — no key loop (map your own keys per the Keyboard nav contract
-above) — and assume a truecolour terminal.
+example and the integration tests use. The terminal baseline: all chrome is Unicode (`░ ▓ ▸ ● ○ …`) and there is **no
+ASCII fallback** — the widgets need a UTF-8 terminal with block-element
+coverage, or the skeleton, the focus cue and the progress bar arrive mojibaked.
+Both examples are non-interactive
+one-shot dumps — no key loop (map your own keys per the *Keyboard nav* legend in
+the first PosterGrid example above) — and assume a truecolour terminal.
 
 `examples/poster-grid.php` by contrast is pure PHP — no image stack, no extensions.
 
@@ -290,23 +294,25 @@ removing every control byte and every escape sequence: C0 (including `BEL`,
 DEL, the 8-bit C1 controls in both wire forms, and any SGR styling a plain
 title has no business carrying. Both rail header lines (title and empty
 state) are additionally clamped to the rail width with an ellipsis, so no
-title — and no locale — can overflow it. Opaque bytes that are simply not
-valid UTF-8 stay put — they are mojibake, not controls, and one of them must
-never be able to disable the strip — with the single exception of a byte in
-the 8-bit C1 band that no well-formed sequence claimed: a terminal reads
-that one as a control, so it goes.
+title — and no locale — can overflow it. Bytes that are simply not valid UTF-8
+stay put: they are mojibake, not controls, and one of them must never be able
+to disable the strip. The single exception is a byte in the 8-bit C1 band that
+no well-formed sequence has claimed. A terminal reads that one as a control,
+so it goes.
 
 `withStyledTitle($ansi)` is the **escape hatch** for a *pre-styled* title (e.g. a
 [sugar-fuzzy](https://github.com/sugarcraft/sugar-fuzzy) match highlight). It is
-emitted **verbatim** — only ANSI-aware *truncated* (with the same `…` the plain path
-shows on overflow; sugar-gallery-032), never stripped — because sanitising it would
+emitted **verbatim**: it is only ever truncated (ANSI-aware, and marked with the
+same `…` the plain path shows on overflow; sugar-gallery-032), never stripped,
+because sanitising it would
 destroy the very SGR escapes it exists to carry. That makes
 **you** the trust boundary: pass only styling you produced yourself over
 already-safe text, **never** raw untrusted / DB-sourced bytes. When the source
 is untrusted, leave the styled title unset and rely on the sanitised plain
 `title`.
 
-Three opt-ins turn that documented contract into an enforced one. All admit **SGR
+Four entry points turn that documented contract into an enforced one — one guard
+flag, its standalone twin, and two coercing setters. All four admit **SGR
 styling only** — `ESC [` followed by nothing but digits, `;` and `:` until a final
 `m`; a private (`ESC [ ?…m`) or intermediate-byte SGR (a `… [` with a space before
 the final `m`) is *not* accepted — every other escape form (cursor movement,
@@ -325,10 +331,11 @@ $card = $card->withSafePoster($bytesFromYourCache);   // same sweep for poster b
 ```
 
 `AnsiGuard::isSafe()` / `::sanitize()` are public if you want to check or clean
-before you build the highlight. The fail-fast pair classifies, it does not
-sweep: it sees the zone sentinels `U+E000`/`U+E001` as ordinary printable text
-and passes them (`isSafe()` on a forged sentinel pair answers true). Removing
-them is the coercers' job — both `sanitize()` and `stripControls()` run
+before you build the highlight. `withStyledTitle(assertSafe: true)` and
+`assertSafeAnsi()` classify; they do not sweep: they see the zone sentinels
+`U+E000`/`U+E001` as ordinary printable text and pass them (`isSafe()` on a
+forged sentinel pair answers true). Sweeping them is the sweepers' job — both
+`sanitize()` and `stripControls()` run
 `Sanitize::stripZoneSentinels()` inline before the ANSI scan, and
 `AnsiGuard::stripSentinels()` does exactly that and nothing else.
 Nothing about the default path changed —
@@ -345,7 +352,7 @@ bytes never enter the text frame at all — the frame carries only the marker
 cell, the bytes themselves ride on the card —
 but they travel their own protocol's trust boundary on the way to the screen.
 
-**Zone sentinels are swept at the coercing ingresses and again at paint.** sugar-mouse marks hit-zones with
+**Zone sentinels are swept by the coercing setters and again at paint.** sugar-mouse marks hit-zones with
 the private-use-area sentinel pair `U+E000`/`U+E001` around the zone id; forged
 sentinels inside untrusted titles or poster text would otherwise splice a phantom
 zone (a click target over nothing) or a duplicate zone id (a throw in the app's
@@ -388,9 +395,9 @@ files (or nowhere) to stay green. Locale selection follows the standard
 detection is **opt-in**: *your app* calls `T::setLocale(T::detect())` at startup,
 and until it does the widgets answer in `en`. The library never mutates process
 locale state itself. One layout caveat: the Rail heading keeps fixed left-to-right
-order (bullet, title, counter) whatever the locale - under `ar` the notices render
-right-to-left while that line's parts stay LTR; compose the heading from the
-accessors yourself if you need a fully mirrored rail.
+order (bullet, title, counter) whatever the locale — under `ar` the notices
+render right-to-left while that line's parts stay LTR. Compose the heading from
+the accessors yourself if you need a fully mirrored rail.
 
 ## API surface
 
@@ -411,7 +418,8 @@ cursor), `withItem()` / `withItems()`, `withoutItemsOutside([$a, $b])`,
 `withViewport($cols, $rows)`.
 Window: `visibleRange($overscan)`, `visibleCards($overscan)`,
 `needsFetch($lastFetched, $overscan)`, `indicesNeedingPoster(...)` — all documented
-above. Affordances: `positionText()` and `fitsViewport($cols, $rows)`; the static
+above. Affordances: `positionText()` and `fitsViewport()` (explicit viewport, or
+the grid's own when called argument-free); the static
 `PosterGrid::emptyMessage()` returns the localised empty-grid notice.
 
 **Rail** — `withCards()` / `withCard()` (unknown id: silent no-op) /
@@ -435,11 +443,11 @@ marks hit-test zones.
 `PosterCard::clearFitCache()` and `PosterGrid::clearBoxCache()` drop process-wide
 memos. Both memos are internally capped — `PosterCard::FIT_CACHE_CAP` and
 `PosterGrid::BOX_CACHE_CAP` are **private** constants, so referencing either
-name from your code fatals (copying the number is legal; it is simply not an
-API, and the sanctioned levers are the clear methods). The two caps are
+name from your code raises a fatal error (copying the number is fine; it simply
+is not part of the API — the sanctioned levers are the clear methods). The two caps are
 implemented differently (by-ref method-static vs plain static) on purpose.
-Each caps at 2048 entries with oldest-half eviction, so resident bytes stay
-bounded (worst case ≈ 2048 frames per memo). Clearing returns an entry count
+Each memo holds at most 2048 entries, evicting the oldest half when full, so
+resident bytes stay bounded (worst case ≈ 2048 frames per memo). Clearing returns an entry count
 and never changes a single rendered byte.
 
 Geometry is clamped at construction: `cardWidth ≥ 4`, `posterHeight ≥ 1`, both

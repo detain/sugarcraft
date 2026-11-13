@@ -135,7 +135,7 @@ final readonly class PosterCard
     /**
      * Attach already-rendered poster bytes VERBATIM. The caller owns their
      * safety — see the class docblock's trust-boundary law and
-     * {@see withSafePoster()} for the coercing half.
+     * {@see withSafePoster()} for the coercing setter.
      */
     public function withPoster(string $ansi): self
     {
@@ -144,7 +144,7 @@ final readonly class PosterCard
 
     /**
      * Attach poster bytes after keeping only SGR styling and printable
-     * glyphs — the coercion half of the poster trust boundary, for bytes
+     * glyphs — the coercing setter at the poster trust boundary, for bytes
      * that arrived from somewhere the caller cannot vouch for (a cache, a
      * server, a disk pipeline). {@see AnsiGuard::sanitize()} drops cursor
      * moves, erases, and every OSC/DCS/APC payload (forged OSC-8 hyperlinks
@@ -230,8 +230,8 @@ final readonly class PosterCard
      * {@see $title} is run through {@see AnsiGuard::stripControls()} in
      * {@see render()} to
      * neutralise cursor-move / clear-screen / ESC bytes from untrusted DB text,
-     * a styled title is emitted verbatim (only ANSI-aware *truncated*, never
-     * stripped) — stripping C0 would destroy the very SGR escapes it exists to
+     * a styled title is emitted verbatim: it is only ever truncated (ANSI-aware,
+     * never stripped) — stripping C0 would destroy the very SGR escapes it exists to
      * carry. The CALLER therefore owns that escaping: pass ONLY styling you
      * produced yourself over already-safe text (e.g. a sugar-fuzzy highlight of
      * a sanitised title), NEVER raw untrusted / DB-sourced bytes. When the
@@ -299,7 +299,7 @@ final readonly class PosterCard
 
     /**
      * Attach a styled title after dropping everything that is not SGR styling
-     * ({@see AnsiGuard::sanitize()}) — the coercion half of the
+     * ({@see AnsiGuard::sanitize()}) — the coercing setter of the
      * {@see withStyledTitle()} trust boundary, for a highlight built over text
      * the caller does not control. Colour may be lost; a cursor move never will be.
      *

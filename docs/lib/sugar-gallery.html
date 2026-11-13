@@ -201,7 +201,9 @@ if ($grid->needsFetch($lastFetched, overscanRows: 1)) {   // the shipped gate
 // Async poster arrived for one cell?
 $grid = $grid->withItem($index, $card->withPoster($ansi));</code></pre>
 
-    <p>Render the visible rows (the cursor shows only when the grid is focused — and on a skeleton cell the <code>▸</code> runs down <em>every</em> poster row, a whole-tile ghost, by design; an empty grid renders <code>''</code> so the owner paints its own empty-state). Pass a <a href="sugar-mouse.html">sugar-mouse</a> <code>Manager</code> to make each cell mouse-clickable — wrapped as zone id <code>cell:&lt;index&gt;</code>. The chrome stays on two width-neutral codepoints — focus <code>▸</code> <code>U+25B8</code> (the <em>small</em> triangular right, not the ambiguous <code>▶</code> <code>U+25B6</code>) and skeleton shade <code>░</code> <code>U+2591</code> — but the rail bullets <code>●</code> <code>U+25CF</code> / <code>○</code> <code>U+25CB</code>, the bar’s filled leg <code>▓</code> <code>U+2593</code>, and truncation <code>…</code> <code>U+2026</code> are East-Asian-Ambiguous: a user’s ambiguous-width setting can widen them a cell:</p>
+    <p>Render the visible rows (the cursor shows only when the grid is focused — and on a skeleton cell the <code>▸</code> runs down <em>every</em> poster row, a whole-tile ghost, by design; an empty grid renders <code>''</code> so the owner paints its own empty-state). Pass a <a href="sugar-mouse.html">sugar-mouse</a> <code>Manager</code> to make each cell mouse-clickable — wrapped as zone id <code>cell:&lt;index&gt;</code>. Six chrome glyphs matter at narrow layouts, and they split four-and-two. Two are width-neutral and stay put: focus <code>▸</code> <code>U+25B8</code> (the <em>small</em> triangular right, not the ambiguous <code>▶</code> <code>U+25B6</code>) and skeleton shade <code>░</code> <code>U+2591</code>. The other four are East-Asian-Ambiguous — the rail bullets <code>●</code> <code>U+25CF</code> and <code>○</code> <code>U+25CB</code>, the bar’s filled leg <code>▓</code> <code>U+2593</code>, and truncation <code>…</code> <code>U+2026</code>; most terminals draw them single-cell, but a user’s ambiguous-width setting can widen them by a cell.</p>
+
+    <p>Paint a focused frame, then scan the zone markers out of it:</p>
     <pre class="code"><code class="language-php">echo $grid->render(focused: true);
 
 $frame = $grid->render(true, $zones);
@@ -211,11 +213,11 @@ $zone  = $zones->anyInBounds($mouseMsg);       // → Zone|null — read $zone-&
     <h3 id="rail-horizontal-carousel" style="margin-top: 32px;">Rail — horizontal carousel</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Gallery\Rail;
 
-$rail = new Rail('Continue Watching', $cards);
+$rail = Rail::new('Continue Watching', $cards);
 $rail = $rail->moveCursor(+1, Rail::perRow($railWidth, $cardWidth));
 echo $rail->render($railWidth, focused: true, cardWidth: 16, posterHeight: 9);</code></pre>
 
-    <p>The heading rides the same title guard a card uses (<code>AnsiGuard::stripControls()</code>) and both header lines are clamped to the rail width; the empty state is localised via <code>Lang::t('rail.empty')</code> (16-locale family in <code>lang/</code>). <code>moveCursor()</code> takes a delta — restore an arbitrary <code>(cursor, scroll)</code> pair by constructing <code>Rail</code> with its third and fourth arguments (a stale pair is clamped, not restored verbatim: scroll follows the cursor).</p>
+    <p>The heading rides the same title guard a card uses (<code>AnsiGuard::stripControls()</code>) and both header lines are clamped to the rail width; the empty state is localised via <code>Lang::t('rail.empty')</code> (16-locale family in <code>lang/</code>). <code>moveCursor()</code> takes a <em>delta</em>. To restore an arbitrary <code>(cursor, scroll)</code> pair — e.g. a remembered position — construct via <code>Rail::new(...)</code>: its third and fourth arguments are that pair. A stale pair is clamped on construction, not restored verbatim: the cursor lands inside the card list and the scroll at or below it.</p>
 
     <h3 id="postercard-one-tile" style="margin-top: 32px;">PosterCard — one tile</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Gallery\PosterCard;
@@ -313,7 +315,7 @@ echo $card->render(focused: true, width: 16, posterHeight: 9);</code></pre>
 <tr><td>PosterCard</td><td>withSafePoster(string $ansi): self</td><td>Attach poster bytes through the AnsiGuard sweep row-by-row — colours and block glyphs stay byte-identical, every control sequence goes</td></tr>
 <tr><td>PosterCard</td><td>withImage(string $bytes, int $id): self</td><td>Attach an overlay fill (sixel / kitty / iterm2): the card draws only the marker cell, the runtime paints the art over it</td></tr>
 <tr><td>PosterCard</td><td>withStyledTitle(string $ansi, bool $assertSafe = false): self</td><td>A pre-styled title, emitted verbatim — ANSI-aware truncated with the same ellipsis the plain path shows — the caller is the trust boundary; $assertSafe guards the bytes first and throws on anything but SGR</td></tr>
-<tr><td>PosterCard</td><td>withSafeStyledTitle(string $ansi): self</td><td>The coercion half: keep the SGR, drop every other escape — and keep the plain title when only styling and ASCII blank space survive (`trim` semantics; a non-breaking space is text)</td></tr>
+<tr><td>PosterCard</td><td>withSafeStyledTitle(string $ansi): self</td><td>The coercing setter: keep the SGR, drop every other escape — and keep the plain title when only styling and ASCII blank space survive (`trim` semantics; a non-breaking space is text)</td></tr>
 <tr><td>PosterCard</td><td>static assertSafeAnsi(string $ansi): string</td><td>Return the styled title or throw — the same guard, standalone</td></tr>
 <tr><td>PosterCard</td><td>withProgress(?float $progress): self</td><td>Set (or clear) the continue-watching progress bar — draws the exact <code>(NN%)</code> label when the row has room; a narrow row drops the label and its unfilled leg shares the skeleton&#39;s <code>░</code> glyph, so guaranteed readouts come from the host</td></tr>
 <tr><td>PosterCard</td><td>withFailed(bool $failed = true): self</td><td>Mark the cell's last fetch as failed (clear with <code>withFailed(false)</code>) — the cell falls back to the plain skeleton and <code>hasPoster()</code> reports it unfilled so a retry policy still re-queues it; attaching real art afterwards does NOT clear the flag, pass <code>withFailed(false)</code> alongside the fill</td></tr>
@@ -323,7 +325,7 @@ echo $card->render(focused: true, width: 16, posterHeight: 9);</code></pre>
 <tr><td>PosterCard</td><td>static clearFitCache(): int</td><td>Drop the shared fitted-body memo, returning how many entries were cleared — purely an optimization, never changes a single output byte</td></tr>
 <tr><td>AnsiGuard</td><td>static assertSafe(string $ansi): string</td><td>Return $ansi when it carries only SGR styling and printable text, else throw with the byte offset and hex of the offender</td></tr>
 <tr><td>AnsiGuard</td><td>static isSafe(string $ansi): bool</td><td>The same question without the exception</td></tr>
-<tr><td>AnsiGuard</td><td>static sanitize(string $ansi): string</td><td>Drop every non-SGR escape and control byte, keeping styling and text — colour may be lost, a cursor move never will be</td></tr>
+<tr><td>AnsiGuard</td><td>static sanitize(string $ansi): string</td><td>Drop every non-SGR escape and control byte, keeping styling and text — colour may be lost; a cursor move never will be</td></tr>
 <tr><td>AnsiGuard</td><td>static stripControls(string $text): string</td><td>Drop escapes and styling alike — what a plain, untrusted title is rendered through (card title <em>and</em> Rail heading)</td></tr>
 <tr><td>AnsiGuard</td><td>static stripSentinels(string $text): string</td><td>Surgically drop forged <code>U+E000/U+E001</code> zone sentinels (delegates to sugar-core <code>Sanitize::stripZoneSentinels()</code>) — anything handed to a zone-marking <code>Manager</code> must pass this sweep first; legitimate <code>U+E002</code>-and-up image markers survive untouched</td></tr>
 <tr><td>Lang</td><td>static t(string $key, array $params = []): string</td><td>i18n facade over the 16-locale <code>lang/</code> family — three keys today: <code>rail.empty</code> (the Rail heading's empty-state line), <code>card.failed</code> (a PosterCard in the failed-fetch state) and <code>grid.empty</code> (the empty PosterGrid message)</td></tr>

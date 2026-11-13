@@ -245,9 +245,17 @@ stepped transitions entirely:
 <?php
 use SugarCraft\Overlay\{Animation\AnimationKind, Position, Veil};
 
-// Apps read the platform preference from sugar-colorprofile, e.g.
-// Probe::reducedMotion(), and pass it straight through.
-$reduced = (bool) ($_ENV['REDUCE_MOTION'] ?? false);
+// Apps read the platform preference from sugar-colorprofile's
+// Probe::reducedMotion(); this env read is the zero-dep stand-in for it.
+// Parse with filter_var, NOT a bare (bool) cast: PHP casts the STRING
+// "false" to TRUE, so REDUCE_MOTION=false would invert the operator's
+// declared preference (the exact bug sugar-colorprofile names in
+// Probe::reducedMotion()). false/0/no/off now read as NOT reduced; the
+// fleet Probe treats any other non-empty spelling as reduced.
+$reduced = \filter_var($_ENV['REDUCE_MOTION'] ?? '', \FILTER_VALIDATE_BOOLEAN);
+if (\filter_var('false', \FILTER_VALIDATE_BOOLEAN) !== false) {
+    exit(1); // the negative spelling must read as falsy
+}
 $bg = "..............................\n..............................\n..............................";
 
 $veil = Veil::new()->withAnimation(AnimationKind::FADE)->withReducedMotion($reduced);

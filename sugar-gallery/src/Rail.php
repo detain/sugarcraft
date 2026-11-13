@@ -20,7 +20,8 @@ final readonly class Rail
     public readonly int $scroll;
 
     /**
-     * The taught construction path is "restore a saved (cursor, scroll) pair",
+     * The main path through the constructor is "restore a saved (cursor, scroll)
+     * pair",
      * so the constructor CLAMPS rather than validates: the cursor lands inside
      * [0, count-1] and the scroll at or below it, instead of a stale restore
      * printing e.g. "(1000/2)" with a phantom empty row. Every with*-carrier

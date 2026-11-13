@@ -30,7 +30,7 @@ use SugarCraft\Core\Util\Sanitize;
  *
  * Private-use codepoints are printable TEXT to this scanner: the zone sentinels
  * `U+E000`/`U+E001` pass `assertSafe()`/`isSafe()` unflagged. The sweep lives on
- * the coercing side — `sanitize()` and `stripControls()` run
+ * the sweeping side — `sanitize()` and `stripControls()` run
  * `Sanitize::stripZoneSentinels()` inline before scanning, and
  * {@see stripSentinels()} is that sweep as a standalone call.
  *
