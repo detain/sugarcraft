@@ -12,17 +12,22 @@ declare(strict_types=1);
  *   candy-git-server init                          Initialize a new data directory
  *   candy-git-server user add <username>           Add a user
  *   candy-git-server user key <username> <keyfile> Add an SSH key
+ *   candy-git-server user list                     List accounts
+ *   candy-git-server user token <username> [ttl]   Mint an HTTP proxy-token signature
  *   candy-git-server user remove <username>        Delete an account
  *   candy-git-server user deactivate <username>    Disable an account, keep its credentials
  *   candy-git-server repo list                     List repos
  *   candy-git-server repo create <name>            Create a repo
+ *   candy-git-server repo info <name>              Show repository info
  *   candy-git-server repo collaborator <n> add|remove <user>   Manage the persisted ACL
  *   candy-git-server repo mirror <n> <url>|--clear Set/clear the upstream
  *   candy-git-server repo push-access <n> allow|deny           Toggle the allowPush posture
- *   candy-git-server help                          Show this help
+ *   candy-git-server help, --help, -h              Show this help
+ *   candy-git-server version, --version, -v        Show the version
  *
- * PHP port of the charmbracelet/soft-serve Go project; the binary was
- * named `soft-serve` before the 2026-10 rename to candy-git-server.
+ * PHP port of the charmbracelet/soft-serve Go project (upstream keeps its
+ * own name); this binary was published as `candy-serve`
+ * (sugarcraft/candy-serve) before the 2026-10 rename to candy-git-server.
  * STATUS: scaffold for the ssh/daemon host wiring — bare `serve` still
  * refuses (no assembled multi-transport entrypoint); `serve --http`
  * starts the smart-HTTP listener: clone, fetch, push (auth-gated) and
@@ -68,7 +73,10 @@ use SugarCraft\GitServer\Support\AtomicWriter;
 foreach (\SugarCraft\Core\Util\LegacyEnv::import([
     'CANDY_SERVE_' => 'CANDY_GIT_SERVER_', // @rename-keep
 ]) as $legacyVar) {
-    fwrite(STDERR, "candy-git-server: {$legacyVar} is deprecated; set CANDY_GIT_SERVER_DATA_PATH instead.\n"); // @rename-keep
+    // 133: the successor name is per-var — the old fixed DATA_PATH string
+    // told every other imported var to migrate to the wrong knob.
+    $successor = \str_replace('CANDY_SERVE_', 'CANDY_GIT_SERVER_', (string) $legacyVar); // @rename-keep
+    fwrite(STDERR, "candy-git-server: {$legacyVar} is deprecated; set {$successor} instead.\n"); // @rename-keep
 }
 
 const VERSION = '0.1.0';
@@ -592,6 +600,10 @@ function cmdUserDeactivate(array $args): int
 /**
  * Mint an HTTP proxy-token signature for the `token` trust mode: the
  * "<expiry-unix>.<hex-hmac>" string the server's verifyUserToken accepts.
+ * The TTL argument is seconds, defaulting to 3600 when omitted, and
+ * http.token_max_ttl in the data path's config.yaml ceilings BOTH the
+ * mint and the verify (S22): a claim past the ceiling is refused by
+ * name instead of being silently shortened.
  * Requires the data path's config.yaml to define a non-empty
  * http.auth_secret — that is the only secret key the loader parses
  * (Config reads it off the `http:` block), so a top-level `auth:` section
@@ -639,9 +651,9 @@ function cmdUserToken(array $args): int
 /**
  * Resolve the data directory the same way every persistence-touching
  * command does: explicit positional arg, then CANDY_GIT_SERVER_DATA_PATH,
- * then the /tmp default (see README "Data
- * directory" — a systemd-tmpfiles-hostile default, so set the env for real
- * deployments).
+ * then the /tmp default (see README "Run" — the data-path resolution
+ * lives there; a systemd-tmpfiles-hostile default, so set the env for
+ * real deployments).
  */
 function bin_data_path(?string $explicit): string
 {
