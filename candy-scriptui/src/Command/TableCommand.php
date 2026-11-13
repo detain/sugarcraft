@@ -192,14 +192,18 @@ final class TableCommand extends Command
      */
     public static function parseRows(string $raw, string $separator): array
     {
-        $raw = rtrim($raw, "\n");
+        $raw = rtrim($raw, "\r\n");
         if ($raw === '') {
             return [];
         }
 
         if (strlen($separator) !== 1) {
+            // scriptui-38 (finding 056): split on \R, not bare LF —
+            // Windows-authored files used to keep a literal CR inside the
+            // last cell of every row (od-proven `b \r │`). FilterCommand::
+            // stdinLines establishes this posture repo-wide.
             $rows = [];
-            foreach (explode("\n", $raw) as $line) {
+            foreach (preg_split('/\R/', $raw) ?: [] as $line) {
                 if ($line === '') {
                     continue;
                 }
