@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Vcr\Tests\Render;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Vcr\Support\HostShell;
 use SugarCraft\Vcr\Player;
 use SugarCraft\Vcr\Render\FrameStream;
 use SugarCraft\Vcr\Tape\Compiler;
@@ -56,6 +57,9 @@ final class FrameStreamExecTest extends TestCase
     public function testExecModeRendersProgramOutputIntoFrames(): void
     {
         $this->requirePtySyscalls();
+        if (\PHP_OS_FAMILY === 'Windows' && HostShell::locate('sh') === null) {
+            $this->markTestSkipped('The fixture tape asks for `sh`, and this Windows host has none on PATH (Git for Windows ships one).');
+        }
 
         [$cassette, $compiler] = $this->compileTape();
         $shell = $compiler->shell();

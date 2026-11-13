@@ -35,6 +35,8 @@ final class RenderBatchCollisionTest extends TestCase
             file_put_contents($root . '/two/x.tape', "Set Theme \"TokyoNight\"\n");
 
             [$exit, $out] = $this->runBatch($root);
+            // Row labels are root-relative paths in the host's own separator.
+            $out = str_replace(DIRECTORY_SEPARATOR, '/', $out);
 
             $this->assertSame(1, $exit, 'one tape failed, so the batch must exit 1');
             $this->assertStringContainsString('one/x.tape', $out);

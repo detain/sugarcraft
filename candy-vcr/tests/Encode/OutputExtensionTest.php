@@ -79,7 +79,7 @@ final class OutputExtensionTest extends TestCase
         $gif = $pipeline->render($this->dir . '/b.tape', null, []);
         // The directive is first confined to the tape dir (finding 005-era
         // door), then the extension honesty applies inside that confinement.
-        $this->assertSame($this->dir . '/demo.gif', $gif);
+        $this->assertSame((string) realpath($this->dir) . DIRECTORY_SEPARATOR . 'demo.gif', $gif);
         $this->assertFileExists($gif);
         $this->assertFileDoesNotExist($this->dir . '/demo.mp4');
         $this->assertStringContainsString(

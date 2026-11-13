@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Vcr\Tests\Format;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Vcr\Tests\Support\HostFilesystem;
 use SugarCraft\Vcr\Cassette;
 use SugarCraft\Vcr\CassetteHeader;
 use SugarCraft\Vcr\Event;
@@ -27,6 +28,8 @@ use SugarCraft\Vcr\Recorder;
  */
 final class FormatHeaderFieldsTest extends TestCase
 {
+    use HostFilesystem;
+
     private function fullHeader(string $mode = CassetteHeader::TIMESTAMP_MODE_ABSOLUTE): CassetteHeader
     {
         return new CassetteHeader(
@@ -114,7 +117,9 @@ final class FormatHeaderFieldsTest extends TestCase
             $format->write(new Cassette($this->fullHeader(), $this->events()), $path);
             $decoded = $format->read($path);
             $this->assertFullHeader($decoded->header);
-            $this->assertSame(0600, fileperms($path) & 0777, 'gzip cassette must land owner-readable only');
+            if (self::hostHasPosixModes()) {
+                $this->assertSame(0600, fileperms($path) & 0777, 'gzip cassette must land owner-readable only');
+            }
         } finally {
             @unlink($path);
             @rmdir($dir);
@@ -156,6 +161,7 @@ final class FormatHeaderFieldsTest extends TestCase
 
     public function testFormatWritesLandAtZeroSixHundred(): void
     {
+        $this->requirePosixModes();
         // Cassettes contain everything typed at the terminal; every rewrite
         // path must match Recorder's 0600, not the ambient umask.
         $paths = [];

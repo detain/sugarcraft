@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace SugarCraft\Vcr\Cli;
 
+use SugarCraft\Core\Util\Tty\WindowsBackend;
+use SugarCraft\Core\Util\Tty\WindowsConsoleInput;
+use SugarCraft\Pty\Contract\Child;
+use SugarCraft\Pty\Contract\MasterPty;
 use SugarCraft\Pty\Contract\Termios;
 use SugarCraft\Pty\Posix\PosixPump;
 use SugarCraft\Pty\PtySystemFactory;
@@ -11,6 +15,7 @@ use SugarCraft\Pty\PumpOptions;
 use SugarCraft\Pty\TermiosFactory;
 use SugarCraft\Vcr\Lang;
 use SugarCraft\Vcr\Recorder;
+use SugarCraft\Vcr\Support\HostShell;
 
 /**
  * `candy-vcr record [--output PATH] [--cols N] [--rows N] [--no-ctty] -- <cmd> [args...]`
@@ -29,6 +34,11 @@ use SugarCraft\Vcr\Recorder;
  */
 final class RecordCommand implements DocumentedCommand
 {
+    /** POSIX signal numbers, spelled out: pcntl's constants are absent on Windows. */
+    private const SIGTERM = 15;
+    private const SIGKILL = 9;
+
+
     /** Default cassette path when `--output` is omitted. */
     public const DEFAULT_OUTPUT_PATTERN = 'session-%s.cas';
 
@@ -72,6 +82,7 @@ final class RecordCommand implements DocumentedCommand
      * {@see rescueRestore()} on every clean exit path.
      */
     private static string $rescueMarkerPath = '';
+
 
     /**
      * @param resource|null $stdin  Host stdin stream — defaults to the
@@ -118,6 +129,7 @@ final class RecordCommand implements DocumentedCommand
             \fwrite($stderr, Lang::t('cli.err', ['verb' => 'record', 'message' => Lang::t('record.refuse_overwrite', ['path' => $outputPath])]) . "\n");
             return 2;
         }
+
         $cols = $opts['cols'];
         $rows = $opts['rows'];
         $ctty = $opts['ctty'];
@@ -149,7 +161,7 @@ final class RecordCommand implements DocumentedCommand
         $frameworkFailed = false;
 
         try {
-            $savedTermios = $this->captureHostTermios($stderr);
+            $savedTermios = self::onWindows() ? null : $this->captureHostTermios($stderr);
             if ($savedTermios !== null) {
                 self::installRescueHandlers($savedTermios);
             }
@@ -163,7 +175,9 @@ final class RecordCommand implements DocumentedCommand
                 $env,
                 $cols,
                 $rows,
-                controllingTerminal: $ctty,
+                // ConPTY has no controlling-terminal notion (the pseudo console
+                // delivers Ctrl+C as input itself) and refuses the request.
+                controllingTerminal: $ctty && !self::onWindows(),
             );
 
             $headerEnv = $captureEnv ? self::filteredHostEnv($envRegex, $captureAll) : [];
@@ -186,16 +200,23 @@ final class RecordCommand implements DocumentedCommand
             }
             $recorder->recordResize($cols, $rows);
 
-            $pumpOpts = (new PumpOptions())->withRecorder($recorder);
-            $exitCode = (new PosixPump())->run(
-                $pair->master(),
-                $stdin,
-                $stdout,
-                $child,
-                $pumpOpts,
-            );
-            if ($exitCode === -1) {
-                $exitCode = $child->wait();
+            if (self::onWindows()) {
+                // PosixPump selects over stream fds, which a ConPTY master and
+                // a Windows console do not have (it used to throw here, and the
+                // reap then waited on the live child forever).
+                $exitCode = $this->runWindowsLoop($pair->master(), $stdin, $stdout, $child, $recorder, $cols, $rows);
+            } else {
+                $pumpOpts = (new PumpOptions())->withRecorder($recorder);
+                $exitCode = (new PosixPump())->run(
+                    $pair->master(),
+                    $stdin,
+                    $stdout,
+                    $child,
+                    $pumpOpts,
+                );
+                if ($exitCode === -1) {
+                    $exitCode = $child->wait();
+                }
             }
 
             $recorder->recordQuit();
@@ -253,6 +274,46 @@ final class RecordCommand implements DocumentedCommand
         return $exitCode === 0 ? 1 : $exitCode;
     }
 
+    private static function onWindows(): bool
+    {
+        return HostShell::onWindows();
+    }
+
+    /**
+     * The native-Windows leg of `record`: {@see WindowsRecordLoop} over the
+     * ConPTY master. A console stdin goes raw with VT input (so arrows and
+     * Ctrl keys reach the child as the bytes a POSIX terminal would send)
+     * and is read as console records; a piped or file stdin, including the
+     * one tests inject, is read as a stream.
+     *
+     * @param resource $stdin
+     * @param resource $stdout
+     */
+    private function runWindowsLoop(MasterPty $master, $stdin, $stdout, Child $child, Recorder $recorder, int $cols, int $rows): int
+    {
+        $console = $this->stdin === null ? WindowsConsoleInput::forStdin() : null;
+        $backend = null;
+        $hostSize = null;
+        if ($console !== null) {
+            $backend = new WindowsBackend();
+            $backend->enableRawMode();
+            $readInput = static fn (): string => $console->read();
+            $hostSize = static function () use ($backend): ?array {
+                $size = $backend->size();
+
+                return [(int) $size['cols'], (int) $size['rows']];
+            };
+        } else {
+            $readInput = WindowsRecordLoop::streamInput($stdin);
+        }
+
+        try {
+            return (new WindowsRecordLoop($readInput, $hostSize))->run($master, $stdout, $child, $recorder, $cols, $rows);
+        } finally {
+            $backend?->restore();
+        }
+    }
+
     /**
      * Bounded reap of the recorded child (M11). If it is still alive —
      * the failure paths that skip PosixPump entirely, or a pump that died
@@ -267,15 +328,17 @@ final class RecordCommand implements DocumentedCommand
         if ($child->exited()) {
             return;
         }
-        if (\defined('SIGTERM')) {
-            $child->kill(\SIGTERM);
-            $deadline = \microtime(true) + 2.0;
-            while (!$child->exited() && \microtime(true) < $deadline) {
-                \usleep(10_000);
-            }
-            if (!$child->exited() && \defined('SIGKILL')) {
-                $child->kill(\SIGKILL);
-            }
+        // Numeric signals: the SIGTERM/SIGKILL constants come from pcntl,
+        // which Windows PHP never has. Gating the kill on them skipped it
+        // there, and the wait() below then blocked forever on a live child.
+        // A ConPTY child maps any signal to a job termination.
+        $child->kill(self::SIGTERM);
+        $deadline = \microtime(true) + 2.0;
+        while (!$child->exited() && \microtime(true) < $deadline) {
+            \usleep(10_000);
+        }
+        if (!$child->exited()) {
+            $child->kill(self::SIGKILL);
         }
         try {
             $child->wait();
@@ -431,10 +494,12 @@ final class RecordCommand implements DocumentedCommand
     private static function shellCommand(): array
     {
         $shell = (string) (\getenv('SHELL') ?: '');
-        if ($shell === '' || !\is_executable($shell)) {
-            $shell = self::FALLBACK_SHELL;
+        if ($shell === '' || !HostShell::isExecutable($shell)) {
+            // On Windows the fallback is %ComSpec%: /bin/sh does not exist
+            // there (and an MSYS `$SHELL=/usr/bin/bash` is not a Windows path).
+            $shell = self::onWindows() ? HostShell::fallback() : self::FALLBACK_SHELL;
         }
-        return [$shell, '-l'];
+        return [$shell, ...HostShell::interactiveArgs($shell, login: true)];
     }
 
     /**
@@ -453,7 +518,7 @@ final class RecordCommand implements DocumentedCommand
             return null;
         }
         if (\str_contains($bin, '/') || \str_contains($bin, '\\') || \preg_match('/^[A-Za-z]:/', $bin) === 1) {
-            return \is_file($bin) && \is_executable($bin) ? $bin : null;
+            return HostShell::isExecutable($bin) ? $bin : null;
         }
 
         $path = (string) (\getenv('PATH') ?: '');
@@ -477,7 +542,7 @@ final class RecordCommand implements DocumentedCommand
             }
             foreach ($extensions as $ext) {
                 $candidate = $dir . \DIRECTORY_SEPARATOR . $bin . $ext;
-                if (\is_file($candidate) && \is_executable($candidate)) {
+                if (HostShell::isExecutable($candidate)) {
                     return $candidate;
                 }
             }
@@ -811,11 +876,15 @@ final class RecordCommand implements DocumentedCommand
      */
     private function captureEnv(): array
     {
-        return [
+        $env = [
             'TERM' => \getenv('TERM') !== false ? (string) \getenv('TERM') : 'xterm-256color',
             'PATH' => \getenv('PATH') !== false ? (string) \getenv('PATH') : '/usr/bin:/bin',
             'HOME' => \getenv('HOME') !== false ? (string) \getenv('HOME') : '/tmp',
             'LANG' => \getenv('LANG') !== false ? (string) \getenv('LANG') : 'C.UTF-8',
         ];
+        // The child's environment block is exactly this list, and a Windows
+        // process without SystemRoot cannot even initialize Winsock or the
+        // CRT (cmd.exe without ComSpec/PATHEXT cannot run a bare command).
+        return $env + HostShell::windowsSystemEnv();
     }
 }

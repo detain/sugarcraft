@@ -812,6 +812,14 @@ final class Compiler
         if ($rawPath === '') {
             return null;
         }
+        // On Windows a backslash IS the separator: fold it to '/' for the
+        // checks below, so a native `C:\tapes\out.gif` is confined like
+        // `C:/tapes/out.gif` instead of being refused outright. An absolute
+        // path that passes is handed back in the caller's own spelling.
+        $spelled = $rawPath;
+        if (\DIRECTORY_SEPARATOR === '\\') {
+            $rawPath = str_replace('\\', '/', $rawPath);
+        }
         // Reject traversal segments, Windows separators, and embedded NUL bytes
         // outright. A NUL would otherwise only surface as a ValueError at write
         // time; reject it cleanly here alongside `..`/`\`.
@@ -838,7 +846,7 @@ final class Compiler
             if ($parentReal === false || !$this->isUnder($parentReal, $baseReal)) {
                 return null;
             }
-            $finalPath = $rawPath;
+            $finalPath = $spelled;
         } else {
             $finalPath = $baseReal . DIRECTORY_SEPARATOR . $rawPath;
             $parentReal = realpath(dirname($finalPath));

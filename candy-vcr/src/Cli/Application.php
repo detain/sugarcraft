@@ -7,7 +7,7 @@ namespace SugarCraft\Vcr\Cli;
 use SugarCraft\Vcr\Lang;
 use Symfony\Component\Console\Application as SymfonyApp;
 use Symfony\Component\Console\Command\Command as SymfonyCommand;
-use Symfony\Component\Console\Input\StringInput;
+use Symfony\Component\Console\Input\ArgvInput;
 use Symfony\Component\Console\Output\StreamOutput;
 
 /**
@@ -162,12 +162,12 @@ final class Application
         $symfonyApp->setAutoExit(false);
         $symfonyApp->add($command);
 
+        // The argv goes to Symfony as the list it already is. Re-joining it
+        // into a StringInput sent every argument through the string
+        // tokenizer, whose stripcslashes() ate the backslashes of a Windows
+        // path (`C:\Users\…\x.tape` arrived as `C:Users…x.tape`).
         $name = $command->getName() ?? '';
-        $argString = $name;
-        foreach ($argv as $arg) {
-            $argString .= ' ' . self::escapeArg($arg);
-        }
-        $input = new StringInput($argString);
+        $input = new ArgvInput(['candy-vcr', $name, ...$argv]);
 
         // A dual-stream output so ConsoleOutputInterface-aware diagnostics
         // (dry-run warnings, progress) reach the caller's stderr instead of
@@ -176,17 +176,6 @@ final class Application
         $output = new DualStreamOutput($stdout, $stderr);
 
         return $symfonyApp->run($input, $output);
-    }
-
-    private static function escapeArg(string $arg): string
-    {
-        if ($arg === '') {
-            return "''";
-        }
-        if (preg_match('/^[A-Za-z0-9_\-\.\/=@:]+$/', $arg) === 1) {
-            return $arg;
-        }
-        return "'" . str_replace("'", "'\\''", $arg) . "'";
     }
 
     /**

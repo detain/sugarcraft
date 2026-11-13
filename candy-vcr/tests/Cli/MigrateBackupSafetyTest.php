@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Vcr\Tests\Cli;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Vcr\Tests\Support\HostFilesystem;
 use SugarCraft\Vcr\Cassette;
 use SugarCraft\Vcr\CassetteHeader;
 use SugarCraft\Vcr\Cli\MigrateCommand;
@@ -25,6 +26,8 @@ use SugarCraft\Vcr\Tests\Support\Stream;
  */
 final class MigrateBackupSafetyTest extends TestCase
 {
+    use HostFilesystem;
+
     /** @var list<string> */
     private array $paths = [];
 
@@ -38,6 +41,7 @@ final class MigrateBackupSafetyTest extends TestCase
 
     public function testBackupLandsOwnerOnlyEvenUnderUmaskZero(): void
     {
+        $this->requirePosixModes();
         $input = $this->writeCassette('cv-safety-', 1);
         $backup = $input . '.bak';
 
@@ -83,7 +87,7 @@ final class MigrateBackupSafetyTest extends TestCase
         $victim = $this->scratch('cv-victim-');
         file_put_contents($victim, 'VICTIM-CONTENT');
         $this->paths[] = $backup;
-        symlink($victim, $backup);
+        $this->plantSymlinkOrSkip($victim, $backup);
 
         $result = $this->migrate($input);
 
@@ -101,8 +105,8 @@ final class MigrateBackupSafetyTest extends TestCase
         // the arm where file_exists() lies and only is_link()/O_EXCL
         // catches the attack.
         $ghost = sys_get_temp_dir() . '/cv-safety-ghost-' . bin2hex(random_bytes(6));
-        symlink($ghost, $backup);
         $this->paths[] = $backup;
+        $this->plantSymlinkOrSkip($ghost, $backup);
 
         $result = $this->migrate($input);
 

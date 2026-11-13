@@ -210,7 +210,14 @@ final class TapeToGif
             // pathinfo() reads a dotfile as extension-only ('.hidden' has an
             // empty filename); an empty stem means appending, not replacing.
             $stem = $outName === '' ? basename($output) : $outName;
-            $swapped = ($outDir === '' ? '' : $outDir . DIRECTORY_SEPARATOR) . $stem . '.gif';
+            // Swap only the final segment, keeping the caller's own spelling
+            // of the directory part: rebuilding it with DIRECTORY_SEPARATOR
+            // turned `C:\out/x.mp4` into `C:\out\x.gif` on Windows.
+            $prefix = substr($output, 0, strlen($output) - strlen(basename($output)));
+            if ($prefix === '') {
+                $prefix = $outDir === '' ? '' : $outDir . DIRECTORY_SEPARATOR;
+            }
+            $swapped = $prefix . $stem . '.gif';
             $this->renderWarnings[] = "Output path '{$output}' is not a .gif file — candy-vcr emits GIF bytes only; writing '{$swapped}' instead";
             $output = $swapped;
         }
@@ -407,6 +414,13 @@ final class TapeToGif
      */
     private function confineScreenshotPath(string $rawPath, string $outputDir): string
     {
+        // On Windows a backslash IS the separator: fold it to '/' so a native
+        // `C:\out\shot.png` takes the same checks as `C:/out/shot.png` instead
+        // of being refused outright. Elsewhere a backslash stays refused.
+        if (\DIRECTORY_SEPARATOR === '\\') {
+            $rawPath = str_replace('\\', '/', $rawPath);
+        }
+
         // Reject path traversal
         if (str_contains($rawPath, '..') || str_contains($rawPath, '\\')) {
             throw new \RuntimeException("Screenshot path escapes output directory: {$rawPath}");

@@ -114,7 +114,7 @@ final class RecordCommandTest extends TestCase
 
         try {
             $rc = $cmd->run(
-                ['--force', '--output', $cassette, '--', '/bin/echo', 'hello-record'],
+                ['--force', '--output', $cassette, '--', ...self::echoArgv('hello-record')],
                 $stdout,
                 $stderr,
             );
@@ -179,7 +179,7 @@ final class RecordCommandTest extends TestCase
 
         try {
             $rc = $cmd->run(
-                ['--force', '--output', $cassette, '--cols', '132', '--rows', '40', '--', '/bin/echo', 'ok'],
+                ['--force', '--output', $cassette, '--cols', '132', '--rows', '40', '--', ...self::echoArgv('ok')],
                 $stdout,
                 $stderr,
             );
@@ -225,7 +225,7 @@ final class RecordCommandTest extends TestCase
 
         try {
             $rc = $cmd->run(
-                ['--force', '--output', $cassette, '--', '/bin/sh', '-c', 'exit 7'],
+                ['--force', '--output', $cassette, '--', ...self::exitArgv(7)],
                 $stdout,
                 $stderr,
             );
@@ -262,7 +262,7 @@ final class RecordCommandTest extends TestCase
 
         try {
             $rc = $cmd->run(
-                ['--force', '--output', $cassette, '--', 'sh', '-c', 'echo bare-path-ok'],
+                ['--force', '--output', $cassette, '--', ...(PHP_OS_FAMILY === 'Windows' ? ['cmd', '/c', 'echo bare-path-ok'] : ['sh', '-c', 'echo bare-path-ok'])],
                 $stdout,
                 $stderr,
             );

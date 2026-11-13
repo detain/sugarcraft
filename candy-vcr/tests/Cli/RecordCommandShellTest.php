@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Vcr\Tests\Cli;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Vcr\Support\HostShell;
 use SugarCraft\Vcr\Cli\RecordCommand;
 use SugarCraft\Vcr\EventKind;
 use SugarCraft\Vcr\Format\JsonlFormat;
@@ -60,7 +61,8 @@ final class RecordCommandShellTest extends TestCase
     public function testShellSpawnFallsBackToFallbackShellWhenShellEnvMissing(): void
     {
         $this->requirePtySyscalls();
-        if (!\is_executable(RecordCommand::FALLBACK_SHELL)) {
+        $fallback = HostShell::onWindows() ? HostShell::fallback() : RecordCommand::FALLBACK_SHELL;
+        if (!HostShell::isExecutable($fallback)) {
             $this->markTestSkipped('FALLBACK_SHELL not executable on this host.');
         }
 
@@ -108,11 +110,18 @@ final class RecordCommandShellTest extends TestCase
         // at a minimal exit-0 sh wrapper for the duration of the run.
         $wrapper = \tempnam(\sys_get_temp_dir(), 'sh-wrap-');
         $this->assertIsString($wrapper);
-        \file_put_contents(
-            $wrapper,
-            "#!/bin/sh\nprintf 'shell-marker\\n'\nexit 0\n",
-        );
-        \chmod($wrapper, 0o755);
+        if (\PHP_OS_FAMILY === 'Windows') {
+            // Windows runs a shell script as a .cmd batch file.
+            @\unlink($wrapper);
+            $wrapper .= '.cmd';
+            \file_put_contents($wrapper, "@echo shell-marker\r\n@exit /b 0\r\n");
+        } else {
+            \file_put_contents(
+                $wrapper,
+                "#!/bin/sh\nprintf 'shell-marker\\n'\nexit 0\n",
+            );
+            \chmod($wrapper, 0o755);
+        }
 
         $prior = \getenv('SHELL');
         \putenv("SHELL={$wrapper}");

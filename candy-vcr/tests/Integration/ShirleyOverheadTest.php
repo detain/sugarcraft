@@ -55,7 +55,7 @@ final class ShirleyOverheadTest extends TestCase
     private function requirePtySyscalls(): void
     {
         if (PHP_OS_FAMILY === 'Windows') {
-            $this->markTestSkipped('sugar-pty is POSIX-only; Windows ConPTY is a separate port.');
+            $this->markTestSkipped('This benchmarks PosixPump, the POSIX record path; Windows records through WindowsRecordLoop.');
         }
         if (!\extension_loaded('ffi')) {
             $this->markTestSkipped('ext-ffi is required to exercise the libc PTY syscalls.');

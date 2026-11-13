@@ -179,11 +179,13 @@ interface Kernel32Interface
     public function peekConsoleInput(int $h, array &$records, int $recordSize = 1): int|false;
 
     /**
-     * Read and consume console input events.
+     * Read and consume console input events, never blocking: nothing pending
+     * answers []. A KEY_EVENT record also carries its decoded fields:
+     * keyDown, repeat, vk, scan, char (one UTF-16 code unit) and ctrl.
      *
      * @param int $h CONIN$ handle
      * @param int $recordSize max records to read
-     * @return list<array{type:int, dataIndex:int}>|false records read, or false
+     * @return list<array{type:int, index:int, keyDown?:bool, repeat?:int, vk?:int, scan?:int, char?:int, ctrl?:int}>|false records read, or false
      */
     public function readConsoleInput(int $h, int $recordSize = 1): array|false;
 

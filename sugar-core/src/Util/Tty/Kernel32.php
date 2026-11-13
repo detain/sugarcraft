@@ -301,10 +301,36 @@ CPROTO
 
         $records = [];
         for ($i = 0; $i < $count->cdata; $i++) {
-            $records[] = ['type' => (int) $buf[$i]->EventType, 'index' => $i];
+            $record = ['type' => (int) $buf[$i]->EventType, 'index' => $i];
+            if ($record['type'] === self::KEY_EVENT) {
+                $record += self::keyEventFields(\FFI::string(\FFI::addr($buf[$i]->Event), 16));
+            }
+            $records[] = $record;
         }
 
         return $records;
+    }
+
+    /**
+     * Decode a KEY_EVENT_RECORD's 16 bytes: BOOL bKeyDown, WORD
+     * wRepeatCount, WORD wVirtualKeyCode, WORD wVirtualScanCode, WCHAR
+     * UnicodeChar, DWORD dwControlKeyState (little-endian, no padding).
+     *
+     * @return array{keyDown: bool, repeat: int, vk: int, scan: int, char: int, ctrl: int}
+     */
+    public static function keyEventFields(string $event): array
+    {
+        /** @var array{down: int, repeat: int, vk: int, scan: int, char: int, ctrl: int} $f */
+        $f = \unpack('Vdown/vrepeat/vvk/vscan/vchar/Vctrl', \str_pad($event, 16, "\0"));
+
+        return [
+            'keyDown' => $f['down'] !== 0,
+            'repeat' => $f['repeat'],
+            'vk' => $f['vk'],
+            'scan' => $f['scan'],
+            'char' => $f['char'],
+            'ctrl' => $f['ctrl'],
+        ];
     }
 
     public function stdIn(): int

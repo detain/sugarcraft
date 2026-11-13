@@ -30,6 +30,32 @@ trait RequiresWorkingPty
     /** @var array{ok: bool, reason: string}|null */
     private static ?array $ptyProbeCache = null;
 
+    /**
+     * A child that prints $text and exits 0: /bin/echo on POSIX, the PHP
+     * binary on Windows (which has no /bin/echo, and whose cmd.exe `echo`
+     * would bring console quoting rules along).
+     *
+     * @return list<string>
+     */
+    private static function echoArgv(string $text): array
+    {
+        return PHP_OS_FAMILY === 'Windows'
+            ? [\PHP_BINARY, '-r', 'echo ' . \var_export($text, true) . ';']
+            : ['/bin/echo', $text];
+    }
+
+    /**
+     * A child that exits with $code.
+     *
+     * @return list<string>
+     */
+    private static function exitArgv(int $code): array
+    {
+        return PHP_OS_FAMILY === 'Windows'
+            ? [\PHP_BINARY, '-r', "exit({$code});"]
+            : ['/bin/sh', '-c', "exit {$code}"];
+    }
+
     private function requirePtySyscalls(): void
     {
         $probe = $this->probePty();
@@ -47,10 +73,10 @@ trait RequiresWorkingPty
             return self::$ptyProbeCache;
         }
 
-        if (PHP_OS_FAMILY === 'Windows') {
+        if (PHP_OS_FAMILY === 'Windows' && \PHP_VERSION_ID < 80400) {
             return self::$ptyProbeCache = [
                 'ok' => false,
-                'reason' => 'sugar-pty is POSIX-only; Windows ConPTY is a separate port.',
+                'reason' => 'ConPTY needs PHP 8.4+ FFI on Windows.',
             ];
         }
         if (!\extension_loaded('ffi')) {
@@ -59,19 +85,19 @@ trait RequiresWorkingPty
                 'reason' => 'ext-ffi is required to exercise the libc PTY syscalls.',
             ];
         }
-        if (!\is_readable('/dev/ptmx') || !\is_writable('/dev/ptmx')) {
+        if (PHP_OS_FAMILY !== 'Windows' && (!\is_readable('/dev/ptmx') || !\is_writable('/dev/ptmx'))) {
             return self::$ptyProbeCache = [
                 'ok' => false,
                 'reason' => '/dev/ptmx is unreadable/unwritable on this host.',
             ];
         }
-        if (!\extension_loaded('pcntl')) {
+        if (PHP_OS_FAMILY !== 'Windows' && !\extension_loaded('pcntl')) {
             return self::$ptyProbeCache = [
                 'ok' => false,
                 'reason' => 'ext-pcntl is required for controllingTerminal:true spawns.',
             ];
         }
-        if (!\is_executable('/bin/echo')) {
+        if (PHP_OS_FAMILY !== 'Windows' && !\is_executable('/bin/echo')) {
             return self::$ptyProbeCache = [
                 'ok' => false,
                 'reason' => '/bin/echo is not executable on this host.',
@@ -92,7 +118,7 @@ trait RequiresWorkingPty
 
         // Raw fopen keeps this gate a graceful skip when streams fail —
         // Stream::memory() would throw instead.
-        $devNullIn = @fopen('/dev/null', 'r');
+        $devNullIn = @fopen(PHP_OS_FAMILY === 'Windows' ? 'NUL' : '/dev/null', 'r');
         $stdout = fopen('php://memory', 'r+');
         $stderr = fopen('php://memory', 'r+');
         if (!\is_resource($devNullIn) || !\is_resource($stdout) || !\is_resource($stderr)) {
@@ -116,7 +142,7 @@ trait RequiresWorkingPty
         try {
             $cmd = new RecordCommand($devNullIn);
             $rc = $cmd->run(
-                ['--force', '--output', $cassette, '--', '/bin/echo', 'ok'],
+                ['--force', '--output', $cassette, '--', ...self::echoArgv('ok')],
                 $stdout,
                 $stderr,
             );

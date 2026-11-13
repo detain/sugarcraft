@@ -364,9 +364,10 @@ final class FakeKernel32 implements \SugarCraft\Core\Util\Tty\Kernel32Interface
         $take = \min($recordSize, \count($this->readConsoleInputSequence));
         $records = \array_splice($this->readConsoleInputSequence, 0, $take);
 
-        // Normalise to the shape expected by WindowsBackend drainSignals.
+        // Normalise to the shape the real binding returns: seeded key fields
+        // (keyDown/char/repeat/...) pass through, index defaults to 0.
         return \array_map(
-            fn (array $r): array => ['type' => $r['type'], 'index' => 0],
+            fn (array $r): array => $r + ['index' => 0],
             $records,
         );
     }

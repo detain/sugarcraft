@@ -201,8 +201,34 @@ final class Locator
         return null;
     }
 
+    /**
+     * Whether $candidate is a file this host would execute. POSIX: the mode
+     * bit. Windows: the extension, matched case-insensitively against
+     * {@see pathExtensions()} — PHP's is_executable() answers false there for
+     * a `.cmd` or `.bat` file, so a batch-file tool (or a `$SHELL` wrapper)
+     * read as absent.
+     */
+    public static function isExecutable(string $candidate): bool
+    {
+        if (!is_file($candidate)) {
+            return false;
+        }
+        if (DIRECTORY_SEPARATOR !== '\\') {
+            return is_executable($candidate);
+        }
+
+        $extension = strtolower('.' . pathinfo($candidate, PATHINFO_EXTENSION));
+        foreach (self::pathExtensions() as $allowed) {
+            if (strtolower($allowed) === $extension) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private static function isExecutableFile(string $candidate): bool
     {
-        return is_file($candidate) && is_executable($candidate);
+        return self::isExecutable($candidate);
     }
 }

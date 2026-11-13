@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Vcr\Tests\Cli;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Vcr\Tests\Support\HostFilesystem;
 use SugarCraft\Vcr\CassetteHeader;
 use SugarCraft\Vcr\Recorder;
 
@@ -18,6 +19,8 @@ use SugarCraft\Vcr\Recorder;
  */
 final class RecorderFilePermissionsTest extends TestCase
 {
+    use HostFilesystem;
+
     /** @var list<string> */
     private array $paths = [];
 
@@ -30,6 +33,7 @@ final class RecorderFilePermissionsTest extends TestCase
 
     public function testFreshCassetteIsWrittenOwnerOnly(): void
     {
+        $this->requirePosixModes();
         $path = $this->freshPath('fresh');
         $recorder = Recorder::open($path, self::header());
         $recorder->close();
@@ -44,6 +48,7 @@ final class RecorderFilePermissionsTest extends TestCase
 
     public function testPreExistingLooserFileIsTightenedByOpen(): void
     {
+        $this->requirePosixModes();
         $path = $this->freshPath('looser');
         file_put_contents($path, 'stale');
         chmod($path, 0644);

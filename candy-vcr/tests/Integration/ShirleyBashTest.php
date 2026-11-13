@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Vcr\Tests\Integration;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Vcr\Support\HostShell;
 use SugarCraft\Vcr\Cli\RecordCommand;
 use SugarCraft\Vcr\EventKind;
 use SugarCraft\Vcr\Format\JsonlFormat;
@@ -25,11 +26,14 @@ final class ShirleyBashTest extends TestCase
 {
     use RequiresWorkingPty;
 
+    private ?string $bash = null;
+
     private function requireBash(): void
     {
         $this->requirePtySyscalls();
-        if (!\is_executable('/bin/bash')) {
-            $this->markTestSkipped('/bin/bash is not executable on this host.');
+        $this->bash = HostShell::onWindows() ? HostShell::locate('bash') : (\is_executable('/bin/bash') ? '/bin/bash' : null);
+        if ($this->bash === null) {
+            $this->markTestSkipped('bash is not available on this host (Windows: Git for Windows ships one).');
         }
     }
 
@@ -43,7 +47,7 @@ final class ShirleyBashTest extends TestCase
         // Keep stdin live until bash exits so the pump's 300 ms EOF
         // grace doesn't close the master before the second `echo
         // world` lands on the PTY.
-        $pair = \stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+        $pair = \SugarCraft\Vcr\Support\SocketPair::open();
         $this->assertIsArray($pair);
         [$stdinRead, $stdinWrite] = $pair;
 
@@ -56,7 +60,7 @@ final class ShirleyBashTest extends TestCase
             $rc = $cmd->run([
                 '--force', '--output', $cassette,
                 '--',
-                '/bin/bash', '-c',
+                $this->bash, '-c',
                 "echo hello; sleep 0.2; echo world",
             ], $stdout, $stderr);
             $elapsed = \microtime(true) - $start;

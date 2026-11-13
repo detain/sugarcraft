@@ -323,9 +323,11 @@ vendor/bin/candy-vcr replay  --no-trim session.cas --speed=realtime # restore re
 
 Comparable to `asciinema rec`, but writes the candy-vcr JSONL cassette so the existing inspect / replay / diff / stats commands and the `Player::play()` API work without conversion. `--cols`/`--rows` set the child PTY size when the recording starts (80×24 when omitted) and are written into the header; the recorder does not track `SIGWINCH`, so resizing your own terminal mid-recording leaves the program laid out for the size you started with — pick the geometry up front. `--idle-trim` and the host-termios safety net (`register_shutdown_function` + signal handlers) are covered under their own headings below.
 
+**Native Windows** (PHP 8.4+ with FFI) records through ConPTY with its own polling loop instead of the POSIX pump. Keystrokes from a console are read as console input records in VT input mode, so arrows and Ctrl keys reach the child as the same bytes a POSIX terminal sends. A piped or redirected stdin is forwarded as-is. Host console resizes are forwarded and recorded, because Windows has no `SIGWINCH`. The child gets the Windows system variables it needs to start (`SystemRoot`, `ComSpec`, `PATHEXT`, …), and `--ctty` has no meaning there: the pseudo console delivers Ctrl+C itself.
+
 #### `--shell`
 
-Spawn the user's `$SHELL -l` (falling back to `/bin/sh -l` when `$SHELL` is empty or non-executable) instead of an explicit positional command. Useful for "capture what my prompt does" demos without enumerating the shell binary every time. Mutually exclusive with positional `<cmd>`.
+Spawn the user's `$SHELL -l` (falling back to `/bin/sh -l` when `$SHELL` is empty or non-executable; on Windows the fallback is `%ComSpec%`, i.e. cmd.exe, which takes no `-l`) instead of an explicit positional command. Useful for "capture what my prompt does" demos without enumerating the shell binary every time. Mutually exclusive with positional `<cmd>`.
 
 #### `--env` and `--env-regex=PATTERN`
 
@@ -554,7 +556,8 @@ Sleep 3s
 ```
 
 Exec mode needs a working PTY layer (ext-ffi + a readable/writable
-`/dev/ptmx` on POSIX). When a shell is requested but the PTY layer is
+`/dev/ptmx` on POSIX; PHP 8.4+ FFI for ConPTY on Windows, where a bare
+`Set Shell` name is found through PATH/PATHEXT and cmd.exe is the fallback). When a shell is requested but the PTY layer is
 unavailable, the render logs a warning and transparently falls back to
 echo mode instead of failing — so FFI-less hosts still render shell-less
 tapes. The spawned shell is interactive (`-i`) but **not** a login shell,

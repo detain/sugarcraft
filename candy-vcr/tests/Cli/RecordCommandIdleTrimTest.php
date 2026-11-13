@@ -168,7 +168,7 @@ final class RecordCommandIdleTrimTest extends TestCase
         // child is sleeping. `/dev/null` would hit EOF immediately and
         // the pump's stdinEofGraceSec (300 ms) would close the master
         // before the child wakes from sleep 1.2.
-        $pair = \stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+        $pair = \SugarCraft\Vcr\Support\SocketPair::open();
         $this->assertIsArray($pair);
         [$stdinRead, $stdinWrite] = $pair;
         $cmd = new RecordCommand($stdinRead);
@@ -183,8 +183,9 @@ final class RecordCommandIdleTrimTest extends TestCase
                 '--force', '--output', $cassette,
                 '--idle-trim', '0.4',
                 '--',
-                '/bin/bash', '-c',
-                "printf 'pre\\n'; sleep 1.2; printf 'post\\n'",
+                // PHP itself, so the leg runs on every host (no /bin/bash on Windows).
+                \PHP_BINARY, '-r',
+                'echo "pre\n"; usleep(1200000); echo "post\n";',
             ], $stdout, $stderr);
             $this->assertSame(0, $rc);
 
@@ -243,7 +244,7 @@ final class RecordCommandIdleTrimTest extends TestCase
         $this->requirePtySyscalls();
 
         $cassette = \tempnam(\sys_get_temp_dir(), 'rec-trim-replay-');
-        $pair2 = \stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+        $pair2 = \SugarCraft\Vcr\Support\SocketPair::open();
         $this->assertIsArray($pair2);
         [$stdinRead2, $stdinWrite2] = $pair2;
         $rec = new RecordCommand($stdinRead2);
@@ -255,8 +256,9 @@ final class RecordCommandIdleTrimTest extends TestCase
                 '--force', '--output', $cassette,
                 '--idle-trim', '0.4',
                 '--',
-                '/bin/bash', '-c',
-                "printf 'pre\\n'; sleep 1.2; printf 'post\\n'",
+                // PHP itself, so the leg runs on every host (no /bin/bash on Windows).
+                \PHP_BINARY, '-r',
+                'echo "pre\n"; usleep(1200000); echo "post\n";',
             ], $stdout, $stderr);
             $this->assertSame(0, $rc);
 

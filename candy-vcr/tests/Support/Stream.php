@@ -40,7 +40,7 @@ final class Stream
      */
     public static function devNull(): mixed
     {
-        $handle = fopen('/dev/null', 'r');
+        $handle = fopen(PHP_OS_FAMILY === 'Windows' ? 'NUL' : '/dev/null', 'r');
         if (!is_resource($handle)) {
             throw new \RuntimeException('tests: could not open /dev/null');
         }

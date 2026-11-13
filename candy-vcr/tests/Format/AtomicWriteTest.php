@@ -6,6 +6,7 @@ namespace SugarCraft\Vcr\Tests\Format;
 
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Vcr\Tests\Support\HostFilesystem;
 use SugarCraft\Vcr\Cassette;
 use SugarCraft\Vcr\CassetteHeader;
 use SugarCraft\Vcr\Diff\DiffWriter;
@@ -27,6 +28,8 @@ use SugarCraft\Vcr\Format\YamlFormat;
  */
 final class AtomicWriteTest extends TestCase
 {
+    use HostFilesystem;
+
     /** @var list<string> */
     private array $dirs = [];
 
@@ -66,7 +69,7 @@ final class AtomicWriteTest extends TestCase
         $victim = $dir . '/victim.bin';
         $dest = $dir . '/' . $name;
         file_put_contents($victim, 'VICTIM-CONTENT');
-        $this->assertTrue(symlink($victim, $dest));
+        $this->plantSymlinkOrSkip($victim, $dest);
 
         $format->write($this->stubCassette(), $dest);
 
@@ -107,6 +110,7 @@ final class AtomicWriteTest extends TestCase
 
     public function testUnwritableGzipDestinationThrowsNamedAndLeaksNothing(): void
     {
+        $this->requirePosixModes();
         $dir = $this->scratch();
         $dest = $dir . '/rec.cas.gz';
 
@@ -127,6 +131,7 @@ final class AtomicWriteTest extends TestCase
 
     public function testLandedCassettesAreOwnerOnlyFromTheFirstByte(): void
     {
+        $this->requirePosixModes();
         $dir = $this->scratch();
 
         // Worst-case ambient umask: mode must still be 0600 because the
@@ -146,6 +151,7 @@ final class AtomicWriteTest extends TestCase
 
     public function testGzipWritePreservesEveryByteOfTheEncodedStream(): void
     {
+        $this->requirePosixModes();
         $dir = $this->scratch();
         $dest = $dir . '/rec.cas.gz';
 
@@ -176,7 +182,7 @@ final class AtomicWriteTest extends TestCase
         $victim = $dir . '/victim.txt';
         $dest = $dir . '/replay.diff';
         file_put_contents($victim, 'DO-NOT-TOUCH');
-        $this->assertTrue(symlink($victim, $dest));
+        $this->plantSymlinkOrSkip($victim, $dest);
 
         $written = (new DiffWriter())->writeUnifiedDiff($dest, "a\nb\n", "a\nc\n");
 

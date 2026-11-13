@@ -32,7 +32,7 @@ final class ShirleyHtopTest extends TestCase
     private function requireHtop(): void
     {
         if (PHP_OS_FAMILY === 'Windows') {
-            $this->markTestSkipped('sugar-pty is POSIX-only; Windows ConPTY is a separate port.');
+            $this->markTestSkipped('htop does not exist on Windows.');
         }
         if (!\extension_loaded('ffi')) {
             $this->markTestSkipped('ext-ffi is required for PTY syscalls.');
@@ -80,7 +80,7 @@ final class ShirleyHtopTest extends TestCase
 
         // htop -n 1: collect one screen refresh then quit automatically.
         // No user interaction needed; deterministic exit.
-        $pair = \stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+        $pair = \SugarCraft\Vcr\Support\SocketPair::open();
         $this->assertIsArray($pair);
         [$stdinRead, $stdinWrite] = $pair;
 

@@ -58,7 +58,7 @@ final class ShirleyVimTest extends TestCase
         // hand the read end to RecordCommand as stdin and vim
         // consumes it in order. Sequence: enter insert mode (`i`),
         // type `Hello`, leave insert mode (ESC), save+quit (`:wq\r`).
-        $pair = \stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+        $pair = \SugarCraft\Vcr\Support\SocketPair::open();
         $this->assertIsArray($pair);
         [$stdinRead, $stdinWrite] = $pair;
         \fwrite($stdinWrite, "iHello\x1b:wq\r");

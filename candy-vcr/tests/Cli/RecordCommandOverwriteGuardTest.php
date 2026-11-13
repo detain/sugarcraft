@@ -86,7 +86,7 @@ final class RecordCommandOverwriteGuardTest extends TestCase
 
         try {
             $rc = $cmd->run(
-                ['--force', '--output', $path, '--', '/bin/echo', 'ok'],
+                ['--force', '--output', $path, '--', ...self::echoArgv('ok')],
                 $stdout,
                 $stderr,
             );
@@ -116,7 +116,7 @@ final class RecordCommandOverwriteGuardTest extends TestCase
 
         try {
             $rc = $cmd->run(
-                ['--output', $missingDir . '/x.cas', '--', '/bin/echo', 'ok'],
+                ['--output', $missingDir . '/x.cas', '--', ...self::echoArgv('ok')],
                 $stdout,
                 $stderr,
             );

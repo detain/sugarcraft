@@ -180,7 +180,7 @@ final class ProgramRecordingTest extends TestCase
     /** @return array{0:resource, 1:resource, 2:resource} */
     private function pipes(): array
     {
-        $sockets = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+        $sockets = \SugarCraft\Vcr\Support\SocketPair::open();
         $this->assertNotFalse($sockets);
         [$reader, $writer] = $sockets;
         $output = Stream::memory('w+');

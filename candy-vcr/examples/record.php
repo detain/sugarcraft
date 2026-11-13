@@ -56,7 +56,7 @@ final class CounterModel implements Model
     }
 }
 
-$sockets = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+$sockets = \SugarCraft\Vcr\Support\SocketPair::open();
 [$inputRead, $inputWrite] = $sockets;
 $output = fopen('php://memory', 'w+');
 $loop = new StreamSelectLoop();

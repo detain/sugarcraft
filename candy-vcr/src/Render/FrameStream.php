@@ -9,6 +9,7 @@ use SugarCraft\AnsiParser\Parser\Parser;
 use SugarCraft\Pty\Contract\Child;
 use SugarCraft\Pty\Contract\MasterPty;
 use SugarCraft\Pty\PtySystemFactory;
+use SugarCraft\Vcr\Support\HostShell;
 use SugarCraft\Vcr\Event;
 use SugarCraft\Vcr\EventKind;
 use SugarCraft\Vcr\Player;
@@ -461,15 +462,20 @@ final class FrameStream implements \IteratorAggregate
                 $this->execEnv(),
                 $cols,
                 $rows,
-                controllingTerminal: true,
+                // ConPTY has no controlling-terminal notion and refuses it.
+                controllingTerminal: !HostShell::onWindows(),
             );
             $master = $pair->master();
 
             // Non-blocking master so the per-frame drain never stalls the render
             // when the child has nothing to say.
-            $stream = $master->stream();
-            if (is_resource($stream)) {
-                stream_set_blocking($stream, false);
+            // (POSIX only: a ConPTY master has no PHP stream, and its read()
+            // peeks the pipe, so it never blocks past its timeout anyway.)
+            if (!HostShell::onWindows()) {
+                $stream = $master->stream();
+                if (is_resource($stream)) {
+                    stream_set_blocking($stream, false);
+                }
             }
 
             $this->execMaster = $master;
@@ -585,11 +591,12 @@ final class FrameStream implements \IteratorAggregate
      */
     private function ptyLayerAvailable(): bool
     {
-        if (PHP_OS_FAMILY === 'Windows') {
-            return false;
-        }
         if (!extension_loaded('ffi')) {
             return false;
+        }
+        if (HostShell::onWindows()) {
+            // ConPTY through sugar-pty needs PHP 8.4's FFI.
+            return \PHP_VERSION_ID >= 80400;
         }
         return is_readable('/dev/ptmx') && is_writable('/dev/ptmx');
     }
@@ -610,14 +617,15 @@ final class FrameStream implements \IteratorAggregate
      */
     private function shellCommand(): array
     {
+        $fallback = HostShell::onWindows() ? HostShell::fallback() : self::FALLBACK_SHELL;
         $shell = trim((string) $this->shell);
         if ($shell === '') {
-            $shell = self::FALLBACK_SHELL;
+            $shell = $fallback;
         }
-        if (!str_starts_with($shell, '/')) {
-            $shell = $this->locateShell($shell) ?? self::FALLBACK_SHELL;
+        if (!HostShell::isAbsolute($shell)) {
+            $shell = $this->locateShell($shell) ?? $fallback;
         }
-        return [$shell, '-i'];
+        return [$shell, ...HostShell::interactiveArgs($shell, login: false)];
     }
 
     /**
@@ -626,23 +634,7 @@ final class FrameStream implements \IteratorAggregate
      */
     private function locateShell(string $name): ?string
     {
-        foreach (['/bin/', '/usr/bin/', '/usr/local/bin/'] as $dir) {
-            $candidate = $dir . $name;
-            if (is_executable($candidate)) {
-                return $candidate;
-            }
-        }
-        $path = (string) (getenv('PATH') ?: '');
-        foreach (explode(PATH_SEPARATOR, $path) as $dir) {
-            if ($dir === '') {
-                continue;
-            }
-            $candidate = rtrim($dir, '/') . '/' . $name;
-            if (is_executable($candidate)) {
-                return $candidate;
-            }
-        }
-        return null;
+        return HostShell::locate($name);
     }
 
     /**
@@ -660,6 +652,8 @@ final class FrameStream implements \IteratorAggregate
             'HOME' => (string) (getenv('HOME') ?: '/tmp'),
             'LANG' => (string) (getenv('LANG') ?: 'C.UTF-8'),
         ];
+        // Windows children cannot start without SystemRoot & co.
+        $env += HostShell::windowsSystemEnv();
         foreach ($this->player->cassette->header->env as $key => $value) {
             $env[$key] = $value;
         }

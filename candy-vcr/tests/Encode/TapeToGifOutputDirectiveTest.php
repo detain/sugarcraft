@@ -51,7 +51,9 @@ final class TapeToGifOutputDirectiveTest extends TestCase
 
         $written = TapeToGif::create(['encoder' => 'php'])->render($tape, null, ['encoder' => 'php']);
 
-        $expected = $this->dir . '/custom.gif';
+        // The compiler joins a relative directive under the tape dir with
+        // the host separator.
+        $expected = (string) realpath($this->dir) . DIRECTORY_SEPARATOR . 'custom.gif';
         // Pre-fix the directive was discarded and the GIF landed at demo.gif.
         $this->assertSame($expected, $written);
         $this->assertFileExists($expected);

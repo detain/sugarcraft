@@ -158,7 +158,7 @@ final class PlayerTest extends TestCase
         $path = tempnam(sys_get_temp_dir(), 'cv-roundtrip-');
         $this->assertNotFalse($path);
 
-        $sockets = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+        $sockets = \SugarCraft\Vcr\Support\SocketPair::open();
         $this->assertNotFalse($sockets);
         [$reader, $writer] = $sockets;
         $output = Stream::memory('w+');

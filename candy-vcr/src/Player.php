@@ -215,7 +215,7 @@ final class Player
         // fall back to the fluent withIdleTrim() setting.
         $idleThreshold = $idleThresholdSeconds ?? $this->idleTrimSeconds;
 
-        $sockets = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+        $sockets = \SugarCraft\Vcr\Support\SocketPair::open();
         if ($sockets === false) {
             throw new \RuntimeException('stream_socket_pair() failed');
         }

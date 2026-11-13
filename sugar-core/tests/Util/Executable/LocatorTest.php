@@ -201,6 +201,25 @@ final class LocatorTest extends TestCase
         );
     }
 
+    public function testIsExecutableFollowsTheHostRule(): void
+    {
+        $this->make('tool.cmd', 0o755);
+        $this->make('notes.txt', 0o755);
+        $this->make('plain', 0o644);
+
+        if (\DIRECTORY_SEPARATOR === '\\') {
+            // Windows: the extension decides. PHP's own is_executable() says
+            // false for .cmd, which is the bug this pins.
+            self::assertTrue(Locator::isExecutable($this->dir . '/tool.cmd'));
+            self::assertFalse(Locator::isExecutable($this->dir . '/notes.txt'));
+        } else {
+            // POSIX: the mode bit decides, whatever the extension.
+            self::assertTrue(Locator::isExecutable($this->dir . '/tool.cmd'));
+            self::assertFalse(Locator::isExecutable($this->dir . '/plain'));
+        }
+        self::assertFalse(Locator::isExecutable($this->dir . '/missing'), 'a missing file is never executable');
+    }
+
     private function make(string $name, int $mode, ?string $dir = null): void
     {
         \file_put_contents(($dir ?? $this->dir) . '/' . $name, "#!/bin/sh\nexit 0\n");

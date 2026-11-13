@@ -181,7 +181,7 @@ final class SrcExitCensusTest extends TestCase
         );
         foreach ($iterator as $file) {
             if ($file->isFile() && $file->getExtension() === 'php') {
-                $files[\substr($file->getPathname(), \strlen(\dirname($root)) + 1)] = $file->getPathname();
+                $files[\str_replace('\\', '/', \substr($file->getPathname(), \strlen(\dirname($root)) + 1))] = $file->getPathname();
             }
         }
         return $files;

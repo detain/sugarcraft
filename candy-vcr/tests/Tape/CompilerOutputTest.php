@@ -45,7 +45,7 @@ final class CompilerOutputTest extends TestCase
         $compiler->compile($result['ast'], $this->tapePath);
 
         // Pre-fix the directive was discarded and outputPath() returned null.
-        $this->assertSame($this->realDir . '/custom.gif', $compiler->outputPath());
+        $this->assertSame($this->realDir . \DIRECTORY_SEPARATOR . 'custom.gif', $compiler->outputPath());
     }
 
     public function testNoOutputDirectiveLeavesOutputPathNull(): void
@@ -110,7 +110,7 @@ final class CompilerOutputTest extends TestCase
 
         $withOutput = Compiler::parseSource('Output custom.gif');
         $compiler->compile($withOutput['ast'], $this->tapePath);
-        $this->assertSame($this->realDir . '/custom.gif', $compiler->outputPath());
+        $this->assertSame($this->realDir . \DIRECTORY_SEPARATOR . 'custom.gif', $compiler->outputPath());
 
         $withoutOutput = Compiler::parseSource('Type "hi"');
         $compiler->compile($withoutOutput['ast'], $this->tapePath);
