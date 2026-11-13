@@ -224,3 +224,17 @@ MIT
 Originally inspired by the Go [Charm](https://github.com/charmbracelet) ecosystem; SugarCraft is developed as a native PHP project.
 
 The Buffer/Cell data model follows the terminal cell buffer of [charmbracelet/x/cellbuf](https://github.com/charmbracelet/x/tree/main/cellbuf) — the Go module `charmbracelet/x/cellbuf`, whose `cellbuf/` (and the old `x/vt`) packages now live consolidated in the [charmbracelet/x](https://github.com/charmbracelet/x) monorepo. The pen/style vocabulary and SGR emission echo [charmbracelet/lipgloss](https://github.com/charmbracelet/lipgloss). The diff framing follows [ratatui](https://github.com/ratatui/ratatui)'s `Buffer::diff`, cited in `DiffOp`/`DiffEncoder`'s upstream notes.
+
+## Divergences from charmbracelet/x/cellbuf
+
+The antecedent is named in [Credits](#credits--inspiration); the shape this port took from it is deliberately narrower. Upstream method names below were read off `cellbuf/buffer.go`, `cellbuf/hardscroll.go` and `cellbuf/hashmap.go` — not from memory.
+
+- **Immutable value objects, no live mutation.** Upstream `Buffer` is edited in place: `Set`/`SetCell`, `Clear`/`ClearRect`, `Fill`/`FillRect`, structural edits `InsertCell`/`InsertCellRect`/`InsertLine`/`InsertLineRect` and `DeleteCell`/`DeleteCellRect`/`DeleteLine`/`DeleteLineRect`, and geometry changes via `Resize`. None of that exists here: every change returns a new `Buffer` (copy-on-write `with*()`), and there is **no resize, no scroll, no `SetSize`**. Structural recomposition is a blit — extract with `copy()`, paste with `withRegion()`:
+
+  ```php
+  $window = $src->copy(Region::new(Position::new(2, 1), 4, 2));                    // region-sized extract
+  $dst   = $dst->withRegion(Region::new(Position::new(0, 0), 4, 2), $window);      // clipped paste
+  ```
+
+- **Dense only.** One flat `width*height` cell grid behind the API. Upstream also carries a `Screen` with scroll optimisation (`hardscroll.go`: `scrollOptimize`, `scrollUp`/`scrollDown`, `scrollIdl`) and a line-hash map (`hashmap.go`) feeding it; there is no counterpart, and no sparse cell-buffer twin here — a mutable live grid that absorbs terminal I/O is sugar-vterm's job, not this package's.
+- **No capability gating.** The encoders emit the byte forms they decided to emit (REP/ECH/OSC 8/CUP) without probing what the attached terminal supports — the honest statement of that trade is in [Degraded terminals & non-visual output](#degraded-terminals--non-visual-output).
