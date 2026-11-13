@@ -28,12 +28,12 @@ The library carries the house i18n plumbing (`src/Lang.php` plus locale files un
 - **Ratio-based sizing** — items with grow ratios fill available space
 
 ### Table
-- **Sortable columns** — sortBy()/sortByNext() toggle ascending/descending (mouse wiring belongs to the app); the sort arrow is prepended before the header is truncated, so a sorted column narrower than arrow plus text shows the arrow alone
+- **Sortable columns** — withSort()/sortByNext() toggle ascending/descending (mouse wiring belongs to the app); the sort arrow is prepended before the header is truncated, so a sorted column narrower than arrow plus text shows the arrow alone
 - **Filterable** — keeps rows where any cell contains a case-insensitive substring; matching runs on the stored raw strings, not the render-time sanitized text
 - **Configurable columns** — title, width, alignment, formatter (`Column::new()`, `withAlign()`, `withStyle()`, `withFormatter()`); the render pipeline runs formatter → sanitize → truncate/pad, so a formatter's output is sanitized like any other cell value and cannot smuggle color to the screen — styling belongs to `withStyle()`
 - **Cell styling** — per-column ANSI style support
 - **Cursor tracking** — get current row/cell on selection. Note the cursor
-  style is empty by default, so `setCursor()` alone marks nothing on screen —
+  style is empty by default, so `withCursor()` alone marks nothing on screen —
   call `withCursorStyle()` to paint the cursor row.
 - **Delta rendering** — the stateful `TableRenderer` emits only the cells that changed between frames (see Buffer diffing below)
 
@@ -139,27 +139,27 @@ result must be assigned (or chained) — calling a method for effect discards it
 use SugarCraft\Flexbox\Table\{Table, Column};
 
 $table = (new Table())
-    ->addColumn(Column::new('Name', 20))
-    ->addColumn(Column::new('Age', 5)->withAlign('right'))
-    ->addColumn(Column::new('City', 15))
-    ->addRow(['Alice', '30', 'NYC'])
-    ->addRow(['Bob', '25', 'LA'])
-    ->addRow(['Carol', '35', 'Chicago']);
+    ->withColumn(Column::new('Name', 20))
+    ->withColumn(Column::new('Age', 5)->withAlign('right'))
+    ->withColumn(Column::new('City', 15))
+    ->withRow(['Alice', '30', 'NYC'])
+    ->withRow(['Bob', '25', 'LA'])
+    ->withRow(['Carol', '35', 'Chicago']);
 
-$sorted = $table->sortBy(0);      // sort by Name column → new Table
-$filtered = $sorted->filter('ca'); // case-insensitive substring in ANY cell → keeps the Carol row (its "Chicago" city matches too)
+$sorted = $table->withSort(0);     // sort by Name column → new Table
+$filtered = $sorted->withFilter('ca'); // case-insensitive substring in ANY cell → keeps the Carol row (its "Chicago" city matches too)
 
 $atCursor = $filtered
     ->withCursorStyle('1;36')    // the default style ('') marks nothing on screen
-    ->setCursor(0);              // cursor row of the materialized view
+    ->withCursor(0);             // cursor row of the materialized view
 
 echo $atCursor->render();
 echo $atCursor->currentCell(0), "\n";
 ```
 
 Sorting and filtering reset the cursor to row 0 — the view reorders
-underneath it — so move the cursor *after* the last `sortBy()`/`sortByNext()`/
-`filter()` call. `setCursor()` does not clamp: an index past the end simply
+underneath it — so move the cursor *after* the last `withSort()`/`sortByNext()`/
+`withFilter()` call. `withCursor()` does not clamp: an index past the end simply
 falls off the view, and `currentRow()`/`currentCell()` answer `null` until the
 cursor lands back inside.
 
@@ -230,16 +230,16 @@ use SugarCraft\Flexbox\Table\{Column, Table, TableRenderer};
 $renderer = new TableRenderer();
 
 $table = Table::new()
-    ->addColumn(Column::new('Status', 8))
-    ->addColumn(Column::new('Job', 20))
-    ->addRow(['running', 'nightly-backup']);
+    ->withColumn(Column::new('Status', 8))
+    ->withColumn(Column::new('Job', 20))
+    ->withRow(['running', 'nightly-backup']);
 
 echo $renderer->render($table);            // full first frame
 
 $changed = Table::new()
-    ->addColumn(Column::new('Status', 8))
-    ->addColumn(Column::new('Job', 20))
-    ->addRow(['done', 'nightly-backup']);
+    ->withColumn(Column::new('Status', 8))
+    ->withColumn(Column::new('Job', 20))
+    ->withRow(['done', 'nightly-backup']);
 
 echo $renderer->render($changed);          // only the 'Status' cell is re-painted
 ```
@@ -261,7 +261,11 @@ not ghost) — callers that clear the terminal out-of-band must still call
 ## Accessor deprecation (2026-10-24)
 
 `Viewport`'s dimension accessors follow the house bare-accessor convention:
-call `width()` and `height()`. The scrollbar toggle's old boolean
+call `width()` and `height()`, and `Table`'s mutation-flavoured builders are
+now `withColumn()/withRow()/withSort()/withFilter()/withCursor()` — every one
+of them returns a **new** Table; the receiver is unchanged, so muscle-memory
+chaining like `$t->addRow($r);` inside a loop dropped rows silently. The
+scrollbar toggle's old boolean
 `withScrollbar()` reads as a fluent setter and shadows the component-attach
 verb `withVerticalScrollbar()` — its honest name is `showScrollbar()`. The
 legacy spellings still work — they are one-line backward-compatibility
@@ -274,6 +278,11 @@ sugar-flexbox v2.0.0. Migrating is a name swap with no behavior change:
 | `Flexbox` | `Viewport` | `getWidth()` | `width()` |
 | `Flexbox` | `Viewport` | `getHeight()` | `height()` |
 | `Flexbox` | `Viewport` | `withScrollbar()` | `showScrollbar()` |
+| `Flexbox\Table` | `Table` | `addColumn()` | `withColumn()` |
+| `Flexbox\Table` | `Table` | `addRow()` | `withRow()` |
+| `Flexbox\Table` | `Table` | `sortBy()` | `withSort()` |
+| `Flexbox\Table` | `Table` | `filter()` | `withFilter()` |
+| `Flexbox\Table` | `Table` | `setCursor()` | `withCursor()` |
 
 ## License
 

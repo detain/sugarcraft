@@ -68,7 +68,10 @@ final class Table
         return new self();
     }
 
-    public function addColumn(Column $col): self
+    /**
+     * Returns a new Table with $col appended; receiver unchanged.
+     */
+    public function withColumn(Column $col): self
     {
         $clone = clone $this;
         $clone->columns[] = $col;
@@ -76,7 +79,15 @@ final class Table
     }
 
     /**
-     * Add a row (values are matched to columns by index).
+     * @deprecated Renamed to {@see self::withColumn()} for the fluent house
+     *             vocabulary; returns a new Table, receiver unchanged.
+     *             REMOVED-IN: 2.0.0
+     */
+    public function addColumn(Column $col): self { return $this->withColumn($col); }
+
+    /**
+     * Returns a new Table with one more row (values are matched to
+     * columns by index).
      *
      * Values must be strings or scalars convertible to one (null, bool,
      * int, float, or an object with __toString); anything else throws,
@@ -89,7 +100,7 @@ final class Table
      *
      * @param array<array-key, string|int|float|bool|null|object> $values
      */
-    public function addRow(array $values): self
+    public function withRow(array $values): self
     {
         $values = \array_values($values);
         foreach ($values as $i => $value) {
@@ -113,6 +124,13 @@ final class Table
     }
 
     /**
+     * @deprecated Renamed to {@see self::withRow()} for the fluent house
+     *             vocabulary; returns a new Table, receiver unchanged.
+     *             REMOVED-IN: 2.0.0
+     */
+    public function addRow(array $values): self { return $this->withRow($values); }
+
+    /**
      * Sort rows by column index.
      *
      * The index must address a real column: silently sorting NOTHING for
@@ -125,7 +143,7 @@ final class Table
      * binary strcmp order ('B' first) would read as a bug to every human
      * looking at a sorted name column.
      */
-    public function sortBy(int $colIndex, bool $ascending = true): self
+    public function withSort(int $colIndex, bool $ascending = true): self
     {
         if ($colIndex < 0 || $colIndex >= \count($this->columns)) {
             $n = \count($this->columns);
@@ -143,6 +161,13 @@ final class Table
     }
 
     /**
+     * @deprecated Renamed to {@see self::withSort()} for the fluent house
+     *             vocabulary; returns a new Table, receiver unchanged.
+     *             REMOVED-IN: 2.0.0
+     */
+    public function sortBy(int $colIndex, bool $ascending = true): self { return $this->withSort($colIndex, $ascending); }
+
+    /**
      * Toggle sort direction on column, or start ascending if different column.
      *
      * Delegates to sortBy(), so the range guard and the cursorRow reset
@@ -151,9 +176,9 @@ final class Table
     public function sortByNext(int $colIndex): self
     {
         if ($this->sortColIndex === $colIndex) {
-            $clone = $this->sortBy($colIndex, !$this->sortAscending);
+            $clone = $this->withSort($colIndex, !$this->sortAscending);
         } else {
-            $clone = $this->sortBy($colIndex, true);
+            $clone = $this->withSort($colIndex, true);
         }
         return $clone;
     }
@@ -169,7 +194,7 @@ final class Table
      * Resets cursorRow to 0: the visible row set changes identity, so the
      * old index would silently address a different record.
      */
-    public function filter(string $text): self
+    public function withFilter(string $text): self
     {
         $clone = clone $this;
         $clone->filterText = $text;
@@ -178,9 +203,16 @@ final class Table
         return $clone;
     }
 
+    /**
+     * @deprecated Renamed to {@see self::withFilter()} for the fluent house
+     *             vocabulary; returns a new Table, receiver unchanged.
+     *             REMOVED-IN: 2.0.0
+     */
+    public function filter(string $text): self { return $this->withFilter($text); }
+
     public function clearFilter(): self
     {
-        return $this->filter('');
+        return $this->withFilter('');
     }
 
     /**
@@ -189,12 +221,19 @@ final class Table
      * falls off the view: currentRow() and currentCell() answer null until
      * a later setCursor() lands back inside.
      */
-    public function setCursor(int $rowIndex): self
+    public function withCursor(int $rowIndex): self
     {
         $clone = clone $this;
         $clone->cursorRow = $rowIndex;
         return $clone;
     }
+
+    /**
+     * @deprecated Renamed to {@see self::withCursor()} for the fluent house
+     *             vocabulary; returns a new Table, receiver unchanged.
+     *             REMOVED-IN: 2.0.0
+     */
+    public function setCursor(int $rowIndex): self { return $this->withCursor($rowIndex); }
 
     public function withCursorStyle(string $ansiStyle): self
     {

@@ -6,6 +6,8 @@ namespace SugarCraft\Flexbox\Tests;
 
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Flexbox\Table\Column;
+use SugarCraft\Flexbox\Table\Table;
 use SugarCraft\Flexbox\Viewport;
 
 /**
@@ -35,6 +37,14 @@ final class AccessorDeprecationTest extends TestCase
             // BC leg compares structure (every property of both instances);
             // a mis-wired twin differs on the delegate it hands back.
             'Viewport::withScrollbar' => [Viewport::class, 'withScrollbar', 'showScrollbar', [true], 'equal'],
+            // Table's mutation-flavoured builders (FBX-05): every returned
+            // Table is a fresh clone-based instance, so equality is the
+            // honest comparison — a mis-wired twin differs on contents.
+            'Table::addColumn' => [Table::class, 'addColumn', 'withColumn', [Column::make('Age', 5)], 'equal'],
+            'Table::addRow' => [Table::class, 'addRow', 'withRow', [['Bob']], 'equal'],
+            'Table::sortBy' => [Table::class, 'sortBy', 'withSort', [0, true], 'equal'],
+            'Table::filter' => [Table::class, 'filter', 'withFilter', ['li'], 'equal'],
+            'Table::setCursor' => [Table::class, 'setCursor', 'withCursor', [1], 'equal'],
         ];
     }
 
@@ -43,6 +53,7 @@ final class AccessorDeprecationTest extends TestCase
         /** @var class-string $class */
         return match ($class) {
             Viewport::class => Viewport::new(40, 12),
+            Table::class => Table::new()->withColumn(Column::make('Name', 10))->withRow(['Alice']),
             default => self::fail("no fixture for {$class}"),
         };
     }
@@ -154,7 +165,7 @@ final class AccessorDeprecationTest extends TestCase
         sort($found);
         sort($expected);
         $this->assertSame($expected, $found, 'src/ census drifted from the tested pairs');
-        $this->assertCount(3, $found);
+        $this->assertCount(8, $found);
     }
 
     /**
@@ -177,7 +188,7 @@ final class AccessorDeprecationTest extends TestCase
             $rows,
             PREG_SET_ORDER
         );
-        $this->assertCount(3, $rows, 'README Accessor-deprecation table must list exactly the swept pairs');
+        $this->assertCount(8, $rows, 'README Accessor-deprecation table must list exactly the swept pairs');
         $tabled = [];
         foreach ($rows as $row) {
             $tabled[$row['class'] . '::' . $row['legacy']] = $row['bare'];
