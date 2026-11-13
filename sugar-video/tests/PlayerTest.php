@@ -18,6 +18,9 @@ use SugarCraft\Video\Player;
 use SugarCraft\Video\Source\Probe;
 use SugarCraft\Video\Subtitle\WebVtt;
 use SugarCraft\Video\Tests\FakeDecoder;
+use SugarCraft\Video\Decode\AnimatedWebpDecoder;
+use SugarCraft\Video\Decode\FfmpegDecoder;
+use SugarCraft\Video\Decode\GifDecoder;
 use SugarCraft\Video\Render\HalfBlockRenderer;
 use SugarCraft\Video\Render\LumaRamp;
 use SugarCraft\Video\Render\Mode;
@@ -3286,6 +3289,118 @@ final class PlayerTest extends TestCase
 
         $this->assertNull($player->subscriptions(), 'M27: null is the deliberate answer — the tick chain owns pacing');
     }
+
+    /**
+     * @testdox SV-M25/025: canSeekByTime() reads the decoder's own capability and the source binding — not a hopeful true
+     */
+    public function testCanSeekByTimeAnswersPerDecoderCapability(): void
+    {
+        $this->assertFalse(
+            Player::fromDecoder(decoder: new FakeDecoder([]), cellsW: 4, cellsH: 2, fps: 10.0)
+                ->canSeekByTime(),
+            'a replay-from-head double has no time seek to promise'
+        );
+
+        // A seconds-capable decoder that rebuilds by RESPAWN needs the source
+        // path the factory branch respawns from — unbound it honestly says no.
+        $respawnSeeker = new class([]) extends FakeDecoder {
+            public function reopensInPlace(): bool
+            {
+                return false;
+            }
+
+            public function seeksBySeconds(): bool
+            {
+                return true;
+            }
+        };
+        $this->assertFalse(
+            Player::fromDecoder(decoder: $respawnSeeker, cellsW: 4, cellsH: 2, fps: 10.0)
+                ->canSeekByTime(),
+            'an unbound player cannot time-seek: the throwaway route has nothing to respawn'
+        );
+        $this->assertTrue(
+            Player::fromDecoder(decoder: $respawnSeeker, cellsW: 4, cellsH: 2, fps: 10.0, videoPath: '/tmp/clip.gif')
+                ->canSeekByTime(),
+            'the factory ffmpeg/GIF shape — seconds-capable and path-bound — is the acceptance truth'
+        );
+
+        // Reopening in place at a honoured second needs no path.
+        $inPlaceSeeker = new class([]) extends FakeDecoder {
+            public function seeksBySeconds(): bool
+            {
+                return true;
+            }
+        };
+        $this->assertTrue(
+            Player::fromDecoder(decoder: $inPlaceSeeker, cellsW: 4, cellsH: 2, fps: 10.0)
+                ->canSeekByTime(),
+            'per capability: an in-place decoder that honours $startSec can be time-seeked as-is'
+        );
+
+        $this->assertTrue((new FfmpegDecoder())->seeksBySeconds(), 'ffmpeg `-ss` before -i');
+        $this->assertTrue((new GifDecoder())->seeksBySeconds(), 'GIF cursor jump over the capture (M38)');
+        $this->assertTrue((new AnimatedWebpDecoder())->seeksBySeconds(), 'WebP container-truth skip');
+    }
+
+    /**
+     * @testdox SV-M25/025: seekToSeconds()/withSeek() whose rebuild dies end the session with the failure row — no FfmpegDecodeFailure escapes to the RPC caller
+     */
+    public function testSeekDecodeFailureEndsWithFailureInsteadOfEscaping(): void
+    {
+        // A dead stream: the typed failure surfaces at the PULL, which is
+        // where both public seek doors touch the decoder (the in-place
+        // forward walk pulls next(); the seconds rebuild pulls after reopen).
+        $decoder = new class(array_fill(0, 5, $this->makeFrame("\x00\x00\x00"))) extends FakeDecoder {
+            public function next(): ?RgbFrame
+            {
+                throw new FfmpegDecodeFailure('child died (simulated seek)');
+            }
+        };
+        $player = Player::fromDecoder(decoder: $decoder, cellsW: 4, cellsH: 2, fps: 10.0, totalFrames: 5);
+
+        $afterTime = $player->seekToSeconds(2.0);
+        $this->assertTrue($afterTime->ended, 'a dead seek ends the session loudly');
+        $this->assertStringContainsString('child died', (string) $afterTime->failure, 'the failure text rides the row the view paints');
+
+        // withSeek(3) from the initial index 0 is a real move (the same-index
+        // guard returns identity before reaching the rebuild), so it takes the
+        // reopen and hits the same failure law.
+        $afterIndex = $player->withSeek(3);
+        $this->assertTrue($afterIndex->ended, 'the index door carries the same law');
+        $this->assertStringContainsString('child died', (string) $afterIndex->failure);
+    }
+
+    /**
+     * @testdox SV-M25/025: a frameAt() peek that hits a decode failure announces on error_log and answers null — the playing session survives the advisory read
+     */
+    public function testFrameAtDecodeFailureAnnouncesNullAndKeepsTheSession(): void
+    {
+        $log = tempnam(sys_get_temp_dir(), 'sv-frameat-');
+        $this->assertNotFalse($log);
+        $this->iniSet('error_log', $log);
+
+        $decoder = new class(array_fill(0, 5, $this->makeFrame("\x00\x00\x00"))) extends FakeDecoder {
+            public function reopen(string $source, int $cellsW, int $cellsH, float $fps, ?Mode $mode = null, float $startSec = 0.0, array $headers = []): void
+            {
+                if ($startSec > 0.0) {
+                    throw new FfmpegDecodeFailure('peek died (simulated)');
+                }
+                parent::reopen($source, $cellsW, $cellsH, $fps, $mode, $startSec, $headers);
+            }
+        };
+        $player = Player::fromDecoder(decoder: $decoder, cellsW: 4, cellsH: 2, fps: 10.0, totalFrames: 5);
+
+        $this->assertNull($player->frameAt(2.0), 'a dead peek answers null, never an exception at the RPC caller');
+        $this->assertFalse($player->ended, 'a thumbnail read is advisory — it does not end the session');
+
+        $written = (string) file_get_contents($log);
+        $this->assertStringContainsString('frameAt', $written, 'the refusal is announced, not silent');
+        $this->assertStringContainsString('peek died', $written);
+
+        @unlink($log);
+    }
+
 }
 
 /**
@@ -3410,4 +3525,5 @@ final class SpyAudioPlayer extends AudioPlayer
         $this->expectExceptionMessage('fps must be greater than zero');
         Player::fromDecoder(decoder: new FakeDecoder([]), cellsW: 4, cellsH: 2, fps: -1.0);
     }
+
 }

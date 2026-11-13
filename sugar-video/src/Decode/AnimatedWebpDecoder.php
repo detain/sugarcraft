@@ -451,6 +451,16 @@ final class AnimatedWebpDecoder implements Decoder
         return false;
     }
 
+    /**
+     * SV-M25/025: true — open() consumes $startSec as a container-truth skip
+     * (cumulative frame durations, exact), so the Player's seconds routes land
+     * on it through the close()+open() rebuild.
+     */
+    public function seeksBySeconds(): bool
+    {
+        return true;
+    }
+
     // -------------------------------------------------------------------------
     // Container
     // -------------------------------------------------------------------------

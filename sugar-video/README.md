@@ -348,6 +348,64 @@ unchanged (it is `Player::open()`'s own default), and `cellPx()` returns
 `null` until one is supplied. A non-positive dimension throws
 `InvalidArgumentException`.
 
+### Feeding your own decoder
+
+`Player::open()` builds its decoder from a source path. When frames come from
+somewhere else — a server transcoding to RGB24 over a socket, a renderer you
+own, a test double with canned bytes — `Player::fromDecoder()` takes any
+`Decoder` instead, and `Player::openForTest()` keeps the same seam scriptable
+(injected clock, unbounded walk). Implementing the interface is the whole
+contract:
+
+| Member | Contract |
+|---|---|
+| `open(source, cellsW, cellsH, fps, mode, startSec, headers)` | bind the source; validate at this boundary (headers land typed, `HttpHeaders`) so internals trust their data |
+| `getIterator()` | generator over the stream |
+| `next(): ?RgbFrame` | next frame; **null means a clean end of stream**, never a failure — `FfmpegDecodeFailure` is reserved for a child that died while frames were expected, and any other exception still propagates untouched to the host |
+| `close(): void` | teardown; idempotent; no child or descriptor outlives it (the repo-wide child-lifetime law) |
+| `reopen(source, cellsW, cellsH, fps, mode, startSec, headers)` | rebuild at a new geometry — in place when you can, faithful either way |
+| `reopensInPlace(): bool` | true is the decoder saying “reopen me, I can retarget myself”; false is “I am a plain stream — rebuild me from the source path”. The Player routes seeks, resizes and mode changes on this answer, never on a path-string guess |
+| `seeksBySeconds(): bool` | true is “`$startSec` lands the playhead” (ffmpeg `-ss` before `-i`; GIF/WebP cursor jump over the captured bytes); false is “I replay from my own head” |
+
+`Player::canSeekByTime()` folds both answers together with the source binding:
+a host (candy-top's frame RPC is the motivating caller) asks it once before a
+time seek or a thumbnail grab instead of discovering the wall as a runtime
+throw. All three shipped factory decoders answer `seeksBySeconds()` true;
+test doubles that replay from their head answer false, exactly as the
+capability says.
+
+The frame itself is a readonly `RgbFrame`: `$bytes` raw RGB24, row-major,
+exactly `w * h * 3`, `$w`/`$h` in pixels, and an optional `$png` carrying a
+pre-encoded full-resolution PNG for the graphics rungs (a PNG-only frame uses
+`bytes: ''`); `toGd()` converts under ext-gd.
+
+`GifDecoder` and `AnimatedWebpDecoder` additionally answer
+`loopCount(): ?int` over the authored container bytes with one shared shape —
+**infinite is null, an authored play count is its integer total** (raw-0
+means forever; libnsgif's reading, mirrored by the WebP RIFF walk) — plus
+`playOnce()` for the explicitly-authored single playthrough. This is file
+state, not playback policy: the Player's own `loop` flag still decides
+restart-at-EOF.
+
+Two traps worth knowing before you write the host loop:
+
+- **`frameAt()` rewinds, throws, or answers null.** On a decoder that reopens
+  in place it reopens at the hovered second, takes one frame, and reopens at
+  the current playhead in a `finally` — scrubbing while playing cannot
+  desync the live stream. On a factory-owned decoder it spawns a throwaway
+  `-ss` read and closes it without disturbing the live one; an **unbound**
+  factory player has no path to respawn from and throws `LogicException` —
+  ask `canSeekByTime()` first. Results are memoised one thumbnail per second
+  with a spawn floor, so mouse scrubbing is cheap. A decode failure during
+  the peek is announced once on `error_log` and answers **null** — an
+  advisory read never ends the session.
+- **A failed seek ends loudly; it never escapes.** `withSeek()` and
+  `seekToSeconds()` respawn the decoder on the seconds route, and a respawn
+  that dies used to throw its `FfmpegDecodeFailure` through those public
+  doors. They now return an ended Player carrying the failure row — the same
+  shape the `update()` choke point gives a dead pump — so a direct RPC seek
+  needs no ffmpeg-specific catch.
+
 ## Subtitles
 
 Subtitles are WebVTT text that paints beneath the frame during playback. Attach
@@ -620,7 +678,7 @@ expects.
 
 ## Public API
 
-The entry points worth knowing: `Reel` (open/openUrl/play/toPlayer + `withMode/withAutoMode/withFps/withLoop/withRamp/withSize/withSubtitles/withAudio/withFrameBudget/withAllowedHosts/withHeaders/withCellPx` + the removal doors `withoutSubtitles/withoutHeaders/withoutRamp` — the allowlist has no remover by design, a security field never loosens via absence), `Player` (open/fromDecoder + pause/play/stop/isStopped/withSeek/withSubtitles/withAudio/frameAt/seekToSeconds/position/duration), `AudioPlayer` (start/stop/pause/resume/mute/unmute/isMuted/isPlaying/hasStarted/position/exitCode), `Synthetic::generate` (path defaults to `Synthetic::DEFAULT_PATH`; the returned path is the source of truth — a refused target yields a private stand-in path), `WebVtt::parse`, `VideoSource::probe`, `HttpHeaders::parse`, `Probe`, `DecoderFactory::new`, and `RendererFactory` (`auto`/`autoMode`/`supports`/`supportedModes`/`diagnose`). Two `Probe` classes share the short name: the roster entry here is `SugarCraft\Video\Source\Probe` (external-binary presence checks for ffmpeg/ffprobe/ffplay/mpv), while the auto-mode fallback above is `SugarCraft\ColorProfile\Probe`.
+The entry points worth knowing: `Reel` (open/openUrl/play/toPlayer + `withMode/withAutoMode/withFps/withLoop/withRamp/withSize/withSubtitles/withAudio/withFrameBudget/withAllowedHosts/withHeaders/withCellPx` + the removal doors `withoutSubtitles/withoutHeaders/withoutRamp` — the allowlist has no remover by design, a security field never loosens via absence), `Player` (open/fromDecoder + pause/play/stop/isStopped/withSeek/withSubtitles/withAudio/frameAt/seekToSeconds/canSeekByTime/position/duration), `AudioPlayer` (start/stop/pause/resume/mute/unmute/isMuted/isPlaying/hasStarted/position/exitCode), `Synthetic::generate` (path defaults to `Synthetic::DEFAULT_PATH`; the returned path is the source of truth — a refused target yields a private stand-in path), `WebVtt::parse`, `VideoSource::probe`, `HttpHeaders::parse`, `Probe`, `DecoderFactory::new`, and `RendererFactory` (`auto`/`autoMode`/`supports`/`supportedModes`/`diagnose`). Two `Probe` classes share the short name: the roster entry here is `SugarCraft\Video\Source\Probe` (external-binary presence checks for ffmpeg/ffprobe/ffplay/mpv), while the auto-mode fallback above is `SugarCraft\ColorProfile\Probe`.
 
 Ceilings that shape what plays: source capture is capped at 64 MiB per file (`GifDecoder::MAX_SOURCE_BYTES`, `AnimatedWebpDecoder::MAX_SOURCE_BYTES`); animated WebP at `MAX_FRAMES` 4096 frames, `MAX_CANVAS_PIXELS` 2048² per canvas and `MAX_TOTAL_PIXELS` 33,554,432 pixels summed across the file; GIF residency at an internal `GifDecoder` cap of 8 000 000 decoded pixels per playthrough; subtitles at 4 MiB (`Reel::MAX_SUBTITLE_BYTES`) and 10 000 cues (`WebVtt::MAX_CUES`, announced when truncated); the terminal geometry clamps to 10-200 columns and 5-80 rows (`Player::MIN/MAX_COLS`, `MIN/MAX_ROWS`). ffprobe output drains under an 8 MiB ceiling and a 10 s deadline; each ffmpeg frame read is bounded by a per-fill timeout.
 

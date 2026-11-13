@@ -116,4 +116,21 @@ interface Decoder
      *         new geometry/mode, so the caller must not re-create the decoder.
      */
     public function reopensInPlace(): bool;
+
+    /**
+     * Whether a start-SECOND argument actually lands the playhead.
+     *
+     * SV-M25/025: the Player's time routes — {@see \SugarCraft\Video\Player::seekToSeconds()}
+     * and the throwaway thumbnail read behind {@see \SugarCraft\Video\Player::frameAt()} —
+     * hand a `$startSec` down and trust it to mean "resume here". This is the
+     * decoder saying whether that trust is answered: true for the sources
+     * {@see DecoderFactory} owns (ffmpeg `-ss` before `-i`, a cursor jump over
+     * the captured bytes for GIF/WebP), false for anything that replays from
+     * its own head and reads `$startSec` as decoration.
+     *
+     * The answer pairs with {@see reopensInPlace()}: a host (candy-top's frame
+     * RPC is the motivating caller) asks once, before a runtime throw, instead
+     * of probing the behaviour by exception.
+     */
+    public function seeksBySeconds(): bool;
 }

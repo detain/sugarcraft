@@ -1903,8 +1903,27 @@ final class Player implements Model
      * pull lands there); an in-place decoder closes-and-reopens at its head
      * and decodes forward, bounded by the frame budget. The landed index is
      * always the truth the new state records (SV-H4/013).
+     *
+     * SV-M25/025 fail-loud contract: a seek whose rebuild cannot land returns
+     * an ended Player carrying the failure row instead of throwing
+     * FfmpegDecodeFailure at the caller — same shape as {@see seekToSeconds()}.
      */
     public function withSeek(int $targetIndex): self
+    {
+        // SV-M25/025: the seconds route of an index seek respawns the decoder
+        // (the SV-H11/011 fast path), so the FfmpegDecodeFailure that escape
+        // law applies here too — a failed seek ends the session loudly with
+        // the failure text instead of throwing at the caller. The update()
+        // key route keeps identical semantics: the conversion just happens
+        // one level down, with the same ended-with-failure shape.
+        try {
+            return $this->performWithSeek($targetIndex);
+        } catch (FfmpegDecodeFailure $failure) {
+            return $this->onDecodeFailure($failure->getMessage());
+        }
+    }
+
+    private function performWithSeek(int $targetIndex): self
     {
         // Clamp to valid range. A known-length stream cannot seek past its
         // last frame (SV-H11/011: the seconds route would read nothing there
@@ -2077,6 +2096,29 @@ final class Player implements Model
     }
 
     /**
+     * Ask whether time-seeking is supported HERE before doing it and taking a
+     * runtime throw (SV-M25/025 — candy-top's frame RPC is the motivating
+     * caller: it wants a yes/no, not an exception class to catch).
+     *
+     * The answer is the decoder's own capability
+     * ({@see Decoder::seeksBySeconds()}) — a double that replays from its head
+     * says false no matter what the caller hopes — AND, for a decoder that
+     * does not reopen in place, whether the player is actually bound to a
+     * source path the rebuild can respawn from. An unbound factory-owned
+     * player cannot time-seek: the honest no that used to arrive later as a
+     * `\LogicException` from {@see frameAt()} or a spawn refusal from the
+     * seconds rebuild.
+     */
+    public function canSeekByTime(): bool
+    {
+        if (!$this->decoder->seeksBySeconds()) {
+            return false;
+        }
+
+        return $this->decoder->reopensInPlace() || $this->videoPath !== '';
+    }
+
+    /**
      * Seek to an absolute time in content seconds (clamped to [0, duration]).
      *
      * The time-domain companion to {@see withSeek()} (which is frame-indexed):
@@ -2085,8 +2127,29 @@ final class Player implements Model
      * intervening frame. A decoder without `-ss` falls back to the index walk,
      * which honours the player's frame budget like every other forward pull. Audio is realigned to the same offset. Returns a new
      * Player (immutable); a host screen decides whether to re-arm the tick.
+     *
+     * SV-M25/025 fail-loud contract: when the seconds rebuild cannot land
+     * (a respawn that fails to spawn or to pull its first frame), the seek
+     * does NOT throw at the caller — it returns an ended Player carrying the
+     * failure row, the same shape the update() choke point gives a dead pump.
+     * Ask {@see canSeekByTime()} before a seek you cannot afford to end on.
      */
     public function seekToSeconds(float $sec): self
+    {
+        // SV-M25/025: the seconds rebuild respawns the decoder — when that
+        // respawn (or its first pull) fails, the typed FfmpegDecodeFailure
+        // used to ESCAPE this public door into the calling host (the update()
+        // choke point only covers key/tick traffic; a direct RPC seek sat
+        // outside it). It now converts to the same ended-with-failure shape
+        // the choke point gives, so hosts need no ffmpeg-specific catch.
+        try {
+            return $this->performSeekToSeconds($sec);
+        } catch (FfmpegDecodeFailure $failure) {
+            return $this->onDecodeFailure($failure->getMessage());
+        }
+    }
+
+    private function performSeekToSeconds(float $sec): self
     {
         $sec = max(0.0, $sec);
         $duration = $this->duration();
@@ -2135,8 +2198,12 @@ final class Player implements Model
      *
      * @throws \LogicException for a factory-owned Player that has no source path
      *         to spawn the throwaway from (an unbound source), where grabbing a
-     *         frame is impossible rather than merely empty.
-     * @return RgbFrame|null null only when a real grab legitimately yields nothing.
+     *         frame is impossible rather than merely empty. Ask
+     *         {@see canSeekByTime()} first.
+     * @return RgbFrame|null null when a real grab legitimately yields nothing,
+     *         and (SV-M25/025) when the peek itself hit a decode failure — a
+     *         thumbnail read never ends the session; it announces on error_log
+     *         and answers null.
      */
     public function frameAt(float $sec): ?RgbFrame
     {
@@ -2207,11 +2274,26 @@ final class Player implements Model
             try {
                 $this->decoder->reopen($this->videoPath, $this->cellsW, $this->cellsH, $this->fps, $this->mode, max(0.0, $sec), $this->headers);
                 $frame = $this->decoder->next();
+            } catch (FfmpegDecodeFailure $failure) {
+                // SV-M25/025: a thumbnail read is ADVISORY — it must not kill
+                // the playing session it was only peeking for. Loud on
+                // error_log, honest null back; the playhead restore below
+                // still runs.
+                $this->announceThumbnailFailure($sec, $failure);
+                return null;
             } finally {
                 // Put the playhead back where the ticking Player thinks it is —
                 // even when the throwaway read throws, so a caught exception
                 // never strands the live decoder at the hovered position.
-                $this->decoder->reopen($this->videoPath, $this->cellsW, $this->cellsH, $this->fps, $this->mode, $this->videoTime, $this->headers);
+                try {
+                    $this->decoder->reopen($this->videoPath, $this->cellsW, $this->cellsH, $this->fps, $this->mode, $this->videoTime, $this->headers);
+                } catch (FfmpegDecodeFailure $failure) {
+                    // The restore itself died: the live stream is gone, and
+                    // this peek is not the place to end a session the host
+                    // never asked to end. Announce; the next tick's own pump
+                    // reports the truth in-model.
+                    $this->announceThumbnailFailure($sec, $failure);
+                }
             }
 
             return $frame;
@@ -2226,11 +2308,25 @@ final class Player implements Model
         $decoder = DecoderFactory::new($this->videoPath, $this->cellsW, $this->cellsH, $this->fps, $this->mode, max(0.0, $sec), $this->cellPxW, $this->cellPxH, $this->headers, hostRestricted: $this->hostRestricted);
         try {
             $frame = $decoder->next(); // with -ss, the first frame is at/near $sec
+        } catch (FfmpegDecodeFailure $failure) {
+            $this->announceThumbnailFailure($sec, $failure);
+            return null; // SV-M25/025: same advisory law for the throwaway
         } finally {
             $decoder->close(); // a throw reads cleanly or not at all — never leaks the child
         }
 
         return $frame;
+    }
+
+    /**
+     * One-line error_log announcement for a failed {@see frameAt()} peek
+     * (SV-M25/025). The decoder's message can carry the spawned command line,
+     * so it goes through the same egress sanitizer the failure row uses —
+     * an authenticated URL must never reach the log verbatim.
+     */
+    private function announceThumbnailFailure(float $sec, FfmpegDecodeFailure $failure): void
+    {
+        error_log('sugar-video: frameAt(' . $sec . 's) refused: ' . trim(Sanitize::untrusted($failure->getMessage())));
     }
 
     /**

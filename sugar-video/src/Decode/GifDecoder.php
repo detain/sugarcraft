@@ -933,4 +933,14 @@ final class GifDecoder implements Decoder
     {
         return false;
     }
+
+    /**
+     * SV-M25/025: true — reopen() honours $startSec as a cursor jump over the
+     * open-time capture (the M38 single-capture law), so the Player's seconds
+     * routes land on it without any re-read.
+     */
+    public function seeksBySeconds(): bool
+    {
+        return true;
+    }
 }

@@ -65,4 +65,13 @@ final class SlowFakeDecoder implements Decoder
     {
         return true;
     }
+
+    /**
+     * SV-M25/025: false — this double replays from its own head and reads
+     * `$startSec` as decoration, exactly the contract's false answer.
+     */
+    public function seeksBySeconds(): bool
+    {
+        return false;
+    }
 }

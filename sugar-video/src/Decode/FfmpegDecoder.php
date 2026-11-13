@@ -955,6 +955,16 @@ final class FfmpegDecoder implements Decoder
     }
 
     /**
+     * SV-M25/025: true — the rebuild route spawns ffmpeg with `-ss` BEFORE
+     * `-i`, so a start-second argument lands natively (the keyframe-snap
+     * trade-off is documented on Player::seekToSeconds(), not hidden here).
+     */
+    public function seeksBySeconds(): bool
+    {
+        return true;
+    }
+
+    /**
      * Flatten a parsed header set back to the name => value array open() accepts,
      * so reopen() can re-present the live credentials without the caller holding
      * them. Repeated names collapse to the last; none are expected in practice.
