@@ -748,7 +748,7 @@
 
 <section class="section" id="quickstart" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
-        <h2>From <code>composer require</code> to a working counter in ten lines.</h2>
+        <h2>From <code>composer require</code> to a working counter app.</h2>
         <p class="lede">
             Install the umbrella, drop the snippet below into a file,
             <code>php counter.php</code>. ↑ ↓ to count, <code>q</code> to quit.
@@ -761,7 +761,11 @@
             </div>
 
             <h3>2. Write the model</h3>
-<pre class="code"><code><span class="kw">use</span> <span class="cls">SugarCraft\Core\</span>{<span class="cls">Cmd</span>, <span class="cls">KeyType</span>, <span class="cls">Model</span>, <span class="cls">Msg</span>, <span class="cls">Program</span>};
+<pre class="code"><code>&lt;?php
+
+<span class="kw">require</span> __DIR__ . <span class="str">'/vendor/autoload.php'</span>;
+
+<span class="kw">use</span> <span class="cls">SugarCraft\Core\</span>{<span class="cls">Cmd</span>, <span class="cls">KeyType</span>, <span class="cls">Model</span>, <span class="cls">Msg</span>, <span class="cls">Program</span>, <span class="cls">Subscriptions</span>};
 <span class="kw">use</span> <span class="cls">SugarCraft\Core\Msg\KeyMsg</span>;
 
 <span class="kw">final class</span> <span class="cls">Counter</span> <span class="kw">implements</span> <span class="cls">Model</span> {
@@ -769,7 +773,7 @@
     <span class="kw">public function</span> <span class="fn">init</span>(): ?\Closure { <span class="kw">return null</span>; }
 
     <span class="kw">public function</span> <span class="fn">update</span>(<span class="cls">Msg</span> $msg): <span class="kw">array</span> {
-        <span class="kw">if</span> ($msg <span class="kw">instanceof</span> <span class="cls">KeyMsg</span> &amp;&amp; $msg-&gt;rune === <span class="str">'q'</span>) <span class="kw">return</span> [$<span class="kw">this</span>, <span class="cls">Cmd</span>::<span class="fn">quit</span>()];
+        <span class="kw">if</span> ($msg <span class="kw">instanceof</span> <span class="cls">KeyMsg</span> &amp;&amp; $msg-&gt;type === <span class="cls">KeyType</span>::Char &amp;&amp; $msg-&gt;rune === <span class="str">'q'</span>) <span class="kw">return</span> [$<span class="kw">this</span>, <span class="cls">Cmd</span>::<span class="fn">quit</span>()];
         <span class="kw">return</span> [<span class="kw">match</span> (<span class="kw">true</span>) {
             $msg <span class="kw">instanceof</span> <span class="cls">KeyMsg</span> &amp;&amp; $msg-&gt;type === <span class="cls">KeyType</span>::Up   =&gt; <span class="kw">new self</span>($<span class="kw">this</span>-&gt;n + <span class="num">1</span>),
             $msg <span class="kw">instanceof</span> <span class="cls">KeyMsg</span> &amp;&amp; $msg-&gt;type === <span class="cls">KeyType</span>::Down =&gt; <span class="kw">new self</span>($<span class="kw">this</span>-&gt;n - <span class="num">1</span>),
@@ -778,6 +782,8 @@
     }
 
     <span class="kw">public function</span> <span class="fn">view</span>(): <span class="kw">string</span> { <span class="kw">return</span> <span class="str">"n = {$this->n}\n↑ ↓ to count, q to quit\n"</span>; }
+
+    <span class="kw">public function</span> <span class="fn">subscriptions</span>(): ?<span class="cls">Subscriptions</span> { <span class="kw">return null</span>; }
 }
 
 (<span class="kw">new</span> <span class="cls">Program</span>(<span class="kw">new</span> <span class="cls">Counter</span>()))-&gt;<span class="fn">run</span>();
