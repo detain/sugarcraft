@@ -827,6 +827,13 @@ FFI. A custom spawner written from only the `runChild` signature does not
 fail at spawn time; it fails at class load with a missing-method fatal,
 so copy both.
 
+Peer signals are pid-scoped — RFC 4254 signals name a process — but the
+teardown ladder is group-scoped: the spawned command is a session
+leader, so its final SIGKILL sweeps the child's whole process group,
+backgrounded descendants included. The documented boundary is a leader
+that itself died of the ladder's SIGHUP: by the time the escalation
+runs, survivors of its group are no longer ours to signal.
+
 `InProcessTransport::runChild()` accepts two more arguments -- `$stdin` and
 `$stdout` -- and they are what make a testable, stream-injecting middleware
 possible. Code holding the interface cannot pass them, so anything that wants

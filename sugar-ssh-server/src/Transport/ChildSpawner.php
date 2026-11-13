@@ -37,6 +37,11 @@ interface ChildSpawner
      * supervisor's STDIN/STDOUT and the master fd until the child
      * exits, returns the exit code.
      *
+     * Containment scope: teardown escalation SIGKILLs the child's
+     * PROCESS GROUP, so backgrounded descendants die with it; see
+     * {@see InProcessTransport::runChild()} for the live-leader gate
+     * and its honest boundary.
+     *
      * The streams are fixed to `STDIN`/`STDOUT` for callers of this
      * signature; see the class note for the concrete transport's wider
      * form.
@@ -48,6 +53,11 @@ interface ChildSpawner
 
     /**
      * Forward a signal to the live child process.
+     *
+     * Pid-scoped by contract: RFC 4254 signals name a process, not a
+     * session group — a peer's SIGTERM must not sweep the child's
+     * background jobs. Only the teardown escalation (the concrete
+     * transport's ladder) reaches the group.
      *
      * No-op for transports that do not spawn a child or when no child
      * is currently running. Delivery must not depend on ext-posix:

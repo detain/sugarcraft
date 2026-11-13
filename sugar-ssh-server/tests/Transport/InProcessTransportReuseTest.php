@@ -37,6 +37,8 @@ final class InProcessTransportReuseTest extends TestCase
 {
     private const RUNCHILD_FIXTURE = __DIR__ . '/_fixtures/runchild.php';
 
+    private const GROUPSENTRY_FIXTURE = __DIR__ . '/_fixtures/groupsentry.php';
+
     private function requirePtySyscalls(): void
     {
         if (PHP_OS_FAMILY === 'Windows') {
@@ -225,6 +227,241 @@ final class InProcessTransportReuseTest extends TestCase
         $this->assertSame(0, $this->driveRun($transport));
         $this->assertSame(1, $fires, "a later run must not fire the previous run's beat");
         $this->assertNotContains("\0", $masterB->writes, 'a stale closure must not reach a child that never armed one');
+    }
+
+    /**
+     * 018 end-to-end: the final rung of the teardown ladder reaches
+     * the child's PROCESS GROUP. The fixture child ignores SIGHUP
+     * (the `trap`), backgrounds a `sleep 30` — non-interactive sh has
+     * no job control, so the sleeper shares the leader's group — and
+     * then blocks in a second foreground sleep. The client hangup
+     * ends the pump, the ladder's SIGHUP bounces off the trap, and
+     * the escalated SIGKILL must sweep leader AND background sleeper.
+     * Before this step the direct pid-kill felled the leader and the
+     * background sleep kept breathing its full 30 s behind a dead
+     * session.
+     */
+    public function testTheFinalEscalationSweepsTheProcessGroup(): void
+    {
+        $this->requirePtySyscalls();
+        if (PHP_OS_FAMILY !== 'Linux') {
+            $this->markTestSkipped('The grandchild probe reads /proc.');
+        }
+        if (!\is_executable('/bin/sh') || !\is_executable('/bin/sleep')) {
+            $this->markTestSkipped('/bin/sh and /bin/sleep required.');
+        }
+
+        $pidFile = \tempnam(\sys_get_temp_dir(), 'ssrv16');
+        $this->assertIsString($pidFile);
+        \unlink($pidFile); // the child's redirect creates it fresh
+
+        $supervisor = null;
+        $pipes = [];
+        $grandchild = 0;
+        $stderrTail = '';
+        $settled = true;
+        $contained = false;
+        try {
+            $supervisor = \proc_open(
+                [PHP_BINARY, self::RUNCHILD_FIXTURE, '80', '24',
+                    '/bin/sh', '-c',
+                    'trap "" HUP; sleep 30 & printf "%s" $! > ' . \escapeshellarg($pidFile) . '; sleep 30'],
+                [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+                $pipes,
+            );
+            $this->assertIsResource($supervisor, 'proc_open of runchild fixture failed');
+
+            $published = \microtime(true) + 5.0;
+            while (\microtime(true) < $published) {
+                $raw = @\file_get_contents($pidFile);
+                if (\is_string($raw) && \trim($raw) !== '') {
+                    $grandchild = (int) \trim($raw);
+                    break;
+                }
+                \usleep(20_000);
+            }
+            $this->assertGreaterThan(0, $grandchild, 'fixture child never published its backgrounded sleep pid');
+
+            // The client hangs up; the pump's stdin-EOF grace ends the
+            // run and the ladder starts swinging.
+            @\fclose($pipes[0]);
+            $pipes[0] = null;
+
+            $endDeadline = \microtime(true) + 6.0;
+            while (\microtime(true) < $endDeadline) {
+                $settled = !(\proc_get_status($supervisor)['running']);
+                if ($settled) {
+                    break;
+                }
+                \usleep(20_000);
+            }
+
+            $sweepDeadline = \microtime(true) + 2.5;
+            while (\microtime(true) < $sweepDeadline) {
+                $contained = $this->groupMemberIsDown($grandchild);
+                if ($contained) {
+                    break;
+                }
+                \usleep(20_000);
+            }
+        } finally {
+            if ($grandchild > 0 && !$this->groupMemberIsDown($grandchild)) {
+                // Belt: a FAILED test must not leak a 30 s sleeper.
+                \SugarCraft\Pty\Libc::kill($grandchild, \defined('SIGKILL') ? \SIGKILL : 9);
+            }
+            foreach ($pipes as $pipe) {
+                if (\is_resource($pipe)) {
+                    \fclose($pipe);
+                }
+            }
+            if (\is_resource($supervisor)) {
+                if (\proc_get_status($supervisor)['running']) {
+                    \proc_terminate($supervisor, 9);
+                }
+                \proc_close($supervisor);
+            }
+            @\unlink($pidFile);
+        }
+
+        $this->assertTrue($settled, 'supervisor must exit once its session group has fallen');
+        $this->assertTrue(
+            $contained,
+            'group-escalated SIGKILL must sweep the backgrounded descendant; the old pid-scoped'
+            . ' kill felled the leader and left sleep ' . $grandchild . ' running',
+        );
+    }
+
+    /**
+     * Self-preservation guard, fallback leg: a "child" reporting THIS
+     * process's pid — a test fake or corrupt state — must not turn the
+     * sweep into `kill(-getmypid())`. From this non-leader runner a
+     * missing guard would merely ESRCH, so the self-destruction itself
+     * is forced by the setsid sentry fixture in the next test; here the
+     * pin is that the declined sweep falls through to the direct
+     * Child::kill() arm, in ladder order.
+     */
+    public function testTheSweepRefusesTheSupervisorsOwnPidAndFallsBackToTheDirectArm(): void
+    {
+        $kills = new \stdClass();
+        $kills->signals = [];
+        $child = new class ($kills) implements Child {
+            public function __construct(private \stdClass $kills) {}
+            public function pid(): int { return \getmypid(); }
+            public function exited(): bool { return false; }
+            public function wait(): int { return 9; }
+            public function exitCode(): ?int { return 9; }
+            public function kill(int $signal): void { $this->kills->signals[] = $signal; }
+        };
+        $transport = new InProcessTransport($this->singleRunSystem(new RecordingMaster(), $child));
+
+        // stdin reads EOF as soon as the pump looks at it: its peer is
+        // closed before the run starts, while the handle itself stays a
+        // valid resource for stream_set_blocking().
+        [$stdin, $peer] = \stream_socket_pair(\STREAM_PF_UNIX, \STREAM_SOCK_STREAM, \STREAM_IPPROTO_IP);
+        \fclose($peer);
+        $stdout = \fopen('php://memory', 'w+b');
+        try {
+            $status = $transport->runChild($this->session(), ['/bin/true'], null, $stdin, $stdout);
+        } finally {
+            \fclose($stdin);
+            \fclose($stdout);
+        }
+
+        $this->assertSame(9, $status, 'the fake wait() code must come back once the ladder has run');
+        $this->assertSame(
+            [\defined('SIGHUP') ? \SIGHUP : 1, \defined('SIGKILL') ? \SIGKILL : 9],
+            $kills->signals,
+            'the guarded sweep must fall through to the direct Child::kill() arm, in ladder order',
+        );
+    }
+
+    /**
+     * 018 guard FORCE: the sentry fixture makes its own process both
+     * session and group leader (posix_setsid) and then drives the same
+     * ladder with a fake child reporting its own pid — the corrupt
+     * shape the guard exists for. With the guard in place it declines
+     * the sweep, falls back to Child::kill(), and exits 0. With the
+     * guard removed, `kill(-pid)` lands on the sentry's own group and
+     * it dies of SIGKILL ('signaled'), which the assertion below
+     * catches from the outside — the real test runner is never the
+     * target of the experiment.
+     */
+    public function testTheGroupSweepNeverTargetsAGroupLeaderRunningAsItsOwnProcess(): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            $this->markTestSkipped('sugar-pty is POSIX-only.');
+        }
+        if (!\function_exists('posix_setsid')) {
+            $this->markTestSkipped('ext-posix is required for the sentry.');
+        }
+        if (!\is_file(self::GROUPSENTRY_FIXTURE)) {
+            $this->markTestSkipped('sentry fixture missing: ' . self::GROUPSENTRY_FIXTURE);
+        }
+
+        $pipes = [];
+        $proc = \proc_open(
+            [PHP_BINARY, self::GROUPSENTRY_FIXTURE],
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+        );
+        $this->assertIsResource($proc, 'proc_open of the sentry fixture failed');
+        @\fclose($pipes[0]);
+
+        try {
+            $deadline = \microtime(true) + 20.0;
+            $status = \proc_get_status($proc);
+            while ($status['running'] && \microtime(true) < $deadline) {
+                \usleep(25_000);
+                $status = \proc_get_status($proc);
+            }
+            $elapsed = 20.0 - \max(0.0, $deadline - \microtime(true));
+            $stderr = (string) @\stream_get_contents($pipes[2]);
+        } finally {
+            if (\proc_get_status($proc)['running']) {
+                \proc_terminate($proc, 9);
+            }
+            @\fclose($pipes[1]);
+            @\fclose($pipes[2]);
+            \proc_close($proc);
+        }
+
+        $this->assertFalse(
+            $status['running'],
+            'the sentry must settle its ladder (stdin grace + full escalation) in under 20 s; it ran '
+            . \round($elapsed, 1) . ' s',
+        );
+        $this->assertFalse(
+            (bool) $status['signaled'],
+            'the sentry died of a signal: the group sweep targeted its own group — the self-'
+            . 'preservation guard is gone (exitcode=' . $status['exitcode'] . ' stderr='
+            . \trim($stderr) . ')',
+        );
+        if ((int) $status['exitcode'] === 3) {
+            $this->markTestSkipped('sentry: posix_setsid failed at runtime.');
+        }
+        $this->assertSame(
+            0,
+            (int) $status['exitcode'],
+            'sentry must survive-and-fall-back (0); 2=wrong kill record 4=ladder did not settle; stderr='
+            . \trim($stderr),
+        );
+    }
+
+    /**
+     * A swept process is either gone (pid slot freed, reaped) or a
+     * zombie (killed, reaper pending). Anything else — S/R/D — is
+     * still running. comm is parenthesised; the state letter follows
+     * the LAST ')'.
+     */
+    private function groupMemberIsDown(int $pid): bool
+    {
+        $stat = @\file_get_contents("/proc/{$pid}/stat");
+        if (!\is_string($stat) || $stat === '') {
+            return true;
+        }
+        $tail = \strrchr($stat, ')');
+
+        return \is_string($tail) && \str_starts_with(\ltrim(\substr($tail, 1)), 'Z');
     }
 
     // ----------------------------------------------------------------

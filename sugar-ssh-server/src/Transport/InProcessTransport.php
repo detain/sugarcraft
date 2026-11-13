@@ -346,7 +346,14 @@ final class InProcessTransport implements Transport, ChildSpawner, KeepaliveArmi
      * file). Closing a PTY master does NOT deliver SIGHUP on Linux —
      * the kernel only hangs the master up, so a child that ignores
      * STDIN EOF (sleep, a daemon) would otherwise outlive the session
-     * and hold the socket open.
+     * and hold the socket open. That final SIGKILL escalates to the
+     * child's PROCESS GROUP (audit 018): the child is a session
+     * leader (the pty-shim runs setsid), so backgrounded descendants
+     * share its group and fall with it — while the leader is still
+     * unreaped, which is what keeps the pid number ours. The honest
+     * boundary: a leader that itself died of the SIGHUP above is not
+     * swept for survivors. By contrast `signalChild()` stays
+     * pid-scoped — RFC 4254 signals name a process, not a group.
      *
      * The two streams are not treated alike, and the asymmetry is the
      * contract (audit K9): STDIN and the PTY master are flipped to
@@ -565,7 +572,49 @@ final class InProcessTransport implements Transport, ChildSpawner, KeepaliveArmi
                         \usleep(20_000);
                     }
                     if (!$child->exited()) {
-                        $child->kill(\defined('SIGKILL') ? \SIGKILL : 9);
+                        $sigkill = \defined('SIGKILL') ? \SIGKILL : 9;
+                        // Final escalation goes to the process GROUP,
+                        // not just the pid (audit sugar-ssh-server-018):
+                        // the runChild child is a session leader — the
+                        // pty-shim runs setsid() + TIOCSCTTY — so -pid
+                        // is exactly its own session's group, and every
+                        // descendant it backgrounded without job control
+                        // (a `cmd &` from a non-interactive shell keeps
+                        // the leader's group) shares it. The old
+                        // pid-scoped SIGKILL left those grandchildren
+                        // running behind a dead leader.
+                        //
+                        // Gated on a live leader on purpose: exited()
+                        // reaps as a side effect (tryWaitpid), and only
+                        // an unreaped leader pins the group's pid number
+                        // to us — signalling a number the kernel may
+                        // already have recycled is the stale-pid hazard
+                        // ChildSpawner::signalChild() documents against.
+                        // The honest boundary this keeps: a leader that
+                        // itself died of the SIGHUP above reports
+                        // exited() here, and a survivor of ITS group is
+                        // no longer ours to touch.
+                        //
+                        // Through Libc::kill — posix_kill() when
+                        // ext-posix is loaded, libc kill(2) over FFI
+                        // otherwise — the same routing Child::kill
+                        // uses, so ext-posix stays optional. Two
+                        // self-preservation guards: never target group
+                        // -1 (the broadcast) and never our own group —
+                        // a child reporting this process's pid is a
+                        // test fake or corrupt state, and kill(-pgid)
+                        // from a group leader hits every process in
+                        // the supervisor's own session.
+                        $pid = $child->pid();
+                        $swept = $pid > 1
+                            && $pid !== \getmypid()
+                            && Libc::kill(-$pid, $sigkill);
+                        // If the sweep reached nobody (ESRCH/EPERM —
+                        // including the guarded fake-pid shapes), the
+                        // leader itself must still fall.
+                        if (!$swept) {
+                            $child->kill($sigkill);
+                        }
                     }
                 }
             } finally {
