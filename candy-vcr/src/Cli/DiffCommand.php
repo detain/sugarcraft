@@ -198,6 +198,21 @@ final class DiffCommand implements DocumentedCommand
             $json = json_encode($value, JSON_UNESCAPED_SLASHES | JSON_PARTIAL_OUTPUT_ON_ERROR);
             return $json === false ? '{...}' : $json;
         }
+        if (\is_string($value)) {
+            // Belt for finding 004: diff prints header scalars. Escaping
+            // via JSON means no control character can reach the terminal
+            // through a diff line (invalid UTF-8 fails the encode and hits
+            // the dotting fallback); printable text stays readable.
+            $json = json_encode(
+                $value,
+                JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PARTIAL_OUTPUT_ON_ERROR,
+            );
+            if (\is_string($json)) {
+                $json = preg_replace('/^"(.*)"$/s', '$1', $json) ?? $json;
+                return $json;
+            }
+            return preg_replace('/[^\x20-\x7e]/', '.', $value) ?? '';
+        }
         return (string) $value;
     }
 }

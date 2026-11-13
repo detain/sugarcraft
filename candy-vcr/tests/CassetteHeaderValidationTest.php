@@ -399,4 +399,56 @@ final class CassetteHeaderValidationTest extends TestCase
             'runtime' => 'test',
         ], \JSON_THROW_ON_ERROR) . "\n");
     }
+
+    /**
+     * Finding 004: header metadata is printed verbatim by inspect/stats/
+     * diff, so control characters are refused at the trust door itself.
+     */
+    public function testRejectsControlCharactersInPrintableHeaderStrings(): void
+    {
+        $forgery = [
+            'ESC + SGR in createdAt' => ['createdAt', "2026-05-09T03:55:02Z\x1b[31mRED"],
+            'OSC 52 + BEL in runtime' => ['runtime', "\x1b]52;c;aGVsbG8=\x07"],
+            'NUL in runtime' => ['runtime', "evil\x00engine"],
+            'newline in theme' => ['theme', "drac\nula"],
+            'DEL in fontFamily' => ['fontFamily', "Mono\x7fpad"],
+            'C1 pad in runtime' => ['runtime', "engine\u{80}pad"],
+            'invalid UTF-8 in theme' => ['theme', "\xff\xfe"],
+        ];
+
+        foreach ($forgery as $case => [$field, $value]) {
+            $args = [
+                'version' => 1,
+                'createdAt' => '2026-05-09T03:55:02Z',
+                'cols' => 80,
+                'rows' => 24,
+                'runtime' => 'test',
+            ];
+            $args[$field] = $value;
+
+            try {
+                new CassetteHeader(...$args);
+                self::fail("case '{$case}': forged header was accepted");
+            } catch (\InvalidArgumentException $e) {
+                self::assertStringContainsString('must not contain control characters', $e->getMessage(), $case);
+                self::assertStringContainsString($field, $e->getMessage(), $case);
+            }
+        }
+    }
+
+    public function testLegitimateNonAsciiMetadataStillPassesTheDoor(): void
+    {
+        // Raw bytes 0x80..0x9F occur inside legitimate UTF-8 (U+2028 is
+        // E2 80 A8) — the C1 half of the door is a code-point class, so
+        // printable Unicode family names must survive.
+        $header = new CassetteHeader(
+            version: 1,
+            createdAt: '2026-05-09T03:55:02Z',
+            cols: 80,
+            rows: 24,
+            runtime: 'test',
+            fontFamily: 'Berliner Straße Grotesk',
+        );
+        $this->assertStringContainsString("\xE2\x80\xA8", $header->fontFamily ?? '');
+    }
 }

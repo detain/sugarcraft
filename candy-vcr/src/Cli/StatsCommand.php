@@ -93,10 +93,21 @@ final class StatsCommand implements DocumentedCommand
             $cassette->header->version,
             $cassette->header->cols,
             $cassette->header->rows,
-            $cassette->header->runtime,
-            $cassette->header->createdAt,
+            self::displaySafe($cassette->header->runtime),
+            self::displaySafe($cassette->header->createdAt),
         ));
         fwrite($stdout, str_repeat('-', 72) . "\n");
+    }
+
+    /**
+     * Belt for finding 004 (the CassetteHeader door is the braces): every
+     * non-printable byte becomes '.' so a header string can never smuggle
+     * escape sequences to the host through `stats`, whatever produced the
+     * object. Same shape as InspectCommand::displaySafe().
+     */
+    private static function displaySafe(string $text): string
+    {
+        return \preg_replace('/[^\x20-\x7e]/', '.', $text) ?? '';
     }
 
     /**

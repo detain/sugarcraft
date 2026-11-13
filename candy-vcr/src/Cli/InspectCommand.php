@@ -268,8 +268,8 @@ final class InspectCommand implements DocumentedCommand
             $cassette->header->version,
             $cassette->header->cols,
             $cassette->header->rows,
-            $cassette->header->runtime,
-            $cassette->header->createdAt,
+            $this->displaySafe($cassette->header->runtime),
+            $this->displaySafe($cassette->header->createdAt),
             $cassette->duration(),
             $cassette->eventCount(),
         ));

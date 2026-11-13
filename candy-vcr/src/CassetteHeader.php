@@ -91,6 +91,19 @@ final readonly class CassetteHeader
                 "CassetteHeader timestampMode must be 'absolute' or 'relative', got '{$timestampMode}'",
             );
         }
+        // Finding 004: header strings are printed verbatim by inspect/stats/
+        // diff. A hostile cassette used to gain arbitrary terminal control
+        // (SGR smear, OSC 52 clipboard write, title set) through them, so
+        // control characters are refused right here — every format builds
+        // its header through this door, so all consumers inherit it.
+        self::rejectControlChars('createdAt', $createdAt);
+        self::rejectControlChars('runtime', $runtime);
+        if ($theme !== null) {
+            self::rejectControlChars('theme', $theme);
+        }
+        if ($fontFamily !== null) {
+            self::rejectControlChars('fontFamily', $fontFamily);
+        }
         foreach ($env as $key => $value) {
             if (!\is_string($key) || $key === '') {
                 throw new \InvalidArgumentException('CassetteHeader env keys must be non-empty strings');
@@ -98,6 +111,26 @@ final readonly class CassetteHeader
             if (!\is_string($value)) {
                 throw new \InvalidArgumentException("CassetteHeader env['{$key}'] must be a string, got " . \get_debug_type($value));
             }
+        }
+    }
+
+    /**
+     * Reject control characters in header metadata (finding 004).
+     *
+     * C0 (including ESC/NUL/CR/LF) and DEL match as raw bytes — they can
+     * never occur inside a valid UTF-8 multibyte sequence. C1 (U+0080
+     * ..U+009F) is matched as a code point class: raw bytes in that range
+     * ARE legitimate UTF-8 continuations (U+2028 encodes as E2 80 A8), so
+     * only the decoded characters count. Strings that are not valid UTF-8
+     * at all cannot be audited and are refused with the same named error.
+     */
+    private static function rejectControlChars(string $field, string $value): void
+    {
+        if (
+            \preg_match('/[\x00-\x1f\x7f]/', $value) === 1
+            || \preg_match('/[\x{80}-\x{9f}]/u', $value) !== 0
+        ) {
+            throw new \InvalidArgumentException("CassetteHeader {$field} must not contain control characters");
         }
     }
 
