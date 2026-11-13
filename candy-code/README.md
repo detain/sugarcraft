@@ -228,6 +228,7 @@ backs one):
 | `ext-curl` (recommended) | the HTTP providers' transport | Guzzle's `Utils::chooseHandler()` routes the HTTP providers to the stream transport (where `allow_url_fopen` allows); the `doctor` row answers `WARN` |
 | `ext-sodium` (recommended) | Ed25519 signature checks in `self-update` and `tools/install.sh` | both refuse to swap or install a phar they cannot verify — the safe direction, not a breakage |
 | `ext-pcntl` (strongly recommended) | running each turn in a forked child | the TUI still runs: turns, parallel tool calls and sub-agents run in-process and the screen only updates when they finish; `doctor` surfaces this only through its server-mode `WARN` |
+| `ripgrep` (`rg`, optional) | the `Grep` tool's fast path: with `rg` on PATH the tool runs it natively (extended-regex dialect) | `Grep` walks the tree PHP-side instead (its regex dialect follows the engine) — slower on a large checkout; nothing refuses and `doctor` has no probe for it |
 | Universal Ctags (optional) | RepoMap coverage of non-PHP files | the map answers `PHP only (install Universal Ctags with +json to map other languages)` |
 | `ext-pcntl` + `ext-posix` + `ext-ffi` | `candy-code serve` only | serve refuses to start; the TUI and `-p` never ask for them |
 | `sugarcraft/candy-code-web` installed beside it | the browser UI | `serve` runs with no browser shell to serve |
