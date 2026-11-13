@@ -7,6 +7,8 @@ namespace SugarCraft\Forms\Field;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg;
 use SugarCraft\Forms\HasThemeChrome;
+use SugarCraft\Forms\HasHydration;
+use SugarCraft\Forms\Hydratable;
 use SugarCraft\Forms\Theme;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\PasteMsg;
@@ -70,9 +72,10 @@ use SugarCraft\Forms\Util\RenderSafe;
  * value-editor shape). Mouse has no v1 path here (draft caret placement is
  * TextInput's domain and un-routed); crush lane a owns zone plumbing.
  */
-final class NumberField implements Field
+final class NumberField implements Field, Hydratable
 {
     use HasThemeChrome;
+    use HasHydration;
 
     use HasHideFunc;
     use HasDynamicLabels;
@@ -443,6 +446,21 @@ final class NumberField implements Field
     // ------------------------------------------------------------------
     // Immutable rebuild
     // ------------------------------------------------------------------
+
+    /**
+     * {@inheritdoc} — accepts `int|float|null`; null restores the
+     * never-set empty box rather than writing a zero (SF-23).
+     */
+    public function hydrateValue(mixed $raw, array &$notes = []): static
+    {
+        if ($raw === null) {
+            return $this->withoutValue();
+        }
+        if (is_int($raw) || is_float($raw)) {
+            return $this->withValue($raw);
+        }
+        throw $this->snapshotMismatch('int|float|null', $raw);
+    }
 
     /**
      * Hand-written copy; the value is always re-fed through the constructor

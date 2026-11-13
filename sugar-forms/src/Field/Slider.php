@@ -9,6 +9,7 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\MouseButton;
 use SugarCraft\Core\Msg;
 use SugarCraft\Forms\HasThemeChrome;
+use SugarCraft\Forms\HasHydration;
 use SugarCraft\Forms\Theme;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\MouseMsg;
@@ -58,9 +59,10 @@ use SugarCraft\Forms\Validator\Validator;
  * Up/Down/PageUp/PageDown/Enter/Tab stay with the Form — the slider moves
  * on its own axis only, so it consumes nothing.
  */
-final class Slider implements \SugarCraft\Forms\Field
+final class Slider implements \SugarCraft\Forms\Field, \SugarCraft\Forms\Hydratable
 {
     use HasThemeChrome;
+    use HasHydration;
 
     use HasHideFunc;
     use HasDynamicLabels;
@@ -437,6 +439,14 @@ final class Slider implements \SugarCraft\Forms\Field
         }
 
         return $line;
+    }
+
+    /**
+     * {@inheritdoc} — accepts `int|float` (SF-23).
+     */
+    public function hydrateValue(mixed $raw, array &$notes = []): static
+    {
+        return $this->withValue($this->snapshotNumber($raw));
     }
 
     /**

@@ -16,6 +16,8 @@ use SugarCraft\Core\Cmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg;
 use SugarCraft\Forms\HasThemeChrome;
+use SugarCraft\Forms\Lang;
+use SugarCraft\Forms\HasHydration;
 use SugarCraft\Forms\Theme;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Forms\FormSuggestionsReadyMsg;
@@ -33,9 +35,10 @@ use SugarCraft\Forms\ItemList\StringItem;
  * Single-choice picker. Wraps {@see ItemList}; the field's value is the
  * highlighted item's title (or null when empty).
  */
-final class Select implements \SugarCraft\Forms\Field
+final class Select implements \SugarCraft\Forms\Field, \SugarCraft\Forms\Hydratable
 {
     use HasThemeChrome;
+    use HasHydration;
 
     use HasHideFunc;
     use HasDynamicLabels;
@@ -545,6 +548,23 @@ final class Select implements \SugarCraft\Forms\Field
             return $msg->type === KeyType::Enter || $msg->type === KeyType::Escape;
         }
         return false;
+    }
+
+    /**
+     * {@inheritdoc} — accepts a stringable option value. An
+     * absent option declines the restore via the SF-22 notes channel
+     * instead of throwing (SF-23).
+     */
+    public function hydrateValue(mixed $raw, array &$notes = []): static
+    {
+        $v      = $this->snapshotString($raw);
+        $chosen = $this->withSelected($v);
+        if ($chosen === $this) {
+            // withSelected() declines an absent value (documented public
+            // no-op); the snapshot restore must not diverge silently — tell it.
+            $notes[$this->key()] = Lang::t('form.hydrate_not_in_options', ['key' => $this->key(), 'value' => $v]);
+        }
+        return $chosen;
     }
 
     private function mutate(?ItemList $list = null, ?string $title = null, ?string $description = null, ?string $enumClass = null, ?array $fuzzyCandidates = null, bool $fuzzyCandidatesSet = false): self

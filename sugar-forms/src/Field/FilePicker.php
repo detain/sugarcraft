@@ -6,6 +6,7 @@ namespace SugarCraft\Forms\Field;
 
 use SugarCraft\Core\Msg;
 use SugarCraft\Forms\HasThemeChrome;
+use SugarCraft\Forms\HasHydration;
 use SugarCraft\Forms\Theme;
 use SugarCraft\Forms\Field;
 use SugarCraft\Forms\FilePicker\FilePicker as PickerWidget;
@@ -25,9 +26,10 @@ use SugarCraft\Forms\Util\RenderSafe;
 
  * NOTE (sugar-forms-058, 2026-11-13): upstream names in this class were re-spelled to canonical grammar from earlier prose and are NOT verified against a pinned charmbracelet checkout; per-symbol verification is gated on a research-lane huh/bubbles reference. Treat them as indicative, not proven.
  * ANTECEDENT (sugar-forms-058): the upstream shape is charmbracelet/bubbles filepicker. Divergences shipped here: (1) no typed-directory filter navigation (entry lists are browsed by arrows/paging only, not filtered by typed path text); (2) no mouse support in the picker overlay. */
-final class FilePicker implements \SugarCraft\Forms\Field
+final class FilePicker implements \SugarCraft\Forms\Field, \SugarCraft\Forms\Hydratable
 {
     use HasThemeChrome;
+    use HasHydration;
 
     use HasHideFunc;
     use HasDynamicLabels;
@@ -156,6 +158,17 @@ final class FilePicker implements \SugarCraft\Forms\Field
             || $msg->type === \SugarCraft\Core\KeyType::Backspace
             || $msg->type === \SugarCraft\Core\KeyType::Up
             || $msg->type === \SugarCraft\Core\KeyType::Down;
+    }
+
+    /**
+     * {@inheritdoc} — accepts `string|null`: the selected path
+     * restores WITHOUT moving navigation, the deliberate asymmetry of
+     * saving only the value half of the picker (SF-23).
+     */
+    public function hydrateValue(mixed $raw, array &$notes = []): static
+    {
+        $path = $this->snapshotNullableString($raw);
+        return $this->mutate(picker: $this->picker->withSelected($path));
     }
 
     private function mutate(?PickerWidget $picker = null, ?string $title = null, ?string $description = null): self

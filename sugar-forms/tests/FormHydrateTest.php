@@ -5,9 +5,12 @@ declare(strict_types=1);
 namespace SugarCraft\Forms\Tests;
 
 use SugarCraft\Forms\Field\Confirm;
+use SugarCraft\Forms\Field\FilePicker;
 use SugarCraft\Forms\Field\Input;
 use SugarCraft\Forms\Field\MultiSelect;
 use SugarCraft\Forms\Field\Note;
+use SugarCraft\Forms\Field\NumberField;
+use SugarCraft\Forms\Field\RadioPills;
 use SugarCraft\Forms\Field\Select;
 use SugarCraft\Forms\Field\Text;
 use SugarCraft\Forms\Form;
@@ -16,6 +19,10 @@ use PHPUnit\Framework\TestCase;
 
 /**
  * E736 5.9 (round 89) — Form::hydrate() and the values() round trip.
+ * SF-23 (sugar-forms-025) moved dispatch from a closed match over the
+ * concrete final classes onto the Hydratable capability interface: every
+ * shipped value field — including the three the match forgot — round-trips
+ * its own export, and third-party fields opt in.
  */
 final class FormHydrateTest extends TestCase
 {
@@ -166,15 +173,160 @@ final class FormHydrateTest extends TestCase
         $this->assertSame('green', $next->get('s'));
     }
 
-    public function testUnhydratableConcreteFieldFailsLoud(): void
+    public function testFilePickerRoundTripsItsSelection(): void
     {
-        // FilePicker is the library's own non-value field: navigation state,
-        // no setter — hydrate must name it, never pretend success.
-        $withPicker = Form::new(\SugarCraft\Forms\Field\FilePicker::new('p', sys_get_temp_dir()));
+        // SF-23 (sugar-forms-025): FilePicker was a match arm the closed
+        // world forgot — its value IS a persisted datum (the selected
+        // path); navigation state deliberately stays out of the snapshot.
+        $form = Form::new(FilePicker::new('p', sys_get_temp_dir()));
+        $next = $form->hydrate(['p' => '/x/y.txt']);
+        $this->assertSame('/x/y.txt', $next->values()['p']);
+        $this->assertSame(['p' => '/x/y.txt'], $next->hydrate($next->values())->values());
+        $this->assertNull($next->hydrate(['p' => null])->values()['p']);
+        try {
+            $form->hydrate(['p' => true]);
+            $this->fail('expected type rejection for the picker');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('p', $e->getMessage());
+        }
+    }
+
+    public function testNumberFieldRestoresEmptyBoxAndRefusesStrings(): void
+    {
+        // SF-23: null exports as the never-set empty box and restores as
+        // one; a numeric string is NOT quietly coerced into the field.
+        $form = Form::new(NumberField::new('n')->withValue(7));
+        $this->assertSame(7, $form->values()['n']);
+        $this->assertSame(4, $form->hydrate(['n' => 3.5])->values()['n']); // off-lattice float commits onto the step lattice (round, not truncate)
+
+        $this->assertNull($form->hydrate(['n' => null])->values()['n']);
+        try {
+            $form->hydrate(['n' => '7']);
+            $this->fail('expected type rejection for the number box');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('int|float|null', $e->getMessage());
+        }
+    }
+
+    public function testRadioPillsRestoresCursorAndTellsDriftedLabel(): void
+    {
+        // SF-23: a pill row restores by label through the same notes
+        // channel SF-22 opened for Select — told, not thrown, on drift.
+        $form = Form::new(RadioPills::new('r')->withOptions('one', 'two', 'three'));
+        $this->assertSame('one', $form->values()['r']);
+        $this->assertSame('two', $form->hydrate(['r' => 'two'])->values()['r']);
+        $drift = $form->hydrate(['r' => 'gone']);
+        $this->assertSame('one', $drift->values()['r']);
+        $this->assertSame(['r'], array_keys($drift->hydrateNotes));
+        $this->assertStringContainsString('gone', $drift->hydrateNotes['r']);
+    }
+
+    public function testEveryShippedValueFieldRoundTripsItsOwnExport(): void
+    {
+        // The class bug SF-23 closes: values() exported every non-skippable
+        // field, hydrate() answered only its own match list. One of every
+        // shipped value field now saves and restores untouched.
+        $form = Form::groups(
+            Group::new(
+                Input::new('in'),
+                Text::new('tx'),
+                \SugarCraft\Forms\Field\Color::new('col'),
+                \SugarCraft\Forms\Field\Slider::new('sl'),
+                \SugarCraft\Forms\Field\Date::new('dt'),
+                Select::new('se')->withOptions('a', 'b'),
+            ),
+            Group::new(
+                MultiSelect::new('ms')->withOptions('a', 'b'),
+                Confirm::new('cf'),
+                NumberField::new('nf'),
+                RadioPills::new('rp')->withOptions('x', 'y'),
+                FilePicker::new('fp', sys_get_temp_dir()),
+            ),
+        );
+        $snapshot = $form->hydrate([
+            'in' => 'abc', 'tx' => 'body', 'col' => '#ff0000', 'sl' => 2, 'dt' => null,
+            'se' => 'b', 'ms' => ['a'], 'cf' => true, 'nf' => 9, 'rp' => 'y', 'fp' => '/tmp/sel.txt',
+        ])->values();
+        $again = $form->hydrate($snapshot)->values();
+        $this->assertSame($snapshot, $again);
+    }
+
+    public function testCustomHydratableFieldHydratesLikeAShippedOne(): void
+    {
+        // The whole point of the hook: the world is open.
+        $form = Form::new(new GhostDraft('g'));
+        $next = $form->hydrate(['g' => 'restored']);
+        $this->assertSame('restored', $next->get('g'));
+    }
+
+    public function testPlainFieldImplementationStillFailsLoud(): void
+    {
+        // A third-party Field that never opted in compiles against the
+        // un-widened interface (BC) and still refuses by name — an error
+        // message, not a silent miss.
+        $form = Form::new(new PlainSketch('p'));
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('p');
-        $withPicker->hydrate(['p' => '/nonexistent']);
+        $form->hydrate(['p' => 'x']);
     }
+}
+
+/**
+ * Minimal third-party Hydratable field (SF-23): proof the open world
+ * round-trips. Records the snapshot it was restored from.
+ */
+final class GhostDraft implements \SugarCraft\Forms\Hydratable
+{
+    public function __construct(private readonly string $k, private readonly string $v = '') {}
+
+    public function key(): string       { return $this->k; }
+    public function value(): mixed      { return $this->v; }
+    public function focus(): array      { return [$this, null]; }
+    public function blur(): \SugarCraft\Forms\Field { return $this; }
+    public function update(\SugarCraft\Core\Msg $msg): array { return [$this, null]; }
+    public function view(bool $showErrors = true, ?\SugarCraft\Forms\Theme $theme = null): string { return $this->v; }
+    public function isFocused(): bool   { return false; }
+    public function getTitle(): string  { return $this->k; }
+    public function description(): string { return ''; }
+    public function error(): ?string    { return null; }
+    public function getDescription(): string { return ''; }
+    public function getError(): ?string { return null; }
+    public function skippable(): bool   { return false; }
+    public function consumes(\SugarCraft\Core\Msg $msg): bool { return false; }
+    public function isHidden(array $values): bool { return false; }
+    public function revalidate(): \SugarCraft\Forms\Field { return $this; }
+
+    public function hydrateValue(mixed $raw, array &$notes = []): static
+    {
+        return new self($this->k, (string) $raw);
+    }
+}
+
+/**
+ * A Field implementation WITHOUT the hook — its mere compilation is the
+ * BC proof SF-23 owed third-party implementors (the interface stayed
+ * un-widened; hydration refuses it by name instead).
+ */
+final class PlainSketch implements \SugarCraft\Forms\Field
+{
+    public function __construct(private readonly string $k) {}
+
+    public function key(): string       { return $this->k; }
+    public function value(): mixed      { return ''; }
+    public function focus(): array      { return [$this, null]; }
+    public function blur(): \SugarCraft\Forms\Field { return $this; }
+    public function update(\SugarCraft\Core\Msg $msg): array { return [$this, null]; }
+    public function view(bool $showErrors = true, ?\SugarCraft\Forms\Theme $theme = null): string { return ''; }
+    public function isFocused(): bool   { return false; }
+    public function getTitle(): string  { return $this->k; }
+    public function description(): string { return ''; }
+    public function error(): ?string    { return null; }
+    public function getDescription(): string { return ''; }
+    public function getError(): ?string { return null; }
+    public function skippable(): bool   { return false; }
+    public function consumes(\SugarCraft\Core\Msg $msg): bool { return false; }
+    public function isHidden(array $values): bool { return false; }
+    public function revalidate(): \SugarCraft\Forms\Field { return $this; }
 }
 
 enum HydrateColour: string

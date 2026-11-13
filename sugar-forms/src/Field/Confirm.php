@@ -7,6 +7,7 @@ namespace SugarCraft\Forms\Field;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg;
 use SugarCraft\Forms\HasThemeChrome;
+use SugarCraft\Forms\HasHydration;
 use SugarCraft\Forms\Lang;
 use SugarCraft\Forms\Theme;
 use SugarCraft\Core\Msg\KeyMsg;
@@ -28,9 +29,10 @@ use SugarCraft\Forms\Validator\Validator;
  * only when a custom map frees Tab from navigation; both polarities are
  * pinned in tests/FormKeyDispatchTest.php.
  */
-final class Confirm implements \SugarCraft\Forms\Field
+final class Confirm implements \SugarCraft\Forms\Field, \SugarCraft\Forms\Hydratable
 {
     use HasThemeChrome;
+    use HasHydration;
 
     use HasHideFunc;
     use HasDynamicLabels;
@@ -222,6 +224,14 @@ final class Confirm implements \SugarCraft\Forms\Field
     // ships now, the claim stays gated.
     public function consumes(Msg $msg): bool  { return false; }
 
+
+    /**
+     * {@inheritdoc} — Confirm answers `bool` (SF-23).
+     */
+    public function hydrateValue(mixed $raw, array &$notes = []): static
+    {
+        return $this->withDefault($this->snapshotBool($raw));
+    }
 
     private function mutate(
         ?bool $value = null,

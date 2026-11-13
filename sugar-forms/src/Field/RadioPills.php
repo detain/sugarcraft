@@ -9,6 +9,8 @@ use SugarCraft\Core\MouseButton;
 use SugarCraft\Core\MouseAction;
 use SugarCraft\Core\Msg;
 use SugarCraft\Forms\HasThemeChrome;
+use SugarCraft\Forms\HasHydration;
+use SugarCraft\Forms\Hydratable;
 use SugarCraft\Forms\Theme;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\MouseMsg;
@@ -56,9 +58,10 @@ use SugarCraft\Forms\Util\RenderSafe;
  * for byte as it always was. Mouse clicks hit-test the windowed layout the
  * row actually renders, markers and gaps alike.
  */
-final class RadioPills implements Field
+final class RadioPills implements Field, Hydratable
 {
     use HasThemeChrome;
+    use HasHydration;
 
     use HasHideFunc;
     use HasDynamicLabels;
@@ -438,6 +441,26 @@ final class RadioPills implements Field
             $k = $last;
         }
         return $this->mutate(cursor: $k);
+    }
+
+    /**
+     * {@inheritdoc} — accepts `string|null` option labels; null
+     * restores the cursor-less nothing-selected state. An unknown label
+     * declines via the SF-22 notes channel exactly like Select (SF-23).
+     */
+    public function hydrateValue(mixed $raw, array &$notes = []): static
+    {
+        $label = $this->snapshotNullableString($raw);
+        if ($label === null) {
+            return $this;
+        }
+        $moved = $this->withValue($label);
+        if ($moved === $this) {
+            // withValue() declines an unknown label (documented no-op)
+            // — tell, do not diverge silently.
+            $notes[$this->key()] = Lang::t('form.hydrate_not_in_options', ['key' => $this->key(), 'value' => $label]);
+        }
+        return $moved;
     }
 
     /** Hand-written immutable copy; every knob funnels the private constructor. */

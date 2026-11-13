@@ -8,6 +8,7 @@ use SugarCraft\Forms\Util\RenderSafe;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg;
 use SugarCraft\Forms\HasThemeChrome;
+use SugarCraft\Forms\HasHydration;
 use SugarCraft\Forms\Theme;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Util\Ansi;
@@ -55,9 +56,10 @@ use SugarCraft\Forms\Lang;
  *
  * Enter and Tab stay with the Form.
  */
-final class Color implements \SugarCraft\Forms\Field
+final class Color implements \SugarCraft\Forms\Field, \SugarCraft\Forms\Hydratable
 {
     use HasThemeChrome;
+    use HasHydration;
 
     use HasHideFunc;
     use HasDynamicLabels;
@@ -288,6 +290,15 @@ final class Color implements \SugarCraft\Forms\Field
             return 5;
         }
         return $next;
+    }
+
+    /**
+     * {@inheritdoc} — accepts a stringable snapshot value; the
+     * picker's hex shape is enforced by withValue() as always (SF-23).
+     */
+    public function hydrateValue(mixed $raw, array &$notes = []): static
+    {
+        return $this->withValue($this->snapshotString($raw));
     }
 
     /**

@@ -8,6 +8,7 @@ use SugarCraft\Forms\Util\RenderSafe;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg;
 use SugarCraft\Forms\HasThemeChrome;
+use SugarCraft\Forms\HasHydration;
 use SugarCraft\Forms\Theme;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Util\Ansi;
@@ -60,9 +61,10 @@ use SugarCraft\Forms\Validator\Validator;
  * Enter is deliberately NOT consumed: it stays the Form's submit /
  * advance key, matching {@see Select}'s non-filter-mode behaviour.
  */
-final class Date implements \SugarCraft\Forms\Field
+final class Date implements \SugarCraft\Forms\Field, \SugarCraft\Forms\Hydratable
 {
     use HasThemeChrome;
+    use HasHydration;
 
     use HasHideFunc;
     use HasDynamicLabels;
@@ -371,6 +373,14 @@ final class Date implements \SugarCraft\Forms\Field
         $month = (int) $day->format('n');
         return $day->setDate($year, $month, $first ? 1 : (int) $day->format('t'))
             ->format('Y-m-d');
+    }
+
+    /**
+     * {@inheritdoc} — accepts `string|null` (SF-23).
+     */
+    public function hydrateValue(mixed $raw, array &$notes = []): static
+    {
+        return $this->withValue($this->snapshotNullableString($raw));
     }
 
     /**

@@ -7,6 +7,7 @@ namespace SugarCraft\Forms\Field;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg;
 use SugarCraft\Forms\HasThemeChrome;
+use SugarCraft\Forms\HasHydration;
 use SugarCraft\Forms\Theme;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Util\Ansi;
@@ -29,9 +30,10 @@ use SugarCraft\Forms\Util\RenderSafe;
  * order.
 
  * NOTE (sugar-forms-058, 2026-11-13): upstream names in this class were re-spelled to canonical grammar from earlier prose and are NOT verified against a pinned charmbracelet checkout; per-symbol verification is gated on a research-lane huh/bubbles reference. Treat them as indicative, not proven. */
-final class MultiSelect implements \SugarCraft\Forms\Field
+final class MultiSelect implements \SugarCraft\Forms\Field, \SugarCraft\Forms\Hydratable
 {
     use HasThemeChrome;
+    use HasHydration;
 
     use HasErrorHelp;
     use HasHideFunc;
@@ -362,6 +364,15 @@ final class MultiSelect implements \SugarCraft\Forms\Field
             return Lang::t('multiselect.pick_at_most', ['n' => (string) $this->max]);
         }
         return null;
+    }
+
+    /**
+     * {@inheritdoc} — accepts a list of stringable option values
+     * (SF-23).
+     */
+    public function hydrateValue(mixed $raw, array &$notes = []): static
+    {
+        return $this->withValue($this->snapshotStringList($raw));
     }
 
     /**

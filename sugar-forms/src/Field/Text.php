@@ -6,6 +6,7 @@ namespace SugarCraft\Forms\Field;
 
 use SugarCraft\Core\Msg;
 use SugarCraft\Forms\HasThemeChrome;
+use SugarCraft\Forms\HasHydration;
 use SugarCraft\Forms\Theme;
 use SugarCraft\Forms\AsyncValidatable;
 use SugarCraft\Forms\Field;
@@ -26,9 +27,10 @@ use SugarCraft\Forms\Util\RenderSafe;
 
  * NOTE (sugar-forms-058, 2026-11-13): upstream names in this class were re-spelled to canonical grammar from earlier prose and are NOT verified against a pinned charmbracelet checkout; per-symbol verification is gated on a research-lane huh/bubbles reference. Treat them as indicative, not proven.
  * NAME SHIFT (sugar-forms-043): this multi-line field maps to charmbracelet/huh Textarea; sugar-forms Text is huh Textarea while sugar-forms Input is huh Text — the crosswise naming is deliberate and documented here so port readers do not map by name. */
-final class Text implements \SugarCraft\Forms\Field, \SugarCraft\Forms\AsyncValidatable
+final class Text implements \SugarCraft\Forms\Field, \SugarCraft\Forms\AsyncValidatable, \SugarCraft\Forms\Hydratable
 {
     use HasThemeChrome;
+    use HasHydration;
 
     use HasAsyncValidation;
     use HasErrorHelp;
@@ -233,6 +235,14 @@ final class Text implements \SugarCraft\Forms\Field, \SugarCraft\Forms\AsyncVali
             return $this;
         }
         return $this->carryNonCtorState(new self($this->key, $this->area, $this->title, $this->description, $err, $this->validator, $this->validateOn));
+    }
+
+    /**
+     * {@inheritdoc} — accepts a stringable snapshot value (SF-23).
+     */
+    public function hydrateValue(mixed $raw, array &$notes = []): static
+    {
+        return $this->withValue($this->snapshotString($raw));
     }
 
     private function mutate(?TextArea $area = null, ?string $title = null, ?string $description = null): self

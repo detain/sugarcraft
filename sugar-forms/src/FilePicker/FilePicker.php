@@ -225,6 +225,18 @@ final class FilePicker implements Model
         return $this->selected;
     }
 
+    /**
+     * Restore the selected path without moving navigation (SF-23).
+     * SugarCraft extension — charmbracelet/bubbles' filepicker persists no
+     * selection at all, so there is no upstream symbol to mirror; this is
+     * the value-half of the save/restore symmetry {@see \SugarCraft\Forms\Field\FilePicker}
+     * hands to Form::hydrate(). The listing, cursor and cwd stay untouched.
+     */
+    public function withSelected(?string $path): self
+    {
+        return $this->mutate(selected: $path, touchSelected: true);
+    }
+
     public function highlightedEntry(): ?Entry
     {
         return $this->entries[$this->cursor] ?? null;

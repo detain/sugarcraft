@@ -270,6 +270,34 @@ a fallback. For inspecting state during a run use `errors()`, `hasErrors()`,
 `focusedField()`, `keyBinds()`, `help()`.
 (`getString()` and friends are deprecated forwarders, to be removed in 2.0.0.)
 
+### Save/restore
+
+`hydrate(array $values)` is the symmetric counterpart of `values()`:
+save the map, hand it back later, and the form comes back to life —
+`hydrate($form->values())` round-trips every field. Each field parses its
+own snapshot: `Input`/`Text`/`Color`/`Select` accept stringables (numbers
+and `BackedEnum` cases included, bools refused — `'1'` from `true` is how
+persistence bugs are born), `MultiSelect` a list of option strings,
+`Confirm` a bool, `Slider` an `int|float`, `NumberField` an `int|float`
+or `null` (null restores the never-set empty box, and off-lattice floats
+commit onto the step exactly like `withValue()` does), `Date` and
+`FilePicker` a `string|null` (the picker restores the selected path,
+never the directory navigation), `RadioPills` an option label. Keys the
+map cannot answer — unknown key, skippable key, wrong shape, or a field
+that never opted in — throw an `InvalidArgumentException` naming the key
+BEFORE any field is touched, so a bad snapshot can never half-hydrate.
+
+Third-party fields opt in by implementing `SugarCraft\Forms\Hydratable`
+— the `hydrateValue(mixed $raw, array &$notes = []): static` hook — and
+hydrate identically to the shipped ones. The hook lives on a capability
+interface (like `AsyncValidatable`) rather than on `Field` itself, so
+existing custom fields keep compiling; a plain `Field` implementation
+that never opted in fails loud by name instead of silently skipping.
+A field that would rather decline than throw (a `Select`/`RadioPills`
+whose snapshot value left the option pool) restores what it can and
+records a human-readable note in `$notes`; those surface on the returned
+form's `hydrateNotes` map — told, not thrown.
+
 ### Themes & accessibility
 
 Stock themes ship as static factories on `SugarCraft\Forms\Theme`:
