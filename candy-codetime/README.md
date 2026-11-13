@@ -88,7 +88,7 @@ calendar date, matching the store layout.)
 | `milestone` | `add [name] [description]` \| `list` | Manage release markers. `name` and `description` are read for `add` only. Milestones live only in SQLite, so this command uses the sqlite backend regardless of `--backend` (a `milestone add` into a file-only data dir says so on stderr before it creates the database); the sqlite dashboard marks the milestone days with `*` under the weekday row. |
 | `export` | `<csv\|json\|ics> [days]` | Dump heartbeats for the last N days (default 7, clamped to [1, 3660]; a non-numeric count is refused with a one-line error and exit 1). Output goes to STDOUT — redirect it to a file to save it. |
 | `gaps` | `[days]` | List untracked stretches of at least 300 seconds within the last N days (default 7, days clamped to [1, 3660]; a non-numeric count is refused with a one-line error and exit 1). |
-| `backup` | — | Archive day files (`*.jsonl`) older than 30 days into `<dir>-backups/`. Copies only — it never deletes your data, and archives are never pruned either. Archives are named after the source directory and the file's logical day, so a backfilled day *refreshes* its existing archive instead of minting a second diverging copy, and two same-basename roots can never shadow each other. Overlapping runs refuse on a lock file rather than interleaving into one destination. A byte copy of a live `.db` would be a torn snapshot, so plain `backup` refuses the SQLite database (the reminder you see when a `.db` is present points at `backup --sqlite`, which runs a crash-safe `VACUUM INTO` snapshot into `<dir>-backups/`). Nothing trims the live database: it grows until you remove it yourself. |
+| `backup` | — | Archive day files (`*.jsonl`) older than 30 days into `<dir>-backups/`. Copies only — it never deletes your data, and archives are never pruned either. Archives are named after the source directory and the file's logical day, so a backfilled day *refreshes* its existing archive instead of minting a second diverging copy, and two same-basename roots can never overwrite one another's archives. Overlapping runs refuse on a lock file rather than interleaving into one destination. A byte copy of a live `.db` would be a torn snapshot, so plain `backup` refuses the SQLite database (the reminder you see when a `.db` is present points at `backup --sqlite`, which runs a crash-safe `VACUUM INTO` snapshot into `<dir>-backups/`). Nothing trims the live database: it grows until you remove it yourself. |
 | `help`, `--help`, `-h` | — | Print usage. |
 | `--version`, `-v` | — | Print the version. |
 
@@ -107,10 +107,15 @@ Options (accepted before or after the command):
 A storage failure ends any command with a one-line message on stderr and exit
 status 1 — never a bare PHP fatal.
 
-Legacy `SUGARTICK_*` environment variables are still imported on every launch
-(each with a deprecation notice on stderr), and the old default data directory
-is migrated once on first launch — the migration is not performed when
-`CANDY_CODETIME_DIR` is set.
+Compatibility with the tool's earlier names — the banner at the top of this
+file covers the package and namespace rename, and the same tool simply kept
+its old file and environment names:
+
+- Legacy `SUGARTICK_*` environment variables are still imported on every
+  launch, each with a deprecation notice on stderr.
+- The old default data directory is migrated once on first launch — not when
+  `CANDY_CODETIME_DIR` is set, because then you have chosen the destination.
+
 CLI messages and dashboard chrome follow `LC_ALL`/`LC_MESSAGES`/`LANG`
 across the 16 shipped locales. Date and weekday names (`Jun 7`, `Sat`) render
 in English in every locale: the locale catalogue carries the PHP format
@@ -121,12 +126,17 @@ characters, not month tables.
 A `.sugartrackignore` in the current directory — or, failing that, in the
 tracked file's own directory (the first found wins) — holds glob patterns one
 per line; a `push` whose file matches is reported as skipped and never
-stored. A bare pattern (`secret.log`) matches by file name at any depth; a
-pattern naming the whole tracked path matches it exactly; and a path pattern
-(`vendor/*`) matches below any `vendor` directory, whether the tracked path is
-relative or absolute. An ignore file larger than 1 MiB is refused outright:
+stored. (The dotfile keeps the pre-rename name — same tool, same patterns.)
+Patterns match in three ways:
+
+- a bare pattern (`secret.log`) matches by file name at any depth;
+- a pattern naming the whole tracked path matches it exactly;
+- a path pattern (`vendor/*`) matches below any `vendor` directory, whether
+  the tracked path is relative or absolute.
+
+An ignore file larger than 1 MiB is refused outright:
 `push` reports it with a one-line error and exits 1 rather than parsing a
-bloated plant. An ignore file that exists but cannot be read is refused the
+deliberately hostile file. An ignore file that exists but cannot be read is refused the
 same way — tracking with the opt-out in an unknown state is exactly the
 failure the file was written to prevent, so `push` never proceeds as if the
 file were empty.
@@ -141,9 +151,10 @@ When the loaded file carries such a pattern,
 the skip is no longer a quiet stdout line: `push` reports it on **stderr**
 with the ignore file's path, its pattern count, and the affected project —
 then still exits 0, because the opt-out is honored, not refused. To undo a
-repo-supplied plant, delete or narrow the file the notice names; to shadow a
-directory-level plant, run `push` from a working directory whose own
-`.sugartrackignore` (checked first) holds only honest patterns.
+file supplied by the repository, delete or narrow the file the notice names;
+to override a directory-level ignore file instead, run `push` from a working
+directory whose own `.sugartrackignore` (checked first) carries only the
+patterns you chose.
 
 ## Data layout
 
