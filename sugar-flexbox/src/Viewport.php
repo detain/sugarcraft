@@ -121,9 +121,22 @@ final readonly class Viewport
      * Designate the first `$rows` lines as a sticky header — always
      * visible at the top of the viewport regardless of scroll offset.
      */
+    /**
+     * Pin the FIRST $rows lines as a sticky header region. The count is an
+     * ARGUMENT POLICY door (FBX-30): negative refuses loudly naming the
+     * value — a silent clamp-to-0 here while Viewport::new() refuses a
+     * negative dimension was three-way inconsistency in one class. 0
+     * is legal and means 'no sticky region'; the render-time cap to
+     * what the height can show stays a GEOMETRY clamp (lines 240/252
+     * era pins), not an argument judgement.
+     */
     public function withStickyHeader(int $rows): self
     {
-        $rows = max(0, $rows);
+        if ($rows < 0) {
+            throw new \InvalidArgumentException(
+                "Viewport::withStickyHeader() needs a row count >= 0; got {$rows}. Use 0 to disable the sticky region."
+            );
+        }
         return new self(
             $this->inner,
             $rows,
@@ -136,9 +149,22 @@ final readonly class Viewport
      * Designate the last `$rows` lines as a sticky footer — always
      * visible at the bottom of the viewport regardless of scroll offset.
      */
+    /**
+     * Pin the LAST $rows lines as a sticky footer region. The count is an
+     * ARGUMENT POLICY door (FBX-30): negative refuses loudly naming the
+     * value — a silent clamp-to-0 here while Viewport::new() refuses a
+     * negative dimension was three-way inconsistency in one class. 0
+     * is legal and means 'no sticky region'; the render-time cap to
+     * what the height can show stays a GEOMETRY clamp (lines 240/252
+     * era pins), not an argument judgement.
+     */
     public function withStickyFooter(int $rows): self
     {
-        $rows = max(0, $rows);
+        if ($rows < 0) {
+            throw new \InvalidArgumentException(
+                "Viewport::withStickyFooter() needs a row count >= 0; got {$rows}. Use 0 to disable the sticky region."
+            );
+        }
         return new self(
             $this->inner,
             $this->stickyHeader,

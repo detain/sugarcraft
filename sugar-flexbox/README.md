@@ -54,6 +54,14 @@ The library carries the house i18n plumbing (`src/Lang.php` plus locale files un
   `isSynced()`, but propagates nothing (scroll state never crosses to the partner)
 - **Mouse wheel** support with configurable delta
 - **Horizontal scrolling** with step-based navigation
+- **Argument policy** — dimensions THROW on negatives (`Viewport::new(-5, 10)`
+  refuses) while zero is legal and degenerate boxes simply render nothing;
+  sticky row counts THROW on negatives too (`withStickyHeader(-1)` refuses by
+  name) because they are an argument bug, not geometry — 0 disables the
+  region, and the render-time cap to available height stays a geometry
+  clamp; scroll offsets never throw — they CLAMP into range
+  (`setYOffset(-2)` answers 0); and FlexBox with no items or width ≤ 0
+  renders `''` rather than refusing
 - **Smooth scroll** and scrollbar toggle (`showScrollbar()`; the old boolean
   `withScrollbar()` spelling is a deprecated forwarder); attaching a component
   with `withVerticalScrollbar()` arms the bar and renders the SAME thumb/track

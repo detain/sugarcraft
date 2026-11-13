@@ -10,16 +10,18 @@ use SugarCraft\Flexbox\Viewport;
 
 final class StickyViewportTest extends TestCase
 {
+
     // ---- withStickyHeader coercion ------------------------------------
 
     public function testWithStickyHeaderRejectsNegative(): void
     {
-        $vp = Viewport::fromContent("one\ntwo\nthree", 20, 4)->withStickyHeader(-5);
-        // Negative is clamped to 0; falls through to normal rendering.
-        $view = $vp->view();
-        $this->assertStringContainsString('one', $view);
-        $this->assertStringContainsString('two', $view);
-        $this->assertStringContainsString('three', $view);
+        // The name always promised this; FBX-30 delivers it. A negative
+        // sticky count is an argument bug, not geometry — it REFUSES by
+        // name and value instead of quietly clamping to 0. Zero still
+        // means 'no sticky region' (testWithStickyHeaderZeroIsNoOp).
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Viewport::withStickyHeader() needs a row count >= 0; got -5');
+        Viewport::fromContent("one\ntwo\nthree", 20, 4)->withStickyHeader(-5);
     }
 
     public function testWithStickyHeaderZeroIsNoOp(): void
@@ -32,11 +34,10 @@ final class StickyViewportTest extends TestCase
 
     public function testWithStickyFooterRejectsNegative(): void
     {
-        $vp = Viewport::fromContent("one\ntwo\nthree", 20, 4)->withStickyFooter(-5);
-        // Negative is clamped to 0; falls through to normal rendering.
-        $view = $vp->view();
-        $this->assertStringContainsString('one', $view);
-        $this->assertStringContainsString('three', $view);
+        // FBX-30: same refusal law on the footer door.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Viewport::withStickyFooter() needs a row count >= 0; got -5');
+        Viewport::fromContent("one\ntwo\nthree", 20, 4)->withStickyFooter(-5);
     }
 
     public function testWithStickyFooterZeroIsNoOp(): void
