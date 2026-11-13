@@ -97,7 +97,10 @@
 set -u
 
 usage() {
-	sed -n '2,96p' "$0" | sed 's/^# \{0,1\}//'
+	# Sentinel-bounded: print the header comment block itself (line 2 up to
+	# the first non-comment line) — no hardcoded end line number to rot when
+	# the tuning notes above grow.
+	awk 'NR>1 && /^#/ {sub(/^# ?/, ""); print; next} NR>1 {exit}' "$0"
 }
 
 REPO=$(git rev-parse --show-toplevel 2>/dev/null) || {
@@ -167,7 +170,9 @@ while [ $# -gt 0 ]; do
 done
 
 case "$LIB" in
-'' | .* | */*)
+'' | .* | */* | *[!A-Za-z0-9._-]*)
+	# Slug whitelist closes the `;$()`-space accept class before the
+	# intentional unquoted $PHPUNIT expansion further down.
 	echo "parallel-tests: --lib must be a plain lib directory slug: $LIB" >&2
 	exit 1
 	;;
@@ -312,7 +317,8 @@ $bx=new DOMXPath($b); $bs=[
 printf("shards: tests=%d assertions=%d errors=%d failures=%d skipped=%d sumTime=%.1fs\n",$sum["tests"],$sum["assertions"],$sum["errors"],$sum["failures"],$sum["skipped"],$sum["time"]);
 printf("base:   tests=%d assertions=%d errors=%d failures=%d skipped=%d\n",$bs["tests"],$bs["assertions"],$bs["errors"],$bs["failures"],$bs["skipped"]);
 printf("delta:  assertions=%+d\n",$sum["assertions"]-$bs["assertions"]);
-$ok = $sum["tests"]==$bs["tests"] && $sum["skipped"]==$bs["skipped"] && $sum["errors"]==0 && $sum["failures"]==0;
+$ok = $sum["tests"]==$bs["tests"] && $sum["skipped"]==$bs["skipped"] && $sum["errors"]==0 && $sum["failures"]==0
+    && $sum["assertions"]==$bs["assertions"];
 printf("CONSERVATION: %s\n", $ok?"PASS":"FAIL");
 exit($ok?0:1);
 ' "$OUT" "$K" "$BASE_JUNIT" || FAILED=1
@@ -339,7 +345,8 @@ printf("shards: tests=%d assertions=%d errors=%d failures=%d skipped=%d sumTime=
 printf("figure: tests=%d assertions=%d errors=0 failures=%d skipped=%d  (%s)\n",$fig["tests"],$fig["assertions"],$fig["failures"],$fig["skipped"],$figFile);
 printf("delta:  tests=%+d assertions=%+d\n",$sum["tests"]-$fig["tests"],$sum["assertions"]-$fig["assertions"]);
 $ok = $sum["tests"]==$fig["tests"] && $sum["skipped"]==$fig["skipped"]
-    && $sum["errors"]==0 && $sum["failures"]==$fig["failures"];
+    && $sum["errors"]==0 && $sum["failures"]==$fig["failures"]
+    && $sum["assertions"]==$fig["assertions"];
 printf("CONSERVATION: %s\n", $ok?"PASS":"FAIL");
 exit($ok?0:1);
 ' "$OUT" "$K" "$AGAINST_JSON" || FAILED=1
