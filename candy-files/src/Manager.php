@@ -70,6 +70,7 @@ final class Manager implements Model
      * @param list<UndoAction> $undoStack Stack of undoable actions
      * @param list<UndoAction> $redoStack Stack of redoable actions (cleared on new action)
      * @param int $termCols Live terminal width in cells (0 = unknown, Renderer falls back to its fixed 40-cell pane)
+     * @param int $termRows Live terminal height in rows (0 = unknown, Renderer lists every entry — the legacy unwindowed frame)
      */
     public function __construct(
         public readonly Pane $left,
@@ -89,6 +90,7 @@ final class Manager implements Model
         public readonly ?string $pendingOpType = null,
         public readonly ?string $inputBuffer = null,
         public readonly int $termCols = 0,
+        public readonly int $termRows = 0,
     ) {
         $this->lister = $lister ?? FsLister::lister();
     }
@@ -157,16 +159,20 @@ final class Manager implements Model
 
     public function update(Msg $msg): array
     {
-        // Terminal resize: capture the live width so the next view() derives
-        // pane widths from it. sugar-core's Program emits WindowSizeMsg at
+        // Terminal resize: capture the live width AND height so the next
+        // view() derives pane widths from it and windows the entry list to
+        // fit the rows. sugar-core's Program emits WindowSizeMsg at
         // startup and on every SIGWINCH, then re-renders — handling it here
-        // is what makes the layout responsive. No Cmd: re-render is the
+        // is what makes the layout responsive. CF-02: the arm used to
+        // compare cols only and DISCARD msg->rows, so a rows-only resize
+        // (window dragged vertically, tmux split re-flow) returned the same
+        // Model and the frame stayed stale. No Cmd: re-render is the
         // Program's dirty-flag step.
         if ($msg instanceof WindowSizeMsg) {
-            if ($msg->cols === $this->termCols) {
+            if ($msg->cols === $this->termCols && $msg->rows === $this->termRows) {
                 return [$this, null];
             }
-            return [$this->mutate(['termCols' => $msg->cols]), null];
+            return [$this->mutate(['termCols' => $msg->cols, 'termRows' => $msg->rows]), null];
         }
 
         // Async copy completion: the Cmd ran on the loop, files landed in the
@@ -294,6 +300,13 @@ final class Manager implements Model
                     : $this->switchTab(($this->tabIndex + 1) % count($this->tabs)),
             $msg->type === KeyType::Tab
                 => $this->withActive(1 - $this->activeIdx),
+            // CF-02: unmodified PageUp/PageDown page the cursor through the
+            // entry list (the modified pair cycles tabs — it lives at the top
+            // of this match and keeps priority over these arms).
+            $msg->type === KeyType::PageDown
+                => $this->withActivePane(fn(Pane $p) => $p->moveCursor($this->pageSize())),
+            $msg->type === KeyType::PageUp
+                => $this->withActivePane(fn(Pane $p) => $p->moveCursor(-$this->pageSize())),
             $msg->type === KeyType::Up,
             $msg->type === KeyType::Char && $msg->rune === 'k'
                 => $this->withActivePane(fn(Pane $p) => $p->moveCursor(-1)),
@@ -399,6 +412,18 @@ final class Manager implements Model
             return $this->mutate(['left' => $fn($this->left)]);
         }
         return $this->mutate(['right' => $fn($this->right), 'activeIdx' => 1]);
+    }
+
+    /**
+     * CF-02: one page of cursor travel. The pane box spends 4 lines on
+     * chrome (top border, header, separator, bottom border) and the frame
+     * 1 more on the status line; the fold-hint rows and the occasional
+     * tab-bar line absorb the last cell. Without a captured height a
+     * conservative 15-row page keeps the keys useful.
+     */
+    private function pageSize(): int
+    {
+        return $this->termRows > 0 ? max(1, $this->termRows - 6) : 15;
     }
 
     private function navigate(): self

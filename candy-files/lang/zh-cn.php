@@ -55,4 +55,6 @@ return [
     'search.type_dir' => '[目录]',
     'search.type_file' => '[文件]',
     'pane.hidden_suffix' => '+隐藏',
+    'pane.more_above' => '上方还有 {count} 项',
+    'pane.more_below' => '下方还有 {count} 项',
 ];

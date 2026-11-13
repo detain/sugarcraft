@@ -66,4 +66,6 @@ return [
 
     // Pane header suffixes
     'pane.hidden_suffix' => '+hidden',
+    'pane.more_above' => '{count} more above',
+    'pane.more_below' => '{count} more below',
 ];

@@ -19,12 +19,27 @@ final class Renderer
     public static function render(Manager $m): string
     {
         $active = self::activeIdx($m);
-        $left  = self::renderPane(self::paneOf($m, 'left'),  $active === 0, $m->termCols);
-        $right = self::renderPane(self::paneOf($m, 'right'), $active === 1, $m->termCols);
-        $body  = Layout::joinHorizontal(0.0, $left, '  ', $right);
-
         $tabBar = self::renderTabBar($m);
         $search = self::renderSearch($m);
+
+        // CF-02: the entry list is windowed to the live height. Frame
+        // chrome is the pane box's fixed rows (top border + header +
+        // separator + bottom border = 4), the status line, and any tab-bar
+        // / search block already composed. Capacity 0 (no height captured
+        // yet — unit shape, or pre-WindowSizeMsg) keeps every entry listed,
+        // byte-preserving the legacy frame.
+        $capacity = 0;
+        if ($m->termRows > 0) {
+            $chromeRows = 5
+                + ($tabBar === '' ? 0 : substr_count($tabBar, "\n"))
+                + ($search === '' ? 0 : substr_count($search, "\n"));
+            $capacity = max(1, $m->termRows - $chromeRows);
+        }
+
+        $left  = self::renderPane(self::paneOf($m, 'left'),  $active === 0, $m->termCols, $capacity);
+        $right = self::renderPane(self::paneOf($m, 'right'), $active === 1, $m->termCols, $capacity);
+        $body  = Layout::joinHorizontal(0.0, $left, '  ', $right);
+
         // N-16: the active-pane cue used to be border weight alone (thick
         // vs normal) — invisible once the frame is linearized or copied as
         // text. Lead the status line with a localized focus label so every
@@ -42,6 +57,18 @@ final class Renderer
                 static fn(string $line): string => Width::truncateAnsi($line, $m->termCols),
                 explode("\n", $frame),
             );
+            $frame = implode("\n", $lines);
+        }
+        if ($m->termRows > 0) {
+            // CF-02 belt: the windowing above keeps a browse frame inside
+            // the viewport; this floor holds that promise for the states it
+            // does not size (an open search block, a comically small
+            // terminal) by dropping head lines — status and the pane
+            // bottoms stay on screen.
+            $lines = explode("\n", $frame);
+            if (count($lines) > $m->termRows) {
+                $lines = array_slice($lines, count($lines) - $m->termRows);
+            }
             $frame = implode("\n", $lines);
         }
         return $frame;
@@ -96,7 +123,7 @@ final class Renderer
      * first WindowSizeMsg) the historical 40-cell box is preserved
      * (content 36, separator 36, name 25, header cap 30).
      */
-    private static function renderPane(Pane $pane, bool $active, int $termCols = 0): string
+    private static function renderPane(Pane $pane, bool $active, int $termCols = 0, int $capacity = 0): string
     {
         $outer = $termCols > 0 ? intdiv($termCols - 2, 2) : 40;
         $inner = max(6, $outer - 4);             // content cells: border(2) + padding(2)
@@ -116,7 +143,14 @@ final class Renderer
         );
 
         $rows = [];
-        foreach ($pane->entries as $i => $entry) {
+        [$start, $end, $above, $below] = self::rowWindow(count($pane->entries), $pane->cursor, $capacity);
+        if ($above > 0) {
+            // Fold hint: the cursor row can never sit off-window (rowWindow
+            // follows it), so the hidden head is purely a scroll affordance.
+            $rows[] = '  ↑ ' . Lang::t('pane.more_above', ['count' => $above]);
+        }
+        foreach (array_slice($pane->entries, $start, $end - $start) as $offset => $entry) {
+            $i = $start + $offset;
             $marker  = isset($pane->selected[$entry->name]) ? '✓' : ' ';
             $arrow   = ($i === $pane->cursor) ? '▸' : ' ';
             $name    = $entry->isDir ? $entry->name . '/' : $entry->name;
@@ -126,9 +160,33 @@ final class Renderer
             // size column for every double-width (CJK/emoji) name.
             $rows[] = sprintf("%s%s %s %7s", $arrow, $marker, Width::padRight(self::truncate($name, $nameCol), $nameCol), $size);
         }
+        if ($below > 0) {
+            $rows[] = '  ↓ ' . Lang::t('pane.more_below', ['count' => $below]);
+        }
 
         $body = $header . "\n" . str_repeat('─', $inner) . "\n" . implode("\n", $rows);
         return $style->render($body);
+    }
+
+    /**
+     * CF-02: the visible window into the entry list, following the cursor.
+     * Capacity 0 (height not captured yet) or a list that already fits
+     * returns the whole list — the legacy unwindowed frame is preserved
+     * byte-identically. When the list overflows, a fold-hint row claims one
+     * capacity cell at each hidden end, so at most capacity - 2 entries
+     * show mid-list.
+     *
+     * @return array{0:int,1:int,2:int,3:int} [start, end, hiddenAbove, hiddenBelow]
+     */
+    private static function rowWindow(int $count, int $cursor, int $capacity): array
+    {
+        if ($capacity <= 0 || $count <= $capacity) {
+            return [0, $count, 0, 0];
+        }
+        $win = max(1, $capacity - 2);
+        $start = max(0, min($cursor - intdiv($win, 2), $count - $win));
+        $end = $start + $win;
+        return [$start, $end, $start, $count - $end];
     }
 
     private static function statusBar(string $msg): string

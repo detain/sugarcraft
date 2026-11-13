@@ -55,4 +55,6 @@ return [
     'search.type_dir' => '[مجلد]',
     'search.type_file' => '[ملف]',
     'pane.hidden_suffix' => '+مخفية',
+    'pane.more_above' => '{count} عنصرًا إضافيًا أعلاه',
+    'pane.more_below' => '{count} عنصرًا إضافيًا أدناه',
 ];

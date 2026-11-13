@@ -55,4 +55,6 @@ return [
     'search.type_dir' => '[DIR]',
     'search.type_file' => '[FILE]',
     'pane.hidden_suffix' => '+nascosti',
+    'pane.more_above' => '{count} più in alto',
+    'pane.more_below' => '{count} più in basso',
 ];

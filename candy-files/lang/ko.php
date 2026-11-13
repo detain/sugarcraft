@@ -55,4 +55,6 @@ return [
     'search.type_dir' => '[폴더]',
     'search.type_file' => '[파일]',
     'pane.hidden_suffix' => '+숨김',
+    'pane.more_above' => '위쪽 {count}개 더',
+    'pane.more_below' => '아래쪽 {count}개 더',
 ];

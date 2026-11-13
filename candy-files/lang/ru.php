@@ -55,4 +55,6 @@ return [
     'search.type_dir' => '[КАТ]',
     'search.type_file' => '[ФАЙЛ]',
     'pane.hidden_suffix' => '+скрытые',
+    'pane.more_above' => 'ещё {count} выше',
+    'pane.more_below' => 'ещё {count} ниже',
 ];

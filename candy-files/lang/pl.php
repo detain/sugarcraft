@@ -55,4 +55,6 @@ return [
     'search.type_dir' => '[KAT]',
     'search.type_file' => '[PLIK]',
     'pane.hidden_suffix' => '+ukryte',
+    'pane.more_above' => '{count} więcej powyżej',
+    'pane.more_below' => '{count} więcej poniżej',
 ];

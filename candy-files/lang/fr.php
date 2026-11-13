@@ -55,4 +55,6 @@ return [
     'search.type_dir' => '[RÉP]',
     'search.type_file' => '[FICHIER]',
     'pane.hidden_suffix' => '+cachés',
+    'pane.more_above' => '{count} de plus en haut',
+    'pane.more_below' => '{count} de plus en bas',
 ];

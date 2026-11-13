@@ -127,6 +127,108 @@ final class RendererTest extends TestCase
         }
     }
 
+    /** @return list<Entry> */
+    private function manyEntries(int $n): array
+    {
+        $entries = [];
+        for ($i = 1; $i <= $n; $i++) {
+            $entries[] = new Entry(sprintf('file%02d.txt', $i), false, $i, 0);
+        }
+        return $entries;
+    }
+
+    /**
+     * CF-02: with a captured height the frame must fit the viewport — the
+     * entry window follows the cursor, fold-hint rows count the hidden
+     * entries, and the status line stays the last row.
+     */
+    public function testViewportWindowsTheEntryListToTheCapturedRows(): void
+    {
+        $entries = $this->manyEntries(30);
+        $lister = static fn(string $p): array => $p === '/' ? $entries : [];
+        [$m] = Manager::start('/', '/', $lister)->update(new \SugarCraft\Core\Msg\WindowSizeMsg(80, 24));
+        $lines = explode("\n", Renderer::render($m));
+        $this->assertLessThanOrEqual(24, count($lines), 'the composed frame must fit the captured rows');
+        // Cursor at the top: no above-hint, below-hint counts the hidden tail.
+        $frame = implode("\n", $lines);
+        $this->assertStringNotContainsString('more above', $frame);
+        $this->assertStringContainsString('more below', $frame);
+        $this->assertStringContainsString('file01.txt', $frame);
+        $this->assertStringNotContainsString('file30.txt', $frame, 'off-window tail must not render');
+        $this->assertStringContainsString('focus:', Ansi::strip($lines[count($lines) - 1]), 'status line stays the last row');
+
+        // End: the window follows the cursor — head hidden, tail visible.
+        [$m] = $m->update(new KeyMsg(KeyType::End));
+        $frame = Renderer::render($m);
+        $lines = explode("\n", $frame);
+        $this->assertLessThanOrEqual(24, count($lines));
+        // Assert on the ACTIVE (left, thick-border) column only: the right
+        // pane's cursor never moved, so its own fold hints stay put.
+        $leftCol = implode("\n", array_map(
+            static fn(string $l): string => explode('│', $l)[0],
+            $lines,
+        ));
+        $this->assertStringContainsString('more above', $leftCol);
+        $this->assertStringNotContainsString('more below', $leftCol, 'the left pane sits at the end of its list');
+        $this->assertStringContainsString('file30.txt', $leftCol);
+        $this->assertStringNotContainsString('file01.txt', $leftCol);
+        $this->assertMatchesRegularExpression('/▸\s+file30/', Ansi::strip($leftCol), 'the cursor row is inside the window');
+    }
+
+    /**
+     * CF-02: the resize arm must not discard msg->rows. Pre-cure the dedup
+     * compared cols only, so a vertical drag (rows change, cols stable)
+     * returned the same Model and the Program never re-rendered.
+     */
+    public function testRowsOnlyResizeIsNotDedupedAway(): void
+    {
+        [$m] = Manager::start('/', '/', $this->fakeFs())->update(new \SugarCraft\Core\Msg\WindowSizeMsg(80, 24));
+        $this->assertSame(24, $m->termRows);
+        [$same] = $m->update(new \SugarCraft\Core\Msg\WindowSizeMsg(80, 24));
+        $this->assertSame($m, $same, 'the identical size still dedupes');
+        [$taller] = $m->update(new \SugarCraft\Core\Msg\WindowSizeMsg(80, 30));
+        $this->assertNotSame($m, $taller, 'a rows-only resize must dirty the model');
+        $this->assertSame(30, $taller->termRows);
+    }
+
+    /**
+     * CF-02: bare PageUp/PageDown page the cursor by the viewport height
+     * (the Ctrl pair keeps cycling tabs — pinned by the existing tab test).
+     */
+    public function testBarePageKeysPageTheCursor(): void
+    {
+        $entries = $this->manyEntries(30);
+        $lister = static fn(string $p): array => $p === '/' ? $entries : [];
+        [$m] = Manager::start('/', '/', $lister)->update(new \SugarCraft\Core\Msg\WindowSizeMsg(80, 24));
+        [$m] = $m->update(new KeyMsg(KeyType::PageDown));
+        $this->assertSame(18, $m->left->cursor, 'pageSize at 24 rows is 18');
+        [$m] = $m->update(new KeyMsg(KeyType::PageDown));
+        $this->assertSame(29, $m->left->cursor, 'the page clamps at the last entry');
+        [$m] = $m->update(new KeyMsg(KeyType::PageUp));
+        $this->assertSame(11, $m->left->cursor);
+        [$m] = $m->update(new KeyMsg(KeyType::PageUp));
+        $this->assertSame(0, $m->left->cursor);
+    }
+
+    /**
+     * CF-02 belt: an open search block is not sized by the windowing (that
+     * is the search family's step) — the frame floor must still hold it to
+     * termRows with the status line on screen.
+     */
+    public function testFrameFloorHoldsEvenWithAnUnwindowedSearchBlock(): void
+    {
+        $entries = $this->manyEntries(30);
+        $lister = static fn(string $p): array => $p === '/' ? $entries : [];
+        [$m] = Manager::start('/', '/', $lister)->update(new \SugarCraft\Core\Msg\WindowSizeMsg(80, 24));
+        [$m] = $m->update(new KeyMsg(KeyType::Char, '/'));
+        foreach (str_split('file') as $ch) {
+            [$m] = $m->update(new KeyMsg(KeyType::Char, $ch));
+        }
+        $lines = explode("\n", Renderer::render($m));
+        $this->assertLessThanOrEqual(24, count($lines), 'frame floor drops head lines, never the status row');
+        $this->assertStringContainsString('focus:', Ansi::strip($lines[count($lines) - 1]));
+    }
+
     public function testRenderShowsSelectedEntries(): void
     {
         $m = Manager::start('/', '/', $this->fakeFs());

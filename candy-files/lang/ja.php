@@ -55,4 +55,6 @@ return [
     'search.type_dir' => '[DIR]',
     'search.type_file' => '[FILE]',
     'pane.hidden_suffix' => '+隠し',
+    'pane.more_above' => '上方にあと{count}件',
+    'pane.more_below' => '下方にあと{count}件',
 ];

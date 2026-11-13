@@ -42,6 +42,7 @@ final class ManagerBuilder
     private ?string $pendingOpType = null;
     private ?string $inputBuffer = null;
     private int $termCols = 0;
+    private int $termRows = 0;
 
     public function __construct()
     {
@@ -179,6 +180,13 @@ final class ManagerBuilder
         return $clone;
     }
 
+    public function withTermRows(int $termRows): self
+    {
+        $clone = clone $this;
+        $clone->termRows = $termRows;
+        return $clone;
+    }
+
     public function build(): \SugarCraft\Files\Manager
     {
         if ($this->left === null || $this->right === null) {
@@ -203,6 +211,7 @@ final class ManagerBuilder
             $this->pendingOpType,
             $this->inputBuffer,
             $this->termCols,
+            $this->termRows,
         );
     }
 }

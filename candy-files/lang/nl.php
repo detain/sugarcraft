@@ -55,4 +55,6 @@ return [
     'search.type_dir' => '[MAP]',
     'search.type_file' => '[BESTAND]',
     'pane.hidden_suffix' => '+verborgen',
+    'pane.more_above' => '{count} meer boven',
+    'pane.more_below' => '{count} meer onder',
 ];

@@ -55,4 +55,6 @@ return [
     'search.type_dir' => '[DİZİN]',
     'search.type_file' => '[DOSYA]',
     'pane.hidden_suffix' => '+gizli',
+    'pane.more_above' => 'yukarıda {count} fazla',
+    'pane.more_below' => 'aşağıda {count} fazla',
 ];

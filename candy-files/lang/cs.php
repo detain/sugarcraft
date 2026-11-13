@@ -55,4 +55,6 @@ return [
     'search.type_dir' => '[ADRES]',
     'search.type_file' => '[SOUBOR]',
     'pane.hidden_suffix' => '+skryté',
+    'pane.more_above' => '{count} navíc nad',
+    'pane.more_below' => '{count} navíc pod',
 ];

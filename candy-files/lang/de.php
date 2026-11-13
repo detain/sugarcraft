@@ -55,4 +55,6 @@ return [
     'search.type_dir' => '[VERZ]',
     'search.type_file' => '[DATEI]',
     'pane.hidden_suffix' => '+versteckte',
+    'pane.more_above' => '{count} weiter oben',
+    'pane.more_below' => '{count} weiter unten',
 ];
