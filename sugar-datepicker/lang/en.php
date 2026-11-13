@@ -12,6 +12,13 @@
  * a week-start knob BEFORE shipping any locale whose convention is Monday-first,
  * or the day names will be attached to the wrong columns.
  *
+ * Width budgets (dp-14, enforced by the render AND by LangCoverageTest):
+ *  - day.*   ≤ 3 display columns (one 3-char cell; longer names are clipped
+ *            per slot by SugarCraft\Core\Util\Width, so overlong values only
+ *            ever degrade their own column).
+ *  - month.* ≤ 16 display columns (the natural 21-wide floor minus the
+ *            ' 2026'-style year slot; longer headers clip at the grid edge).
+ *
  * @return array<string, string>
  */
 

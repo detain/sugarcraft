@@ -345,7 +345,11 @@ Day abbreviations and month names resolve through the shared sugar-core i18n
 lookup (`Lang::t`): keys `day.0`–`day.6` (Sunday-first) and `month.1`–`month.12`
 live in `lang/en.php`, which is the source of truth. Only English ships today;
 additional locales are added as `lang/<code>.php` files carrying the same key
-set.
+set. Every locale file is machine-checked by `LangCoverageTest`: `day.*` values
+fit the 3-column cell budget (an oversized name is clipped to its own slot at
+render time, never overwriting the next column), `month.*` fit the 16-column
+header budget (the natural 21-wide floor minus the year slot), and the
+`day.0`–`day.6` positional Sunday-first order is pinned.
 
 ## Shared foundations
 

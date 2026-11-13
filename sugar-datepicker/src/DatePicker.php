@@ -814,14 +814,21 @@ final class DatePicker
 
         $buffer = Buffer::new($totalWidth, $height);
 
-        // Row 0: header "May 2026" (left-aligned)
+        // Row 0: header "May 2026" (left-aligned). Budget = the calendar
+        // area (total width minus the week column); at the natural 21 floor
+        // that leaves "September 2026" room, and a fatter locale clips on
+        // width instead of bleeding over the day-name row's columns.
         $headerText = self::monthName($this->viewMonth) . ' ' . $this->viewYear;
+        $headerText = Width::truncate($headerText, $totalWidth - $weekColWidth);
         $buffer = $this->placeStringAt($buffer, $weekColWidth, 0, $headerText, $this->sgrToBufferStyle($this->headerStyle));
 
-        // Row 1: day-name row
+        // Row 1: day-name row. Each name is clamped to its own 3-column
+        // slot (the locale budget, see lang/*.php contract): an oversized
+        // translation degrades cosmetically (a clip) instead of
+        // sequentially overwriting the NEXT header column.
         for ($dow = 0; $dow < self::DAYS_IN_WEEK; $dow++) {
             $col = $weekColWidth + $dow * self::CELL_CHARS; // 3-char cells
-            $dayName = self::dayName($dow);
+            $dayName = Width::truncate(self::dayName($dow), self::CELL_CHARS);
             $buffer = $this->placeStringAt($buffer, $col, 1, $dayName, $this->sgrToBufferStyle($this->dayNameStyle));
         }
 
