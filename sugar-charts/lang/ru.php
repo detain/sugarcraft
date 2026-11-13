@@ -35,4 +35,9 @@ return [
 
     // OHLC/OHLCChart.php
     'ohlc.bar_type'            => 'Список столбцов OHLC должен содержать только экземпляры Bar, передано {given}',
+// Chart/Chart.php + ChartExtras compositor doors
+    'chart.title_side'         => 'Заголовки {side} не имеют места в горизонтальной композиции; используйте Position::Top или Position::Bottom',
+
+    // LineChart/LineChart.php
+    'chart.datalabels_unsupported' => 'LineChart не может печатать подписи значений; используйте BarChart::withDataLabels() или выведите числа из своих данных',
 ];

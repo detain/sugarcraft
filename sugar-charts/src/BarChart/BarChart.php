@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Charts\BarChart;
 
 use SugarCraft\Charts\Chart\ChartExtras;
+use SugarCraft\Charts\Chart\ChromeAccessors;
 use SugarCraft\Charts\Chart\Position;
 use SugarCraft\Charts\Lang;
 use SugarCraft\Charts\Support\Range;
@@ -39,7 +40,7 @@ use SugarCraft\Style\Style;
  *     ->view();
  * ```
  */
-final class BarChart
+final class BarChart implements ChromeAccessors
 {
     use ChartExtras;
     /**
@@ -80,6 +81,9 @@ final class BarChart
         }
         if ($barGap !== null && $barGap < 0) {
             throw new \InvalidArgumentException(Lang::t('barchart.bar_gap_nonneg'));
+        }
+        if ($titlePosition === Position::Left || $titlePosition === Position::Right) {
+            throw new \InvalidArgumentException(Lang::t('chart.title_side', ['side' => strtolower($titlePosition->name)]));
         }
         // pinned value range must be finite and ordered.
         Range::pin($min, $max, 'value');
@@ -164,11 +168,22 @@ final class BarChart
     /**
      * Draw an axis line along the chart edge: vertical (┤) on the
      * left in vertical mode, vertical (├) on the left of each bar row
-     * in horizontal mode. Mirrors ntcharts' `SetShowAxis`.
+     * in horizontal mode. Canonical spelling shared with LineChart::withAxes()
+     * (sugar-charts-008 naming split converged here). Mirrors ntcharts'
+     * `SetShowAxis`.
+     */
+    public function withAxes(bool $on = true): self
+    {
+        return $this->copy(showAxis: $on);
+    }
+
+    /**
+     * @deprecated kept as the BC alias window for {@see withAxes()} —
+     *             LineChart's spelling is canonical; retire next minor.
      */
     public function withShowAxis(bool $on = true): self
     {
-        return $this->copy(showAxis: $on);
+        return $this->withAxes($on);
     }
 
     /**
@@ -249,6 +264,18 @@ final class BarChart
     public function withBarColor(?\Closure $fn): self
     {
         return $this->copy(barColorFn: $fn, barColorFnSet: true);
+    }
+
+    /** Renderers that answer false refuse `withDataLabels(true)` (sugar-charts-024). */
+    public function supportsDataLabels(): bool
+    {
+        return true;
+    }
+
+    /** No progress-driven frame path exists on this renderer. */
+    public function supportsAnimation(): bool
+    {
+        return false;
     }
 
     /**
@@ -349,7 +376,9 @@ final class BarChart
     public function max(?float $m): self              { return $this->withMax($m); }
     public function showLabels(bool $on = true): self { return $this->withShowLabels($on); }
     public function horizontal(bool $on = true): self { return $this->withHorizontal($on); }
-    public function showAxis(bool $on = true): self   { return $this->withShowAxis($on); }
+    public function axes(bool $on = true): self       { return $this->withAxes($on); }
+    /** @deprecated alias-window for {@see axes()}/{@see withAxes()}; retire next minor. */
+    public function showAxis(bool $on = true): self   { return $this->withAxes($on); }
     /** Short-form alias for {@see withFractionalHeights()}. */
     public function fractional(bool $on = true): self { return $this->withFractionalHeights($on); }
     public function barWidth(?int $width): self       { return $this->withBarWidth($width); }
@@ -373,16 +402,16 @@ final class BarChart
 
     // ─── ChartExtras Getters ────────────────────────────────────────────
 
-    protected function chartExtrasGetWidth(): int   { return $this->width; }
-    protected function chartExtrasShowLegend(): bool { return $this->showLegend; }
+    public function chartExtrasGetWidth(): int   { return $this->width; }
+    public function chartExtrasShowLegend(): bool { return $this->showLegend; }
     /** @return list<array{label: string, color: string}> */
-    protected function chartExtrasGetLegendItems(): array { return $this->legendItems; }
-    protected function chartExtrasGetLegendPosition(): Position { return $this->legendPosition; }
-    protected function chartExtrasGetLegendIndicatorChar(): ?string { return $this->legendIndicatorChar; }
-    protected function chartExtrasGetTitle(): ?string { return $this->title; }
-    protected function chartExtrasGetTitlePosition(): Position { return $this->titlePosition; }
-    protected function chartExtrasGetXLabel(): ?string { return $this->xLabel; }
-    protected function chartExtrasGetYLabel(): ?string { return $this->yLabel; }
+    public function chartExtrasGetLegendItems(): array { return $this->legendItems; }
+    public function chartExtrasGetLegendPosition(): Position { return $this->legendPosition; }
+    public function chartExtrasGetLegendIndicatorChar(): ?string { return $this->legendIndicatorChar; }
+    public function chartExtrasGetTitle(): ?string { return $this->title; }
+    public function chartExtrasGetTitlePosition(): Position { return $this->titlePosition; }
+    public function chartExtrasGetXLabel(): ?string { return $this->xLabel; }
+    public function chartExtrasGetYLabel(): ?string { return $this->yLabel; }
 
     // ─── Rendering ──────────────────────────────────────────────────────
 

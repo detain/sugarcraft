@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Charts\Scatter;
 
 use SugarCraft\Charts\Chart\ChartExtras;
+use SugarCraft\Charts\Chart\ChromeAccessors;
 use SugarCraft\Charts\Chart\Position;
 use SugarCraft\Charts\Lang;
 use SugarCraft\Charts\Support\Finite;
@@ -35,7 +36,7 @@ use SugarCraft\Charts\Legend\Legend;
  *     ->view();
  * ```
  */
-final class Scatter
+final class Scatter implements ChromeAccessors
 {
     use ChartExtras;
     /**
@@ -68,6 +69,9 @@ final class Scatter
     ) {
         if ($width < 0 || $height < 0) {
             throw new \InvalidArgumentException(Lang::t('scatter.dim_nonneg'));
+        }
+        if ($titlePosition === Position::Left || $titlePosition === Position::Right) {
+            throw new \InvalidArgumentException(Lang::t('chart.title_side', ['side' => strtolower($titlePosition->name)]));
         }
         // single door for every copy()/with* rebuild — pinned axis
         // ranges must be finite and ordered; null ends stay legal ("auto").
@@ -196,16 +200,16 @@ final class Scatter
 
     // ─── ChartExtras Getters ────────────────────────────────────────────
 
-    protected function chartExtrasGetWidth(): int   { return $this->width; }
-    protected function chartExtrasShowLegend(): bool { return $this->showLegend; }
+    public function chartExtrasGetWidth(): int   { return $this->width; }
+    public function chartExtrasShowLegend(): bool { return $this->showLegend; }
     /** @return list<array{label: string, color: string}> */
-    protected function chartExtrasGetLegendItems(): array { return $this->legendItems; }
-    protected function chartExtrasGetLegendPosition(): Position { return $this->legendPosition; }
-    protected function chartExtrasGetLegendIndicatorChar(): ?string { return $this->legendIndicatorChar; }
-    protected function chartExtrasGetTitle(): ?string { return $this->title; }
-    protected function chartExtrasGetTitlePosition(): Position { return $this->titlePosition; }
-    protected function chartExtrasGetXLabel(): ?string { return $this->xLabel; }
-    protected function chartExtrasGetYLabel(): ?string { return $this->yLabel; }
+    public function chartExtrasGetLegendItems(): array { return $this->legendItems; }
+    public function chartExtrasGetLegendPosition(): Position { return $this->legendPosition; }
+    public function chartExtrasGetLegendIndicatorChar(): ?string { return $this->legendIndicatorChar; }
+    public function chartExtrasGetTitle(): ?string { return $this->title; }
+    public function chartExtrasGetTitlePosition(): Position { return $this->titlePosition; }
+    public function chartExtrasGetXLabel(): ?string { return $this->xLabel; }
+    public function chartExtrasGetYLabel(): ?string { return $this->yLabel; }
 
     // ─── Rendering ──────────────────────────────────────────────────────
 

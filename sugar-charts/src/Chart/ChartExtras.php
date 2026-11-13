@@ -10,18 +10,26 @@ use SugarCraft\Core\Util\Width;
 /**
  * Shared legend / title / axis-label composition logic.
  *
- * Shared composition logic for the renderers that do not extend Chart
- * (BarChart, Scatter, OHLCChart); Chart carries a private fork of the same
- * layout. Each using class supplies the property getters this trait's
- * methods reference.
+ * The single compositor for every renderer: the ChartExtras renderers
+ * (BarChart, Scatter, OHLCChart) and the Chart base alike carry these
+ * method bodies (sugar-charts-008 converged a private fork into this
+ * trait). Each using class supplies the nine ChromeAccessors getters
+ * this trait's methods reference.
  */
 trait ChartExtras
 {
     /** yLabel rides every row; cap it to width / this divisor so a long label cannot multiply out the canvas. */
     private const Y_LABEL_WIDTH_FRACTION_DIVISOR = 4;
 
-    /** @param list<string> $chart */
-    protected function buildChartWithExtras(string $chart): array
+    /**
+     * Compose the chart with legend, title, and axis labels.
+     *
+     * Public so the parity guard can assert both families share this one
+     * body (declaring-class reflection, sugar-charts-008).
+     *
+     * @return list<string>
+     */
+    public function buildChartWithExtras(string $chart): array
     {
         $lines = $chart !== '' ? explode("\n", $chart) : [];
 
@@ -118,17 +126,5 @@ trait ChartExtras
             $lines,
         );
     }
-
-    // ─── Property Getters (must be implemented by using class) ────────────
-
-    abstract protected function chartExtrasGetWidth(): int;
-    abstract protected function chartExtrasShowLegend(): bool;
-    /** @return list<array{label: string, color: string}> */
-    abstract protected function chartExtrasGetLegendItems(): array;
-    abstract protected function chartExtrasGetLegendPosition(): Position;
-    abstract protected function chartExtrasGetLegendIndicatorChar(): ?string;
-    abstract protected function chartExtrasGetTitle(): ?string;
-    abstract protected function chartExtrasGetTitlePosition(): Position;
-    abstract protected function chartExtrasGetXLabel(): ?string;
-    abstract protected function chartExtrasGetYLabel(): ?string;
 }
+

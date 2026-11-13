@@ -35,4 +35,9 @@ return [
 
     // OHLC/OHLCChart.php
     'ohlc.bar_type'            => 'OHLC バーリストには Bar インスタンスのみを含められます（指定: {given}）',
+// Chart/Chart.php + ChartExtras compositor doors
+    'chart.title_side'         => '{side} タイトルは水平コンポジジョンの余白がないため、Position::Top または Position::Bottom を使用してください',
+
+    // LineChart/LineChart.php
+    'chart.datalabels_unsupported' => 'LineChart は値ラベルを印刷できません。BarChart::withDataLabels() を使うか、自前のデータから数値を描画してください',
 ];

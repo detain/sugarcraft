@@ -35,4 +35,9 @@ return [
 
     // OHLC/OHLCChart.php
     'ohlc.bar_type'            => 'OHLC çubuk listesi yalnızca Bar örnekleri içermeli, {given} verildi',
+// Chart/Chart.php + ChartExtras compositor doors
+    'chart.title_side'         => '{side} başlıkların yatay kompozisyonda yeri yoktur; Position::Top veya Position::Bottom kullanın',
+
+    // LineChart/LineChart.php
+    'chart.datalabels_unsupported' => 'LineChart değer etiketleri yazamaz; BarChart::withDataLabels() kullanın veya sayıları kendi verinizden çizdirin',
 ];

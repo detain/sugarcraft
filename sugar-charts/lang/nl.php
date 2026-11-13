@@ -35,4 +35,9 @@ return [
 
     // OHLC/OHLCChart.php
     'ohlc.bar_type'            => 'De OHLC-balklijst mag alleen Bar-instanties bevatten, {given} gegeven',
+// Chart/Chart.php + ChartExtras compositor doors
+    'chart.title_side'         => '{side}-titels hebben geen goot in de horizontale compositie; gebruik Position::Top of Position::Bottom',
+
+    // LineChart/LineChart.php
+    'chart.datalabels_unsupported' => 'LineChart kan geen waardenlabels afdrukken; gebruik BarChart::withDataLabels() of geef de getallen uit je eigen data weer',
 ];

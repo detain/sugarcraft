@@ -35,4 +35,9 @@ return [
 
     // OHLC/OHLCChart.php
     'ohlc.bar_type'            => 'OHLC 막대 목록에는 Bar 인스턴스만 포함할 수 있으며 {given}이(가) 제공되었습니다',
+// Chart/Chart.php + ChartExtras compositor doors
+    'chart.title_side'         => '{side} 제목은 수평 구성에 여백이 없습니다. Position::Top 또는 Position::Bottom을 사용하세요',
+
+    // LineChart/LineChart.php
+    'chart.datalabels_unsupported' => 'LineChart는 값 레이블을 인쇄할 수 없습니다. BarChart::withDataLabels()를 사용하거나 자체 데이터에서 숫자를 렌더링하세요',
 ];

@@ -57,4 +57,10 @@ return [
 
     // OHLC/OHLCChart.php
     'ohlc.bar_type'            => 'OHLC bar list must contain only Bar instances, {given} given',
+
+    // Chart/Chart.php + ChartExtras compositor doors
+    'chart.title_side'         => '{side} titles have no gutter in the horizontal composition; use Position::Top or Position::Bottom',
+
+    // LineChart/LineChart.php
+    'chart.datalabels_unsupported' => 'LineChart cannot print value labels; use BarChart::withDataLabels() or render the numbers from your own data',
 ];

@@ -266,24 +266,22 @@ final class OHLCChartTest extends TestCase
         $this->assertStringContainsString('Bottom Title', $out);
     }
 
-    public function testWithTitleLeftPositionNotRendered(): void
+    /**
+     * CH-02 (sugar-charts-025) moved Left/Right from silent-drop to a
+     * refusal at the door: disclose the intent instead of dropping bytes.
+     */
+    public function testWithTitleLeftPositionThrows(): void
     {
         $bar = new Bar(open: 100.0, high: 110.0, low: 95.0, close: 108.0);
-        $out = OHLCChart::new([$bar], 20, 3)
-            ->withTitle('Left Title', Position::Left)
-            ->view();
-        // Title at Left/Right is NOT rendered (returns lines unchanged)
-        $this->assertStringNotContainsString('Left Title', $out);
+        $this->expectException(\InvalidArgumentException::class);
+        OHLCChart::new([$bar], 20, 3)->withTitle('Left Title', Position::Left);
     }
 
-    public function testWithTitleRightPositionNotRendered(): void
+    public function testWithTitleRightPositionThrows(): void
     {
         $bar = new Bar(open: 100.0, high: 110.0, low: 95.0, close: 108.0);
-        $out = OHLCChart::new([$bar], 20, 3)
-            ->withTitle('Right Title', Position::Right)
-            ->view();
-        // Title at Left/Right is NOT rendered (returns lines unchanged)
-        $this->assertStringNotContainsString('Right Title', $out);
+        $this->expectException(\InvalidArgumentException::class);
+        OHLCChart::new([$bar], 20, 3)->withTitle('Right Title', Position::Right);
     }
 
     public function testWithTitleTopPositionRendered(): void

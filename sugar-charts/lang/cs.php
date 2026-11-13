@@ -35,4 +35,9 @@ return [
 
     // OHLC/OHLCChart.php
     'ohlc.bar_type'            => 'Seznam sloupců OHLC musí obsahovat pouze instance Bar, zadáno {given}',
+// Chart/Chart.php + ChartExtras compositor doors
+    'chart.title_side'         => '{side} titulky nemají v horizontální kompozici místo; použijte Position::Top nebo Position::Bottom',
+
+    // LineChart/LineChart.php
+    'chart.datalabels_unsupported' => 'LineChart nemůže tisknout popisky hodnot; použijte BarChart::withDataLabels() nebo vykreslete čísla ze svých dat',
 ];

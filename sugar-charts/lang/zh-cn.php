@@ -35,4 +35,9 @@ return [
 
     // OHLC/OHLCChart.php
     'ohlc.bar_type'            => 'OHLC 条形列表只能包含 Bar 实例，给定 {given}',
+// Chart/Chart.php + ChartExtras compositor doors
+    'chart.title_side'         => '{side} 标题在水平布局中没有边栏；请使用 Position::Top 或 Position::Bottom',
+
+    // LineChart/LineChart.php
+    'chart.datalabels_unsupported' => 'LineChart 无法打印数值标签；请使用 BarChart::withDataLabels() 或从你自己的数据渲染数值',
 ];

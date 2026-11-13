@@ -35,4 +35,9 @@ return [
 
     // OHLC/OHLCChart.php
     'ohlc.bar_type'            => 'La lista di barre OHLC deve contenere solo istanze Bar, fornito {given}',
+// Chart/Chart.php + ChartExtras compositor doors
+    'chart.title_side'         => 'I titoli {side} non hanno spazio nella composizione orizzontale; usa Position::Top o Position::Bottom',
+
+    // LineChart/LineChart.php
+    'chart.datalabels_unsupported' => 'LineChart non può stampare etichette dei valori; usa BarChart::withDataLabels() o mostra i numeri dai tuoi dati',
 ];

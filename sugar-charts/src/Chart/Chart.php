@@ -19,12 +19,12 @@ use SugarCraft\Style\Theme;
  * Chart implementations should extend this class and implement
  * the `renderChart()` method to produce the raw chart output.
  * The `view()` method will then composite the chart with legend,
- * title, and labels.
+ * title, and labels through the shared ChartExtras compositor —
+ * the same body the BarChart/Scatter/OHLC renderers use.
  */
-abstract class Chart
+abstract class Chart implements ChromeAccessors
 {
-    /** yLabel rides every row; cap it to width / this divisor so a long label cannot multiply out the canvas. */
-    private const Y_LABEL_WIDTH_FRACTION_DIVISOR = 4;
+    use ChartExtras;
 
     protected function __construct(
         protected int $width,
@@ -49,6 +49,9 @@ abstract class Chart
     ) {
         if ($width < 0 || $height < 0) {
             throw new \InvalidArgumentException(Lang::t('chart.dim_nonneg'));
+        }
+        if ($titlePosition === Position::Left || $titlePosition === Position::Right) {
+            throw new \InvalidArgumentException(Lang::t('chart.title_side', ['side' => strtolower($titlePosition->name)]));
         }
         $this->brailleCanvas = $brailleCanvas;
         $this->theme = $theme;
@@ -80,9 +83,9 @@ abstract class Chart
         // NOTE: the early return deliberately does NOT test showDataLabels.
         // No composer at this level draws value labels (LineChart's
         // dot-per-column geometry has no room for them — see
-        // withDataLabels() for the honest surface; BarChart renders labels
-        // through its own API). Gating here would only re-wrap the bare
-        // chart through an empty extras pass.
+        // supportsDataLabels() for the honest capability surface; BarChart
+        // renders labels through its own API). Gating here would only
+        // re-wrap the bare chart through an empty extras pass.
         if (!$this->showLegend && $this->title === null && $this->xLabel === null && $this->yLabel === null) {
             return $chart;
         }
@@ -92,33 +95,11 @@ abstract class Chart
     }
 
     /**
-     * @return list<string>
+     * Legend composition for this family: recolored from the active theme
+     * when one is set (the ChartExtras renderers carry no theme surface,
+     * so the trait's palette-blind body serves them unchanged).
      */
-    private function buildChartWithExtras(string $chart): array
-    {
-        $lines = $chart !== '' ? explode("\n", $chart) : [];
-
-        if ($this->showLegend && $this->legendItems !== []) {
-            $legend = $this->buildLegend();
-            $lines = $this->mergeLegend($lines, $legend);
-        }
-
-        if ($this->title !== null) {
-            $lines = $this->addTitle($lines);
-        }
-
-        if ($this->yLabel !== null) {
-            $lines = $this->addYLabel($lines);
-        }
-
-        if ($this->xLabel !== null) {
-            $lines[] = Width::truncate($this->xLabel, $this->width);
-        }
-
-        return $lines;
-    }
-
-    private function buildLegend(): Legend
+    public function chartExtrasBuildLegend(): Legend
     {
         $items = $this->theme === null ? $this->legendItems : $this->themeLegendItems();
 
@@ -131,6 +112,19 @@ abstract class Chart
 
         return $legend;
     }
+
+    // ─── ChromeAccessors ──────────────────────────────────────────────────
+
+    public function chartExtrasGetWidth(): int        { return $this->width; }
+    public function chartExtrasShowLegend(): bool     { return $this->showLegend; }
+    /** @return list<array{label: string, color: string}> */
+    public function chartExtrasGetLegendItems(): array { return $this->legendItems; }
+    public function chartExtrasGetLegendPosition(): Position { return $this->legendPosition; }
+    public function chartExtrasGetLegendIndicatorChar(): ?string { return $this->legendIndicatorChar; }
+    public function chartExtrasGetTitle(): ?string    { return $this->title; }
+    public function chartExtrasGetTitlePosition(): Position { return $this->titlePosition; }
+    public function chartExtrasGetXLabel(): ?string   { return $this->xLabel; }
+    public function chartExtrasGetYLabel(): ?string   { return $this->yLabel; }
 
     /**
      * The theme's series-color palette, in render order. Seven color roles
@@ -182,80 +176,31 @@ abstract class Chart
         return $items;
     }
 
-    /**
-     * @param list<string> $chartLines
-     * @param list<string> $legendLines
-     * @return list<string>
-     */
-    private function mergeLegend(array $chartLines, Legend $legend): array
-    {
-        $legendLines = explode("\n", $legend->view());
-
-        return match ($this->legendPosition) {
-            Position::Top => [...$legendLines, ...$chartLines],
-            Position::Bottom => [...$chartLines, ...$legendLines],
-            Position::Left => $this->mergeLegendLeftRight($chartLines, $legendLines),
-            Position::Right => $this->mergeLegendLeftRight($chartLines, $legendLines, true),
-        };
-    }
-
-    /**
-     * @param list<string> $chartLines
-     * @param list<string> $legendLines
-     * @return list<string>
-     */
-    private function mergeLegendLeftRight(array $chartLines, array $legendLines, bool $legendOnRight = false): array
-    {
-        $maxHeight = max(count($chartLines), count($legendLines));
-        $result = [];
-
-        for ($i = 0; $i < $maxHeight; $i++) {
-            $chartLine = $chartLines[$i] ?? '';
-            $legendLine = $legendLines[$i] ?? '';
-
-            if ($legendOnRight) {
-                $result[] = Width::padRight($chartLine, $this->width) . ' ' . $legendLine;
-            } else {
-                $result[] = $legendLine . ' ' . Width::padRight($chartLine, $this->width);
-            }
-        }
-
-        return $result;
-    }
-
-    /**
-     * @param list<string> $lines
-     * @return list<string>
-     */
-    private function addTitle(array $lines): array
-    {
-        $centered = Width::padCenter(Width::truncate((string) $this->title, $this->width), $this->width);
-
-        return match ($this->titlePosition) {
-            Position::Top => [$centered, ...$lines],
-            Position::Bottom => [...$lines, $centered],
-            Position::Left, Position::Right => $lines,
-        };
-    }
-
-    /**
-     * @param list<string> $lines
-     * @return list<string>
-     */
-    private function addYLabel(array $lines): array
-    {
-        $budget = max(1, intdiv($this->width, self::Y_LABEL_WIDTH_FRACTION_DIVISOR));
-        $label = Width::truncate((string) $this->yLabel, $budget);
-
-        return array_map(
-            fn(string $line) => $label . ' ' . $line,
-            $lines,
-        );
-    }
-
     public function __toString(): string
     {
         return $this->view();
+    }
+
+    // ─── Capability Introspection ─────────────────────────────────────────
+
+    /**
+     * Whether value labels (a number printed beside each datum) render.
+     * {@see withDataLabels()} refuses true on classes that answer false —
+     * no knob is stored that the frame will ignore.
+     */
+    public function supportsDataLabels(): bool
+    {
+        return false;
+    }
+
+    /**
+     * Whether {@see withAnimationProgress()} changes rendered bytes.
+     * Duration stays a caller-side pacing hint on every renderer (no
+     * renderer here owns a clock).
+     */
+    public function supportsAnimation(): bool
+    {
+        return true;
     }
 
     // ─── Fluent Configuration ───────────────────────────────────────────
@@ -285,6 +230,16 @@ abstract class Chart
     }
 
     /**
+     * Replace the legend entries.
+     *
+     * @param list<array{label: string, color: string}> $items
+     */
+    public function withLegendItems(array $items): self
+    {
+        return $this->copy(legendItems: UntrustedText::guardItems($items));
+    }
+
+    /**
      * Set the X-axis label (rendered at bottom). Null clears it.
      */
     public function withXLabel(?string $label = null): self
@@ -309,6 +264,10 @@ abstract class Chart
      * LineChart's dot-per-column geometry has no room to print a number
      * next to each sample, so nothing renders. Bar labels (the category
      * names under each bar) are the separate `showLabels` axis.
+     *
+     * Query {@see supportsDataLabels()} to learn whether this renderer
+     * paints them; LineChart (the only class extending this base) answers
+     * false and its own override throws instead of storing a dead knob.
      */
     public function withDataLabels(bool $show = true): self
     {
@@ -329,14 +288,17 @@ abstract class Chart
     /**
      * Set the chart title.
      *
-     * @param Position $position Where to render the title (Top or Bottom).
-     *                           Left/Right positions are accepted but not
-     *                           rendered — a horizontal composition has no
-     *                           title gutter, so the title is silently
-     *                           dropped for those values.
+     * @param Position $position Where to render the title. Only Top and
+     *                           Bottom compose (a horizontal composition
+     *                           has no title gutter), so Left/Right throw
+     *                           instead of silently dropping.
      */
     public function withTitle(?string $title = null, Position $position = Position::Top): self
     {
+        if ($position === Position::Left || $position === Position::Right) {
+            throw new \InvalidArgumentException(Lang::t('chart.title_side', ['side' => strtolower($position->name)]));
+        }
+
         return $this->copy(
             title: $title === null ? null : UntrustedText::guard($title),
             titlePosition: $position,
@@ -383,8 +345,12 @@ abstract class Chart
 
     // ─── Short-form Aliases ──────────────────────────────────────────────
 
-    /** @param list<array{label: string, color: string}> $items */
-    public function legendItems(array $items): self { return $this->copy(legendItems: UntrustedText::guardItems($items)); }
+    /**
+     * Short-form alias for {@see withLegendItems()}.
+     *
+     * @param list<array{label: string, color: string}> $items
+     */
+    public function legendItems(array $items): self { return $this->withLegendItems($items); }
     public function legend(bool $on = true): self   { return $this->withLegend($on); }
     public function legendPos(Position $pos): self  { return $this->withLegendPosition($pos); }
     public function legendStyle(?string $char): self { return $this->withLegendStyle($char); }

@@ -35,4 +35,9 @@ return [
 
     // OHLC/OHLCChart.php
     'ohlc.bar_type'            => 'Lista słupków OHLC może zawierać wyłącznie instancje Bar, podano {given}',
+// Chart/Chart.php + ChartExtras compositor doors
+    'chart.title_side'         => 'Tytuły {side} nie mają światła w poziomej kompozycji; użyj Position::Top lub Position::Bottom',
+
+    // LineChart/LineChart.php
+    'chart.datalabels_unsupported' => 'LineChart nie może drukować etykiet wartości; użyj BarChart::withDataLabels() lub wyświetl liczby z własnych danych',
 ];

@@ -503,13 +503,18 @@ final class LineChart extends Chart
     }
 
     /**
-     * Enable or disable data point labels. Storage-only on LineChart:
-     * one column per sample leaves no room to print the value beside it.
-     * Use {@see BarChart::withDataLabels()} for rendered value labels,
-     * or read the numbers from your own `$data` array.
+     * Value labels cannot render on LineChart (one column per sample
+     * leaves no room beside it), so enabling them throws — the same
+     * guidance {@see Chart::withDataLabels()} gives via
+     * supportsDataLabels(). Use BarChart::withDataLabels() for rendered
+     * value labels, or read the numbers from your own `$data` array.
      */
     public function withDataLabels(bool $show = true): self
     {
+        if ($show && !$this->supportsDataLabels()) {
+            throw new \InvalidArgumentException(Lang::t('chart.datalabels_unsupported'));
+        }
+
         return $this->lineChartCopy(showDataLabels: $show);
     }
 
@@ -526,10 +531,10 @@ final class LineChart extends Chart
      * Set the chart title.
      *
      * @param Position $position Where to render the title (Top or Bottom).
-     *                           Left/Right positions are accepted but not
-     *                           rendered — a horizontal composition has no
-     *                           title gutter, so the title is silently
-     *                           dropped for those values.
+     *                           Left/Right throw (sugar-charts-025): a
+     *                           horizontal composition has no title
+     *                           gutter, so nothing used to render for
+     *                           those values.
      */
     public function withTitle(?string $title = null, Position $position = Position::Top): self
     {
@@ -590,14 +595,21 @@ final class LineChart extends Chart
     }
 
     /**
-     * Set legend items. Overrides Chart::legendItems() to route through
-     * lineChartCopy() so LineChart-specific constructor args are preserved.
+     * Set legend items. Overrides Chart::withLegendItems() to route
+     * through lineChartCopy() so LineChart-specific constructor args are
+     * preserved.
      *
      * @param list<array{label: string, color: string}> $items
      */
-    public function legendItems(array $items): self
+    public function withLegendItems(array $items): self
     {
         return $this->lineChartCopy(legendItems: UntrustedText::guardItems($items));
+    }
+
+    /** Short-form alias for {@see withLegendItems()}. */
+    public function legendItems(array $items): self
+    {
+        return $this->withLegendItems($items);
     }
 
     // ─── Animation Support ──────────────────────────────────────────────

@@ -105,6 +105,9 @@ final class Sparkline
      * way. The flag therefore changes no rendering — retained as a
      * no-op shim, not silently removed (removal is breaking).
      * See {@see view()} for the resolved expression.
+     *
+     * @deprecated no-effect shim — the pin it toggles is always honored;
+     *             set {@see withMax()} (or clear it) instead.
      */
     public function withNoAutoMaxValue(bool $disable = true): self
     {

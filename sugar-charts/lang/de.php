@@ -52,4 +52,9 @@ return [
 
     // OHLC/OHLCChart.php
     'ohlc.bar_type'            => 'Die OHLC-Balkenliste darf nur Bar-Instanzen enthalten, {given} angegeben',
+// Chart/Chart.php + ChartExtras compositor doors
+    'chart.title_side'         => '{side}-Titel haben in der waagerechten Komposition keinen Platz; verwende Position::Top oder Position::Bottom',
+
+    // LineChart/LineChart.php
+    'chart.datalabels_unsupported' => 'LineChart kann keine Wertelabels drucken; verwende BarChart::withDataLabels() oder gebe die Zahlen aus deinen eigenen Daten aus',
 ];

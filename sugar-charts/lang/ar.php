@@ -35,4 +35,9 @@ return [
 
     // OHLC/OHLCChart.php
     'ohlc.bar_type'            => 'يجب أن تحتوي قائمة أعمدة OHLC على نسخ Bar فقط، تم تقديم {given}',
+// Chart/Chart.php + ChartExtras compositor doors
+    'chart.title_side'         => 'عناوين {side} لا مكان لها في التركيب الأفقي؛ استخدم Position::Top أو Position::Bottom',
+
+    // LineChart/LineChart.php
+    'chart.datalabels_unsupported' => 'لا يمكن لـ LineChart طباعة تسميات القيم؛ استخدم BarChart::withDataLabels() أو اعرض الأرقام من بياناتك',
 ];

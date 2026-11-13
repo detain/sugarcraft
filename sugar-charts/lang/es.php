@@ -52,4 +52,9 @@ return [
 
     // OHLC/OHLCChart.php
     'ohlc.bar_type'            => 'La lista de barras OHLC debe contener solo instancias de Bar, se recibió {given}',
+// Chart/Chart.php + ChartExtras compositor doors
+    'chart.title_side'         => 'Los títulos {side} no tienen hueco en la composición horizontal; usa Position::Top o Position::Bottom',
+
+    // LineChart/LineChart.php
+    'chart.datalabels_unsupported' => 'LineChart no puede imprimir etiquetas de valores; usa BarChart::withDataLabels() o muestra los números de tus propios datos',
 ];
