@@ -28,9 +28,10 @@ use SugarCraft\Core\Util\Color;
  * Output is plain ASCII bytes (no Imagick / GD required).
  *
  * Encoded size scales with pixel count and color passes: the shipped
- * 16×6 / 16-color demo encodes to 326 bytes, while a 320×200 image
- * runs into the tens of kilobytes — fine over local terminals, heavy
- * over slow SSH, and the encoder does no further compression.
+ * 16×6 / 16-color demo encodes to a little under a third of a
+ * kilobyte, while a 320×200 image runs into the tens of kilobytes —
+ * fine over local terminals, heavy over slow SSH, and the encoder does
+ * no further compression.
  */
 final class Sixel
 {
@@ -97,15 +98,22 @@ final class Sixel
         // Walk in 6-row stripes.
         for ($stripeStart = 0; $stripeStart < $rows; $stripeStart += 6) {
             $stripeEnd = min($stripeStart + 6, $rows);
-            // Per stripe: for each color active in the stripe, emit
-            // a color pass.
-            $colors = [];
+            // Per stripe: ONE pass over the columns accumulating each
+            // color's bit masks, then emit the color passes. The old shape
+            // re-walked every column and re-scanned the six rows per color
+            // — O(rows × cols × K), multi-second for a 320×200@256 image
+            // and 16× even at the default palette (sugar-charts-038). The
+            // emitted bytes are identical; the cost is O(rows × cols) to
+            // build plus the emission walk itself.
+            $masks = [];
             for ($r = $stripeStart; $r < $stripeEnd; $r++) {
-                foreach ($quant[$r] as $idx) {
-                    $colors[$idx] = true;
+                $bit  = 1 << ($r - $stripeStart);
+                $rowQ = $quant[$r];
+                for ($c = 0; $c < $cols; $c++) {
+                    $masks[$rowQ[$c]][$c] = ($masks[$rowQ[$c]][$c] ?? 0) | $bit;
                 }
             }
-            $colorList = array_keys($colors);
+            $colorList = array_keys($masks);
             sort($colorList);
 
             $first = true;
@@ -115,28 +123,25 @@ final class Sixel
                 }
                 $out .= '#' . $idx;
                 for ($c = 0; $c < $cols; $c++) {
-                    $bits = 0;
-                    for ($k = 0; $k < ($stripeEnd - $stripeStart); $k++) {
-                        $row = $stripeStart + $k;
-                        if (($quant[$row][$c] ?? -1) === $idx) {
-                            $bits |= (1 << $k);
-                        }
-                    }
-                    $out .= chr(0x3f + $bits);
+                    $out .= chr(0x3f + ($masks[$idx][$c] ?? 0));
                 }
                 $first = false;
             }
-            if ($stripeEnd < $rows) {
-                $out .= '-';   // LF — advance to the next stripe.
-            }
+            // LF after EVERY stripe, final one included (sugar-charts-116):
+            // mlterm-variants and older xterm park the cursor on the final
+            // LF; emitters that ignore it are unaffected. No raster-geometry
+            // (DECSTR) announce is sent — the payload carries no `P1;P2;P3`
+            // header and terminals place the image by the stripe count.
+            $out .= '-';
         }
         return $out . "\x1b\\";
     }
 
     /**
      * Build a `$paletteSize`-entry RGB palette by sampling a uniform
-     * cube. The first 16 entries cover the standard ANSI palette so
-     * small images map cleanly.
+     * cube. Caps at or below 16 draw luminance-spread rungs from the ANSI
+     * set (black through bright white, sugar-charts-117); larger caps append
+     * cube colors after the full ANSI sixteen.
      *
      * @return array{0:list<array{0:int,1:int,2:int}>, 1:int}
      */
@@ -151,8 +156,16 @@ final class Sixel
             [92, 92, 255], [255, 0, 255], [0, 255, 255], [255, 255, 255],
         ];
         if ($paletteSize <= 16) {
-            $palette = array_slice($palette, 0, $paletteSize);
-            return [$palette, count($palette)];
+            // Luminance-spread subset of ANSI-16 (sugar-charts-117): the old
+            // prefix slice handed small caps black→dark colours only —
+            // every bright and white collapsed. Evenly spaced rungs keep
+            // both ends (black, bright white) at any size.
+            $spread = [];
+            $last   = count($palette) - 1;
+            for ($i = 0; $i < $paletteSize; $i++) {
+                $spread[] = $palette[(int) round($i * $last / ($paletteSize - 1))];
+            }
+            return [$spread, count($spread)];
         }
         // Add cube colors up to the cap.
         $extra = $paletteSize - 16;

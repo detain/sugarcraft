@@ -210,7 +210,14 @@ final class Picture
         if ($this->pixels === null) {
             return $this->fallbackText('Sixel needs a pixel grid (use Picture::fromGrid).');
         }
-        return Sixel::encode($this->pixels, $this->paletteSize);
+        $encoded = Sixel::encode($this->pixels, $this->paletteSize);
+        if ($encoded === '') {
+            // Always-visible placeholder law (sugar-charts-102): an empty or
+            // zero-column grid encodes to nothing — the frame must not be a
+            // silent void on a Sixel-capable terminal.
+            return $this->fallbackText('Sixel: the pixel grid is empty — nothing to encode.');
+        }
+        return $encoded;
     }
 
     /**
