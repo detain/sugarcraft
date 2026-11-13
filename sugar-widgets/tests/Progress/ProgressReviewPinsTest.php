@@ -57,11 +57,11 @@ final class ProgressReviewPinsTest extends TestCase
 
         $prop = new \ReflectionProperty(AnimatedProgress::class, 'spring');
 
-        [$tick1, $cmd1] = $moving->update(new SpringTickMsg());
+        [$tick1, $cmd1] = $moving->update(new SpringTickMsg($moving->id, $moving->epoch));
         $spring1 = $prop->getValue($tick1);
         self::assertIsObject($spring1, 'first tick must have materialised the spring');
 
-        [$tick2] = $tick1->update(new SpringTickMsg());
+        [$tick2] = $tick1->update(new SpringTickMsg($tick1->id, $tick1->epoch));
         self::assertSame($spring1, $prop->getValue($tick2), 'm2: cache rides ordinary copies');
 
         // A tuning change must drop the cache so getSpring() re-tunes.

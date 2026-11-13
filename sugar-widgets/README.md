@@ -123,11 +123,12 @@ component arms through `subscriptions()`). `ItemList\LoadMoreMsg` has
 **no** widgets alias — import `SugarCraft\Forms\ItemList\LoadMoreMsg`.
 The id-carrying components (`Timer`, `Stopwatch`, `Cursor`,
 `Spinner`) filter in `update()` by their own `id()`, so multiple
-instances of the same component coexist on one event loop. Not every
-tick is id-routed: `SpringTickMsg` is an id-less sentinel and
-`AnimatedProgress::update()` applies no id filtering, so two animated
-bars on one loop react to each other's ticks (seam noted for an owner
-ruling; no behaviour change here). Timer and
+instances of the same component coexist on one event loop. Every
+tick is id-routed: `SpringTickMsg` carries the destination bar's `id`
+and generation `epoch` exactly like the Timer/Stopwatch ticks, and
+`AnimatedProgress::update()` refuses ticks addressed to another
+instance or armed before the current transition, so N animated bars on
+one loop advance only their own chain. Timer and
 Stopwatch ticks also carry an `epoch` (generation counter bumped by
 `start()`): a tick armed before a stop/start flip is refused rather than
 double-counted.

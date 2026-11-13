@@ -37,6 +37,14 @@ final class AnimatedProgress implements Model
     /** Cached spring instance — reused across ticks to avoid per-tick allocation. */
     private ?Spring $spring = null;
 
+    /** Stable per-instance routing id, mirrored from the Timer/Stopwatch M12 pattern. */
+    public readonly int $id;
+
+    /** Generation counter bumped by each new transition; in-flight stale ticks are refused. */
+    public readonly int $epoch;
+
+    private static int $nextId = 0;
+
     public function __construct(
         public readonly Progress $progress,
         public readonly float $current,
@@ -46,7 +54,12 @@ final class AnimatedProgress implements Model
         public readonly float $dampingRatio,
         public readonly float $fps,
         public readonly bool $animating,
-    ) {}
+        ?int $id = null,
+        int $epoch = 0,
+    ) {
+        $this->id = $id ?? ++self::$nextId;
+        $this->epoch = $epoch;
+    }
 
     public static function new(
         int $width = 40,
@@ -73,7 +86,11 @@ final class AnimatedProgress implements Model
 
     public function update(Msg $msg): array
     {
-        if (!($msg instanceof SpringTickMsg)) {
+        if (
+            !($msg instanceof SpringTickMsg)
+            || $msg->id !== $this->id
+            || $msg->epoch !== $this->epoch
+        ) {
             return [$this, null];
         }
         if (!$this->animating) {
@@ -102,10 +119,27 @@ final class AnimatedProgress implements Model
     private function getSpring(): Spring
     {
         return $this->spring ??= new Spring(
-            Spring::fps((int) $this->fps),
+            Spring::fps(self::tickRate($this->fps)),
             $this->angularFrequency,
             $this->dampingRatio,
         );
+    }
+
+    /**
+     * The single clock: the integer tick rate both the spring integration
+     * and the tick scheduling are priced from, so the integrator's assumed
+     * frame cadence and the actual dispatch cadence can never disagree
+     * (a sub-1.0 fps floors to 1 — never to the fatal 0).
+     */
+    private static function tickRate(float $fps): int
+    {
+        return is_finite($fps) ? max(1, (int) $fps) : 60;
+    }
+
+    /** NaN renders as an empty bar, never a full one; mirrors Progress::clampPercent(). */
+    private static function clampPercent(float $v): float
+    {
+        return is_nan($v) ? 0.0 : max(0.0, min(1.0, $v));
     }
 
     /**
@@ -117,8 +151,8 @@ final class AnimatedProgress implements Model
      */
     public function setPercent(float $percent): array
     {
-        $clamped = max(0.0, min(1.0, $percent));
-        $next = $this->copy(target: $clamped, animating: true);
+        $clamped = self::clampPercent($percent);
+        $next = $this->copy(target: $clamped, animating: true, epoch: $this->epoch + 1);
         return [$next, $next->scheduleTick()];
     }
 
@@ -137,12 +171,13 @@ final class AnimatedProgress implements Model
     /** Snap the displayed percent to `$p` instantly without animating. */
     public function jumpTo(float $p): self
     {
-        $clamped = max(0.0, min(1.0, $p));
+        $clamped = self::clampPercent($p);
         return $this->copy(
             current:   $clamped,
             velocity:  0.0,
             target:    $clamped,
             animating: false,
+            epoch:     $this->epoch + 1,
         );
     }
 
@@ -178,8 +213,8 @@ final class AnimatedProgress implements Model
 
     private function scheduleTick(): \Closure
     {
-        $interval = 1.0 / max(1.0, $this->fps);
-        return Cmd::tick($interval, static fn(): Msg => new SpringTickMsg());
+        $interval = 1.0 / self::tickRate($this->fps);
+        return Cmd::tick($interval, fn(): Msg => new SpringTickMsg($this->id, $this->epoch));
     }
 
     /**
@@ -196,6 +231,7 @@ final class AnimatedProgress implements Model
         ?float $dampingRatio = null,
         ?float $fps = null,
         ?bool $animating = null,
+        ?int $epoch = null,
     ): self {
         $next = new self(
             progress:         $progress         ?? $this->progress,
@@ -206,6 +242,8 @@ final class AnimatedProgress implements Model
             dampingRatio:     $dampingRatio     ?? $this->dampingRatio,
             fps:              $fps              ?? $this->fps,
             animating:        $animating        ?? $this->animating,
+            id:               $this->id,
+            epoch:            $epoch            ?? $this->epoch,
         );
         if ($angularFrequency === null && $dampingRatio === null && $fps === null) {
             $next->spring = $this->spring;
