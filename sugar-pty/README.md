@@ -373,6 +373,29 @@ chains into `$recorder->recordResize($cols, $rows)` — the pump
 itself stays clear of SIGWINCH detection so it can be reused for
 non-interactive recordings.
 
+### StreamPump — pump plain streams (pipes, FIFOs, sockets)
+
+`SugarCraft\Pty\Posix\StreamPump` is the stream-generic sibling of
+`PosixPump`: no `MasterPty` required. It selects over any set of streams with
+the same EINTR/deadline discipline (signals are dispatched and the wait resumed
+against the original deadline, never mistaken for end-of-output). It never
+spawns, kills, or closes anything; a deadline or stop is an exit condition and
+the caller owns the child.
+
+```php
+use SugarCraft\Pty\Posix\StreamPump;
+
+$reason = StreamPump::new()
+    ->withSource($stdout, fn (string $c) => $out .= $c)
+    ->withSource($stderr, fn (string $c) => $err .= $c)
+    ->withSource($fifo, fn (string $c) => $pty->write($c), endsOnEof: false)
+    ->withTimeout(30.0)
+    ->withShouldStop(fn () => $child->exited())
+    ->run();   // StreamPump::EOF | STOPPED | EXPIRED | SELECT_FAILED
+
+$sent = StreamPump::writeStream($pipe, $bytes, 5.0); // bounded, non-blocking write leg
+```
+
 ## Multi-pump
 
 `MultiPump` demuxes multiple PTY sessions from a single
