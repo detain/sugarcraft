@@ -8,6 +8,8 @@
         "terminal",
         "buffer",
         "cell",
+        "cellbuf",
+        "candy-buffer",
         "sugarcraft"
     ],
     "homepage": "https://github.com/sugarcraft/sugar-cellbuffer",
