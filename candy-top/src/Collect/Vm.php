@@ -270,9 +270,17 @@ final class Vm
     /**
      * Non-libvirt qemu: a qemu binary (basename rule) with a `-name`.
      * cgroupPath is '' — the process owns no VM cgroup.
+     *
+     * The stripos pre-screen (candy-top-041) keeps the full NUL explode
+     * from running per non-container process: neither `-name` (which also
+     * covers `--name`) nor `-uuid` in the cmdline means no option can be
+     * found, so the answer is null without a second parse pass.
      */
     public static function fromBareCmdline(?string $cmdline): ?ContainerRef
     {
+        if ($cmdline === null || (stripos($cmdline, '-name') === false && stripos($cmdline, '-uuid') === false)) {
+            return null;
+        }
         $info = self::fromCmdline($cmdline);
         $argv0 = explode("\0", (string) $cmdline, 2)[0];
         if ($info === null || $info->guestName === '' || !self::isQemuBinary($argv0)) {

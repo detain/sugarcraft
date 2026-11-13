@@ -35,7 +35,13 @@ namespace SugarCraft\Top\Collect;
  * the target's mmap lock, so a process stuck holding it (e.g. in D state
  * mid page-fault on dead NFS) can block that read. It is paid once per
  * process lifetime here (cached with name/user), not every scan, which
- * bounds the exposure but cannot remove it from userspace.
+ * bounds the exposure but cannot remove it from userspace. The blast
+ * radius is NOT the same as btop's though (candy-top-037): btop wedges a
+ * dedicated collector thread while its UI keeps ticking, this scan blocks
+ * the single loop thread — no off-thread collector exists yet. What the
+ * first-sight budget (candy-top-032) does bound is how many such reads a
+ * tick volunteers into; removing the block itself needs the loop-driven
+ * AsyncCommand lane, recorded as deferred work.
  *
  * Additions from open btop upstream PRs:
  *  - #1859: argv[0]'s basename offset is computed from the first
@@ -93,7 +99,26 @@ final class ProcList implements TunableProcList
         private readonly bool $readIo = false,
         private readonly ?float $previousUptime = null,
         private readonly ?int $detailPid = null,
+        private readonly int $scanBudgetUs = self::SCAN_BUDGET_US,
+        private readonly array $pending = [],
     ) {
+    }
+
+    /**
+     * First-sight static reads (candy-top-032) may cost a scan at most this
+     * many microseconds; stat/cpu/rss are ALWAYS read, so a budget-bitten
+     * tick shows a real row with blank cmd/user for one tick, not a
+     * missing one. $users/$known/pending are pid- and uid-space-bound:
+     * monotonic but capped by the kernel's pid_max (candy-top-049).
+     */
+    public const int SCAN_BUDGET_US = 25_000;
+
+    /** Test seam and tuning knob: rename the first-sight budget. */
+    public function withScanBudget(int $microseconds): self
+    {
+        return $microseconds === $this->scanBudgetUs
+            ? $this
+            : $this->copy(['scanBudgetUs' => max(0, $microseconds)]);
     }
 
     /**
@@ -179,7 +204,10 @@ final class ProcList implements TunableProcList
         $detail = null;
 
         $root = $this->paths->proc();
-        foreach (self::pids($root) as $pid) {
+        $scanStart = hrtime(true);
+        $budgetSpent = false;
+        $pendingNew = [];
+        foreach (self::pids($root) as $i => $pid) {
             $dir = $root . '/' . $pid;
 
             $stat = self::parseStat(Read::file($dir . '/stat'));
@@ -191,12 +219,27 @@ final class ProcList implements TunableProcList
             }
 
             $cached = $this->known[$pid] ?? null;
-            if ($cached === null || $cached['start'] !== $stat['start']) {
-                $info = $this->readStatic($dir, $users);
-                if ($info === null) {
-                    continue;
+            if ($cached === null || $cached['start'] !== $stat['start'] || isset($this->pending[$pid])) {
+                // The self-budget (candy-top-032): at a thousand-plus pids
+                // the first-sight reads pushed scans past the project's
+                // own 50 ms frame budget, so static columns are read at
+                // most SCAN_BUDGET_US per scan and everything the budget
+                // could not pay for is deferred to a later tick — the row
+                // itself is never dropped (cpu/rss come from stat).
+                if (!$budgetSpent && ($i & 63) === 63 && (hrtime(true) - $scanStart) / 1000 >= $this->scanBudgetUs) {
+                    $budgetSpent = true;
                 }
-                $cached = ['start' => $stat['start'], 'cpuT' => $stat['cpuT']] + $info;
+                if ($budgetSpent) {
+                    $pendingNew[$pid] = true;
+                    $cached = ['start' => $stat['start'], 'cpuT' => $stat['cpuT'],
+                        'cmd' => '', 'user' => '', 'uid' => -1, 'argv0' => 0, 'container' => null];
+                } else {
+                    $info = $this->readStatic($dir, $users);
+                    if ($info === null) {
+                        continue;
+                    }
+                    $cached = ['start' => $stat['start'], 'cpuT' => $stat['cpuT']] + $info;
+                }
             }
 
             $cpu = Sentinel::UNMEASURED;
@@ -256,6 +299,7 @@ final class ProcList implements TunableProcList
                 'known' => $known,
                 'users' => $users,
                 'previousUptime' => $uptime >= 0.0 ? $uptime : null,
+                'pending' => $pendingNew,
             ]),
         ];
     }
@@ -305,6 +349,8 @@ final class ProcList implements TunableProcList
             $o['readIo'] ?? $this->readIo,
             array_key_exists('previousUptime', $o) ? $o['previousUptime'] : $this->previousUptime,
             array_key_exists('detailPid', $o) ? $o['detailPid'] : $this->detailPid,
+            $o['scanBudgetUs'] ?? $this->scanBudgetUs,
+            $o['pending'] ?? $this->pending,
         );
     }
 

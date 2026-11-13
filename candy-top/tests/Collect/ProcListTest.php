@@ -466,4 +466,33 @@ final class ProcListTest extends TestCase
         $this->assertNotNull($self);
         $this->assertGreaterThanOrEqual(0, $self->ioReadTotal, 'own io is always readable');
     }
+
+    public function testFirstSightReadsAreBudgetedAndDrainLater(): void
+    {
+        // candy-top-032: an exhausted first-sight budget degrades columns
+        // for one tick; it never drops a row, and the later tick fills in.
+        $tree = FixtureTree::empty();
+        try {
+            $tree->write('proc/stat', "cpu  1000 0 0 0 0 0 0 0 0 0\ncpu0 1 0 0 0\n");
+            $tree->write('proc/uptime', "500.0 900.0\n");
+            for ($pid = 100; $pid < 400; $pid++) {
+                $tree->write("proc/{$pid}/stat", "{$pid} (worker {$pid}) S 1 1 1 0 -1 0 0 0 0 0 10 5 0 0 20 0 1 0 50 1000 100 0\n");
+                $tree->write("proc/{$pid}/status", "Name:\tworker\nUid:\t" . ($pid % 7) . "\t0\t0\t0\n");
+                $tree->write("proc/{$pid}/cmdline", "/usr/bin/worker\0--id\0{$pid}\0");
+            }
+            $procs = ProcList::new($tree->paths(), userLookup: static fn (int $uid): ?string => 'u' . $uid)->withScanBudget(0);
+
+            [$first, $procs] = $procs->sample();
+
+            $this->assertSame(300, $first->count(), 'a budget-bitten tick still lists every process');
+            $this->assertNotSame('', self::byPid($first, 100)?->cmd, 'the pids paid for before the check ran keep their columns');
+            $this->assertSame('', self::byPid($first, 399)?->cmd, 'the tail degrades to blank columns for one tick');
+            $this->assertGreaterThan(0, self::byPid($first, 399)?->mem, 'rss stays real (stat-based) even on a degraded row');
+
+            [$second] = $procs->withScanBudget(ProcList::SCAN_BUDGET_US)->sample();
+            $this->assertSame('/usr/bin/worker --id 399', self::byPid($second, 399)?->cmd, 'the deferred read lands on the next scan');
+        } finally {
+            $tree->destroy();
+        }
+    }
 }
