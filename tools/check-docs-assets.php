@@ -335,6 +335,24 @@ final class CheckDocsAssets
     }
 
     /**
+     * SD-S28: the two admin/dev pages under docs/admin/ + docs/dev/ ship the
+     * nav chrome (they carry <div class="nav-links">) but predate the nav
+     * marker pair, so they join a REDUCED roster only — their local links and
+     * RAW-gif references are checked, the byte-identity leg is not. Folding
+     * them into chromePages() would force marker-pair adoption and the
+     * five-seat G-Guard re-pin; that sizing is an owner decision (P5).
+     *
+     * @return list<string>
+     */
+    private static function adminDevPages(string $root): array
+    {
+        return array_values(array_filter([
+            "$root/docs/admin/sugar-pty.html",
+            "$root/docs/dev/sugar-pty.html",
+        ], 'is_file'));
+    }
+
+    /**
      * Every page that renders the shared nav chrome: the static surfaces,
      * the generated detail pages, and the rendered documentation pages.
      * Keyed on the nav container, so chromeless redirect stubs fall out
@@ -589,6 +607,9 @@ final class CheckDocsAssets
             $targets[] = $page;
         }
         $targets[] = "$root/docs/cookbook/index.html";
+        foreach (self::adminDevPages($root) as $page) {
+            $targets[] = $page;
+        }
 
         $findings = [];
         foreach (array_unique($targets) as $file) {
@@ -682,6 +703,12 @@ final class CheckDocsAssets
         // surfaces — scanning them cost whole-corpus reads for zero check
         // value. They are excluded by path before anything is read.
         $files = ["$root/docs/index.html", "$root/docs/libraries.html", "$root/docs/apps.html"];
+        // SD-S28: the admin/dev chrome pages now share the RAW-gif leg too —
+        // zero references today, but the leg must not stay blind to pages
+        // that carry nav chrome.
+        foreach (self::adminDevPages($root) as $page) {
+            $files[] = $page;
+        }
         foreach (["$root/docs/lib/*.html"] as $glob) {
             foreach (glob($glob) ?: [] as $file) {
                 $files[] = $file;
