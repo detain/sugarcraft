@@ -19,10 +19,17 @@ namespace SugarCraft\AnsiParser\Codec;
  *
  * and the control forms (`1337;Pop`, `1337;SetMark`, …).
  *
- * {@see fromDcs()} covers the DCS arm: under tmux the whole OSC rides inside
- * `ESC P tmux; <ESC-doubled inner> ESC \`, which the parser reports as a DCS
- * with final `t` and data starting `mux;`. Unwrapping is deterministic —
- * un-double ESC, find the inner `ESC ] 1337;`, take the body up to BEL/ST.
+ * {@see fromDcs()} covers the DCS arm — but only OUT OF BAND: under tmux the
+ * whole OSC rides inside `ESC P tmux; <ESC-doubled inner> ESC \`, and
+ * decoding that envelope requires the doubled `ESC ] 1337;` introducer to
+ * still be present in the data argument. This lib's own parser never
+ * delivers such a payload: the DcsString row treats 0x1B as a dispatch
+ * terminator (Transitions), so ESC bytes cannot exist inside a
+ * parser-produced DCS payload and the in-parser route to the tmux arm is
+ * dead. fromDcs() is therefore for caller-assembled or externally-produced
+ * payloads (another parser, a captured stream) — unwrapping is
+ * deterministic: un-double ESC, find the inner `ESC ] 1337;`, take the body
+ * up to BEL/ST.
  *
  * Malformed input never throws: a missing `:` separator, a parameter without
  * `=`, a negative `size=`, or a payload that stops short of its declared size
@@ -65,6 +72,12 @@ final class Iterm1337
     /**
      * Decode the DCS arm: a tmux passthrough envelope (`ESC P tmux; … ESC \`)
      * carrying an OSC 1337. Returns null for any other DCS.
+     *
+     * Reachable only OUT OF BAND (finding sugar-ansi-parser-016): this lib's
+     * parser dispatches DCS the moment it sees 0x1B, so its payloads carry no
+     * ESC for the doubled introducer. Feed this from caller-assembled or
+     * externally-produced data — never expect it to fire from a
+     * dcsDispatch() this parser made.
      */
     public static function fromDcs(int $final, string $data): ?self
     {

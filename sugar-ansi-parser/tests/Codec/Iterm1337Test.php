@@ -6,6 +6,8 @@ namespace SugarCraft\AnsiParser\Tests\Codec;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\AnsiParser\Codec\Iterm1337;
+use SugarCraft\AnsiParser\Parser\Handler;
+use SugarCraft\AnsiParser\Parser\Parser;
 
 /**
  * Iterm1337 codec — inline-image transfer header decode (the OSC arm)
@@ -191,6 +193,63 @@ final class Iterm1337Test extends TestCase
         self::assertSame(5, $seq->declaredSize());
         self::assertTrue($seq->inline());
         self::assertSame('QUJD', $seq->payloadBase64());
+    }
+
+    public function testTmuxArmIsDeadThroughTheOwnParserAndAliveOnlyOutOfBand(): void
+    {
+        // Finding sugar-ansi-parser-016, documented as a live envelope: walk
+        // the real tmux wire shape (ESC P tmux; ESC-doubled inner …) through
+        // the real parser and prove the two halves of the truth —
+        // (1) the dispatched DCS data contains NO ESC byte (DcsString stops
+        // at 0x1B), so the introducer the arm searches for cannot be present;
+        // (2) fromDcs() on that parser-made payload therefore returns null,
+        // while the hand-built positive leg above keeps working — which is
+        // exactly why the docblocks now say "out-of-band only".
+        $handler = new class implements Handler {
+            /** @var list<array{final:int,data:string}> */
+            public array $dcs = [];
+
+            public function printChar(string $rune): void
+            {
+            }
+
+            public function execute(int $byte): void
+            {
+            }
+
+            public function csiDispatch(int $final, array $params, int $prefix, int $intermediate): void
+            {
+            }
+
+            public function escDispatch(int $final, int $intermediate): void
+            {
+            }
+
+            public function oscDispatch(string $data): void
+            {
+            }
+
+            public function dcsDispatch(int $final, array $params, int $prefix, int $intermediate, string $data): void
+            {
+                $this->dcs[] = ['final' => $final, 'data' => $data];
+            }
+
+            public function sosPmApcDispatch(string $kind, string $data): void
+            {
+            }
+        };
+
+        $inner = "\x1b]1337;File=name=x.png;size=5;inline=1:QUJD\x1b\\";
+        $wire = "\x1bPtmux;" . str_replace("\x1b", "\x1b\x1b", $inner);
+        (new Parser($handler))->feed($wire);
+
+        $dcs = $handler->dcs;
+
+        self::assertNotEmpty($dcs, 'the envelope prefix still dispatches a DCS');
+        foreach ($dcs as $dispatch) {
+            self::assertStringNotContainsString("\x1b", $dispatch['data'], 'parser payloads carry no ESC');
+        }
+        self::assertNull(Iterm1337::fromDcs($dcs[0]['final'], $dcs[0]['data']));
     }
 
     public function testTmuxDcsArmAcceptsTheBelTerminator(): void
