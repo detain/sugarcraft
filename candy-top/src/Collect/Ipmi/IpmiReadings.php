@@ -38,6 +38,20 @@ final class IpmiReadings
     ) {
     }
 
+    /**
+     * Identity of a power rail for the duplicate-output fold: the name with
+     * separators dropped, the `pwr` spelling normalised and a trailing
+     * `out`/`output` decoration cut — so HP's "Power Meter" and
+     * "PwrMeter Output" share one key while two genuinely different
+     * "P1 Output"/"P2 Output" rails do not.
+     */
+    private static function railKey(string $name): string
+    {
+        $n = str_replace('pwr', 'power', strtolower(preg_replace('/[^a-z0-9]/i', '', $name) ?? ''));
+
+        return preg_replace('/out(put)?$/', '', $n) ?? $n;
+    }
+
     /** @param list<IpmiSensor> $sensors */
     public static function of(array $sensors): self
     {
@@ -51,7 +65,7 @@ final class IpmiReadings
                 $fanNames[strtolower($s->name)] = true;
             }
         }
-        $railValues = [];
+        $seenOutRailNames = [];
         foreach ($sensors as $s) {
             $psu = preg_match(self::PSU, $s->name, $m) === 1 ? (int) $m[1] : null;
             if ($psu !== null && ($s->kind === SensorKind::Power || $s->kind === SensorKind::Discrete || $s->kind === SensorKind::Other)) {
@@ -94,11 +108,15 @@ final class IpmiReadings
                     $volts[] = $s;
                     break;
                 case SensorKind::Power:
-                    $key = (string) $s->value;
-                    if (preg_match('/out(put)?/i', $s->name) === 1 && isset($railValues[$key])) {
+                    // Fold duplicate output rails by meter identity, never by
+                    // value: HP BMCs report one meter twice ("Power Meter" and
+                    // "PwrMeter Output"), while two different output rails can
+                    // legitimately read the same watts.
+                    $key = self::railKey($s->name);
+                    if (preg_match('/out(put)?/i', $s->name) === 1 && isset($seenOutRailNames[$key])) {
                         break;
                     }
-                    $railValues[$key] = true;
+                    $seenOutRailNames[$key] = true;
                     $rails[] = $s;
                     break;
                 case SensorKind::Current:

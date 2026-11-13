@@ -30,7 +30,9 @@ final class IpmiRound
     /**
      * Record a command's outcome: a timeout or a runaway output always
      * ends the round (a hung or broken BMC); a refusal ends it only for a command the round cannot do
-     * without (`$fatal`: mc info, sensor list).
+     * without (`$fatal`: mc info, sdr elist). The threshold walk
+     * (`sensor list`) never calls note() — its values are enrichment, and
+     * a missing `fru print` likewise only blanks the header facts.
      */
     public function note(CommandResult $result, bool $fatal = false): void
     {

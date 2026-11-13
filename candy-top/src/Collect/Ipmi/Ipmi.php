@@ -207,7 +207,9 @@ final class Ipmi implements IpmiReader
         // A child killed at its deadline that has not died yet sits in
         // uninterruptible sleep inside the IPMI driver: another ipmitool
         // would only queue behind it. Back off until it is reaped.
-        if (($this->stuck)((string) $this->binary())) {
+        $binary = $this->binary();
+        \assert($binary !== null, 'gate() above only returns null when the binary resolved');
+        if (($this->stuck)($binary)) {
             $this->fail($now, IpmiSnapshot::failed(IpmiState::Stuck, '', $this->round), false);
 
             return resolve($this->last);
@@ -244,7 +246,7 @@ final class Ipmi implements IpmiReader
         return $chain
             ->then(
                 fn (): IpmiSnapshot => $this->finish($acc, $round, $slow, $slowMs),
-                function (\Throwable $e) use ($acc, $round): IpmiSnapshot {
+                function () use ($acc, $round): IpmiSnapshot {
                     $acc->fail ??= IpmiState::NoResponse;
 
                     return $this->finish($acc, $round, false, 0);
@@ -596,6 +598,9 @@ final class Ipmi implements IpmiReader
      */
     private function run(array $args, float $timeout): PromiseInterface
     {
-        return ($this->runner)([(string) $this->binary(), '-I', 'open', ...$args], $timeout);
+        $binary = $this->binary();
+        \assert($binary !== null, 'every command chain starts behind gate(), which refuses a null binary');
+
+        return ($this->runner)([$binary, '-I', 'open', ...$args], $timeout);
     }
 }

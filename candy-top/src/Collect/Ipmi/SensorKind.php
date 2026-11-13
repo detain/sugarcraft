@@ -36,12 +36,16 @@ enum SensorKind
         return match (true) {
             $u === 'discrete' => self::Discrete,
             str_starts_with($u, 'degrees') => self::Temperature,
-            $u === 'volts' => self::Voltage,
+            ($u === 'volts' || $u === 'v') => self::Voltage,
             $u === 'rpm' => self::FanRpm,
             $u === 'percent' && preg_match('/\bfan/i', $name) === 1 => self::FanDuty,
             $u === 'percent' => self::Percent,
-            $u === 'watts' => self::Power,
-            $u === 'amps' => self::Current,
+            // VA and BTU/min are power-shaped rails on HP-class BMCs; they
+            // belong with the watts, not in Other.
+            ($u === 'watts' || $u === 'va' || $u === 'btu/min') => self::Power,
+            // Some BMCs spell current short ("A") or scaled ("milliamps");
+            // both belong with the amps so the rails see them.
+            ($u === 'amps' || $u === 'a' || $u === 'milliamps') => self::Current,
             default => self::Other,
         };
     }

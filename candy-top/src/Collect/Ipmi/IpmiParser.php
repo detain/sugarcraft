@@ -264,7 +264,8 @@ final class IpmiParser
      */
     public static function info(string $mc, string $fru, string $lan = '', ?int $channel = null): IpmiInfo
     {
-        [$mc, $fru, $lan] = [self::clean($mc), self::clean($fru), self::clean($lan)];
+        // pairs() and lanAddress() are the sanitize boundaries: one escape
+        // scan per text, no pre-pass (double-cleaning paid the scan twice).
         $m = self::pairs($mc);
         $f = self::pairs($fru);
         $l = self::pairs($lan);
@@ -275,7 +276,7 @@ final class IpmiParser
                 $serials[$slug] = $f[$key];
             }
         }
-        $ip = self::lanAddress($lan);
+        $ip = self::lanIp($l);
 
         return new IpmiInfo(
             $f['Product Name'] ?? '',
@@ -295,8 +296,17 @@ final class IpmiParser
     /** The address `lan print` answered with; '' when none or unconfigured (0.0.0.0). */
     public static function lanAddress(string $lan): string
     {
-        $lan = self::clean($lan);
-        $ip = self::pairs($lan)['IP Address'] ?? '';
+        return self::lanIp(self::pairs($lan));
+    }
+
+    /**
+     * From an already-parsed `lan print` map: the usable IP or ''.
+     *
+     * @param array<string,string> $lanPairs
+     */
+    private static function lanIp(array $lanPairs): string
+    {
+        $ip = $lanPairs['IP Address'] ?? '';
 
         return filter_var($ip, FILTER_VALIDATE_IP) !== false && $ip !== '0.0.0.0' ? $ip : '';
     }
