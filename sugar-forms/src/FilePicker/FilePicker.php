@@ -9,6 +9,7 @@ use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Forms\Lang;
 use SugarCraft\Forms\Util\RenderSafe;
 use SugarCraft\Forms\Util\ViewportPan;
 
@@ -121,7 +122,11 @@ final class FilePicker implements Model
     {
         $lines = [RenderSafe::clean($this->cwd)];
         if ($this->error !== null) {
-            $lines[] = '! ' . $this->error;
+            // SF-008: the error carries a user-/filesystem-sourced path;
+            // every sibling '! error' site in the lib renders it through
+            // the sanitizer — this was the one unclean surface, letting
+            // OSC-8/CSI smuggled via a crafted dir name paint the row.
+            $lines[] = '! ' . RenderSafe::clean($this->error);
         }
         if ($this->entries === []) {
             $lines[] = '(empty)';
@@ -307,7 +312,10 @@ final class FilePicker implements Model
     {
         $names = @scandir($this->cwd);
         if ($names === false) {
-            return [[], 'cannot read directory: ' . $this->cwd];
+            // SF-017: localized like every other user-surfaced string;
+            // the test-pinned 'cannot read directory: ' shape rides as the
+            // en default so consumers see byte-identical text.
+            return [[], Lang::t('filepicker.read_error', ['path' => $this->cwd])];
         }
         $entries = [];
         foreach ($names as $name) {

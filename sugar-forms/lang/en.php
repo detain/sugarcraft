@@ -65,6 +65,7 @@ return [
     'suggestions.async_result_type' => 'Async suggestions for field "{key}" must resolve to an array, got {type}',
     'suggestions.bad_debounce' => 'Async suggestions debounce for field "{key}" must not be negative, got {ms} ms',
     'suggestions.bad_timeout' => 'Async suggestions fetch timeout for field "{key}" must be a positive finite number of seconds, got {seconds}',
+    'filepicker.read_error' => 'cannot read directory: {path}',
     'keys.override_shape' => 'Key overrides must be a map of string spellings to string actions',
     'keys.override_unknown_key' => 'Unknown key override spelling "{key}"',
     'keys.override_unknown_action' => 'Unknown key override action "{action}"',

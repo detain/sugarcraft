@@ -6,6 +6,7 @@ namespace SugarCraft\Forms\Tests\FilePicker;
 
 use SugarCraft\Forms\FilePicker\Entry;
 use SugarCraft\Forms\FilePicker\FilePicker;
+use SugarCraft\Forms\Lang;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use PHPUnit\Framework\TestCase;
@@ -406,7 +407,9 @@ final class FilePickerTest extends TestCase
         }
         try {
             $p = FilePicker::new($dir);
-            $this->assertSame('cannot read directory: ' . $p->cwd, $p->error());
+            // SF-017: the message is Lang-resolved, not a bare literal —
+            // the pins name the key so a locale switch moves them loudly.
+            $this->assertSame(Lang::t('filepicker.read_error', ['path' => $p->cwd]), $p->error());
             $this->assertStringContainsString('! cannot read directory', $p->view());
 
             chmod($dir, 0o755);
@@ -425,4 +428,38 @@ final class FilePickerTest extends TestCase
         $this->assertStringContainsString('(empty)', $pe->view());
     }
 
+    /**
+     * SF-008: the error row used to render '! ' . $this->error RAW while
+     * every sibling '! error' site cleans — a crafted unreadable dir name
+     * smuggled OSC-8/CSI/CR through the row and painted arbitrary content.
+     * The render site now goes through RenderSafe::clean.
+     */
+    public function testErrorRowRendersControlBytesFromCraftedDirNameClean(): void
+    {
+        $dir = $this->root . DIRECTORY_SEPARATOR . "evil\x1b]0;pwned\x07link\x1b[31m\rX";
+        mkdir($dir);
+        $this->assertTrue(is_dir($dir), 'the crafted directory must exist for the probe to mean anything');
+        chmod($dir, 0o000);
+        if (is_readable($dir)) {
+            chmod($dir, 0o755);
+            $this->markTestSkipped('cannot simulate an unreadable directory for this uid');
+        }
+        try {
+            $p     = FilePicker::new($dir);
+            $bytes = $p->view();
+            // Data channel keeps the raw path (error() is host-facing);
+            // the RENDERED surface must carry no OSC-8 introducer, no BEL
+            // terminator, no CR. (The \x1b[31m true-SGR fragment survives
+            // BY DESIGN — the sanitizer's contract keeps real colour.)
+            $this->assertStringNotContainsString(chr(0x1B) . ']', $bytes, 'no OSC introducer on the error row');
+            $this->assertStringNotContainsString(chr(0x0D), $bytes, 'no raw CR on the error row');
+            $this->assertStringNotContainsString(chr(0x07), $bytes, 'no raw BEL on the error row');
+            $this->assertSame('! ' . \SugarCraft\Forms\Util\RenderSafe::clean($p->error()) . "\n" . '(empty)',
+                implode("\n", array_slice(explode("\n", $bytes), 1)) ,
+                'the rendered row is byte-identical to the cleaned error');
+        } finally {
+            @chmod($dir, 0o755);
+            @rmdir($dir);
+        }
+    }
 }
