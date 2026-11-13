@@ -9,6 +9,7 @@ use React\EventLoop\LoopInterface;
 use React\EventLoop\TimerInterface;
 use React\Promise\PromiseInterface;
 use SugarCraft\Code\Host\SessionEvent;
+use SugarCraft\Code\Lang;
 use SugarCraft\Code\Protocol\Dispatcher;
 use SugarCraft\Code\Protocol\ErrorCode;
 use SugarCraft\Code\Protocol\EventEnvelope;
@@ -233,6 +234,9 @@ final class Gateway implements MessageHandler
 
                 return;
             }
+            if (!$this->admit($connection, $id, $method, $params, null)) {
+                return;
+            }
             $this->own($connection, $id, $method, $params);
 
             return;
@@ -262,8 +266,65 @@ final class Gateway implements MessageHandler
             return;
         }
 
+        if (!$this->admit($connection, $id, $method, $params, $root)) {
+            return;
+        }
+
         unset($params->root);
         $this->forward($connection, $id, $root, $method, $params);
+    }
+
+    /**
+     * The scope law at the gateway's own door. The Dispatcher enforces scope,
+     * the viewer-session pin and the method roster for what it answers, but a
+     * request the gateway answers or relays never reaches it - and a
+     * workspace host trusts its parent as the owner. So everything the gateway
+     * intercepts is judged HERE, with the same rules, before it can start a
+     * host or reach one. An owner-class socket (no scope list on its
+     * connection) passes untouched; a viewer grant:
+     *
+     *  - needs the method's scope (an unknown method is refused, never relayed
+     *    to a host that would answer for the owner);
+     *  - never touches `workspace.*` (it lists roots and pids, and opens or
+     *    stops hosts);
+     *  - reaches another root only through a host that is already running -
+     *    it cannot cause one to start;
+     *  - when pinned to sessions, may only name a pinned session.
+     *
+     * @return bool true when the request may proceed (a refusal was sent otherwise)
+     */
+    private function admit(Connection $connection, string|int|null $id, string $method, \stdClass $params, ?string $root): bool
+    {
+        $granted = $connection->scopes();
+        $viewer = $connection->principal() === 'viewer';
+        if ($granted === null && !$viewer) {
+            return true;
+        }
+        try {
+            $spec = $this->primary->registry()->get($method)
+                ?? throw RpcError::of(ErrorCode::MethodNotFound, \sprintf('method not found: %s', \substr($method, 0, 64)));
+            if (!\in_array($spec->scope->value, $granted ?? [], true)) {
+                throw RpcError::of(ErrorCode::Forbidden, \sprintf('this needs the %s scope', $spec->scope->value));
+            }
+            if (\in_array($method, self::METHODS, true)) {
+                throw RpcError::of(ErrorCode::Forbidden, 'this needs the admin scope', 'owner_only');
+            }
+            if ($viewer && ($pins = $connection->viewerSessions()) !== null) {
+                $sessionId = $params->sessionId ?? null;
+                if (!\is_string($sessionId) || !\in_array($sessionId, $pins, true)) {
+                    throw RpcError::of(ErrorCode::Forbidden, Lang::t('cli.serve.tokens.session_denied'), 'viewer_session_denied');
+                }
+            }
+            if ($viewer && $root !== null && !isset($this->hosts[$root])) {
+                throw RpcError::of(ErrorCode::Forbidden, 'a viewer may only reach a workspace that is already running', 'owner_only');
+            }
+        } catch (RpcError $e) {
+            $this->send($connection, JsonRpc::error($id, $e));
+
+            return false;
+        }
+
+        return true;
     }
 
     public function onClose(Connection $connection, int $code): void
@@ -571,6 +632,11 @@ final class Gateway implements MessageHandler
                 $this->cursors[$connectionId][$sessionId] = $seq;
             }
             if (!$connection->isOpen()) {
+                continue;
+            }
+            // A pinned viewer hears only its pinned sessions: a root-wide
+            // (server-scope) event of a workspace is not its to see.
+            if ($sessionId === null && $connection->viewerSessions() !== null) {
                 continue;
             }
             if ($message === null || $seq !== null || ($envelope['durable'] ?? false) === true) {
