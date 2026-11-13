@@ -156,4 +156,123 @@ final class PharBuildScriptTest extends TestCase
 
         return substr($text, $pos);
     }
+
+    public function testTheStampProbesAskGitWithoutAnyShellRedirect(): void
+    {
+        $script = self::source(self::PACKAGE . '/tools/build-phar.php');
+
+        // scriptui-80: a shell stderr-null redirect inside a git probe
+        // string is cmd.exe FILENAME syntax noise — the redirect fails,
+        // git answers nothing, and the build silently stamps dev-build
+        // onto a would-be release. No /dev/null may reappear anywhere.
+        self::assertStringNotContainsString('/dev/null', $script);
+        self::assertStringContainsString('function gitProbe(', $script);
+        self::assertMatchesRegularExpression(
+            "/proc_open\\(\\s*array_merge\\(\\['git', '-C', /",
+            $script,
+            'git must be probed through an argv array so no shell ever parses the command.',
+        );
+    }
+
+    public function testAnUntaggedTreeDisclosesTheDevBuildStampInsteadOfHidingIt(): void
+    {
+        $root = self::makeProbeTree(false);
+        try {
+            [$rc, $stderr, $outPath] = self::runProbeBuild($root);
+            self::assertSame(0, $rc, $stderr);
+            self::assertStringContainsString('stamping dev-build (not a release identity)', $stderr);
+            self::assertFileExists($outPath);
+            $meta = (new \Phar($outPath))->getMetadata();
+            self::assertSame('dev-build', is_array($meta) ? ($meta['version'] ?? null) : null);
+        } finally {
+            self::removeProbeTree($root);
+        }
+    }
+
+    public function testAReachablePackageTagStampsTheRealIdentitySilently(): void
+    {
+        $root = self::makeProbeTree(true);
+        try {
+            [$rc, $stderr, $outPath] = self::runProbeBuild($root);
+            self::assertSame(0, $rc, $stderr);
+            self::assertStringNotContainsString('dev-build', $stderr);
+            $meta = (new \Phar($outPath))->getMetadata();
+            self::assertSame('candy-scriptui/v0.0.9-probe', is_array($meta) ? ($meta['version'] ?? null) : null);
+        } finally {
+            self::removeProbeTree($root);
+        }
+    }
+
+    public function testAGitUnanswerableTreeRefusesLoudlyWithNonZeroExit(): void
+    {
+        $root = self::makeProbeTree(false, git: false);
+        try {
+            [$rc, $stderr] = self::runProbeBuild($root);
+            self::assertSame(2, $rc);
+            self::assertStringContainsString('cannot be verified with git', $stderr);
+        } finally {
+            self::removeProbeTree($root);
+        }
+    }
+
+    /**
+     * A minimal buildable package in a temp dir: the tree the guards see
+     * is the ONLY input — a probe rehearsal, not a product build.
+     */
+    private static function makeProbeTree(bool $tagged, bool $git = true): string
+    {
+        $root = sys_get_temp_dir() . '/scriptui-phar-probe-' . bin2hex(random_bytes(4));
+        mkdir($root . '/tools', 0o755, true);
+        foreach (['bin', 'src', 'lang', 'vendor'] as $dir) {
+            mkdir($root . '/' . $dir, 0o755, true);
+        }
+        copy(self::PACKAGE . '/tools/build-phar.php', $root . '/tools/build-phar.php');
+        file_put_contents($root . '/bin/candy-scriptui', "#!/usr/bin/env php\n<?php\n// probe stub\n");
+        file_put_contents($root . '/src/Probe.php', "<?php\ndeclare(strict_types=1);\n");
+        file_put_contents($root . '/lang/en.php', "<?php\ndeclare(strict_types=1);\nreturn [];\n");
+        file_put_contents($root . '/vendor/autoload.php', "<?php\ndeclare(strict_types=1);\n");
+        file_put_contents($root . '/LICENSE', "probe\n");
+
+        if ($git) {
+            exec('git -C ' . escapeshellarg($root) . ' init -q 2>&1');
+            exec('git -C ' . escapeshellarg($root) . ' add -A 2>&1');
+            exec(
+                'git -C ' . escapeshellarg($root)
+                . " -c user.email=probe@example.invalid -c user.name=probe commit -q -m probe 2>&1",
+            );
+            if ($tagged) {
+                exec('git -C ' . escapeshellarg($root) . ' tag candy-scriptui/v0.0.9-probe 2>&1');
+            }
+        }
+
+        return $root;
+    }
+
+    /** @return array{0:int,1:string,2:string} [rc, stderr, outPath] */
+    private static function runProbeBuild(string $root): array
+    {
+        $outPath = $root . '/out/probe.phar';
+        $proc = proc_open(
+            [PHP_BINARY, '-d', 'phar.readonly=0', $root . '/tools/build-phar.php', '--out=' . $outPath],
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+            null,
+            null,
+            ['suppress_errors' => true],
+        );
+        self::assertIsResource($proc);
+        fclose($pipes[0]);
+        $stdout = (string) stream_get_contents($pipes[1]);
+        fclose($pipes[1]);
+        $stderr = (string) stream_get_contents($pipes[2]);
+        fclose($pipes[2]);
+        $rc = proc_close($proc);
+
+        return [$rc, $stderr . $stdout, $outPath];
+    }
+
+    private static function removeProbeTree(string $root): void
+    {
+        exec('rm -rf ' . escapeshellarg($root) . ' 2>&1');
+    }
 }

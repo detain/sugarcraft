@@ -93,6 +93,44 @@ if (ini_get('phar.readonly') !== '' && filter_var(ini_get('phar.readonly'), FILT
     exit(2);
 }
 
+/**
+ * Shell-free git probe (scriptui-80). The stamp probes used to redirect
+ * stderr to the null device inside the shell command; on a cmd.exe build host
+ * that literal is a FILENAME, not
+ * a suppression, and git's answer dies with the redirect error — the
+ * build then stamped `dev-build` (which versionString() refuses as a
+ * release identity) onto a would-be release with NO failure signal. An
+ * argv-array proc_open never spawns a shell, so stderr suppression works
+ * identically on every OS PHP runs on.
+ *
+ * @return array{rc:int,out:string}|null null only when the process could
+ *         not start at all — for a stamp probe that is a broken build
+ *         host, answered loudly by the caller, never by a silent sentinel.
+ */
+function gitProbe(string $cwd, string ...$args): ?array
+{
+    $proc = proc_open(
+        array_merge(['git', '-C', $cwd], $args),
+        [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+        $pipes,
+        null,
+        null,
+        ['suppress_errors' => true],
+    );
+    if (!is_resource($proc)) {
+        return null;
+    }
+    fclose($pipes[0]);
+    $out = (string) stream_get_contents($pipes[1]);
+    fclose($pipes[1]);
+    while (!feof($pipes[2])) {
+        fread($pipes[2], 8192); // drain-to-discard: same intent as the old shell stderr-null redirect, portable mechanism
+    }
+    fclose($pipes[2]);
+
+    return ['rc' => proc_close($proc), 'out' => $out];
+}
+
 // Guard 2 (the integrity preflight): the archive may only ship what its
 // commit stamp claims. Every git question is asked with 2>&1 so a failing
 // git reads as an unverifiable tree — refused, not waved through.
@@ -202,10 +240,25 @@ if ($version === null) {
     // so an unfiltered `describe --tags` would stamp some other package's
     // tag onto a candy-scriptui artifact. No candy-scriptui tag reachable => dev-build,
     // which versionString() refuses to read as a version.
-    $described = @shell_exec('git -C ' . escapeshellarg($package) . ' describe --tags --abbrev=0 --match ' . escapeshellarg('candy-scriptui/v*') . ' 2>/dev/null');
-    $version = is_string($described) && trim($described) !== '' ? trim($described) : 'dev-build';
+    $described = gitProbe($package, 'describe', '--tags', '--abbrev=0', '--match', 'candy-scriptui/v*');
+    if ($described === null) {
+        fwrite(STDERR, "build-phar: refusing to build — git could not even be started for the version probe on this host; a silent dev-build stamp would ship a version-stripped artifact thinking it was a release.\n");
+        exit(2);
+    }
+    $version = trim($described['out']);
+    if ($described['rc'] !== 0 || $version === '') {
+        $version = 'dev-build';
+        // Loud, disclosed sentinel: legitimate for untagged trees, and the
+        // operator sees WHY the artifact will not claim a release identity.
+        fwrite(STDERR, "build-phar: note — no reachable candy-scriptui/v* tag; stamping dev-build (not a release identity).\n");
+    }
 }
-$commit = trim((string) @shell_exec('git -C ' . escapeshellarg($package) . ' rev-parse HEAD 2>/dev/null'));
+$commitProbe = gitProbe($package, 'rev-parse', 'HEAD');
+if ($commitProbe === null || $commitProbe['rc'] !== 0 || trim($commitProbe['out']) === '') {
+    fwrite(STDERR, "build-phar: refusing to build — HEAD is not resolvable with git; the artifact would carry a silent empty commit stamp and be unattributable.\n");
+    exit(2);
+}
+$commit = trim($commitProbe['out']);
 
 $sourceEpoch = getenv('SOURCE_DATE_EPOCH');
 $builtAt = preg_match('/^\d+$/', $sourceEpoch === false ? '' : $sourceEpoch) === 1
