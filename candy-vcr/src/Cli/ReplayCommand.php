@@ -26,6 +26,11 @@ use SugarCraft\Vcr\Support\Scalars;
  * value-taking flag on this verb.
  * Use `--no-trim` to restore original (pre-trim) wall-clock timing.
  *
+ * A realtime gap taken from the cassette's own bytes is clamped to
+ * {@see self::MAX_SLEEP_SECONDS} and slept in slices, so a corrupted
+ * timestamp cannot block the replay for hours and a signal lands within
+ * one slice.
+ *
  * The recorded stream is VERBATIM terminal bytes — it may leave the
  * screen on the alternate buffer with a hidden cursor (a vim cassette
  * does exactly that). On an interactive stdout the replay therefore
@@ -55,19 +60,49 @@ final class ReplayCommand implements DocumentedCommand
     /** Restore saved screen, show the cursor, reset every SGR attribute. */
     public const SCREEN_GUARD_RESTORE = "\x1b[?1049u\x1b[?25h\x1b[0m";
 
+    /**
+     * Wall-clock belt for realtime pacing: a cassette is a data file, and
+     * the parse doors (S01) only bound `t` to 24 h of virtual tape — a
+     * hostile or corrupted gap must never block a replay for hours. Gaps
+     * above this are clamped down to it; `--idle-trim` remains the user's
+     * policy knob for legitimate long pauses.
+     */
+    public const MAX_SLEEP_SECONDS = 300.0;
+
+    /**
+     * Longest single blocking sleep. Signals dispatch between opcodes, so
+     * a Ctrl-C mid-gap lands (at worst) one slice later instead of waiting
+     * out the remainder of a multi-minute pause.
+     */
+    public const SLEEP_SLICE_SECONDS = 0.1;
+
     /** @var \Closure(resource): bool */
     private readonly \Closure $ttyProbe;
+
+    /** @var \Closure(float): void */
+    private readonly \Closure $sleeper;
+
+    /** Prior `pcntl_async_signals` mode captured at arm, restored at disarm. */
+    private ?bool $priorAsyncSignals = null;
 
     /**
      * @param (callable(resource): bool)|null $ttyProbe seam used by tests to
      *                                          force the interactive path
      *                                          without a controlling terminal
+     * @param (callable(float): void)|null    $sleeper  seam used by tests to
+     *                                          observe realtime pacing without
+     *                                          paying wall clock
      */
-    public function __construct(?callable $ttyProbe = null)
+    public function __construct(?callable $ttyProbe = null, ?callable $sleeper = null)
     {
         $this->ttyProbe = $ttyProbe !== null
             ? \Closure::fromCallable($ttyProbe)
             : static fn ($stream): bool => \stream_isatty($stream);
+        $this->sleeper = $sleeper !== null
+            ? \Closure::fromCallable($sleeper)
+            : static function (float $seconds): void {
+                \usleep((int) round($seconds * 1_000_000));
+            };
     }
 
     public function summary(): string
@@ -172,8 +207,15 @@ final class ReplayCommand implements DocumentedCommand
                     if ($idleTrim !== null && $delta > $idleTrim) {
                         $delta = $idleTrim;
                     }
+                    // File-side belt clamp (finding 031): the delta rides
+                    // cassette bytes, so an absurd gap is capped at the wall
+                    // clock before it can block this process — and it is
+                    // sliced so a pending signal lands between pieces.
+                    if ($delta > self::MAX_SLEEP_SECONDS) {
+                        $delta = self::MAX_SLEEP_SECONDS;
+                    }
                     if ($delta > 0) {
-                        usleep((int) ($delta * 1_000_000));
+                        $this->interruptibleSleep($delta, $interrupted);
                     }
                 }
                 if ($event->kind === EventKind::Output) {
@@ -233,13 +275,18 @@ final class ReplayCommand implements DocumentedCommand
      * Install abort handlers so a Ctrl-C mid-replay still restores the
      * terminal. Returns false when ext-pcntl is unavailable (then the
      * trailer only covers the normal/exception paths, not signals).
+     *
+     * The process-wide `pcntl_async_signals` mode is captured here and put
+     * back at disarm (finding 039): a caller embedding this command in its
+     * own pcntl-driven process must not silently lose its signal-dispatch
+     * contract when the replay finishes.
      */
     private function armInterruptHandlers(int &$interrupted): bool
     {
         if (!\function_exists('pcntl_async_signals') || !\defined('SIGINT')) {
             return false;
         }
-        pcntl_async_signals(true);
+        $this->priorAsyncSignals = pcntl_async_signals(true);
         $handler = static function (int $signo) use (&$interrupted): void {
             $interrupted = $signo;
         };
@@ -254,5 +301,21 @@ final class ReplayCommand implements DocumentedCommand
         pcntl_signal(SIGINT, SIG_DFL);
         pcntl_signal(SIGTERM, SIG_DFL);
         pcntl_signal(SIGHUP, SIG_DFL);
+        pcntl_async_signals($this->priorAsyncSignals ?? false);
+        $this->priorAsyncSignals = null;
+    }
+
+    /**
+     * Sleep in bounded slices, re-checking the interrupt flag between them
+     * so a signal that arrived mid-gap stops pacing within one slice
+     * instead of waiting out the whole delay.
+     */
+    private function interruptibleSleep(float $seconds, int &$interrupted): void
+    {
+        while ($seconds > 0.0 && $interrupted === 0) {
+            $slice = min($seconds, self::SLEEP_SLICE_SECONDS);
+            ($this->sleeper)($slice);
+            $seconds -= $slice;
+        }
     }
 }
