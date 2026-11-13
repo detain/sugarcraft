@@ -923,8 +923,9 @@ final class QuickPick
      * Render the QuickPick overlay and composite it over $backgroundView.
      *
      * Named `view()` (lowercase) to honour the TEA/Bubble-Tea render contract
-     * this library ports, the sibling {@see Model::view()} it is handed to, and
-     * PSR-1's lowerCamelCase method rule. The rename is NOT a break for callers:
+     * this library ports, the sibling {@see QuickPickHost::view()} it is
+     * handed to, and PSR-1's lowerCamelCase method rule. The rename is NOT
+     * a break for callers:
      * PHP resolves method names case-insensitively, so existing `$hermit->View()`
      * call sites and docs keep working and resolve here. A capitalised `View()`
      * shim à la sugar-core's `Program::getModel()` is therefore both unnecessary

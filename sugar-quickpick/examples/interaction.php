@@ -78,3 +78,36 @@ echo $picker->view($bg) . "\n\n";
 // Final state: cursor at bottom, filter cleared
 echo "=== Final state ===\n";
 echo $picker->view($bg) . "\n";
+
+// The same loop expressed through the composition contract: a host that
+// owns NO state, threading every transition through the update() tuple
+// ([host, picker]) — the shape QuickPickHost exists to make honest.
+final class PickerHost implements \SugarCraft\QuickPick\QuickPickHost
+{
+    /** @return array{0: \SugarCraft\QuickPick\QuickPickHost, 1: QuickPick} */
+    public function update(QuickPick $model, string $msg): array
+    {
+        return [$this, match ($msg) {
+            'down' => $model->cursorDown(),
+            'up'   => $model->cursorUp(),
+            default => $model->type($msg),
+        }];
+    }
+
+    public function view(QuickPick $model): string
+    {
+        // A genuinely stateless host takes its background from script scope
+        // ($bg is the top-level variable above); real hosts that hold render
+        // context are immutable-by-construction with a readonly property —
+        // the tuple only promises the PICKER never needs mutable host state.
+        return $model->view($GLOBALS['bg']);
+    }
+}
+
+echo "\n=== QuickPickHost contract — stateless loop ===\n";
+$host  = new PickerHost();
+$state = QuickPick::new($items)->withPrompt('> ')->withWindowHeight(8)->show();
+foreach (['p', 'h', 'down'] as $event) {
+    [$host, $state] = $host->update($state, $event);
+}
+echo $host->view($state) . "\n";

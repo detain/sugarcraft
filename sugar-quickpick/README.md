@@ -182,11 +182,13 @@ A custom `withFilterFn()` predicate still applies on top of the ranker.
 ```
 SugarCraft\QuickPick
 ├── QuickPick           — Fuzzy finder overlay (main class)
+├── Lang                — chrome text catalogue (lang/en.php via the core i18n registry)
 ├── Item                — Interface for filterable items
 ├── FilteredItem        — Numbered item implementation of Item
 ├── HelpBar             — Keyboard shortcut summary line
 ├── StatusBar           — Status message line with optional segments
-├── Model               — update()/view() composition contract (package-local)
+├── QuickPickHost       — update()/view() composition contract, state in the return tuple
+├── Model               — @deprecated alias of QuickPickHost (soft landing)
 ├── ItemFactory         — string[]/Item[] coercion (used by new()/withItems())
 ├── Concerns
 │   └── Visible         — show()/hide()/isVisible() shared by HelpBar/StatusBar
@@ -404,7 +406,7 @@ public function view(string $backgroundView): string
 ```
 
 The method was originally declared `View()`. It is now lowercase `view()`,
-matching PSR-1 and the Model–Update–View render contract of {@see Model::view()}. Nothing to
+matching PSR-1 and the Model–Update–View render contract of `QuickPickHost::view()`. Nothing to
 migrate: PHP resolves method names case-insensitively, so an existing
 `$h->View($bg)` call still binds here.
 
@@ -585,8 +587,9 @@ loop decodes terminal keys and forwards them. A conventional mapping:
 | Esc (cancel) | `$h = $h->hide()` |
 
 `hide()` is not `accept()`: the overlay simply stops rendering; reading
-`selected()` **before** hiding is your accept path. The `Model` interface's
-`update(QuickPick $model, string $msg)` expects exactly this forwarding —
+`selected()` **before** hiding is your accept path. The `QuickPickHost`
+interface's `update(QuickPick $model, string $msg): array` — returning
+`[$host, $picker]` — expects exactly this forwarding —
 `$msg` strings are host-defined, nothing in this library decodes them.
 
 ## SIGWINCH Resize
@@ -626,19 +629,41 @@ Signals are process-global. In a long-lived host (PHP-FPM worker, ReactPHP
 daemon, test suite) detach them at session teardown with
 `SugarCraft\Pty\SignalForwarder::reset()`.
 
-## Model Interface
+## Composition contract — QuickPickHost
 
-Implement the `Model` interface to use QuickPick inside a larger Model–Update–View application:
+Implement `QuickPickHost` to use QuickPick inside a larger Model–Update–View
+application. `update()` answers a TWO-element array — `[host, picker]` —
+because every keystroke on a QuickPick is a fresh fluent clone: the tuple
+carries the updated picker back, so the host needs no mutable state
+whatsoever (`-006`; the single-value `: Model` shape used to force it).
 
 ```php
 use SugarCraft\QuickPick\QuickPick;
-use SugarCraft\QuickPick\Model;
+use SugarCraft\QuickPick\QuickPickHost;
 
-class MyModel implements Model {
-    public function update(QuickPick $model, string $msg): Model { ... }
-    public function view(QuickPick $model): string { ... }
+final class MyModel implements QuickPickHost {
+    /** @return array{0: QuickPickHost, 1: QuickPick} */
+    public function update(QuickPick $model, string $msg): array {
+        $next = match ($msg) {
+            'down'  => $model->cursorDown(),
+            'up'    => $model->cursorUp(),
+            default => $model,
+        };
+        return [$this, $next];
+    }
+
+    public function view(QuickPick $model): string {
+        return $model->view($this->background);
+    }
 }
 ```
+
+> **Naming.** The contract shipped as `Model` — the bare word collided with
+> sugar-core's house `SugarCraft\Core\Model`, a different shape (-044). The
+> old name remains as an empty `@deprecated` alias (`interface Model extends
+> QuickPickHost`), so `instanceof` checks and type-hints keep resolving;
+> IMPLEMENTORS of the old single-return shape must adopt the tuple — the
+> alias cannot abstract a signature change.
 
 ## License
 
