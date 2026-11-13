@@ -694,4 +694,72 @@ final class StyleTest extends TestCase
         $this->expectExceptionMessage('SGR parameters must be semicolon-separated integers');
         Style::fromSgr('blink');
     }
+
+    // ─── Colon sub-parameters (sugar-cellbuffer-007) ───────────────────
+
+    public function testTheColonTruecolorFormParsesItsTrueTailOperands(): void
+    {
+        // T.416 colour-space form: the `1` is a colour-space id, NOT red.
+        // The old colon→semicolon flattening read (1,200,100) as the colour.
+        $style = Style::fromSgr('38:2:1:200:100:50');
+
+        $this->assertSame(0xC86432, $style?->fg());
+        $this->assertNull($style?->fgSlot());
+    }
+
+    public function testTheColonTruecolorFormAcceptsAnEmptyColourSpaceField(): void
+    {
+        // The empty-field variant used to THROW on the numeric check.
+        $style = Style::fromSgr('38:2::1:2:3');
+
+        $this->assertSame(0x010203, $style?->fg());
+    }
+
+    public function testTheColonShortTruecolorFormStillParses(): void
+    {
+        $this->assertEquals(
+            Style::fromSgr('38;2;1;2;3'),
+            Style::fromSgr('38:2:1:2:3')
+        );
+    }
+
+    public function testTheColonColor256FormStillParses(): void
+    {
+        $this->assertEquals(
+            Style::fromSgr('38;5;57'),
+            Style::fromSgr('38:5:57')
+        );
+    }
+
+    public function testTheColonBackgroundFormParsesItsTrueTailOperands(): void
+    {
+        $style = Style::fromSgr('48:2:7:10:20:30');
+
+        $this->assertSame(0x0A141E, $style?->bg());
+    }
+
+    public function testAColonExtensionOnANonColourCodeIsDroppedNotReinterpreted(): void
+    {
+        // `4:0` (underline style) must not flatten into `4;0` — that would
+        // underline then RESET the whole pen. Bold survives, nothing else.
+        $style = Style::fromSgr('1;4:0');
+
+        $this->assertSame(Style::ATTR_BOLD, $style?->attrs());
+
+        $this->assertNull(Style::fromSgr('4:0'));
+    }
+
+    public function testAColonColourModeOutsideTheVocabularyFailStopsTheParse(): void
+    {
+        // CSA `38:6:…` and over-long colon operands forward the bare
+        // introducer: the merge loop stops there and never reaches the 31.
+        $this->assertNull(Style::fromSgr('38:6:1:2:3;31'));
+        $this->assertNull(Style::fromSgr('38:2:1:2:3:4:5;31'));
+
+        // Truncated colon form behaves like `38;5`: the operands after the
+        // stop are colour data, not codes.
+        $style = Style::fromSgr('1;38:5');
+        $this->assertSame(Style::ATTR_BOLD, $style?->attrs());
+        $this->assertNull($style?->fg());
+    }
 }

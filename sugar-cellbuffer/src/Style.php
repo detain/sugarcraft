@@ -375,18 +375,15 @@ final class Style implements \JsonSerializable
      * here instead of forking it a third time.
      *
      * @param string $params Semicolon-separated SGR parameter numbers
-     *                       (colon separators are accepted and normalised)
+     *                       (colon sub-parameters are interpreted per
+     *                       {@see self::expandSgrParameters()}, not flattened)
      * @param Style|null $carry Style in effect before this sequence
      *
      * @throws \InvalidArgumentException if $params is not a parameter run
      */
     public static function fromSgr(string $params, ?self $carry = null): ?self
     {
-        $normalised = str_replace(':', ';', $params);
-        if (preg_match('/^\d+(?:;\d+)*$/', $normalised) !== 1) {
-            throw new \InvalidArgumentException("SGR parameters must be semicolon-separated integers, got '{$params}'");
-        }
-        $codes = array_map('intval', explode(';', $normalised));
+        $codes = self::expandSgrParameters($params);
 
         $fg = $carry?->fg();
         $bg = $carry?->bg();
@@ -512,6 +509,104 @@ final class Style implements \JsonSerializable
             || $fgSlot !== null || $bgSlot !== null || $ul !== null || $ulSlot !== null
             ? new self($fg, $bg, $attrs, $fgSlot, $bgSlot, $ul, $ulSlot)
             : null;
+    }
+
+    /**
+     * Expand one SGR parameter run into a flat list of numeric codes.
+     *
+     * Colon sub-parameter spellings are INTERPRETED, never squashed: the
+     * old str_replace(':',';') flattening shifted the operands of the
+     * ITU-T T.416 colour-space form (in `38:2:1:200:100:50` the colour
+     * space id `1` was consumed as the red channel — a confidently wrong
+     * colour, the exact class the clamp-never-mask law legislates) and
+     * turned the empty-params variant (`38:2::1:2:3`) into a throw on the
+     * numeric check. Per-parameter expansion here:
+     *
+     *  - `38:2:r:g:b` and `38:2:cs:r:g:b` (colour-space id present or
+     *    empty) → introducer, mode, then the TRUE TAIL three operands;
+     *  - `38:5:n` → the `38;5;n` equivalent;
+     *  - a truncated or out-of-vocabulary extended colour (`38:5:`,
+     *    `38:6:…`, `38:2` with too few/too many operands) → the bare
+     *    introducer passes through, and the flat parser fail-stops on it
+     *    exactly as it does for the semicolon spelling;
+     *  - colons on a non-colour code (`4:0` underline styles) are an
+     *    unrecognised extension: the parameter is DROPPED whole, never
+     *    reinterpreted as separate codes;
+     *  - plain numeric parameters pass through; anything else throws.
+     *
+     * 38, 48 and 58 share one grammar, so the rule reads `38`/`48`/`58`
+     * wherever spelled above.
+     *
+     * @return list<int> flat SGR code list for the merge loop
+     *
+     * @throws \InvalidArgumentException when a parameter is neither a
+     *         numeric code nor a supported colon sub-parameter form.
+     */
+    private static function expandSgrParameters(string $params): array
+    {
+        $refuse = static fn(): \InvalidArgumentException => new \InvalidArgumentException(
+            "SGR parameters must be semicolon-separated integers, got '{$params}'"
+        );
+
+        $codes = [];
+        foreach (explode(';', $params) as $param) {
+            if (!str_contains($param, ':')) {
+                if ($param === '' || preg_match('/^\d+$/', $param) !== 1) {
+                    throw $refuse();
+                }
+                $codes[] = (int) $param;
+                continue;
+            }
+
+            $sub = explode(':', $param);
+            if (preg_match('/^\d+$/', $sub[0]) !== 1) {
+                throw $refuse();
+            }
+            $introducer = (int) $sub[0];
+            $mode = $sub[1] ?? '';
+            $isExtendedColour = in_array($introducer, [38, 48, 58], true);
+
+            if ($isExtendedColour && ($mode === '2' || $mode === '5')) {
+                $rest = array_slice($sub, 2);
+                if ($mode === '2' && (count($rest) === 3 || count($rest) === 4)) {
+                    $tail = array_slice($rest, -3);
+                    foreach ($tail as $component) {
+                        if (preg_match('/^\d+$/', $component) !== 1) {
+                            throw $refuse();
+                        }
+                    }
+                    $codes[] = $introducer;
+                    $codes[] = 2;
+                    foreach ($tail as $component) {
+                        $codes[] = (int) $component;
+                    }
+                    continue;
+                }
+                if ($mode === '5' && count($rest) === 1 && preg_match('/^\d+$/', $rest[0]) === 1) {
+                    $codes[] = $introducer;
+                    $codes[] = 5;
+                    $codes[] = (int) $rest[0];
+                    continue;
+                }
+                // Truncated/out-of-shape extended colour: forward the bare
+                // introducer so the merge loop fail-stops exactly like the
+                // `38;5` semicolon spelling does.
+                $codes[] = $introducer;
+                continue;
+            }
+
+            if ($isExtendedColour) {
+                // Unknown colour mode (CSA `38:6:…` or a missing one): same
+                // fail-stop forwarding as the out-of-shape arms above.
+                $codes[] = $introducer;
+                continue;
+            }
+
+            // Unrecognised colon extension on an attribute code — dropped,
+            // never flattened into codes it was never meant to spell.
+        }
+
+        return $codes;
     }
 
     /**
