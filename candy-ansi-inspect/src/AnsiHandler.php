@@ -526,7 +526,7 @@ final class AnsiHandler implements Handler
         $this->recoverCancelledResidue($rawBytes);
         $this->flushPendingSs3();
         $this->flushText();
-        $this->segments[] = new SequenceSegment($rawBytes, Inspector::describeEsc(chr($final)));
+        $this->segments[] = new SequenceSegment($rawBytes, Inspector::describeEsc(chr($final), $intermediateStr));
         $this->inFlightBytes = '';
     }
 

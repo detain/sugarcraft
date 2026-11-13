@@ -638,6 +638,37 @@ final class InspectorTest extends TestCase
         $this->assertStringContainsString('ESC Z', $seg->describe());
     }
 
+    public function testEscWithIntermediateNamesTheRightControl(): void
+    {
+        // AIP-12 / finding 014: escDispatch used to label `ESC {int} {final}`
+        // from the final byte alone, so `ESC # 8` was reported as DECRC.
+        // The intermediate now selects the table; an unmapped pair is
+        // honest-generic instead of borrowing a bare-ESC name.
+        $cases = [
+            "\x1b#8" => 'screen alignment test (DECALN)',
+            "\x1b(0" => 'charset G0 DEC Special Graphics',
+            "\x1b(B" => 'charset G0 US/UK ASCII',
+            "\x1b)0" => 'charset G1 DEC Special Graphics',
+            "\x1b*A" => 'charset G2 designator A',
+            "\x1b%G" => 'select UTF-8 (ISO 2022)',
+            "\x1b%@" => 'select ASCII (ISO 2022)',
+            "\x1b/N" => 'ESC / N',
+            "\x1b 7" => 'ESC   7',
+        ];
+
+        foreach ($cases as $input => $label) {
+            $segments = Inspector::parse($input);
+            $this->assertCount(1, $segments, bin2hex($input));
+            $this->assertSame($input, $segments[0]->raw(), bin2hex($input));
+            $this->assertStringContainsString($label, $segments[0]->describe(), bin2hex($input));
+        }
+
+        // The bare arms stay gated on an empty intermediate: nothing with a
+        // collected byte may answer to DECSC/DECRC.
+        $this->assertStringNotContainsString('save cursor', Inspector::parse("\x1b 7")[0]->describe());
+        $this->assertStringNotContainsString('restore cursor', Inspector::parse("\x1b#8")[0]->describe());
+    }
+
     // --- describeSgr branches ---
 
     public function testDescribeSgrForegroundBasic(): void

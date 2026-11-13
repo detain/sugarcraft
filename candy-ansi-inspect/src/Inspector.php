@@ -755,8 +755,19 @@ final class Inspector
         };
     }
 
-    public static function describeEsc(string $byte): string
+    /**
+     * Names a two- or three-byte ESC sequence. The intermediate byte (the
+     * 0x20–0x2F the EscapeIntermediate state collects, finding 014) changes
+     * the final byte's meaning entirely — `ESC 8` is DECRC while `ESC # 8`
+     * is DECALN — so the bare-ESC arms are gated on its absence and an
+     * unexpected intermediate never borrows a bare label.
+     */
+    public static function describeEsc(string $byte, string $intermediate = ''): string
     {
+        if ($intermediate !== '') {
+            return self::describeEscWithIntermediate($byte, $intermediate);
+        }
+
         return match ($byte) {
             '7'  => 'save cursor (DECSC)',
             '8'  => 'restore cursor (DECRC)',
@@ -774,6 +785,42 @@ final class Inspector
             '\\' => 'string terminator (ST)',
             'c' => 'reset to initial state',
             default => 'ESC ' . $byte,
+        };
+    }
+
+    private static function describeEscWithIntermediate(string $byte, string $intermediate): string
+    {
+        return match (true) {
+            $intermediate === '#' && $byte === '8' => 'screen alignment test (DECALN)',
+            in_array($intermediate, ['(', ')', '*', '+'], true)
+                => 'charset ' . self::charsetSlot($intermediate) . ' ' . self::charsetName($byte),
+            $intermediate === '%' && $byte === 'G' => 'select UTF-8 (ISO 2022)',
+            $intermediate === '%' && $byte === '@' => 'select ASCII (ISO 2022)',
+            // Honest-generic: the bytes are on the wire but this table has
+            // no name for the pair — better than stealing a bare-ESC label.
+            default => 'ESC ' . $intermediate . ' ' . $byte,
+        };
+    }
+
+    private static function charsetSlot(string $intermediate): string
+    {
+        return match ($intermediate) {
+            '(' => 'G0',
+            ')' => 'G1',
+            '*' => 'G2',
+            '+' => 'G3',
+            default => '?',
+        };
+    }
+
+    private static function charsetName(string $byte): string
+    {
+        return match ($byte) {
+            '0' => 'DEC Special Graphics',
+            'B' => 'US/UK ASCII',
+            '7' => 'UK (British)',
+            '>' => 'DEC Technical',
+            default => 'designator ' . $byte,
         };
     }
 
