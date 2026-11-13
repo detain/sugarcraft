@@ -567,8 +567,8 @@
             </div>
             <div class="pillar">
                 <div class="icon">📦</div>
-                <h3>No native extensions</h3>
-                <p>Pure-PHP base flow. <code>ext-pcntl</code>, <code>ext-gd</code>, <code>ext-ssh2</code> are optional for niche features.</p>
+                <h3>Pure-PHP by default</h3>
+                <p>No build step, and the base flow needs nothing beyond a standard PHP-CLI. Only named features hard-gate an extension — <code>ext-ffi</code> for PTYs, <code>ext-gd</code> for imaging, <code>ext-sqlite3</code> for storage backends, <code>ext-mbstring</code>/<code>ext-intl</code> where Unicode is load-bearing. <code>ext-pcntl</code>, <code>ext-ssh2</code>, <code>ext-curl</code> stay optional suggestions with clean fallbacks.</p>
             </div>
         </div>
     </div>

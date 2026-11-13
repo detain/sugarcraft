@@ -155,8 +155,7 @@
             input, signal handling, alt-screen lifecycle.
         </p>
         <p>
-            <strong>Pick Symfony Console for</strong>: argument parsers, one-
-            shot scripts, pipeline tools, anything that exits cleanly after
+            <strong>Pick Symfony Console for</strong>: argument parsers, one-shot scripts, pipeline tools, anything that exits cleanly after
             printing a result.
         </p>
         <p>
@@ -223,16 +222,21 @@
                 <strong>SugarSshServer leans on OpenSSH</strong>. Rather than
                 re-implementing the SSH wire protocol, SugarSshServer runs as a
                 <code>ForceCommand</code> entry; sshd handles authentication,
-                ciphers, host keys, fail2ban, audit logs. You get a battle-
-                tested SSH stack and a clean middleware programming model.
+                ciphers, host keys, fail2ban, audit logs. You get a battle-tested SSH stack and a clean middleware programming model.
             </li>
             <li>
-                <strong>No build step.</strong> Every library is pure PHP,
-                installable via <code>composer require</code>, no native
-                extensions required for the base flow. <code>ext-pcntl</code>,
-                <code>ext-gd</code>, <code>ext-ssh2</code> are optional for
-                specific advanced features (signal handling, PNG → Sixel,
-                outbound SSH from inside a session).
+                <strong>No build step.</strong> The base flow is pure PHP —
+                installable via <code>composer require</code> with nothing
+                beyond a standard PHP-CLI build. Only named features
+                hard-gate an extension: <code>ext-ffi</code> (sugar-pty),
+                <code>ext-gd</code> (sugar-image, GIF codecs),
+                <code>ext-sqlite3</code>/<code>ext-pdo_sqlite</code>
+                (storage backends), and <code>ext-mbstring</code>/<code>ext-intl</code>
+                where Unicode handling is load-bearing.
+                <code>ext-pcntl</code>, <code>ext-ssh2</code>,
+                <code>ext-curl</code> and similar stay optional suggestions —
+                nicer signal handling, the SSH capability gate, faster HTTP —
+                each with a documented fallback when absent.
             </li>
             <li>
                 <strong>Forty libraries, twenty-two apps, sixty-two Composer packages.</strong>
