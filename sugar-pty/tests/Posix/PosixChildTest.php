@@ -6,6 +6,7 @@ namespace SugarCraft\Pty\Tests\Posix;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Pty\Posix\PosixChild;
+use SugarCraft\Pty\Posix\PosixProcess;
 use SugarCraft\Pty\Posix\PosixPtySystem;
 use SugarCraft\Pty\Contract\Child;
 
@@ -34,6 +35,35 @@ final class PosixChildTest extends TestCase
             $this->assertInstanceOf(PosixChild::class, $child);
         } finally {
             $pair->master()->close();
+        }
+    }
+
+    public function testPidAccessorAndPropertyAgreeOnEveryConcretive(): void
+    {
+        // PTY-14: the contract method and the promoted property must never
+        // diverge on the POSIX-side concretives (property access exists
+        // there natively; no bridge needed).
+        $process = \proc_open('sleep 0.2', [1 => ['pipe', 'w']], $pipes);
+        $this->assertIsResource($process);
+        $status = \proc_get_status($process);
+
+        try {
+            $child = new PosixChild($status['pid'], $process);
+            $this->assertSame($child->pid(), $child->pid);
+
+            $legacy = new \SugarCraft\Pty\Child($status['pid'], $process);
+            $this->assertSame($legacy->pid(), $legacy->pid);
+
+            $plain = new PosixProcess($status['pid'], $process);
+            $this->assertSame($plain->pid(), $plain->pid);
+        } finally {
+            foreach ($pipes as $pipe) {
+                if (\is_resource($pipe)) {
+                    \fclose($pipe);
+                }
+            }
+            \proc_terminate($process);
+            \proc_close($process);
         }
     }
 

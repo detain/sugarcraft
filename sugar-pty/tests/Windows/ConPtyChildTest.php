@@ -55,6 +55,18 @@ final class ConPtyChildTest extends TestCase
         self::assertSame(4000 + $process, $child->pid());
     }
 
+    public function testPropertyStylePidReadAgreesWithTheAccessor(): void
+    {
+        [$child] = $this->spawnOne();
+
+        // The contract declares the method; property-style readers get the
+        // same answer through the __get bridge (PTY-14).
+        self::assertSame($child->pid(), $child->pid);
+
+        $this->expectException(PtyException::class);
+        $child->noSuchProperty;
+    }
+
     public function testRunningChildIsNotExitedAndHasNoCodeYet(): void
     {
         [$child, $process] = $this->spawnOne();

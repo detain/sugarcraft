@@ -58,6 +58,26 @@ final class ConPtyChild implements Child
     }
 
     /**
+     * Bridge for legacy property-style reads of the process id. The contract
+     * declares only the {@see self::pid()} method and the promoted property
+     * is private, so `->pid` on a raw handle would otherwise read as an
+     * undefined property (null with a warning); route it to the accessor so
+     * both spellings agree. Any other name is a typo about to be found —
+     * fail loudly rather than launder it into null.
+     */
+    public function __get(string $name): int
+    {
+        if ($name !== 'pid') {
+            throw new PtyException(\sprintf(
+                'ConPtyChild exposes only the pid property bridge, got $%s',
+                $name,
+            ));
+        }
+
+        return $this->pid;
+    }
+
+    /**
      * Non-blocking poll. WAIT_TIMEOUT is the only "not yet" answer; a
      * WAIT_FAILED here means the handle is gone (released or foreign), and
      * guessing would hide a lifecycle bug.
