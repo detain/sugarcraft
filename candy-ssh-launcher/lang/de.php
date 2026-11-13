@@ -60,6 +60,9 @@ return [
     'cli.unsafe_option_effect_log_level' => 'ssh-Warnungen und Hinweise werden versteckt',
     'cli.unsafe_option_effect_identity_agent' => 'die Authentifizierung wird an einen anderen Agent-Socket delegiert',
     'cli.unsafe_option_effect_certificate_file' => 'ein zusätzliches Authentifizierungszertifikat wird angeboten',
+    'cli.ssh_config_source'  => 'candy-ssh-launcher: Endpunkte werden aus der ssh-Konfiguration importiert: {path}',
+    'cli.ssh_config_missing' => 'candy-ssh-launcher: keine ssh-Konfiguration unter {path} — mit --config <path> und --from-ssh-config eine andere Datei angeben',
+    'cli.config_is_ssh_config' => 'candy-ssh-launcher: {path} sieht wie eine OpenSSH-Konfiguration aus, keine Wishlist-Datei — importiere sie mit --from-ssh-config (optional mit --config <path>)',
 
     // picker chrome
     'picker.title'       => '── wishlist ──',

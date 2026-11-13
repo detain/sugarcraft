@@ -444,6 +444,101 @@ final class BinCliTest extends TestCase
         $this->assertSame(2, $code, 'stderr: ' . $err, 'the ssh gate passed on the env value; the non-TTY picker refusal answers next');
     }
 
+    public function testFromSshConfigImportsNamedFile(): void
+    {
+        // -078: --from-ssh-config with --config naming an OpenSSH config
+        // imports the Host blocks; the resolved source is announced on stderr.
+        $cwd = $this->makeTempDir('import-cwd');
+        $path = $this->writeFixture(
+            "Host web1\n  HostName web.example.com\n  User ops\n  Port 2200\n",
+            '.cfg',
+        );
+
+        [$code, $out, $err] = $this->runBin(
+            ['--config', $path, '--from-ssh-config', '--list'],
+            cwd: $cwd,
+        );
+
+        $this->assertSame(0, $code, 'stderr: ' . $err);
+        $this->assertStringContainsString("web1\tweb.example.com:2200\tops\n", $out);
+        $this->assertStringContainsString('importing endpoints from ssh config', $err);
+        $this->assertStringContainsString($path, $err, 'the banner names the resolved source path');
+    }
+
+    public function testFromSshConfigDefaultsToHomeSshConfig(): void
+    {
+        $cwd = $this->makeTempDir('import-default-cwd');
+        $home = $this->makeTempDir('import-default-home');
+        mkdir($home . '/.ssh', 0o700, true);
+        $this->scratchConfig($home . '/.ssh/config', "Host db1\n  HostName db.example.com\n  User postgres\n");
+
+        [$code, $out, $err] = $this->runBin(
+            ['--from-ssh-config', '--list'],
+            ['HOME' => $home],
+            cwd: $cwd,
+        );
+
+        $this->assertSame(0, $code, 'stderr: ' . $err);
+        $this->assertStringContainsString("db1\tdb.example.com:22\tpostgres\n", $out);
+        $this->assertStringContainsString($home . '/.ssh/config', $err);
+    }
+
+    public function testFromSshConfigMissingDefaultRefusesByPath(): void
+    {
+        $cwd = $this->makeTempDir('import-missing-cwd');
+        $home = $this->makeTempDir('import-missing-home');
+
+        [$code, , $err] = $this->runBin(
+            ['--from-ssh-config', '--list'],
+            ['HOME' => $home],
+            cwd: $cwd,
+        );
+
+        $this->assertSame(1, $code, 'stderr: ' . $err);
+        $this->assertStringContainsString('no ssh config at', $err);
+        $this->assertStringContainsString($home . '/.ssh/config', $err);
+    }
+
+    public function testFromSshConfigDefaultTierFacesTheTrustGate(): void
+    {
+        // The default ~/.ssh/config is auto-discovered — same fstat gate as
+        // the wishlist ladder, group-writable included.
+        $cwd = $this->makeTempDir('import-gate-cwd');
+        $home = $this->makeTempDir('import-gate-home');
+        mkdir($home . '/.ssh', 0o700, true);
+        file_put_contents($home . '/.ssh/config', "Host gate1\n  HostName g.test\n");
+        chmod($home . '/.ssh/config', 0o664);
+
+        [$code, $out, $err] = $this->runBin(
+            ['--from-ssh-config', '--list'],
+            ['HOME' => $home],
+            cwd: $cwd,
+        );
+
+        $this->assertSame(1, $code, 'stderr: ' . $err);
+        $this->assertStringContainsString('writable', $err);
+        $this->assertStringNotContainsString("gate1\tg.test", $out, 'nothing is listed past the refusal');
+    }
+
+    public function testConfigPointedAtSshConfigGetsThePointerNotFakeYaml(): void
+    {
+        // -078 sniff: a --config file whose bytes look like an OpenSSH config
+        // must answer with the --from-ssh-config pointer, never a bogus
+        // 'unparseable line' YAML complaint.
+        $cwd = $this->makeTempDir('pointer-cwd');
+        $path = $this->writeFixture(
+            "Host web1\n  HostName web.example.com\n  User ops\n\nHost *\n  ServerAliveInterval 30\n",
+            '.yml',
+        );
+
+        [$code, , $err] = $this->runBin(['--config', $path, '--list'], cwd: $cwd);
+
+        $this->assertSame(1, $code, 'stderr: ' . $err);
+        $this->assertStringContainsString('--from-ssh-config', $err);
+        $this->assertStringContainsString('OpenSSH config', $err);
+        $this->assertStringNotContainsString('unparseable', $err);
+    }
+
     public function testConfigWithoutValueIsRefused(): void
     {
         [$code, , $err] = $this->runBin(['--config']);

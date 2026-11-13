@@ -58,6 +58,9 @@ return [
     'cli.unsafe_option_effect_log_level' => 'ostrzeżenia i komunikaty ssh są ukrywane',
     'cli.unsafe_option_effect_identity_agent' => 'uwierzytelnianie jest delegowane do innego gniazda agenta',
     'cli.unsafe_option_effect_certificate_file' => 'oferowany jest dodatkowy certyfikat uwierzytelniania',
+    'cli.ssh_config_source'  => 'candy-ssh-launcher: importowanie punktów końcowych z konfiguracji ssh: {path}',
+    'cli.ssh_config_missing' => 'candy-ssh-launcher: brak konfiguracji ssh w {path} — podaj --config <path> z --from-ssh-config, aby wskazać inny plik',
+    'cli.config_is_ssh_config' => 'candy-ssh-launcher: {path} wygląda na konfigurację OpenSSH, a nie plik wishlist — zaimportuj go przez --from-ssh-config (opcjonalnie z --config <path>)',
 
     // picker chrome
     'picker.title'       => '── wishlist ──',

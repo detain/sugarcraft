@@ -6,7 +6,8 @@ declare(strict_types=1);
 /**
  * `candy-ssh-launcher` — SSH endpoint picker.
  *
- *   candy-ssh-launcher [--config <path>] [--ssh <ssh-binary>] [--list]
+ *   candy-ssh-launcher [--config <path>] [--ssh <ssh-binary>]
+ *                      [--from-ssh-config] [--list]
  *                      [-h|--help] [-v|--version] [--] [endpoint]
  *
  * Without `--config` the search order is: `wishlist.yml`,
@@ -23,8 +24,12 @@ declare(strict_types=1);
  * then the default
  * (`pcntl_exec` performs no `$PATH` search — a bare name like `ssh` fails
  * loudly at the gate below; relative paths resolve against the CWD).
- * `--list` prints the resolved endpoints and exits 0 without touching the
- * terminal or ssh — it stays safe to drive from pipes. An optional
+ * `--from-ssh-config` imports the endpoint list from an OpenSSH config
+ * instead of a wishlist file (named via `--config`, else the default
+ * `~/.ssh/config` — auto-discovered, so the same trust gate applies); the
+ * resolved source is named on stderr. `--list` prints the resolved
+ * endpoints and exits 0 without touching the terminal or ssh — it stays
+ * safe to drive from pipes. An optional
  * positional names an endpoint: exactly one match dispatches it directly
  * (all exit-3 guards honored, no terminal needed); an ambiguous or unknown
  * name falls back to the picker (prefilled with the matches when the name
@@ -113,6 +118,31 @@ $cfgPath = '';
 $sshBin = ''; // resolved after parsing: --ssh > SSH_LAUNCHER_SSH > candidates > DEFAULT_SSH
 $wantList = false;
 $wantName = ''; // -027: first bare positional — exact-unique match dispatches directly
+$wantFromSshConfig = false; // -024: import the list from an OpenSSH config, not a wishlist file
+
+// OpenSSH StrictModes precedent (carried from -023): a config nobody named
+// is judged by ownership and mode — both the wishlist ladder and the default
+// ~/.ssh/config tier of --from-ssh-config pass through here. A config owned
+// by another user, or writable by the group or the world, is refused by name;
+// the CWD tier is the file an attacker can plant most easily, so a repo
+// tarball row with `options: [ProxyCommand=...]` never wins the ladder
+// silently. A path named via --config skips this gate ON PURPOSE: naming a
+// path is consent.
+$trustGate = static function (string $path) use ($fail): void {
+    $stat = @stat($path);
+    if (!is_array($stat)) {
+        return;
+    }
+    $fileUid  = (int) $stat['uid'];
+    $myUid    = function_exists('posix_geteuid') ? posix_geteuid() : (int) getmyuid();
+    $ownPerms = (int) $stat['mode'] & 0o022;
+    if ($fileUid !== $myUid && $fileUid !== 0) {
+        $fail(Lang::t('cli.config_unowned', ['path' => Sanitize::untrusted($path)]), 1);
+    }
+    if ($ownPerms !== 0) {
+        $fail(Lang::t('cli.config_writable', ['path' => Sanitize::untrusted($path)]), 1);
+    }
+};
 
 $tokens = array_slice($argv, 1);
 $count = count($tokens);
@@ -161,6 +191,11 @@ for ($i = 0; $i < $count; $i++) {
         continue;
     }
 
+    if ($name === '--from-ssh-config') {
+        $wantFromSshConfig = true;
+        continue;
+    }
+
     if ($name !== '--config' && $name !== '--ssh') {
         // Unknown flags name the FULL token (glued value included) so the
         // user sees exactly what the program choked on.
@@ -189,9 +224,33 @@ for ($i = 0; $i < $count; $i++) {
 }
 
 // ---------------------------------------------------------------------------
+// --from-ssh-config route (-024): read the endpoint list from an OpenSSH
+// config instead of a wishlist file. The flag never engages on its own — an
+// auto-detected ssh_config must not silently replace the wishlist contract.
+// --config names the file when given; the default ~/.ssh/config is
+// auto-discovered and therefore faces the same trust gate as the ladder.
+// The resolved source is named on stderr: an imported list is a different
+// thing than the config the user's dotfiles would suggest.
+// ---------------------------------------------------------------------------
+if ($wantFromSshConfig) {
+    if ($cfgPath === '') {
+        $home = getenv('HOME');
+        if ($home === false || $home === '') {
+            $fail(Lang::t('cli.ssh_config_missing', ['path' => '~/.ssh/config']), 1);
+        }
+        $cfgPath = $home . '/.ssh/config';
+        $trustGate($cfgPath);
+    }
+    if (!is_file($cfgPath)) {
+        $fail(Lang::t('cli.ssh_config_missing', ['path' => Sanitize::untrusted($cfgPath)]), 1);
+    }
+    fwrite(STDERR, Lang::t('cli.ssh_config_source', ['path' => Sanitize::untrusted($cfgPath)]) . "\n");
+}
+
+// ---------------------------------------------------------------------------
 // Config file search (with HOME guard)
 // ---------------------------------------------------------------------------
-if ($cfgPath === '') {
+if (!$wantFromSshConfig && $cfgPath === '') {
     $home = getenv('HOME');
     $candidates = [];
     // Always check CWD first
@@ -223,24 +282,8 @@ if ($cfgPath === '') {
     }
     $cfgPath = $candidates[0];
 
-    // Trust gate on auto-discovered configs (OpenSSH StrictModes precedent):
-    // the CWD tier is the file an attacker can plant most easily — a repo
-    // tarball row with `options: [ProxyCommand=...]` would otherwise win the
-    // ladder silently. A config owned by another user, or writable by the
-    // group or the world, is refused by name. A config passed via --config
-    // skips this gate ON PURPOSE: naming a path is consent.
-    $stat = @stat($cfgPath);
-    if (is_array($stat)) {
-        $fileUid   = (int) $stat['uid'];
-        $myUid     = function_exists('posix_geteuid') ? posix_geteuid() : (int) getmyuid();
-        $ownPerms  = (int) $stat['mode'] & 0o022;
-        if ($fileUid !== $myUid && $fileUid !== 0) {
-            $fail(Lang::t('cli.config_unowned', ['path' => Sanitize::untrusted($cfgPath)]), 1);
-        }
-        if ($ownPerms !== 0) {
-            $fail(Lang::t('cli.config_writable', ['path' => Sanitize::untrusted($cfgPath)]), 1);
-        }
-    }
+    // Auto-discovered tier — same trust law as the --from-ssh-config default.
+    $trustGate($cfgPath);
     if ($cfgPath === 'wishlist.yml' || $cfgPath === 'wishlist.yaml' || $cfgPath === 'wishlist.json') {
         // The CWD tier won — say so, one line on stderr, then proceed.
         $cwd = getcwd();
@@ -277,8 +320,23 @@ if (!$wantList && (!is_file($sshBin) || !is_executable($sshBin))) {
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
+if (!$wantFromSshConfig) {
+    // Killing the live-proved misfire (-024): an OpenSSH config handed to
+    // the wishlist reader used to die as `wishlist yaml: unparseable line:
+    // Host=web1` — a parse error for a file that never claimed to be YAML.
+    // A leading `Host `/`Host=` line is the ssh_config keyword shape (the
+    // wishlist schema's own keys are lowercase), so the refusal names the
+    // file and points at the route that reads it instead.
+    $head = @file_get_contents($cfgPath, false, null, 0, 65536);
+    if (is_string($head) && preg_match('/^Host[ =]/m', $head) === 1) {
+        $fail(Lang::t('cli.config_is_ssh_config', ['path' => Sanitize::untrusted($cfgPath)]), 1);
+    }
+}
+
 try {
-    $endpoints = Config::load($cfgPath);
+    $endpoints = $wantFromSshConfig
+        ? Config::importFromSshConfig($cfgPath)
+        : Config::load($cfgPath);
 } catch (\Throwable $e) {
     // Config errors echo bytes taken from the file itself (paths, YAML
     // fragments) — the stderr channel wraps them as untrusted so a hostile

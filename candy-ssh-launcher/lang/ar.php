@@ -58,6 +58,9 @@ return [
     'cli.unsafe_option_effect_log_level' => "يتم إخفاء تحذيرات ssh وإشعاراتها",
     'cli.unsafe_option_effect_identity_agent' => "يتم تفويض المصادقة إلى مقبس وكيل آخر",
     'cli.unsafe_option_effect_certificate_file' => "يتم تقديم شهادة مصادقة إضافية",
+    'cli.ssh_config_source'  => "candy-ssh-launcher: يتم استيراد نقاط النهاية من تكوين ssh: \u{2066}{path}\u{2069}",
+    'cli.ssh_config_missing' => "candy-ssh-launcher: لا يوجد تكوين ssh في \u{2066}{path}\u{2069} — مرّر \u{2066}--config <path>\u{2069} مع \u{2066}--from-ssh-config\u{2069} لتسمية ملف آخر",
+    'cli.config_is_ssh_config' => "candy-ssh-launcher: يبدو \u{2066}{path}\u{2069} تكوين OpenSSH وليس ملف wishlist — استورده عبر \u{2066}--from-ssh-config\u{2069} (اختياريا مع \u{2066}--config <path>\u{2069})",
 
     // picker chrome
     'picker.title'       => '── wishlist ──',

@@ -58,6 +58,9 @@ return [
     'cli.unsafe_option_effect_log_level' => 'ssh uyarıları ve bildirimleri gizleniyor',
     'cli.unsafe_option_effect_identity_agent' => 'kimlik doğrulama başka bir ajan soketine devredildi',
     'cli.unsafe_option_effect_certificate_file' => 'ek bir kimlik doğrulama sertifikası sunuluyor',
+    'cli.ssh_config_source'  => 'candy-ssh-launcher: uç noktalar ssh yapılandırmasından aktarılıyor: {path}',
+    'cli.ssh_config_missing' => 'candy-ssh-launcher: {path} konumunda ssh yapılandırması yok — başka bir dosya belirtmek için --from-ssh-config ile birlikte --config <path> verin',
+    'cli.config_is_ssh_config' => 'candy-ssh-launcher: {path} bir wishlist dosyası değil, OpenSSH yapılandırmasına benziyor — --from-ssh-config ile içe aktarın (isterseniz --config <path> ile)',
 
     // picker chrome
     'picker.title'       => '── wishlist ──',

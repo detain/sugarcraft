@@ -58,6 +58,9 @@ return [
     'cli.unsafe_option_effect_log_level' => 'ssh 警告与提示被隐藏',
     'cli.unsafe_option_effect_identity_agent' => '身份认证被委托给另一个代理套接字',
     'cli.unsafe_option_effect_certificate_file' => '提供了额外的身份认证证书',
+    'cli.ssh_config_source'  => 'candy-ssh-launcher: 正在从 ssh 配置导入端点：{path}',
+    'cli.ssh_config_missing' => 'candy-ssh-launcher: {path} 没有 ssh 配置 —— 要指定其他文件，请将 --config <path> 与 --from-ssh-config 一起使用',
+    'cli.config_is_ssh_config' => 'candy-ssh-launcher: {path} 看起来是 OpenSSH 配置而非 wishlist 文件 —— 请用 --from-ssh-config 导入（可选配合 --config <path> 指定文件）',
 
     // picker chrome
     'picker.title'       => '── wishlist ──',

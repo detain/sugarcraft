@@ -58,6 +58,9 @@ return [
     'cli.unsafe_option_effect_log_level' => 'ssh-waarschuwingen en meldingen worden verborgen',
     'cli.unsafe_option_effect_identity_agent' => 'authenticatie wordt gedelegeerd naar een andere agent-socket',
     'cli.unsafe_option_effect_certificate_file' => 'er wordt een extra authenticatiecertificaat aangeboden',
+    'cli.ssh_config_source'  => 'candy-ssh-launcher: endpoints worden geïmporteerd uit de ssh-configuratie: {path}',
+    'cli.ssh_config_missing' => 'candy-ssh-launcher: geen ssh-configuratie op {path} — geef --config <path> met --from-ssh-config op om een ander bestand te noemen',
+    'cli.config_is_ssh_config' => 'candy-ssh-launcher: {path} lijkt op een OpenSSH-configuratie, geen wishlist-bestand — importeer het met --from-ssh-config (optioneel met --config <path>)',
 
     // picker chrome
     'picker.title'       => '── wishlist ──',

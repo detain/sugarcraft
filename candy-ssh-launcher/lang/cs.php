@@ -58,6 +58,9 @@ return [
     'cli.unsafe_option_effect_log_level' => 'varování a upozornění ssh jsou skryta',
     'cli.unsafe_option_effect_identity_agent' => 'ověření je delegováno na jiný socket agenta',
     'cli.unsafe_option_effect_certificate_file' => 'je nabízen další autentizační certifikát',
+    'cli.ssh_config_source'  => 'candy-ssh-launcher: importuji endpointy ze ssh konfigurace: {path}',
+    'cli.ssh_config_missing' => 'candy-ssh-launcher: žádná ssh konfigurace v {path} — jiný soubor zadáte přepínačem --config <path> s --from-ssh-config',
+    'cli.config_is_ssh_config' => 'candy-ssh-launcher: {path} vypadá jako konfigurace OpenSSH, ne soubor wishlist — nahrajte ji přes --from-ssh-config (volitelně s --config <path>)',
 
     // picker chrome
     'picker.title'       => '── wishlist ──',

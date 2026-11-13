@@ -58,6 +58,9 @@ return [
     'cli.unsafe_option_effect_log_level' => 'предупреждения и уведомления ssh скрыты',
     'cli.unsafe_option_effect_identity_agent' => 'аутентификация делегирована другому сокету агента',
     'cli.unsafe_option_effect_certificate_file' => 'предложен дополнительный сертификат аутентификации',
+    'cli.ssh_config_source'  => 'candy-ssh-launcher: импорт эндпоинтов из конфигурации ssh: {path}',
+    'cli.ssh_config_missing' => 'candy-ssh-launcher: конфигурация ssh не найдена: {path} — укажите другой файл, передав --config <path> вместе с --from-ssh-config',
+    'cli.config_is_ssh_config' => 'candy-ssh-launcher: {path} похож на конфигурацию OpenSSH, а не на файл wishlist — импортируйте его с --from-ssh-config (при необходимости с --config <path>)',
 
     // picker chrome
     'picker.title'       => '── wishlist ──',

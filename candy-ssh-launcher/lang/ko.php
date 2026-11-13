@@ -58,6 +58,9 @@ return [
     'cli.unsafe_option_effect_log_level' => 'ssh 경고와 알림이 숨겨집니다',
     'cli.unsafe_option_effect_identity_agent' => '인증이 다른 에이전트 소켓으로 위임됩니다',
     'cli.unsafe_option_effect_certificate_file' => '추가 인증 자격 증명이 제시됩니다',
+    'cli.ssh_config_source'  => 'candy-ssh-launcher: ssh 구성에서 엔드포인트를 가져옵니다: {path}',
+    'cli.ssh_config_missing' => 'candy-ssh-launcher: {path}에 ssh 구성이 없습니다 — 다른 파일을 지정하려면 --from-ssh-config와 함께 --config <path>를 사용하세요',
+    'cli.config_is_ssh_config' => 'candy-ssh-launcher: {path}은(는) wishlist 파일이 아니라 OpenSSH 구성으로 보입니다 — --from-ssh-config로 가져오세요 (필요하면 --config <path>로 파일을 지정)',
 
     // picker chrome
     'picker.title'       => '── wishlist ──',

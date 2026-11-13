@@ -89,13 +89,14 @@ If step 2 exits `1` with a "no config found" refusal, the launcher never saw the
 ## Usage
 
 ```
-candy-ssh-launcher [--config <path>] [--ssh <ssh-binary>] [--list] [-h|--help] [-v|--version] [--] [endpoint]
+candy-ssh-launcher [--config <path>] [--ssh <ssh-binary>] [--from-ssh-config] [--list] [-h|--help] [-v|--version] [--] [endpoint]
 ```
 
 | Argument | Meaning |
 |----------|---------|
 | `endpoint` (positional) | Connect by name. Exactly one endpoint with that name dispatches it directly — no terminal needed, all dispatch guards honored. An ambiguous name (duplicates are loaded with a warning, not refused) opens the picker pre-filtered to the matches; an unknown name opens the full picker. A second bare token is refused as an unknown argument. |
 | `--config <path>` | Read this config file and skip the search. Accepts `--config <path>` and `--config=<path>`; a missing value is refused. |
+| `--from-ssh-config` | Import the endpoint list from an OpenSSH config instead of a wishlist file. With `--config <path>` it reads that file; without it the default `~/.ssh/config` is used — auto-discovered, so the same ownership/writability trust gate applies as on the wishlist ladder. The resolved source is named on stderr. A wishlist-format refusal on an ssh-config-style file names this flag as the route instead of printing a fake-YAML parse error. |
 | `--ssh <path>` | ssh binary to exec. Must be an **existing executable path** — `pcntl_exec` performs no `$PATH` search, so a bare `ssh` is rejected; relative paths resolve against the current directory. Accepts `--ssh <path>` and `--ssh=<path>`. Without the flag the binary resolves through the environment variable `SSH_LAUNCHER_SSH`, then the candidate list (`/usr/bin/ssh`, `/run/current-system/sw/bin/ssh`, `/opt/homebrew/bin/ssh` — first existing executable wins), then the default `/usr/bin/ssh`. A config row may override this for itself with `command:` (see the field table). |
 | `--list` | Print the resolved endpoints to stdout as TAB-joined `name`, `host:port`, `user` columns (an unset or empty user prints as a literal `-`; a name that occurs more than once is suffixed with its 1-based config index, `dup#1`/`dup#3`), and exit `0` — no terminal, no ssh, no picker, and no `--ssh` executability check. Control and line bytes in every column are folded to spaces, so the output is exactly one physical row per endpoint and safe to `awk -F'\t'`. |
 | `-h`, `--help` | Print the usage line and exit `0`. |
@@ -209,7 +210,14 @@ The interactive picker owns the **alternate screen buffer** — it enters on the
 
 ## Import from ssh config
 
-`candy-ssh-launcher` can import endpoints directly from your OpenSSH config file (`~/.ssh/config`):
+The launcher imports endpoints directly from your OpenSSH config file. From the command line:
+
+```sh
+candy-ssh-launcher --from-ssh-config --list   # show what the import yields
+candy-ssh-launcher --from-ssh-config          # pick from the imported list
+```
+
+The default file is `~/.ssh/config`; pass `--config <path>` together with the flag to import another file instead. The resolved source is named on stderr before anything else runs. The default file is auto-discovered and faces the same ownership/writability trust gate as the wishlist ladder; naming it via `--config` is consent and skips the gate. Pointing `--config` at an ssh-config-style file *without* the flag refuses with a pointer to `--from-ssh-config` — never a fake-YAML `unparseable line` error. Programmatically:
 
 ```php
 use SugarCraft\SshLauncher\Config;

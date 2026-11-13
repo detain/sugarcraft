@@ -58,6 +58,9 @@ return [
     'cli.unsafe_option_effect_log_level' => 'ssh の警告と通知が非表示になります',
     'cli.unsafe_option_effect_identity_agent' => '認証が別のエージェントソケットに委任されています',
     'cli.unsafe_option_effect_certificate_file' => '追加の認証証明書が提示されています',
+    'cli.ssh_config_source'  => 'candy-ssh-launcher: ssh 設定からエントリをインポートしています：{path}',
+    'cli.ssh_config_missing' => 'candy-ssh-launcher: {path} に ssh 設定はありません — 別のファイルを指定するには --from-ssh-config とともに --config <path> を指定してください',
+    'cli.config_is_ssh_config' => 'candy-ssh-launcher: {path} は wishlist ファイルではなく OpenSSH 設定と思われます — --from-ssh-config でインポートしてください（必要なら --config <path> でファイルを指定）',
 
     // picker chrome
     'picker.title'       => '── wishlist ──',

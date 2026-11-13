@@ -59,6 +59,9 @@ return [
     'cli.unsafe_option_effect_log_level' => 'ssh warnings and notices are hidden',
     'cli.unsafe_option_effect_identity_agent' => 'authentication is delegated to another agent socket',
     'cli.unsafe_option_effect_certificate_file' => 'an extra authentication certificate is offered',
+    'cli.ssh_config_source'  => 'candy-ssh-launcher: importing endpoints from ssh config: {path}',
+    'cli.ssh_config_missing' => 'candy-ssh-launcher: no ssh config at {path} — pass --config <path> with --from-ssh-config to name another file',
+    'cli.config_is_ssh_config' => 'candy-ssh-launcher: {path} looks like an OpenSSH config, not a wishlist file — import it with --from-ssh-config (optionally with --config <path> to name the file)',
 
     // picker chrome
     'picker.title'       => '── wishlist ──',
