@@ -85,7 +85,8 @@ use SugarCraft\Top\View\Surface;
  * under 200 ms ago; the press time is read in a Cmd ({@see UpdateStepMsg}).
  *
  * Input precedence (full rule on {@see Panel}): `ctrl+c` always quits.
- * Behind the size notice only `q` and `1`-`4` act. Otherwise an open menu
+ * Behind the size notice only `q`, the box toggles `1`-`4`, `v` and the
+ * gpu slot keys `5`-`0` act (see {@see sizeNoticeKey()}). Otherwise an open menu
  * ({@see Overlay} on top of the App's {@see OverlayStack}, btop's
  * `Menu::active`) takes every key and mouse event. Otherwise a visible
  * panel reporting {@see Panel::modal()} (btop's open proc filter) gets
@@ -127,8 +128,10 @@ use SugarCraft\Top\View\Surface;
  *
  * Resize: WindowSizeMsg is the only size truth; it re-runs the calcSizes
  * port and the next view repaints everything. A terminal below the
- * shown boxes' minimum shows btop's size notice, where only `q` and the
- * box toggles 1-4 work (btop.cpp:180-198).
+ * shown boxes' minimum shows btop's size notice, where `q`, the box
+ * toggles 1-4, `v` and the gpu slot keys 5-0 act — btop has only the
+ * first two (btop.cpp:180-198), the rest are candy-top escapes so the
+ * notice can never trap the user.
  *
  * GPU boxes (btop PR #1730/#1881): every `gpuN` box in shown_boxes is
  * drawn by the ONE panel registered as `gpu` ({@see panelFor()}); the

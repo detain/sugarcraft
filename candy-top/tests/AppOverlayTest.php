@@ -220,7 +220,7 @@ final class AppOverlayTest extends TestCase
         $this->assertSame('error', $tiny->overlay()?->title);
         $this->assertStringContainsString('Terminal size too small', implode("\n", $tiny->surface()?->plainLines() ?? []));
         [$tiny] = $tiny->update(self::keyMsg('x'));
-        $this->assertSame('error', $tiny->overlay()?->title, 'behind the notice only q and 1-4 act');
+        $this->assertSame('error', $tiny->overlay()?->title, 'behind the notice only q, 1-4, v and the gpu slot keys act');
         [$back] = $tiny->update(new WindowSizeMsg(120, 40));
         $this->assertInstanceOf(MsgBox::class, $back->overlay(), '#126: a dropped menu never revives mid-interaction on refit');
         $this->assertNotInstanceOf(HelpMenu::class, $back->overlay());
