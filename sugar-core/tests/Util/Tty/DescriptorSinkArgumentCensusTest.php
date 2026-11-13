@@ -198,6 +198,13 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
             'CORRECT. $this->fd is the `int $fd` constructor parameter -- a descriptor the '
             . 'caller supplied, never a cast of a stream.',
         ],
+        'sugar-pty/src/Posix/PosixTermios.php::->isatty($this->fd)' => [
+            DescriptorSinkScanner::VARIABLE,
+            'CORRECT. The ext-posix fallback arm of isAtty() added by PTY-29: the SAME `int $fd` '
+            . 'constructor parameter as the posix_isatty() row above, now through the method '
+            . 'spelling -- $this->libc->isatty($this->fd) on the cdef-declared isatty(3) of the '
+            . 'libc handle this class already holds. Caller-supplied descriptor, genuine sink.',
+        ],
         'sugar-pty/src/Posix/SttyTermios.php::posix_isatty($this->fd)' => [
             DescriptorSinkScanner::VARIABLE,
             'CORRECT. Same shape and same reason as PosixTermios.',
@@ -268,30 +275,22 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
             . 'the one above -- before the ordinal existed these two collapsed into one row and '
             . 'only the later survived.',
         ],
-        'sugar-pty/src/Posix/PosixMasterPty.php::->dup($this->fd)' => [
+        'sugar-pty/src/Posix/PosixMasterPty.php::->close($fd)' => [
             DescriptorSinkScanner::VARIABLE,
-            'CORRECT. The promoted constructor parameter. `dup` is one of the five symbols the '
-            . 'backlog\'s hand-written alternation could not express.',
+            'CORRECT. closeRawFd(int $fd) -- the PTY-38 static sweep door: the pool-owned creator-side '
+            . 'fd captured at pair creation and deliberately released when both pair and master are '
+            . 'collected (non-ptmx readlink guard refuses recycled numbers). Genuine libc close on a '
+            . 'genuine int descriptor.',
         ],
         'sugar-pty/src/Posix/PosixMasterPty.php::->close($this->fd)' => [
             DescriptorSinkScanner::VARIABLE,
             'CORRECT. Same field, released on close().',
         ],
-        'sugar-pty/src/Posix/PosixMasterPty.php::->close($stableFd)' => [
-            DescriptorSinkScanner::VARIABLE,
-            'CORRECT. The return value of the `dup($this->fd)` taken earlier in the same '
-            . 'close(), released again once the original has been closed. (Cited by what it IS, '
-            . 'not by position: this roster is an insertion-ordered array that several lanes '
-            . 'append to, so "two rows up" rots at the next merge.) Releasing it is the whole '
-            . 'point -- before that, close() leaked one /dev/ptmx descriptor per master that had '
-            . 'been read from or written to, MEASURED linear over five cycles with a no-stream '
-            . 'control leaking none. It does NOT "hold the description alive across the close", '
-            . 'which is what this row used to say: MEASURED, PHP 8.3.6, fopen(php://fd/N) '
-            . 'allocates a new descriptor and fclose() closes that one, so $this->fd is open '
-            . 'continuously and the recycle race it was written for cannot arise. See the '
-            . 'three-part note on the block itself in PosixMasterPty::close(). Local to close(), '
-            . 'guarded by `>= 0`, and never a cast of a PHP stream.',
-        ],
+        // The ->dup($this->fd) and ->close($stableFd) rows retired here: the
+        // sugar-pty-038 ghost-hunt deleted the dup/stableFd seam (the
+        // "FD reuse race" the pair defended was measured not to exist -- see
+        // the HISTORY note at the surviving close() site). Sites gone from the
+        // tree; guard says delete the row.
 
         // sugar-pty/PosixPtySystem. `$masterFd` comes from openPtyMaster(),
         // i.e. posix_openpt(); `$slaveFd` from `$libc->open($slavePath, ...)`;
@@ -403,22 +402,10 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
             . 'and answers null (so no call is made) when no entry or more than one matches. '
             . 'Never a cast of a PHP stream.',
         ],
-        'candy-code/src/Tools/IgnoreRules.php::->close($start)' => [
-            DescriptorSinkScanner::VARIABLE,
-            'NOT A LIBC CALL, the start-state closure in simulate(). IgnoreRules::close() is a private static helper of the gitignore glob automaton (audit F-T5): it adds an NFA state and its epsilon-reachable successors to a state SET passed by reference. Its first argument is an array, not a descriptor; it shares only the word close with libc close(2).',
-        ],
-        'candy-code/src/Tools/IgnoreRules.php::->close($next)' => [
-            DescriptorSinkScanner::VARIABLE,
-            'NOT A LIBC CALL, the `/` that ends one `(?:[^/]+/)` iteration in step(). IgnoreRules::close() is a private static helper of the gitignore glob automaton (audit F-T5): it adds an NFA state and its epsilon-reachable successors to a state SET passed by reference. Its first argument is an array, not a descriptor; it shares only the word close with libc close(2).',
-        ],
-        'candy-code/src/Tools/IgnoreRules.php::->close($next) #2' => [
-            DescriptorSinkScanner::VARIABLE,
-            'NOT A LIBC CALL, a byte inside a `[...]` class in step(). IgnoreRules::close() is a private static helper of the gitignore glob automaton (audit F-T5): it adds an NFA state and its epsilon-reachable successors to a state SET passed by reference. Its first argument is an array, not a descriptor; it shares only the word close with libc close(2).',
-        ],
-        'candy-code/src/Tools/IgnoreRules.php::->close($next) #3' => [
-            DescriptorSinkScanner::VARIABLE,
-            'NOT A LIBC CALL, a literal, `?`, `*` or `**` advance in step(). IgnoreRules::close() is a private static helper of the gitignore glob automaton (audit F-T5): it adds an NFA state and its epsilon-reachable successors to a state SET passed by reference. Its first argument is an array, not a descriptor; it shares only the word close with libc close(2).',
-        ],
+        // The four `candy-code/src/Tools/IgnoreRules.php::->close($…)` rows
+        // retired here: the gitignore matcher moved to sugar-ignore/src/Automaton.php
+        // (f8d87af46, "extracted from candy-code") and the census re-prints the sites
+        // under their new spelling — the sugar-ignore rows below carry the judgements.
 
         // ---- candy-discord Gateway websocket-close family ---------------
         // Landed with the code-chat merge (2026-11-11, master aa2a5b93c);
@@ -700,6 +687,27 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
             DescriptorSinkScanner::VARIABLE,
             'NOT A LIBC CALL, send(). $cmd is the local `Menus::sendSignal($this->control, $this->pid, $signal)` bound just above -- respelled from the inline call expression. $signal is a signal number, not a descriptor, and it never reaches close(). '
             . 'OverlayResult::close() is the overlay stack\'s named constructor (btop `Closed`): it closes the overlay and carries an optional Cmd closure, typed `?\\Closure`. It shares only the word close with libc close(2); no descriptor is anywhere near it.',
+        ],
+        'sugar-ignore/src/Automaton.php::->close($start)' => [
+            DescriptorSinkScanner::VARIABLE,
+            'NOT A LIBC CALL, the automaton-rebuild arm of match(). `close` is the private static NFA epsilon-closure of the subset construction -- '
+            . 'private static function close(array &$set, int $state, array $tokens, int $m): void marks every state reachable from $state through STAR/GLOBSTAR/DIRS edges into $set[$state] = true. '
+            . '$start is the fresh live-state set being filled from state 0: an array of NFA states, passed by reference. No descriptor anywhere near it.',
+        ],
+        'sugar-ignore/src/Automaton.php::->close($next)' => [
+            DescriptorSinkScanner::VARIABLE,
+            'NOT A LIBC CALL, step() closing a name leg: when the `/` byte returns the machine from inside a `[^/]+/` iteration (a state above $m) to the boundary state, its epsilon-closure folds into the next live-state set. '
+            . 'Same private DFA-closure helper as the $start row; $next is that state set, not a file handle.',
+        ],
+        'sugar-ignore/src/Automaton.php::->close($next) #2' => [
+            DescriptorSinkScanner::VARIABLE,
+            'NOT A LIBC CALL, step() CLASS_ arm: the epsilon-closure of $state + 1 after a character-class hit. '
+            . 'A second site spelled exactly like the $next row, hence the ordinal; same DFA-closure helper, same live-state array.',
+        ],
+        'sugar-ignore/src/Automaton.php::->close($next) #3' => [
+            DescriptorSinkScanner::VARIABLE,
+            'NOT A LIBC CALL, step() generic-advance arm: the epsilon-closure of the $advance state computed by the LITERAL/ONE/STAR/GLOBSTAR match just above. '
+            . 'A third site spelled exactly like the $next row, hence the ordinal; same DFA-closure helper, same live-state array.',
         ],
     ];
 
