@@ -24,12 +24,49 @@ final class BinCliTest extends TestCase
     /** @var list<string> */
     private array $tempFiles = [];
 
+    /** @var list<string> */
+    private array $tempDirs = [];
+
     protected function tearDown(): void
     {
         foreach ($this->tempFiles as $path) {
             @unlink($path);
         }
         $this->tempFiles = [];
+        foreach ($this->tempDirs as $dir) {
+            self::removeTree($dir);
+        }
+        $this->tempDirs = [];
+    }
+
+    /**
+     * A scratch directory for ladder pins: the config search is relative to
+     * the child's CWD and $HOME, so both must be real dirs the test owns
+     * (never the lib root — its content is not the test's to assume).
+     */
+    private function makeTempDir(string $prefix): string
+    {
+        $dir = sys_get_temp_dir() . '/sshlaunch-' . $prefix . '-' . bin2hex(random_bytes(6));
+        mkdir($dir, 0777, true);
+        $this->tempDirs[] = $dir;
+
+        return $dir;
+    }
+
+    private static function removeTree(string $dir): void
+    {
+        foreach (scandir($dir) ?: [] as $entry) {
+            if ($entry === '.' || $entry === '..') {
+                continue;
+            }
+            $path = $dir . '/' . $entry;
+            if (is_dir($path)) {
+                self::removeTree($path);
+            } else {
+                @unlink($path);
+            }
+        }
+        @rmdir($dir);
     }
 
     /**
@@ -55,17 +92,20 @@ final class BinCliTest extends TestCase
      * @param array<string,string> $extraEnv merged over the minimal env
      * @param string $stdin bytes written to the child's stdin before close
      *                     ('' keeps the historical immediately-closed shape)
+     * @param string|null $cwd child working directory (null = lib root; the
+     *                     ladder pins pass a scratch dir so the CWD tier is
+     *                     something the test created, never repo content)
      * @return array{int,string,string}
      */
-    private function runBin(array $args, array $extraEnv = [], string $stdin = ''): array
+    private function runBin(array $args, array $extraEnv = [], string $stdin = '', ?string $cwd = null): array
     {
         $cmd = array_merge([PHP_BINARY, self::BIN], $args);
         $proc = proc_open(
             $cmd,
             [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
             $pipes,
-            \dirname(__DIR__),
-            ['PATH' => '/usr/bin:/bin', 'HOME' => \sys_get_temp_dir()] + $extraEnv,
+            $cwd ?? \dirname(__DIR__),
+            array_merge(['PATH' => '/usr/bin:/bin', 'HOME' => \sys_get_temp_dir()], $extraEnv),
         );
         $this->assertIsResource($proc);
         if ($stdin !== '') {
@@ -129,16 +169,16 @@ final class BinCliTest extends TestCase
     public function testMissingConfigStillFailsLoudly(): void
     {
         // --ssh to a real binary so the ssh guard passes and we reach the
-        // config probe. HOME points at a temp dir with no wishlist config
-        // (and the lib root carries none). With BOTH search tiers now
-        // existence-gated (2026-10-23), the run stops with the honest
-        // "no config found — pass --config" message instead of the old
-        // lie about a nonexistent path being "not found".
-        $probe = \dirname(__DIR__) . '/wishlist.yml';
-        if (is_file($probe)) {
-            $this->markTestSkipped('lib root unexpectedly carries a wishlist.yml fixture');
-        }
-        [$code, , $err] = $this->runBin(['--ssh', '/bin/true']);
+        // config probe. Both search tiers are scratch dirs the test created
+        // (sshl-36: the old lib-root probe + markTestSkipped guard assumed
+        // repo content — a scratch CWD + scratch HOME is the honest shape).
+        // With BOTH tiers existence-gated (2026-10-23), the run stops with
+        // the honest "no config found — pass --config" message instead of
+        // the old lie about a nonexistent path being "not found".
+        $cwd = $this->makeTempDir('nocfg-cwd');
+        $home = $this->makeTempDir('nocfg-home');
+
+        [$code, , $err] = $this->runBin(['--ssh', '/bin/true'], ['HOME' => $home], cwd: $cwd);
 
         $this->assertSame(1, $code, 'stderr: ' . $err);
         $this->assertStringContainsString('no config', $err);
@@ -158,6 +198,67 @@ final class BinCliTest extends TestCase
 
         $this->assertSame(1, $code, 'stderr: ' . $err);
         $this->assertStringContainsString('not found', $err);
+    }
+
+    // ------------------------------------------------------------------
+    // Config-ladder pins (sshl-36 / finding -045): regress the CWD-first,
+    // existence-gated search BEFORE -23/-24/-27 reshape it, so those
+    // changes are red-green and not blue-sky.
+    // ------------------------------------------------------------------
+
+    public function testLadderCwdYmlBeatsHomeJson(): void
+    {
+        $cwd = $this->makeTempDir('ladder-a-cwd');
+        $home = $this->makeTempDir('ladder-a-home');
+        mkdir($home . '/.config');
+        file_put_contents($cwd . '/wishlist.yml', "- name: cwdbox\n  host: c.test\n");
+        file_put_contents($home . '/.config/wishlist.json', json_encode([
+            ['name' => 'homebox', 'host' => 'h.test'],
+        ]) . "\n");
+
+        [$code, $out, $err] = $this->runBin(
+            ['--ssh', '/bin/true', '--list'],
+            ['HOME' => $home],
+            cwd: $cwd,
+        );
+
+        $this->assertSame(0, $code, 'stderr: ' . $err);
+        $this->assertSame("cwdbox\tc.test:22\t-\n", $out, 'the current directory wins outright; the HOME tier never loads');
+    }
+
+    public function testLadderHomeYamlResolvesWhenYmlAbsent(): void
+    {
+        // The 2026-10-23 shadowing bug's regression shape: the HOME tier
+        // used to append ~/.config/wishlist.yml UNCONDITIONALLY, so a file
+        // nobody had (wishlist.yaml) was shadowed by a file nobody has, and
+        // the run died on "not found" for a path that does not exist. The
+        // pin reddens if either existence gate at the bin ladder is reverted.
+        $cwd = $this->makeTempDir('ladder-b-cwd');
+        $home = $this->makeTempDir('ladder-b-home');
+        mkdir($home . '/.config');
+        file_put_contents($home . '/.config/wishlist.yaml', "- name: yamltier\n  host: y.test\n");
+
+        [$code, $out, $err] = $this->runBin(
+            ['--ssh', '/bin/true', '--list'],
+            ['HOME' => $home],
+            cwd: $cwd,
+        );
+
+        $this->assertSame(0, $code, 'stderr: ' . $err);
+        $this->assertSame("yamltier\ty.test:22\t-\n", $out, 'first HOME candidate that EXISTS wins');
+    }
+
+    public function testLadderEmptyHomeLeaksNoSlashConfigProbe(): void
+    {
+        // HOME='' must skip the whole home tier — no '/./config/…' path may
+        // surface in any message (the pre-guard era probed it literally).
+        $cwd = $this->makeTempDir('ladder-c-cwd');
+
+        [$code, , $err] = $this->runBin(['--ssh', '/bin/true'], ['HOME' => ''], cwd: $cwd);
+
+        $this->assertSame(1, $code, 'stderr: ' . $err);
+        $this->assertStringContainsString('no config', $err);
+        $this->assertStringNotContainsString('/./config', $err, 'the refusal may teach ~/.config/… (a path), never interpolate an empty HOME into a probe path');
     }
 
     public function testConfigWithoutValueIsRefused(): void
@@ -192,12 +293,12 @@ final class BinCliTest extends TestCase
     {
         // Everything after `--` is not read: the bogus flags beneath would
         // each be exit-2-worthy on their own; the run must reach the
-        // config stage (exit 1 here, with no config around).
-        $probe = \dirname(__DIR__) . '/wishlist.yml';
-        if (is_file($probe)) {
-            $this->markTestSkipped('lib root unexpectedly carries a wishlist.yml fixture');
-        }
-        [$code, , $err] = $this->runBin(['--', '--bogus=1', '-x']);
+        // config stage (exit 1 here, with no config around — scratch dirs
+        // per sshl-36, never a lib-root assumption).
+        $cwd = $this->makeTempDir('dash-cwd');
+        $home = $this->makeTempDir('dash-home');
+
+        [$code, , $err] = $this->runBin(['--', '--bogus=1', '-x'], ['HOME' => $home], cwd: $cwd);
 
         $this->assertSame(1, $code, 'expected the terminator to silence arg checking, got: ' . $err);
         $this->assertStringContainsString('no config', $err);
