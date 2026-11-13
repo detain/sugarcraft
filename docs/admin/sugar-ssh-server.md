@@ -352,9 +352,11 @@ token buckets (`burst`, `ratePerSec`); per-username buckets are opt-in
 via `$userBurst`/`$userRatePerSec` (a request must get a token from
 *both* buckets, and a rejection consumes neither). `penalize()` lets an
 auth-failure hook drain buckets faster than connection attempts alone -- but
-nothing in this library calls it: the shipped gates know nothing about whose
-bucket to blame. Wire it yourself after a denied `PasswordAuth` or
-`KeyboardInteractive` attempt if you want the penalty to exist.
+no shipped gate calls it on its own: the gates know nothing about whose
+bucket to blame. `AuthRateLimitBridge` supplies the wiring — wrap the gate
+once and each of its refusals charges the offending session's buckets the
+bridge penalty. Wire `penalize()` yourself instead only for penalties the
+bridge's rule (gate refused => charge) does not describe.
 
 - **Ordering law:** register `RateLimit` **before** any
   authentication middleware, or unauthenticated traffic reaches the

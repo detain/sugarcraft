@@ -502,8 +502,12 @@ final class DocSurfaceTruthTest extends TestCase
         self::assertStringContainsString('`CertificateAuth::ENV_KEYS`', $flat);
         self::assertStringNotContainsString('Validates X.509 peer certificate (`SSL_CLIENT_CERT` / `SSH_CLIENT_CERT` env vars).', $flat);
 
-        // penalize(): real method, no caller (audit MAJOR 20).
-        self::assertStringContainsString('nothing in this library calls it', $flat);
+        // penalize(): the gates still never call it on their own, but the
+        // bridge is the shipped wiring (superseded MAJOR-20 sentence,
+        // re-anchored with the bridge step — README and guide must agree).
+        self::assertStringContainsString('no gate calls it directly', $flat);
+        self::assertStringContainsString('wrap the gate in `AuthRateLimitBridge`', $flat);
+        self::assertStringNotContainsString('nothing in this library calls it', $flat);
 
         $guide = $this->adminGuide();
         if ($guide === null) {
@@ -511,7 +515,12 @@ final class DocSurfaceTruthTest extends TestCase
         }
 
         $guide = (string) \preg_replace('/\s+/', ' ', $guide);
-        self::assertStringContainsString('nothing in this library calls it', $guide);
+        // The guide tells the bridged story in the same breath the README
+        // does: gates still do not charge on their own, the bridge is the
+        // shipped wiring, and the dead MAJOR-20 sentence stays dead.
+        self::assertStringContainsString('no shipped gate calls it on its own', $guide);
+        self::assertStringContainsString('`AuthRateLimitBridge` supplies the wiring', $guide);
+        self::assertStringNotContainsString('nothing in this library calls it', $guide);
         self::assertStringNotContainsString('drain buckets faster than connection attempts alone.', $guide);
     }
 
