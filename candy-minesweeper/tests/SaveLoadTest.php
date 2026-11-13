@@ -383,4 +383,34 @@ final class SaveLoadTest extends TestCase
             @rmdir($xdgDir);
         }
     }
+
+    public function testARelativeXdgConfigHomeNeverSteersTheSlot(): void
+    {
+        // msw-31 (finding -064): the docblock promises an absolute path.
+        // XDG_CONFIG_HOME=cfg must be IGNORED — the slot resolves under
+        // HOME, never relative to whatever directory the process happens
+        // to boot in.
+        $savedXdg = getenv('XDG_CONFIG_HOME');
+        putenv('XDG_CONFIG_HOME=cfg');
+        try {
+            $this->assertSame(
+                $this->homeDir . '/.config/candy-minesweeper/savegame.json',
+                Game::savePath(),
+                'a relative XDG leg falls through to HOME/.config',
+            );
+
+            self::liveGame()->update(self::press(KeyType::Char, 'S'));
+            $this->assertFileExists($this->homeDir . '/.config/candy-minesweeper/savegame.json', 'the save lands under HOME');
+            $this->assertFileDoesNotExist('cfg/candy-minesweeper/savegame.json', 'the CWD-relative leg is never written');
+        } finally {
+            putenv('XDG_CONFIG_HOME=' . (string) $savedXdg);
+            $stray = getcwd() . '/cfg';
+            if (is_dir($stray . '/candy-minesweeper')) {
+                @unlink($stray . '/candy-minesweeper/savegame.json');
+                @unlink($stray . '/candy-minesweeper/savegame.json.lock');
+                @rmdir($stray . '/candy-minesweeper');
+                @rmdir($stray);
+            }
+        }
+    }
 }

@@ -295,6 +295,21 @@ final class BinArgvTest extends TestCase
         $this->assertNotEmpty($out);
     }
 
+    // ---- msw-31: env-derived echoes obey the cliVisible law (finding -069) ----
+
+    public function testTheHelpScreenScrubbsControlBytesFromTheEnvSlotPath(): void
+    {
+        // The save-slot line is the help screen's only environment-derived
+        // token; a self-set XDG_CONFIG_HOME carrying ESC must not be able to
+        // reformat the terminal while claiming to tell the player where
+        // their saves live. Kept under the 40-byte cap so the scrub — not
+        // the clip — is what lands on screen.
+        [$code, $out, $err] = self::runBinary(['--help'], ['XDG_CONFIG_HOME' => "/t/\x1bx"]);
+        $this->assertSame(0, $code, 'stderr was: ' . $err);
+        $this->assertStringContainsString('save slot: /t/?x/candy-minesweeper/savegame.json', $out);
+        $this->assertStringNotContainsString("\x1b", $out, 'raw ESC must never reach the help screen');
+    }
+
     // ---- msw-32: POSIX end-of-options and the -v alias (finding -070) ----
 
     public function testEndOfOptionsMarkerIsAcceptedInsteadOfRefused(): void

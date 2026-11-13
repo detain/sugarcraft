@@ -621,15 +621,18 @@ final class Game implements Model
      * Absolute path of the single-slot savegame, resolved from the
      * environment at call time (never cached — tests sandbox HOME per test,
      * and a process that learned its HOME after boot should still find the
-     * file). XDG_CONFIG_HOME wins when set; otherwise the slot lives under
-     * $HOME/.config. Null when neither carries a usable value: save then
+     * file). XDG_CONFIG_HOME wins when set AND absolute; a relative value
+     * is ignored and the slot falls to $HOME/.config (finding -064: the
+     * docblock promises an absolute path, and a relative XDG leg would make
+     * the slot CWD-dependent — the XDG spec bars relative values too).
+     * Null when neither carries a usable value: save then
      * degrades to a no-op and load keeps the current game, mirroring the
      * best-effort stats writes.
      */
     public static function savePath(): ?string
     {
         $xdg = getenv('XDG_CONFIG_HOME');
-        if ($xdg !== false && $xdg !== '') {
+        if ($xdg !== false && $xdg !== '' && str_starts_with($xdg, '/')) {
             return rtrim($xdg, '/') . '/candy-minesweeper/savegame.json';
         }
         $home = getenv('HOME');

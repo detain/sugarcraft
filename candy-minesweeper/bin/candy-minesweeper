@@ -132,8 +132,21 @@ if ($profile === ColorProfile::Ascii || $profile === ColorProfile::NoTty) {
  *
  * Stats persistence is opt-in: set CANDY_MINESWEEPER_STATS=/path/to/stats.json and a
  * completed game's outcome is recorded there across sessions.
- * Mid-game saves (in-app 'S' / 'L') live at $HOME/.config/candy-minesweeper/savegame.json.
+ * Mid-game saves (in-app 'S' / 'L') live at $XDG_CONFIG_HOME/candy-minesweeper/savegame.json
+ * when XDG_CONFIG_HOME is set to an absolute path, and at
+ * $HOME/.config/candy-minesweeper/savegame.json otherwise (finding -081:
+ * this one copy used to omit the XDG precedence the code, README and site
+ * all state).
  */
+// The env-derived half of the save-slot echo is scrubbed like every other
+// environment value the terminal sees (msw-31, finding -069: cliVisible is
+// the uniform rule — control bytes must not reformat the help screen); the
+// path leg rides CLI_PATH_CAP so the line can still do its job of naming
+// the WHOLE slot (measured: the default 40-cell clip ate 'savegame.json'
+// for an ordinary /tmp HOME — the existing usage pin caught it). The
+// fallback literal is a compile-time constant and passes untouched.
+const CLI_PATH_CAP = 4096;
+$slotPath = Game::savePath();
 $usage = "usage: candy-minesweeper --easy | --standard | --medium | --expert\n"
       . "       candy-minesweeper [width] [height] [mines]\n"
       . "       board sizes are columns (width) then rows (height) —\n"
@@ -141,7 +154,7 @@ $usage = "usage: candy-minesweeper --easy | --standard | --medium | --expert\n"
       . "       keys: hjkl/arrows move · Home/End row · PgUp/PgDn half-page\n"
       . "       space reveal · f flag/question · c chord · S save · L load ·\n"
       . "       r restart · n new game · q quit\n"
-      . "       save slot: " . (Game::savePath() ?? '$HOME/.config/candy-minesweeper/savegame.json') . "\n"
+      . "       save slot: " . ($slotPath === null ? '$HOME/.config/candy-minesweeper/savegame.json' : cliVisible($slotPath, CLI_PATH_CAP)) . "\n"
       . "       stats: set CANDY_MINESWEEPER_STATS=/path/stats.json to tally across sessions\n";
 $args   = array_slice($argv ?? [], 1);
 
@@ -167,32 +180,35 @@ if (in_array('--help', $flagTokens, true) || in_array('-h', $flagTokens, true)) 
 }
 
 /**
- * Render a raw argv fragment safely for stderr: control bytes (ESC, BEL, NUL,
- * newlines…) become '?' and anything past 40 cells is clipped. Deliberately
- * NOT sugar-core's Sanitize — its ANSI-arena handling targets terminal-payload
- * trust boundaries; argv echoes want printable-but-recognisable names, and the
- * '?' substitution keeps a pasted escape sequence from reformatting the very
- * error message that reports it.
+ * Render a raw environment/argv fragment safely for the terminal: control
+ * bytes (ESC, BEL, newlines…) become '?' and anything past $cap cells
+ * (default 40) is clipped. Deliberately NOT sugar-core's Sanitize — its
+ * ANSI-arena handling targets terminal-payload trust boundaries; argv
+ * echoes want printable-but-recognisable names, and the '?' substitution
+ * keeps a pasted escape sequence from reformatting the very error message
+ * that reports it. msw-31 added the cap parameter: the save-slot echo
+ * carries a path whose whole job is being complete, so it passes the
+ * generous CLI_PATH_CAP instead (still scrubbed, still bounded).
  */
-function cliVisible(string $raw): string
+function cliVisible(string $raw, int $cap = 40): string
 {
     $probe = preg_replace('/[\x00-\x1f\x7f]/', '?', $raw);
-    if (strlen($probe) <= 40) {
+    if (strlen($probe) <= $cap) {
         return $probe;
     }
-    // Clip on CODEPOINT boundaries: a byte slice at 39 can cut a multi-byte
-    // character in half and emit invalid UTF-8 (a replacement glyph or a
-    // mangled name) into the very error line reporting the problem.
+    // Clip on CODEPOINT boundaries: a byte slice just under the cap can cut
+    // a multi-byte character in half and emit invalid UTF-8 (a replacement
+    // glyph or a mangled name) into the very line reporting the problem.
     $chars = preg_split('//u', $probe, -1, PREG_SPLIT_NO_EMPTY);
     if ($chars === false) {
         // Already not valid UTF-8 — the byte floor is all that exists. The
         // control scrub above ran first, so no truncated tail can re-form an
         // escape sequence.
-        return substr($probe, 0, 39) . '…';
+        return substr($probe, 0, $cap - 1) . '…';
     }
     $keep = '';
     foreach ($chars as $char) {
-        if (strlen($keep) + strlen($char) > 39) {
+        if (strlen($keep) + strlen($char) > $cap - 1) {
             break;
         }
         $keep .= $char;
