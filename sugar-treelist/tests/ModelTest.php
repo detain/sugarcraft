@@ -643,7 +643,7 @@ final class ModelTest extends TestCase
         // box head, number column and cursor marker, the continuation row
         // carries the wrap glyph and no marker.
         $this->assertCount(2, $lines);
-        $this->assertStringStartsWith('╭ 0 > line1', $lines[0]);
+        $this->assertStringStartsWith('╭ 1 > line1', $lines[0]); // treelist-17: 1-based ordinal (was '╭ 0 ')
         $this->assertStringStartsWith('│     line2', $lines[1]);
     }
 
@@ -1859,7 +1859,8 @@ final class ModelTest extends TestCase
             ->withViewport(8, 24);
 
         $lines = $m->lines();
-        $this->assertSame(['╭ 0 > a<', '│     b', '╰ 1   c', '│     d'], $lines);
+        // treelist-17: numbers are 1-based ordinals by default (was 0/1).
+        $this->assertSame(['╭ 1 > a<', '│     b', '╰ 2   c', '│     d'], $lines);
         foreach ($lines as $row) {
             $this->assertNotSame('', $row);
             $this->assertLessThanOrEqual(8, Width::string($row));
@@ -2485,7 +2486,7 @@ final class ModelTest extends TestCase
             ->withItemsFromArray(['apple', 'banana', 'cherry']);
         $frame = $model->view();
 
-        $this->assertStringContainsString('╭ 0 > apple', $frame);
+        $this->assertStringContainsString('╭ 1 > apple', $frame); // treelist-17: 1-based ordinal
         $this->assertStringContainsString('banana', $frame);
         $this->assertStringContainsString('<', $frame); // suffix closes the row
     }
@@ -2516,7 +2517,7 @@ final class ModelTest extends TestCase
         $lines = $this->decoratedLines($long);
 
         $this->assertSame([
-            '╭ 0 > ?????????????<',
+            '╭ 1 > ?????????????<', // treelist-17: 1-based ordinal
             '│     ?????????????',
             '│     ?????????????',
             '│     ?tail-content',
@@ -2540,8 +2541,8 @@ final class ModelTest extends TestCase
         $short = $this->decoratedLines("a\xFFz", height: 1, wrap: 1);
         $long  = $this->decoratedLines("a\xFFz" . \str_repeat('q', 30));
 
-        $this->assertSame(['╭ 0 > a?z          <'], $short);
-        $this->assertSame('╭ 0 > a?zqqqqqqqqqq<', $long[0]);
+        $this->assertSame(['╭ 1 > a?z          <'], $short); // treelist-17: 1-based ordinal
+        $this->assertSame('╭ 1 > a?zqqqqqqqqqq<', $long[0]);
     }
 
     public function testWellFormedUtf8PassesTheRepairByteForByte(): void
@@ -2552,7 +2553,7 @@ final class ModelTest extends TestCase
         $lines = $this->decoratedLines('Price: €5 😀 end');
 
         $this->assertSame([
-            '╭ 0 > Price: €5 😀 <',
+            '╭ 1 > Price: €5 😀 <', // treelist-17: 1-based ordinal
             '│     end',
         ], $lines);
     }

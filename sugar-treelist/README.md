@@ -17,7 +17,7 @@ sugar-treelist — a tree-list view component for terminal UIs, for PHP 8.3+. Re
 
 ## Features
 
-- **Customizable Prefixer** — generates per-line prefix strings (0-based line numbers, box-drawing borders, tree branches)
+- **Customizable Prefixer** — generates per-line prefix strings (1-based line numbers by default, box-drawing borders, tree branches)
 - **Customizable Suffixer** — generates per-line suffix strings (status markers, padding)
 - **Line wrapping** — items wrap to multiple lines within a fixed viewport width, whitespace-faithfully (indentation and inter-word runs survive)
 - **Cursor navigation** — current item highlighted with configurable style
@@ -41,7 +41,7 @@ composer require sugarcraft/sugar-treelist
 use SugarCraft\TreeList\Model;
 
 // Model::tree() = new() + the Default prefixer/suffixer pair: a ╭ ├ ╰
-// join column, 0-based line numbers and a visible > cursor marker. Plain
+// join column, 1-based line numbers and a visible > cursor marker. Plain
 // new() stays deliberately undecorated for custom-gutter consumers, and
 // withTreeDefaults() picks the pair up mid-chain.
 //
@@ -54,7 +54,7 @@ $model = Model::tree()
     ->withItemsFromArray(['First item', 'Second item', 'Third item']);
 
 echo $model->view();
-// Renders the list with a ╭ ├ ╰ box-drawing gutter, 0-based line numbers, and > cursor marker
+// Renders the list with a ╭ ├ ╰ box-drawing gutter, 1-based line numbers, and > cursor marker
 ```
 
 ### Naming: `with*` everywhere
@@ -105,20 +105,30 @@ $model = $model->withItem(new MyItem());
 
 ## Custom Prefixer
 
-`DefaultPrefixer` renders the box-drawing gutter and has public knobs (all
-glyph strings are validated at init — control bytes and malformed UTF-8 are
-refused): `$firstSep` (top corner, default `╭`), `$separator` (middle join,
-default `├`), `$lastSep` (bottom corner, default `╰`), `$separatorWrap`
-(continuation rows of a wrapped item, default `│`), `$currentMarker` (`>`),
-`$emptyMarker` (a single space on non-cursor rows), `$number` (toggle the
-number column — its field width is derived from the item count, so columns
-stay aligned past nine items), `$numberRelative` (number as each item's
-unsigned distance from the cursor: 2 1 0 1 2), and `$prefixWrap` (continuation
-rows use `$separatorWrap` instead of the join glyph). The join glyph follows
+`DefaultPrefixer` renders the box-drawing gutter and has knobs. The safe door
+is the fluent `with*()` setter family — each returns a configured **clone**
+to attach: `withFirstSep()` (top corner, default `╭`), `withSeparator()`
+(middle join, default `├`), `withLastSep()` (bottom corner, default `╰`),
+`withSeparatorWrap()` (continuation rows of a wrapped item, default `│`),
+`withCurrentMarker()` (`>`), `withEmptyMarker()` (a single space on non-cursor
+rows), `withNumber()` (toggle the number column — its field width is derived
+from the largest number the pass renders, so columns stay aligned past nine
+items), `withNumberRelative()` (number as each item's unsigned distance from
+the cursor: 2 1 0 1 2), `withNumberZeroBased()` (opt back into the legacy
+0-based absolute index — by default the column prints 1-based ordinals: the
+first row is `1`), and `withPrefixWrap()` (continuation rows use
+`separatorWrap` instead of the join glyph). Glyph strings are validated —
+control bytes and malformed UTF-8 are refused at the setter door and again
+at init. The equivalent public fields (`$firstSep`, `$number`, …) stay
+writable for upstream Go exported-struct parity, but beware: the prefixer
+instance is **shared** by every model fork attached to it, so a field write
+silently changes all of those models at once (cross-clone coupling). Prefer
+the setters. The join glyph follows
 the item's **position in the list**, so the gutter reads as a tree — the list
 itself stays flat: tree structure is yours to encode as leading whitespace in
 the item text, which survives the whitespace-faithful wrapper verbatim.
-`DefaultSuffixer::$currentMarker` (default `<`) marks the cursor row.
+`DefaultSuffixer::withCurrentMarker()` (default `<`; its `$currentMarker`
+field stays writable with the same shared-clone caveat) marks the cursor row.
 
 Guide the cursor with text, not colour alone. Keep a marker glyph
 (`$currentMarker`, or your suffixer's) so position survives monochrome

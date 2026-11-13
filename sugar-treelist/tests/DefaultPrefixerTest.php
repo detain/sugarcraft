@@ -14,6 +14,11 @@ use PHPUnit\Framework\TestCase;
  * `assertIsString` — it never pinned the computed width or marker text, so the
  * per-item number sizing (ragged at ≥10 items) stayed invisible (audit M6/#16
  * fix wave). Every width and shape claim below is now exact.
+ *
+ * DISCLOSED GOLDEN MOVE (treelist-17, 2026-11-13): the absolute number
+ * column flipped from the 0-based index to 1-based ordinals by default. The
+ * four number pins below were re-pinned; the legacy bytes live on behind
+ * `numberZeroBased`.
  */
 final class DefaultPrefixerTest extends TestCase
 {
@@ -85,8 +90,8 @@ final class DefaultPrefixerTest extends TestCase
     {
         $p = new DefaultPrefixer();
         $p->initPrefixer(new StringItem('first'), 0, 0, 5, 80, 24, 5);
-        // "╭ " + "0 " + ">" + " "
-        $this->assertSame('╭ 0 > ', $p->prefix(0, 3));
+        // "╭ " + "1 " + ">" + " " (treelist-17: 1-based ordinal)
+        $this->assertSame('╭ 1 > ', $p->prefix(0, 3));
     }
 
     public function testPrefixShapeNonCurrentItem(): void
@@ -96,7 +101,8 @@ final class DefaultPrefixerTest extends TestCase
         // 2026-11-03 fix wave: the first-line join glyph follows the item's
         // POSITION (╭ first / ├ middle / ╰ last). The old pin '╭ 1   ' froze
         // the tree-lie — firstSep on every item made ├/╰ unreachable.
-        $this->assertSame('├ 1   ', $p->prefix(0, 3));
+        // treelist-17: the number is the 1-based ordinal (index 1 → '2').
+        $this->assertSame('├ 2   ', $p->prefix(0, 3));
     }
 
     /** Corners track the ends of the rendered list; ├ owns the middle. */
@@ -165,9 +171,9 @@ final class DefaultPrefixerTest extends TestCase
     {
         $p = new DefaultPrefixer();
         $p->initPrefixer(new StringItem('ten'), 10, 0, 5, 80, 24, 12);
-        $this->assertSame('├ 10   ', $p->prefix(0, 1)); // middle item → ├ (2026-11-03 gutter fix)
+        $this->assertSame('├ 11   ', $p->prefix(0, 1)); // middle item → ├ (2026-11-03 gutter fix); ordinal 11 (treelist-17)
         $p->initPrefixer(new StringItem('nine'), 9, 0, 5, 80, 24, 12);
-        $this->assertSame('├  9   ', $p->prefix(0, 1));
+        $this->assertSame('├ 10   ', $p->prefix(0, 1)); // ordinal 10, 2-cell column sized on max printed 12
     }
 
     public function testPrefixWithRelativeNumbers(): void
@@ -225,5 +231,106 @@ final class DefaultPrefixerTest extends TestCase
         $columns = \array_map(static fn(string $line): int => \strpos($line, 'item '), $lines);
         $this->assertSame(\array_fill(0, 11, $columns[0]), $columns,
             'content must start at one column for every item (M6 alignment)');
+    }
+
+    /**
+     * treelist-17 (finding 023): the absolute column prints 1-based ordinals
+     * by default — the first row is '1', not '0' — because numbered terminal
+     * lists read as ordinals, while the zero-based index in the same column
+     * doubled as cursor-distance in relative mode with no signal. The legacy
+     * bytes live on behind the numberZeroBased opt-out.
+     */
+    public function testAbsoluteNumberIsOneBasedOrdinalByDefault(): void
+    {
+        $p = new DefaultPrefixer();
+        $p->initPrefixer(new StringItem('a'), 0, 0, 5, 80, 24, 3);
+        $this->assertSame('╭ 1 > ', $p->prefix(0, 1));
+        $p->initPrefixer(new StringItem('c'), 2, 0, 5, 80, 24, 3);
+        $this->assertSame('╰ 3   ', $p->prefix(0, 1));
+
+        $legacy = (new DefaultPrefixer())->withNumberZeroBased(true);
+        $legacy->initPrefixer(new StringItem('a'), 0, 0, 5, 80, 24, 3);
+        $this->assertSame('╭ 0 > ', $legacy->prefix(0, 1), 'numberZeroBased opt-out keeps the legacy bytes');
+    }
+
+    /**
+     * treelist-17: the column sizes on the widest value the mode actually
+     * prints — the 1-based default widens a 10-item list (1..10 → two cells)
+     * where the zero-based legacy (0..9) still fits one.
+     */
+    public function testColumnWidthTracksWidestPrintedNumber(): void
+    {
+        $p = new DefaultPrefixer();
+        // sep(1) + number(2)+space(1) + marker(1) + trailing(2) = 7
+        $this->assertSame(7, $p->initPrefixer(new StringItem('i'), 0, 0, 5, 80, 24, 10));
+
+        $legacy = (new DefaultPrefixer())->withNumberZeroBased(true);
+        // sep(1) + number(1)+space(1) + marker(1) + trailing(2) = 6
+        $this->assertSame(6, $legacy->initPrefixer(new StringItem('i'), 0, 0, 5, 80, 24, 10));
+    }
+
+    /**
+     * treelist-17 (finding 020): every knob has a clone-returning with*() —
+     * the receiver (and any model already attached to it) is untouched.
+     */
+    public function testFluentSettersReturnClonesAndNeverTouchTheReceiver(): void
+    {
+        $p = new DefaultPrefixer();
+        $q = $p->withNumber(false)
+               ->withNumberRelative(true)
+               ->withPrefixWrap(false)
+               ->withFirstSep('A')
+               ->withSeparator('B')
+               ->withLastSep('C')
+               ->withSeparatorWrap('D')
+               ->withCurrentMarker('E')
+               ->withEmptyMarker('·');
+        $this->assertNotSame($p, $q);
+        $this->assertTrue($p->number, 'receiver untouched');
+        $this->assertFalse($p->numberRelative, 'receiver untouched');
+        $this->assertSame(' ', $p->emptyMarker, 'receiver untouched');
+        $this->assertFalse($q->number);
+        $this->assertTrue($q->numberRelative);
+        $this->assertFalse($q->prefixWrap);
+        $this->assertSame('A', $q->firstSep);
+        $this->assertSame('B', $q->separator);
+        $this->assertSame('C', $q->lastSep);
+        $this->assertSame('D', $q->separatorWrap);
+        $this->assertSame('E', $q->currentMarker);
+        $this->assertSame('·', $q->emptyMarker);
+        // Empty is still a legal glyph through the door (it drops the decoration).
+        $this->assertSame('', $p->withFirstSep('')->firstSep);
+    }
+
+    /**
+     * treelist-17: the public-field parity path is honest — a write after
+     * attach reaches EVERY fork sharing the instance (cross-clone coupling).
+     * Pinned so the documented deviation stays true, not folklore.
+     */
+    public function testPublicFieldWriteAfterAttachReachesEveryFork(): void
+    {
+        $p = new DefaultPrefixer();
+        $m1 = Model::new()->withViewport(20, 10)->withItemsFromArray(['a', 'b'])->withPrefixer($p);
+        $m2 = $m1->withCursor(1);
+        $p->emptyMarker = '.'; // legacy parity write: mutates the SHARED instance
+        $this->assertStringContainsString('.', $m1->lines()[1], 'fork one sees the write');
+        $this->assertStringContainsString('.', $m2->lines()[0], 'fork two sees the same write');
+    }
+
+    /**
+     * treelist-17: glyph setters fail fast at the DOOR — a control byte
+     * never survives to init, let alone the terminal.
+     */
+    public function testGlyphSettersRefuseControlBytesAtTheDoor(): void
+    {
+        $p = new DefaultPrefixer();
+        foreach (['withFirstSep', 'withSeparator', 'withLastSep', 'withSeparatorWrap', 'withCurrentMarker', 'withEmptyMarker'] as $setter) {
+            try {
+                $p->$setter("x\x1b]0;owned\x07");
+                $this->fail("DefaultPrefixer::$setter() accepted control bytes");
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString('DefaultPrefixer:', $e->getMessage());
+            }
+        }
     }
 }

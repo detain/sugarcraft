@@ -13,7 +13,9 @@ use SugarCraft\TreeList\Support\AssertGlyph;
  * Renders items with:
  * - ╭ / ├ / ╰ box-drawing separators chosen by the item's POSITION in the
  *   rendered list (first / middle / last), with │ on wrap continuations
- * - optional line numbers (absolute or relative to cursor)
+ * - optional line numbers: 1-based ordinals by default (the legacy 0-based
+ *   index keeps a numberZeroBased opt-out), or the unsigned distance from
+ *   the cursor when numberRelative is on
  * - > current-item marker
  * - wrap continuation prefix
  *
@@ -25,12 +27,17 @@ use SugarCraft\TreeList\Support\AssertGlyph;
  * The instance is shared across every item of a render pass (and across
  * clones of the model that set it): the position state below is re-sealed
  * by initPrefixer() for each item, so two models rendering alternately to
- * the same terminal never interleave stale positions.
+ * the same terminal never interleave stale positions. That sharing is also
+ * the hazard the public fields carry: writing a field mutates EVERY model
+ * fork attached to this instance at once (cross-clone coupling, documented
+ * in the README knob table). The with*() setters are the safe door — they
+ * return a configured clone for you to attach.
  */
 final class DefaultPrefixer implements Prefixer
 {
     public bool $number = true;          // show line numbers
     public bool $numberRelative = false; // show each item's unsigned distance from the cursor
+    public bool $numberZeroBased = false; // legacy 0-based absolute index (default prints 1-based ordinals)
     public bool $prefixWrap = true;      // wrap with │ continuation
 
     public string $firstSep      = '╭';   // top-left corner (first item)
@@ -79,7 +86,15 @@ final class DefaultPrefixer implements Prefixer
         // mode renders indices up to totalItems-1 and relative mode renders
         // distances bounded by the same value, so one width serves both.
         if ($this->number) {
-            $this->numWidth = \max(1, \strlen((string) \max(0, $totalItems - 1)));
+            // Size the column on the widest value this mode can actually
+            // print. Absolute default mode prints ordinals 1..totalItems
+            // (a ten-item list therefore reserves TWO cells — the 1-based
+            // flip is a disclosed byte move); the legacy zero-based opt-out
+            // and relative distances are both bounded by totalItems - 1.
+            $maxPrinted = $this->numberRelative || $this->numberZeroBased
+                ? \max(0, $totalItems - 1)
+                : $totalItems;
+            $this->numWidth = \max(1, \strlen((string) $maxPrinted));
         }
 
         // Separator widths. The reservation must cover the WIDEST glyph each
@@ -139,7 +154,13 @@ final class DefaultPrefixer implements Prefixer
                 // widen negative rows and break column alignment.
                 $numStr = \sprintf("%{$this->numWidth}d ", \abs($this->currentIndex - $this->cursorIndex));
             } elseif ($currentLine === 0) {
-                $numStr = \sprintf("%{$this->numWidth}d ", $this->currentIndex);
+                // Ordinal by default: numbered terminal lists read as 1..N
+                // (rows are counted, not zeroed). $numberZeroBased restores
+                // the legacy absolute index for byte-parity hosts.
+                $numStr = \sprintf(
+                    "%{$this->numWidth}d ",
+                    $this->numberZeroBased ? $this->currentIndex : $this->currentIndex + 1
+                );
             } else {
                 $numStr = \str_repeat(' ', $this->numWidth) . ' ';
             }
@@ -149,5 +170,90 @@ final class DefaultPrefixer implements Prefixer
         $mark = ($isCurrent && $currentLine === 0) ? $this->currentMarker : $this->emptyMarker;
 
         return "{$sep} {$numStr}{$mark} ";
+    }
+
+    // ------------------------------------------------------------------
+    // Fluent knob setters (S-X06 / house with* vocabulary). Each returns a
+    // configured CLONE: attach the returned instance to take effect. The
+    // public $fields stay writable for upstream Go NewPrefixer parity, but
+    // a field write mutates the shared instance for every attached model
+    // fork at once — these setters are the coupling-safe door.
+    // ------------------------------------------------------------------
+
+    public function withNumber(bool $show): self
+    {
+        $clone = clone $this;
+        $clone->number = $show;
+        return $clone;
+    }
+
+    public function withNumberRelative(bool $relative): self
+    {
+        $clone = clone $this;
+        $clone->numberRelative = $relative;
+        return $clone;
+    }
+
+    /** Opt back into the legacy 0-based absolute number column. */
+    public function withNumberZeroBased(bool $zeroBased): self
+    {
+        $clone = clone $this;
+        $clone->numberZeroBased = $zeroBased;
+        return $clone;
+    }
+
+    public function withPrefixWrap(bool $wrap): self
+    {
+        $clone = clone $this;
+        $clone->prefixWrap = $wrap;
+        return $clone;
+    }
+
+    public function withFirstSep(string $glyph): self
+    {
+        AssertGlyph::field(self::class, 'firstSep', $glyph);
+        $clone = clone $this;
+        $clone->firstSep = $glyph;
+        return $clone;
+    }
+
+    public function withSeparator(string $glyph): self
+    {
+        AssertGlyph::field(self::class, 'separator', $glyph);
+        $clone = clone $this;
+        $clone->separator = $glyph;
+        return $clone;
+    }
+
+    public function withLastSep(string $glyph): self
+    {
+        AssertGlyph::field(self::class, 'lastSep', $glyph);
+        $clone = clone $this;
+        $clone->lastSep = $glyph;
+        return $clone;
+    }
+
+    public function withSeparatorWrap(string $glyph): self
+    {
+        AssertGlyph::field(self::class, 'separatorWrap', $glyph);
+        $clone = clone $this;
+        $clone->separatorWrap = $glyph;
+        return $clone;
+    }
+
+    public function withCurrentMarker(string $glyph): self
+    {
+        AssertGlyph::field(self::class, 'currentMarker', $glyph);
+        $clone = clone $this;
+        $clone->currentMarker = $glyph;
+        return $clone;
+    }
+
+    public function withEmptyMarker(string $glyph): self
+    {
+        AssertGlyph::field(self::class, 'emptyMarker', $glyph);
+        $clone = clone $this;
+        $clone->emptyMarker = $glyph;
+        return $clone;
     }
 }

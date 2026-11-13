@@ -130,4 +130,28 @@ final class DefaultSuffixerTest extends TestCase
         $s->initSuffixer(new StringItem('third'), 2, 1, 5, 80, 24);
         $this->assertSame('', $s->suffix(0, 1));
     }
+
+    /**
+     * treelist-17 (finding 020): the marker knob gains the house with*()
+     * door — a configured CLONE, validated at the setter, never a mutation
+     * of the shared instance behind attached model forks.
+     */
+    public function testWithCurrentMarkerReturnsConfiguredCloneAndValidatesAtDoor(): void
+    {
+        $s = new DefaultSuffixer();
+        $t = $s->withCurrentMarker('»');
+        $this->assertNotSame($s, $t);
+        $this->assertSame('<', $s->currentMarker, 'receiver untouched');
+        $t->initSuffixer(new StringItem('i'), 0, 0, 5, 80, 24);
+        $this->assertSame('»', $t->suffix(0, 1));
+
+        try {
+            $s->withCurrentMarker("\x1b[31m");
+            $this->fail('expected door refusal');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('currentMarker', $e->getMessage());
+        }
+        // Empty is legal through the door (it drops the marker).
+        $this->assertSame('', $s->withCurrentMarker('')->currentMarker);
+    }
 }
