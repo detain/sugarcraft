@@ -115,6 +115,9 @@ final class SystemClipboard
         if (PHP_OS_FAMILY === 'Darwin') {
             $add('pbcopy');
         }
+        if (PHP_OS_FAMILY === 'Windows') {
+            $add('clip');
+        }
         if ((string) getenv('WAYLAND_DISPLAY') !== '') {
             $add('wl-copy');
         }
@@ -153,22 +156,37 @@ final class SystemClipboard
             return (self::$runner)($argv, $text);
         }
 
+        // Windows: a stdin pipe write blocks past 4 KiB and select() cannot
+        // bound it, so the text rides a staged file descriptor instead.
+        $win = WindowsPipes::runtimeNeedsIt();
+        $staged = $win ? WindowsPipes::stageStdin($text) : null;
+        if ($win && $staged === null) {
+            return false;
+        }
+        $null = $win ? 'NUL' : '/dev/null';
         $descriptors = [
-            0 => ['pipe', 'r'],
-            1 => ['file', '/dev/null', 'w'],
-            2 => ['file', '/dev/null', 'w'],
+            0 => $staged !== null ? ['file', $staged, 'r'] : ['pipe', 'r'],
+            1 => ['file', $null, 'w'],
+            2 => ['file', $null, 'w'],
         ];
 
         // Direct argv, never a shell string: the text goes in on stdin and no
         // byte of it is ever parsed as a command.
         $process = @proc_open($argv, $descriptors, $pipes, null, ProcessContainment::env());
         if (!\is_resource($process)) {
+            if ($staged !== null) {
+                @unlink($staged);
+            }
+
             return false;
         }
 
         $deadline = microtime(true) + self::TIMEOUT_SECONDS;
-        $written = self::feed($pipes[0], $text, $deadline);
-        fclose($pipes[0]);
+        $written = true;
+        if ($staged === null) {
+            $written = self::feed($pipes[0], $text, $deadline);
+            fclose($pipes[0]);
+        }
 
         // The exit code comes from the status poll, not proc_close(): once
         // proc_get_status() has observed the exit, proc_close() reports -1.
@@ -185,6 +203,9 @@ final class SystemClipboard
         }
 
         proc_close($process);
+        if ($staged !== null) {
+            @unlink($staged);
+        }
 
         return $exitCode === 0;
     }
