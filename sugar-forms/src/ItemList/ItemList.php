@@ -76,6 +76,13 @@ final class ItemList implements Model
         public readonly string $unselectedPrefix = '  ',
         public readonly bool $keepFilter = false,
         public readonly bool $hasMore = false,
+        /**
+         * Optional LINES budget (SF-27, sugar-forms-031): 0 (default) keeps
+         * the historical item-count windowing; > 0 fills the page by
+         * rendered lines instead — the truth of what the widget occupies.
+         * {@see withVisibleLines()}.
+         */
+        public readonly int $visibleLines = 0,
     ) {}
 
     /**
@@ -247,7 +254,7 @@ final class ItemList implements Model
         }
 
         $top    = max(0, $this->offset);
-        $window = array_slice($visible, $top, $this->height);
+        $window = array_slice($visible, $top, $this->windowCount($visible, $top));
         foreach ($window as $i => $item) {
             $idx = $top + $i;
             $sel = $idx === $this->cursor;
@@ -472,12 +479,106 @@ final class ItemList implements Model
         return $this->filtering;
     }
 
+    /**
+     * Resize the viewport. `height` is a count of ITEMS per page — with
+     * showDescription on, a described item paints two lines, so a height-8
+     * list can emit up to 16 lines (the honest line budget is
+     * {@see withVisibleLines()}, SF-27). Negative dimensions throw;
+     * zero means unbounded.
+     */
     public function setSize(int $width, int $height): self
     {
         if ($width < 0 || $height < 0) {
             throw new \InvalidArgumentException(Lang::t('list.dim_nonneg'));
         }
         return $this->mutate(width: $width, height: $height)->reclamp();
+    }
+
+    /**
+     * Opt into a strict LINES budget for the page (SF-27,
+     * sugar-forms-031): `height` counts ITEMS, so with showDescription on
+     * a height-8 list paints up to 16 lines. `withVisibleLines(8)` renders
+     * exactly 4 described items (or 8 plain ones) — the number the layout
+     * budget actually occupies. 0 (default) keeps the historical
+     * item-count windowing byte-for-byte; a budget of 1 pins one item per
+     * page whatever it costs.
+     */
+    public function withVisibleLines(int $lines): self
+    {
+        if ($lines < 0) {
+            throw new \InvalidArgumentException(Lang::t('list.dim_nonneg'));
+        }
+        return $this->mutate(visibleLines: $lines)->reclamp();
+    }
+
+    /**
+     * How many lines {@see view()} currently paints for this list — the
+     * honest budget figure callers laying out panes need (header, filter
+     * row, windowed item lines, status row).
+     */
+    public function renderedLineCount(): int
+    {
+        return count($this->renderLines());
+    }
+
+    /** Screen lines one item's body costs: title plus an indented description row. */
+    private function linesForItem(Item $item): int
+    {
+        return $this->showDescription && $item->description() !== '' ? 2 : 1;
+    }
+
+    /**
+     * How many ITEMS the window starting at $top paints: the line budget
+     * fills exactly (never over), or the item count when no budget is set.
+     * A budget smaller than one item's cost still paints that item
+     * (minimum 1) rather than an empty page.
+     *
+     * @param list<Item> $visible
+     */
+    private function windowCount(array $visible, int $top): int
+    {
+        if ($this->visibleLines <= 0) {
+            return $this->height;
+        }
+        $used = 0;
+        $n    = 0;
+        foreach (array_slice($visible, $top) as $item) {
+            $cost = $this->linesForItem($item);
+            if ($used + $cost > $this->visibleLines) {
+                break;
+            }
+            $used += $cost;
+            $n++;
+        }
+        return max(1, $n);
+    }
+
+    /**
+     * Line-aware window-pan (SF-27): keep the cursor's WHOLE body (title +
+     * description rows) inside the line budget by sliding the top item
+     * forward/backward; the item-count twin is {@see ViewportPan::offsetFor}.
+     *
+     * @param list<Item> $visible
+     */
+    private function panForLines(array $visible, int $cursor, int $offset): int
+    {
+        $cost = fn(int $i): int => $this->linesForItem($visible[$i]);
+        if ($cursor < $offset) {
+            // The cursor left the window through the top: it becomes the
+            // first body painted (strictly the best fit whatever it costs).
+            return $cursor;
+        }
+        while ($offset < $cursor) {
+            $used = 0;
+            for ($j = $offset; $j <= $cursor; $j++) {
+                $used += $cost($j);
+            }
+            if ($used <= $this->visibleLines) {
+                break;
+            }
+            $offset++;
+        }
+        return max(0, $offset);
     }
 
     public function withTitle(string $t): self           { return $this->mutate(title: $t); }
@@ -677,7 +778,7 @@ final class ItemList implements Model
             $line++;
         }
         $top    = max(0, $this->offset);
-        $window = array_slice($visible, $top, $this->height);
+        $window = array_slice($visible, $top, $this->windowCount($visible, $top));
         foreach ($window as $i => $item) {
             if ($screenLine === $line) {
                 return $top + $i;
@@ -705,7 +806,10 @@ final class ItemList implements Model
         } else {
             $cursor = max(0, min($count - 1, $idx));
         }
-        return $this->mutate(cursor: $cursor, offset: ViewportPan::offsetFor($cursor, $this->offset, $this->height));
+        $offset = $this->visibleLines > 0
+            ? $this->panForLines($this->visibleItems(), $cursor, $this->offset)
+            : ViewportPan::offsetFor($cursor, $this->offset, $this->height);
+        return $this->mutate(cursor: $cursor, offset: $offset);
     }
 
     private function reclamp(): self
@@ -736,6 +840,7 @@ final class ItemList implements Model
         ?string $unselectedPrefix = null,
         ?bool $keepFilter = null,
         ?bool $hasMore = null,
+        ?int $visibleLines = null,
     ): self {
         return new self(
             items:                  $items                  ?? $this->items,
@@ -759,6 +864,7 @@ final class ItemList implements Model
             unselectedPrefix:       $unselectedPrefix       ?? $this->unselectedPrefix,
             keepFilter:             $keepFilter             ?? $this->keepFilter,
             hasMore:                $hasMore                ?? $this->hasMore,
+            visibleLines:           $visibleLines           ?? $this->visibleLines,
         );
     }
 

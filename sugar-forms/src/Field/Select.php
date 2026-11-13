@@ -206,6 +206,17 @@ final class Select implements \SugarCraft\Forms\Field
     public function withHeight(int $h): self          { return $this->mutate(list: $this->list->setSize($this->list->width, max(1, $h))); }
 
     /**
+     * Opt the dropdown into a strict LINES page budget instead of the
+     * item-count `height` (SF-27, sugar-forms-031 — with descriptions on,
+     * item-count height can paint up to twice the lines it nominally
+     * budgets). 0 restores item-count windowing.
+     */
+    public function withVisibleLines(int $lines): self
+    {
+        return $this->mutate(list: $this->list->withVisibleLines(max(0, $lines)));
+    }
+
+    /**
      * Clip list lines to this cell budget (ItemList honours it in view —
      * SF-05's per-line clip). The height slot rides through untouched.
      */
