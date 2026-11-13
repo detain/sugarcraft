@@ -6,6 +6,7 @@ namespace SugarCraft\ScriptUi\Command;
 
 use React\EventLoop\LoopInterface;
 use SugarCraft\Forms\Spinner\Style as SpinStyle;
+use SugarCraft\Forms\Spinner\TickMsg;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Program;
 use SugarCraft\ScriptUi\Lang;
@@ -42,6 +43,9 @@ use Symfony\Component\Console\Output\OutputInterface;
 #[AsCommand(name: 'spin', description: 'Run a command while showing a spinner.')]
 final class SpinCommand extends Command
 {
+    /** Exit-watcher cadence — same 15 ms granularity as sugar-pty waitAsync (scriptui-10). */
+    public const EXIT_POLL_SECONDS = 0.015;
+
     /** @var \Closure(list<string>, bool, bool): Process spawns the child */
     private readonly \Closure $processFactory;
 
@@ -314,6 +318,8 @@ final class SpinCommand extends Command
     {
         $model = SpinModel::spawn($process, $title, $style, $align);
         $guard = null;
+        /** @var ?\React\EventLoop\TimerInterface $exitWatch */
+        $exitWatch = null;
         try {
             $program = ($this->programFactory)($model, $loop);
             // Two statements on fire, so a real closure (not an arrow fn): the
@@ -345,9 +351,33 @@ final class SpinCommand extends Command
             // pipes (--show-output/--show-error unset) the attach is a no-op.
             $process->attachPump($loop);
 
+            // scriptui-10 (finding 096): exit detection used to ride the
+            // animation tick alone — latency of a whole spinner interval,
+            // and correctness coupled to the spinner still ticking. The
+            // watcher polls at sugar-pty's waitAsync granularity (15 ms)
+            // and wakes the model with its own tick; the animation tick
+            // stays as the fallback belt. The belt also covers a child
+            // that is already gone when the first frame would arrive.
+            $exitWatch = $loop->addPeriodicTimer(self::EXIT_POLL_SECONDS, function () use ($process, $program, $model, $loop, &$exitWatch): void {
+                if (!$process->exited()) {
+                    return;
+                }
+                if ($exitWatch !== null) {
+                    $loop->cancelTimer($exitWatch);
+                    $exitWatch = null;
+                }
+                $program->send(new TickMsg($model->spinner->id));
+            });
+
             /** @var SpinModel $final */
             $final = $program->run();
         } finally {
+            if ($exitWatch !== null) {
+                try {
+                    $loop->cancelTimer($exitWatch);
+                } catch (\Throwable) {
+                }
+            }
             // scriptui-05 (candy-scriptui-035): any Throwable between spawn
             // and settle — factory blowup, renderer crash, pump death — used
             // to unwind to Symfony's exit-1 with the child STILL RUNNING (and
