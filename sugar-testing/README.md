@@ -73,6 +73,35 @@ runtime dependencies. In a monorepo checkout, `php scripts/refresh-deps.php
 from Packagist `dev-master`, and `--mode=linked` restores development wiring —
 suites must only be scored against the figure you know the mode of.
 
+## Development
+
+```sh
+composer install && vendor/bin/phpunit
+```
+
+Run from the lib root; the suite is its own proof. The fixtures under
+`tests/` (`CounterModel`, `ControlRecorderModel`, and friends) are a
+self-test bed: the harness tests itself through the same Model contract it
+simulates. `tests/bootstrap.php` arms `LoopPin::pinStableClock()` **first**
+— the stale-clock law from AGENTS.md: on ext-uv hosts deadlines are
+computed against a clock refreshed once per loop iteration, so a timer
+armed after synchronous idle would already be overdue. Golden files are
+CREATE-ONLY: `SUGAR_TESTING_UPDATE_GOLDENS=1` (legacy alias
+`UPDATE_GOLDENS=1`) seeds a missing baseline, and a re-baseline is always
+delete-then-recreate — never an in-place rewrite. And every fenced snippet
+in this README is executed by `tests/ReadmeSnippetsTest.php`: documentation
+that stops running goes red in CI, so examples cannot rot silently.
+
+## Extending the harness
+
+New decoders or assertion surfaces must budget hostile input up front (the
+`DecodeLimits` duty: every allocation has a declared ceiling that raises a
+catchable `MalformedGraphicsException`, never an OOM), keep the simulator's
+dispatch table an explicit mirror of `Program::dispatch()`'s (the "Simulation
+subset" section is the contract; divergences are named, not glossed), and land
+with README coverage — the snippets test executes the docs, so the roster
+sentences are requirement text enforced fail-loud, not optional garnish.
+
 ## Quickstart
 
 This block runs exactly as copy-pasted (the suite executes it as a test):
@@ -259,14 +288,14 @@ skipped** — a grid that cannot assert anything fails, so a typo cannot produce
 a false pass:
 
 ```php
-// One buffer, two rows: row 0 painted "abcd", row 1 painted "ok🎉" (the wide
-// rune auto-claims column 3 as its continuation). A plain string row spreads
-// its grapheme clusters across cells, one per cell; a `null` row slot skips
-// that whole row:
+// One buffer, two rows: row 0 painted "abcd", row 1 painted "ok🎉". A plain
+// string row spreads its grapheme clusters across cells, one per cell; a
+// `null` row slot skips that whole row:
 Assertions::assertCellGrid(['abcd', null], $buffer);
 
 // Per-cell forms. An array row must list exactly `buffer->width()` entries —
-// one entry per column. Auto-claiming the continuation cell happens only in
+// one entry per column. Auto-claiming the continuation cell (a wide rune like
+// 🎉 swallowing column 3 as its zero-width continuation) happens only in
 // string rows; an array row must state the continuation cell itself after a
 // wide rune. Same buffer, now asserting row 1 (row 0 wildcarded):
 Assertions::assertCellGrid([
@@ -358,6 +387,20 @@ Pixel materialization goes through GD. Where ext-gd is absent the pixel paths
 graphics assertion never skips silently, because a skipped pixel check reads
 identical to a passing one once the suite reports OK. Decoding needs no GD.
 
+Per-class member roster (each class has exactly these public shapes):
+`GraphicsAssertions` — `assertRendersTo()`, `assertInlineImageDimensions()`,
+`assertProtocolRoundTrip()`, `renderGrid()`; `SixelStream` — `width()`,
+`height()`, `palette()`, `grid()`, `pixel()`, `toGdImage()`; `Iterm2Stream` —
+`command()`, `params()`, `payload()`, `hasPayload()`, `png()`, `cellsWidth()`,
+`cellsHeight()`, `pixelDimensions()`, `toGdImage()`; `KittyStream` —
+`images()`, `image()`, `count()`, `id()`, `action()`, `cols()`, `rows()`,
+`png()`; `KittyImage` — the full typed transmission
+(`action`, `id`, `number`, `cols`, `rows`, `pixelWidth/Height`, offsets,
+`zIndex`, `format`, `compressed`, `pngPassthrough`, `rawPayload`, `hasPayload`,
+`png`, `params`, `pixelDimensions`, `toGdImage`); `PixelGrid` — `width()`,
+`height()`, `pixel()`, `paintedPixels()`, `uniformColor()`, `toGdImage()`,
+constructed via `fromRgbGrid()` or `transparent()`; `Mode` — `detect()`.
+
 These decoders eat captured output, which may be hostile-sized, so
 `DecodeLimits` budgets every allocation before it happens: declared rasters
 beyond 4M cells, numeric literals beyond 9 digits, `o=z` payloads inflating
@@ -387,7 +430,9 @@ shift:, ctrl:, alt:)`, `enter()`, `escape()`, `backspace()`, `tab()`,
 `arrow(dir, shift:, ctrl:, alt:)`, `ticks(count, seconds:, factory:)`,
 `resize(cols, rows)`, `quit()` (a real `QuitMsg` — it halts the simulator
 drain, production-style), `mouse(...)`, `wheel(...)`, `paste(content)`,
-`bytes(...$reads)`, `clipboard(content, selection:)`,
+`withSanitizePaste(bool)` (runtime parity with `ProgramOptions::$sanitizePaste`;
+starts a fresh parser, so place it before `paste()`/`bytes()` — payloads
+already built keep the mode they were read in), `bytes(...$reads)`, `clipboard(content, selection:)`,
 `keyboardEnhancements(flags)`, `push(msg)` for anything bespoke, plus
 `build()`, `count()`, and constants `READ_SIZE`, `PASTE_START`, `PASTE_END`.
 
