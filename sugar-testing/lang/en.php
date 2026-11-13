@@ -22,6 +22,13 @@ return [
     'tape.header_conflict' => 'header() was already emitted with a different set — emitted: {emitted}; attempted: {attempted}',
     'tape.bad_sleep' => 'sleep() needs a finite non-negative delay, got: {seconds}',
     'tape.bad_typing_speed' => 'header() typingSpeed needs a finite non-negative delay, got: {seconds}',
+    // SugarCraft\Testing\Concerns\TemporaryDirectoryTrait
+    'concerns.scratch_create_failed' => 'TemporaryDirectoryTrait: could not create scratch directory {path}',
+    'concerns.link_detected' => 'TemporaryDirectoryTrait: refusing to wipe {path} — the scratch path itself is a symlink',
+    'concerns.outside_temp' => 'TemporaryDirectoryTrait: refusing to wipe {path} — it does not resolve inside {root}',
+    'concerns.opendir_failed' => 'TemporaryDirectoryTrait: cannot open {path} for cleanup',
+    // SugarCraft\Testing\Snapshot\Assertions
+    'assertions.row_not_utf8' => 'assertCellGrid(): row {row} is not valid UTF-8; a raw-byte row cannot address cells.',
 
     // ProgramSimulator errors
     'simulator.cmd_loop_overflow' => 'Cmd message loop exceeded {max} cycles',

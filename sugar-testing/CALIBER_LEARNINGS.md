@@ -30,3 +30,7 @@ Pattern: `ScriptedInput::paste()`/`bytes()` feed bytes through sugar-core's `Inp
 Anti-pattern: `paste()` used to push one raw `PasteMsg` — no envelope, no sanitizing, no chunking — so a model that replaced its value on every PasteMsg, or echoed escapes, passed here and broke on a terminal.
 Pattern: `ProgramSimulator::run()` applies subscription output right after the message that fired it and never appends it to the `send()` queue; the old fixed-count drain dropped it and the next `run()` replayed it.
 
+### 2026-11-13 — Localization boundary: thrown exceptions localized, assertion guidance English
+Pattern: Exceptions THROWN by the harness (bad input, refusal guards) carry `Lang::t()` messages so user-facing failures translate. Guidance prose that only ever appears as a PHPUnit failure text — `Assert::fail()` strings and `TestResult` re-baselining directions — stays English: it is test-author-facing, goes in golden-free diff output, and translating it would churn pins for zero user benefit.
+Anti-pattern: Half-migrating one family and leaving sibling throws of the same guard ad hoc — pick the boundary (throw vs assertion-failure) and keep it.
+Source: sugar-testing EXEC testing-11

@@ -9,6 +9,7 @@ use PHPUnit\Framework\Assert;
 use SugarCraft\CellBuffer\Buffer;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Testing\Lang;
 
 /**
  * Static assertion helpers for terminal snapshot testing.
@@ -378,10 +379,7 @@ final class Assertions
         $clusters = preg_match_all('/\X/u', $row);
 
         if ($clusters === false) {
-            throw new InvalidArgumentException(sprintf(
-                'assertCellGrid(): row %d is not valid UTF-8; a raw-byte row cannot address cells.',
-                $rowIndex,
-            ));
+            throw new InvalidArgumentException(Lang::t('assertions.row_not_utf8', ['row' => $rowIndex]));
         }
 
         preg_match_all('/\X/u', $row, $matches);

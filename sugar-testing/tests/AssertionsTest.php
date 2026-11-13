@@ -58,6 +58,16 @@ final class AssertionsTest extends TestCase
         Assertions::assertGoldenAnsi($goldenPath, "\x1b[1;33mActual\x1b[0m");
     }
 
+    public function testAssertCellGridRefusesNonUtf8StringRow(): void
+    {
+        // A raw-byte row cannot address cells — the throw is localized,
+        // so the teaching text must survive via the lang lookup too.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('is not valid UTF-8');
+
+        Assertions::assertCellGrid(["\xff\xfe"], Buffer::new(2, 1));
+    }
+
     public function testAssertGoldenAnsiCreatesWhenUpdateGoldensSetAndMissing(): void
     {
         $goldenPath = $this->fixturesDir . '/new.golden';

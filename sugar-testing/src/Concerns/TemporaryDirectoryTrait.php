@@ -6,6 +6,7 @@ namespace SugarCraft\Testing\Concerns;
 
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
+use SugarCraft\Testing\Lang;
 
 /**
  * Provides temporary directory setup and cleanup for tests.
@@ -50,7 +51,7 @@ trait TemporaryDirectoryTrait
         // '@' + is_dir rescue keeps the concurrent-creation shape warning-free.
         @mkdir($base, 0700, true);
         if (!is_dir($base)) {
-            throw new RuntimeException('TemporaryDirectoryTrait: could not create scratch directory ' . $base);
+            throw new RuntimeException(Lang::t('concerns.scratch_create_failed', ['path' => $base]));
         }
 
         $this->tmpDir = $base;
@@ -74,7 +75,7 @@ trait TemporaryDirectoryTrait
         }
 
         if (is_link($dir)) {
-            throw new RuntimeException('TemporaryDirectoryTrait: refusing to wipe ' . $dir . ' — the scratch path itself is a symlink');
+            throw new RuntimeException(Lang::t('concerns.link_detected', ['path' => $dir]));
         }
 
         if (!is_dir($dir)) {
@@ -84,7 +85,10 @@ trait TemporaryDirectoryTrait
         $tempRoot = realpath(sys_get_temp_dir());
         $realDir  = realpath($dir);
         if ($tempRoot === false || $realDir === false || !str_starts_with($realDir, $tempRoot . DIRECTORY_SEPARATOR)) {
-            throw new RuntimeException('TemporaryDirectoryTrait: refusing to wipe ' . $dir . ' — it does not resolve inside ' . ($tempRoot ?: 'the system temp directory'));
+            throw new RuntimeException(Lang::t('concerns.outside_temp', [
+                'path' => $dir,
+                'root' => $tempRoot ?: 'the system temp directory',
+            ]));
         }
 
         self::removeTreeContents($realDir);
@@ -98,7 +102,7 @@ trait TemporaryDirectoryTrait
     {
         $handle = opendir($dir);
         if ($handle === false) {
-            throw new RuntimeException('TemporaryDirectoryTrait: cannot open ' . $dir . ' for cleanup');
+            throw new RuntimeException(Lang::t('concerns.opendir_failed', ['path' => $dir]));
         }
 
         try {
