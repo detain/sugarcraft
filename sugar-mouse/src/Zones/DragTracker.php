@@ -103,11 +103,22 @@ final class DragTracker
      * Process a mouse event and detect drag state transitions.
      *
      * - Press inside a zone → start drag, emit {@see ZoneDragStartMsg}.
+     * - Press while a drag is already open → CLOSE that gesture first: the
+     *   tracker forks back to idle and emits its {@see ZoneDragEndMsg} with
+     *   a null target (abandoned by the steal, not released over a zone);
+     *   the stealing Press starts nothing — the next Press opens a new drag.
      * - Motion while dragging → crossing a boundary emits one
      *   {@see ZoneDragMoveMsg} for the new zone in the SAME call.
      * - Release of the drag button → end drag, emit {@see ZoneDragEndMsg}
      *   carrying the origin zone and the zone under the cursor at release
      *   (null when the release happened outside every zone).
+     *
+     * The Start fires on the Press itself: a zero-movement click inside a
+     * drag zone is a Start immediately followed by an End — the honest shape
+     * of the gesture, not a bug to threshold away. Apps that must not
+     * flash a drag UI on a plain click gate their painting on the first
+     * {@see ZoneDragMoveMsg} (candy-code's selection controller does); an
+     * opt-in movement threshold is a ruling the lib has not taken.
      *
      * Button identity: the Press records which button started the drag, and
      * a Release of a DIFFERENT button neither ends the drag nor clears state.
@@ -153,8 +164,22 @@ final class DragTracker
             return [$tracker, new ZoneDragEndMsg($origin, $hit)];
         }
 
-        // --- Press: start a new drag if inside a zone ---
+        // --- Press: one gesture at a time ---
         if ($msg->action === MouseAction::Press) {
+            if ($this->originZoneId !== null) {
+                // A second Press while a drag is active CLOSES the open
+                // gesture before anything else can claim it: fork back to
+                // idle, emitting the abandoned gesture's End (null target —
+                // it ended by steal, not by a release over a zone).
+                // Pre-fix the rebind swallowed the old gesture silently, so
+                // its Start never got an End and pairing consumers wedged.
+                // The stealing Press is consumed by the close; a new drag
+                // starts at the NEXT Press inside a zone. Vanished origin
+                // clears silently, mirroring the Release path.
+                $abandoned = $this->manager->get($this->originZoneId);
+
+                return [$this->mutate(null, null, null), $abandoned !== null ? new ZoneDragEndMsg($abandoned, null) : null];
+            }
             if ($hit !== null) {
                 return [$this->mutate($hit->id, $hit->id, $msg->button), new ZoneDragStartMsg($hit, $hit)];
             }
@@ -186,6 +211,12 @@ final class DragTracker
             if ($origin !== null) {
                 return [$this->mutate($this->originZoneId, $hit->id, $this->dragButton), new ZoneDragMoveMsg($origin, $hit)];
             }
+
+            // Origin zone vanished from the registry mid-drag: the Motion
+            // path abandons the gesture exactly as the Release path ends it
+            // — silent clear, so stale ids cannot wedge the tracker or keep
+            // emitting Moves for a zone that no longer exists.
+            return [$this->mutate(null, null, null), null];
         }
 
         return [$this, null];

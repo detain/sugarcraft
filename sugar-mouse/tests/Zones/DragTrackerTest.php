@@ -452,4 +452,84 @@ final class DragTrackerTest extends TestCase
         $this->assertInstanceOf(ZoneDragEndMsg::class, $msg);
         $this->assertNull($tracker->originZoneId());
     }
+
+    /**
+     * sugar-mouse-048 QA probe: a right-press while a left-drag is open
+     * must END the A gesture (pre-fix it silently rebound the tracker to
+     * B, so A's Start never got an End and pairing consumers wedged).
+     * The steal closes with a null target — abandoned, not released —
+     * and the tracker idles.
+     */
+    public function testRightPressStealEndsFirstGestureWithNullTarget(): void
+    {
+        $m = $this->buildManager();
+        $tracker = new DragTracker($m);
+
+        [$tracker, $msg] = $tracker->update($this->press(2, 1));
+        $this->assertInstanceOf(ZoneDragStartMsg::class, $msg);
+        $this->assertSame('a', $tracker->originZoneId());
+
+        // Steal: right button pressed inside zone B while A's drag is open.
+        [$tracker, $msg] = $tracker->update($this->press(6, 1, MouseButton::Right));
+        $this->assertInstanceOf(ZoneDragEndMsg::class, $msg);
+        $this->assertSame('a', $msg->originZone->id, 'the closed gesture is the A drag');
+        $this->assertNull($msg->currentZone, 'abandoned gestures end with a null target');
+        $this->assertNull($tracker->originZoneId());
+        $this->assertNull($tracker->currentZoneId());
+        $this->assertNull($tracker->dragButton());
+
+        // The stealing Press was consumed by the close; the next Press opens
+        // a fresh gesture.
+        [$tracker, $msg] = $tracker->update($this->press(6, 1));
+        $this->assertInstanceOf(ZoneDragStartMsg::class, $msg);
+        $this->assertSame('b', $tracker->originZoneId());
+    }
+
+    /**
+     * A same-zone re-press closes too — gesture identity changed (new
+     * button), so the open one must end before any claim that it continues
+     * under different button identity.
+     */
+    public function testRePressInsideSameZoneClosesOpenGesture(): void
+    {
+        $m = $this->buildManager();
+        $tracker = new DragTracker($m);
+
+        [$tracker, $msg] = $tracker->update($this->press(2, 1));
+        $this->assertInstanceOf(ZoneDragStartMsg::class, $msg);
+
+        [$tracker, $msg] = $tracker->update($this->press(2, 1, MouseButton::Right));
+        $this->assertInstanceOf(ZoneDragEndMsg::class, $msg);
+        $this->assertSame('a', $msg->originZone->id);
+        $this->assertNull($tracker->originZoneId());
+    }
+
+    /**
+     * sugar-mouse-048 alignment: the Motion path of a vanished origin now
+     * abandons the gesture with the same silent clear the Release path
+     * performs — pre-fix it returned the tracker UNCHANGED, keeping stale
+     * ids alive across frames.
+     */
+    public function testMotionAfterOriginVanishedClearsLikeReleasePath(): void
+    {
+        $m = $this->buildManager();
+        $tracker = new DragTracker($m);
+
+        [$tracker] = $tracker->update($this->press(2, 1));
+        $this->assertSame('a', $tracker->originZoneId());
+
+        $m->clear('a');
+
+        // Crossing into B with origin 'a' gone: silent clear, no Move msg.
+        [$tracker, $msg] = $tracker->update($this->move(6, 1));
+        $this->assertNull($msg);
+        $this->assertNull($tracker->originZoneId());
+        $this->assertNull($tracker->currentZoneId());
+        $this->assertNull($tracker->dragButton());
+
+        // Re-registering lets the next press start fresh — no wedge residue.
+        $m->scan($m->mark('a', 'AAA') . '|' . $m->mark('b', 'BBB'));
+        [$tracker, $msg] = $tracker->update($this->press(2, 1));
+        $this->assertInstanceOf(ZoneDragStartMsg::class, $msg);
+    }
 }

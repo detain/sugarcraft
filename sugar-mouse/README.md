@@ -599,15 +599,24 @@ that same `update()` call.
 **Button identity:** the Press records which button started the drag; a
 Release of a different button is inert. Releasing the drag button always
 ends the drag, even when the origin zone has vanished from the manager
-(that end is silent, but the tracker clears instead of wedging).
+(that end is silent, but the tracker clears instead of wedging). A second
+Press while a drag is open — the right-press steal — closes the first
+gesture before anything else can claim it: `ZoneDragEndMsg(origin, null)`
+(null target: abandoned, not released over a zone) and the tracker idles;
+the stealing Press starts nothing, and the next Press opens the new drag.
 
 **Click vs. zero-distance drag:** a press and release in the same spot of
 the same zone satisfies both state machines — `ClickCounter` counts it and
 `DragTracker` emits `ZoneDragStartMsg` followed by `ZoneDragEndMsg` with
-`currentZone === originZone`. Neither tracker ships a travel threshold
-(bubblezone has none either); if a widget wants EITHER a click OR a drag
-per gesture, gate drag effects on a start/end box difference or on at
-least one emitted `ZoneDragMoveMsg`.
+`currentZone === originZone`. The Start firing on the Press itself means a
+plain click inside a zone flashes the drag UI for one event pair unless the
+app gates it: paint drag effects only from the first emitted
+`ZoneDragMoveMsg` (candy-code's selection controller gates exactly this
+way). Neither tracker ships a travel threshold (bubblezone has none
+either); if a widget wants EITHER a click OR a drag per gesture, gate drag
+effects on a start/end box difference or on at least one emitted
+`ZoneDragMoveMsg`. An opt-in movement threshold is a lib ruling that has
+not been taken.
 
 **State accessors:**
 - `originZoneId()` / `originZone()` — zone the drag started from, or null
