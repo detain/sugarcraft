@@ -80,13 +80,15 @@ candy-codeshot notes.md --format png -o notes.png
 
 (That last one renders **without** syntax colour: detection names
 `notes.md` as Markdown, the lexer has no Markdown grammar, and a name
-with no grammar renders plain — see [Language Detection](#language-detection).)
+with no grammar renders plain — see [Language detection](#language-detection).)
 
 ### Flags
 
-Every flag the parser accepts. Flag values are **separate arguments** —
+These are all the flags the parser accepts. Flag values are **separate arguments** —
 `--theme dracula`, not `--theme=dracula` (the `=` form is rejected as an
-unrecognised flag).
+unrecognised flag). A lone `-` names stdin; a lone `--` ends option parsing, so
+every token after it is an operand (a second file argument is refused as an
+unexpected argument).
 
 - `--theme <name|file>` — colour palette: `dark` (default), `light`, `dracula`, `tokyo-night`, `nord` — or a path to a JSON theme file (VS Code or flat-palette; see [Themes](#themes)). Names match case-insensitively with `_` read as `-`, so `tokyo_night`, `Tokyo-Night` and `DARK` are all accepted. A value that looks like a path (contains a separator, or ends in `.json`) goes through the file route — confined like every other path argument — and refuses with exit 2 if it cannot be read or parsed.
 - `--padding <n>` — content padding inside the frame (default 24).
@@ -96,11 +98,11 @@ unrecognised flag).
 - `--line-numbers` — render a left-gutter line counter.
 - `--border-radius <n>` — corner radius of the frame (default 8).
 - `--window-style <style>` — chrome style: `macos` (default), `windows-terminal`, `iterm`, `hyper`, `none`. `none` collapses the title-bar band (no empty 36 px strip).
-- `--ligatures` — enable ligatures (`font-variant-ligatures: normal`). **SVG only.**
+- `--ligatures` — enable ligatures (`font-variant-ligatures: normal`). **SVG only.** Freeze's spelling of this flag is renamed here; see [Ligatures](#ligatures).
 - `--font <path>` — embed a TTF/OTF/WOFF/WOFF2 font in the SVG. **SVG only.** The CLI validates the file's signature; the library-level `SvgRenderer::withFont()` only checks existence and falls back to `font/ttf` for unknown MIME at render time.
 - `--unsafe-paths` — allow input / `--font` / `--output` paths outside the CWD (see Path confinement).
-- `--highlight <start:end[:color]>` — highlight lines `start:end` with an optional colour (default: the theme’s own highlight colour). Ranges are validated at parse time, whichever output format you chose: `start >= 1`, `end >= start`, else a friendly refusal, exit 2. The highlight itself is **SVG only.**
-- `--format <svg|png>` — output format (default `svg`; `png` requires `ext-gd`).
+- `--highlight <start:end[:color]>` — highlight lines `start:end` with an optional colour (default: the theme's own highlight colour). Ranges are validated at parse time, whichever output format you chose: `start >= 1`, `end >= start`, else a friendly refusal, exit 2. The highlight itself is **SVG only.**
+- `--format <svg|png>` — output format (default `svg`; `png` requires `ext-gd`). Upstream freeze also exports WebP; codeshot deliberately does not — the format vocabulary stays two deep.
 - `-t`, `--type <lang>` — force the syntax-highlighting language (default: filename, then shebang, then content detection). The value is not validated: any string is accepted, and a name with no grammar renders as plain text rather than erroring.
 - `-o`, `--output <path>` — write the screenshot to a file instead of stdout.
 - `-h`, `--help` — show the help message.
@@ -109,14 +111,19 @@ unrecognised flag).
 ### Exit codes
 
 - `0` — success.
-- `1` — I/O failure: unreadable input, unwritable output, or a missing composer `autoload.php` (installation problem; the binary names itself and says to run `composer install`).
-- `2` — usage or input error: unknown or malformed flag, missing flag value,
-  non-numeric `--padding` / `--border-radius`, unknown theme, `--format` or
-  `--window-style` name, path refused by confinement (input, `--font` or
-  `--output`), refused font (not a file, or not a TTF/OTF/WOFF/WOFF2
-  signature), directory as input, missing `ext-gd` for PNG, PNG output refused
-  to a terminal, refused `--highlight` range, or a render the engine refuses
-  mid-flight (PNG pixel ceiling, font read failure).
+- `1` — I/O failure: unreadable input, unwritable output, or a missing composer `autoload.php` (installation problem — the message is prefixed with `candy-codeshot:` and says to run `composer install`).
+- `2` — usage or input error. Three families:
+  - **Flags and values:** unknown or malformed flag, missing flag value, an
+    unexpected second positional argument, non-numeric `--padding` /
+    `--border-radius`, refused `--highlight` range.
+  - **Names, paths and input:** unknown theme name, an unreadable,
+    unparseable or non-array `--theme` file, a refused `--format` or
+    `--window-style` name, path refused by confinement (input, `--font`,
+    `--output` or `--theme`), refused font (not a file, or not a
+    TTF/OTF/WOFF/WOFF2 signature), directory as input.
+  - **Output and mid-render refusals:** missing `ext-gd` for PNG, PNG output
+    refused to a terminal, or a render the engine refuses mid-flight (PNG
+    pixel ceiling, font read failure).
 
 ### Path confinement
 
@@ -149,11 +156,11 @@ them together with `--format png`, the CLI **announces each dropped option on
 stderr** instead of failing silently. If `ext-gd` is missing, PNG requests exit
 2 with a clear message; likewise `--format png` without an `--output` file is
 refused (exit 2) when stdout is a terminal, because raw high-bit PNG bytes
-belong in a file and not on your shell. Font checks are not part of that
-drop-list, though: the `--font` confinement, existence and signature checks run
-before the format branch decides to discard the option, so
-`--format png --font <bad-path>` exits 2 on the refused font even though a
-valid font would merely have been dropped. Writing `--format svg` (or omitting it)
+belong in a file and not on your shell. `--font` is dropped like the other
+SVG-only options, but its validation is not skipped: the confinement,
+existence and signature checks run before the format branch decides to
+discard the option, so `--format png --font <bad-path>` exits 2 on the
+refused font even though a valid font would merely have been dropped. Writing `--format svg` (or omitting it)
 to a `*.png` filename — or `--format png` to a `*.svg` filename — still writes
 the bytes of the requested format but warns on stderr that the extension and
 format disagree.
@@ -210,13 +217,15 @@ attributes; PNG paints only the foreground colour and background bands — bold 
 italic / underline are silently dropped there (see [Known
 limitations](#known-limitations)). SGR state carries across lines: an
 unterminated colour sequence keeps painting the following lines, as in a
-terminal. Foreground colours are read in both spellings xterm allows — the flat
+terminal. Colours are read in both spellings xterm allows — the flat
 `38;2;R;G;B` and the grouped `38:2::R:G:B` (ECMA-48 sub-parameters, where the
-slot after the mode is a colour-space id and not the red component) — and both
-resolve to the same `#rrggbb`. SGR codes the renderers deliberately do not
-map: `reverse` (7), `hidden` (8), `strikethrough` (9), `dim` (2), `blink` (5),
-`rapid blink` (6), `fringe` (21), `overlined` (53) — among others — they are
-parsed and ignored. The same doctrine covers an out-of-range palette index:
+slot after the mode is a colour-space id and not the red component) — for
+foreground **and** background alike: `48;5;N` / `48:2::R:G:B` share the same
+reader and resolve the same way, and both spellings land on the same
+`#rrggbb`. The SGR codes the renderers deliberately do not map — `reverse` (7),
+`hidden` (8), `strikethrough` (9), `dim` (2), `blink` (5), `rapid blink` (6),
+`double underline` (21), `overlined` (53), among others — are parsed and
+ignored. The same doctrine covers an out-of-range palette index:
 `38;5;N` / `48;5;N` with N outside 0..255 changes no colour, matching xterm —
 and the public table helper `AnsiParser::xterm256ToHex()` refuses such an
 index with `InvalidArgumentException` rather than clamping or guessing.
@@ -228,7 +237,7 @@ $svg = SvgRenderer::dark()->render("\x1b[31merror:\x1b[0m something broke");
 $svg = SvgRenderer::dark()->render("\x1b[44m\x1b[37malert:\x1b[0m background highlight");
 ```
 
-`PngRenderer` is the GD-backed sibling with the same fluent surface — except the SVG-only `withLigatures()`, `withFont()`, `withHighlight()` and `withTitle()` setters, plus `withBorderRadius()`, which is accepted but not honoured: PNG corners stay square.
+`PngRenderer` is the GD-backed sibling with the same fluent surface except four genuinely SVG-only setters — `withLigatures()`, `withFont()`, `withHighlight()` and `withTitle()` have no PNG counterpart. `withBorderRadius()` does exist on PNG and is accepted, but it is inert there: PNG corners stay square.
 
 ```php
 use SugarCraft\CodeShot\PngRenderer;
@@ -244,16 +253,17 @@ $png = PngRenderer::dracula()
 |---|---|
 | `SvgRenderer` | Immutable fluent renderer producing SVG; factories `dark()/light()/dracula()/tokyoNight()/nord()`, fluent `with*()`. |
 | `PngRenderer` | GD-backed renderer producing PNG bytes; same theme, fixed bitmap fonts. |
+| `AnsiParser` | Turns SGR-annotated input into `Segment` runs (`parse()`); exposes the classic palette `ANSI16` and `xterm256ToHex()`, which refuses indices outside 0..255. |
 | `Theme` | Immutable palette + font config shared by both renderers (window-chrome style lives on the renderers). |
 | `WindowStyle` | Enum of chrome styles: `Macos`, `WindowsTerminal`, `ITerm2`, `Hyper`, `None`. |
 | `WindowChromeGeometry` | Per-style traffic-light / title-bar geometry (used by both renderers). |
-| `CodeHighlighter` | Keyword/string/comment highlighting for a detected language under a theme. |
+| `CodeHighlighter` | Keyword/string/number/comment highlighting for a detected language under a theme. |
 | `LanguageDetector` | Heuristic language detection from filename, shebang and content. |
 | `LayoutCalculator` | Canvas maths: content box, header band, shadow margin, totals. |
 | `Segment` | One styled run of text (text + fg/bg/style flags) produced by the parser/highlighter. |
 | `Theme\VsCodeThemeLoader` | Import a VS Code `themes/*.json` colour scheme into a `Theme`. |
 | `Theme\FlatPaletteThemeLoader` | Import this library's flat JSON palette file into a `Theme`. |
-| `OutputWriter` (+ `StringOutputWriter`, `FileOutputWriter`) | Buffer/forward helpers for caller-chunked pieces — they do not stream screenshots themselves; the renderers return complete bytes and do not call them. |
+| `OutputWriter` (+ `StringOutputWriter`, `FileOutputWriter`) | Helpers that buffer or forward text handed to them chunk by chunk. Nothing internal uses them: the renderers return one complete string and the CLI writes it directly. |
 | `Lang` | i18n lookup wrapper (16 locales shipped under `lang/`). |
 
 ## Ligatures
@@ -266,7 +276,10 @@ $svg = SvgRenderer::dracula()
     ->render($code);
 ```
 
-## Language Detection
+The CLI flag is `--ligatures`; upstream freeze spells the same option
+`--font-ligatures`, and codeshot dropped the redundant word at rename.
+
+## Language detection
 
 `LanguageDetector` provides heuristic detection from filename, shebang or content:
 
@@ -305,7 +318,7 @@ Source details:
 - **Shebang** — `#!/bin/bash`, `#!/usr/bin/env node`, `#!/usr/bin/env php`, etc.
 - **Content signatures** — a deliberately small list matched by `detect()`: php, javascript, python, ruby, bash, sql, html, css, json, yaml, markdown (TypeScript/Go/Rust are recognised **by extension only**, not by content).
 
-Returns `"text"` when no match is found.
+`detect()` returns `"text"` when no source matches.
 
 ## Themes
 
@@ -319,9 +332,9 @@ SvgRenderer::nord();        // #2e3440
 
 Build a custom theme via the `Theme` constructor — set background / foreground
 / border / shadow / line-number colour / window-control colours / font family
-/ size / line height / highlight band colour (`Theme::$highlight`, a nullable
-string and the default `--highlight` colour; all five bundled presets set
-their own). VS Code theme JSON and the library's flat-palette JSON can be
+/ size / line height / highlight band colour (the `Theme` `$highlight`
+property — `->highlight` — a nullable string and the default `--highlight`
+colour; all five bundled presets set their own). VS Code theme JSON and the library's flat-palette JSON can be
 imported straight from the CLI with `--theme <path.json>`: the path rides
 the same CWD confinement as every other file argument, VS Code files are
 sniffed by their `colors` / `tokenColors` keys and anything else is read
@@ -344,7 +357,7 @@ today:
 
 - **Highlighting engine** — freeze drives chroma's 100+ TextMate-adjacent
   lexers; codeshot lexes sixteen keyword grammars in pure PHP (see
-  Language Detection above). No external process, no grammar bundles.
+  Language detection above). No external process, no grammar bundles.
 - **No config file** — freeze reads a persisted config; codeshot takes
   every option from the command line or the library call. A `--config`
   route has been considered and deliberately not shipped: a static
@@ -381,9 +394,10 @@ Matching the upstream surface: the five window styles (`macos`,
 - **`windows-terminal` chrome is deliberately dark** — its title bar uses the
   hard-coded `#1e1e1e` / `#303030` / `#444444` of the real Windows Terminal
   default theme and is not re-tinted by `--theme` (planned future work:
-  theme-derived chrome colours). Its title-bar rects are clipped to the rounded frame, so a
-  non-zero `--border-radius` shows rounded top corners — the `hyper` chrome
-  receives the same rounded-frame clip.
+  theme-derived chrome colours).
+- **Rounded title-bar clip** — the `windows-terminal` title-bar rects are
+  clipped to the rounded frame, so a non-zero `--border-radius` shows rounded
+  top corners; the `hyper` chrome receives the same rounded-frame clip.
 - **Accessible SVG output** — every render emits `<title>`, `<desc>` and
   `role="img"`; the CLI names the document after the input basename (or
   `stdin`), the library via `withTitle()`. The accessible name comes from the
@@ -411,9 +425,10 @@ Matching the upstream surface: the five window styles (`macos`,
 - **Numeric ceilings** — the CLI refuses `--padding` above 512 and
   `--border-radius` above 64; engine constructors clamp to 0..4096 /
   0..256, and PNG output above 40,000,000 pixels is refused, not allocated.
-  Language detection reads at most 1 MB of content (`src/LanguageDetector.php:87`):
-  input beyond that cap is treated as plain text, so a multi-megabyte paste is
-  rendered unhighlighted rather than refused.
+  Language detection bails out above 1 MB of content (`LanguageDetector::detect()`
+  answers `"text"`): a multi-megabyte paste loses the shebang/signature tiers
+  and renders unhighlighted, though file input with a known extension is
+  unaffected — the filename tier never looks inside.
 - **Font embedding caps at 32 MiB** — unreadable or oversized font files
   raise a loud `RuntimeException` (CLI exit 2); SVG never silently drops
   the `@font-face`. The CLI verifies the font's signature before reading it;
@@ -453,6 +468,13 @@ Matching the upstream surface: the five window styles (`macos`,
 
 ![ansi-input](.vhs/ansi-input.gif)
 
+### Example gallery
+
+[`examples/out/`](examples/out/) holds a 16-artifact gallery: every theme as
+SVG, plus every theme and window style as PNG. Both scripts in `examples/`
+generate it — `php examples/screenshot.php` and `php examples/codeshot_to_png.php`
+from the library root (after `composer install`) regenerate the set.
+
 ## Testing
 
 ```sh
@@ -464,13 +486,21 @@ The options roster guard (`tests/OptionsRosterTest.php`) fails when the parser,
 
 ## Accessor deprecation (2026-10-24)
 
-Per the house bare-accessor convention (`AGENTS.md`: *"Bare accessors (no* `get`*"), ruling 3b)*, `StringOutputWriter::getResult()` was renamed to its bare twin `result()` — unclaimed on the class, and deliberately not lifted onto the `OutputWriter` interface, because `FileOutputWriter` has no accumulated string to hand back; `result()` is this implementation's surface. The legacy spelling stays a byte-identical one-line BC forwarder marked `@deprecated` with `REMOVED-IN: 2.0.0`; it will be removed in candy-codeshot v2.0.0.
+`StringOutputWriter::getResult()` is now `result()` — the house convention for
+accessors drops the `get` prefix. Use `result()`; `getResult()` remains as a
+deprecated forwarder that returns the identical string, and will be removed in
+candy-codeshot v2.0.0. The bare name deliberately stays off the `OutputWriter`
+interface: `FileOutputWriter` has no accumulated string to hand back, so
+`result()` is this implementation's surface.
 
 | Namespace | Class | Deprecated | Use instead |
 |-----------|-------|------------|-------------|
 | `CodeShot` | `StringOutputWriter` | `getResult()` | `result()` |
 
-`tests/AccessorDeprecationTest.php` pins BC identity on a live writer (empty buffer, after writes, after flush), the forwarder shape (single return line + markers), a discovery-first `src/` census with an inverse leg that reddens any unmarked public `get*()`, and the README table agreement. The bundled renderers never call the writer, so there were no internal call sites to switch; the existing `StringOutputWriterTest` needles stay green through the forwarder.
+`tests/AccessorDeprecationTest.php` keeps the forwarder byte-identical to
+`result()` on a live writer and fails if any public `get*()` accessor ships
+without a deprecation marker. Nothing internal called the writer — the
+renderers return complete bytes — so no call sites needed switching.
 
 ## Credits & inspiration
 
