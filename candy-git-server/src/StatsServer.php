@@ -7,6 +7,7 @@ namespace SugarCraft\GitServer;
 use React\EventLoop\Loop;
 use React\EventLoop\LoopInterface;
 use React\EventLoop\TimerInterface;
+use SugarCraft\GitServer\Support\HttpWire;
 
 /**
  * Minimal HTTP stats endpoint on `stats.listen_addr`.
@@ -37,7 +38,8 @@ use React\EventLoop\TimerInterface;
 final class StatsServer
 {
     /** Bytes of request head (line + headers) tolerated before refusal. */
-    private const MAX_HEADER_BYTES = 65536;
+    /** Header cap + write quantum now live in one place — see Support/HttpWire. */
+    private const MAX_HEADER_BYTES = HttpWire::MAX_HEADER_BYTES;
 
     /** Silence tolerated on a half-finished request before the seat dies. */
     private const IDLE_TIMEOUT_SECONDS = 30.0;
@@ -214,7 +216,10 @@ final class StatsServer
     private function onClientReadable($client): void
     {
         $id = (int) $client;
-        if (!isset($this->clients[$id])) {
+        // 112: the number alone is not the connection — a callback for a
+        // closed-and-recycled stream must not fread a dead handle and
+        // then unset the innocent seat that inherited its id.
+        if (($this->clients[$id]['stream'] ?? null) !== $client) {
             return;
         }
         $data = @\fread($client, 8192);
@@ -282,7 +287,13 @@ final class StatsServer
             . 'Content-Length: ' . \strlen($body) . "\r\n"
             . "Connection: close\r\n"
             . "Server: CandyGitServer/1.0\r\n\r\n";
-        @\fwrite($client, $headers . $body);
+        // 033: this used to be ONE @fwrite — on a non-blocking socket that
+        // hands off at most one send window, so a stats body past the
+        // kernel buffer (an operator with hundreds of repos packed the
+        // JSON) arrived truncated behind a matching Content-Length. Same
+        // defect shape the listener was cured of; same drain, one source
+        // (HttpWire, S13).
+        HttpWire::writeAll($client, $headers . $body);
     }
 
     /** @param resource $client */

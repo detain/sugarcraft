@@ -7,6 +7,7 @@ namespace SugarCraft\GitServer\HttpSmartProtocol;
 use React\EventLoop\Loop;
 use React\EventLoop\LoopInterface;
 use React\EventLoop\TimerInterface;
+use SugarCraft\GitServer\Support\HttpWire;
 use SugarCraft\GitServer\Support\WorkerFork;
 
 /**
@@ -45,7 +46,7 @@ use SugarCraft\GitServer\Support\WorkerFork;
  * The sweep enforces the request deadline between ticks; it cannot preempt
  * work already inside dispatch(), so the response write carries its OWN
  * two-part bound (zero-progress stall grace + absolute ceiling in
- * {@see self::writeAll()}) and the router's child pumps are bounded by
+ * {@see HttpWire::writeAll()}) and the router's child pumps are bounded by
  * the ladder in Git\StatelessRpc — no phase of a served request is
  * unbounded.
  *
@@ -64,7 +65,8 @@ use SugarCraft\GitServer\Support\WorkerFork;
 final class HttpListener
 {
     /** Bytes of request head (line + headers) tolerated before refusal. */
-    private const MAX_HEADER_BYTES = 65536;
+    /** Header cap + write quantum now live in one place — see Support/HttpWire. */
+    private const MAX_HEADER_BYTES = HttpWire::MAX_HEADER_BYTES;
 
     /** Silence tolerated on a half-finished request before the seat dies. */
     private const IDLE_TIMEOUT_SECONDS = 30.0;
@@ -316,7 +318,13 @@ final class HttpListener
     private function pumpClient($client): bool
     {
         $id = (int) $client;
-        if (!isset($this->clients[$id])) {
+        // 112: a matching seat NUMBER is not a matching CONNECTION — PHP
+        // recycles resource ids, and a stale readable callback whose old
+        // stream got closed under it would otherwise fread a dead handle,
+        // then closeClient() the NEWER socket sharing the number (the
+        // innocent seat's stream IS what closeClient acts through). The
+        // identity check makes stale callbacks inert.
+        if (($this->clients[$id]['stream'] ?? null) !== $client) {
             return false;
         }
         $data = @\fread($client, 8192);
@@ -394,7 +402,9 @@ final class HttpListener
         $this->inWorker = true;
 
         $id = (int) $client;
-        if (!isset($this->clients[$id])) {
+        if (($this->clients[$id]['stream'] ?? null) !== $client) {
+            // 112: same number is not the same connection (pumpClient's
+            // reasoning); a worker never services a recycled-id seat.
             return false;
         }
         $now = \microtime(true);
@@ -628,83 +638,11 @@ final class HttpListener
         // bare fwrite hands the kernel AT MOST one send-buffer of bytes and
         // the rest of the response would be silently lost on close — real
         // `git clone` of any repo whose pack exceeds the kernel buffers died
-        // with curl 18 "transfer closed with N bytes remaining". writeAll()
-        // keeps feeding the socket until it is drained or the client stalls.
-        self::writeAll($client, $wire);
+        // with curl 18 "transfer closed with N bytes remaining".
+        // HttpWire::writeAll() keeps feeding the socket until it is drained
+        // or the client stalls (shared with the stats transport, S13).
+        HttpWire::writeAll($client, $wire);
     }
-
-    /**
-     * Push $bytes through a non-blocking stream, retrying every partial
-     * accept until the whole payload is handed to the kernel — or until the
-     * client makes zero progress for $stallSeconds, or the write outlives
-     * the absolute ceiling, or the socket errors. Returns the byte count
-     * actually written (== strlen($bytes) on success); the caller's close
-     * path is identical either way because a half-delivered response is
-     * already protocol-dead to the client.
-     *
-     * The progress re-arm bounds only the ZERO-progress grace: a client
-     * that accepts one byte every few seconds used to hold the seat — and,
-     * in the serial-loop build, every other client with it — for as long as
-     * it liked. The absolute ceiling (start + $absoluteSeconds, monotonic)
-     * is the same shape GitDaemon::drainWrite and StdioPipe's hard bound
-     * already enforce, so no response write is unbounded anywhere in the
-     * lib. Sweeping deadlines cannot preempt a write already in flight
-     * (single-threaded dispatch), which is exactly why the bound lives here.
-     *
-     * @param resource $stream
-     */
-    private static function writeAll($stream, string $bytes, ?float $stallSeconds = null, ?float $absoluteSeconds = null): int
-    {
-        $stall    = $stallSeconds ?? self::WRITE_STALL_SECONDS;
-        $absolute = $absoluteSeconds ?? self::WRITE_ABSOLUTE_SECONDS;
-        $total    = \strlen($bytes);
-        $offset   = 0;
-        $absoluteNs = \hrtime(true) + (int) ($absolute * 1e9);
-        $giveUp   = \microtime(true) + $stall;
-
-        while ($offset < $total) {
-            if (\microtime(true) >= $giveUp || \hrtime(true) >= $absoluteNs) {
-                return $offset; // wedged (zero progress past the grace) or dribbling (past the ceiling)
-            }
-            // Hand the kernel ONE chunk per feed: substr($bytes, $offset)
-            // re-sliced the whole remainder on every partial accept, so a
-            // max-size response on a slow peer did O(n²/chunk) byte copying
-            // inside the write loop (the same quadratic-writer family as
-            // the fleet's streaming holds). The slice is also what keeps a
-            // huge $bytes from being copied twice per attempt.
-            $written = @\fwrite($stream, \substr($bytes, $offset, self::WRITE_CHUNK_BYTES));
-            if ($written === false) {
-                return $offset; // socket error / reset by peer
-            }
-            if ($written > 0) {
-                $offset += $written;
-                $giveUp = \microtime(true) + $stall; // progress re-arms the window, never past the ceiling
-                continue;
-            }
-            // 0-byte accept: kernel buffer full (or EINTR-ish moment). Wait
-            // for writability in short ticks so the stall deadline stays
-            // authoritative even if the socket never turns writable.
-            $read = $except = null;
-            $write = [$stream];
-            @\stream_select($read, $write, $except, 0, 100_000); // 100 ms tick
-        }
-
-        return $offset;
-    }
-
-    /** How long a response write may make ZERO progress on a client socket. */
-    private const WRITE_STALL_SECONDS = 10.0;
-
-    /** Bytes handed to one fwrite feed by writeAll() (the lib's write quantum). */
-    private const WRITE_CHUNK_BYTES = 65536;
-
-    /**
-     * Absolute ceiling for one response write regardless of trickle
-     * progress — mirrors StdioPipe::HARD_SECONDS, the per-request bound
-     * the daemon pump already carries. A seat that keeps the house's
-     * kernel buffers fed forever is still only a seat for this long.
-     */
-    private const WRITE_ABSOLUTE_SECONDS = 300.0;
 
     /** @param resource $client */
     private static function peerAddress($client): ?string
@@ -752,7 +690,7 @@ final class HttpListener
         // Same full-buffer drain as dispatch(): small bodies almost always
         // fit one kernel window, but "almost" is what the byte-fidelity
         // review proved unprovable from the inside.
-        self::writeAll($client, "HTTP/1.1 {$status} {$reason}\r\n"
+        HttpWire::writeAll($client, "HTTP/1.1 {$status} {$reason}\r\n"
             . "Content-Type: text/plain\r\n"
             . 'Content-Length: ' . \strlen($body) . "\r\n"
             . "Connection: close\r\n"
@@ -763,7 +701,10 @@ final class HttpListener
     private function closeClient($client): void
     {
         $id = (int) $client;
-        if (isset($this->clients[$id])) {
+        // Only the seat that OWNS this exact stream may be closed through
+        // it (112): closeClient acts on the seat's stream, so a recycled-id
+        // guest closing the door would tear down an innocent connection.
+        if (isset($this->clients[$id]) && $this->clients[$id]['stream'] === $client) {
             if (!$this->inWorker) {
                 // The loop belongs to the parent process; a worker child
                 // must never touch the inherited watch structures (the uv /
