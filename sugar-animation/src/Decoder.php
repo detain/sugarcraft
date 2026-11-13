@@ -133,6 +133,30 @@ final class Decoder
     }
 
     /**
+     * The canonical file decode as a single value (SA-G1 -006): frames,
+     * loop policy, and the walk's stop reason, captured where the truth
+     * lives instead of re-guessed by every consumer.
+     *
+     * Same ritual {@see self::decode()} already runs — one bounded read,
+     * one walk — plus `loopCount()` over the very bytes that were audited.
+     * The input gates stay gates: a stream the caps refuse THROWS before any
+     * animation exists, exactly as through {@see self::decodeBytes()};
+     * `stopReason()` only ever describes walks that were allowed to run.
+     */
+    public static function decodeFile(string $path, int $cellsW, int $cellsH, bool $withCanvasRgba = false): DecodedAnimation
+    {
+        $bytes = self::readFile($path);
+        $walk = self::decodeBytes($bytes, $cellsW, $cellsH, $withCanvasRgba);
+        $frames = iterator_to_array($walk, preserve_keys: false);
+
+        return DecodedAnimation::fromWalk(
+            $frames,
+            self::loopCount($bytes),
+            $walk->getReturn(),
+        );
+    }
+
+    /**
      * Read a GIF file on disk into bytes for {@see self::decodeBytes()} and
      * {@see self::loopCount()} — the ingress half of {@see self::decode()}
      * exposed so a host can read once and feed both the frame stream and the
@@ -380,7 +404,12 @@ final class Decoder
      * The compositing/sampling frame stream behind {@see self::decodeBytes()},
      * entered only after every input gate has passed.
      *
-     * @param array{width: int, height: int, hasGct: bool, gctBytes: int, frameInfos: list<array<string, int|bool>>} $header
+     * On completion the generator RETURNS the walk's stop reason — null for
+     * a stream that ran to its own end, otherwise a {@see DecodedAnimation}
+     * `STOP_*` label (SA-G1 -006). Callers that ignore the return value
+     * (`decode()`, every plain consumer) behave exactly as before.
+     *
+     * @param array{width: int, height: int, hasGct: bool, gctBytes: int, frameInfosSeen: int, frameInfos: list<array<string, int|bool>>} $header
      *
      * @return \Generator<int, Frame>
      */
@@ -405,10 +434,14 @@ final class Decoder
                 'frameH' => $screenH,
             ];
             $frame = self::renderSingleFrame($bytes, $info, $header, $cellsW, $cellsH, $withCanvasRgba);
-            if ($frame !== null) {
-                yield $frame;
+            if ($frame === null) {
+                // The container advertised no walkable frames and the
+                // single-frame fallback refused to decode — the list hides
+                // what the file appeared to hold (SA-G1 -006).
+                return DecodedAnimation::STOP_UNDECODABLE_FRAME;
             }
-            return;
+            yield $frame;
+            return null;
         }
 
         // Create a truecolor canvas at logical screen size for compositing.
@@ -429,6 +462,7 @@ final class Decoder
 
         $prevInfo = null;
         $sampler = null; // built at the first successful paint — that frame samples the full grid
+        $emitted = 0;
 
         try {
             foreach ($header['frameInfos'] as $info) {
@@ -535,9 +569,12 @@ final class Decoder
                 }
 
                 yield new Frame($sampler->cells(), $info['delay'], $info['disposal'], $info['transparent'], $rgba, $screenW, $screenH);
+                $emitted++;
 
                 $prevInfo = $info;
             }
+
+            return self::walkStopReason($header['frameInfosSeen'], count($header['frameInfos']), $emitted);
         } finally {
             // Runs on normal completion AND on abandonment: a generator that
             // is never fully consumed must not leak its canvases — GD frees
@@ -548,6 +585,27 @@ final class Decoder
                 imagedestroy($snapshot);
             }
         }
+    }
+
+    /**
+     * Why did the walk end before the file's own end? (SA-G1 -006.) The cap
+     * answer comes first: a stream that both hit the ceiling and refused a
+     * frame was capped above all. Reaching the ceiling is reported even
+     * when the slice was an identity — exactly-256 is a documented false
+     * positive of the same boundary question, and withholding it would
+     * force consumers back to guessing from the count.
+     */
+    private static function walkStopReason(int $seen, int $listed, int $emitted): ?string
+    {
+        if ($seen >= self::MAX_FRAMES) {
+            return DecodedAnimation::STOP_FRAME_CAP;
+        }
+
+        if ($listed > $emitted) {
+            return DecodedAnimation::STOP_UNDECODABLE_FRAME;
+        }
+
+        return null;
     }
 
     /**
@@ -759,6 +817,7 @@ final class Decoder
      *   height: int,
      *   hasGct: bool,
      *   gctBytes: int,
+     *   frameInfosSeen: int,
      *   frameInfos: list<array{offset: int, delay: int, disposal: int, transparent: bool, transparentIndex: int, hasLct: bool, lctBytes: int, left: int, top: int, frameW: int, frameH: int}>
      * }
      */
@@ -888,11 +947,16 @@ final class Decoder
         }
         // The walk above already refused anything past cap + slack; this
         // slice is the documented silent clip for the (256, 512] range.
+        // frameInfosSeen carries the RAW count so the walk can tell a file
+        // that hit the ceiling from one that simply had fewer frames
+        // (SA-G1 -006); frameInfos stays the capped list everything else
+        // consumes.
         return [
             'width' => $width,
             'height' => $height,
             'hasGct' => $hasGct,
             'gctBytes' => $gctBytes,
+            'frameInfosSeen' => count($frameInfos),
             'frameInfos' => array_slice($frameInfos, 0, self::MAX_FRAMES),
         ];
     }
