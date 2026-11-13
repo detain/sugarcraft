@@ -156,7 +156,13 @@ Codec matrix (sugar-image native paths only):
   MIME (or `application/octet-stream`), and the Kitty/iTerm2 renderers
   re-encode any payload that is not PNG by signature.
 - Palette PNGs are automatically converted to truecolor before
-  processing.
+  processing, through one checked door (`Concerns\ForceTrueColor`): if ext-gd
+  ever refuses the conversion, the read fails with a `RuntimeException`
+  instead of sampling palette-indexed pixels as RGB. Every `imagecreatefromstring()`
+  call in the lib runs `@`-suppressed with an explicit `false` check, so a
+  corrupt payload produces exactly one thrown refusal — never warning spam
+  ahead of it. `tests/GdCallIdiomCensusTest.php` greps the source tree and
+  keeps both idioms from drifting back.
 - Animated GIF and APNG via `ImageSource::fromAnimatedFile()`, which returns an
   `Animation` (frames + per-frame delays) — the input to `AnimationDriver`.
 
