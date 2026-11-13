@@ -103,12 +103,23 @@ calendar date, matching the store layout.)
 | `export` | `<csv\|json\|ics> [days]` \| `from [to]` | Dump heartbeats for the last N days (default 7, clamped to [1, 3660]; a non-numeric count is refused with a one-line error and exit 1), or for an explicit dated window: `from`/`to` are `YYYY-MM` or `YYYY-MM-DD` — `export json 2025-06 2025-06` is June 2025, a lone `from` runs through today. A window wider than 3660 days is refused like any oversized range. `--project=<name>` / `--tag=<label>` keep only the rows they match (same filter on both backends). Output goes to STDOUT — redirect it to a file to save it. |
 | `gaps` | `[days]` \| `from [to]` \| `--min=<secs>` | List untracked stretches in the last N days or the dated window named by `from [to]` (same doors, filters, and clamps as `export`). Stretches count from 300 seconds up; `--min=<secs>` raises or lowers that threshold. |
 | `forget` | `--project=<name> [--file-prefix=<path>] [--apply]` | Remove stored beats matching the filter from **both** stores — day files and the SQLite database, regardless of the selected backend. Dry run by default: it counts the matches and changes nothing. `--apply` rewrites the day files (temp-file rewrite; non-matching lines stay byte-identical, a fully emptied day is unlinked) and runs a parameterized `DELETE` on the database. Lines that fail to parse are never removed — only provably matching beats go. Run `backup` first: the archive is the undo path. |
-| `backup` | — | Archive day files (`*.jsonl`) older than 30 days into `<dir>-backups/`. Copies only — it never deletes your data, and archives are never pruned either. Archives are named after the source directory and the file's logical day, so a backfilled day *refreshes* its existing archive instead of minting a second diverging copy, and two same-basename roots can never overwrite one another's archives. Overlapping runs refuse on a lock file rather than interleaving into one destination. A byte copy of a live `.db` would be a torn snapshot, so plain `backup` refuses the SQLite database (the reminder you see when a `.db` is present points at `backup --sqlite`, which runs a crash-safe `VACUUM INTO` snapshot into `<dir>-backups/`). Nothing trims the live database: it grows until you use the `forget` door. |
+| `backup` | — | Archive day files (`*.jsonl`) older than 30 days into `<dir>-backups/` — copies only, nothing is ever deleted or pruned. |
 | `help`, `--help`, `-h` | — | Print usage. |
 | `--version`, `-v` | — | Print the version. |
 
 Any command word not listed above prints a one-line error followed by the full
 usage on stderr and exits 1.
+
+Two details sit behind the `backup` row:
+
+- Archives are named after the source directory and the file's logical day, so
+  a backfilled day *refreshes* its existing archive instead of minting a second
+  diverging copy, and two same-basename roots can never overwrite one another.
+  Overlapping runs refuse on a lock file rather than interleaving.
+- Plain `backup` refuses the live SQLite database — a byte copy would be a
+  torn snapshot. The `--sqlite` option (below) runs the crash-safe `VACUUM
+  INTO` snapshot, and the Data layout section states the retention law: nothing,
+  archive or database, is ever pruned, so the `forget` door is the only trim.
 
 Options (accepted before or after the command):
 
