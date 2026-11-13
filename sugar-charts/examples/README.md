@@ -24,8 +24,8 @@ composer install        # one-time setup
 php examples/heatmap.php
 ```
 
-Most examples set their own dimensions; pass an alternative size via
-the script's hard-coded constants if you want to embed it differently.
+Most examples set their own dimensions; to change the size, edit the
+constants at the top of the script.
 
 ## Quick sketches
 

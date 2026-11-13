@@ -9,6 +9,12 @@
 [![PHP](https://img.shields.io/badge/php-%E2%89%A58.3-8892bf.svg)](https://www.php.net/)
 <!-- BADGES:END -->
 
+sugar-charts is a terminal charting library for PHP 8.3+. It ships the canvas
+foundation (Canvas / BrailleGrid / Graph), ten chart renderers — Sparkline,
+BarChart, LineChart, TimeSeries, Streamline, Waveline, Heatmap, OHLCChart,
+Scatter and Picture — and an Aggregation toolbox. The Components table below
+is the fastest way to find the class you need.
+
 ```sh
 composer require sugarcraft/sugar-charts:dev-master
 ```
@@ -17,12 +23,6 @@ No tagged releases ship yet — Packagist serves the `dev-master` branch only,
 so name it explicitly (`:dev-master`, or `@dev` in a `composer.json` require).
 On a default-`stable` project a bare `sugarcraft/sugar-charts` request does
 not resolve.
-
-sugar-charts — terminal charts for PHP 8.3+. The lib ships the canvas foundation
-(Canvas / BrailleGrid / Graph) plus ten chart renderers — Sparkline, BarChart,
-LineChart, TimeSeries, Streamline, Waveline, Heatmap, OHLCChart, Scatter and Picture —
-and an Aggregation toolbox. The Components table below is the fastest way to
-find the class you need.
 
 The snippets assume a composer project with this package installed and
 `require 'vendor/autoload.php';` in scope.
@@ -33,7 +33,7 @@ use SugarCraft\Charts\BarChart\BarChart;
 use SugarCraft\Charts\LineChart\LineChart;
 
 echo Sparkline::new([1, 3, 2, 8, 5, 4, 7, 6], 8)->view() . PHP_EOL;
-// " ▂▁█▅▃▇▆" (scaled to the window's min..max; the minimum maps to the blank leading cell)
+// " ▂▁█▅▃▇▆" (scaled to the window's minimum and maximum; the minimum maps to the blank leading cell)
 
 echo BarChart::new([['cpu', 0.7], ['mem', 0.4], ['disk', 0.9]], 20, 5)->view() . PHP_EOL;
 //               ██████
@@ -54,21 +54,22 @@ echo LineChart::new([1, 4, 2, 8, 6, 3, 7], 30, 6)->view() . PHP_EOL;
 ```
 
 > Every `with*()` fluent setter on the chart classes (and on `Legend`) also has a
-> short-form alias, so
-> `data` / `size` / `min` / `max` / `point` / `xRange` / `yRange` / `xyRange` / `colors` /
-> `palette` / `bars` / `barWidth` / `showLabels` / `showAxis` / `title` / `canvas` /
-> `theme` / `dataset` / `markLines` / `unicodeConnectors` / `style` / `protocol` / `items` / `position` … are all available.
+> short-form alias: `withFoo()` becomes `foo()` (drop `with`, lcfirst). Fleet-wide
+> vocabulary includes `data`, `size`, `min`, `max`, `point`, `xRange`, `yRange`,
+> `xyRange`, `colors`, `palette`, `bars`, `barWidth`, `showLabels`, `showAxis`,
+> `title`, `canvas`, `theme`, `dataset`, `markLines`, `unicodeConnectors`, `style`,
+> `protocol`, `items` and `position`.
 > That list is fleet-wide vocabulary, not a per-class promise: each alias exists on
 > exactly the classes that expose the matching `with*()` setter — `style()` is on
 > `Sparkline`, while neither `BarChart` nor `LineChart` carries `colors()`, `style()`
 > or `palette()`. The per-class registry is pinned by `tests/AliasCompletenessTest.php`.
-> The convention is `withFoo()` → `foo()` (drop `with`, lcfirst). A few names deviate to
-> read better: `withLegendPosition()` → `legendPos()`, `withTitlePosition()` → `titlePos()`
-> (Position shortens to `Pos`), `withDataLabelFormatter()` → `dataLabelFormat()`,
-> `withFractionalHeights()` → `fractional()`, and `withXYRange()` → `xyRange()`. These
-> deviations are pinned by `tests/AliasCompletenessTest.php` — and note that
+> A few names deviate from the rule to read better: `withLegendPosition()` →
+> `legendPos()` and `withTitlePosition()` → `titlePos()` (`Pos` is the accepted
+> shorthand for `Position`), `withDataLabelFormatter()` → `dataLabelFormat()`,
+> `withFractionalHeights()` → `fractional()`, and `withXYRange()` → `xyRange()`.
 > `Sparkline`'s width setter aliases to `width()`, not `size()`. The
-> `with*` long forms always still work; pick the form that reads best at the call site.
+> `with*` long forms continue to work everywhere; pick the form that reads best at
+> the call site.
 >
 > Read accessors follow the house bare-name law (`cell()`, `cellStyle()` on `Canvas`,
 > `circlePoints()` and friends on `Graph`). Where a bare name was already taken by a
@@ -78,14 +79,17 @@ echo LineChart::new([1, 4, 2, 8, 6, 3, 7], 30, 6)->view() . PHP_EOL;
 
 ## Components
 
+Table paths omit the `SugarCraft\` root namespace for width (`Charts\Canvas\Canvas`
+is `SugarCraft\Charts\Canvas\Canvas`); prose and snippets always spell the full FQN.
+
 | Component | Role | Notable knobs |
 |---|---|---|
 | `Charts\Canvas\Canvas` | Fixed-size cell grid; each cell holds a rune + optional sugar-style `Style`. | `setCell` / `setLines` / `setString` / `setRunes` / `fill` / `fillLine` / `shiftUp` / `shiftDown` / `shiftLeft` / `shiftRight` / `setCellStyle` / `cellStyle` / `cell` (`getCell` / `getCellStyle` kept as compat aliases) |
 | `Charts\Canvas\BrailleGrid` | Sub-cell scratch buffer (2 cols × 4 rows of dots per cell). Paint dots, then copy to a `Canvas`. | `set` / `unset` / `toggle` / `isSet` / `rune` / `paint(Canvas, x0, y0, ?Style)` / `clear` |
 | `Charts\Canvas\Graph` | Drawing primitives over a `Canvas`. | `drawHLine` / `drawVLine` / `drawXYAxis` / `drawXYAxisLabel` / `drawString` / `drawLine` / `drawLinePoints` / `fillRect` / `drawColumn` / `drawColumns` / `drawRows` / `drawCandlestick` / `drawBrailleRune` / `drawBraillePatterns` / `drawVerticalLineUp` / `drawVerticalLineDown` / `drawHorizontalLineLeft` / `drawHorizontalLineRight` / `circlePoints` / `circlePointsWithLimit` / `fullCirclePoints` / `fullCirclePointsWithLimit` / `linePointsWithLimit` (`get*` spellings kept as ntcharts-mirror compat aliases) |
-| `Charts\Sparkline\Sparkline` | Single-row series renderer using the 8 Unicode bar glyphs. | `push` / `pushAll` / `clear` / `withMin` / `withMax` / `withStyle(?Style)` / `withNoAutoMaxValue(bool)` (parity shim — the flag never changes output; removal would be breaking) / `withWidth` |
+| `Charts\Sparkline\Sparkline` | Single-row series renderer using the eight Unicode bar glyphs. | `push` / `pushAll` / `clear` / `withMin` / `withMax` / `withStyle(?Style)` / `withNoAutoMaxValue(bool)` (parity shim — the flag never changes output; removal would be breaking) / `withWidth` |
 | `Charts\BarChart\BarChart` | Labeled bars — vertical or horizontal (`withHorizontal()`, a second render mode); auto-scales to a configurable min / max. | `withBarWidth` / `withBarGap` / `withNoAutoBarWidth` / `withFractionalHeights` (eighth-block caps) / `withBarColor(?Closure)` (per-bar `fn(Bar, int): ?Color`) / `withHorizontal(bool)` / `withShowAxis(bool)` / `withMin(?float)` / `withMax(?float)` / `withDataLabels(bool)` (values as a row, see Value labels) / `withDataLabelFormatter(?Closure)` / `push(Bar\|array)` / `pushAll(iterable)` / `clear` |
-| `Charts\LineChart\LineChart` | Multi-series ASCII or braille plot drawn onto a Canvas with configurable axes — `withDataset()` registers a named series and its legend entry (colors cycle a six-name color-blind-safe palette (blue, orange, green, red, purple, cyan), or follow the `withTheme()` palette); the strip itself is drawn only after `withLegend()` — adding datasets never shows it on its own. | `withYRange` / `withXRange` / `withXYRange` / `autoAdjustRange` / `withXLabelFormatter` / `withYLabelFormatter` / `withAxes` / `withXLabels` / `withYLabels` / `withCanvas` / `withTheme` / `withFill` / `withSeriesColorFn(?Closure)` (per-point `fn(string, int, float): ?Color`) |
+| `Charts\LineChart\LineChart` | Multi-series ASCII or braille plot drawn onto a Canvas with configurable axes. `withDataset()` registers a named series and its legend entry; series colors cycle through the six-name color-blind-safe palette (blue, orange, green, red, purple, cyan) or follow the `withTheme()` palette. The legend strip (the row of color swatches and series names) appears only once `withLegend()` is on — adding datasets never shows it on its own. | `withYRange` / `withXRange` / `withXYRange` / `autoAdjustRange` / `withXLabelFormatter` / `withYLabelFormatter` / `withAxes` / `withXLabels` / `withYLabels` / `withCanvas` / `withTheme` / `withFill` / `withSeriesColorFn(?Closure)` (per-point `fn(string, int, float): ?Color`) |
 | `Charts\LineChart\TimeSeries` | Wrapper around `LineChart` (composition, not inheritance — `TimeSeries` is `final`) accepting `[\DateTimeImmutable, value]` tuples and rendering X-axis labels formatted from the timestamps. LineChart knobs such as `withDataset()` / `withTheme()` are not exposed. | `push` / `withPoints` / `withTimeFormat` / `withXLabelCount` / `withTimeRange(?start, ?end)` / `getTimeRange()` |
 | `Charts\LineChart\Streamline` | Streaming line windowed to width — renders through a LineChart of configurable height (default 8 rows). | `push` / `pushAll` / `clear` / `isEmpty` / `count` / `withSize` / `withMin` / `withMax` / `withYRange` / `withPoint` |
 | `Charts\LineChart\Waveline` | XY scatter / wave plot driven by `(x, y)` pairs. | `push` / `pushAll` / `clear` / `withSize` / `withXRange` / `withYRange` / `withXYRange` / `withPoint` |
@@ -110,7 +114,7 @@ $buckets = BucketByTime::sum(3600, [
     ['ts' => 1704087900, 'value' => 15],  // 2024-01-01 05:45 UTC
     ['ts' => 1704089100, 'value' => 20],  // 2024-01-01 06:05 UTC
 ]);
-// → [{ts: 1704085200, value: 25}, {ts: 1704088800, value: 20}]
+// → [['ts' => 1704085200, 'value' => 25], ['ts' => 1704088800, 'value' => 20]]
 // Note: `ts` is the ABSOLUTE epoch bucket start (floor(ts / 3600) * 3600),
 // not a relative offset — render it with gmdate(), not epoch-offset math.
 
@@ -237,7 +241,7 @@ the progress yourself, e.g. `examples/animated_line.php`.
 
 ### Per-point and per-bar colors
 
-One color per series is too coarse for value-heat graphs — btop tints every
+One color per series is too coarse for value-heat graphs — btop (the terminal resource monitor) tints every
 graph point and meter by its value through the theme gradient. Two optional resolvers bring
 that to SugarCharts:
 
@@ -303,8 +307,9 @@ echo $chart->view();
 - `MarkLine::at(float $value, string $label = '', string $style = MarkLine::STYLE_DASHED)`
   is the factory (the constructor is private). `STYLE_SOLID` /
   `STYLE_DASHED` / `STYLE_DOTTED` pick the run glyph; the line is drawn
-  across the plot at the value's row. Labels pass the untrusted-text guard
-  at construction; non-finite values and unknown styles throw at once.
+  across the plot at the value's row. Labels are sanitized through the
+  untrusted-text guard at construction; non-finite values and unknown styles
+  throw at once.
   Data-derived marks: `MarkLine::min($data)`, `MarkLine::max($data)`,
   `MarkLine::average($data)` (each `(array $data, string $style = STYLE_DASHED)`),
   or `MarkLine::fromDataset($data, $type)` with `$type` one of min/max/average.
@@ -396,8 +401,8 @@ per-sample style lookups are memoized.
 
 Terminology: a *tick* is a numeric value at an axis position, a *label*
 is the text drawn for one of the evenly-spaced *slots* along an axis
-(five slots on X, four on Y by default; `withXLabelFormatter` /
-`withYLabelFormatter` accept both).
+(five slots on X, four on Y by default; `withXLabelFormatter` covers the X
+axis and `withYLabelFormatter` the Y axis).
 
 Axis tick values are not a nice-number ladder: the live path
 (`LineChart::resolveXLabels` / `resolveYLabels`) emits evenly-spaced
@@ -447,7 +452,7 @@ $grid->paint($canvas, 1, 0);
 echo $canvas->view();
 ```
 
-### Palette / color profile
+## Palette / color profile
 
 `Heatmap::withPalette([Color, …])` interpolates between an arbitrary
 number of stops (≥ 2). `withColors(Color $cold, Color $hot)` is the
@@ -458,10 +463,12 @@ is TrueColor. `Heatmap::withCellStyle(?Style)` overlays additional attributes
 
 ## Demos
 
-Nine of the ten renderers have a runnable demo: `php examples/<name>.php`
-from the `sugar-charts/` directory (see [examples/README.md](examples/README.md)).
-The eight CI-recorded GIFs cover eight renderers; `line.php` drives
-`Streamline`. Waveline's example is pending.
+The demo families: ten renderers · nine runnable examples · eight CI-recorded
+GIFs. Run one with `php examples/<name>.php` from the `sugar-charts/` directory
+(see [examples/README.md](examples/README.md)). The eight GIFs cover Sparkline,
+BarChart, Heatmap, OHLCChart, Scatter, Picture, TimeSeries and Streamline
+(`line.php` drives `Streamline`); the two renderers without a recorded GIF are
+`animated_line` and `braille`, whose example scripts have no `.vhs/` tape.
 
 ### Bar chart
 
@@ -522,15 +529,17 @@ renderers are covered by inline byte assertions in their class suites;
 that is the extension path for growing the golden family.
 
 The golden writer is create-only: an existing fixture is never
-rewritten, and a mismatch against one still fails with the update arm
-set. To re-record after an intentional output change, delete first:
+rewritten, and a mismatch against one still fails even with the
+update environment variable set (the branch honoring `UPDATE_GOLDENS` /
+`SUGAR_TESTING_UPDATE_GOLDENS` only ever writes a fixture that does not
+exist yet). To re-record after an intentional output change, delete first:
 
 ```sh
 rm tests/fixtures/<name>.golden && SUGAR_TESTING_UPDATE_GOLDENS=1 vendor/bin/phpunit
 ```
 
-(`UPDATE_GOLDENS=1` is honored as a legacy spelling; the canonical arm
-is `SUGAR_TESTING_UPDATE_GOLDENS=1`.)
+(`UPDATE_GOLDENS=1` is honored as a legacy spelling; the canonical name is
+`SUGAR_TESTING_UPDATE_GOLDENS=1`.)
 
 ## Testing
 
