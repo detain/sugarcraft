@@ -889,7 +889,9 @@ final class QuickPick
         }
 
         $bgLines = \explode("\n", $backgroundView);
-        if (\end($bgLines) === '') \array_pop($bgLines);
+        if (\end($bgLines) === '') {
+            \array_pop($bgLines);
+        }
 
         // Build the overlay once — the previous code built it twice (once just to
         // count lines for padding, once to composite).
@@ -1496,7 +1498,9 @@ final class QuickPick
 
         foreach ($overlayLines as $lineIdx => $line) {
             $destY = $y + $lineIdx;
-            if ($destY < 0 || $destY >= \count($bgLines)) continue;
+            if ($destY < 0 || $destY >= \count($bgLines)) {
+                continue;
+            }
 
             // Replace segment of background line with overlay chars
             $bgLine = $bgLines[$destY];
