@@ -159,7 +159,7 @@ The whole transition layer is pure — filesystem I/O is injected as a `Closure(
 
 ## Test plan
 
-- 318 tests / 4788 assertions — this pair is hand-typed: candy-files is lib-local for PHPUnit and absent from the CI figure-pin machinery (`parallel-tests-durations.tsv` / `suite-figure.json`), so re-derive it with `vendor/bin/phpunit` here whenever tests change.
+- 321 tests / 4805 assertions — this pair is hand-typed: candy-files is lib-local for PHPUnit and absent from the CI figure-pin machinery (`parallel-tests-durations.tsv` / `suite-figure.json`), so re-derive it with `vendor/bin/phpunit` here whenever tests change.
 - Pure-state coverage: `Entry` (size formatting, parent sentinel, escape-sequence sweep incl. OSC/CSI/generic-ESC), `Sort` (every order × dirs-first × cycle), `Pane` (open / relist-with-selection-preservation / navigate / move / select / sort / hidden toggle / parent-path / join)
 - `Manager` integration: Tab swap, key dispatch per pane, confirm gate (`d` arms, `y` or the prompt's taught localized affirmative confirms, anything else cancels; modified chords never confirm), refresh status, Escape clears selection, resize capture (`WindowSizeMsg` → derived widths **and rows**, other non-key Msgs dropped)
 - `t` duplicates the current tab; `Manager::openNewTab(path)` lands a tab on the given directory as an API (no key binding carries a path)

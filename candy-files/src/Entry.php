@@ -115,6 +115,28 @@ final class Entry
             static fn(array $m): string => strlen($m[0]) === 1 ? '' : $m[0],
             $s,
         ) ?? '';
-        return $s;
+        // CF-27 (closes audit 039): BIDI overrides/embeddings (U+202A-U+202E),
+        // isolates (U+2066-U+2069) and the BOM/zero-width no-break space
+        // (U+FEFF) are the spoofing layer — 'invoice.txt.<U+202E>gpj.exe'
+        // PAINTS as 'invoice.txt.jpgexe' on a bidi-aware terminal, hiding
+        // the real extension. They survive every control sweep above because
+        // they are format characters, not controls, so they get the visible
+        // <U+XXXX> marker treatment sugar-core's Sanitize established.
+        // Byte-mode str_replace: same discipline as the C1 walk — no /u on
+        // a string that may carry malformed sequences, and a fixed 3-byte
+        // needle cannot mis-fire on valid UTF-8.
+        return str_replace(
+            [
+                "\xE2\x80\xAA", "\xE2\x80\xAB", "\xE2\x80\xAC", "\xE2\x80\xAD", "\xE2\x80\xAE",
+                "\xE2\x81\xA6", "\xE2\x81\xA7", "\xE2\x81\xA8", "\xE2\x81\xA9",
+                "\xEF\xBB\xBF",
+            ],
+            [
+                '<U+202A>', '<U+202B>', '<U+202C>', '<U+202D>', '<U+202E>',
+                '<U+2066>', '<U+2067>', '<U+2068>', '<U+2069>',
+                '<U+FEFF>',
+            ],
+            $s,
+        );
     }
 }

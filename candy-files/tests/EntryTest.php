@@ -117,4 +117,47 @@ final class EntryTest extends TestCase
         $this->assertStringNotContainsString("\x1b", $clean);
         $this->assertStringNotContainsString("\x07", $clean);
     }
+
+    /**
+     * CF-27 (audit 039): BIDI overrides and isolates are format characters,
+     * not controls, so every escape sweep above let them through — and a
+     * terminal that honours them REWRITES the visible order. The classic
+     * probe 'invoice.txt.<U+202E>gpj.exe' PAINTS as 'invoice.txt.jpgexe'
+     * (the trailing 'gpj.' is mirrored), hiding the real executable
+     * extension. The markers restore an honest reading.
+     */
+    public function testSanitizeNameMarksBidiOverride(): void
+    {
+        $clean = Entry::sanitizeName("invoice.txt.\u{202E}gpj.exe");
+        $this->assertSame('invoice.txt.<U+202E>gpj.exe', $clean);
+        $this->assertStringNotContainsString("\xE2\x80\xAE", $clean);
+        // Every embedding/override in the U+202A-U+202E range is marked.
+        foreach ([0x202A, 0x202B, 0x202C, 0x202D, 0x202E] as $cp) {
+            $ch = mb_chr($cp, 'UTF-8');
+            $marker = '<U+' . strtoupper(dechex($cp)) . '>';
+            $clean = Entry::sanitizeName('a' . $ch . 'b');
+            $this->assertSame('a' . $marker . 'b', $clean);
+            $this->assertStringNotContainsString($ch, $clean);
+        }
+    }
+
+    public function testSanitizeNameMarksIsolatesAndBom(): void
+    {
+        // U+2066-U+2069 isolates and the U+FEFF BOM/zero-width no-break
+        // space: invisible reordering and invisible-prefix (hidden dotfile
+        // disguise) vectors.
+        $clean = Entry::sanitizeName("\u{2066}secret\u{2069}.txt");
+        $this->assertSame('<U+2066>secret<U+2069>.txt', $clean);
+        $clean = Entry::sanitizeName("\u{FEFF}.hidden.txt");
+        $this->assertSame('<U+FEFF>.hidden.txt', $clean);
+    }
+
+    public function testSanitizeNameBidiPassLeavesValidTextUntouched(): void
+    {
+        // The byte-mode marker pass must not disturb ordinary multi-byte
+        // names (no needle bytes appear inside legit sequences for these).
+        $this->assertSame('日本語.txt', Entry::sanitizeName('日本語.txt'));
+        $this->assertSame('café—report.pdf', Entry::sanitizeName('café—report.pdf'));
+        $this->assertSame('plain_file.tar.gz', Entry::sanitizeName('plain_file.tar.gz'));
+    }
 }
