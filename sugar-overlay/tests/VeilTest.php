@@ -365,6 +365,59 @@ final class VeilTest extends TestCase
         $this->assertSame($frame(0, -5), $frame(9999, 0));
     }
 
+    /**
+     * SO-07 (sugar-overlay-012): coveredCells() is the rect zone-lift hosts
+     * ask the painter for — same resolvePlacement() arithmetic, the paint
+     * loop's guards mirrored. Rects fold to the CLIPPED extent: off-left
+     * clamps to column 0, too-wide/tall blocks report only painted rows,
+     * a no-canvas backdrop covers the overlay itself, and fully-off is null.
+     */
+    public function testCoveredCellsMatchesThePaintedExtent(): void
+    {
+        $veil = Veil::new();
+        $bg   = "alpha\nbeta\ngamma";
+
+        $this->assertSame(
+            ['x' => 1, 'y' => 0, 'w' => 2, 'h' => 2],
+            $veil->coveredCells("XX\nYY", $bg, Position::CENTER, Position::CENTER),
+        );
+        // x=-1: lo clamps to 0, hi = min(5, -1+4) = 3.
+        $this->assertSame(
+            ['x' => 0, 'y' => 0, 'w' => 3, 'h' => 1],
+            $veil->coveredCells('XXXX', 'aaaaa', Position::TOP, Position::LEFT, -1, 0),
+        );
+        // Fully off-canvas (the SO-11 collapse case) covers nothing.
+        $this->assertNull($veil->coveredCells('XX', $bg, Position::CENTER, Position::RIGHT, 50, 0));
+        // No canvas at all: the overlay IS the frame, so it covers itself.
+        $this->assertSame(
+            ['x' => 0, 'y' => 0, 'w' => 2, 'h' => 2],
+            $veil->coveredCells("XX\nYY", '', Position::CENTER, Position::CENTER),
+        );
+        $this->assertNull($veil->coveredCells('', $bg, Position::CENTER, Position::CENTER));
+        // Ragged block: the rect is the widest painted row, clipped to canvas.
+        $this->assertSame(
+            ['x' => 0, 'y' => 0, 'w' => 5, 'h' => 2],
+            $veil->coveredCells("wiiiiiiid\nt", $bg, Position::TOP, Position::LEFT),
+        );
+        // Containment semantics: a zero-width middle row still sits inside
+        // the painted span (rows are contiguous top..bottom).
+        $this->assertSame(
+            ['x' => 0, 'y' => 0, 'w' => 2, 'h' => 3],
+            $veil->coveredCells("XX\n\nYY", "aaa\nbbb\nccc\nddd", Position::TOP, Position::LEFT),
+        );
+        // Border chrome is measured BEFORE anchoring — the rect carries it.
+        $this->assertSame(
+            ['x' => 1, 'y' => 0, 'w' => 3, 'h' => 3],
+            Veil::new()->withBorder(Border::rounded())->coveredCells('X', $bg, Position::CENTER, Position::CENTER),
+        );
+        // Taller-than-backdrop (anchor clamps the top): only the two painted
+        // rows count, not the five dropped ones.
+        $this->assertSame(
+            ['x' => 0, 'y' => 0, 'w' => 1, 'h' => 2],
+            $veil->coveredCells("a\nb\nc\nd\ne\nf\ng", "x\ny", Position::BOTTOM, Position::LEFT),
+        );
+    }
+
     public function testBrightOverlayIsNotDimmedWhileBackgroundIs(): void
     {
         // A FULL-WIDTH styled foreground bar over a dotted background + backdrop.

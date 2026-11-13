@@ -673,17 +673,24 @@ final class Veil
      * @param Position $vertical     Vertical position anchor
      * @param Position $horizontal    Horizontal position anchor
      * @param int       $xOffset      Additional columns rightward (+) / leftward (-)
-     * @param int       $yOffset      Additional lines downward (+) / upward (-)
-     * @return string                 The composited output
+    /**
+     * The single placement computation every public spell shares: split,
+     * border chrome, one tokenize per row, anchor resolution, offsets.
+     *
+     * composite() consumes the bundle; coveredCells() folds the painted
+     * rect from it. Two arithmetics that could drift is how zone-lift
+     * hosts get lied to — so there is exactly one (sugar-overlay-012).
+     *
+     * @return array{canvasEmpty: bool, bgLines: list<string>, bgSegs: array<int, list<array{string,int}>>, bgWidths: list<int>, bgWidth: int, bgHeight: int, fgLines: list<string>, fgSegs: array<int, list<array{string,int}>>, fgWidths: list<int>, fgWidth: int, fgHeight: int, x: int, y: int}
      */
-    public function composite(
+    private function resolvePlacement(
         string $foreground,
         string $background,
         Position $vertical,
         Position $horizontal,
-        int $xOffset = 0,
-        int $yOffset = 0,
-    ): string {
+        int $xOffset,
+        int $yOffset,
+    ): array {
         $bgLines  = $this->splitLines($background);
         $bgHeight = \count($bgLines);
         // One tokenize per row (sugar-overlay-003): widths, the covered-row
@@ -694,8 +701,8 @@ final class Veil
         $bgSegs   = [];
         $bgWidths = [];
         foreach ($bgLines as $r => $line) {
-            $segs        = MarkedFrame::segments($line);
-            $bgSegs[$r]  = $segs;
+            $segs         = MarkedFrame::segments($line);
+            $bgSegs[$r]   = $segs;
             $bgWidths[$r] = MarkedFrame::measureSegments($segs);
         }
         $bgWidth = $bgWidths === [] ? 0 : \max($bgWidths);
@@ -721,16 +728,16 @@ final class Veil
         $fgWidth = $fgWidths === [] ? 0 : \max($fgWidths);
 
         if ($bgHeight === 0 || $bgWidth === 0) {
-            // A background with no cells is no canvas to clip against, so the
-            // overlay itself is the frame — mirrors upstream Composite()'s
-            // `if bg == "" { return fg }` early return. It still goes through
-            // the session bookkeeping: a skipped rememberFull() would let the
-            // next composite diff against a frame from before this one.
-            if ($fgHeight === 0 || $fgWidth === 0) {
-                return $this->emitFrame($background, 0, 0);
-            }
-
-            return $this->emitFrame(\implode("\n", $fgLines), $fgWidth, $fgHeight);
+            // No canvas to clip against; composite() returns the overlay
+            // itself as the frame and coveredCells() reads the same flag.
+            return [
+                'canvasEmpty' => true,
+                'bgLines' => $bgLines, 'bgSegs' => $bgSegs, 'bgWidths' => $bgWidths,
+                'bgWidth' => $bgWidth, 'bgHeight' => $bgHeight,
+                'fgLines' => $fgLines, 'fgSegs' => $fgSegs, 'fgWidths' => $fgWidths,
+                'fgWidth' => $fgWidth, 'fgHeight' => $fgHeight,
+                'x' => 0, 'y' => 0,
+            ];
         }
 
         // Resolve base position. The background is the canvas, so an anchor
@@ -756,8 +763,120 @@ final class Veil
         $baseY = \max(0, $vertical->yOffset($fgHeight, $bgHeight));
 
         // Apply additional offsets
-        $x = $baseX + $xOffset;
-        $y = $baseY + $yOffset;
+        return [
+            'canvasEmpty' => false,
+            'bgLines' => $bgLines, 'bgSegs' => $bgSegs, 'bgWidths' => $bgWidths,
+            'bgWidth' => $bgWidth, 'bgHeight' => $bgHeight,
+            'fgLines' => $fgLines, 'fgSegs' => $fgSegs, 'fgWidths' => $fgWidths,
+            'fgWidth' => $fgWidth, 'fgHeight' => $fgHeight,
+            'x' => $baseX + $xOffset,
+            'y' => $baseY + $yOffset,
+        ];
+    }
+
+    /**
+     * Which canvas cells the composite actually covers — the rect zone-lift
+     * hosts need to know which hot zones an overlay hides (sugar-overlay-012).
+     *
+     * Same inputs, same resolvePlacement() arithmetic as composite(); the
+     * per-row visibility guards mirror the paint loop verbatim. Returns null
+     * when no cell of the overlay lands on-canvas (fully off-canvas offsets,
+     * or a zero-cell overlay over a real backdrop).
+     *
+     * @return ?array{x: int, y: int, w: int, h: int}
+     */
+    public function coveredCells(
+        string $foreground,
+        string $background,
+        Position $vertical,
+        Position $horizontal,
+        int $xOffset = 0,
+        int $yOffset = 0,
+    ): ?array {
+        $p        = $this->resolvePlacement($foreground, $background, $vertical, $horizontal, $xOffset, $yOffset);
+        $fgWidths = $p['fgWidths'];
+
+        if ($p['canvasEmpty']) {
+            // The overlay itself is the frame — every fg cell is painted.
+            if ($p['fgHeight'] === 0 || $p['fgWidth'] === 0) {
+                return null;
+            }
+
+            return ['x' => 0, 'y' => 0, 'w' => $p['fgWidth'], 'h' => $p['fgHeight']];
+        }
+
+        // Fold the painted extent row by row, mirroring the composite loop's
+        // guards: the row must land on-canvas, x must not start past the
+        // canvas, and the line's own width must not end at or left of
+        // column 0 (the mirror guard — a zero-width or fully off-left line
+        // paints nothing).
+        $x       = $p['x'];
+        $y       = $p['y'];
+        $bgWidth = $p['bgWidth'];
+        $lo      = PHP_INT_MAX;
+        $hi      = PHP_INT_MIN;
+        $top     = PHP_INT_MAX;
+        $bottom  = PHP_INT_MIN;
+        foreach ($fgWidths as $fy => $rowWidth) {
+            $row = $y + $fy;
+            if ($row < 0 || $row >= $p['bgHeight']) {
+                continue;
+            }
+
+            if ($x >= $bgWidth || $x + $rowWidth <= 0) {
+                continue;
+            }
+
+            $lo     = \min($lo, \max(0, $x));
+            $hi     = \max($hi, \min($bgWidth, $x + $rowWidth));
+            $top    = \min($top, $row);
+            $bottom = \max($bottom, $row);
+        }
+
+        if ($hi <= $lo) {
+            return null;
+        }
+
+        return ['x' => $lo, 'y' => $top, 'w' => $hi - $lo, 'h' => $bottom - $top + 1];
+    }
+
+    /**
+     * @param int       $yOffset      Additional lines downward (+) / upward (-)
+     * @return string                 The composited output
+     */
+    public function composite(
+        string $foreground,
+        string $background,
+        Position $vertical,
+        Position $horizontal,
+        int $xOffset = 0,
+        int $yOffset = 0,
+    ): string {
+        $p = $this->resolvePlacement($foreground, $background, $vertical, $horizontal, $xOffset, $yOffset);
+
+        $bgLines  = $p['bgLines'];
+        $bgSegs   = $p['bgSegs'];
+        $bgWidths = $p['bgWidths'];
+        $bgWidth  = $p['bgWidth'];
+        $bgHeight = $p['bgHeight'];
+        $fgSegs   = $p['fgSegs'];
+        $fgWidths = $p['fgWidths'];
+        $fgHeight = $p['fgHeight'];
+        $x        = $p['x'];
+        $y        = $p['y'];
+
+        if ($p['canvasEmpty']) {
+            // A background with no cells is no canvas to clip against, so the
+            // overlay itself is the frame — mirrors upstream Composite()'s
+            // `if bg == "" { return fg }` early return. It still goes through
+            // the session bookkeeping: a skipped rememberFull() would let the
+            // next composite diff against a frame from before this one.
+            if ($fgHeight === 0 || $p['fgWidth'] === 0) {
+                return $this->emitFrame($background, 0, 0);
+            }
+
+            return $this->emitFrame(\implode("\n", $p['fgLines']), $p['fgWidth'], $fgHeight);
+        }
 
         // Build the output a row at a time. Each foreground line is overlaid as a
         // single styled SEGMENT at [x, x + visibleWidth) — cell-aware (via Width)
