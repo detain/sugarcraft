@@ -103,7 +103,7 @@ final class ExchangeLock
         $modeRefused = null;
         for ($attempt = 0; $attempt < 8 && $path === null; $attempt++) {
             $candidate = rtrim($dir, '/') . '/' . self::FILE_PREFIX . self::pidNamespace() . '-' . $pid . '-' . bin2hex(random_bytes(6));
-            $handle = @fopen($candidate, 'x');
+            $handle = @fopen($candidate, 'xe');
             if ($handle === false) {
                 continue;
             }
@@ -225,7 +225,7 @@ final class ExchangeLock
                 continue;
             }
 
-            $handle = @fopen($path, 'r+');
+            $handle = @fopen($path, 'r+e');
             if ($handle === false) {
                 continue;
             }
@@ -444,7 +444,22 @@ final class ExchangeLock
         }
     }
 
-    /** @return resource|null */
+    /**
+     * This process' own descriptor on the lock file, opened on demand.
+     *
+     * Two laws live here:
+     *  - O_CLOEXEC ('e' on every mode): the exchange buffer is this client's
+     *    private state; without the flag every subsequently spawned child of
+     *    the owner inherits the descriptor (and with it, a handle on another
+     *    session's stream state).
+     *  - the reopen mode law: 'c+' CREATES under the ambient umask when the
+     *    file is gone, so an owner reopening a deleted lock settles the file
+     *    at 0600 before trusting it — the same refusal {@see new()} applies at
+     *    first creation, because the file will carry server output. A file
+     *    that cannot settle (planted foreign ownership) fails LOUD.
+     *
+     * @return resource|null
+     */
     private function handle()
     {
         $pid = (int) getmypid();
@@ -459,9 +474,26 @@ final class ExchangeLock
 
         // Only the owner may (re)create the file; a non-owner meeting a missing
         // file means the owner already stopped the server.
-        $handle = @fopen($this->path, $pid === $this->ownerPid ? 'c+' : 'r+');
+        $owner = $pid === $this->ownerPid;
+        $handle = @fopen($this->path, $owner ? 'c+e' : 'r+e');
         if ($handle === false) {
             return null;
+        }
+
+        if ($owner && self::modeOf($this->path) !== 0600) {
+            // The create-to-chmod window is real (the file briefly exists at
+            // the umask default) but BOUNDED and ALWAYS corrected: chmod now,
+            // re-verify, and refuse to run on a file that stays readable to
+            // the host. A foreign file planted at this path cannot be
+            // chmod'ed by us — that is precisely the case this loud failure
+            // is for; its owner keeps ownership, this session gets an error.
+            if (@chmod($this->path, 0600) === false || self::modeOf($this->path) !== 0600) {
+                fclose($handle);
+
+                throw new \RuntimeException(
+                    "the exchange lock file at {$this->path} could not be set to mode 0600; it would hold server output readable by every user on the host"
+                );
+            }
         }
 
         $this->handle = $handle;

@@ -271,4 +271,65 @@ final class ExchangeLockTest extends TestCase
         self::assertStringContainsString('@unlink', $slice, 'a refused boot removes the half-made file');
         self::assertStringContainsString('could not be set to mode', $slice, 'the refusal is loud');
     }
+
+    public function testOwnerRecreationOfADeletedLockSettlesAtMode0600(): void
+    {
+        // The reopen law: 'c+' created the replacement under the AMBIENT UMASK
+        // — a lock deleted mid-session (a janitor sweeping /tmp) came back
+        // world-readable, the exact state the class docblock names as
+        // expected. The owner arm now settles the mode before trusting it.
+        $this->dir = sys_get_temp_dir() . '/mclock-' . bin2hex(random_bytes(6));
+        mkdir($this->dir);
+        $lock = ExchangeLock::new('probe', $this->dir);
+        $this->lock = $lock;
+
+        $previousUmask = umask(0o022);
+
+        try {
+            self::assertTrue($lock->store(ExchangeLock::PHASE_CLEAN, 'first'));
+            $lock->close();
+            unlink($lock->path); // the janitor got it while the owner served on
+
+            self::assertTrue($lock->store(ExchangeLock::PHASE_CLEAN, 'second'));
+            $mode = fileperms($lock->path) & 0o777;
+            self::assertSame(0o600, $mode, sprintf('the recreated lock landed at %o', $mode));
+            self::assertSame([ExchangeLock::PHASE_CLEAN, 'second'], $lock->load());
+        } finally {
+            umask($previousUmask);
+        }
+    }
+
+    public function testLockDescriptorIsNotInheritedBySpawnedChildren(): void
+    {
+        // The CLOEXEC law: without 'e' on every mode, every MCP child spawned
+        // after a lock opened later held a descriptor on another session's
+        // exchange state. The probe walks its OWN descriptor table; the lock
+        // path must not be in it.
+        if (PHP_OS_FAMILY !== 'Linux') {
+            self::markTestSkipped('/proc/self/fd is a Linux view of the descriptor table');
+        }
+
+        $this->dir = sys_get_temp_dir() . '/mclock-' . bin2hex(random_bytes(6));
+        mkdir($this->dir);
+        $lock = ExchangeLock::new('probe', $this->dir);
+        $this->lock = $lock;
+        self::assertTrue($lock->store(ExchangeLock::PHASE_CLEAN, 'busy')); // handle open in OUR pid
+
+        $walk = 'foreach (glob("/proc/self/fd/*") ?: [] as $fd) { $t = @readlink($fd); if ($t !== false) { echo $t, "\n"; } }';
+        $child = proc_open(
+            [PHP_BINARY, '-r', $walk],
+            [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+        );
+        self::assertIsResource($child);
+
+        $seen = (string) stream_get_contents($pipes[1]);
+        $err = (string) stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $status = proc_close($child);
+
+        self::assertSame(0, $status, "fd walker failed: {$err}");
+        self::assertStringNotContainsString(basename($lock->path), $seen, 'the lock descriptor rode into the child');
+    }
 }
