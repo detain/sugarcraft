@@ -130,20 +130,28 @@ foreach ($streaming->finish() as $segment) {
 ## What it decodes
 
 - **SGR** — foreground / background (16, 256, 24-bit truecolor) +
-  bold / italic / underline / blink / reverse / strikethrough / faint.
+  bold / italic / underline (all `4:N` styles) / blink / reverse / conceal /
+  strikethrough / faint / framed / encircled / overlined / super- and
+  subscript, plus the matching off codes.
 - **CSI** — cursor moves, erase, scroll region (DECSTBM), scroll up/down,
-  insert/delete line/char, tab forward/backward, DECSCUSR cursor shape,
-  DECRQM mode query, DECRPM mode reply, request cursor position,
-  XTVERSION query, kitty keyboard query/push/pop.
-- **CSI ~ keys** — Home / End / Delete / PgUp / PgDn / F1-F12 / bracketed
-  paste markers.
-- **DEC private modes** — cursor visibility, mouse modes (1000/1002/1003/
-  1006/1015), focus reporting (1004), alt screen (47/1047/1049),
+  insert/delete line/char, tab forward/backward, HVP/VPR/HPR absolute
+  position, ECH, window manipulation (XTWINOPS), DECSCUSR cursor shape,
+  DECRQM mode query, DECRPM mode reply, DSR status/CPR request, DA1/DA2/DA3
+  device attributes, XTVERSION query, kitty keyboard query/push/pop,
+  **mouse event reports: SGR (1006), urxvt (1015) and X10** — button,
+  coordinates, press/release/wheel and modifier bits, never "delete lines".
+- **CSI ~ keys** — Home / Insert / End / Delete / PgUp / PgDn / F1-F12 /
+  bracketed paste markers.
+- **DEC private modes** — cursor visibility, cursor-keys application (1),
+  origin (6), mouse modes (1000/1002/1003/1005/1006/1015), focus reporting
+  (1004), focused-output (2031), alt screen (47/1047/1049),
   bracketed paste (2004), **synchronized output (2026)**, **unicode
   grapheme mode (2027)**.
-- **OSC** — title (0/2), icon (1), palette (4), cwd (7), hyperlink (8),
-  iTerm2 (9), taskbar progress (9;4), terminal colour set (10/11/12),
-  clipboard (52), reset terminal colour (110/111/112).
+- **OSC** — title (0/2), icon (1), palette (4), cwd (7), hyperlink (8, id and
+  URI split), iTerm2 (9), taskbar progress (9;4), terminal colour set or
+  **query** (`10/11/12;?`), clipboard (52), palette register reset (104),
+  reset terminal colour (110/111/112), shell integration (133), iTerm2
+  private sequences (1337).
 - **DCS** — XTVERSION reply (`>|<term> <ver>`), DECRQSS request, DECRPSS,
   tmux passthrough, sixel.
 - **APC** — CandyZone markers (`candyzone:S/E:<id>`), kitty graphics <!-- @rename-keep legacy wire token / historical log -->

@@ -92,6 +92,45 @@ final class Inspector
             return ($on ? 'enable ' : 'disable ') . implode(', ', $names);
         }
 
+        // Mouse EVENT reports (finding 006): the SGR (1006) and urxvt (1015)
+        // encodings ride the same `M`/`m` finals the line-editing fall-through
+        // below otherwise reads as "delete lines". The bare `ESC[M` X10 form
+        // has no marker here at all — AnsiHandler arms for its three raw
+        // payload bytes before describe ever sees it.
+        if (
+            ($final === 'M' || $final === 'm')
+            && (str_starts_with($params, '<') || str_starts_with($params, '>'))
+        ) {
+            // modifyOtherKeys (xterm) also rides `>` … m: name it before the
+            // mouse shapes claim it (finding 007's vocabulary).
+            if ($final === 'm' && preg_match('/^>4[;:](\d+)$/', $params, $mok) === 1) {
+                return 'set modifyOtherKeys ' . $mok[1] . ' (xterm)';
+            }
+            return self::describeMouse(
+                $params[0] === '<' ? 'SGR' : 'urxvt',
+                substr($params, 1),
+                $final,
+            );
+        }
+
+        // Device attributes (finding 020): DA1 `CSI c`, DA2 `CSI > c`, DA3
+        // `CSI = c` — previously all three fell to the generic `CSI … c`.
+        if ($final === 'c') {
+            if ($params === '') {
+                return 'request primary device attributes (DA1)';
+            }
+            if (str_starts_with($params, '>')) {
+                return 'request secondary device attributes (DA2)' . (substr($params, 1) !== '' ? ' ' . substr($params, 1) : '');
+            }
+            if (str_starts_with($params, '=')) {
+                return 'request tertiary device attributes (DA3)' . (substr($params, 1) !== '' ? ' ' . substr($params, 1) : '');
+            }
+            if (str_starts_with($params, '?')) {
+                return 'device attributes query (private) ' . $params;
+            }
+            return 'device attributes reply ' . $params;
+        }
+
         // DECRQM (mode-state query): `CSI [?] mode $p`.
         if (str_ends_with($params, '$') && $final === 'p') {
             $body = substr($params, 0, -1);
@@ -131,13 +170,19 @@ final class Inspector
         if ($final === 'u' && str_starts_with($params, '>')) {
             return 'push kitty keyboard flags ' . substr($params, 1);
         }
-        // XTVERSION request: `CSI > 0 q`.
-        if ($params === '>0' && $final === 'q') {
+        // XTVERSION request: `CSI > 0 q` — both the glued spelling and the
+        // space spelling (finding 020: the space spelling falls through the
+        // DECSCUSR-shaped arm because the intermediate sits between the
+        // `0` and the `q`, exactly like DECSCUSR's own `N SP q`).
+        if (preg_match('/^>0 ?$/D', $params) === 1 && $final === 'q') {
             return 'request terminal version (XTVERSION)';
         }
         // OSC palette set/query and DSR.
         if ($params === '6' && $final === 'n') {
             return 'request cursor position (DSR-CPR)';
+        }
+        if ($params === '5' && $final === 'n') {
+            return 'request operating status (DSR)';
         }
         // DECSTBM scrolling region: `CSI [top;bottom] r`.
         if ($final === 'r') {
@@ -147,7 +192,11 @@ final class Inspector
         }
 
         return match ($final) {
-            'm' => 'SGR ' . self::describeSgr($params),
+            // SGR is the PLAIN parameter space: no private marker, no
+            // sub-parameter colon, and every group digit-or-empty (finding
+            // 007). `ESC[?7m` / `ESC[>4;2m` / `ESC[:5m` are NOT SGR and must
+            // not borrow its labels.
+            'm' => self::describeMarkerFreeSgr($params),
             'A' => 'cursor up '    . ($params === '' ? '1' : $params),
             'B' => 'cursor down '  . ($params === '' ? '1' : $params),
             'C' => 'cursor right ' . ($params === '' ? '1' : $params),
@@ -171,6 +220,11 @@ final class Inspector
             'Z' => 'tab backward ' . ($params === '' ? '1' : $params),
             'g' => $params === '3' ? 'clear all tab stops' : 'clear tab stop',
             '@' => 'insert chars ' . ($params === '' ? '1' : $params),
+            'f' => 'cursor position (HVP) ' . ($params === '' ? '1;1' : $params),
+            'd' => 'line position absolute (VPR) ' . ($params === '' ? '1' : $params),
+            'e' => 'column position absolute (HPR) ' . ($params === '' ? '1' : $params),
+            'X' => 'erase chars (ECH) ' . ($params === '' ? '1' : $params),
+            't' => 'window manipulation (XTWINOPS)' . ($params === '' ? '' : ' ' . $params),
             '~' => self::describeTilde($params),
             default => 'CSI ' . ($params === '' ? '' : $params . ' ') . $final,
         };
@@ -326,6 +380,19 @@ final class Inspector
             $code === 27 => 'no reverse',
             $code === 28 => 'no conceal',
             $code === 29 => 'no strikethrough',
+            $code === 26 => 'proportional font off',
+            $code === 50 => 'proportional font (character spacing)',
+            $code === 51 => 'framed',
+            $code === 52 => 'encircled',
+            $code === 53 => 'overlined',
+            $code === 54 => 'framed/encircled off',
+            $code === 55 => 'overlined off',
+            $code === 59 => 'underline colour default',
+            $code >= 60 && $code <= 65
+                         => 'off extended-underline band (cancels ' . ($code - 39) . ')',
+            $code === 73 => 'superscript',
+            $code === 74 => 'subscript',
+            $code === 75 => 'super/subscript off',
             $code >= 30 && $code <= 37
                          => 'foreground ' . self::ansiName($code - 30),
             $code === 39 => 'foreground default',
@@ -345,12 +412,121 @@ final class Inspector
         return ['black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white'][$i] ?? 'unknown';
     }
 
+    /**
+     * SGR routing guard (finding 007): `describeSgr` may only be reached by a
+     * plain parameter space — no private marker (`?`, `<`, `>`, `=`), no
+     * leading colon, every semicolon group digit-or-empty. Anything else
+     * gets an honest generic that echoes the marker instead of inventing an
+     * "SGR …" label for bytes that were never SGR.
+     */
+    private static function describeMarkerFreeSgr(string $params): string
+    {
+        if ($params === '') {
+            return 'SGR reset';
+        }
+        $first = $params[0];
+        if ($first === '?') {
+            return 'private SGR ' . $params;
+        }
+        if (!ctype_digit($first)) {
+            return 'SGR-marker ' . $params;
+        }
+        foreach (explode(';', $params) as $group) {
+            if ($group !== '' && preg_match('/^\d+(?::\d*)*$/', $group) !== 1) {
+                return 'SGR-marker ' . $params;
+            }
+        }
+        return 'SGR ' . self::describeSgr($params);
+    }
+
+    /**
+     * SGR (1006) mouse event decode (finding 006). Wire semantics:
+     * `CSI < code ; x ; y M/m`, where code = button (0-2 left/mid/right,
+     * 3/4 wheel-up/down, 5 none) + 4 shift + 8 meta + 16 ctrl + 32 motion,
+     * and the final byte is the press/release edge. urxvt (1015) reports a
+     * raw X10-style button number with no agreed modifier algebra, so its
+     * code is echoed rather than invented.
+     */
+    private static function describeMouse(string $encoding, string $params, string $final): string
+    {
+        $codes = explode(';', $params);
+        if (count($codes) < 3 || preg_match('/^\d+$/', $codes[0]) !== 1) {
+            return 'mouse ' . $encoding . ' event ' . self::sanitizeLabelBytes($params) . ' ' . $final;
+        }
+        $button = (int) $codes[0];
+        if ($encoding !== 'SGR') {
+            return 'mouse ' . $encoding . ' ' . ($final === 'm' ? 'release' : 'press')
+                . ' code' . $button . ' @' . (int) $codes[1] . ',' . (int) $codes[2];
+        }
+        if (($button & ~63) !== 0) {
+            return 'mouse SGR event ' . self::sanitizeLabelBytes($params) . ' ' . $final;
+        }
+        $motion = ($button & 32) !== 0;
+        $modifiers = '';
+        if (($button & 4) !== 0) {
+            $modifiers .= ' +shift';
+        }
+        if (($button & 8) !== 0) {
+            $modifiers .= ' +meta';
+        }
+        if (($button & 16) !== 0) {
+            $modifiers .= ' +ctrl';
+        }
+        $number = $button & ~60;
+        $name = match ($number) {
+            3 => 'wheel-up',
+            4 => 'wheel-down',
+            default => 'btn' . $number,
+        };
+        $state = $final === 'm' ? 'release' : ($motion ? 'motion' : 'press');
+        return 'mouse ' . $encoding . ' ' . $state . ' ' . $name . ' @' . (int) $codes[1] . ',' . (int) $codes[2] . $modifiers;
+    }
+
+    /**
+     * X10 mouse event (finding 006): the three raw bytes that trail `ESC[M`,
+     * each offset by 32. Low bits 0-2 select button (3 = release), bit 4
+     * shift, bit 8 meta, bit 16 ctrl, bit 5 drag, the 64 band wheels;
+     * coordinates are byte-minus-31 (1-based).
+     */
+    public static function describeMouseX10(string $payload): string
+    {
+        $button = ord($payload[0]) - 32;
+        $x = ord($payload[1]) - 31;
+        $y = ord($payload[2]) - 31;
+        $modifiers = '';
+        if (($button & 4) !== 0) {
+            $modifiers .= ' +shift';
+        }
+        if (($button & 8) !== 0) {
+            $modifiers .= ' +meta';
+        }
+        if (($button & 16) !== 0) {
+            $modifiers .= ' +ctrl';
+        }
+        $button &= ~28;
+        if (($button & 64) !== 0) {
+            $kind = match ($button & 3) {
+                0 => 'wheel-up',
+                1 => 'wheel-down',
+                default => 'wheel-release',
+            };
+        } elseif (($button & 3) === 3) {
+            $kind = 'release';
+        } elseif (($button & 32) !== 0) {
+            $kind = 'drag btn' . ($button & 3);
+        } else {
+            $kind = 'press btn' . ($button & 3);
+        }
+        return 'mouse X10 ' . $kind . ' @' . $x . ',' . $y . $modifiers;
+    }
+
     private static function describeTilde(string $params): string
     {
         return match ($params) {
             '1', '7'  => 'Home',
-            '4', '8'  => 'End',
+            '2'       => 'Insert',
             '3'       => 'Delete',
+            '4', '8'  => 'End',
             '5'       => 'PageUp',
             '6'       => 'PageDown',
             '11'      => 'F1',
@@ -374,6 +550,8 @@ final class Inspector
     private static function decPrivateName(int $code): string
     {
         return match ($code) {
+            1    => 'cursor keys application mode (DECCKM)',
+            6    => 'origin mode (DECOM)',
             7    => 'auto wrap',
             12   => 'cursor blink',
             25   => 'cursor visibility',
@@ -382,6 +560,7 @@ final class Inspector
             1002 => 'mouse cell motion',
             1003 => 'mouse all motion',
             1004 => 'focus reporting',
+            1005 => 'UTF-8 mouse encoding (legacy)',
             1006 => 'mouse SGR encoding',
             1015 => 'mouse urxvt encoding',
             1047 => 'alternate screen (no save)',
@@ -390,6 +569,7 @@ final class Inspector
             2004 => 'bracketed paste',
             2026 => 'synchronized output',
             2027 => 'unicode (grapheme cluster) mode',
+            2031 => 'focused-output mode',
             default => "DEC ?$code",
         };
     }
@@ -403,22 +583,30 @@ final class Inspector
                 '1'       => 'set icon name to "' . $safe . '"',
                 '4'       => 'palette ' . $safe,
                 '7'       => 'cwd ' . $safe,
-                '8'       => 'hyperlink ' . $safe,
+                // OSC 8 carries `params ; URI` — split them (finding 020) so a
+                // capture shows where the link actually goes, not one blob.
+                '8'       => self::describeOscHyperlink($m[2]),
                 '9'       => str_starts_with($m[2], '4;')
                                 ? 'progress ' . self::sanitizeLabelBytes(substr($m[2], 2))
                                 : 'iTerm2 ' . $safe,
-                '10'      => 'set foreground colour ' . $safe,
-                '11'      => 'set background colour ' . $safe,
-                '12'      => 'set cursor colour ' . $safe,
+                // `?` payload is a QUERY, not a set — printing "set … colour ?"
+                // inverted the direction of the conversation (finding 020).
+                '10'      => $m[2] === '?' ? 'query foreground colour' : 'set foreground colour ' . $safe,
+                '11'      => $m[2] === '?' ? 'query background colour' : 'set background colour ' . $safe,
+                '12'      => $m[2] === '?' ? 'query cursor colour' : 'set cursor colour ' . $safe,
                 '52'      => 'clipboard ' . $safe,
+                '104'     => 'reset colour palette' . ($m[2] === '' ? '' : ' register ' . $safe),
                 '110'     => 'reset foreground colour',
                 '111'     => 'reset background colour',
                 '112'     => 'reset cursor colour',
+                '133'     => 'shell integration (OSC 133) ' . $safe,
+                '1337'    => 'iTerm2 private sequence (OSC 1337) ' . $safe,
                 default   => 'OSC ' . self::sanitizeLabelBytes($payload),
             };
         }
-        if (in_array($payload, ['110', '111', '112'], true)) {
+        if (in_array($payload, ['104', '110', '111', '112'], true)) {
             return match ($payload) {
+                '104' => 'reset colour palette',
                 '110' => 'reset foreground colour',
                 '111' => 'reset background colour',
                 '112' => 'reset cursor colour',
@@ -427,6 +615,20 @@ final class Inspector
         // Regex-miss payload (no `digit;` prefix) is as attacker-controlled as
         // the matched branches — sanitize before it reaches the report label.
         return 'OSC ' . self::sanitizeLabelBytes($payload);
+    }
+
+    /**
+     * OSC 8 payload split: `params ; URI` (both may legitimately be empty —
+     * `8;;URL` is the standard close-hyperlink form).
+     */
+    private static function describeOscHyperlink(string $body): string
+    {
+        $split = explode(';', $body, 2);
+        $params = $split[0];
+        $uri = $split[1] ?? '';
+        return 'hyperlink'
+            . ($params === '' ? '' : ' (' . self::sanitizeLabelBytes($params) . ')')
+            . ($uri === '' ? ' (no URI)' : ' to ' . self::sanitizeLabelBytes($uri));
     }
 
     /**

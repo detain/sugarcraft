@@ -108,8 +108,8 @@ final class UnderlineStylesTest extends TestCase
         $this->assertStringContainsString('underline', $desc);
         // SGR 53 is "overline" — the heuristic must not claim "underline style 53".
         $this->assertStringNotContainsString('underline style 53', $desc);
-        // The 53 should still appear as an SGR code.
-        $this->assertStringContainsString('SGR 53', $desc);
+        // 53 now carries its own name (2026-11-12 vocabulary wave, AIP-07).
+        $this->assertStringContainsString('overlined', $desc);
     }
 
     /**

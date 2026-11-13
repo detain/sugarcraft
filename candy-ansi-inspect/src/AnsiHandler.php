@@ -95,6 +95,19 @@ final class AnsiHandler implements Handler
     private int $ss3Intermediate = 0;
 
     /**
+     * True between a bare `ESC[M` dispatch and the arrival of its three raw
+     * payload bytes (X10 mouse event, finding 006 / AIP-07). The parser is
+     * right that those bytes are ordinary characters — ECMA-48 has no CSI
+     * continuation — but a mode-unaware inspector has to pick a reading, and
+     * the mouse report is the one captures actually contain. Any dispatch,
+     * execute byte or stream end before the third payload byte aborts the
+     * arm and reports `ESC[M` + what arrived as truncated.
+     */
+    private bool $x10Armed = false;
+
+    private string $x10Payload = '';
+
+    /**
      * Parse a complete input in one shot: feed every byte, then finalise.
      *
      * @return list<Segment>
@@ -168,6 +181,8 @@ final class AnsiHandler implements Handler
         $this->awaitingStringTerminator = false;
         $this->ss3Buffered = false;
         $this->ss3Intermediate = 0;
+        $this->x10Armed = false;
+        $this->x10Payload = '';
     }
 
     /**
@@ -220,6 +235,7 @@ final class AnsiHandler implements Handler
     {
         $pendingText = $this->textBuf;
         $this->flushText();
+        $this->abortX10Arm();
 
         // Text bytes ride in the in-flight window until a dispatch consumes
         // them; drop that prefix so what remains is only the sequence tail.
@@ -248,6 +264,27 @@ final class AnsiHandler implements Handler
     {
         $this->awaitingStringTerminator = false;
 
+        // X10 payload bytes (AIP-07): swallowed whole while the arm is open,
+        // emitted as one mouse report when the third byte lands. A rune that
+        // overflows (multi-byte) keeps its tail as fresh text — the mouse
+        // report itself never absorbs more than its three bytes.
+        if ($this->x10Armed === true) {
+            $this->x10Payload .= $rune;
+            if (strlen($this->x10Payload) < 3) {
+                return;
+            }
+            $payload = substr($this->x10Payload, 0, 3);
+            $overflow = substr($this->x10Payload, 3);
+            $this->x10Armed = false;
+            $this->x10Payload = '';
+            $this->segments[] = new SequenceSegment("\x1b[M" . $payload, Inspector::describeMouseX10($payload));
+            $this->inFlightBytes = $overflow;
+            if ($overflow !== '') {
+                $this->textBuf .= $overflow;
+            }
+            return;
+        }
+
         if ($this->ss3Buffered === true) {
             if (self::isSs3Final($rune)) {
                 $this->segments[] = new SequenceSegment(
@@ -270,6 +307,7 @@ final class AnsiHandler implements Handler
     public function execute(int $byte): void
     {
         $this->awaitingStringTerminator = false;
+        $this->abortX10Arm();
 
         if ($byte >= 0x00 && $byte <= 0x1F && $byte !== 0x1B) {
             $this->flushPendingSs3();
@@ -321,12 +359,26 @@ final class AnsiHandler implements Handler
         }
 
         $rawBytes = "\x1b[{$paramsStr}{$intermediateStr}" . $finalChar;
+        $this->abortX10Arm();
+        if ($finalChar === 'M' && $prefixStr === '' && $intermediateStr === '' && $paramsStr === '') {
+            // X10 mouse introducer (finding 006 / AIP-07): do not emit "delete
+            // lines 1" — arm for the three raw payload bytes that trail the
+            // dispatch and complete the report inside printChar().
+            $this->recoverCancelledResidue($rawBytes);
+            $this->flushPendingSs3();
+            $this->flushText();
+            $this->x10Armed = true;
+            $this->x10Payload = '';
+            $this->inFlightBytes = '';
+            return;
+        }
         $this->recoverCancelledResidue($rawBytes);
         $this->flushPendingSs3();
         $this->flushText();
-        $isSgr = $finalChar === 'm';
-        $paramsForDescribe = $isSgr ? $paramsStr : $paramsStr . $intermediateStr;
-        $label = Inspector::describeCsi($paramsForDescribe, $finalChar);
+        // One `describeCsi` input: params (marker-prefixed) plus any
+        // intermediate byte — the SGR guard (finding 007) must see the
+        // intermediate to refuse `ESC[!5m`-style shapes.
+        $label = Inspector::describeCsi($paramsStr . $intermediateStr, $finalChar);
 
         $this->segments[] = new SequenceSegment($rawBytes, $label);
         $this->inFlightBytes = '';
@@ -363,6 +415,7 @@ final class AnsiHandler implements Handler
 
     public function escDispatch(int $final, int $intermediate): void
     {
+        $this->abortX10Arm();
         if ($final === ord('O')) {
             $this->recoverCancelledResidue(
                 "\x1b" . ($intermediate !== 0 ? chr($intermediate) . 'O' : 'O'),
@@ -403,6 +456,7 @@ final class AnsiHandler implements Handler
     public function oscDispatch(string $data): void
     {
         $this->awaitingStringTerminator = false;
+        $this->abortX10Arm();
         // Residue check before the flushes: it must see the still-pending
         // text/SS3 buffers to attribute window bytes. The ST-pending spelling
         // is a second candidate because sugar-ansi-parser dispatches the OSC on
@@ -423,6 +477,7 @@ final class AnsiHandler implements Handler
     public function dcsDispatch(int $final, array $params, int $prefix, int $intermediate, string $data): void
     {
         $this->awaitingStringTerminator = false;
+        $this->abortX10Arm();
 
         $prefixStr = $prefix !== 0 ? chr($prefix) : '';
         $intermediateStr = $intermediate !== 0 ? chr($intermediate) : '';
@@ -456,6 +511,7 @@ final class AnsiHandler implements Handler
     public function sosPmApcDispatch(string $kind, string $data): void
     {
         $this->awaitingStringTerminator = false;
+        $this->abortX10Arm();
 
         $isSosPm = $kind === 'sos' || $kind === 'pm';
         $introducer = match ($kind) {
@@ -596,6 +652,27 @@ final class AnsiHandler implements Handler
             'SS3 ' . chr($this->ss3Intermediate),
         );
         $this->ss3Buffered = false;
+    }
+
+    /**
+     * Close an open X10 arm whose payload never completed: the introducer and
+     * whatever payload bytes did arrive are reported as truncated (finding
+     * 006's conservation floor — the bytes must surface, even when the sender
+     * broke the protocol).
+     */
+    private function abortX10Arm(): void
+    {
+        if ($this->x10Armed === false) {
+            return;
+        }
+        $this->x10Armed = false;
+        $raw = "\x1b[M" . $this->x10Payload;
+        // The payload bytes live in the shared byte window too (they arrived
+        // after the arm cleared it); peel them out so no later residue check
+        // reports the same byte twice.
+        $this->inFlightBytes = substr($this->inFlightBytes, strlen($this->x10Payload));
+        $this->x10Payload = '';
+        $this->segments[] = new SequenceSegment($raw, 'X10 mouse report (incomplete payload)');
     }
 
     /**

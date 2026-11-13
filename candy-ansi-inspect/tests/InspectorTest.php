@@ -422,7 +422,7 @@ final class InspectorTest extends TestCase
     public function testUnknownFinalByte(): void
     {
         // CSI with unhandled final byte falls to default
-        $seg = Inspector::parse("\x1b[1;2X")[0];
+        $seg = Inspector::parse("\x1b[1;2w")[0];
         $this->assertStringContainsString('CSI', $seg->describe());
     }
 
