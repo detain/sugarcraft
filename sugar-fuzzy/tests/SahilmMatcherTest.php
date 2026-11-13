@@ -249,31 +249,38 @@ final class SahilmMatcherTest extends TestCase
     #[Test]
     public function testCamelCaseBonusRaisesScore(): void
     {
-        // The camelCase bonus (+10) fires when a matched lowercase char follows
-        // an uppercase char in the original (non-lowercased) candidate.
-        // 'b' in 'fooBar' matches 'B' at index 3 (uppercase), so no camel bonus;
-        // the preceding 'o' (index 2) is lowercase, so no camelCase bonus either.
-        // 'b' in 'foobar' matches 'b' at index 2 (lowercase), so gets +1 lowercase bonus.
-        // To properly test camelCase bonus: match 'B' in 'fooBar' vs 'B' in 'foobar'.
-        // In 'fooBar': 'B' follows 'o' (lowercase) → no camel bonus, but 'B' is uppercase
-        // so the scores differ. This test verifies the baseline score is positive.
+        // #97 cure: the old form's entire score content was two assertGreaterThan(0, …)
+        // re-reads of match()'s own null guard (non-null only when score > 0) — the test
+        // could not fail. Exact live pins now: 'b' in 'fooBar' matches the UPPERCASE 'B'
+        // at index 3 for base matchScore 1 only (no camel fire — the matched char is not
+        // lowercase-after-uppercase; no lowercase bonus — 'B' is uppercase); 'b' in
+        // 'foobar' matches lowercase 'b' and earns lowerCaseBonus (+1). This pair pins
+        // the scoring table (matchScore + lowerCaseBonus), NOT a camel raise — asserting
+        // a 1-vs-2 "raise" would be wrong (the delta is the lowercase bonus). The
+        // canonical camelCase pin is its own test (sugar-fuzzy-004).
         $fooBar = $this->matcher->match('b', 'fooBar');
         $foobar = $this->matcher->match('b', 'foobar');
 
         $this->assertNotNull($fooBar);
         $this->assertNotNull($foobar);
-        // Both should score > 0; the specific comparison depends on case handling
-        $this->assertGreaterThan(0, $fooBar->score);
-        $this->assertGreaterThan(0, $foobar->score);
+        $this->assertSame(1, $fooBar->score);
+        $this->assertSame(2, $foobar->score);
     }
 
     #[Test]
     public function testNonAsciiCamelBonusFires(): void
     {
         // After Step 7 (Unicode-aware case classification), the round-trip check
-        // properly identifies case for accented characters.  'Ét' contains 'E'
+        // properly identifies case for accented characters.  'Ét' contains 'É'
         // (uppercase) followed by 't' (lowercase), so 't' matching at index 1
-        // follows an uppercase char and should earn the camelCase bonus.
+        // follows an uppercase char and earns the camelCase bonus.
+        // #98 cure: the old assertGreaterThanOrEqual($plain, $accented) passed even in
+        // the bonus-absent world (with camelBonus 0 both score 2, and 2 >= 2 is true)
+        // — the documented Unicode case-classification fix was completely unprotected.
+        // Now a STRICT comparison plus exact live pins (12 / 2): corrupting camelBonus
+        // to 0 collapses the accented row to 2 and trips BOTH the > assert and the
+        // 12-pin, so the test goes red. (Note: FUZZY-26's camel-direction decision
+        // does not move these literals — this pair fires under the current condition.)
         $accented = $this->matcher->match('t', 'Ét');
         $plain = $this->matcher->match('t', 'et');
 
@@ -281,8 +288,9 @@ final class SahilmMatcherTest extends TestCase
         $this->assertNotNull($plain);
         // 't' in 'Ét' follows uppercase 'É' → camelCase bonus fires (+10)
         // 't' in 'et' follows lowercase 'e' → no camelCase bonus
-        // Even with the index difference, the camelCase bonus should make accented > plain
-        $this->assertGreaterThanOrEqual($plain->score, $accented->score);
+        $this->assertSame(12, $accented->score);
+        $this->assertSame(2, $plain->score);
+        $this->assertGreaterThan($plain->score, $accented->score);
     }
 
     #[Test]
@@ -309,14 +317,39 @@ final class SahilmMatcherTest extends TestCase
     #[Test]
     public function testMatchAllRespectsMinScore(): void
     {
-        // Build a list with varied scores
-        $candidates = ['hello', 'hey', 'h', 'xyz'];
-        $results = $this->matcher->matchAll('he', $candidates, minScore: 10);
+        // #96 cure: the old form swept ['hello','hey','h','xyz'] at minScore 10 — that
+        // set scores [hello 24, hey 24] for EVERY threshold 1..24 (h is dropped by the
+        // whole-query guard, xyz never matches), so the loop pruned nothing and was
+        // vacuous on []. These thresholds DIVIDE the live set: THE-app (7) crosses at
+        // 8, the 24-scorers fall away at 25 — an ignored threshold leaks THE-app into
+        // the minScore-8 row and the minScore-25 row, an over-strong threshold drops
+        // the minScore-7 row's survivor. Both bug classes now go red.
+        $candidates = ['hello', 'hey', 'THE-app', 'h', 'xyz'];
 
-        // All results should have score >= 10
-        foreach ($results as $result) {
-            $this->assertGreaterThanOrEqual(10, $result->score);
-        }
+        $this->assertSame(
+            ['hello|24|[0,1]', 'hey|24|[0,1]', 'THE-app|7|[1,2]'],
+            self::rows($this->matcher->matchAll('he', $candidates, minScore: 7)),
+        );
+        $this->assertSame(
+            ['hello|24|[0,1]', 'hey|24|[0,1]'],
+            self::rows($this->matcher->matchAll('he', $candidates, minScore: 8)),
+        );
+        $this->assertSame([], self::rows($this->matcher->matchAll('he', $candidates, minScore: 25)));
+    }
+
+    /**
+     * Exact-list rendering mirroring GeneratorBytePinTest's row format
+     * "haystack|score|[indices]".
+     *
+     * @param array<MatchResult> $results
+     * @return list<string>
+     */
+    private static function rows(array $results): array
+    {
+        return array_map(
+            static fn (MatchResult $r): string => $r->haystack . '|' . $r->score . '|[' . implode(',', $r->indices()) . ']',
+            $results,
+        );
     }
 
     #[Test]
