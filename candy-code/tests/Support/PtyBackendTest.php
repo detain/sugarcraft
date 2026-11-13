@@ -192,6 +192,10 @@ final class FakeMasterPty implements MasterPty
         return null;
     }
 
+    public function setBlocking(bool $blocking): void
+    {
+    }
+
     public function close(): void
     {
         $this->closed = true;

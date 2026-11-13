@@ -80,7 +80,7 @@ final class PtyShimAutoloadResolutionTest extends TestCase
      * script-only argv and the usage branch (rc 2); a token left in place
      * would instead be taken as the command and reach the claim/exec path.
      */
-    public function testShimConsumesExplicitAutoloadFlagBeforeCommand(): void
+    public function testShimConsumesTheEnvAutoloadHandOff(): void
     {
         $autoload = $this->plantConsumer();
         // Invoke from the TARGET dir (not the symlink): nothing in the
@@ -88,10 +88,13 @@ final class PtyShimAutoloadResolutionTest extends TestCase
         // flag is the only channel that can succeed.
         $shim = $this->sandbox . '/lib/bin/pty-shim.php';
 
-        [$rc, $output] = self::runShim($shim, '--autoload=' . $autoload);
+        [$rc, $output] = self::runShim($shim, $autoload, '/bin/true');
 
-        self::assertSame(2, $rc, $output);
-        self::assertStringContainsString('usage', $output);
+        // Autoload consumed from the env, argv[1] stays the COMMAND: the stub
+        // autoload defines no ControllingTerminal, so the honesty gate (rc 3)
+        // is reached, proving the file was required rather than 'not found'.
+        self::assertSame(3, $rc, $output);
+        self::assertStringContainsString('does not define ControllingTerminal', $output);
     }
 
     /**
@@ -106,8 +109,7 @@ final class PtyShimAutoloadResolutionTest extends TestCase
     public static function invalidAutoloadFlags(): array
     {
         return [
-            'missing file' => ['--autoload=/definitely/not/here.php'],
-            'empty value' => ['--autoload='],
+            'missing file' => ['/definitely/not/here.php'],
         ];
     }
 
@@ -118,10 +120,10 @@ final class PtyShimAutoloadResolutionTest extends TestCase
     {
         $this->plantConsumer();
 
-        [$rc, $output] = self::runShim($this->sandbox . '/lib/bin/pty-shim.php', $flag);
+        [$rc, $output] = self::runShim($this->sandbox . '/lib/bin/pty-shim.php', $flag, '/bin/true');
 
         self::assertSame(3, $rc, $output);
-        self::assertStringContainsString('--autoload file not found', $output);
+        self::assertStringContainsString('SUGAR_PTY_SHIM_AUTOLOAD file not found', $output);
     }
 
     /**
@@ -137,7 +139,7 @@ final class PtyShimAutoloadResolutionTest extends TestCase
     {
         $autoload = $this->plantConsumer();
 
-        [$rc, $output] = self::runShim($this->sandbox . '/lib/bin/pty-shim.php', '--autoload=' . $autoload, '/bin/true');
+        [$rc, $output] = self::runShim($this->sandbox . '/lib/bin/pty-shim.php', $autoload, '/bin/true');
 
         self::assertSame(3, $rc, $output);
         self::assertStringContainsString('does not define ControllingTerminal', $output);
@@ -180,16 +182,17 @@ final class PtyShimAutoloadResolutionTest extends TestCase
         $method = new ReflectionMethod(Spawn::class, 'wrapInShim');
         $method->setAccessible(true);
         /** @var list<string> $argv */
-        $argv = $method->invoke(null, ['/bin/sh', '-c', 'true', '--autoload=user-visible']);
+        [$argv, $autoload] = $method->invoke(null, ['/bin/sh', '-c', 'true', '--autoload=user-visible']);
 
         self::assertSame(\PHP_BINARY, $argv[0]);
         self::assertSame(\realpath(self::realShim()), $argv[1]);
-        self::assertStringStartsWith('--autoload=', $argv[2]);
+        // PTY-07: the autoloader travels beside argv (staged into the env by
+        // Spawn::proc()), so argv is exactly shim + the untouched command.
+        self::assertSame(['/bin/sh', '-c', 'true', '--autoload=user-visible'], \array_slice($argv, 2));
         self::assertSame(
             \realpath(\dirname(__DIR__, 2) . '/vendor/autoload.php'),
-            \realpath(\substr($argv[2], \strlen('--autoload='))),
+            \realpath((string) $autoload),
         );
-        self::assertSame(['/bin/sh', '-c', 'true', '--autoload=user-visible'], \array_slice($argv, 3));
     }
 
     /**
@@ -215,9 +218,11 @@ final class PtyShimAutoloadResolutionTest extends TestCase
     /**
      * @return array{0:int,1:string}
      */
-    private static function runShim(string $shim, string ...$args): array
+    private static function runShim(string $shim, string $autoloadEnv = '', string ...$args): array
     {
-        $command = \PHP_BINARY . ' ' . \escapeshellarg($shim);
+        // PTY-07: the hand-off rides SUGAR_PTY_SHIM_AUTOLOAD, never argv.
+        $command = ($autoloadEnv === '' ? '' : 'SUGAR_PTY_SHIM_AUTOLOAD=' . \escapeshellarg($autoloadEnv) . ' ')
+            . \PHP_BINARY . ' ' . \escapeshellarg($shim);
         foreach ($args as $arg) {
             $command .= ' ' . \escapeshellarg($arg);
         }
