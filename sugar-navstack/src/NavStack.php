@@ -11,7 +11,8 @@ namespace SugarCraft\NavStack;
  * Push new items to go deeper; pop to go back up.
  * The top of the stack is the "current" screen/section.
  *
- * **Mutable by design** — `push`, `popTo`, `updateTop`, `clear`, and
+ * **Mutable by design** — `push`, `popTo`, `popToRoot`, `updateTop`,
+ * `clear`, and
  * `setItems` mutate `$this` and return `$this` for fluent chaining; `pop`
  * mutates in place too but returns the removed `?NavigationItem`, never
  * `$this`.
@@ -114,17 +115,36 @@ final class NavStack
      * Truncate the stack to the item at $index (inclusive), removing everything newer.
      * The item at position $index becomes the top.
      *
-     * Out-of-range indices are clamped silently: a negative index clamps to
-     * EMPTY (not "keep the root") — callers wanting root-or-deeper semantics
-     * guard with `max(0, $index)`; oversized clamps to current depth.
+     * NEGATIVE INDICES ARE REFUSED, not clamped: the historical clamp-to-EMPTY
+     * turned a 1-based-UI off-by-one into a wiped stack while the same-class
+     * MAX_STACK_DEPTH violation throws 40 lines above. Oversized indices
+     * STAY a silent clamp to the current depth (harmless: nothing newer
+     * exists to remove).
+     *
+     * @throws \InvalidArgumentException On a negative index
      *
      * Project addition (research §10) — upstream KevM/bubbleo NavStack has
      * no truncation/popTo; the shape follows from Pop/Top semantics.
      */
     public function popTo(int $index): self
     {
-        $this->items = \array_slice($this->items, 0, \max(0, $index + 1));
+        if ($index < 0) {
+            throw new \InvalidArgumentException(
+                'popTo index must be >= 0; use popToRoot() to keep only the root'
+            );
+        }
+        $this->items = \array_slice($this->items, 0, $index + 1);
         return $this;
+    }
+
+    /**
+     * Keep ONLY the root item (spelled intent for what a negative popTo
+     * used to silently do — wipe the stack from a 1-based off-by-one).
+     * On an empty stack this is a no-op.
+     */
+    public function popToRoot(): self
+    {
+        return $this->popTo(0);
     }
 
     /**

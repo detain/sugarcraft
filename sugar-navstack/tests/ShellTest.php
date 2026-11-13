@@ -163,13 +163,14 @@ final class ShellTest extends TestCase
         $this->assertSame(2, $result->stack->depth());
     }
 
-    public function testWithPopToNegativeIndex(): void
+    public function testWithPopToNegativeIndexThrows(): void
     {
         $shell = Shell::new()->withPush('Home')->withPush('Settings');
 
-        // popTo(-5) clamps to 0 (empty stack)
-        $result = $shell->withPopTo(-5);
-        $this->assertSame(0, $result->stack->depth());
+        // NS-03: withPopTo inherits popTo's boundary refusal (disclosed
+        // flip of the old clamp-to-empty pin).
+        $this->expectException(\InvalidArgumentException::class);
+        $shell->withPopTo(-5);
     }
 
     // ─── renderBreadcrumb() ───────────────────────────────────────────────────

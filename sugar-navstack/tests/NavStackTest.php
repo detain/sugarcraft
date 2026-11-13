@@ -400,18 +400,30 @@ final class NavStackTest extends TestCase
         $this->assertSame('Settings', $s->items()[1]->title);
     }
 
-    public function testPopToClampsOutOfRange(): void
+    public function testPopToClampsOversizeAndRefusesNegatives(): void
     {
         $s = NavStack::new();
         $s->push('Home')->push('Settings');
 
-        // popTo(99) clamps to current depth (2)
+        // popTo(99) clamps to current depth (2) — silent, harmless.
         $s->popTo(99);
         $this->assertSame(2, $s->depth());
 
-        // popTo(-5) clamps to 0 (empty stack)
-        $s->popTo(-5);
-        $this->assertSame(0, $s->depth());
+        // NS-03: a negative index THROWS instead of wiping the stack
+        // (the old clamp-to-EMPTY punished the 1-based off-by-one).
+        // Disclosed pin flip: testPopToClampsOutOfRange's negative leg.
+        try {
+            $s->popTo(-5);
+            $this->fail('negative popTo index accepted');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('popToRoot()', $e->getMessage());
+        }
+        $this->assertSame(2, $s->depth(), 'refusal leaves the stack intact');
+
+        // The spelled-intent door keeps only the root:
+        $s->popToRoot();
+        $this->assertSame(1, $s->depth());
+        $this->assertSame('Home', $s->current()?->title);
     }
 
     public function testShellWithPopOnEmptyStackIsNoOp(): void

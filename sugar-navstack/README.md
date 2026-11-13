@@ -95,7 +95,8 @@ returns a new instance.
 | `push(string $title, mixed $data = null): self` | Append an item (mutates) |
 | `pop(): ?NavigationItem` | Remove and return the top; `null` when empty |
 | `canPop(): bool` | True only when depth > 1 — guards the root crumb |
-| `popTo(int $index): self` | Truncate so item `$index` becomes the top; out-of-range clamps silently — a negative index clamps to EMPTY (guard with `max(0, $index)` for root-or-deeper), an oversized one clamps to the current top |
+| `popTo(int $index): self` | Truncate so item `$index` becomes the top; a NEGATIVE index throws (`InvalidArgumentException` — use `popToRoot()` for keep-only-the-root), an oversized one clamps silently to the current top |
+| `popToRoot(): self` | Keep only the root item (spelled intent; no-op on an empty stack) |
 | `current(): ?NavigationItem` / `parent(): ?NavigationItem` | Peek at the top / one below it |
 | `depth(): int` / `isEmpty(): bool` / `items(): list<NavigationItem>` | Inspect the stack |
 | `updateTop(mixed $data): self` | Replace the top item's payload (no-op when empty) |
@@ -113,6 +114,8 @@ rather than silently truncating:
 - `push()` refuses titles that are empty after trimming and sanitizing —
   blank, whitespace-only, or built purely of terminal/sentinel bytes — and
   refuses to grow past `NavStack::MAX_STACK_DEPTH` (10,000 levels).
+- `popTo()` refuses negative indices (the historical silent clamp-to-EMPTY
+  is closed; `popToRoot()` spells the keep-only-the-root intent).
 - Every item is born through `NavigationItem`'s constructor, which refuses
   titles above `NavigationItem::MAX_TITLE_BYTES` (65,536 raw bytes).
 - `filter()` walks array payloads recursively and refuses payloads nested

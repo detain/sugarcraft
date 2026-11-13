@@ -76,7 +76,10 @@ final class Shell
      * No-op only when the stack is already empty. Popping a depth-1 stack
      * DOES empty it — the single item is removed, matching
      * {@see NavStack::pop()}. Callers that must keep the root crumb alive
-     * guard with {@see NavStack::canPop()} first.
+     * guard with the predicate before dispatching:
+     * `if ($shell->stack->canPop()) { $shell = $shell->withPop(); }` —
+     * discarding the return without that guard is the classic silent
+     * stack wipe.
      *
      * Project addition — upstream KevM/bubbleo Shell has no withPop; the
      * Pop semantics it wraps live on NavStack.
@@ -90,8 +93,9 @@ final class Shell
 
     /**
      * Truncate the stack to the item at $index (inclusive), removing newer
-     * items, and return a new Shell. A negative $index clamps to EMPTY
-     * (see {@see NavStack::popTo()}).
+     * items, and return a new Shell. A negative $index THROWS (see
+     * {@see NavStack::popTo()}); {@see NavStack::popToRoot()} names the
+     * keep-only-the-root intent the old silent clamp used to swallow.
      *
      * Project addition — upstream KevM/bubbleo Shell has no truncation/
      * withPopTo; see {@see NavStack::popTo()}.

@@ -175,4 +175,40 @@ final class DepthGuardsTest extends TestCase
         $mixed = Url::parse('/a/%20/b');
         self::assertSame(['a', 'b'], array_map(static fn (NavigationItem $i): string => $i->title, $mixed->items()));
     }
+
+    // ─── NS-03: pop-family boundary (negative refusal + spelled intent) ─────
+
+    public function testPopToRootKeepsRootThroughDeepStack(): void
+    {
+        $stack = NavStack::new();
+        for ($i = 0; $i < 10; $i++) {
+            $stack->push("Level $i");
+        }
+        self::assertSame(10, $stack->depth());
+
+        $stack->popToRoot();
+        self::assertSame(1, $stack->depth());
+        self::assertSame('Level 0', $stack->current()?->title);
+    }
+
+    public function testPopToRootOnEmptyStackIsNoOp(): void
+    {
+        $stack = NavStack::new();
+        self::assertSame(0, $stack->popToRoot()->depth());
+    }
+
+    public function testNegativePopToThrowsBeforeTouchingTheStack(): void
+    {
+        $stack = NavStack::new();
+        $stack->push('Home')->push('Settings');
+
+        try {
+            $stack->popTo(-1);
+            self::fail('negative popTo accepted');
+        } catch (InvalidArgumentException $e) {
+            self::assertStringContainsString('>= 0', $e->getMessage());
+            self::assertStringContainsString('popToRoot', $e->getMessage());
+        }
+        self::assertSame(2, $stack->depth());
+    }
 }
