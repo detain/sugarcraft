@@ -319,11 +319,13 @@ echo Tree::new()
   stored choice into the concrete slot (`resolveProfile()` is zero-arg —
   it picks against the style's own `ColorProfile`). Two truths about
   resolution: an explicitly-set concrete `foreground()`/`background()`
-  **wins** over the collapse (lipgloss precedence), and `render()` never
-  resolves — a style holding *only* an adaptive/complete slot renders as
-  plain text (measured:
-  `Style::new()->foregroundAdaptive($red, $blue)->of('x')->render()`
-  returns bare `x`). Keep the axes straight:
+  **wins** over the collapse (lipgloss precedence), and neither ritual
+  is ambient at render — upstream lipgloss resolves lazily inside
+  `Render()`, but this lib cannot see the terminal's background, so a
+  forgotten `resolveProfile()` still paints the designer's pick (render
+  collapses the complete triple against the style's own profile), while
+  rendering with an uncollapsed *adaptive* pair throws `LogicException`
+  naming the slot and the fix. Keep the axes straight:
   `Renderer::resolveAdaptive(AdaptiveColor): Color` is the dark-vs-light
   *scheme* pick, while `Style::resolveProfile()` is the colour-depth
   *tier* pick; `$c = ($r->lightDark())($light, $dark)` is a closure form
@@ -430,12 +432,14 @@ per-segment colour) are normally used one at a time.
 
 ### Adaptive and complete colours — store then collapse
 
-`render()` reads only the concrete `Color` slots, so a stored
-adaptive/complete choice must be collapsed first —
-`resolveAdaptive(bool $isDark)` picks light-vs-dark by the bool you
-pass, `resolveProfile()` picks the tier from the style's own
-`ColorProfile`. A concrete `foreground()` set up front is not
-overwritten by the collapse.
+`render()` reads only the concrete `Color` slots. A stored *complete*
+triple is collapsed automatically against the style's own
+`ColorProfile`, but the light-vs-dark `AdaptiveColor` pair needs an
+ambient answer only the caller has: `resolveAdaptive(bool $isDark)`
+picks light-vs-dark by the bool you pass, and rendering without it
+throws `LogicException` (upstream lipgloss resolves lazily inside
+`Render()`; this lib keeps the ritual explicit). A concrete
+`foreground()` set up front is not overwritten by the collapse.
 
 ```php
 use SugarCraft\Core\Util\Color;

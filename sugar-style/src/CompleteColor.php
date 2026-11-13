@@ -14,13 +14,13 @@ use SugarCraft\Core\Util\ColorProfile;
  * lipgloss v2's `CompleteColor`.
  *
  * Use with {@see Style::foregroundComplete()} /
- * {@see Style::backgroundComplete()}; the live {@see ColorProfile}
- * (whatever was set on the Style via `colorProfile()`) picks one of
- * the three colours at render time.
+ * {@see Style::backgroundComplete()}: the style's own {@see ColorProfile}
+ * picks one of the three colours — automatically at render, or up front
+ * through {@see Style::resolveProfile()}.
  *
  * For terminals reporting `Ascii` / `NoTty`, the ANSI fallback is
- * returned but `Style::buildContentSgr()` will skip emission anyway
- * since SGR isn't supported.
+ * picked but emission is skipped by the profile anyway since SGR
+ * isn't supported.
  */
 final class CompleteColor
 {

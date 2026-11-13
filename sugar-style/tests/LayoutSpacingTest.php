@@ -121,7 +121,11 @@ final class LayoutSpacingTest extends TestCase
             Layout::joinHorizontalWithSpacing(0.0, -1, 'a', 'b');
             $this->fail('expected InvalidArgumentException for negative spacing');
         } catch (\InvalidArgumentException $e) {
-            $this->assertSame(\SugarCraft\Core\I18n\Lang::t('style.spacing_nonneg'), $e->getMessage());
+            // SugarCraft\Style\Lang (not the core base facade — empty
+            // namespace returns raw keys). English literal + facade
+            // equality prove the wiring both ways.
+            $this->assertSame('spacing must be >= 0', $e->getMessage());
+            $this->assertSame(\SugarCraft\Style\Lang::t('style.spacing_nonneg'), $e->getMessage());
         }
     }
 

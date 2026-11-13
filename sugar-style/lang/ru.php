@@ -17,6 +17,7 @@ return [
     'style.maxheight_nonneg' => 'maxHeight должен быть >= 0',
     'style.tabwidth_nonneg' => 'tabWidth должен быть >= 0',
     'style.spacing_nonneg' => 'spacing должен быть >= 0',
+    'style.slot_unresolved' => 'адаптивные слоты цветов {slots} никогда не были свёрнуты; вызовите resolveAdaptive(bool $isDark) перед рендерингом',
     'style.hyperlink_id_delimiter' => 'ИD гиперссылки не должна содержать ";" или ":" (разделители параметров OSC 8)',
     'style.markup_depth' => 'вложенность разметки превышает {levels} уровней',
     'style.label_nonneg'    => 'значения {label} должны быть >= 0',

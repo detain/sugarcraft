@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Style;
 
-use SugarCraft\Core\I18n\Lang;
+use SugarCraft\Style\Lang;
 use SugarCraft\Core\Util\Width as WidthUtil;
 
 /**

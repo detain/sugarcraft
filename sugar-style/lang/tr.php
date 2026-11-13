@@ -17,6 +17,7 @@ return [
     'style.maxheight_nonneg' => 'maxHeight >= 0 olmalıdır',
     'style.tabwidth_nonneg' => 'tabWidth >= 0 olmalıdır',
     'style.spacing_nonneg' => 'spacing >= 0 olmalıdır',
+    'style.slot_unresolved' => '{slots} uyarlanabilir renk yuvaları hiç katlanmadı; boyamadan önce resolveAdaptive(bool $isDark) çağırın',
     'style.hyperlink_id_delimiter' => 'bağlantı kimliği ";" veya ":" içermemelidir (OSC 8 parametre ayırıcıları)',
     'style.markup_depth' => 'içiçe markup {levels} seviyeyi aşıyor',
     'style.label_nonneg'    => '{label} değerleri >= 0 olmalıdır',

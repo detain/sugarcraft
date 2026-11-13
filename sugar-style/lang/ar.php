@@ -17,6 +17,7 @@ return [
     'style.maxheight_nonneg' => 'maxHeight يجب أن يكون >= 0',
     'style.tabwidth_nonneg' => 'tabWidth يجب أن يكون >= 0',
     'style.spacing_nonneg' => 'spacing يجب أن يكون >= 0',
+    'style.slot_unresolved' => 'لم تُطوَ فتحات الألوان التكيفية {slots} قط؛ استدعِ resolveAdaptive(bool $isDark) قبل العرض',
     'style.hyperlink_id_delimiter' => 'يجب ألا يحتوي معرف الرابط على ";" أو ":" (فواصل معاملات OSC 8)',
     'style.markup_depth' => 'تداخل الرمز يتجاوز {levels} مستوى',
     'style.label_nonneg'    => 'قيم {label} يجب أن تكون >= 0',

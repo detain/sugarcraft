@@ -397,12 +397,81 @@ final class StyleTest extends TestCase
 
     // ---- adaptive colour ------------------------------------------------
 
-    public function testForegroundAdaptiveDoesNotRenderUntilResolved(): void
+    public function testForegroundAdaptiveThrowsUntilResolved(): void
     {
-        // Adaptive without a concrete `foreground()` shouldn't paint
-        // anything yet — the call is deferred until resolveAdaptive().
+        // Finding 001 arm (b): the light-vs-dark answer is ambient, so a
+        // forgotten resolveAdaptive() is programmer error — render
+        // refuses loudly instead of silently painting colourless.
         $s = Style::new()->foregroundAdaptive(Color::hex('#000'), Color::hex('#fff'));
-        $this->assertSame('hi', $s->render('hi'));
+        $this->expectException(\LogicException::class);
+        $s->render('hi');
+    }
+
+    public function testUnresolvedAdaptiveThrowNamesSlotsAndRitual(): void
+    {
+        // The message must be actionable: which slots, which ritual.
+        $s = Style::new()
+            ->foregroundAdaptive(Color::hex('#000'), Color::hex('#fff'))
+            ->backgroundAdaptive(Color::hex('#eeeeee'), Color::hex('#111111'));
+        try {
+            $s->render('hi');
+            $this->fail('expected LogicException');
+        } catch (\LogicException $e) {
+            $this->assertStringContainsString('foregroundAdaptive', $e->getMessage());
+            $this->assertStringContainsString('backgroundAdaptive', $e->getMessage());
+            $this->assertStringContainsString('resolveAdaptive', $e->getMessage());
+        }
+    }
+
+    public function testUnresolvedAdaptiveThrowsUnderNoTtyToo(): void
+    {
+        // Fail-fast does not depend on the destination: the forgotten
+        // ritual is a bug even where the bytes would have been plain.
+        $s = Style::new()
+            ->colorProfile(ColorProfile::NoTty)
+            ->foregroundAdaptive(Color::hex('#000'), Color::hex('#fff'));
+        $this->expectException(\LogicException::class);
+        $s->render('hi');
+    }
+
+    public function testUnsettingAResolvedForegroundRevivesTheAdaptiveRefusal(): void
+    {
+        // The adaptive pair is stored, not consumed, by the ritual — the
+        // refusal contract is "no concrete slot while the pair is set".
+        $s = Style::new()
+            ->foregroundAdaptive(Color::hex('#000'), Color::hex('#fff'))
+            ->resolveAdaptive(isDark: true)
+            ->unsetForeground();
+        $this->expectException(\LogicException::class);
+        $s->render('hi');
+    }
+
+    public function testForegroundCompleteCollapsesAtRenderWithoutRitual(): void
+    {
+        // Finding 001 arm (a): the tier axis is self-contained (the
+        // profile lives on the style), so render paints the designer's
+        // pick even when resolveProfile() was never called.
+        $s = Style::new()
+            ->colorProfile(ColorProfile::Ansi256)
+            ->foregroundComplete(Color::hex('#ff0000'), Color::ansi256(202), Color::ansi(1));
+        $this->assertSame("\x1b[38;5;202mhi\x1b[0m", $s->render('hi'));
+    }
+
+    public function testBackgroundCompleteCollapsesAtRenderWithoutRitual(): void
+    {
+        $s = Style::new()
+            ->colorProfile(ColorProfile::Ansi)
+            ->backgroundComplete(Color::hex('#ff0000'), Color::ansi256(202), Color::ansi(1));
+        $this->assertSame("\x1b[41mhi\x1b[0m", $s->render('hi'));
+    }
+
+    public function testExplicitForegroundStillWinsOverUnresolvedComplete(): void
+    {
+        // Concrete slot precedence (lipgloss) survives the auto-collapse.
+        $s = Style::new()
+            ->foreground(Color::hex('#00ff00'))
+            ->foregroundComplete(Color::hex('#ff0000'), Color::ansi256(202), Color::ansi(1));
+        $this->assertSame("\x1b[38;2;0;255;0mhi\x1b[0m", $s->render('hi'));
     }
 
     public function testResolveAdaptivePicksDarkForDarkBackground(): void

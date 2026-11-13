@@ -11,8 +11,10 @@ use SugarCraft\Core\Util\Color;
  * background. Mirrors lipgloss v2's `AdaptiveColor`.
  *
  * Use with {@see Style::foregroundAdaptive()} /
- * {@see Style::backgroundAdaptive()} and resolve at render time via
- * {@see Style::resolveAdaptive()}.
+ * {@see Style::backgroundAdaptive()} and collapse before render via
+ * {@see Style::resolveAdaptive()} — render never picks on its own: the
+ * dark-vs-light answer is ambient, and rendering with an uncollapsed
+ * pair throws.
  *
  * The "light" colour is meant for terminals with a *light* background
  * (so it's the darker, contrasting colour); the "dark" colour is for

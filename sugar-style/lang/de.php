@@ -17,6 +17,7 @@ return [
     'style.maxheight_nonneg' => 'maxHeight muss >= 0 sein',
     'style.tabwidth_nonneg' => 'tabWidth muss >= 0 sein',
     'style.spacing_nonneg' => 'spacing muss >= 0 sein',
+    'style.slot_unresolved' => 'die adaptiven Farb-Slots {slots} wurden nie aufgelöst; vor dem Rendern resolveAdaptive(bool $isDark) aufrufen',
     'style.hyperlink_id_delimiter' => 'Hyperlink-ID darf kein ";" oder ":" enthalten (OSC-8-Parameter-Trenner)',
     'style.markup_depth' => 'Markup-Verschachtelung überschreitet {levels} Ebenen',
     'style.label_nonneg'    => '{label}-Werte müssen >= 0 sein',

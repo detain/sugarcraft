@@ -317,10 +317,13 @@ final class Style
     }
 
     /**
-     * Set a foreground that picks between $light (for terminals with a
-     * light background) and $dark (for terminals with a dark
-     * background) at render time. Resolve via {@see resolveAdaptive()}
-     * — until then the concrete `foreground` slot wins.
+     * Store a foreground pair for {@see resolveAdaptive()} to collapse:
+     * $light for terminals with a light background, $dark for terminals
+     * with a dark one. render() never consults the pair — the
+     * light-vs-dark answer is ambient knowledge the style does not
+     * have — and rendering with the pair still uncollapsed throws a
+     * `LogicException`. Until the ritual runs, an explicit
+     * `foreground` slot wins.
      *
      * Mirrors lipgloss v2's `AdaptiveColor` field.
      */
@@ -343,11 +346,13 @@ final class Style
     }
 
     /**
-     * Set a foreground that picks per-tier from the supplied triple
-     * based on the live {@see ColorProfile}. Use this when you want
-     * to override the automatic downsampling with designer-chosen
-     * values for each terminal capability tier. Mirrors lipgloss v2's
-     * `CompleteColor`.
+     * Store a foreground that picks per-tier from the supplied triple
+     * based on the live {@see ColorProfile}. render() collapses the
+     * triple itself (the tier lives on the style, so nothing ambient is
+     * needed); {@see resolveProfile()} materialises the same pick into
+     * the concrete slot. Use this when you want to override the
+     * automatic downsampling with designer-chosen values for each
+     * terminal capability tier. Mirrors lipgloss v2's `CompleteColor`.
      */
     public function foregroundComplete(Color $trueColor, Color $ansi256, Color $ansi): self
     {
@@ -394,9 +399,11 @@ final class Style
      * Collapse any complete-colour fg/bg slots into concrete
      * `foreground` / `background` based on the style's current colour
      * profile. Explicit concrete colours win, matching lipgloss
-     * precedence. Call this after any `colorProfile()` change but
-     * before `render()` if you mixed `foregroundComplete()` calls
-     * into the style.
+     * precedence. render() collapses complete slots on its own, so this
+     * is only needed to materialise (or re-materialise after a
+     * `colorProfile()` change) the pick for inspection — the adaptive
+     * axis has no automatic path and must come through
+     * {@see resolveAdaptive()}.
      */
     public function resolveProfile(): self
     {
@@ -1824,6 +1831,30 @@ final class Style
         if ($this->contentSgrMemo !== null) {
             return $this->contentSgrMemo;
         }
+        // Adaptive slots need an ambient light-vs-dark answer that
+        // render() cannot see, so a populated-but-unresolved pair is
+        // programmer error — refuse loudly (any profile, any
+        // destination) instead of silently painting colourless. The
+        // complete-tier slots below are self-contained and collapse
+        // themselves. Finding 001.
+        $unresolved = [];
+        if ($this->fgAdaptive !== null && !isset($this->propsSet['fg'])) {
+            $unresolved[] = 'foregroundAdaptive';
+        }
+        if ($this->bgAdaptive !== null && !isset($this->propsSet['bg'])) {
+            $unresolved[] = 'backgroundAdaptive';
+        }
+        if ($unresolved !== []) {
+            throw new \LogicException(Lang::t('style.slot_unresolved', ['slots' => implode(', ', $unresolved)]));
+        }
+        $fg = $this->fg;
+        if ($fg === null && $this->fgComplete !== null && !isset($this->propsSet['fg'])) {
+            $fg = $this->fgComplete->pick($this->profile);
+        }
+        $bg = $this->bg;
+        if ($bg === null && $this->bgComplete !== null && !isset($this->propsSet['bg'])) {
+            $bg = $this->bgComplete->pick($this->profile);
+        }
         // Text attributes survive every profile down to `Ascii` (colour is
         // dropped per-colour by Color::toFg()/toBg()), but a NoTty
         // destination gets no escape sequence at all — colorprofile strips
@@ -1859,8 +1890,12 @@ final class Style
         if ($this->underline && $this->underlineStyle !== UnderlineStyle::None) {
             $sgr .= "\x1b[4:" . $this->underlineStyle->value . 'm';
         }
-        if ($this->fg !== null) $sgr .= $this->fg->toFg($this->profile);
-        if ($this->bg !== null) $sgr .= $this->bg->toBg($this->profile);
+        if ($fg !== null) {
+            $sgr .= $fg->toFg($this->profile);
+        }
+        if ($bg !== null) {
+            $sgr .= $bg->toBg($this->profile);
+        }
         // SGR 58: coloured underline (xterm-256 extension). Only emit
         // when underline is on AND a colour is explicitly set, so plain
         // underline keeps its default terminal colour.

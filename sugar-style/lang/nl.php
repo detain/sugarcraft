@@ -17,6 +17,7 @@ return [
     'style.maxheight_nonneg' => 'maxHeight moet >= 0 zijn',
     'style.tabwidth_nonneg' => 'tabWidth moet >= 0 zijn',
     'style.spacing_nonneg' => 'spacing moet >= 0 zijn',
+    'style.slot_unresolved' => 'de adaptieve kleursleuven {slots} zijn nooit samengevouwen; roep resolveAdaptive(bool $isDark) aan vóór het renderen',
     'style.hyperlink_id_delimiter' => 'hyperlink-id mag geen ";" of ":" bevatten (OSC 8-parameter scheidingstekens)',
     'style.markup_depth' => 'markup-nesting overschrijdt {levels} niveaus',
     'style.label_nonneg'    => '{label}-waarden moeten >= 0 zijn',

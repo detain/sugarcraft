@@ -17,6 +17,7 @@ return [
     'style.maxheight_nonneg' => 'maxHeight 必须 >= 0',
     'style.tabwidth_nonneg' => 'tabWidth 必须 >= 0',
     'style.spacing_nonneg' => 'spacing 必须 >= 0',
+    'style.slot_unresolved' => 'adaptive 颜色槽 {slots} 尚未折叠；请在渲染前调用 resolveAdaptive(bool $isDark)',
     'style.hyperlink_id_delimiter' => 'hyperlink id 不得包含 ";" 或 ":" (OSC 8 参数分隔符)',
     'style.markup_depth' => 'markup 嵌套超过 {levels} 层',
     'style.label_nonneg'    => '{label} 值必须 >= 0',
