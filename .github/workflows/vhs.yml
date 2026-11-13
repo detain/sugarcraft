@@ -171,10 +171,15 @@ jobs:
           # Render-all triggers: manual dispatch, or a workflow-file
           # change (in which case we want to verify the new pipeline
           # works for every lib).
+          # RT-47 (repo-tooling-057): ONE `git diff HEAD~1 HEAD` for the whole
+          # step instead of one per lib — the old loop re-spawned the identical
+          # full diff 51× and the force_all leg spawned it again. The cached
+          # name list is what every leg below greps.
+          changed_files=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || true)
           force_all=false
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             force_all=true
-          elif git diff --name-only HEAD~1 HEAD -- .github/workflows/vhs.yml | grep -q .; then
+          elif printf '%s\n' "$changed_files" | grep -qx '.github/workflows/vhs.yml'; then
             force_all=true
           fi
 
@@ -183,8 +188,7 @@ jobs:
             keep=false
             if $force_all; then
               keep=true
-            elif git diff --name-only HEAD~1 HEAD 2>/dev/null \
-                 | grep -qE "^${lib}/(src|examples|bin|\.vhs)/"; then
+            elif printf '%s\n' "$changed_files" | grep -qE "^${lib}/(src|examples|bin|\.vhs)/"; then
               keep=true
             fi
             if $keep; then
@@ -269,6 +273,12 @@ jobs:
             composer-${{ matrix.lib }}-
 
       - name: Link sibling libs
+        # RT-47 (repo-tooling-057): every neighbour step honours the
+        # needs_render gate and this one didn't — skipped matrix cells still
+        # ran `--fix --strict-closure`, rewriting ~60 lib manifests for a lib
+        # they would never render. The step must not change what a NEEDS-RENDER
+        # cell does; it only stops the ones that don't.
+        if: steps.check.outputs.needs_render == 'true'
         run: php tools/check-path-repos.php --fix --strict-closure
 
       - name: Install lib deps
