@@ -584,7 +584,7 @@ final readonly class RepoMapBlock implements PromptSection
 
         $sourceDirs = $this->renderSection(array_map(
             fn(array $d): string => '- ' . $d['path'] . '/  ->  ' . $d['namespace']
-                . '  (' . $d['files'] . ' files)',
+                . '  (' . $d['files'] . ($d['files'] === 1 ? ' file)' : ' files)'),
             $this->sourceDirectories,
         ));
 

@@ -807,6 +807,22 @@ final class RepoMapBlockTest extends TestCase
     // render()
     // =========================================================================
 
+    public function testFileCountsAreSingularForOneAndPluralOtherwise(): void
+    {
+        $root = $this->workspace([
+            'composer.json' => ['name' => 'acme/lib', 'autoload' => ['psr-4' => ['Acme\\Lib\\' => 'src/']]],
+            'src/One.php' => '<?php',
+            'src/Two.php' => '<?php',
+            'src/Deep/Three.php' => '<?php',
+        ]);
+
+        $rendered = RepoMapBlock::capture($root)->render();
+
+        $this->assertStringContainsString('(2 files)', $rendered);
+        $this->assertStringContainsString('(1 file)', $rendered);
+        $this->assertStringNotContainsString('(1 files)', $rendered);
+    }
+
     public function testTheRenderedBlockIsByteExactForAKnownWorkspace(): void
     {
         $root = $this->workspace([
@@ -825,7 +841,7 @@ final class RepoMapBlockTest extends TestCase
             $rendered . "\n",
         );
         $this->assertStringContainsString(
-            "\n- src/  ->  Acme\\Lib\\  (1 files)\n- src/Deep/  ->  Acme\\Lib\\Deep\\  (1 files)\n",
+            "\n- src/  ->  Acme\\Lib\\  (1 file)\n- src/Deep/  ->  Acme\\Lib\\Deep\\  (1 file)\n",
             $rendered . "\n",
         );
         $this->assertStringStartsWith("<repo-map>\n", $rendered);
@@ -1231,7 +1247,7 @@ final class RepoMapBlockTest extends TestCase
         $this->assertIsInt($envEnd);
         $this->assertIsInt($mapAt, 'the repo map never reached the prompt');
         $this->assertLessThan($envEnd, $mapAt, 'the map must precede the block that names the cwd its paths are relative to');
-        $this->assertStringContainsString('- src/  ->  Acme\\Lib\\  (1 files)', $prompt);
+        $this->assertStringContainsString('- src/  ->  Acme\\Lib\\  (1 file)', $prompt);
     }
 
     public function testAWorkspaceWithNothingToMapAddsNothingToTheSystemPrompt(): void
