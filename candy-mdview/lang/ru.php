@@ -17,7 +17,7 @@ return [
     'glamour.json_object' => 'конфигурация темы должна быть объектом JSON',
     'glamour.decoration_unsafe' => 'поле темы {slot} должно содержать только переводы строк, табуляции и пробелы',
     'glamour.value_too_large' => 'ключ темы {key} превышает максимум {limit}',
-    'render.no_input_tty' => 'нет ввода: укажите файл или передайте Markdown на стандартный ввод',
+    'render.no_input_tty' => 'нет ввода: укажите файл, передайте Markdown на стандартный ввод или запустите с --help',
     'render.no_input_empty' => 'нет ввода: стандартный ввод пуст',
     'render.pager_needs_tty' => 'пагинатору нужен терминал; выполните рендер в стандартный вывод без -p',
     'render.file_missing' => 'не удаётся открыть {path}: файл не найден',

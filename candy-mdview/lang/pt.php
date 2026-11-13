@@ -17,7 +17,7 @@ return [
     'glamour.json_object' => 'a configuração do tema deve ser um objeto JSON',
     'glamour.decoration_unsafe' => 'o campo {slot} do tema só pode conter quebras de linha, tabulações e espaços',
     'glamour.value_too_large' => 'a chave {key} do tema excede o limite máximo de {limit}',
-    'render.no_input_tty' => 'sem entrada: indique um ficheiro ou envie Markdown pelo standard input',
+    'render.no_input_tty' => 'sem entrada: indique um ficheiro, envie Markdown pelo standard input ou execute com --help',
     'render.no_input_empty' => 'sem entrada: o standard input está vazio',
     'render.pager_needs_tty' => 'o paginador necessita de um terminal; rendicione para a saída standard sem -p',
     'render.file_missing' => 'não é possível abrir {path}: ficheiro inexistente',

@@ -17,7 +17,7 @@ return [
     'glamour.json_object' => 'テーマ設定は JSON オブジェクトでなければなりません',
     'glamour.decoration_unsafe' => 'テーマ {slot} には改行・タブ・スペースのみ使用可能です',
     'glamour.value_too_large' => 'テーマ {key} が上限 {limit} を超えています',
-    'render.no_input_tty' => '入力なし: ファイルを指定するか Markdown を標準入力にパイプしてください',
+    'render.no_input_tty' => '入力なし: ファイルを指定するか、Markdown を標準入力にパイプするか、--help を実行してください',
     'render.no_input_empty' => '入力なし: 標準入力が空です',
     'render.pager_needs_tty' => 'ページャーにはターミナルが必要です。-p を外して標準出力へレンダリングしてください',
     'render.file_missing' => '{path} を開けません: ファイルが存在しません',

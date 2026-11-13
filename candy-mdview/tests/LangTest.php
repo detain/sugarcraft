@@ -90,7 +90,7 @@ final class LangTest extends TestCase
         // KM5: the usage-error vocabulary execute() throws must exist in
         // en with the exact texts the tests and docs quote.
         $this->assertSame(
-            'no input: pass a file argument or pipe Markdown to standard input',
+            'no input: pass a file argument, pipe Markdown to standard input, or run with --help',
             Lang::t('render.no_input_tty')
         );
         $this->assertSame(

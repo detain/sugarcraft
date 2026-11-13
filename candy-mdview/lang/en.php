@@ -17,7 +17,7 @@ return [
     'glamour.json_object' => 'glamour theme config must be a JSON object',
     'glamour.decoration_unsafe' => 'theme {slot} must contain only newlines, tabs and spaces',
     'glamour.value_too_large' => 'theme {key} exceeds the maximum of {limit}',
-    'render.no_input_tty' => 'no input: pass a file argument or pipe Markdown to standard input',
+    'render.no_input_tty' => 'no input: pass a file argument, pipe Markdown to standard input, or run with --help',
     'render.no_input_empty' => 'no input: standard input is empty',
     'render.pager_needs_tty' => 'pager needs a terminal; render to stdout instead (drop -p)',
     'render.file_missing' => 'open {path}: no such file',

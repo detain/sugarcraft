@@ -17,7 +17,7 @@ return [
     'glamour.json_object' => 'la configuration du thème doit être un objet JSON',
     'glamour.decoration_unsafe' => 'le champ {slot} du thème ne doit contenir que retours à la ligne, tabulations et espaces',
     'glamour.value_too_large' => 'la clé {key} du thème dépasse le maximum de {limit}',
-    'render.no_input_tty' => 'aucune entrée : indiquez un fichier ou envoyez du Markdown sur l\'entrée standard',
+    'render.no_input_tty' => 'aucune entrée : indiquez un fichier, envoyez du Markdown sur l\'entrée standard ou lancez avec --help',
     'render.no_input_empty' => 'aucune entrée : l\'entrée standard est vide',
     'render.pager_needs_tty' => 'le paginateur exige un terminal ; rendez plutôt en sortie standard (retirez -p)',
     'render.file_missing' => 'impossible d\'ouvrir {path} : fichier inexistant',

@@ -249,6 +249,23 @@ final class RenderCommandTest extends TestCase
         $this->assertSame(Command::INVALID, $result);
         $this->assertStringContainsString('no input:', $captured);
         $this->assertStringContainsString('file argument', $captured);
+        // Finding 002: the refusal must name the WHOLE replacement
+        // workflow — file argument, stdin pipe, and --help — since the
+        // flagship no-arg invocation is a disclosure, not a feature.
+        $this->assertStringContainsString('standard input', $captured);
+        $this->assertStringContainsString('--help', $captured);
+    }
+
+    public function testReadmeDisclosesTheBrowserGap(): void
+    {
+        // The product's biggest divergence from glow is now admitted at
+        // line 1 of the intro: the out-of-scope enumeration names the
+        // directory browser next to search/config UI/presentation.
+        $readme = (string) file_get_contents(__DIR__ . '/../README.md');
+        $this->assertMatchesRegularExpression(
+            "/glow's directory browser, search, config UI, and presentation modes/",
+            $readme,
+        );
     }
 
     public function testExecuteWithValidInputNoPagerReturnsSuccess(): void

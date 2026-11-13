@@ -17,7 +17,7 @@ return [
     'glamour.json_object' => 'Themenkonfiguration muss ein JSON-Objekt sein',
     'glamour.decoration_unsafe' => 'Theme-Feld {slot} darf nur Zeilenumbrüche, Tabs und Leerzeichen enthalten',
     'glamour.value_too_large' => 'Theme-Schlüssel {key} überschreitet das Maximum von {limit}',
-    'render.no_input_tty' => 'keine Eingabe: Datei als Argument übergeben oder Markdown in die Standardeingabe pipeilen',
+    'render.no_input_tty' => 'keine Eingabe: Datei als Argument übergeben, Markdown in die Standardeingabe pipeilen oder mit --help starten',
     'render.no_input_empty' => 'keine Eingabe: die Standardeingabe ist leer',
     'render.pager_needs_tty' => 'Pager benötigt ein Terminal; stattdessen ohne -p auf die Standardausgabe rendern',
     'render.file_missing' => 'kann {path} nicht öffnen: Datei nicht gefunden',

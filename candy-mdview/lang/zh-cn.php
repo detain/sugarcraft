@@ -17,7 +17,7 @@ return [
     'glamour.json_object' => '主题配置必须是 JSON 对象',
     'glamour.decoration_unsafe' => '主题 {slot} 只能包含换行、制表符和空格',
     'glamour.value_too_large' => '主题键 {key} 超过上限 {limit}',
-    'render.no_input_tty' => '无输入：请指定文件或向标准输入传入 Markdown',
+    'render.no_input_tty' => '无输入：请指定文件、向标准输入传入 Markdown，或运行 --help',
     'render.no_input_empty' => '无输入：标准输入为空',
     'render.pager_needs_tty' => '分页器需要终端；请去掉 -p 直接渲染到标准输出',
     'render.file_missing' => '无法打开 {path}：文件不存在',

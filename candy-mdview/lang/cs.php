@@ -17,7 +17,7 @@ return [
     'glamour.json_object' => 'konfigurace motivu musí být objekt JSON',
     'glamour.decoration_unsafe' => 'pole motivu {slot} musí obsahovat pouze konce řádků, tabulátory a mezery',
     'glamour.value_too_large' => 'klíč motivu {key} překračuje maximum {limit}',
-    'render.no_input_tty' => 'žádný vstup: zadejte soubor nebo nasměrujte Markdown na standardní vstup',
+    'render.no_input_tty' => 'žádný vstup: zadejte soubor, nasměrujte Markdown na standardní vstup, nebo spusťte s --help',
     'render.no_input_empty' => 'žádný vstup: standardní vstup je prázdný',
     'render.pager_needs_tty' => 'pager vyžaduje terminál; vykreslete na standardní výstup bez -p',
     'render.file_missing' => 'nelze otevřít {path}: soubor neexistuje',

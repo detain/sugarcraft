@@ -17,7 +17,7 @@ return [
     'glamour.json_object' => 'la configurazione del tema deve essere un oggetto JSON',
     'glamour.decoration_unsafe' => 'il campo {slot} del tema può contenere solo a capo, tab e spazi',
     'glamour.value_too_large' => 'la chiave {key} del tema supera il massimo di {limit}',
-    'render.no_input_tty' => 'nessun input: indicare un file o inviare Markdown sullo standard input',
+    'render.no_input_tty' => 'nessun input: indicare un file, inviare Markdown sullo standard input o eseguire con --help',
     'render.no_input_empty' => 'nessun input: lo standard input è vuoto',
     'render.pager_needs_tty' => 'il pager richiede un terminale; renderizza su stdout senza -p',
     'render.file_missing' => 'impossibile aprire {path}: file inesistente',
