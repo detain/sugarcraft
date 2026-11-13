@@ -395,14 +395,21 @@ final class CliTest extends TestCase
     {
         // sugar-animation exposes no per-frame multiplier (only the
         // fixed-cadence seam), so --speed scales the GIF's own nominal fps
-        // derived from the decoded frames — pin the arithmetic here.
+        // derived from the decoded frames. Literal-pinned (gifview-009 — the
+        // old assert re-implemented nominalFps() inline and could never
+        // disagree with it): the bare GD single-frame fixture carries no GCE
+        // and decodes at the engine default delay of 10 cs, so
+        // nominal = 1 / (10/100) = 10.0 fps, doubled by --speed=2 → 20.0.
         $player = $this->wiredPlayer(['{gif}', '--speed=2']);
-        $n = count($player->frames);
-        $nominal = $n / (array_sum(array_map(
-            static fn ($f): int => max(1, $f->delay),
-            $player->frames,
-        )) / 100.0);
-        $this->assertSame(2.0 * $nominal, $player->fixedFps);
+        $this->assertSame(20.0, $player->fixedFps);
+
+        // assembleGif stamps every added GCE with delay 4 cs, so the
+        // two-frame fixture answers nominal = 2 / ((4+4)/100) = 25.0 fps,
+        // doubled → 50.0. A /100 → /1000 mutation in nominalFps() reddens
+        // both literals 10x over; the readable constant-comparison failure
+        // is the point.
+        $player = $this->wiredPlayer(['{gif}', '--speed=2'], 2);
+        $this->assertSame(50.0, $player->fixedFps);
     }
 
     public function testE09SpeedMaxSaturatesAtThePlayerCeiling(): void
