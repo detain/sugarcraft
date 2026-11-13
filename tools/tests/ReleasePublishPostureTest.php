@@ -243,14 +243,28 @@ final class ReleasePublishPostureTest extends TestCase
         ];
         foreach ($pollers as $file => [$job, $verb]) {
             $text = $this->workflow($file);
+            $gate = $this->jobSection($text, $job);
             self::assertStringContainsString('timeout-minutes: 250', $text, "$file bounds the gate job");
             self::assertSame(
                 1,
-                substr_count($text, 'for attempt in $(seq 1 240)'),
+                substr_count($gate, 'for attempt in $(seq 1 '),
                 "$file has one bounded poll (fail-closed)"
             );
+            // RT-48 (budget invariant): what is load-bearing is the WALL
+            // BUDGET, not one (240,60) spelling. polls × tick must stay
+            // 14400s — RT-48 moved sync's granularity to 960×15 and any
+            // future silent budget change reddens here instead of a literal.
+            self::assertSame(
+                1,
+                preg_match('/seq 1 (\d+)\).*?\bsleep (\d+)\b/s', $gate, $poll),
+                "$file gate poll carries its tick in plain sight"
+            );
+            self::assertSame(
+                14400,
+                (int) $poll[1] * (int) $poll[2],
+                "$file gate poll budget is 4h wall (polls x tick)"
+            );
 
-            $gate = $this->jobSection($text, $job);
             self::assertMatchesRegularExpression(
                 '/refusing ' . $verb . ': CI at \$\w+ concluded \'\$run_line\'" >&2\W*exit 1/',
                 $gate,

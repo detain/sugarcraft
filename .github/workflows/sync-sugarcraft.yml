@@ -306,34 +306,51 @@ jobs:
             read -r -a libs <<<"$libs_str"
           fi
 
+          # RT-27: the publish wave was fully serial — one blocking force-push
+          # plus one blocking (--max-time 20) Packagist ping per lib, across
+          # ~60 independent repos; a degraded packagist.org taxed the publish
+          # path 20s×N behind the ci-gate. Now: phase 1 computes every split
+          # SHA serially (ensure_repo's fail-loud creation preflight stays
+          # AHEAD of the wave — the parallel push must never race a missing
+          # repo), phase 2 fans the pushes out bounded (xargs -P 8) with the
+          # rename-continuity guards kept verbatim and fail-closed per worker,
+          # phase 3 drains the best-effort pings after the push wave. The step
+          # rc is unchanged in kind: every lib landed or the job is red, and
+          # the red names the libs.
+          base="${SPLIT_BASE_URL:-https://github.com/sugarcraft}"
+          plan=$(mktemp)
+          pushdir=$(mktemp -d)
           for lib in "${libs[@]}"; do
             [ -d "$lib" ] || { echo "skip $lib (no dir)"; continue; }
             ensure_repo "$lib"
             # splitsh-lite prints the split-commit SHA for the prefix on stdout.
             sha=$(/tmp/splitsh-lite --prefix="$lib")
-            push_url="https://github.com/sugarcraft/$lib.git"
-
             # Rename continuity (step 2.1 verdict NOT-CONTINUOUS fallback):
             # when this dir was produced by a `git mv <old> <new>`, the split
-            # above has a fresh unrelated root, so the remote master still
-            # holds the only copy of the pre-rename split history. Preserve it
-            # as refs/heads/legacy/<old> + refs/tags/<old>-final before the
-            # first force-push that would strand it. Non-renamed libs split as
-            # a fast-forward, so the ancestor guard never fires for them and
-            # their split/force-push behavior is identical (every lib does pay
-            # one extra local old_slug_for lookup per run — no extra network
-            # calls unless the dir is a rename target). An ls-remote or fetch
-            # failure aborts the job here (set -e + pipefail; note there is
-            # deliberately no `|| true` on ls-remote: a truly empty repo
-            # answers rc=0/empty, so a non-zero exit is an auth/network error
-            # that must NOT masquerade as "nothing to preserve") — fail closed,
-            # never force-push over an uninspected remote master.
-            # Chained renames (A->B->C): the lookup is immediate-predecessor
-            # only, so if both hops land before any intervening sync the A-era
-            # remote chain is preserved as legacy/B — history survives by
-            # reference; the ref name marks the hop, not the era.
+            # has a fresh unrelated root, so the remote master still holds the
+            # only copy of the pre-rename split history. The lookup is
+            # immediate-predecessor only: chained renames (A->B->C) preserve
+            # the A-era remote chain as legacy/B — history survives by
+            # reference, the ref name marks the hop, not the era. Non-renamed
+            # libs answer empty, so the worker below never touches the network
+            # for the guard (one local old_slug_for lookup per lib in phase 1,
+            # zero extra network calls).
             prev=$(old_slug_for "$lib")
+            printf '%s|%s|%s|%s|%s\n' "$lib" "$sha" "$prev" "$base" "$pushdir" >>"$plan"
+          done
+
+          push_one() {
+            # spec: lib|sha|prev — runs as its own bash via xargs, so
+            # everything it needs is either in the spec, the env, or an arg.
+            set -euo pipefail
+            local spec="$1" lib sha prev base pushdir push_url remote_tip
+            IFS='|' read -r lib sha prev base pushdir <<<"$spec"
+            push_url="$base/$lib.git"
             if [ -n "$prev" ]; then
+              # Deliberately no `|| true` on ls-remote: a truly empty repo
+              # answers rc=0/empty, so a non-zero exit is an auth/network
+              # error that must NOT masquerade as "nothing to preserve" —
+              # fail closed, never force-push over an uninspected master.
               remote_tip=$(git ls-remote "$push_url" refs/heads/master | cut -f1)
               if [ -n "$remote_tip" ]; then
                 git fetch --quiet "$push_url" "$remote_tip"
@@ -344,30 +361,56 @@ jobs:
                 fi
               fi
             fi
-
             retry_git_push git push --force "$push_url" "$sha:refs/heads/master"
+            : >"$pushdir/$lib.ok"
             echo "✓ synced $lib ($sha)"
+          }
+          export -f push_one retry_git_push
 
-            # Belt-and-suspenders Packagist re-crawl (see env note above).
-            # Auth channel note (RT-09, 2026-11-12): packagist's documented
-            # update-package contract takes username/apiToken as QUERY
-            # PARAMETERS, so the token rides the URL by design here. The
-            # compensating control is GitHub Actions secret masking: the
-            # PACKAGIST_API_TOKEN value is masked in all step logs and argv
-            # is not logged; the local scripts/packagist.sh twin of this call
-            # additionally keeps the URL out of argv via `curl -K -`.
-            # Guarded on the token so a fork/secret-less run skips it cleanly;
-            # the `|| true` keeps a transient Packagist hiccup from failing the
-            # whole sync (the per-repo webhook is still the primary path).
-            if [ -n "${PACKAGIST_TOKEN:-}" ]; then
+          push_rc=0
+          xargs -a "$plan" -d '\n' -P 8 -n 1 bash -c 'push_one "$1"' _ || push_rc=$?
+          # Collection is roster-driven, not xargs-rc-driven: a worker killed
+          # sideways (no .ok file) fails closed even if xargs shrugged.
+          failed=()
+          while IFS='|' read -r lib _rest; do
+            [ -f "$pushdir/$lib.ok" ] || failed+=("$lib")
+          done <"$plan"
+          if [ "$push_rc" -ne 0 ] || [ "${#failed[@]}" -gt 0 ]; then
+            printf 'split push FAILED for: %s\n' "${failed[*]}" >&2
+            exit 1
+          fi
+
+          # Belt-and-suspenders Packagist re-crawl (see env note above).
+          # Auth channel note (RT-09, 2026-11-12): packagist's documented
+          # update-package contract takes username/apiToken as QUERY
+          # PARAMETERS, so the token rides the URL by design here. The
+          # compensating control is GitHub Actions secret masking: the
+          # PACKAGIST_API_TOKEN value is masked in all step logs and argv
+          # is not logged; the local scripts/packagist.sh twin of this call
+          # additionally keeps the URL out of argv via `curl -K -`.
+          # Guarded on the token so a fork/secret-less run skips it cleanly;
+          # the `|| echo 000` keeps a transient Packagist hiccup from failing
+          # the whole sync (the per-repo webhook is still the primary path).
+          # RT-27 moved the drain AFTER the push wave so pings overlap each
+          # other instead of serializing behind every push.
+          if [ -n "${PACKAGIST_TOKEN:-}" ]; then
+            ping_one() {
+              # spec: lib|base — xargs children never see the parent's
+              # locals, so the repo URL is carried in the spec (same law as
+              # push_one above).
+              local spec="$1" lib base code
+              IFS='|' read -r lib base <<<"$spec"
               code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 -XPOST \
                 -H 'content-type: application/json' \
                 "https://packagist.org/api/update-package?username=${PACKAGIST_USERNAME}&apiToken=${PACKAGIST_TOKEN}" \
-                -d "{\"repository\":{\"url\":\"https://github.com/sugarcraft/$lib\"}}" || echo "000")
+                -d "{\"repository\":{\"url\":\"$base/$lib\"}}" || echo "000")
               echo "  ↳ packagist update $lib → HTTP $code"
-            fi
-          done
-          echo "Done — ${#libs[@]} libs pushed"
+            }
+            export -f ping_one
+            cut -d'|' -f1 "$plan" | while IFS= read -r l; do printf '%s|%s\n' "$l" "$base"; done \
+              | xargs -d '\n' -P 8 -n 1 bash -c 'ping_one "$1"' _ || true
+          fi
+          echo "Done — $(wc -l <"$plan") libs pushed"
 
   sync-site:
     name: Push docs/ to sugarcraft/sugarcraft.github.io
