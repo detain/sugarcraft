@@ -34,6 +34,11 @@ $ring    = FocusRing::of(...$regions);
 $esc   = "\x1b";
 $reset = "{$esc}[0m";
 
+// Persistence demo state (SF-14 s/r keys): the RAW json_encode() snapshot plus
+// a per-frame status note — restoring through fromJson() proves the round trip
+// carries the disabled set too (the panel rows show it).
+$snapshot = null;
+
 /**
  * Build one panel as an array of text rows. A panel drawn with the bright
  * cyan border + bold label is the FOCUSED **and ENABLED** one — the same
@@ -64,11 +69,11 @@ $panel = static function (string $label, bool $focused, bool $enabled) use ($esc
     ];
 };
 
-$render = static function (FocusRing $ring) use ($regions, $panel, $esc, $reset): void {
+$render = static function (FocusRing $ring, string $note = '') use ($regions, $panel, $esc, $reset): void {
     // Home the cursor and clear the screen so each redraw overwrites the last.
     $out = "{$esc}[H{$esc}[2J";
     $out .= "{$esc}[1msugar-focus — FocusRing traversal{$reset}\n";
-    $out .= "{$esc}[90mTab: next   Shift-Tab: previous   x: toggle focusable   d: re-enable first   q: quit{$reset}\n\n";
+    $out .= "{$esc}[90mTab: next   Shift-Tab: previous   x: toggle focusable   d: re-enable first   s: snapshot   r: restore   q: quit{$reset}\n\n";
 
     $panels = array_map(
         static fn(string $id): array => $panel($id, $ring->isFocused($id), $ring->isEnabled($id)),
@@ -84,14 +89,18 @@ $render = static function (FocusRing $ring) use ($regions, $panel, $esc, $reset)
     }
 
     $current = $ring->current() ?? '(none)';
-    // The README announce contract (:215-221): position is an ENABLED ordinal,
+    // The README announce contract: position is an ENABLED ordinal,
     // and a parked focus has none — the old raw index()/count() pair announced
     // "region 4 of 7, enabled 2" shapes that named nowhere Tab could reach.
     $idx     = $ring->enabledIndex();
     $footer  = $idx === null
         ? 'focus parked — ' . $ring->enabledCount() . ' enabled'
         : 'region ' . ($idx + 1) . ' of ' . $ring->enabledCount();
-    $out .= "\n{$esc}[96m● focused: {$current}{$reset}  {$esc}[90m({$footer}){$reset}\n";
+    $out .= "\n{$esc}[96m● focused: {$current}{$reset}  {$esc}[90m({$footer}){$reset}";
+    if ($note !== '') {
+        $out .= "  {$esc}[33m[{$note}]{$reset}";
+    }
+    $out .= "\n";
 
     fwrite(STDOUT, $out);
 };
@@ -208,6 +217,23 @@ while (true) {
                 $ring = $ring->enable($disabledIds[0]);
                 $render($ring);
             }
+            continue;
+        }
+        if ($byte === 's') {
+            // Snapshot the RAW ring spec — disabled set included, so 'r'
+            // proves the full round trip, not just the focus leg.
+            $snapshot = json_encode($ring);
+            $render($ring, 'snapshot stored');
+            continue;
+        }
+        if ($byte === 'r') {
+            $restored = $snapshot === null ? null : FocusRing::fromJson($snapshot);
+            if ($restored === null) {
+                $render($ring, 'no snapshot');
+                continue;
+            }
+            $ring = $restored;
+            $render($ring, 'restored');
             continue;
         }
         if ($byte === "\t") {

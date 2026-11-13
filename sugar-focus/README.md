@@ -172,7 +172,10 @@ $ring = FocusRing::fromJson($json)
   back **enabled** — ids in the list must be JSON strings. Note the parameter
   is typed `array`: a corrupt file
   whose `json_decode()` yields `null` or a string is a caller-side `is_array`
-  guard away — restore() itself never sees it.
+  guard away — restore() itself never sees it. That guard is `fromJson()`:
+  decode-rot answers `null`, and the demo's `s`/`r` keys run the round trip
+  live on the running ring — the disabled set included, so `r` after `s`
+  restores exactly what `x` had parked.
 
 The ring never sanitises ids for you, and snapshot data is the one input you
 do not control: a restored id is whatever the file said. Ids flow to
