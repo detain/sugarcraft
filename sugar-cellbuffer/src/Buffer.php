@@ -690,6 +690,13 @@ final class Buffer implements \JsonSerializable
      * @param list<\SugarCraft\CellBuffer\Diff\DiffOp> $ops
      * @return self
      * @throws \InvalidArgumentException on a MoveCursorOp with negative coords
+     *
+     * Boundary policy (both sides of zero, asymmetric by design and now
+     * stated): NEGATIVE cursor coordinates are a programmer error in the op
+     * stream and THROW; writes that land outside the grid on the positive
+     * side (row below the last row, column past the last column) are skipped
+     * fail-soft — an out-of-frame op is treated like the off-screen part of
+     * a legitimate repaint, never as a fatal.
      */
     public function applyDiff(array $ops): self
     {
@@ -752,6 +759,13 @@ final class Buffer implements \JsonSerializable
             } elseif ($op instanceof Diff\EraseRunOp) {
                 // ECH: replace $count cells at cursor with blank (style=null).
                 // ECH erases in-place; the logical cursor does NOT advance.
+                // A cursor below the last row has nowhere to erase: skip the
+                // whole op, the same skip-don't-throw law the SetCellOp
+                // branch applies on both axes (an unchecked write here
+                // silently EXTENDED the grid past width*height).
+                if ($cursorRow >= $this->height) {
+                    continue;
+                }
                 for ($i = 0; $i < $op->count; $i++) {
                     $c = $cursorCol + $i;
                     if ($c >= $this->width) {
@@ -761,7 +775,7 @@ final class Buffer implements \JsonSerializable
                 }
             } elseif ($op instanceof Diff\RepeatRunOp) {
                 // REP: repeat the rune $count times at current cursor.
-                if ($op->count > 0) {
+                if ($op->count > 0 && $cursorRow < $this->height) {
                     $rune = $op->rune;
                     // Width=0 treated as 1.
                     $width = $op->width > 0 ? $op->width : 1;

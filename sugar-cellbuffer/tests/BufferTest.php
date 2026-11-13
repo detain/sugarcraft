@@ -1980,6 +1980,42 @@ final class BufferTest extends TestCase
         $this->assertSame(' ', $result->cellAt(2, 0)->rune());
     }
 
+    public function testApplyDiffEraseRunBelowTheBottomRowIsSkippedNotAppending(): void
+    {
+        // EraseRunOp checked only the COLUMN before the row guard; a cursor
+        // below the last row indexed past width*height and PHP silently
+        // EXTENDED the flat grid, corrupting the dimensional invariant.
+        $buffer = Buffer::new(3, 2)
+            ->withCellAt(0, 0, Cell::new('A'))
+            ->withCellAt(2, 1, Cell::new('B'));
+
+        $result = $buffer->applyDiff([
+            new MoveCursorOp(0, $buffer->height()),
+            new EraseRunOp(4),
+        ]);
+
+        $this->assertCount($buffer->width() * $buffer->height(), $result->jsonSerialize()['grid']);
+        $this->assertSame('A', $result->cellAt(0, 0)->rune());
+        $this->assertSame('B', $result->cellAt(2, 1)->rune());
+        $this->assertSame("A  \n  B", $result->text());
+    }
+
+    public function testApplyDiffRepeatRunBelowTheBottomRowIsSkippedNotAppending(): void
+    {
+        // RepeatRunOp shared the same missing row guard.
+        $buffer = Buffer::new(3, 2)
+            ->withCellAt(0, 0, Cell::new('A'))
+            ->withCellAt(2, 1, Cell::new('B'));
+
+        $result = $buffer->applyDiff([
+            new MoveCursorOp(0, $buffer->height()),
+            new RepeatRunOp('Z', 3),
+        ]);
+
+        $this->assertCount($buffer->width() * $buffer->height(), $result->jsonSerialize()['grid']);
+        $this->assertSame("A  \n  B", $result->text());
+    }
+
     public function testApplyDiffRepeatRunOpZeroWidthTreatedAsOne(): void
     {
         // RepeatRunOp with width=0 should treat width as 1
