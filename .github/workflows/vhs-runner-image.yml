@@ -2,8 +2,17 @@ name: VHS runner image
 
 # Build + publish ghcr.io/<owner>/vhs-runner. Used by vhs.yml so render
 # jobs don't need to hit GitHub release APIs (vhs / ttyd / ffmpeg) on
-# every push. Weekly rebuild picks up upstream releases without manual
-# work.
+# every push.
+#
+# RT-22 (repo-tooling-024, OG-5 recommend arm): the toolchain versions and
+# sha256 hashes live IN-REPO in scripts/vhs-runner/pins.env. The weekly cron
+# no longer resolves upstream and rebuilds `:latest` out from under the
+# render jobs (a released-asset substitution used to flow straight into
+# published demo GIFs with no diff to bisect). The cron now compares
+# upstream against the pins and, when stale, opens a bump PR carrying the
+# new versions + hashes; merging that PR rebuilds via the pins.env path
+# trigger, and any GIF delta is reviewable on the PR. When the pins are
+# fresh the rebuild is a cache no-op.
 #
 # Cost: 2 authenticated API calls per build (gh release view × 2).
 # Weekly schedule = ~104 API calls/year total, vs. up to 94 per push
@@ -11,19 +20,25 @@ name: VHS runner image
 
 on:
   schedule:
-    # Monday 06:00 UTC — early-week rebuild so any new vhs/ttyd
-    # release lands before the bulk of weekday demo work.
+    # Monday 06:00 UTC — early-week staleness check so a new vhs/ttyd
+    # release produces a bump PR before the bulk of weekday demo work.
     - cron: '0 6 * * 1'
   workflow_dispatch:
   push:
     branches: [master]
     paths:
       - 'scripts/vhs-runner/Dockerfile'
+      - 'scripts/vhs-runner/pins.env'
       - '.github/workflows/vhs-runner-image.yml'
 
 permissions:
-  contents: read
+  # contents:write + pull-requests:write are for the stale-pins bump PR only
+  # (RT-22). This workflow is never triggered by PR events — schedule,
+  # workflow_dispatch and push-to-master are all repo-internal — so the write
+  # surface is not reachable from fork code.
+  contents: write
   packages: write
+  pull-requests: write
 
 # RT-24: queued single publisher (same class as candy-code-image.yml) —
 # overlapping cron/dispatch/path runs must not interleave `:latest` retags.
@@ -41,7 +56,7 @@ jobs:
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
 
-      - name: Resolve vhs + ttyd versions
+      - name: Read pins + check upstream
         id: vers
         env:
           # Authenticated calls get 5000/hr instead of the anonymous
@@ -49,18 +64,63 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          vhs=$(gh release view --repo charmbracelet/vhs  --json tagName -q .tagName)
-          ttyd=$(gh release view --repo tsl0922/ttyd      --json tagName -q .tagName)
-          echo "Resolved vhs=$vhs ttyd=$ttyd"
-          echo "vhs=$vhs"   >> "$GITHUB_OUTPUT"
-          echo "ttyd=$ttyd" >> "$GITHUB_OUTPUT"
-          # Strip leading 'v' from ttyd if present so the image tag
-          # matches the asset filename convention.
-          echo "tag=vhs-${vhs}-ttyd-${ttyd}" >> "$GITHUB_OUTPUT"
+          . scripts/vhs-runner/pins.env
+          vhs_up=$(gh release view --repo charmbracelet/vhs  --json tagName -q .tagName)
+          ttyd_up=$(gh release view --repo tsl0922/ttyd      --json tagName -q .tagName)
+          stale=no
+          if [ "$vhs_up" != "$VHS_VERSION" ] || [ "$ttyd_up" != "$TTYD_VERSION" ]; then
+            stale=yes
+          fi
+          echo "Pinned vhs=$VHS_VERSION ttyd=$TTYD_VERSION; upstream vhs=$vhs_up ttyd=$ttyd_up (stale=$stale)"
+          # The BUILD always uses the pinned values — never the resolved ones.
+          echo "vhs=$VHS_VERSION"     >> "$GITHUB_OUTPUT"
+          echo "ttyd=$TTYD_VERSION"   >> "$GITHUB_OUTPUT"
+          echo "vhs_sha=$VHS_SHA256"  >> "$GITHUB_OUTPUT"
+          echo "ttyd_sha=$TTYD_SHA256" >> "$GITHUB_OUTPUT"
+          echo "stale=$stale"         >> "$GITHUB_OUTPUT"
+          # Image tag from the pins, so the tag names exactly what was hashed.
+          echo "tag=vhs-${VHS_VERSION}-ttyd-${TTYD_VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Open pins bump PR when stale
+        id: bump
+        if: steps.vers.outputs.stale == 'yes'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          . scripts/vhs-runner/pins.env
+          branch="vhs-runner-pins-bump-$(date -u +%Y%m%d)"
+          if [ "$(gh pr view "$branch" --json state -q .state 2>/dev/null || true)" = "OPEN" ]; then
+            echo "An OPEN bump PR already exists on $branch — skipping duplicate."
+            exit 0
+          fi
+          vhs_up=$(gh release view --repo charmbracelet/vhs  --json tagName -q .tagName)
+          ttyd_up=$(gh release view --repo tsl0922/ttyd      --json tagName -q .tagName)
+          # Stream the exact assets scripts/vhs-runner/Dockerfile downloads and
+          # hash them, so the PR lands a pins.env that verifiably builds.
+          vhs_sha=$(curl -fsSL "https://github.com/charmbracelet/vhs/releases/download/${vhs_up}/vhs_${vhs_up#v}_Linux_x86_64.tar.gz" | sha256sum | cut -d' ' -f1)
+          ttyd_sha=$(curl -fsSL "https://github.com/tsl0922/ttyd/releases/download/${ttyd_up}/ttyd.x86_64" | sha256sum | cut -d' ' -f1)
+          git checkout -b "$branch"
+          sed -i \
+            -e "s|^VHS_VERSION=.*|VHS_VERSION=${vhs_up}|" \
+            -e "s|^TTYD_VERSION=.*|TTYD_VERSION=${ttyd_up}|" \
+            -e "s|^VHS_SHA256=.*|VHS_SHA256=${vhs_sha}|" \
+            -e "s|^TTYD_SHA256=.*|TTYD_SHA256=${ttyd_sha}|" \
+            scripts/vhs-runner/pins.env
+          git config user.name  'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- scripts/vhs-runner/pins.env
+          git commit -m "vhs-runner pins: vhs $VHS_VERSION -> $vhs_up, ttyd $TTYD_VERSION -> $ttyd_up (weekly cron)"
+          git push -u origin "$branch"
+          gh pr create --head "$branch" --base master \
+            --title "vhs-runner toolchain bump: vhs $vhs_up, ttyd $ttyd_up" \
+            --body "Weekly cron found upstream releases beyond \`scripts/vhs-runner/pins.env\` (sha256s stream-computed from the release assets). Merging rebuilds the runner image via the pins.env path trigger; any demo-GIF delta is then reviewable on this PR instead of appearing un-bisectably in \`:latest\`."
 
       - uses: docker/setup-buildx-action@5b9cf3909b54a280b6df6eee035755eb1f2fd611
+        if: steps.vers.outputs.stale != 'yes'
 
       - name: Log in to GHCR
+        if: steps.vers.outputs.stale != 'yes'
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
         with:
           registry: ghcr.io
@@ -68,6 +128,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build + push image
+        if: steps.vers.outputs.stale != 'yes'
         uses: docker/build-push-action@cb941d0b895b09c17fa011d41c411b33c752cf28
         with:
           context: scripts/vhs-runner
@@ -75,6 +136,8 @@ jobs:
           build-args: |
             VHS_VERSION=${{ steps.vers.outputs.vhs }}
             TTYD_VERSION=${{ steps.vers.outputs.ttyd }}
+            VHS_SHA256=${{ steps.vers.outputs.vhs_sha }}
+            TTYD_SHA256=${{ steps.vers.outputs.ttyd_sha }}
           tags: |
             ${{ env.IMAGE_NAME }}:${{ steps.vers.outputs.tag }}
             ${{ env.IMAGE_NAME }}:latest
@@ -91,10 +154,18 @@ jobs:
       - name: Summary
         run: |
           {
-            echo "## VHS runner image built"
-            echo ""
-            echo "- vhs: \`${{ steps.vers.outputs.vhs }}\`"
-            echo "- ttyd: \`${{ steps.vers.outputs.ttyd }}\`"
-            echo "- Image: \`${{ env.IMAGE_NAME }}:${{ steps.vers.outputs.tag }}\`"
-            echo "- Also tagged: \`${{ env.IMAGE_NAME }}:latest\`"
+            if [ '${{ steps.vers.outputs.stale }}' = 'yes' ]; then
+              echo "## VHS runner pins stale — bump PR opened, build skipped"
+              echo ""
+              echo "- Pinned: vhs \`${{ steps.vers.outputs.vhs }}\` ttyd \`${{ steps.vers.outputs.ttyd }}\`"
+              echo "- Upstream has newer releases; see the \`vhs-runner-pins-bump-*\` branch."
+              echo "- The image was NOT rebuilt: builds follow the pins, never upstream."
+            else
+              echo "## VHS runner image built (pins fresh)"
+              echo ""
+              echo "- vhs: \`${{ steps.vers.outputs.vhs }}\`"
+              echo "- ttyd: \`${{ steps.vers.outputs.ttyd }}\`"
+              echo "- Image: \`${{ env.IMAGE_NAME }}:${{ steps.vers.outputs.tag }}\`"
+              echo "- Also tagged: \`${{ env.IMAGE_NAME }}:latest\` (consumers pin the versioned tag — vhs.yml derives it from scripts/vhs-runner/pins.env)"
+            fi
           } >> "$GITHUB_STEP_SUMMARY"

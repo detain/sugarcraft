@@ -132,10 +132,23 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       libs: ${{ steps.compute.outputs.libs }}
+      runner_tag: ${{ steps.pin.outputs.runner_tag }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
           fetch-depth: 2   # need HEAD~1 for the diff
+
+      # RT-22 (repo-tooling-024): render jobs pull the VERSIONED runner image
+      # tag derived from scripts/vhs-runner/pins.env instead of `:latest`, so
+      # the exact toolchain that produced today's GIFs is named in the job and
+      # a GIF delta traces to the pin-bump commit. vhs.yml runs only on
+      # master pushes and dispatch, so the pins file it reads is master's own.
+      - name: Derive runner image tag from pins
+        id: pin
+        run: |
+          set -euo pipefail
+          . scripts/vhs-runner/pins.env
+          echo "runner_tag=vhs-${VHS_VERSION}-ttyd-${TTYD_VERSION}" >> "$GITHUB_OUTPUT"
 
       - id: compute
         run: |
@@ -194,7 +207,7 @@ jobs:
     # GitHub release API calls (previously up to 2× the matrix size on
     # cache miss) and the apt-get ffmpeg install.
     container:
-      image: ghcr.io/${{ github.repository_owner }}/vhs-runner:latest
+      image: ghcr.io/${{ github.repository_owner }}/vhs-runner:${{ needs.changed.outputs.runner_tag }}
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -333,7 +346,7 @@ jobs:
     if: ${{ contains(fromJSON(needs.changed.outputs.libs), 'sugar-dashboard') }}
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/${{ github.repository_owner }}/vhs-runner:latest
+      image: ghcr.io/${{ github.repository_owner }}/vhs-runner:${{ needs.changed.outputs.runner_tag }}
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}

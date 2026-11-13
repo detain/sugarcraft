@@ -4,14 +4,17 @@
 #
 # Bakes in: vhs, ttyd, ffmpeg, PHP 8.3 + required extensions, composer.
 # The render job in vhs.yml uses this image so it never has to hit
-# GitHub release APIs at render time. Image is rebuilt weekly (Monday
-# 06:00 UTC) by .github/workflows/vhs-runner-image.yml, which resolves
-# the latest vhs + ttyd tags and passes them as build args.
+# GitHub release APIs at render time. Versions AND sha256 hashes are pinned
+# in scripts/vhs-runner/pins.env (RT-22); the weekly cron in
+# .github/workflows/vhs-runner-image.yml verifies upstream against the pins
+# and opens a bump PR when they diverge — this image is never rebuilt on a
+# silently-resolved upstream version.
 #
-# Build locally for testing:
+# Build locally for testing (values from pins.env):
+#   set -a; . scripts/vhs-runner/pins.env; set +a
 #   docker build \
-#       --build-arg VHS_VERSION=v0.10.0 \
-#       --build-arg TTYD_VERSION=1.7.7 \
+#       --build-arg VHS_VERSION="$VHS_VERSION" --build-arg VHS_SHA256="$VHS_SHA256" \
+#       --build-arg TTYD_VERSION="$TTYD_VERSION" --build-arg TTYD_SHA256="$TTYD_SHA256" \
 #       -t vhs-runner:local scripts/vhs-runner
 
 FROM ubuntu:24.04
@@ -74,17 +77,25 @@ RUN curl -sS https://getcomposer.org/installer | php -- \
 
 ARG VHS_VERSION
 ARG TTYD_VERSION
+ARG VHS_SHA256
+ARG TTYD_SHA256
 
+# RT-22 (repo-tooling-024): every downloaded artifact is sha256-verified before
+# it is installed — the splitsh-lite leg in sync-sugarcraft.yml is the in-repo
+# exemplar. Empty pin = fail closed, not unverified download.
 RUN test -n "$VHS_VERSION" && test -n "$TTYD_VERSION" \
+    && test -n "$VHS_SHA256" && test -n "$TTYD_SHA256" \
     && vhs_ver="${VHS_VERSION#v}" \
     && curl -fsSL -o /tmp/vhs.tar.gz \
         "https://github.com/charmbracelet/vhs/releases/download/${VHS_VERSION}/vhs_${vhs_ver}_Linux_x86_64.tar.gz" \
+    && echo "$VHS_SHA256  /tmp/vhs.tar.gz" | sha256sum -c - \
     && tar -xz -f /tmp/vhs.tar.gz -C /usr/local/bin --strip-components=1 --wildcards '*/vhs' \
     && rm /tmp/vhs.tar.gz \
     && chmod +x /usr/local/bin/vhs
 
 RUN curl -fsSL -o /usr/local/bin/ttyd \
         "https://github.com/tsl0922/ttyd/releases/download/${TTYD_VERSION}/ttyd.x86_64" \
+    && echo "$TTYD_SHA256  /usr/local/bin/ttyd" | sha256sum -c - \
     && chmod +x /usr/local/bin/ttyd
 
 RUN vhs --version \
