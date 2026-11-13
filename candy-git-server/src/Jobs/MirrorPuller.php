@@ -26,12 +26,16 @@ use SugarCraft\GitServer\Support\BoundedCommand;
  * before any child is spawned: an explicit scheme from
  * {@see self::ALLOWED_SCHEMES} only (git's `ext::` transport is remote
  * code execution dressed as a URL; `file://` reads the server's own disk;
- * plaintext `http://` ships credentials over the wire), no leading dash
- * (an option like `--upload-pack=cmd` would be parsed as a flag), and the
- * fetch runs as an argv vector through {@see BoundedCommand} — no shell,
- * no quoting to forget, a hard deadline, and GIT_TERMINAL_PROMPT=0 so a
- * credentialed upstream can never park the tick on an interactive prompt.
- * Failure logging redacts any password embedded in the URL.
+ * plaintext `http://` ships credentials over the wire; and `git://` —
+ * finding 070 — authenticates neither host nor content, so it is refused
+ * by default and admitted only under an explicit
+ * git.mirror_allow_git_protocol opt-in, loudly logged on every pull),
+ * no leading dash (an option like `--upload-pack=cmd` would be parsed as
+ * a flag), and the fetch runs as an argv vector through
+ * {@see BoundedCommand} — no shell, no quoting to forget, a hard
+ * deadline, and GIT_TERMINAL_PROMPT=0 so a credentialed upstream can
+ * never park the tick on an interactive prompt. Failure logging redacts
+ * any password embedded in the URL.
  *
  * Dual-mode, like the rest of the lib: {@see attach()} registers a
  * periodic timer on a ReactPHP loop (the `serveAsync()` path);
@@ -55,8 +59,17 @@ use SugarCraft\GitServer\Support\BoundedCommand;
  */
 final class MirrorPuller
 {
-    /** Transports an operator may mirror over, after lowercasing. */
-    public const ALLOWED_SCHEMES = ['https', 'ssh', 'git'];
+    /**
+     * Transports an operator may mirror over BY DEFAULT, after lowercasing
+     * (finding 070). git:// is NOT here: it authenticates neither the host
+     * nor the payload, so a mirror admitted over it is whatever the wire
+     * said it was. It joins the accepted set only under the explicit
+     * opt-in git.mirror_allow_git_protocol.
+     */
+    public const ALLOWED_SCHEMES = ['https', 'ssh'];
+
+    /** The unauthenticated daemon transport, usable only via opt-in. */
+    public const GIT_SCHEME = 'git';
 
     /** Wall-clock ceiling for one upstream fetch (git can be slow, not forever). */
     public const FETCH_TIMEOUT_SECONDS = 300.0;
@@ -72,6 +85,9 @@ final class MirrorPuller
 
     /** True while a runOnce() batch is executing (overlap guard). */
     private bool $inTick = false;
+
+    /** git.mirror_allow_git_protocol as read at construction (finding 070). */
+    private readonly bool $allowGit;
 
     private Schedule $schedule;
 
@@ -103,6 +119,7 @@ final class MirrorPuller
      */
     public function __construct(Config $config, ?\Closure $exec = null)
     {
+        $this->allowGit = $config->mirrorAllowGitProtocol;
         $this->schedule = Schedule::parse($config->mirrorPullSchedule);
         $this->exec = $exec ?? static function (array $argv, float $timeoutSeconds = self::FETCH_TIMEOUT_SECONDS): array {
             return BoundedCommand::run($argv, $timeoutSeconds, ['GIT_TERMINAL_PROMPT' => '0']);
@@ -242,13 +259,20 @@ final class MirrorPuller
         $this->lastPull[$repo->name] = $now ?? \time();
 
         $url = (string) $repo->mirrorFrom;
-        $refusal = self::upstreamRefusal($url);
+        $refusal = self::upstreamRefusal($url, $this->allowGit);
         if ($refusal !== null) {
             // The refusal names the problem, never the URL: a hostile
             // config drop should not get its payload echoed into logs.
             \error_log("candy-git-server: mirror pull refused for {$repo->name}: {$refusal}");
 
             return false;
+        }
+        if ($this->allowGit && \stripos($url, self::GIT_SCHEME . '://') === 0) {
+            // Admitted under opt-in: say so on every pull, so an operator
+            // who flipped the key for a trusted LAN mirror still sees the
+            // unauthenticated transport in the log when something smells
+            // wrong later.
+            \error_log("candy-git-server: mirroring {$repo->name} over git:// under git.mirror_allow_git_protocol — unauthenticated transport");
         }
 
         $result = ($this->exec)([
@@ -268,7 +292,7 @@ final class MirrorPuller
     /**
      * Why an operator-supplied upstream URL is unfit to fetch, or null.
      */
-    private static function upstreamRefusal(string $url): ?string
+    private static function upstreamRefusal(string $url, bool $allowGit = false): ?string
     {
         if ($url === '') {
             return 'empty upstream URL';
@@ -281,6 +305,16 @@ final class MirrorPuller
         }
 
         $scheme = \parse_url($url, \PHP_URL_SCHEME);
+        if (\is_string($scheme) && \strtolower($scheme) === self::GIT_SCHEME) {
+            if (!$allowGit) {
+                // Named refusal, not roster fall-through: the operator who
+                // set a git:// upstream must learn WHICH key to flip.
+                return 'the git:// transport authenticates neither host nor content — a mirror over it is '
+                    . 'trusting the wire; set git.mirror_allow_git_protocol: true to accept that for this upstream';
+            }
+
+            return null; // opted in: admitted with the warning already logged
+        }
         if (!\is_string($scheme) || !\in_array(\strtolower($scheme), self::ALLOWED_SCHEMES, true)) {
             return 'upstream scheme must be one of ' . \implode(', ', self::ALLOWED_SCHEMES)
                 . ' (scp-style "host:path" needs the explicit ssh:// form)';

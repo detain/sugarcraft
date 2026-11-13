@@ -35,6 +35,15 @@ final class Config
     public readonly int $gitMaxConnections;
 
     /**
+     * Opt-in for mirroring over git:// — the daemon protocol that
+     * authenticates NEITHER host nor content (finding 070). Default off:
+     * a mirror pull is content admission, and admitting it over an
+     * unauthenticated transport hands the decision to whoever can see the
+     * wire. Operators who run trusted-LAN mirrors flip this key knowingly.
+     */
+    public readonly bool $mirrorAllowGitProtocol;
+
+    /**
      * Whether requests with NO authenticated identity may read repositories
      * the operator explicitly marked public. Default OFF (fail-closed): a
      * fresh install exposes nothing to passers-by until this is turned on
@@ -189,6 +198,7 @@ final class Config
         $this->gitIdleTimeout    = (int) ($git['idle_timeout'] ?? 3);
         $this->gitMaxConnections = (int) ($git['max_connections'] ?? 32);
         $this->allowAnonymousRead = (bool) ($git['allow_anonymous_read'] ?? false);
+        $this->mirrorAllowGitProtocol = (bool) ($git['mirror_allow_git_protocol'] ?? false);
 
         $http = $data['http'] ?? [];
         $this->httpListenAddr = (string) ($http['listen_addr'] ?? ':23232');

@@ -40,19 +40,20 @@ final class MirrorPullerTest extends TestCase
         parent::tearDown();
     }
 
-    private function config(string $schedule = '@every 10m'): Config
+    private function config(string $schedule = '@every 10m', bool $allowGit = false): Config
     {
         \file_put_contents(
             $this->tmpDir . '/config.yaml',
             "name: MirrorTest\njobs:\n mirror_pull: \"{$schedule}\"\n"
+            . ($allowGit ? "git:\n mirror_allow_git_protocol: true\n" : '')
         );
 
         return Config::load($this->tmpDir . '/config.yaml');
     }
 
-    private function puller(string $schedule = '@every 10m', int $exitCode = 0, ?\Closure $stub = null): MirrorPuller
+    private function puller(string $schedule = '@every 10m', int $exitCode = 0, ?\Closure $stub = null, bool $allowGit = false): MirrorPuller
     {
-        return new MirrorPuller($this->config($schedule), $stub ?? function (array $argv) use ($exitCode): array {
+        return new MirrorPuller($this->config($schedule, $allowGit), $stub ?? function (array $argv) use ($exitCode): array {
             $this->commands[] = $argv;
 
             return ['code' => $exitCode, 'output' => $exitCode === 0 ? [] : ['fatal: mirror unreachable']];
@@ -299,29 +300,57 @@ final class MirrorPullerTest extends TestCase
         }
     }
 
-    public function testGitSchemeIsAnAcceptedExplicitTransport(): void
+    /**
+     * S06 (finding 070): git:// authenticates NEITHER host NOR content —
+     * a mirror pulled over it is trusting the wire. The default roster is
+     * the safe set; git:// joins only under a named opt-in, and even then
+     * every pull says so out loud.
+     */
+    public function testGitSchemeIsRefusedByDefaultAndAdmittedOnlyByNamedOptIn(): void
     {
-        $puller = $this->puller();
-        $mirror = Repo::new('g', '/tmp/g')->withMirrorFrom('git://example.com/pub.git');
-        $puller->registerRepo($mirror);
+        $logPath = $this->tmpDir . '/git-scheme.log';
+        \ini_set('error_log', $logPath);
 
-        $this->assertTrue($puller->pull($mirror));
-        $this->assertCount(1, $this->commands);
+        try {
+            $puller = $this->puller();
+            $mirror = Repo::new('g', '/tmp/g')->withMirrorFrom('git://example.com/pub.git');
+            $puller->registerRepo($mirror);
+
+            $this->assertFalse($puller->pull($mirror), 'git:// must die by default');
+            $this->assertCount(0, $this->commands, 'a refused scheme never reaches the runner');
+            $log = (string) \file_get_contents($logPath);
+            $this->assertStringContainsString('mirror pull refused', $log, 'the refusal is still logged');
+            $this->assertStringContainsString('mirror_allow_git_protocol', $log, 'the refusal names the key to flip');
+
+            $optedIn = $this->puller(allowGit: true);
+            $this->assertTrue($optedIn->pull($mirror), 'the opt-in admits git://');
+            $this->assertCount(1, $this->commands);
+            $log = (string) \file_get_contents($logPath);
+            $this->assertStringContainsString('under git.mirror_allow_git_protocol', $log, 'an opted-in git:// pull is announced every time');
+        } finally {
+            \ini_set('error_log', '');
+            @\unlink($logPath);
+        }
     }
 
     public function testSchemeAllowlistIsTheNamedRosterAndExtDiesByName(): void
     {
-        // "git:// admitted by choice": the roster IS the decision. Adding or
-        // removing any transport must be a deliberate edit that reddens here,
-        // never a silent side effect of touching the refusal ladder.
-        $this->assertSame(['https', 'ssh', 'git'], MirrorPuller::ALLOWED_SCHEMES);
+        // S06 (finding 070): the roster is the safe-by-default decision —
+        // git:// left it (unauthenticated transport) and lives behind
+        // git.mirror_allow_git_protocol instead. Adding or removing any
+        // transport must be a deliberate edit that reddens here, never a
+        // silent side effect of touching the refusal ladder.
+        $this->assertSame(['https', 'ssh'], MirrorPuller::ALLOWED_SCHEMES);
 
         $refuse = new \ReflectionMethod(MirrorPuller::class, 'upstreamRefusal');
         $refuse->setAccessible(true);
-        /** @param callable(string): ?string */
-        $refusal = static fn (string $url): ?string => $refuse->invoke(null, $url);
+        /** @param callable(string, bool): ?string */
+        $refusal = static fn (string $url, bool $allowGit = false): ?string => $refuse->invoke(null, $url, $allowGit);
 
-        $this->assertNull($refusal('git://example.com/pub.git'), 'git:// is admitted by choice');
+        $gitDeny = $refusal('git://example.com/pub.git');
+        $this->assertNotNull($gitDeny, 'git:// is refused by default now (finding 070)');
+        $this->assertStringContainsString('mirror_allow_git_protocol', $gitDeny, 'the denial names the opt-in key');
+        $this->assertNull($refusal('git://example.com/pub.git', true), 'the opt-in admits it');
         $this->assertNull($refusal('SSH://example.com/p.git'), 'scheme match is case-insensitive');
 
         // "ext:: refused by name": the named leg must carry its own message,
@@ -339,7 +368,7 @@ final class MirrorPullerTest extends TestCase
         // Everything else outside the roster dies on the roster message.
         $offRoster = $refusal('ftp://example.com/x.git');
         $this->assertNotNull($offRoster);
-        $this->assertStringContainsString('must be one of https, ssh, git', $offRoster);
+        $this->assertStringContainsString('must be one of https, ssh', $offRoster);
     }
 
     public function testCredentialsAreRedactedInFailureLogs(): void
