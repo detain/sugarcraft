@@ -301,13 +301,13 @@ final class SpringCollection
     }
 
     /**
-     * Get the current position of a spring by id.
+     * The current position of a spring by id — the house bare accessor.
      *
      * @throws \OutOfBoundsException naming the unknown id (the raw array
      *         read used to surface a warning-only null then a TypeError in
      *         the renderer three lines later).
      */
-    public function get(string $id): float
+    public function position(string $id): float
     {
         if (!array_key_exists($id, $this->positions)) {
             throw new \OutOfBoundsException(Lang::t('spring.unknown_id', ['id' => $id]));
@@ -316,11 +316,26 @@ final class SpringCollection
     }
 
     /**
+     * BC forwarder for the pre-rename accessor name.
+     *
+     * @deprecated The `get`-prefixed form breaks the house bare-accessor
+     *             convention (finding 020 — the last surviving `get`
+     *             accessor here). Use {@see self::position()} instead.
+     *             REMOVED-IN: 2.0.0, loud like the other shims.
+     */
+    public function get(string $id): float
+    {
+        $this->emitShimDeprecation('get()', 'position()');
+
+        return $this->position($id);
+    }
+
+    /**
      * Get the current velocity of a spring by id.
      *
      * Positions alone cannot answer "has it stopped?" — an under-damped
      * spring coasts through its target with full speed. Completion checks
-     * need both, hence this twin of {@see get()} (and {@see settled()},
+     * need both, hence this twin of {@see position()} (and {@see settled()},
      * which folds the pair).
      *
      * @throws \OutOfBoundsException naming the unknown id.

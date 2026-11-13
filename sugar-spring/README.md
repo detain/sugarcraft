@@ -444,13 +444,13 @@ while (!$group->settled() && $frame < 600) {   // settled(): every member's posi
     $frame++;
 }
 
-echo sprintf("menu=%.2f panel=%.2f\n", $group->get('menu'), $group->get('panel'));
+echo sprintf("menu=%.2f panel=%.2f\n", $group->position('menu'), $group->position('panel'));
 ```
 
-Read with `get($id)` / `all()` / `target($id)` / `velocity($id)` /
+Read with `position($id)` / `all()` / `target($id)` / `velocity($id)` /
 `allVelocities()` / `has($id)`; ask "still animating?" with
 `settled($threshold = Spring::SETTLING_THRESHOLD)` (it needs velocities, which
-is why they are exposed). Unknown ids are refused by `get()` / `target()` /
+is why they are exposed). Unknown ids are refused by `position()` / `target()` /
 `velocity()` / `withTarget()` with an `OutOfBoundsException` naming the id,
 and the constructor refuses misaligned or orphaned id planes. The legacy
 `add()` / `remove()` / `setTarget()` mutators are **deprecated** shims
@@ -599,7 +599,7 @@ back-flavoured control points — same honesty rule as `Easing`.
   `withSpring($id, Spring, $pos, $vel, $target)` / `without($id)` /
   `withTarget($id, $target)` (unknown ids refused, named in the error) /
   `tick(): self` (new collection; positions map via `all()`) /
-  `get($id): float` / `has($id): bool` / `all(): array<string,float>` /
+  `position($id): float` / `has($id): bool` / `all(): array<string,float>` /
   `target($id): float` / `velocity($id): float` / `allVelocities()` /
   `settled($threshold = Spring::SETTLING_THRESHOLD): bool`. The legacy
   `add()` / `remove()` / `setTarget()` mutators are deprecated
@@ -686,13 +686,16 @@ UPDATE_GOLDENS=1 vendor/bin/phpunit
 
 ## Accessor deprecation (2026-10-24)
 
-One accessor was renamed to the house bare form: `SpringCollection::getTarget()`
-→ `target($id)`. The legacy spelling stays a byte-identical `@deprecated` BC
-forwarder until sugar-spring v2.0.0; migrate call sites.
+Two accessors were renamed to the house bare form: `SpringCollection::getTarget()`
+→ `target($id)` (2026-10-24) and `SpringCollection::get()` → `position($id)`.
+Each legacy spelling stays a thin `@deprecated` BC forwarder — loud with
+`E_USER_DEPRECATED`, stamped `REMOVED-IN: 2.0.0` — until sugar-spring v2.0.0;
+migrate call sites.
 
 | Namespace | Class | Deprecated | Use instead |
 |-----------|-------|------------|-------------|
 | `Spring` | `SpringCollection` | `getTarget()` | `target()` |
+| `Spring` | `SpringCollection` | `get()` | `position()` |
 
 `tests/AccessorDeprecationTest.php` pins the table above; the dated internal
 change record lives in `CALIBER_LEARNINGS.md`.

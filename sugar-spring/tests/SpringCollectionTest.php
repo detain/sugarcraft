@@ -16,7 +16,7 @@ final class SpringCollectionTest extends TestCase
         $collection = (new SpringCollection())->withSpring('spring1', $spring, 0.0, 0.0, 100.0);
 
         $this->assertTrue($collection->has('spring1'));
-        $this->assertEqualsWithDelta(0.0, $collection->get('spring1'), 1e-9);
+        $this->assertEqualsWithDelta(0.0, $collection->position('spring1'), 1e-9);
     }
 
     public function testWithSpringReturnsNewInstanceLeavingOriginalUnchanged(): void
@@ -65,7 +65,7 @@ final class SpringCollectionTest extends TestCase
         $positions = $newCollection->all();
         $this->assertGreaterThan(0.0, $positions['spring1']);
         // Original is untouched by tick().
-        $this->assertEqualsWithDelta(0.0, $collection->get('spring1'), 1e-9);
+        $this->assertEqualsWithDelta(0.0, $collection->position('spring1'), 1e-9);
     }
 
     /**
@@ -98,8 +98,8 @@ final class SpringCollectionTest extends TestCase
 
         $ticked = $collection->tick();
 
-        $this->assertSame(100.00005, $ticked->get('parked'), 'settled member must ride through byte-identical');
-        $this->assertGreaterThan(0.0, $ticked->get('running'), 'unsettled member still integrates');
+        $this->assertSame(100.00005, $ticked->position('parked'), 'settled member must ride through byte-identical');
+        $this->assertGreaterThan(0.0, $ticked->position('running'), 'unsettled member still integrates');
     }
 
     /**
@@ -200,7 +200,7 @@ final class SpringCollectionTest extends TestCase
         }
 
         $this->assertTrue($collection->settled());
-        $this->assertEqualsWithDelta(100.0, $collection->get('a'), Spring::SETTLING_THRESHOLD);
+        $this->assertEqualsWithDelta(100.0, $collection->position('a'), Spring::SETTLING_THRESHOLD);
         $this->assertLessThan(1e-4, abs($collection->velocity('a')), 'velocity must be within threshold too');
     }
 
@@ -214,7 +214,7 @@ final class SpringCollectionTest extends TestCase
         // Advance until position happens to sit ON the target mid-ring.
         for ($i = 0; $i < 600; $i++) {
             $collection = $collection->tick();
-            if (abs($collection->get('a') - 100.0) < 1e-4 && abs($collection->velocity('a')) > 1.0) {
+            if (abs($collection->position('a') - 100.0) < 1e-4 && abs($collection->velocity('a')) > 1.0) {
                 $this->assertFalse(
                     $collection->settled(),
                     'at-target position with a live velocity must NOT be settled'
@@ -242,7 +242,7 @@ final class SpringCollectionTest extends TestCase
         $spring = new Spring(1.0 / 60.0, 6.0, 1.0);
         $collection = (new SpringCollection())->withSpring('menu', $spring);
 
-        foreach (['get', 'target', 'velocity'] as $method) {
+        foreach (['position', 'target', 'velocity'] as $method) {
             try {
                 $collection->{$method}('menue');
                 $this->fail("{$method}() on a typo'd id must throw");

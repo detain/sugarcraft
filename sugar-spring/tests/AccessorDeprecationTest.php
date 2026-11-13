@@ -16,7 +16,8 @@ use SugarCraft\Spring\SpringCollection;
  * — unclaimed on the class (withTarget() is the fluent builder,
  * setTarget() a deprecated shim; a bare target($id) getter
  * sits beside them cleanly, mirroring the collection's existing bare
- * get()/all()/has() readers). The legacy spelling stays a thin BC
+ * position()/all()/has() readers (get() itself swept by SPR-18). The legacy
+ * spellings stay thin BC
  * forwarder marked '@deprecated' + 'REMOVED-IN: 2.0.0' until v2.0.0,
  * loud with E_USER_DEPRECATED since SPR-17 (finding 051).
  */
@@ -31,6 +32,9 @@ final class AccessorDeprecationTest extends TestCase
     {
         return [
             'SpringCollection::getTarget' => [SpringCollection::class, 'getTarget', 'target'],
+            // SPR-18 (finding 020): the last get-prefix accessor followed
+            // the exact same sweep — table above in README mirrors this map.
+            'SpringCollection::get' => [SpringCollection::class, 'get', 'position'],
         ];
     }
 
@@ -57,6 +61,32 @@ final class AccessorDeprecationTest extends TestCase
         } finally {
             restore_error_handler();
         }
+    }
+
+    /**
+     * SPR-18: the get() forwarder copies the getTarget() precedent EXACTLY —
+     * identical answers under both spellings, one loud notice carrying the
+     * dated expiry stamp.
+     */
+    public function testThePositionForwarderAnswersIdenticallyAndWarns(): void
+    {
+        $collection = (new SpringCollection())->withSpring('a', new Spring(1.0 / 60.0, 6.0, 1.0), 7.0, 0.0, 10.0);
+        $this->assertSame(7.0, $collection->position('a'));
+
+        $captured = [];
+        set_error_handler(static function (int $errno, string $errstr) use (&$captured): bool {
+            $captured[] = [$errno, $errstr];
+            return true;
+        }, E_USER_DEPRECATED);
+        try {
+            $this->assertSame($collection->position('a'), $collection->get('a'));
+        } finally {
+            restore_error_handler();
+        }
+
+        $this->assertCount(1, $captured, 'get() must be loud exactly once');
+        $this->assertStringContainsString('position()', $captured[0][1]);
+        $this->assertStringContainsString('REMOVED-IN: 2.0.0', $captured[0][1]);
     }
     /**
      * Structural leg: the swept forwarder carries the @deprecated +
@@ -117,7 +147,14 @@ final class AccessorDeprecationTest extends TestCase
                 $found[] = $key;
             }
         }
-        $this->assertSame(['SpringCollection::getTarget'], $found, 'src/ census drifted from the tested pairs');
+        $expected = array_keys(self::deprecatedAccessors());
+        sort($found);
+        sort($expected);
+        $this->assertSame(
+            $expected,
+            $found,
+            'src/ census drifted from the tested pairs — every marked public get* forwarder must be in the roster',
+        );
     }
 
     /**
@@ -164,7 +201,7 @@ final class AccessorDeprecationTest extends TestCase
                     $name = $tokens[$j]->text;
                     break;
                 }
-                if (\preg_match('/^get[A-Z]/', $name) !== 1) {
+                if (\preg_match('/^get([A-Z]|$)/', $name) !== 1) {
                     continue;
                 }
                 $private = false;
