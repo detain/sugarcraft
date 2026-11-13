@@ -161,7 +161,32 @@ final class Input implements \SugarCraft\Forms\Field, \SugarCraft\Forms\AsyncVal
     /** The parsed override map carried by the inner widget. @return array<string,string> */
     public function keyOverrides(): array             { return $this->input->keyOverrides(); }
 
-    // Short-form aliases: same behavior, less typing.
+    /**
+     * Populate the recall history for the inner text input (SF-40 /
+     * sugar-forms-022: the field-level door — the widget has always had
+     * `withHistory`, the Field API never exposed it). Up/Down recall is a
+     * key-map contract: under the default map those chords drive field
+     * navigation, so recall lands when a custom map frees them (or when
+     * the host forwards them here).
+     *
+     * @param list<string> $history chronological, oldest first
+     */
+    public function withHistory(array $history): self
+    {
+        return $this->mutate(input: $this->input->withHistory($history));
+    }
+
+    /**
+     * Append one entry to the recall history (dedupe and the history limit
+     * are the widget's; not wired into Enter automatically — same
+     * discipline as {@see TextInput::addToHistory()}).
+     */
+    public function addToHistory(string $entry): self
+    {
+        return $this->mutate(input: $this->input->addToHistory($entry));
+    }
+
+    // Short-form aliases: same behavior, less typing:
     public function title(string $t): self        { return $this->withTitle($t); }
     public function desc(string $d): self         { return $this->withDescription($d); }
     public function placeholder(string $p): self  { return $this->withPlaceholder($p); }
@@ -180,6 +205,8 @@ final class Input implements \SugarCraft\Forms\Field, \SugarCraft\Forms\AsyncVal
     public function passwordMask(?string $pattern, string $echoChar = '*'): self { return $this->withPasswordMask($pattern, $echoChar); }
     public function suggestionsFunc(\Closure $fn): self { return $this->withSuggestionsFunc($fn); }
     public function validateOn(ValidateOn $when): self { return $this->withValidateOn($when); }
+    /** @param list<string> $history */
+    public function history(array $history): self { return $this->withHistory($history); }
 
     /**
      * Attach the cancellation source of a NEWLY scheduled async fetch. The

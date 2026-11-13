@@ -91,6 +91,7 @@ final class ShortAliasMatrixTest extends TestCase
             'withValidateOn'              => 'validateOn',
             'withValidation'              => 'validation',
             'withKeyOverrides'            => null,
+            'withHistory'                 => 'history',
             'withAsyncValidator'          => null,
             'withErrorHelp'               => null,
             'withHideFunc'                => 'hideFunc',

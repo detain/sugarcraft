@@ -100,6 +100,12 @@ final class TextInput implements Model
         public readonly int $historyIndex = -1,
         /** Maximum number of history entries to keep (0 = unlimited) */
         public readonly int $historyLimit = 0,
+        /**
+         * The in-progress line captured by the first history Up (SF-40):
+         * navigating back past the newest entry restores it, shell parity.
+         * Null = no draft stored for the current browse.
+         */
+        public readonly ?string $historyDraft = null,
         /** When to run validation. */
         public readonly ValidateOn $validateOn = ValidateOn::None,
         /** Regex pattern; only matching characters are accepted. */
@@ -730,7 +736,7 @@ final class TextInput implements Model
      */
     public function withHistory(array $history): self
     {
-        return $this->mutate(history: array_values($history), historyIndex: -1);
+        return $this->mutate(history: array_values($history), historyIndex: -1, historyDraftClear: true);
     }
 
     /**
@@ -770,7 +776,7 @@ final class TextInput implements Model
         if ($this->historyLimit > 0 && count($history) > $this->historyLimit) {
             $history = array_slice($history, -$this->historyLimit);
         }
-        return $this->mutate(history: $history, historyIndex: -1);
+        return $this->mutate(history: $history, historyIndex: -1, historyDraftClear: true);
     }
 
     public function withCharLimit(int $n): self      { return $this->mutate(charLimit: max(0, $n)); }
@@ -1459,6 +1465,8 @@ final class TextInput implements Model
         ?array $history = null,
         ?int $historyIndex = null,
         ?int $historyLimit = null,
+        ?string $historyDraft = null,
+        bool $historyDraftClear = false,
         ?ValidateOn $validateOn = null,
         ?string $restrict = null,
         ?array $keyOverrides = null,
@@ -1505,6 +1513,7 @@ final class TextInput implements Model
             history:                $history                ?? $this->history,
             historyIndex:           $historyIndex           ?? $this->historyIndex,
             historyLimit:           $historyLimit           ?? $this->historyLimit,
+            historyDraft:           $historyDraftClear ? null : ($historyDraft ?? $this->historyDraft),
             validateOn:             $validateOn             ?? $this->validateOn,
             restrict:               $restrict               ?? $this->restrict,
             keyOverrides:           $keyOverrides           ?? $this->keyOverrides,
@@ -1516,7 +1525,9 @@ final class TextInput implements Model
     /**
      * Navigate up in history (show older entry).
      * History is indexed from oldest (0) to newest (n-1).
-     * UP goes from newest towards oldest.
+     * UP goes from newest towards oldest. The first UP stores the
+     * in-progress line as the draft (SF-40) so navigation can never
+     * destroy it.
      *
      * @return array{0:TextInput, 1:?\Closure}
      */
@@ -1543,6 +1554,9 @@ final class TextInput implements Model
                 value: $entry,
                 cursorPos: mb_strlen($entry, 'UTF-8'),
                 historyIndex: $nextIndex,
+                // SF-40: the first Up captures the line the user was writing;
+                // later Ups carry it (the null param threads the existing draft).
+                historyDraft: $this->historyIndex === -1 ? $this->value : null,
             ),
             null,
         ];
@@ -1566,9 +1580,12 @@ final class TextInput implements Model
         }
         $nextIndex = $this->historyIndex + 1;
         if ($nextIndex >= $count) {
-            // Past the newest - return to current input (clear the value)
+            // Past the newest - back to the line the user was writing
+            // before navigation started (SF-40 shell parity; an empty
+            // draft restores exactly the old clear-to-empty behavior).
+            $draft = $this->historyDraft ?? '';
             return [
-                $this->mutate(historyIndex: -1, value: '', cursorPos: 0),
+                $this->mutate(historyIndex: -1, value: $draft, cursorPos: mb_strlen($draft, 'UTF-8'), historyDraftClear: true),
                 null,
             ];
         }
