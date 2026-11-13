@@ -55,6 +55,9 @@ use SugarCraft\Code\Util\TokenEstimate;
 final class StepSummarizer
 {
     /** The final user row of a step summary request. */
+    /** The environment knob naming the summary model (documented in docs/ENVIRONMENT.md). */
+    public const ENV_SUMMARY_MODEL = 'CANDY_CODE_SUMMARY_MODEL';
+
     public const INSTRUCTION = 'The conversation above is close to the context limit, so the harness will replace it with a '
         . 'summary you write now. Do not call any tools — answer with the summary only. Cover, in this order: the '
         . 'user\'s requests (quote the most recent one verbatim); what has been done so far, naming every file read, '
@@ -247,7 +250,7 @@ final class StepSummarizer
      */
     public static function modelOverride(): ?string
     {
-        $env = getenv('CANDY_CODE_SUMMARY_MODEL');
+        $env = getenv(self::ENV_SUMMARY_MODEL);
 
         return is_string($env) && trim($env) !== '' ? trim($env) : null;
     }
