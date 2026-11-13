@@ -25,7 +25,7 @@ use SugarCraft\ColorProfile\Env;
  *  1. Environment phase  → chain ladder mapped to capability entries
  *  2. Terminfo phase     → `infocmp -1` name-position Tc/RGB and Sixel caps
  *  3. Environment upgrade table (interactive only — issues no raw OSC query
- *     round-trips; see checkEscapeQueries)
+ *     round-trips; see capabilitiesFromTermProgram)
  *  4. Fallbacks          → BasicAscii floor
  *
  * Extension seams (protected on purpose): {@see self::getEnv()},
@@ -146,7 +146,7 @@ class TerminalProbe
 
             // Phase 3: Environment upgrade table (if interactive)
             if (!$gated && $this->interactive) {
-                $caps = $this->checkEscapeQueries($caps);
+                $caps = $this->capabilitiesFromTermProgram($caps);
             }
 
             // Phase 4: Apply fallbacks
@@ -299,18 +299,19 @@ class TerminalProbe
     public const SIXEL_TERMCAPS = TerminfoParser::SIXEL_NAMES;
 
     /**
-     * Step 3: Interactive-only capability upgrade from the advertised environment.
-     *
-     * Despite the historical name this issues no raw OSC query round-trips
-     * (DA1, OSC 4;1;?, OSC 8, 2004, 1004): the implementation is a
-     * TERM_PROGRAM lookup table. Real query I/O would need raw-mode read-back
+     * Step 3: Interactive-only capability upgrade from the advertised
+     * environment — the name says exactly what it does: a TERM_PROGRAM
+     * lookup table. It issues no raw OSC query round-trips (DA1, OSC 4;1;?,
+     * OSC 8, 2004, 1004). Real query I/O would need raw-mode read-back
      * owned by the TUI layer; until then terminfo (Phase 2) is the
-     * authoritative deep probe.
+     * authoritative deep probe, and the two query-implying enum cases stay
+     * @deprecated RESERVED (Capability::BracketedPaste,
+     * Capability::FocusEvents).
      *
      * @param array<string, string> $caps
      * @return array<string, string>
      */
-    private function checkEscapeQueries(array $caps): array
+    private function capabilitiesFromTermProgram(array $caps): array
     {
         // TERM_PROGRAM hints for terminal families that advertise a capability
         // they actually implement — table lookup, no query. Apple_Terminal is

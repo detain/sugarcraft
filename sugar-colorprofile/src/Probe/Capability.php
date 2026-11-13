@@ -40,10 +40,30 @@ enum Capability: string
     /** Hyperlinks (OSC 8) support. */
     case Hyperlinks = 'hyperlinks';
 
-    /** Bracketed paste mode support. */
+    /**
+     * Bracketed paste mode support.
+     *
+     * @deprecated RESERVED — never produced by this build. Reporting it
+     *             would require an OSC 2004 query round-trip, which this
+     *             probe deliberately leaves to the TUI layer (raw-mode
+     *             read-back); the phase-3 upgrade table in TerminalProbe is
+     *             a lookup table, not a query face. Candidates for real
+     *             query legs are tracked in CALIBER_LEARNINGS (Phase-5
+     *             candidate #6).
+     */
     case BracketedPaste = 'bracketed-paste';
 
-    /** Focus tracking events support. */
+    /**
+     * Focus tracking events support.
+     *
+     * @deprecated RESERVED — never produced by this build. Reporting it
+     *             would require an OSC 1004 query round-trip, which this
+     *             probe deliberately leaves to the TUI layer (raw-mode
+     *             read-back); the phase-3 upgrade table in TerminalProbe is
+     *             a lookup table, not a query face. Candidates for real
+     *             query legs are tracked in CALIBER_LEARNINGS (Phase-5
+     *             candidate #6).
+     */
     case FocusEvents = 'focus-events';
 
     /** Basic ASCII-only fallback (always available). */

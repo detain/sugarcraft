@@ -7,6 +7,7 @@ namespace SugarCraft\ColorProfile\Tests\Probe;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\ColorProfile\Probe\Capability;
 use SugarCraft\ColorProfile\Probe\ProbeReport;
+use SugarCraft\ColorProfile\Probe\TerminalProbe;
 
 /**
  * @covers \SugarCraft\ColorProfile\Probe\ProbeReport
@@ -25,6 +26,39 @@ final class ProbeReportTest extends TestCase
         $this->assertCount(2, $all);
         $this->assertContains(Capability::TrueColor, $all);
         $this->assertContains(Capability::BasicAscii, $all);
+    }
+
+    /**
+     * CP-23 negative roster pin, beside the all() shape above: the two
+     * @deprecated RESERVED cases have NO producer anywhere. Every advertised
+     * environment the phase-3 TERM_PROGRAM table knows must still never
+     * yield them — a future query leg that starts minting them flips this
+     * pin and the README footnote together, never silently. TERM stays
+     * unset so the terminfo phase (and any host database) is not part of
+     * the proof.
+     */
+    public function testTheReservedQueryCapabilitiesAreNeverProduced(): void
+    {
+        // The constructor's interactive flag ANDs with the real
+        // isInteractive() (TTY), so only the fixture convention — override
+        // the seam — arms phase 3 on a test runner. Mutation-checked pin:
+        // a row planted in the TERM_PROGRAM table reddens this (verified).
+        foreach (['iTerm.app', 'Hyper', 'WezTerm', 'vscode', 'Ghostty', 'Apple_Terminal'] as $termProgram) {
+            $probe = new class([
+                'COLORTERM'    => 'truecolor',
+                'TERM_PROGRAM' => $termProgram,
+            ], true) extends TerminalProbe {
+                protected function isInteractive(): bool
+                {
+                    return true;
+                }
+            };
+
+            $all = $probe->runProbe()->all();
+            $this->assertNotEmpty($all, $termProgram . ': the advertised table answered at all');
+            $this->assertNotContains(Capability::BracketedPaste, $all, $termProgram);
+            $this->assertNotContains(Capability::FocusEvents, $all, $termProgram);
+        }
     }
 
     public function testAllWithSourceReturnsMap(): void
