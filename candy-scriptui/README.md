@@ -395,31 +395,61 @@ success (`0`) rather than specific non-zero values.
 
 | Key | Effect |
 |-----|--------|
-| ↑ / ↓ | Move the highlighted item / cursor line. |
+| ↑ / ↓ | Move the highlighted item (`choose`, `filter` paging — see the `filter` row — `file`, `pager`). In `write`, move the caret one line. In `input`, Up/Down walk the widget's command-history slot — a list this CLI never fills — so there they are inert. |
 | Enter | Submit `choose`, `confirm`, `filter`, `input` (in `write`, inserts a newline). In `filter`, Enter with zero matches submits the empty selection and exits `0` — the session always ends on Enter. In `choose`, while a typed filter is OPEN the first Enter commits the narrowing (the text and reduced list stay), and the next Enter submits. |
 | y / n | Answer `confirm` directly. |
 | ← / → · h / l | Toggle the `confirm` answer (like `Tab` there); in `pager`, `h`/`l` scroll sideways. |
 | Ctrl+D | Submit `write` (end-of-input convention). |
 | Space | Toggle selection in multi-select `choose`; page down in `pager`. In multi-select `filter` the toggle is `Tab` — a Space is typed into the filter text instead, as it is in `input` / `write`. |
-| Tab | Toggle the highlighted item in multi-select `filter`; toggle the answer in `confirm`. |
+| Tab | Toggle the highlighted item in multi-select `filter`; toggle the answer in `confirm`; in `write`, insert four spaces. |
 | Any printable key | Filter text in `filter`; in `choose` typing opens the filter immediately too (`--no-filter` keeps the historical inert keys). |
-| `j`/`k` · `g`/`G` · `Home`/`End` · `PgUp`/`PgDn` | Move, jump to top / bottom, and page the lists in `choose` and `filter` (`j`/`k` plus `Home`/`End` in `file`); the same set also scrolls the `pager`. |
+| `j`/`k` · `g`/`G` · `Home`/`End` · `PgUp`/`PgDn` | Move, jump to top / bottom, and page the list in `choose` (and the `pager` view). In `file`, `j`/`k` move and `Home`/`End` jump to the first / last entry. |
+| `filter` navigation | `filter` opens in permanent filter mode with no exit, so the vim-style keys above are NOT its navigation: `j`/`k`/`g`/`G` are typed into the query and `Home`/`End` are inert in the default substring mode. Move with ↑/↓, page with `PgUp`/`PgDn`, delete query characters with `Backspace`, and end the session with Enter or Esc; in `--fuzzy` mode ↑/↓, `PgUp`/`PgDn`, `Home`/`End` all navigate the match set. |
 | `b`/`f` · `Ctrl+U`/`Ctrl+D` · `q` | Page, half-page, and quit keys of the `pager`. |
 | Esc | Abort (exit `1`, or `2` on `confirm`) — except in `pager`, where Esc is a normal finish like `q` (exit `0`). |
-| Ctrl+C | Abort with exit `130`; `spin` also terminates its child. |
+| Ctrl+C | Abort with exit `130` everywhere, `spin` included (it also terminates its child). In `write` it cancels — it never copies (copy/cut bindings need a selection, and the shipped `write` surface anchors none). |
 | Backspace | Ascend a directory in `file` (`←` does the same); delete before the caret elsewhere. |
 
-The key bindings are owned by each `Model`; the table matches their
-doc-comments, and those are exercised by the model tests.
+There is no mouse: every frame runs with terminal mouse reporting OFF,
+so clicks and wheel turns are not consumed (the underlying sugar-forms
+widgets implement click-select and wheel-scroll, but no shipped
+candy-scriptui command arms the tracking).
+
+### Editing keys (`input` and `write`)
+
+The text widgets keep the usual line-editor bindings (owned by the
+`sugar-forms` `TextInput` / `TextArea` widgets, verified live against
+their update arms):
+
+| Key | Effect |
+|-----|--------|
+| Ctrl+A / Ctrl+E | Caret to the start / end of the current line. |
+| Ctrl+U / Ctrl+K | Delete from the caret to the line start / line end. |
+| Home / End | Same as Ctrl+A / Ctrl+E. |
+| ← / → | Move the caret one cluster left / right. |
+| Delete | Remove the character after the caret. |
+| Backspace | Remove the character before the caret. |
+| Tab | In `write`, insert four spaces (an indentation tab). |
+| Enter | `input`: submit the line (same as the table above). `write`: insert a newline. |
+| Ctrl+D | `write`: submit the whole buffer. |
+| Ctrl+O | `write`: round-trip the buffer through the external editor — `$EDITOR` (or the widget's fallback chain) opens a temp file seeded with the text, and the edited contents replace the buffer when it exits. |
+| Esc / Ctrl+C | Abort (`input` exits `1`/`130`; `write` likewise). |
+
+The key bindings are owned by each `Model` (the editing keys by the
+`sugar-forms` widgets behind them); the tables above match the live
+update arms, and those arms are exercised by the model tests.
 
 ### Sizing, hints, and terminal modes
 
-- Interactive lists and the pager size themselves from the terminal at
-  launch (COLUMNS/LINES, then an ioctl against the controlling stream).
-  An explicit `--width`/`--height` wins; when nothing is knowable the
+- The `pager` sizes itself from the terminal at launch, in both
+  dimensions (COLUMNS/LINES, then an ioctl against the controlling
+  stream); an explicit `--width`/`--height` wins, and both default to
+  `0` = auto. The interactive lists size only their WIDTH from the
+  terminal the same way (overridable with `--width`, `0` = auto); their
+  HEIGHT is the visible item count (`--height`), a literal defaulting
+  to 10 and never read from the terminal. When nothing is knowable the
   historical literals (lists 60 cells, pager 80×20) keep piped output
-  byte-stable. `choose` gained `--width`; `filter`'s existing `--width`
-  is now honoured; `pager`'s `--width`/`--height` default to `0` = auto.
+  byte-stable.
 - `pager` re-fits live on resize. The list views do not re-flow live
   (sugar-forms `ItemList` exposes resize, but `--width` is a launch-time
   cap there — following SIGWINCH would silently widen explicitly-sized
