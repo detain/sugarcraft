@@ -127,6 +127,22 @@ use SugarCraft\Core\Util\Proc\BoundedShutdown;
  * answers from state it already holds. The wall clock a request handler
  * spends is PAUSED out of any bounded call's deadline — waiting for an
  * answer this client owes is not the server being slow (the no-blanket-timeout law).
+ *
+ * The failure vocabulary (one per door, named once here and consumed by the
+ * `@return` annotations below): FailurePayload is callTool's array-or-error
+ * shape shared by every convenience door — on success the server's result
+ * envelope, on failure exactly `['error' => non-empty string]`, the
+ * discriminator key checked first; RawRequestResult is request()'s reply
+ * envelope-or-null — null means no usable reply (a named cause may sit in
+ * lastFailureCause) while a JSON-RPC error is a non-null message with
+ * ->error set, NOT null; NotifyAck is notify()'s delivery report — false
+ * means not on the wire, never "answered". The typedefs exist so a
+ * misapplied branch stops compiling silently; see README *Failure shapes*.
+ *
+ * @phpstan-type FailurePayload array<string,mixed>
+ * @phpstan-type RawRequestResult McpMessage|null
+ * @phpstan-type NotifyAck bool
+ *
  */
 final class StdioMcpServer implements McpServer
 {
@@ -1141,7 +1157,7 @@ final class StdioMcpServer implements McpServer
      * @param (\Closure(string, ?array<string,mixed>, bool): ?array)|null $onServerMessage
      *        per-call override of the connection's server-request handler
      *        (the server-request law); null keeps the configured one in force.
-     * @return array<string,mixed>
+     * @return FailurePayload
      */
     public function callTool(string $name, array $arguments, ?\Closure $onWait = null, ?float $timeoutSeconds = null, ?\Closure $onServerMessage = null): array
     {
@@ -1171,7 +1187,7 @@ final class StdioMcpServer implements McpServer
 
     /**
      * @param array<string,mixed> $arguments
-     * @return array<string,mixed>
+     * @return FailurePayload
      */
     private function callToolWaiting(string $name, array $arguments, ?float $timeoutSeconds): array
     {
@@ -1313,7 +1329,7 @@ final class StdioMcpServer implements McpServer
      * defensible blanket budget — bound it via {@see self::request()} if you
      * need a deadline).
      *
-     * @return array<string,mixed>
+     * @return FailurePayload
      */
     public function listResources(): array
     {
@@ -1323,7 +1339,7 @@ final class StdioMcpServer implements McpServer
     /**
      * `resources/read` — fetch one resource by URI.
      *
-     * @return array<string,mixed>
+     * @return FailurePayload
      */
     public function readResource(string $uri): array
     {
@@ -1333,7 +1349,7 @@ final class StdioMcpServer implements McpServer
     /**
      * `prompts/list` — the server's advertised prompt templates.
      *
-     * @return array<string,mixed>
+     * @return FailurePayload
      */
     public function listPrompts(): array
     {
@@ -1346,8 +1362,8 @@ final class StdioMcpServer implements McpServer
      * refused at the client door, and `[]` is repaired to an empty JSON
      * object before the wire sees it.
      *
-     * @param array<string,mixed> $arguments
-     * @return array<string,mixed>
+     * @param array<array-key,mixed> $arguments
+     * @return FailurePayload
      */
     public function getPrompt(string $name, array $arguments = []): array
     {
@@ -1368,7 +1384,7 @@ final class StdioMcpServer implements McpServer
      * callTool names it, so one vocabulary covers every convenience door.
      *
      * @param array<string,mixed>|null $params
-     * @return array<string,mixed>
+     * @return FailurePayload
      */
     private function protocolResult(string $method, ?array $params = null): array
     {
@@ -1459,6 +1475,7 @@ final class StdioMcpServer implements McpServer
      * @param (\Closure(string, ?array<string,mixed>, bool): ?array)|null $onServerMessage
      *        per-call override of the connection's server-request handler
      *        (the server-request law), live for this round trip only.
+     * @return RawRequestResult
      * @throws \InvalidArgumentException when $params cannot be encoded as JSON
      *         (see McpMessage::toJson()), or when $deadline carries the
      *         wall-clock magnitude this seam refuses; nothing is written in
@@ -1541,6 +1558,7 @@ final class StdioMcpServer implements McpServer
      * `notifications/cancelled` or `progress` can tell a dropped one.
      *
      * @param array<string,mixed>|null $params
+     * @return NotifyAck
      * @throws \InvalidArgumentException when $params cannot be encoded as JSON
      */
     public function notify(string $method, ?array $params = null, ?float $deadline = null): bool

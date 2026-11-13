@@ -49,6 +49,13 @@ namespace SugarCraft\McpClient;
  * store that fails leaves the file EMPTY, which {@see load()} reads as dirty —
  * so the next holder resynchronises rather than trusting a half-written
  * buffer under a clean phase byte.
+ *
+ * StoreResult names the lock's reporting door: false means the write did not
+ * happen (handle lost, disk refused) — the lock never throws from these
+ * methods, it reports; consumers branch, they do not catch.
+ *
+ * @phpstan-type StoreResult bool
+ *
  */
 final class ExchangeLock
 {
@@ -339,7 +346,7 @@ final class ExchangeLock
      * design would need a cross-process offset ledger to stay recoverable —
      * it re-earns nothing the phase byte could not already say.
      *
-     * @return bool false when the state did not land whole. The file is then
+     * @return StoreResult false when the state did not land whole. The file is then
      *         truncated to empty (best-effort), which {@see load()} reads as
      *         dirty — a partial write would otherwise leave a clean phase byte
      *         in front of a truncated buffer.
@@ -366,7 +373,7 @@ final class ExchangeLock
     /**
      * Overwrite the phase byte alone, leaving the stored buffer as it is.
      *
-     * @return bool false when the byte was not written — the marker on disk is
+     * @return StoreResult false when the byte was not written — the marker on disk is
      *         then whatever the previous write left, and callers must not act
      *         as if this phase were recorded
      */

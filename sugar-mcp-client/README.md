@@ -254,7 +254,17 @@ is a guard against a pathological server, not a working budget:
 
 ## Failure shapes
 
-What you get when things go wrong, so you can branch on it knowingly:
+What you get when things go wrong, so you can branch on it knowingly. The
+docblock typedefs name each door's vocabulary (defined on the owning class,
+consumed by every `@return`):
+
+| Door | Vocabulary | Typedef |
+|---|---|---|
+| `start()` | throws, naming the leg and cause — no half-open connection | — |
+| `callTool()` + the provider quartet | result array or `['error' => …]`; never throws, never null | `FailurePayload` |
+| `request()` | reply envelope, or `null` for "no usable reply" (a JSON-RPC **error is not null** — it is a message with `->error`) | `RawRequestResult` |
+| `notify()` | `true` once fully on the wire, `false` otherwise | `NotifyAck` |
+| `ExchangeLock::store()` / `markPhase()` | `true` when the state landed whole, `false` when it did not | `StoreResult` |
 
 - `start()` **throws** — the connection either comes up with a tool roster or
   does not come up. The exception names the leg and the cause:
