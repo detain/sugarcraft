@@ -1,8 +1,8 @@
 {
     "title": "SugarDatepicker — SugarCraft",
-    "description": "SugarDatepicker: Interactive month-grid date picker — keyboard navigation, min/max date constraints, locale-ready day names (English ships today), ANSI rendering.",
+    "description": "SugarDatepicker: Interactive month-grid date picker — keyboard navigation, min/max date constraints, localized day and month names (17 locales), ANSI rendering.",
     "ogTitle": "SugarDatepicker — SugarCraft",
-    "ogDescription": "Interactive month-grid date picker — keyboard navigation, min/max date constraints, locale-ready day names (English ships today), ANSI rendering.",
+    "ogDescription": "Interactive month-grid date picker — keyboard navigation, min/max date constraints, localized day and month names (17 locales), ANSI rendering.",
     "emoji": "",
     "displayName": "SugarDatepicker",
     "tagline": "Interactive month-grid date picker",

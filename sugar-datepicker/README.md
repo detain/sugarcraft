@@ -439,9 +439,15 @@ Beyond `DatePicker` itself, the shipped public classes are:
 
 Day abbreviations and month names resolve through the shared sugar-core i18n
 lookup (`Lang::t`): keys `day.0`–`day.6` (Sunday-first) and `month.1`–`month.12`
-live in `lang/en.php`, which is the source of truth. Only English ships today;
-additional locales are added as `lang/<code>.php` files carrying the same key
-set. Every locale file is machine-checked by `LangCoverageTest`: `day.*` values
+live in `lang/en.php`, which is the source of truth. Seventeen locales ship:
+`ar`, `cs`, `de`, `en`, `es`, `fr`, `it`, `ja`, `ko`, `nl`, `pl`, `pt`, `pt-br`,
+`ru`, `tr`, `zh-cn`, `zh-tw` — the recommended set from `LOCALES.md`. The
+lookup ladder is exact → base → `en` → raw, so a new locale is just another
+`lang/<code>.php` file carrying the same key set. Every shipped file — not
+merely English — is machine-checked by `LangCoverageTest`, which closes the
+ladder hole where a missing or partial locale file could hide behind the
+English fallback: its glob walk over the real files goes red instead. The
+budgets ride the same gate: `day.*` values
 fit the 3-column cell budget (an oversized name is clipped to its own slot at
 render time, never overwriting the next column), `month.*` fit the 16-column
 header budget (the natural 21-wide floor minus the year slot), and the
