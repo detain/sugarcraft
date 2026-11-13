@@ -248,7 +248,9 @@ final class DatePicker
         // Same law as setTime()/moveToDate() (dp-25): RE-AIM the cursor at
         // today's cell — carrying the previous month's index would leave it
         // on a different weekday column than the day we just navigated to.
-        // Out-of-bounds today falls back to the first selectable day.
+        // A dimmed in-view today is still aimed (Enter there refuses, dp-09);
+        // only an unaimable target (bounds suppressed today's month) falls
+        // back to the view's first selectable day.
         $clone->cursorIndex = $clone->cursorForDate($today);
 
         return $clone;
