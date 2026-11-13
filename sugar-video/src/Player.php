@@ -71,6 +71,15 @@ final class Player implements Model
      * next tick, so a long seek keeps painting while it converges.
      */
     public const DEFAULT_FRAME_BUDGET_FLOOR_MS = 50.0;
+    /**
+     * SV-M20/045: the largest content-time delta ONE tick may charge. The
+     * pacing clock is monotonic (hrtime), so NTP steps and suspend jumps can
+     * no longer forge elapsed time at all; this clamp is the second line of
+     * defence for hand-fed clock seams and pathological stalls — a negative
+     * skew reads as zero and no single update() bursts past one second of
+     * playback, whatever the source claims.
+     */
+    public const MAX_TICK_DELTA_SEC = 1.0;
     public const MIN_ROWS = 5;
     public const MAX_ROWS = 80;
 
@@ -140,7 +149,35 @@ final class Player implements Model
         public readonly ?string $failure = null,
         public readonly bool $audioMuted = false,
         private readonly bool $hostRestricted = false,
+        // SV-M20/020: scripted pacing clock (seconds; test injection only, via
+        // fromDecoder/openForTest — the precedent is $autoModeChooser). null
+        // keeps the library default: the monotonic hrtime base in now().
+        private readonly ?\Closure $clock = null,
     ) {
+    }
+
+    /**
+     * SV-M20/045: the pacing clock. Monotonic by default — microtime() is a
+     * wall clock: an NTP step or a laptop-suspend resume jumped it by hours,
+     * fast-forwarding thousands of frames in one tick (or freezing playback
+     * when it stepped backwards). hrtime() cannot move. A hand-injected
+     * $clock seam (openForTest) overrides the source so pacing tests script
+     * time instead of seeding lastTickTime through reflection.
+     */
+    private function now(): float
+    {
+        $clock = $this->clock;
+
+        return $clock !== null ? (float) $clock() : self::monotonicNow();
+    }
+
+    /**
+     * Seconds on the monotonic base — what the static factories stamp a fresh
+     * playhead with, and the default behind now().
+     */
+    private static function monotonicNow(): float
+    {
+        return hrtime(true) / 1e9;
     }
 
     /**
@@ -295,7 +332,7 @@ final class Player implements Model
             videoTime: 0.0,
             frameIndex: 0,
             currentFrame: $poster,
-            lastTickTime: microtime(true),
+            lastTickTime: self::monotonicNow(),
             fps: $fps,
             totalFrames: $totalFrames,
             cellsW: $cellsW,
@@ -351,6 +388,11 @@ final class Player implements Model
      * @param WebVtt|null $subtitles  Parsed subtitle track, or null.
      * @param array<array-key, string> $headers HTTP request headers for a remote source.
      * @param float    $frameBudgetMs Bounded per-tick catch-up decode (ms); 0 = unbounded.
+     * @param \Closure|null $clock SV-M20/020: scripted seconds source for pacing
+     *                            tests (the openForTest seam); null = the monotonic
+     *                            hrtime base. Never feed wall-clock values and the
+     *                            scripted values alternately — one playhead base
+     *                            must hold for a player's whole life.
      */
     public static function fromDecoder(
         Decoder $decoder,
@@ -370,6 +412,7 @@ final class Player implements Model
         ?WebVtt $subtitles = null,
         array $headers = [],
         float $frameBudgetMs = 0.0,
+        ?\Closure $clock = null,
     ): self {
         // m11: same boundary law as open() — a hand-built Player with fps <= 0
         // would throw DivisionByZeroError from its first scheduled tick.
@@ -403,7 +446,7 @@ final class Player implements Model
             videoTime: 0.0,
             frameIndex: 0,
             currentFrame: null,
-            lastTickTime: microtime(true),
+            lastTickTime: $clock !== null ? (float) $clock() : self::monotonicNow(),
             fps: $fps,
             totalFrames: $totalFrames,
             cellsW: $cellsW,
@@ -420,6 +463,7 @@ final class Player implements Model
             renderer: $renderer,
             headers: $headers,
             frameBudgetMs: $frameBudgetMs,
+            clock: $clock,
         );
     }
 
@@ -462,6 +506,7 @@ final class Player implements Model
         int $cellPxW = 10,
         int $cellPxH = 20,
         ?WebVtt $subtitles = null,
+        ?\Closure $clock = null,
     ): self {
         return self::fromDecoder(
             decoder: $decoder,
@@ -479,6 +524,7 @@ final class Player implements Model
             cellPxW: $cellPxW,
             cellPxH: $cellPxH,
             subtitles: $subtitles,
+            clock: $clock,
         );
     }
 
@@ -572,8 +618,12 @@ final class Player implements Model
             return [$this, null];
         }
 
-        $now = microtime(true);
-        $delta = $now - $this->lastTickTime;
+        $now = $this->now();
+        // SV-M20/045: [0, ceiling] by construction. The monotonic base makes a
+        // negative skew impossible on the default clock; the clamp still binds
+        // a hand-fed seam and any pathological stall, so no tick can ever
+        // burst more than MAX_TICK_DELTA_SEC of content time.
+        $delta = min(max(0.0, $now - $this->lastTickTime), self::MAX_TICK_DELTA_SEC);
 
         // F4 fix: videoTime accumulates delta*speed — speed change only affects
         // FUTURE pacing, never retroactively rescales prior content time.
@@ -615,7 +665,7 @@ final class Player implements Model
                 $nextIndex++;
                 // Check the budget after each frame so we never abandon the tick
                 // having decoded nothing (progress is guaranteed by the first read).
-                if ($deadline !== null && $i + 1 < $skipCount && microtime(true) >= $deadline) {
+                if ($deadline !== null && $i + 1 < $skipCount && $this->now() >= $deadline) {
                     // Out of budget with frames still to skip: yield to the event
                     // loop and finish the catch-up on the next tick.
                     break;
@@ -775,7 +825,7 @@ final class Player implements Model
             // recorded playhead must be where the decoder ACTUALLY is.
             'frameIndex' => $landed,
             'videoTime' => $landed / $this->fps,
-            'lastTickTime' => microtime(true),
+            'lastTickTime' => $this->now(),
             'renderer' => RendererFactory::new($this->mode, $this->ramp, $this->cellPxW, $this->cellPxH),
         ]);
 
@@ -864,7 +914,7 @@ final class Player implements Model
             if ($resuming) {
                 // Re-anchor the wall clock to now so $elapsed accumulates
                 // play-time only — not time spent on the start screen or paused.
-                $changes['lastTickTime'] = microtime(true);
+                $changes['lastTickTime'] = $this->now();
                 // Start audio on first play; resume it on later unpauses, so it
                 // shares the video's t0 and stays roughly in sync.
                 if ($this->audioPlayer !== null) {
@@ -1589,7 +1639,7 @@ final class Player implements Model
         $frame = null;
         $landed = 0;
         $deadline = $this->frameBudgetMs > 0.0
-            ? microtime(true) + ($this->frameBudgetMs / 1000.0)
+            ? $this->now() + ($this->frameBudgetMs / 1000.0)
             : null;
         for ($i = 0; $i <= $frameIndex; $i++) {
             $f = $decoder->next();
@@ -1600,7 +1650,7 @@ final class Player implements Model
             $landed = $i;
             // Same guaranteed-progress rule as the tick pump: the first pulled
             // frame is never abandoned, and only a still-pending walk bails.
-            if ($deadline !== null && $i < $frameIndex && microtime(true) >= $deadline) {
+            if ($deadline !== null && $i < $frameIndex && $this->now() >= $deadline) {
                 break;
             }
         }
@@ -1668,7 +1718,7 @@ final class Player implements Model
                 'videoTime' => $landed / $this->fps,
                 'frameIndex' => $landed,
                 'currentFrame' => $frame ?? $this->currentFrame,
-                'lastTickTime' => microtime(true),
+                'lastTickTime' => $this->now(),
                 'audioPlayer' => $newAudio,
                 'failure' => null, // SV-H4/004: a rebuild from the SOURCE PATH clears the row
                 'ended' => $frame !== null ? false : $this->ended,
@@ -1688,7 +1738,7 @@ final class Player implements Model
                 'videoTime' => $newVideoTime,
                 'frameIndex' => $landed,
                 'currentFrame' => $frame ?? $this->currentFrame,
-                'lastTickTime' => microtime(true),
+                'lastTickTime' => $this->now(),
                 'audioPlayer' => $newAudio,
                 // SV-H4/004: a seek rebuilds from the SOURCE PATH, so a dead
                 // session's error row is cleared deliberately — the fresh
@@ -1709,7 +1759,7 @@ final class Player implements Model
         $frame = $this->currentFrame;
         $idx = $this->frameIndex;
         $fwdDeadline = $this->frameBudgetMs > 0.0
-            ? microtime(true) + ($this->frameBudgetMs / 1000.0)
+            ? $this->now() + ($this->frameBudgetMs / 1000.0)
             : null;
         while ($idx < $targetIndex) {
             $pulled = $this->decoder->next();
@@ -1718,7 +1768,7 @@ final class Player implements Model
             }
             $frame = $pulled;
             $idx++;
-            if ($fwdDeadline !== null && $idx < $targetIndex && microtime(true) >= $fwdDeadline) {
+            if ($fwdDeadline !== null && $idx < $targetIndex && $this->now() >= $fwdDeadline) {
                 break;
             }
         }
@@ -1730,7 +1780,7 @@ final class Player implements Model
             'videoTime' => $newVideoTime,
             'frameIndex' => $idx,
             'currentFrame' => $frame,
-            'lastTickTime' => microtime(true),
+            'lastTickTime' => $this->now(),
             'audioPlayer' => $newAudio,
             'failure' => null, // SV-H4/004: see the backward arm's law
             'ended' => $frame !== null ? false : $this->ended, // a seek clears the ended state when it landed
@@ -1799,7 +1849,7 @@ final class Player implements Model
             'currentFrame' => $frame ?? $this->currentFrame,
             'frameIndex' => $landed,
             'videoTime' => $landed / $this->fps,
-            'lastTickTime' => microtime(true),
+            'lastTickTime' => $this->now(),
             'audioPlayer' => $newAudio,
             'failure' => null, // SV-H4/004: a rebuild-from-source clears the dead session's row
             'ended' => $frame !== null ? false : $this->ended, // a seek clears the end-of-stream state when it landed
@@ -1939,7 +1989,7 @@ final class Player implements Model
         $this->audioPlayer?->resume();
         return $this->mutate([
             'paused' => false,
-            'lastTickTime' => microtime(true),
+            'lastTickTime' => $this->now(),
         ]);
     }
 
@@ -2096,6 +2146,7 @@ final class Player implements Model
             // the player keeps decoding at the superseded geometry forever.
             pendingResize: array_key_exists('pendingResize', $changes) ? $changes['pendingResize'] : $this->pendingResize,
             audioMuted: array_key_exists('audioMuted', $changes) ? $changes['audioMuted'] : $this->audioMuted,
+            clock: $this->clock, // the seam belongs to the player, not to one state
         );
         // Teardown is not a value the model is built with, so it cannot ride the
         // named-argument list — copy the latch forward instead. Every derived

@@ -239,6 +239,10 @@ final class PlayerMutateTest extends TestCase
     public function testLoopingEndOfStreamWrapsFalsyValuesThroughTheRealTickPath(): void
     {
         $decoder = new FakeDecoder([self::red()]);
+        $t = 0.0;
+        $clock = static function () use (&$t): float {
+            return $t;
+        };
         $player = Player::fromDecoder(
             $decoder,
             cellsW: 20,
@@ -248,8 +252,13 @@ final class PlayerMutateTest extends TestCase
             totalFrames: 1,
             loop: true,
             paused: false,
+            // SV-M20/020: the 'microtime-10' magic lag is a scripted clock now.
+            clock: $clock,
         );
-        $player = $this->mutatePlayer($player, ['lastTickTime' => \microtime(true) - 10.0, 'frameIndex' => 1, 'ended' => true]);
+        $player = $this->mutatePlayer($player, ['frameIndex' => 1, 'ended' => true]);
+        // Ten scripted seconds elapse; the clamp caps the charge at 1.0s —
+        // the rewind itself is decoder-exhaustion-driven, not delta-driven.
+        $t += 10.0;
 
         [$next, $cmd] = $player->update(new TickMsg());
 

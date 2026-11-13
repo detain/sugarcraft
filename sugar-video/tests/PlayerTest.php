@@ -483,14 +483,19 @@ final class PlayerTest extends TestCase
      */
     public function testSpeedChangeDoesNotRetroactivelyJump(): void
     {
-        // Build a 100-frame decoder at 30 fps. Start playing from frame 0.
+        // SV-M20/020: pacing time is SCRIPTED through the clock seam — no
+        // reflection seeding of lastTickTime, no wall-clock race. Build a
+        // 100-frame decoder at 30 fps, start playing from frame 0.
+        $t = 0.0;
+        $clock = static function () use (&$t): float {
+            return $t;
+        };
         $decoder = new FakeDecoder(array_fill(0, 100, $this->makeFrame("\x00\x00\x00")));
-        $player = Player::openForTest($decoder, 30.0);
+        $player = Player::openForTest($decoder, 30.0, clock: $clock);
 
         // Pre-seed first frame and unpause.
         $player = $this->setCurrentFrame($player, $decoder->next(), 0);
         $player = $this->setPlayerProperty($player, 'videoTime', 0.0);
-        $player = $this->setPlayerProperty($player, 'lastTickTime', microtime(true));
 
         [$player] = $player->update(new KeyMsg(KeyType::Space)); // unpause
 
@@ -499,9 +504,8 @@ final class PlayerTest extends TestCase
         $frameAfterTick1 = $this->getPlayerProperty($player, 'frameIndex');
         // videoTime is now ~1/30
 
-        // Manually backdate lastTickTime so the NEXT tick sees a ~0.033s delta
-        // (one frame interval at 30fps).
-        $player = $this->backdateLastTick($player, 0.033);
+        // Script the next tick one frame interval later (30fps).
+        $t += 0.033;
 
         // Press ']' to increase speed to 1.25× — this must ONLY affect the NEXT
         // tick's delta, not retroactively re-scale videoTime.
@@ -517,8 +521,8 @@ final class PlayerTest extends TestCase
         // A retroactive re-scale would produce target = floor((1/30)*30*1.25) = floor(1.25) = 1
         // — actually let me use a larger gap to make the retroactivity obvious.
         //
-        // Let's use a more obvious case: backdate by 0.5s so old formula would jump.
-        $player = $this->backdateLastTick($player, 0.5);
+        // Let's use a more obvious case: script a 0.5s gap so the old formula would jump.
+        $t += 0.5;
         $frameBefore = $this->getPlayerProperty($player, 'frameIndex');
         [$player] = $player->update(new TickMsg());
         $frameAfter = $this->getPlayerProperty($player, 'frameIndex');
@@ -528,6 +532,11 @@ final class PlayerTest extends TestCase
         // So frameAfter should be frameBefore + at most 19 (never 30+ which would
         // happen with the retroactive bug where videoTime gets scaled by 1.25).
         $deltaFrames = $frameAfter - $frameBefore;
+        $this->assertGreaterThanOrEqual(
+            15,
+            $deltaFrames,
+            'the scripted clock really drove pacing (a dropped seam would see microsecond real-time deltas and hold)'
+        );
         $this->assertLessThanOrEqual(
             19,
             $deltaFrames,
@@ -607,17 +616,21 @@ final class PlayerTest extends TestCase
      */
     public function testSpeedDecreaseDoesNotFreeze(): void
     {
+        // SV-M20/020: scripted clock — reflection seeding gone.
+        $t = 0.0;
+        $clock = static function () use (&$t): float {
+            return $t;
+        };
         $decoder = new FakeDecoder(array_fill(0, 100, $this->makeFrame("\x00\x00\x00")));
-        $player = Player::openForTest($decoder, 30.0);
+        $player = Player::openForTest($decoder, 30.0, clock: $clock);
         $player = $this->setCurrentFrame($player, $decoder->next(), 0);
         $player = $this->setPlayerProperty($player, 'videoTime', 0.0);
-        $player = $this->setPlayerProperty($player, 'lastTickTime', microtime(true));
 
         [$player] = $player->update(new KeyMsg(KeyType::Space)); // unpause
 
         // Advance several ticks.
         for ($i = 0; $i < 5; $i++) {
-            $player = $this->backdateLastTick($player, 0.033);
+            $t += 0.033;
             [$player] = $player->update(new TickMsg());
         }
         $frameBefore = $this->getPlayerProperty($player, 'frameIndex');
@@ -632,7 +645,7 @@ final class PlayerTest extends TestCase
         // (retroactively slower), so target = newElapsed*30 = oldElapsed*30*0.75,
         // which is LESS than the current frameIndex → shouldHold fires → freeze.
         // The fix means target >= currentFrameIndex, so tick ADDS frames (doesn't hold).
-        $player = $this->backdateLastTick($player, 0.033);
+        $t += 0.033;
         [$player] = $player->update(new TickMsg());
         $frameAfter = $this->getPlayerProperty($player, 'frameIndex');
 
@@ -1840,6 +1853,13 @@ final class PlayerTest extends TestCase
         // Carried like any other playback state: dropping a pending resize here
         // would silently cancel a debounced rebuild the test is about to trigger.
         $pendingResize = $this->getPlayerProperty($player, 'pendingResize');
+        // SV-M20: these four were silently DEFAULTED by the positional map —
+        // a script-clock or restricted-transport Player rebuilt through here
+        // (backdateLastTick, setCurrentFrame, ...) lost its seam. Carry them.
+        $failure = $this->getPlayerProperty($player, 'failure');
+        $audioMuted = $this->getPlayerProperty($player, 'audioMuted');
+        $hostRestricted = $this->getPlayerProperty($player, 'hostRestricted');
+        $clock = $this->getPlayerProperty($player, 'clock');
 
         // Order MUST match the Player constructor positionally — the new Player
         // instance is built via array_values($values) through the private ctor.
@@ -1869,6 +1889,10 @@ final class PlayerTest extends TestCase
             'headers' => $headers,
             'frameBudgetMs' => $frameBudgetMs,
             'pendingResize' => $pendingResize,
+            'failure' => $failure,
+            'audioMuted' => $audioMuted,
+            'hostRestricted' => $hostRestricted,
+            'clock' => $clock,
         ];
 
         foreach ($overrides as $k => $v) {
@@ -2976,6 +3000,77 @@ final class PlayerTest extends TestCase
             $body,
             'the in-place backward arm keeps the index walk (deep-walk-on-everything is not allowed back)'
         );
+    }
+
+    /**
+     * @testdox SV-M20/045: a clock jump can never burst — the delta is clamped to [0, ceiling]
+     *
+     * Load-bearing: remove the clamp in update() and the burst arm reddens
+     * (a 10-hour scripted jump would charge 36,000 s of content time);
+     * flipping the negative guard lets a backward step freeze the clock
+     * bookkeeping — videoTime must only ever advance by the clamped delta.
+     */
+    public function testAClockJumpChargesAtMostTheClampedDelta(): void
+    {
+        $t = 100.0;
+        $clock = static function () use (&$t): float {
+            return $t;
+        };
+
+        $decoder = new FakeDecoder(array_fill(0, 200, $this->makeFrame("\x00\x00\x00")));
+        $player = Player::openForTest($decoder, 30.0, clock: $clock, paused: false);
+
+        // A ten-hour forward jump (NTP, suspend resume, hostile seam): at most
+        // MAX_TICK_DELTA_SEC of content time is charged — at 30fps that is 30
+        // frames plus the one the on-schedule arm may pull, never thousands.
+        $t += 36000.0;
+        [$player] = $player->update(new TickMsg());
+        $burstIndex = (int) $this->getPlayerProperty($player, 'frameIndex');
+        $this->assertGreaterThanOrEqual(
+            30,
+            $burstIndex,
+            'the scripted seam really fed the delta (a dropped clock seam sees microsecond real-time deltas instead)'
+        );
+        $this->assertLessThanOrEqual(
+            32,
+            $burstIndex,
+            'a 10-hour clock jump may not burst more than the clamped one-second budget'
+        );
+        $videoBefore = (float) $this->getPlayerProperty($player, 'videoTime');
+
+        // A two-hour step BACKWARD: the negative skew reads as zero, videoTime
+        // does not retreat, and no frames are refunded.
+        $t -= 7200.0;
+        [$player] = $player->update(new TickMsg());
+        $this->assertLessThanOrEqual(
+            $videoBefore + Player::MAX_TICK_DELTA_SEC,
+            (float) $this->getPlayerProperty($player, 'videoTime'),
+            'a backward step cannot rewind or inflate the content clock'
+        );
+        $this->assertGreaterThanOrEqual(
+            $burstIndex,
+            (int) $this->getPlayerProperty($player, 'frameIndex'),
+            'the frame index never runs backward'
+        );
+    }
+
+    /**
+     * @testdox SV-M20/045: the default pacing clock is the monotonic one
+     */
+    public function testTheDefaultPacingClockIsMonotonic(): void
+    {
+        // Structural pin: the update() delta is built from now() (the
+        // monotonic-based seam), and no wall-clock microtime call survives in
+        // the playback timing path.
+        $source = (string) file_get_contents(__DIR__ . '/../src/Player.php');
+        $this->assertStringNotContainsString('microtime(true)', $source, 'the player no longer reads the wall clock at all');
+        $this->assertStringContainsString('return hrtime(true) / 1e9;', $source, 'the base is hrtime-ns converted to seconds');
+        $this->assertStringContainsString(
+            '(float) $clock()',
+            $source,
+            'the scripted seam is consulted by now() — dropping it silently re-pins every pacing test to the real clock'
+        );
+        $this->assertSame(1.0, Player::MAX_TICK_DELTA_SEC, 'the burst ceiling is pinned');
     }
 }
 

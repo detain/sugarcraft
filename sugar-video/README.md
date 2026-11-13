@@ -445,8 +445,12 @@ video file (mp4/gif/avi/webm)
 
 - **Decode:** `FfmpegDecoder` shells out to `ffmpeg` for raw RGB frames (pre-scaled to cell dimensions). `GifDecoder` wraps sugar-animation's pure-PHP GIF decoder.
 - **Render:** Delegates to sugar-image for sixel/kitty/iTerm2. Uses sugar-colorprofile for color mapping. Text modes assemble their SGR cell grid with sugar-cellbuffer; the delta repaint belongs to sugar-core's `Renderer`, which re-sends only the rows that changed by default and switches to per-cell diffing only when the host opts into `ProgramOptions::$cellDiffRenderer`.
-- **Pace:** `Cmd::tick()` wall-clock alignment via `Sync`, no busy-waiting.
-- **Audio:** `AudioPlayer` shells out to `ffplay` or `mpv --no-video` as the audio output companion; the Player's own wall clock stays master (audio may drift; it is never the pacing source).
+- **Pace:** `Cmd::tick()` alignment via `Sync`, no busy-waiting. Tick deltas
+  accumulate on a **monotonic** base (SV-M20: `hrtime`, not `microtime`) — an
+  NTP step or a laptop-suspend resume can no longer fast-forward thousands of
+  frames or freeze playback, and one tick charges at most
+  `Player::MAX_TICK_DELTA_SEC` of content time whatever the clock claims.
+- **Audio:** `AudioPlayer` shells out to `ffplay` or `mpv --no-video` as the audio output companion; the Player's own (monotonic) clock stays master (audio may drift; it is never the pacing source).
 
 ## Prior art
 
