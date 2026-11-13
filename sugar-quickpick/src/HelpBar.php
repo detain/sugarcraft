@@ -12,7 +12,9 @@ use SugarCraft\Style\Bar\HelpBar as BarHelpBar;
  * HelpBar — renders a single-line keyboard shortcut summary for the QuickPick overlay.
  *
  * Displays key → description pairs in a compact status-line format.
- * Mirrors the QuickPick quick-fix help bar rendered at the bottom of the overlay.
+ * Antecedent: the help line Genekkion/theHermit renders at the bottom of its
+ * quick-fix overlay — rebuilt native here (this lib is a native PHP project,
+ * not a member-by-member mirror; see README "Credits & inspiration").
  *
  * Rendering is delegated to the shared {@see BarHelpBar} primitive; this class
  * keeps QuickPick's map-based shortcut API (unique keys, update-in-place) as a
