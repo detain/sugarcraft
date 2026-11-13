@@ -292,4 +292,65 @@ final class ZoneGeometryTest extends TestCase
         $bc->scan($out, 5);
         self::assertNull($bc->hit(9_999, 1), 'cells past the viewport edge must not resolve');
     }
+
+    /**
+     * NS-21 (sugar-navstack-034): the elision marker is a dead cell by
+     * design — hosts get elisionSpan() [start, end, row] as the reveal
+     * handle instead of a forged clickable crumb.
+     */
+    public function testElisionSpanPublishesMarkerCells(): void
+    {
+        $bc    = (new Breadcrumb())->withScanner(new Scanner())->setMaxWidth(20);
+        $stack = $this->stackWith('Home', 'Settings', 'Display');
+        $out   = $bc->render($stack);
+        self::assertSame('… Settings › Display', \SugarCraft\Mouse\Scan::strip($out), 'visible row; sentinels ride inside for the scanner');
+
+        $bc->scan($out, 100);
+        self::assertSame([1, 2, 1], $bc->elisionSpan(), 'the marker owns cells 1-2 of row 1');
+        self::assertNull($bc->hit(1, 1), 'marker cells stay dead: no forged crumb zone');
+        self::assertNull($bc->hit(2, 1));
+        self::assertNotNull($bc->hit(3, 1), 'the first survivor crumb still resolves');
+
+        $bc->scan($out, 100, row: 4);
+        self::assertSame([1, 2, 4], $bc->elisionSpan(), 'absolute row follows scan()');
+
+        // An empty render skips doRender() — its early path must still clear
+        // the tracker, or a later scan() of a fresh row would resurrect the
+        // stale marker span (NS-21 leak proof).
+        self::assertSame('', $bc->render(new NavStack()));
+        $bc->scan('', 100);
+        self::assertNull($bc->elisionSpan(), 'stale span must not survive an empty re-render');
+    }
+
+    public function testElisionSpanHonoursCustomTruncatorAndCorners(): void
+    {
+        $bc = (new Breadcrumb())->withScanner(new Scanner())->setMaxWidth(24)->setTruncator('[more] ');
+        $out = $bc->render($this->stackWith('Home', 'Settings', 'Display'));
+        $bc->scan($out, 100);
+        self::assertSame([1, 7, 1], $bc->elisionSpan(), 'span width follows the marker actually painted');
+
+        // Degenerate corner: the marker itself is dropped (cap 2 over 'a','b')
+        $dropped = (new Breadcrumb())->withScanner(new Scanner())->setMaxWidth(2);
+        $dropped->scan($dropped->render($this->stackWith('a', 'b')), 100);
+        self::assertNull($dropped->elisionSpan(), 'no marker painted, nothing to bind');
+
+        // No elision at all:
+        $wide = (new Breadcrumb())->withScanner(new Scanner());
+        $wide->scan($wide->render($this->stackWith('Home', 'Settings')), 100);
+        self::assertNull($wide->elisionSpan());
+
+        // Scanner-less and unscanned renders answer null quietly:
+        $bare = (new Breadcrumb())->setMaxWidth(20);
+        $bare->render($this->stackWith('Home', 'Settings', 'Display'));
+        self::assertNull($bare->elisionSpan(), 'no scanner: paint-time query, not a hit() throw');
+
+        $noScan = (new Breadcrumb())->withScanner(new Scanner())->setMaxWidth(20);
+        $noScan->render($this->stackWith('Home', 'Settings', 'Display'));
+        self::assertNull($noScan->elisionSpan(), 'geometry not published until scan()');
+
+        // Re-render that stops eliding clears the previous span:
+        $noScan->setMaxWidth(100);
+        $noScan->scan($noScan->render($this->stackWith('Home', 'Settings', 'Display')), 100);
+        self::assertNull($noScan->elisionSpan());
+    }
 }

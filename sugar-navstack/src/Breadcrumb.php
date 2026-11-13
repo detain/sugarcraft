@@ -108,6 +108,9 @@ final class Breadcrumb
     /** True between a scan() of the current output and the next render. */
     private bool $scanned = false;
 
+    /** Width in cells of the left-elision marker on the current render (NS-21); 0 when no marker. */
+    private int $elidedPrefixCells = 0;
+
     /**
      * Render stamp (NS-08): identity of the exact stack object the LAST
      * render() consumed, plus its generation at that moment. Weak on
@@ -449,6 +452,39 @@ final class Breadcrumb
     }
 
     /**
+     * The terminal cells the left-elision marker occupies on the CURRENT
+     * scanned render, as `[start, end, row]` (1-based, absolute — same
+     * coordinate space as {@see hit()}), or null when there is nothing to
+     * bind (NS-21).
+     *
+     * The marker is deliberately NOT a clickable crumb zone: it rides
+     * outside the zone wrapping so hitItem() never forges an item for it
+     * (a zone id would have to pass through hitItem's item contract).
+     * Hosts that want a "click … to expand" affordance use THIS span as
+     * the reveal handle — a hit($col, $row) landing inside it is an
+     * expansion gesture, not a navigation. The richer alternative (a
+     * reserved `{prefix}-elided` zone id in a non-item alphabet slot) is
+     * left for a later phase; the span is the cheap honest truth.
+     *
+     * Null covers every state that means "no marker can be clicked right
+     * now" — no scanner attached, no scan() of the current render, or a
+     * render that did not elide (including the degenerate corners where
+     * the marker itself is dropped to give the survivor cells). Quiet
+     * null, not the hit() throw: this is a paint-time query a host may
+     * run with mouse support entirely absent.
+     *
+     * @return null|array{int, int, int}
+     */
+    public function elisionSpan(): ?array
+    {
+        if ($this->scanner === null || $this->scanned === false || $this->elidedPrefixCells === 0) {
+            return null;
+        }
+
+        return [1, $this->elidedPrefixCells, 1 + $this->scanRowOffset];
+    }
+
+    /**
      * Render the current navigation stack as a breadcrumb string.
      *
      * Mirrors KevM/bubbleo Breadcrumb.render.
@@ -461,6 +497,7 @@ final class Breadcrumb
             $this->scanned        = false;
             $this->focusedVisible = null;
             $this->clearStamp();
+            $this->elidedPrefixCells = 0;
             return '';
         }
 
@@ -518,6 +555,7 @@ final class Breadcrumb
             $this->scanned        = false;
             $this->focusedVisible = null;
             $this->clearStamp();
+            $this->elidedPrefixCells = 0;
             return '';
         }
 
@@ -598,6 +636,12 @@ final class Breadcrumb
             $result = $prefix . \implode($this->separator, $titles);
         }
 
+        // The marker's final form (kept, or dropped by a degenerate corner
+        // above) is what the row actually shows — publish its cell count for
+        // elisionSpan() (NS-21). Assigned unconditionally: a re-render that
+        // stops eliding must clear the previous span.
+        $this->elidedPrefixCells = $prefix === '' ? 0 : $this->effectiveWidth($prefix);
+
         // Record the survivors' full-stack positions for visibleIndices():
         // either the whole stack, or the contiguous newest tail truncate()
         // kept (its loop breaks at the first non-fit, so survivors are a
@@ -609,7 +653,7 @@ final class Breadcrumb
 
         // Wrap each crumb in a zone marker when a scanner is attached. The
         // truncator prefix rides OUTSIDE the zone wrapping (it is not a
-        // clickable crumb) and the zones carry stack indices, so a
+        // clickable crumb) (bind it via elisionSpan(), NS-21) and the zones carry stack indices, so a
         // "crumb-N" hit always dispatches to stack position N even after
         // left-elision renumbers what is visible.
         if ($this->scanner !== null) {

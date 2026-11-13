@@ -233,7 +233,16 @@ crash on a stray click; the missing `withScanner()` surfaces loudly at the
 scan call, not at the first click); scanner attached but the current render
 unscanned — both lookups THROW (stale geometry would misroute); scanned —
 geometry live until the next render. Omitting the viewport width at `scan()`
-is now a `TypeError`, not a policy (NS-20 made it required). Every `set*` mutation takes
+is now a `TypeError`, not a policy (NS-20 made it required).
+
+The `…` elision marker is deliberately NOT a clickable zone — it rides
+outside the crumb wrapping, so `hitItem()` can never forge an item for it.
+Hosts that want a "click … to expand" affordance query `elisionSpan()`
+after `scan()`: `[start, end, row]` in `hit()`'s coordinate space, or null
+when no marker is painted on the current scanned render (no scanner, not
+yet scanned, nothing elided, or the degenerate corner where the marker
+itself was dropped). Treat hits inside the span as an expansion gesture,
+not navigation (NS-21). Every `set*` mutation takes
 effect only on the NEXT `render()`, and each render clears the scanned flag
 — render, then scan, then hit, and never trust zones across a re-render.
 
