@@ -191,6 +191,50 @@ final class DocumentedApiTest extends TestCase
         return $rows;
     }
 
+    /**
+     * SF-42 (sugar-forms-060/-069): the README documented a two-parameter
+     * `withAsyncSuggestions` while the shipped setter carries four — the
+     * pool-offload and per-fetch-timeout knobs had zero prose presence.
+     * The full-signature sentence in the Async suggestions section is
+     * re-derived from reflection every run: parameter drift reddens it.
+     */
+    public function testTheAsyncSuggestionsProseSignatureMatchesReflection(): void
+    {
+        $readme = str_replace("\r\n", "\n", $this->readme());
+
+        foreach (['Input', 'Select'] as $class) {
+            $reflection = new \ReflectionMethod('SugarCraft\\Forms\\Field\\' . $class, 'withAsyncSuggestions');
+
+            $parts = [];
+            foreach ($reflection->getParameters() as $param) {
+                $type = (string) $param->getType();
+                $short = '';
+                if ($type !== '') {
+                    $nullable = str_starts_with($type, '?');
+                    $bare = $nullable ? substr($type, 1) : $type;
+                    if (str_contains($bare, '\\')) {
+                        $bare = substr($bare, (int) strrpos($bare, '\\') + 1);
+                    }
+                    $short = ($nullable ? '?' : '') . $bare;
+                }
+                $entry = ($short === '' ? '' : $short . ' ') . '$' . $param->getName();
+                if ($param->isDefaultValueAvailable()) {
+                    $default = $param->getDefaultValue();
+                    $entry .= ' = ' . ($default === null ? 'null' : var_export($default, true));
+                }
+                $parts[] = $entry;
+            }
+
+            $this->assertCount(4, $parts, $class . ': the shipped setter carries four parameters');
+            $signature = 'withAsyncSuggestions(' . implode(', ', $parts) . ')';
+            $this->assertStringContainsString(
+                $signature,
+                $readme,
+                $class . ': the README Async suggestions section must carry the full shipped signature',
+            );
+        }
+    }
+
     private function readme(): string
     {
         $path = dirname(__DIR__) . '/README.md';

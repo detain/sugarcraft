@@ -130,10 +130,10 @@ $form = Form::new(
 
 | Field         | Description                                                 | Notable knobs | Keys consumed |
 | ------------- | ----------------------------------------------------------- | ------------- | --------------- |
-| `Input`       | Single-line text (wraps `SugarCraft\Forms\TextInput\TextInput`)     | `withPlaceholder`, `withCharLimit`, `withWidth`, `withPrompt`, `withValidator(Validator\|\Closure)` (chains; first error wins), `withTitleFunc` / `withDescriptionFunc`, `withPassword(bool $on = true, string $echoChar = '*')`, `withPasswordMask(?string $pattern, string $echoChar = '*')`, `withSuggestions(list<string>)`, `withSuggestionsFunc(\Closure(string):list<string>)`, `withFuzzySuggestions(list<string>)`, `withAsyncSuggestions(callable $fetcher, int $debounceMs = 150)` | typing, Home/End, Left/Right, Backspace/Delete, ctrl+a / ctrl+e / ctrl+u / ctrl+k; Up/Down history recall and the Enter submit-validator run only when a custom key map frees those keys (by default they drive field navigation); a host PasteMsg is consumed as typed text (CR/LF stripped) |
+| `Input`       | Single-line text (wraps `SugarCraft\Forms\TextInput\TextInput`)     | `withPlaceholder`, `withCharLimit`, `withWidth`, `withPrompt`, `withValidator(Validator\|\Closure)` (chains; first error wins), `withTitleFunc` / `withDescriptionFunc`, `withPassword(bool $on = true, string $echoChar = '*')`, `withPasswordMask(?string $pattern, string $echoChar = '*')`, `withSuggestions(list<string>)`, `withSuggestionsFunc(\Closure(string):list<string>)`, `withFuzzySuggestions(list<string>)`, `withAsyncSuggestions(callable $fetcher, int $debounceMs = 150, …)` | typing, Home/End, Left/Right, Backspace/Delete, ctrl+a / ctrl+e / ctrl+u / ctrl+k; Up/Down history recall and the Enter submit-validator run only when a custom key map frees those keys (by default they drive field navigation); a host PasteMsg is consumed as typed text (CR/LF stripped) |
 | `Text`        | Multi-line text editor                                      | `withCharLimit`, `withHeight`, `withWidth`, `withValidator(closure only; replaces)` | full buffer editing; Enter newline and Up/Down caret rows are claimed (they arrive despite nav); ctrl+a/e/u/k + ctrl+c/x/o chords (under the default map Ctrl+C is abort — the copy/cut chords need a custom map that frees Ctrl+C); a host PasteMsg replaces the selection; Tab indents only when a custom map frees it (default: Tab navigates) |
 | `Confirm`     | Yes/no boolean                                              | `withLabels(affirmative, negative)`, `withDefault(bool)`, `withValidator(Validator\|\Closure(bool):?string\|null)` (replaces; null clears), `withTitleFunc`, `withDescriptionFunc` | Left/Right or h/l answer, y / n answer; Tab toggles only when a custom map frees it (default: Tab navigates) |
-| `Select`      | Single-choice list (wraps `SugarCraft\Forms\ItemList\ItemList`)     | `withOptions(...)`, `withWidth(int)`, `withVisibleLines(int)` (page by LINES, not items — `withHeight` counts items, so described entries can double the painted rows), `withTitleFunc`, `withDescriptionFunc`, `withFuzzySuggestions(list<string>)`, `withAsyncSuggestions(callable $fetcher, int $debounceMs = 150)`, `withEnum(\BackedEnum::class)` | list keys Up/Down or k/j, PageUp/PageDown, Home/g, End/G; the / key opens the filter (typing + Backspace narrow, Enter/Escape end it — claimed); click to position when focused |
+| `Select`      | Single-choice list (wraps `SugarCraft\Forms\ItemList\ItemList`)     | `withOptions(...)`, `withWidth(int)`, `withVisibleLines(int)` (page by LINES, not items — `withHeight` counts items, so described entries can double the painted rows), `withTitleFunc`, `withDescriptionFunc`, `withFuzzySuggestions(list<string>)`, `withAsyncSuggestions(callable $fetcher, int $debounceMs = 150, …)`, `withEnum(\BackedEnum::class)` | list keys Up/Down or k/j, PageUp/PageDown, Home/g, End/G; the / key opens the filter (typing + Backspace narrow, Enter/Escape end it — claimed); click to position when focused |
 | `MultiSelect` | Multi-choice list (k/j vim keys + space to toggle)          | `withOptions(...)`, `withWidth(int)`, `withLimit(int)` | Up/Down or k/j, Home/g, End/G, Space toggles the cursor, digits 1-9 toggle the option in that slot (first option = 1; a digit past the list end is inert, modified digits stay free) |
 | `Note`        | Read-only paragraph; skipped by tab navigation              | `withTitle`, `withDescription`, `withHeight(int)`, `withNext(bool)`, `withNextLabel(string)` (turns it into an interactive button page) | none (inert) |
 | `FilePicker`  | Filesystem picker (wraps `SugarCraft\Forms\FilePicker\FilePicker`) | `withDirAllowed`, `withFileAllowed`, `withAllowedExtensions`, `withShowHidden` (starting directory via `FilePicker::new($key, $cwd)`) | Up/Down or k/j, Home/End, Enter selects or enters a directory, Backspace/Left ascend, Right enters; no filter typing, no mouse |
@@ -332,14 +332,31 @@ mismatch `-3`, gap open `-5`, gap extend `-1`, adjacent bonus `+5`).
 
 ### Async suggestions
 
-`withAsyncSuggestions(callable $fetcher, int $debounceMs = 150)` (alias
-`async()`) fetches `list<string>` suggestions off the keystroke path with a
+The shipped signature has four parameters (the table cell abbreviates with
+`…`): `withAsyncSuggestions(callable $fetcher, int $debounceMs = 150, ?WorkerPool $workerPool = null, ?float $fetchTimeoutSeconds = null)`
+(alias `async()`) fetches `list<string>` suggestions off the keystroke path with a
 debounce; `SugarCraft\Forms\FormSuggestionsReadyMsg` (the forms-side
 envelope, SF-52) arrives via the event loop when fresh results land. The
 envelope carries the fetch GENERATION: an arrival whose seq no longer
 matches the field's newest scheduled flight — or whose field is no longer
 focused (you arrowed away while the fetch was in flight) — is discarded
 instead of popping an overlay nobody is looking at.
+
+The two optional parameters are tuning surfaces, not part of the fetcher
+contract — leave them null unless you know why you are touching them:
+
+- `$fetchTimeoutSeconds` — when set, each in-flight fetch is raced against
+  this wall-clock ceiling via `AsyncOps::withTimeout()`; a breach rejects
+  the race and surfaces as the fetcher failing (the same shape any other
+  fetcher failure takes). The default null awaits the fetcher promise with
+  no added timeout. Both arguments are validated at the setter door
+  (fail-fast on negative debounce / non-positive timeout).
+- `$workerPool` — RESERVED: stored on the model, never consulted (pool
+  offload is not wired). The knob exists so a future offload can arrive
+  without a signature break; passing a pool today changes nothing.
+
+The precise shapes live in the `Field\Input::withAsyncSuggestions()` and
+`Field\Select::withAsyncSuggestions()` docblocks.
 
 ### Async validation gate
 
