@@ -1077,13 +1077,15 @@ parse) — never visible state.
 function(int $row, int $col, string $value): SugarCraft\CellBuffer\Style|SugarCraft\Style\Style|string
 ```
 
-- **Returns `string`** — an ANSI SGR code string such as `'1;31'`. It is NOT
-  echoed verbatim: every style string is parsed at render time into a
-  restricted attribute set (see the cheat table below); unrecognised tokens
-  are dropped, `38;5`/`48;5` codes expand to 24-bit through the fixed xterm
-  cube (levels 0/51/102/153/204/255), and the frame emits canonicalised
-  24-bit SGR — golden byte comparisons must never assume the input codes
-  survive to output.
+- **Returns `string`** — an ANSI SGR code string such as `'1;31'`. It is not
+  echoed verbatim. Every style string is parsed at render time into a
+  restricted attribute set (see the cheat table below); anything outside that
+  vocabulary is dropped. The `38;5`/`48;5` codes expand to 24-bit through the
+  fixed xterm cube (levels 0/51/102/153/204/255), and the frame emits
+  canonicalised 24-bit SGR.
+  *Golden tests note:* because output is canonicalised, golden byte
+  comparisons must never assume the input codes survive to the frame —
+  compare against the emitted 24-bit form.
 - **Returns `SugarCraft\CellBuffer\Style`** — the buffer-level style value;
   converted to its SGR codes and folded through the same parser.
 - **Returns `SugarCraft\Style\Style`** — the declarative sugar-style object;
