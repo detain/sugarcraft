@@ -47,6 +47,8 @@ final class ChooseCommand extends Command
             ->addOption('no-selected', null, InputOption::VALUE_REQUIRED, 'Message printed (with a non-zero exit) when the user exits without a selection.', null)
             ->addOption('width', null, InputOption::VALUE_REQUIRED, 'List width in cells (0 = auto).', 0)
             ->addOption('no-alt-screen', null, InputOption::VALUE_NONE, 'Render inline instead of the alternate screen (keeps output in scrollback).')
+            ->addOption('filter', null, InputOption::VALUE_NONE,    'Type-to-filter is already the default; accepted for gum parity.')
+            ->addOption('no-filter', null, InputOption::VALUE_NONE, 'Keys other than nav/Enter/Escape stay inert (historical shape).')
             ->addOption('timeout',   null, InputOption::VALUE_REQUIRED, 'Auto-abort after N seconds (0 = none).', 0);
     }
 
@@ -70,6 +72,14 @@ final class ChooseCommand extends Command
             return Command::FAILURE;
         }
         $noLimit = (bool) $input->getOption('no-limit');
+        if ($input->getOption('filter') && $input->getOption('no-filter')) {
+            fwrite(STDERR, Lang::t('runtime.conflicting_flags', ['first' => '--filter', 'second' => '--no-filter']) . "\n");
+            return Command::FAILURE;
+        }
+        // scriptui-43: immediate type-to-filter is the default (gum muscle
+        // memory); --no-filter restores the historical keys where plain
+        // letters are inert until '/' opens the filter.
+        $typeToFilter = !(bool) $input->getOption('no-filter');
         $ordered = (bool) $input->getOption('ordered');
         $header  = (string) $input->getOption('header');
         /** @var list<string> $preselected */
@@ -105,6 +115,7 @@ final class ChooseCommand extends Command
             cursorPrefix:     is_string($cursor) ? $cursor : null,
             unselectedPrefix: is_string($unselected) ? $unselected : null,
             width:            $width,
+            typeToFilter:     $typeToFilter,
         );
         $loop    = \React\EventLoop\Loop::get();
         $options = InteractiveRuntime::programOptions(

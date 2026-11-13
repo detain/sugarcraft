@@ -365,13 +365,13 @@ success (`0`) rather than specific non-zero values.
 | Key | Effect |
 |-----|--------|
 | ↑ / ↓ | Move the highlighted item / cursor line. |
-| Enter | Submit `choose`, `confirm`, `filter`, `input` (in `write`, inserts a newline). In `filter`, Enter with zero matches submits the empty selection and exits `0` — the session always ends on Enter. |
+| Enter | Submit `choose`, `confirm`, `filter`, `input` (in `write`, inserts a newline). In `filter`, Enter with zero matches submits the empty selection and exits `0` — the session always ends on Enter. In `choose`, while a typed filter is OPEN the first Enter commits the narrowing (the text and reduced list stay), and the next Enter submits. |
 | y / n | Answer `confirm` directly. |
 | ← / → · h / l | Toggle the `confirm` answer (like `Tab` there); in `pager`, `h`/`l` scroll sideways. |
 | Ctrl+D | Submit `write` (end-of-input convention). |
 | Space | Toggle selection in multi-select `choose`; page down in `pager`. In multi-select `filter` the toggle is `Tab` — a Space is typed into the filter text instead, as it is in `input` / `write`. |
 | Tab | Toggle the highlighted item in multi-select `filter`; toggle the answer in `confirm`. |
-| Any printable key | Filter text in `filter`. |
+| Any printable key | Filter text in `filter`; in `choose` typing opens the filter immediately too (`--no-filter` keeps the historical inert keys). |
 | `j`/`k` · `g`/`G` · `Home`/`End` · `PgUp`/`PgDn` | Move, jump to top / bottom, and page the lists in `choose` and `filter` (`j`/`k` plus `Home`/`End` in `file`); the same set also scrolls the `pager`. |
 | `b`/`f` · `Ctrl+U`/`Ctrl+D` · `q` | Page, half-page, and quit keys of the `pager`. |
 | Esc | Abort (exit `1`, or `2` on `confirm`) — except in `pager`, where Esc is a normal finish like `q` (exit `0`). |

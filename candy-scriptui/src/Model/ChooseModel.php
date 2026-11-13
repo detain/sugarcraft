@@ -46,6 +46,7 @@ final class ChooseModel implements Model
         ?string $cursorPrefix = null,
         ?string $unselectedPrefix = null,
         int $width = 0,
+        bool $typeToFilter = true,
     ): self {
         // scriptui-15: options and the preselection list stay RAW — they
         // are the DATA channel (the selection is emitted verbatim by
@@ -84,7 +85,7 @@ final class ChooseModel implements Model
                 }
             }
         }
-        return new self($list, false, false, $multi, $cap, $checked, $ordered);
+        return new self($list, false, false, $multi, $cap, $checked, $ordered, typeToFilter: $typeToFilter);
     }
 
     /**
@@ -102,6 +103,9 @@ final class ChooseModel implements Model
         // scriptui-22: multi-mode Enter pressed with zero ticks — the
         // session ends refused (rc 1 + STDERR notice), not "succeeded".
         public readonly bool $refusedEmpty = false,
+        // scriptui-43: printable keys start filtering immediately (gum
+        // parity) unless --no-filter opted out.
+        public readonly bool $typeToFilter = true,
     ) {}
 
     public function init(): ?\Closure
@@ -117,6 +121,17 @@ final class ChooseModel implements Model
         if ($msg instanceof KeyMsg) {
             $listOwnsKey = $this->list->isFiltering()
                 && ($msg->type === KeyType::Enter || $msg->type === KeyType::Escape);
+
+            if ($listOwnsKey && $msg->type === KeyType::Enter && $this->typeToFilter) {
+                // scriptui-43: while the filter is OPEN, Enter commits the
+                // narrowing instead of dissolving it (ItemList's default
+                // keepFilter=false would erase the text and restore the
+                // full list, so the next Enter could submit a row the user
+                // never saw). The second Enter — no longer filtering —
+                // submits the cursor row of the narrowed view.
+                [$nextList, ] = $this->list->withKeepFilter(true)->update($msg);
+                return [$this->copy(list: $nextList), null];
+            }
 
             if (!$listOwnsKey) {
                 if ($msg->type === KeyType::Escape || ($msg->ctrl && $msg->rune === 'c')) {
@@ -138,6 +153,27 @@ final class ChooseModel implements Model
                 // Multi-select: Space toggles the highlighted item.
                 if ($this->multi && $msg->type === KeyType::Space) {
                     return [$this->toggle(), null];
+                }
+
+                // scriptui-43 (finding 061): gum filters as you type; candy
+                // made plain letters fall into a void until '/' mode was
+                // entered. Any printable key the list does not otherwise
+                // claim — j/k/g/G ride the cursor, '/' opens the mode
+                // natively, and in multi mode Space stays the tick — now
+                // opens the filter with itself as the first byte.
+                // --no-filter keeps the historical keys.
+                if (
+                    $this->typeToFilter
+                    && !$this->list->isFiltering()
+                    && !$msg->ctrl
+                    && (
+                        ($msg->type === KeyType::Char && $msg->rune !== '' && !in_array($msg->rune, ['j', 'k', 'g', 'G', '/'], true))
+                        || ($msg->type === KeyType::Space && !$this->multi)
+                    )
+                ) {
+                    [$primed] = $this->list->update(new KeyMsg(KeyType::Char, '/'));
+                    [$nextList, $cmd] = $primed->update($msg);
+                    return [$this->copy(list: $nextList), $cmd];
                 }
             }
         }
@@ -323,6 +359,7 @@ final class ChooseModel implements Model
             ordered:    $this->ordered,
             interrupted: $interrupted ?? $this->interrupted,
             refusedEmpty: $refusedEmpty ?? $this->refusedEmpty,
+            typeToFilter: $this->typeToFilter,
         );
     }
 
