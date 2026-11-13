@@ -278,7 +278,7 @@ Used by: sugar-dashboard's `Layout\FocusManager` (imports
 `SugarCraft\Focus\FocusRing`) and candy-code's `Tui\Pane` tab cycle — the ring
 is the shared keyboard-focus primitive under both TUIs.
 
-Runnable example: [`examples/focus-ring.php`](https://github.com/sugarcraft/sugar-focus/blob/master/examples/focus-ring.php) — run it with `php examples/focus-ring.php`; with no TTY it draws one frame and exits 0.
+Runnable example: [`examples/focus-ring.php`](https://github.com/sugarcraft/sugar-focus/blob/master/examples/focus-ring.php) — run it with `php examples/focus-ring.php`; with no TTY it draws one frame and exits 0. The shipped demo lays out for roughly 70 columns or wider; narrower terminals wrap the panel rows, and the full repaint means the next keystroke self-heals the frame.
 
 *Demo note (2026-11-13): a looping terminal capture — it clears and repaints
 the frame each loop, so it may flicker on some displays.*

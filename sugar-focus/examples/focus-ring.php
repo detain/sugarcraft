@@ -10,7 +10,8 @@ declare(strict_types=1);
  * (Shift-Tab / Backtab reverses it) and the ring wraps around at either end.
  * Press x to toggle whether the focused panel takes part in traversal — the
  * accent follows `isFocused() && isEnabled()`, so a parked focus on a
- * disabled panel shows grey. Press q to quit.
+ * disabled panel shows grey. Press d to re-enable the first disabled panel
+ * (focus not required). Press q to quit.
  *
  *   php examples/focus-ring.php
  *
@@ -67,7 +68,7 @@ $render = static function (FocusRing $ring) use ($regions, $panel, $esc, $reset)
     // Home the cursor and clear the screen so each redraw overwrites the last.
     $out = "{$esc}[H{$esc}[2J";
     $out .= "{$esc}[1msugar-focus — FocusRing traversal{$reset}\n";
-    $out .= "{$esc}[90mTab: next   Shift-Tab: previous   x: toggle focusable   q: quit{$reset}\n\n";
+    $out .= "{$esc}[90mTab: next   Shift-Tab: previous   x: toggle focusable   d: re-enable first   q: quit{$reset}\n\n";
 
     $panels = array_map(
         static fn(string $id): array => $panel($id, $ring->isFocused($id), $ring->isEnabled($id)),
@@ -83,10 +84,13 @@ $render = static function (FocusRing $ring) use ($regions, $panel, $esc, $reset)
     }
 
     $current = $ring->current() ?? '(none)';
-    $footer  = 'region ' . ($ring->index() + 1) . ' of ' . $ring->count();
-    if ($ring->disabledCount() > 0) {
-        $footer .= ', enabled ' . $ring->enabledCount();
-    }
+    // The README announce contract (:215-221): position is an ENABLED ordinal,
+    // and a parked focus has none — the old raw index()/count() pair announced
+    // "region 4 of 7, enabled 2" shapes that named nowhere Tab could reach.
+    $idx     = $ring->enabledIndex();
+    $footer  = $idx === null
+        ? 'focus parked — ' . $ring->enabledCount() . ' enabled'
+        : 'region ' . ($idx + 1) . ' of ' . $ring->enabledCount();
     $out .= "\n{$esc}[96m● focused: {$current}{$reset}  {$esc}[90m({$footer}){$reset}\n";
 
     fwrite(STDOUT, $out);
@@ -191,6 +195,17 @@ while (true) {
                 $ring = $ring->isEnabled($focused)
                     ? $ring->disable($focused)
                     : $ring->enable($focused);
+                $render($ring);
+            }
+            continue;
+        }
+        if ($byte === 'd') {
+            // Re-enable the FIRST disabled region, focus not needed: one press
+            // walks the disabled queue (a parked focus stays parked until
+            // traversal carries it off — enabling alone moves nothing).
+            $disabledIds = $ring->disabledIds();
+            if ($disabledIds !== []) {
+                $ring = $ring->enable($disabledIds[0]);
                 $render($ring);
             }
             continue;
