@@ -5321,6 +5321,6 @@ TXT,
     'host.agent_resume.feed_degraded' => '此后续运行的实时进度流已降级：有 {count} 条更新未能送达。运行本身已完成，结果如下。',
     'host.agent_resume.feed_broke' => '后续运行的进度流在报告结果之前中断，因此其结果未知。请查看该运行的转录日志。',
     'host.agent_resume.no_fork' => '此后续运行无法派生子进程，因此在当前进程中运行，没有实时进度流。',
-    'hooks.subagent_grant.denied' => '智能体 "{agent}" 的权限模式 \'{mode}\' 不允许 {tool}。',
+    'hooks.subagent_grant.denied' => '权限模式 \'{mode}\'（智能体 "{agent}"）不允许 {tool}。',
     'hooks.subagent_grant.ask' => '允许运行 {tool} 吗？（智能体 "{agent}" 处于权限模式：{mode}）',
 ];

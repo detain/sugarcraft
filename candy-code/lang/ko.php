@@ -5323,6 +5323,6 @@ TXT,
     'host.agent_resume.feed_degraded' => '이 후속 실행의 실시간 진행 피드가 저하되었습니다. 업데이트 {count}건이 도착하지 않았습니다. 실행 자체는 끝났으며 결과는 아래와 같습니다.',
     'host.agent_resume.feed_broke' => '후속 실행의 진행 피드가 결과를 보고하기 전에 끊겨 결과를 알 수 없습니다. 실행의 트랜스크립트 로그를 확인하세요.',
     'host.agent_resume.no_fork' => '이 후속 실행은 포크할 수 없어 실시간 진행 피드 없이 이 프로세스 안에서 실행되었습니다.',
-    'hooks.subagent_grant.denied' => '에이전트 "{agent}"의 권한 모드 \'{mode}\'에서는 {tool}을(를) 허용하지 않습니다.',
+    'hooks.subagent_grant.denied' => '권한 모드 \'{mode}\' (에이전트 "{agent}")에서는 {tool}을(를) 허용하지 않습니다.',
     'hooks.subagent_grant.ask' => '{tool} 실행을 허용할까요? (에이전트 "{agent}"는 권한 모드 {mode}로 실행 중)',
 ];
