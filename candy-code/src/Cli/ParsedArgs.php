@@ -77,7 +77,7 @@ final readonly class ParsedArgs
      *
      * @var list<string>
      */
-    public const SUBCOMMANDS = ['acp', 'attach', 'bundles', 'completion', 'doctor', 'gc', 'import', 'login', 'lsp', 'mcp', 'models', 'self-update', 'serve', 'session', 'usage', 'workflow'];
+    public const SUBCOMMANDS = ['acp', 'attach', 'bundles', 'completion', 'config', 'doctor', 'gc', 'import', 'login', 'lsp', 'mcp', 'models', 'permissions', 'self-update', 'serve', 'session', 'usage', 'workflow'];
 
     /**
      * The flags each subcommand verb owns, keyed by verb: `true` when the flag
@@ -95,6 +95,16 @@ final readonly class ParsedArgs
      * @var array<string, array<string, bool>>
      */
     public const SUBCOMMAND_FLAGS = [
+        // `config show` (#29): `--sources` names the layer each value came from,
+        // `--json` answers as the one contract document.
+        'config' => [
+            '--json' => false,
+            '--sources' => false,
+        ],
+        // `permissions list` (#29): the gate's rules, as a document with `--json`.
+        'permissions' => [
+            '--json' => false,
+        ],
         // `attach` (roadmap O-8a): the server to attach to, when it is not
         // the one this user's `serve` state directory records.
         'attach' => [

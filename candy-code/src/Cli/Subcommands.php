@@ -134,6 +134,8 @@ final class Subcommands
     {
         return match ($args->subcommand) {
             'doctor'     => self::doctor($args),
+            'config'     => self::config($args),
+            'permissions' => self::permissions($args),
             'gc'         => self::gc($args),
             'models'     => self::models($args),
             'self-update' => SelfUpdate::run($args),
@@ -211,6 +213,169 @@ final class Subcommands
             $args->outputFormat,
             Lang::t('cli.sub.takes_no_arguments', ['verb' => $verb]),
         );
+    }
+
+    // ---------------------------------------------------------------------
+    // config / permissions (#29)
+    // ---------------------------------------------------------------------
+
+    /**
+     * `candy-code config show [--sources] [--json]` — the effective value of
+     * every setting, resolved the way a launch resolves it, with `--sources`
+     * naming the layer each one came from. Read-only: it builds a resolver and
+     * never writes a file.
+     */
+    private static function config(ParsedArgs $args): int
+    {
+        $operands = $args->subcommandArgs;
+        if ($operands !== ['show']) {
+            return NonInteractive::failUsage(
+                'candy-code: ' . Lang::t('cli.sub.config.usage'),
+                $args->outputFormat,
+                Lang::t('cli.sub.config.hint'),
+            );
+        }
+
+        $withSources = \array_key_exists('--sources', $args->subcommandFlags);
+        $asJson = self::asJson($args);
+
+        try {
+            $root = $args->root ?? (\getcwd() ?: null);
+            $sources = \SugarCraft\Code\Tui\Settings\SettingsSources::fromLaunch(
+                $root,
+                $root === null ? null : Bootstrap::projectSettingsTrusted($root),
+                Bootstrap::userSettingsDirOrNull(),
+                Bootstrap::userConfigPath(),
+                \array_filter(\getenv(), 'is_string'),
+            );
+            $resolved = $sources->resolver->resolveAll();
+        } catch (\Throwable $e) {
+            return NonInteractive::failUsage(
+                'candy-code: ' . Lang::t('cli.sub.config.failed', ['error' => $e->getMessage()]),
+                $args->outputFormat,
+            );
+        }
+
+        $rows = [];
+        foreach ($resolved as $key => $setting) {
+            $value = self::redactedValue((string) $key, $setting->value);
+            $row = ['key' => (string) $key, 'value' => $value];
+            if ($withSources) {
+                $row['source'] = $setting->source->value;
+                $row['sourcePath'] = $setting->sourcePath;
+                $row['shadowed'] = \array_map(static fn ($shadow): string => $shadow->value, $setting->shadowed);
+                $row['locked'] = $setting->locked;
+            }
+            $rows[] = $row;
+        }
+
+        if ($asJson) {
+            self::emitDocument(['result' => ['settings' => $rows]]);
+
+            return NonInteractive::EXIT_OK;
+        }
+
+        foreach ($rows as $row) {
+            $line = $row['key'] . ' = ' . self::renderValue($row['value']);
+            if ($withSources) {
+                $line .= '  [' . $row['source'] . ($row['sourcePath'] === null ? '' : ' ' . $row['sourcePath']) . ']';
+            }
+            echo $line . "\n";
+        }
+
+        return NonInteractive::EXIT_OK;
+    }
+
+    /**
+     * `candy-code permissions list [--json]` — the rules the launch gate
+     * decides by, in first-match order, each with its source and file. Reads
+     * the gate the launch would build; it evaluates no call.
+     */
+    private static function permissions(ParsedArgs $args): int
+    {
+        if ($args->subcommandArgs !== ['list']) {
+            return NonInteractive::failUsage(
+                'candy-code: ' . Lang::t('cli.sub.permissions.usage'),
+                $args->outputFormat,
+                Lang::t('cli.sub.permissions.hint'),
+            );
+        }
+
+        try {
+            $gate = Bootstrap::permissionGate(announceBypassMode: false);
+        } catch (\Throwable $e) {
+            return NonInteractive::failUsage(
+                'candy-code: ' . Lang::t('cli.sub.permissions.failed', ['error' => $e->getMessage()]),
+                $args->outputFormat,
+            );
+        }
+
+        $rules = [];
+        foreach ($gate->rules() as $index => $rule) {
+            $rules[] = [
+                'index' => $index + 1,
+                'action' => $rule->action->value,
+                'pattern' => $rule->pattern,
+                'source' => $rule->source->value,
+                'file' => $rule->file,
+            ];
+        }
+
+        if (self::asJson($args)) {
+            self::emitDocument(['result' => ['mode' => $gate->mode()->value, 'rules' => $rules]]);
+
+            return NonInteractive::EXIT_OK;
+        }
+
+        if ($rules === []) {
+            echo Lang::t('cli.sub.permissions.none') . "\n";
+
+            return NonInteractive::EXIT_OK;
+        }
+        foreach ($rules as $rule) {
+            echo sprintf('%d. %-5s %-8s %s%s', $rule['index'], $rule['action'], $rule['source'], $rule['pattern'], $rule['file'] === null ? '' : '  (' . $rule['file'] . ')') . "\n";
+        }
+
+        return NonInteractive::EXIT_OK;
+    }
+
+    /** `--json` as a flag of the verb, or the global `--output-format json`. */
+    private static function asJson(ParsedArgs $args): bool
+    {
+        return \array_key_exists('--json', $args->subcommandFlags)
+            || $args->outputFormat === NonInteractive::FORMAT_JSON;
+    }
+
+    /**
+     * A credential is shown as a marker, never its value, at any depth: a
+     * provider entry carries its `apiKey` inside a map, so the top-level key
+     * alone is not enough. The name test is for credential NAMES, so a
+     * `maxOutputTokens` budget is not mistaken for one.
+     */
+    private static function redactedValue(string $key, mixed $value): mixed
+    {
+        if (\preg_match('/api[_-]?key|secret|password|access[_-]?token|auth[_-]?token|bearer/i', $key) === 1) {
+            return '[redacted]';
+        }
+        if (\is_array($value)) {
+            $redacted = [];
+            foreach ($value as $inner => $innerValue) {
+                $redacted[$inner] = self::redactedValue((string) $inner, $innerValue);
+            }
+
+            return $redacted;
+        }
+
+        return $value;
+    }
+
+    private static function renderValue(mixed $value): string
+    {
+        if (\is_scalar($value) || $value === null) {
+            return \var_export($value, true);
+        }
+
+        return (string) \json_encode($value, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE);
     }
 
     // ---------------------------------------------------------------------
@@ -6719,6 +6884,8 @@ final class Subcommands
         'attach' => 'cli.completion.verb.attach',
         'bundles' => 'cli.completion.verb.bundles',
         'completion' => 'cli.completion.verb.completion',
+        'config' => 'cli.completion.verb.config',
+        'permissions' => 'cli.completion.verb.permissions',
         'doctor' => 'cli.completion.verb.doctor',
         'gc' => 'cli.completion.verb.gc',
         'import' => 'cli.completion.verb.import',
@@ -6749,6 +6916,8 @@ final class Subcommands
         'bundles' => ['list', 'install', 'marketplace', 'update', 'search', 'recommend'],
         'lsp' => ['install', 'list'],
         'mcp' => ['list', 'auth', 'import', 'trust', 'serve'],
+        'config' => ['show'],
+        'permissions' => ['list'],
         'import' => ['claude'],
         'serve' => Serve::ACTIONS,
         'completion' => self::SHELLS,
