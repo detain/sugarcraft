@@ -456,4 +456,76 @@ final class RendererTest extends TestCase
         // The long path should be truncated with "..."
         $this->assertStringContainsString('…', $out);
     }
+
+    /**
+     * CF-12: on an 80-column terminal the idle status must carry the
+     * MINIMAL tier — the 269-cell full roster wrapped to 3-4 rows per
+     * frame (defect 017). Terse (149 cells at en) cannot fit 80 either.
+     */
+    public function testKeyhelpMinimalSelectedAt80Cols(): void
+    {
+        [$m] = Manager::start('/', '/', $this->fakeFs())
+            ->update(new \SugarCraft\Core\Msg\WindowSizeMsg(80, 24));
+        $lines = explode("\n", Renderer::render($m));
+        $status = Ansi::strip(end($lines));
+        $this->assertLessThanOrEqual(80, Width::of($status));
+        $this->assertStringContainsString(\SugarCraft\Files\Lang::t('keyhelp.minimal'), $status);
+        $this->assertStringNotContainsString('Home/End', $status, 'full roster must not survive at 80');
+        $this->assertStringNotContainsString('space select', $status, 'terse must not fit at 80');
+    }
+
+    /**
+     * CF-12: mid widths take the terse tier (fits), still drop the
+     * long-tail chord segments, and never need the clip belt.
+     */
+    public function testKeyhelpTerseSelectedAt200Cols(): void
+    {
+        [$m] = Manager::start('/', '/', $this->fakeFs())
+            ->update(new \SugarCraft\Core\Msg\WindowSizeMsg(200, 24));
+        $lines = explode("\n", Renderer::render($m));
+        $status = Ansi::strip(end($lines));
+        $this->assertStringContainsString('space select', $status, 'terse segment missing');
+        $this->assertStringNotContainsString('Home/End', $status, 'full roster must not fit at 200');
+    }
+
+    /** CF-12: very wide terminals keep the complete roster. */
+    public function testKeyhelpFullRosterAt400Cols(): void
+    {
+        [$m] = Manager::start('/', '/', $this->fakeFs())
+            ->update(new \SugarCraft\Core\Msg\WindowSizeMsg(400, 24));
+        $lines = explode("\n", Renderer::render($m));
+        $status = Ansi::strip(end($lines));
+        $this->assertStringContainsString('Home/End', $status);
+        $this->assertStringContainsString('^tab cycle', $status);
+    }
+
+    /** CF-12: with no live width the historical full line is byte-preserved. */
+    public function testKeyhelpWithoutLiveWidthKeepsFullRoster(): void
+    {
+        $out = Ansi::strip(Renderer::render(Manager::start('/', '/', $this->fakeFs())));
+        $this->assertStringContainsString('Home/End', $out);
+    }
+
+    /**
+     * CF-12 acceptance (017): an interpolated unbounded status — the refusal
+     * message echoing a 255-byte name — stays a single clamped row.
+     */
+    public function testLongInterpolatedStatusStaysOneRow(): void
+    {
+        $fake = $this->fakeFs();
+        $m = (new \SugarCraft\Files\Manager\ManagerBuilder())
+            ->withLister($fake)
+            ->withLeft(Pane::open('/', $fake))
+            ->withRight(Pane::open('/', $fake))
+            ->withStatus(\SugarCraft\Files\Lang::t('status.mkdir_failed', ['name' => str_repeat('z', 255)]))
+            ->withTermCols(80)
+            ->withTermRows(24)
+            ->build();
+        $lines = explode("\n", Renderer::render($m));
+        $this->assertCount(1, array_filter($lines, static fn(string $l): bool => str_contains($l, 'zzzz')),
+            'long status must occupy exactly one row');
+        foreach ($lines as $line) {
+            $this->assertLessThanOrEqual(80, Width::of(Ansi::strip($line)));
+        }
+    }
 }

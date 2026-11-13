@@ -59,6 +59,8 @@ return [
     'undo.move' => '{count} ögeyi taşı',
     'undo.copy' => '{count} ögeyi kopyala',
     'keyhelp.default' => 'Tab değiştir · ↑↓ jk hareket · Home/End g/G atla · Enter aç · ← h yukarı · space seç · s sırala · . gizli · c kopyala · m taşı · R adlandır · d sil · r yenile · q çık · / ara · Esc temizle · t sekmeyi çoğalt · ^w sekmeyi kapat · ^tab dön · ^PgUp/^PgDn sekmeler · u/^z geri al · ^y yinele',
+    'keyhelp.terse' => 'Tab değiştir · ↑↓ jk hareket · Enter aç · ← h yukarı · space seç · s sırala · c kopyala · m taşı · R adlandır · d sil · q çık · / ara · u/^z geri al · ^y yinele',
+    'keyhelp.minimal' => 'Enter aç · q çık · / ara',
     'search.no_match' => '(eşleşme yok)',
     'search.counter' => '({current}/{total})',
     'search.type_dir' => '[DİZİN]',

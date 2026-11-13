@@ -59,6 +59,8 @@ return [
     'undo.move' => 'przeniesienie {count} elementów',
     'undo.copy' => 'skopiowanie {count} elementów',
     'keyhelp.default' => 'Tab zamień · ↑↓ jk ruch · Home/End g/G skacz · Enter otwórz · ← h w górę · spacja zaznacz · s sortuj · . ukryte · c kopiuj · m przenieś · R zmień nazwę · d usuń · r odśwież · q wyjdź · / szukaj · Esc wyczyść · t duplikuj kartę · ^w zamknij kartę · ^tab przełączaj · ^PgUp/^PgDn karty · u/^z cofnij · ^y ponów',
+    'keyhelp.terse' => 'Tab zamień · ↑↓ jk ruch · Enter otwórz · ← h w górę · spacja zaznacz · s sortuj · c kopiuj · m przenieś · R zmień nazwę · d usuń · q wyjdź · / szukaj · u/^z cofnij · ^y ponów',
+    'keyhelp.minimal' => 'Enter otwórz · q wyjdź · / szukaj',
     'search.no_match' => '(brak dopasowań)',
     'search.counter' => '({current}/{total})',
     'search.type_dir' => '[KAT]',

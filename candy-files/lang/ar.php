@@ -59,6 +59,8 @@ return [
     'undo.move' => 'نقل {count} عناصر',
     'undo.copy' => 'نسخ {count} عناصر',
     'keyhelp.default' => 'Tab تبديل · ↑↓ jk حركة · Home/End g/G انتقال · Enter فتح · ← h للأعلى · مسافة تحديد · s ترتيب · . المخفية · c نسخ · m نقل · R إعادة تسمية · d حذف · r تحديث · q خروج · / بحث · Esc مسح · t تبويب مكرر · ^w إغلاق التبويب · ^tab تنقّل · ^PgUp/^PgDn تبويبات · u/^z تراجع · ^y إعادة',
+    'keyhelp.terse' => 'Tab تبديل · ↑↓ jk حركة · Enter فتح · ← h للأعلى · مسافة تحديد · s ترتيب · c نسخ · m نقل · R إعادة تسمية · d حذف · q خروج · / بحث · u/^z تراجع · ^y إعادة',
+    'keyhelp.minimal' => 'Enter فتح · q خروج · / بحث',
     'search.no_match' => '(لا تطابقات)',
     'search.counter' => '({current}/{total})',
     'search.type_dir' => '[مجلد]',

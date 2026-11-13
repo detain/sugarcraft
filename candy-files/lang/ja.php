@@ -59,6 +59,8 @@ return [
     'undo.move' => '{count} 項目の移動',
     'undo.copy' => '{count} 項目のコピー',
     'keyhelp.default' => 'Tab 切替 · ↑↓ jk 移動 · Home/End g/G 先頭末尾 · Enter 開く · ← h 上へ · Space 選択 · s 並べ替え · . 隠し表示 · c コピー · m 移動 · R 名前変更 · d 削除 · r 再読込 · q 終了 · / 検索 · Esc 解除 · t タブを複製 · ^w タブを閉じる · ^tab タブ巡回 · ^PgUp/^PgDn タブ · u/^z 元に戻す · ^y やり直し',
+    'keyhelp.terse' => 'Tab 切替 · ↑↓ jk 移動 · Enter 開く · ← h 上へ · Space 選択 · s 並べ替え · c コピー · m 移動 · R 名前変更 · d 削除 · q 終了 · / 検索 · u/^z 元に戻す · ^y やり直し',
+    'keyhelp.minimal' => 'Enter 開く · q 終了 · / 検索',
     'search.no_match' => '(一致なし)',
     'search.counter' => '({current}/{total})',
     'search.type_dir' => '[DIR]',

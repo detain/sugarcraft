@@ -45,7 +45,7 @@ final class Renderer
         // text. Lead the status line with a localized focus label so every
         // frame says which pane answers the keyboard.
         $focus  = Lang::t('status.focus', ['side' => $active === 0 ? Lang::t('side.left') : Lang::t('side.right')]);
-        $status = $focus . ' · ' . ($m->status === '' ? self::keyHelp() : $m->status);
+        $status = $focus . ' · ' . ($m->status === '' ? self::keyHelp($m->termCols, Width::of($focus)) : $m->status);
         $frame = $search . $tabBar . $body . "\n" . self::statusBar($status);
         if ($m->termCols > 0) {
             // CF-01 belt: once a live width is known, no composed line may
@@ -196,9 +196,32 @@ final class Renderer
             ->render($msg);
     }
 
-    private static function keyHelp(): string
+    /**
+     * CF-12: the key-help line picks the widest tier that still fits.
+     * The full roster is 269 cells at en — three permanently wrapped rows
+     * on an 80-column terminal (the 017 defect). Tier order: full default
+     * (every chord) → terse (primary verbs, no long-tail chords) →
+     * minimal (open/quit/search). With no live width the historical full
+     * line is preserved (unit shape, pre-WindowSizeMsg frames).
+     *
+     * @param int $termCols    live terminal width, 0 when unknown
+     * @param int $focusCells  cells the focus prefix + separator already took
+     */
+    private static function keyHelp(int $termCols = 0, int $focusCells = 0): string
     {
-        return Lang::t('keyhelp.default');
+        $default = Lang::t('keyhelp.default');
+        if ($termCols <= 0) {
+            return $default;
+        }
+        $budget = $termCols - $focusCells - 3;
+        foreach ([$default, Lang::t('keyhelp.terse'), Lang::t('keyhelp.minimal')] as $tier) {
+            if (Width::of($tier) <= $budget) {
+                return $tier;
+            }
+        }
+        // Even minimal overflows (comically narrow terminal): the frame
+        // clamp in render() cuts the tail, status stays a single row.
+        return Lang::t('keyhelp.minimal');
     }
 
     private static function renderSearch(Manager $m): string

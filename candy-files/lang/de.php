@@ -59,6 +59,8 @@ return [
     'undo.move' => 'Verschieben von {count} Objekt(en)',
     'undo.copy' => 'Kopieren von {count} Objekt(en)',
     'keyhelp.default' => 'Tab Wechsel · ↑↓ jk bewegen · Home/End g/G springen · Enter öffnen · ← h hoch · Space wählen · s sortieren · . versteckte · c kopieren · m verschieben · R umbenennen · d löschen · r neu laden · q beenden · / suchen · Esc Auswahl leeren · t Tab duplizieren · ^w Tab schließen · ^tab wechseln · ^PgUp/^PgDn Tabs · u/^z Rückgängig · ^y Wiederholen',
+    'keyhelp.terse' => 'Tab Wechsel · ↑↓ jk bewegen · Enter öffnen · ← h hoch · Space wählen · s sortieren · c kopieren · m verschieben · R umbenennen · d löschen · q beenden · / suchen · u/^z Rückgängig · ^y Wiederholen',
+    'keyhelp.minimal' => 'Enter öffnen · q beenden · / suchen',
     'search.no_match' => '(keine Treffer)',
     'search.counter' => '({current}/{total})',
     'search.type_dir' => '[VERZ]',

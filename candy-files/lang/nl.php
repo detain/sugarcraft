@@ -59,6 +59,8 @@ return [
     'undo.move' => 'verplaatsen van {count} item(s)',
     'undo.copy' => 'kopiëren van {count} item(s)',
     'keyhelp.default' => 'Tab wisselen · ↑↓ jk bewegen · Home/End g/G springen · Enter openen · ← h omhoog · spatie selecteren · s sorteren · . verborgen · c kopiëren · m verplaatsen · R hernoemen · d verwijderen · r verversen · q afsluiten · / zoeken · Esc wissen · t tabblad dupliceren · ^w tabblad sluiten · ^tab cyclen · ^PgUp/^PgDn tabbladen · u/^z ongedaan · ^y herhalen',
+    'keyhelp.terse' => 'Tab wisselen · ↑↓ jk bewegen · Enter openen · ← h omhoog · spatie selecteren · s sorteren · c kopiëren · m verplaatsen · R hernoemen · d verwijderen · q afsluiten · / zoeken · u/^z ongedaan · ^y herhalen',
+    'keyhelp.minimal' => 'Enter openen · q afsluiten · / zoeken',
     'search.no_match' => '(geen treffers)',
     'search.counter' => '({current}/{total})',
     'search.type_dir' => '[MAP]',

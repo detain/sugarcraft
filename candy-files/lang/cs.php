@@ -59,6 +59,8 @@ return [
     'undo.move' => 'přesunout {count} položek',
     'undo.copy' => 'kopírovat {count} položek',
     'keyhelp.default' => 'Tab prohodit · ↑↓ jk pohyb · Home/End g/G skok · Enter otevřít · ← h nahoru · mezerník vybrat · s řadit · . skryté · c kopírovat · m přesunout · R přejmenovat · d smazat · r obnovit · q quitter · / hledat · Esc vyčistit · t duplikovat kartu · ^w zavřít kartu · ^tab přepínat · ^PgUp/^PgDn karty · u/^z vrátit · ^y znovu',
+    'keyhelp.terse' => 'Tab prohodit · ↑↓ jk pohyb · Enter otevřít · ← h nahoru · mezerník vybrat · s řadit · c kopírovat · m přesunout · R přejmenovat · d smazat · q quitter · / hledat · u/^z vrátit · ^y znovu',
+    'keyhelp.minimal' => 'Enter otevřít · q quitter · / hledat',
     'search.no_match' => '(žádné shody)',
     'search.counter' => '({current}/{total})',
     'search.type_dir' => '[ADRES]',

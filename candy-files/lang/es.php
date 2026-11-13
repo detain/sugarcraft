@@ -59,6 +59,8 @@ return [
     'undo.move' => 'mover {count} elemento(s)',
     'undo.copy' => 'copiar {count} elemento(s)',
     'keyhelp.default' => 'Tab intercambiar · ↑↓ jk mover · Home/End g/G saltar · Enter abrir · ← h subir · espacio seleccionar · s ordenar · . ocultos · c copiar · m mover · R renombrar · d eliminar · r refrescar · q salir · / buscar · Esc limpiar · t duplicar pestaña · ^w cerrar pestaña · ^tab ciclar · ^PgUp/^PgDn pestañas · u/^z deshacer · ^y rehacer',
+    'keyhelp.terse' => 'Tab intercambiar · ↑↓ jk mover · Enter abrir · ← h subir · espacio seleccionar · s ordenar · c copiar · m mover · R renombrar · d eliminar · q salir · / buscar · u/^z deshacer · ^y rehacer',
+    'keyhelp.minimal' => 'Enter abrir · q salir · / buscar',
     'search.no_match' => '(sin coincidencias)',
     'search.counter' => '({current}/{total})',
     'search.type_dir' => '[DIR]',
