@@ -19,6 +19,10 @@ use SugarCraft\Style\Style;
  * Renders a {@see KeyMap} as either a short, single-line summary or a
  * multi-column full-help block.
  *
+ * Not to be confused with {@see \SugarCraft\Widgets\Key\Help} — the tiny
+ * key/desc label pair carried by each {@see Binding}. Files importing
+ * both must alias one: `use SugarCraft\Widgets\Key\Help as HelpLabel;`.
+ *
  * ```php
  * $help = new Help();
  * echo $help->shortView($keymap);   // "↑/k up • ↓/j down • q quit"

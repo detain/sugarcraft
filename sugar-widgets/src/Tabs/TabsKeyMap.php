@@ -10,7 +10,9 @@ use SugarCraft\Widgets\Key\KeyMap;
 use SugarCraft\Widgets\Lang;
 
 /**
- * Key bindings for the {@see Tabs} component.
+ * Key bindings for the {@see Tabs} component. Implements
+ * {@see \SugarCraft\Widgets\Key\KeyMap} — the help-collection contract,
+ * not the sugar-forms submit/abort chords class of the same name.
  *
  * Default bindings:
  * - `Tab` → next tab (wraps)
