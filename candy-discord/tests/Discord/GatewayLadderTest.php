@@ -133,6 +133,45 @@ final class GatewayLadderTest extends TestCase
         self::assertStringContainsString('127.0.0.1', $this->gateway->resumeUrl);
     }
 
+    public function testUndecodableFramesAreTracedOncePerWindow(): void
+    {
+        // NET-CD-04/PHP-CD-04: a one-frame protocol desync used to vanish
+        // without a line of evidence. The first drop per window traces with
+        // its reason; the rest are counted, not echoed — and the connection
+        // SURVIVES: junk is a protocol error, not a teardown.
+        $lines = [];
+        $this->connect(true, new Log(static function (string $line) use (&$lines): void {
+            $lines[] = $line;
+        }));
+        $this->fake->pushRaw('not-json{{');
+        $this->fake->pushRaw('42');
+        $this->fake->pushRaw('{"no_op":1}');
+        $this->settle(400);
+        $traced = \array_values(array_filter($lines, static fn (string $l): bool => str_contains($l, 'discord_malformed_frame"') || str_contains($l, 'discord_malformed_frame\'')));
+        self::assertCount(1, $traced, 'one bounded trace for three drops');
+        self::assertStringContainsString('undecodable', $traced[0]);
+        self::assertTrue($this->gateway->connected(), 'malformed traffic is dropped, not fatal');
+        self::assertSame(1, $this->fake->connectionCount, 'no reconnect was armed by junk');
+    }
+
+    public function testAnOversizeFrameIsRefusedByTheLocalCeiling(): void
+    {
+        // SEC-CD-02 belt: ratchet's own buffer is the first wall, but the
+        // insecureLoopbackProxy topology makes a misbehaving local edge a
+        // supported shape — so the ceiling is stated and enforced here too.
+        $lines = [];
+        $this->connect(true, new Log(static function (string $line) use (&$lines): void {
+            $lines[] = $line;
+        }));
+        $this->fake->pushRaw(\str_repeat('x', Gateway::MAX_INBOUND_MESSAGE_BYTES + 1));
+        $this->fake->pushRaw('not-json{{');
+        $this->settle(600);
+        $traced = \array_values(array_filter($lines, static fn (string $l): bool => str_contains($l, 'discord_malformed_frame"') || str_contains($l, 'discord_malformed_frame\'')));
+        self::assertCount(1, $traced, 'the ceiling trip opens the window; the junk drop rides the count');
+        self::assertStringContainsString('oversize', $traced[0]);
+        self::assertTrue($this->gateway->connected(), 'an oversized frame must not kill the session');
+    }
+
     private function connect(bool $wantContent, ?Log $log = null): void
     {
         $port = $this->fake->listen();

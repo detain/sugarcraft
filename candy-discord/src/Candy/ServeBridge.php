@@ -86,6 +86,10 @@ final class ServeBridge
     private array $followed = [];
 
     private bool $helloDone = false;
+    /** Malformed-frame window state (see noteMalformed — one row per window). */
+    private int $malformedWindowAt = 0;
+    private int $malformedSuppressed = 0;
+    private const MALFORMED_LOG_WINDOW_SECONDS = 60;
     private bool $stopping = false;
     private int $attempts = 0;
     private ?\React\EventLoop\TimerInterface $reconnectTimer = null;
@@ -577,9 +581,13 @@ final class ServeBridge
         try {
             $message = \json_decode($payload, true, JsonRpc::MAX_DEPTH, \JSON_THROW_ON_ERROR);
         } catch (\JsonException) {
+            $this->noteMalformed('undecodable', \strlen($payload));
+
             return;
         }
         if (!\is_array($message)) {
+            $this->noteMalformed('not_object', \strlen($payload));
+
             return;
         }
 
@@ -682,6 +690,23 @@ final class ServeBridge
             // the down notice lives HERE — once, with the ending's reason.
             ($this->onDown ?? static function (): void {})($reason);
         }
+    }
+
+    /** Content-free malformed-frame trace, rate-limited to one row per window. */
+    private function noteMalformed(string $why, int $bytes): void
+    {
+        $now = \time();
+        if ($now - $this->malformedWindowAt >= self::MALFORMED_LOG_WINDOW_SECONDS) {
+            if ($this->malformedSuppressed > 0) {
+                $this->log->warn('serve_malformed_frames_suppressed', ['count' => $this->malformedSuppressed]);
+                $this->malformedSuppressed = 0;
+            }
+            $this->malformedWindowAt = $now;
+            $this->log->warn('serve_malformed_frame', ['why' => $why, 'bytes' => $bytes]);
+
+            return;
+        }
+        $this->malformedSuppressed++;
     }
 
     private function rejectPending(string $reason): void

@@ -53,6 +53,16 @@ final class Gateway
 
     public const DEFAULT_URL = 'wss://gateway.discord.gg/?v=10&encoding=json';
 
+    /** Discord's own gateway ceiling: 4 MiB per message; more is a broken or hostile edge. */
+    public const MAX_INBOUND_MESSAGE_BYTES = 4 * 1024 * 1024;
+    /** Discord envelopes are shallow objects; deep nesting is attack padding, not protocol. */
+    public const JSON_MAX_DEPTH = 64;
+    /** One trace row per window; later drops are counted, not echoed. */
+    private const MALFORMED_LOG_WINDOW_SECONDS = 60;
+
+    private int $malformedWindowAt = 0;
+    private int $malformedSuppressed = 0;
+
     private ?WebSocket $socket = null;
     private ?string $sessionId = null;
     private ?int $seq = null;
@@ -131,6 +141,23 @@ final class Gateway
         $socket?->close(1000);
     }
 
+    /** Content-free malformed-frame trace, rate-limited to one row per window. */
+    private function noteMalformed(string $why, int $bytes): void
+    {
+        $now = \time();
+        if ($now - $this->malformedWindowAt >= self::MALFORMED_LOG_WINDOW_SECONDS) {
+            if ($this->malformedSuppressed > 0) {
+                $this->log->warn('discord_malformed_frames_suppressed', ['count' => $this->malformedSuppressed]);
+                $this->malformedSuppressed = 0;
+            }
+            $this->malformedWindowAt = $now;
+            $this->log->warn('discord_malformed_frame', ['why' => $why, 'bytes' => $bytes]);
+
+            return;
+        }
+        $this->malformedSuppressed++;
+    }
+
     private function connect(string $url): void
     {
         if ($this->stopping || $this->gaveUp) {
@@ -176,11 +203,28 @@ final class Gateway
         );
     }
 
-    /** The v10 envelope: {op, d, s, t}. */
+    /**
+     * The v10 envelope: {op, d, s, t}.
+     *
+     * Malformed traffic is dropped WITH a trace, rate-limited to one row per
+     * window (a broken or hostile edge must not log-flood). The size ceiling
+     * is belt-and-suspenders — ratchet's own MessageBuffer bounds decoded
+     * frames by default — but `insecureLoopbackProxy` makes a misbehaving
+     * local edge a SUPPORTED topology, so the assumption is written down
+     * and enforced here rather than only trusted upstream.
+     */
     private function onFrame(string $raw): void
     {
-        $frame = \json_decode($raw, true);
+        $bytes = \strlen($raw);
+        if ($bytes > self::MAX_INBOUND_MESSAGE_BYTES) {
+            $this->noteMalformed('oversize', $bytes);
+
+            return;
+        }
+        $frame = \json_decode($raw, true, self::JSON_MAX_DEPTH);
         if (!\is_array($frame) || !isset($frame['op'])) {
+            $this->noteMalformed('undecodable', $bytes);
+
             return;
         }
         if (isset($frame['s']) && \is_int($frame['s'])) {

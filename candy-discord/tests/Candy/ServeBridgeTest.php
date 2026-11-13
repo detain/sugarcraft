@@ -248,6 +248,29 @@ final class ServeBridgeTest extends TestCase
         self::assertFalse($bridge->connected());
     }
 
+    public function testUndecodableServePayloadsLeaveABoundedTrace(): void
+    {
+        // PHP-CD-04 serve leg: payloads that never decode (or decode to a
+        // non-object) used to return silently — a one-frame desync against
+        // our OWN daemon was invisible. First drop per window traces, the
+        // rest count; the session survives either way.
+        $lines = [];
+        $bridge = new ServeBridge($this->url, 'tok-123456', 'subprotocol', new Log(static function (string $line) use (&$lines): void {
+            $lines[] = $line;
+        }), $this->loop);
+        self::bridgeConnected($bridge);
+
+        $this->serve->pushRaw('not json {{');
+        $this->serve->pushRaw('"a bare string"');
+        $this->serve->pushRaw('42');
+        self::runFor($this->loop, 150);
+        $traced = \array_values(array_filter($lines, static fn (string $l): bool => str_contains($l, 'serve_malformed_frame"') || str_contains($l, 'serve_malformed_frame\'')));
+        self::assertCount(1, $traced, 'one bounded trace for three drops');
+        self::assertStringContainsString('undecodable', $traced[0]);
+        self::assertTrue($bridge->connected(), 'junk traffic is dropped, not fatal');
+        $bridge->stop();
+    }
+
     private static function bridgeConnected(ServeBridge $bridge): void
     {
         $GLOBALS['p2_loop'] = $bridge;

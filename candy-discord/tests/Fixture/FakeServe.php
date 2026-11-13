@@ -156,6 +156,14 @@ final class FakeServe
         }
     }
 
+    /** Deliver a raw payload as one TEXT message to every upgraded client. */
+    public function pushRaw(string $payload): void
+    {
+        foreach ($this->framing as $framing) {
+            $framing->sendMessage($payload);
+        }
+    }
+
     public function stop(): void
     {
         $this->dropClients();

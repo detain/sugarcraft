@@ -100,6 +100,14 @@ final class FakeGateway
         }
     }
 
+    /** Deliver a raw payload as one TEXT message to every client (malformed-frame arms). */
+    public function pushRaw(string $payload): void
+    {
+        foreach ($this->framing as $framing) {
+            $framing->sendMessage($payload);
+        }
+    }
+
     public function stop(): void
     {
         $this->dropConnection();
