@@ -14,4 +14,5 @@ return [
     // Byte-cap marker: an item value over Model::MAX_ITEM_RENDER_BYTES
     // renders its first window plus this loud row (sugar-treelist-004).
     'list.render_truncated' => '… (élément tronqué)',
+    'list.no_content_width' => 'Les gouttières de ligne consomment tout l’affichage, la liste ne peut donc pas être affichée.',
 ];

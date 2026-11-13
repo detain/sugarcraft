@@ -1044,7 +1044,8 @@ final class Model
      * rendered — a pass never walks the whole list.
      *
      * @return list<string> Visible lines
-     * @throws \RuntimeException If the viewport has zero dimensions or the list is empty.
+     * @throws \RuntimeException If the viewport has zero dimensions, the list
+     *   is empty, or the gutter reservations leave no content column.
      */
     public function lines(): array
     {
@@ -1378,7 +1379,14 @@ final class Model
 
         $contentWidth = $this->width - $prefixWidth - $suffixWidth;
         if ($contentWidth <= 0) {
-            return [''];
+            // Gutter overrun is a refusal, not a blank: with shipped defaults
+            // the reservation (~7 cells) exceeds narrow side-pane widths, and
+            // every row used to render invisible while the cursor navigated
+            // happily — the list LOOKED empty and nothing said why. The
+            // adjacent degenerate geometry (zero viewport) already refused
+            // loudly; both now share the localized-throw contract, and
+            // view()'s height-tall error frame carries the sentence.
+            throw new \RuntimeException(Lang::t('list.no_content_width'));
         }
 
         // The item value is untrusted display data. Ansi::strip() alone removes
@@ -1508,7 +1516,10 @@ final class Model
     private function hardWrap(string $text, int $contentWidth, ?int $maxLines = null): array
     {
         if ($contentWidth <= 0) {
-            return [''];
+            // Mirror of renderItem()'s gutter-overrun refusal: a zero-width
+            // wrap budget must never degrade to a silent blank row for any
+            // future caller (renderItem refuses before reaching here today).
+            throw new \RuntimeException(Lang::t('list.no_content_width'));
         }
         $budget = $maxLines ?? \PHP_INT_MAX;
 

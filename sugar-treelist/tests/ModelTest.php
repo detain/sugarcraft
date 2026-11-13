@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\TreeList\Tests;
 
 use SugarCraft\Core\Util\Width;
-use SugarCraft\TreeList\{DefaultPrefixer, DefaultSuffixer, FilterState, Model, Prefixer, StringItem, Suffixer};
+use SugarCraft\TreeList\{DefaultPrefixer, DefaultSuffixer, FilterState, Lang, Model, Prefixer, StringItem, Suffixer};
 use SugarCraft\TreeList\Tests\Support\RowDeltaAssertions;
 use PHPUnit\Framework\TestCase;
 
@@ -647,19 +647,21 @@ final class ModelTest extends TestCase
         $this->assertStringStartsWith('│     line2', $lines[1]);
     }
 
-    public function testLinesWithContentWidthTooNarrowExercisingHardWrapEdgeCase(): void
+    public function testLinesWithContentWidthTooNarrowRefusesInsteadOfBlanks(): void
     {
+        // sugar-treelist-008 disclosed flip: this geometry pinned a SILENT
+        // single blank row (the old assertSame([''], $lines) — gutters ate
+        // every column while the cursor navigated happily). Gutter overrun is
+        // now a loud localized refusal, mirroring the zero-viewport contract.
         $m = $this->model
             ->withItem(new StringItem('word'))
             ->withPrefixer(new DefaultPrefixer())
             ->withSuffixer(new DefaultSuffixer())
             ->withViewport(5, 24);
 
-        $lines = $m->lines();
-        // Exact geometry (2026-11-03 strengthened pin): prefix + suffix leave
-        // no content width, so the item degrades to a single blank row rather
-        // than throwing or overflowing the viewport.
-        $this->assertSame([''], $lines);
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage(Lang::t('list.no_content_width'));
+        $m->lines();
     }
 
     // -------------------------------------------------------------------------
@@ -1781,6 +1783,91 @@ final class ModelTest extends TestCase
             $this->assertSame("\x1b[" . ($i + 1) . ";1H\x1b[K", $rows[$i], 'only erase-only cleared rows stand below the message');
         }
         $this->assertSame('', $rows[24], 'the frame terminates with a trailing "\n"');
+    }
+
+    public function testGutterRefusalPaintsTheHeightTallErrorFrame(): void
+    {
+        // The refusal rides the caught-frame path (sugar-treelist-003
+        // machinery): view() never throws, so at width 7 — where shipped
+        // defaults leave contentWidth 0 — the frame is the localized
+        // sentence rewritten across the full viewport height, never blanks.
+        $m = $this->model
+            ->withItem(new StringItem('main.php'))
+            ->withItem(new StringItem('lib.php'))
+            ->withPrefixer(new DefaultPrefixer())
+            ->withSuffixer(new DefaultSuffixer())
+            ->withViewport(7, 3);
+
+        $frame = $m->view();
+        $rows  = \explode("\n", $frame);
+        $this->assertCount(4, $rows, 'the caught frame keeps the viewport-height invariant');
+        $this->assertSame(
+            "\x1b[1;1H" . Lang::t('list.no_content_width') . "\x1b[K",
+            $rows[0],
+            'row 1 carries the localized refusal sentence',
+        );
+        $this->assertSame("\x1b[2;1H\x1b[K", $rows[1]);
+        $this->assertSame("\x1b[3;1H\x1b[K", $rows[2]);
+    }
+
+    public function testLinesStreamPropagatesTheGutterRefusal(): void
+    {
+        // linesStream() shares lines()'s eager door: the refusal is raised on
+        // first consumption, exactly like lines().
+        $m = $this->model
+            ->withItem(new StringItem('main.php'))
+            ->withItem(new StringItem('lib.php'))
+            ->withPrefixer(new DefaultPrefixer())
+            ->withSuffixer(new DefaultSuffixer())
+            ->withViewport(7, 3);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage(Lang::t('list.no_content_width'));
+        \iterator_to_array($m->linesStream());
+    }
+
+    public function testSingleContentColumnAtTheBoundaryStillRenders(): void
+    {
+        // Boundary geometry: width 8 with shipped gutters leaves exactly one
+        // content column. That is NOT a refusal — content survives, one cell
+        // per row, never a blank.
+        $m = $this->model
+            ->withItem(new StringItem('ab'))
+            ->withItem(new StringItem('cd'))
+            ->withPrefixer(new DefaultPrefixer())
+            ->withSuffixer(new DefaultSuffixer())
+            ->withViewport(8, 24);
+
+        $lines = $m->lines();
+        $this->assertSame(['╭ 0 > a<', '│     b', '╰ 1   c', '│     d'], $lines);
+        foreach ($lines as $row) {
+            $this->assertNotSame('', $row);
+            $this->assertLessThanOrEqual(8, Width::string($row));
+        }
+    }
+
+    public function testGutterlessNarrowViewportIsNotARefusal(): void
+    {
+        // The refusal is about the GUTTERS eating the frame, not about narrow
+        // viewports: with no prefixer/suffixer attached, a one-cell viewport
+        // still renders its content.
+        $lines = $this->model
+            ->withItem(new StringItem('x'))
+            ->withViewport(1, 3)
+            ->lines();
+        $this->assertSame(['x'], $lines);
+    }
+
+    public function testHardWrapMirrorRefusesAZeroWidthBudgetDirectly(): void
+    {
+        // Defense-in-depth mirror pin (sugar-treelist-008): renderItem guards
+        // the geometry upstream, so hardWrap's own refusal is only reachable
+        // through this private door — reached directly it must refuse too,
+        // never return the historical [''] blank.
+        $method = new \ReflectionMethod($this->model, 'hardWrap');
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage(Lang::t('list.no_content_width'));
+        $method->invoke($this->model, 'text', 0);
     }
 
     public function testPrefixerAndSuffixerReturnsAreSweptIntoTheFrame(): void

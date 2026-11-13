@@ -14,4 +14,5 @@ return [
     // Byte-cap marker: an item value over Model::MAX_ITEM_RENDER_BYTES
     // renders its first window plus this loud row (sugar-treelist-004).
     'list.render_truncated' => '… (항목 잘림)',
+    'list.no_content_width' => '여백이 뷰포트 전체를 차지하여 목록을 표시할 수 없습니다.',
 ];

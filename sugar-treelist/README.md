@@ -353,14 +353,16 @@ Beyond the fluent setters shown above, the navigation surface is:
 - `withCursorUp(int $n = 1)`/`withCursorDown(int $n = 1)` and the page helpers `withCursorPageUp(int $pages = 1)`/`withCursorPageDown(int $pages = 1)` — movement **saturates** at the list ends (`withCursorDown(PHP_INT_MAX)` lands on the last item, never wraps or overflows). A page spans `height` **items**, not displayed lines — a list of multi-line items pages visually faster. `withCursorToStart()`/`withCursorToEnd()` jump to the ends.
 - `cursorIndex()` — the cursor's **item** index (not a row position: with multi-line items, rows and items differ). `cursorItem()` — the cursor item's `\Stringable`; throws `RuntimeException` on an empty list. `tryCursorItem()` returns `null` instead, matching the `tryItemAt()`/`itemAt()` pair.
 - `length()`, `isEmpty()`, `itemAt(int)`, `tryItemAt(int)`, `find(\Stringable)`, `itemIds()` — read-only item access (indices address the **visible** projection, so they follow the active filter).
-- `lines()` — the laid-out frame rows without any delta bookkeeping; throws `RuntimeException` with a localized message (see below) on an empty list or zero viewport. `linesStream()` is a generator-shaped wrapper over the same eager computation — it interleaves nothing.
+- `lines()` — the laid-out frame rows without any delta bookkeeping; throws `RuntimeException` with a localized message (see below) on an empty list, a zero viewport, or gutters whose reservation consumes every viewport column (`list.no_content_width` — narrow panes refuse loudly instead of painting silent blanks). `linesStream()` is a generator-shaped wrapper over the same eager computation — it interleaves nothing.
 - `view()` — full frame or row delta as described above. Together with `resetPreviousFrame()` it is one of only two members that mutate in place: `view()` updates the render memo, `resetPreviousFrame()` (void) drops it, which is why the immutability contract is scoped to item/configuration data. Unlike `lines()`, `view()` **never throws**: a `Throwable` raised mid-render drops the memo and the frame becomes the swept exception message (`Model::sweepForFrame` — the marked-frames sanitize plus the CR→LF fold — is the choke, so a failure surfaces as readable text, never as a live escape channel; line breaks the message itself carries stay breaks); pass a `LoggerInterface` as `view()`'s optional parameter to receive the same failure at `warning` level. `lines()` keeps the opposite polarity and throws.
 
 ## Localisation
 
-The two refusal strings raised by `lines()` — `list.no_items` (which
-`cursorItem()` reuses for its own empty-list refusal) and
-`list.zero_viewport` — are live `Lang::t()` lookups across the 16 shipped
+The three refusal strings raised by `lines()` — `list.no_items` (which
+`cursorItem()` reuses for its own empty-list refusal),
+`list.zero_viewport`, and `list.no_content_width` (the prefix/suffix
+reservations consumed every viewport column, sugar-treelist-008) — are live
+`Lang::t()` lookups across the 16 shipped
 locales under `lang/`. Locale selection is the host application's concern; the
 renderer only formats through `SugarCraft\TreeList\Lang`.
 

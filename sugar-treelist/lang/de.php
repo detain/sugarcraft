@@ -14,4 +14,5 @@ return [
     // Byte-cap marker: an item value over Model::MAX_ITEM_RENDER_BYTES
     // renders its first window plus this loud row (sugar-treelist-004).
     'list.render_truncated' => '… (Eintrag gekürzt)',
+    'list.no_content_width' => 'Die Zeilenränder verbrauchen das gesamte Viewport, daher kann die Liste nicht angezeigt werden.',
 ];
