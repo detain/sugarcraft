@@ -57,8 +57,16 @@ final class PngRenderer
     /** Upper bound for corner rounding (pixels); the ctor and withers door the value. */
     public const MAX_BORDER_RADIUS = 256;
 
-    /** Hard ceiling on output pixels (~40M) to bound GD memory. */
+    /**
+     * Hard ceiling on output pixels (~40M) to bound GD memory. With the cs-10
+     * in-place shadow fill the render allocates ONE canvas at this size
+     * (peak ~= 4 bytes/pixel); the pre-cure second full-canvas blit buffer
+     * doubled it silently.
+     */
     public const MAX_PNG_PIXELS = 40_000_000;
+
+    /** Down/right offset (px) of the shadow rect from the frame corner. */
+    private const SHADOW_OFFSET = 6;
 
     /** @var \WeakMap<\GdImage, array<string, int>> Per-image colour cache */
     private \WeakMap $colorCache;
@@ -170,30 +178,22 @@ final class PngRenderer
         $bgColor    = $this->allocateColor($img, $this->theme->background);
         $borderColor = $this->theme->border ? $this->allocateColor($img, $this->theme->border) : null;
 
-        // Draw shadow if enabled.
+        // Draw shadow if enabled. cs-10: this used to render into a SECOND
+        // full-canvas truecolor buffer ($totalW x $totalH) and imagecopy it
+        // back — doubling peak GD memory to blit one opaque rectangle. With
+        // alpha blending off (set above), the whole-canvas copy is exactly
+        // "shadow rect pixels inside the rectangle, transparent outside"
+        // onto an already-transparent canvas, so filling the offset rect
+        // in place is byte-identical. One fill, one canvas.
         if ($this->shadow) {
-            $shadowImg = imagecreatetruecolor($totalW, $totalH);
-            if ($shadowImg === false) {
-                imagedestroy($img);
-                throw new \RuntimeException('Failed to create shadow GD image resource.');
-            }
-            imagealphablending($shadowImg, false);
-            imagesavealpha($shadowImg, true);
-            imagefill($shadowImg, 0, 0, imagecolorallocatealpha($shadowImg, 0, 0, 0, 127));
-
-            $shadowColor = imagecolorallocatealpha($shadowImg, 0, 0, 0, 60);
-            $shadowOffset = 6;
             imagefilledrectangle(
-                $shadowImg,
-                $shadowMargin + $shadowOffset,
-                $shadowMargin + $shadowOffset,
-                $shadowMargin + $frameWidth - 1 + $shadowOffset,
-                $shadowMargin + $frameHeight - 1 + $shadowOffset,
-                $shadowColor,
+                $img,
+                $shadowMargin + self::SHADOW_OFFSET,
+                $shadowMargin + self::SHADOW_OFFSET,
+                $shadowMargin + $frameWidth - 1 + self::SHADOW_OFFSET,
+                $shadowMargin + $frameHeight - 1 + self::SHADOW_OFFSET,
+                imagecolorallocatealpha($img, 0, 0, 0, 60),
             );
-
-            imagecopy($img, $shadowImg, 0, 0, 0, 0, (int) $totalW, (int) $totalH);
-            imagedestroy($shadowImg);
         }
 
         // Draw background frame.

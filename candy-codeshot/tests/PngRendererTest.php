@@ -107,6 +107,43 @@ final class PngRendererTest extends TestCase
         $this->assertGreaterThan(strlen($noShadow), strlen($withShadow));
     }
 
+    public function testShadowBandIsFilledInPlaceOnASingleCanvas(): void
+    {
+        // cs-10: the shadow used to be a SECOND full-canvas truecolor buffer
+        // blitted over the frame by a whole-canvas imagecopy — peak GD memory
+        // 2x canvas for one opaque rect. With blending off the copy is
+        // "rect pixels inside, transparent outside" onto the already
+        // transparent fill, so the in-place fill is byte-identical (md5-
+        // proven against the pre-cure implementation at commit time). This
+        // pins the CONTRACT the blit provided: the offset L-band carries the
+        // shadow pixels and nothing beyond it leaks onto the canvas.
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('ext-gd not loaded');
+        }
+
+        // Geometry for this shape: frame 8x16 at (32,32), shadow rect
+        // (38,38)-(45,53), canvas 72x80 (shadow margin 32, offset 6).
+        $png = PngRenderer::dark()->withWindow(false)->withBorder(false)->withPadding(0)->render("x\n");
+        $im = imagecreatefromstring($png);
+        $this->assertNotFalse($im);
+
+        try {
+            foreach ([[43, 43], [43, 50], [41, 49]] as [$x, $y]) {
+                $c = imagecolorat($im, $x, $y);
+                $this->assertSame(0, $c & 0xFF, "shadow pixel ($x,$y) blue");
+                $this->assertSame(0, ($c >> 8) & 0xFF, "shadow pixel ($x,$y) green");
+                $this->assertSame(0, ($c >> 16) & 0xFF, "shadow pixel ($x,$y) red");
+                $this->assertSame(60, ($c >> 24) & 0x7F, "shadow pixel ($x,$y) alpha");
+            }
+            foreach ([[5, 5], [70, 78], [60, 45]] as [$x, $y]) {
+                $c = imagecolorat($im, $x, $y);
+                $this->assertSame(127, ($c >> 24) & 0x7F, "pixel ($x,$y) outside the band must stay transparent");
+            }
+        } finally {
+            imagedestroy($im);
+        }
+    }
+
     public function testLineNumbersIncreaseWidth(): void
     {
         $noLineNums = PngRenderer::dark()->withLineNumbers(false)->withWindow(false)->render("x\n");
