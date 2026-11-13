@@ -85,7 +85,7 @@ final class AsciiRenderer implements FrameRenderer
      */
     public function cellDimensions(Mode $mode): array
     {
-        // All ASCII modes render one source pixel per terminal cell.
-        return ['w' => 1, 'h' => 1];
+        // SV-L51: Mode answers the packing; no per-renderer table.
+        return ['w' => $mode->colsPerCell(), 'h' => $mode->rowsPerCell()];
     }
 }

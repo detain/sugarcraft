@@ -248,6 +248,7 @@ final class RendererFactoryTest extends TestCase
             Mode::Ansi256,
             Mode::TrueColor,
             Mode::HalfBlock,
+            Mode::QuarterBlock,
         ];
 
         foreach ($implementedModes as $mode) {
@@ -272,6 +273,46 @@ final class RendererFactoryTest extends TestCase
             $this->assertIsArray($dims);
             $this->assertArrayHasKey('w', $dims);
             $this->assertArrayHasKey('h', $dims);
+
+            // SV-L51: the renderer's answer IS Mode's answer — one packing source.
+            $this->assertSame(
+                ['w' => $mode->colsPerCell(), 'h' => $mode->rowsPerCell()],
+                $dims,
+                "{$mode->value} renderer still holds its own packing table"
+            );
+        }
+    }
+
+    /**
+     * @testdox cellDimensions answers the mode it is passed, not the renderer's own mode (SV-L51)
+     */
+    public function testCellDimensionsFollowThePassedModeNotTheRenderer(): void
+    {
+        $ascii = RendererFactory::new(Mode::Ascii);
+        $this->assertSame(['w' => 2, 'h' => 2], $ascii->cellDimensions(Mode::QuarterBlock));
+
+        $half = RendererFactory::new(Mode::HalfBlock);
+        $this->assertSame(['w' => 1, 'h' => 1], $half->cellDimensions(Mode::Ansi256));
+    }
+
+    /**
+     * @testdox no renderer file keeps numeric packing literals — cell-packing arithmetic lives only in Mode (SV-L51)
+     */
+    public function testCellPackingArithmeticLivesOnlyInMode(): void
+    {
+        foreach (['AsciiRenderer', 'HalfBlockRenderer', 'QuarterBlockRenderer', 'GraphicsRenderer'] as $class) {
+            $source = (string) file_get_contents(dirname(__DIR__) . '/src/Render/' . $class . '.php');
+
+            $this->assertStringContainsString(
+                '$mode->colsPerCell()',
+                $source,
+                "{$class}::cellDimensions no longer delegates to Mode"
+            );
+            $this->assertDoesNotMatchRegularExpression(
+                "/'w' => \d/",
+                $source,
+                "{$class} still carries a hardcoded cell-packing table"
+            );
         }
     }
 

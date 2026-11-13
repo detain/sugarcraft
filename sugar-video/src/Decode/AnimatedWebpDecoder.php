@@ -996,9 +996,13 @@ final class AnimatedWebpDecoder implements Decoder
             return [max(1, $cellsW * $cellPxW), max(1, $cellsH * $cellPxH)];
         }
 
+        // SV-L51: null mode keeps the DecoderFactory HalfBlock policy (spelled as
+        // a mode); the packing arithmetic itself lives only in Mode.
+        $pack = $mode ?? Mode::HalfBlock;
+
         return [
-            max(1, $cellsW * ($mode?->colsPerCell() ?? 1)),
-            max(1, $cellsH * ($mode?->rowsPerCell() ?? 2)),
+            max(1, $cellsW * $pack->colsPerCell()),
+            max(1, $cellsH * $pack->rowsPerCell()),
         ];
     }
 

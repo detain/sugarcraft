@@ -24,10 +24,16 @@ interface FrameRenderer
     public function render(RgbFrame $frame, Mode $mode): string;
 
     /**
-     * Return the terminal cell dimensions consumed by a pixel of the given mode.
+     * The terminal cell dimensions a pixel of the GIVEN mode consumes.
      *
-     * Most modes render one source pixel per cell [1,1].
-     * HalfBlock reads 2 source rows per cell [1,2].
+     * SV-L51: `Mode` is the single packing authority — implementations
+     * answer by delegating to {@see Mode::colsPerCell()} /
+     * {@see Mode::rowsPerCell()} instead of holding per-renderer tables
+     * (the old tables drifted: quarter-block's 2×2 was missing from this
+     * very contract's prose). The answer follows the mode passed in, not
+     * the renderer's own mode. The method survives as a call-path shim
+     * for external implementations and callers; in-library consumers read
+     * Mode directly.
      *
      * @param Mode $mode Rendering mode
      * @return array{w: int, h: int} Cell width and height in terminal cells

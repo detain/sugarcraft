@@ -42,7 +42,7 @@ final class QuarterBlockRenderer implements FrameRenderer
 
     public function cellDimensions(Mode $mode): array
     {
-        // Quarter-block reads a 2×2 source pixel group per terminal cell.
-        return ['w' => 2, 'h' => 2];
+        // SV-L51: Mode answers the packing; no per-renderer table.
+        return ['w' => $mode->colsPerCell(), 'h' => $mode->rowsPerCell()];
     }
 }

@@ -260,7 +260,10 @@ final class GifDecoder implements Decoder
         } else {
             $this->targetW = 0;
             $this->targetH = 0;
-            [$decodeW, $decodeH] = [$cellsW * ($mode?->colsPerCell() ?? 1), $cellsH * ($mode?->rowsPerCell() ?? 2)];
+            // SV-L51: the null-mode fallback is the HalfBlock policy spelled as a
+            // mode (DecoderFactory default) — the packing arithmetic lives in Mode.
+            $pack = $mode ?? Mode::HalfBlock;
+            [$decodeW, $decodeH] = [$cellsW * $pack->colsPerCell(), $cellsH * $pack->rowsPerCell()];
         }
 
         // Index only identifies a frame WITHIN one decode shape: the same GIF

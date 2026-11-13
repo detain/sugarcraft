@@ -114,11 +114,12 @@ final class GraphicsRenderer implements FrameRenderer
     /**
      * @inheritDoc
      *
-     * Graphics protocols fill the terminal with the image — one "cell"
-     * represents the entire rendered area.
+     * Graphics protocols resolve in the renderer: Mode treats them as 1×1
+     * cells (the presentation box comes from the cell-pixel geometry).
      */
     public function cellDimensions(Mode $mode): array
     {
-        return ['w' => 1, 'h' => 1];
+        // SV-L51: Mode answers the packing; no per-renderer table.
+        return ['w' => $mode->colsPerCell(), 'h' => $mode->rowsPerCell()];
     }
 }

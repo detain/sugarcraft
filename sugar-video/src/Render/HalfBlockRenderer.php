@@ -63,7 +63,7 @@ final class HalfBlockRenderer implements FrameRenderer
      */
     public function cellDimensions(Mode $mode): array
     {
-        // HalfBlock reads 2 source rows per terminal cell [1,2].
-        return ['w' => 1, 'h' => 2];
+        // SV-L51: Mode answers the packing; no per-renderer table.
+        return ['w' => $mode->colsPerCell(), 'h' => $mode->rowsPerCell()];
     }
 }

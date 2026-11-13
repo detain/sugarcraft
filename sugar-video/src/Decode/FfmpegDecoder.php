@@ -261,11 +261,11 @@ final class FfmpegDecoder implements Decoder
             $this->frameBytes = 0; // PNG frames are self-delimiting, not fixed-length
         } else {
             // Text modes: scale each axis by the mode's source-pixels-per-cell.
-            // HalfBlock packs 2 rows per cell (cellsH*2); QuarterBlock packs 2 rows
-            // AND 2 cols (cellsW*2 × cellsH*2); the 1:1 modes use cellsW × cellsH.
-            // $mode === null defaults to HalfBlock (2 rows, 1 col), per DecoderFactory.
-            $this->frameW = $cellsW * ($mode?->colsPerCell() ?? 1);
-            $this->frameH = $cellsH * ($mode?->rowsPerCell() ?? 2);
+            // The packing table lives in Mode (SV-L51); $mode === null keeps the
+            // DecoderFactory policy — HalfBlock (2 rows, 1 col) spelled as a mode.
+            $pack = $mode ?? Mode::HalfBlock;
+            $this->frameW = $cellsW * $pack->colsPerCell();
+            $this->frameH = $cellsH * $pack->rowsPerCell();
             $this->frameBytes = $this->frameW * $this->frameH * 3;
         }
 
