@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Tests\Cli;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Cli\Bootstrap;
+use SugarCraft\Code\Lang;
 use SugarCraft\Code\Cli\PermissionConfigException;
 use SugarCraft\Code\Config\LayeredSettings;
 use SugarCraft\Code\Permissions\PermissionMode;
@@ -1348,9 +1349,11 @@ final class BootstrapToolAndPermissionSettingsTest extends TestCase
         // harvest and a regex fragment has no business in its pattern corpus;
         // the parenthesis is on that scanner's exclusion set and reads the
         // same to PCRE.
-        $tailPattern = '/^'
-            . str_replace(['%d', '%s'], ['\\d+', '(?:s)?'], preg_quote(Bootstrap::NARROWED_GRANT_OVERFLOW_FORMAT, '/'))
-            . '$/';
+        $tailPattern = '/^(?|'
+            . str_replace('@@', '\\d+', preg_quote(Lang::t('cli.noticerow.narrowed_grant_overflow_one', ['count' => '@@']), '/'))
+            . '|'
+            . str_replace('@@', '\\d+', preg_quote(Lang::t('cli.noticerow.narrowed_grant_overflow_other', ['count' => '@@']), '/'))
+            . ')$/';
         self::assertSame('system', $history[2]['role']);
         self::assertMatchesRegularExpression($tailPattern, $history[2]['content']);
         self::assertCount(4, $history);

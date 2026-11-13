@@ -2989,9 +2989,8 @@ final class DocFigureProseDriftTest extends TestCase
 
     /**
      * E686 tranche-8 (AL): the retention row quotes its own output sentence and
-     * its own cap. The sentence is Bootstrap::SESSION_RETENTION_SUMMARY_FORMAT
-     * filled with the row's example figures, the SAME sentence the constant's
-     * doc-block carries, and 36500 is exactly 100×365. Three sites, one truth
+     * its own cap. The sentence is the cli.noticerow.retention_summary_other
+     * catalogue row filled with the row's example figures, and 36500 is exactly 100×365. Three sites, one truth
      * (arm X's family idiom).
      */
     public function testEnvironmentRetentionRowQuotesTheLiveFormatAndCap(): void
@@ -3008,14 +3007,11 @@ final class DocFigureProseDriftTest extends TestCase
             preg_match('/^retention removed (\d+) unnamed (\w+) untouched for (\d+)\+ days \(ids on stderr\)$/', $quote[1], $parts),
             'the quoted summary no longer matches the shape the live format produces — update the example with the format',
         );
-        $format = Bootstrap::SESSION_RETENTION_SUMMARY_FORMAT;
         self::assertSame(
-            \sprintf($format, (int) $parts[1], $parts[2], (int) $parts[3]),
+            \SugarCraft\Code\Lang::t('cli.noticerow.retention_summary_other', ['count' => (int) $parts[1], 'days' => (int) $parts[3]]),
             $quote[1],
-            'the row\'s example is no longer the live format filled with its own figures',
+            'the row\'s example is no longer the live catalogue row filled with its own figures',
         );
-        $doc = self::proseOf(self::docBlockOf(Bootstrap::class, 'SESSION_RETENTION_SUMMARY_FORMAT'));
-        self::assertStringContainsString($quote[1], $doc, 'ENVIRONMENT.md and the format\'s own doc-block now quote different sentences — the family moved half');
 
         self::assertSame(
             1,

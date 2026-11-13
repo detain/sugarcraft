@@ -92,46 +92,8 @@ final class LaunchNotices
      */
     public const LAUNCH_NOTICE_CLIP_SUFFIX = '… (clipped; full text on stderr)';
 
-    /**
-     * The tail row {@see rows()} synthesises when this launch raised more
-     * warnings than {@see Bootstrap::LAUNCH_NOTICE_LIMIT} could seat.
-     *
-     * PROMOTED BECAUSE A SECOND PARTY READS IT, and this one reproduces the
-     * sentence WHOLE: a routing test `assertSame()`s the rendered line rather
-     * than a fragment of it. It is also the odd one out of its own family: the
-     * cap and the clip suffix are already named, and the sentence that tells a
-     * reader the cap was hit was the only part of the cap contract living as an
-     * inline literal.
-     *
-     * `%d` the number dropped, `%s` the plural marker.
-     */
-    public const LAUNCH_NOTICE_OVERFLOW_FORMAT =
-        '…and %d more launch warning%s this transcript could not fit; the full list is on stderr';
 
-    /**
-     * The aggregate header {@see grantRows()} packs narrowed agent-tool-grant
-     * warnings under.
-     *
-     * PROMOTED BECAUSE A TEST RENDERS THE WHOLE LINE: the drain test
-     * `assertSame()`s the composed row rather than pinning a fragment, so the
-     * wording is a contract with the test and belongs in a named constant.
-     *
-     * `%d` the grant count, `%s` the plural marker, `%s` the was/were verb.
-     */
-    public const NARROWED_GRANT_NOTICE_FORMAT =
-        '%d agent tool grant%s %s narrowed by this session\'s allowedTools/disabledTools';
 
-    /**
-     * The tail row {@see grantRows()} appends when the header's pair pack did
-     * not fit every grant. Mirrors {@see LAUNCH_NOTICE_OVERFLOW_FORMAT}'s
-     * contract — count the rest, point at stderr, spend one row — for the same
-     * reason: a silently truncated aggregate is the defect this seam exists to
-     * end.
-     *
-     * `%d` the grants left over, `%s` the plural marker.
-     */
-    public const NARROWED_GRANT_OVERFLOW_FORMAT =
-        '…and %d more narrowed grant%s this transcript could not fit; the full list is on stderr';
 
     /**
      * The compact `agent "x" declares "y" in tools` prefix of one
@@ -317,10 +279,9 @@ final class LaunchNotices
 
         return [
             ...self::$launchNotices,
-            sprintf(
-                self::translated(self::LAUNCH_NOTICE_OVERFLOW_FORMAT),
-                $dropped,
-                $dropped === 1 ? '' : 's',
+            Lang::t(
+                $dropped === 1 ? 'cli.noticerow.overflow_one' : 'cli.noticerow.overflow_other',
+                ['count' => $dropped],
             ),
         ];
     }
@@ -386,11 +347,9 @@ final class LaunchNotices
             return [];
         }
 
-        $header = sprintf(
-            self::translated(self::NARROWED_GRANT_NOTICE_FORMAT),
-            $count,
-            $count === 1 ? '' : 's',
-            $count === 1 ? 'was' : 'were',
+        $header = Lang::t(
+            $count === 1 ? 'cli.noticerow.narrowed_grant_one' : 'cli.noticerow.narrowed_grant_other',
+            ['count' => $count],
         );
 
         $row = $header;
@@ -409,10 +368,9 @@ final class LaunchNotices
 
         if ($shown < $count) {
             $remaining = $count - $shown;
-            $rows[] = sprintf(
-                self::translated(self::NARROWED_GRANT_OVERFLOW_FORMAT),
-                $remaining,
-                $remaining === 1 ? '' : 's',
+            $rows[] = Lang::t(
+                $remaining === 1 ? 'cli.noticerow.narrowed_grant_overflow_one' : 'cli.noticerow.narrowed_grant_overflow_other',
+                ['count' => $remaining],
             );
         }
 

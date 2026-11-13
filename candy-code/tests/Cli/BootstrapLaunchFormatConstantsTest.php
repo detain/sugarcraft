@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Tests\Cli;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Cli\Bootstrap;
+use SugarCraft\Code\Lang;
 use SugarCraft\Code\Tests\Config\ReadmeSettingsTierClaimTest;
 
 /**
@@ -213,9 +214,6 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
             'method' => 'reportProjectTierToolRemovals',
             'conversions' => 5,
         ],
-        'SKILL_SKIP_NOTICE_FORMAT' => ['method' => 'reportSkillSkips', 'conversions' => 5],
-        // E172's command twin, byte-for-byte in shape — see the constant's doc-block.
-        'COMMAND_SKIP_NOTICE_FORMAT' => ['method' => 'reportCommandSkips', 'conversions' => 5],
         // ISS-036's override aggregate, read back by
         // CommandOverrideLaunchNoticeTest. Quoted on no page, so no
         // PAGE_QUOTES row — the PROMPT_ATTRIBUTION precedent.
@@ -224,9 +222,6 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         // PAGE_QUOTES row — the PROMPT_ATTRIBUTION precedent below.
         // ISS-031's displaced-preset row, read back by
         // AgentPresetShadowNoticeTest. Quoted on no page, so no PAGE_QUOTES row.
-        'LAUNCH_NOTICE_OVERFLOW_FORMAT' => ['method' => 'rows', 'conversions' => 2],
-        'SESSION_RETENTION_SUMMARY_FORMAT' => ['method' => 'reportPrunedSessions', 'conversions' => 3],
-        'SESSION_RETENTION_DETAIL_FORMAT' => ['method' => 'reportPrunedSessions', 'conversions' => 4],
         // ISS-026's cross-project resume notice. Quoted on no page (stderr
         // alone, and this lane may not edit docs), so no PAGE_QUOTES row —
         // the PROMPT_ATTRIBUTION precedent.
@@ -242,22 +237,12 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         'MCP_SERVER_REFUSED_NOTICE_FORMAT' => ['method' => 'mcpClient', 'conversions' => 2],
         'MCP_SERVER_CHANGED_FORMAT' => ['method' => 'mcpClient', 'conversions' => 3],
         'MCP_SERVER_ADDED_FORMAT' => ['method' => 'mcpClient', 'conversions' => 2],
-        // Audit 15d-05's one-time legacy-binding row, read back by
-        // BootstrapLaunchNoticeRoutingTest; quoted on no page.
-        'MEMORY_LEGACY_BOUND_NOTICE_FORMAT' => ['method' => 'reportMemorySkips', 'conversions' => 5],
         // The in-prompt attribution sentence a body-less preset inherits a
         // built-in's text with. Both `%s` slots are the tier word and the
         // definition name; nothing external reads the rendered line (it lives
         // inside the agent's prompt, not on a launch page), so it carries no
         // PAGE_QUOTES row — the census only needs to know the format is named.
         'PROMPT_ATTRIBUTION_FORMAT' => ['method' => 'attributeInheritedPrompt', 'conversions' => 2],
-        // The E653 narrowed-grant pair, both `sprintf()`ed from inside the
-        // packer. The header has a doc reader (this suite renders it whole);
-        // the tail mirrors the launch-overflow line's contract. Neither is
-        // quoted on a page, so no PAGE_QUOTES row — the PROMPT_ATTRIBUTION
-        // precedent above covers exactly that shape.
-        'NARROWED_GRANT_NOTICE_FORMAT' => ['method' => 'grantRows', 'conversions' => 3],
-        'NARROWED_GRANT_OVERFLOW_FORMAT' => ['method' => 'grantRows', 'conversions' => 2],
         // Audit R1's two prompt-budget rows and audit R12's nonsense-ceiling
         // row, read back by BootstrapLaunchNoticeRoutingTest; quoted on no page.
         'NONSENSE_LIMIT_NOTICE_FORMAT' => ['method' => 'reportNonsenseLimits', 'conversions' => 4],
@@ -368,10 +353,6 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
                 . '::testOneShortDenyGlobRemovesEveryToolButOneWithoutNamingAnyOfThem',
             'docs/SETTINGS.md' => ReadmeSettingsTierClaimTest::class
                 . '::testTheSettingsPageQuotesTheSameLaunchReportByteForByte',
-        ],
-        'SESSION_RETENTION_SUMMARY_FORMAT' => [
-            'docs/ENVIRONMENT.md' => self::class . '::testTheDocPagesQuoteTheRetentionSummaryTheLauncherActuallyPrints',
-            'docs/SETTINGS.md' => self::class . '::testTheDocPagesQuoteTheRetentionSummaryTheLauncherActuallyPrints',
         ],
         'PROJECT_TIER_REFUSAL_FORMAT' => [
             // §7(2) closeout: README's coincidence sentence lapsed past the
@@ -520,20 +501,10 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
     private const METHOD_LITERALS = [
         'warnPermissionConfig' => [],
         'reportProjectTierToolRemovals' => ["'disabledTools'", "', '"],
-        // The three agreement slots the notice interpolates. Every one of them
-        // is plumbing for ONE sentence, which is why the sentence has a name
-        // and these do not.
-        'reportSkillSkips' => ["''", "'s'", "'was'", "'were'", "'it'", "'them'"],
-        // The command twin's identical agreement slots (E172).
-        'reportCommandSkips' => ["''", "'s'", "'was'", "'were'", "'it'", "'them'"],
         // ISS-036's override aggregate: the plural pick and the row joiner.
         // The loader's sentences arrive pre-rendered, so the body's only
         // format is the named constant.
         'reportCommandOverrides' => ["'cli.noticerow.command_overrides_one'", "'cli.noticerow.command_overrides_other'", "'count'", "'list'", "'; '"],
-        'rows' => ["''", "'s'"],
-        // Both halves of the retention report are named, so what is left here
-        // is the plural pair and the four `$row` keys the detail line reads.
-        'reportPrunedSessions' => ["'session'", "'sessions'", "'id'", "'updated_at'", "'messages'", "'message'"],
         // ISS-026: the only format is named; the rest are the return-shape
         // keys, the two launch-mode words the body compares against, and the
         // cwd fallback ternary's empty-string probe and fallback word.
@@ -554,8 +525,9 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         // sentence inline in body order, ahead of `userPath`; they are not
         // launcher-printed stderr lines, so they own no named constant.
         'mcpClient' => ["'path'", "'status'", "'userStatus'", "'canonicalRoot'", "'/'", "'MCP trust pins '", "' unusable ('", "'); treated as no record'", "'refusing to start MCP servers: '", "' is empty or unreadable; run `candy-code mcp trust` to re-approve'", "'userPath'", "''", "'fingerprint'", "'summary'", "'deny'", "'; '"],
-        // Audit 15d-05's binding row: the plural pair and the is/are pick.
-        'reportMemorySkips' => ["''", "'s'", "'is'", "'are'"],
+        // Audit 15d-05's binding row: the one/other catalogue pair (S-X08) and
+        // the three parameter names it fills.
+        'reportMemorySkips' => ["'cli.noticerow.memory_legacy_bound_one'", "'cli.noticerow.memory_legacy_bound_other'", "'count'", "'root'", "'dir'"],
         // Audit R1's two rows: S-X08 moved the plural grammar into one
         // catalogue key per plural class (cli.deferral.*), so what the body
         // holds is those six Lang::t keys and the two placeholder names they
@@ -910,7 +882,7 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         // -2 in S-X08: the two prompt-budget deferral rows left sprintf() for
         // count-keyed catalogue sentences (cli.deferral.*).
         self::assertSame(
-            27,
+            19,
             $census['calls'],
             "Bootstrap.php's sprintf() call-site count moved; see this test's doc-block",
         );
@@ -1089,7 +1061,7 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
     /**
      * THE SECOND PARTY, made a real assertion rather than a claim in a
      * doc-block: the two pages that quote the retention summary are rendered
-     * FROM {@see Bootstrap::SESSION_RETENTION_SUMMARY_FORMAT}.
+     * FROM the `cli.noticerow.retention_summary_*` catalogue rows.
      *
      * WHAT THIS PARAGRAPH USED TO SAY, and why it is rewritten rather than
      * deleted (round 46's review, MAJOR 3). IT SAID: "the only one of the six
@@ -1129,7 +1101,7 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
      */
     public function testTheDocPagesQuoteTheRetentionSummaryTheLauncherActuallyPrints(): void
     {
-        $rendered = sprintf(Bootstrap::SESSION_RETENTION_SUMMARY_FORMAT, 3, 'sessions', 30);
+        $rendered = Lang::t('cli.noticerow.retention_summary_other', ['count' => 3, 'days' => 30]);
 
         foreach (['docs/ENVIRONMENT.md', 'docs/SETTINGS.md'] as $page) {
             $path = \dirname(__DIR__, 2) . '/' . $page;
@@ -1140,7 +1112,7 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
             self::assertStringContainsString(
                 $rendered,
                 $flat,
-                "{$page} no longer quotes what Bootstrap::SESSION_RETENTION_SUMMARY_FORMAT renders. Either "
+                "{$page} no longer quotes what the cli.noticerow.retention_summary_other row renders. Either "
                 . 'the launcher was reworded and the page was not, or the page was edited away from the '
                 . 'line it is describing; both are the drift a name exists to make loud',
             );
@@ -1218,7 +1190,7 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
      * The retention DETAIL row carries its own copy of the stderr envelope, and
      * that relationship is asserted rather than only explained.
      *
-     * {@see Bootstrap::SESSION_RETENTION_DETAIL_FORMAT}'s doc-block says the
+     * the `cli.noticerow.retention_detail_*` rows' says the
      * duplication is deliberate — these rows are a continuation indented under
      * the summary, and routing them through the seam would seed one transcript
      * row per deleted session. A justification is not a pin: with nothing
@@ -1242,16 +1214,17 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         $label = substr(Bootstrap::STDERR_LINE_FORMAT, 0, $at);
         self::assertNotSame('', $label, 'the stderr envelope has no label, so there is nothing to indent under');
 
+        $detail = Lang::t('cli.noticerow.retention_detail_other', ['id' => 'x', 'when' => 'y', 'count' => 2]);
         self::assertStringStartsWith(
             $label . '  ',
-            Bootstrap::SESSION_RETENTION_DETAIL_FORMAT,
+            $detail,
             'the retention detail rows no longer open with the stderr envelope\'s own label plus the indent '
             . 'that makes them read as a continuation of the summary above them',
         );
-        self::assertStringEndsWith("\n", Bootstrap::SESSION_RETENTION_DETAIL_FORMAT);
+        self::assertStringEndsWith("\n", $detail);
         self::assertStringEndsWith(
             ")\n",
-            Bootstrap::SESSION_RETENTION_DETAIL_FORMAT,
+            $detail,
             'a continuation row gained sentence punctuation; the envelope adds the full stop because it '
             . 'wraps a sentence, and these rows are not one',
         );
@@ -1354,7 +1327,7 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         );
         self::assertSame(
             [],
-            self::pagesQuoting(Bootstrap::SKILL_SKIP_NOTICE_FORMAT, $pages),
+            self::pagesQuoting(Bootstrap::PROJECT_TIER_REFUSAL_FORMAT, $pages),
             'the sweep nominates a page for a format that page does not contain',
         );
 

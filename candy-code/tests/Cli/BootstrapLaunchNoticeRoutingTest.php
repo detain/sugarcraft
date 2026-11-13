@@ -245,7 +245,7 @@ final class BootstrapLaunchNoticeRoutingTest extends TestCase
 
         self::assertCount(1, $notices);
         self::assertStringContainsString(
-            sprintf(Bootstrap::SKILL_SKIP_NOTICE_FORMAT, 2, 's', 'were', SkillLoader::DEBUG_SKIPS_ENV, 'them'),
+            Lang::t('cli.noticerow.skill_skip_other', ['count' => 2, 'env' => SkillLoader::DEBUG_SKIPS_ENV]),
             $notices[0],
         );
         self::assertSame(1, substr_count($stderr, 'skill files were not loaded'));
@@ -296,14 +296,11 @@ final class BootstrapLaunchNoticeRoutingTest extends TestCase
         $launch = '\\SugarCraft\\Code\\Cli\\Bootstrap::chat(' . var_export($this->projectRoot, true) . ");\n";
         [$stderr, $notices] = $this->launch($launch);
 
-        $expected = sprintf(
-            Bootstrap::MEMORY_LEGACY_BOUND_NOTICE_FORMAT,
-            1,
-            '',
-            'is',
-            $this->projectRoot,
-            $this->configDir . '/memory/project/' . MemoryStore::projectKeyFor($this->projectRoot),
-        );
+        $expected = Lang::t('cli.noticerow.memory_legacy_bound_one', [
+            'count' => 1,
+            'root' => $this->projectRoot,
+            'dir' => $this->configDir . '/memory/project/' . MemoryStore::projectKeyFor($this->projectRoot),
+        ]);
         self::assertSame([$expected], $notices);
         self::assertSame(1, substr_count($stderr, $expected));
         self::assertFileExists(
@@ -555,14 +552,10 @@ final class BootstrapLaunchNoticeRoutingTest extends TestCase
 
         self::assertCount(1, $notices);
         self::assertStringContainsString(
-            sprintf(
-                Bootstrap::COMMAND_SKIP_NOTICE_FORMAT,
-                2,
-                's',
-                'were',
-                CommandLoader::DEBUG_REFUSALS_ENV,
-                'them',
-            ),
+            Lang::t('cli.noticerow.command_skip_other', [
+                'count' => 2,
+                'env' => CommandLoader::DEBUG_REFUSALS_ENV,
+            ]),
             $notices[0],
         );
         self::assertSame(1, substr_count($stderr, 'could not be read'));
@@ -637,7 +630,7 @@ final class BootstrapLaunchNoticeRoutingTest extends TestCase
         $last = $limit - 1;
         self::assertStringContainsString("permissionRules[{$last}] ('Bogus{$last}')", $notices[$last]);
         self::assertSame(
-            sprintf(Bootstrap::LAUNCH_NOTICE_OVERFLOW_FORMAT, 6, 's'),
+            Lang::t('cli.noticerow.overflow_other', ['count' => 6]),
             $notices[$limit],
         );
 
@@ -667,7 +660,7 @@ final class BootstrapLaunchNoticeRoutingTest extends TestCase
         // traffic) and lands after the overflow tail through both entry points.
         self::assertCount($limit + 2, $history);
         self::assertStringContainsString(
-            sprintf(Bootstrap::LAUNCH_NOTICE_OVERFLOW_FORMAT, 6, 's'),
+            Lang::t('cli.noticerow.overflow_other', ['count' => 6]),
             $history[$limit],
         );
         self::assertStringContainsString('offline echo backend', $history[$limit + 1]);
@@ -796,7 +789,7 @@ final class BootstrapLaunchNoticeRoutingTest extends TestCase
             1,
             substr_count(
                 implode("\n", $viaApp),
-                sprintf(Bootstrap::LAUNCH_NOTICE_OVERFLOW_FORMAT, 6, 's'),
+                Lang::t('cli.noticerow.overflow_other', ['count' => 6]),
             ),
             'the overflow row must appear exactly once in the hosted transcript',
         );
@@ -899,14 +892,14 @@ final class BootstrapLaunchNoticeRoutingTest extends TestCase
         );
 
         self::assertSame(
-            [sprintf(Bootstrap::SESSION_RETENTION_SUMMARY_FORMAT, 2, 'sessions', 30)],
+            [Lang::t('cli.noticerow.retention_summary_other', ['count' => 2, 'days' => 30])],
             $notices,
             'the transcript must carry exactly one aggregate row for the prune',
         );
         self::assertStringContainsString(
             sprintf(
                 Bootstrap::STDERR_LINE_FORMAT,
-                sprintf(Bootstrap::SESSION_RETENTION_SUMMARY_FORMAT, 2, 'sessions', 30),
+                Lang::t('cli.noticerow.retention_summary_other', ['count' => 2, 'days' => 30]),
             ),
             $stderr,
             'the stderr half of the seam must still say it',
@@ -922,12 +915,9 @@ final class BootstrapLaunchNoticeRoutingTest extends TestCase
         // identical needle for both would miss a plural bug either way.
         foreach (['gone-one' => 1, 'gone-two' => 0] as $id => $messages) {
             self::assertStringContainsString(
-                sprintf(
-                    Bootstrap::SESSION_RETENTION_DETAIL_FORMAT,
-                    $id,
-                    '2020-01-01 00:00:00',
-                    $messages,
-                    $messages === 1 ? 'message' : 'messages',
+                Lang::t(
+                    $messages === 1 ? 'cli.noticerow.retention_detail_one' : 'cli.noticerow.retention_detail_other',
+                    ['id' => $id, 'when' => '2020-01-01 00:00:00', 'count' => $messages],
                 ),
                 $stderr,
             );

@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Tests\Cli;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 use SugarCraft\Code\Cli\Bootstrap;
+use SugarCraft\Code\Lang;
 use SugarCraft\Code\Config\LayeredSettings;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 
@@ -77,7 +78,7 @@ final class PermissionWarningDrainTest extends TestCase
 
         self::assertSame(
             [
-                sprintf(Bootstrap::NARROWED_GRANT_NOTICE_FORMAT, 1, '', 'was')
+                Lang::t('cli.noticerow.narrowed_grant_one', ['count' => 1])
                     . ': agent "solo" declares "Read" in tools',
             ],
             $rows,
@@ -113,7 +114,7 @@ final class PermissionWarningDrainTest extends TestCase
         self::assertLessThanOrEqual($budget, mb_strlen($header, 'UTF-8'));
         self::assertGreaterThanOrEqual(1, substr_count($header, ' declares '));
         self::assertStringStartsWith(
-            sprintf(Bootstrap::NARROWED_GRANT_NOTICE_FORMAT, 5, 's', 'were') . ': ',
+            Lang::t('cli.noticerow.narrowed_grant_other', ['count' => 5]) . ': ',
             $header,
         );
 
@@ -156,7 +157,7 @@ final class PermissionWarningDrainTest extends TestCase
         }
 
         self::assertSame(
-            sprintf(Bootstrap::NARROWED_GRANT_NOTICE_FORMAT, 2, 's', 'were'),
+            Lang::t('cli.noticerow.narrowed_grant_other', ['count' => 2]),
             $rows[0],
         );
         self::assertMatchesRegularExpression($this->tailRegex(), $rows[1]);
@@ -184,11 +185,9 @@ final class PermissionWarningDrainTest extends TestCase
         $n = count($probe['warnings']);
         self::assertGreaterThanOrEqual(1, $n, 'the fixture must actually flood the collector');
 
-        $headerPrefix = sprintf(
-            Bootstrap::NARROWED_GRANT_NOTICE_FORMAT,
-            $n,
-            $n === 1 ? '' : 's',
-            $n === 1 ? 'was' : 'were',
+        $headerPrefix = Lang::t(
+            $n === 1 ? 'cli.noticerow.narrowed_grant_one' : 'cli.noticerow.narrowed_grant_other',
+            ['count' => $n],
         );
 
         $headers = array_values(array_filter(
@@ -371,9 +370,11 @@ final class PermissionWarningDrainTest extends TestCase
         // harvest, and a regex fragment would silently join its pattern-path
         // corpus. `(` is on that scanner's exclusion set, so the non-capturing
         // group reads as prose to it and as the same `s?` to PCRE.
-        return '/^'
-            . str_replace(['%d', '%s'], ['(\\d+)', '(?:s)?'], preg_quote(Bootstrap::NARROWED_GRANT_OVERFLOW_FORMAT, '/'))
-            . '$/';
+        return '/^(?|'
+            . str_replace('@@', '(\\d+)', preg_quote(Lang::t('cli.noticerow.narrowed_grant_overflow_one', ['count' => '@@']), '/'))
+            . '|'
+            . str_replace('@@', '(\\d+)', preg_quote(Lang::t('cli.noticerow.narrowed_grant_overflow_other', ['count' => '@@']), '/'))
+            . ')$/';
     }
 
     private function noticeCharBudget(): int

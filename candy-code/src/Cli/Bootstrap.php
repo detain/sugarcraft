@@ -516,33 +516,6 @@ final class Bootstrap
     /** The survivor field when the project's globs left nothing at all. */
     public const PROJECT_TIER_TOOL_REMOVAL_LEAVING_NONE = 'leaving no tools at all';
 
-    /**
-     * The aggregate row {@see reportSkillSkips()} raises for skill files that
-     * did not load: unreadable ones, and readable ones that lost a name
-     * collision to a skill of higher precedence.
-     *
-     * WORDED FOR BOTH SINCE AUDIT 15d-03. {@see skillSkips()} has carried the
-     * shadowed files since `9105feb48` (`SkillLoader::recordShadowing()`
-     * writes them through the same `recordSkip()` an unreadable file takes),
-     * but the row still said they "could not be read" — a repository's
-     * `deploy` losing to the user's own read as a broken file the user had to
-     * go and fix. The debug listing the row points at says which is which.
-     *
-     * PROMOTED BECAUSE A SECOND PARTY READS IT (E164).
-     * {@see \SugarCraft\Code\Tests\Cli\BootstrapLaunchNoticeRoutingTest::testSkippedSkillFilesReachBothChannelsAsOneAggregateRow()}
-     * reproduces a rendered span of this sentence, plural machinery included —
-     * and the plural machinery is the part that drifts, because `%s` here is
-     * three separate agreement slots (`file/files`, `was/were`, `it/them`) that
-     * a reworded message silently desynchronises.
-     *
-     * `%d` the count, `%s` the noun plural, `%s` the verb, `%s` the env var
-     * that lists the paths, `%s` the object pronoun. Five, and the count is
-     * asserted rather than intended — `sprintf()` on PHP 8 throws
-     * `ArgumentCountError` when a format asks for more than it is given, so a
-     * sixth conversion is a launch-time fatal, not a cosmetic drift.
-     */
-    public const SKILL_SKIP_NOTICE_FORMAT =
-        '%d skill file%s %s not loaded (unreadable, or shadowed by a same-named skill); set %s=1 to list %s';
 
     /**
      * The row {@see reportNonsenseLimits()} raises for a `maxToolSteps` or
@@ -581,25 +554,6 @@ final class Bootstrap
     public const TUI_ERROR_LOG_DISCARDED_NOTICE_FORMAT =
         "%s could not be written and no private log file could be prepared either, so this session's diagnostics are discarded";
 
-    /**
-     * The aggregate row {@see reportCommandSkips()} raises for unreadable
-     * command files (E172).
-     *
-     * THE SKILL ROW'S TWIN in shape: the same five conversion slots —
-     * `%d` the count, `%s` the noun plural, `%s` the was/were verb, `%s` the
-     * env var that lists the paths, `%s` the object pronoun — because the
-     * failure the two sentences answer is the same class of thing (some of the
-     * files that WOULD have been a capability did not load) and the plural
-     * machinery is the part that drifts when the two are edited separately.
-     * Not the same words: the skill row also counts skills shadowed by a
-     * same-named one (audit 15d-03), and a command file has no such loss to
-     * report. PROMOTED BECAUSE A SECOND PARTY READS IT (E164):
-     * {@see \SugarCraft\Code\Tests\Cli\BootstrapLaunchNoticeRoutingTest::testSkippedCommandFilesReachBothChannelsAsOneAggregateRow()}
-     * reproduces the rendered span through this constant, plural slots
-     * included.
-     */
-    public const COMMAND_SKIP_NOTICE_FORMAT =
-        '%d command file%s could not be read and %s skipped; set %s=1 to list %s';
 
     /**
      * ISS-090(d): how many per-file rows either foreign-preset notice lists.
@@ -615,71 +569,10 @@ final class Bootstrap
      */
     private const FOREIGN_PRESET_NOTICE_ROWS = 10;
 
-    /**
-     * Alias of {@see LaunchNotices::LAUNCH_NOTICE_OVERFLOW_FORMAT}. The
-     * overflow row is rendered by the shelf now; the name stays on this class
-     * because the catalogue and the format census read constants from here.
-     */
-    public const LAUNCH_NOTICE_OVERFLOW_FORMAT = LaunchNotices::LAUNCH_NOTICE_OVERFLOW_FORMAT;
 
-    /** Alias of {@see LaunchNotices::NARROWED_GRANT_NOTICE_FORMAT} — see the overflow alias above. */
-    public const NARROWED_GRANT_NOTICE_FORMAT = LaunchNotices::NARROWED_GRANT_NOTICE_FORMAT;
 
-    /** Alias of {@see LaunchNotices::NARROWED_GRANT_OVERFLOW_FORMAT} — see the overflow alias above. */
-    public const NARROWED_GRANT_OVERFLOW_FORMAT = LaunchNotices::NARROWED_GRANT_OVERFLOW_FORMAT;
 
-    /**
-     * The one-line summary {@see reportPrunedSessions()} seeds the transcript
-     * with.
-     *
-     * PROMOTED BECAUSE TWO DOC PAGES QUOTE THE RENDERED LINE (E164) —
-     * `docs/ENVIRONMENT.md`'s `CANDY_CODE_SESSION_RETENTION_DAYS` row and
-     * `docs/SETTINGS.md`'s routing section both carry
-     * `retention removed 3 unnamed sessions untouched for 30+ days (ids on
-     * stderr)` verbatim. That is the strongest form of the readership rule this
-     * class promotes on: a page an operator reads and this line have to agree,
-     * and a name is how two parties agree.
-     * {@see \SugarCraft\Code\Tests\Cli\BootstrapLaunchFormatConstantsTest}
-     * renders both pages' copy from this constant.
-     *
-     * `%d` the count, `%s` the noun plural, `%d` the retention window in days.
-     * The `+` after the last conversion is literal text, not part of it.
-     */
-    public const SESSION_RETENTION_SUMMARY_FORMAT =
-        'retention removed %d unnamed %s untouched for %d+ days (ids on stderr)';
 
-    /**
-     * The per-session detail row {@see reportPrunedSessions()} writes to stderr
-     * and deliberately does NOT seed into the transcript.
-     *
-     * PROMOTED AS THE OTHER HALF OF ONE REPORT, which is the same argument
-     * {@see PROJECT_TIER_TOOL_REMOVAL_LEAVING_NONE} is kept under rather than a
-     * second-party one: `docs/ENVIRONMENT.md` and `docs/SETTINGS.md` document
-     * the SPLIT — summary to both channels, ids to stderr alone — so the two
-     * lines are one contract, and splitting a contract across a constant and an
-     * inline literal is worse than either choice made consistently. Its own
-     * external readers assert fragments (`'<id> (last used …'`), not the line.
-     *
-     * IT CARRIES ITS OWN ENVELOPE, and that is not a mistake to be tidied away:
-     * the leading `candy-code:   ` and the trailing newline duplicate what
-     * {@see STDERR_LINE_FORMAT} adds, because these rows are a CONTINUATION of
-     * the summary above them and are indented under it by the two extra spaces.
-     * The two obvious tidyings each cost something, and they cost DIFFERENT
-     * things — which is why they are named separately rather than as one
-     * "route it through the helper". Sending these rows through
-     * {@see warnPermissionConfig()} would keep them on stderr and only lose the
-     * indent and gain a full stop after an id list. Sending them through
-     * {@see warnPermissionConfigInTranscript()} — the seam the SUMMARY takes —
-     * would additionally seed one transcript row per deleted session, which is
-     * the per-entry fan-out that buries the other launch notices and that
-     * {@see LAUNCH_NOTICE_LIMIT} exists to refuse, and that `docs/SETTINGS.md`
-     * names as the reason this half of the report did not migrate with the
-     * other half.
-     *
-     * `%s` the session id, `%s` its last-used timestamp, `%d` the message
-     * count, `%s` that count's noun plural.
-     */
-    public const SESSION_RETENTION_DETAIL_FORMAT = "candy-code:   %s (last used %s UTC, %d %s)\n";
 
     /**
      * Notice for a `--continue` launch that fell back to a session from another
@@ -827,19 +720,6 @@ final class Bootstrap
     /** One refused item: `%s` the server name, `%s` its summary. */
     public const MCP_SERVER_ADDED_FORMAT = '"%s" is new (%s)';
 
-    /**
-     * The one-time launch row for audit 15d-05's legacy binding: unkeyed
-     * home-store project notes moved into THIS project's keyed directory
-     * ({@see \SugarCraft\Code\Memory\MemoryStore::bindLegacyProjectNotes()}).
-     * Routed through {@see reportMemorySkips()}'s seam call, beside the
-     * unreadable-notes row.
-     *
-     * `%d` the count, `%s` the plural, `%s` is/are, `%s` the project root,
-     * `%s` the keyed directory.
-     */
-    public const MEMORY_LEGACY_BOUND_NOTICE_FORMAT =
-        '%d project memory note%s written before notes were kept per project %s now bound to this project '
-        . '(%s) and shown nowhere else, in %s; move a file out if it belongs to another project';
 
     /**
      * W4/MacAlt: the one-line hint that Alt chords may die on a Mac terminal
@@ -923,7 +803,6 @@ final class Bootstrap
         self::PROJECT_TIER_TOOL_REMOVAL_FORMAT => 'cli.launch.tool_removal',
         self::PROJECT_TIER_TOOL_REMOVAL_LEAVING => 'cli.launch.tool_removal_leaving',
         self::PROJECT_TIER_TOOL_REMOVAL_LEAVING_NONE => 'cli.launch.tool_removal_leaving_none',
-        self::SKILL_SKIP_NOTICE_FORMAT => 'cli.launch.skill_skip',
         self::NONSENSE_LIMIT_NOTICE_FORMAT => 'cli.launch.nonsense_limit',
         self::NONSENSE_STEPS_EXPECTED => 'cli.launch.nonsense_steps_expected',
         self::NONSENSE_STEPS_CONSEQUENCE => 'cli.launch.nonsense_steps_consequence',
@@ -931,19 +810,12 @@ final class Bootstrap
         self::NONSENSE_TOKENS_CONSEQUENCE => 'cli.launch.nonsense_tokens_consequence',
         self::TUI_ERROR_LOG_FALLBACK_NOTICE_FORMAT => 'cli.launch.tui_error_log_fallback',
         self::TUI_ERROR_LOG_DISCARDED_NOTICE_FORMAT => 'cli.launch.tui_error_log_discarded',
-        self::COMMAND_SKIP_NOTICE_FORMAT => 'cli.launch.command_skip',
-        self::LAUNCH_NOTICE_OVERFLOW_FORMAT => 'cli.launch.overflow',
-        self::NARROWED_GRANT_NOTICE_FORMAT => 'cli.launch.narrowed_grant',
-        self::NARROWED_GRANT_OVERFLOW_FORMAT => 'cli.launch.narrowed_grant_overflow',
-        self::SESSION_RETENTION_SUMMARY_FORMAT => 'cli.launch.retention_summary',
-        self::SESSION_RETENTION_DETAIL_FORMAT => 'cli.launch.retention_detail',
         self::PROJECT_TIER_REFUSAL_FORMAT => 'cli.launch.project_tier_refusal',
         self::MCP_PARTIAL_START_LOG_FORMAT => 'cli.launch.mcp_partial_start_log',
         self::MCP_PARTIAL_START_NOTICE_FORMAT => 'cli.launch.mcp_partial_start',
         self::MCP_SERVER_REFUSED_NOTICE_FORMAT => 'cli.launch.mcp_server_refused',
         self::MCP_SERVER_CHANGED_FORMAT => 'cli.launch.mcp_server_changed',
         self::MCP_SERVER_ADDED_FORMAT => 'cli.launch.mcp_server_added',
-        self::MEMORY_LEGACY_BOUND_NOTICE_FORMAT => 'cli.launch.memory_legacy_bound',
         self::MAC_ALT_NOTICE_TEXT => 'cli.launch.mac_alt_notice',
     ];
 
@@ -5793,13 +5665,9 @@ public static function useMaxCost(?string $maxCost): void
         // is now a row in BootstrapTranscriptSeamCallSiteCensusTest's
         // PROSE_SITES and a declaration in {@see TRANSCRIPT_SEAM_CALL_SITES}, so
         // a further site reds this sentence rather than dating it.
-        self::warnPermissionConfigInTranscript(sprintf(
-            self::translated(self::SKILL_SKIP_NOTICE_FORMAT),
-            $count,
-            $count === 1 ? '' : 's',
-            $count === 1 ? 'was' : 'were',
-            SkillLoader::DEBUG_SKIPS_ENV,
-            $count === 1 ? 'it' : 'them',
+        self::warnPermissionConfigInTranscript(Lang::t(
+            $count === 1 ? 'cli.noticerow.skill_skip_one' : 'cli.noticerow.skill_skip_other',
+            ['count' => $count, 'env' => SkillLoader::DEBUG_SKIPS_ENV],
         ));
     }
 
@@ -5841,13 +5709,13 @@ public static function useMaxCost(?string $maxCost): void
         // is itself a read of the project scope and so performs the binding.
         $bound = $home?->takeBoundLegacyNotes() ?? [];
         if ($bound !== [] && $home !== null) {
-            $notices[] = sprintf(
-                self::translated(self::MEMORY_LEGACY_BOUND_NOTICE_FORMAT),
-                \count($bound),
-                \count($bound) === 1 ? '' : 's',
-                \count($bound) === 1 ? 'is' : 'are',
-                ProjectRoot::resolve((string) $root),
-                $home->projectDirectory(),
+            $notices[] = Lang::t(
+                \count($bound) === 1 ? 'cli.noticerow.memory_legacy_bound_one' : 'cli.noticerow.memory_legacy_bound_other',
+                [
+                    'count' => \count($bound),
+                    'root' => ProjectRoot::resolve((string) $root),
+                    'dir' => $home->projectDirectory(),
+                ],
             );
         }
 
@@ -6240,13 +6108,9 @@ public static function useMaxCost(?string $maxCost): void
         // reportSkillSkips()'s, and the refusal this row answers is the one
         // CommandLoader's property doc-block recorded in round 46: the count
         // belongs on the seam, the paths behind the debug gate.
-        self::warnPermissionConfigInTranscript(sprintf(
-            self::translated(self::COMMAND_SKIP_NOTICE_FORMAT),
-            $count,
-            $count === 1 ? '' : 's',
-            $count === 1 ? 'was' : 'were',
-            CommandLoader::DEBUG_REFUSALS_ENV,
-            $count === 1 ? 'it' : 'them',
+        self::warnPermissionConfigInTranscript(Lang::t(
+            $count === 1 ? 'cli.noticerow.command_skip_one' : 'cli.noticerow.command_skip_other',
+            ['count' => $count, 'env' => CommandLoader::DEBUG_REFUSALS_ENV],
         ));
     }
 
@@ -10606,19 +10470,14 @@ public static function useMaxCost(?string $maxCost): void
     private static function reportPrunedSessions(array $report, int $retentionDays): void
     {
         $count = count($report);
-        self::warnPermissionConfigInTranscript(sprintf(
-            self::translated(self::SESSION_RETENTION_SUMMARY_FORMAT),
-            $count,
-            $count === 1 ? 'session' : 'sessions',
-            $retentionDays,
+        self::warnPermissionConfigInTranscript(Lang::t(
+            $count === 1 ? 'cli.noticerow.retention_summary_one' : 'cli.noticerow.retention_summary_other',
+            ['count' => $count, 'days' => $retentionDays],
         ));
         foreach ($report as $row) {
-            fwrite(STDERR, sprintf(
-                self::translated(self::SESSION_RETENTION_DETAIL_FORMAT),
-                $row['id'],
-                $row['updated_at'],
-                $row['messages'],
-                $row['messages'] === 1 ? 'message' : 'messages',
+            fwrite(STDERR, Lang::t(
+                $row['messages'] === 1 ? 'cli.noticerow.retention_detail_one' : 'cli.noticerow.retention_detail_other',
+                ['id' => $row['id'], 'when' => $row['updated_at'], 'count' => $row['messages']],
             ));
         }
     }
