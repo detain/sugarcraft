@@ -146,4 +146,63 @@ public function testComposedFrameRoundTripsItsLinkThroughTheNextRender(): void
         $out = Toast::new(60)->alert(ToastType::Info, 'gone')->cancelAlert(0)->clear()->view($bg, 80, 12);
         $this->assertSame($bg, $out);
     }
+
+    // ------------------------------------------------------------------
+    // TST-CSI: final-byte dispatch in scanLine. A non-SGR CSI (any final
+    // byte that is not 'm') is CONSUMED like a DCS/APC payload — the old
+    // walker folded every CSI parameter string into applySgr, so host-row
+    // cursor moves and erases silently re-decoded as SGR state: `\e[10;5H`
+    // made the rest of the row BLINK (`\e[2J` made it FAINT). The pins are
+    // equality pins: a consumed sequence must render byte-identically to a
+    // row where it was never there.
+    // ------------------------------------------------------------------
+
+    public function testNonSgrCsiFinalIsConsumedNotDecodedAsSgr(): void
+    {
+        // sugar-toast-014 measured repro: cursor-move params (10;5) folded
+        // into SGR bled blink across the host row ('a\x1b[0;5mb…').
+        $bug = "a\x1b[10;5Hb\x1b[1mdone";
+        $ref = "ab\x1b[1mdone";
+        $outBug = $this->withToast($bug . "\n" . \str_repeat("filler\n", 5));
+        $outRef = $this->withToast($ref . "\n" . \str_repeat("filler\n", 5));
+        $this->assertSame($outRef, $outBug, 'cursor-move CSI must render as if absent');
+        $this->assertStringContainsString('abdone', (string) \preg_replace('/\x1b\[[0-9;]*m/', '', $outBug));
+        // The blink leak specifically: no emitted SGR on that row names 5.
+        $row = \explode("\n", $outBug)[0];
+        \preg_match_all('/\x1b\[[0-9;]*m/', $row, $ms);
+        foreach ($ms[0] as $sgr) {
+            $this->assertStringNotContainsString('5', $sgr, "cursor param re-emerged as a style: {$sgr}");
+        }
+    }
+
+    public function testEraseCsiDoesNotFoldFaintOntoNeighbouringText(): void
+    {
+        $bug = "x\x1b[2Jy";
+        $ref = "xy";
+        $this->assertSame(
+            $this->withToast($ref . "\n" . \str_repeat("filler\n", 5)),
+            $this->withToast($bug . "\n" . \str_repeat("filler\n", 5)),
+            'erase-in-line must not become the faint attribute'
+        );
+    }
+
+    public function testUnterminatedCsiAtRowEndIsConsumedWithoutFabricatedOutput(): void
+    {
+        // sugar-toast-015/EOF nit: `ESC[` / `ESC[31` / `ESC[5` at end-of-row.
+        // The fold into applySgr('…') is gone (guard: only final 'm' dispatches),
+        // and the bytes must neither execute style nor print as literal
+        // garbage. Measured truth: the old fabricated RESET was invisible at the
+        // frame edge (style state changes after the last cell never reach the
+        // wire), so these equalities are FENCES pinning the honest form —
+        // truncated CSI renders exactly like absent CSI, one way or the other.
+        foreach ([
+            ["keep\x1b[31mred\x1b[", "keep\x1b[31mred"],
+            ["keep\x1b[31mred\x1b[5", "keep\x1b[31mred"],
+            ["pre\x1b[31", "pre"],
+        ] as [$bug, $ref]) {
+            $outBug = $this->withToast($bug . "\n" . \str_repeat("filler\n", 5));
+            $outRef = $this->withToast($ref . "\n" . \str_repeat("filler\n", 5));
+            $this->assertSame($outRef, $outBug, "truncated CSI '{$bug}' must render as absent");
+        }
+    }
 }

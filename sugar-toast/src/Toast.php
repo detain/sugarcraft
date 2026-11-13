@@ -1547,19 +1547,30 @@ final class Toast
 
             if ($b === "\x1b" && ($s[$i + 1] ?? '') === '[') {
                 $j = $i + 2;
+                $final = null;
                 while ($j < $len) {
                     $c = \ord($s[$j]);
                     $j++;
                     if ($c >= 0x40 && $c <= 0x7e) {
+                        $final = $s[$j - 1];
                         break;
                     }
                 }
-                $seq = \substr($s, $i + 2, $j - $i - 3);
-                // Cumulative fold: a sequence mutates only the facets it names
-                // — styles survive across sequences on the same run of cells,
-                // and a sugar-cellbuffer-emitted `\e[0;…m` preamble resets then
-                // rebuilds instead of erasing everything.
-                $currentStyle = $this->applySgr($currentStyle, $seq);
+                if ($final !== null && $final === 'm') {
+                    // Cumulative fold: a sequence mutates only the facets it
+                    // names — styles survive across sequences on the same run
+                    // of cells, and a sugar-cellbuffer-emitted `\e[0;…m`
+                    // preamble resets then rebuilds instead of erasing
+                    // everything.
+                    $currentStyle = $this->applySgr($currentStyle, \substr($s, $i + 2, $j - $i - 3));
+                }
+                // Any other final byte (cursor-move H, erase K/J, DEC modes…)
+                // CONSUMES the sequence and leaves the style run untouched —
+                // the rule the walker already applies to DCS/APC/PM/SOS. The
+                // old unconditional applySgr decoded `\e[10;5H` as SGR params:
+                // blink bled across the host row. An unterminated CSI
+                // (end-of-row) is likewise consumed: folding its bytes into
+                // applySgr('') fabricated a RESET the host never sent.
                 $i = $j;
                 continue;
             }
