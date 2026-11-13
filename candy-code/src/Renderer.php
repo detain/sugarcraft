@@ -2649,23 +2649,25 @@ final class Renderer
                 $processing .= $segment;
             }
         }
-        // The context figure is a guess when the backend reports no window. The
-        // tag is a trailing segment on the same fit rule, so it never widens
-        // the context figure or squeezes out the spend beside it.
-        if ($chat->contextWindowAssumed()) {
-            $segment = ' · ' . Lang::t('tui.status.context_assumed');
+        // The answer to a mouse selection's release: without it a copy is
+        // invisible (the clipboard does not announce itself). Present only
+        // while the copied highlight is up, and held to the queue segment's
+        // fit rule so it can never be the piece that widens the bar. It is fitted
+        // BEFORE the assumed-window tag below: the copy confirmation is transient
+        // and the only sign the copy happened, the tag is standing context.
+        $selection = Chat::textSelection();
+        if ($selection !== null && $selection->settled) {
+            $segment = ' · ✓ ' . Lang::t('tui.status.copied', ['count' => $selection->copiedChars]);
             $floor = Width::of(self::stripZoneMarkers($processing)) + Width::of($segment) + 3 + 2;
             if ($floor <= $cols) {
                 $processing .= $segment;
             }
         }
-        // The answer to a mouse selection's release: without it a copy is
-        // invisible (the clipboard does not announce itself). Present only
-        // while the copied highlight is up, and held to the queue segment's
-        // fit rule so it can never be the piece that widens the bar.
-        $selection = Chat::textSelection();
-        if ($selection !== null && $selection->settled) {
-            $segment = ' · ✓ ' . Lang::t('tui.status.copied', ['count' => $selection->copiedChars]);
+        // The context figure is a guess when the backend reports no window. The
+        // tag is a trailing segment on the same fit rule, so it never widens
+        // the context figure or squeezes out the spend beside it.
+        if ($chat->contextWindowAssumed()) {
+            $segment = ' · ' . Lang::t('tui.status.context_assumed');
             $floor = Width::of(self::stripZoneMarkers($processing)) + Width::of($segment) + 3 + 2;
             if ($floor <= $cols) {
                 $processing .= $segment;
