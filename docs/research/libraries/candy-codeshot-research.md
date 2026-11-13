@@ -300,6 +300,12 @@ const buffer = await codeToImage('console.log("hello")', {
 
 ## 3. candy-codeshot Current Implementation Analysis
 
+> **As-of banner (2026-11-13).** §3 was written before the review-pipeline
+> execution wave landed most of what §3.2 called gaps. The item texts stay
+> verbatim for lineage; §3.2 carries per-item supersession notes and the
+> genuinely-open items are restated. §3.1's list remains true, plus file
+> theme import (`--theme <path.json>`) shipped since.
+
 ### 3.1 Current Strengths ✅
 
 1. **Pure SVG output** — No GD/Imagick required for SVG
@@ -309,15 +315,37 @@ const buffer = await codeToImage('console.log("hello")', {
 5. **Multiple themes** — dark, light, dracula, tokyo-night, nord
 6. **i18n support** — 16 locales already translated
 
-### 3.2 Current Gaps ❌
+### 3.2 Current Gaps ❌ — superseded per item (re-derived 2026-11-13)
 
-1. **No language-aware syntax highlighting** — Relies on external pre-highlighting
-2. **No language detection** — Must specify manually or pipe pre-colored ANSI
-3. **No font embedding** — Uses CSS `font-family` stack, not embedded TTF
-4. **No ligature support** — Fira Code ligatures won't work
-5. **Limited theme format** — Custom Theme class, not VS Code/chroma/syntect themes
-6. **Hardcoded cell dimensions** — `fontSize * 0.6` for width is approximate
-7. **No background color handling** — Background colors from ANSI ignored (see AnsiParser.php L13-14)
+The seven items below are the pre-wave gap list, kept verbatim with
+status notes; items 1-5 and 7 no longer describe the shipped library:
+
+1. **No language-aware syntax highlighting** — **CLOSED**: `CodeHighlighter`
+   lexes raw source into keyword/string/number/comment spans via
+   sugar-core's shared `RegexHighlighter` (16 grammars); external
+   pre-highlighting is no longer required.
+2. **No language detection** — **CLOSED**: `LanguageDetector` reads the
+   filename extension first, then shebang, then content signatures;
+   `-t/--type` forces the answer.
+3. **No font embedding** — **CLOSED (SVG)**: `--font` embeds
+   TTF/OTF/WOFF/WOFF2 as an `@font-face` behind signature and size doors
+   (32 MiB cap); PNG remains GD-bitmap-only by design.
+4. **No ligature support** — **CLOSED (SVG)**: `--ligatures` /
+   `withLigatures()` emits `font-variant-ligatures: normal` — the
+   viewer's font does the shaping; no built-in ligature tables.
+5. **Limited theme format** — **CLOSED**: `Theme\VsCodeThemeLoader` and
+   `Theme\FlatPaletteThemeLoader` import JSON colour schemes (token
+   slots feed the highlighter), reachable from the CLI since the
+   `--theme <path.json>` route shipped.
+6. **Hardcoded cell dimensions** — **STILL OPEN (by choice)**: layout
+   advances remain the monospace estimate (`SvgRenderer`: font size ×
+   0.6 wide, size × lineHeight tall); no measured glyph advance is ever
+   taken. A viewer substituting a different-metric font drifts columns.
+   Carried into the README Known limitations as the
+   measured-font-cell-width item.
+7. **No background color handling** — **CLOSED**: SGR backgrounds paint
+   `<rect>` bands in SVG and filled runs in PNG; the `AnsiParser.php
+   L13-14` citation predates the background channel entirely.
 
 ### 3.3 Core Code Locations
 

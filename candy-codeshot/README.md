@@ -392,6 +392,9 @@ Matching the upstream surface: the five window styles (`macos`,
   collisions. PNG bitmaps carry no text metadata.
 - **Terminal-accurate cell math** — layout width uses `SugarCraft\Core\Util\Width`
   (East-Asian widths) and tabs expand to 8-cell stops, matching a terminal.
+  The advance is terminal-cell arithmetic, never a measured glyph width:
+  SVG cells are estimated at `fontSize × 0.6`, so a viewer whose font
+  substitution carries different metrics drifts the columns.
   PNG still *draws* with GD's Latin-1 bitmap font, so non-Latin-1 text can
   overrun its computed advance in PNG output.
 - **No cursor model** — input is read as text, never replayed as a
