@@ -773,21 +773,38 @@ final class Renderer
     }
 
     /**
-     * Strip C0 / ESC control bytes from source-derived text before
-     * emitting it. Enabled by default; disable when rendering trusted
-     * input where control characters must be preserved. Mirrors the
-     * TUI render invariant that renderer output contains only intended
-     * SGR escapes, not raw ANSI controls from the source document.
+     * The LOUD flag for the control-byte sweep: raw source controls pass
+     * through untouched, so every text byte of the document re-opens the
+     * ESC / CSI / OSC path to the terminal — a code span may inject an
+     * OSC-8 hyperlink or a window-title bait verbatim (FUZZ-03: hostile
+     * corpora probe exactly this). Only for trusted input where controls
+     * are the payload (e.g. re-emitting captured ANSI art).
      *
-     * This toggle governs only the general text pipeline (paragraph text,
-     * inline/fenced/indented code). Raw HTML nodes and link/image URLs are
-     * ALWAYS control-stripped regardless of this flag — those channels emit
-     * source bytes verbatim into the terminal, so disabling the general
-     * sanitizer must not re-open them as an injection vector.
+     * Raw HTML nodes and link/image URLs stay control-stripped regardless
+     * of this flag — those channels emit source bytes verbatim, so the
+     * door is never re-opened on the always-hardened edges.
+     */
+    public function withRawControlChars(bool $on = true): self
+    {
+        return $this->mutate(sanitize: !$on);
+    }
+
+    /**
+     * Strip C0 / ESC control bytes from source-derived text before
+     * emitting it — the safe default. Documented alias of
+     * {@see withRawControlChars()} read the other way: pass `false` and
+     * you are asking for raw ESC/CSI/OSC re-entry, so prefer the loud
+     * name at the call site when you genuinely mean it.
      */
     public function withSanitize(bool $on = true): self
     {
         return $this->mutate(sanitize: $on);
+    }
+
+    // Short-form alias.
+    public function rawControlChars(bool $on = true): self
+    {
+        return $this->withRawControlChars($on);
     }
 
     // Short-form alias.

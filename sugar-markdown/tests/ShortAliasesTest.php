@@ -69,6 +69,7 @@ final class ShortAliasesTest extends TestCase
         yield 'preserved-new-lines' => ['withPreservedNewLines', 'preservedNewLines', true, "one\n\ntwo\n\n\nthree\n"];
         yield 'standard-style' => ['withStandardStyle', 'standardStyle', 'dracula', self::SAMPLE];
         yield 'sanitize' => ['withSanitize', 'sanitize', false, "hi\x1b[31mred\x1b[0m\n"];
+        yield 'raw-control-chars' => ['withRawControlChars', 'rawControlChars', true, "hi\x1b[31mred\x1b[0m\n"];
         yield 'style-sheet' => ['withStyleSheet', 'styleSheet', StyleSheet::base(), self::SAMPLE];
     }
 
@@ -77,7 +78,7 @@ final class ShortAliasesTest extends TestCase
      */
     public function testTheRemainingAliasesMatchTheirLongForms(string $long, string $short, mixed $arg, string $md): void
     {
-        // The alias must thread the exact same value into copy(); a dropped
+        // The alias must thread the exact same value into mutate(); a dropped
         // or re-typed argument diverges here on rendered bytes.
         $longOut  = (new Renderer(Theme::plain()))->{$long}($arg)->withWordWrap(30)->render($md);
         $shortOut = (new Renderer(Theme::plain()))->{$short}($arg)->withWordWrap(30)->render($md);

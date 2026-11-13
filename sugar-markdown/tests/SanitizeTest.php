@@ -268,4 +268,46 @@ final class SanitizeTest extends TestCase
         $streamed = implode('', iterator_to_array($renderer->stream([$input]), false));
         $this->assertSame($renderer->render($input), $streamed);
     }
+
+    /**
+     * SM-S16 (FUZZ-03): withRawControlChars() is the loud name for the
+     * opt-out; withSanitize() remains as its documented-but-soft-warning
+     * alias. The pair must stay byte-exact mirrors in both states.
+     */
+    public function testTheLoudFlagMirrorsTheSanitizeAliasInBothStates(): void
+    {
+        $md = "hi `a\x1b]0;title\x07b` tail\n";
+
+        $this->assertSame(
+            Renderer::plain()->withSanitize(false)->render($md),
+            Renderer::plain()->withRawControlChars(true)->render($md),
+            'withRawControlChars(true) must equal withSanitize(false)',
+        );
+        $this->assertSame(
+            Renderer::plain()->withSanitize(true)->render($md),
+            Renderer::plain()->withRawControlChars(false)->render($md),
+            'withRawControlChars(false) must equal the sanitizing default',
+        );
+    }
+
+    /**
+     * Acceptance probe for SM-S16: the default (sanitize on, equivalently
+     * withRawControlChars(false)) path refuses a window-title OSC bait
+     * smuggled through a code span, while the loud opt-out ships it raw —
+     * documenting the residual rather than hiding it.
+     */
+    public function testTheDefaultPathRefusesTheOscTitleBaitAndTheLoudFlagShipsItRaw(): void
+    {
+        $md = "```\na\x1b]2;pwned\x07b\n```\n";
+
+        $safe = Renderer::plain()->render($md);
+        $this->assertStringNotContainsString("\x1b]2;", $safe, 'raw OSC must not reach the terminal by default');
+        $this->assertStringContainsString(']2;pwned', $safe, 'the bait text survives inertly');
+
+        $loud = Renderer::plain()->withRawControlChars(false)->render($md);
+        $this->assertSame($safe, $loud, 'withRawControlChars(false) is the sanitizing state');
+
+        $raw = Renderer::plain()->withRawControlChars(true)->render($md);
+        $this->assertStringContainsString("\x1b]2;pwned\x07", $raw, 'the opt-out ships the escape verbatim (documented residual)');
+    }
 }

@@ -24,7 +24,8 @@ composer require sugarcraft/sugar-markdown
 ```
 
 > Every `with*()` builder on the `Renderer` has a short-form method
-> alias: `theme` / `sanitize` / `wordWrap` / `hyperlinks` / `baseURL` /
+> alias: `theme` / `sanitize` / `rawControlChars` / `wordWrap` /
+> `hyperlinks` / `baseURL` /
 > `tableWrap` / `inlineTableLinks` / `tableColumnBudget` /
 > `fenceColumnBudget` / `preservedNewLines` / `emoji` / `standardStyle` /
 > `styleSheet`. The long-form `with*` names still work — pick whichever
@@ -162,9 +163,13 @@ HTML-entity-decoded spellings, so a refused scheme split by invisibles
 (`java&#8203;script:`) never becomes a target either. A link with an
 empty destination renders its text and nothing more — no `()` noise.
 
-`withSanitize(false)` relaxes only the control-character sweep of the
-general text pipeline, for trusted input where control characters must
-survive. Everything else holds regardless of the flag: encoding repair
+`withRawControlChars()` is the loud opt-out of the control-character
+sweep: passing `true` (or `withSanitize(false)`, kept as its documented
+alias) re-opens the raw ESC / CSI / OSC path for every text byte, so a
+code span can carry an OSC-8 bait or a window-title escape straight
+through to the terminal — hostile corpora probe exactly this (FUZZ-03).
+Use it only for trusted input where control characters are the payload.
+Everything else holds regardless of the flag: encoding repair
 (malformed UTF-8, stray C1 bytes) runs before parsing unconditionally,
 raw HTML blocks and inline HTML stay control-stripped, and URL
 stripping is likewise always on. See the fleet-wide trust model in
@@ -236,7 +241,8 @@ $writer->close();
   `Renderer` constructor): it gates the `stripControls` sweep of
   rendered text, code spans, and indented and fenced code. Raw-HTML
   and URL control-stripping run regardless of the flag; see
-  Link safety above.
+  Link safety above. The opt-out carries a loud name:
+  `withRawControlChars(true)` (alias `withSanitize(false)`).
 - Theme files are code. A style/theme JSON drives colours, affixes and
   indent tokens straight into the terminal, so do not auto-load
   workspace-adjacent style files — pin the path from operator config.
