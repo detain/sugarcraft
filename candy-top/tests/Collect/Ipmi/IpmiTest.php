@@ -275,6 +275,28 @@ final class IpmiTest extends TestCase
         $this->assertNotContains('dcmi power reading', $this->calls);
     }
 
+    public function testADcmiHangIsAStrikeNotARoundFailure(): void
+    {
+        $this->script['dcmi power reading'] = new CommandResult(CommandOutcome::Timeout);
+        $ipmi = $this->reader();
+        $s = self::settle($ipmi->poll(10000));
+        $this->assertSame(IpmiState::Ready, $s->state, 'a BMC hanging ONLY the optional dcmi probe keeps every other reading');
+        $this->assertNull($s->power, 'no power row until the probe answers');
+        $this->assertContains('dcmi power reading', $this->calls);
+        $this->assertContains('mc info', $this->calls, 'the rest of the chain still ran behind the hang');
+        $this->assertContains('sdr dump CACHE', $this->calls);
+
+        $this->now += 20000;
+        $this->assertSame(IpmiState::Ready, self::settle($ipmi->poll(10000))->state, 'strike two');
+        $this->now += 20000;
+        $this->assertSame(IpmiState::Ready, self::settle($ipmi->poll(10000))->state, 'strike three');
+
+        $this->now += 20000;
+        $this->calls = [];
+        $this->assertSame(IpmiState::Ready, self::settle($ipmi->poll(10000))->state);
+        $this->assertNotContains('dcmi power reading', $this->calls, 'repeated hangs drop the dcmi leg like repeated refusals do');
+    }
+
     public function testWithoutAWritableCacheDirThePlainWalkIsUsed(): void
     {
         $ipmi = $this->reader(cacheDir: $this->dir . '/missing');

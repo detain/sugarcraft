@@ -27,7 +27,9 @@ use function React\Promise\resolve;
  *     on 2, ASUS/AMI on 1), and `sdr dump <cache>` — a private copy of
  *     the BMC's sensor repository;
  *  2. every round: `dcmi power reading` (~0.05 s) — dropped for the
- *     session after {@see DCMI_STRIKES} refusals (a BMC without DCMI);
+ *     session after {@see DCMI_STRIKES} refusals or hangs (a BMC without
+ *     DCMI, or one that stalls only this optional probe, keeps serving
+ *     every other reading);
  *  3. every `$slowMs`: `chassis status`, `sel info` (+ `sel elist last 1`
  *     only when the SEL changed) and `-S <cache> sdr elist` for the
  *     values;
@@ -495,7 +497,12 @@ final class Ipmi implements IpmiReader
     {
         return $this->quick(['dcmi', 'power', 'reading'])->then(function (CommandResult $r) use ($acc): void {
             if ($r->outcome === CommandOutcome::Timeout || $r->outcome === CommandOutcome::TooLarge) {
-                $acc->note($r);
+                // A BMC that hangs ONLY this optional probe must not fail the
+                // round forever (candy-top-063): note() would end it and keep
+                // climbing the backoff while chassis/SEL/SDR never land. Count
+                // a strike — after DCMI_STRIKES the leg is dropped from the
+                // session, exactly as refusals already are.
+                $this->dcmiStrikes++;
 
                 return;
             }
