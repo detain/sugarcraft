@@ -182,6 +182,25 @@ jobs:
         run: |
           set -euo pipefail
 
+          # RT-33: the split/site remotes used to carry the token INSIDE the
+          # URL. That form persists credentials into every cloned .git/config
+          # and shows the secret in child-process argv while each push runs.
+          # GIT_ASKPASS hands git the same basic-auth pair at auth time
+          # instead: remote URLs stay credential-free and no on-disk config
+          # ever holds the token (the step's TOKEN env var is what the helper
+          # echoes).
+          git_askpass=$(mktemp)
+          {
+            echo '#!/bin/sh'
+            echo '[ -n "${TOKEN:-}" ] || { echo "GIT_ASKPASS: TOKEN env is unset - refusing to answer auth" >&2; exit 1; }'
+            echo 'case "$1" in'
+            echo '  *sername*) printf "x-access-token\n" ;;'
+            echo '  *)         printf "%s\n" "$TOKEN" ;;'
+            echo 'esac'
+          } >"$git_askpass"
+          chmod 700 "$git_askpass"
+          export GIT_ASKPASS="$git_askpass"
+
           # Retry function for git push operations with exponential backoff
           retry_git_push() {
             local max_attempts=3
@@ -292,7 +311,7 @@ jobs:
             ensure_repo "$lib"
             # splitsh-lite prints the split-commit SHA for the prefix on stdout.
             sha=$(/tmp/splitsh-lite --prefix="$lib")
-            push_url="https://x-access-token:$TOKEN@github.com/sugarcraft/$lib.git"
+            push_url="https://github.com/sugarcraft/$lib.git"
 
             # Rename continuity (step 2.1 verdict NOT-CONTINUOUS fallback):
             # when this dir was produced by a `git mv <old> <new>`, the split
@@ -363,6 +382,25 @@ jobs:
         run: |
           set -euo pipefail
 
+          # RT-33: the split/site remotes used to carry the token INSIDE the
+          # URL. That form persists credentials into every cloned .git/config
+          # and shows the secret in child-process argv while each push runs.
+          # GIT_ASKPASS hands git the same basic-auth pair at auth time
+          # instead: remote URLs stay credential-free and no on-disk config
+          # ever holds the token (the step's TOKEN env var is what the helper
+          # echoes).
+          git_askpass=$(mktemp)
+          {
+            echo '#!/bin/sh'
+            echo '[ -n "${TOKEN:-}" ] || { echo "GIT_ASKPASS: TOKEN env is unset - refusing to answer auth" >&2; exit 1; }'
+            echo 'case "$1" in'
+            echo '  *sername*) printf "x-access-token\n" ;;'
+            echo '  *)         printf "%s\n" "$TOKEN" ;;'
+            echo 'esac'
+          } >"$git_askpass"
+          chmod 700 "$git_askpass"
+          export GIT_ASKPASS="$git_askpass"
+
           # Retry function for git push operations with exponential backoff
           retry_git_push() {
             local max_attempts=3
@@ -383,7 +421,7 @@ jobs:
 
           tmp=$(mktemp -d)
           git clone --quiet \
-            "https://x-access-token:$TOKEN@github.com/sugarcraft/sugarcraft.github.io.git" \
+            "https://github.com/sugarcraft/sugarcraft.github.io.git" \
             "$tmp/site"
           # docs/old and docs/research are repo working documents, not site content:
           # drop any copy already published so --delete removes them from the site.
