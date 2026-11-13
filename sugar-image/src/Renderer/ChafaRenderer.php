@@ -92,6 +92,16 @@ final class ChafaRenderer implements Renderer, ConfigFingerprintProvider
     private static ?bool $available = null;
 
     /**
+     * The first banner line the availability probe's `--version` spawn
+     * answered — '' when no binary resolved or the probe produced no
+     * output, null when not yet probed. {@see configFingerprint()} folds
+     * it (with the resolved path) into the cache key so an upgraded or
+     * swapped chafa cannot keep serving pre-switch frames forever under
+     * a stable key (finding 015).
+     */
+    private static ?string $version = null;
+
+    /**
      * Reused per-process scratch file for the chafa input image, plus the
      * content hash of whatever is currently written to it.
      *
@@ -133,6 +143,13 @@ final class ChafaRenderer implements Renderer, ConfigFingerprintProvider
 
         $binary = ChafaBinary::path();
         if ($binary === null) {
+            self::$version = '';
+            return self::$available = false;
+        }
+
+        $outPath = @tempnam(sys_get_temp_dir(), 'schafaout');
+        if ($outPath === false) {
+            self::$version = '';
             return self::$available = false;
         }
 
@@ -143,7 +160,14 @@ final class ChafaRenderer implements Renderer, ConfigFingerprintProvider
             // THIS process's fd 0, so a chafa build that touches stdin
             // could consume user input — or block forever waiting for an
             // EOF the TUI never sends — from a mere availability probe.
-            [0 => ['file', '/dev/null', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            // The banner rides a FILE sink, not a pipe (finding 015):
+            // the probe's stdout must survive reap() to be read, and
+            // proc_close() closes the pipe legs on the way — a read
+            // after the settle would be structurally empty, while a
+            // read before it re-opens the unbounded-wait door finding
+            // 005 just closed. The sink is this library's own shape for
+            // "child output we read after the child is gone".
+            [0 => ['file', '/dev/null', 'r'], 1 => ['file', $outPath, 'w'], 2 => ['file', '/dev/null', 'w']],
             $pipes,
         );
         if (!is_resource($proc)) {
@@ -156,12 +180,9 @@ final class ChafaRenderer implements Renderer, ConfigFingerprintProvider
                     fclose($pipe);
                 }
             }
+            @unlink($outPath);
+            self::$version = '';
             return self::$available = false;
-        }
-        foreach ($pipes as $pipe) {
-            if (is_resource($pipe)) {
-                fclose($pipe);
-            }
         }
 
         // Settle through the reap ladder, not proc_close's unbounded wait
@@ -172,7 +193,13 @@ final class ChafaRenderer implements Renderer, ConfigFingerprintProvider
         // lands either way: a process that cannot finish its own version
         // string inside the budget has honestly told us it is not a usable
         // backend, and this process will not ask it twice.
-        return self::$available = (self::reap($proc) === 0);
+        $exit = self::reap($proc);
+
+        $raw = (string) @file_get_contents($outPath);
+        @unlink($outPath);
+        $newline       = strpos($raw, "\n");
+        self::$version = rtrim($newline === false ? $raw : substr($raw, 0, $newline));
+        return self::$available = ($exit === 0);
     }
 
     public function render(ImageSource $image, int $width, ?int $height = null): string
@@ -495,11 +522,37 @@ final class ChafaRenderer implements Renderer, ConfigFingerprintProvider
      * encoded bytes for identical input, so both ride the fingerprint —
      * Mosaic::chafa('--colors=16') must never serve a '--colors=256'
      * cache entry (or a symbols-format one) back.
+     *
+     * The binary IDENTITY rides too (finding 015): the resolved absolute
+     * path and the probed `--version` banner, each folded to a fixed-width
+     * xxh3 segment. Without them an upgraded chafa — or a
+     * SUGAR_IMAGE_CHAFA/PATH switch to a differently-built one — keeps
+     * its old stable key and serves pre-switch frames forever, silently.
+     * First use forces the bounded availability probe (one spawn per
+     * process, reaped on budget); when no identity is available both
+     * segments are the hashes of '' — a stable key across runs, exactly
+     * the no-churn posture the pre-fix code had for that host.
      */
     public function configFingerprint(): string
     {
         return 'opts=' . implode(',', $this->options)
-            . '|format=' . ($this->format ?? '');
+            . '|format=' . ($this->format ?? '')
+            . '|binary=' . hash('xxh3', ChafaBinary::path() ?? '')
+            . '|version=' . hash('xxh3', self::versionString());
+    }
+
+    /**
+     * The memoised probe banner; probing on demand so a fingerprint is
+     * never computed while the identity is merely UNASKED (an unasked
+     * probe would be the same silent-stale door finding 015 closes).
+     */
+    private static function versionString(): string
+    {
+        if (self::$version === null) {
+            self::available();
+        }
+
+        return self::$version ?? '';
     }
 
     /**
@@ -514,6 +567,7 @@ final class ChafaRenderer implements Renderer, ConfigFingerprintProvider
     public static function reset(): void
     {
         self::$available   = null;
+        self::$version     = null;
         self::$reapWaitMs  = null;
         self::$termGraceMs = null;
         self::$drainBudgetMs = null;

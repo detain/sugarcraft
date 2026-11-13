@@ -12,6 +12,7 @@ use SugarCraft\Image\DiskCache;
 use SugarCraft\Image\Dither;
 use SugarCraft\Image\Mosaic;
 use SugarCraft\Image\Optimization;
+use SugarCraft\Image\Renderer\ChafaBinary;
 use SugarCraft\Image\Renderer\ChafaRenderer;
 use SugarCraft\Image\Renderer\ConfigFingerprintProvider;
 use SugarCraft\Image\Renderer\HalfBlockRenderer;
@@ -30,6 +31,10 @@ final class DiskCacheKeyTest extends TestCase
 {
     private const URL = 'https://example.test/key.png';
 
+    private ?string $stubDir = null;
+
+    private ?string $overrideBackup = null;
+
     public function testSixelFingerprintCoversEveryByteVaryingConfig(): void
     {
         $this->assertSame(
@@ -44,16 +49,58 @@ final class DiskCacheKeyTest extends TestCase
         );
     }
 
-    public function testChafaFingerprintCoversOptionsAndFormat(): void
+    public function testChafaFingerprintCarriesOptionsFormatAndBinaryIdentity(): void
     {
-        $this->assertSame(
-            'opts=--colors=256|format=',
+        // Post-SI-04 the exact opts/format prefix still answers, and the
+        // identity tail is fixed-width hex (machine-dependent VALUES,
+        // machine-independent SHAPE — finding 015).
+        $this->assertMatchesRegularExpression(
+            '/^opts=--colors=256\|format=\|binary=[0-9a-f]{16}\|version=[0-9a-f]{16}$/',
             (new ChafaRenderer(['--colors=256']))->configFingerprint(),
         );
-        $this->assertSame(
-            'opts=--colors=16,--transparent|format=sixel',
+        $this->assertMatchesRegularExpression(
+            '/^opts=--colors=16,--transparent\|format=sixel\|binary=[0-9a-f]{16}\|version=[0-9a-f]{16}$/',
             (new ChafaRenderer(['--colors=16', '--transparent'], 'sixel'))->configFingerprint(),
         );
+    }
+
+    /**
+     * The discriminator finding 015 exists for: a swapped or upgraded
+     * chafa must move ONLY the version segment — same config keeps its
+     * opts/format prefix, and the next process never reads the old
+     * binary's frames back through the old key.
+     */
+    public function testAChangedBinaryVersionMovesTheFingerprint(): void
+    {
+        $this->plantChafaVersionStub('chafa 1.14.0');
+        ChafaRenderer::reset();
+
+        $first  = (new ChafaRenderer(['--colors=256']))->configFingerprint();
+        $stable = (new ChafaRenderer(['--colors=256']))->configFingerprint();
+        $this->assertSame($first, $stable, 'one probed identity must answer identically until reset');
+
+        $this->plantChafaVersionStub('chafa 1.15.0');
+        ChafaRenderer::reset();
+        $upgraded = (new ChafaRenderer(['--colors=256']))->configFingerprint();
+
+        $this->assertNotSame($first, $upgraded, 'an upgraded chafa must stop serving the pre-upgrade key');
+
+        [$sameConfig, $sameFormat, $sameBinary, $oldVersion] = explode('|', $first, 4);
+        [$newConfig, $newFormat, $newBinary, $newVersion]    = explode('|', $upgraded, 4);
+        $this->assertSame($sameConfig, $newConfig);
+        $this->assertSame($sameFormat, $newFormat);
+        $this->assertSame($sameBinary, $newBinary, 'the stub lives at one path; only the banner moved');
+        $this->assertNotSame($oldVersion, $newVersion);
+    }
+
+    public function testTheFingerprintIsStableAcrossRepeatedRunsOnThisHost(): void
+    {
+        ChafaRenderer::reset();
+        $first = (new ChafaRenderer(['--colors=256']))->configFingerprint();
+        ChafaRenderer::reset();
+        $second = (new ChafaRenderer(['--colors=256']))->configFingerprint();
+
+        $this->assertSame($first, $second, 'whether the host has chafa or not, two un-modified runs must not churn the key');
     }
 
     public function testSixelDitherConfigsGetDistinctPosterKeys(): void
@@ -95,7 +142,11 @@ final class DiskCacheKeyTest extends TestCase
         $this->assertNotSame($wide, $formatted);
 
         $this->assertSame(
-            DiskCache::key(self::URL, 8, 4, 'chafa|Fill|opts=--colors=256|format='),
+            // The descriptor tail now carries the binary-identity segments
+            // (SI-04), so the pin assembles the live fingerprint rather than
+            // a hardcoded string; the SHAPE of that tail is pinned by
+            // testChafaFingerprintCarriesOptionsFormatAndBinaryIdentity.
+            DiskCache::key(self::URL, 8, 4, 'chafa|Fill|' . (new ChafaRenderer(['--colors=256']))->configFingerprint()),
             $wide,
         );
     }
@@ -237,6 +288,71 @@ final class DiskCacheKeyTest extends TestCase
         $this->assertSame(
             DiskCache::key(self::URL, 8, 4, 'halfblock|Fill|opt=4'),
             $this->posterKey($chained, 8, 4),
+        );
+    }
+
+    /**
+     * Plant an absolute-path chafa stub (SUGAR_IMAGE_CHAFA override) that
+     * answers `--version` with the given banner and exits 0 — the probe
+     * becomes deterministic without touching any real binary.
+     */
+    private function plantChafaVersionStub(string $banner): void
+    {
+        if ($this->overrideBackup === null && getenv(ChafaBinary::ENV_OVERRIDE) === false) {
+            $this->overrideBackup = '';
+        } elseif ($this->overrideBackup === null) {
+            $this->overrideBackup = (string) getenv(ChafaBinary::ENV_OVERRIDE);
+        }
+
+        if ($this->stubDir === null) {
+            $this->stubDir = sys_get_temp_dir() . '/s4-chafa-stub-' . getmypid() . '-' . uniqid();
+            mkdir($this->stubDir, 0700, true);
+        }
+
+        $stub = $this->stubDir . '/chafa';
+        if (!is_file($stub)) {
+            file_put_contents($stub, "#!/bin/sh\n");
+            chmod($stub, 0700);
+            putenv(ChafaBinary::ENV_OVERRIDE . '=' . $stub);
+        }
+        file_put_contents($stub, "#!/bin/sh\nif [ \"\$1\" = \"--version\" ]; then printf '%s\\n' '" . $banner . "'; exit 0; fi\nexit 3\n");
+        chmod($stub, 0700);
+    }
+
+    protected function tearDown(): void
+    {
+        ChafaRenderer::reset();
+        if ($this->stubDir !== null) {
+            @unlink($this->stubDir . '/chafa');
+            @rmdir($this->stubDir);
+            $this->stubDir = null;
+        }
+        if ($this->overrideBackup !== null) {
+            if ($this->overrideBackup === '') {
+                putenv(ChafaBinary::ENV_OVERRIDE);
+            } else {
+                putenv(ChafaBinary::ENV_OVERRIDE . '=' . $this->overrideBackup);
+            }
+            $this->overrideBackup = null;
+        }
+    }
+
+    /**
+     * Plant the stub twice with different banners WITHOUT an intermediate
+     * reset, proving the memo holds the identity it probed.
+     */
+    public function testTheVersionMemoSurvivesLaterConfigConstruction(): void
+    {
+        ChafaRenderer::reset();
+        $this->plantChafaVersionStub('chafa 1.0.0');
+        $before = (new ChafaRenderer(['--colors=256']))->configFingerprint();
+
+        $this->plantChafaVersionStub('chafa 9.9.9');
+
+        $this->assertSame(
+            $before,
+            (new ChafaRenderer(['--colors=256']))->configFingerprint(),
+            'the memo is per-process on purpose (probe-once law) — only reset() re-reads',
         );
     }
 
