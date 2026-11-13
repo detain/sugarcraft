@@ -792,7 +792,10 @@ final class Compiler
      */
     private function compileOutput(OutputDirective $node): void
     {
-        $confined = $this->confineOutputPath($node->path);
+        // Quote-trim like the other free-text Set arms: `Output "demo.gif"`
+        // used to leak the quotes into the produced filename (a latent wart
+        // the S10 extension honesty surfaced while pinning it).
+        $confined = $this->confineOutputPath(trim($node->path, " \t\n\r\0\x0B'\""));
         if ($confined !== null) {
             $this->outputPath = $confined;
         }

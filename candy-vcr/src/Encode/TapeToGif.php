@@ -48,6 +48,15 @@ final class TapeToGif
     }
 
     /**
+     * Notices booked while writing (finding 009's extension swap). Kept
+     * separate from the compile warnings so the reset cadence is honest:
+     * compile() clears the compiler's list, render() clears this one.
+     *
+     * @var list<string>
+     */
+    private array $renderWarnings = [];
+
+    /**
      * The single fps precedence ladder (finding 008): explicit caller/CLI
      * value → tape `Set Framerate` → the 30.0 house default. Public so the
      * door is testable without rendering pixels, and any second render path
@@ -99,6 +108,9 @@ final class TapeToGif
      */
     public function render(string $tapePath, ?string $outputPath = null, array $options = []): string
     {
+        // Render-time notices (the .gif swap from finding 009) are per-run;
+        // the pipeline instance is reused across batch renders.
+        $this->renderWarnings = [];
         $cliTheme = $options['theme'] ?? null;
 
         // Size law (finding 032): refuse by name BEFORE slurping — a stat is
@@ -182,6 +194,24 @@ final class TapeToGif
         $output = $outputPath
             ?? $this->compiler->outputPath()
             ?? (preg_replace('/\.tape$/', '.gif', $tapePath) ?: $tapePath . '.gif');
+
+        // Finding 009: the only artifact candy-vcr emits is GIF bytes, so a
+        // mislabeled suffix used to make the file lie about itself (demo.mp4
+        // carrying a GIF header). The write door now rewrites any non-.gif
+        // output to .gif and books the swap as a named warning — neither a
+        // pretend mp4/webm encode nor a silently mislabeled file. Covers all
+        // three output sources (CLI -o, the tape's Output directive, the
+        // fallback) at the single seam they converge on.
+        if (strcasecmp(pathinfo($output, PATHINFO_EXTENSION), 'gif') !== 0) {
+            $outDir = pathinfo($output, PATHINFO_DIRNAME);
+            $outName = pathinfo($output, PATHINFO_FILENAME);
+            // pathinfo() reads a dotfile as extension-only ('.hidden' has an
+            // empty filename); an empty stem means appending, not replacing.
+            $stem = $outName === '' ? basename($output) : $outName;
+            $swapped = ($outDir === '' ? '' : $outDir . DIRECTORY_SEPARATOR) . $stem . '.gif';
+            $this->renderWarnings[] = "Output path '{$output}' is not a .gif file — candy-vcr emits GIF bytes only; writing '{$swapped}' instead";
+            $output = $swapped;
+        }
         $outputDir = dirname($output);
 
         // `Hide`/`Show` events flip the frame stream's cursor-capture flag as
@@ -274,7 +304,7 @@ final class TapeToGif
      */
     public function warnings(): array
     {
-        return $this->compiler->warnings();
+        return array_merge($this->compiler->warnings(), $this->renderWarnings);
     }
 
     /**
