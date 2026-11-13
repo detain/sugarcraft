@@ -42,10 +42,75 @@ final class MarkedFrame
 
     /**
      * Display cells $line occupies — zero for marker envelopes and escapes.
+     *
+     * SO-04 (sugar-overlay-029): width-only byte walk, no segment list.
+     * The old body materialized the full segments() output — a 4-key array
+     * per cluster — just to sum the width column, over every background and
+     * foreground line per composite and (via Slide) per line per tick. The
+     * arms below mirror segments() control-for-control (every skipped arm
+     * charges zero cells); tests pin the two paths to agree on a hostile
+     * corpus, so the walker can never silently drift from the tokenizer.
      */
     public static function measure(string $line): int
     {
-        return self::measureSegments(self::segments($line));
+        $width = 0;
+        $len = \strlen($line);
+        $i = 0;
+
+        while ($i < $len) {
+            $byte = $line[$i];
+
+            if ($byte === "\e" && $i + 1 < $len) {
+                $intro = $line[$i + 1];
+
+                if ($intro === '[') {
+                    // CSI: params are bytes < 0x40, one final byte closes.
+                    $p = $i + 2;
+                    while ($p < $len && \ord($line[$p]) < 0x40) {
+                        $p++;
+                    }
+                    $i = $p < $len ? $p + 1 : $len;
+                    continue;
+                }
+
+                if ($intro === ']') {
+                    // OSC: BEL swallows its byte; a real ST (ESC \) swallows
+                    // both; a bare ESC ends it AT the introducer, which the
+                    // next round re-reads as its own escape.
+                    $tail = $i + 2 + \strcspn($line, "\x07\x1b", $i + 2);
+                    if ($tail < $len && $line[$tail] === "\x1b" && ($line[$tail + 1] ?? '') === '\\') {
+                        $i = $tail + 2;
+                    } else {
+                        $i = $tail < $len && $line[$tail] === "\x07" ? $tail + 1 : $tail;
+                    }
+                    continue;
+                }
+
+                // Any other two-byte ESC sequence: zero columns.
+                $i += 2;
+                continue;
+            }
+
+            if ($byte === "\xEE" && $i + 2 < $len && $line[$i + 1] === "\x80") {
+                if ($line[$i + 2] === "\x80") { // U+E000 OPEN — id rides to CLOSE
+                    $close = \strpos($line, Sanitize::ZONE_SENTINEL_CLOSE, $i + 3);
+                    // Unmatched open swallows the tail (paintRow parity);
+                    // a matched pair consumes through the CLOSE sentinel.
+                    $i = $close === false ? $len : $close + 3;
+                    continue;
+                }
+                if ($line[$i + 2] === "\x81") { // U+E001 CLOSE without an OPEN
+                    $i += 3;
+                    continue;
+                }
+            }
+
+            $cluster = Cluster::next($line, $i);
+            $width += Width::of($cluster);
+            $i += \strlen($cluster);
+        }
+
+        return $width;
     }
 
     /**

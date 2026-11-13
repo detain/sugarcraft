@@ -78,6 +78,55 @@ final class MarkedFrameTest extends TestCase
         $this->assertSame(1, MarkedFrame::measure('A' . self::CLOSE));
     }
 
+    /**
+     * SO-04 (sugar-overlay-029) parity pin: the zero-allocation byte walker
+     * behind measure() must agree with the full tokenizer (segments()) on
+     * every corpus line — both walk the same arms, so a control-flow change
+     * on either side reddens here instead of silently re-measuring.
+     *
+     * @dataProvider measureParityCorpus
+     */
+    public function testMeasureWalkerAgreesWithSegments(string $line): void
+    {
+        $sum = 0;
+        foreach (MarkedFrame::segments($line) as $seg) {
+            $sum += $seg['width'];
+        }
+
+        $this->assertSame(
+            $sum,
+            MarkedFrame::measure($line),
+            'walker/tokenizer width parity for [' . addcslashes($line, "\0..\37\177..\377") . ']',
+        );
+    }
+
+    /** @return array<string, array{0: string}> */
+    public static function measureParityCorpus(): array
+    {
+        return [
+            'empty' => [''],
+            'ascii' => ['abc def'],
+            'wide-cjk' => ['日本語テスト'],
+            'zwj-family' => ['👨‍👩‍👧x'],
+            'skin-tone' => ['👍🏿x'],
+            'flag' => ['🇺🇸'],
+            'combining-vs' => ["♥\xEF\xB8\x80"],
+            'zone-balanced' => ["a\xEE\x80\x80id\xEE\x80\x81b"],
+            'zone-open-unclosed' => ["a\xEE\x80\x80tail"],
+            'zone-close-slash' => ["/open\xEE\x80\x81x"],
+            'zone-stray-close' => ["x\xEE\x80\x81y"],
+            'zone-sentinel-truncated' => ["\xEE\x80"],
+            'sgr-simple' => ["\e[31mred\e[0m"],
+            'sgr-rgb' => ["\e[38;2;1;2;3mpen\e[m"],
+            'csi-unterminated-eol' => ["abc\e[38"],
+            'osc8-st-pair' => ["\e]8;;http://x\e\\link\e]8;;\e\\"],
+            'osc8-bel' => ["\e]8;;u\x07bel-terminated"],
+            'osc8-bare-esc-reread' => ["\e]8;;bare-esc\x1b[0mafter"],
+            'lone-esc-eol' => ["text\e"],
+            'mixed-hostile' => ["\e[31m\xEE\x80\x80z語\xEE\x80\x81\e]8;;u\x07👍🏿✕"],
+        ];
+    }
+
     // ------------------------------------------------------------------
     # take
     // ------------------------------------------------------------------
