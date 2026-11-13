@@ -645,4 +645,155 @@ final class TableTest extends TestCase
 
         $this->assertSame($t->buildLines(), $t->withCursorMarker('')->buildLines());
     }
+
+    // ---- FBX-10: per-render row-line memo + withVisibleRange -----------
+
+    /** Twelve rows, cursor style AND marker armed — the memo's hazard set. */
+    private function memoTable(): Table
+    {
+        $t = Table::new()
+            ->withColumn(Column::new('Name', 8))
+            ->withColumn(Column::new('City', 6))
+            ->withCursorStyle('7')
+            ->withCursorMarker('> ');
+        foreach ([
+            ['Alice', 'Berlin'], ['Bob', 'Cairo'], ['Carol', 'Delhi'],
+            ['Dave', 'Egypt'], ['Erin', 'Florence'], ['Fay', 'Genoa'],
+            ['Gus', 'Hanoi'], ['Hal', 'Innsbruck'], ['Ivy', 'Jersey'],
+            ['Jo', 'Kyiv'], ['Kim', 'Lima'], ['Lou', 'Madrid'],
+        ] as $row) {
+            $t = $t->withRow($row);
+        }
+        return $t;
+    }
+
+    public function testMemoKeepsCursorSweepByteIdenticalToFreshBuilds(): void
+    {
+        // One chain accumulates memo history across every frame; a twin
+        // built from scratch per cursor answers must agree byte for byte.
+        // Poison classes pinned here: a cursored line surviving its own
+        // cursor move (reverse-video ghost on the wrong row) and a stale
+        // marker frame.
+        $swept = $this->memoTable();
+        foreach ([0, 5, 11, 3, 0, 9] as $cursor) {
+            $swept = $swept->withCursor($cursor);
+            $fresh = $this->memoTable()->withCursor($cursor);
+            $this->assertSame(
+                $fresh->buildLines(),
+                $swept->buildLines(),
+                "cursor {$cursor} frame must equal a fresh memoless build"
+            );
+        }
+    }
+
+    public function testMemoInvalidatesOnLayoutAndContentChanges(): void
+    {
+        // Separator and column changes ride INSIDE every cached row;
+        // appends and re-sorts move content between row indices. The
+        // twin-oracle comparison catches any class of stale hit.
+        $t = $this->memoTable();
+        $t->buildLines();
+
+        $t2 = $t->withSeparator(' | ')->withCursor(4);
+        $fresh2 = $this->memoTable()->withSeparator(' | ')->withCursor(4);
+        $this->assertSame($fresh2->buildLines(), $t2->buildLines());
+
+        $t3 = $t2->withColumn(Column::new('Flag', 4))->withRow(['Mia', 'Oslo'])->withCursor(6);
+        $fresh3 = $this->memoTable()
+            ->withSeparator(' | ')
+            ->withColumn(Column::new('Flag', 4))
+            ->withRow(['Mia', 'Oslo'])
+            ->withCursor(6);
+        $this->assertSame($fresh3->buildLines(), $t3->buildLines());
+
+        // Descending re-sort places different names at the same indices.
+        $t4 = $t3->withSort(0, false)->withCursor(2);
+        $fresh4 = $this->memoTable()
+            ->withSeparator(' | ')
+            ->withColumn(Column::new('Flag', 4))
+            ->withRow(['Mia', 'Oslo'])
+            ->withSort(0, false)
+            ->withCursor(2);
+        $this->assertSame($fresh4->buildLines(), $t4->buildLines());
+    }
+
+    public function testWindowKeepsViewIndexForPositionSensitiveFormatters(): void
+    {
+        // Column::padded() hands the formatter the VIEW index; a window
+        // must not renumber rows, or a parity-stripe formatter flips.
+        $parity = static fn(string $v, int $ri): string => ($ri % 2) === 1 ? "[{$v}]" : $v;
+        $t = Table::new()
+            ->withColumn(Column::new('Name', 8)->withFormatter($parity))
+            ->withColumn(Column::new('City', 6)->withFormatter($parity));
+        foreach ([
+            ['Alice', 'Berlin'], ['Bob', 'Cairo'], ['Carol', 'Delhi'], ['Dave', 'Egypt'],
+            ['Erin', 'Florence'], ['Fay', 'Genoa'], ['Gus', 'Hanoi'], ['Hal', 'Innsbruck'],
+        ] as $row) {
+            $t = $t->withRow($row);
+        }
+
+        $full = $t->buildLines();
+        $windowed = $t->withVisibleRange(2, 6)->buildLines();
+
+        // Header + ruler always paint; the windowed data lines are exactly
+        // the full-frame bytes of view rows 2..5 (full indices 4..7) — the
+        // [bracket] parity markers on rows 3/5 prove the formatter saw
+        // view indices, not window positions.
+        $this->assertSame(
+            array_merge([$full[0], $full[1]], array_slice($full, 4, 4)),
+            $windowed
+        );
+    }
+
+    public function testOpenEndedWindowRendersHeadPlusTailRows(): void
+    {
+        $t = $this->memoTable();
+        $full = $t->buildLines();
+        $this->assertSame(
+            array_merge([$full[0], $full[1]], array_slice($full, 5)),
+            $t->withVisibleRange(3)->buildLines()
+        );
+    }
+
+    public function testWindowPastEndRendersHeadOnly(): void
+    {
+        $t = $this->memoTable();
+        $full = $t->buildLines();
+        $this->assertSame(
+            [$full[0], $full[1]],
+            $t->withVisibleRange(30, 40)->buildLines()
+        );
+    }
+
+    public function testVisibleRangeRefusesNegativeStart(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        Table::new()->withVisibleRange(-1);
+    }
+
+    public function testVisibleRangeRefusesEndAtOrBeforeStart(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        Table::new()->withVisibleRange(2, 2);
+    }
+
+    public function testCursorOutsideWindowPaintsNoFocusRow(): void
+    {
+        $t = $this->memoTable();
+        $inside = $t->withCursor(3)->withVisibleRange(2, 6)->buildLines();
+        // Window [2,6) → lines: head, ruler, rows 2,3,4,5. Row 3 is line 3.
+        $this->assertStringStartsWith("\x1b[7m> ", $inside[3]);
+
+        $outside = $t->withCursor(9)->withVisibleRange(2, 6)->buildLines();
+        foreach ($outside as $i => $line) {
+            $this->assertStringNotContainsString("\x1b[7m", $line, "line {$i}");
+        }
+        // And the unseen cursor frame must not poison the memo for later
+        // plain renders of the same rows.
+        $again = $t->withCursor(9)->withVisibleRange(2, 6)->withCursor(4)->withVisibleRange(0);
+        $this->assertSame(
+            $this->memoTable()->withCursor(4)->buildLines(),
+            $again->buildLines()
+        );
+    }
 }

@@ -455,11 +455,43 @@ final class TableRendererTest extends TestCase
 
     public function testZeroColumnTableRendersEmptyInsteadOfFatal(): void
     {
+        // A width-0 grid has no cells to address: the renderer answers
+        // empty even mid-stream, and recovers on the next real frame.
         $renderer = new TableRenderer();
         $this->assertSame('', $renderer->render(Table::new()));
         // And after a real frame, collapsing to zero columns must not fatal
         // the frame loop either.
         $renderer->render(Table::new()->addColumn(Column::new('A', 3))->addRow(['x']));
         $this->assertSame('', $renderer->render(Table::new()));
+    }
+
+    public function testMemoizedCursorSweepEmitsIdenticalDeltasToFresh(): void
+    {
+        // The Table line memo (FBX-10) is invisible to the delta encoder:
+        // a chain that accumulates memo history emits the exact ops of a
+        // twin chain built fresh per frame — otherwise cached vs computed
+        // lines would differ inside the diff and corrupt long sessions.
+        $base = static function (): Table {
+            $t = Table::new()
+                ->withColumn(Column::new('A', 5))
+                ->withColumn(Column::new('B', 5))
+                ->withCursorStyle('7');
+            foreach ([['one', 'two'], ['three', 'four'], ['five', 'six'], ['seven', 'eight']] as $r) {
+                $t = $t->withRow($r);
+            }
+            return $t;
+        };
+
+        $swept = $base();
+        $renMemo = new TableRenderer();
+        $renFresh = new TableRenderer();
+        foreach ([0, 2, 1, 3, 0] as $cursor) {
+            $swept = $swept->withCursor($cursor);
+            $this->assertSame(
+                $renFresh->render($base()->withCursor($cursor)),
+                $renMemo->render($swept),
+                "cursor {$cursor} delta"
+            );
+        }
     }
 }

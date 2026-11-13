@@ -66,6 +66,32 @@ final class Table
      */
     private bool $viewDirty = false;
 
+    /**
+     * Paint window: view rows below $visibleFrom or at/above $visibleTo
+     * are never emitted (header and ruler always paint). Data semantics
+     * are untouched — rowCount(), currentRow() and the cursor index all
+     * address the FULL settled view. Default (0, null) renders everything.
+     */
+    private int $visibleFrom = 0;
+    private ?int $visibleTo = null;
+
+    /**
+     * Per-render row-line memo: view index => [(version key), (line)].
+     * A cursor move re-renders ONLY the two cursor rows; every other row
+     * is served from here. Rows carrying the cursor are never stored —
+     * their marker and style are cursor-dependent, so the cache could
+     * poison the frame after the cursor moves on. Keys carry both
+     * versions: $rowsVersion moves whenever rebuildView() settles new
+     * content (append/sort/filter), $layoutVersion whenever column or
+     * separator changes alter every row's shape.
+     *
+     * @var array<int, array{0: string, 1: string}>
+     */
+    private array $rowMemo = [];
+
+    private int $rowsVersion = 0;
+    private int $layoutVersion = 0;
+
     public static function new(): self
     {
         return new self();
@@ -78,6 +104,8 @@ final class Table
     {
         $clone = clone $this;
         $clone->columns[] = $col;
+        // Every row gains a cell: the line memo is about the old shape.
+        $clone->layoutVersion++;
         return $clone;
     }
 
@@ -283,6 +311,38 @@ final class Table
     {
         $clone = clone $this;
         $clone->separator = \SugarCraft\Core\Util\Sanitize::untrusted($s);
+        // The joint rides inside every data row: retire the memo's keys.
+        $clone->layoutVersion++;
+        return $clone;
+    }
+
+    /**
+     * Paint only the view rows in [$from, $to) (open-ended when $to is
+     * null). This is the virtualization door for large tables: a 24-line
+     * viewport never renders the cells of 20k rows, only its window.
+     *
+     * Header and ruler always paint; the cursor is unaffected in the data
+     * sense — currentRow() and rowCount() still address the FULL view, so
+     * a windowed frame is byte-identical to the slice of a full frame at
+     * the same indices (pinned in TableTest). Out-of-range $to simply
+     * renders fewer rows; $from < 0 or a closed range that does not
+     * advance throws at this door (house fail-fast).
+     */
+    public function withVisibleRange(int $from, ?int $to = null): self
+    {
+        if ($from < 0) {
+            throw new \InvalidArgumentException(
+                "Visible range start must be >= 0; got {$from}."
+            );
+        }
+        if ($to !== null && $to <= $from) {
+            throw new \InvalidArgumentException(
+                "Visible range end {$to} must be greater than its start {$from} (or null for open-ended)."
+            );
+        }
+        $clone = clone $this;
+        $clone->visibleFrom = $from;
+        $clone->visibleTo = $to;
         return $clone;
     }
 
@@ -390,53 +450,89 @@ final class Table
         }
         $lines[] = \implode($this->rulerJoint(), $sepParts);
 
-        // Data rows
+        // Data rows — windowed, and served from the line memo wherever
+        // the row is plain and its (view, layout) version still matches.
+        $from   = $this->visibleFrom;
+        $to     = $this->visibleTo;
+        $key    = $this->rowsVersion . ':' . $this->layoutVersion;
+        $cached = $this->rowMemo;
+        $memo   = [];
+
         foreach ($this->rows as $ri => $row) {
+            if ($ri < $from) {
+                continue;
+            }
+            if ($to !== null && $ri >= $to) {
+                break;
+            }
             $isCursor = ($ri === $this->cursorRow);
-            $rowCols  = [];
-
-            foreach ($this->columns as $ci => $col) {
-                $val = $row[$ci] ?? '';
-                $cellStr = $col->padded($val, $ri);
-
-                // Per-column style reaches every data cell — the knob was
-                // once stored but never rendered.
-                if ($col->ansiStyle !== '') {
-                    $cellStr = $this->applyStyle($cellStr, $col->ansiStyle);
-                }
-
-                // Non-colour focus marker (finding-023): prepend like the
-                // header's sort arrow, then re-clamp so the cell keeps its
-                // exact allocated width. Applied AFTER the column style so
-                // the prefix always renders un-styled and bare.
-                if ($isCursor && $this->cursorMarker !== '' && $ci === 0) {
-                    $clamped = Width::truncateAnsi(
-                        $this->cursorMarker . $cellStr,
-                        $col->width
-                    );
-                    $cellStr = match ($col->align) {
-                        'right'  => Width::padLeft($clamped, $col->width),
-                        'center' => Width::padCenter($clamped, $col->width),
-                        default  => Width::padRight($clamped, $col->width),
-                    };
-                }
-
-                $rowCols[] = $cellStr;
+            if ($isCursor) {
+                $lines[] = $this->buildRowLine($ri, $row, true);
+                continue;
             }
-
-            $line = \implode($this->separator, $rowCols);
-
-            // Row style wraps the IMPLoded line (finding-019): a per-cell
-            // wrap left every ' │ ' joint bare between reset runs, so the
-            // focused row rendered striped instead of solid.
-            if ($isCursor && $this->cursorStyle !== '') {
-                $line = $this->applyStyle($line, $this->cursorStyle);
+            if (($cached[$ri][0] ?? null) === $key) {
+                $line = $cached[$ri][1];
+            } else {
+                $line = $this->buildRowLine($ri, $row, false);
             }
-
-            $lines[] = $line;
+            $memo[$ri] = [$key, $line];
+            $lines[]   = $line;
         }
 
+        $this->rowMemo = $memo;
+
         return $lines;
+    }
+
+    /**
+     * Render one data-row line for view index $ri.
+     *
+     * The index reaches Column::padded() — a formatter may branch on it —
+     * and the window never renumbers rows, so a windowed line is the very
+     * bytes the full frame paints at the same index.
+     */
+    private function buildRowLine(int $ri, array $row, bool $isCursor): string
+    {
+        $rowCols = [];
+        foreach ($this->columns as $ci => $col) {
+            $val = $row[$ci] ?? '';
+            $cellStr = $col->padded($val, $ri);
+
+            // Per-column style reaches every data cell — the knob was
+            // once stored but never rendered.
+            if ($col->ansiStyle !== '') {
+                $cellStr = $this->applyStyle($cellStr, $col->ansiStyle);
+            }
+
+            // Non-colour focus marker (finding-023): prepend like the
+            // header's sort arrow, then re-clamp so the cell keeps its
+            // exact allocated width. Applied AFTER the column style so
+            // the prefix always renders un-styled and bare.
+            if ($isCursor && $this->cursorMarker !== '' && $ci === 0) {
+                $clamped = Width::truncateAnsi(
+                    $this->cursorMarker . $cellStr,
+                    $col->width
+                );
+                $cellStr = match ($col->align) {
+                    'right'  => Width::padLeft($clamped, $col->width),
+                    'center' => Width::padCenter($clamped, $col->width),
+                    default  => Width::padRight($clamped, $col->width),
+                };
+            }
+
+            $rowCols[] = $cellStr;
+        }
+
+        $line = \implode($this->separator, $rowCols);
+
+        // Row style wraps the IMPLoded line (finding-019): a per-cell
+        // wrap left every ' │ ' joint bare between reset runs, so the
+        // focused row rendered striped instead of solid.
+        if ($isCursor && $this->cursorStyle !== '') {
+            $line = $this->applyStyle($line, $this->cursorStyle);
+        }
+
+        return $line;
     }
 
     // -------------------------------------------------------------------------
@@ -473,6 +569,9 @@ final class Table
     private function rebuildView(): void
     {
         $this->viewDirty = false;
+        // New settled content: the line memo keys on this version, so
+        // every cached row becomes stale the moment rows change identity.
+        $this->rowsVersion++;
         $rows = $this->allRows;
 
         if ($this->sortColIndex >= 0 && $this->sortColIndex < \count($this->columns)) {
