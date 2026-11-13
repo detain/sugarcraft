@@ -33,7 +33,7 @@ final class ConfigWriterTest extends TestCase
         $out = ConfigWriter::render(Config::new());
 
         $this->assertStringContainsString(
-            "\n#* Update time in milliseconds, recommended 2000 ms or above for better sample times for graphs.\nupdate_ms = 2000\n",
+            "\n#* Update time in milliseconds, recommended 2000 ms or above for better sample times for graphs. At the 100 ms floor the UI measured 45-63 ms CPU per frame (~45-50 % of a core) — watch the cost.\nupdate_ms = 2000\n",
             $out,
         );
         $this->assertStringContainsString(
