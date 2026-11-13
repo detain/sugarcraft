@@ -1446,13 +1446,21 @@ final class GameTest extends TestCase
         $this->assertSame([7], json_decode((string) file_get_contents($tmp . '/.candy-flappy/scores.json'), true));
         $target = $tmp . '/.candy-flappy/scores.json';
         $this->assertFileExists($target);
+        // flappy-28 (finding -031): mtime alone is blind — a same-second
+        // rewrite keeps the seconds counter, and AtomicJsonFile::write()
+        // renames a fresh temp over the target, so the inode is what
+        // cannot survive a double write; bytes are the belt.
         $mtime = (int) filemtime($target);
+        $inode = (int) fileinode($target);
+        $bytes = (string) file_get_contents($target);
         [$next, $cmd] = $g->update(new KeyMsg(KeyType::Char, 'q'));
         $this->assertNotNull($cmd);
         $this->assertSame($g, $next, 'a crashed board quits as-is, no re-merge');
         $cmd();
         clearstatcache();
         $this->assertFileExists($target);
+        $this->assertSame($inode, (int) fileinode($target), 'quit after crash must not replace the save file');
+        $this->assertSame($bytes, (string) file_get_contents($target), 'quit after crash must not rewrite the bytes');
         $this->assertSame($mtime, (int) filemtime($target), 'quit after crash must not rewrite the save');
         @unlink($target);
         @rmdir($tmp . '/.candy-flappy');
