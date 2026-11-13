@@ -1306,13 +1306,30 @@ pre.code .num  { color: #fcd5b4; }
     flex: 1;
 }
 .carousel-dot {
-    width: 10px;
-    height: 10px;
+    /* SD-S11: 24x24 hit area (was 10x10, under target-size minimum).
+       The visible dot moved to ::after so the button box can grow
+       without changing the look. */
+    width: 24px;
+    height: 24px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     padding: 0;
     border: none;
+    background: transparent;
+    cursor: pointer;
+}
+.carousel-dot::after {
+    content: "";
+    width: 10px;
+    height: 10px;
     border-radius: 50%;
     background: var(--line);
-    cursor: pointer;
+}
+.carousel-dot:focus-visible {
+    outline: 2px solid var(--link);
+    outline-offset: 1px;
+    border-radius: 50%;
 }
 /* JS mode: one slide at a time, controls appear. */
 .carousel-js .carousel-track {
@@ -1328,7 +1345,7 @@ pre.code .num  { color: #fcd5b4; }
 .carousel-js .carousel-controls {
     display: flex;
 }
-.carousel-dot.is-active {
+.carousel-dot.is-active::after {
     background: var(--accent, #ff5da2);
 }
 
