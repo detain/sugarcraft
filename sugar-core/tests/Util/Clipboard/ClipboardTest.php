@@ -115,6 +115,36 @@ final class ClipboardTest extends TestCase
         );
     }
 
+    /** sugar-core-062: native Windows gets clip first, PowerShell second. */
+    public function testWindowsPlanOffersClipThenPowerShell(): void
+    {
+        $plan = Clipboard::plan('Windows', [], $this->knows('clip', 'powershell.exe'));
+        $this->assertCount(2, $plan);
+        $this->assertSame(['/bin/clip'], $plan[0]);
+        $this->assertSame('/bin/powershell.exe', $plan[1][0]);
+        $this->assertContains('-NoProfile', $plan[1]);
+        $this->assertContains('Set-Clipboard -Value ([Console]::In.ReadToEnd())', $plan[1]);
+    }
+
+    /** sugar-core-062: WSL bridges to the OUTER clipboard first, X tools second. */
+    public function testWslPlanPrefersTheInteropBridgeOverInDistroTools(): void
+    {
+        $plan = Clipboard::plan(
+            'Linux',
+            ['WSL_INTEROP' => '/run/WSL/1', 'DISPLAY' => ':0'],
+            $this->knows('powershell.exe', 'xclip'),
+        );
+        $this->assertSame('/bin/powershell.exe', $plan[0][0], 'the Windows bridge leads in WSL');
+        $this->assertSame('/bin/xclip', $plan[1][0], 'in-distro tools remain as fallbacks');
+    }
+
+    /** sugar-core-062: interop disabled = honest empty plan, never an xclip death-spiral. */
+    public function testWslWithoutTheInteropBinaryAndNoDisplayServersPlansNothing(): void
+    {
+        $plan = Clipboard::plan('Linux', ['WSL_DISTRO_NAME' => 'Ubuntu'], $this->knows('tmux'));
+        $this->assertSame([], $plan, 'no reachable host tool is the documented degradation law, not a failure');
+    }
+
     public function testOsc52BytesAreIdenticalToTheAnsiChannelTheyDegradeTo(): void
     {
         // The degradation law: with no host tool the caller still writes the

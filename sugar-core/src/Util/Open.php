@@ -14,10 +14,19 @@ use SugarCraft\Pty\PtyException;
  * Always uses {@see proc_open()}'s argv form so user-supplied URLs
  * cannot reach a shell — `javascript:` / `data:` / `vbscript:` URIs
  * are also rejected up front by the scheme allowlist in {@see url()}.
+ * The `cmd.exe` arms are the exception that proves the rule: cmd re-parses
+ * the command line it is handed, so the target there goes through
+ * {@see cmdStartArgument()} (sugar-core-061) or the launch is refused.
  *
- * Fire-and-forget: the launched application is detached. Failures
- * (xdg-utils not installed, sandboxed `open`, no `cmd.exe` interop)
- * surface as a `false` return; callers decide UX.
+ * WAITING IS THE CONTRACT, NOT A BETRAYED PROMISE (sugar-core-061): the
+ * default runner holds the spawn until the LAUNCHER exits and reports that
+ * exit code back — a launcher that fails (xdg-open with no handler, a wedged
+ * `cmd start`) returns `false`, never a laundered `true`. Launchers detach
+ * the real application themselves (`open`, `xdg-open`, `start`), so waiting
+ * on the launcher is not waiting on the app; the docblock formerly claimed
+ * "fire-and-forget" while the code unconditionally waited and discarded the
+ * status. The only refusal without an exit code is an argument cmd.exe cannot
+ * be fed safely: that never reaches a runner at all.
  */
 final class Open
 {
@@ -72,15 +81,22 @@ final class Open
         $platform = $platform ?? self::detectPlatform();
         if ($platform === 'WSL') {
             $hasWslview = $hasWslview ?? self::commandExists('wslview');
-            return $hasWslview
-                ? ['wslview', [$arg]]
-                : ['cmd.exe', ['/c', 'start', '', $arg]];
+            if ($hasWslview) {
+                return ['wslview', [$arg]];
+            }
+            $safe = self::cmdStartArgument($arg);
+            return $safe === null ? self::REFUSED : ['cmd.exe', ['/c', 'start', '', $safe]];
+        }
+        if ($platform === 'Windows') {
+            // Empty "" is the window title — required so `start` doesn't
+            // mistake a quoted URL for it (sugar-core-061: the target itself
+            // is quoted + percent-doubled by cmdStartArgument, or the launch
+            // is refused and no cmd.exe is ever fed the argument).
+            $safe = self::cmdStartArgument($arg);
+            return $safe === null ? self::REFUSED : ['cmd', ['/c', 'start', '', $safe]];
         }
         return match ($platform) {
             'Darwin'  => ['open', [$arg]],
-            // Empty `""` is the window title — required so `start` doesn't
-            // mistake a quoted URL for it.
-            'Windows' => ['cmd', ['/c', 'start', '', $arg]],
             default   => ['xdg-open', [$arg]],
         };
     }
@@ -101,9 +117,44 @@ final class Open
         return $prev;
     }
 
+    /**
+     * The unsanitizable-argument sentinel from {@see commandFor()}: an empty
+     * command that {@see dispatch()} refuses without touching the runner
+     * (sugar-core-061 — better a silent no-open than an escaped-into-`start`
+     * argument; the `false` return keeps that decision with the caller).
+     */
+    private const REFUSED = ['', []];
+
+    /**
+     * Harden one argument for cmd.exe's `start` re-parse (sugar-core-061).
+     *
+     * proc_open hands CreateProcess a rebuilt command LINE, and cmd.exe then
+     * RE-PARSES it: `&`, `|`, `<`, `>`, `^` act as operators and `%VAR%`
+     * expands even inside a quoted context — a URL like
+     * `https://x/&calc&` used to launch CALC on the user's desktop. Inside
+     * double quotes the operators go literal, so the canonical shape is
+     * `start "" "<target>"` with the target quoted and every percent
+     * doubled (cmd's own escape for a literal `%`). A value that cannot be
+     * made safe at all — an embedded double quote (cmd's own delimiter;
+     * there is no quoting layer left to protect it) or any C0 control /
+     * DEL byte (never legal in a URL or path) — is refused by returning
+     * null, and the launch dies as `false` before a shell is ever involved.
+     */
+    public static function cmdStartArgument(string $arg): ?string
+    {
+        if (preg_match('/[\x00-\x1F\x7F"]/', $arg) === 1) {
+            return null;
+        }
+        return '"' . str_replace('%', '%%', $arg) . '"';
+    }
+
     private static function dispatch(string $arg): bool
     {
         [$cmd, $args] = self::commandFor($arg);
+        if ($cmd === '') {
+            // Named refusal (sugar-core-061): no cmd-safe form exists.
+            return false;
+        }
         $runner = self::$runner ?? self::defaultRunner();
         return $runner($cmd, $args);
     }
@@ -114,9 +165,12 @@ final class Open
             $argv = array_merge([$cmd], array_values($args));
             try {
                 $proc = PosixProcess::spawn($argv, null, false, false);
-                $proc->wait();
-                return true;
+                // sugar-core-061: the launcher's exit code IS the result — a
+                // failed or wedged launcher must not report success. (This
+                // waits on the LAUNCHER; launchers detach the application.)
+                return $proc->wait() === 0;
             } catch (PtyException) {
+                // Named non-success: the spawn never reached a launcher.
                 return false;
             }
         };

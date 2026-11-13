@@ -143,6 +143,12 @@ final class Clipboard
      * terminal — an older tmux rejects `-w`, and the plain form still leaves
      * the text in a paste buffer for `prefix ]`.
      *
+     * Windows reaches its clipboard through `clip` / PowerShell Set-Clipboard
+     * and WSL through the `powershell.exe` interop bridge (sugar-core-062);
+     * an environment where no arm resolves returns the EMPTY plan — the
+     * honest "no host tool here" outcome the degradation law already
+     * documents, never an xclip death-spiral on an env with no DISPLAY.
+     *
      * @return list<list<string>>
      */
     public static function candidates(): array
@@ -156,8 +162,9 @@ final class Clipboard
      * — is pinned deterministically on any host.
      *
      * @param array<string, string> $environment the clipboard-relevant vars
-     *        (`TMUX`, `TERM_PROGRAM`, `WAYLAND_DISPLAY`, `DISPLAY`); a
-     *        missing key is the empty string, an empty value is "off".
+     *        (`TMUX`, `TERM_PROGRAM`, `WAYLAND_DISPLAY`, `DISPLAY`,
+     *        `WSL_INTEROP`, `WSL_DISTRO_NAME`); a missing key is the empty
+     *        string, an empty value is "off".
      * @param callable(string): (?string) $locate resolves a binary name to
      *        its absolute path, or null when absent.
      *
@@ -183,6 +190,37 @@ final class Clipboard
 
         if ($osFamily === 'Darwin') {
             $add('pbcopy');
+        }
+        if ($osFamily === 'Windows') {
+            // sugar-core-062: native Windows arms. `clip` is shipped with
+            // cmd.exe and eats stdin directly — the cheapest true path.
+            // PowerShell is the documented Get-Clipboard/Set-Clipboard route
+            // for hosts where clip is absent (and the read-back twin a paste
+            // leg would use); -NoProfile -NonInteractive keeps a user
+            // profile from hijacking a convenience copy.
+            $add('clip');
+            $add(
+                'powershell.exe',
+                '-NoProfile', '-NonInteractive', '-Command',
+                'Set-Clipboard -Value ([Console]::In.ReadToEnd())',
+            );
+        }
+        if ($osFamily === 'Linux' && (
+            (string) ($environment['WSL_INTEROP'] ?? '') !== ''
+            || (string) ($environment['WSL_DISTRO_NAME'] ?? '') !== ''
+        )) {
+            // sugar-core-062: WSL. The Windows clipboard is reachable through
+            // the powershell.exe interop bridge, tried BEFORE the in-distro
+            // X/Wayland tools because a bare WSL terminal usually has neither
+            // and always wants the OUTER clipboard. WSL2 mirrored-mode
+            // networking does not change the file-interop path, but distros
+            // run with interop disabled simply find no powershell.exe: the
+            // arm drops out and the OSC 52 degradation law covers the copy.
+            $add(
+                'powershell.exe',
+                '-NoProfile', '-NonInteractive', '-Command',
+                'Set-Clipboard -Value ([Console]::In.ReadToEnd())',
+            );
         }
         if ((string) ($environment['WAYLAND_DISPLAY'] ?? '') !== '') {
             $add('wl-copy');
@@ -220,7 +258,7 @@ final class Clipboard
     private static function environment(): array
     {
         $environment = [];
-        foreach (['TMUX', 'TERM_PROGRAM', 'WAYLAND_DISPLAY', 'DISPLAY'] as $name) {
+        foreach (['TMUX', 'TERM_PROGRAM', 'WAYLAND_DISPLAY', 'DISPLAY', 'WSL_INTEROP', 'WSL_DISTRO_NAME'] as $name) {
             $environment[$name] = (string) getenv($name);
         }
 

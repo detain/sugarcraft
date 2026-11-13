@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Core\Util;
 
+use SugarCraft\Core\Lang;
 use SugarCraft\Pty\Posix\PosixProcess;
 
 /**
@@ -14,10 +15,19 @@ use SugarCraft\Pty\Posix\PosixProcess;
  * defaults (`vi` then `nano` on POSIX, `notepad` on Windows). Splits the
  * env-var value on whitespace so `EDITOR='vim -p'` keeps the `-p` flag.
  *
- * The child process inherits STDIN/STDOUT/STDERR — the editor takes
- * over the controlling terminal for its lifetime. Callers that own the
- * altscreen (e.g. sugar-core's `Program`) must suspend the renderer
- * around this call; that integration is the responsibility of
+ * STDOUT/STDERR are inherited — the editor takes over the controlling
+ * terminal for its lifetime. STDIN is the RUNNER's business (sugar-core-055):
+ * the default runner spawns through sugar-pty's PosixProcess, whose contract
+ * binds fd 0 to `/dev/null` so a supervised child can never steal the
+ * controlling shell's stdin. Interactive editors are unaffected — vim, nano
+ * and friends reopen `/dev/tty` for the UI — but an editor driven by
+ * stdin-fed scripts (`gawk -f`, here-doc pipelines into the `$EDITOR`) sees
+ * immediate EOF through this arm. A caller that truly owns the terminal may
+ * inject a stdin-inheriting runner via {@see setRunner()}.
+ * Windows posture: the `notepad` default arm is behind sugar-core-049 and
+ * untested on Linux CI hosts — the POSIX discovery chain is the proven path.
+ * Callers that own the altscreen (e.g. sugar-core's `Program`) must suspend
+ * the renderer around this call; that integration is the responsibility of
  * `Cmd::exec()` / `ExecRequest`, not this helper.
  *
  * Throws `\RuntimeException` on every error path: editor not found,
@@ -35,7 +45,12 @@ final class Editor
      *
      * `$extension` controls the temp-file suffix so syntax-aware
      * editors pick the right ftplugin (`.md` for markdown, `.json`
-     * for JSON, etc). Pass `''` to skip the suffix entirely.
+     * for JSON, etc). Pass `''` to skip the suffix entirely. A suffix
+     * is a LABEL, never a path: after the optional leading dot it must
+     * match `^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$` — slashes, `..` and other
+     * traversal shapes are refused with InvalidArgumentException
+     * (sugar-core-050: the pre-validation arm renamed the seeded temp file
+     * outside the temp directory).
      *
      * `$editor` overrides the discovery chain — useful for unit tests
      * and for callers that need a fixed editor regardless of env.
@@ -185,6 +200,17 @@ final class Editor
         $ext = ltrim($extension, '.');
         if ($ext === '') {
             return $base;
+        }
+
+        // sugar-core-050: the suffix used to ride straight into
+        // rename($base, $base . '.' . $ext) — a `/`-bearing or `..`-bearing
+        // "extension" walked the seeded temp file OUT of sys_get_temp_dir().
+        // A suffix is a label, never a path: shape-validate, refuse by name.
+        if (preg_match('/^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$/', $ext) !== 1) {
+            @unlink($base);
+            throw new \InvalidArgumentException(Lang::t('editor.extension_invalid', [
+                'extension' => $extension,
+            ]));
         }
 
         $renamed = $base . '.' . $ext;

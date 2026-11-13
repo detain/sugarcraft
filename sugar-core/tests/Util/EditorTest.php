@@ -255,4 +255,56 @@ final class EditorTest extends TestCase
             @unlink($shim);
         }
     }
+
+    /**
+     * sugar-core-050: an extension is a LABEL, never a path. Shapes that
+     * could walk the seeded temp file out of sys_get_temp_dir() via
+     * rename($base, $base.'.'.$ext) are refused by name before the runner
+     * ever sees them; dot-only spellings collapse to "no suffix" (ltrim
+     * consumes them) which is safe by shape; accepted labels land inside
+     * the temp directory with exactly that suffix.
+     */
+    public function testTraversalShapesInExtensionsAreRefusedByName(): void
+    {
+        /** @var list<string>|null $last */
+        $last = null;
+        $prev = Editor::setRunner(static function (array $argv) use (&$last): int {
+            $last = $argv;
+            return 0;
+        });
+        try {
+            foreach (['a/b', '../../etc/x', 'a\b', '.php\";rm', 'x' . str_repeat('y', 40), "\x00md"] as $hostile) {
+                $threw = false;
+                try {
+                    Editor::edit('seed', $hostile, 'true');
+                } catch (\InvalidArgumentException) {
+                    $threw = true;
+                }
+                $this->assertTrue($threw, 'hostile extension must be refused: ' . $hostile);
+            }
+            $this->assertNull($last, 'a refused suffix never reaches the runner');
+
+            foreach (['', '.', '..', '...'] as $dotOnly) {
+                $last = null;
+                $this->assertSame('seed', Editor::edit('seed', $dotOnly, 'true'));
+                $tmp  = (string) ($last[1] ?? '');
+                $this->assertStringStartsWith(sys_get_temp_dir() . DIRECTORY_SEPARATOR, $tmp);
+                $this->assertStringNotContainsString('/', substr(basename($tmp), 0, 1));
+            }
+
+            foreach (['md', '.md', '.txt', '.php8', 'a.b-c_1'] as $ok) {
+                $last = null;
+                $this->assertSame('body', Editor::edit('body', $ok, 'true'));
+                $tmp = (string) ($last[1] ?? '');
+                $this->assertStringStartsWith(sys_get_temp_dir() . DIRECTORY_SEPARATOR, $tmp);
+                $this->assertStringEndsWith(
+                    '.' . ltrim($ok, '.'),
+                    $tmp,
+                    'the accepted label is exactly the on-disk suffix',
+                );
+            }
+        } finally {
+            Editor::setRunner($prev);
+        }
+    }
 }
