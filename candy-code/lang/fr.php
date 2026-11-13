@@ -5313,4 +5313,9 @@ brouillon du formulaire de génération. Les valeurs déjà présentes dans le b
     'cmd.sendto.row' => '{name} envoyé au formulaire de génération — {count} champs importés ({via}, {mode})',
     'context.intent.unusable_glob' => 'La note de mémoire {id} a un déclencheur `when: path:` ({glob}) inutilisable, elle ne se déclenchera donc jamais. Modifiez ou supprimez la note.',
     'host.memory.repo_ignore_planted' => '`.candy-code/memory/.gitignore` (`*`) a été créé pour que les notes du projet restent hors de git. Supprimez ce fichier si vous souhaitez les valider.',
+    'mcp.build_failed' => 'Entrées de serveur MCP de cette configuration qui n’ont pas pu être construites ({count}) : {failures}',
+    'mcp.disabled_report' => 'Entrées de serveur MCP de cette configuration désactivées et ignorées ({count}) : {servers}',
+    'mcp.secret_env_stripped' => 'Les serveurs MCP stdio démarrent sans identifiants hérités : {servers}. Un serveur qui en a besoin le déclare dans le bloc "env" de son .mcp.json, p. ex. "GITHUB_TOKEN": "${GITHUB_TOKEN}", ou son nom figure dans secretEnvAllowlist.',
+    'mcp.auth_required_row' => '{server} (HTTP {status}) : exécutez `candy-code mcp auth login {target}`, puis redémarrez',
+    'mcp.auth_required' => 'Des serveurs MCP ont refusé ce lancement faute d’identifiants : {servers}.',
 ];

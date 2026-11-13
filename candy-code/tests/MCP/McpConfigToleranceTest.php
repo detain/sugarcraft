@@ -230,7 +230,7 @@ final class McpConfigToleranceTest extends TestCase
         self::assertStringContainsString('int-head ("command" array must start with a non-empty string)', $reported);
         self::assertStringContainsString('int-tail ("command" array must hold strings)', $reported);
         self::assertStringContainsString('map-args ("args" must be a list)', $reported);
-        self::assertStringContainsString('5 MCP server entries', $reported);
+        self::assertStringContainsString('that could not be built (5): ', $reported);
     }
 
     // -- environment / env precedence -------------------------------------------
@@ -312,7 +312,7 @@ final class McpConfigToleranceTest extends TestCase
 
         $reported = $this->tolAggregateMessage($client);
 
-        self::assertStringContainsString('1 MCP server entry in this config is disabled and skipped: lone', $reported);
+        self::assertStringContainsString('disabled and skipped (1): lone', $reported);
         self::assertStringNotContainsString('could not be built', $reported, 'a deliberate skip must not be phrased as a build failure');
         self::assertArrayNotHasKey('lone', $client->startedSnapshot());
         $client->stopServers();
@@ -327,10 +327,10 @@ final class McpConfigToleranceTest extends TestCase
 
         $reported = $this->tolAggregateMessage($client);
 
-        self::assertStringContainsString('1 MCP server entry in this config could not be built: bad (Unknown MCP server type: nope)', $reported);
-        self::assertStringContainsString('1 MCP server entry in this config is disabled and skipped: off', $reported);
+        self::assertStringContainsString('could not be built (1): bad (Unknown MCP server type: nope)', $reported);
+        self::assertStringContainsString('disabled and skipped (1): off', $reported);
         self::assertMatchesRegularExpression(
-            '/could not be built: [^.]+\. \d+ MCP server entry/',
+            '/could not be built \(\d+\): [^.]+\. MCP server entries in this config that are disabled/',
             $reported,
             'the two sentences must stay separately readable — one list carrying both would be a new lie',
         );

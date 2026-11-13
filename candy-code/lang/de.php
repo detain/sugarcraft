@@ -5312,4 +5312,9 @@ Generierungsformular-Entwurf. Bereits im Entwurf vorhandene Werte werden nie
     'cmd.sendto.row' => '{name} an das Generierungsformular gesendet — {count} Felder importiert ({via}, {mode})',
     'context.intent.unusable_glob' => 'Die Gedächtnisnotiz {id} hat einen `when: path:`-Auslöser ({glob}), der nicht verwendbar ist und daher nie ausgelöst wird. Bearbeite oder lösche die Notiz.',
     'host.memory.repo_ignore_planted' => '`.candy-code/memory/.gitignore` (`*`) wurde angelegt, damit Projektnotizen nicht in Git landen. Lösche die Datei, wenn du sie committen möchtest.',
+    'mcp.build_failed' => 'MCP-Server-Einträge in dieser Konfiguration, die nicht erstellt werden konnten ({count}): {failures}',
+    'mcp.disabled_report' => 'MCP-Server-Einträge in dieser Konfiguration, die deaktiviert und übersprungen wurden ({count}): {servers}',
+    'mcp.secret_env_stripped' => 'MCP-stdio-Server starten ohne geerbte Zugangsdaten: {servers}. Ein Server, der eine benötigt, deklariert sie in seinem „env“-Block in .mcp.json, z. B. "GITHUB_TOKEN": "${GITHUB_TOKEN}", oder der Name steht in secretEnvAllowlist.',
+    'mcp.auth_required_row' => '{server} (HTTP {status}): führe `candy-code mcp auth login {target}` aus und starte dann neu',
+    'mcp.auth_required' => 'MCP-Server haben diesen Start wegen fehlender Zugangsdaten abgelehnt: {servers}.',
 ];

@@ -496,12 +496,10 @@ final class McpClient
             $disabled = $this->disabledReport();
 
             throw new \RuntimeException(
-                sprintf(
-                    '%d MCP server %s in this config could not be built: %s',
-                    count($failures),
-                    count($failures) === 1 ? 'entry' : 'entries',
-                    implode('; ', $failures),
-                )
+                Lang::t('mcp.build_failed', [
+                    'count' => count($failures),
+                    'failures' => implode('; ', $failures),
+                ])
                 . ($disabled === '' ? '' : '. ' . $disabled),
             );
         }
@@ -771,10 +769,7 @@ final class McpClient
             $parts[] = sprintf('%s (%s)', $server, implode(', ', $names));
         }
 
-        return sprintf(
-            'MCP stdio servers start without inherited credentials: %s. A server that needs one declares it in its .mcp.json "env" block, e.g. "GITHUB_TOKEN": "${GITHUB_TOKEN}", or list the name in secretEnvAllowlist.',
-            implode('; ', $parts),
-        );
+        return Lang::t('mcp.secret_env_stripped', ['servers' => implode('; ', $parts)]);
     }
 
     /**
@@ -823,15 +818,14 @@ final class McpClient
         $parts = [];
         foreach ($this->authRequired as $server => $row) {
             $target = $row['url'] !== '' ? $row['url'] : $server;
-            $parts[] = sprintf(
-                '%s (HTTP %d): run `candy-code mcp auth login %s`, then restart',
-                $server,
-                $row['status'],
-                $target,
-            );
+            $parts[] = Lang::t('mcp.auth_required_row', [
+                'server' => $server,
+                'status' => $row['status'],
+                'target' => $target,
+            ]);
         }
 
-        return sprintf('MCP servers refused this launch for credentials: %s.', implode('; ', $parts));
+        return Lang::t('mcp.auth_required', ['servers' => implode('; ', $parts)]);
     }
 
     /**
@@ -847,13 +841,12 @@ final class McpClient
             return '';
         }
 
-        return sprintf(
-            '%d MCP server %s in this config %s disabled and skipped: %s',
-            count($this->disabledServers),
-            count($this->disabledServers) === 1 ? 'entry' : 'entries',
-            count($this->disabledServers) === 1 ? 'is' : 'are',
-            implode(', ', $this->disabledServers),
-        );
+        // Flat count phrasing on purpose: one sentence shape for every count,
+        // so no locale needs its own plural logic (audit providers-004).
+        return Lang::t('mcp.disabled_report', [
+            'count' => count($this->disabledServers),
+            'servers' => implode(', ', $this->disabledServers),
+        ]);
     }
 
     /**
