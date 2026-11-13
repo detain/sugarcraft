@@ -43,14 +43,33 @@ A rolling development phar is published on GitHub Releases under
 the sugarcraft signing key configured adds the three signing assets
 (`candy-tetris.phar.sha256.sig`, `candy-tetris.phar.minisig`,
 `candy-tetris.phar.minisig.sha256`). Stable cuts ride the same release
-pipeline on `candy-tetris/v*` tags. The launcher detects that it is running from inside a phar and loads
-the autoloader bundled in the archive, so the downloaded file needs nothing
-else installed.
+pipeline on `candy-tetris/v*` tags. (Dated 2026-11-12: the channel was
+structurally dead from the sibling-pin wave until the fleet WF-CURE
+commit `191ccd566` restored the build's tree/sidecar flow; the published
+`candy-tetris/dev` asset is the last pre-freeze build until the next
+green phar-dev CI run advances the tag. The `.phar.commit` companion
+names exactly which build is live.)
 
-Requirements: `php-cli` 8.3+ with `ext-intl` and `ext-mbstring`. Both are
-hard-required transitively by [sugar-core](https://packagist.org/packages/sugarcraft/sugar-core),
-whose cell-width math segments through ICU — on a bare php-cli machine
-`composer install` is the step that refuses, naming sugar-core.
+The launcher detects that it is running from inside a phar and loads
+the autoloader bundled in the archive — by archive identity (magic
+bytes), so the file also boots after a rename like
+`mv candy-tetris.phar tetris`. Nothing needs to be installed for it to
+run; what it does need is a plain-PHP floor: `php-cli` 8.3+ with
+`ext-intl` and `ext-mbstring`, now declared in the manifest and
+preflighted by the launcher itself (one plain refusal line naming the
+missing extension).
+
+Verify a download from the repo's release assets
+(`https://github.com/detain/sugarcraft/releases/download/candy-tetris/dev/...`):
+
+```bash
+gh release download candy-tetris/dev -R detain/sugarcraft -p 'candy-tetris.phar*'
+sha256sum -c candy-tetris.phar.sha256
+php -r '$m = (new Phar("candy-tetris.phar"))->getMetadata(); echo $m["version"], " ", $m["commit"], PHP_EOL;'
+```
+
+The printed commit is the tested SHA the build sealed; compare it with
+`git rev-parse <sha>` or the `.phar.commit` companion file.
 
 The interface is localized: sixteen catalogues ship (ar, cs, de, en, es,
 fr, it, ja, ko, nl, pl, pt, pt-br, ru, tr, zh-cn) and the launcher picks
