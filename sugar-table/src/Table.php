@@ -1825,13 +1825,25 @@ final class Table
 
         // When multilineMode is enabled, pre-calculate row heights. Expanded
         // rows are a single full-width detail line — one buffer row each —
-        // regardless of their wrapped height (audit #8).
+        // regardless of their wrapped height (audit #8). The wrapped lines
+        // both passes would compute are memoized for this frame only
+        // (audit ST-32): the height pass records each cell's renderCell()
+        // output and the paint pass replays it byte-identically, halving the
+        // wrap work of every multiline frame.
         $rowHeights = [];
+        $cellLineMemo = new CellLineMemo();
         if ($this->multilineMode) {
             foreach ($rows as $ri => $row) {
                 $rowHeights[$ri] = $this->isExpandedByRow($row)
                     ? 1
-                    : $this->calculateRowHeight($row, $this->computedColumnWidths, $visibleColumnIndices);
+                    : $this->calculateRowHeight($row, $this->computedColumnWidths, $visibleColumnIndices, $cellLineMemo);
+            }
+            // Close every (column, effective width) group the height pass
+            // walked — replay legality starts at complete().
+            foreach ($visibleColumnIndices as $ci) {
+                $groupColumn = $this->columns[$ci];
+                $groupWidth = \max(1, ($this->computedColumnWidths[$ci] ?? $groupColumn->width) - 2 * $this->cellPadding);
+                $cellLineMemo->complete($groupColumn, $groupWidth);
             }
             $totalRowHeight = \array_sum($rowHeights);
         } else {
@@ -1906,7 +1918,7 @@ final class Table
                     $canvas = $this->fillExpandedRow($canvas, $bufferRow, $row, $ri, $isSelected, $visibleWidth, $visibleColumnIndices, $absoluteIndex);
                     $bufferRow++;
                 } elseif ($this->multilineMode) {
-                    $canvas = $this->fillDataRowLines($canvas, $bufferRow, $row, $ri, $visibleWidth, $isSelected, $this->computedColumnWidths, $rowHeights[$ri], $visibleColumnIndices, $absoluteIndex);
+                    $canvas = $this->fillDataRowLines($canvas, $bufferRow, $row, $ri, $visibleWidth, $isSelected, $this->computedColumnWidths, $rowHeights[$ri], $visibleColumnIndices, $absoluteIndex, $cellLineMemo);
                     $bufferRow += $rowHeights[$ri];
                 } else {
                     $canvas = $this->fillDataRow($canvas, $bufferRow, $row, $ri, $isSelected, $this->computedColumnWidths, $visibleColumnIndices, $absoluteIndex);
@@ -2264,7 +2276,7 @@ final class Table
      * When multilineMode is enabled, row height equals the maximum number of
      * lines across all visible cells. This accounts for text wrapping in each cell.
      */
-    private function calculateRowHeight(Row $row, array $computedWidths, array $visibleColumnIndices): int
+    private function calculateRowHeight(Row $row, array $computedWidths, array $visibleColumnIndices, CellLineMemo $memo): int
     {
         $maxLines = 1;
 
@@ -2281,6 +2293,7 @@ final class Table
             $cellStr = Sanitize::value($cellStr, true, $this->markedFrameSanitization);
 
             $lines = $column->renderCell($cellStr, $effectiveWidth, $this->markedFrameSanitization);
+            $memo->store($column, $effectiveWidth, $lines);
             $lineCount = \count($lines);
             if ($lineCount > $maxLines) {
                 $maxLines = $lineCount;
@@ -2297,7 +2310,7 @@ final class Table
      * all cells). Cells with fewer lines are padded vertically with empty space.
      * Row borders span the full row height.
      */
-    private function fillDataRowLines(RenderCanvas $canvas, int $startRow, Row $row, int $rowIndex, int $_contentWidth, bool $isSelected, array $computedWidths, int $rowHeight, array $visibleColumnIndices, int $absoluteRowIndex): RenderCanvas
+    private function fillDataRowLines(RenderCanvas $canvas, int $startRow, Row $row, int $rowIndex, int $_contentWidth, bool $isSelected, array $computedWidths, int $rowHeight, array $visibleColumnIndices, int $absoluteRowIndex, CellLineMemo $cellLineMemo): RenderCanvas
     {
         // Determine row-level style: compose row + zebra stripe, with the
         // selection reverse video on top of the band (audit M3/M5 — both
@@ -2361,7 +2374,13 @@ final class Table
             // reach here — renderToBuffer routes them to fillExpandedRow.
             $effectiveWidth = $colWidth - (2 * $this->cellPadding);
             $effectiveWidth = \max(1, $effectiveWidth);
-            $lines = $column->renderCell($cellStr, $effectiveWidth, $this->markedFrameSanitization);
+            // ST-32: the height pass already wrapped this cell with the same
+            // sanitized text and width; replay its lines byte-identically.
+            // The fresh renderCell() stays as the structural fallback for a
+            // group the height pass did not record (never in a symmetric
+            // frame, but the paint must never depend on memo luck).
+            $lines = $cellLineMemo->replayNext($column, $effectiveWidth)
+                ?? $column->renderCell($cellStr, $effectiveWidth, $this->markedFrameSanitization);
             $cellLines[$ci] = ['lines' => $lines, 'style' => $parsedStyle, 'width' => $colWidth];
         }
 
