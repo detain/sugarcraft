@@ -54,8 +54,11 @@ The library carries the house i18n plumbing (`src/Lang.php` plus locale files un
   nothing scrolled out — renders the plain streaming frame instead of reserving blank bands for pinned rows
 - **Sync partner** — `withLinkedViewport($other)` is a decorative association: it marks the viewport as synced and is readable via
   `hasLinkedViewport()`, but propagates nothing (scroll state never crosses to the partner)
-- **Mouse wheel** support with configurable delta
-- **Horizontal scrolling** with step-based navigation
+- **Mouse wheel** — `withMouseWheelEnabled(bool)` arms it and `withMouseWheelDelta($lines)`
+  sizes the step (default 3); wheel motion reaches the same `update()` door as keys (`MouseWheelMsg`)
+- **Horizontal scrolling** — `scrollLeft()` / `scrollRight()` shift by `withHorizontalStep($cells)`
+  (default 6, minimum 1, or pass an explicit per-step count), and `horizontalScrollPercent()`
+  answers the slider position
 - **Argument policy** — dimensions THROW on negatives (`Viewport::new(-5, 10)`
   refuses) while zero is legal and degenerate boxes simply render nothing;
   sticky row counts THROW on negatives too (`withStickyHeader(-1)` refuses by
@@ -70,9 +73,22 @@ The library carries the house i18n plumbing (`src/Lang.php` plus locale files un
   in the plain and sticky paths; wide scrollbar runes reserve their true cell width
 
 ### Scrollbar
-- **Scrollbar** — composes the canonical `sugar-forms` `Scrollbar` (same alias chain)
-- **Vertical and horizontal** scrollbars with configurable thumb/track characters
-- **Arrow toggling** for scrollbar ends
+- **The API** — `Scrollbar::vertical()` / `Scrollbar::horizontal()` build a bar;
+  `view($state, $rows)` renders it into exactly `$rows` lines, where `$state` is a
+  `SugarCraft\Forms\Scrollbar\ScrollbarState` or its array shape
+  `['total' => n, 'position' => row, 'viewport' => visibleRows]`; a `Viewport`
+  composes one through `withVerticalScrollbar()` and paints it when `showScrollbar()`
+  is on (see Viewport above)
+- **Theming** — `withThumbChar()` / `withTrackChar()` set the runes (sanitized,
+  at most one cell), and `withArrows(bool)` toggles the end caps (vertical only —
+  the horizontal bar boots arrowless)
+
+```php
+use SugarCraft\Flexbox\Scrollbar;
+
+$bar = Scrollbar::vertical()->withArrows(true);
+echo $bar->view(['total' => 100, 'position' => 30, 'viewport' => 24], 9);
+```
 
 ## Install
 
@@ -106,6 +122,12 @@ bulk construction stays flat.
 
 Every dimension is in **cells**, and allocation follows one deterministic model (no CSS
 `justify-content`, `flex-wrap`, or reverse-direction counterparts exist):
+
+`FlexItem::new()` defaults to grow-ratio **1** — plain items divide the free
+space evenly, not proportionally to content; CSS's `flex-grow: 0` intuition
+requires an explicit `withRatio(0)`, and a ratio-0 item with no basis then
+falls to the 1-cell floor (rule 3), never to its content width. The fixed-size
+recipe is `withBasis()`, not `withRatio(0)`.
 
 1. **Basis first.** Each item's `withBasis(cells)` reserves a fixed main-axis slice
    (row: width, column: height), clamped to the container: ANY positive basis is a
