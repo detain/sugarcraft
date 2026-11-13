@@ -46,9 +46,6 @@ composer require sugarcraft/sugar-table
 
 ## Quick Start
 
-
-
-
 ```php
 use SugarCraft\Table\{Column, Row, RowData, Table};
 
@@ -67,9 +64,6 @@ echo $t->View();
 
 ## Columns
 
-
-
-
 ```php
 Column::new($key, $title, $width)        // key, display title, fixed width
     ->withFlexibleWidth($share)          // weight when ColumnWidth::Flex splits leftover
@@ -82,9 +76,6 @@ Column::new($key, $title, $width)        // key, display title, fixed width
 ```
 
 ### ColumnWidth Enum
-
-
-
 
 `ColumnWidth` specifies how a column's width is computed at render time.
 The table computes actual widths in `computeColumnWidths($tableWidth)` and uses
@@ -142,9 +133,6 @@ echo $t->View();  // pct takes 25% of the table width, id stays 5, the three bor
 
 ### WrapMode Enum
 
-
-
-
 `WrapMode` controls how cell text is wrapped:
 
 | Case        | Description                                              |
@@ -161,9 +149,6 @@ $col = Column::new('desc', 'Description', 20)
 ```
 
 ## Rows
-
-
-
 
 ```php
 $row = Row::new($rowData)
@@ -194,9 +179,6 @@ sanitizes every cell's text.
 
 ## Navigation & Sorting
 
-
-
-
 ```php
 $t = $t->SortBy('name', ascending: true);
 $t = $t->Filter('name', 'alice');       // filter column by text
@@ -226,9 +208,6 @@ $t = $t->SortBy('city')
 
 ## Keyboard Navigation
 
-
-
-
 Scroll the table vertically using keyboard input via `scrollYForKey()` and `handleKey()`:
 
 `handleKey()` drives vertical scrolling ONLY. Moving the row cursor
@@ -250,9 +229,6 @@ $t = $t->handleKey(Table::KEY_END);         // scroll to bottom
 
 ### Key Constants
 
-
-
-
 | Constant          | Description                      |
 |-------------------|----------------------------------|
 | `KEY_ARROW_UP`    | Scroll up by 1 row                |
@@ -263,9 +239,6 @@ $t = $t->handleKey(Table::KEY_END);         // scroll to bottom
 | `KEY_END`         | Scroll to last row               |
 
 ### scrollYForKey() — Raw Scroll Calculation
-
-
-
 
 Returns the new `scrollY` value for a key without modifying the table:
 
@@ -278,9 +251,6 @@ This is useful when you need the raw integer value for your own integration logi
 
 ### handleKey() — Convenience Wrapper
 
-
-
-
 Returns a new Table with `scrollY` already adjusted:
 
 ```php
@@ -290,9 +260,6 @@ $t = $t->handleKey($keyFromInputHandler);
 This combines `scrollYForKey()` + `withScrollY()` in one call.
 
 ### Integration Example
-
-
-
 
 ```php
 use SugarCraft\Input\Event\KeyEvent;
@@ -333,9 +300,6 @@ $t = $t->handleKey(Table::KEY_PAGE_DOWN);
 - **No-op for unknown keys**: Unrecognized keys return the current `scrollY` unchanged
 - **Requires viewport**: Keyboard scrolling only works when `withViewportHeight()` is set
 
-
-
-
 ```php
 // Combined: keyboard scroll + cursor selection
 $t = $t->withScrollY($t->scrollYForKey($key))  // update scroll
@@ -343,9 +307,6 @@ $t = $t->withScrollY($t->scrollYForKey($key))  // update scroll
 ```
 
 ## Global Search
-
-
-
 
 Call `search()` to filter rows across the scanned columns simultaneously: every
 column is scanned while none is marked with `withFilterable()`, and only the
@@ -378,9 +339,6 @@ $t = $t->ClearSearch();     // alias for search('')
 - **Resets view state**: `search()` — like `Filter()`, `SortBy()` and `withRows()` —
   re-anchors cursor, page and scroll offset to the start
 
-
-
-
 ```php
 // Combined: Filter by name column AND search the scanned columns for "ny"
 $t = $t->Filter('name', 'alice')  // name must contain "alice"
@@ -392,9 +350,6 @@ $t = $t->Filter('name', 'alice')  // name must contain "alice"
 ```
 
 ### Interaction with Filter()
-
-
-
 
 | Method     | Scope        | Logic   |
 |------------|--------------|---------|
@@ -418,9 +373,6 @@ $t = $t->Filter('city', 'ny')     // city must contain "ny"
 ```
 
 ## Missing Data Indicator
-
-
-
 
 A cell whose row carries no entry for the column renders the missing-data
 placeholder instead of blank space (an empty string is a value and does NOT
@@ -453,9 +405,6 @@ Pinned by `tests/TableEmptyStateTest.php`.
 
 ## Pagination
 
-
-
-
 ```php
 $t = $t->withPageSize(25)               // 25 rows per page
     ->withPage(2);                      // 0-based: jumps to the THIRD page
@@ -463,9 +412,6 @@ echo $t->PageFooter();                  // 'Page 3 of 4' (i18n-aware)
 ```
 
 ### Footer Types
-
-
-
 
 Control what the footer displays using the `FooterType` enum:
 
@@ -514,9 +460,6 @@ The row count footer uses the `showing_rows` i18n key and updates automatically 
 
 ## Viewport Virtualization
 
-
-
-
 Render only a visible slice of rows for large datasets:
 
 ```php
@@ -534,9 +477,6 @@ The table automatically slices the visible row range from the filtered+sorted vi
 `scrollY()` returns the current vertical scroll offset.
 
 ## Frozen Columns
-
-
-
 
 Pin columns from the left so they remain visible when scrolling horizontally:
 
@@ -561,9 +501,6 @@ echo $t->View();                       // ID and Name always visible
 
 ### Frozen Columns with Horizontal Scroll
 
-
-
-
 Combine frozen columns with `scrollX` for a spreadsheet-like experience:
 
 ```php
@@ -584,16 +521,10 @@ echo $t->View();
 
 ### Visibility Logic
 
-
-
-
 A column is visible when:
 
 1. Its index is in the `frozenCols` array (always visible), OR
 2. Its index >= `count(frozenCols) + scrollX` (in the scrollable region)
-
-
-
 
 ```php
 // Given: frozenCols = [0, 1], scrollX = 1
@@ -606,9 +537,6 @@ A column is visible when:
 ```
 
 ## Horizontal Scroll
-
-
-
 
 Scroll horizontally through columns that exceed the table width:
 
@@ -636,9 +564,6 @@ echo $t->View();
 
 ### Interaction with Frozen Columns
 
-
-
-
 When combining `withScrollX()` with `withFrozenCols()`:
 
 ```php
@@ -663,9 +588,6 @@ echo $t->View();
 The visibility formula: a column is visible when its index is in `frozenCols` OR `index >= count(frozenCols) + scrollX`.
 
 ## Column Visibility Toggle
-
-
-
 
 Hide columns by index without removing them from the table:
 
@@ -692,9 +614,6 @@ echo $t->View();
 - **Useful for optional columns** that can be toggled visible/invisible via UI
 - **Column indices refer to the original column order** — not affected by scroll position
 
-
-
-
 ```php
 // Hide multiple columns
 $t = $t->withHiddenCols([2, 3]);         // hide columns at indices 2 and 3
@@ -709,9 +628,6 @@ $t = $t->withFrozenCols([0])
 
 ### Interaction with Frozen Columns and Scroll
 
-
-
-
 Hidden columns are **never rendered**, regardless of frozen status or scroll position:
 
 ```php
@@ -723,9 +639,6 @@ Hidden columns are **never rendered**, regardless of frozen status or scroll pos
 ```
 
 ## Column Width Computation
-
-
-
 
 Compute actual column widths from `ColumnWidth` enum values:
 
@@ -748,9 +661,6 @@ Uses multi-pass computation:
 5. **Content**: exact content width (min 1)
 
 ## Internationalization
-
-
-
 
 All translatable strings live in `lang/en.php` under the `'table'` namespace.
 
@@ -841,9 +751,6 @@ Known limits — there is no colour-blind or a11y mode:
 
 ## Border Styling
 
-
-
-
 Customize the table border using the `SugarCraft\Style\Border` family:
 
 ```php
@@ -892,9 +799,6 @@ separators, not pipe rows). Do not route `View()` output into markdown renderers
 
 ## Cell Padding Control
 
-
-
-
 Add inner spacing inside each cell for better visual breathing room:
 
 ```php
@@ -924,9 +828,6 @@ echo $t->View();
 - **Applied to header and data cells** — both headers and row data benefit from consistent inner padding
 - **Combined with other features** — works with frozen columns, horizontal scroll, multiline mode, and row expansion
 
-
-
-
 ```php
 // Combine padding with other features
 $t = $t->withCellPadding(2)
@@ -935,9 +836,6 @@ $t = $t->withCellPadding(2)
 ```
 
 ## Multi-line Rows
-
-
-
 
 Enable multi-line row rendering to display tall cell content that wraps within its column width:
 
@@ -969,9 +867,6 @@ echo $t->View();
 
 ### How It Works
 
-
-
-
 When `withMultilineMode(true)` is enabled:
 
 - **Row height** equals the maximum number of lines across all visible cells after text wrapping
@@ -979,15 +874,9 @@ When `withMultilineMode(true)` is enabled:
 - **Borders** span the full row height on each line
 - **Cell wrapping** respects the column's `WrapMode`: `WordWrap` breaks at word boundaries, `Character` breaks at any character, `None` truncates with a trailing … (U+2026)
 
-
-
-
 When disabled (the default), cells are clamped to one line for backward compatibility.
 
 ### Interaction with WrapMode
-
-
-
 
 A literal newline in a value splits the cell into multiple lines even under `WrapMode::None` (each segment is still clipped to the column width). `WrapMode` controls *flowing* of content that exceeds one line: `WordWrap` breaks at spaces, `Character` at cell boundaries. `withMultilineMode(true)` grows rows to the tallest cell; disabled (default) clips to the first line.
 
@@ -1002,9 +891,6 @@ Column::new('code', 'Code', 5)->withWrapMode(WrapMode::Character);
 ```
 
 ## Row Expansion
-
-
-
 
 Expand a row to render it as one full-width detail line spanning the table
 (clip marks at the table edge only when even that cannot fit):
@@ -1039,9 +925,6 @@ echo $t->View();
 
 ### Toggle Expansion
 
-
-
-
 Use `toggleExpanded()` to interactively expand/collapse rows:
 
 ```php
@@ -1051,9 +934,6 @@ $t = $t->toggleExpanded(1);   // expand row 1 (Bob)
 ```
 
 ### Check Expansion State
-
-
-
 
 Use `isExpanded()` to query whether a row is currently expanded:
 
@@ -1072,34 +952,23 @@ $t->isExpanded(1);   // false — row 1 is not expanded
   whole line; per-cell StyledCell styles do not.
 - **Row identity**: Expanded rows are tracked by object identity (`Row` instance),
 
-
-
   not by index. `withRows()` prunes identities that leave the new data set (no stale-
   object retention); note an equal-valued refresh builds new `Row` objects, so re-wrapping
   identical data collapses an active expansion.
 
 - **Pagination**: All expansion methods (`withExpandedRows`, `toggleExpanded`,
 
-
-
   `isExpanded`) use page-relative indices via `pagedRows()`
 
 - **Multiline mode**: In `multilineMode=true`, expanded rows also bypass column
-
-
 
   width constraints so all wrapped content is visible
 
 - **No content filtering**: Expansion does not filter or transform row data;
 
-
-
   it only controls rendering behavior (truncation vs full display)
 
 - **Fail fast**: Invalid indices throw `OutOfBoundsException`
-
-
-
 
 ```php
 // Combined with pagination — page 1
@@ -1132,18 +1001,12 @@ and the roster in that test drift apart. Rename-era history lives in
 
 ## Shared foundations
 
-
-
-
 sugar-table adopts `sugar-cellbuffer` for all buffer-based rendering. Layout fills a flat mutable
 `RenderCanvas` grid in a single pass; it is frozen into an immutable `Buffer` exactly once per
 `View()` call. `View()` writes only internal render memos (width solve, filter/sort cache, style
 parse) — never visible state.
 
 ### styleFunc signature
-
-
-
 
 `Table::withStyleFunc()` accepts a callable with the signature:
 
@@ -1167,9 +1030,6 @@ cell style. Prefer `SugarCraft\CellBuffer\Style`.
 
 ## Snapshot tests
 
-
-
-
 Render output is covered by golden-file snapshot tests. Fixture files live
 in `tests/fixtures/` with a `.golden` extension and are compared against
 actual ANSI byte output via `SugarCraft\Testing\Snapshot\Assertions::assertGoldenAnsi()`.
@@ -1185,9 +1045,6 @@ SUGAR_TESTING_UPDATE_GOLDENS=1 vendor/bin/phpunit
 failure message names the file to delete.)
 
 ## License
-
-
-
 
 MIT
 
