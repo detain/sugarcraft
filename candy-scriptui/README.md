@@ -284,24 +284,29 @@ command surface currently defines none).
 ### Shell completion
 
 ```sh
-candy-scriptui completion --shell=bash
+candy-scriptui completion bash
 candy-scriptui completion --shell=zsh
-candy-scriptui completion --shell=fish
+candy-scriptui completion fish
 ```
 
-Emit a shell completion script for bash, zsh, or fish. Source the output
-directly or drop it into the appropriate completion directory.
+Emit a shell completion script for bash, zsh, or fish. The positional shell
+wins over `--shell`, and a bare `candy-scriptui completion` defaults to bash.
+Source the output directly or drop it into the appropriate completion
+directory.
 
 ### Version
 
-`candy-scriptui --version` answers through `Application::versionString()`, in
+`candy-scriptui --version` (and the matching `candy-scriptui version`
+subcommand, scriptui-40) answer through `Application::versionString()`, in
 precedence order:
 
 1. When running from a phar, the version stamped into the archive's phar
    metadata at build time (a `dev-build` working-tree stamp is refused, so a
    dev archive never impersonates a release).
-2. Otherwise the nearest reachable `composer.json` that carries a non-empty
-   `version` field, found by walking up from the package directory.
+2. Otherwise this package's own `composer.json` — the walk is identity-gated
+   to `sugarcraft/candy-scriptui` (scriptui-39), so a monorepo checkout
+   never reports the host root's version as the tool's own. The package
+   manifest carries no `version` field until a release stamps one.
 3. Otherwise `0.0.0` — the honest answer when no version metadata is
    reachable. A `composer require`-installed copy inside a project whose
    root `composer.json` declares no `version` sees exactly this; use the

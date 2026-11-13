@@ -11,6 +11,7 @@ use SugarCraft\ScriptUi\Completion\ZshCompletion;
 use SugarCraft\ScriptUi\Lang;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
@@ -37,6 +38,11 @@ final class CompletionCommand extends Command
     protected function configure(): void
     {
         $this
+            ->addArgument(
+                'shell',
+                InputArgument::OPTIONAL,
+                'Shell to emit the script for: bash, zsh, or fish. Wins over --shell; bare `completion` defaults to bash.',
+            )
             ->addOption(
                 'shell',
                 's',
@@ -47,19 +53,29 @@ final class CompletionCommand extends Command
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        /** @var string */
-        $shell = $input->getOption('shell') ?? 'bash';
+        // scriptui-41 (candy-scriptui-059): gum's canonical install line is
+        // positional (`gum completion bash`); the positional wins over the
+        // flag, and a bare run keeps the documented bash default (108).
+        $positional = $input->getArgument('shell');
+        $origin     = '--shell';
+        if (is_string($positional) && $positional !== '') {
+            $shell  = $positional;
+            $origin = 'shell';
+        } else {
+            /** @var string */
+            $shell = $input->getOption('shell') ?? 'bash';
+        }
 
         if (!in_array($shell, self::SUPPORTED_SHELLS, true)) {
             // The output of this command is meant to be eval'd by the shell.
-            // An unsupported --shell value must NEVER be interpolated into
+            // An unsupported shell name must NEVER be interpolated into
             // it verbatim: the name is echoed through the shipped escaper,
             // which admits only [A-Za-z0-9_-], so a crafted value carrying
             // newlines or script text cannot forge extra output lines.
             $safeName = CompletionEscaper::safeName($shell);
             $shown    = $safeName ?? 'invalid-shell-name';
             fwrite(STDERR, Lang::t('runtime.unknown_choice', [
-                'option' => '--shell',
+                'option' => $origin,
                 'value' => $shown,
                 'allowed' => implode('|', self::SUPPORTED_SHELLS),
             ]) . "\n");
