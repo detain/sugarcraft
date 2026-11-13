@@ -24,7 +24,7 @@ namespace SugarCraft\ColorProfile;
  * byte-identically — reads and writes are untouched — and are replaced, no
  * earlier than 2.0.0 (tagged REMOVED-IN: 2.0.0), by an immutable,
  * constant-backed equivalent. The blessed NON-MUTATING read surface is
- * already here and is NOT deprecated: all() (indexed 0–15),
+ * already here and is NOT deprecated: all() (indexed 0-15),
  * fromIndex(int) (bounds-checked, throws OutOfBoundsException), and
  * catalog() (the ordered name list). New code that needs a named standard
  * color as a value reads it from those (or builds its own with
@@ -113,7 +113,7 @@ final class StandardColors
     }
 
     /**
-     * Get a color by ANSI 16-color index (0–15).
+     * Get a color by ANSI 16-color index (0-15).
      *
      * @throws \OutOfBoundsException if $index is outside 0..15
      */

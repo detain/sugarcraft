@@ -23,7 +23,7 @@ sugar-colorprofile — terminal color profile detection and color degradation fo
   (256-color), `Ansi240` (fixed slots 16-255), `Ansi` (16-color), `Ansi8`
   (basic 8), `Fgbg` (two-color fg/bg), `Ascii` (colorless, decoration kept)
   and `NoTTY`. The former renderer-facing `Profile` enum is now a deprecated
-  `class_alias` façade over it; every old `Profile::X` spelling still resolves
+  `class_alias` facade over it; every old `Profile::X` spelling still resolves
 - **Color conversion**: downsample RGBA colors to any target profile
 - **ProfileWriter**: wrap a stream and automatically match its output to the terminal — `degrade()` on the color rungs, full `stripAnsi()` on `NoTTY`
 - **ANSI stripping**: `NoTTY` output runs through `Palette::stripAnsi()`, which
@@ -34,7 +34,7 @@ sugar-colorprofile — terminal color profile detection and color degradation fo
   reserved for hardware absence (a non-TTY stream)
 - **Environment-aware**: reads `CLICOLOR_FORCE`, `FORCE_COLOR`, `NO_COLOR`, `CLICOLOR`, `TERM`, `COLORTERM`, `TERM_PROGRAM`, `WT_SESSION`, `GOOGLE_CLOUD_SHELL`, `TMUX`, `STY`, `REDUCE_MOTION`, `PREFERS_REDUCED_MOTION`
 - **Probe class**: static convenience layer over the shared detection chain
-  and the infocmp Phase-2 upgrade
+  and the infocmp phase-2 upgrade
 - **Perceptual color distance**: CIELAB conversion + ΔE*₇₆ / ΔE*₉₄ / ΔE*₀₀ (CIEDE2000) metrics with an opt-in nearest-palette matcher (`NearestColor`), palette Lab values memoized for hot loops, a PCA-bucketed exact lookup index for repeated queries (`PaletteIndex`), and error-compensated quantization for dither chains (`NearestColor::withError()`)
 
 ## Install
@@ -178,7 +178,7 @@ Maintenance):
 11. `TMUX` or `STY` set + base TERM begins `tmux` → Ansi256 (behind `COLORTERM`
     — modern tmux may honestly forward truecolor; the screen/tmux split is the
     documented answer, pinned by twin tests)
-12. TERM contains `-256color`, or equals `xterm-kitty`/`xterm-ghostty` (case-insensitive) → Ansi256 (termenv promotes kitty/ghostty to TrueColor by NAME; this fork keeps the 256 promise the TERM value carries and defers name-based promotion to Phase-2 terminfo — WezTerm has no TERM-only twin)
+12. TERM contains `-256color`, or equals `xterm-kitty`/`xterm-ghostty` (case-insensitive) → Ansi256 (termenv promotes kitty/ghostty to TrueColor by NAME; this fork keeps the 256 promise the TERM value carries and defers name-based promotion to phase-2 terminfo — WezTerm has no TERM-only twin)
 13. TERM begins `xterm`/`screen`/`tmux`/`vt`/`linux` (case-insensitive) → Ansi (the KNOWN-family set — CP-10)
 14. Default — unknown or empty TERM → Ascii (the colorless floor, CP-10: an unfamiliar family no longer over-detects 16-color support; decoration is kept, color codes are dropped)
 
@@ -247,7 +247,7 @@ weigh: an operator who said "no color" means no color, queried upgrades
 included — which is why the same check gates the escape-query phase. A bare `Palette::detect()`
 never runs terminfo; it is the ladder plus the step-0 stream gate.
 
-**The synchronous probe is bounded:** every `infocmp` child on the sync faces
+**The synchronous probe is bounded:** every `infocmp` child on the sync surfaces
 launches through one door (`Probe\InfocmpBinary::runBounded()`): a 5 s
 wall-clock deadline with SIGTERM → 1 s grace → SIGKILL escalation, an 8 KiB
 keep-a-prefix stdout cap, an array-form argv launch with no shell in the
@@ -269,7 +269,7 @@ The ladder's env legs, one table row per variable, in ladder order:
 | `CLICOLOR=0` | 4 | suppress color |
 | `TERM=dumb` | 5 | case-insensitive; suppresses color — outranks `COLORTERM` (dumb is a promise of minimal capabilities) |
 | `TMUX` / `STY` | 6 | set + base TERM begins `screen*` → capped at Ansi256 **before** `COLORTERM` is consulted (CP-09): GNU screen never forwards the 24-bit set and `COLORTERM` survives multiplexer inheritance — the cap cannot be inherited away. Under tmux/screen the inner TERM *is* the base — no re-anchoring to the outer terminal happens |
-| `COLORTERM` | 7 | `truecolor`/`24bit` → TrueColor (exact value match, case-insensitive); `yes` → Ansi256 — the legacy "this is a color terminal" marker is a 256-color promise, not a 24-bit one (CP-09 demotion from the old TrueColor grant; a Phase-2 terminfo that proves RGB still raises the rung back) |
+| `COLORTERM` | 7 | `truecolor`/`24bit` → TrueColor (exact value match, case-insensitive); `yes` → Ansi256 — the legacy "this is a color terminal" marker is a 256-color promise, not a 24-bit one (CP-09 demotion from the old TrueColor grant; a phase-2 terminfo that proves RGB still raises the rung back) |
 | `TERM_PROGRAM` | 8 | `iTerm.app` (exact spelling, case-sensitive) → TrueColor rung (step 8); phase 3 additionally maps WezTerm/vscode/Ghostty → TrueColor, iTerm.app → ITerm2, Hyper → Hyperlinks |
 | `WT_SESSION` | 9 | set, non-empty → Windows Terminal, TrueColor |
 | `GOOGLE_CLOUD_SHELL` | 10 | set to exactly `true` → TrueColor; any other value (`false` and `1` included) carries no 24-bit promise — CP-09 one-way tightening of the old set-and-non-empty grant |
@@ -298,7 +298,7 @@ opt-out — repairable with `--color=always` — from a stream that simply has
 no TTY in front of it. A force leg outranking a suppression reads false:
 the rung in force is not a suppression.
 
-## Color Degradation
+## Color degradation
 
 ```php
 use SugarCraft\ColorProfile\Color;
@@ -401,7 +401,7 @@ section adds no facts):
   `Probe::reducedMotion()` with a deliberate one-way bias — see the
   [env-var precedence](#env-var-precedence) row.
 
-## Perceptual Color Distance (opt-in)
+## Perceptual color distance (opt-in)
 
 Default nearest-color matching stays Euclidean (RGB) for byte-for-byte back-compat.
 For perceptual matching — where blues, greens and near-grays rank correctly — opt in:
@@ -466,7 +466,7 @@ cross-pinned to sugar-core's decoder (`Ansi256TableParityTest`). Earlier
 versions shipped a private even-51-step cube; that table never matched a real
 terminal and is gone.
 
-## Probe — Static Environment Detection
+## Probe — static environment detection
 
 The `Probe` class provides the static convenience layer over the ladder above —
 color profile, explicit no-color/force-color flags, and reduced-motion
@@ -502,9 +502,9 @@ Detection's inputs are the env vars in the precedence table above — and,
 through phase 2, the terminfo database the `infocmp` child consults. The
 binary is launched from a fixed absolute-path roster, and every exec surface hands the child a minimal environment built in one place (`Probe\InfocmpBinary::childEnvironment()`: the queried `TERM` and a fixed `PATH` only). `TERMINFO`, `TERMINFO_DIRS` and `HOME` all steer `infocmp`'s lookup (a search path you can inspect with `infocmp -1 -D`), and inheriting them from a parent whose environment an attacker controls would hand that attacker the database; they are therefore never passed. The stripped child environment is the correct security default, but it also silently defeats the classic `tic`-compiled TrueColor entry living in `~/.terminfo`: the child's search will not find it, so export `COLORTERM=truecolor` instead — that rides the env ladder directly (step 7). What remains outside this library's reach is the database itself: an attacker who can write to the system terminfo directories still controls what the probe reports, so the name-position guard in `Probe\TerminfoParser` protects the *parse* from a hostile database but cannot vouch for the *source*. Treat every detection answer as a rendering hint, never as an authorization signal. A detected capability describes what the environment provides, not what this library guarantees: choosing a feature, granting trust, or selecting a transport on the basis of a `Tc`/`RGB`/`Sixel` answer opts into a promise the environment made — one this library cannot enforce.
 
-## ColorProfile Enum
+## ColorProfile enum
 
-`ColorProfile` is this library's color-depth vocabulary, shared by every surface of it: the detection chain speaks it, `Palette`/`ProfileWriter` degrade against it, and libs that need the raw profile value consume it directly (live roster, derived from `use SugarCraft\ColorProfile\` imports in the production `src/` trees of the monorepo — candy-code references the library in its own `tests/` only: sugar-log, sugar-image, sugar-spring, sugar-video, candy-mdview). `Profile` remains only as a deprecated `class_alias` façade over it. Five of the arms are detection-emittable (`TrueColor`/`Ansi256`/`Ansi`/`Ascii`/`NoTTY` — `Ascii` lands from a falsy `FORCE_COLOR` spelling, step 2 of the ladder); `Ansi240`, `Ansi8` and `Fgbg` are request-side vocabulary only.
+`ColorProfile` is this library's color-depth vocabulary, shared by every surface of it: the detection chain speaks it, `Palette`/`ProfileWriter` degrade against it, and libs that need the raw profile value consume it directly (live roster, derived from `use SugarCraft\ColorProfile\` imports in the production `src/` trees of the monorepo — candy-code references the library in its own `tests/` only: sugar-log, sugar-image, sugar-spring, sugar-video, candy-mdview). `Profile` remains only as a deprecated `class_alias` facade over it. Five of the arms are detection-emittable (`TrueColor`/`Ansi256`/`Ansi`/`Ascii`/`NoTTY` — `Ascii` lands from a falsy `FORCE_COLOR` spelling, step 2 of the ladder); `Ansi240`, `Ansi8` and `Fgbg` are request-side vocabulary only.
 
 ```php
 use SugarCraft\ColorProfile\ColorProfile;
@@ -587,7 +587,7 @@ rows) under Fleet integration rather than guarded into sameness.
 SugarCraft\ColorProfile\
 ├── Color          — RGBA color value object with conversion methods (Color::namedColors() lists standard names)
 ├── ColorProfile    — THE color-depth enum (8 levels, richest→simplest)
-├── Profile         — deprecated class_alias façade over ColorProfile
+├── Profile         — deprecated class_alias facade over ColorProfile
 ├── DetectionChain  — shared env ladder (the one precedence core; see the ladder above) + userOptedOut() provenance door
 ├── Env             — env resolution (hermetic-replace rule), value read, source sanitize
 ├── Palette         — instance detection over the chain + degrade/strip; adds the stream TTY gate and the describe()/comment() plain-language capability announcements
@@ -642,7 +642,7 @@ binary on PATH):
 - **`AsyncProbe::colorProfile(?LoopInterface $loop = null)`** — the same infocmp
   check in a ReactPHP child process; returns a promise. The child spawns ONLY
   on the loop you pass in: called without one, the promise resolves in-place
-  through the bounded sync face (an implicit singleton pickup would park the
+  through the bounded sync surface (an implicit singleton pickup would park the
   child on a loop its caller may never run, settling only in somebody else's
   `Loop::run()`). Env suppression, a missing infocmp binary, an unset or
   `dumb` TERM, a TERM whose shape infocmp would read as an option, a chain
@@ -710,7 +710,7 @@ Use the non-mutating read API instead (not deprecated):
 | --- | --- |
 | `StandardColors::$red` | `StandardColors::fromIndex(1)` or `StandardColors::all()[1]` |
 | `StandardColors::$brightBlack` | `StandardColors::fromIndex(8)` |
-| enumerating the palette | `StandardColors::all()` (indexed 0–15) · `StandardColors::catalog()` (names) |
+| enumerating the palette | `StandardColors::all()` (indexed 0-15) · `StandardColors::catalog()` (names) |
 | a private/global override table | build your own `array` from `all()` — the `Color` values are immutable, so a local array is already isolated |
 | constructing fresh standard colors | `new Color(0xcd, 0x00, 0x00)`, `Color::parse('#cd0000')`, `Color::fromName('red')` (a `fromIndex()` read in disguise) or `Color::fromAnsi256Index(1)` |
 

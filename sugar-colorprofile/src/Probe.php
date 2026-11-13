@@ -19,7 +19,7 @@ use SugarCraft\ColorProfile\Probe\TerminfoParser;
  *  Phase 2: infocmp declares `Tc`/`RGB` at capability-name position
  *           → upgrade Ansi or Ansi256 to TrueColor.
  *
- * Phase 2 answers from ONE shared table and ONE bounded exec face
+ * Phase 2 answers from ONE shared table and ONE bounded exec surface
  * ({@see InfocmpBinary::runBounded()}): repeated calls never re-spawn (the
  * old code ran a fresh unbounded shell per call, and each class kept its
  * own memo — now the per-TERM dump table lives beside the binary it caches
@@ -29,7 +29,7 @@ use SugarCraft\ColorProfile\Probe\TerminfoParser;
  * 1 s grace → SIGKILL), 8 KiB keep-a-prefix stdout, array-form argv with no
  * shell in the path, stderr drained and closed, and fail-open semantics —
  * anything short of a clean dump leaves the chain answer standing. A wedged
- * infocmp can therefore never block the caller: the sync face carries its
+ * infocmp can therefore never block the caller: the sync surface carries its
  * own bound and no longer defers the problem to {@see AsyncProbe}, whose
  * child rides the same ladder via the event loop instead. What the child
  * does get, at both surfaces, is only the shared minimal environment
@@ -130,7 +130,7 @@ final class Probe
     /**
      * Optional Phase 2: does infocmp declare Tc/RGB for this TERM?
      *
-     * The verdict answers from the ONE bounded, memoized exec face
+     * The verdict answers from the ONE bounded, memoized exec surface
      * ({@see InfocmpBinary::runBounded()}) — deadline, output cap, and the
      * per-TERM dump table all live there, shared with TerminalProbe.
      */

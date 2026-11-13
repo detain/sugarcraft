@@ -439,12 +439,12 @@ final class Color
     }
 
     /**
-     * Map an ANSI 16-color index (0–15) to a 4-bit SGR code.
+     * Map an ANSI 16-color index (0-15) to a 4-bit SGR code.
      *
-     * Foreground: 0–7 → 30–37, 8–15 → 90–97
-     * Background: 0–7 → 40–47, 8–15 → 100–107
+     * Foreground: 0-7 → 30-37, 8-15 → 90-97
+     * Background: 0-7 → 40-47, 8-15 → 100-107
      *
-     * Fail fast: an index outside 0–15 is not a color — it used to
+     * Fail fast: an index outside 0-15 is not a color — it used to
      * silently emit an off-by-N SGR code (e.g. -1 → "29", a cursor movement).
      *
      * @see https://en.wikipedia.org/wiki/ANSI_escape_code#3/4-bit — the

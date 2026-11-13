@@ -9,8 +9,8 @@
 declare(strict_types=1);
 
 return [
-    'standard.ansi16_out_of_range' => 'ANSI 16색 인덱스는 0–15이어야 합니다: {index}',
-    'standard.ansi256_out_of_range' => 'ANSI 256색 인덱스는 0–255이어야 합니다: {index}',
+    'standard.ansi16_out_of_range' => 'ANSI 16색 인덱스는 0-15이어야 합니다: {index}',
+    'standard.ansi256_out_of_range' => 'ANSI 256색 인덱스는 0-255이어야 합니다: {index}',
     'standard.color_name_unknown' => '알 수 없는 색상 이름: {name}',
     'standard.ansi8_out_of_range' => 'ANSI 8색 인덱스는 0-7이어야 합니다: {index}',
     'color.invalid_hex' => '잘못된 16진수 색상: {hex}',

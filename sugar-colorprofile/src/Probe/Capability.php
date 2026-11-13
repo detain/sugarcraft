@@ -47,7 +47,7 @@ enum Capability: string
      *             would require an OSC 2004 query round-trip, which this
      *             probe deliberately leaves to the TUI layer (raw-mode
      *             read-back); the phase-3 upgrade table in TerminalProbe is
-     *             a lookup table, not a query face. Candidates for real
+     *             a lookup table, not a query surface. Candidates for real
      *             query legs are tracked in CALIBER_LEARNINGS (Phase-5
      *             candidate #6).
      */
@@ -60,7 +60,7 @@ enum Capability: string
      *             would require an OSC 1004 query round-trip, which this
      *             probe deliberately leaves to the TUI layer (raw-mode
      *             read-back); the phase-3 upgrade table in TerminalProbe is
-     *             a lookup table, not a query face. Candidates for real
+     *             a lookup table, not a query surface. Candidates for real
      *             query legs are tracked in CALIBER_LEARNINGS (Phase-5
      *             candidate #6).
      */

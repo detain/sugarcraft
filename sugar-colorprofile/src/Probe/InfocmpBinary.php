@@ -29,7 +29,7 @@ use SugarCraft\Core\Util\Proc\WindowsPipes;
  * beside "where is infocmp?" rather than tripling across Probe, AsyncProbe
  * and TerminalProbe.
  *
- * And it owns the ONE bounded execution face ({@see runBounded()}): the
+ * And it owns the ONE bounded execution surface ({@see runBounded()}): the
  * deadline, the keep-a-prefix output cap, the array-form argv launch, and
  * the per-TERM verdict table every synchronous surface shares — so "how
  * long may infocmp take, and how much of it may we keep" cannot drift
@@ -124,7 +124,7 @@ final class InfocmpBinary
     }
 
     /**
-     * The ONE bounded infocmp execution face, shared by every surface
+     * The ONE bounded infocmp execution surface, shared by every surface
      * (synchronous {@see Probe}, the {@see TerminalProbe} phase-2 leg, and
      * future callers). The pre-CP-11 shape carried two unbounded waits:
      * the child was untimed (a wedged infocmp blocked the caller for its

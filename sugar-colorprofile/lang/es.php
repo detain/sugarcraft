@@ -9,8 +9,8 @@
 declare(strict_types=1);
 
 return [
-    'standard.ansi16_out_of_range' => 'El índice de color ANSI 16 debe ser 0–15, obtenido: {index}',
-    'standard.ansi256_out_of_range' => 'El índice de color ANSI 256 debe ser 0–255, obtenido: {index}',
+    'standard.ansi16_out_of_range' => 'El índice de color ANSI 16 debe ser 0-15, obtenido: {index}',
+    'standard.ansi256_out_of_range' => 'El índice de color ANSI 256 debe ser 0-255, obtenido: {index}',
     'standard.color_name_unknown' => 'nombre de color desconocido: {name}',
     'standard.ansi8_out_of_range' => 'El índice de color ANSI 8 debe ser 0-7, obtenido: {index}',
     'color.invalid_hex' => 'color hexadecimal no válido: {hex}',

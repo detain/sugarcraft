@@ -23,7 +23,7 @@ use SugarCraft\ColorProfile\Probe\TerminfoParser;
  * every resolve is composed from data already in hand, the environment-
  * anchored detection chain (a pure env read, no shell) plus whatever the
  * child's stdout managed to deliver. Called WITHOUT a loop the promise
- * resolves in-place through the bounded synchronous face ({@see Probe}),
+ * resolves in-place through the bounded synchronous surface ({@see Probe}),
  * because a plain-CLI caller has no loop it runs: react/event-loop 1.x
  * would otherwise lazily create its singleton and park the child there,
  * settling only when somebody else runs that loop.
@@ -54,8 +54,8 @@ use SugarCraft\ColorProfile\Probe\TerminfoParser;
  * call, so the static slot table can never wedge permanently.
  *
  * A child that RUNS TO COMPLETION settles its verdict into a per-TERM memo
- * (CP-13 — the async twin of the sync face's dump memo): a repeat call for
- * the same TERM answers from memory without re-spawning, so the two faces
+ * (CP-13 — the async twin of the sync surface's dump memo): a repeat call for
+ * the same TERM answers from memory without re-spawning, so the two surfaces
  * keep one cache policy for one question.
  *
  * Probe results are ADVISORY ONLY: the terminfo snapshot answers "what could
@@ -174,7 +174,7 @@ final class AsyncProbe
      * growing and the settle treats the truncated prefix as the whole dump
      * (advisory), instead of letting a pathological writer grow with the pipe.
      * The number is the door's: {@see InfocmpBinary::OUTPUT_CAP_BYTES} is the
-     * one ceiling every infocmp surface shares (sync face, async pump).
+     * one ceiling every infocmp surface shares (sync surface, async pump).
      */
     private const STDOUT_CAP_BYTES = InfocmpBinary::OUTPUT_CAP_BYTES;
 
@@ -196,7 +196,7 @@ final class AsyncProbe
      * {@see InfocmpBinary::MEMO_MAX_ENTRIES} (256): a long-lived process
      * honoring attacker-influenced TERM shapes must not creep the table for
      * its lifetime. Value-coupled, deliberately not a shared constant —
-     * InfocmpBinary's is private to the exec face that owns it; the two
+     * InfocmpBinary's is private to the exec surface that owns it; the two
      * tables bound the same TERM-cardinality risk and must be edited
      * together if either ever moves.
      */
@@ -206,7 +206,7 @@ final class AsyncProbe
      * Settled answers of COMPLETED infocmp children, keyed by lowercased
      * TERM (CP-13, sugar-colorprofile-050).
      *
-     * The sync face memoizes per TERM (the dump table inside
+     * The sync surface memoizes per TERM (the dump table inside
      * {@see InfocmpBinary}); until this entry the async pump re-spawned a
      * real child on every Ansi/Ansi256-rung call — two cache policies on
      * one question, and on Termux-class hardware the repeated spawn is a
@@ -220,7 +220,7 @@ final class AsyncProbe
      * only: {@see ColorProfile::TrueColor} when the completed child found
      * a promotion cap, or a NULL sentinel when it completed cleanly
      * without one (the terminfo verdict is TERM-static — the dump the sync
-     * face caches carries the same property, and its table mints entries
+     * surface caches carries the same property, and its table mints entries
      * for clean misses too). The ENV-side half of any negative answer is
      * re-derived from the CURRENT chain per call, so env drift after the
      * first probe can never be served stale. A child that died nonzero or
@@ -236,7 +236,7 @@ final class AsyncProbe
      * Detect the terminal color profile asynchronously.
      *
      * With an explicit {@see LoopInterface} the infocmp leg runs as a child
-     * on that loop; with none, the answer is the bounded synchronous face,
+     * on that loop; with none, the answer is the bounded synchronous surface,
      * resolved in-place (the caller has no loop to settle on, and the
      * react/event-loop singleton must never be picked up implicitly — a
      * child parked there settles only when someone else runs that loop).
@@ -263,7 +263,7 @@ final class AsyncProbe
 
         if ($loop === null) {
             // No loop handed in: spawn nothing on any loop. The bounded
-            // synchronous face is the full answer — chain plus the deadline-
+            // synchronous surface is the full answer — chain plus the deadline-
             // capped infocmp leg — and it settles the promise in-place
             // instead of parking a child on the react/event-loop singleton
             // that this caller may never run.

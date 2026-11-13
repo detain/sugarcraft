@@ -9,8 +9,8 @@
 declare(strict_types=1);
 
 return [
-    'standard.ansi16_out_of_range' => 'ANSI 16 renk dizini 0–15 olmalıdır, alınan: {index}',
-    'standard.ansi256_out_of_range' => 'ANSI 256 renk dizini 0–255 olmalıdır, alınan: {index}',
+    'standard.ansi16_out_of_range' => 'ANSI 16 renk dizini 0-15 olmalıdır, alınan: {index}',
+    'standard.ansi256_out_of_range' => 'ANSI 256 renk dizini 0-255 olmalıdır, alınan: {index}',
     'standard.color_name_unknown' => 'bilinmeyen renk adı: {name}',
     'standard.ansi8_out_of_range' => 'ANSI 8 renk dizini 0-7 olmalıdır, alınan: {index}',
     'color.invalid_hex' => 'geçersiz onaltılık renk: {hex}',

@@ -388,7 +388,7 @@ final class DetectionChain
     /**
      * Convert the detection level to the profile enum.
      *
-     * @deprecated — {@see Profile} is a class_alias façade over
+     * @deprecated — {@see Profile} is a class_alias facade over
      *             {@see ColorProfile}; this method and
      *             {@see self::toColorProfile()} return the same thing.
      *             Call toColorProfile() in new code.

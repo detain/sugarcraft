@@ -314,7 +314,7 @@ final class ColorTest extends TestCase
     #[DataProvider('outOfRange256Indices')]
     public function testFromAnsi256IndexThrowNamesTheOffendingIndex(int $idx): void
     {
-        $this->expectExceptionMessage('0–255, got ' . $idx);
+        $this->expectExceptionMessage('0-255, got ' . $idx);
         Color::fromAnsi256Index($idx);
     }
 
@@ -496,7 +496,7 @@ final class ColorTest extends TestCase
     #[DataProvider('outOfRange16Indices')]
     public function testFromAnsi16IndexThrowNamesTheOffendingIndex(int $idx): void
     {
-        $this->expectExceptionMessage('0–15, got ' . $idx);
+        $this->expectExceptionMessage('0-15, got ' . $idx);
         Color::fromAnsi16Index($idx);
     }
 

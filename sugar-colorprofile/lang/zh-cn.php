@@ -9,8 +9,8 @@
 declare(strict_types=1);
 
 return [
-    'standard.ansi16_out_of_range' => 'ANSI 16 色索引必须为 0–15，实际：{index}',
-    'standard.ansi256_out_of_range' => 'ANSI 256 色索引必须为 0–255，实际：{index}',
+    'standard.ansi16_out_of_range' => 'ANSI 16 色索引必须为 0-15，实际：{index}',
+    'standard.ansi256_out_of_range' => 'ANSI 256 色索引必须为 0-255，实际：{index}',
     'standard.color_name_unknown' => '未知的颜色名称：{name}',
     'standard.ansi8_out_of_range' => 'ANSI 8 色索引必须为 0-7，实际：{index}',
     'color.invalid_hex' => '无效的十六进制颜色：{hex}',

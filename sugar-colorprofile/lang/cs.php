@@ -9,8 +9,8 @@
 declare(strict_types=1);
 
 return [
-    'standard.ansi16_out_of_range' => 'ANSI 16 index barev musí být 0–15, obdrženo: {index}',
-    'standard.ansi256_out_of_range' => 'ANSI 256 index barev musí být 0–255, obdrženo: {index}',
+    'standard.ansi16_out_of_range' => 'ANSI 16 index barev musí být 0-15, obdrženo: {index}',
+    'standard.ansi256_out_of_range' => 'ANSI 256 index barev musí být 0-255, obdrženo: {index}',
     'standard.color_name_unknown' => 'neznámý název barvy: {name}',
     'standard.ansi8_out_of_range' => 'ANSI 8 index barev musí být 0-7, obdrženo: {index}',
     'color.invalid_hex' => 'neplatná barva v hex zápisu: {hex}',

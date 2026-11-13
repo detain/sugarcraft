@@ -9,8 +9,8 @@
 declare(strict_types=1);
 
 return [
-    'standard.ansi16_out_of_range' => 'ANSI 16-color index must be 0–15, got {index}',
-    'standard.ansi256_out_of_range' => 'ANSI 256-color index must be 0–255, got {index}',
+    'standard.ansi16_out_of_range' => 'ANSI 16-color index must be 0-15, got {index}',
+    'standard.ansi256_out_of_range' => 'ANSI 256-color index must be 0-255, got {index}',
     'standard.color_name_unknown' => 'unknown color name: {name}',
     'standard.ansi8_out_of_range' => 'ANSI 8-color index must be 0-7, got {index}',
     'color.invalid_hex' => 'invalid hex color: {hex}',

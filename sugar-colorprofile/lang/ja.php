@@ -9,8 +9,8 @@
 declare(strict_types=1);
 
 return [
-    'standard.ansi16_out_of_range' => 'ANSI 16色インデックスは 0–15 である必要があります：{index}',
-    'standard.ansi256_out_of_range' => 'ANSI 256色インデックスは 0–255 である必要があります：{index}',
+    'standard.ansi16_out_of_range' => 'ANSI 16色インデックスは 0-15 である必要があります：{index}',
+    'standard.ansi256_out_of_range' => 'ANSI 256色インデックスは 0-255 である必要があります：{index}',
     'standard.color_name_unknown' => '不明な色名: {name}',
     'standard.ansi8_out_of_range' => 'ANSI 8色インデックスは 0-7 である必要があります：{index}',
     'color.invalid_hex' => '無効な16進色: {hex}',

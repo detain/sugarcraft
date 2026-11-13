@@ -15,7 +15,7 @@ namespace SugarCraft\ColorProfile;
  * under the same wire values — {@see Profile} (renderer-facing, SCREAMING
  * case spellings) and this one (detection-facing, CamelCase spellings).
  * ColorProfile is now canonical in its CamelCase spelling, and {@see Profile}
- * survives as a deprecated class_alias façade. The old SCREAMING spellings
+ * survives as a deprecated class_alias facade. The old SCREAMING spellings
  * resolve through the {@see self::ANSI256()}/{@see self::ANSI()} deprecated
  * constants below, so `Profile::ANSI256` keeps evaluating — to the very
  * same case object — during the deprecation window.
@@ -95,7 +95,7 @@ enum ColorProfile: string
 
     /**
      * @deprecated — identity bridge. Profile IS this enum
-     *             (class_alias façade), the two vocabularies are one; this
+     *             (class_alias facade), the two vocabularies are one; this
      *             method survives only so old call sites compile unchanged.
      */
     public static function fromColorProfile(self $p): self

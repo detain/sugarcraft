@@ -17,7 +17,7 @@ declare(strict_types=1);
 require __DIR__ . '/../vendor/autoload.php';
 
 use SugarCraft\ColorProfile\Color;
-use SugarCraft\ColorProfile\ColorProfile; // (The old deprecated Profile:: facade still resolves via class_alias; new code names the real enum.)
+use SugarCraft\ColorProfile\ColorProfile; // (The old deprecated Profile facade still resolves via class_alias; new code names the real enum.)
 
 echo "=== Color Conversion Demo ===\n\n";
 
