@@ -1452,7 +1452,6 @@ final class App implements Model
     private function toggleBox(string $box, bool $notify): array
     {
         $boxes = $this->config->shownBoxes();
-        $before = VmsMode::effective($boxes);
         $pos = array_search($box, $boxes, true);
         if (VmsMode::active($boxes) && \in_array($box, VmsMode::ECLIPSED, true)) {
             // The VM dashboard hides this box: its toggle leaves the
@@ -1476,13 +1475,14 @@ final class App implements Model
         } catch (InvalidOptionValue) {
             return [$this, null];
         }
-        // btop toggle_box goes through Config::set: the change is saved on exit.
-        $next = $this->mutate(config: $config, preset: null, presetSet: true, writeNew: true)->relayout();
-        // Every box now laid out that was not (the toggled one, or the
-        // boxes the VM dashboard was hiding) is sampled at once.
-        [$next, $cmds] = $next->openShown($before);
+        // btop toggle_box goes through Config::set: the change is saved on
+        // exit (shown_boxes always differs from persisted, so applyConfig's
+        // writeNew dedup lands on true). The swap itself rides applyConfig —
+        // the Cadence law: relayout, settled backdrop and the sample-at-once
+        // of every newly laid-out box are its, not re-implemented here.
+        [$next, $cmd] = $this->mutate(preset: null, presetSet: true)->applyConfig($config);
 
-        return [$next, self::batch(...$cmds)];
+        return [$next, $cmd];
     }
 
     /**
@@ -1542,12 +1542,14 @@ final class App implements Model
         if ($config === null || ($this->cols > 0 && !$this->fitsBoxes($config->shownBoxes()))) {
             return [$notify ? $this->withOverlay(Menus::sizeError()) : $this, null];
         }
-        $hadGpu = GpuPanels::targets($this->config->shownBoxes()) !== [];
-        $next = $this->mutate(config: $config, preset: null, presetSet: true, writeNew: true)->relayout();
-        $gpu = $next->panels['gpu'] ?? null;
-        $opened = !$active && !$hadGpu && $gpu !== null;
+        // Same Cadence law as toggleBox: the swap rides applyConfig, whose
+        // openShown samples the gpu panel once when a laid-out box appears
+        // (and not when the panel already drew one of the old boxes -
+        // the exact rule the hand-rolled hadGpu check encoded, now shared
+        // with every other box change).
+        [$next, $cmd] = $this->mutate(preset: null, presetSet: true)->applyConfig($config);
 
-        return [$next, $opened ? $gpu->collect($next->context('gpu')) : null];
+        return [$next, $cmd];
     }
 
     /**
