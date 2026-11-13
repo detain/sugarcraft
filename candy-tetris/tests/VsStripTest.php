@@ -138,4 +138,93 @@ final class VsStripTest extends TestCase
         self::assertMatchesRegularExpression('/level: \d+  TETRIS/', $frame, 'badge rides the spelled-out level leg');
         self::assertStringNotContainsString('lvl ', $frame);
     }
+
+    public function testTheArmedMomentsChainRidesThePlayersRow(): void
+    {
+        $vs = VsGame::start();
+        $chain = $vs->player->mutate(['combo' => 3, 'backToBack' => true]);
+        self::assertStringContainsString(
+            'x3 B2B',
+            self::seatLine(VsRenderer::render(new VsGame($chain, $vs->computer)), 'you'),
+            'the chain and the flag fit the fresh-columns budget armed — they paint whole',
+        );
+
+        // Award + chain is one cell too many even tightened: the award
+        // (higher priority) keeps the row, the chain gives way whole.
+        // The tightest tier earns its keep on long chains: x999+B2B is
+        // ten cells — impossible at [6,2], whole at [5,1].
+        $deep = $vs->player->mutate(['combo' => 999, 'backToBack' => true]);
+        self::assertStringContainsString(
+            'x999 B2B',
+            self::seatLine(VsRenderer::render(new VsGame($deep, $vs->computer)), 'you'),
+        );
+
+        $both = $vs->player->mutate(['lastAward' => 'TETRIS', 'combo' => 3]);
+        $line = self::seatLine(VsRenderer::render(new VsGame($both, $vs->computer)), 'you');
+        self::assertStringContainsString('TETRIS', $line);
+        self::assertStringNotContainsString('x3', $line, 'priority law: the badge survives, the chain drops WHOLE');
+    }
+
+    public function testTheComputerRowCarriesItsOwnMoments(): void
+    {
+        $vs = VsGame::start();
+        $cpu = $vs->computer->mutate(['combo' => 5, 'backToBack' => true]);
+        $frame = VsRenderer::render(new VsGame($vs->player, $cpu));
+
+        $line = self::seatLine($frame, 'computer');
+        self::assertStringContainsString('x5', $line, 'the duel scores BOTH tensions (candy-tetris-086)');
+        self::assertStringContainsString('B2B', $line);
+    }
+
+    public function testATailTooWideForAnyTierDropsInsteadOfHalfCutting(): void
+    {
+        $vs = VsGame::start();
+        $worst = $vs->player->mutate([
+            'score'      => new Score(999999, 99, 9),
+            'lastAward'  => 'T-SPIN+PC',
+            'combo'      => 99,
+            'backToBack' => true,
+        ]);
+        $frame = VsRenderer::render(new VsGame($worst, $vs->computer));
+
+        $line = self::seatLine($frame, 'you');
+        // Max digits leave no tier that carries even the 11-cell award:
+        // the WHOLE chain of moments gives way and the scoreboard stays
+        // honest — half-cut 'T-SPIN+P' is the failure this law forbids.
+        self::assertStringNotContainsString('T-SPIN', $line);
+        self::assertStringNotContainsString('x99', $line);
+        self::assertStringNotContainsString('B2B', $line);
+        self::assertMatchesRegularExpression('/level: 9$/', rtrim($line, ' │'), 'the row ends clean at the level');
+
+        // A mid-game seat DOES carry its badge (the drop is width-driven,
+        // not armed-vs-dead): 48000/23/4 + TETRIS rides whole.
+        $mid = $vs->player->mutate(['score' => new Score(48000, 23, 4), 'lastAward' => 'TETRIS']);
+        self::assertStringContainsString(
+            'level: 4  TETRIS',
+            self::seatLine(VsRenderer::render(new VsGame($mid, $vs->computer)), 'you'),
+        );
+    }
+
+    public function testAnUnarmedRowEndsAtTheLevelExactlyAsBeforeTheMoments(): void
+    {
+        $frame = VsRenderer::render(VsGame::start());
+
+        self::assertMatchesRegularExpression(
+            '/level: 0$/',
+            rtrim(self::seatLine($frame, 'you'), ' │'),
+            'nothing armed, nothing appended (the pre-086 bytes)',
+        );
+        self::assertStringNotContainsString(' x', self::seatLine($frame, 'you'));
+    }
+
+    /** The strip row of one seat — fail loud if the seat vanished. */
+    private static function seatLine(string $frame, string $seat): string
+    {
+        foreach (explode("\n", $frame) as $line) {
+            if (preg_match('/' . preg_quote($seat, '/') . '\s+score:/', $line) === 1) {
+                return trim($line, '│ ');
+            }
+        }
+        self::fail("no strip row for seat '$seat'");
+    }
 }

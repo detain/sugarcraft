@@ -53,6 +53,11 @@ final class VsRenderer
     public const MIN_COLS = 54;
     public const MIN_ROWS = 33;
 
+    /** Cell budget of one match-strip row (candy-tetris-086): the number
+     *  the tail-drop law measures against, hoisted from the truncator's
+     *  literal so both legs read one truth. */
+    private const STRIP_CELLS = 50;
+
     public static function render(VsGame $game): string
     {
         // Posture dispatch, mirror of Renderer::render (C-2): NoTty gets a
@@ -212,8 +217,8 @@ final class VsRenderer
      */
     private static function renderStrip(Game $player, Game $computer): string
     {
-        $line = static fn(string $row): string => Width::of($row) > 50
-            ? Width::truncateAnsi($row, 50)
+        $line = static fn(string $row): string => Width::of($row) > self::STRIP_CELLS
+            ? Width::truncateAnsi($row, self::STRIP_CELLS)
             : $row;
 
         $nextLetters = implode('  ', array_map(
@@ -225,10 +230,16 @@ final class VsRenderer
             ? '-'
             : $player->hold->value . ($player->canHold === false ? ' ' . Lang::t('hold_used') : '');
 
-        // The award must land whole: the $line truncator would otherwise
-        // half-cut it into 'TETR', so the score/lines fields give way by
-        // one digit each before the badge does.
-        $youAward = $player->lastAward !== null ? '  ' . $player->lastAward : '';
+        // candy-tetris-086: the duel's scoreboard. The strip now grows the
+        // same moments the solo sidebar arms — the award badge, the combo
+        // chain (the >=2 solo door), the B2B flag — and each row is
+        // assembled ATOMIC-tail: a segment that would push the row past
+        // the 50-cell card is dropped whole, lowest priority first, so
+        // nothing ever half-cuts into 'TETR' (the truncator law from -06,
+        // now honoured by construction). 'x99'/'B2B' are locale-neutral
+        // notation, the raw-ASCII vocabulary the solo badges themselves
+        // use — no lang keys to drift. Both seats carry their own
+        // moments: the computer's tension is part of the duel too.
 
         // candy-tetris-008: the frame words are catalogue keys like every
         // other string the strip speaks — English baked into sprintf made
@@ -241,8 +252,8 @@ final class VsRenderer
         $nameCpu  = Lang::t('vs.strip.computer');
         $nameCol  = max(9, Width::of($nameYou), Width::of($nameCpu));
         $rows = [
-            $line(self::stripRow($nameYou, $player->score, $nameCol, $youAward)),
-            $line(self::stripRow($nameCpu, $computer->score, $nameCol, '')),
+            $line(self::stripRow($nameYou, $player->score, $nameCol, $player)),
+            $line(self::stripRow($nameCpu, $computer->score, $nameCol, $computer)),
             $line(sprintf('%s %s        %s %s', Lang::t('next_label'), $nextLetters, Lang::t('hold_label'), $holdText)),
         ];
 
@@ -271,19 +282,57 @@ final class VsRenderer
 
     /**
      * One scoreboard row of the match strip (candy-tetris-008): locale
-     * labels, display-width-padded numeric columns, and the award badge
-     * riding at the tail whole. With a badge present the two wide fields
-     * each give a digit so the row still fits the strip's 50-cell budget.
+     * labels, display-width-padded numeric columns, and — since
+     * candy-tetris-086 — the seat's armed moments riding at the tail.
+     * Priority is award > combo > B2B; with any tail the two wide fields
+     * each give a digit (the -06 tier), and a tail still too wide for
+     * the 50-cell budget drops its LAST segment, then the next, until
+     * what paints is whole. A seat with nothing armed lands the exact
+     * pre-086 bytes.
      */
-    private static function stripRow(string $name, Score $score, int $nameCol, string $award): string
+    private static function stripRow(string $name, Score $score, int $nameCol, Game $seat): string
     {
-        $figures = $award === '' ? [7, 3] : [6, 2];
+        $segments = [];
+        if ($seat->lastAward !== null) {
+            $segments[] = '  ' . $seat->lastAward;
+        }
+        if ($seat->combo >= 2) {
+            $segments[] = ' x' . $seat->combo;
+        }
+        if ($seat->backToBack === true) {
+            $segments[] = ' B2B';
+        }
 
-        return $name . str_repeat(' ', max(1, $nameCol - Width::of($name)))
-            . ' ' . Lang::t('vs.strip.score') . ' ' . str_pad((string) $score->points, $figures[0])
-            . ' ' . Lang::t('vs.strip.lines') . ' ' . str_pad((string) $score->lines, $figures[1])
-            . ' ' . Lang::t('vs.strip.level') . ' ' . $score->level
-            . $award;
+        $row = static function (array $figures, string $tail) use ($name, $score, $nameCol): string {
+            return $name . str_repeat(' ', max(1, $nameCol - Width::of($name)))
+                . ' ' . Lang::t('vs.strip.score') . ' ' . str_pad((string) $score->points, $figures[0])
+                . ' ' . Lang::t('vs.strip.lines') . ' ' . str_pad((string) $score->lines, $figures[1])
+                . ' ' . Lang::t('vs.strip.level') . ' ' . $score->level
+                . $tail;
+        };
+
+        // Widest TAIL that fits the card wins, bought with the loosest
+        // digit padding that carries it: an unarmed row keeps the roomy
+        // [7,3] columns of the pre-086 strip byte-identically, the first
+        // badge buys room with [6,2] (-06's promise), a fuller chain may
+        // tighten to [5,1], and only when even that cannot hold the
+        // tail WHOLE does the lowest-priority moment give way — never a
+        // half-cut badge.
+        $tiers = [[7, 3]];
+        if ($segments !== []) {
+            $tiers[] = [6, 2];
+            $tiers[] = [5, 1];
+        }
+        for ($kept = count($segments); $kept > 0; $kept--) {
+            $tail = implode('', array_slice($segments, 0, $kept));
+            foreach ($tiers as $figures) {
+                if (Width::of($row($figures, $tail)) <= self::STRIP_CELLS) {
+                    return $row($figures, $tail);
+                }
+            }
+        }
+
+        return $row([7, 3], '');
     }
 
     /**
