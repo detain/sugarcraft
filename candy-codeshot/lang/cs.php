@@ -66,7 +66,7 @@ Poznámky:
 Návratové kódy:
   0  úspěch
   1  chyba I/O (nečitelný vstup, nezapisovatelný výstup, chybějící autoload)
-  2  chyba použití nebo vstupu (neznámý příznak, zamítnutá cesta, zamítnuté zvýraznění, ...)
+  2  chyba použití nebo vstupu (neznámý příznak, chybějící hodnota, neplatné číslo, zamítnutá cesta nebo písmo, zamítnuté zvýraznění, chybějící ext-gd, zamítnut výstup PNG do terminálu)
 
 Příklady:
   cat script.php | candy-codeshot --theme dracula

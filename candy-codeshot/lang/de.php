@@ -66,7 +66,7 @@ Hinweise:
 Exit-Codes:
   0  Erfolg
   1  E/A-Fehler (unlesbare Eingabe, nicht schreibbare Ausgabe, fehlender Autoload)
-  2  Benutzungs- oder Eingabefehler (ungültiger Flag, abgelehnter Pfad, abgelehnte Hervorhebung, ...)
+  2  Benutzungs- oder Eingabefehler (ungültiger Flag, fehlender Wert, ungültige Zahl, abgelehnter Pfad oder Font, abgelehnte Hervorhebung, fehlende ext-gd, abgelehntes PNG-ins-Terminal)
 
 Beispiele:
   cat script.php | candy-codeshot --theme dracula

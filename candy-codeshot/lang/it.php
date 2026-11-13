@@ -66,7 +66,7 @@ Note:
 Codici di uscita:
   0  successo
   1  errore di I/O (input illeggibile, output non scrivibile, autoload mancante)
-  2  errore di uso o input (flag sconosciuto, percorso rifiutato, evidenziazione rifiutata, ...)
+  2  errore di uso o input (flag sconosciuto, valore mancante, numero non valido, percorso o font rifiutato, evidenziazione rifiutata, ext-gd mancante, PNG verso il terminale rifiutato)
 
 Esempi:
   cat script.php | candy-codeshot --theme dracula

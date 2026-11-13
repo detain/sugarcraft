@@ -65,7 +65,7 @@ candy-codeshot - 코드 또는 터미널 출력을 SVG 또는 PNG 스크린샷�
 종료 코드:
   0  성공
   1  I/O 실패 (입력 읽기 실패, 출력 쓰기 실패, autoload 없음)
-  2  사용법 또는 입력 오류 (잘못된 플래그, 거부된 경로, 거부된 강조 표시...)
+  2  사용법 또는 입력 오류 (잘못된 플래그, 값 누락, 잘못된 숫자, 거부된 경로 또는 글꼴, 거부된 강조 표시, ext-gd 누락, 터미널로 PNG 출력 거부)
 
 예시:
   cat script.php | candy-codeshot --theme dracula

@@ -66,7 +66,7 @@ Notas:
 Códigos de salida:
   0  éxito
   1  fallo de E/S (entrada ilegible, salida no escribible, autoload ausente)
-  2  error de uso o de entrada (opción desconocida, ruta rechazada, resaltado rechazado, ...)
+  2  error de uso o de entrada (opción desconocida, valor ausente, número no válido, ruta o fuente rechazada, resaltado rechazado, falta ext-gd, PNG a terminal rechazado)
 
 Ejemplos:
   cat script.php | candy-codeshot --theme dracula

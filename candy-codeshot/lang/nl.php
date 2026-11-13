@@ -66,7 +66,7 @@ Opmerkingen:
 Exitcodes:
   0  succes
   1  I/O-fout (onleesbare invoer, niet-schrijfbare uitvoer, ontbrekende autoload)
-  2  gebruiksfout of invoerfout (onbekende vlag, geweigerd pad, geweigerde markering, ...)
+  2  gebruiksfout of invoerfout (onbekende vlag, ontbrekende waarde, ongeldig getal, geweigerd pad of lettertype, geweigerde markering, ext-gd ontbreekt, PNG naar terminal geweigerd)
 
 Voorbeelden:
   cat script.php | candy-codeshot --theme dracula

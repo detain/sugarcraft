@@ -65,7 +65,7 @@ candy-codeshot - 将代码或终端输出渲染为 SVG 或 PNG 截图
 退出码:
   0  成功
   1  I/O 失败 (不可读输入、不可写输出、缺少 autoload)
-  2  用法或输入错误 (无效参数、被拒路径、被拒高亮...)
+  2  用法或输入错误 (无效参数、缺少值、无效数字、被拒路径或字体、被拒高亮、缺少 ext-gd、拒绝 PNG 输出到终端)
 
 示例:
   cat script.php | candy-codeshot --theme dracula

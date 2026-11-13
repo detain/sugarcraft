@@ -66,7 +66,7 @@ Notlar:
 Çıkış kodları:
   0  başarılı
   1  G/Ç hatası (okunamayan girdi, yazılamayan çıktı, eksik autoload)
-  2  kullanım veya girdi hatası (bilinmeyen bayrak, reddedilen yol, reddedilen vurgu, ...)
+  2  kullanım veya girdi hatası (bilinmeyen bayrak, eksik değer, geçersiz sayı, reddedilen yol veya yazı tipi, reddedilen vurgu, eksik ext-gd, terminale PNG reddi)
 
 Örnekler:
   cat script.php | candy-codeshot --theme dracula

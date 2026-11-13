@@ -141,6 +141,55 @@ final class LangParityTest extends TestCase
     }
 
     /**
+     * @dataProvider localeProvider
+     */
+    public function testExitTwoCauseListIsCompleteInEveryLocale(string $locale): void
+    {
+        // candy-codeshot-020 (cs-15): every non-English locale shipped the
+        // exit-2 explanation truncated to three causes plus a literal "...",
+        // hiding exactly the actionable cases (missing value, bad number,
+        // missing ext-gd, PNG-to-terminal) behind an ellipsis. English is
+        // the canon: a locale line may name its causes in its own words and
+        // order, but it must carry at least as many comma-separated causes
+        // as English and must never hide one behind "..." or "…".
+        $en  = require self::LANG_DIR . '/en.php';
+        $cat = require self::LANG_DIR . '/' . $locale . '.php';
+
+        $causes = static function (string $usage): string {
+            if (!preg_match('/^  2\b.*(?:\n {5,}\S.*)*/m', $usage, $m)) {
+                return '';
+            }
+            $line = trim(preg_replace('/\s*\n\s*/', ' ', $m[0]) ?? $m[0]);
+            $open  = strpos($line, '(');
+            $close = strrpos($line, ')');
+            return $open !== false && $close !== false && $close > $open
+                ? (string) substr($line, $open + 1, $close - $open - 1)
+                : $line;
+        };
+
+        $split = static fn (string $body): array => array_values(array_filter(
+            array_map('trim', preg_split('/[,，、،]/', $body) ?: []),
+            static fn (string $token): bool => $token !== '',
+        ));
+
+        $enCount = count($split($causes($en['cli.usage'])));
+        $this->assertGreaterThanOrEqual(7, $enCount, 'English itself must keep the full seven-cause list');
+
+        $tokens = $split($causes($cat['cli.usage']));
+        $this->assertGreaterThanOrEqual(
+            $enCount,
+            count($tokens),
+            "locale '$locale' exit-2 line must name every English cause (>= $enCount), got: " . implode(' | ', $tokens),
+        );
+        foreach ($tokens as $token) {
+            $this->assertFalse(
+                (bool) preg_match('/\.\.\.|…/', $token),
+                "locale '$locale' must not hide exit-2 causes behind an ellipsis",
+            );
+        }
+    }
+
+    /**
      * @return list<string>
      */
     private static function placeholders(string $value): array

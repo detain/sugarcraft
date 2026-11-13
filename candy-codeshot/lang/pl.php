@@ -66,7 +66,7 @@ Uwagi:
 Kody wyjścia:
   0  sukces
   1  błąd I/O (nieczytelne wejście, niezapisywalne wyjście, brakujący autoload)
-  2  błąd użycia lub wejścia (zła flaga, odrzucona ścieżka, odrzucone podświetlenie, ...)
+  2  błąd użycia lub wejścia (zła flaga, brak wartości, błędny numer, odrzucona ścieżka lub czcionka, odrzucone podświetlenie, brak ext-gd, odmowa PNG do terminala)
 
 Przykłady:
   cat script.php | candy-codeshot --theme dracula
