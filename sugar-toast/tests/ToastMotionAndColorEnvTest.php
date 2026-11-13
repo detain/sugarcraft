@@ -180,4 +180,55 @@ final class ToastMotionAndColorEnvTest extends TestCase
         $live = $apply->invoke($toast, null, '31');
         $this->assertNotNull($live?->fg(), 'unthreaded seam call must fall back to live env (neutral here)');
     }
+
+    public function testMonochromeNarrowKeepsSeverityLetterChannel(): void
+    {
+        // finding 056: NO_COLOR + a box narrower than icon + cell used to
+        // drop the whole prefix — a critical alert in monochrome then
+        // carried ZERO severity signal. The space-free ASCII letter is the
+        // retreat that guarantees at least one channel.
+        \putenv('NO_COLOR=1');
+        $out = Toast::new(4)->alert(ToastType::Error, 'Disk full')->view('', 40, 8);
+        $rows = \explode("\n", $out);
+        $header = null;
+        foreach ($rows as $row) {
+            if (\str_contains($row, 'E')) {
+                $header = $row;
+                break;
+            }
+        }
+        $this->assertNotNull($header, 'the severity letter channel must survive the icon drop under NO_COLOR');
+        $this->assertStringNotContainsString("\x1b[", $header, 'the retreat is plain cells, never styled chrome');
+        $this->assertStringNotContainsString(']', $header, 'only the bare letter rides, not the bracketed affordance');
+        $this->assertStringContainsString('D', \str_replace('E', '', $header), 'and the message keeps its cells beside it');
+    }
+
+    public function testMonochromeWideKeepsPlainIconWithoutLetterRetreat(): void
+    {
+        // The letter only exists because the glyph dropped out; a box with
+        // room shows the plain icon and must NOT gain a second channel.
+        \putenv('NO_COLOR=1');
+        $out = Toast::new(20)->alert(ToastType::Error, 'Disk full')->view('', 40, 8);
+        $this->assertStringContainsString("\u{2716}", $out, 'Unicode icon rides plain under NO_COLOR at roomy widths');
+        $this->assertStringNotContainsString('E Disk', $out, 'no letter when the icon survived');
+    }
+
+    public function testLiveColourNarrowDropsPrefixToBorderChannelAlone(): void
+    {
+        // Without colour suppression the border carries severity, so the
+        // documented icon-drop is unchanged: no letter injected.
+        $out = Toast::new(4)->alert(ToastType::Error, 'Disk full')->view('', 40, 8);
+        $this->assertStringNotContainsString('E', $out, 'letter retreat belongs to the monochrome case only');
+        $this->assertStringContainsString('D', $out, 'message keeps priority at hopeless widths');
+    }
+
+    public function testOneCellFloorLeavesMessagePriorityAbsolute(): void
+    {
+        // inner == 1: neither icon nor letter fits beside a message cell;
+        // the documented floor is message-only, zero chrome.
+        \putenv('NO_COLOR=1');
+        $out = Toast::new(3)->alert(ToastType::Error, 'Disk full')->view('', 40, 8);
+        $this->assertStringNotContainsString('E', $out, 'at inner<=1 the message owns the single cell');
+        $this->assertStringContainsString('D', $out, 'and the message still renders');
+    }
 }

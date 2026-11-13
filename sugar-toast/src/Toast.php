@@ -1319,6 +1319,21 @@ final class Toast
             // severity channel left, so the narrow box loses it too.
             $prefix = '';
             $iconCells = 0;
+            if (($envCtx[0] ?? $this->coloursSuppressed())) {
+                // finding 056: zero-channel guard. With colour suppressed
+                // AND the icon dropped, a critical alert in a monochrome
+                // narrow terminal carried NO severity signal at all.
+                // Retreat to the symbol set's ASCII letter, space-free so
+                // it costs one cell — severity then survives on >=1 channel
+                // by construction at any width where a message cell also
+                // fits. At inner <= 1 the message keeps priority: nothing
+                // survives, and that floor is the documented law.
+                $letter = \trim($alert->type->asciiPrefix(), '[]');
+                if ($inner >= Width::string($letter) + 1) {
+                    $prefix = $letter;
+                    $iconCells = Width::string($prefix);
+                }
+            }
         }
         $headerWrap = $this->wordWrap($message ?? '', \max(1, $inner - $iconCells));
         $firstWord  = \array_shift($headerWrap) ?? '';
