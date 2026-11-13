@@ -166,6 +166,38 @@ final class CliContractTest extends TestCase
         $this->assertSame("a\0b", $back['stdout'], 'binary door round-trips byte-exact');
     }
 
+    public function testErroringStdinIsRefusedAndStoresNothing(): void
+    {
+        // kv-016: a STDIN READ FAILURE used to be laundered into '' and
+        // written over the previous secret with a success line. An EISDIR
+        // fd surfaces on this CLI as a stream diagnostic + truncated ''
+        // — the exact laundering shape — so it must exit 1 with nothing
+        // stored. (The literal false return is unreachable through any
+        // spawnable fd; the refusal arms both shapes in one code path.)
+        $dir = \fopen('/tmp', 'r');
+        if ($dir === false) {
+            $this->markTestSkipped('this platform will not open a directory as a read resource.');
+        }
+
+        $run = $this->spawnKvOnFd0(['set', 'kv016-secret'], $this->configHome, $dir);
+        \fclose($dir);
+
+        $this->assertSame(1, $run['exit'], $run['stdout'] . $run['stderr']);
+        $this->assertStringContainsString('Failed to read from STDIN', $run['stderr']);
+        $this->assertSame(1, $this->runKv(['get', 'kv016-secret'])['exit'], 'a failed read stores nothing');
+    }
+
+    public function testCleanEofStdinStillStoresAnEmptyValue(): void
+    {
+        // The other half of kv-016: only FAILURES refuse. Feeding zero bytes
+        // through a closed pipe is a clean EOF — an intentional empty value.
+        $run = $this->runKvFeeding(['set', 'kv016-empty'], '');
+        $this->assertSame(0, $run['exit'], $run['stderr']);
+        $get = $this->runKv(['get', 'kv016-empty']);
+        $this->assertSame(0, $get['exit'], $get['stderr']);
+        $this->assertSame('', $get['stdout']);
+    }
+
     public function testBackslashTerminatedKeyIsRefusedAtTheCliDoor(): void
     {
         // G3 minimum (kv-007): usage-class refusal, exit 2, informative line.

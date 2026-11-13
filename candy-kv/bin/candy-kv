@@ -143,6 +143,39 @@ try {
 
 exit(0);
 
+/**
+ * Read the STDIN payload for `set`, refusing to launder a failed read as empty.
+ *
+ * kv-016: the old shape mapped every read failure to '' and wrote that empty
+ * secret over whatever the key held — a success line with data loss. PHP
+ * surfaces a failing read in two shapes: stream_get_contents() returning
+ * false, or (on this CLI, e.g. an EISDIR fd from `< /tmp`) a stream-layer
+ * diagnostic plus a truncated ''. The handler below promotes diagnostics to
+ * exceptions so BOTH shapes land in the same refusal, mirroring
+ * ImportCommand's "Failed to read from STDIN." exit-1 contract. A clean EOF
+ * still yields '' — storing an empty value stays the caller's prerogative.
+ */
+function stdinOrFail(): string
+{
+    \set_error_handler(static function (int $severity, string $message): bool {
+        throw new \ErrorException($message, 0, $severity);
+    });
+
+    try {
+        $value = \stream_get_contents(STDIN);
+    } catch (\ErrorException) {
+        $value = false; // a stream-layer diagnostic IS a failed read
+    } finally {
+        \restore_error_handler();
+    }
+
+    if ($value === false) {
+        throw new \RuntimeException('Failed to read from STDIN.');
+    }
+
+    return $value;
+}
+
 function run(Store $store, string $cmd, array $argv, string $bin): void
 {
     switch ($cmd) {
@@ -154,10 +187,7 @@ function run(Store $store, string $cmd, array $argv, string $bin): void
         // Read value from stdin if not provided as argument
         $value = $opts['value'];
         if ($value === null) {
-            $value = stream_get_contents(STDIN);
-            if ($value === false) {
-                $value = '';
-            }
+            $value = stdinOrFail();
         }
         // Binary handling: the column is TEXT, so NUL bytes get truncated at
         // the C string end and invalid UTF-8 breaks the whole-store JSON

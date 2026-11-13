@@ -49,18 +49,22 @@ trait SpawnBounded
         ?array $env = null,
         ?string $stdin = null,
         float $deadline = self::SPAWN_DEADLINE_SECONDS,
+        mixed $fd0 = null,
     ): array {
-        $proc = \proc_open($cmd, [
-            0 => ['pipe', 'r'],
-            1 => ['pipe', 'w'],
-            2 => ['pipe', 'w'],
-        ], $pipes, null, $env);
+        $spec = $fd0 !== null
+            // An explicit resource on fd0 (a directory fd, a closed pipe —
+            // shapes bytes-fed stdin cannot express; kv-016 read-failure pin).
+            ? [0 => $fd0, 1 => ['pipe', 'w'], 2 => ['pipe', 'w']]
+            : [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
+        $proc = \proc_open($cmd, $spec, $pipes, null, $env);
         self::assertIsResource($proc, 'failed to launch ' . ($cmd[0] ?? '?'));
 
-        if ($stdin !== null) {
-            \fwrite($pipes[0], $stdin);
+        if ($fd0 === null) {
+            if ($stdin !== null) {
+                \fwrite($pipes[0], $stdin);
+            }
+            \fclose($pipes[0]); // stdin at EOF immediately: a child must never wait on a terminal.
         }
-        \fclose($pipes[0]); // stdin at EOF immediately: a child must never wait on a terminal.
 
         $stdout = '';
         $stderr = '';
@@ -145,6 +149,28 @@ trait SpawnBounded
             \array_merge([\PHP_BINARY, \dirname(__DIR__, 2) . '/bin/candy-kv'], $args),
             $env,
             $stdin,
+        );
+    }
+
+    /**
+     * Spawn the CLI with an arbitrary resource on fd0 — the read-failure
+     * shapes (directory fd, closed handle) that `$stdin` bytes cannot express.
+     *
+     * @param list<string> $args
+     *
+     * @return array{stdout: string, stderr: string, exit: int, timedOut: bool}
+     */
+    protected static function spawnKvOnFd0(array $args, string $xdgConfigHome, mixed $fd0): array
+    {
+        $env = \getenv();
+        $env['XDG_CONFIG_HOME'] = $xdgConfigHome;
+
+        return self::spawnBounded(
+            \array_merge([\PHP_BINARY, \dirname(__DIR__, 2) . '/bin/candy-kv'], $args),
+            $env,
+            null,
+            self::SPAWN_DEADLINE_SECONDS,
+            $fd0,
         );
     }
 }
