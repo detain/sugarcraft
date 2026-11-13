@@ -1080,4 +1080,16 @@ final class StoreTest extends TestCase
         $this->assertNotNull($entry->expiresAt);
         $this->assertSame('v', $this->store->get('edge'));
     }
+    public function testSuggestDatabaseAnswersTheNearestLiveName(): void
+    {
+        // candy-kv-048: the db door reuses the KEY hint metric (shared
+        // bestSimilar core) — one edit distance, one tolerance law, no
+        // second drift-prone DP.
+        $this->store->set('token', 'v', false, null);
+        $qual = new \SugarCraft\Kv\Store($this->tmpDir, 'passwords');
+        $qual->set('token', 'v');
+
+        $this->assertSame('passwords', $qual->suggestDatabase('passwrods'));
+        $this->assertNull($qual->suggestDatabase('zzzzqqqqxyzzy'));
+    }
 }

@@ -316,19 +316,45 @@ final class Store
             return null;
         }
 
+        return self::bestSimilar($key, $allKeys);
+    }
+
+    /**
+     * The nearest live database name to a typo'd one (kv-048), or null
+     * when nothing is close enough. Same codepoint law as the key hint —
+     * the two doors must not drift into different edit metrics.
+     */
+    public function suggestDatabase(string $dbName): ?string
+    {
+        $candidates = \array_values(\array_filter(
+            $this->listDatabases(),
+            static fn(string $n): bool => $n !== $dbName,
+        ));
+
+        return $candidates === [] ? null : self::bestSimilar($dbName, $candidates);
+    }
+
+    /**
+     * The shared did-you-mean core: nearest candidate within the tolerance,
+     * tie-broken by first-seen order.
+     *
+     * @param list<string> $candidates
+     */
+    private static function bestSimilar(string $needle, array $candidates): ?string
+    {
         // Codepoint distance, not byte distance: PHP's levenshtein() counts
         // bytes, so a single two-byte character (ä, one CJK glyph) registers
         // as 2-3 "edits" and multibyte typos never clear the tolerance.
         // The allowance is floored at one edit: a plain half-the-length rule
         // gave 1-2 codepoint queries a zero threshold, silencing did-you-mean
         // exactly where a hint helps most (typo 'a' for live key 'at').
-        $keyLength = \mb_strlen($key, 'UTF-8');
+        $keyLength = \mb_strlen($needle, 'UTF-8');
         $threshold = max(1, intdiv($keyLength, 2));
 
         $best = null;
         $bestDist = \PHP_INT_MAX;
 
-        foreach ($allKeys as $candidate) {
+        foreach ($candidates as $candidate) {
             // One Levenshtein edit changes length by at most one, so the
             // codepoint-length gap is a lower bound on the distance: a
             // candidate past the tolerance is skipped without paying the
@@ -339,7 +365,7 @@ final class Store
             if (\abs($keyLength - \mb_strlen($candidate, 'UTF-8')) > $threshold) {
                 continue;
             }
-            $dist = self::codepointLevenshtein($key, $candidate);
+            $dist = self::codepointLevenshtein($needle, $candidate);
             if ($dist < $bestDist && $dist <= $threshold) {
                 $bestDist = $dist;
                 $best = $candidate;

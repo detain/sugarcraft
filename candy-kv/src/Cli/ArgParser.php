@@ -167,7 +167,7 @@ final class ArgParser
      *
      * @param list<string> $argv  Full argv array.
      * @param int         $offset Offset where list subcommand args begin.
-     * @return array{mode: 'all'|'keys'|'values', reverse: bool, delimiter: string, pattern: string|null}
+     * @return array{mode: 'all'|'keys'|'values', reverse: bool, delimiter: string, pattern: string|null, db: string|null}
      * @throws \InvalidArgumentException on unknown flags, extra positionals,
      *         or a -d facing a flag-shaped token.
      */
@@ -234,12 +234,54 @@ final class ArgParser
 
         self::refuseSurplus($out, 1, 'list');
 
+        $pattern = $out[0] ?? null;
+        $db = null;
+        if ($pattern !== null && \preg_match('/^@([A-Za-z0-9_-]+)$/', $pattern, $at) === 1) {
+            // kv-047: a leading '@' wrapping a bare database name is a
+            // SCOPE, not a pattern — the db-name grammar (letters, digits,
+            // '-', '_') can never appear inside a real key@db pattern, so
+            // `list '@notes'` lists notes.db unambiguously. Anything else
+            // — '@', 'a@b', '@no@tes' — keeps its old pattern meaning.
+            $db = $at[1];
+            $pattern = null;
+        }
+
         return [
             'mode' => $mode,
             'reverse' => $reverse,
             'delimiter' => $delimiter,
-            'pattern' => $out[0] ?? null,
+            'pattern' => $pattern,
+            'db' => $db,
         ];
+    }
+
+    /**
+     * Parse arguments for the `delete-db` verb (kv-046): exactly one
+     * positional, no flags. The NAME is validated downstream by the same
+     * dbPath grammar every other database door routes through — the parser
+     * does not grow a second, drift-prone copy of it.
+     *
+     * @param list<string> $argv  Full argv array.
+     * @param int         $offset Offset where delete-db args begin.
+     * @throws \InvalidArgumentException on missing/surplus positionals or
+     *         any option token.
+     */
+    public static function deleteDb(array $argv, int $offset): string
+    {
+        [$tokens, $tail] = self::splitPositional($argv, $offset);
+        foreach ($tokens as $arg) {
+            if (self::isOptionLike($arg)) {
+                throw self::unknownOption($arg, 'delete-db');
+            }
+        }
+        $out = array_merge($tokens, $tail);
+
+        self::refuseSurplus($out, 1, 'delete-db');
+        if ($out === []) {
+            throw new \InvalidArgumentException('delete-db requires a database name.');
+        }
+
+        return $out[0];
     }
 
     /**
@@ -247,7 +289,7 @@ final class ArgParser
      *
      * @param list<string> $argv  Full argv array.
      * @param int         $offset Offset where import subcommand args begin.
-     * @return array{format: string|null, path: string|null, atomic: bool}
+     * @return array{format: string|null, path: string|null, atomic: bool, ifExists: string}
      * @throws \InvalidArgumentException on unknown flags or extra positionals.
      */
     public static function import(array $argv, int $offset): array

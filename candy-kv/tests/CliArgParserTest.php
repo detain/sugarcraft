@@ -548,4 +548,51 @@ final class CliArgParserTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         ArgParser::list(['candy-kv', 'list', '-d, '], 2);
     }
+    // ─── candy-kv-046/047: delete-db grammar + @db list scope ───────────────
+
+    public function testDeleteDbParsesExactlyOnePositional(): void
+    {
+        $this->assertSame('notes', ArgParser::deleteDb(['candy-kv', 'delete-db', 'notes'], 2));
+    }
+
+    public function testDeleteDbMissingNameRefuses(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('delete-db requires a database name.');
+        ArgParser::deleteDb(['candy-kv', 'delete-db'], 2);
+    }
+
+    public function testDeleteDbRefusesSurplusAndOptions(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        ArgParser::deleteDb(['candy-kv', 'delete-db', 'a', 'b'], 2);
+    }
+
+    public function testDeleteDbRefusesFlagTokens(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        ArgParser::deleteDb(['candy-kv', 'delete-db', '--force'], 2);
+    }
+
+    public function testListAtNameIsADatabaseScopeNotAPattern(): void
+    {
+        $result = ArgParser::list(['candy-kv', 'list', '@notes'], 2);
+        $this->assertSame('notes', $result['db']);
+        $this->assertNull($result['pattern']);
+
+        $combined = ArgParser::list(['candy-kv', 'list', '-k', '@notes'], 2);
+        $this->assertSame('notes', $combined['db']);
+        $this->assertSame('keys', $combined['mode']);
+    }
+
+    public function testListNearMissesStayOrdinaryPatterns(): void
+    {
+        // '@' alone, an interior @, or a name beyond the db grammar keep the
+        // pre-S24 pattern reading — the scope form must not steal them.
+        foreach (['@', 'a@b', '@no@tes', '@dots.in.name'] as $pattern) {
+            $result = ArgParser::list(['candy-kv', 'list', $pattern], 2);
+            $this->assertNull($result['db'], $pattern);
+            $this->assertSame($pattern, $result['pattern'], $pattern);
+        }
+    }
 }

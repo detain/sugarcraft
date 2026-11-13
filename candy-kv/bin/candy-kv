@@ -12,6 +12,7 @@ declare(strict_types=1);
  *   candy-kv list [-k|-v] [-r] [-d DELIM] [pattern]
  *   candy-kv delete <key> [--dry-run]
  *   candy-kv list-dbs
+ *   candy-kv delete-db <name>
  *   candy-kv prune [--db NAME] [--all]
  *   candy-kv import <format> <path> [--no-atomic] [--if-exists=MODE]
  *   candy-kv export <format> [db] [pattern]
@@ -115,7 +116,7 @@ switch ($argv[1]) {
         help($bin);
         exit(0);
 }
-if (!in_array($argv[1], ['set', 'get', 'list', 'delete', 'list-dbs', 'prune', 'import', 'export'], true)) {
+if (!in_array($argv[1], ['set', 'get', 'list', 'delete', 'list-dbs', 'delete-db', 'prune', 'import', 'export'], true)) {
     fwrite(STDERR, Lang::t('cli.unknown_command', ['cmd' => Store::sanitizeForTty($argv[1])]) . "\n");
     help($bin);
     exit(2);
@@ -233,6 +234,11 @@ function run(Store $store, string $cmd, array $argv, string $bin): void
             $entry = $store->entry($key);
         }
         if ($entry === null) {
+            // kv-048: a typo'd DATABASE is answered about the database —
+            // key hints from some other vault would mislead.
+            if (databaseMissing($store, $decoded)) {
+                reportDatabaseMiss($store, Store::splitKey($decoded, '')[0]);
+            }
             // Suggestions are CLI policy. Everything echoed here may be
             // attacker-chosen (typo key, poisoned store keys) → sanitize.
             $suggestion = $store->suggestionFor($decoded);
@@ -271,7 +277,13 @@ function run(Store $store, string $cmd, array $argv, string $bin): void
         // throw on a key listing.
         $delim = $opts['delimiter'];
         $mode = $opts['mode'];
-        foreach ($store->list($opts['pattern'], null, $opts['reverse'], $mode === 'keys' ? 'keys' : 'all', $opts['delimiter']) as $item) {
+        // kv-047: '@notes' scoped the listing to one database — an absent
+        // db is the miss class (exit 1 + did-you-mean), NOT an empty table
+        // that reads like 'the database is empty'.
+        if ($opts['db'] !== null && !\in_array($opts['db'], $store->listDatabases(), true) && !$store->isReservedDatabase($opts['db'])) {
+            reportDatabaseMiss($store, $opts['db']);
+        }
+        foreach ($store->list($opts['pattern'], $opts['db'], $opts['reverse'], $mode === 'keys' ? 'keys' : 'all', $opts['delimiter']) as $item) {
             if ($item instanceof Entry) {
                 $key = Store::sanitizeForTty($item->key);
                 $bytes = $item->rawValue();
@@ -294,6 +306,9 @@ function run(Store $store, string $cmd, array $argv, string $bin): void
         if ($opts['dryRun']) {
             $n = countMatches($store, $opts['key']);
             if ($n === 0) {
+                if (databaseMissing($store, $opts['key'])) {
+                    reportDatabaseMiss($store, Store::splitKey($opts['key'], '')[0]);
+                }
                 fwrite(STDERR, Lang::t('cli.deleted_none', ['key' => Store::sanitizeForTty($opts['key'])]) . "\n");
                 exit(1);
             }
@@ -302,6 +317,9 @@ function run(Store $store, string $cmd, array $argv, string $bin): void
         }
         $n = $store->delete($opts['key']);
         if ($n === 0) {
+            if (databaseMissing($store, $opts['key'])) {
+                reportDatabaseMiss($store, Store::splitKey($opts['key'], '')[0]);
+            }
             fwrite(STDERR, Lang::t('cli.deleted_none', ['key' => Store::sanitizeForTty($opts['key'])]) . "\n");
             exit(1);
         }
@@ -361,6 +379,26 @@ function run(Store $store, string $cmd, array $argv, string $bin): void
         }
         break;
 
+    case 'delete-db':
+        // kv-046: the thin teardown verb over Store::deleteDatabase() —
+        // the library door already returns false for 'did not exist OR a
+        // file survived', so the CLI only maps that verdict to the exit
+        // codes and mirrors list-dbs' no-ceremony success shape.
+        $dbName = ArgParser::deleteDb($argv, 2);
+        $existed = \in_array($dbName, $store->listDatabases(), true);
+        if ($store->deleteDatabase($dbName)) {
+            echo Lang::t('cli.db_deleted', ['name' => Store::sanitizeForTty($dbName)]) . "\n";
+            break;
+        }
+        if (!$existed && !$store->isReservedDatabase($dbName)) {
+            reportDatabaseMiss($store, $dbName);
+        }
+        // The file roster existed but a teardown leg failed (surviving
+        // -wal/-shm/sidecar) — say the true thing, name the true target.
+        fwrite(STDERR, 'Could not completely remove database ' . Store::sanitizeForTty($dbName)
+            . '; some of its files remain.' . "\n");
+        exit(1);
+
     case 'import':
         $opts = ArgParser::import($argv, 2);
         if ($opts['format'] === null || $opts['path'] === null) {
@@ -416,6 +454,42 @@ function usage(string $bin, string $messageKey): never
     exit(2);
 }
 
+/**
+ * The DATABASE-miss class (kv-048): an explicit @db that routes to no
+ * file is answered where the typo actually lives — the database name —
+ * with the same did-you-mean metric the keys use, BEFORE any key
+ * suggestion (a hint from the wrong vault is noise, and the old shape
+ * printed one: 'token@passwrods' suggested keys from default.db).
+ */
+function reportDatabaseMiss(Store $store, string $db): never
+{
+    fwrite(STDERR, Lang::t('cli.db_not_found', ['db' => Store::sanitizeForTty($db)]) . "\n");
+    $suggest = $store->suggestDatabase($db);
+    if ($suggest !== null) {
+        fwrite(STDERR, Lang::t('cli.db_did_you_mean', ['db' => Store::sanitizeForTty($suggest)]) . "\n");
+    }
+    exit(1);
+}
+
+/** True when a key spelling explicitly names a database, at all. */
+function explicitlyQualified(string $key): bool
+{
+    // splitKey hands back the passed fallback for unqualified spellings;
+    // a NUL-bearing sentinel can never collide with the db-name grammar.
+    return Store::splitKey($key, "\0unqualified")[0] !== "\0unqualified";
+}
+
+/** The named database absent from the store's files? (reserved names are present by law.) */
+function databaseMissing(Store $store, string $key): bool
+{
+    if (!explicitlyQualified($key)) {
+        return false;
+    }
+    $db = Store::splitKey($key, '')[0];
+
+    return $db !== '' && !\in_array($db, $store->listDatabases(), true) && !$store->isReservedDatabase($db);
+}
+
 function help(string $bin): void
 {
     echo <<<HELP
@@ -429,6 +503,7 @@ function help(string $bin): void
                                       List entries (default: keys+values)
       {$bin} delete <key> [--dry-run]  Delete a key or glob pattern
       {$bin} list-dbs                  List all databases
+      {$bin} delete-db <name>          Delete one database (and its files)
       {$bin} prune [--db NAME|--all]
                                       Remove expired entries: the default db,
                                       one named db, or every db (--all).
@@ -482,6 +557,7 @@ function help(string $bin): void
       Use key@dbname to target a specific database.
       E.g. {$bin} get token@passwords
       A literal @ in a key is spelled \\@ (never "a@b@c").
+      list accepts the database bare: {$bin} list '@notes' lists notes.db.
 
     Output discipline:
       get    exact stored bytes, no added newline.

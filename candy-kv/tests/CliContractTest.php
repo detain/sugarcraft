@@ -174,6 +174,60 @@ final class CliContractTest extends TestCase
         $this->assertStringContainsString('Option -d requires a delimiter value', $run['stderr']);
     }
 
+    public function testAcceptanceDatabaseParityVerbs(): void
+    {
+        // kv-046/047/048 acceptance shape, end to end through the binary:
+        // write qualified, list the database bare, typo the database name
+        // and be answered about the DATABASE, retire the database.
+        $this->assertSame(0, $this->runKv(['set', 'k@notes', 'v'])['exit']);
+        $this->assertSame(0, $this->runKv(['set', 'token@passwords', 'sekret'])['exit']);
+
+        $scoped = $this->runKv(['list', '@notes']);
+        $this->assertSame(0, $scoped['exit'], $scoped['stderr']);
+        $this->assertMatchesRegularExpression('/^k\tv$/m', $scoped['stdout']);
+
+        $typo = $this->runKv(['get', 'token@passwrods']);
+        $this->assertSame(1, $typo['exit']);
+        $this->assertStringContainsString('database not found: passwrods', $typo['stderr']);
+        $this->assertStringContainsString("did you mean database 'passwords'", $typo['stderr'],
+            'the typo answer must name the vault that exists, before any key hint');
+
+        $typoScopedList = $this->runKv(['list', '@passwrods']);
+        $this->assertSame(1, $typoScopedList['exit'], 'a scoped list of a missing db is the db-miss class');
+        $this->assertStringContainsString("'passwords'", $typoScopedList['stderr']);
+
+        $deleted = $this->runKv(['delete-db', 'notes']);
+        $this->assertSame(0, $deleted['exit'], $deleted['stderr']);
+        $this->assertStringContainsString('Deleted database "notes".', $deleted['stdout']);
+        $this->assertFileDoesNotExist($this->configHome . '/skate/notes.db');
+        $this->assertFileDoesNotExist($this->configHome . '/skate/notes.db-wal');
+        $this->assertFileDoesNotExist($this->configHome . '/skate/notes.db-shm');
+
+        $gone = $this->runKv(['delete-db', 'notes']);
+        $this->assertSame(1, $gone['exit'], 're-deleting a retired database is a miss, not a second success');
+        $this->assertStringContainsString('database not found', $gone['stderr']);
+    }
+
+    public function testDeleteDatabaseRefusesTheReservedNameThroughTheWriteDoor(): void
+    {
+        // S19's reservation binds this NEW verb too: settings answers the
+        // reserved sentence at exit 2, never a delete.
+        $run = $this->runKv(['delete-db', 'settings']);
+        $this->assertSame(2, $run['exit'], $run['stdout'] . $run['stderr']);
+        $this->assertStringContainsString('reserved', $run['stderr']);
+    }
+
+    public function testQualifiedMissOnADatabaseStillGetsKeyHelpWhenTheDbExists(): void
+    {
+        // The db-miss branch must not swallow the key class: wrong key,
+        // right database → the did-you-mean KEY hint (old behaviour intact).
+        $this->runKv(['set', 'token@notes', 'v']);
+        $run = $this->runKv(['get', 'tken@notes']);
+        $this->assertSame(1, $run['exit']);
+        $this->assertStringContainsString('did you mean', $run['stderr']);
+        $this->assertStringNotContainsString('database not found', $run['stderr']);
+    }
+
     public function testTextForcedNulValueIsRefusedAndBinaryDoorRoundTrips(): void
     {
         // kv-008: `--text` sold as a force switch silently minted
