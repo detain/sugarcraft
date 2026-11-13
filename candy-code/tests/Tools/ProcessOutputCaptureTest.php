@@ -97,4 +97,30 @@ final class ProcessOutputCaptureTest extends TestCase
         $this->assertLessThan(10.0, $elapsed, 'stdin must be closed so the child cannot block');
         $this->assertSame('', $result->content());
     }
+
+    /**
+     * S-T05: the spawn-failure refusal must survive the array (direct-exec
+     * argv) form of $command — strlen()/substr() once TypeErrored on it
+     * before the promised exit-127 result could be returned.
+     */
+    public function testSpawnFailureWithArrayArgvYieldsExit127(): void
+    {
+        $host = new class {
+            use \SugarCraft\Code\Tools\Concerns\CapturesProcessOutput;
+
+            /** @param string|list<string> $command @return array<string,mixed> */
+            public function capture(string|array $command, string $cwd): array
+            {
+                return $this->runCaptured($command, $cwd);
+            }
+        };
+        $missing = sys_get_temp_dir() . '/candy-code-no-such-dir-' . bin2hex(random_bytes(6));
+
+        foreach ([['x', str_repeat('y', 200)], 'x ' . str_repeat('y', 200)] as $command) {
+            $r = $host->capture($command, $missing);
+            $this->assertSame(127, $r['exitCode']);
+            $this->assertStringContainsString('Could not start the command x ', $r['stderr']);
+            $this->assertStringContainsString('...', $r['stderr']);
+        }
+    }
 }
