@@ -12,10 +12,11 @@ use SugarCraft\Table\{Column, Row, RowData, Table};
  * the stripe REPLACED the row style instead of composing underneath it).
  *
  * Post-fix behavior: the default even stripe is '30;47' (ANSI16 canon:
- * fg 0;0;0, bg 229;229;229), the odd stripe is empty. Rows opt in with an
- * explicit stripe index via Row::withZebra($index) and then ignore
- * positional parity; unflagged rows keep parity striping. All stripe codes
- * compose UNDER the row's own style and any higher tier.
+ * fg 0;0;0, bg 229;229;229), the odd stripe is empty. Rows opt in with
+ * Row::withZebra() (ST-28 bool form — pins the ODD stripe, ignoring
+ * positional parity; false restores parity); unflagged rows keep parity
+ * striping. All stripe codes compose UNDER the row's own style and any
+ * higher tier.
  */
 final class TableZebraTest extends TestCase
 {
@@ -51,17 +52,29 @@ final class TableZebraTest extends TestCase
         $this->assertStringContainsString(self::EVEN_STRIKE . ';1m', $view);
     }
 
-    public function testRowZebraOptInSelectsExplicitStripeIndex(): void
+    public function testRowZebraOptInPinsTheOddStripe(): void
     {
-        // Row at even position opting into stripe index 1 (the EMPTY odd
-        // stripe by default) must NOT carry the parity stripe; pre-fix the
-        // flag was never read and the row would stripe anyway.
+        // Row at even position opting in pins the ODD stripe (empty by
+        // default) and ignores positional parity; pre-M5-fix the flag was
+        // never read and the row would stripe anyway; pre-ST-28 the same
+        // outcome required the int selector 1.
         $view = $this->table(
-            Row::new(RowData::from(['a' => 'zero']))->withZebra(1),
+            Row::new(RowData::from(['a' => 'zero']))->withZebra(),
             Row::new(RowData::from(['a' => 'one'])),
         )->View();
 
         $this->assertStringNotContainsString('48;2;229;229;229', $view);
+    }
+
+    public function testRowZebraOptOutRestoresParity(): void
+    {
+        // withZebra(false) is a value-level no-op against an unflagged row:
+        // the even position stripes exactly as parity dictates.
+        $view = $this->table(
+            Row::new(RowData::from(['a' => 'zero']))->withZebra(false),
+        )->View();
+
+        $this->assertStringContainsString(self::EVEN_STRIKE, $view);
     }
 
     public function testDisabledZebraIsSilent(): void

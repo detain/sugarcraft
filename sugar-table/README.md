@@ -174,11 +174,15 @@ $t = $t->withZebra(true);
 
 **Stripe model**: the two stripes are hard-wired — the even slot is
 `30;47` (black on white), the odd slot carries no style.
-`Row::withZebra(int $styleIndex = 0)` picks the slot: index 0 takes the
-stripe, index 1 the bare one (higher indices behave as 0). Rows without an
-opt-in fall back to position parity while the table switch is on: even
-`rowIndex` stripes, odd does not. With the switch off — the default —
-nothing stripes, whatever the rows ask for.
+`Row::withZebra(bool $on = true)` opts a row into the ODD stripe explicitly,
+overriding its positional parity; `withZebra(false)` (or no call at all)
+leaves parity in charge. While the table switch is on, rows without an
+opt-in stripe by position: even `rowIndex` takes the `30;47` stripe, odd
+does not. With the switch off — the default — nothing stripes, whatever the
+rows ask for. (ST-28: the earlier `withZebra(int $styleIndex)` two-state
+selector was a fake — only 0/1 ever differed and 0 duplicated the even
+position's own stripe; the bool names exactly what the state can mean.
+Pre-1.0 hard switch; no caller in the census passed a non-default index.)
 
 **String-cast warning**: `(string)` on a `StyledCell` (and every implicit
 `Stringable` coercion — `echo`, `print`, `sprintf('%s')`, concatenation) emits

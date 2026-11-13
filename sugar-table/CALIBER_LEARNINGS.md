@@ -176,3 +176,12 @@ Auto-managed by [caliber](https://github.com/caliber-ai-org/ai-setup) — do not
   keyed lookups and predicates, pinned fail-closed by
   `tests/BareAccessorEraTest.php` — the README "Accessors" section and that
   test's roster must move together.
+
+- **[api:bool-over-fake-int]** `Row::withZebra()` took an int "stripe
+  selector" (audit ST-28, finding 028) whose two states were a fake: only 0
+  and 1 ever differed, every other value behaved as 0, and 0 duplicated what
+  an even-position row already got from parity. Hard-switched to
+  `withZebra(bool $on = true)` — true pins the odd stripe, false restores
+  positional parity — pre-1.0 with a consumer census showing zero callers
+  passing a non-default index. When an "enum-ish" int parameter has exactly
+  one distinguishable non-default value, it is a bool wearing a costume.

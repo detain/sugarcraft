@@ -15,19 +15,16 @@ final class Row
 {
     public readonly RowData $data;
     public readonly string $style;       // row-level ANSI style
-    public readonly bool $zebra;         // apply zebra striping
-    public readonly ?int $zebraStyleIndex; // which alternating style
+    public readonly bool $zebra;         // explicit odd-stripe opt-in (ST-28)
 
     private function __construct(
         RowData $data,
         string $style = '',
         bool $zebra = false,
-        ?int $zebraStyleIndex = null,
     ) {
-        $this->data             = $data;
-        $this->style            = $style;
-        $this->zebra            = $zebra;
-        $this->zebraStyleIndex  = $zebraStyleIndex;
+        $this->data   = $data;
+        $this->style  = $style;
+        $this->zebra  = $zebra;
     }
 
     public static function new(RowData $data): self
@@ -37,19 +34,24 @@ final class Row
 
     public function withStyle(string $ansiStyle): self
     {
-        return new self(data: $this->data, style: $ansiStyle, zebra: $this->zebra, zebraStyleIndex: $this->zebraStyleIndex);
+        return new self(data: $this->data, style: $ansiStyle, zebra: $this->zebra);
     }
 
     /**
-     * Enable zebra striping for this row with the given stripe selector.
+     * Opt this row into (or out of) the ODD zebra stripe, overriding its
+     * positional parity.
      *
-     * The model is two-stripe: $styleIndex 1 picks the odd stripe, index 0
-     * (and any other value) picks the even stripe — an index of 2 or higher
-     * behaves exactly like 0. Table-level {@see Table::withZebra()} must
-     * also be enabled for any striping to render.
+     * ST-28 (finding 028): this used to take an int "stripe selector" that
+     * offered a fake two-state model — only 0 and 1 ever differed, every
+     * other value behaved as 0, and 0 was indistinguishable from leaving an
+     * even-position row at its positional stripe. A bool says exactly what
+     * the state can mean: true pins the odd stripe, false restores
+     * positional parity. Pre-1.0 hard switch (Go-parity port, consumer
+     * census: no caller passed a non-default index). Table-level
+     * {@see Table::withZebra()} must also be enabled to render any stripe.
      */
-    public function withZebra(int $styleIndex = 0): self
+    public function withZebra(bool $on = true): self
     {
-        return new self(data: $this->data, style: $this->style, zebra: true, zebraStyleIndex: $styleIndex);
+        return new self(data: $this->data, style: $this->style, zebra: $on);
     }
 }

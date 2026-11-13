@@ -2809,8 +2809,9 @@ final class Table
 
     /**
      * Resolve the zebra stripe for one row (audit M5: {@see Row::withZebra()}
-     * used to be stored and never read — rows that opted in with an explicit
-     * stripe index now win over positional parity).
+     * used to be stored and never read — rows that opted in now win over
+     * positional parity; ST-28 settled the opt-in shape to a bool pinning
+     * the odd stripe).
      *
      * $rowIndex is the ABSOLUTE data index (page offset + window slot), the
      * same domain the selection highlight compares in (audit ST-18): a
@@ -2823,7 +2824,7 @@ final class Table
             return '';
         }
         if ($rowData->zebra) {
-            return $rowData->zebraStyleIndex === 1 ? $this->zebraStyleOdd : $this->zebraStyleEven;
+            return $this->zebraStyleOdd;
         }
 
         return ($rowIndex % 2 === 0) ? $this->zebraStyleEven : $this->zebraStyleOdd;
