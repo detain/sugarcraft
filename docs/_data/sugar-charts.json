@@ -1,8 +1,8 @@
 {
     "title": "SugarCharts — SugarCraft",
-    "description": "SugarCharts: Charts that render in the terminal — line, bar, sparkline, heatmap, scatter, OHLC candlesticks, and inline images via Sixel / Kitty / iTerm2.",
+    "description": "SugarCharts: Charts that render in the terminal — line, bar, sparkline, heatmap, scatter, OHLC candlesticks, and inline images via Sixel / Kitty / iTerm2 — with documented color-vision, accessibility, and NO_COLOR behavior.",
     "ogTitle": "SugarCharts — SugarCraft",
-    "ogDescription": "Charts that render in the terminal — line, bar, sparkline, heatmap, scatter, OHLC candlesticks, and inline images via Sixel / Kitty / iTerm2.",
+    "ogDescription": "Charts that render in the terminal — line, bar, sparkline, heatmap, scatter, OHLC candlesticks, and inline images via Sixel / Kitty / iTerm2 — with documented accessibility behavior.",
     "emoji": "📊",
     "displayName": "SugarCharts",
     "tagline": "Line, bar, heat, candlestick & braille charts for any terminal",

@@ -67,7 +67,11 @@ echo LineChart::new([1, 4, 2, 8, 6, 3, 7], 30, 6)->view() . PHP_EOL;
 > `legendPos()` and `withTitlePosition()` → `titlePos()` (`Pos` is the accepted
 > shorthand for `Position`), `withDataLabelFormatter()` → `dataLabelFormat()`,
 > `withFractionalHeights()` → `fractional()`, and `withXYRange()` → `xyRange()`.
-> `Sparkline`'s width setter aliases to `width()`, not `size()`. The
+> `Sparkline`'s width setter aliases to `width()`, not `size()` — and
+> `Sparkline::width()`/`data()`/`min()`/`max()` are dual-form: called bare they
+> **read** the current value, called with an argument they set it exactly like
+> the long form. The same dual shape carries `TimeSeries::timeRange()` and
+> `Heatmap::cellStyle()`/`autoValueRange()`/`monoRamp()`. The
 > `with*` long forms continue to work everywhere; pick the form that reads best at
 > the call site.
 >
@@ -99,7 +103,7 @@ is `SugarCraft\Charts\Canvas\Canvas`); prose and snippets always spell the full 
 | `Charts\Aggregation\BucketByTime` | Groups timestamped values into time buckets with configurable aggregation. | `sum` / `mean` / `min` / `max` / `first` / `last` factory methods + `add` / `addMany` / `compute` |
 | `Charts\Aggregation\MovingAverage` | Sliding-window aggregator — SMA and EMA. | `simple` / `centered` / `ema` static factories + `add` / `addMany` / `computeSimple` / `values` / `clear` |
 | `Charts\Aggregation\Resample` | Upsample or downsample timestamped series to a target cadence. | `last` / `mean` / `linear` / `nearest` factories + `resample` auto-detection |
-| `Charts\Picture\Picture` | Inline image renderer — Sixel, Kitty (chunked APC) and iTerm2 (OSC 1337) protocols, with `detect()` routing on `TERM` / `TERM_PROGRAM`. | `fromGrid` / `fromPng` / `withProtocol` / `withPaletteSize` / `detect` / `view` |
+| `Charts\Picture\Picture` | Inline image renderer — Sixel, Kitty (chunked APC) and iTerm2 (OSC 1337) protocols. `detect()` is multiplexer-first: under tmux or Zellij it returns `null` (their surfaces swallow image escapes) unless you opt in via `CHARTS_PICTURE_PASSTHROUGH=1`; then it routes iTerm2/WezTerm/kitty/Foot/mlterm/Windows Terminal (Sixel since 1.18) by env. | `fromGrid` / `fromPng` / `withProtocol` / `withPaletteSize` / `detect` / `view` |
 
 ### Aggregation
 
@@ -118,7 +122,9 @@ $buckets = BucketByTime::sum(3600, [
 // Note: `ts` is the ABSOLUTE epoch bucket start (floor(ts / 3600) * 3600),
 // not a relative offset — render it with gmdate(), not epoch-offset math.
 
-// MovingAverage: 3-point SMA and EMA.
+// MovingAverage: 3-point SMA and EMA (ema takes an optional smoothing
+// alpha in (0,1]; omitted, it uses the standard 2/(window+1) — and window
+// must be > 0 for every factory, EMA included).
 $sma = MovingAverage::simple(3, [1, 4, 2, 8, 6]);
 // → [0.0, 0.0, 2.33…, 4.67…, 5.33…]
 
@@ -136,35 +142,35 @@ $down = Resample::last(30, $timestampedData);
 $up   = Resample::linear(30, $timestampedData);
 ```
 
-### Braille canvas rendering
+### Braille dot-grid rendering
 
-`LineChart` supports high-resolution dot-matrix (braille) rendering via
-`SugarCraft\Dashboard\Plot\Braille\BrailleCanvas`. Pass a `BrailleCanvas`
-instance via `withCanvas()` to switch from character-cell to 2×4
-sub-cell resolution. Braille mode needs `composer require
-sugarcraft/sugar-dashboard` — an optional display helper, not a runtime
-dependency of sugar-charts. `withCanvas()` exists only on the `Chart`
-base that `LineChart` extends — `BarChart`, `Scatter` and `OHLCChart`
-compose the `ChartExtras` trait and have no braille mode, and `Heatmap`,
-`TimeSeries`, `Streamline` and `Waveline` have no such method at all.
+Reach for braille when a pane must carry more samples than it has rows
+(dense telemetry, overlapping series): it renders at 2×4 sub-cell dot
+resolution instead of character cells. Enable it with `withBraille(true)`
+— a plain boolean switch that needs **no extra package at all**.
+`sugar-dashboard` is only needed if you specifically want its
+`BrailleCanvas` class (or dashboard embedding of chart rows); the
+dot-grid itself is lib-local. Note the name: this is a braille
+*dot-grid* — six-dot cell patterns used as a dense character set — not
+screen-reader braille.
 
-The passed canvas works as a **mode flag**: it accepts any non-null
-object, its dimensions are ignored and it is never mutated — the chart's
-own `width` / `height` still drive the render, so size the *chart* (not
-the canvas) below. You do not need the dashboard package installed to
-arm the mode; you need it for the `BrailleCanvas` symbol itself and for
-embedding the chart's rows in a dashboard layout. Reach for
-braille when a pane must carry more samples than it has rows (dense
-telemetry, overlapping series); plain cell mode stays the right default
-for narrow panes and hosts where glyph widths vary.
+`withCanvas(?CellGrid)` composes with it: pass any cell-grid
+implementation (`BrailleCanvas`, a sugar-cellbuffer `Buffer`, your own)
+and the chart paints into that grid at its declared size instead of a
+fresh internal one — a real bridge, writes clipped by the grid's bounds.
+Grid choice and braille mode are independent: a braille raster can be
+painted into any grid. Both knobs exist only on the `Chart` base that
+`LineChart` extends; `BarChart`/`Scatter`/`OHLCChart` compose
+`ChartExtras` with no canvas surface, and `Heatmap`, `TimeSeries`,
+`Streamline` and `Waveline` expose neither knob.
 
 ```php
 use SugarCraft\Charts\LineChart\LineChart;
 use SugarCraft\Dashboard\Plot\Braille\BrailleCanvas;
 
-$canvas = new BrailleCanvas(80, 24);
-$chart  = LineChart::new([1, 4, 2, 8, 6], 80, 24)
-    ->withCanvas($canvas);
+$chart = LineChart::new([1, 4, 2, 8, 6], 80, 24)
+    ->withBraille(true)        // dot-grid mode, no extra package
+    ->withCanvas(new BrailleCanvas(80, 24)); // optional: paint into a caller grid
 echo $chart->view();
 ```
 
@@ -237,7 +243,9 @@ and the braille pass; no other renderer exposes the knob (verified
 `TimeSeries`, `Streamline`, `Waveline`, `Sparkline`, `Picture`).
 `withAnimationDuration(int $ms)` is a stored **pacing hint** for the
 caller's own clock — the lib runs no timers. Drive frames by advancing
-the progress yourself, e.g. `examples/animated_line.php`.
+the progress yourself, e.g. `examples/animated_line.php`. For readers who
+prefer reduced motion, skip the sweep entirely and render the final frame
+at progress `1.0` — the output is the same chart, fully drawn.
 
 ### Per-point and per-bar colors
 
@@ -330,15 +338,20 @@ Pair it with the structural channels that survive it.
 
 **What color actually drops out when.** The environment ladder
 (`CLICOLOR_FORCE` / `FORCE_COLOR` beat `NO_COLOR`, which beats `CLICOLOR=0`)
-is consulted at exactly one site here: `Legend::colorSuppressed()`, which
-suppresses the legend's color indicators. Everything else — bar bodies,
-the Heatmap's truecolor fill, themed frame rules — keeps emitting SGR
-regardless, and there is no automatic non-TTY degradation: piping a chart
-to a file yields full color. To force monochrome deliberately, set the
-sugar-style profile for the whole process
-(`Style::setDefaultProfile(ColorProfile::Ascii)`) and cool the Heatmap
-separately with `Heatmap::withColorProfile(ColorProfile::Ascii)`; the
-library never installs a profile from the environment on your behalf.
+is honored by every text renderer's `view()`: under `NO_COLOR` the legend
+indicators, bar bodies, Heatmap fills, themed rules, MarkLine runs and
+per-point colors all come back SGR-free (the ladder lives in
+`Support/ColorLadder.php`). Image payloads are deliberately exempt —
+under `NO_COLOR` `Picture::view()` still emits the sixel/kitty/iTerm2
+escape because the escapes ARE the image — only its plain-text
+placeholder is stripped. There is no automatic non-TTY degradation:
+without the env var, piping a chart to a file yields full color.
+Heatmap keeps readable structure without color via
+`withMonoRamp(true)` (density through shade selection). To force
+monochrome by profile instead of env, set the sugar-style profile for the
+whole process (`Style::setDefaultProfile(ColorProfile::Ascii)`) and cool
+the Heatmap separately with `Heatmap::withColorProfile(ColorProfile::Ascii)`;
+the library never installs a profile from the environment on your behalf.
 
 **Structural channels that never carry color.** `withDataLabels()` prints
 bar values as text (BarChart renders them; LineChart's flag and formatter
@@ -356,22 +369,56 @@ both readable without any color channel.
 **Glyph widths.** Plain-ASCII defaults hold only for those six point runes.
 Bodies and frames default to Unicode: the eight Sparkline block shades,
 BarChart's `█`, the Heatmap fill, OHLC's `│ █ ▒`, MarkLine's `─` / `╌`, and
-Graph's thin frame rules. Several of these are East-Asian-Ambiguous and
-occupy one or two cells depending on terminal configuration, which shifts
-fixed-width rows. There is no library-wide ASCII switch; the per-chart rune
-levers above are the mitigation.
+Graph's thin frame rules. Several of these are East-Asian-Ambiguous glyphs
+that occupy one or two cells depending on terminal configuration; this
+library lays them out by cell index assuming the fleet-wide canon of one
+cell each (`Ambiguous = 1`, the same width policy sugar-core's `Width`
+applies), so output is correct on every terminal in the CI matrix and a
+host configured for `Ambiguous = 2` (legacy GNU-wcwidth CJK) would wrap
+dense rows. The per-chart rune levers above cover Scatter/Heatmap fills,
+OHLC bodies and LineChart points — **Sparkline's block shades and
+BarChart's `█` have no glyph setter today**, so on an Ambiguous-wide host
+those two renderers are the escapees; there is no library-wide ASCII
+switch (tracked as product option sugar-charts-034).
+
+**High contrast / low vision.** Color-vision deficiency and low vision are
+different needs. For the 16-color tier, `Theme::ansi()` keeps every series
+distinguishable without truecolor blending; the default Heatmap
+cold→hot ramp is dark-heavy and can wash out on black terminals — prefer
+an explicit `withPalette()` of light, saturated stops, or
+`withMonoRamp(true)` for a single-glyph density ramp that survives any
+background.
+
+**Non-visual output.** A rendered chart is a pixel-free text picture: a
+screen reader narrates block characters, not trends. The accessible
+channel is the data itself — read `Sparkline::cells()`,
+`LineChart::cells()` or your source arrays as text/CSV and emit those;
+`withDataLabels()` on BarChart is the only renderer-side text
+substitution (values as a label row). `Sparkline` in particular is one
+unlabeled row with no axis and no title — never the sole carrier of a
+number. `Picture` has no alternative-text slot: when its placeholder
+prints, it names the protocol and frame size, which is what assistive
+output will see.
 
 ## Untrusted labels
 
 Every string this library can echo to a terminal passes through
 `SugarCraft\Charts\Support\UntrustedText` — the trust boundary for labels
-assembled from application data. The sweep deletes escape-introduced
-sequences (CSI, OSC-8 hyperlinks, OSC 0 title writes, DCS/SOS/PM/APC, both
-spellings), C0 controls except TAB/LF/CR, DEL, 8-bit C1, and forged
-U+E000/U+E001 mouse-zone sentinels; repairs malformed UTF-8 to U+FFFD
-before the Unicode-aware passes; converts bidi overrides and zero-width
-characters into printable markers; and flattens TAB/LF/CR to spaces, so a
-single surviving newline can never desynchronize the fixed-width frame.
+assembled from application data. The sweep:
+
+- deletes every escape-introduced sequence — CSI, OSC-8 hyperlinks, OSC 0
+  title writes, and the DCS/SOS/PM/APC string introducers — under **both
+  spellings** of each (the 7-bit `ESC [`-style form and its 8-bit C1
+  single-byte equivalent);
+- deletes C0 controls except TAB/LF/CR, DEL, 8-bit C1, and forged
+  U+E000/U+E001 mouse-zone sentinels;
+- repairs malformed UTF-8 to U+FFFD **before** the Unicode-aware passes,
+  so a hostile fragment can never make a pattern bail and strand the rest
+  of the string;
+- converts bidi overrides and zero-width characters into printable markers;
+- flattens TAB/LF/CR to spaces, so a single surviving newline can never
+  desynchronize the fixed-width frame.
+
 Ordinary printable input comes back byte-identical, and the guard is
 idempotent.
 
@@ -428,7 +475,10 @@ Do not re-implement string padding or cell-grid assembly — reuse `Buffer`
 or `Canvas` as the shape of your output demands. Display widths come from
 `SugarCraft\Core\Util\Width`, so bar labels, gutters and truncation are
 **cell-correct** for CJK / emoji text (`BarChart`'s horizontal gutter
-included).
+included). Label text is split by **grapheme cluster** (ICU via ext-intl,
+a hard requirement; the codepoint ladder is a safety fallback), so emoji
+families and combining sequences occupy one cell group instead of
+shredding into isolated marks.
 
 ## Graph primitives at a glance
 
@@ -472,35 +522,35 @@ BarChart, Heatmap, OHLCChart, Scatter, Picture, TimeSeries and Streamline
 
 ### Bar chart
 
-![bar](.vhs/bar.gif)
+![Animated bar chart demo: labeled vertical bars growing column by column](.vhs/bar.gif)
 
 ### Heatmap
 
-![heatmap](.vhs/heatmap.gif)
+![Animated heatmap demo: a grid of cells shifting color as values update](.vhs/heatmap.gif)
 
 ### Streamline (line.gif)
 
-![line](.vhs/line.gif)
+![Animated streaming line chart: a series scrolling right-to-left through a fixed window](.vhs/line.gif)
 
 ### OHLC (candlestick)
 
-![ohlc](.vhs/ohlc.gif)
+![Animated candlestick (OHLC) chart: bodies and wicks appearing bar by bar](.vhs/ohlc.gif)
 
 ### Picture (Sixel)
 
-![picture](.vhs/picture.gif)
+![Picture demo: a test image rendered inline through the Sixel escape protocol](.vhs/picture.gif)
 
 ### Scatter
 
-![scatter](.vhs/scatter.gif)
+![Animated scatter plot: points with x/y axes plotted across the canvas](.vhs/scatter.gif)
 
 ### Sparkline
 
-![sparkline](.vhs/sparkline.gif)
+![Sparkline demo: an inline single-row series drawn with Unicode block shades](.vhs/sparkline.gif)
 
 ### Time series
 
-![timeseries](.vhs/timeseries.gif)
+![Time series demo: a timestamped line chart with formatted time-axis labels](.vhs/timeseries.gif)
 
 
 ## Status
