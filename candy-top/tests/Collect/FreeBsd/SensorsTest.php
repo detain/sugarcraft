@@ -104,6 +104,15 @@ final class SensorsTest extends TestCase
         $this->assertSame(55.0, $pinned->cpu());
     }
 
+    public function testSubZeroCelsiusSurvivesTheAverage(): void
+    {
+        $probe = new FixtureProbe("dev.cpu.0.%desc=ACPI CPU\ndev.cpu.0.temperature=-12.5C\ndev.cpu.1.%desc=ACPI CPU\ndev.cpu.1.temperature=-2.5C\n");
+        [$snap] = Temp::new($probe)->sample();
+
+        $this->assertSame([-12.5, -2.5], $snap->cores);
+        $this->assertSame(-7.5, $snap->cpu(), 'a freezer-cold core is a reading, not the unmeasured sentinel');
+    }
+
     public function testNoSensorsAtAll(): void
     {
         $probe = new FixtureProbe();

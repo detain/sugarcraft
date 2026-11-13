@@ -81,7 +81,7 @@ final class Temp
         if (isset($sensors['acpi/tz0'])) {
             $cpu = 'acpi/tz0';
         } elseif ($cores !== []) {
-            $measured = array_filter($cores, static fn (float $t): bool => $t > Sentinel::UNMEASURED);
+            $measured = array_filter($cores, static fn (float $t): bool => $t !== Sentinel::UNMEASURED); // identity, not `>`: sub-zero celsius is a real reading
             $first = $sensors[$self->coreSensors[0]];
             $sensors[self::AVERAGE] = new Sensor(
                 self::AVERAGE,

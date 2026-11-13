@@ -146,6 +146,19 @@ final class ProcListTest extends TestCase
         $this->assertSame('cron', ProcList::command('', 'cron'));
     }
 
+    public function testCommWithSpacesIsRecoveredFromPsAnnotations(): void
+    {
+        $rows = ProcList::parse(FixtureProbe::fixture('ps-comm-with-spaces.synthetic.txt'));
+        $this->assertCount(3, $rows);
+        $this->assertSame('Web Content', $rows[0]['comm']);
+        $this->assertSame('/usr/local/lib/firefox/firefox -contentproc -childID 1 (Web Content)', $rows[0]['args']);
+        $this->assertSame('/usr/local/lib/firefox/firefox -contentproc -childID 1', ProcList::command($rows[0]['args'], $rows[0]['comm']));
+        $this->assertSame('clock (all)', $rows[1]['comm'], 'kernel thread: bracketed args');
+        $this->assertSame('[swi4: clock (all)]', $rows[1]['args']);
+        $this->assertSame('getty', $rows[2]['comm'], 'plain rows still split at the first token');
+        $this->assertSame('/usr/libexec/getty Pc ttyv0', $rows[2]['args']);
+    }
+
     public function testParsersAreTotal(): void
     {
         $this->assertSame(0.16, ProcList::seconds('0:00.16'));

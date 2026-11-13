@@ -208,11 +208,12 @@ final class ProcList implements TunableProcList
     public static function parse(string $text): array
     {
         $out = [];
-        $re = '/^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\S+)\s+(\d+)\s+(\S+)\s+(\d+)\s+([\d.]+)\s+(\S+)\s+(\d+)\s+(\S+)[ \t]*(.*)$/';
+        $re = '/^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\S+)\s+(\d+)\s+(\S+)\s+(\d+)\s+([\d.]+)\s+(\S+)\s+(\d+)\s+(.+)$/';
         foreach (explode("\n", $text) as $line) {
             if (preg_match($re, rtrim($line), $m) !== 1) {
                 continue; // a header line, or a row cut mid-write
             }
+            [$comm, $args] = self::splitCommArgs($m[11]);
             $out[] = [
                 'pid' => (int) $m[1],
                 'ppid' => (int) $m[2],
@@ -224,12 +225,42 @@ final class ProcList implements TunableProcList
                 'pcpu' => (float) $m[8],
                 'time' => self::seconds($m[9]),
                 'etimes' => (int) $m[10],
-                'comm' => $m[11],
-                'args' => $m[12],
+                'comm' => $comm,
+                'args' => $args,
             ];
         }
 
         return $out;
+    }
+
+    /**
+     * Split the trailing `comm args` text of a ps row. comm may contain
+     * spaces ("Web Content", "clock (all)"), so it cannot be a \S+ token.
+     * ps annotates args with " (comm)" whenever argv[0] differs from comm,
+     * and kernel threads print args as "[comm]": both give the comm back
+     * exactly. Otherwise (comm equals argv[0], no spaces to worry about)
+     * the first token is comm.
+     *
+     * @return array{string, string} [comm, args]
+     */
+    public static function splitCommArgs(string $rest): array
+    {
+        $rest = trim($rest);
+        for ($p = strpos($rest, ' ('); $p !== false; $p = strpos($rest, ' (', $p + 1)) {
+            if (!str_ends_with($rest, ')')) {
+                break;
+            }
+            $comm = substr($rest, $p + 2, -1);
+            if ($comm !== '' && str_starts_with($rest, $comm) && $p > strlen($comm) - 1 && ctype_space($rest[strlen($comm)])) {
+                return [$comm, ltrim(substr($rest, strlen($comm)))];
+            }
+        }
+        if (preg_match('/^(.+?)\s+(\[.*\])$/', $rest, $b) === 1) {
+            return [$b[1], $b[2]];
+        }
+        $parts = preg_split('/\s+/', $rest, 2);
+
+        return [$parts[0] ?? '', $parts[1] ?? ''];
     }
 
     /** ps `time`: [[dd-]hh:]mm:ss.cc (minutes may exceed 59) → seconds; −1 when unparsable. */
