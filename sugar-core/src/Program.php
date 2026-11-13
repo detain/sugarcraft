@@ -135,19 +135,21 @@ final class Program
     /** @var array<string, array{0: mixed, 1: Subscription}> */
     private array $activeSubscriptions = [];
     /**
-     * Handlers displaced by signal subscriptions, keyed by signal number, so
-     * cancelling a signal subscription can restore whatever was installed
-     * before ours instead of leaking our handler. A null VALUE means the
-     * predecessor was unobservable (no pcntl_signal_get_handler): cancel then
-     * refuses to restore rather than fabricate SIG_DFL (sugar-core-034).
+     * Signal-subscription chains, keyed by signal number (sugar-core-017).
+     * Each signo owns ONE dispatcher we install; `prev` is the handler the
+     * dispatcher displaced (null = unobservable: cancel then refuses to
+     * fabricate SIG_DFL, sugar-core-034 RUN-13), `subs` the live subscribers
+     * it fans out to. One handler slot could not serve two subscribers:
+     * installing the second deafened the first, and cancelling one sibling
+     * restored the pre-first handler over the survivor's head.
      *
-     * @var array<int, callable|int|string|array|null>
+     * @var array<int, array{prev: callable|int|string|array|null, subs: list<Subscription>}>
      */
-    private array $prevSignalHandlers = [];
+    private array $signalSubscriptions = [];
     /**
      * Handlers {@see installSignalHandlers()} displaced, keyed by signal
      * number, restored by {@see restoreSignalHandlers()} when run() ends.
-     * Kept apart from {@see $prevSignalHandlers}: a signal subscription on
+     * Kept apart from {@see $signalSubscriptions}: a signal subscription on
      * SIGWINCH displaces OUR handler, and cancelling it must hand the signal
      * back to us, not to whatever predated the Program. Null VALUE = the
      * predecessor was unobservable; restore then refuses to guess
@@ -2839,63 +2841,80 @@ final class Program
      * Install a signal handler for the given subscription.
      *
      * Signal subscriptions have no loop timer — they fire via `pcntl_signal`.
-     * Before installing our handler we record whatever handler is currently
-     * registered for the signal so {@see cancelSignalSubscription()} can
-     * restore it on cancel; returns null (there is no timer handle to cancel).
+     * One dispatcher per signo fans out to every live subscriber
+     * (sugar-core-017): a second subscriber previously displaced the first,
+     * and the first's cancel hand then restored the pre-first handler over
+     * the survivor. The dispatcher records the real predecessor at install
+     * time; {@see cancelSignalSubscription()} hands it back only when the
+     * LAST subscriber cancels. A missing/absurd signo is a named
+     * InvalidArgumentException (the old `?? 0` arm silently subscribed to
+     * signal 0 — kill -0 delivers nothing, so the subscription was dead on
+     * arrival with no trace); a build without pcntl refuses the WHOLE install
+     * — registering a subscriber the dispatcher could never reach would fake
+     * a signal source, the same honesty sc-02/sc-10 established for suspend.
      *
-     * @return null
+     * @return null (there is no timer handle to cancel; cancellation is by Subscription identity)
      */
     private function installSignalSubscription(Subscription $sub): mixed
     {
-        $signo = $sub->params['signo'] ?? 0;
-        if (function_exists('pcntl_signal')) {
-            // Remember the handler we're about to displace so cancel can put it
-            // back. Guard against clobbering it if the same signo is installed
-            // again before being cancelled (keep the ORIGINAL predecessor).
-            // sugar-core-034 (RUN-13): when the predecessor cannot be read
-            // (no pcntl_signal_get_handler) record null — cancel must then
-            // refuse to restore, never fabricate SIG_DFL over someone
-            // else's live handler.
-            if (!array_key_exists($signo, $this->prevSignalHandlers)) {
-                $this->prevSignalHandlers[$signo] = function_exists('pcntl_signal_get_handler')
-                    ? pcntl_signal_get_handler($signo)
-                    : null;
-            }
-            $handler = function (int $signo) use ($sub): void {
-                $msg = $this->userProduce($sub->produce);
-                if ($msg !== null) {
-                    $this->dispatch($msg);
-                }
-            };
-            pcntl_signal($signo, $handler);
+        $signo = $sub->params['signo'] ?? null;
+        if (!\is_int($signo) || $signo < 1) {
+            throw new \InvalidArgumentException(Lang::t('program.signal_signo_missing', ['id' => $sub->id]));
         }
+        if (!function_exists('pcntl_signal')) {
+            return null; // named whole-install refusal (sugar-core-017, sc-02/10 posture)
+        }
+        if (!isset($this->signalSubscriptions[$signo])) {
+            // The dispatcher displaces whatever is installed NOW — record
+            // exactly that, or null when it cannot be read (RUN-13).
+            $prev = function_exists('pcntl_signal_get_handler')
+                ? pcntl_signal_get_handler($signo)
+                : null;
+            $this->signalSubscriptions[$signo] = ['prev' => $prev, 'subs' => []];
+            pcntl_signal($signo, function (int $delivered): void {
+                foreach ($this->signalSubscriptions[$delivered]['subs'] ?? [] as $subscriber) {
+                    $msg = $this->userProduce($subscriber->produce);
+                    if ($msg !== null) {
+                        $this->dispatch($msg);
+                    }
+                }
+            });
+        }
+        $this->signalSubscriptions[$signo]['subs'][] = $sub;
         return null;
     }
 
     /**
-     * Cancel a signal subscription by restoring the handler that was in place
-     * before {@see installSignalSubscription()} displaced it. Without this the
-     * subscription's handler stays wired to `pcntl_signal` for the process
-     * lifetime — the leak this method fixes.
+     * Cancel a signal subscription: drop it from the signo's live set. While
+     * any sibling remains, the dispatcher stays installed and keeps firing
+     * for them (sugar-core-017); only the last cancel restores the recorded
+     * predecessor — and an unrecordable predecessor is never guessed at
+     * (sugar-core-034 RUN-13).
      */
     private function cancelSignalSubscription(Subscription $sub): void
     {
-        if (!function_exists('pcntl_signal')) {
+        $signo = $sub->params['signo'] ?? null;
+        if (!\is_int($signo) || !isset($this->signalSubscriptions[$signo])) {
+            // Nothing installed through us (or an un-installable signo that
+            // could never have been installed) — no-op.
             return;
         }
-        $signo = $sub->params['signo'] ?? 0;
-        if (!array_key_exists($signo, $this->prevSignalHandlers)) {
-            // Nothing installed through us — no-op (old code restored SIG_DFL
-            // here, clobbering whatever handler the signo actually had).
-            return;
+        $entry = $this->signalSubscriptions[$signo];
+        $rest  = array_values(array_filter(
+            $entry['subs'],
+            static fn (Subscription $s): bool => $s !== $sub,
+        ));
+        if ($rest !== []) {
+            $this->signalSubscriptions[$signo] = ['prev' => $entry['prev'], 'subs' => $rest];
+            return; // a sibling still answers this signo — leave the dispatcher up
         }
-        $prev = $this->prevSignalHandlers[$signo];
-        unset($this->prevSignalHandlers[$signo]);
-        if ($prev === null) {
-            // Unknown predecessor (sugar-core-034 RUN-13): refuse the guess.
-            return;
+        unset($this->signalSubscriptions[$signo]);
+        if ($entry['prev'] === null) {
+            return; // unknown predecessor: refuse to fabricate SIG_DFL
         }
-        pcntl_signal($signo, $prev);
+        if (function_exists('pcntl_signal')) {
+            pcntl_signal($signo, $entry['prev']);
+        }
     }
 
     /**

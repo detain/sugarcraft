@@ -32,6 +32,26 @@ final class SeededCursorModel implements Model
     public function view(): string { return 'frame'; }
 }
 
+/** Records every delivered Msg — proves WHICH subscriptions actually fired. */
+final class RecordingSignalModel implements Model
+{
+    use SubscriptionCapable;
+
+    /** @var list<Msg> */
+    public array $log = [];
+
+    public function init(): ?\Closure { return null; }
+
+    public function update(Msg $msg): array
+    {
+        $next = clone $this;
+        $next->log = [...$this->log, $msg];
+        return [$next, null];
+    }
+
+    public function view(): string { return 'rec'; }
+}
+
 final class ProgramSilentArmsTest extends TestCase
 {
     /** @var list<resource> */
@@ -146,13 +166,16 @@ final class ProgramSilentArmsTest extends TestCase
         pcntl_signal($signo, $host);
 
         $program = new Program(new SeededCursorModel(), $this->bareOptions());
-        $prev = new \ReflectionProperty(Program::class, 'prevSignalHandlers');
+        $chain = new \ReflectionProperty(Program::class, 'signalSubscriptions');
         // Simulate the unobservable-predecessor install (no get_handler build).
-        $prev->setValue($program, [$signo => null]);
+        $chain->setValue($program, [$signo => ['prev' => null, 'subs' => [
+            new Subscription('sig', Kind::Signal, ['signo' => $signo], static fn (): Msg => new Msg\QuitMsg()),
+        ]]]);
 
         $cancel = new \ReflectionMethod(Program::class, 'cancelSignalSubscription');
-        $sub = new Subscription('sig', Kind::Signal, ['signo' => $signo], static fn (): Msg => new Msg\QuitMsg());
-        $cancel->invoke($program, $sub);
+        // Identity match: the chain's own subscriber object must be the one cancelled.
+        $live = $chain->getValue($program)[$signo]['subs'][0];
+        $cancel->invoke($program, $live);
 
         $current = pcntl_signal_get_handler($signo);
         // PHP >= 8 hands back the bare callable (int only for SIG_DFL/SIG_IGN).
@@ -215,6 +238,94 @@ final class ProgramSilentArmsTest extends TestCase
         $this->assertSame($host, $restored, 'the recorded predecessor is handed back verbatim');
 
         pcntl_signal($signo, SIG_DFL);
+    }
+
+    /**
+     * sugar-core-017 keystone: two subscribers on ONE signo both answer the
+     * signal; cancelling one leaves the other live (old code: the second
+     * install deafened the first, and the first's cancel hand restored the
+     * pre-first handler over the survivor's head).
+     */
+    public function testTwoSubscribersShareASignoAndTheSurvivorKeepsFiring(): void
+    {
+        if (!function_exists('pcntl_signal') || !function_exists('pcntl_signal_dispatch')) {
+            $this->markTestSkipped('pcntl required');
+        }
+        $signo = defined('SIGUSR2') ? SIGUSR2 : 12;
+        $host  = static function (int $s): void {};
+        pcntl_signal($signo, $host);
+
+        $program = new Program(new RecordingSignalModel(), $this->bareOptions());
+        $install = new \ReflectionMethod(Program::class, 'installSignalSubscription');
+        $cancel  = new \ReflectionMethod(Program::class, 'cancelSignalSubscription');
+
+        $subA = new Subscription('a', Kind::Signal, ['signo' => $signo], static fn (): Msg => new Msg\KeyMsg(\SugarCraft\Core\KeyType::Char, 'A'));
+        $subB = new Subscription('b', Kind::Signal, ['signo' => $signo], static fn (): Msg => new Msg\KeyMsg(\SugarCraft\Core\KeyType::Char, 'B'));
+        $install->invoke($program, $subA);
+        $install->invoke($program, $subB);
+
+        posix_kill(getmypid(), $signo);
+        pcntl_signal_dispatch();
+        $runes = $this->runes($program);
+        $this->assertSame(['A', 'B'], $runes, 'one delivery must reach every live subscriber');
+
+        $cancel->invoke($program, $subA);
+        posix_kill(getmypid(), $signo);
+        pcntl_signal_dispatch();
+        $this->assertSame(['A', 'B', 'B'], $this->runes($program), 'the survivor keeps firing after its sibling cancels');
+
+        $cancel->invoke($program, $subB);
+        posix_kill(getmypid(), $signo);
+        pcntl_signal_dispatch();
+        $this->assertSame(['A', 'B', 'B'], $this->runes($program), 'with the last subscriber gone the dispatcher is down');
+        $this->assertSame($host, pcntl_signal_get_handler($signo), 'the recorded predecessor is handed back once, at the end');
+
+        pcntl_signal($signo, SIG_DFL);
+    }
+
+    /** sugar-core-017: a subscription with no signo is a NAMED refusal, never signal 0. */
+    public function testASubscriptionWithoutASignoThrowsNamedInvalidArgument(): void
+    {
+        $program = new Program(new RecordingSignalModel(), $this->bareOptions());
+        $install = new \ReflectionMethod(Program::class, 'installSignalSubscription');
+        $sub = new Subscription('no-signo', Kind::Signal, [], static fn (): Msg => new Msg\QuitMsg());
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('no-signo');
+        try {
+            $install->invoke($program, $sub);
+        } finally {
+            $this->assertSame(
+                [],
+                (new \ReflectionProperty(Program::class, 'signalSubscriptions'))->getValue($program),
+                'the refused install leaves no chain entry',
+            );
+        }
+    }
+
+    /** Signal 0 — kill -0 delivers nothing — is refused by the same named arm. */
+    public function testASubscriptionOnSignalZeroIsRefused(): void
+    {
+        $program = new Program(new RecordingSignalModel(), $this->bareOptions());
+        $install = new \ReflectionMethod(Program::class, 'installSignalSubscription');
+        $sub = new Subscription('zero', Kind::Signal, ['signo' => 0], static fn (): Msg => new Msg\QuitMsg());
+
+        $this->expectException(\InvalidArgumentException::class);
+        $install->invoke($program, $sub);
+    }
+
+    /** @return list<string> the Char runes recorded by the root model so far. */
+    private function runes(Program $program): array
+    {
+        $model = $program->model();
+        $this->assertInstanceOf(RecordingSignalModel::class, $model);
+        $runes = [];
+        foreach ($model->log as $msg) {
+            if ($msg instanceof Msg\KeyMsg) {
+                $runes[] = $msg->rune;
+            }
+        }
+        return $runes;
     }
 
     private function bareOptions(): ProgramOptions
