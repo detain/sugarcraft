@@ -8,6 +8,7 @@ use Psr\Log\LogLevel;
 use SugarCraft\Log\Hook\Hook;
 use SugarCraft\Log\Hook\HookRegistry;
 use SugarCraft\Log\Level;
+use SugarCraft\Log\Tests\Support\StderrNoticeCapture;
 use PHPUnit\Framework\TestCase;
 
 final class HookRegistryTest extends TestCase
@@ -222,6 +223,29 @@ final class HookRegistryTest extends TestCase
         $registry->fire(Level::Info, 'info', 'msg', []); // must not throw
 
         $this->assertTrue($secondCalled, 'a failed hook must not cancel the walk');
+    }
+
+    public function testThrowingHookAnnouncesSanitizedNoticeOnRealStderr(): void
+    {
+        // [TEST-SL-01] Second notice shape: '[sugar-log] hook failed:' at
+        // HookRegistry.php:107-112. Deleting reportHookFailure()'s announcement
+        // must turn THIS red (the walk-completes tests only observe control
+        // flow). Child capture asserts the bytes: exact prefix, hostile
+        // multi-line + ESC payload flattened and escape-free, one line.
+        $result = StderrNoticeCapture::run(<<<'PHP'
+            $registry = new SugarCraft\Log\Hook\HookRegistry();
+            $registry->onLevel(SugarCraft\Log\Level::Info, function (): void {
+                throw new RuntimeException("hook\nboom\x1b[31m forged");
+            });
+            $registry->fire(SugarCraft\Log\Level::Info, 'info', 'msg', []);
+            PHP);
+
+        $this->assertSame(0, $result['exitCode'], 'fire() must not propagate the hook failure: ' . $result['stderr']);
+        $this->assertStringStartsWith('[sugar-log] hook failed: ', $result['stderr']);
+        $this->assertStringContainsString('RuntimeException', $result['stderr']);
+        $this->assertStringContainsString('forged', $result['stderr']);
+        $this->assertStringNotContainsString("\x1b", $result['stderr']);
+        $this->assertSame(1, StderrNoticeCapture::lineCount($result['stderr']), 'the notice must be exactly one line: ' . $result['stderr']);
     }
 
     public function testEveryHandlerGuardedIndividually(): void

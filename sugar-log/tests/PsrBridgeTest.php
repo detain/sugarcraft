@@ -9,6 +9,7 @@ use Psr\Log\LogLevel;
 use SugarCraft\Log\Level;
 use SugarCraft\Log\Logger;
 use SugarCraft\Log\PsrBridge;
+use SugarCraft\Log\Tests\Support\StderrNoticeCapture;
 use SugarCraft\Log\Hook\HookRegistry;
 
 final class PsrBridgeTest extends TestCase
@@ -301,6 +302,49 @@ final class PsrBridgeTest extends TestCase
 
         $bridge->info($poison); // must not throw
         $this->addToAssertionCount(1);
+    }
+
+    public function testInternalFailuresAnnounceTheirNoticeShapesOnRealStderr(): void
+    {
+        // [TEST-SL-01] Third notice shape pair: PsrBridge::reportInternalFailure
+        // ('message cast failed' / 'log write failed', PsrBridge.php:158/:178).
+        // The two containment tests above only observe "no throw reached us";
+        // deleting reportInternalFailure()'s fwrite kept the whole suite green.
+        // Child capture pins the announced bytes.
+        $cast = StderrNoticeCapture::run(<<<'PHP'
+            $logger = SugarCraft\Log\Logger::new(stream: fopen('php://stdout', 'w'), level: SugarCraft\Log\Level::Debug, reportTimestamp: false);
+            $bridge = new SugarCraft\Log\PsrBridge($logger);
+            $poison = new class implements Stringable {
+                public function __toString(): string
+                {
+                    throw new RuntimeException("cast\nexploded\x1b[31m");
+                }
+            };
+            $bridge->info($poison);
+            PHP);
+
+        $this->assertSame(0, $cast['exitCode'], $cast['stderr']);
+        $this->assertStringStartsWith('[sugar-log] message cast failed: ', $cast['stderr']);
+        $this->assertStringContainsString('cast exploded', $cast['stderr']);
+        $this->assertStringNotContainsString("\x1b", $cast['stderr']);
+        $this->assertSame(1, StderrNoticeCapture::lineCount($cast['stderr']), $cast['stderr']);
+
+        $write = StderrNoticeCapture::run(<<<'PHP'
+            $formatter = new class implements SugarCraft\Log\Formatter {
+                public function format(SugarCraft\Log\Level $level, string $message, array $context, DateTimeImmutable $time, ?string $caller, ?string $prefix): string
+                {
+                    throw new LogicException('formatter detonates');
+                }
+            };
+            $logger = SugarCraft\Log\Logger::new(formatter: $formatter, stream: fopen('php://stdout', 'w'), level: SugarCraft\Log\Level::Debug, reportTimestamp: false);
+            $bridge = new SugarCraft\Log\PsrBridge($logger);
+            $bridge->error('hostile payload');
+            PHP);
+
+        $this->assertSame(0, $write['exitCode'], $write['stderr']);
+        $this->assertStringStartsWith('[sugar-log] log write failed: ', $write['stderr']);
+        $this->assertStringContainsString('formatter detonates', $write['stderr']);
+        $this->assertSame(1, StderrNoticeCapture::lineCount($write['stderr']), $write['stderr']);
     }
 
     public function testHooksSeeALandedRecordAndFilteredRecordsDispatchNothing(): void

@@ -7,6 +7,7 @@ namespace SugarCraft\Log\Tests;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Log\Level;
 use SugarCraft\Log\Logger;
+use SugarCraft\Log\Tests\Support\StderrNoticeCapture;
 
 /**
  * [M8/m15/N5/N7] Write-path honesty pins: a record that cannot land must be
@@ -94,6 +95,30 @@ final class WritePathTest extends TestCase
         $this->assertStringContainsString('gentle-info', $mainContent);
         $this->assertStringNotContainsString('gentle-info', $errContent);
         $this->assertStringContainsString('loud-error', $errContent);
+    }
+
+    public function testWriteFailureAnnouncesSanitizedSingleLineOnRealStderr(): void
+    {
+        // [TEST-SL-01] The notice bytes themselves were never asserted: every
+        // failure test here checked the destination, not the announcement.
+        // Deleting the fwrite at Logger.php:273 kept the suite green. A child
+        // process pin closes that hole: one line, exact prefix, payload
+        // excerpt carried, control bytes swept.
+        $result = StderrNoticeCapture::run(<<<'PHP'
+            $path = sys_get_temp_dir() . '/sugar-log-notice-ro-' . getmypid() . '.log';
+            file_put_contents($path, 'untouched');
+            $stream = fopen($path, 'r');
+            $logger = SugarCraft\Log\Logger::new(level: SugarCraft\Log\Level::Debug, reportTimestamp: false, stream: $stream);
+            $logger->error('cannot-land-probe');
+            fclose($stream);
+            unlink($path);
+            PHP);
+
+        $this->assertSame(0, $result['exitCode'], 'the failed write must not escalate to the child: ' . $result['stderr']);
+        $this->assertStringStartsWith('[sugar-log] log write failed: ', $result['stderr']);
+        $this->assertStringContainsString('cannot-land-probe', $result['stderr']);
+        $this->assertSame(1, StderrNoticeCapture::lineCount($result['stderr']), 'the notice must be exactly one line: ' . $result['stderr']);
+        $this->assertStringNotContainsString("\x1b", $result['stderr']);
     }
 
     public function testFlushDrainsBufferedFileBytes(): void
