@@ -35,7 +35,9 @@ use SugarCraft\Log\Support\Stdio;
  * never for records the wrapped Logger's level filter drops or for a message
  * cast that explodes before the write is attempted.
  *
- * Mirrors charmbracelet/log's PSR-3 bridge where applicable.
+ * PHP-side addition rather than a port: there is no charmbracelet/log
+ * artifact to mirror (PSR-3 is a PHP FIG standard); the closest upstream
+ * analog is a log/slog handler adapting structured levels to a backend.
  */
 final class PsrBridge implements LoggerInterface
 {
