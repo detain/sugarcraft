@@ -17,7 +17,7 @@ New here? Read [Quickstart](#quickstart), then [Terminal replies](#terminal-repl
 - **Application keypad (DECKPAM)** — SS3 `ESC O p..y` (digits), `Ol` (decimal), `Om` (minus), `OM` (enter)
 - **SGR mouse 1006 / 1016** — press, release, drag, and scroll (incl. horizontal wheel) with modifier support (`CSI < b ; x ; y M|m`); 1016 (pixels) frames carry colon sub-parameters and arrive byte-compatible with 1006 — the decoder keeps the first integer of each field, which for 1016 is a PIXEL coordinate. A stateless decoder cannot convert, so `x`/`y` are whatever the reporting mode measures; a host that enabled 1016 knows its own units. Non-numeric mouse parameters are refused, never cast to phantom origin clicks
 - **urxvt mouse 1015** — `CSI b ; x ; y M` decimal reports (no `<` introducer, so it never collides with 1006)
-- **X10 mouse** — `CSI M` three-byte compressed reports (mode 1000), not printable-key spam
+- **X10 mouse** — `CSI M` three-byte compressed reports (mode 1000), not printable-key spam; payload bytes outside the printable 7-bit range are refused with one counted drop — including the UTF-8 mode-1005 coordinate extension (`≥ 0x80`), which is deliberately not modelled and would otherwise surface forged high-button clicks
 - **Focus events** — DECSET 1004 via `CSI I` / `CSI O`
 - **Bracketed paste** — `CSI 200 ~` … `CSI 201 ~` with 1 MiB safety cap (a paste over the cap announces one truncated `PasteEvent`, then DISCARDS the remaining body bytes until the real terminator — see [Bracketed paste](#bracketed-paste))
 - **Terminal replies** — DA1/DA2, DSR/CPR, XTWINOPS, Kitty flags, DECRPM and OSC/DCS/APC/PM strings are drained as `TerminalReplyEvent` — never buffered, never mis-parsed as keys (see below)

@@ -800,12 +800,18 @@ final class EscapeDecoder
      */
     private function handleX10Mouse(string $afterM): array
     {
+        // Payload bytes must sit in the printable 7-bit range 0x20..0x7E.
+        // A control byte means the report was truncated — resync on it rather
+        // than swallowing a fresh ESC sequence. A byte >= 0x80 is the UTF-8
+        // mode 1005 coordinate extension: it is NOT modelled here, and the
+        // old permissive range let those bytes through to ord-32, surfacing
+        // forged high-button clicks (a 0xA0 lead is "button 128"). Refuse
+        // both shapes with one counted drop.
+        $refuse = static fn(int $ord): bool => $ord < 0x20 || $ord > 0x7F;
+
         if (strlen($afterM) < 3) {
-            // Payload may legitimately contain any byte ≥ 0x20; a control byte in
-            // a payload slot means the report was truncated — resync on it rather
-            // than swallowing a fresh ESC sequence.
             for ($j = 0; $j < strlen($afterM); $j++) {
-                if (ord($afterM[$j]) < 0x20) {
+                if ($refuse(ord($afterM[$j]))) {
                     $this->droppedUnknownCount++;
                     return ['events' => [], 'remaining' => substr($afterM, $j)];
                 }
@@ -815,7 +821,7 @@ final class EscapeDecoder
         }
 
         for ($j = 0; $j < 3; $j++) {
-            if (ord($afterM[$j]) < 0x20) {
+            if ($refuse(ord($afterM[$j]))) {
                 $this->droppedUnknownCount++;
                 return ['events' => [], 'remaining' => substr($afterM, $j)];
             }

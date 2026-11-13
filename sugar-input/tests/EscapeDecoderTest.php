@@ -2679,4 +2679,36 @@ final class EscapeDecoderTest extends TestCase
         $this->assertCount(1, $events);
         $this->assertSame(MouseEvent::ACTION_RELEASE, $events[0]->action);
     }
+
+    public function testX10MouseRefusesPayloadBytesAtOrAbove0x80(): void
+    {
+        // SI-07 (default arm): X10 payload slots are printable 7-bit bytes.
+        // High bytes are the UTF-8 mode-1005 coordinate extension — refused
+        // as one counted drop, never decoded through ord-32 into forged
+        // high-button clicks.
+        $before = $this->decoder->droppedUnknownCount();
+
+        $events = $this->decoder->decode("\x1b[M" . chr(0xA0) . chr(32) . chr(32));
+        foreach ($events as $event) {
+            $this->assertNotInstanceOf(MouseEvent::class, $event, 'a refused high-byte payload must not surface a click');
+        }
+        $this->assertSame($before + 1, $this->decoder->droppedUnknownCount());
+
+        // 1005-style UTF-8 coordinate lead mid-payload: same refusal.
+        $this->decoder->decode("\x1b[M" . chr(32) . chr(0xC0) . chr(0xA8));
+        $this->assertSame($before + 2, $this->decoder->droppedUnknownCount());
+
+        // Incomplete high-byte payload is refused as it arrives, not buffered
+        // against a fantasy third byte that would forge a click.
+        $this->decoder->decode("\x1b[M" . chr(32) . chr(0xE2));
+        $this->assertSame($before + 3, $this->decoder->droppedUnknownCount());
+
+        // Re-sync: a legit 1000-mode report still decodes afterwards. The
+        // dropped 0xE2 above may buffer as an incomplete UTF-8 lead — reset
+        // to a clean epoch first so the pin is about the mouse leg alone.
+        $this->decoder->reset();
+        $events = $this->decoder->decode("\x1b[M" . chr(32) . chr(35) . chr(37));
+        $this->assertCount(1, $events);
+        $this->assertInstanceOf(MouseEvent::class, $events[0]);
+    }
 }
