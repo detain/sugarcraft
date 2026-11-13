@@ -294,6 +294,39 @@ final class CliTest extends TestCase
         }
     }
 
+    public function testExecArmRunsARealCommandWhenThePlatformHasAPty(): void
+    {
+        // The thin real-PTY leg of AIP-03's acceptance: `-- printf …` must
+        // report the styled stream the child prints on its pseudo-terminal
+        // and exit with the child's status. Runners without a PTY get a
+        // visible skip instead of a fake pass.
+        [$code, $stdout, $stderr] = self::runCliWithStdin('', ['--', 'printf', "\x1b[31mhi\x1b[0m"]);
+        if ($code === 1 && str_contains($stderr, 'pseudo-terminal')) {
+            $this->markTestSkipped('no pseudo-terminal on this runner: ' . trim($stderr));
+        }
+        $this->assertSame(0, $code, $stderr);
+        $this->assertStringContainsString('SGR foreground red', $stdout);
+        $this->assertStringContainsString('hi', $stdout);
+        $this->assertStringContainsString('SGR reset', $stdout);
+    }
+
+    public function testExecArmWithoutACommandIsUsageMisuse(): void
+    {
+        [$code, $stdout, $stderr] = self::runCliWithStdin('', ['--']);
+        $this->assertSame(1, $code);
+        $this->assertSame('', $stdout);
+        $this->assertStringContainsString('usage:', $stderr);
+    }
+
+    public function testExecArmCarriesAChildFailureThrough(): void
+    {
+        [$code, $stdout, $stderr] = self::runCliWithStdin('', ['--', 'sh', '-c', 'exit 3']);
+        if ($code === 1 && str_contains($stderr, 'pseudo-terminal')) {
+            $this->markTestSkipped('no pseudo-terminal on this runner: ' . trim($stderr));
+        }
+        $this->assertSame(3, $code, $stderr);
+    }
+
     public function testReadsRealLocalFile(): void
     {
         $tmp = tempnam(sys_get_temp_dir(), 'inspect');

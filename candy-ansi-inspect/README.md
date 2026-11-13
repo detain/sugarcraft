@@ -62,6 +62,12 @@ written as soon as the sequence completes, so `tail -f log | candy-ansi-inspect`
 emits per sequence instead of waiting for the writer to close — and the bytes of
 that live report are the same bytes the file argument produces.
 
+Exec mode runs the program instead of reading its capture: `candy-ansi-inspect
+-- cmd [args…]` starts `cmd` on a fresh pseudo-terminal (sugar-pty does all the
+PTY work) and reports every sequence it prints the instant it completes, then
+exits with the child's status. Everything after `--` belongs to the command —
+including its own flags.
+
 An empty source is a valid report of nothing: an empty file, or a command that
 printed nothing, yields an empty report and exit status **0**, so
 `cmd | candy-ansi-inspect` stays chainable when `cmd` has no output. Usage is printed on

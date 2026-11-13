@@ -3,6 +3,7 @@
 
 declare(strict_types=1);
 
+use SugarCraft\AnsiInspect\Exec\ExecRunner;
 use SugarCraft\AnsiInspect\Inspector;
 use SugarCraft\AnsiInspect\Lang;
 use SugarCraft\AnsiInspect\StreamingInspector;
@@ -39,6 +40,23 @@ if (!empty($argv[1])) {
     if ($argv[1] === '--help' || $argv[1] === '-h') {
         fwrite(STDOUT, Lang::t('cli.usage') . "\n");
         exit(0);
+    }
+    // Exec mode (finding 003): `-- cmd [args…]` runs the command on a fresh
+    // pseudo-terminal (spawned by sugar-pty — this lib never reimplements a
+    // PTY primitive) and reports the raw bytes it prints segment by segment
+    // as they dispatch, sharing the streaming reader with the stdin arm.
+    // Everything after `--` belongs to the child: this tool's own flags do
+    // not apply there, and the child's exit status is the tool's exit status.
+    if ($argv[1] === '--') {
+        $cmd = array_slice($argv, 2);
+        if ($cmd === []) {
+            fwrite(STDERR, Lang::t('cli.usage') . "\n");
+            exit(1);
+        }
+        stream_set_write_buffer(STDOUT, 0);
+        exit(ExecRunner::run($cmd, static function (string $line): void {
+            fwrite(STDOUT, $line . "\n");
+        }));
     }
     // Reject stream wrappers (php://, data://, http://, …) — a file-path argument
     // must not be coerced into fetching a URL or evaluating a wrapper. is_file()
