@@ -228,7 +228,7 @@ $card = $card->withSafePoster($fromCache);  // …or sweep untrusted bytes: SGR 
 $card = $card->withProgress(0.6);           // optional continue-watching bar
 echo $card->render(focused: true, width: 16, posterHeight: 9);</code></pre>
 
-    <p>Overlay posters (<code>withImage()</code>) draw as a single <code>U+E002</code>-range marker cell inside the reserved block — the image renderer paints the real graphics there, and the marker deliberately survives every text sweep (it lives outside the zone-sentinel window). Text-extraction paths (search, clipboard) therefore see an unassigned private-use glyph at that cell; sugar-core's <code>Sanitize::stripPrivateUse()</code> sweeps the whole block out of extracted text without touching the frame.</p>
+    <p>Overlay posters (<code>withImage()</code>) draw as a single <code>U+E002</code>-range marker cell inside the reserved block — the image renderer paints the real graphics there, and the marker deliberately survives every text sweep (it lives outside the zone-sentinel window). Text-extraction paths (search, clipboard) therefore see an unassigned private-use glyph at that cell; sugar-core's <code>Sanitize::stripPrivateUse()</code> sweeps the whole block out of extracted text without touching the frame. The rule reaches further than the marker: a <code>withPoster()</code> inline mosaic IS frame text — <code>█</code>/<code>░</code> runs are ordinary visible characters no sweep tidies — so extract card text from the model (<code>title</code>, <code>positionText()</code>), never the painted frame.</p>
 
     <h3 id="behaviour" style="margin-top: 32px;">Behaviour</h3>
     <div class="feature-grid">

@@ -386,7 +386,12 @@ the real graphics there), so a path that extracts *text* from a rendered frame �
 search, clipboard, a screen scrape — reads unassigned private-use glyphs at that
 cell. For those consumers sugar-core ships `Sanitize::stripPrivateUse()`, which
 sweeps the whole private-use block out of extracted text; the frame itself must
-keep the marker, or the image renderer has nothing to find.
+keep the marker, or the image renderer has nothing to find. The same rule has a
+wider reach than the overlay cell: a `withPoster()` inline mosaic IS frame text —
+runs of `█` and `░` are ordinary visible characters, so no sweep will tidy them.
+A text-extraction path over cards must therefore read the MODEL (`title`,
+`positionText()`), never the painted frame: the art carries no accessible name,
+and the frame is display bytes, not content.
 
 ## Internationalisation
 
