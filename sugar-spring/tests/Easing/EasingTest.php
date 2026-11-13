@@ -435,8 +435,77 @@ final class EasingTest extends TestCase
             $this->assertContains(
                 $name,
                 $actualCases,
-                sprintf('Easing case %s must exist', $name)
+                sprintf('Easing case %s must exist', $name),
             );
+        }
+    }
+
+    /**
+     * SPR-07 (finding 063): the documented non-finite passthrough contract —
+     * Easing.php class docblock and README — says NAN answers NAN from EVERY
+     * case, ±INF survives the polynomial curves with the sign their leading
+     * terms dictate, and flips to NAN inside the sin-modulated Elastic and
+     * Back trig. Until now that prose had zero test coverage (the sibling
+     * CubicBezier refusal was pinned; this half of the asymmetry was not).
+     * Signs are the measured table, pinned exactly so a formula rewrite that
+     * changes a sign is a disclosed contract change, not a silent one.
+     *
+     * @dataProvider nonFinitePassthroughProvider
+     */
+    public function testDocumentedNonFinitePassthroughContract(
+        Easing $case,
+        float $expectedAtPlusInf,
+        float $expectedAtMinusInf,
+    ): void {
+        $this->assertNan($case->ease(NAN), "{$case->name} must answer NAN to NAN");
+
+        foreach (['+INF' => $expectedAtPlusInf, '-INF' => $expectedAtMinusInf] as $label => $expected) {
+            $actual = $case->ease($label === '+INF' ? INF : -INF);
+            if (is_nan($expected)) {
+                $this->assertNan($actual, "{$case->name} must flip {$label} to NAN inside its trig");
+            } else {
+                $this->assertSame($expected, $actual, "{$case->name} must carry {$label} through");
+            }
+        }
+    }
+
+    /** @return array<string, array{Easing, float, float}> */
+    public static function nonFinitePassthroughProvider(): array
+    {
+        return [
+            //     case                +INF        -INF
+            'Linear'           => [Easing::Linear,           INF,  -INF],
+            'QuadraticIn'      => [Easing::QuadraticIn,      INF,   INF],
+            'QuadraticOut'     => [Easing::QuadraticOut,    -INF,  -INF],
+            'QuadraticInOut'   => [Easing::QuadraticInOut,  -INF,   INF],
+            'CubicIn'          => [Easing::CubicIn,          INF,  -INF],
+            'CubicOut'         => [Easing::CubicOut,         INF,  -INF],
+            'CubicInOut'       => [Easing::CubicInOut,       INF,  -INF],
+            'ElasticIn'        => [Easing::ElasticIn,       NAN,   NAN],
+            'ElasticOut'       => [Easing::ElasticOut,      NAN,   NAN],
+            'ElasticInOut'     => [Easing::ElasticInOut,    NAN,   NAN],
+            'BounceIn'         => [Easing::BounceIn,        -INF,  -INF],
+            'BounceOut'        => [Easing::BounceOut,        INF,   INF],
+            'BounceInOut'      => [Easing::BounceInOut,      INF,  -INF],
+            'BackIn'           => [Easing::BackIn,          NAN,   NAN],
+            'BackOut'          => [Easing::BackOut,         NAN,   NAN],
+            'BackInOut'        => [Easing::BackInOut,       NAN,   NAN],
+        ];
+    }
+
+    /**
+     * The two-side contract lives in one class — pin the CONTRAST directly:
+     * the enum flows, the bezier refuses.
+     */
+    public function testNonFinitePolicyIsTheOppositeOfTheBezierRefusal(): void
+    {
+        $this->assertNan(Easing::CubicIn->ease(NAN), 'enum must flow NAN through');
+
+        try {
+            \SugarCraft\Spring\Easing\CubicBezier::cssEase()->ease(NAN);
+            $this->fail('CubicBezier must refuse a non-finite t outright');
+        } catch (\InvalidArgumentException $error) {
+            $this->assertStringContainsString('t must be finite', $error->getMessage());
         }
     }
 }
