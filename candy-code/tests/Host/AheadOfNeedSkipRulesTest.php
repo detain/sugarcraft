@@ -60,6 +60,8 @@ use SugarCraft\Code\Usage;
  */
 final class AheadOfNeedSkipRulesTest extends TestCase
 {
+    use \SugarCraft\Code\Tests\Support\DrainsSharedLoopTrait;
+
     private string $dir;
 
     private EnhancedSessionStore $store;

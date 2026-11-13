@@ -47,6 +47,8 @@ use SugarCraft\Code\Tools\BuiltIn\Write;
  */
 final class BinCandyCodeWiringTest extends TestCase
 {
+    use \SugarCraft\Code\Tests\Support\DrainsSharedLoopTrait;
+
     use BackendSelectionEnvSandboxTrait;
 
     private string $tempDir;

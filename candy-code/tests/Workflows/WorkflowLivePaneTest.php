@@ -69,6 +69,8 @@ use SugarCraft\Code\Workflows\WorkflowStatus;
  */
 final class WorkflowLivePaneTest extends TestCase
 {
+    use \SugarCraft\Code\Tests\Support\DrainsSharedLoopTrait;
+
     use DrivesWorkflowRunsTrait;
 
     /** The name the workflow's parallel task carries, and so the agent's. */

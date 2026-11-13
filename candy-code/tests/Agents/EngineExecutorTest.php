@@ -36,6 +36,8 @@ use SugarCraft\Code\Workflows\WorkflowRegistry;
  */
 final class EngineExecutorTest extends TestCase
 {
+    use \SugarCraft\Code\Tests\Support\DrainsSharedLoopTrait;
+
     public function testAStageAgentRunsAToolLoopUntilItAnswers(): void
     {
         $probe = self::probe();

@@ -64,6 +64,8 @@ use SugarCraft\Code\Tests\Support\DiscardsErrorLogTrait;
  */
 final class RuntimeNoticeSinkDeliveryTest extends TestCase
 {
+    use \SugarCraft\Code\Tests\Support\DrainsSharedLoopTrait;
+
     use DiscardsErrorLogTrait;
 
     /**
@@ -1337,7 +1339,7 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
         // backend slot sits above setHeld()'s `@param` block while
         // setSessionBackend() below carries none. Costly variant. Retire by
         // moving the one-line block down onto setSessionBackend().
-        'tests/Host/AheadOfNeedSkipRulesTest.php:499',
+        'tests/Host/AheadOfNeedSkipRulesTest.php:501',
         // W22 / C-MCP-3.c (d827a5f6): both blocks describe the same private
         // replyTo() helper; the `@param` attaches and only the English
         // sentence is dropped. Cheap variant. Retire by joining the two.

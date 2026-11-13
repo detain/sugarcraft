@@ -27,6 +27,8 @@ use SugarCraft\Code\Session\EnhancedSessionStore;
  */
 final class WebhookTurnDropTest extends TestCase
 {
+    use \SugarCraft\Code\Tests\Support\DrainsSharedLoopTrait;
+
     private string $sandbox;
 
     private string $project;

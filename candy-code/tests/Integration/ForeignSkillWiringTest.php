@@ -39,6 +39,8 @@ use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
  */
 final class ForeignSkillWiringTest extends TestCase
 {
+    use \SugarCraft\Code\Tests\Support\DrainsSharedLoopTrait;
+
     use HomeSandboxTrait;
     use TemporaryDirectoryTrait;
 

@@ -16,6 +16,8 @@ use SugarCraft\Code\Server\Listener;
  */
 final class ListenerAcceptStormTest extends TestCase
 {
+    use \SugarCraft\Code\Tests\Support\DrainsSharedLoopTrait;
+
     public function testFailedAcceptPausesMasterAndResumesViaTimer(): void
     {
         $real = Loop::get();

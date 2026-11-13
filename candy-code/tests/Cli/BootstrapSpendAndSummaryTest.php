@@ -32,6 +32,8 @@ use SugarCraft\Code\Config\Settings\UiEditability;
  */
 final class BootstrapSpendAndSummaryTest extends TestCase
 {
+    use \SugarCraft\Code\Tests\Support\DrainsSharedLoopTrait;
+
     private string $tempDir;
     private string $home;
     private string $repo;

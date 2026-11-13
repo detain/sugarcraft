@@ -89,6 +89,8 @@ use SugarCraft\Code\Tests\Support\BackendSelectionEnvSandboxTrait;
  */
 final class RulesStateWiringTest extends TestCase
 {
+    use \SugarCraft\Code\Tests\Support\DrainsSharedLoopTrait;
+
     // Used for its CHAIN constant only, exactly as
     // {@see AgentManagerWiringTest} uses it: the clear/restore helpers are instance
     // methods and this fixture is class-level, so the loop is spelled out below and

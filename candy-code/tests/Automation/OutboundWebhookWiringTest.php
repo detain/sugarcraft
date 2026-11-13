@@ -61,6 +61,8 @@ use SugarCraft\Code\ToolCall;
 
 final class OutboundWebhookWiringTest extends TestCase
 {
+    use \SugarCraft\Code\Tests\Support\DrainsSharedLoopTrait;
+
     use HomeSandboxTrait;
 
     private const WIRE_SECRET = 'wiring-secret-value-0123456789';

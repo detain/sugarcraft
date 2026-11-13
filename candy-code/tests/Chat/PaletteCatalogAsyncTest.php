@@ -37,6 +37,8 @@ use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
  */
 final class PaletteCatalogAsyncTest extends TestCase
 {
+    use \SugarCraft\Code\Tests\Support\DrainsSharedLoopTrait;
+
     use HomeSandboxTrait;
 
     private const PERSISTED = 'persisted-sg-model';

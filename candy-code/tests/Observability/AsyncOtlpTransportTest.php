@@ -45,6 +45,8 @@ use function React\Promise\resolve;
  */
 final class AsyncOtlpTransportTest extends TestCase
 {
+    use \SugarCraft\Code\Tests\Support\DrainsSharedLoopTrait;
+
     /** Bodies the loopback collector handler saw, in arrival order. */
     private array $collectorBodies = [];
 

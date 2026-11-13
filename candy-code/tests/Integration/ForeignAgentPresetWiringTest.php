@@ -52,6 +52,8 @@ use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
  */
 final class ForeignAgentPresetWiringTest extends TestCase
 {
+    use \SugarCraft\Code\Tests\Support\DrainsSharedLoopTrait;
+
     use HomeSandboxTrait;
     use TemporaryDirectoryTrait;
 

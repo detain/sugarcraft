@@ -66,6 +66,8 @@ use SugarCraft\Code\Tools\ToolResult;
  */
 final class StreamingWiringTest extends TestCase
 {
+    use \SugarCraft\Code\Tests\Support\DrainsSharedLoopTrait;
+
     /**
      * Wall-clock the fork test's fake provider spends producing its stream.
      * Long enough that "the first delta crossed the socket before the result

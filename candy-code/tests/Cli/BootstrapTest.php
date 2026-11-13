@@ -22,6 +22,8 @@ use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 
 final class BootstrapTest extends TestCase
 {
+    use \SugarCraft\Code\Tests\Support\DrainsSharedLoopTrait;
+
     use HomeSandboxTrait;
 
     /** @var array<string, string|false> */

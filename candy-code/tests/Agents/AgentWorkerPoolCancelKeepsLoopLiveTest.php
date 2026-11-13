@@ -45,6 +45,8 @@ use SugarCraft\Code\Support\ProcessTree;
  */
 final class AgentWorkerPoolCancelKeepsLoopLiveTest extends TestCase
 {
+    use \SugarCraft\Code\Tests\Support\DrainsSharedLoopTrait;
+
     private const COMMAND_SLEEP_SECONDS = 30;
 
     private string $dir = '';

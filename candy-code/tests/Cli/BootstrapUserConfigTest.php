@@ -25,6 +25,8 @@ use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
  */
 final class BootstrapUserConfigTest extends TestCase
 {
+    use \SugarCraft\Code\Tests\Support\DrainsSharedLoopTrait;
+
     use BackendSelectionEnvSandboxTrait;
     use HomeSandboxTrait;
 

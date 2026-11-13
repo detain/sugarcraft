@@ -35,6 +35,8 @@ use SugarCraft\Code\Hooks\ScriptHook;
  */
 final class BootstrapHookFileTest extends TestCase
 {
+    use \SugarCraft\Code\Tests\Support\DrainsSharedLoopTrait;
+
     private string $tempDir;
     private string $home;
     private string $project;

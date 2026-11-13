@@ -42,6 +42,8 @@ use SugarCraft\Code\Tests\Server\Support\WireClient;
  */
 final class ClientToolMethodsTest extends TestCase
 {
+    use \SugarCraft\Code\Tests\Support\DrainsSharedLoopTrait;
+
     private const BROWSE_ANNOUNCEMENT = [
         'name' => 'browse',
         'description' => 'opens a page in the user browser',

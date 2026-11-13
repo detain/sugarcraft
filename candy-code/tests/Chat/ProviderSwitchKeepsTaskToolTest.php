@@ -35,6 +35,8 @@ use SugarCraft\Code\Tools\BuiltIn\TaskTool;
  */
 final class ProviderSwitchKeepsTaskToolTest extends TestCase
 {
+    use \SugarCraft\Code\Tests\Support\DrainsSharedLoopTrait;
+
     use BackendSelectionEnvSandboxTrait;
     use HomeSandboxTrait;
 

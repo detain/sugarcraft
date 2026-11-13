@@ -43,6 +43,8 @@ use SugarCraft\Code\ToolCall;
  */
 final class BootstrapPermissionGateTest extends TestCase
 {
+    use \SugarCraft\Code\Tests\Support\DrainsSharedLoopTrait;
+
     use BackendSelectionEnvSandboxTrait;
 
     private string $tempDir;

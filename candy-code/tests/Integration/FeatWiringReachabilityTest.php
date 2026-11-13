@@ -56,6 +56,8 @@ use SugarCraft\Mouse\Zone;
  */
 final class FeatWiringReachabilityTest extends TestCase
 {
+    use \SugarCraft\Code\Tests\Support\DrainsSharedLoopTrait;
+
     use \SugarCraft\Code\Tests\Support\DrivesWorkflowRunsTrait;
 
     private string $tempDir;
