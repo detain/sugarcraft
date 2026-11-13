@@ -9,6 +9,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Animation\Decoder;
 use SugarCraft\Animation\Player;
 use SugarCraft\Animation\Renderer;
+use SugarCraft\Core\I18n\T;
 use SugarCraft\GifView\Cli;
 
 /**
@@ -227,6 +228,130 @@ final class CliTest extends TestCase
         $this->assertStringNotContainsString('takes no value', $err2);
         $this->assertSame('', self::drain($stdout));
         $this->assertSame('', self::drain($stdout2));
+    }
+
+    /**
+     * gifview-23: `--lang=CODE` decides the locale BEFORE the first message
+     * formats — the hatch for hosts whose LC_* never exists (native Windows
+     * cmd). The T registry is process-global, so every arm restores the
+     * boot locale in a finally block.
+     */
+    public function testTheLangFlagLocalisesTheUsageLine(): void
+    {
+        $saved = T::locale();
+        try {
+            [$stdout, $stderr] = self::pipes();
+
+            $exit = Cli::main(['candy-gifview', '--lang=de', '--help'], $stdout, $stderr);
+
+            $this->assertSame(0, $exit, self::drain($stderr));
+            $out = self::drain($stdout);
+            $this->assertStringContainsString('Aufruf:', $out, 'the German usage line must answer');
+            $this->assertStringContainsString('--lang=CODE', $out, 'the usage roster names the hatch itself');
+            $this->assertStringNotContainsString('usage: candy-gifview', $out, 'English may not leak past the hatch');
+            $this->assertSame('', self::drain($stderr));
+        } finally {
+            T::setLocale($saved);
+        }
+    }
+
+    public function testTheLastLangFlagWins(): void
+    {
+        $saved = T::locale();
+        try {
+            [$stdout, $stderr] = self::pipes();
+
+            $exit = Cli::main(['candy-gifview', '--lang=de', '--lang=tr', '--help'], $stdout, $stderr);
+
+            $this->assertSame(0, $exit, self::drain($stderr));
+            $this->assertStringContainsString('Kullanım:', self::drain($stdout),
+                'repeats compose last-write-wins, like the rate slot');
+        } finally {
+            T::setLocale($saved);
+        }
+    }
+
+    public function testAnUnknownLangCodeRefusesWithAPlainEnglishLine(): void
+    {
+        $saved = T::locale();
+        try {
+            [$stdout, $stderr] = self::pipes();
+
+            $exit = Cli::main(['candy-gifview', '--lang=xx', 'whatever.gif'], $stdout, $stderr);
+
+            $this->assertSame(1, $exit);
+            $err = self::drain($stderr);
+            $this->assertStringContainsString("unknown locale 'xx'", $err, 'the refused code is named');
+            $this->assertStringContainsString('available:', $err, 'the roster names the alternatives');
+            $this->assertStringContainsString(' zh-cn)', $err);
+            $this->assertSame($saved, T::locale(), 'a refused code never flips the registry');
+            $this->assertSame('', self::drain($stdout));
+        } finally {
+            T::setLocale($saved);
+        }
+    }
+
+    public function testAnEmptyLangCodeIsRefusedByTheSameRosterArm(): void
+    {
+        $saved = T::locale();
+        try {
+            [$stdout, $stderr] = self::pipes();
+
+            $exit = Cli::main(['candy-gifview', '--lang=', 'whatever.gif'], $stdout, $stderr);
+
+            $this->assertSame(1, $exit);
+            $this->assertStringContainsString("unknown locale ''", self::drain($stderr));
+            $this->assertSame($saved, T::locale());
+        } finally {
+            T::setLocale($saved);
+        }
+    }
+
+    public function testAHostileLangCodeIsChokedBeforeItIsEchoed(): void
+    {
+        $saved = T::locale();
+        try {
+            [$stdout, $stderr] = self::pipes();
+
+            // ESC would redraw the terminal from inside a quoted error line.
+            $exit = Cli::main(['candy-gifview', "--lang=\x1b[2J", 'x.gif'], $stdout, $stderr);
+
+            $this->assertSame(1, $exit);
+            $err = self::drain($stderr);
+            $this->assertStringNotContainsString("\x1b", $err, 'the refusal passes the printable() choke');
+            $this->assertStringContainsString('unknown locale', $err);
+        } finally {
+            T::setLocale($saved);
+        }
+    }
+
+    public function testBareLangWithoutAValueKeepsTheSharedBadValueAnswer(): void
+    {
+        // The pre-scan only consumes `--lang=`; a bare --lang reaches the
+        // loop and answers like --fps without a value — one message family
+        // for "this flag wants something after the =".
+        [$stdout, $stderr] = self::pipes();
+
+        $exit = Cli::main(['candy-gifview', '--lang', 'whatever.gif'], $stdout, $stderr);
+
+        $this->assertSame(1, $exit);
+        $this->assertStringContainsString('invalid value', self::drain($stderr));
+    }
+
+    public function testLangAfterTheEndOfOptionsHatchIsAnOrdinaryPath(): void
+    {
+        $saved = T::locale();
+        try {
+            [$stdout, $stderr] = self::pipes();
+
+            $exit = Cli::main(['candy-gifview', '--', '--lang=de'], $stdout, $stderr);
+
+            $this->assertSame(1, $exit);
+            $this->assertStringContainsString("could not play '--lang=de'", self::drain($stderr));
+            $this->assertSame($saved, T::locale(), 'the hatch keeps its promise: no flag past it');
+        } finally {
+            T::setLocale($saved);
+        }
     }
 
     /**

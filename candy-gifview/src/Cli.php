@@ -7,6 +7,7 @@ namespace SugarCraft\GifView;
 use SugarCraft\Animation\Decoder;
 use SugarCraft\Animation\Player;
 use SugarCraft\Animation\Renderer;
+use SugarCraft\Core\I18n\T;
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Core\Util\Tty;
@@ -123,6 +124,31 @@ final class Cli
     {
         $decode ??= static fn (string $p, int $w, int $h): array => self::decodeFrames($p, $w, $h);
 
+        // gifview-23: `--lang=CODE` is resolved BEFORE anything prints —
+        // the locale must be decided before the first message formats. The
+        // unknown-code refusal is a plain English literal on purpose: a
+        // localized "unknown locale" would need a locale the user never got
+        // to choose (chicken-and-egg, documented in README). A standalone
+        // `--` ends the pre-scan exactly like the main loop's hatch, so
+        // `--lang=...` after it stays an ordinary path.
+        foreach (\array_slice($argv, 1) as $token) {
+            if ($token === '--') {
+                break;
+            }
+            if (!\str_starts_with($token, '--lang=')) {
+                continue;
+            }
+            $code = \substr($token, \strlen('--lang='));
+            if (!\in_array($code, self::localeCodes(), true)) {
+                \fwrite($stderr, 'candy-gifview: unknown locale \'' . self::printable($code) . "' (available: " . \implode(' ', self::localeCodes()) . ")\n");
+
+                return 1;
+            }
+            // Repeats are allowed; the last valid code wins, mirroring the
+            // rate slot's last-write law.
+            T::setLocale($code);
+        }
+
         $path = null;
         $presetToken = null;
         $fps = null;
@@ -170,7 +196,7 @@ final class Cli
                     return 1;
                 }
 
-                if (!\in_array($flag, ['fps', 'speed', 'duration', 'watch', 'paused'], true)) {
+                if (!\in_array($flag, ['fps', 'speed', 'duration', 'watch', 'paused', 'lang'], true)) {
                     \fwrite($stderr, Lang::t('cli.bad_flag', ['flag' => self::printable($flag)]) . "\n");
                     \fwrite($stderr, Lang::t('cli.usage') . "\n");
 
@@ -202,6 +228,16 @@ final class Cli
                     \fwrite($stderr, Lang::t('cli.bad_value', ['flag' => '--' . $flag, 'value' => '']) . "\n");
 
                     return 1;
+                }
+
+                if ($flag === 'lang') {
+                    // The pre-scan already validated the code against the
+                    // lang roster and applied it (it had to run before the
+                    // first message could format); this seat only stops the
+                    // loop from refusing what `--lang=CODE` means. Bare
+                    // `--lang` died in the bad_value gate above — the same
+                    // answer `--fps` gives without a value.
+                    continue;
                 }
 
                 switch ($flag) {
@@ -710,5 +746,30 @@ final class Cli
         $value = (int) $raw;
 
         return $value > 0 ? $value : null;
+    }
+
+    /**
+     * The locale codes this app ships, derived from the bundled lang/ roster
+     * (gifview-23 — a hardcoded list here would drift the moment the fleet's
+     * add-a-locale step lands another file). The glob is phar-safe: the
+     * archive ships lang/ beside src/, which is exactly the layout
+     * src/Lang.php already resolves for translation lookups.
+     *
+     * @return list<string>
+     */
+    private static function localeCodes(): array
+    {
+        static $codes = null;
+
+        if ($codes === null) {
+            $files = \glob(__DIR__ . '/../lang/*.php') ?: [];
+            $codes = \array_values(\array_map(
+                static fn (string $file): string => \basename($file, '.php'),
+                $files,
+            ));
+            \sort($codes);
+        }
+
+        return $codes;
     }
 }

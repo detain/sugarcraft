@@ -73,6 +73,7 @@ works — inline-protocol rendering is a different route, offered by
 | `--duration=N`        | Stop after N seconds of playback time — paused time never accrues (a schedule deadline in the model — no wall-clock kill). N positive, fractions accepted. Needs at least two frames: a single-frame file combined with `--duration` is refused. |
 | `--watch`             | Reload automatically when the source file changes, via a 10 ms event-loop poll. Bare flag — it takes no value. |
 | `--paused`            | Start paused on the first frame (step with the arrow keys, `Space` resumes). Bare flag — it takes no value. |
+| `--lang=CODE`         | Answer in one of the 16 bundled locales regardless of the environment — the hatch for hosts where `LC_*` never exists (native Windows cmd). Resolved before the first message prints; unknown codes refuse with a plain English line naming the roster. |
 | `--help` / `-h`       | Print the usage line (localised) and exit 0.                      |
 | `--version` / `-v`    | Print the version stamp and exit 0.                               |
 
@@ -198,9 +199,12 @@ The key table is fixed in the player model; keys are not rebindable.
 - The player caps frame rate at its own scheduler floors; `--speed=max` is
   opt-in, never the default.
 - All CLI messages are localised into 16 locales. The bin shim calls
-  `T::setLocale(T::detect())` before its first message (there is no `--lang`
-  flag); `T::detect()` consults `LC_ALL`, then `LC_MESSAGES`, then `LANG`.
-  The in-app playback chrome (the status line) is currently English-only.
+  `T::setLocale(T::detect())` before its first message; `T::detect()`
+  consults `LC_ALL`, then `LC_MESSAGES`, then `LANG`. Where those variables
+  never exist (native Windows cmd), pick the locale explicitly with
+  `--lang=CODE` (any position, last one wins) or export `LANG=de.UTF-8`
+  (`set LANG=de.UTF-8`). The in-app playback chrome (the status line) is
+  currently English-only.
 - **Reduced motion is not auto-detected**: unlike `sugar-spring` and
   `sugar-toast`, this viewer does not read `REDUCE_MOTION` or
   `PREFERS_REDUCED_MOTION`. Motion-averse users must opt in with `--paused`

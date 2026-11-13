@@ -9,7 +9,7 @@
 declare(strict_types=1);
 
 return [
-    'cli.usage'       => '사용법: candy-gifview <gif> [solid|density] [--fps=N] [--speed=N|Nfps|max] [--duration=SECONDS] [--watch] [--paused] [--help|-h] [--version|-v]',
+    'cli.usage'       => '사용법: candy-gifview <gif> [solid|density] [--fps=N] [--speed=N|Nfps|max] [--duration=SECONDS] [--watch] [--paused] [--lang=CODE] [--help|-h] [--version|-v]',
     'cli.no_autoload' => 'candy-gifview: composer autoload.php을(를) 찾을 수 없음',
     'cli.bad_flag'    => 'candy-gifview: 알 수 없는 옵션 --{flag}',
     'cli.empty_flag'  => 'candy-gifview: -- 뒤에 옵션 이름이 없습니다',
