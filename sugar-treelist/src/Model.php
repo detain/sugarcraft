@@ -725,7 +725,7 @@ final class Model
         $value = self::normalizeItem($value, 'Model::withItem()', 'the value');
 
         return $this->mutate(function ($m) use ($value) {
-            $item = new Item($value, $m->idCounter++);
+            $item = Item::new($value, $m->idCounter++);
             if ($m->filterFn !== null) {
                 $m->originalItems[] = $item;
             } else {
@@ -767,7 +767,7 @@ final class Model
 
         return $this->mutate(function ($m) use ($normalized) {
             foreach ($normalized as $value) {
-                $item = new Item($value, $m->idCounter++);
+                $item = Item::new($value, $m->idCounter++);
                 if ($m->filterFn !== null) {
                     $m->originalItems[] = $item;
                 } else {
@@ -813,7 +813,7 @@ final class Model
 
         return $this->mutate(function ($m) use ($normalized) {
             foreach ($normalized as $value) {
-                $item = new Item($value, $m->idCounter++);
+                $item = Item::new($value, $m->idCounter++);
                 if ($m->filterFn !== null) {
                     $m->originalItems[] = $item;
                 } else {
