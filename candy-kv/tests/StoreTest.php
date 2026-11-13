@@ -262,6 +262,35 @@ final class StoreTest extends TestCase
         $this->assertSame('secret', $entry->rawValue());
     }
 
+    /**
+     * kv-029: a short query facing huge keys must answer fast. Without
+     * the codepoint-length gap lower bound, every 100k-char candidate
+     * costs |query| x 100k dynamic-programming cells, turning the
+     * did-you-mean hint into a multi-second stall. The generous bound
+     * covers BOTH legs: the misses answer quickly, and a genuinely
+     * nearby small key is still suggested — the bound only prunes
+     * candidates that could never have won.
+     */
+    public function testSuggestionIgnoresOversizedCandidatesQuickly(): void
+    {
+        $huge = \str_repeat('x', 100_000);
+        for ($i = 0; $i < 40; $i++) {
+            $this->store->set($huge . $i . '@notes', 'payload');
+        }
+        $this->store->set('node@notes', 'v');
+
+        $start = \hrtime(true);
+        $this->assertNull($this->store->suggestionFor('q@notes'));
+        $this->assertSame('node', $this->store->suggestionFor('nope@notes'));
+        $elapsedMs = (\hrtime(true) - $start) / 1_000_000;
+
+        $this->assertLessThan(
+            50.0,
+            $elapsedMs,
+            'did-you-mean must stay under 50 ms against forty 100k-char keys'
+        );
+    }
+
     public function testDataDir(): void
     {
         $this->assertSame($this->tmpDir, $this->store->dataDir());

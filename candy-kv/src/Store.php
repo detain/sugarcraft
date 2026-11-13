@@ -194,8 +194,10 @@ final class Store
      * Distance is Levenshtein over UTF-8 codepoints; a candidate must lie
      * within half the query's codepoint length, floored at one edit (a
      * deliberate skate tolerance — long queries get proportionally more
-     * slack, short ones still clear one typo). The comparison scans every
-     * non-expired key of the target database.
+     * slack, short ones still clear one typo). Every non-expired key of
+     * the target database is considered, but a candidate whose codepoint
+     * length differs by more than the tolerance is dismissed by that gap
+     * — a lower bound on the distance — instead of a full comparison.
      */
     public function suggestionFor(string $key): ?string
     {
@@ -320,12 +322,23 @@ final class Store
         // The allowance is floored at one edit: a plain half-the-length rule
         // gave 1-2 codepoint queries a zero threshold, silencing did-you-mean
         // exactly where a hint helps most (typo 'a' for live key 'at').
-        $threshold = max(1, intdiv(\mb_strlen($key, 'UTF-8'), 2));
+        $keyLength = \mb_strlen($key, 'UTF-8');
+        $threshold = max(1, intdiv($keyLength, 2));
 
         $best = null;
         $bestDist = \PHP_INT_MAX;
 
         foreach ($allKeys as $candidate) {
+            // One Levenshtein edit changes length by at most one, so the
+            // codepoint-length gap is a lower bound on the distance: a
+            // candidate past the tolerance is skipped without paying the
+            // DP. The bound is pure selection — it only drops keys that
+            // could never have won — and it is the whole difference
+            // between a hint and a timeout when a short query faces
+            // megabyte-scale neighbours (kv-029).
+            if (\abs($keyLength - \mb_strlen($candidate, 'UTF-8')) > $threshold) {
+                continue;
+            }
             $dist = self::codepointLevenshtein($key, $candidate);
             if ($dist < $bestDist && $dist <= $threshold) {
                 $bestDist = $dist;
