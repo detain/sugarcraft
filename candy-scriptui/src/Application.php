@@ -16,6 +16,7 @@ use SugarCraft\ScriptUi\Command\PagerCommand;
 use SugarCraft\ScriptUi\Command\SpinCommand;
 use SugarCraft\ScriptUi\Command\StyleCommand;
 use SugarCraft\ScriptUi\Command\TableCommand;
+use SugarCraft\ScriptUi\Command\VersionCommand;
 use SugarCraft\ScriptUi\Command\WriteCommand;
 use SugarCraft\ScriptUi\Attribute\Alias;
 use SugarCraft\ScriptUi\Attribute\Example;
@@ -138,11 +139,12 @@ final class Application extends SymfonyApplication
             new SpinCommand(),
             new FormatCommand(),
             new CompletionCommand(),
+            new VersionCommand(),
         ]);
     }
 
     /**
-     * Reads the version from the root composer.json file.
+     * Reads the version from this PACKAGE's composer.json manifest.
      */
     public function versionFromComposer(): string
     {
@@ -179,8 +181,9 @@ final class Application extends SymfonyApplication
      * through fail-closed, exactly like candy-code's Version::fromPharMetadata().
      * Outside an archive the dispatcher answers whatever versionFromComposer()
      * answers — byte-identical to the pre-phar contract (pinned by
-     * EnvVarFallbackTest): in a monorepo checkout the walk reaches the root
-     * composer.json, and inside an archive it would land on `0.0.0` because
+     * EnvVarFallbackTest): the identity-gated walk stops at THIS package's
+     * manifest (scriptui-39), so a monorepo checkout reports the package's
+     * own answer, and inside an archive it would land on `0.0.0` because
      * the phar ships no composer.json at all (the dead answer the stamp
      * overrides).
      */
