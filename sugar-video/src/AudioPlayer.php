@@ -27,6 +27,13 @@ use SugarCraft\Video\Support\FfmpegCommandBuilder;
  *
  * No single upstream — the audio-companion + wall-clock pacing approach is
  * drawn from maxcurzi/tplay and joelibaceta/video-to-ascii.
+ *
+ * Intentionally non-final: a real test seam, mirroring Probe's header (same
+ * pattern in this lib). The suite extends this class to fake the child —
+ * overriding buildCommand() to return an argv that never spawns anything
+ * (and, in the Player-side spy, start()/stop() to count respawns) — and to
+ * script the pacing clock through the constructor seam; five fixtures do
+ * exactly that, so the openness is deliberate policy, not drift.
  */
 class AudioPlayer
 {
