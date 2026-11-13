@@ -28,6 +28,7 @@ final class AnimatedWebpDecoderTest extends TestCase
     protected function tearDown(): void
     {
         AnimatedWebpDecoder::setWebpCapableForTesting(null);
+        AnimatedWebpDecoder::setCompositeTouchBudgetForTesting(null);
         foreach ($this->dirs as $dir) {
             foreach (scandir($dir) ?: [] as $entry) {
                 if ($entry !== '.' && $entry !== '..') {
@@ -562,5 +563,38 @@ final class AnimatedWebpDecoderTest extends TestCase
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('video source not found');
         (new AnimatedWebpDecoder())->open($fifo, 8, 4, 10.0);
+    }
+
+    // ---- SV-M41: composite-time budget ----
+
+    public function testTheCompositeTouchBudgetRefusesOverBudgetContainers(): void
+    {
+        AnimatedWebpDecoder::setWebpCapableForTesting(true);
+        // Story stills touch 1024 + 256 + 256 = 1536 pixels (the still area
+        // is charged whole, clipped or not). A scripted 1300-pixel budget
+        // accepts frames 1-2 (1280 charged) and refuses the third; the
+        // class constant is the same code path, only affordable by real
+        // stickers.
+        AnimatedWebpDecoder::setCompositeTouchBudgetForTesting(1300);
+        $d = new AnimatedWebpDecoder();
+        try {
+            $d->open($this->file($this->storyContainer(), 'budget.webp'), 8, 4, 10.0);
+            self::fail('the composite budget did not trip');
+        } catch (\RuntimeException $e) {
+            self::assertStringContainsString('composite-touch budget', $e->getMessage());
+            self::assertStringContainsString('frame 3 paints 256 pixels, 1536 charged', $e->getMessage());
+        }
+    }
+
+    public function testTheClassCeilingDoesNotRefuseOrdinaryContainers(): void
+    {
+        AnimatedWebpDecoder::setWebpCapableForTesting(true);
+        // The shipped ceiling is far above what the whole suite composites:
+        // the same story opens untouched at MAX_COMPOSITE_TOUCHES, so the
+        // refuse arm exists for hostile-in-cap files, not for stickers.
+        self::assertSame(20_000_000, AnimatedWebpDecoder::MAX_COMPOSITE_TOUCHES, 'documented in the constant docblock — move it with the ms math, not silently');
+        $d = new AnimatedWebpDecoder();
+        $d->open($this->file($this->storyContainer(), 'ceiling-normal.webp'), 8, 4, 10.0);
+        self::assertSame([100, 100, 100], $d->frameDelaysMs());
     }
 }

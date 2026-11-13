@@ -84,6 +84,18 @@ final class AnimatedWebpDecoder implements Decoder
     /** Ceiling on frames × canvas area summed — the whole composited animation's storage bound (~128 MB at 4 B/px). */
     public const MAX_TOTAL_PIXELS = 33_554_432;
 
+    /**
+     * Composite-time budget (review 041): the memory ceilings cap what a
+     * file may RESIDE; this caps what compositing may TOUCH — one unit per
+     * source pixel of every frame drawn. Per-pixel GD work is the only
+     * cost the memory ceilings leave unbounded, so a legal-in-memory
+     * sticker (worst case: the full 33.5M-pixel residency budget) used to
+     * stall open() for tens of seconds. Files over the budget refuse with
+     * the typed error below; 20M touches keeps the worst accepted open in
+     * the low seconds on a cold runner.
+     */
+    public const MAX_COMPOSITE_TOUCHES = 20_000_000;
+
     /** Chunk-walk step ceiling in isAnimated() — bounded so a pathological header chain cannot spin. */
     private const MAX_CHUNK_STEPS = 10_000;
 
@@ -152,6 +164,19 @@ final class AnimatedWebpDecoder implements Decoder
     {
         self::$supportOverride = $capable;
     }
+
+    /**
+     * Test seam for the composite-time budget (same shape as the capability
+     * mock above): a scripted ceiling lets the refuse arm be pinned without
+     * shipping a 20M-pixel fixture through the suite. Null restores the
+     * class ceiling.
+     */
+    public static function setCompositeTouchBudgetForTesting(?int $budget): void
+    {
+        self::$compositeBudgetOverride = $budget;
+    }
+
+    private static ?int $compositeBudgetOverride = null;
 
     /**
      * Cheap container sniff: does this file claim WebP animation?
@@ -703,6 +728,8 @@ final class AnimatedWebpDecoder implements Decoder
      */
     private function compositeAll(array $frames, int $canvasW, int $canvasH): void
     {
+        $budget = self::$compositeBudgetOverride ?? self::MAX_COMPOSITE_TOUCHES;
+        $touched = 0;
         $canvas = imagecreatetruecolor($canvasW, $canvasH);
         imagesavealpha($canvas, true);
         $transparent = imagecolorallocatealpha($canvas, 0, 0, 0, 127);
@@ -771,6 +798,22 @@ final class AnimatedWebpDecoder implements Decoder
                 ));
             }
 
+            // Composite-time budget: charge this frame's touched area
+            // BEFORE the per-pixel work, then refuse over-budget files
+            // (destroying the decoded still first — nothing leaks).
+            $touched += imagesx($sub) * imagesy($sub);
+            if ($touched > $budget) {
+                $overBy = imagesx($sub) * imagesy($sub);
+                imagedestroy($sub);
+                throw new \RuntimeException(sprintf(
+                    'animated WebP exceeds the %d composite-touch budget (frame %d paints %d pixels, %d charged so far)',
+                    $budget,
+                    count($this->canvases) + 1,
+                    $overBy,
+                    $touched,
+                ));
+            }
+
             self::drawOnto($canvas, $sub, $frame['x'], $frame['y'], $frame['noBlend']);
             // The dispose rect is the frame's ACTUAL painted box — the
             // bitstream's dimensions, not the lossy container field.
@@ -787,9 +830,15 @@ final class AnimatedWebpDecoder implements Decoder
     /**
      * Copy $sub onto $canvas at (x,y), honoring the WebP blend bit.
      *
-     * GD's imagecopy never per-pixel-blends source alpha, so both modes are
-     * done explicitly: "no blend" copies color AND alpha raw; "alpha blend"
-     * composites src-over against the canvas pixel. Clipped to both rects.
+     * "No blend" is GD's raw pixel replace: with alphablending OFF,
+     * imagecopy writes color AND alpha verbatim, so the whole clipped rect
+     * goes through the C-level copy (the manual per-pixel setpixel loop it
+     * replaces produced identical bytes, at ~an order of magnitude more
+     * cost per sticker). "Alpha blend" composites src-over against the
+     * canvas pixel — inline, with two cheap exact skips: a fully
+     * transparent source pixel leaves the destination untouched (the old
+     * loop recomposited it to itself via a palette allocation), and an
+     * opaque one IS the result (no lerp math needed). Clipped to both rects.
      */
     private static function drawOnto(\GdImage $canvas, \GdImage $sub, int $x, int $y, bool $noBlend): void
     {
@@ -798,39 +847,58 @@ final class AnimatedWebpDecoder implements Decoder
         $sw = imagesx($sub);
         $sh = imagesy($sub);
 
-        for ($py = 0; $py < $sh; $py++) {
+        // Preclip once — the identical coverage the per-pixel bounds guards
+        // used to re-check on every touch.
+        $dx = max(0, $x);
+        $dy = max(0, $y);
+        $sx = $dx - $x;
+        $sy = $dy - $y;
+        $w = min($sw - $sx, $cw - $dx);
+        $h = min($sh - $sy, $ch - $dy);
+        if ($w <= 0 || $h <= 0) {
+            return;
+        }
+
+        if ($noBlend) {
+            imagecopy($canvas, $sub, $dx, $dy, $sx, $sy, $w, $h);
+
+            return;
+        }
+
+        for ($py = $sy; $py < $sy + $h; $py++) {
             $ty = $y + $py;
-            if ($ty < 0 || $ty >= $ch) {
-                continue;
-            }
-            for ($px = 0; $px < $sw; $px++) {
+            for ($px = $sx; $px < $sx + $w; $px++) {
                 $tx = $x + $px;
-                if ($tx < 0 || $tx >= $cw) {
-                    continue;
-                }
                 $src = imagecolorat($sub, $px, $py);
                 $srcA = ($src >> 24) & 0x7F; // GD alpha 0..127, 127 = transparent
-
-                if ($noBlend) {
-                    imagesetpixel($canvas, $tx, $ty, $src);
+                if ($srcA === 127) {
+                    continue; // fully transparent: destination already correct
+                }
+                if ($srcA === 0) {
+                    imagesetpixel($canvas, $tx, $ty, $src); // opaque: the source IS the result
                     continue;
                 }
 
                 $dst = imagecolorat($canvas, $tx, $ty);
                 $dstA = ($dst >> 24) & 0x7F;
                 $aS = (127 - $srcA) / 127;
+                $invA = 1 - $aS;
                 $aD = (127 - $dstA) / 127;
-                $outA = $aS + $aD * (1 - $aS);
+                $outA = $aS + $aD * $invA;
 
-                $lerp = static fn (int $shift): int => $outA <= 0.0
-                    ? 0
-                    : (int) round(((($src >> $shift) & 0xFF) * $aS * 1.0 + ((($dst >> $shift) & 0xFF) * $aD * (1 - $aS))) / $outA);
+                if ($outA <= 0.0) {
+                    $r = $g = $b = 0;
+                } else {
+                    $r = (int) round((((($src >> 16) & 0xFF) * $aS + ((($dst >> 16) & 0xFF) * $aD * $invA)) / $outA));
+                    $g = (int) round((((($src >> 8) & 0xFF) * $aS + ((($dst >> 8) & 0xFF) * $aD * $invA)) / $outA));
+                    $b = (int) round(((($src & 0xFF) * $aS + (($dst & 0xFF) * $aD * $invA)) / $outA));
+                }
 
                 imagesetpixel(
                     $canvas,
                     $tx,
                     $ty,
-                    imagecolorallocatealpha($canvas, $lerp(16), $lerp(8), $lerp(0), (int) round((1 - $outA) * 127)),
+                    imagecolorallocatealpha($canvas, $r, $g, $b, (int) round((1 - $outA) * 127)),
                 );
             }
         }
