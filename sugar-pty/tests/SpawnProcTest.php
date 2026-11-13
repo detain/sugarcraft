@@ -197,6 +197,219 @@ final class SpawnProcTest extends TestCase
         }
     }
 
+    /**
+     * PTY-07: the autoloader hand-off rides the environment and ONLY the
+     * environment. A command shaped like the old argv token must never be
+     * required by the shim — it is the command the caller asked to run.
+     */
+    public function testShimNeverRequiresAnArgvShapedAutoloadToken(): void
+    {
+        $this->requirePtySyscalls();
+
+        $shim = \realpath(__DIR__ . '/../bin/pty-shim.php');
+        if ($shim === false) {
+            $this->markTestSkipped('pty-shim.php not present.');
+        }
+
+        $dir = \sys_get_temp_dir();
+        $marker = $dir . '/pty-shim-poison-' . \bin2hex(\random_bytes(4)) . '.flag';
+        $poison = $dir . '/pty-shim-poison-' . \basename($marker, '.flag') . '.php';
+        \file_put_contents($poison, "<?php file_put_contents(" . \var_export($marker, true) . ", 'required');");
+
+        try {
+            // Token-shaped cmd[0] with an explicit /bin/true behind it, and
+            // the bare single-token shape: neither may reach require().
+            // A token-free env makes the absent-inherit arm explicit.
+            foreach ([
+                ['--autoload=' . $poison, '/bin/true'],
+                ['--autoload=' . $poison],
+            ] as $args) {
+                $proc = @\proc_open(
+                    [\PHP_BINARY, $shim, ...$args],
+                    [0 => ['file', '/dev/null', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+                    $pipes,
+                    null,
+                    ['PATH' => (string) \getenv('PATH')],
+                );
+                $this->assertIsResource($proc);
+                \stream_get_contents($pipes[1]);
+                \stream_get_contents($pipes[2]);
+                \fclose($pipes[1]);
+                \fclose($pipes[2]);
+                \proc_close($proc);
+                $this->assertFileDoesNotExist(
+                    $marker,
+                    'the shim required an autoload path sourced from argv — the hand-off must be env-only',
+                );
+            }
+        } finally {
+            @\unlink($poison);
+            @\unlink($marker);
+        }
+    }
+
+    /**
+     * Positive control for the poison test above: the env token IS live —
+     * same shim, same file, carried via SUGAR_PTY_SHIM_AUTOLOAD, the marker
+     * must appear. Without this leg the poison assertion could be faked by
+     * any breakage that makes the require never happen at all.
+     */
+    public function testShimHonoursTheEnvironmentHandoffToken(): void
+    {
+        $this->requirePtySyscalls();
+
+        $shim = \realpath(__DIR__ . '/../bin/pty-shim.php');
+        if ($shim === false) {
+            $this->markTestSkipped('pty-shim.php not present.');
+        }
+
+        $dir = \sys_get_temp_dir();
+        $marker = $dir . '/pty-shim-token-' . \bin2hex(\random_bytes(4)) . '.flag';
+        $token = $dir . '/pty-shim-token-' . \basename($marker, '.flag') . '.php';
+        \file_put_contents($token, "<?php file_put_contents(" . \var_export($marker, true) . ", 'required');");
+
+        try {
+            $proc = @\proc_open(
+                [\PHP_BINARY, $shim, '/bin/true'],
+                [0 => ['file', '/dev/null', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+                $pipes,
+                null,
+                [
+                    'PATH' => (string) \getenv('PATH'),
+                    'SUGAR_PTY_SHIM_AUTOLOAD' => $token,
+                ],
+            );
+            $this->assertIsResource($proc);
+            \stream_get_contents($pipes[1]);
+            \stream_get_contents($pipes[2]);
+            \fclose($pipes[1]);
+            \fclose($pipes[2]);
+            \proc_close($proc);
+            $this->assertFileExists(
+                $marker,
+                'the env hand-off went inert — the shim did not require the tokenised path (poison assertions would pass vacuously)',
+            );
+        } finally {
+            @\unlink($token);
+            @\unlink($marker);
+        }
+    }
+
+    /**
+     * A real Spawn-wrapped child sees the computed autoloader in its
+     * environment, not whatever the caller tried to forge in a replace-mode
+     * env map.
+     */
+    public function testWrapStagesTheRealHandoffOverAForgedMapEntry(): void
+    {
+        $this->requirePtySyscalls();
+
+        if (!\is_executable('/bin/sh')) {
+            $this->markTestSkipped('/bin/sh is required.');
+        }
+
+        $pty = Pty::open();
+        try {
+            $child = Spawn::proc(
+                $pty->master,
+                ['/bin/sh', '-c', 'printf "[token:%s]" "$SUGAR_PTY_SHIM_AUTOLOAD"'],
+                ['PATH' => (string) \getenv('PATH'), 'SUGAR_PTY_SHIM_AUTOLOAD' => '/tmp/forged-by-caller.php'],
+                true,
+            );
+
+            $seen = '';
+            $deadline = \microtime(true) + 3.0;
+            while (\microtime(true) < $deadline) {
+                $chunk = $pty->read(8192, 0.2);
+                if ($chunk === null) {
+                    continue;
+                }
+                if ($chunk === '') {
+                    break;
+                }
+                $seen .= $chunk;
+                if (\str_contains($seen, ']')) {
+                    break;
+                }
+            }
+            $child->wait();
+
+            $expected = null;
+            foreach (\get_included_files() as $file) {
+                if (\preg_match('#/vendor/autoload\.php$#', $file) === 1 && \is_readable($file)) {
+                    $expected = $file;
+                    break;
+                }
+            }
+            $this->assertNotNull($expected, 'test process must have an entrypoint autoloader');
+            $this->assertStringContainsString(
+                '[token:' . $expected . ']',
+                $seen,
+                'child env must carry the Spawn-computed hand-off; saw: ' . $seen,
+            );
+            $this->assertStringNotContainsString('forged-by-caller', $seen);
+        } finally {
+            $pty->close();
+        }
+    }
+
+    /**
+     * Inherit mode: a token already sitting in the PARENT environment (the
+     * forged-inheritance vector) is scrubbed for the proc_open window — the
+     * child must see the computed path, never the inherited forgery.
+     */
+    public function testWrapScrubsAForgedInheritedToken(): void
+    {
+        $this->requirePtySyscalls();
+
+        if (!\is_executable('/bin/sh')) {
+            $this->markTestSkipped('/bin/sh is required.');
+        }
+
+        $previous = \getenv('SUGAR_PTY_SHIM_AUTOLOAD');
+        \putenv('SUGAR_PTY_SHIM_AUTOLOAD=/tmp/forged-inherited.php');
+        $pty = Pty::open();
+        try {
+            $child = Spawn::proc(
+                $pty->master,
+                ['/bin/sh', '-c', 'printf "[token:%s]" "$SUGAR_PTY_SHIM_AUTOLOAD"'],
+                null,
+                true,
+            );
+
+            $seen = '';
+            $deadline = \microtime(true) + 3.0;
+            while (\microtime(true) < $deadline) {
+                $chunk = $pty->read(8192, 0.2);
+                if ($chunk === null) {
+                    continue;
+                }
+                if ($chunk === '') {
+                    break;
+                }
+                $seen .= $chunk;
+                if (\str_contains($seen, ']')) {
+                    break;
+                }
+            }
+            $child->wait();
+
+            $this->assertStringNotContainsString(
+                'forged-inherited',
+                $seen,
+                'a forged inherited token leaked into the child; saw: ' . $seen,
+            );
+            $this->assertStringContainsString('[token:', $seen, 'hand-off leg of the env probe vanished; saw: ' . $seen);
+        } finally {
+            $pty->close();
+            if ($previous === false) {
+                \putenv('SUGAR_PTY_SHIM_AUTOLOAD');
+            } else {
+                \putenv('SUGAR_PTY_SHIM_AUTOLOAD=' . $previous);
+            }
+        }
+    }
+
     public function testProcWithControllingTerminalRequiresPcntl(): void
     {
         if (\extension_loaded('pcntl')) {

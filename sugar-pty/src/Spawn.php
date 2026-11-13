@@ -27,9 +27,12 @@ use SugarCraft\Pty\Posix\PosixChild;
  * + `pcntl_exec()` so the child claims the slave PTY as its
  * controlling terminal — required for Ctrl+C → SIGINT delivery and
  * other tty-driven job-control signals. The wrap carries this process's
- * own autoloader to the shim as `--autoload=` (see {@see self::wrapInShim()})
- * so the shim still resolves `SugarCraft\Pty\*` when it is reached
- * through a symlinked vendor directory.
+ * own autoloader to the shim via the SUGAR_PTY_SHIM_AUTOLOAD environment
+ * variable, which {@see self::proc()} stages around the child's proc_open
+ * (and scrubs of inherited or caller-supplied values) so the shim still
+ * resolves `SugarCraft\Pty\*` through a symlinked vendor directory.
+ * argv never carries the hand-off: an argument shaped like a token is
+ * simply the command the user asked to run.
  *
  * Mirrors charmbracelet/x/xpty.UnixPty.Start's spawn algorithm.
  */
@@ -67,8 +70,29 @@ final class Spawn
             throw new \InvalidArgumentException('Spawn::proc requires a non-empty command');
         }
 
+        // The autoloader hand-off for the shim travels ONLY in the child's
+        // environment (see class doc): a replace-mode map gets the key set
+        // (or removed) INSIDE the array, so a forged SUGAR_PTY_SHIM_AUTOLOAD
+        // entry in the caller's map is overwritten before the child sees it;
+        // an inherit-mode child gets the token staged around proc_open and
+        // the previous value restored after, scrubbing inherited forgeries
+        // for the window in which the child is forked.
+        $stagedToken = null;
         if ($controllingTerminal) {
-            $cmd = self::wrapInShim($cmd);
+            [$cmd, $autoload] = self::wrapInShim($cmd);
+            if ($env !== null) {
+                unset($env['SUGAR_PTY_SHIM_AUTOLOAD']);
+                if ($autoload !== null) {
+                    $env['SUGAR_PTY_SHIM_AUTOLOAD'] = $autoload;
+                }
+            } else {
+                $stagedToken = \getenv('SUGAR_PTY_SHIM_AUTOLOAD');
+                if ($autoload === null) {
+                    \putenv('SUGAR_PTY_SHIM_AUTOLOAD');
+                } else {
+                    \putenv('SUGAR_PTY_SHIM_AUTOLOAD=' . $autoload);
+                }
+            }
         }
 
         // TOCTOU: the previous descriptor spec named `$master->slavePath`
@@ -131,16 +155,25 @@ final class Spawn
             // keep the slave open on the master side). Close on EVERY exit
             // path — success and both throw branches.
             \fclose($slave);
+            if ($stagedToken !== null) {
+                if ($stagedToken === false) {
+                    \putenv('SUGAR_PTY_SHIM_AUTOLOAD');
+                } else {
+                    \putenv('SUGAR_PTY_SHIM_AUTOLOAD=' . $stagedToken);
+                }
+            }
         }
     }
 
     /**
-     * Prepend `[PHP_BINARY, /path/to/pty-shim.php, --autoload=<path>?, ...]`
-     * to the cmd so the actual command runs inside a session where the
-     * slave PTY is the controlling terminal.
+     * Prepend `[PHP_BINARY, /path/to/pty-shim.php, ...]` to the cmd so the
+     * actual command runs inside a session where the slave PTY is the
+     * controlling terminal, and return the autoloader hand-off that
+     * {@see self::proc()} must stage into the child's environment
+     * (SUGAR_PTY_SHIM_AUTOLOAD — the ONLY channel the token has; see the
+     * class doc for the argv-injection hazard this closes).
      *
-     * The `--autoload=` token hands the shim the autoloader THIS process
-     * is running under. WHY: PHP resolves `__FILE__`/`__DIR__` through
+     * The hand-off names the autoloader THIS process is running under. WHY: PHP resolves `__FILE__`/`__DIR__` through
      * symlinks, so when this package is installed as a Composer path-repo
      * sibling — the monorepo's linked shape, and any consumer whose
      * `vendor/sugarcraft/sugar-pty` symlinks a checkout with no `vendor/`
@@ -152,7 +185,9 @@ final class Spawn
      * ladder (see bin/pty-shim.php) takes over.
      *
      * @param list<string> $cmd
-     * @return list<string>
+     * @return array{0: list<string>, 1: string|null} the wrapped argv and
+     *     the env-channel hand-off (null when no entrypoint autoloader can
+     *     be identified — the shim's own resolution ladder takes over)
      */
     private static function wrapInShim(array $cmd): array
     {
@@ -169,13 +204,9 @@ final class Spawn
             throw new PtyException(Lang::t('spawn.shim_not_found', ['path' => __DIR__ . self::SHIM_RELATIVE]));
         }
 
-        $argv = [PHP_BINARY, $shim];
-        $autoload = self::callerAutoloader();
-        if ($autoload !== null) {
-            $argv[] = '--autoload=' . $autoload;
-        }
+        $argv = [PHP_BINARY, $shim, ...$cmd];
 
-        return [...$argv, ...$cmd];
+        return [$argv, self::callerAutoloader()];
     }
 
     /**
