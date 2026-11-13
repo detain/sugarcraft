@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace CandyCode\Bundles\Discord\Support;
 
 use RuntimeException;
+use SugarCraft\Code\Lang;
 
 /**
  * Resolves the Discord API root and gateway websocket URL (§7.1).
@@ -107,7 +108,7 @@ final class Endpoint
         $host = $parts['host'] ?? '';
         if ($scheme === '' || $host === '') {
             throw new RuntimeException(
-                'discord-bundle: endpoint override "' . $override . '" is not an absolute https/wss URL.'
+                Lang::t('channels.discord.endpoint.not_absolute', ['override' => $override])
             );
         }
 
@@ -122,15 +123,14 @@ final class Endpoint
 
         if (($scheme === 'http' || $scheme === 'ws') && self::isLoopback($host)) {
             throw new RuntimeException(
-                'discord-bundle: plain-' . $scheme . ' loopback override "' . $override . '" needs '
-                . 'channels.discord.transport.insecureLoopbackProxy = true (a local proxy you control).'
+                Lang::t('channels.discord.endpoint.loopback_opt_in', ['scheme' => $scheme, 'override' => $override])
             );
         }
 
         throw new RuntimeException(
-            'discord-bundle: endpoint override "' . $override . '" must be https or wss'
-            . ($scheme === 'http' || $scheme === 'ws' ? '; plain ' . $scheme . ' is only ever accepted for a loopback proxy' : '')
-            . '.'
+            $scheme === 'http' || $scheme === 'ws'
+                ? Lang::t('channels.discord.endpoint.must_be_secure_plain', ['override' => $override, 'scheme' => $scheme])
+                : Lang::t('channels.discord.endpoint.must_be_secure', ['override' => $override])
         );
     }
 }

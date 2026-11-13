@@ -177,16 +177,16 @@ message, and they are redacted everywhere else.
 
 An approver answers with either spelling:
 
-- the slash command `/pair action:approve code:<code>` (ephemeral by default
+- the slash command `/pair action:grant code:<code>` (ephemeral by default
   through `slash.ephemeral`), or
-- the text spelling `/pair approve <code>` in a channel or DM.
+- the text spelling `/pair grant <code>` in a channel or DM (`/pair approve <code>` is a deprecated alias that still works and answers with a one-line notice).
 
 Approval writes the sender into the 0600 store's allowlist. `/pair list` shows
 pending codes **only in a direct message**; asked in a guild it answers without
 listing anything. Pending codes are never listed in a channel, even to an
 approver.
 
-If `approvals.approvers` is empty, no one can run `/pair approve`, so no
+If `approvals.approvers` is empty, no one can run `/pair grant`, so no
 stranger is ever admitted by pairing. Configure at least one approver before
 you expect pairing to work.
 
@@ -236,7 +236,7 @@ Worked pairing-and-approval exchange (a DM, text spellings):
 
 ```text
 stranger  DM> hello                -> bot: "pairing code k7m2q9x4 …"
-approver  DM> /pair approve k7m2q9x4
+approver  DM> /pair grant k7m2q9x4
                                    -> admitted; the sender id is written to
                                       the allowlist in the 0600 store
 bot       DM> [ask] run composer install?
@@ -338,7 +338,7 @@ appear in any of them — they are redaction secrets.
   mention-only (`discord_intents_degraded` names the landing in the channel
   log; it is one-way for the process). Enable the intent and restart.
 - **DMs get a pairing code but nothing happens after approval**: check the
-  approver roster. `/pair approve` by a user not on `approvals.approvers` is
+  approver roster. `/pair grant` by a user not on `approvals.approvers` is
   refused, and an empty roster admits no one.
 - **`/approve` says the answer was refused**: the answer came from another
   conversation, carried a stale nonce (the card is from before a restart or

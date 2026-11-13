@@ -788,7 +788,7 @@ final class DiscordAccount implements PlatformFace
     }
 
     /**
-     * §7.3 approval surface: `/pair approve <code>` and `/pair list`.
+     * §7.3 approval surface: `/pair grant <code>` (`approve` kept as a deprecated alias) and `/pair list`.
      * Pairing is an approver's act (mirrors candy-msteams): the roster that
      * answers tool asks answers pairings too, and an EMPTY roster answers
      * nobody — the gate that admits a peer must not default open. Codes are
@@ -825,10 +825,12 @@ final class DiscordAccount implements PlatformFace
         }
 
         $action = \strtolower(\trim((string) ($args[0] ?? 'list')));
-        if ($action === 'approve') {
+        if ($action === 'grant' || $action === 'approve') {
             $code = \strtoupper(\trim((string) ($args[1] ?? '')));
             $paired = $code === '' ? null : $this->pairing->approve($this->account, $code);
-            $say($paired === null ? Lang::t('channels.discord.pair.no_match') : Lang::t('channels.discord.pair.paired', ['paired' => (string) $paired]));
+            $answer = $paired === null ? Lang::t('channels.discord.pair.no_match') : Lang::t('channels.discord.pair.paired', ['paired' => (string) $paired]);
+            // Deprecated spelling: still works, but say so once per use.
+            $say($action === 'approve' ? Lang::t('channels.discord.pair.deprecated_approve') . "\n" . $answer : $answer);
 
             return;
         }
@@ -1024,7 +1026,7 @@ final class DiscordAccount implements PlatformFace
     /** @param array<string,mixed> $ask */
     private function approvalSummary(array $ask): string
     {
-        $tool = (string) ($ask['tool'] ?? 'a tool');
+        $tool = (string) ($ask['tool'] ?? Lang::t('channels.discord.approval.unknown_tool'));
         $reason = (string) ($ask['reason'] ?? '');
         $args = $ask['arguments'] ?? [];
         $rendered = \is_array($args) ? (string) \json_encode($args, \JSON_UNESCAPED_SLASHES | \JSON_INVALID_UTF8_SUBSTITUTE) : (string) $args;
@@ -1035,6 +1037,6 @@ final class DiscordAccount implements PlatformFace
             $rendered = \substr($rendered, 0, 400) . '…';
         }
 
-        return \trim("candy-code is asking to run **{$tool}**.\n{$reason}\n```\n{$rendered}\n```");
+        return \trim(Lang::t('channels.discord.approval.summary', ['tool' => $tool, 'reason' => $reason, 'args' => $rendered]));
     }
 }

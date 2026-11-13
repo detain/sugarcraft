@@ -277,17 +277,31 @@ final class DiscordAccountTest extends TestCase
         self::assertSame([], $this->face->idleThreads(\time()));
     }
 
-    public function testPairApproveAndListSpeakThroughTheChannelSurface(): void
+    public function testPairGrantAndListSpeakThroughTheChannelSurface(): void
     {
         $this->buildFace(['dmPolicy' => 'pairing', 'approvalRoster' => ['boss']]);
         $mint = $this->pairing->request('default', 'u2');
         $code = (string) $mint['code'];
-        $this->face->pairCommand(['channelId' => 'c1', 'messageId' => ''], ['approve', $code], 'boss', true);
+        $this->face->pairCommand(['channelId' => 'c1', 'messageId' => ''], ['grant', $code], 'boss', true);
         $this->settle();
-        self::assertStringContainsString('Paired u2.', (string) $this->api->lastCallFor('/messages')['body']['content']);
+        $said = (string) $this->api->lastCallFor('/messages')['body']['content'];
+        self::assertStringContainsString('Paired u2.', $said);
+        self::assertStringNotContainsString('deprecated', $said, 'the canonical spelling carries no notice');
         $this->face->pairCommand(['channelId' => 'c1', 'messageId' => ''], ['list'], 'boss', true);
         $this->settle();
         self::assertStringContainsString('No pending pairings.', (string) $this->api->lastCallFor('/messages')['body']['content']);
+    }
+
+    public function testPairApproveIsAStillWorkingDeprecatedAliasOfGrant(): void
+    {
+        $this->buildFace(['dmPolicy' => 'pairing', 'approvalRoster' => ['boss']]);
+        $code = (string) $this->pairing->request('default', 'u2')['code'];
+        $this->face->pairCommand(['channelId' => 'c1', 'messageId' => ''], ['approve', $code], 'boss', true);
+        $this->settle();
+        $said = (string) $this->api->lastCallFor('/messages')['body']['content'];
+        self::assertStringContainsString('Paired u2.', $said);
+        self::assertStringContainsString('/pair approve` is deprecated; use `/pair grant', $said);
+        self::assertSame([], $this->pairing->pending('default'));
     }
 
     public function testPairingIsAnApproversActAndCodesListOnlyInADirectMessage(): void
@@ -296,10 +310,10 @@ final class DiscordAccountTest extends TestCase
         // (even one who passed the channel floor) can neither redeem nor list codes.
         $this->buildFace(['dmPolicy' => 'pairing', 'approvalRoster' => ['boss']]);
         $code = (string) $this->pairing->request('default', 'u2')['code'];
-        $this->face->pairCommand(['channelId' => 'c1', 'messageId' => ''], ['approve', $code], 'u3', true);
+        $this->face->pairCommand(['channelId' => 'c1', 'messageId' => ''], ['grant', $code], 'u3', true);
         $this->settle();
         self::assertStringContainsString('Only an approver can manage pairings', (string) $this->api->lastCallFor('/messages')['body']['content']);
-        self::assertCount(1, $this->pairing->pending('default'), 'a refused approve must leave the code pending');
+        self::assertCount(1, $this->pairing->pending('default'), 'a refused grant must leave the code pending');
 
         $this->face->pairCommand(['channelId' => 'c1', 'messageId' => ''], ['list'], 'boss', false);
         $this->settle();

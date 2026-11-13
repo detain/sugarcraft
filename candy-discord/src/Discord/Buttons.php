@@ -114,7 +114,7 @@ final class Buttons
         ];
 
         return [
-            'content' => "Permission asked: `{$tool}`",
+            'content' => Lang::t('channels.discord.approval.asked', ['tool' => $tool]),
             'components' => [$container],
             'flags' => self::FLAG_COMPONENTS_V2,
             'allowed_mentions' => ['parse' => []],

@@ -9,7 +9,7 @@ namespace CandyCode\Bundles\Discord\Support;
  * in a direct message.
  *
  * A stranger DMs the bot → they get an 8-character code valid for one
- * hour; an approver runs /pair approve CODE; approval appends the peer's
+ * hour; an approver runs /pair grant CODE (/pair approve is a deprecated alias); approval appends the peer's
  * Discord id to the account's allowlist inside channels.json (0600, user
  * tier — never config.json). The alphabet excludes the glyphs 0/O/1/I so
  * a code survives being read over a voice channel or typed from a phone.

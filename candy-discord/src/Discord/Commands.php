@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace CandyCode\Bundles\Discord\Discord;
 
+use SugarCraft\Code\Lang;
+
 /**
  * The command vocabulary (§7.6): NATIVE slash commands deployed with a
  * global PUT on boot (owner ruling D7=7a) AND the text fallback that works
@@ -30,27 +32,27 @@ final class Commands
         return [
             [
                 'name' => 'new',
-                'description' => 'Start a fresh candy-code session for this conversation',
+                'description' => Lang::t('channels.discord.slash.new.desc'),
                 'type' => 1,
                 'options' => [[
                     'name' => 'name',
-                    'description' => 'Optional session name',
+                    'description' => Lang::t('channels.discord.slash.new.name'),
                     'type' => 3,
                     'required' => false,
                 ]],
             ],
             [
                 'name' => 'stop',
-                'description' => 'Interrupt the running turn',
+                'description' => Lang::t('channels.discord.slash.stop.desc'),
                 'type' => 1,
             ],
             [
                 'name' => 'approve',
-                'description' => 'Answer an open permission question',
+                'description' => Lang::t('channels.discord.slash.approve.desc'),
                 'type' => 1,
                 'options' => [
-                    ['name' => 'ask', 'description' => 'The ask id shown in the approval message', 'type' => 3, 'required' => true],
-                    ['name' => 'verdict', 'description' => 'once, always or deny', 'type' => 3, 'required' => false, 'choices' => [
+                    ['name' => 'ask', 'description' => Lang::t('channels.discord.slash.approve.ask'), 'type' => 3, 'required' => true],
+                    ['name' => 'verdict', 'description' => Lang::t('channels.discord.slash.approve.verdict'), 'type' => 3, 'required' => false, 'choices' => [
                         ['name' => 'once', 'value' => 'once'],
                         ['name' => 'always', 'value' => 'always'],
                         ['name' => 'deny', 'value' => 'deny'],
@@ -59,11 +61,11 @@ final class Commands
             ],
             [
                 'name' => 'queue',
-                'description' => 'Queue a prompt behind the running turn',
+                'description' => Lang::t('channels.discord.slash.queue.desc'),
                 'type' => 1,
                 'options' => [[
                     'name' => 'text',
-                    'description' => 'The prompt to queue',
+                    'description' => Lang::t('channels.discord.slash.queue.text'),
                     'type' => 3,
                     'required' => true,
                 ]],
@@ -71,11 +73,11 @@ final class Commands
             [
                 // §7.10: the /model leg of the §2.3 surface rides command.exec.
                 'name' => 'model',
-                'description' => 'Show or set the model for this session',
+                'description' => Lang::t('channels.discord.slash.model.desc'),
                 'type' => 1,
                 'options' => [[
                     'name' => 'name',
-                    'description' => 'Model id (leave empty to list)',
+                    'description' => Lang::t('channels.discord.slash.model.name'),
                     'type' => 3,
                     'required' => false,
                 ]],
@@ -83,14 +85,16 @@ final class Commands
             [
                 // §7.3: pairing approval is a command on the approver roster.
                 'name' => 'pair',
-                'description' => 'Approve a DM pairing code, or list pending codes',
+                'description' => Lang::t('channels.discord.slash.pair.desc'),
                 'type' => 1,
                 'options' => [
-                    ['name' => 'action', 'description' => 'approve or list', 'type' => 3, 'required' => true, 'choices' => [
-                        ['name' => 'approve', 'value' => 'approve'],
+                    ['name' => 'action', 'description' => Lang::t('channels.discord.slash.pair.action'), 'type' => 3, 'required' => true, 'choices' => [
+                        // `approve` is the deprecated spelling: still accepted (text and
+                        // slash), no longer offered as a choice.
+                        ['name' => 'grant', 'value' => 'grant'],
                         ['name' => 'list', 'value' => 'list'],
                     ]],
-                    ['name' => 'code', 'description' => 'The 8-character pairing code', 'type' => 3, 'required' => false],
+                    ['name' => 'code', 'description' => Lang::t('channels.discord.slash.pair.code'), 'type' => 3, 'required' => false],
                 ],
             ],
         ];
