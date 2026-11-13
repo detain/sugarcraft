@@ -307,10 +307,16 @@ function cmdServeHttp(array $args): int
     }
 
     $server = new \SugarCraft\GitServer\HttpSmartProtocol\Server($config);
+    // 011 (G-2): the boot snapshot becomes a LIVE watch instead of a
+    // registerUser dump. Registering persisted accounts into the instance
+    // map at boot is what made every account change invisible until a
+    // restart — the stale instance copy always shadowed the file. Arming
+    // the watch makes users.json the authority for disk accounts (the
+    // instance registry still wins for purely in-process/test users), and
+    // a later `user add` / rotation / deactivation takes effect on the
+    // next authenticated request with no restart.
     $storedUserCount = \count($storedUsers);
-    foreach ($storedUsers as $storedUser) {
-        $server->registerUser($storedUser);
-    }
+    $server->watchUserStore($config->dataPath);
     $served = 0;
     $published = 0;
     // 089: scandir returns FALSE for an unreadable-but-existing root, and

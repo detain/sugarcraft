@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\GitServer\HttpSmartProtocol;
 
-use SugarCraft\GitServer\{AccessControl, Config, Repo, Stats, User};
+use SugarCraft\GitServer\{AccessControl, Config, Repo, Stats, User, UserStore};
 use SugarCraft\GitServer\Git\{PktLine, ReceivePack, StatelessRpc, UploadPack};
 use SugarCraft\GitServer\LFS\LFSHandler;
 
@@ -122,9 +122,117 @@ final class Server
      */
     private ?AuthAttemptBudget $authBudget = null;
 
+    /**
+     * Live-store watch (finding 011, G-2 default): the users.json path set
+     * by {@see watchUserStore()}, its last-successful-read composite stamp
+     * (mtime + size), and the snapshot re-read from disk. The old shape
+     * snapshotted accounts at boot only, so `user add` / `user deactivate`
+     * / a password rotation stayed invisible until a full restart — while
+     * a restart is exactly what a wedged-fork pool host avoids.
+     *
+     * Fail-closed on read error: a corrupt store holds the last-good
+     * snapshot (and the stamp is NOT taken, so the next request retries);
+     * the process never serves an auth-less server, but neither does a
+     * mid-publish corrupt read revoke a known-good account. The composite
+     * stamp (not mtime alone) is the atomic-rename tell: a same-second
+     * republish still moves the size, and both transports' writers are
+     * AtomicWriter renames, never in-place truncates.
+     */
+    private ?string $userStoreFile = null;
+    private ?string $usersStamp = null;
+
+    /** @var array<string, User> disk-snapshot accounts (instance registry wins) */
+    private array $fileUsers = [];
+
+    /** @var array<string, string> gitDir => last marker composite stamp */
+    private array $markerStamps = [];
+
     public function __construct(Config $config)
     {
         $this->config = $config;
+    }
+
+    /**
+     * Arm the live account store watch: users are then resolved from this
+     * file (re-checked cheaply per authenticated request) underneath the
+     * instance registry. Pass the data directory holding users.json.
+     */
+    public function watchUserStore(string $dataPath): void
+    {
+        $this->userStoreFile = \rtrim($dataPath, '/') . '/' . UserStore::FILE_NAME;
+        $this->usersStamp = null; // force the first read to prime the snapshot
+    }
+
+    /**
+     * Cheap per-request diff of the watched store: one stat; only a stamp
+     * change pays for a full parse. See the property docblock for the
+     * fail-closed contract.
+     */
+    private function refreshUserStore(): void
+    {
+        $file = $this->userStoreFile;
+        if ($file === null) {
+            return;
+        }
+        @\clearstatcache(true, $file);
+        $mtime = @\filemtime($file);
+        $stamp = $mtime === false
+            ? 'absent'
+            : $mtime . ':' . (string) (@\filesize($file));
+        if ($stamp === $this->usersStamp) {
+            return;
+        }
+
+        try {
+            $store = UserStore::forDataPath(\dirname($file));
+        } catch (\RuntimeException $e) {
+            // Corrupt/unsupported on disk: hold the last-good snapshot and
+            // leave the stamp unclaimed so a repaired file is picked up by
+            // the next request's diff.
+            return;
+        }
+
+        $users = [];
+        foreach ($store->all() as $user) {
+            $users[$user->username] = $user;
+        }
+        $this->fileUsers = $users;
+        $this->usersStamp = $stamp;
+    }
+
+    /**
+     * Re-check one registered repo's visibility marker (finding 011's
+     * marker half): a running server must stop serving a repo the moment
+     * an operator un-publishes it, and open readability the moment one
+     * publishes it — without a restart. One stat per request on the
+     * resolved repo; the snapshot VO is replaced only on a real change.
+     * A PRESENT marker is authoritative and reads fail-closed (an
+     * unreadable or unrecognizable marker means PRIVATE, the same rule
+     * the boot scan uses). A VANISHED or never-written marker defers to
+     * the registered VO: programmatic registrations (embedders, tests)
+     * carry in-memory truth the boot scan never minted from a marker,
+     * and the CLI un-publish path rewrites the marker, never deletes it.
+     */
+    private function liveMarker(Repo $repo): Repo
+    {
+        $gitDir = $repo->gitDir();
+        $marker = $gitDir . '/' . Repo::VISIBILITY_MARKER;
+        @\clearstatcache(true, $marker);
+        $mtime = @\filemtime($marker);
+        $stamp = $mtime === false ? 'absent' : (string) $mtime;
+        if (($this->markerStamps[$gitDir] ?? null) === $stamp) {
+            return $repo;
+        }
+        $this->markerStamps[$gitDir] = $stamp;
+        if ($stamp === 'absent') {
+            return $repo; // marker is not the authority for this repo
+        }
+
+        $live = Repo::markerVisibility($gitDir);
+
+        return $live === $repo->visibility
+            ? $repo
+            : $repo->withVisibility($live);
     }
 
     /** Inject a stats collector (default: the shared {@see Stats} instance). */
@@ -736,7 +844,7 @@ final class Server
         foreach ($candidates as $candidate) {
             $repo = $this->repos[$candidate] ?? null;
             if ($repo !== null) {
-                return $repo;
+                return $this->repos[$candidate] = $this->liveMarker($repo);
             }
 
             if (\str_ends_with($candidate, '.git')) {
@@ -746,7 +854,7 @@ final class Server
             }
 
             if ($repo !== null) {
-                return $repo;
+                return $this->liveMarker($repo);
             }
         }
 
@@ -823,7 +931,8 @@ final class Server
                         if ($retryAfter !== null) {
                             throw new AuthBudgetExhausted($retryAfter);
                         }
-                        $user = $this->users[$username] ?? null;
+                        $this->refreshUserStore();
+                        $user = $this->users[$username] ?? $this->fileUsers[$username] ?? null;
                         if ($user === null) {
                             // The old shape returned HERE, before any
                             // password_verify() — and a bcrypt-less reply is
@@ -922,10 +1031,14 @@ final class Server
         }
 
         // Instance registry first (the registered accounts of THIS
-        // server), with the process-global registry as fallback — mirrors
-        // how repos resolve. The old headless singleton-only read could
-        // never see accounts registered on the server instance.
-        $user = $this->users[$username] ?? $this->lookupGlobalUser($username);
+        // server), then the watched store's live snapshot, with the
+        // process-global registry as last fallback — mirrors how repos
+        // resolve. The old headless singleton-only read could never see
+        // accounts registered on the server instance.
+        $this->refreshUserStore();
+        $user = $this->users[$username]
+            ?? $this->fileUsers[$username]
+            ?? $this->lookupGlobalUser($username);
 
         return $user !== null && $user->isActive ? $user : null;
     }
