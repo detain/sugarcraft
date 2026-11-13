@@ -14,7 +14,10 @@ use SugarCraft\Charts\Support\Finite;
  *
  * @see https://en.wikipedia.org/wiki/Temporal_database#Binning
  *
- * Mirrors timeseriesbinner from influxdb/influxql.
+ * Designed after windowed time-binning semantics — a SugarCraft
+ * extension: the Influx-lineage package this docblock used to name was
+ * never resolvable, so the class stands on its own (the Wikipedia
+ * temporal-database binning cite above is the honest anchor).
  */
 final class BucketByTime
 {

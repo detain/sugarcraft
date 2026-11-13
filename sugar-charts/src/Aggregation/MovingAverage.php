@@ -11,7 +11,10 @@ use SugarCraft\Charts\Support\Finite;
  * Optionally produces a SMA for a second list at the same cadence (e.g.
  * close prices bucketed by time, then smoothed).
  *
- * Mirrors pandas.DataFrame.rolling.mean / emcli/sma.
+ * Designed after pandas.DataFrame.rolling(mean) semantics — a SugarCraft
+ * extension: no surveyed Go charting library ships an aggregation module
+ * (research record: Aggregation missing across the board); the second
+ * upstream this docblock used to cite never resolved to a real package.
  */
 final class MovingAverage
 {

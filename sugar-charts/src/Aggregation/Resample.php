@@ -12,7 +12,11 @@ use SugarCraft\Charts\Support\Finite;
  * (upsampling or downsampling) using linear interpolation or
  * nearest-value selection.
  *
- * Mirrors pandas.DataFrame.resample + scipy.signal.resample.
+ * Designed after pandas.DataFrame.resample semantics — a SugarCraft
+ * extension: the FFT-based Python resampler once cited here shares no
+ * code path with our linear/nearest interpolation, and no surveyed Go
+ * charting library ships resampling primitives (research record:
+ * Aggregation missing across the board).
  */
 final class Resample
 {
