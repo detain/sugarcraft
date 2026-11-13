@@ -25,7 +25,7 @@ return [
     'cli.initializing'         => 'CandyGitServer 데이터 디렉토리 초기화 중: {path}',
     'cli.done'                 => '완료.',
     'cli.next_steps'           => '다음 단계:',
-    'cli.next_step_1'          => '  1. 계정 생성: candy-git-server user add --admin admin {path}',
+    'cli.next_step_1' => '  1. 첫 관리자 만들기: candy-git-server init {path} --admin <name> --admin-password-stdin',
 
     'cli.next_step_2'          => '  2. 저장소 생성: candy-git-server repo create <이름> {path} (익명 공개 읽기는 --public 추가)',
 
@@ -77,7 +77,7 @@ return [
     'cli.bool_no'              => '아니오',
     'cli.none_value'           => '(없음)',
     'cli.unknown_command'      => "알 수 없는 명령: {cmd}\n  도움말은 'candy-git-server help'를 실행하세요.",
-    'cli.help'                 => "CandyGitServer — 자체 호스팅 Git 서버\n\n사용법:\n  candy-git-server <명령> [옵션]\n\n명령:\n  serve [--config path]    Git 서버 시작\n  init [data-path]         새 데이터 디렉토리 초기화\n  user add <username>      사용자 생성\n  user key <username> <file>  사용자의 SSH 공개키 추가 (stdin에는 - 사용)\n  user list                사용자 목록\n  repo list [data-path]    저장소 목록\n  repo create <name> [data-path]  저장소 생성\n  repo info <name> [data-path]    저장소 정보 표시\n  help, --help, -h         이 도움말 표시\n  version, --version, -v   버전 표시\n\n환경 변수:\n  CANDY_GIT_SERVER_DATA_PATH    데이터 디렉토리 (기본값: /tmp/candy-git-server)\n\n예:\n  candy-git-server init ~/candy-git-server-data\n  candy-git-server serve --config ~/candy-git-server-data/config.yaml\n  candy-git-server repo create my-project\n  candy-git-server user key alice ~/.ssh/id_ed25519.pub",
+    'cli.help' => "CandyGitServer — 자체 호스팅 Git 서버\n\n사용법:\n  candy-git-server <명령> [옵션]\n\n명령:\n  serve --http --repo-root DIR [--http-port N] [--http-host H] [--config F]          스마트 HTTP로 저장소 제공\n  init [data-path] [--admin NAME [--admin-password-stdin | --key-file F]] [--force]  데이터 디렉터리 초기화(첫 관리자 생성 선택 가능)\n  user add <username> [data-path] [--password [-]] [--admin|--read]                  사용자 생성(--admin이 없으면 최소 권한)\n  user key <username> <file>                                                         SSH 공개 키 추가(-는 STDIN에서 읽음)\n  user list                                                                          사용자 목록\n  user token <username> [ttl]                                                        HTTP 프록시 토큰 서명 발급\n  user remove <username> [data-path]                                                 사용자 삭제\n  user deactivate <username> [data-path]                                             사용자 비활성화\n  repo list [data-path]                                                              저장소 목록\n  repo create <name> [data-path]                                                     저장소 생성\n  repo info <name> [data-path]                                                       저장소 정보 표시\n  repo collaborator <name> add|remove <user>                                         저장소 협업자 관리\n  repo mirror <name> <url>|--clear                                                   미러 업스트림 설정 또는 해제\n  repo push-access <name> allow|deny                                                 쓰기 권한 없는 push 허용 또는 거부\n  help, --help, -h                                                                   이 도움말 표시\n  version, --version, -v                                                             버전 표시\n\n환경 변수:\n  CANDY_GIT_SERVER_DATA_PATH        데이터 디렉터리(기본값: /tmp/candy-git-server)\n  CANDY_GIT_SERVER_LANG             번역 카탈로그(기본값: en)\n  CANDY_GIT_SERVER_BOOTSTRAP_ADMIN  첫 관리자 이름(init만 참조)\n\n예시:\n  candy-git-server init ~/candy-git-server-data --admin alice --admin-password-stdin\n  candy-git-server serve --http --repo-root ~/candy-git-server-data/repositories\n  candy-git-server repo create my-project\n  candy-git-server user key alice ~/.ssh/id_ed25519.pub",
     'user.ssh_key_too_short' => '{type}용 SSH 공개 키 블록이 너무 짧습니다: {len} < {min} base64 문자',
     'config.parse_failed'   => '잘못된 YAML 설정: {error}',
     'config.invalid_user_trust_mode' => '잘못된 http.user_trust_mode "{mode}": off, proxy 또는 token 필요',
@@ -102,7 +102,7 @@ return [
     'cli.token_no_config' => 'token: 읽을 수 있는 구성이 없습니다 {data}/config.yaml — init을 실행하거나 데이터 경로를 지정하세요',
     'cli.token_no_secret' => 'token: 이 데이터 경로에 http.auth_secret이 구성되어 있지 않습니다. 토큰을 발행하기 전에 config.yaml의 http: 섹션에 설정하세요',
     'cli.token_ttl_capped' => 'token: 요청한 TTL {ttl}초가 {key}의 상한 {max}초를 초과합니다. TTL을 낮추거나 config.yaml에서 이 키를 올리세요',
-    'cli.password_flag_empty' => 'candy-git-server: --password에는 비어 있지 않은 값이 필요합니다',
+    'cli.password_flag_empty' => '--password에는 비어 있지 않은 값이 필요합니다',
     'cli.password_argv_exposed' => '경고: 명령줄에 전달된 비밀번호는 bcrypt 실행 중 ps /proc/pid/cmdline에서 보입니다. 값 없는 --password는 STDIN에서 읽습니다',
     'cli.username_invalid' => '잘못된 사용자 이름: \'{username}\' (문자, 숫자, 점, 밑줄, 하이픈만 가능; 점만은 불가)',
     'cli.user_exists' => '사용자 \'{username}\'이(가) {path}에 이미 있습니다',
@@ -112,4 +112,11 @@ return [
     'cli.init_admin_needs_name' => 'init: --admin에는 계정 이름이 필요합니다',
     'cli.init_key_invalid' => 'init: {file}의 SSH 키가 올바르지 않습니다: {why}',
     'cli.serve_no_admin_hint' => '참고: {path}에 관리자 계정이 없습니다. \'candy-git-server init {path} --admin <이름> --admin-password-stdin\'으로 첫 계정을 만드세요',
+    'ssh.user_deactivated' => '사용자 {user}은(는) 비활성화되어 있습니다',
+    'ssh.auth_failed' => '{user} 인증에 실패했습니다',
+    'ssh.unknown_command' => '알 수 없는 명령: {cmd}',
+    'ssh.repo_not_found' => '저장소를 찾을 수 없습니다: {name}',
+    'ssh.repo_created' => '새 저장소를 만들었습니다: {name}',
+    'cli.serve_unwired' => '\'serve\'가 시작을 거부했습니다: ssh 및 git 리스너는 아직 연결되지 않았고 \'serve --http\'만 동작합니다(README의 알려진 공백 참조)',
+    'cli.user_persisted_to' => '{path}에 저장했습니다',
 ];

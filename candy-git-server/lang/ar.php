@@ -25,7 +25,7 @@ return [
     'cli.initializing'         => 'جاري تهيئة دليل بيانات CandyGitServer: {path}',
     'cli.done'                 => 'تم.',
     'cli.next_steps'           => 'الخطوات التالية:',
-    'cli.next_step_1'          => '  1. أنشئ حسابًا: candy-git-server user add --admin admin {path}',
+    'cli.next_step_1' => '  1. أنشئ أول مسؤول: candy-git-server init {path} --admin <name> --admin-password-stdin',
 
     'cli.next_step_2'          => '  2. أنشئ مستودعًا: candy-git-server repo create <اسم> {path} (أضف --public للنشر للقراءة المجهولة)',
 
@@ -77,7 +77,7 @@ return [
     'cli.bool_no'              => 'لا',
     'cli.none_value'           => '(لا شيء)',
     'cli.unknown_command'      => "أمر غير معروف: {cmd}\n  شغّل 'candy-git-server help' للمساعدة.",
-    'cli.help'                 => "CandyGitServer — خادم Git ذاتي الاستضافة\n\nالاستخدام:\n  candy-git-server <أمر> [خيارات]\n\nالأوامر:\n  serve [--config path]    بدء خادم Git\n  init [data-path]         تهيئة دليل بيانات جديد\n  user add <username>      إنشاء مستخدم\n  user key <username> <file>  إضافة مفتاح SSH عام للمستخدم (استخدم - لـ stdin)\n  user list                سرد المستخدمين\n  repo list [data-path]    سرد المستودعات\n  repo create <name> [data-path]  إنشاء مستودع\n  repo info <name> [data-path]    عرض معلومات المستودع\n  help, --help, -h         عرض هذه المساعدة\n  version, --version, -v   عرض الإصدار\n\nمتغيرات البيئة:\n  CANDY_GIT_SERVER_DATA_PATH    دليل البيانات (الافتراضي: /tmp/candy-git-server)\n\nالأمثلة:\n  candy-git-server init ~/candy-git-server-data\n  candy-git-server serve --config ~/candy-git-server-data/config.yaml\n  candy-git-server repo create my-project\n  candy-git-server user key alice ~/.ssh/id_ed25519.pub",
+    'cli.help' => "CandyGitServer — خادم Git ذاتي الاستضافة\n\nالاستخدام:\n  candy-git-server <أمر> [خيارات]\n\nالأوامر:\n  serve --http --repo-root DIR [--http-port N] [--http-host H] [--config F]          تقديم المستودعات عبر HTTP الذكي\n  init [data-path] [--admin NAME [--admin-password-stdin | --key-file F]] [--force]  تهيئة دليل البيانات (مع إنشاء أول مسؤول اختياريًا)\n  user add <username> [data-path] [--password [-]] [--admin|--read]                  إنشاء مستخدم (أقل الصلاحيات ما لم يُستخدم --admin)\n  user key <username> <file>                                                         إضافة مفتاح SSH عام (الرمز - يقرأ من STDIN)\n  user list                                                                          عرض المستخدمين\n  user token <username> [ttl]                                                        إصدار توقيع رمز وكيل HTTP\n  user remove <username> [data-path]                                                 إزالة مستخدم\n  user deactivate <username> [data-path]                                             تعطيل مستخدم\n  repo list [data-path]                                                              عرض المستودعات\n  repo create <name> [data-path]                                                     إنشاء مستودع\n  repo info <name> [data-path]                                                       عرض معلومات المستودع\n  repo collaborator <name> add|remove <user>                                         إدارة المتعاونين في المستودع\n  repo mirror <name> <url>|--clear                                                   ضبط مصدر المرآة أو مسحه\n  repo push-access <name> allow|deny                                                 السماح بالدفع دون صلاحية الكتابة أو منعه\n  help, --help, -h                                                                   عرض هذه المساعدة\n  version, --version, -v                                                             عرض الإصدار\n\nالبيئة:\n  CANDY_GIT_SERVER_DATA_PATH        دليل البيانات (الافتراضي: /tmp/candy-git-server)\n  CANDY_GIT_SERVER_LANG             كتالوج الترجمة (الافتراضي: en)\n  CANDY_GIT_SERVER_BOOTSTRAP_ADMIN  اسم أول مسؤول، يُعتمد في init فقط\n\nأمثلة:\n  candy-git-server init ~/candy-git-server-data --admin alice --admin-password-stdin\n  candy-git-server serve --http --repo-root ~/candy-git-server-data/repositories\n  candy-git-server repo create my-project\n  candy-git-server user key alice ~/.ssh/id_ed25519.pub",
     'user.ssh_key_too_short' => 'نواة المفتاح العام SSH قصيرة جدًا لـ {type}: {len} < {min} حرف base64',
     'config.parse_failed'   => 'تهيئة YAML غير صالحة: {error}',
     'config.invalid_user_trust_mode' => 'قيمة http.user_trust_mode "{mode}" غير صالحة: المتوقع off أو proxy أو token',
@@ -102,7 +102,7 @@ return [
     'cli.token_no_config' => 'token: لا يوجد إعداد قابل للقراءة في {data}/config.yaml — شغّل init أو مرّر مسار بيانات',
     'cli.token_no_secret' => 'token: http.auth_secret غير مُهيأ لمسار البيانات هذا؛ اضبطه تحت قسم http: في config.yaml قبل إصدار الرموز',
     'cli.token_ttl_capped' => 'token: مدة TTL المطلوبة {ttl} ثانية تتجاوز الحد {max} ثانية المضبوط تحت {key}; قلل المدة أو ارفع هذا المفتاح في config.yaml',
-    'cli.password_flag_empty' => 'candy-git-server: --password يتطلب قيمة غير فارغة',
+    'cli.password_flag_empty' => '--password يتطلب قيمة غير فارغة',
     'cli.password_argv_exposed' => 'تحذير: كلمة المرور الممررة في سطر الأوامر مرئية عبر ps /proc/pid/cmdline أثناء bcrypt؛ --password بدون قيمة تقرأها من STDIN',
     'cli.username_invalid' => 'اسم مستخدم غير صالح: \'{username}\' (حروف وأرقام ونقطة وشرطة سفلية وشرطة؛ ليس نقاطًا فقط)',
     'cli.user_exists' => 'المستخدم \'{username}\' موجود بالفعل في {path}',
@@ -112,4 +112,11 @@ return [
     'cli.init_admin_needs_name' => 'init: الخيار --admin يتطلب اسم حساب',
     'cli.init_key_invalid' => 'init: مفتاح SSH غير صالح في {file}: {why}',
     'cli.serve_no_admin_hint' => 'ملاحظة: لا يوجد حساب مسؤول في {path}؛ أنشئ الأول بالأمر \'candy-git-server init {path} --admin <name> --admin-password-stdin\'',
+    'ssh.user_deactivated' => 'المستخدم {user} معطّل',
+    'ssh.auth_failed' => 'فشلت مصادقة {user}',
+    'ssh.unknown_command' => 'أمر غير معروف: {cmd}',
+    'ssh.repo_not_found' => 'المستودع غير موجود: {name}',
+    'ssh.repo_created' => 'تم إنشاء مستودع جديد: {name}',
+    'cli.serve_unwired' => 'يرفض \'serve\' البدء: مستمعا ssh وgit غير موصولين بعد، ويعمل \'serve --http\' فقط (راجع README، الثغرات المعروفة)',
+    'cli.user_persisted_to' => 'تم الحفظ في {path}',
 ];

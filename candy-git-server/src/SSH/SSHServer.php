@@ -104,13 +104,13 @@ final class SSHServer
         $user = $this->users[$username] ?? null;
 
         if ($user !== null && !$user->isActive) {
-            \fwrite(\STDERR, "User " . self::logSafe($username) . " is deactivated\n");
+            \fwrite(\STDERR, Lang::t('ssh.user_deactivated', ['user' => self::logSafe($username)]) . "\n");
             return 1;
         }
 
         // Handle public key auth
         if (!$this->authenticate($stream, $user, $publicKey)) {
-            \fwrite(\STDERR, "Authentication failed for " . self::logSafe($username) . "\n");
+            \fwrite(\STDERR, Lang::t('ssh.auth_failed', ['user' => self::logSafe($username)]) . "\n");
             return 1;
         }
 
@@ -118,7 +118,7 @@ final class SSHServer
 
         // Parse git command
         if (!\preg_match('/^(git-upload-pack|git-receive-pack)\s+["\']?(\/[^"\'\s]+)["\']?/', $command, $m)) {
-            \fwrite(\STDERR, "Unknown command: " . self::logSafe($command) . "\n");
+            \fwrite(\STDERR, Lang::t('ssh.unknown_command', ['cmd' => self::logSafe($command)]) . "\n");
             return 1;
         }
 
@@ -131,7 +131,7 @@ final class SSHServer
         // parent of the repos root (and creating repos there on push).
         // isJailSafeName rejects the all-dots names that the charset allows.
         if (!Repo::isJailSafeName($repoName)) {
-            \fwrite(\STDERR, "Invalid repo name: " . self::logSafe($repoName) . "\n");
+            \fwrite(\STDERR, Lang::t('ssh.invalid_repo_name', ['name' => self::logSafe($repoName)]) . "\n");
             return 1;
         }
 
@@ -145,7 +145,7 @@ final class SSHServer
             if ($gitCmd === 'git-receive-pack' && $ac->canCreateRepos($user)) {
                 $repo = $this->createRepo($repoName, $user);
             } else {
-                \fwrite(\STDERR, "Repository not found: {$repoName}\n");
+                \fwrite(\STDERR, Lang::t('ssh.repo_not_found', ['name' => $repoName]) . "\n");
                 return 1;
             }
         }
@@ -268,7 +268,7 @@ final class SSHServer
 
         $this->repos[$name] = $repo;
 
-        \fwrite(\STDERR, "Created new repository: {$name}\n");
+        \fwrite(\STDERR, Lang::t('ssh.repo_created', ['name' => $name]) . "\n");
         return $repo;
     }
 

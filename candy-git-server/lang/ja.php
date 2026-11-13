@@ -25,7 +25,7 @@ return [
     'cli.initializing'         => 'CandyGitServer データディレクトリを初期化中：{path}',
     'cli.done'                 => '完了。',
     'cli.next_steps'           => '次のステップ：',
-    'cli.next_step_1'          => '  1. アカウント作成: candy-git-server user add --admin admin {path}',
+    'cli.next_step_1' => '  1. 最初の管理者を作成: candy-git-server init {path} --admin <name> --admin-password-stdin',
 
     'cli.next_step_2'          => '  2. リポジトリ作成: candy-git-server repo create <名前> {path} (匿名読み取りで公開するには --public)',
 
@@ -77,7 +77,7 @@ return [
     'cli.bool_no'              => 'いいえ',
     'cli.none_value'           => '（なし）',
     'cli.unknown_command'      => "不明なコマンド：{cmd}\n  帮助は 'candy-git-server help' を実行してください。",
-    'cli.help'                 => "CandyGitServer — セルフホスト Git サーバー\n\n用法：\n  candy-git-server <コマンド> [オプション]\n\nコマンド：\n  serve [--config path]    Git サーバーを起動\n  init [data-path]         新しいデータディレクトリを初期化\n  user add <username>      ユーザーを作成\n  user key <username> <file>  ユーザーの SSH 公開鍵を追加（stdin は - を使用）\n  user list                ユーザー一覧\n  repo list [data-path]    リポジトリ一覧\n  repo create <name> [data-path]  リポジトリを作成\n  repo info <name> [data-path]    リポジトリ情報を表示\n  help, --help, -h         このヘルプを表示\n  version, --version, -v   バージョンを表示\n\n環境変数：\n  CANDY_GIT_SERVER_DATA_PATH    データディレクトリ（デフォルト：/tmp/candy-git-server）\n\n例：\n  candy-git-server init ~/candy-git-server-data\n  candy-git-server serve --config ~/candy-git-server-data/config.yaml\n  candy-git-server repo create my-project\n  candy-git-server user key alice ~/.ssh/id_ed25519.pub",
+    'cli.help' => "CandyGitServer — セルフホスト Git サーバー\n\n用法：\n  candy-git-server <コマンド> [オプション]\n\nコマンド：\n  serve --http --repo-root DIR [--http-port N] [--http-host H] [--config F]          スマート HTTP でリポジトリを提供\n  init [data-path] [--admin NAME [--admin-password-stdin | --key-file F]] [--force]  データディレクトリを初期化（最初の管理者を作成可）\n  user add <username> [data-path] [--password [-]] [--admin|--read]                  ユーザーを作成（--admin がなければ最小権限）\n  user key <username> <file>                                                         SSH 公開鍵を追加（- で STDIN から読み込み）\n  user list                                                                          ユーザー一覧\n  user token <username> [ttl]                                                        HTTP プロキシトークン署名を発行\n  user remove <username> [data-path]                                                 ユーザーを削除\n  user deactivate <username> [data-path]                                             ユーザーを無効化\n  repo list [data-path]                                                              リポジトリ一覧\n  repo create <name> [data-path]                                                     リポジトリを作成\n  repo info <name> [data-path]                                                       リポジトリ情報を表示\n  repo collaborator <name> add|remove <user>                                         リポジトリの共同作業者を管理\n  repo mirror <name> <url>|--clear                                                   ミラー上流を設定または解除\n  repo push-access <name> allow|deny                                                 書き込み権限なしの push を許可または拒否\n  help, --help, -h                                                                   このヘルプを表示\n  version, --version, -v                                                             バージョンを表示\n\n環境変数：\n  CANDY_GIT_SERVER_DATA_PATH        データディレクトリ（既定：/tmp/candy-git-server）\n  CANDY_GIT_SERVER_LANG             翻訳カタログ（既定：en）\n  CANDY_GIT_SERVER_BOOTSTRAP_ADMIN  最初の管理者名（init のみが参照）\n\n例：\n  candy-git-server init ~/candy-git-server-data --admin alice --admin-password-stdin\n  candy-git-server serve --http --repo-root ~/candy-git-server-data/repositories\n  candy-git-server repo create my-project\n  candy-git-server user key alice ~/.ssh/id_ed25519.pub",
     'user.ssh_key_too_short' => '{type} の SSH 公開鍵ブロックが短すぎます: {len} < {min} base64 文字',
     'config.parse_failed'   => 'YAML 設定が無効です: {error}',
     'config.invalid_user_trust_mode' => 'http.user_trust_mode "{mode}" が無効です: off、proxy、token のいずれか',
@@ -102,7 +102,7 @@ return [
     'cli.token_no_config' => 'token: 読み取り可能な設定がありません {data}/config.yaml — init を実行するかデータパスを指定してください',
     'cli.token_no_secret' => 'token: このデータパスに http.auth_secret が設定されていません。トークンを発行する前に config.yaml の http: セクションに設定してください',
     'cli.token_ttl_capped' => 'token: 要求された TTL {ttl}秒は {key} の上限 {max}秒 を超えています。TTL を下げるか、config.yaml でこのキーを引き上げてください',
-    'cli.password_flag_empty' => 'candy-git-server: --password には空でない値が必要です',
+    'cli.password_flag_empty' => '--password には空でない値が必要です',
     'cli.password_argv_exposed' => '警告: コマンドラインに渡したパスワードは bcrypt 実行中に ps /proc/pid/cmdline から参照されます。値なしの --password は STDIN から読み込みます',
     'cli.username_invalid' => '無効なユーザー名: \'{username}\' (使用可能: 英数字、ドット、アンダースコア、ハイフン。ドットのみは不可)',
     'cli.user_exists' => 'ユーザー \'{username}\' は {path} に既に存在します',
@@ -112,4 +112,11 @@ return [
     'cli.init_admin_needs_name' => 'init: --admin にはアカウント名が必要です',
     'cli.init_key_invalid' => 'init: {file} の SSH 鍵が無効です: {why}',
     'cli.serve_no_admin_hint' => '注意: {path} に管理者アカウントがありません。最初の1件を \'candy-git-server init {path} --admin <名前> --admin-password-stdin\' で作成してください',
+    'ssh.user_deactivated' => 'ユーザー {user} は無効化されています',
+    'ssh.auth_failed' => '{user} の認証に失敗しました',
+    'ssh.unknown_command' => '不明なコマンド：{cmd}',
+    'ssh.repo_not_found' => 'リポジトリが見つかりません：{name}',
+    'ssh.repo_created' => '新しいリポジトリを作成しました：{name}',
+    'cli.serve_unwired' => '\'serve\' は起動を拒否しました：ssh と git のリスナーはまだ接続されておらず、\'serve --http\' のみ動作します（README の既知のギャップを参照）',
+    'cli.user_persisted_to' => '{path} に保存しました',
 ];

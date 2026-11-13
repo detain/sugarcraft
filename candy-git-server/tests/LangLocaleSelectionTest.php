@@ -17,7 +17,7 @@ use SugarCraft\GitServer\Lang;
  */
 final class LangLocaleSelectionTest extends TestCase
 {
-    private const LOCALES = ['ar', 'cs', 'de', 'en', 'es', 'fr', 'it', 'ja', 'ko', 'nl', 'pl', 'pt-br', 'pt', 'ru', 'tr', 'zh-cn'];
+    private const LOCALES = ['ar', 'cs', 'de', 'en', 'es', 'fr', 'it', 'ja', 'ko', 'nl', 'pl', 'pt-br', 'pt', 'ru', 'tr', 'zh-cn', 'zh-tw'];
 
     protected function tearDown(): void
     {
@@ -68,6 +68,35 @@ final class LangLocaleSelectionTest extends TestCase
                 "locale {$locale} diverges from the en key set",
             );
             self::assertCount(\count($english), $keys);
+        }
+    }
+
+    public function testEveryLocaleKeepsTheEnglishPlaceholders(): void
+    {
+        // Key parity alone lets a translation drop or rename {path}; the
+        // placeholder set per key must match en exactly.
+        $english = include \dirname(__DIR__) . '/lang/en.php';
+        foreach (self::LOCALES as $locale) {
+            $table = include \dirname(__DIR__) . "/lang/{$locale}.php";
+            foreach ($english as $key => $text) {
+                \preg_match_all('/\{[a-z_]+\}/', $text, $want);
+                \preg_match_all('/\{[a-z_]+\}/', $table[$key], $got);
+                $w = $want[0];
+                $g = $got[0];
+                \sort($w);
+                \sort($g);
+                self::assertSame($w, $g, "{$locale}: {$key} placeholders diverge from en");
+            }
+        }
+    }
+
+    public function testHelpListsEveryRealCommandInEveryLocale(): void
+    {
+        foreach (self::LOCALES as $locale) {
+            $help = (include \dirname(__DIR__) . "/lang/{$locale}.php")['cli.help'];
+            foreach (['init [data-path] [--admin NAME', 'user remove', 'user deactivate', 'repo collaborator', 'repo mirror', 'repo push-access', 'CANDY_GIT_SERVER_BOOTSTRAP_ADMIN'] as $needle) {
+                self::assertStringContainsString($needle, $help, "{$locale} help is stale: missing {$needle}");
+            }
         }
     }
 
@@ -142,12 +171,12 @@ final class LangLocaleSelectionTest extends TestCase
         self::assertStringContainsString("Lang::t('cli.next_step_3', ['path' => \$dataPath])", $bin);
         $en = include \dirname(__DIR__) . '/lang/en.php';
         self::assertStringContainsString('serve --http --repo-root', $en['cli.next_step_3']);
-        self::assertStringContainsString('user add', $en['cli.next_step_1']);
+        self::assertStringContainsString('init {path} --admin <name>', $en['cli.next_step_1']);
         // 019: the printed onboarding step must not mint a factor-less
         // account — the retired 'user add --admin admin' shape persisted
         // password_hash: null and refused pushes forever, off a name the
         // attack list guesses first. STDIN steer replaces it.
-        self::assertStringContainsString('--password -', $en['cli.next_step_1']);
+        self::assertStringContainsString('--admin-password-stdin', $en['cli.next_step_1']);
         self::assertStringNotContainsString('--admin admin', $en['cli.next_step_1']);
         self::assertStringContainsString('--public', $en['cli.next_step_2']);
         self::assertArrayNotHasKey('cli.next_step_4', $en);

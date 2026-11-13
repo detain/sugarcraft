@@ -25,7 +25,7 @@ return [
     'cli.initializing'         => '正在初始化 CandyGitServer 数据目录：{path}',
     'cli.done'                 => '完成。',
     'cli.next_steps'           => '下一步：',
-    'cli.next_step_1'          => '  1. 创建账户: candy-git-server user add --admin admin {path}',
+    'cli.next_step_1' => '  1. 创建第一个管理员: candy-git-server init {path} --admin <name> --admin-password-stdin',
 
     'cli.next_step_2'          => '  2. 创建仓库: candy-git-server repo create <名称> {path} (加 --public 公开匿名读取)',
 
@@ -77,7 +77,7 @@ return [
     'cli.bool_no'              => '否',
     'cli.none_value'           => '（无）',
     'cli.unknown_command'      => "未知命令：{cmd}\n  运行 'candy-git-server help' 获取帮助。",
-    'cli.help'                 => "CandyGitServer — 自托管 Git 服务器\n\n用法：\n  candy-git-server <命令> [选项]\n\n命令：\n  serve [--config path]    启动 Git 服务器\n  init [data-path]         初始化新的数据目录\n  user add <username>      创建用户\n  user key <username> <file>  为用户添加 SSH 公钥（使用 - 表示标准输入）\n  user list                列出用户\n  repo list [data-path]    列出仓库\n  repo create <name> [data-path]  创建仓库\n  repo info <name> [data-path]    显示仓库信息\n  help, --help, -h         显示此帮助\n  version, --version, -v   显示版本\n\n环境变量：\n  CANDY_GIT_SERVER_DATA_PATH    数据目录（默认：/tmp/candy-git-server）\n\n示例：\n  candy-git-server init ~/candy-git-server-data\n  candy-git-server serve --config ~/candy-git-server-data/config.yaml\n  candy-git-server repo create my-project\n  candy-git-server user key alice ~/.ssh/id_ed25519.pub",
+    'cli.help' => "CandyGitServer — 可自托管的 Git 服务器\n\n用法：\n  candy-git-server <命令> [选项]\n\n命令：\n  serve --http --repo-root DIR [--http-port N] [--http-host H] [--config F]          通过智能 HTTP 提供仓库服务\n  init [data-path] [--admin NAME [--admin-password-stdin | --key-file F]] [--force]  初始化数据目录（可选创建第一个管理员）\n  user add <username> [data-path] [--password [-]] [--admin|--read]                  创建用户（除非加 --admin，否则为最小权限）\n  user key <username> <file>                                                         添加 SSH 公钥（- 表示从 STDIN 读取）\n  user list                                                                          列出用户\n  user token <username> [ttl]                                                        签发 HTTP 代理令牌签名\n  user remove <username> [data-path]                                                 删除用户\n  user deactivate <username> [data-path]                                             停用用户\n  repo list [data-path]                                                              列出仓库\n  repo create <name> [data-path]                                                     创建仓库\n  repo info <name> [data-path]                                                       显示仓库信息\n  repo collaborator <name> add|remove <user>                                         管理仓库协作者\n  repo mirror <name> <url>|--clear                                                   设置或清除镜像上游\n  repo push-access <name> allow|deny                                                 允许或拒绝无写权限的推送\n  help, --help, -h                                                                   显示此帮助\n  version, --version, -v                                                             显示版本\n\n环境变量：\n  CANDY_GIT_SERVER_DATA_PATH        数据目录（默认：/tmp/candy-git-server）\n  CANDY_GIT_SERVER_LANG             翻译目录（默认：en）\n  CANDY_GIT_SERVER_BOOTSTRAP_ADMIN  第一个管理员的名称，仅 init 使用\n\n示例：\n  candy-git-server init ~/candy-git-server-data --admin alice --admin-password-stdin\n  candy-git-server serve --http --repo-root ~/candy-git-server-data/repositories\n  candy-git-server repo create my-project\n  candy-git-server user key alice ~/.ssh/id_ed25519.pub",
     'user.ssh_key_too_short' => '{type} 的 SSH 公钥块太短: {len} < {min} base64 字符',
     'config.parse_failed'   => 'YAML 配置无效: {error}',
     'config.invalid_user_trust_mode' => 'http.user_trust_mode "{mode}" 无效: 期望 off、proxy 或 token',
@@ -102,7 +102,7 @@ return [
     'cli.token_no_config' => 'token: {data}/config.yaml 没有可读配置 — 请运行 init 或指定数据路径',
     'cli.token_no_secret' => 'token: 此数据路径未配置 http.auth_secret；请在 config.yaml 的 http: 段中设置后再签发令牌',
     'cli.token_ttl_capped' => 'token: 请求的 TTL {ttl}秒超过 {key} 配置的上限 {max}秒；请降低 TTL，或在 config.yaml 中提高该键值',
-    'cli.password_flag_empty' => 'candy-git-server: --password 需要非空值',
+    'cli.password_flag_empty' => '--password 需要非空值',
     'cli.password_argv_exposed' => '警告：命令行传入的密码在 bcrypt 运行期间可通过 ps /proc/pid/cmdline 看到；不带值的 --password 会从 STDIN 读取',
     'cli.username_invalid' => '无效用户名：\'{username}\'（仅限字母、数字、点、下划线、连字符；不能全为点）',
     'cli.user_exists' => '用户 \'{username}\' 已存在于 {path}',
@@ -112,4 +112,11 @@ return [
     'cli.init_admin_needs_name' => 'init：--admin 需要账户名',
     'cli.init_key_invalid' => 'init：{file} 中的 SSH 密钥无效：{why}',
     'cli.serve_no_admin_hint' => '提示：{path} 中没有管理员账户；请用 \'candy-git-server init {path} --admin <名称> --admin-password-stdin\' 创建第一个',
+    'ssh.user_deactivated' => '用户 {user} 已停用',
+    'ssh.auth_failed' => '{user} 认证失败',
+    'ssh.unknown_command' => '未知命令：{cmd}',
+    'ssh.repo_not_found' => '未找到仓库：{name}',
+    'ssh.repo_created' => '已创建新仓库：{name}',
+    'cli.serve_unwired' => '\'serve\' 拒绝启动：ssh 与 git 监听器尚未接入，只有 \'serve --http\' 可运行（参见 README 的已知缺口）',
+    'cli.user_persisted_to' => '已保存到 {path}',
 ];

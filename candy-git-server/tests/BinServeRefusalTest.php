@@ -84,8 +84,8 @@ final class BinServeRefusalTest extends TestCase
         $r = $this->runBin(['serve']);
 
         $this->assertSame(1, $r['rc'], 'serve must exit non-zero, never the old banner-and-zero');
-        $this->assertStringContainsString('not implemented', $r['err']);
-        $this->assertStringContainsString('scaffold', $r['err']);
+        $this->assertStringContainsString('not wired', $r['err']);
+        $this->assertStringContainsString('only', $r['err']);
         $this->assertSame('', $r['out'], 'no banner, no config summary, no repo listing on stdout');
     }
 
@@ -96,7 +96,7 @@ final class BinServeRefusalTest extends TestCase
         $r = $this->runBin(['serve', '--daemon', '--pid-file', $pidFile]);
 
         $this->assertSame(1, $r['rc'], 'daemon mode is refused the same way — nothing forks');
-        $this->assertStringContainsString('scaffold', $r['err']);
+        $this->assertStringContainsString('only', $r['err']);
         $this->assertFileDoesNotExist($pidFile);
         // A real daemon launch returns only after forking; refusal is
         // immediate. Generous ceiling: this proves "did not daemonize",
@@ -112,8 +112,8 @@ final class BinServeRefusalTest extends TestCase
         $r = $this->runBin(['serve', '--config', $this->tmpDir . '/definitely-not-here.yaml']);
 
         $this->assertSame(1, $r['rc']);
-        $this->assertStringContainsString('not implemented', $r['err']);
-        $this->assertStringContainsString('scaffold', $r['err']);
+        $this->assertStringContainsString('not wired', $r['err']);
+        $this->assertStringContainsString('only', $r['err']);
     }
 
     public function testRepoCreateRoundtripIsDiscoveryVisibleAndPromisesNoCloneUrl(): void

@@ -29,7 +29,7 @@ return [
     'cli.initializing'         => 'Inicializando directorio de datos de CandyGitServer: {path}',
     'cli.done'                 => 'Hecho.',
     'cli.next_steps'           => 'Próximos pasos:',
-    'cli.next_step_1'          => '  1. Cree una cuenta: candy-git-server user add --admin admin {path}',
+    'cli.next_step_1' => '  1. Crear el primer admin: candy-git-server init {path} --admin <name> --admin-password-stdin',
 
     'cli.next_step_2'          => '  2. Cree un repositorio: candy-git-server repo create <nombre> {path} (añada --public para publicarlo en lectura anónima)',
 
@@ -86,7 +86,7 @@ Resaltado:   {highlight}
 
     // bin/candy-git-server — help / unknown
     'cli.unknown_command'      => "Comando desconocido: {cmd}\n  Ejecute 'candy-git-server help' para obtener ayuda.",
-    'cli.help'                 => "CandyGitServer — Servidor Git autoalojable\n\nUso:\n  candy-git-server <comando> [opciones]\n\nComandos:\n  serve [--config path]    Iniciar el servidor Git\n  init [data-path]         Inicializar un nuevo directorio de datos\n  user add <username>      Crear un usuario\n  user key <username> <file>  Agregar clave SSH pública para el usuario (use - para stdin)\n  user list                Listar usuarios\n  repo list [data-path]    Listar repositorios\n  repo create <name> [data-path]  Crear un repositorio\n  repo info <name> [data-path]    Mostrar información del repositorio\n  help, --help, -h         Mostrar esta ayuda\n  version, --version, -v   Mostrar versión\n\nEntorno:\n  CANDY_GIT_SERVER_DATA_PATH    Directorio de datos (predeterminado: /tmp/candy-git-server)\n\nEjemplos:\n  candy-git-server init ~/candy-git-server-data\n  candy-git-server serve --config ~/candy-git-server-data/config.yaml\n  candy-git-server repo create mi-proyecto\n  candy-git-server user key alice ~/.ssh/id_ed25519.pub",
+    'cli.help' => "CandyGitServer — servidor Git autoalojable\n\nUso:\n  candy-git-server <comando> [opciones]\n\nComandos:\n  serve --http --repo-root DIR [--http-port N] [--http-host H] [--config F]          Servir repositorios por HTTP inteligente\n  init [data-path] [--admin NAME [--admin-password-stdin | --key-file F]] [--force]  Inicializar un directorio de datos (opcionalmente crea el primer admin)\n  user add <username> [data-path] [--password [-]] [--admin|--read]                  Crear un usuario (mínimo privilegio salvo --admin)\n  user key <username> <file>                                                         Añadir una clave pública SSH (- lee STDIN)\n  user list                                                                          Listar usuarios\n  user token <username> [ttl]                                                        Emitir una firma de token de proxy HTTP\n  user remove <username> [data-path]                                                 Eliminar un usuario\n  user deactivate <username> [data-path]                                             Desactivar un usuario\n  repo list [data-path]                                                              Listar repositorios\n  repo create <name> [data-path]                                                     Crear un repositorio\n  repo info <name> [data-path]                                                       Mostrar información del repositorio\n  repo collaborator <name> add|remove <user>                                         Gestionar colaboradores del repositorio\n  repo mirror <name> <url>|--clear                                                   Establecer o borrar el origen del espejo\n  repo push-access <name> allow|deny                                                 Permitir o denegar push sin permiso de escritura\n  help, --help, -h                                                                   Mostrar esta ayuda\n  version, --version, -v                                                             Mostrar la versión\n\nEntorno:\n  CANDY_GIT_SERVER_DATA_PATH        Directorio de datos (predeterminado: /tmp/candy-git-server)\n  CANDY_GIT_SERVER_LANG             Catálogo de traducción (predeterminado: en)\n  CANDY_GIT_SERVER_BOOTSTRAP_ADMIN  Nombre del primer admin, solo lo respeta init\n\nEjemplos:\n  candy-git-server init ~/candy-git-server-data --admin alice --admin-password-stdin\n  candy-git-server serve --http --repo-root ~/candy-git-server-data/repositories\n  candy-git-server repo create my-project\n  candy-git-server user key alice ~/.ssh/id_ed25519.pub",
     'user.ssh_key_too_short' => 'blob de clave pública SSH demasiado corto para {type}: {len} < {min} caracteres base64',
     'config.parse_failed'   => 'configuración YAML no válida: {error}',
     'config.invalid_user_trust_mode' => 'http.user_trust_mode "{mode}" no válido: se esperaba off, proxy o token',
@@ -111,7 +111,7 @@ Resaltado:   {highlight}
     'cli.token_no_config' => 'token: no hay configuración legible en {data}/config.yaml — ejecute init o indiquee una ruta de datos',
     'cli.token_no_secret' => 'token: http.auth_secret no esta configurado para esta ruta de datos; definalo en la seccion http: de config.yaml antes de emitir tokens',
     'cli.token_ttl_capped' => 'token: el TTL solicitado de {ttl}s supera el limite de {max}s configurado en {key}; reduzca el TTL o eleve esa clave en config.yaml',
-    'cli.password_flag_empty' => 'candy-git-server: --password requiere un valor no vacio',
+    'cli.password_flag_empty' => '--password requiere un valor no vacio',
     'cli.password_argv_exposed' => 'advertencia: la contraseña pasada en la línea de órdenes es visible en ps /proc/pid/cmdline durante bcrypt; --password sin valor la lee de STDIN',
     'cli.username_invalid' => 'Nombre de usuario no valido: \'{username}\' (letras, digitos, punto, guion bajo, guion; no solo puntos)',
     'cli.user_exists' => 'El usuario \'{username}\' ya existe en {path}',
@@ -121,4 +121,11 @@ Resaltado:   {highlight}
     'cli.init_admin_needs_name' => 'init: --admin requiere un nombre de cuenta',
     'cli.init_key_invalid' => 'init: clave SSH no válida en {file}: {why}',
     'cli.serve_no_admin_hint' => 'nota: no existe ninguna cuenta de administrador en {path}; cree la primera con \'candy-git-server init {path} --admin <nombre> --admin-password-stdin\'',
+    'ssh.user_deactivated' => 'El usuario {user} está desactivado',
+    'ssh.auth_failed' => 'Falló la autenticación de {user}',
+    'ssh.unknown_command' => 'Comando desconocido: {cmd}',
+    'ssh.repo_not_found' => 'Repositorio no encontrado: {name}',
+    'ssh.repo_created' => 'Repositorio nuevo creado: {name}',
+    'cli.serve_unwired' => '\'serve\' se niega a iniciar: los oyentes ssh y git aún no están conectados, solo funciona \'serve --http\' (véase el README, Carencias conocidas)',
+    'cli.user_persisted_to' => 'Guardado en {path}',
 ];

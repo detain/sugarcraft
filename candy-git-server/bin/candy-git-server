@@ -162,10 +162,7 @@ function cmdServe(array $args): int
         return cmdServeHttp($args);
     }
 
-    \fwrite(
-        \STDERR,
-        "candy-git-server: 'serve' refuses to start — server assembly is not implemented; see docs (status: scaffold).\n"
-    );
+    \fwrite(\STDERR, 'candy-git-server: ' . Lang::t('cli.serve_unwired') . "\n");
 
     return 1;
 }
@@ -286,19 +283,6 @@ function cmdServeHttp(array $args): int
     $serveTemp = \sys_get_temp_dir();
     if (\str_starts_with($config->dataPath, $serveTemp . '/') || $config->dataPath === $serveTemp) {
         \fwrite(\STDERR, 'candy-git-server: ' . Lang::t('cli.warn_tmp_data_path', ['path' => $config->dataPath]) . "\n");
-    }
-
-    // 108: stats history is volatile unless the operator parks a persist
-    // file. When configured, the shared Stats instance hydrates from it
-    // (monotonic merge on every flush, so restarts and per-worker
-    // counters both move history forward only). The setInstance shape
-    // is the documented injection channel this lib already shares with
-    // AccessControl.
-    if ($config->statsPersistPath !== '') {
-        \SugarCraft\GitServer\Stats::setInstance(new \SugarCraft\GitServer\Stats(
-            $config->statsPersistPath,
-            $config->statsFlushIntervalSeconds,
-        ));
     }
 
     // Authz wiring: the anonymous-read lever comes from config (default
@@ -442,9 +426,6 @@ function cmdServeHttp(array $args): int
     if (\function_exists('pcntl_signal')) {
         $stop = static function () use ($listener): void {
             $listener->stop();
-            // 108: the last few seconds of counters are the cheapest
-            // history to keep — one merge-write before the loop exits.
-            \SugarCraft\GitServer\Stats::instance()->flushNow();
             \React\EventLoop\Loop::stop();
         };
         \pcntl_signal(2, $stop);
@@ -615,7 +596,7 @@ function bin_bootstrap_admin(string $dataPath, string $name, bool $passwordStdin
         $raw = \stream_get_contents(\STDIN);
         $password = $raw === false ? '' : \rtrim($raw, "\r\n");
         if ($password === '') {
-            return error(Lang::t('cli.password_flag_empty') . "\n");
+            return error('candy-git-server: ' . Lang::t('cli.password_flag_empty') . "\n");
         }
     }
     $user = User::new($name)->withAdmin(true);
@@ -916,7 +897,7 @@ function cmdUserAdd(array $args): int
         $password = $raw === false ? '' : \rtrim($raw, "\r\n");
     }
     if ($password === '') {
-        return error(Lang::t('cli.password_flag_empty') . "\n");
+        return error('candy-git-server: ' . Lang::t('cli.password_flag_empty') . "\n");
     }
     $dataPath = bin_data_path($positional[0] ?? null);
     if (!bin_valid_account_name($username)) {
@@ -956,7 +937,7 @@ function cmdUserAdd(array $args): int
         // push, not SSH. The old shape let this land in total silence.
         \fwrite(\STDERR, 'candy-git-server: ' . Lang::t('cli.user_add_no_password', ['username' => $username]) . "\n");
     }
-    echo "Persisted to {$store->path()}\n";
+    echo Lang::t('cli.user_persisted_to', ['path' => $store->path()]) . "\n";
 
     return 0;
 }
