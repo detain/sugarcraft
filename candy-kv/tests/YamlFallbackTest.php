@@ -463,4 +463,43 @@ final class YamlFallbackTest extends TestCase
         $this->expectExceptionMessage('Syntax error on line 1');
         YamlDialect::parseFallback("k: !!str x\n");
     }
+
+    // ─── KV-S27 fallback error-branch corpus (kv-083) ────────────────────────
+
+    /**
+     * @return array<string, array{0: string, 1: string}>
+     */
+    public static function fallbackErrorBranches(): array
+    {
+        return [
+            'unterminated quoted value' => ['k: "abc', 'Syntax error on line 1: unterminated quoted string'],
+            'unterminated quoted key' => ['"abc: v', 'Syntax error on line 1: unterminated quoted string'],
+            'quoted key without colon' => ['"k" v', 'Syntax error on line 1: expected \':\' after the quoted key'],
+            'quoted key trailing junk' => ['"k"x: v', 'Syntax error on line 1: expected \':\' after the quoted key'],
+            'space-padded key' => ['k : v', 'Syntax error on line 1: missing key'],
+            'colon-led line' => [': v', 'Syntax error on line 1: not a key: value pair'],
+            'bare sequence line' => ['- a', 'Syntax error on line 1: sequence entries are not part of this dialect'],
+            'junk after quoted value' => ['k: "v"x', 'Syntax error on line 1: unexpected text after the closing quote'],
+            'binary tag broken base64' => ['k: !!binary ***', 'Syntax error on line 1: invalid base64 in a !!binary value'],
+            'second line names itself' => ["k: 1\nbroken pair here", 'Syntax error on line 2: not a key: value pair'],
+            'deep line numbering' => ["a: 1\nb: 2\n\n# c\nstill-broken-pair\n", 'Syntax error on line 5: not a key: value pair'],
+        ];
+    }
+
+    /**
+     * Every fallback error branch names its line and its reason (kv-083):
+     * the old machine threw one bare 'Syntax error' for a 500-line file.
+     * Exact-match on the full message, so the prefix law itself is pinned.
+     *
+     * @dataProvider fallbackErrorBranches
+     */
+    public function testFallbackErrorBranchNamesLineAndReason(string $doc, string $message): void
+    {
+        try {
+            YamlDialect::parseFallback($doc);
+            $this->fail("expected refusal for $doc");
+        } catch (\RuntimeException $e) {
+            $this->assertSame($message, $e->getMessage());
+        }
+    }
 }

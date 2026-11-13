@@ -219,6 +219,104 @@ final class YamlDialectTest extends TestCase
         }
     }
 
+    // ─── KV-S27 engine-divergence matrix (kv-034) ────────────────────────────
+    //
+    // The YamlDialect class docblock lists exactly which asymmetries the
+    // shared file-level laws leave standing. This matrix ENFORCES that list:
+    // every fallback leg runs always, every symfony leg is skipped only
+    // when symfony is genuinely absent (kv-083's CI parity requirement).
+    // If a leg below starts failing while the docblock still claims the
+    // asymmetry, the docblock is a lie and must be rewritten in the same
+    // commit that changes the behaviour.
+
+    private static function symfonyAvailable(): bool
+    {
+        return \class_exists(\Symfony\Component\Yaml\Yaml::class);
+    }
+
+    public function testMatrixBoolTokenStaysLiteralTextOnTheFallbackRoute(): void
+    {
+        // Documented asymmetry (b): the fallback keeps `true` as the word,
+        // so a fallback-only machine imports `k: true` as the string 'true'.
+        $this->assertSame(['k' => 'true'], YamlDialect::parseFallback('k: true'));
+    }
+
+    public function testMatrixBoolTokenDecodesUnderSymfonyAndTheImporterRefuses(): void
+    {
+        if (!self::symfonyAvailable()) {
+            $this->markTestSkipped('this leg pins the SYMFONY half of the documented bool asymmetry.');
+        }
+
+        $this->assertSame(['k' => true], \Symfony\Component\Yaml\Yaml::parse('k: true'));
+
+        // The refusal lands at the importer door (YamlDialect docblock
+        // pointer): a decoded bool is not a round-trippable scalar.
+        $importer = new YamlImporter($this->store);
+        try {
+            $importer->importFromString('k: true');
+            $this->fail('the importer must refuse a bool-valued entry');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('Entry "k" has a bool value', $e->getMessage());
+        }
+    }
+
+    public function testMatrixIntLandsIdenticallyOnBothRoutes(): void
+    {
+        // Documented symmetry (b′): a decoded int stringifies at import, so
+        // the stored bytes match whichever engine read the file.
+        $this->assertSame(['k' => '42'], YamlDialect::parseFallback('k: 42'));
+
+        if (self::symfonyAvailable()) {
+            $this->assertSame(['k' => 42], \Symfony\Component\Yaml\Yaml::parse('k: 42'));
+        }
+
+        $importer = new YamlImporter($this->store);
+        $importer->importFromString('k: 42'); // auto-engine: symfony under CI
+        $this->assertSame('42', $this->store->get('k'), 'int lands as the same stored bytes either way');
+    }
+
+    public function testMatrixColonBearingKeyRefusesOnFallbackUnderBothConfigs(): void
+    {
+        // Documented asymmetry (a): the fallback refuses a bare colon-led
+        // key outright; symfony reads `e:f: hey` as the key `e:f`.
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Syntax error on line 1: not a key: value pair');
+        YamlDialect::parseFallback('e:f: hey');
+    }
+
+    public function testMatrixColonBearingKeyDecodesUnderSymfony(): void
+    {
+        if (!self::symfonyAvailable()) {
+            $this->markTestSkipped('this leg pins the SYMFONY half of the documented colon-key asymmetry.');
+        }
+
+        $this->assertSame(['e:f' => 'hey'], \Symfony\Component\Yaml\Yaml::parse('e:f: hey'));
+    }
+
+    public function testMatrixFoldedScalarRefusesOnFallbackUnderBothConfigs(): void
+    {
+        // Documented asymmetry (c): symfony may fold a long plain scalar
+        // across lines; the fallback refuses the continuation loudly at its
+        // line instead of half-parsing a value the writer never meant.
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Syntax error on line 2: not a key: value pair');
+        YamlDialect::parseFallback('k: some
+  folded text');
+    }
+
+    public function testMatrixFoldedScalarFoldsUnderSymfony(): void
+    {
+        if (!self::symfonyAvailable()) {
+            $this->markTestSkipped('this leg pins the SYMFONY half of the documented fold asymmetry.');
+        }
+
+        $this->assertSame(
+            ['k' => 'some folded text'],
+            \Symfony\Component\Yaml\Yaml::parse('k: some
+  folded text'),
+        );
+    }
+
     public function testTtlAndBinaryMetadataRideTheFlatDialectOnBothEngines(): void
     {
         $this->store->set('token@pw', 'hunter2', false, 3600);

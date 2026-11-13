@@ -75,7 +75,8 @@ further guarantees:
   logger-injection seam, so a TUI tearing down mid-frame should expect a stray
   interleaved line to corrupt the in-progress render. The hook-failure sites are
   the cancellation callbacks (`CancellationToken`), the `retry` `onRetry:` and
-  `pendingNotice` hooks (`AsyncOps`), and `Subscriptions::disposeAll()`.
+  `pendingNotice` hooks (`AsyncOps`), and the disposal pass behind
+  `Subscriptions::unsubscribe()`.
   `CancellationToken::none()` is a shared never-cancelled
   sentinel for "no token here" plumbing: its `onCancel()` hands back an
   already-spent handle and nothing is ever retained.
@@ -130,7 +131,7 @@ Without ext-pcntl the mapping is the same: route your host's interrupt event to
 
 `Subscription` is the disposal handle returned by `onCancel()`, `debounce()`,
 and `throttle()`.
-`Subscriptions::compose()` lets multiple subscriptions be disposed atomically;
+`Subscriptions::compose()` disposes multiple subscriptions atomically;
 `Subscriptions::of()` mints one from any cleanup closure, so hand-owned
 resources join the composite without a producer that hands out handles:
 
@@ -152,6 +153,13 @@ $composite = Subscriptions::compose(
 $composite->unsubscribe(); // cleanup runs once; the registration is dropped
 $source->cancel();         // the dropped callback no longer runs — the leak guard
 ```
+
+For handles that arrive over time the composite doubles as a running
+tracker: `Subscriptions::new()` starts empty, `add()` collects each handle as
+a producer hands it out, and one final `unsubscribe()` disposes everything
+collected. An `add()` onto an already-unsubscribed composite disposes the
+incoming member immediately — the tracker never keeps a subscription for a
+disposal that already happened.
 
 ## Suspension
 

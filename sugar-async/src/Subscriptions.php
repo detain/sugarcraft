@@ -60,9 +60,16 @@ final class Subscriptions implements Subscription, \Countable
     }
 
     /**
-     * Add a subscription to this composite.
+     * Register a subscription on this composite as things arrive.
      *
-     * @internal
+     * The public accumulating seam: hold a composite minted by new(),
+     * add() handles as producers hand them out, and one final
+     * unsubscribe() disposes every member, including those registered
+     * after construction. Two edges are part of the contract: adding to
+     * an already-unsubscribed composite disposes the incoming
+     * subscription immediately (nothing is retained for a disposal that
+     * already happened), and adding the composite to itself is ignored
+     * (no self-composition recursion).
      */
     public function add(Subscription $subscription): void
     {
