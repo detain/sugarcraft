@@ -57,6 +57,22 @@ final class ReportRunner
      */
     public function run(string $viewName, ?int $limit = null): ReportResult
     {
+        $this->assertAvailable($viewName);
+
+        return $this->formatResult($this->runRaw($viewName, $limit));
+    }
+
+    /**
+     * The catalog+availability guard behind run(), public so a caller that
+     * formats elsewhere (ReportsPage's SQL-P10 single-query reuse) keeps the
+     * same failure vocabulary: unknown report / view-not-available throw
+     * before any query rides.
+     *
+     * @throws \InvalidArgumentException If the report doesn't exist in the catalog
+     * @throws \RuntimeException If the view is not available on this server
+     */
+    public function assertAvailable(string $viewName): void
+    {
         $report = $this->catalog->get($viewName);
         if ($report === null) {
             throw new \InvalidArgumentException(
@@ -69,21 +85,22 @@ final class ReportRunner
                 "View not available on this server: " . htmlspecialchars($viewName, ENT_QUOTES, 'UTF-8')
             );
         }
+    }
 
-        $limit ??= $this->defaultLimit;
-
-        // Use the report's actual view name (from catalog) for the query,
-        // not the lookup key, since they may differ (e.g. 'statement_analysis' vs 'x$statement_analysis')
-        $query = $this->selectFor($report, $limit);
-        $rows = $this->db->query($query);
-
-        $formattedRows = $this->formatRows($rows, $report);
+    /**
+     * Format a raw ReportResult through the report's column types without
+     * re-querying (SQL-P10: the arrival-identity reuse path holds the raw
+     * generation once and pays formatRows at most once per generation).
+     */
+    public function formatResult(ReportResult $raw): ReportResult
+    {
+        $rows = $this->formatRows($raw->rows, $raw->report);
 
         return new ReportResult(
-            report: $report,
-            rows: $formattedRows,
-            rowCount: count($formattedRows),
-            limited: count($formattedRows) >= $limit,
+            report: $raw->report,
+            rows: $rows,
+            rowCount: count($rows),
+            limited: $raw->limited,
         );
     }
 

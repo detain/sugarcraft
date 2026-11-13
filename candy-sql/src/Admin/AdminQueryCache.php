@@ -148,7 +148,7 @@ final class AdminQueryCache
         // If we have a result, return it without re-adding to pending.
         // Only schedule a refresh if the entry is stale.
         if (array_key_exists($sql, $this->results)) {
-            if ((microtime(true) - ($this->storedAt[$sql] ?? 0.0)) >= self::TTL) {
+            if ((microtime(true) - ($this->storedAt[$sql] ?? 0.0)) >= $this->windowFor($sql)) {
                 // Stale: schedule a background refresh but keep showing last value.
                 $this->pending[$sql] = true;
             }
@@ -159,6 +159,21 @@ final class AdminQueryCache
         // renders its loading state while the query runs async.
         $this->pending[$sql] = true;
         return null;
+    }
+
+    /**
+     * SQL-P10 (adminpages-016): the freshness window is per key, not a
+     * global. Live status legs keep the 3 s cadence; sys report legs —
+     * digest-view scans behind a LIMIT 1000 that a reader cannot possibly
+     * out-refresh — join the slow-config window instead of re-executing
+     * ~1,200×/hour. Shape test: every report SELECT is built by
+     * ReportRunner::selectFor() as `SELECT * FROM \`sys\`.\`<view>\` LIMIT n`.
+     */
+    private function windowFor(string $sql): float
+    {
+        return str_starts_with($sql, 'SELECT * FROM `sys`.')
+            ? CacheTtl::REPORT
+            : self::TTL;
     }
 
     /**
@@ -195,9 +210,9 @@ final class AdminQueryCache
      */
     private function sweepResidency(): void
     {
-        $horizon = microtime(true) - (self::TTL * self::RETENTION_TTL_FACTOR);
+        $now = microtime(true);
         foreach ($this->storedAt as $sql => $at) {
-            if ($at < $horizon) {
+            if ($at < $now - $this->windowFor($sql) * self::RETENTION_TTL_FACTOR) {
                 unset($this->results[$sql], $this->storedAt[$sql], $this->pending[$sql], $this->errors[$sql]);
             }
         }

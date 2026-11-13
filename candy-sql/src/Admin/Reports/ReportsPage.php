@@ -64,6 +64,16 @@ final class ReportsPage extends PageBase implements RowNavigable
     /** @var ReportResult|null */
     private ?ReportResult $currentResult = null;
 
+    /**
+     * SQL-P10 arrival fingerprint: the raw generation the current result was
+     * built from, plus the view and unit-mode that produced it.
+     *
+     * @var list<array<string,mixed>>|null
+     */
+    private ?array $reloadedRows = null;
+    private ?string $reloadedView = null;
+    private bool $reloadedRawMode = false;
+
     /** @var string|null */
     private ?string $selectedCategory = null;
 
@@ -797,14 +807,44 @@ final class ReportsPage extends PageBase implements RowNavigable
                 return;
             }
 
-            $result = $this->showRawValues
-                ? $this->runner->runRaw($viewName)
-                : $this->runner->run($viewName);
+            // SQL-P10 (adminpages-016): App forwards ReloadReportMsg for both
+            // AdminDataLoadedMsg and AdminDrainCompletedMsg of the SAME
+            // arrival, so the formatted grid used to run formatRows over up
+            // to 1,000 rows twice per arrival. The cache makes the re-query
+            // cheap inside its window, but the format was pure repetition:
+            // the raw generation is fingerprinted, and an identical arrival
+            // keeps the existing ReportResult object instead of rebuilding
+            // it. Selection, unit-mode and data moves all miss the guard by
+            // construction (view key, mode flag, row content).
+            if (!$this->showRawValues) {
+                $this->runner->assertAvailable($viewName);
+            }
+            $raw = $this->runner->runRaw($viewName);
 
-            $this->currentResult = $result;
+            if (
+                $this->currentResult !== null
+                && $this->reloadedView === $viewName
+                && $this->reloadedRawMode === $this->showRawValues
+                && $this->reloadedRows === $raw->rows
+            ) {
+                $this->errorMessage = '';
+
+                return;
+            }
+
+            $this->reloadedView = $viewName;
+            $this->reloadedRawMode = $this->showRawValues;
+            $this->reloadedRows = $raw->rows;
+            $this->currentResult = $this->showRawValues
+                ? $raw
+                : $this->runner->formatResult($raw);
             $this->errorMessage = '';
         } catch (\Throwable $e) {
             $this->currentResult = null;
+            // A failed load invalidates the fingerprint so the next arrival
+            // retries instead of riding a stale guard.
+            $this->reloadedView = null;
+            $this->reloadedRows = null;
             $this->errorMessage = "Error loading report: {$e->getMessage()}";
         }
     }

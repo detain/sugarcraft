@@ -51,6 +51,13 @@ final class ServerStatusPage extends PageBase
     private ?Sampler $sampler = null;
     private ?MetricsColumn $column = null;
 
+    /**
+     * SQL-P10 (adminpages-015): memo of the session-constant ROUTINES probe,
+     * pinned to the context identity it was answered for (plugins() pattern).
+     */
+    private ?bool $storedProgramsMemo = null;
+    private ?ServerContextInterface $storedProgramsMemoFor = null;
+
     /** GTID_MODE string captured when the dialog opened (server variable). */
     private string|null $gtidModeCurrent = null;
     private bool $gtidDialog = false;
@@ -629,18 +636,34 @@ final class ServerStatusPage extends PageBase
      *
      * Detected by querying information_schema.ROUTINES (supports all dialects;
      * on MariaDB or older MySQL the table exists and the count query is cheap).
+     *
+     * SQL-P10 (adminpages-015): the answer is session-constant (creating a
+     * procedure mid-session is not a thing this pane can observe anyway),
+     * but it used to re-poll ROUTINES on EVERY render frame. Memoized per
+     * context identity exactly like ServerContext::plugins() memoizes per
+     * context — a reconnection builds a fresh page/context pair and the
+     * memo resets with it.
      */
     private function hasStoredPrograms(): bool
     {
+        if ($this->storedProgramsMemo !== null && $this->storedProgramsMemoFor === $this->context) {
+            return $this->storedProgramsMemo;
+        }
+
         try {
             $connection = $this->context->connection();
             $result = $connection->query(
                 'SELECT COUNT(*) FROM information_schema.ROUTINES WHERE ROUTINE_SCHEMA NOT IN (\'information_schema\', \'performance_schema\', \'mysql\') LIMIT 1'
             );
-            return count($result) > 0 && ($result[0]['COUNT(*)'] ?? 0) > 0;
+            $answer = count($result) > 0 && ($result[0]['COUNT(*)'] ?? 0) > 0;
         } catch (\Throwable) {
-            return false;
+            $answer = false;
         }
+
+        $this->storedProgramsMemo = $answer;
+        $this->storedProgramsMemoFor = $this->context;
+
+        return $answer;
     }
 
     /**

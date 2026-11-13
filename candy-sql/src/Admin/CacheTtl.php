@@ -40,6 +40,16 @@ final class CacheTtl
      * needs the status fetch and the page poll to agree, and both read here.
      */
     public const DASHBOARD = 1.0;
+    /**
+     * Seconds a sys report leg (the `SELECT * FROM \`sys\`.\`<view>\`` shapes
+     * ReportRunner builds) stays fresh. The 3 s STATUS window was tuned for
+     * cheap SHOW GLOBAL STATUS reads; a digest-view scan behind LIMIT 1000
+     * re-executing every 3 s (~1,200×/hour) while a user merely reads the
+     * grid is the "aggressive re-exec" defect (SQL-P10/adminpages-016).
+     * These tables are themselves periodic refresh snapshots server-side,
+     * so the slow-config cadence (SERVER) is the honest match.
+     */
+    public const REPORT = 30.0;
 
     private function __construct()
     {
