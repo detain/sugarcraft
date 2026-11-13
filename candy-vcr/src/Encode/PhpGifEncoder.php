@@ -159,12 +159,17 @@ final class PhpGifEncoder implements GifEncoder
             }
         }
 
+        // Row chunks, not a single growing buffer: per-pixel appends onto the
+        // whole-frame string re-alloc as the string grows (finding candy-vcr-016
+        // third term). Rows reset the append target to frame-width scale.
         $pixels = '';
         for ($y = 0; $y < $height; $y++) {
+            $row = '';
             for ($x = 0; $x < $width; $x++) {
                 $idx = imagecolorat($image, $x, $y);
-                $pixels .= chr($idx & 0xff);
+                $row .= chr($idx & 0xff);
             }
+            $pixels .= $row;
         }
 
         $lzw = $this->lzwEncode($pixels, 8);
@@ -176,6 +181,21 @@ final class PhpGifEncoder implements GifEncoder
         $gif->fwrite("\x00");
     }
 
+    /**
+     * LZW-encode pixels with an integer-keyed code trie.
+     *
+     * The word dictionary is keyed `(prefixCode << 8) | byte` instead of the
+     * word string. String keys made every byte of a shared prefix cost a fresh
+     * concatenation and hash — a k-byte run burned O(k²) work, and long-run
+     * terminal frames (the common case: thousands of identical background
+     * pixels) were quadratic (finding candy-vcr-016, 551.7x measured on the
+     * candy-code per-frame encode path lineage #51/#95/#99). Integer keys keep
+     * the state in two ints: constant work per byte. The emitted code stream is
+     * identical to the string-keyed construction — single-byte entries live at
+     * sentinel prefix 256 (the CLEAR code, never a real prefix), 2-byte words
+     * at prefix 0..255 (their first byte's code), 3+-byte words at their
+     * prefix's assigned code (≥ 258), so the code space never collides.
+     */
     private function lzwEncode(string $data, int $minCodeSize): string
     {
         $clearCode = 1 << $minCodeSize;
@@ -184,10 +204,7 @@ final class PhpGifEncoder implements GifEncoder
         $nextCode = $endCode + 1;
         $limit = (1 << 12) - 1;
 
-        $dictionary = [];
-        for ($i = 0; $i < $clearCode; $i++) {
-            $dictionary[(string) chr($i)] = $i;
-        }
+        $dictionary = $this->primeDictionary($clearCode);
 
         $output = '';
 
@@ -215,33 +232,37 @@ final class PhpGifEncoder implements GifEncoder
 
         $emit($clearCode);
 
-        $buffer = '';
-        foreach (str_split($data) as $char) {
-            $word = $buffer . $char;
-            if (isset($dictionary[$word])) {
-                $buffer = $word;
-            } else {
-                $emit($dictionary[$buffer]);
-                if ($nextCode <= $limit) {
-                    $dictionary[$word] = $nextCode++;
-                    if ($nextCode > (1 << $state->codeSize) && $state->codeSize < 12) {
-                        $state->codeSize++;
-                    }
-                } else {
-                    $emit($clearCode);
-                    $dictionary = [];
-                    for ($i = 0; $i < $clearCode; $i++) {
-                        $dictionary[(string) chr($i)] = $i;
-                    }
-                    $nextCode = $endCode + 1;
-                    $state->codeSize = $minCodeSize + 1;
-                }
-                $buffer = $char;
+        // Code of the current longest-match buffer; -1 means "empty".
+        $bufferCode = -1;
+        $length = strlen($data);
+        for ($i = 0; $i < $length; $i++) {
+            $byte = ord($data[$i]);
+            $key = (($bufferCode < 0 ? $clearCode : $bufferCode) << 8) | $byte;
+            // Single hash lookup per byte; -1 is never a stored code.
+            $found = $dictionary[$key] ?? -1;
+            if ($found !== -1) {
+                $bufferCode = $found;
+                continue;
             }
+
+            $emit($bufferCode);
+            if ($nextCode <= $limit) {
+                $dictionary[$key] = $nextCode++;
+                if ($nextCode > (1 << $state->codeSize) && $state->codeSize < 12) {
+                    $state->codeSize++;
+                }
+            } else {
+                $emit($clearCode);
+                $dictionary = $this->primeDictionary($clearCode);
+                $nextCode = $endCode + 1;
+                $state->codeSize = $minCodeSize + 1;
+            }
+            // Restart the match at this single byte (always primed).
+            $bufferCode = $dictionary[($clearCode << 8) | $byte];
         }
 
-        if ($buffer !== '') {
-            $emit($dictionary[$buffer]);
+        if ($bufferCode >= 0) {
+            $emit($bufferCode);
         }
 
         $emit($endCode);
@@ -251,6 +272,22 @@ final class PhpGifEncoder implements GifEncoder
         }
 
         return $this->packBytes($output, $minCodeSize);
+    }
+
+    /**
+     * Fresh-dictionary single-byte entries at sentinel prefix CLEAR.
+     *
+     * @return array<int, int>
+     */
+    private function primeDictionary(int $clearCode): array
+    {
+        $dictionary = [];
+        $base = $clearCode << 8;
+        for ($i = 0; $i < $clearCode; $i++) {
+            $dictionary[$base | $i] = $i;
+        }
+
+        return $dictionary;
     }
 
     private function packBytes(string $data, int $minCodeSize): string

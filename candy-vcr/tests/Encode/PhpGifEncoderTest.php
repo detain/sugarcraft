@@ -39,6 +39,71 @@ final class PhpGifEncoderTest extends TestCase
         $this->assertSame(extension_loaded('gd'), $encoder->isAvailable());
     }
 
+    /**
+     * Byte-identity contract for the integer-key LZW rewrite (VCR-S17).
+     *
+     * These md5 values were captured from the PREVIOUS string-keyed
+     * implementation on this exact input set — the zero-golden-movement law
+     * for the encoder: the code stream the new key scheme emits must equal
+     * the old one forever. If one of these moves, the rewrite (or a later
+     * change) altered encoded bytes and the goldens need a disclosed re-pin.
+     */
+    public function testLzwOutputIsByteIdenticalToTheStringKeyedOracle(): void
+    {
+        $encoder = new PhpGifEncoder();
+        $method = new \ReflectionMethod($encoder, 'lzwEncode');
+
+        mt_srand(4242);
+        $seeded = '';
+        for ($i = 0; $i < 14000; $i++) {
+            $seeded .= chr(mt_rand(0, 255));
+        }
+
+        $pins = [
+            'long-runs' => [str_repeat(chr(7), 300) . str_repeat(chr(9), 200) . str_repeat(chr(7), 100), '871077b22e03ef18b4984dcf4eaf7b27'],
+            'uniform' => [str_repeat(chr(0), 65536), '855c3e0fe8be4f81aa9a34f891ec4ac6'],
+            'seeded-random' => [$seeded, '4d7220bc08790a059e5e5b8393af5255'],
+            'gradient' => [implode('', array_map(static fn (int $i): string => chr($i % 251), range(0, 3999))), 'a11720c35ba3d8e69d0d2af40c562bd4'],
+            'interleaved' => [str_repeat("AB\x00\xFF\x00", 500), '2dfb4d27658fdc119a65744e000c6554'],
+            'prose' => [str_repeat('the quick brown fox jumps over the lazy dog ', 40), '08071ec301d6ded0db96d054bb569924'],
+            'empty' => ['', '3ab2dcf9ff5b8e69662981b6ac1e848c'],
+            'one' => [chr(3), 'fa0cb70da54973bce8a4ae776fc9855f'],
+        ];
+
+        foreach ($pins as $name => $pinPair) {
+            self::assertIsArray($pinPair);
+            $data = $pinPair[0];
+            $pin = $pinPair[1];
+            self::assertIsString($data);
+            self::assertIsString($pin);
+            $encoded = $method->invoke($encoder, $data, 8);
+            self::assertIsString($encoded);
+            $this->assertSame($pin, md5($encoded), "LZW output for '{$name}' must stay byte-identical");
+        }
+    }
+
+    /**
+     * Slope guard (VCR-S17): the old string-keyed loop was superlinear on
+     * long uniform runs (≈2 KB of churn per pixel at chain length). Encoding
+     * a multi-megabyte uniform stream — the dominant shape of real terminal
+     * frames — must stay comfortably bounded. Measured on the rewrite lane:
+     * 1.92 MB ≈ 0.57 s; the 8 s ceiling only trips on a regression back to
+     * quadratic behaviour (which would need minutes).
+     */
+    public function testLzwEncodesMultiMegabyteUniformRunsWithinBounds(): void
+    {
+        $encoder = new PhpGifEncoder();
+        $method = new \ReflectionMethod($encoder, 'lzwEncode');
+
+        $data = str_repeat(chr(32), 1920000);
+        $start = microtime(true);
+        $out = $method->invoke($encoder, $data, 8);
+        $elapsed = microtime(true) - $start;
+
+        $this->assertNotSame('', $out);
+        $this->assertLessThan(8.0, $elapsed, sprintf('1.92 MB uniform encode took %.2f s — quadratic slope is back', $elapsed));
+    }
+
     public function testNameReturnsPhp(): void
     {
         $encoder = new PhpGifEncoder();
