@@ -25,7 +25,7 @@ When at grid index 0 and pressing Left, the cursor stays at 0 (no month wrap).
 When at grid index 41 and pressing Right, the cursor stays at 41.
 
 This is an architectural decision. If month-boundary wrap is desired,
-the `MoveCursorLeft()` method would need to call `GoToPreviousMonth()` and
+the `moveCursorLeft()` method would need to call `goToPreviousMonth()` and
 position the cursor at the last day cell of the previous month.
 
 Source: ai/sugar-datepicker-phase6
@@ -40,7 +40,7 @@ REMOVED: every mutator here returns a fresh clone, so any instance-keyed
 render cache is stale-by-construction the moment a clone is mutated through
 another handle, and the invalidation roster (navigation/selection/cursor/
 styling/today — fifteen methods) was pure footgun surface. The current law:
-`View()` rebuilds cells and the ANSI string from instance state on every
+`view()` rebuilds cells and the ANSI string from instance state on every
 call; same input, same bytes, no hidden state. `testViewDoesNotMutateInstance`
 and `testViewIsDeterministicAcrossCalls` pin it.
 
@@ -52,7 +52,7 @@ machinery.
 
 ## [pattern:configurable-viewport] Viewport width is configurable; out-of-range is clamped
 
-The `View()` method accepts a `$width` parameter (default 21) and a
+The `view()` method accepts a `$width` parameter (default 21) and a
 `$showWeekNumbers` flag. The clamp is on the TOTAL width (the `width`-wide
 calendar area plus the optional 4-cell week column): it is bounded BELOW by the
 natural grid (21 without a week column, 25 with one) and ABOVE by 63. Requests
@@ -83,3 +83,44 @@ hard break. New methods follow camelCase (house convention); when a rename
 program lands, route it through a deprecation alias, never a substitution.
 
 Source: 2026-10-23 docs-fix-1023 E2
+
+STATUS 2026-11-13 (sugar-datepicker-013 / dp-02): the rename program LANDED
+by declaration flip — every public method is DECLARED camelCase and the
+PascalCase spellings remain resolvable call sites (PHP method names are
+case-insensitive), demoted to a deprecated legacy layer the README
+deprecation table maps one-for-one. A delegate-twin alias was impossible
+(a same-class Pascal twin is a redeclare fatal), so the declarations moved
+instead; `tests/ApiAliasTest.php` pins the zero-Pascal-declaration law and
+byte parity per spelling. Do not re-introduce PascalCase declarations.
+
+---
+
+## [ruling:public-ctor-exception] VOs and stores ship public ctors + `::new()` mirrors
+
+AGENTS.md doctrine: `::new()` is the advertised factory, private ctors the
+goal. This lib deviates INVENTORY-WIDE — `DatePicker`, `Model`, `DateRange`
+and `EventStore` all keep PUBLIC constructors because in-repo and host code
+construct them bare (promoted-property ctors double as the documented shape).
+Ruling: legal deviation, declared here, with `::new()` mirrors added wherever
+missing (DateRange, EventStore) so the advertised entry exists; a v2 flip to
+private ctors is TRACKED as a hard-break item, not to be done silently.
+Documentation must keep pointing readers at `::new()`; `new DateRange(...)` /
+`new EventStore(...)` in examples/README are treated as drift.
+
+Source: sugar-datepicker-033/035 review (dp-30), 2026-11-13
+
+---
+
+## [ruling:clone-not-mutable] Immutable withers via per-method `clone $this`, no Mutable trait
+
+`sugar-core/src/Concerns/Mutable.php` with its paired `bool $XSet` sentinels
+is the canonical fluent shape; DatePicker instead clones per method with
+plain nullable fields where null-means-absent (`minDate`, `maxDate`,
+`today`). Ruling: deviate, declared — every absence here IS a null semantic
+(no date bound vs a bound set to "none"), the XSet duplication would model a
+distinction nobody renders, and the withers carry validation (bounds
+cross-checks, `assertSgr`) that a generic `mutate()` seam would spread.
+The per-method `clone $this` shape at e.g. `withMinDate()`/`withMaxDate()`
+is the stamp of this ruling; do not "converge" it onto the trait.
+
+Source: sugar-datepicker-035 review (dp-30), 2026-11-13

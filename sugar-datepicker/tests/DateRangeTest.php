@@ -189,4 +189,19 @@ final class DateRangeTest extends TestCase
         );
         $this->assertSame(-10, $range->durationInDays());
     }
+
+    public function testNewFactoryMirrorsTheConstructor(): void
+    {
+        $start = new \DateTimeImmutable('2026-05-01');
+        $end = new \DateTimeImmutable('2026-05-10');
+
+        $viaFactory = DateRange::new($start, $end);
+
+        $this->assertInstanceOf(DateRange::class, $viaFactory);
+        $this->assertSame($start, $viaFactory->start);
+        $this->assertSame($end, $viaFactory->end);
+        $this->assertEquals(new DateRange($start, $end), $viaFactory, '::new() must not diverge from the ctor');
+        $this->assertEquals(new DateRange(), DateRange::new(), 'default arms must mirror too');
+        $this->assertSame(-9, DateRange::new($end, $start)->durationInDays());
+    }
 }

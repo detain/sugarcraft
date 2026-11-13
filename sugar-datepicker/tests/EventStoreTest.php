@@ -186,4 +186,20 @@ final class EventStoreTest extends TestCase
         $seqs = array_column(array_column($released, 'payload'), 'seq');
         $this->assertSame(range(7, $first + 9), $seqs, 'wrapped ring must read oldest→newest');
     }
+
+    public function testNewFactoryMirrorsTheConstructor(): void
+    {
+        $clock = static fn (): int => 12345;
+        $store = EventStore::new(clock: $clock);
+
+        $this->assertInstanceOf(EventStore::class, $store);
+        $this->assertInstanceOf(EventStoreInterface::class, $store);
+
+        $store->record(PickerEvent::DATE_SELECTED, ['date' => '2026-05-01']);
+        $events = $store->release();
+        $this->assertCount(1, $events);
+        $this->assertSame(12345, $events[0]['time'], '::new(clock:) must wire the deterministic clock like the ctor does');
+
+        $this->assertSame(0, EventStore::new()->count(), 'bare ::new() default arm must mirror the ctor');
+    }
 }

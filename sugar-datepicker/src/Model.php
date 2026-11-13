@@ -17,6 +17,11 @@ use SugarCraft\Core\Subscriptions;
  */
 final class Model implements \SugarCraft\Core\Model
 {
+    /**
+     * Public constructor — kept as a house exception pending a v2 convergence
+     * on private ctors; the docs advertise `Model::new()` as the entry point
+     * (same declared deviation as {@see DatePicker}'s ctor note).
+     */
     public function __construct(
         private readonly DatePicker $picker,
         private readonly ?EventStoreInterface $store = null,

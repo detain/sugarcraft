@@ -19,6 +19,18 @@ final readonly class DateRange
         public ?\DateTimeImmutable $end = null,
     ) {}
 
+    /**
+     * House factory mirroring the constructor.
+     *
+     * AGENTS.md doctrine says factories are the advertised entry point; the
+     * public ctor stays legal as the declared value-object exception (see
+     * CALIBER_LEARNINGS) pending a v2 flip to a private ctor.
+     */
+    public static function new(?\DateTimeImmutable $start = null, ?\DateTimeImmutable $end = null): self
+    {
+        return new self($start, $end);
+    }
+
     public function withStart(\DateTimeImmutable $start): self
     {
         return new self($start, $this->end);

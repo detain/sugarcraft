@@ -39,6 +39,15 @@ final class EventStore implements EventStoreInterface
     }
 
     /**
+     * House factory mirroring the constructor; the public ctor stays legal as
+     * the declared store exception (CALIBER_LEARNINGS) pending a v2 flip.
+     */
+    public static function new(?\Closure $clock = null): self
+    {
+        return new self($clock);
+    }
+
+    /**
      * @param PickerEvent::* $type event kind (see {@see PickerEvent}); permissive
      *                             at runtime by design — constants are
      *                             documentation + typo protection

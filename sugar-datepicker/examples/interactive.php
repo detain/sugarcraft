@@ -92,7 +92,7 @@ final class InteractiveDemo implements CoreModel
 
     public static function create(): self
     {
-        $store = new EventStore(clock: static fn (): int => self::FIXED_CLOCK);
+        $store = EventStore::new(clock: static fn (): int => self::FIXED_CLOCK);
         $picker = DatePicker::new(new DateTimeImmutable(self::SEED_DATE))
             ->withToday(new DateTimeImmutable(self::SEED_DATE));
 
