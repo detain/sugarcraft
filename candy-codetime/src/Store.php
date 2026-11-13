@@ -37,6 +37,13 @@ final class Store implements HeartbeatReader
      */
     public const MAX_LINE_BYTES = 1_048_576;
 
+    /**
+     * How many day files the memo may retain (CT-S16): the widest window the
+     * store itself will serve, so the cache can never outgrow a legitimate
+     * full-range load. Served days rotate to the tail; the head ages out.
+     */
+    public const DAY_CACHE_MAX_DAYS = self::MAX_RANGE_DAYS;
+
     // memoization, not observable state
     private array $dayCache = [];
 
@@ -211,7 +218,12 @@ final class Store implements HeartbeatReader
     {
         $key = $day->format('Y-m-d');
         if (isset($this->dayCache[$key])) {
-            return $this->dayCache[$key];
+            $cached = $this->dayCache[$key];
+            // LRU touch (CT-S16): the most recently served day sits at the
+            // tail and is the last to be evicted.
+            unset($this->dayCache[$key]);
+            $this->dayCache[$key] = $cached;
+            return $cached;
         }
         $file = $this->dir . '/' . $key . '.jsonl';
         if (!is_file($file)) {
@@ -303,6 +315,9 @@ final class Store implements HeartbeatReader
             }
         }
         $this->dayCache[$key] = $rows;
+        while (count($this->dayCache) > self::DAY_CACHE_MAX_DAYS) {
+            unset($this->dayCache[array_key_first($this->dayCache)]);
+        }
         return $rows;
     }
 

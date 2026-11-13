@@ -518,4 +518,41 @@ final class DashboardTest extends TestCase
         $this->assertStringContainsString('Top projects', $stripped);
     }
 
+
+    public function testAWindowBelowOneDayIsRefusedAtTheDoor(): void
+    {
+        // CT-S16: the old door let days=0 widen to two days and days=-5
+        // sign-flip into a forward window; both are refusals now.
+        $store = new Store($this->storeDir);
+        foreach ([0, -5] as $bad) {
+            try {
+                new Dashboard($store, new \DateTimeImmutable('today'), $bad, new Stats([], []));
+                $this->fail('days=' . $bad . ' must not hydrate a model');
+            } catch (\InvalidArgumentException) {
+                $this->assertTrue(true);
+            }
+        }
+    }
+
+    public function testAWindowAboveTheStoreCeilingIsCappedNotWrapped(): void
+    {
+        $store = new Store($this->storeDir);
+        $d = new Dashboard($store, new \DateTimeImmutable('today'), PHP_INT_MAX, new Stats([], []));
+        $this->assertSame(Store::MAX_RANGE_DAYS, $d->days);
+    }
+
+    public function testTheBackwardWalkStopsAtTheStoreCeiling(): void
+    {
+        // CT-S16: held left-arrow presses against the earliest window the
+        // store can serve and sticks there — no tour walks into undeliverable
+        // history, and the cache never follows it past the ceiling.
+        $floor = (new \DateTimeImmutable('today'))->modify('-' . (Store::MAX_RANGE_DAYS - 7) . ' days');
+        $store = new Store($this->storeDir);
+        $d = new Dashboard($store, $floor->modify('+3 days'), 7, new Stats([], []));
+        $left = new KeyMsg(KeyType::Left, '');
+        for ($i = 0; $i < 10; $i++) {
+            [$d, ] = $d->update($left);
+        }
+        $this->assertSame($floor->format('Y-m-d'), $d->endDay->format('Y-m-d'), 'the walk sticks at the ceiling floor');
+    }
 }

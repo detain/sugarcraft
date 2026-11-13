@@ -693,4 +693,32 @@ public function testAppendValidatesTheFullWrittenLineCount(): void
         $this->assertSame(1775000000, $rows[0]->time);
         $this->assertSame(1, $store->drainDiagnostics()['dropped']);
     }
+
+    public function testTheDayCacheRotatesAndStopsAtTheWindowCeiling(): void
+    {
+        // CT-S16: every other growth surface carries a constant; the memo is
+        // now the last one. The cap equals the widest servable window, days
+        // served rotate to the tail, and the stale head ages out.
+        $cap = Store::DAY_CACHE_MAX_DAYS;
+        $dir = $this->tmp . '/lru-' . bin2hex(random_bytes(4));
+        mkdir($dir, 0o700);
+        $epoch = new \DateTimeImmutable('2000-01-01');
+        for ($i = 0; $i <= $cap + 2; $i++) {
+            $day = $epoch->modify('+' . $i . ' days');
+            file_put_contents($dir . '/' . $day->format('Y-m-d') . '.jsonl',
+                json_encode(['time' => $day->getTimestamp(), 'project' => 'p', 'language' => 'l', 'file' => 'f', 'duration' => 1]) . "\n");
+        }
+        $store = new Store($dir);
+        $probe = new \ReflectionProperty(Store::class, 'dayCache');
+        for ($i = 0; $i <= $cap + 2; $i++) {
+            $store->loadDay($epoch->modify('+' . $i . ' days'));
+        }
+        $cache = $probe->getValue($store);
+        $this->assertCount($cap, $cache, 'the memo never exceeds the widest servable window');
+        $this->assertArrayNotHasKey($epoch->format('Y-m-d'), $cache, 'the stale head aged out');
+        $this->assertArrayNotHasKey($epoch->modify('+2 days')->format('Y-m-d'), $cache, 'the flood evicted exactly the days past the cap');
+        $this->assertArrayHasKey($epoch->modify('+3 days')->format('Y-m-d'), $cache, 'the eviction line is exactly the cap back from the tail');
+        $store->loadDay($epoch->modify('+3 days'));
+        $this->assertSame($epoch->modify('+3 days')->format('Y-m-d'), array_key_last($probe->getValue($store)), 'a served day rotates to the protected tail');
+    }
 }

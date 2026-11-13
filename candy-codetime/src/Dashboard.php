@@ -33,10 +33,17 @@ final class Dashboard implements Model
      */
     public const WINDOW_LADDER = [7, 14, 30, 90];
 
+    /**
+     * Window length in days. Validated at the door (CT-S16): a Dashboard can
+     * never carry a zero, negative or wrapped window, so Renderer's label
+     * re-derivation always paints exactly what the reader will serve.
+     */
+    public readonly int $days;
+
     public function __construct(
         public readonly HeartbeatReader $source,
         public readonly \DateTimeImmutable $endDay,
-        public readonly int $days = 7,
+        int $days = 7,
         public readonly Stats $stats = new Stats([], []),
         public readonly ?int $width = null,
         public readonly ?ColorProfile $colorProfile = null,
@@ -61,7 +68,17 @@ final class Dashboard implements Model
          * clean(), so a locked or swapped-out database never kills the TUI.
          */
         public readonly ?string $loadError = null,
-    ) {}
+    ) {
+        // CT-S16 parse-at-boundary honesty: before this door, days=0 silently
+        // widened into a two-day window, days=-5 sign-flipped the composed
+        // modify() string, and PHP_INT_MAX wrapped around to zero (all
+        // probe-verified). The library door now refuses the floor and caps at
+        // the store's own ceiling, so no caller can steer a liar's label.
+        if ($days < 1) {
+            throw new \InvalidArgumentException('Dashboard window must cover at least one day, got ' . $days);
+        }
+        $this->days = min($days, Store::MAX_RANGE_DAYS);
+    }
 
     public static function start(HeartbeatReader $source, ?\DateTimeImmutable $endDay = null, int $days = 7, ?string $backendLabel = null): self
     {
@@ -200,6 +217,13 @@ final class Dashboard implements Model
         $next  = $this->endDay->modify(($direction > 0 ? '+' : '-') . abs($direction) . ' days');
         if ($next > $today) {
             $next = $today;
+        }
+        // CT-S16: the backward walk stops where the store's ceiling starts —
+        // an endDay so early that the window would begin before the earliest
+        // servable day is refused; a held left-arrow presses here and sticks.
+        $floor = $today->modify('-' . (Store::MAX_RANGE_DAYS - $this->days) . ' days');
+        if ($next < $floor) {
+            $next = $floor;
         }
         // The width has to ride the shift: without it the next frame is laid
         // out for an unknown terminal and the rows we sized to the window
