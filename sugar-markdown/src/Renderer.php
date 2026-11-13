@@ -915,7 +915,7 @@ final class Renderer
             $node instanceof DescriptionTerm => $this->renderDescriptionTerm($node),
             $node instanceof Description    => $this->renderDescription($node),
             $node instanceof ThematicBreak => $this->theme->rule->render(
-                str_repeat($this->theme->horizontalRuleGlyph, max(1, $this->theme->horizontalRuleLength))
+                str_repeat($this->theme->horizontalRuleGlyph, $this->ruleLength())
             ) . "\n\n",
             $node instanceof Strong        => $this->theme->bold->render($this->renderChildren($node)),
             $node instanceof Emphasis      => $this->theme->italic->render($this->renderChildren($node)),
@@ -931,6 +931,22 @@ final class Renderer
             $node instanceof Newline       => "\n",
             default                        => $this->renderChildren($node),
         };
+    }
+
+    /**
+     * Thematic break length: the theme's flat `horizontalRuleLength` cells
+     * while wrapping is off (the historic byte-for-byte behaviour the
+     * goldens pin), capped to the block stack's available width once a wrap
+     * width is set, so a 40-cell rule cannot overshoot a narrow document or
+     * a deeper nested block (SM-S47).
+     */
+    private function ruleLength(): int
+    {
+        $length = max(1, $this->theme->horizontalRuleLength);
+        if ($this->wrapWidth === null) {
+            return $length;
+        }
+        return max(1, min($length, $this->blockStack->availableWidth($this->wrapWidth)));
     }
 
     /**

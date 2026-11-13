@@ -257,8 +257,10 @@ $writer->close();
   per-cluster walk. The output is byte-identical to the plain wrap,
   including runs the fast path declines (tokens carrying escape
   sequences or control bytes).
-- The thematic break always draws `horizontalRuleLength` cells (default
-  40) regardless of the wrap width, and `withTableWrap(true)` wraps each
+- The thematic break draws `horizontalRuleLength` cells (default 40)
+  while word wrapping is off; once a wrap width is set the rule clamps
+  to the current block's available width, so nested breaks never
+  overshoot the frame (2026-11, SM-S47). `withTableWrap(true)` wraps each
   cell at the *full* wrap width — pair it with `withTableColumnBudget()`
   to bound the whole table geometry.
 - The streaming channel keeps a section that waits on a link-reference
