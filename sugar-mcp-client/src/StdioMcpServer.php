@@ -264,9 +264,22 @@ final class StdioMcpServer implements McpServer
      * Post-mortem evidence like the stderr tail: cleared at every start(),
      * deliberately kept by stop() so a failed launch's report survives.
      *
+     * The list is a CAPPED view — the ledger never grows past
+     * {@see self::MALFORMED_LEDGER_CEILING} entries (one hostile
+     * `tools/list` must not turn the diagnostic into a memory DoS);
+     * {@see $malformedToolDefsTotal} keeps the honest count of everything
+     * dropped, and the report announces the overflow.
+     *
      * @var list<string>
      */
     private array $malformedToolDefs = [];
+
+    /**
+     * Every drop recorded since the last start(), capped or not — the
+     * denominator the report quotes so a truncated view can never
+     * understate the server's sloppiness.
+     */
+    private int $malformedToolDefsTotal = 0;
 
     /**
      * The identity this client advertises in the initialize handshake. The
@@ -636,6 +649,7 @@ final class StdioMcpServer implements McpServer
         $this->stderrTruncated = false;
         $this->lastFailureCause = null;
         $this->malformedToolDefs = [];
+        $this->malformedToolDefsTotal = 0;
 
         $deadline = self::nowSeconds() + $this->startTimeoutSeconds;
 
@@ -920,7 +934,9 @@ final class StdioMcpServer implements McpServer
      * Labels of the tools/list definitions refused by the well-typedness
      * gate during the current start — the ones {@see parseTools()} skipped
      * instead of registering. Post-mortem evidence: reset by every start(),
-     * kept by stop().
+     * kept by stop(). The view is capped at
+     * {@see self::MALFORMED_LEDGER_CEILING} entries; the full count rides
+     * the report.
      *
      * @return list<string>
      */
@@ -930,11 +946,22 @@ final class StdioMcpServer implements McpServer
     }
 
     /**
+     * Ceiling on recorded malformed-definition rows (the roster list, not
+     * the counted total): bounds what ONE adversarial `tools/list` can
+     * make this client remember, mirroring the capped-tail posture of the
+     * stderr capture.
+     */
+    private const MALFORMED_LEDGER_CEILING = 100;
+
+    /**
      * One-line announcement for the skipped definitions, '' when the last
      * tools/list walk registered everything the server advertised. Report
      * it wherever the server's start outcome is surfaced — the roster is
      * already SAFE (only valid definitions were registered); this is the
-     * half of the story the user must not have to guess.
+     * half of the story the user must not have to guess. The count is the
+     * honest total; the named rows are the first few of a ledger capped at
+     * {@see self::MALFORMED_LEDGER_CEILING}, and a cut-off list says so
+     * with `[+N more]` — truncation announced, never silent.
      */
     public function malformedToolDefinitionsReport(): string
     {
@@ -942,11 +969,14 @@ final class StdioMcpServer implements McpServer
             return '';
         }
 
+        $overflow = $this->malformedToolDefsTotal - count($this->malformedToolDefs);
+
         return sprintf(
-            'MCP server %s advertised %d malformed tool definition(s) in tools/list (first: %s) — skipped, the rest of the roster registered',
+            'MCP server %s advertised %d malformed tool definition(s) in tools/list (first: %s)%s — skipped, the rest of the roster registered',
             $this->name,
-            count($this->malformedToolDefs),
+            $this->malformedToolDefsTotal,
             implode(', ', array_slice($this->malformedToolDefs, 0, 5)),
+            $overflow > 0 ? sprintf(' [+%d more]', $overflow) : '',
         );
     }
 
@@ -2332,6 +2362,7 @@ final class StdioMcpServer implements McpServer
             // scalar is a PHP warning, so the shape is checked once here —
             // the same family as the per-entry is_array($def) skip below.
             $this->malformedToolDefs[] = sprintf('tools container was %s', get_debug_type($toolDefs));
+            ++$this->malformedToolDefsTotal;
 
             return [];
         }
@@ -2345,16 +2376,29 @@ final class StdioMcpServer implements McpServer
             if ($tool === null) {
                 // Counted, never silently vanished: "advertised 3 malformed
                 // definitions" is diagnosable; a shorter tool list than the
-                // server promised is not.
+                // server promised is not. The name that failed the gate is
+                // EXACTLY the text the -004 control-gate exists to refuse,
+                // so the ledger never gets to announce it raw: sanitize to
+                // printable bytes and cap the row, same posture the stderr
+                // tail keeps. The get_debug_type rows are already ours.
                 $dropped[] = is_array($def) && isset($def['name']) && is_string($def['name'])
-                    ? $def['name']
+                    ? mb_substr(self::printableDiagnostic($def['name']), 0, 120)
                     : get_debug_type($def);
             } else {
                 $tools[] = $tool;
             }
         }
 
-        $this->malformedToolDefs = [...$this->malformedToolDefs, ...$dropped];
+        // Capped merge: one `tools/list` carrying thousands of junk entries
+        // must not mint thousands of ledger rows (memory DoS through the
+        // diagnostic path). The ceiling bounds the VIEW; the total keeps
+        // the roster-size claim honest.
+        $this->malformedToolDefsTotal += count($dropped);
+        $room = self::MALFORMED_LEDGER_CEILING - count($this->malformedToolDefs);
+
+        if ($room > 0) {
+            $this->malformedToolDefs = [...$this->malformedToolDefs, ...array_slice($dropped, 0, $room)];
+        }
 
         // A LEGAL empty roster stays legal: a server with no tools is real.
         return $tools;

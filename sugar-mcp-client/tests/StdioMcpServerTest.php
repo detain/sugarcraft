@@ -237,6 +237,50 @@ final class StdioMcpServerTest extends TestCase
         self::assertStringContainsString((string) count($drops) . ' malformed tool definition', $report);
     }
 
+    public function testMalformedLedgerSanitizesControlByteNamesToPrintableBytes(): void
+    {
+        // The name that fails the well-typedness gate is EXACTLY the poisoned
+        // text the gate exists to refuse — the ledger must announce it as
+        // rendered bytes, never raw, or the diagnostic re-poisons every
+        // transcript it is pasted into.
+        $server = new StdioMcpServer('probe', '/bin/true');
+        $parse = new \ReflectionMethod(StdioMcpServer::class, 'parseTools');
+        $parse->setAccessible(true);
+
+        $poisoned = "\x1B]0;evil-title\x07ping";
+        $parse->invoke($server, ['result' => ['tools' => [['name' => $poisoned, 'inputSchema' => []]]]]);
+
+        $row = $server->malformedToolDefinitions()[0] ?? '';
+        self::assertStringNotContainsString("\x1B", $row, 'an OSC opener survived the ledger');
+        self::assertStringNotContainsString("\x07", $row, 'the BEL terminator survived the ledger');
+        self::assertStringContainsString('0;evil-title', $row, 'the sanitize blinded the diagnosis entirely');
+        self::assertLessThanOrEqual(120, mb_strlen($row));
+        self::assertStringNotContainsString("\x1B", $server->malformedToolDefinitionsReport());
+    }
+
+    public function testMalformedLedgerIsCappedButCountedInFullAcrossPages(): void
+    {
+        // One tools/list walk (pagination calls parseTools once per page)
+        // carrying 150 junk entries: the VIEW caps at the ledger ceiling, the
+        // report quotes the honest total and announces the cut — bounded
+        // memory without an understated count.
+        $server = new StdioMcpServer('probe', '/bin/true');
+        $parse = new \ReflectionMethod(StdioMcpServer::class, 'parseTools');
+        $parse->setAccessible(true);
+        $junk = array_fill(0, 75, 'not-a-definition');
+
+        $parse->invoke($server, ['result' => ['tools' => $junk]]);
+        $parse->invoke($server, ['result' => ['tools' => $junk]]);
+
+        $rows = $server->malformedToolDefinitions();
+        self::assertCount(100, $rows, 'the ledger grew past its ceiling');
+        self::assertSame(array_fill(0, 100, 'string'), $rows, 'the capped view dropped the get_debug_type rows');
+
+        $report = $server->malformedToolDefinitionsReport();
+        self::assertStringContainsString('advertised 150 malformed', $report, 'the capped view understated the count');
+        self::assertStringContainsString('[+50 more]', $report, 'the truncation was silent');
+    }
+
     public function testParseToolsPreservesComplexInputSchemas(): void
     {
         $schema = ['type' => 'object', 'properties' => ['p' => ['type' => 'string']], 'required' => ['p']];
