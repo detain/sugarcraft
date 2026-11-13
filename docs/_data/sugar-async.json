@@ -2,7 +2,7 @@
     "title": "SugarCraft — SugarAsync",
     "description": "SugarAsync: Async building blocks for ReactPHP — cancellation tokens and sources, disposable subscription handles, timeout / deadline / retry / debounce / throttle / fan-in helpers, in-flight coalescing, and a TTL async cache.",
     "ogTitle": "SugarCraft — SugarAsync",
-    "ogDescription": "Async building blocks for ReactPHP — cancellation tokens and sources, disposable subscription handles, timeout / deadline / retry / debounce / throttle / fan-in helpers, in-flight coalescing, and a TTL async cache. The measured dependents census is sugar-forms, sugar-vterm, candy-sql, candy-mail, candy-git-server and candy-codetime.",
+    "ogDescription": "Async building blocks for ReactPHP — cancellation tokens and sources, disposable subscription handles, timeout / deadline / retry / debounce / throttle / fan-in helpers, in-flight coalescing, and a TTL async cache. The measured dependents census (as of 2026-11) is sugar-forms, sugar-vterm, candy-sql, candy-mail, candy-git-server and candy-codetime.",
     "emoji": "🍬",
     "displayName": "SugarAsync",
     "tagline": "Shared async vocabulary for ReactPHP",
