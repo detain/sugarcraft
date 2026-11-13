@@ -125,6 +125,19 @@ resolves it. For a PATH-visible copy, install it globally:
 composer global require sugarcraft/candy-mail
 ```
 
+### Requirements
+
+| Need | Extension | Without it |
+|------|-----------|------------|
+| Any TLS — STARTTLS or port-465 implicit | `ext-openssl` | named refusal (`smtp.openssl_missing`) before dialling; only plain SMTP works |
+| The Resend transport | `ext-curl` | named refusal (`resend.curl_missing`) at send time; SMTP is unaffected |
+| MIME types for path attachments | `ext-fileinfo` | sniffing degrades to the extension-suffix table (`Attachment::EXT_TO_MIME`), unknown suffixes become `application/octet-stream` — sends still work |
+| The forked fake-server test legs | `pcntl` (dev only) | dialogue suites skip (or fail loudly under `CANDY_MAIL_REQUIRE_DIALOGUE_TESTS=1`) |
+
+Check what your interpreter has: `php -m | grep -E 'curl|openssl|fileinfo'`. On Debian and
+Ubuntu the three ship as `sudo apt install php8.3-curl php8.3-openssl php8.3-fileinfo`
+(other distros carry the same extension names through their PHP package manager).
+
 ## Quick Start
 
 ### Resend API
@@ -237,6 +250,21 @@ $email2 = new Email(
   `CANDY_MAIL_FROM`; an empty Resend sender list throws instead of fabricating
   `unknown@localhost`.
 
+### Egress and network topology
+
+- **TLS-inspecting egress.** A corporate egress that terminates and re-signs TLS
+  presents a leaf your OS trust store does not anchor, so verification fails —
+  by design. Feed the interception CA through `--ca-file` or
+  `CANDY_MAIL_SMTP_CA_FILE`; there is no blanket `verify_peer` off switch, the
+  verification options stay pinned ON at both TLS attach points.
+- **IP-literal relays.** Verification pins `peer_name` to the configured host, so
+  dialling a relay by IP requires that address in the server's certificate SAN
+  set (IP SANs are uncommon in commercial certs). Point at the relay's hostname
+  instead, and route name resolution wherever you need to.
+- **No base-URL override for SMTP today.** `host`/`port` are the entire dial
+  surface. The Resend transport's endpoint seam is test-only; it shows where a
+  future first-class override would attach, and promises nothing.
+
 ## CLI
 
 ```bash
@@ -344,6 +372,20 @@ same loud-over-truncating posture as `Attachment::MAX_BYTES`. Credentials come
 from the environment in every unattended shape — automation passes no flags, so
 the `CANDY_MAIL_SMTP_*` variables above are read identically under cron, systemd,
 and containers and carry every decision.
+
+### The stdout contract, per mode
+
+- **Send** — one line on success, translated: `✓ Email sent via {transport}.`
+  Everything that is not that line (refusals, warnings, deprecation notices, the
+  `--render` 8-bit note) goes to **stderr**; stdout stays machine-greppable.
+- **`--render`** — stdout carries the composed MIME document and nothing else.
+- **`--help` / `--version`** — stdout carries the usage text / the version line.
+- Parsing output in a different locale? The banners translate through the catalog
+  shelf; pin English with `LC_ALL=C` (or `LANG=C`) in the wrapper's environment
+  and the strings above are stable.
+
+A `--quiet` flag and a `--json` envelope would formalise this further; they stay
+a separate CONV/CLI proposal (recorded with this section, not promised by it).
 
 ### Exit codes
 
