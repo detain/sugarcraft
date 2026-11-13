@@ -30,6 +30,16 @@ final class ProbeStreamWrapper
     /** @var array<string, int> per-target flush calls */
     public static array $flushes = [];
 
+    /** @var array<string, int> armed byte-budgets: the next write commits at
+     * most this many bytes and reports a short write (SM-S54 legs) */
+    public static array $shortWrite = [];
+
+    /** @var array<string, bool> armed flush failures: consumed once, and
+     * self-healing — PHP keeps reporting a wrapper flush failure through
+     * cached stream-level state until a flush succeeds again, so the repair
+     * flush re-runs the (now un-armed) commit path transparently */
+    public static array $failFlush = [];
+
     public $context;
 
     private string $target = '';
@@ -48,6 +58,7 @@ final class ProbeStreamWrapper
         self::$committed[$target] = '';
         self::$writes[$target]    = 0;
         self::$flushes[$target]   = 0;
+        unset(self::$shortWrite[$target], self::$failFlush[$target]);
     }
 
     /** Open handle for probe://<target> in write mode. */
@@ -70,8 +81,28 @@ final class ProbeStreamWrapper
         return true;
     }
 
+    /**
+     * SM-S54: honour the one option the failure legs need — melting the
+     * write buffer makes fwrite call stream_write directly (and take its
+     * short-write return as its own), which is how real byte-limited doors
+     * misbehave. Every other option stays unsupported.
+     */
+    public function stream_set_option(int $option, int $arg1, ?int $arg2): bool
+    {
+        return $option === STREAM_OPTION_WRITE_BUFFER && $arg1 === 0;
+    }
+
     public function stream_write(string $data): int
     {
+        if (isset(self::$shortWrite[$this->target])) {
+            // SM-S54 arm: accept only the budgeted prefix, then disarm.
+            $accept = min(self::$shortWrite[$this->target], strlen($data));
+            unset(self::$shortWrite[$this->target]);
+            self::$pending[$this->target] .= substr($data, 0, $accept);
+            self::$writes[$this->target]++;
+
+            return $accept;
+        }
         self::$pending[$this->target] .= $data;
         self::$writes[$this->target]++;
 
@@ -80,6 +111,13 @@ final class ProbeStreamWrapper
 
     public function stream_flush(): bool
     {
+        if (self::$failFlush[$this->target] ?? false) {
+            // SM-S54 arm: the commit door fails exactly once.
+            unset(self::$failFlush[$this->target]);
+            self::$flushes[$this->target]++;
+
+            return false;
+        }
         self::$committed[$this->target] .= self::$pending[$this->target];
         self::$pending[$this->target]    = '';
         self::$flushes[$this->target]++;
