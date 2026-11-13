@@ -126,17 +126,37 @@ final class ExecRunner
     private static function sugarPtyFactory(): callable
     {
         return static function (array $cmd): array {
-            if (!class_exists(\SugarCraft\Pty\Pty::class)) {
+            if (!class_exists(\SugarCraft\Pty\PtySystemFactory::class)) {
                 throw new \RuntimeException('sugar-pty is not installed');
             }
-            $pty = \SugarCraft\Pty\Pty::open();
+            // PtySystemFactory picks the host backend (POSIX openpty, or
+            // ConPTY on Windows); the raw POSIX Pty::open() cannot run there.
+            $pair = \SugarCraft\Pty\PtySystemFactory::new()->open();
             try {
-                $child = $pty->spawn($cmd);
+                $child = $pair->slave()->spawn($cmd);
             } catch (\Throwable $e) {
-                $pty->close();
+                $pair->master()->close();
                 throw $e;
             }
-            return [$pty, $child];
+            $master = $pair->master();
+            // The session the loop above drives: read() + close() over the master.
+            $session = new class ($master) {
+                public function __construct(private readonly \SugarCraft\Pty\Contract\MasterPty $master)
+                {
+                }
+
+                public function read(int $len = 8192, ?float $timeout = 0.05): ?string
+                {
+                    return $this->master->read($len, $timeout);
+                }
+
+                public function close(): void
+                {
+                    $this->master->close();
+                }
+            };
+
+            return [$session, $child];
         };
     }
 }
