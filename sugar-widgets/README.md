@@ -88,7 +88,7 @@ The first-party widgets below decode these keys inside their own
 |---|---|
 | `Tabs` | `Tab`/`Shift+Tab` next/prev (wraps by default; `wrap:` construction flag switches to clamp), `1`–`9` direct jump to tab N; only decoded while focused — the bindings are `TabsKeyMap` defaults and the map is replaceable |
 | `Table` | `↑`/`k`, `↓`/`j`, `Home`/`g`, `End`/`G`, `PageUp`/`PageDown` by `max(1, height)` rows — rows only, no vim letter bindings |
-| `Tree` | `↑`/`k`, `↓`/`j`, `Enter` toggles, `→`/`l` expands, `←`/`h` collapses, `g`/`G` jump |
+| `Tree` | `↑`/`k`, `↓`/`j`, `Enter` toggles, `→`/`l` expands, `←`/`h` collapses, `g`/`G` jump, `Home`/`End` jump (same targets), `PageUp`/`PageDown` stride the visible height (whole list at height 0) |
 | `Help` | no hardcoded key — `updateWithBinding($msg, $toggle)` flips the full view when `$msg` matches whatever `Binding` the host wires in (the bubbles convention is `?`); plain `update()` is a pass-through |
 | `Menu\OptionRow` | renders the `←`/`→`/`↵` control glyphs on the selected row but decodes nothing itself — the consumer's keymap drives the actions |
 

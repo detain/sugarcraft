@@ -310,4 +310,66 @@ final class TreeTest extends TestCase
         // bytes exactly (regression pin for the W-16 cap being a no-op shallow).
         $this->assertSame($tree->view(), $tree->withSize(40, 0)->view());
     }
+
+    // ─── W-41 leg 2: window-relative paging pins ────────────────────
+
+    private function paged(int $height = 3): Tree
+    {
+        $leaves = [];
+        for ($i = 0; $i < 10; $i++) {
+            $leaves[] = Node::leaf('r' . $i);
+        }
+        return Tree::new(...$leaves)->withSize(20, $height)->focus();
+    }
+
+    public function testPageDownStridesTheVisibleWindow(): void
+    {
+        $t = $this->paged();
+        foreach ([3, 6, 9] as $expected) {
+            [$t, ] = $t->update(new \SugarCraft\Core\Msg\KeyMsg(\SugarCraft\Core\KeyType::PageDown));
+            $this->assertSame($expected, $t->cursor);
+        }
+        [$t, ] = $t->update(new \SugarCraft\Core\Msg\KeyMsg(\SugarCraft\Core\KeyType::PageDown));
+        $this->assertSame(9, $t->cursor, 'clamped at the last row');
+    }
+
+    public function testPageUpStridesBackAndFloorsAtZero(): void
+    {
+        $t = $this->paged();
+        [$t, ] = $t->update(new \SugarCraft\Core\Msg\KeyMsg(\SugarCraft\Core\KeyType::PageDown));
+        [$t, ] = $t->update(new \SugarCraft\Core\Msg\KeyMsg(\SugarCraft\Core\KeyType::PageDown));
+        foreach ([3, 0] as $expected) {
+            [$t, ] = $t->update(new \SugarCraft\Core\Msg\KeyMsg(\SugarCraft\Core\KeyType::PageUp));
+            $this->assertSame($expected, $t->cursor);
+        }
+        [$t, ] = $t->update(new \SugarCraft\Core\Msg\KeyMsg(\SugarCraft\Core\KeyType::PageUp));
+        $this->assertSame(0, $t->cursor, 'floored, never negative');
+    }
+
+    public function testHomeAndEndJumpLikeGAndShiftG(): void
+    {
+        $t = $this->paged();
+        [$t, ] = $t->update(new \SugarCraft\Core\Msg\KeyMsg(\SugarCraft\Core\KeyType::End));
+        $this->assertSame(9, $t->cursor);
+        [$t, ] = $t->update(new \SugarCraft\Core\Msg\KeyMsg(\SugarCraft\Core\KeyType::Home));
+        $this->assertSame(0, $t->cursor);
+    }
+
+    public function testUnboundedTreePagesTheWholeListInOneStride(): void
+    {
+        // height 0 = unbounded (W-35 law): one PageDown lands the cursor
+        // on the last row — the stride IS the whole visible list.
+        $t = $this->paged(0);
+        [$t, ] = $t->update(new \SugarCraft\Core\Msg\KeyMsg(\SugarCraft\Core\KeyType::PageDown));
+        $this->assertSame(9, $t->cursor);
+    }
+
+    public function testPagingKeysAreInertWhileBlurred(): void
+    {
+        $t = $this->paged()->blur();
+        [$same, $cmd] = $t->update(new \SugarCraft\Core\Msg\KeyMsg(\SugarCraft\Core\KeyType::PageDown));
+        $this->assertSame($t, $same);
+        $this->assertSame(0, $same->cursor, 'update() gates on focus first');
+        $this->assertNull($cmd);
+    }
 }
