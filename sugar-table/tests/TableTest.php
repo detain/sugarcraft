@@ -1362,9 +1362,43 @@ final class TableTest extends TestCase
         $t2 = $t->Filter('name', 'Ali');
         $this->assertSame(1, $t2->TotalRows());
 
-        // Filter on non-filterable column should be ignored (no-op)
-        $t3 = $t->Filter('city', 'NYC');
-        $this->assertSame(2, $t3->TotalRows()); // all rows still shown
+        // Filter on a non-filterable column is now a loud guarantee, not a
+        // silent no-op (audit ST-26):
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("'city' is not filterable");
+        $t->Filter('city', 'NYC');
+    }
+
+    public function testClearFilterOnUnmarkedColumnAlsoThrows(): void
+    {
+        $t = Table::fromColumns([
+            Column::new('name', 'Name', 10)->withFilterable(),
+            Column::new('city', 'City', 10),
+        ])->withRows([Row::new(RowData::from(['name' => 'Alice', 'city' => 'NYC']))]);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $t->ClearFilter('city');
+    }
+
+    public function testStrandedFilterTextStaysInertAfterColumnSwap(): void
+    {
+        // The defensive render-time skip (ST-26): text set while 'city' was
+        // filterable, then the column loses the mark — filtering halts rather
+        // than silently matching new data.
+        $t = Table::fromColumns([
+            Column::new('name', 'Name', 10)->withFilterable(),
+            Column::new('city', 'City', 10)->withFilterable(),
+        ])->withRows([
+            Row::new(RowData::from(['name' => 'Alice', 'city' => 'NYC'])),
+            Row::new(RowData::from(['name' => 'Bob', 'city' => 'Denver'])),
+        ])->Filter('city', 'NYC');
+        $this->assertSame(1, $t->TotalRows());
+
+        $swapped = $t->withColumns([
+            Column::new('name', 'Name', 10)->withFilterable(),
+            Column::new('city', 'City', 10),
+        ]);
+        $this->assertSame(2, $swapped->TotalRows(), 'stranded text must not filter, not throw at render');
     }
 
     public function testGlobalSearchOnlySearchesFilterableColumns(): void

@@ -365,7 +365,9 @@ $t = $t->Filter('name', 'alice')  // name must contain "alice"
   instead of surfacing as a deep `TypeError`; `Column::new()` likewise rejects a
   negative width at construction (`width must be >= 0`)
 - **Unmarked column**: once any column carries `withFilterable()`, `Filter()` on a
-  column that lacks the mark is a silent no-op — mark the column first
+  column that lacks the mark throws `InvalidArgumentException` — mark the column
+  first. (Filter text stranded by a later column swap stays inert at render time
+  rather than filtering silently against new data.)
 
 Both can be active simultaneously:
 

@@ -1137,12 +1137,16 @@ final class Table
         }
         $clone = clone $this;
 
-        // If this column is not filterable (and at least one column IS declared
-        // filterable), treat the call as a no-op — return clone with no changes.
+        // A filter that cannot be honoured is announced, not swallowed (audit
+        // ST-26, finding 26): hosts passing filter text across mixed
+        // filterable/non-filterable sets used to get a silent no-op that hid
+        // the worst case. Now symmetric with SortBy's key-domain throws.
         $filterableKeys = $this->filterableKeys();
         $hasExplicitFilterable = $this->hasExplicitFilterable();
         if ($hasExplicitFilterable && !\in_array($colKey, $filterableKeys, true)) {
-            return $clone;
+            throw new \InvalidArgumentException(
+                "Filter column key '{$colKey}' is not filterable (add Column::withFilterable())"
+            );
         }
 
         if ($text === '') {
@@ -1316,7 +1320,7 @@ final class Table
                 \array_filter($rows, function (Row $row) use ($filterable): bool {
                     foreach ($this->filterText as $key => $text) {
                         if (!\in_array($key, $filterable, true)) {
-                            continue; // column not filterable — skip (no-op filter)
+                            continue; // defensive: entry validates (ST-26); stale text can only arrive via a post-hoc column swap
                         }
                         $val = $row->data->get($key);
                         if (\stripos(self::plainText($val), $text) === false) {
