@@ -169,14 +169,14 @@ A custom `withFilterFn()` predicate still applies on top of the ranker.
 | **Overlay compositing** | Background view renders underneath; overlay chars replace background at specified positions |
 | **Background continues updating** | The QuickPick doesn't block the underlying view |
 | **Fully styleable** | Custom filter prompt, item format, matching highlight, window dimensions |
-| **String renderer** | `view()` returns strings you manage; the only terminal I/O is the STDIN geometry probe the auto-width path runs on a width-cache miss plus the screen-clamp probe every render applies (see `withWindowWidth` — a width that fits the screen renders identically everywhere) and the opt-in `attachSigwinch()` resize attach (an `ioctl` + `pcntl` handler), which you never have to call |
+| **String renderer** | `view()` returns strings you manage — it never writes to a stream or moves a cursor. The only terminal I/O lives in the width path and is all read-only or opt-in: an STDIN geometry probe on a width-cache miss, the screen-clamp probe every render applies (see `withWindowWidth` — a width that fits the screen renders identically everywhere), and the `attachSigwinch()` resize attach (`ioctl` + `pcntl`), which you never have to call |
 | **Item interface** | Work with structured `Item` objects instead of raw strings |
 | **Persistent history** | `FileHistory` stores items as JSONL for session persistence |
 | **Custom filter predicates** | `withFilterFn()` lets you filter items by arbitrary criteria |
 | **Border & Style composition** | `withBorder()` and `withStyle()` compose `sugar-style` `Border` and `Style` for window decoration |
 | **HelpBar / StatusBar** | `withHelpBar()` and `withStatusBar()` attach keyboard-shortcut and status-line renders below the overlay |
 | **SIGWINCH resize** | `withOnResize()` + `attachSigwinch()` forwards terminal resize events via `SignalForwarder::attachSigwinchToFd` |
-| **Colorless by design** | The frame itself emits no color — pure Unicode runes (the default row decoration is the `●` cursor dot plus plain ordinals, and `withItemFormatter()` replaces it wholesale). SGR appears only where the host opts in (`withMatchStyle()`, the item formatter, `withStyle()`) — and once opted in, those escapes go out unconditionally: honoring `NO_COLOR`/`CLICOLOR` is the host's job (skip the opt-ins on dumb terminals, or prefer the two-channel emphasis of runes that needs no color) |
+| **Colorless by design** | The frame itself emits no color: selection rides the `●` cursor dot and position rides plain ordinals — two cues that need no color at all (`withItemFormatter()` replaces both wholesale). SGR appears only where the host opts in (`withMatchStyle()`, the item formatter, `withStyle()`) — and once opted in, those escapes go out unconditionally: honoring `NO_COLOR`/`CLICOLOR` is the host's job (skip the opt-ins on dumb terminals) |
 
 ## Architecture
 
@@ -426,6 +426,7 @@ interface Item {
 // Numbered item implementation
 final readonly class FilteredItem implements Item {
     public function __construct(private int $number, private string $value) {}
+    public static function new(int $number, string $value): self; // house factory, same seeds
     public function number(): int { return $this->number; }
     public function value(): string { return $this->value; }
 }
@@ -456,6 +457,9 @@ $history = new FileHistory(getenv('HOME') . '/.myapp/history.jsonl');
 // throws InvalidArgumentException when the base directory itself does not
 // exist.
 $history = new FileHistory('history.jsonl', baseDir: getenv('HOME') . '/.myapp');
+
+// FileHistory::new(path, baseDir, maxEntries) is the house factory — same
+// seeds, same semantics; the constructor stays public.
 
 // Append an Item as the raw journal row (stored as a JSON line:
 // {"n":1,"v":"apple","f":1}\n — "f" is the row-format stamp; rows written
@@ -529,6 +533,8 @@ $bar = new HelpBar([
     'Esc' => 'close',
 ]);
 
+// HelpBar::new($shortcuts, $visible) is the house factory — same seeds.
+
 // Add or remove shortcuts (fluent)
 $bar = $bar->withShortcut('Ctrl+R', 'reload')
            ->withoutShortcut('↑↓');
@@ -554,6 +560,8 @@ use SugarCraft\QuickPick\StatusBar;
 // Create with optional message
 $bar = new StatusBar('3 of 12 items');
 
+// StatusBar::new($message, $visible) is the house factory — same seeds.
+
 // Fluent setters
 $bar = $bar->withMessage('Searching...')   // replaces the constructor message
            ->withSegment('count', '7');    // named segment
@@ -565,8 +573,9 @@ $segments = $bar->segments();
 // Render: "[count: 7] Searching..."
 echo $bar->render();
 
-// The clearing and visibility ops undo one thing each; shown separately so
-// the echoed state above stays truthful:
+// Each call removes exactly one thing — a named segment, the message, or
+// visibility — and returns a clone: $bar itself still holds the state echoed
+// above, so all three lines start from the same full frame:
 $bar->withoutSegment('count')->render(); // 'Searching...'
 $bar->withNoMessage()->render();         // '[count: 7]'
 $bar->hide()->render();                  // '' — a hidden bar renders empty
@@ -593,7 +602,7 @@ interface's `update(QuickPick $model, string $msg): array` — returning
 `[$host, $picker]` — expects exactly this forwarding —
 `$msg` strings are host-defined, nothing in this library decodes them.
 
-## SIGWINCH Resize
+## SIGWINCH resize
 
 ```php
 use SugarCraft\QuickPick\QuickPick;
