@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\ScriptUi\Command;
 
+use SugarCraft\Core\Util\Width;
 use SugarCraft\ScriptUi\Lang;
 use SugarCraft\ScriptUi\Runtime\PositiveInt;
 use SugarCraft\Style\Align;
@@ -113,35 +114,29 @@ final class TableCommand extends Command
         }
 
         // --widths truncates each cell to the corresponding budget.
+        // scriptui-31 (finding 042): the budget is DISPLAY CELLS, not
+        // codepoints — mb_strlen/mb_substr shipped ~2x cells on CJK/emoji
+        // (a 20-codepoint budget → ~40 cells) and skewed every border on
+        // that row, exactly the condition the flag exists to prevent;
+        // mb_substr also cut split grapheme clusters. Width::string +
+        // Width::truncateMiddle (gum ellipsises) is the same primitive
+        // JoinCommand already rides.
         /** @var list<int> $widths */
         $rawWidths = $input->getOption('widths');
         $widths = array_map('intval', is_array($rawWidths) ? $rawWidths : []);
         if ($widths !== []) {
+            $fit = static function (string $cell, int $i) use ($widths): string {
+                $cap = $widths[$i] ?? 0;
+                return $cap > 0 && Width::string($cell) > $cap
+                    ? Width::truncateMiddle($cell, $cap)
+                    : $cell;
+            };
             $rows = array_map(
-                static fn (array $row) => array_map(
-                    static function (string $cell, int $i) use ($widths): string {
-                        $cap = $widths[$i] ?? 0;
-                        if ($cap > 0 && mb_strlen($cell, 'UTF-8') > $cap) {
-                            return mb_substr($cell, 0, $cap, 'UTF-8');
-                        }
-                        return $cell;
-                    },
-                    $row,
-                    array_keys($row),
-                ),
+                static fn (array $row) => array_map($fit, $row, array_keys($row)),
                 $rows,
             );
             if ($headers !== []) {
-                $headers = array_map(
-                    static function (string $h, int $i) use ($widths): string {
-                        $cap = $widths[$i] ?? 0;
-                        return $cap > 0 && mb_strlen($h, 'UTF-8') > $cap
-                            ? mb_substr($h, 0, $cap, 'UTF-8')
-                            : $h;
-                    },
-                    $headers,
-                    array_keys($headers),
-                );
+                $headers = array_map($fit, $headers, array_keys($headers));
             }
         }
 
