@@ -14,6 +14,11 @@ primitives ship as a single standalone dependency.
 composer require sugarcraft/sugar-forms
 ```
 
+Until a `1.0` tag exists the package publishes only `dev-master`, so a
+consumer's own `composer.json` needs `"minimum-stability": "dev"` with
+`"prefer-stable": true` (Composer's documented default refuses a
+dev-only package at plain `stable`); see **Versioning** below.
+
 ## Role
 
 SugarForms owns the full primitive + form surface:
@@ -514,6 +519,8 @@ monorepo pre-dates 1.0: every library moves together and published installs
 resolve siblings from Packagist `dev-master` (path repositories are
 injected by CI at build time, never committed). At the stable release the
 pins become proper `^1.0` constraints — track this in the release plan.
+Consumer projects install under the same rule: see the **Install** note
+above for the `minimum-stability` duty while no `1.0` tag exists.
 
 ## Testing & CI
 
