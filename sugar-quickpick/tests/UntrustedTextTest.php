@@ -94,6 +94,82 @@ final class UntrustedTextTest extends TestCase
     }
 
     // ------------------------------------------------------------------
+    // -072 memoization: one transform per distinct input, identical bytes
+    // ------------------------------------------------------------------
+
+    /** @return array<string, string> the live memo table */
+    private static function memoTable(): array
+    {
+        $property = new \ReflectionProperty(UntrustedText::class, 'memo');
+        $property->setAccessible(true);
+        /** @var array<string, string> $value */
+        $value = $property->getValue();
+        return $value;
+    }
+
+    /** Number of full transforms executed so far in this process. */
+    private static function transformPasses(): int
+    {
+        $property = new \ReflectionProperty(UntrustedText::class, 'transformPasses');
+        $property->setAccessible(true);
+        return (int) $property->getValue();
+    }
+
+    public function testGuardMemoizesRepeatedInputToOnePass(): void
+    {
+        $dirty  = "h\x1b[2Jost";
+        $before = self::transformPasses();
+        $first  = UntrustedText::guard($dirty);
+        self::assertSame($before + 1, self::transformPasses(), 'a distinct dirty input runs exactly one sweep');
+        $second = UntrustedText::guard($dirty);
+        self::assertSame($first, $second, 'memo hit returns identical bytes');
+        self::assertSame($before + 1, self::transformPasses(), 'the repeat ran no second sweep');
+        self::assertStringNotContainsString("\x1b", self::memoTable()[$dirty] ?? '', 'and the memo holds the guarded answer');
+        self::assertSame('host', $first);
+    }
+
+    public function testGuardFastPathSkipsTheSweepForPureAscii(): void
+    {
+        $before = self::transformPasses();
+        self::assertSame('ascii-clean-9000', UntrustedText::guard('ascii-clean-9000'));
+        self::assertSame($before, self::transformPasses(), 'a printable-ASCII-only input never reaches the sweep');
+        // And a cold dirty key does sweep exactly once.
+        UntrustedText::guard("cold\x07key");
+        self::assertSame($before + 1, self::transformPasses(), 'non-ASCII input reaches the sweep on a cold key');
+    }
+
+    public function testGuardMemoNeverCollidesAcrossDistinctInputs(): void
+    {
+        $clean  = UntrustedText::guard('apple');
+        $dirty  = UntrustedText::guard("a\x1bpple");
+        $broken = UntrustedText::guard("apple\xff");
+        self::assertSame('apple', $clean);
+        self::assertNotSame($clean, $broken, 'the hostile shape transforms; the key namespace is the exact input');
+        self::assertStringNotContainsString("\x1b", $dirty);
+        self::assertStringNotContainsString("\xff", $broken);
+        // Each input keeps its own answer under repetition.
+        self::assertSame($clean, UntrustedText::guard('apple'));
+        self::assertSame($dirty, UntrustedText::guard("a\x1bpple"));
+        self::assertSame($broken, UntrustedText::guard("apple\xff"));
+    }
+
+    public function testGuardFastPathKeepsTheDirtyArmsTransforming(): void
+    {
+        // The fast path must be a pure-printable-ASCII promise, not a
+        // blanket skip: every hostile family still transforms.
+        self::assertSame('ab', UntrustedText::guard("a\x1b[2Jb"));
+        self::assertStringNotContainsString("\x00", UntrustedText::guard("a\x00b"));
+        self::assertStringNotContainsString("\x07", UntrustedText::guard("a\x07b"));
+        self::assertStringNotContainsString("\u{e000}", UntrustedText::guard("a\u{e000}b"));
+        self::assertStringNotContainsString("\u{202e}", UntrustedText::guard("a\u{202e}b"));
+        self::assertStringNotContainsString("\x9b", UntrustedText::guard("a\x9b0m"));
+        self::assertStringContainsString("\u{fffd}", UntrustedText::guard("a\xff\xfeb"));
+        // Benign non-ASCII keeps byte identity through the memo slow path.
+        self::assertSame('Éclair.txt', UntrustedText::guard('Éclair.txt'));
+        self::assertSame('日本語', UntrustedText::guard('日本語'));
+    }
+
+    // ------------------------------------------------------------------
     // End-to-end: hostile strings through view()
     // ------------------------------------------------------------------
 

@@ -44,10 +44,64 @@ use SugarCraft\Core\Util\Sanitize;
 final class UntrustedText
 {
     /**
+     * Bound on the guard() memo (-072): the same corpus strings are guarded
+     * per visible row per frame and again in the width pass; overwhelmingly
+     * clean input is byte-identical output, so the full transform runs at
+     * most once per DISTINCT input. Oldest entry drops on overflow.
+     */
+    private const GUARD_CACHE_LIMIT = 4096;
+
+    /** @var array<string, string> exact input => guarded bytes */
+    private static array $memo = [];
+
+    /**
+     * Transform-pass counter: the memo's whole purpose is "one sweep per
+     * distinct input", and a bounded table cannot prove that (a recompute
+     * overwrites its own slot). The test pin reads this seam by reflection.
+     */
+    private static int $transformPasses = 0;
+
+    /**
      * Make `$value` safe to render inside the fixed-width overlay frame.
+     *
+     * Fast path first (a printable-ASCII-only string provably passes all
+     * four steps untouched — no regexes, no substitute-character dance),
+     * memo keyed by the exact input behind it. The slow path is the full
+     * documented sweep; hoisting the `mb_substitute_character` triple out
+     * of it as a permanent class-init side effect was rejected on purpose:
+     * that mutates a PROCESS-GLOBAL for the whole host. Instead the memo
+     * guarantees the triple runs at most once per distinct dirty input.
      */
     public static function guard(string $value): string
     {
+        // A guarded result can itself be the empty string (everything was
+        // deleted), so `?? null` would miss the memo forever for those keys.
+        if (\array_key_exists($value, self::$memo)) {
+            return self::$memo[$value];
+        }
+
+        // ASCII \x20..\x7E cannot be touched by any step: valid UTF-8 (the
+        // repair is an identity), outside every control/C1/sentinel/invisible
+        // class the two Sanitize sweeps delete or mark, and carries no
+        // TAB/LF/CR to flatten.
+        if ($value !== '' && \preg_match('/^[\x20-\x7E]*$/', $value) === 1) {
+            $result = $value;
+        } else {
+            $result = self::transform($value);
+        }
+
+        if (\count(self::$memo) >= self::GUARD_CACHE_LIMIT) {
+            unset(self::$memo[\array_key_first(self::$memo)]);
+        }
+        self::$memo[$value] = $result;
+
+        return $result;
+    }
+
+    /** The full four-step sweep, run only for non-fast-path inputs. */
+    private static function transform(string $value): string
+    {
+        self::$transformPasses++;
         $value = self::repairUtf8($value);
         $value = Sanitize::untrustedForMarkedFrames($value);
         $value = Sanitize::markInvisibleFormatting($value);
