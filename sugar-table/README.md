@@ -1176,6 +1176,43 @@ $t->isExpanded(0);   // false
 // tabulated under Row Index Domains in Expanded Rows above.
 ```
 
+## Multi-Row Selection (Checked Rows)
+
+The cursor (`selectNext()`, `selectedRow()`) is one row; the checked set is
+independent of it and mirrors upstream's `Row.Selected` set:
+
+```php
+$t = $t->withCheckMarks()                // '[ ]' / '[x]' gutter before the first column
+       ->toggleChecked();                // space-bar action: toggle the cursor row
+$t = $t->toggleChecked(4);               // or any row by page-global view index
+$t->checkedRows();                       // list<Row> in view order
+$t = $t->withAllRowsChecked()->withAllRowsUnchecked();
+```
+
+Rows are tracked by object identity (like row expansion), so `withRows()`
+drops rows that no longer exist; filtered-out rows stay checked but are not
+listed by `checkedRows()`. `withCheckMarks('○', '●')` picks other marks; the
+gutter sits outside a `withWidth()` pin. The table binds no key — the host
+maps space to `toggleChecked()`.
+
+## Divergences from Upstream
+
+Everything Evertras/bubble-table offers in the areas below is ported except
+this list of deliberate gaps:
+
+- **Sorting**: no `SortTypeAuto` time/date handling — dates sort as text or
+  through a column `withSortFunc()` hook.
+- **Filtering**: no built-in fuzzy filter (`WithFuzzyFilter`) and no
+  interactive filter-input affordance; `withFilterFunc()` is the seam for
+  both. Column filters (`filter()`) stay substring-only.
+- **Selection**: the checked set renders in a gutter, not as upstream's
+  inline leading column; no key constants route space/enter.
+- **Paging**: `withMaxLines()` truncates the data region by lines, but pages
+  are still counted in rows — upstream's line-based `WithTargetHeight` /
+  `WithMinimumHeight` paging is not ported.
+- **Overflow**: `withMaxTotalWidth()` windows by declared widths, not by the
+  solved (Flex/Percent/Content) widths.
+
 ## Full API at a Glance
 
 Every public member of the five surface classes, mechanically re-derived from
@@ -1219,6 +1256,13 @@ in this README is still documented — this table is the completeness floor.
 | `withOverflowArrows(bool $v = true): self` | '«'/'»' header overflow marks |
 | `scrollX(): int` | Horizontal scroll offset |
 | `scrollLeft(): self` / `scrollRight(): self` | Pan one scrollable column |
+| `toggleChecked(?int $viewIndex = null): self` | Toggle a row in the checked set (cursor row by default) |
+| `withRowChecked(Row $row, bool $checked = true): self` | Set one row's checked state |
+| `withAllRowsChecked(): self` / `withAllRowsUnchecked(): self` | Check / clear every row |
+| `checked(Row $row): bool` | Is this row checked |
+| `checkedRows(): array` | Checked rows in view order |
+| `withCheckMarks(string $unchecked = '[ ]', string $checked = '[x]'): self` | Checkbox gutter marks |
+| `withoutCheckMarks(): self` | Remove the gutter |
 | `withStrictPercent(bool $v = true): self` | Throw when visible Percent columns sum past 100 |
 | `withRowSeparator(bool $v = true): self` | Rule between data rows |
 | `withStaticFooter(string $text): self` | Fixed footer text replacing the Page/Rows label |

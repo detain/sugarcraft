@@ -101,6 +101,12 @@ final class Table
     private int $maxTotalWidth = 0;
     private bool $overflowArrows = false;
     private bool $strictPercent = false;
+
+    /** Multi-row selection set, tracked by Row identity like expandedRows (OG-5 / ST-38). @var list<Row> */
+    private array $checkedRows = [];
+
+    /** @var array{0: string, 1: string}|null [unchecked, checked] gutter marks; null = no gutter */
+    private ?array $checkMarks = null;
     private string $staticFooter = '';
 
     /** Vertical scroll offset — first visible row index in the filtered+sorted view. */
@@ -348,9 +354,147 @@ final class Table
             $clone->expandedRows,
             static fn (Row $r): bool => isset($liveIds[\spl_object_id($r)]),
         ));
+        $clone->checkedRows = \array_values(\array_filter(
+            $clone->checkedRows,
+            static fn (Row $r): bool => isset($liveIds[\spl_object_id($r)]),
+        ));
         $clone->resetCursor();
         $clone->invalidateRenderCaches();
         return $clone;
+    }
+
+    /**
+     * Toggle the multi-row selection (checked set) of the row under the
+     * cursor, or of the row at `$viewIndex` in the page-global
+     * filtered/sorted view (OG-5 / ST-38). This is the SET upstream keeps in
+     * `Row.Selected`; the single cursor (selectNext()/selectedRow()) is
+     * independent of it. Hosts bind it to space. Mirrors
+     * Evertras/bubble-table's space-toggle of `Row.Selected`.
+     *
+     * @throws \OutOfBoundsException when `$viewIndex` is outside the view
+     */
+    public function toggleChecked(?int $viewIndex = null): self
+    {
+        $view = $this->filteredSortedRows();
+        $index = $viewIndex ?? $this->selectedIndex;
+        $row = $view[$index] ?? null;
+        if ($row === null) {
+            if ($viewIndex === null) {
+                return $this; // empty view: nothing under the cursor
+            }
+            throw new \OutOfBoundsException("Invalid row index {$index} for the current view");
+        }
+
+        return $this->withRowChecked($row, !$this->checked($row));
+    }
+
+    /** Set one Row's checked state explicitly; a Row not in the table throws. */
+    public function withRowChecked(Row $row, bool $checked = true): self
+    {
+        if (!\in_array($row, $this->rows, true)) {
+            throw new \InvalidArgumentException('Row does not belong to this table');
+        }
+        $idx = \array_search($row, $this->checkedRows, true);
+        if (($idx !== false) === $checked) {
+            return $this;
+        }
+        $clone = clone $this;
+        if ($checked) {
+            $clone->checkedRows[] = $row;
+        } else {
+            \array_splice($clone->checkedRows, (int) $idx, 1);
+        }
+
+        return $clone;
+    }
+
+    /** Check every row of the filtered/sorted view (all pages). */
+    public function withAllRowsChecked(): self
+    {
+        $clone = clone $this;
+        $clone->checkedRows = $this->filteredSortedRows();
+
+        return $clone;
+    }
+
+    /** Clear the checked set. Mirrors Evertras/bubble-table.WithAllRowsDeselected. */
+    public function withAllRowsUnchecked(): self
+    {
+        if ($this->checkedRows === []) {
+            return $this;
+        }
+        $clone = clone $this;
+        $clone->checkedRows = [];
+
+        return $clone;
+    }
+
+    public function checked(Row $row): bool
+    {
+        return \in_array($row, $this->checkedRows, true);
+    }
+
+    /**
+     * The checked rows in view order (rows filtered out of the view are
+     * excluded but stay checked). Mirrors Evertras/bubble-table.SelectedRows.
+     *
+     * @return list<Row>
+     */
+    public function checkedRows(): array
+    {
+        return \array_values(\array_filter($this->filteredSortedRows(), fn (Row $r): bool => $this->checked($r)));
+    }
+
+    /**
+     * Show a checkbox gutter before the first column: `$unchecked` /
+     * `$checked` are the per-row marks (default '[ ]' / '[x]'). The gutter is
+     * the wider mark plus one gap cell and sits OUTSIDE withWidth()'s column
+     * span. Mirrors Evertras/bubble-table.WithSelectedText.
+     */
+    public function withCheckMarks(string $unchecked = '[ ]', string $checked = '[x]'): self
+    {
+        $clone = clone $this;
+        $clone->checkMarks = [$unchecked, $checked];
+        $clone->invalidateRenderCaches();
+
+        return $clone;
+    }
+
+    /** Remove the checkbox gutter (the checked set itself is kept). */
+    public function withoutCheckMarks(): self
+    {
+        $clone = clone $this;
+        $clone->checkMarks = null;
+        $clone->invalidateRenderCaches();
+
+        return $clone;
+    }
+
+    private function gutterWidth(): int
+    {
+        if ($this->checkMarks === null) {
+            return 0;
+        }
+
+        return \max(Width::of($this->checkMarks[0]), Width::of($this->checkMarks[1])) + 1;
+    }
+
+    /**
+     * Paint the checkbox gutter cell ($mark null = blank, for header and
+     * continuation lines) and return the next column. No-op without a gutter.
+     *
+     * @return array{0: RenderCanvas, 1: int}
+     */
+    private function writeGutter(RenderCanvas $canvas, int $row, int $col, ?Row $mark, ?Style $style): array
+    {
+        $g = $this->gutterWidth();
+        if ($g === 0) {
+            return [$canvas, $col];
+        }
+        $text = $mark === null ? '' : Sanitize::value($this->checkMarks[$this->checked($mark) ? 1 : 0], false, $this->markedFrameSanitization);
+        $canvas = $this->fillCellContent($canvas, $row, $col, Width::padRight(Column::clipToWidth($text, $g - 1), $g), $g, $style);
+
+        return [$canvas, $col + $g];
     }
 
     /**
@@ -2365,7 +2509,7 @@ final class Table
         // scrolled-away columns are dropped from the layout entirely instead
         // of leaving blank cells, and an over-subscribed fixed set is clamped
         // back to the pinned width so no line can exceed the frame.
-        $visibleWidth = $this->contentSpanWidth($this->computedColumnWidths);
+        $visibleWidth = $this->contentSpanWidth($this->computedColumnWidths) + $this->gutterWidth();
 
         // The empty state owns ONE row of its own, and it is budgeted whether
         // or not the header is shown. Previously the no-data line rendered only
@@ -2738,6 +2882,7 @@ final class Table
         $style = $this->styleFor($this->headerStyle);
         $sepStyle = $this->styleOrNull($this->borderStyle);
         [$canvas, $col] = $this->writeLeftEdge($canvas, $row, $style);
+        [$canvas, $col] = $this->writeGutter($canvas, $row, $col, null, $style);
 
         $lastCi = $visibleColumnIndices === [] ? -1 : \end($visibleColumnIndices);
 
@@ -2825,6 +2970,7 @@ final class Table
         // highlight is one solid run instead of chunks split by plain border glyphs.
         $sepStyle = $this->styleOrNull($isSelected ? self::mergeStyle($this->borderStyle, '7') : $this->borderStyle);
         [$canvas, $col] = $this->writeLeftEdge($canvas, $row, $style);
+        [$canvas, $col] = $this->writeGutter($canvas, $row, $col, $rowData, $style);
 
         // Data cells - visible columns laid out contiguously (hidden and
         // scrolled-away columns take no space, audit #4).
@@ -2936,10 +3082,12 @@ final class Table
             $text = self::plainText($val);
             $parts[] = Sanitize::value($text, false, $this->markedFrameSanitization);
         }
-        $detail = Column::clipToWidth(\implode('  ', $parts), $contentWidth);
+        $detail = Column::clipToWidth(\implode('  ', $parts), $contentWidth - $this->gutterWidth());
 
         [$canvas, $col] = $this->writeLeftEdge($canvas, $row, $style);
-        $canvas = $this->fillCellContent($canvas, $row, $col, $detail, $contentWidth, $style);
+        [$canvas, $col] = $this->writeGutter($canvas, $row, $col, $rowData, $style);
+        $contentWidth -= $this->gutterWidth();
+        $canvas = $this->fillCellContent($canvas, $row, $col, Column::clipToWidth($detail, $contentWidth), $contentWidth, $style);
 
         return $this->writeRightEdge($canvas, $row, $col + $contentWidth, $sepStyle);
     }
@@ -3080,6 +3228,7 @@ final class Table
 
             // Left border (full height)
             [$canvas, $col] = $this->writeLeftEdge($canvas, $bufferRow, $style);
+            [$canvas, $col] = $this->writeGutter($canvas, $bufferRow, $col, $lineIdx === 0 ? $row : null, $style);
 
             // Render each visible cell, laid out contiguously (audit #4).
             // $lastCi is resolved once per row above (ST-67).
