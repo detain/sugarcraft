@@ -654,9 +654,10 @@ final class Game implements Model
                 return [$this, null];
             }
             if ($this->lockResets >= self::LOCK_DELAY_RESET_CAP) {
-                // Forced lock: the stated cap is exhausted (or was
-                // reached through the float-and-return path, which never
-                // increments). No untimed fresh window opens here.
+                // Forced lock: the stated cap is exhausted — possibly
+                // spent by the counted float-close cycles of the overhang
+                // jiggle (candy-tetris-021). No untimed fresh window opens
+                // here.
                 $locked = $this->lockAndSpawn();
                 if ($locked->over === true) {
                     return [$locked, null];

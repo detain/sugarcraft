@@ -6,10 +6,12 @@ namespace SugarCraft\Tetris\Tests;
 
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\TickRequest;
 use SugarCraft\Tetris\Bag;
 use SugarCraft\Tetris\Board;
 use SugarCraft\Tetris\Game;
 use SugarCraft\Tetris\GravityMsg;
+use SugarCraft\Tetris\LockDelayMsg;
 use SugarCraft\Tetris\Piece;
 use SugarCraft\Tetris\Tetromino;
 use SugarCraft\Tetris\VsGame;
@@ -209,6 +211,97 @@ final class VsGameTest extends TestCase
         $this->assertStringContainsString('COMPUTER WINS!', $view);
         $this->assertStringContainsString('stack reached the ceiling', $view,
             'the death banner must name why the loser died');
+    }
+
+    /**
+     * candy-tetris-017: the human side of a VS match now starts on the solo
+     * game's 500 ms lock-delay window. A grounded VS piece must survive the
+     * tick-driven landing (the window owns the timing, gravity self-parks),
+     * slide inputs must re-arm it through the forwarded Cmd, and the live
+     * window generation must be the thing that finally locks the piece.
+     */
+    public function testVsGroundedPieceSlidesOnTheLockWindow(): void
+    {
+        $vs = $this->createVsPlayerPerched();
+
+        [$state, $cmd] = $vs->update($this->gravity());
+        $request = $cmd === null ? null : $cmd();
+        $this->assertInstanceOf(TickRequest::class, $request, 'grounding must arm the window timer');
+        $this->assertSame(0.5, $request->seconds, 'the VS window is the solo 500 ms one');
+        $this->assertNotNull($state->player->lockWindowGeneration);
+
+        [$parked] = $state->update($this->gravity());
+        $this->assertSame($state->player->piece, $parked->player->piece, 'a tick must not bypass the window');
+        $this->assertSame($state->player->board, $parked->player->board, 'no lock, no stack growth');
+
+        [$afterSlide, $slideCmd] = $parked->update($this->key('left'));
+        $this->assertNotNull($slideCmd, 'a grounded VS move forwards its re-armed window timer');
+        $this->assertNotSame($parked->player->lockWindowGeneration, $afterSlide->player->lockWindowGeneration,
+            'the slide must re-arm a fresh generation');
+
+        [$locked, $lockCmd] = $afterSlide->update(new LockDelayMsg($afterSlide->player->lockWindowGeneration));
+        $this->assertNotSame($afterSlide->player->piece, $locked->player->piece, 'the live window generation locks the piece');
+        $this->assertNotSame($afterSlide->player->board, $locked->player->board);
+        $this->assertNotNull($lockCmd, 'the lock re-anchors the gravity chain');
+    }
+
+    /**
+     * candy-tetris-017 (pause composition): solo's survival law mirrored —
+     * a window that comes due while the VS board is paused EXTENDS, it
+     * never locks a frozen piece out from under the player.
+     */
+    public function testVsPauseExtendsTheWindowInsteadOfLocking(): void
+    {
+        $vs = $this->createVsPlayerPerched();
+        [$grounded] = $vs->update($this->gravity());
+        [$paused] = $grounded->update($this->key('p'));
+        $gen = $paused->player->lockWindowGeneration;
+        $this->assertNotNull($gen, 'the window armed before the pause');
+
+        [$held, $again] = $paused->update(new LockDelayMsg($gen));
+
+        $this->assertNotNull($again, 'a paused VS window re-arms, it never locks');
+        $this->assertSame($paused->player->piece, $held->player->piece, 'the frozen board keeps its piece');
+        $this->assertSame($gen, $held->player->lockWindowGeneration, 'the same generation stays live');
+    }
+
+    /**
+     * candy-tetris-017 (garbage composition): a lift that clears the
+     * player's armed window strands the chain behind a stale timer unless
+     * the re-anchor law fires — pending must be re-seated and a heartbeat
+     * must be in flight on the same arrival.
+     */
+    public function testGarbageLiftReAnchorsAWindowedPlayerChain(): void
+    {
+        $vs = VsGame::start();
+        $computer = $this->createComputerPoisedToClear($vs->computer);
+        // Player grounded with a live window, chain parked (gravity consumed
+        // when the window opened): exactly the shape a slide leaves behind.
+        $player = $vs->player->mutate([
+            'piece' => new Piece(Tetromino::T, 0, 3, 22),
+            'gravityPending' => false,
+            'lockGeneration' => 1,
+            'lockWindowGeneration' => 1,
+        ]);
+        $vs = new VsGame($player, $computer, hasComputerPlan: true);
+
+        [$after, $cmd] = $vs->update($this->gravity()); // the computer's lock leg sends garbage
+
+        $this->assertNull($after->player->lockWindowGeneration, 'the lift cleared the stale window');
+        $this->assertTrue($after->player->gravityPending, 'the strand rule must re-anchor the chain');
+        $this->assertNotNull($cmd, 'a heartbeat must be in flight so the game resumes');
+        $request = $cmd();
+        $this->assertInstanceOf(TickRequest::class, $request);
+        $this->assertInstanceOf(GravityMsg::class, ($request->produce)(), 'the re-anchor arms a gravity tick, not a stale lock');
+    }
+
+    /** Fresh VS pair whose player piece sits grounded on the floor, ready to window. */
+    private function createVsPlayerPerched(): VsGame
+    {
+        $vs = VsGame::start();
+        $player = $vs->player->mutate(['piece' => new Piece(Tetromino::T, 0, 3, 22)]);
+
+        return new VsGame($player, $vs->computer);
     }
 
     public function testOverStateWhenPlayerGameOver(): void

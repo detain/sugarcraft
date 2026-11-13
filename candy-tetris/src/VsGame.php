@@ -101,11 +101,18 @@ final class VsGame implements Model
 
     /**
      * Start a new VS Computer game.
+     *
+     * candy-tetris-017: the human side starts on the same 500 ms lock-delay
+     * window the solo game gives (slide-on-ground, cap-bounded). The AI side
+     * stays plain-started: stepComputer drives it one planned input per
+     * tick through applyAiMove and never through update(), so a window on
+     * that board could never be interacted with — instant lock IS the AI's
+     * difficulty, and the asymmetry is a rule, not an oversight.
      */
     public static function start(?KeyBindings $bindings = null, ?Scores $scores = null, ?string $scoresPath = null): self
     {
         return new self(
-            Game::start(bindings: $bindings),
+            Game::startWithLockDelay(bindings: $bindings),
             Game::start(bindings: $bindings),
             bindings: $bindings,
             scores: $scores,
@@ -166,6 +173,15 @@ final class VsGame implements Model
             if ($msg instanceof GravityMsg) {
                 return [$this, self::scheduleTick($this->player, $this->gravityChain)];
             }
+            if ($msg instanceof LockDelayMsg) {
+                // A resize never parks a live window (solo timers keep
+                // running across WindowSizeMsg too): the lock lands behind
+                // the freeze frame and the restored board shows an honest
+                // stack (candy-tetris-017 composition rule).
+                [$grown, $locked] = $this->player->update($msg);
+
+                return [$this->mutate(['player' => $grown]), $locked];
+            }
             return [$this, null];
         }
 
@@ -179,9 +195,16 @@ final class VsGame implements Model
                 // Restart the pair and arm one fresh tick chain — parity
                 // with the solo game's 'r'. The chain epoch bumps so the
                 // superseded chain's in-flight tick lands inert on the
-                // fresh pair (candy-tetris-003).
-                $fresh = self::start($this->bindings, $this->scores, $this->scoresPath)->mutate([
-                    'gravityChain' => $this->gravityChain + 1,
+                // fresh pair (candy-tetris-003). The fresh player's own
+                // chain counter starts on the same epoch (candy-tetris-017
+                // composition rule): forwarded player re-arms carry the
+                // player's counter, and the guard above must read them as
+                // the live chain they are — two number spaces, one clock.
+                $bumped = $this->gravityChain + 1;
+                $freshPair = self::start($this->bindings, $this->scores, $this->scoresPath);
+                $fresh = $freshPair->mutate([
+                    'gravityChain' => $bumped,
+                    'player' => $freshPair->player->mutate(['gravityChain' => $bumped]),
                     // The live terminal size survives the restart: the
                     // Program only re-reports on the next SIGWINCH.
                     'frameCols' => $this->frameCols,
@@ -215,6 +238,15 @@ final class VsGame implements Model
             if ($msg instanceof GravityMsg) {
                 return [$this, self::scheduleTick($this->player, $this->gravityChain)];
             }
+            if ($msg instanceof LockDelayMsg) {
+                // Solo's survival law mirrored (candy-tetris-017): a window
+                // that comes due while paused EXTENDS — the player's own
+                // paused arm re-arms the timer and the frozen piece never
+                // locks out from under the player.
+                [$pausedPlayer, $again] = $this->player->update($msg);
+
+                return [$this->mutate(['player' => $pausedPlayer]), $again];
+            }
             return [$this, null];
         }
 
@@ -225,7 +257,7 @@ final class VsGame implements Model
         // fresh pair after restart carries 0 while the outer epoch has moved
         // on (candy-tetris-003; the inner chain only ever bumps via paths
         // VS never drives — see the same law in {@see GravityMsg}'s docblock).
-        [$newPlayer, ] = $this->player->update(
+        [$newPlayer, $playerCmd] = $this->player->update(
             $msg instanceof GravityMsg ? new GravityMsg($this->player->gravityChain) : $msg
         );
 
@@ -278,6 +310,21 @@ final class VsGame implements Model
             return $this->withPlayerWinner($finalPlayer, $processedComputer);
         }
 
+        // candy-tetris-017 composition rule: a garbage lift clears the
+        // recipient's armed lock window (Game's reset arms do it), so any
+        // window timer already in flight for the player arrives STALE. If
+        // this arrival lifted the player and left the chain unanchored —
+        // no pending gravity, no window — re-anchor it here, or the piece
+        // would strand forever behind a heartbeat that only ever gets
+        // dropped at the player's own pending gate.
+        if ($computerLinesCleared > 0
+            && $finalPlayer->gravityPending === false
+            && $finalPlayer->lockWindowGeneration === null
+        ) {
+            $finalPlayer = $finalPlayer->mutate(['gravityPending' => true]);
+            $playerCmd = self::scheduleTick($finalPlayer, $this->gravityChain);
+        }
+
         return [
             $this->mutate([
                 'player' => $finalPlayer,
@@ -286,11 +333,14 @@ final class VsGame implements Model
                 'computerRotationsLeft' => $rotationsLeft,
                 'computerShiftLeft' => $shiftLeft,
             ]),
-            // The tick chain is singleton: re-arm only when this message
-            // consumed the in-flight tick, never on key messages. The arm
-            // carries the live VS epoch so the next arrival round-trips
-            // the guard above.
-            $msg instanceof GravityMsg ? self::scheduleTick($finalPlayer, $this->gravityChain) : null,
+            // The tick chain stays singleton: on a gravity tick the PLAYER's
+            // own answer is the truth — either its re-arm or the lock-delay
+            // timer that replaced it (candy-tetris-017) — and only when the
+            // player parked without arming anything does the VS heartbeat
+            // take over. On key messages only the window timer survives.
+            $msg instanceof GravityMsg
+                ? ($playerCmd ?? self::scheduleTick($finalPlayer, $this->gravityChain))
+                : $playerCmd,
         ];
     }
 

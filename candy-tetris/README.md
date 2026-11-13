@@ -236,9 +236,11 @@ until the piece locks.
 A grounded piece does not lock instantly — you get a real-time window
 (~500 ms by default, independent of the gravity speed, so it stays a constant
 half-second even at level 29) to slide or rotate it before it settles. The
-binary arms it via `Game::startWithLockDelay()` — single-player only: the VS
-boards run plain `Game::start()`, so a piece locks on the gravity tick that
-finds it grounded (no window). Every successful move or
+binary arms it via `Game::startWithLockDelay()` — and versus boards use the
+same window on the human side; the AI side keeps the plain instant lock,
+because its plan locks the piece through the drop-and-settle seam and an
+uninteractive slide window there would only dull the opponent (the asymmetry
+is a rule, not an oversight). Every successful move or
 rotation while grounded re-arms the full window, up to the SRS-style 15-reset
 cap — once the budget is spent the open window locks on expiry and further
 inputs no longer extend it. Moving the piece back off a surface closes the
