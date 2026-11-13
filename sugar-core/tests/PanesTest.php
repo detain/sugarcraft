@@ -13,6 +13,7 @@ use SugarCraft\Core\Pane;
 use SugarCraft\Core\Panes;
 use SugarCraft\Core\Rect;
 use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Core\Util\Width;
 
 /**
  * A simple Model that returns a fixed view string for testing.
@@ -242,5 +243,79 @@ final class PanesTest extends TestCase
         $this->assertStringContainsString(Ansi::cursorTo(11, 1), $view);
         $this->assertStringContainsString('top', $view);
         $this->assertStringContainsString('bottom', $view);
+    }
+    public function testPaneClipsRowsAndColumnsToItsBounds(): void
+    {
+        // sugar-core-027: bounds are a HARD partition. Five rows of six
+        // cells into a 2x3 box leaves exactly two rows of at most three
+        // visible cells; the overflow is discarded, never bled.
+        $pane = new Pane(new StringModel("123456\nabcdef\nggg\nlong4\nlong5"), new Rect(0, 0, 3, 2));
+        $view = $pane->view();
+
+        $body = \substr($view, \strlen(Ansi::cursorTo(1, 1)));
+        $lines = \explode("\n", $body);
+        $this->assertCount(2, $lines, 'rows past bounds.height must be dropped');
+        foreach ($lines as $line) {
+            $this->assertLessThanOrEqual(3, Width::string($line), 'row wider than bounds.width must be clipped');
+        }
+        $this->assertStringNotContainsString('ddd', $body);
+        $this->assertStringNotContainsString('long4', $body);
+    }
+
+    public function testOversizedPaneNeverBleedsIntoItsSibling(): void
+    {
+        // The two-pane fixture: an oversized upper pane contributes only
+        // its own cell budget, so no orphan rows land between the two
+        // origin jumps (the old bleed: rows 3-5 scrolled under the lower
+        // pane's cursorTo and overwrote its cells).
+        $upper = new Pane(new StringModel("aaa\nbbb\nccc\nddd\neee"), new Rect(0, 0, 10, 2));
+        $lower = new Pane(new StringModel("z"), new Rect(0, 2, 10, 2));
+        $view = (new Panes([$upper, $lower]))->view();
+
+        $upperPos = Ansi::cursorTo(1, 1);
+        $lowerPos = Ansi::cursorTo(3, 1);
+        $lowerStart = \strpos($view, $lowerPos);
+        $this->assertIsInt($lowerStart);
+        $upperBody = \substr($view, \strlen($upperPos), $lowerStart - \strlen($upperPos));
+        $this->assertSame(1, \substr_count($upperBody, "\n"), 'upper pane spilled a row into the lower pane region');
+        $this->assertStringNotContainsString('ddd', $view);
+        $this->assertStringNotContainsString('eee', $view);
+    }
+
+    public function testActiveIndexIsClampedIntoRange(): void
+    {
+        $panes = [new Pane(new StringModel('A'), new Rect(0, 0, 5, 1)), new Pane(new StringModel('B'), new Rect(5, 0, 5, 1))];
+
+        $this->assertSame(1, (new Panes($panes, 99))->activeIndex(), 'over-range focus clamps to the last pane');
+        $this->assertSame(0, (new Panes($panes, -3))->activeIndex(), 'negative focus clamps to zero');
+        $this->assertSame(0, (new Panes([], 7))->activeIndex(), 'no panes, no focus — zero is the only truth');
+
+        // The clamped index is also a working one: update() must not
+        // dereference a missing slot (the old failure mode).
+        [$next] = (new Panes($panes, 99))->update(new class implements Msg {});
+        $this->assertInstanceOf(Panes::class, $next);
+    }
+
+    public function testUpdateIdentityChainSurvivesAnUnchangedActiveModel(): void
+    {
+        // sugar-core-036 PERF-13: StringModel::update() returns $this.
+        // If Pane::update() still cloned the identity, Panes::update()
+        // would rebuild the list — and every enclosing composition tree
+        // — on a keystroke that changed nothing.
+        $panes = new Panes([new Pane(new StringModel('A'), new Rect(0, 0, 5, 1))]);
+        $result = $panes->update(new class implements Msg {});
+
+        $this->assertSame($panes, $result[0], 'no-op messages must not rebuild the composition');
+        $this->assertNull($result[1]);
+    }
+
+    public function testChangedModelStillRebuildsTheComposition(): void
+    {
+        // The other side of the identity pin: churn must remain real
+        // when the active model actually changes.
+        $panes = new Panes([new Pane(new CountingModel(0), new Rect(0, 0, 5, 1))]);
+        $result = $panes->update(new KeyMsg(KeyType::Char, 'x'));
+
+        $this->assertNotSame($panes, $result[0]);
     }
 }
