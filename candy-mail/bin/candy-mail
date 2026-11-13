@@ -12,7 +12,8 @@ declare(strict_types=1);
  *
  * Flags accept both `--flag value` and `--flag=value`; repeatable flags are
  * --to/--cc/--bcc/--attach. A value that begins with a dash rides the inline
- * `--flag=VALUE` form only — the separated form refuses to steal a switch
+ * `--flag=VALUE` form only — the separated form refuses to steal a switch.
+ *
  * --render prints the SMTP MIME message without any network I/O;
  * --version prints the package version.
  *
