@@ -204,7 +204,7 @@ final class CliTest extends TestCase
             $stderr,
             null,
             null,
-            static fn (string $p, int $w, int $h): array => ['GIF89a', []],
+            static fn (string $p, int $w, int $h): array => [[], null],
         );
 
         $this->assertSame(1, $exit, 'a zero-frame intake never opens the TUI');
@@ -616,6 +616,65 @@ final class CliTest extends TestCase
         $this->assertSame(1, $exit);
         $this->assertStringContainsString('simulated walk failure', self::drain($stderr));
         $this->assertSame('', self::drain($stdout));
+    }
+
+    /**
+     * gifview-006/007: the loop-count audit rides the intake, so the exact
+     * RuntimeException('not a GIF') shape that Decoder::loopCount throws for
+     * bytes shorter than 13 or with a non-GIF signature is rescued through
+     * the same exit-1 channel as decode failures — one localized line, never
+     * a raw stack trace. (Before the fix this throw ran in main(), OUTSIDE
+     * any catch: measured exit 255 with the library string as final word.)
+     */
+    public function testNotAGifThrowFromTheAuditedIntakeExitsOneLoudly(): void
+    {
+        [$stdout, $stderr] = self::pipes();
+
+        $exit = Cli::main(
+            ['candy-gifview', 'junk.bin'],
+            $stdout,
+            $stderr,
+            static fn (Player $p): int => self::fail('the play seam must never run after an intake throw'),
+            null,
+            static fn (string $p, int $w, int $h): array => throw new \RuntimeException('sugar-animation: not a GIF'),
+        );
+
+        $this->assertSame(1, $exit);
+        $err = self::drain($stderr);
+        $this->assertStringContainsString('could not play', $err, 'the CLI speaks in its own brand');
+        $this->assertStringContainsString('not a GIF', $err, 'the audit reason survives the wrap');
+        $this->assertSame(1, substr_count($err, "\n"), 'exactly one line — no stack trace relay');
+        $this->assertStringNotContainsString('stack trace', strtolower($err));
+        $this->assertSame('', self::drain($stdout));
+    }
+
+    /**
+     * Structural law behind gifview-007: the raw intake bytes are a secret of
+     * decodeFrames() alone. main() must bind withLoops() from the audited
+     * tuple and must never hold a $bytes reference — otherwise a forever-
+     * looping animation parks up to MAX_INPUT_BYTES of dead RAM again, and a
+     * re-appearing second Decoder::loopCount() call site would re-open the
+     * un-rescued-audit hole (it would have to be the bytes).
+     */
+    public function testTheAuditedTupleReleasesTheRawBytes(): void
+    {
+        $src = (string) file_get_contents(__DIR__ . '/../src/Cli.php');
+
+        $this->assertSame(
+            1,
+            substr_count($src, 'Decoder::loopCount('),
+            'loopCount is audited at exactly one place — inside the intake',
+        );
+
+        $mainStart = strpos($src, 'public static function main(');
+        $mainEnd = strpos($src, "\n    /**", $mainStart);
+        self::assertIsInt($mainStart);
+        self::assertIsInt($mainEnd);
+        $main = substr($src, $mainStart, $mainEnd - $mainStart);
+
+        $this->assertStringNotContainsString('$bytes', $main, 'raw intake bytes must die at the tuple destructure');
+        $this->assertStringContainsString('[$frames, $loops] = $decode(', $main, 'main consumes the audited tuple');
+        $this->assertStringContainsString('$player->withLoops($loops)', $main, 'the loops bind from the tuple, not from bytes');
     }
 
     /**

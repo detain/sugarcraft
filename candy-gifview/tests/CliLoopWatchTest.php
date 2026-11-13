@@ -93,7 +93,7 @@ final class CliLoopWatchTest extends TestCase
     /**
      * @param ?\Closure(Player): int $play
      * @param ?\Closure(string): (array|false) $watchStat
-     * @param ?\Closure(string, int, int): array{string, list<\SugarCraft\Animation\Frame>} $decode
+     * @param ?\Closure(string, int, int): array{list<\SugarCraft\Animation\Frame>, ?int} $decode
      */
     private function cli(array $argv, ?\Closure $play = null, ?\Closure $watchStat = null, ?\Closure $decode = null): array
     {
@@ -273,10 +273,10 @@ final class CliLoopWatchTest extends TestCase
             if ($decodeCalls === 1) {
                 $bytes = \SugarCraft\Animation\Decoder::readFile($p);
 
-                return [$bytes, iterator_to_array(
+                return [iterator_to_array(
                     \SugarCraft\Animation\Decoder::decodeBytes($bytes, $w, $h),
                     preserve_keys: false,
-                )];
+                ), \SugarCraft\Animation\Decoder::loopCount($bytes)];
             }
 
             throw new \Error('simulated walk failure on reload');

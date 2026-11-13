@@ -27,12 +27,12 @@ use SugarCraft\Core\Util\Tty;
  * means the decoded frames' average delay), and --duration=SECONDS
  * (Player::withMaxSeconds — a model-side deadline, never a wall-clock kill).
  *
- * The authored NETSCAPE loop count is honoured: the decoded Player is bound
- * with Decoder::loopCount() over the same bytes (null = play forever, the
- * absent-extension answer chosen over libnsgif's gif.c:1601 single-play
- * default). --watch binds chicle's run_watch rebind (chafa.c:908-955) to
- * Player::withWatch behind a host-probe seam, so CI drives change tokens
- * without a real 10 ms busy-poll.
+ * The authored NETSCAPE loop count is honoured: the audited intake answers
+ * [frames, loops] (loopCount over the bytes it just read — null = play
+ * forever, the absent-extension answer chosen over libnsgif's gif.c:1601
+ * single-play default). --watch binds chicle's run_watch rebind
+ * (chafa.c:908-955) to Player::withWatch behind a host-probe seam, so CI
+ * drives change tokens without a real 10 ms busy-poll.
  */
 final class Cli
 {
@@ -106,9 +106,11 @@ final class Cli
      * @param ?\Closure(string): (array|false) $watchStat test seam for the
      *        watcher: answers stat() for a path; null falls back to the real
      *        @stat().
-     * @param ?\Closure(string, int, int): array{string, list<\SugarCraft\Animation\Frame>} $decode
-     *        test seam for the intake: answers [bytes, frames] for a path and
-     *        grid; null falls back to {@see decodeFrames()}. Pins can drive a
+     * @param ?\Closure(string, int, int): array{list<\SugarCraft\Animation\Frame>, ?int} $decode
+     *        test seam for the intake: answers [frames, loops] for a path and
+     *        grid — the loop-count audit is part of the intake, so a pin's
+     *        garbage-bytes stand-in throws inside the rescue, never past it;
+     *        null falls back to {@see decodeFrames()}. Pins can drive a
      *        raw \Error out of the walk to prove the rescue catches absorb it.
      */
     public static function main(array $argv, $stdout, $stderr, ?\Closure $play = null, ?\Closure $watchStat = null, ?\Closure $decode = null): int
@@ -281,8 +283,9 @@ final class Cli
         try {
             // Read once, then decode and audit the SAME bytes — the authored
             // loop count rides the same intake as the frames, so nothing
-            // re-opens the file behind the capture.
-            [$bytes, $frames] = $decode($path, $cellsW, $cellsH);
+            // re-opens the file behind the capture, and every engine throw
+            // (decode AND audit) lands inside this rescue.
+            [$frames, $loops] = $decode($path, $cellsW, $cellsH);
         } catch (\Throwable $e) {
             // \Throwable, not just the Decoder's documented RuntimeExceptions:
             // the GIF walk is hand-rolled, and a latent \Error (ValueError/
@@ -333,8 +336,9 @@ final class Cli
 
         // Honour the file: null (unauthored or raw 0) keeps the Player's
         // infinite default; N >= 2 stops the schedule after N complete
-        // playthroughs, exactly chicle-style intent.
-        $player = $player->withLoops(Decoder::loopCount($bytes));
+        // playthroughs, exactly chicle-style intent. The audit rode the
+        // intake, so no raw bytes survive this point (gifview-007).
+        $player = $player->withLoops($loops);
 
         // --fps / --speed both land on the SAME fixed-cadence seam
         // (sugar-animation exposes no per-frame multiplier; applying the
@@ -397,7 +401,9 @@ final class Cli
      * {@see MAX_FRAMES} and {@see MAX_RESIDENT_CELLS} (fail-loud: the drain
      * stops one item past each cap instead of buffering the whole stream).
      *
-     * @return array{string, list<\SugarCraft\Animation\Frame>} [bytes, frames]
+     * @return array{list<\SugarCraft\Animation\Frame>, ?int} [frames, loops]
+     *         — the loop count is audited over the same bytes inside this
+     *         call, so the raw bytes never leave the scope (gifview-006/007).
      */
     private static function decodeFrames(string $path, int $cellsW, int $cellsH): array
     {
@@ -410,11 +416,18 @@ final class Cli
 
         $bytes = Decoder::readFile($path);
 
-        return [$bytes, self::collectFrames(
+        // The loop-count audit runs HERE, inside the intake, not in the
+        // caller: a 'not a GIF' throw from loopCount() is then absorbed by
+        // main()/watchProbe()'s rescue catches through the single exit-1
+        // channel instead of fataling past them (a future gate divergence
+        // between decodeBytes() and loopCount() cannot produce a mid-run
+        // 255), and the raw bytes die at this return — a forever-looping
+        // animation no longer carries up to MAX_INPUT_BYTES of dead RAM.
+        return [self::collectFrames(
             Decoder::decodeBytes($bytes, $cellsW, $cellsH),
             self::MAX_FRAMES,
             $cellsW * $cellsH,
-        )];
+        ), Decoder::loopCount($bytes)];
     }
 
     /**
@@ -510,7 +523,7 @@ final class Cli
      * exactly chicle's if (media_loader) guard shape.
      *
      * @param ?\Closure(string): (array<string|int,mixed>|false) $watchStat
-     * @param ?\Closure(string, int, int): array{string, list<\SugarCraft\Animation\Frame>} $decode
+     * @param ?\Closure(string, int, int): array{list<\SugarCraft\Animation\Frame>, ?int} $decode
      *
      * @return \Closure(): ?array{frames: list<\SugarCraft\Animation\Frame>, loops: ?int}
      */
@@ -530,8 +543,10 @@ final class Cli
             $last = $token;
 
             try {
-                [$bytes, $frames] = $decode($path, $cellsW, $cellsH);
-                $loops = Decoder::loopCount($bytes);
+                // The audited tuple: the intake itself carries the loop
+                // count, so a reload-time 'not a GIF' is rescued right here
+                // exactly like a decode failure — stale frames keep playing.
+                [$frames, $loops] = $decode($path, $cellsW, $cellsH);
             } catch (\Throwable) {
                 // \Throwable, not just RuntimeException: a raw \Error escaping
                 // the reload walk must not kill the watch loop — stale frames
