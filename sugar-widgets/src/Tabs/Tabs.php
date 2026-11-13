@@ -198,9 +198,13 @@ final class Tabs implements Model
             }
             $padded = ' ' . self::sanitizeLabel($label) . ' ';
 
-            if ($this->zoneManager !== null) {
-                $padded = $this->zoneManager->mark("tab-{$i}", $padded);
-            }
+            // M14: zone markup is invisible by Mark's zero-width contract,
+            // but Width::string scores each PUA sentinel as one cell —
+            // marking BEFORE pricing inflates every tab by 4 + 2·strlen(id)
+            // phantom cells (spurious ellipses, dropped tabs) and lets
+            // truncateAnsi cut inside a marker pair, orphaning sentinels.
+            // All measuring and clipping happens on the unmarked content;
+            // mark only the segments that actually reach the frame.
             $segments[$i] = [$padded, $style];
         }
 
@@ -230,26 +234,88 @@ final class Tabs implements Model
         // Build output: optional left ellipsis + visible tabs + optional right ellipsis.
         $parts = [];
         if ($leftEllipsis) {
-            $parts[] = '…';
+            $parts[] = ['…', null, null];
         }
 
         for ($i = $visibleStart; $i <= $visibleEnd; $i++) {
             [$padded, $style] = $segments[$i];
-            $parts[] = $style->render($padded);
+            $parts[] = [$padded, $style, $i];
         }
 
         if ($rightEllipsis) {
-            $parts[] = '…';
+            $parts[] = ['…', null, null];
         }
 
         $inactiveDivider = $this->inactiveStyle->render($this->divider);
-        $line = implode($inactiveDivider, $parts);
 
-        if ($this->width > 0 && Width::string($line) > $this->width) {
-            $line = Width::truncateAnsi($line, $this->width - 1) . '…';
+        if ($this->zoneManager === null) {
+            $line = implode($inactiveDivider, array_map(
+                static fn(array $p): string => $p[1]?->render($p[0]) ?? $p[0],
+                $parts,
+            ));
+            if ($this->width > 0 && Width::string($line) > $this->width) {
+                $line = Width::truncateAnsi($line, $this->width - 1) . '…';
+            }
+            return $line;
         }
 
-        return $line;
+        // Zone-attached host: price on the unmarked content and mark only
+        // the survivors, so sentinel pairs are never born split (M14).
+        $plain = implode($this->divider, array_map(static fn(array $p): string => $p[0], $parts));
+        if ($this->width > 0 && Width::string($plain) > $this->width) {
+            return $this->assembleMarked($this->clipParts($parts, $this->width - 1)) . '…';
+        }
+        return $this->assembleMarked($parts);
+    }
+
+    /**
+     * Render each part, wrapping tab segments in their zone marker. The
+     * marking that used to happen per-segment before pricing now happens
+     * here — after the window and any clipping have been decided on the
+     * invisible markup's zero-width contract (M14).
+     *
+     * @param list<array{0:string, 1:?Style, 2:?int}> $parts
+     */
+    private function assembleMarked(array $parts): string
+    {
+        $rendered = [];
+        foreach ($parts as [$text, $style, $tabIndex]) {
+            if ($tabIndex !== null) {
+                $text = $this->zoneManager->mark("tab-{$tabIndex}", $text);
+            }
+            $rendered[] = $style?->render($text) ?? $text;
+        }
+        return implode($this->inactiveStyle->render($this->divider), $rendered);
+    }
+
+    /**
+     * Clip unmarked parts to $budget cells (the trailing ellipsis lives
+     * outside the budget, mirroring the old whole-line truncate). A
+     * segment straddling the edge is kept truncated — still a whole
+     * marker pair once re-marked — and later segments drop.
+     *
+     * @param list<array{0:string, 1:?Style, 2:?int}> $parts
+     * @return list<array{0:string, 1:?Style, 2:?int}>
+     */
+    private function clipParts(array $parts, int $budget): array
+    {
+        $dividerCells = Width::string($this->divider);
+        $out = [];
+        $used = 0;
+        foreach ($parts as [$text, $style, $tabIndex]) {
+            $cost = ($out === [] ? 0 : $dividerCells) + Width::string($text);
+            if ($used + $cost <= $budget) {
+                $out[] = [$text, $style, $tabIndex];
+                $used += $cost;
+                continue;
+            }
+            $room = $budget - $used - ($out === [] ? 0 : $dividerCells);
+            if ($room > 0) {
+                $out[] = [Width::truncateAnsi($text, $room), $style, $tabIndex];
+            }
+            break;
+        }
+        return $out;
     }
 
     /** Currently active tab index (0-based). */
@@ -489,14 +555,10 @@ final class Tabs implements Model
         return Sanitize::untrustedForMarkedFrames(Sanitize::controlChars($label));
     }
 
-    /** Rendered cell width of one tab: padded, sanitised, zone-marked if attached. */
+    /** Rendered cell width of one tab: padded, sanitised — zone markup is invisible. */
     private function tabWidth(int $i): int
     {
-        $padded = ' ' . self::sanitizeLabel($this->labels[$i]) . ' ';
-        if ($this->zoneManager !== null) {
-            $padded = $this->zoneManager->mark("tab-{$i}", $padded);
-        }
-        return Width::string($padded);
+        return Width::string(' ' . self::sanitizeLabel($this->labels[$i]) . ' ');
     }
 
     /**

@@ -669,23 +669,40 @@ final class TabsTest extends TestCase
     }
 
     /**
-     * M11: zone markers cost real cells (Width::string counts them), so the
-     * scroll window must price them or view()'s clip guard cuts through a
-     * marked tab. Three 3-letter tabs at width 30 fit unpriced (scrollEnd 2);
-     * each marked tab costs 13 extra cells, so only tab 0 survives the walk.
+     * M14: zone markers are invisible markup (Mark's zero-width contract) —
+     * Width::string scoring their sentinels as cells must NOT leak into
+     * window pricing. Zone-on and zone-off hosts see the same scroll window,
+     * and the marker-stripped bytes reproduce the zone-off render exactly.
+     * (Re-anchors M11, which had priced the phantom cells as law: three
+     * 3-letter tabs at width 30 fit unmarked — the marked walk used to drop
+     * all but tab 0.)
      */
-    public function testZoneMarkerCostIsPricedIntoTheScrollWindow(): void
+    public function testZoneMarkersArePricedAsInvisibleMarkup(): void
     {
         $plain = Tabs::new(['AAA', 'BBB', 'CCC'], 30);
-        $this->assertSame(2, $plain->scrollEnd);
-
         $marked = $plain->withZoneManager(\SugarCraft\Mouse\Zones\Manager::newPrefix('test'));
-        $this->assertSame(0, $marked->scrollEnd);
+        $this->assertSame($plain->scrollEnd, $marked->scrollEnd, 'window parity zone-on vs zone-off');
+
+        $stripped = \SugarCraft\Mouse\Scan::strip($marked->view());
+        $this->assertSame($plain->view(), $stripped, 'strip(marked) === zone-off bytes');
+    }
+
+    /**
+     * M14 clip probe: when a single over-wide tab forces the ellipsis clip
+     * on a zone host, the surviving segment is truncated BEFORE marking —
+     * no orphan sentinel can ride the frame, and the visible cells honour
+     * the budget.
+     */
+    public function testTruncationNeverSplitsZoneMarkerPairs(): void
+    {
+        $marked = Tabs::new(['AVeryLongTabLabelThatOverflows', 'BBB'], 12)
+            ->withZoneManager(\SugarCraft\Mouse\Zones\Manager::newPrefix('t'));
         $view = $marked->view();
-        $this->assertLessThanOrEqual(30, Width::string($view));
-        $this->assertStringContainsString('AAA', $view);
-        $this->assertStringNotContainsString('BBB', $view);
+        $open = \SugarCraft\Mouse\Sentinel::OPEN;
+        $close = \SugarCraft\Mouse\Sentinel::CLOSE;
+        $this->assertSame(substr_count($view, $open), substr_count($view, $close), 'pairs balanced');
         $this->assertStringEndsWith("\u{2026}", $view);
+        $this->assertLessThanOrEqual(12, Width::string(\SugarCraft\Mouse\Scan::strip($view)), 'visible cells honour the budget');
     }
 
     /**
