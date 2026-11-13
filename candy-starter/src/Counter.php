@@ -116,14 +116,15 @@ final class Counter implements Model
     // package's README "Trust boundary" section.
     // Mirrors charmbracelet/bubbletea-app-template/Model.view — the
     // current frame, rendered as a plain string here.
-    // The frame's English literals are a deliberate teaching boundary, not
-    // an oversight: the template must stay copy-paste-runnable with zero
-    // i18n wiring. A real app wraps user-facing text in Lang::t() — the
-    // README's "Common next steps" table names the row ("Translate your UI
-    // strings").
+    // The frame's strings go through Lang::t() — one key pair
+    // (frame.count / frame.hint) in lang/<code>.php, English being the
+    // fallback. Copy that shape for your own UI text: add keys to lang/en.php,
+    // mirror them in every other locale file (the LocaleParityTest guard
+    // fails on drift), and call T::setLocale(T::detect()) at boot, as
+    // bin/start does.
     public function view(): string
     {
-        $body = sprintf("count: %d\n↑ ↓ to change · q / Esc / Ctrl+C quit", $this->n);
+        $body = Lang::t('frame.count', ['n' => $this->n]) . "\n" . Lang::t('frame.hint');
 
         return self::frameStyle()->render($body);
     }
