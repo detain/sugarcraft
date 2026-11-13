@@ -818,6 +818,50 @@ final class AudioPlayerTest extends TestCase
     }
 
     /**
+     * @testdox L49: exitCode() refreshes at the natural-death sighting — never a stale replay
+     *
+     * The finding's shape: pause() captured the close status but stop() and
+     * resume() threw theirs away, and a child that ended on its own (EOF
+     * under -autoexit) was never observed at all — so exitCode() kept
+     * reporting the PREVIOUS generation's code, or null, long after the
+     * newest child had died. Every observation of a termination now records
+     * the status, and a fresh spawn clears the older one.
+     */
+    public function testExitCodeRefreshesAtTheNaturalDeathSighting(): void
+    {
+        $player = new class('/tmp/video.mp4') extends AudioPlayer {
+            /** @var list<string> */
+            public array $argv = ['sh', '-c', 'sleep 0.3; exit 7'];
+
+            /** @return list<string>|null */
+            protected function buildCommand(): ?array
+            {
+                return $this->argv;
+            }
+        };
+
+        // Generation one: ends itself with status 7, no teardown in between.
+        $player->start();
+        $this->assertTrue($this->waitUntil(static fn (): bool => $player->isPlaying(), 2.0), 'the companion must be observably alive first');
+        $this->assertNull($player->exitCode(), 'a running child has no exit status yet');
+
+        $this->assertTrue($this->waitUntil(static fn (): bool => !$player->isPlaying(), 6.0), 'the short-lived companion must end on its own');
+        $this->assertSame(7, $player->exitCode(), 'the not-running sighting must already carry the final status (SV-L49/049)');
+
+        // Generation two — the stale replay itself: resume() closes gen one,
+        // spawns a new child, that child dies with a DIFFERENT code. Before
+        // L49 this question answered with gen one's leftover forever.
+        $player->argv = ['sh', '-c', 'sleep 0.3; exit 9'];
+        $player->resume();
+        $this->assertNull($player->exitCode(), 'a fresh spawn clears the older generation status');
+        $this->assertTrue($this->waitUntil(static fn (): bool => $player->isPlaying(), 2.0), 'gen two must be observably alive');
+        $this->assertTrue($this->waitUntil(static fn (): bool => !$player->isPlaying(), 6.0), 'gen two must end on its own');
+        $this->assertSame(9, $player->exitCode(), 'the second natural death reports the second code, never the first');
+
+        $player->stop();
+    }
+
+    /**
      * @testdox exitCode() retrieves the last process exit code
      */
     public function testGetExitCodeReturnsCodeAfterExit(): void

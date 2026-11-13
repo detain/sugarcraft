@@ -799,6 +799,12 @@ final class FfmpegDecoder implements Decoder
             return; // clean end (or a disposition close() itself provoked)
         }
 
+        // SV-L49/049: the sighting is data — record the final status here so
+        // exitCode() answers truthfully from the moment the death is known,
+        // not only once close() runs (which then re-captures the same value
+        // from proc_close on the way down).
+        $this->exitCode = $code;
+
         $detail = self::stderrTail($this->stderrPath);
         throw new FfmpegDecodeFailure(
             Lang::t('decoder.ffmpeg_exit', [
@@ -912,7 +918,10 @@ final class FfmpegDecoder implements Decoder
     }
 
     /**
-     * Returns the exit code from the last ffmpeg process, or null if still running.
+     * Returns the exit status of the last ffmpeg process once a termination
+     * has been OBSERVED — the close() reap or, earlier, the not-running
+     * sighting in {@see refuseAbnormalExit()} (SV-L49/049); null before
+     * either, or while the child is still running.
      */
     public function exitCode(): ?int
     {

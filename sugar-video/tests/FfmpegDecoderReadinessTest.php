@@ -111,6 +111,10 @@ final class FfmpegDecoderReadinessTest extends TestCase
             // bounds the grace-ladder worst case, not a settle window.
             $this->assertLessThan(5.0, microtime(true) - $start, 'the typed refusal must release the read as promptly as EOF');
             $this->assertNotNull($thrown, 'M12: a dead-abnormal child is not EOF — the read refuses typed');
+            // SV-L49/049: the death sighting is data — the final status is
+            // visible the moment the refusal fires, not only after close().
+            $this->assertIsInt($decoder->exitCode(), 'the typed refusal must already carry the final status');
+            $statusAtThrow = $decoder->exitCode();
             $this->assertStringContainsString('exited with code', $thrown->getMessage());
             $this->assertStringContainsString('ffmpeg said', $thrown->getMessage(), 'the stderr tail rides the refusal');
 
@@ -125,6 +129,7 @@ final class FfmpegDecoderReadinessTest extends TestCase
 
             $decoder->close();
             $this->assertNotSame(0, $decoder->exitCode(), 'ffmpeg must have failed on the empty file');
+            $this->assertSame($statusAtThrow, $decoder->exitCode(), 'close() re-captures the same status the refusal sighted (SV-L49/049)');
 
             $logged = is_file($log) ? (string) file_get_contents($log) : '';
             $this->assertStringContainsString(

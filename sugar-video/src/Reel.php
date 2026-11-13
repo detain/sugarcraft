@@ -8,6 +8,7 @@ use SugarCraft\Core\Program;
 use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Video\Render\AutoMode;
+use SugarCraft\Video\Render\LumaRamp;
 use SugarCraft\Video\Render\Mode;
 use SugarCraft\Video\Render\RendererFactory;
 use SugarCraft\Video\Source\HttpHeaders;
@@ -353,7 +354,7 @@ final class Reel
      */
     public function withRamp(string $name): self
     {
-        if (!\SugarCraft\Video\Render\LumaRamp::isValidRamp($name)) {
+        if (!LumaRamp::isValidRamp($name)) {
             throw new \InvalidArgumentException(Lang::t('ramp.unknown', ['name' => $name]));
         }
         return $this->with(ramp: $name);

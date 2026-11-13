@@ -113,6 +113,48 @@ class AudioPlayer
         . '|aws[-_]?token|google[-_]?access[-_]?token|sig(?:nature)?v[24]|sig'
         . '|se|sk|sp|sv|sr|st|skt|sas|spr)$/';
 
+    /** @var resource|null */
+    private $processHandle = null;
+
+    /** True once start() has been invoked. */
+    private bool $started = false;
+
+    /**
+     * Current play position in milliseconds — the constructor seek offset advanced
+     * by every banked play segment (pause/resume/stop each add elapsed monotonic
+     * time). start()/buildCommand() spawn from here so a resume continues instead
+     * of replaying from the original seek.
+     */
+    private int $seekMs;
+
+    /** Monotonic time the running subprocess started, or null when not playing. */
+    private ?float $runningSince = null;
+
+    /**
+     * Highest monotonic instant at which the running subprocess was OBSERVED
+     * alive (spawn stamps it, isPlaying() lifts it) — the billing ceiling of
+     * SV-L89/089: a child that died unwatched is billed to this, not to the
+     * parent's wall-clock at teardown time.
+     */
+    private ?float $lastAliveAt = null;
+
+    /**
+     * Validated request headers for a network source, empty otherwise — parsed
+     * once in the constructor so every (re)spawn presents them without re-checking
+     * (a pause/resume respawn that forgot the credentials would fail the signed
+     * stream's second request, exactly like the decoder rebuild did).
+     */
+    private readonly HttpHeaders $headers;
+
+    /**
+     * Exit status of the last OBSERVED termination (SV-L49/049), or null while
+     * no child has ended in front of us. Every capture point refreshes it:
+     * the closes in pause()/stop()/resume(), and the not-running observation
+     * inside isPlaying() for a child that died naturally. A fresh spawn
+     * clears it — the running child has not terminated yet.
+     */
+    private ?int $exitCode = null;
+
     public static function redactCredentials(string $source): string
     {
         // Public because FfmpegDecoder redacts the same source for the same
@@ -234,6 +276,10 @@ class AudioPlayer
         // sees the child running (SV-L89/089).
         $this->runningSince = ($this->clock ?? self::monotonic())();
         $this->lastAliveAt = $this->runningSince;
+        // SV-L49/049: this child has not terminated yet — the status belongs
+        // to the last one. Clearing here is what lets exitCode() answer
+        // null-then-final-code across a resume, never a replayed stale.
+        $this->exitCode = null;
         // No pipe cleanup needed — file sinks open no parent-side pipes.
     }
 
@@ -257,7 +303,10 @@ class AudioPlayer
 
         $this->bankElapsed();
         BoundedShutdown::terminateAndAwaitExit($this->processHandle);
-        proc_close($this->processHandle);
+        // SV-L49/049: stop() used to throw the close status away, leaving
+        // exitCode() either null or — worse — a stale pause()-era code once a
+        // respawn died later. Capture the same way pause() does.
+        $this->exitCode = proc_close($this->processHandle);
         $this->processHandle = null;
     }
 
@@ -372,7 +421,7 @@ class AudioPlayer
             // banking first so this segment's play time is not lost.
             $this->bankElapsed();
             BoundedShutdown::terminateAndAwaitExit($this->processHandle);
-            proc_close($this->processHandle);
+            $this->exitCode = proc_close($this->processHandle); // SV-L49/049: capture, like pause()
             $this->processHandle = null;
         }
         $this->start(); // start() honours the advanced $seekMs via buildCommand()
@@ -461,6 +510,15 @@ class AudioPlayer
         // bookkeeping only — it never spawns, never reaps, never throws.
         $this->bankElapsed();
 
+        // SV-L49/049: the same observation carries the final status. PHP's
+        // proc_get_status() reaps via waitpid(WNOHANG) on the spot (the M22
+        // lesson), so a not-running child answers with the very code a
+        // proc_close() would have returned — and signal deaths report -1,
+        // the same value proc_close() reserves for them. Recording it here
+        // is what keeps exitCode() from replaying a stale code from the
+        // previous pause/resume generation after a natural death.
+        $this->exitCode = (int) ($status['exitcode'] ?? -1);
+
         return false;
     }
 
@@ -495,49 +553,15 @@ class AudioPlayer
         return null;
     }
 
-    /** @var resource|null */
-    private $processHandle = null;
-
-    /** True once start() has been invoked. */
-    private bool $started = false;
-
     /**
-     * Current play position in milliseconds — the constructor seek offset advanced
-     * by every banked play segment (pause/resume/stop each add elapsed monotonic
-     * time). start()/buildCommand() spawn from here so a resume continues instead
-     * of replaying from the original seek.
-     */
-    private int $seekMs;
-
-    /** Monotonic time the running subprocess started, or null when not playing. */
-    private ?float $runningSince = null;
-
-    /**
-     * Highest monotonic instant at which the running subprocess was OBSERVED
-     * alive (spawn stamps it, isPlaying() lifts it) — the billing ceiling of
-     * SV-L89/089: a child that died unwatched is billed to this, not to the
-     * parent's wall-clock at teardown time.
-     */
-    private ?float $lastAliveAt = null;
-
-    /**
-     * Validated request headers for a network source, empty otherwise — parsed
-     * once in the constructor so every (re)spawn presents them without re-checking
-     * (a pause/resume respawn that forgot the credentials would fail the signed
-     * stream's second request, exactly like the decoder rebuild did).
-     */
-    private readonly HttpHeaders $headers;
-
-    /** Exit code from the last process termination, or null if still running. */
-    private ?int $exitCode = null;
-
-    /**
-     * Return the exit code from the last process termination.
+     * Return the exit status of the last OBSERVED termination.
      *
-     * Returns null when:
-     * - The process has never been started.
-     * - The process is still running.
-     * - The process was stopped via stop() (which discards the exit code).
+     * Returns null when nothing has terminated in front of us: no process
+     * was ever started, the (re)spawn is still running, or no binary was
+     * available. Every observation refreshes it — the closes in
+     * pause()/stop()/resume() and the not-running sighting in isPlaying()
+     * (SV-L49/049) — so the answer tracks the newest child, never a code
+     * left behind by an older generation.
      */
     public function exitCode(): ?int
     {

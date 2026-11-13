@@ -210,7 +210,7 @@ final class Player implements Model
      * with — and a 26th constructor parameter would shift the positional argument list
      * every test helper assembles. mutate() copies it forward deliberately: a derived
      * instance owns the SAME decoder and audio companion that stop() already closed, so
-     * nothing that happens after teardown may respawn them. That includes the debounce
+     * nothing that happens after teardown may respawn them. That includes the
      * debounce timer, which is armed before the resize lands and would
      * otherwise spawn a fresh ffmpeg child onto a player the host has already torn down
      * — a leak the static child-lifetime roster cannot see, since the spawn site itself
