@@ -342,6 +342,13 @@ default is chosen for terminal safety, not paste fidelity — zero-width and
 bidi override characters survive precisely so real text round-trips through
 editors, while escapes and marker bytes do not.
 
+**Piped stdin ends the program.** When the input stream reaches EOF (`echo | app`,
+`app < /dev/null`, cron, CI) the `Program` quits cleanly through the cooperative
+quit path (exit 0) instead of idling on its render timer. A program driven by
+timers, sockets, or subscriptions that must outlive the pipe passes
+`ProgramOptions(exitOnStdinEof: false)` (builder: `withExitOnStdinEof(false)`);
+the dead stdin watcher is still dropped so the loop does not spin.
+
 **The marker arena.** Mouse zones and image overlays ride the Unicode
 Private Use Area: `U+E000`/`U+E001` are the zone open/close sentinels
 (declared by sugar-mouse's `Mark`/`Scan`), image cell markers start at

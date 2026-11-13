@@ -177,4 +177,47 @@ final class ProgramEofTest extends TestCase
         fclose($in);
         rewind($out);
     }
+
+    public function testExitOnStdinEofFalseKeepsTheLoopAliveUntilExplicitQuit(): void
+    {
+        [$in, $out, $writer] = $this->pipes();
+        $loop = new StreamSelectLoop();
+
+        $model   = new EofSilentModel();
+        $program = new Program($model, new ProgramOptions(
+            useAltScreen: false,
+            catchInterrupts: false,
+            hideCursor: false,
+            input: $in,
+            output: $out,
+            loop: $loop,
+            exitOnStdinEof: false,
+        ));
+
+        $loop->addTimer(0.01, function () use ($writer): void {
+            fclose($writer);
+        });
+        // The opt-out means EOF must NOT end the run: this timer is the
+        // only thing that does, and it must be the one that fires.
+        $explicitQuitAt = null;
+        $t0 = \microtime(true);
+        $loop->addTimer(0.3, function () use ($program, &$explicitQuitAt, $t0): void {
+            $explicitQuitAt = \microtime(true) - $t0;
+            $program->quit();
+        });
+
+        $program->run();
+
+        $this->assertNotNull($explicitQuitAt, 'EOF ended the run although exitOnStdinEof is false');
+        $this->assertGreaterThanOrEqual(0.25, \microtime(true) - $t0);
+        fclose($in);
+        rewind($out);
+    }
+
+    public function testExitOnStdinEofDefaultsOnAndBuilderCarriesIt(): void
+    {
+        $this->assertTrue((new ProgramOptions())->exitOnStdinEof);
+        $this->assertTrue(ProgramOptions::builder()->build()->exitOnStdinEof);
+        $this->assertFalse(ProgramOptions::builder()->withExitOnStdinEof(false)->build()->exitOnStdinEof);
+    }
 }

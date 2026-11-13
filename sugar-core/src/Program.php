@@ -1660,7 +1660,9 @@ final class Program
             // normal arm — never a raw loop->stop().
             if (feof($stream)) {
                 $this->loop->removeReadStream($stream);
-                $this->send(new QuitMsg());
+                if ($this->options->exitOnStdinEof) {
+                    $this->send(new QuitMsg());
+                }
             }
             return false;
         }

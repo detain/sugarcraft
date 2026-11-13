@@ -47,6 +47,7 @@ final class ProgramOptionsBuilder
     private ?Termios $termios = null;
     private ?\Closure $subscriptions = null;
     private bool $sanitizePaste = true;
+    private bool $exitOnStdinEof = true;
 
     public function withUseAltScreen(bool $useAltScreen): self
     {
@@ -203,6 +204,12 @@ final class ProgramOptionsBuilder
         return $this;
     }
 
+    public function withExitOnStdinEof(bool $exitOnStdinEof): self
+    {
+        $this->exitOnStdinEof = $exitOnStdinEof;
+        return $this;
+    }
+
     /**
      * Build the {@see ProgramOptions} instance.
      */
@@ -233,6 +240,7 @@ final class ProgramOptionsBuilder
             termios: $this->termios,
             subscriptions: $this->subscriptions,
             sanitizePaste: $this->sanitizePaste,
+            exitOnStdinEof: $this->exitOnStdinEof,
         );
     }
 }

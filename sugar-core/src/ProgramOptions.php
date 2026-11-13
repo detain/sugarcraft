@@ -158,6 +158,16 @@ final class ProgramOptions
          * raw bytes and sanitizes them itself.
          */
         public readonly bool $sanitizePaste = true,
+        /**
+         * Quit cleanly when the input stream reaches EOF (piped stdin,
+         * `< /dev/null`, cron, CI). Defaults ON: a Program whose stdin is
+         * gone can never receive another key, so left running it would hang
+         * until killed. Pass `exitOnStdinEof: false` for programs driven by
+         * something other than input (timers, sockets, subscriptions) that
+         * must keep running after the pipe closes; the stdin watcher is
+         * still dropped so the loop does not spin on the dead stream.
+         */
+        public readonly bool $exitOnStdinEof = true,
     ) {
     }
 
