@@ -20,6 +20,13 @@ final class PanicFormatter
     /** Whether to include local variable dumps in the backtrace. */
     private readonly bool $showLocals;
 
+    /**
+     * Test seam: Windows folds path case at the filesystem, so there redaction
+     * matching must fold too. Defaults from the running OS family; a Linux CI
+     * pins both arms through the private constructor (see {@see redact()}).
+     */
+    private readonly bool $caseFoldPaths;
+
     private function __construct(
         private readonly Style $titleStyle,
         private readonly Style $exceptionStyle,
@@ -27,9 +34,51 @@ final class PanicFormatter
         private readonly Style $mutedStyle,
         bool $showLocals = false,
         array $redactPaths = [],
+        bool $caseFoldPaths = \PHP_OS_FAMILY === 'Windows',
     ) {
         $this->showLocals = $showLocals;
-        $this->redactPaths = $redactPaths;
+        $this->caseFoldPaths = $caseFoldPaths;
+        $this->redactPaths = self::normalizeRedactPaths($redactPaths);
+    }
+
+    /**
+     * Expand the configured redaction substrings once, at construction.
+     *
+     * Empty entries are dropped — a '' needle would splice '[redacted]'
+     * between every character of the subject (PHP 8 str_replace semantics),
+     * turning a config typo into a shredded report. Beside each configured
+     * spelling we keep its realpath when that path resolves: traces report
+     * canonical paths while configs quote authored ones ('/../' and '/./'
+     * spellings), and both must match. Unresolvable entries are NOT dropped —
+     * a secret path on a machine that never mounts it still has to redact the
+     * literal bytes.
+     *
+     * @param array<array-key, string> $paths
+     *
+     * @return list<string>
+     */
+    private static function normalizeRedactPaths(array $paths): array
+    {
+        $out = [];
+        foreach ($paths as $path) {
+            if ($path === '') {
+                continue;
+            }
+
+            $candidates = [$path];
+            $resolved = \realpath($path);
+            if ($resolved !== false) {
+                $candidates[] = $resolved;
+            }
+
+            foreach ($candidates as $candidate) {
+                if (!\in_array($candidate, $out, true)) {
+                    $out[] = $candidate;
+                }
+            }
+        }
+
+        return $out;
     }
 
     /**
@@ -51,7 +100,11 @@ final class PanicFormatter
      * report, or frame providers that add them), and the branch is kept for
      * those callers; it is not dead, it is engine-starved.
      *
-     * @param list<string> $redactPaths Substrings to redact from paths, locals, and message.
+     * @param list<string> $redactPaths Substrings to redact from paths, locals, and
+     *                                  message: exact-substring matching (case-folded
+     *                                  on Windows), compared against both the configured
+     *                                  spelling and its realpath when that path resolves;
+     *                                  empty entries are ignored.
      */
     public static function pretty(bool $showLocals = false, array $redactPaths = []): self
     {
@@ -72,7 +125,11 @@ final class PanicFormatter
      * "no ANSI", not "no redaction": a destination gate must never silently
      * drop the caller's privacy settings.
      *
-     * @param list<string> $redactPaths Substrings to redact from paths, locals, and message.
+     * @param list<string> $redactPaths Substrings to redact from paths, locals, and
+     *                                  message: exact-substring matching (case-folded
+     *                                  on Windows), compared against both the configured
+     *                                  spelling and its realpath when that path resolves;
+     *                                  empty entries are ignored.
      */
     public static function plain(bool $showLocals = false, array $redactPaths = []): self
     {
@@ -129,10 +186,11 @@ final class PanicFormatter
         $file = $e->getFile();
         $line = $e->getLine();
 
-        // Redact paths in primary exception file to match backtrace redaction
-        foreach ($this->redactPaths as $path) {
-            $file = str_replace($path, '[redacted]', $file);
-        }
+        // The primary exception file is attacker-reachable (crafted upload /
+        // phar names reach getFile()) just like every frame path: redact
+        // configured secrets, then sweep control bytes so the header row can
+        // neither leak a path nor forge extra report rows.
+        $file = self::ctrl($this->redact($file));
 
         // Group consecutive repeated frames.
         $grouped = [];
@@ -168,12 +226,8 @@ final class PanicFormatter
             }
 
             $func = self::ctrl($this->safeClassName((string) ($frame['class'] ?? '')) . ($frame['type'] ?? '') . ($frame['function'] ?? '?'));
-            $frameFile = self::ctrl($frame['file'] ?? '?');
+            $frameFile = self::ctrl($this->redact($frame['file'] ?? '?'));
             $frameLine = $frame['line'] ?? '?';
-
-            foreach ($this->redactPaths as $path) {
-                $frameFile = str_replace($path, '[redacted]', $frameFile);
-            }
 
             // %s, not %d: internal frames (call_user_func et al.) carry no
             // file/line, and '%d' would render the '?' placeholder as '0'.
@@ -185,13 +239,11 @@ final class PanicFormatter
                     $argStr = is_scalar($arg) ? (string) $arg : gettype($arg);
                     // Redact configured secret substrings from dumped locals,
                     // not just from file paths — a token/password passed as a
-                    // call argument would otherwise leak verbatim. Redact BEFORE
-                    // truncation so secrets longer than the cap are still caught.
-                    foreach ($this->redactPaths as $path) {
-                        if ($path !== '') {
-                            $argStr = str_replace($path, '[redacted]', $argStr);
-                        }
-                    }
+                    // call argument would otherwise leak verbatim. Redact on
+                    // the RAW bytes before truncation (secrets longer than the
+                    // cap are still caught) and before the ctrl() sweep below
+                    // (order policy: see redact()).
+                    $argStr = $this->redact($argStr);
                     if (mb_strlen($argStr) > 40) {
                         $argStr = mb_substr($argStr, 0, 40) . '...';
                     }
@@ -204,19 +256,38 @@ final class PanicFormatter
     }
 
     /**
-     * Exception messages routinely embed user input: sweep terminal-control
-     * bytes, redact configured secret substrings (a message quoting a secret
-     * path is still a leak), and flatten newlines/tabs so one message renders
-     * as exactly one report line.
+     * Exception messages routinely embed user input: configured secret
+     * substrings are redacted on the raw bytes first, then terminal-control
+     * bytes are swept and newlines/tabs flattened so one message renders as
+     * exactly one report line.
      */
     private function safeMessage(string $message): string
     {
-        $s = self::ctrl($message);
+        return self::ctrl($this->redact($message));
+    }
 
+    /**
+     * The single redaction policy, shared by the primary file, frame files,
+     * dumped locals, and the message.
+     *
+     * ORDER (redact then ctrl, never the reverse): redaction is path
+     * semantics and must match on untouched bytes — a configured secret that
+     * itself contains a sweep-target byte (a tab is legal in a POSIX file
+     * name) would be folded out of reach of matching if ctrl() ran first.
+     * ctrl() then runs LAST as the render invariant: no byte reaches a report
+     * row without having passed through it, and the '[redacted]' placeholder
+     * is a constant that survives the sweep unchanged.
+     *
+     * Matching is exact substring on POSIX; on Windows ($caseFoldPaths, the
+     * OS default) the filesystem is case-insensitive, so 'C:\Secrets\key' and
+     * 'c:\secrets\KEY' are the same secret and must both hit.
+     */
+    private function redact(string $s): string
+    {
         foreach ($this->redactPaths as $path) {
-            if ($path !== '') {
-                $s = str_replace($path, '[redacted]', $s);
-            }
+            $s = $this->caseFoldPaths
+                ? \str_ireplace($path, '[redacted]', $s)
+                : \str_replace($path, '[redacted]', $s);
         }
 
         return $s;
@@ -226,9 +297,10 @@ final class PanicFormatter
      * A class name is not a safe identifier: PHP renders anonymous classes as
      * 'Prefix@anonymous\0/creating/file.php:line$counter' (NUL-separated on
      * 8.x), and the embedded creating path is neither stripped by {@see ctrl()}
-     * (the bytes around it are printable) nor covered by {@see $redactPaths}
-     * unless the developer happens to have configured that exact file. The
-     * NUL additionally breaks the redact str_replace matching. Collapse the
+     * (the bytes around it are printable) nor covered by {@see redact()}
+     * unless the developer happens to have configured that exact file — and a
+     * NUL spliced through a configured path would split it out of reach of
+     * redaction, which matches on raw bytes. Collapse the
      * creation tail — keeping the declared prefix so an anonymous subclass of
      * RuntimeException still reads as 'RuntimeException@anonymous' — then run
      * the remainder through the message ladder as defense in depth against

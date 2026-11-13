@@ -6,6 +6,7 @@ namespace SugarCraft\Log\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Log\PanicFormatter;
+use SugarCraft\Style\Style;
 
 final class PanicFormatterTest extends TestCase
 {
@@ -51,15 +52,26 @@ final class PanicFormatterTest extends TestCase
         $this->assertStringContainsString($e->getFile(), $out);
     }
 
-    public function testFormatRedactsPaths(): void
+    public function testFormatRedactsPrimaryFileAndFramesTogether(): void
     {
-        $f = PanicFormatter::plain();
-        $e = new \RuntimeException('test');
-        // Verify path redaction is not in the output (redaction targets
-        // backtrace file paths, not the primary exception file/line).
+        // One policy, all sites: the primary exception file is redacted the
+        // same way as frame paths (the old loop did it, the old comment did
+        // not — and it silently skipped the control sweep this now pins).
+        $f = PanicFormatter::plain(false, ['/etc/secrets']);
+        $e = new \ErrorException('redaction sweep', 0, E_USER_ERROR, '/etc/secrets/primary.php', 12);
+        $traceProp = new \ReflectionProperty(\Exception::class, 'trace');
+        $traceProp->setAccessible(true);
+        $traceProp->setValue($e, [[
+            'file' => '/etc/secrets/config.php',
+            'line' => 10,
+            'function' => 'load',
+        ]]);
+
         $out = $f->format($e);
-        // The redaction applies to backtrace frames, not the main file path.
-        $this->assertIsString($out);
+
+        $this->assertStringNotContainsString('/etc/secrets', $out);
+        $this->assertStringContainsString('[redacted]/primary.php', $out);
+        $this->assertStringContainsString('[redacted]/config.php', $out);
     }
 
     public function testFormatCollapsesRepeatedFrames(): void
@@ -400,5 +412,114 @@ final class PanicFormatterTest extends TestCase
         $this->assertStringNotContainsString('/secret/place/creating-file.php', $out);
         $this->assertStringNotContainsString("\0", $out);
         $this->assertStringContainsString('class@anonymous->run()', $out);
+    }
+
+    // -------------------------------------------------------------------------
+    // [SL-07] unified redact/ctrl policy: primary-file sweep, Windows
+    // case fold, empty-entry ignore, realpath both-spellings, byte order
+    // -------------------------------------------------------------------------
+
+    public function testHostilePrimaryFilePathCannotForgeRowsOrEscapes(): void
+    {
+        $f = PanicFormatter::plain();
+        // ErrorException carries an explicit filename — the crafted-upload /
+        // phar path shape that reaches getFile(). Pre-fix the primary file
+        // row went to the terminal unswept: raw ESC and a split row.
+        $e = new \ErrorException('oven jammed', 0, E_USER_ERROR, "/tmp/fo\x1b[2Jrge\nrow.php", 7);
+        $out = $f->format($e);
+
+        $this->assertStringNotContainsString("\x1b", $out);
+
+        $rows = array_values(array_filter(
+            explode("\n", $out),
+            static fn (string $row): bool => str_contains($row, 'row.php'),
+        ));
+        $this->assertCount(1, $rows, 'the forged newline must not split the primary file row');
+        // Sanitize::untrusted drops the WHOLE CSI sequence (ESC[2J), not just
+        // the introducer; ctrl() folds the newline into a space.
+        $this->assertStringContainsString('/tmp/forge row.php:7', $rows[0]);
+    }
+
+    public function testCaseFoldedRedactionMatchesWindowsPathSpelling(): void
+    {
+        // The seam: PHP_OS_FAMILY cannot be forked inside a process, so the
+        // Windows arm is pinned through the private constructor (scope-bound
+        // closure — reflection instantiation rejects private ctors), and the
+        // POSIX arm is pinned by binding the same fixture with fold=false.
+        $mk = static function (array $paths, bool $fold): PanicFormatter {
+            $factory = \Closure::bind(
+                static fn (Style $t, Style $x, Style $b, Style $m, bool $locals, array $redact, bool $caseFold): PanicFormatter
+                    => new PanicFormatter($t, $x, $b, $m, $locals, $redact, $caseFold),
+                null,
+                PanicFormatter::class,
+            );
+
+            return $factory(Style::new(), Style::new(), Style::new(), Style::new(), false, $paths, $fold);
+        };
+
+        $winish = $mk(['c:\secrets\key'], true);
+        $out = $winish->format(new \RuntimeException('cannot open C:\SeCREts\key.txt'));
+        $this->assertStringNotContainsString('SeCREts', $out);
+        $this->assertStringContainsString('[redacted]', $out);
+
+        $posix = $mk(['c:\secrets\key'], false);
+        $out = $posix->format(new \RuntimeException('cannot open C:\SeCREts\key.txt'));
+        $this->assertStringContainsString('C:\SeCREts', $out, 'POSIX paths are case-sensitive: different bytes, different path, no fold');
+    }
+
+    public function testEmptyRedactEntryIsIgnoredNotSpliced(): void
+    {
+        // An empty configured substring is a config typo, not a policy: the
+        // unguarded loops spliced '[redacted]' between every character of the
+        // primary file and frame paths (PHP 8 str_replace semantics).
+        $f = PanicFormatter::plain(false, ['', '/etc/secrets']);
+        $e = new \ErrorException('cannot read /etc/secrets/app.env', 0, E_USER_ERROR, '/etc/secrets/primary.php', 3);
+        $out = $f->format($e);
+
+        $this->assertStringContainsString('cannot read [redacted]/app.env', $out);
+        $this->assertStringContainsString('[redacted]/primary.php', $out);
+        $this->assertStringNotContainsString('/etc/secrets', $out);
+        $this->assertSame(2, substr_count($out, '[redacted]'), 'exactly one placeholder per real secret site — no fragmentation');
+    }
+
+    public function testRedactionComparesConfiguredAndRealpathSpellings(): void
+    {
+        // Traces report canonical paths while configs quote authored ones;
+        // both spellings must match, and an unresolvable entry must survive
+        // normalization rather than being dropped.
+        $dir = sys_get_temp_dir() . '/sugar-log-rp-' . bin2hex(random_bytes(4));
+        mkdir($dir . '/nested', 0o777, true);
+        touch($dir . '/nested/secret.key');
+        $authored = $dir . '/./nested/../nested/secret.key';
+        $canonical = realpath($authored);
+        $this->assertIsString($canonical);
+
+        $f = PanicFormatter::plain(false, [$authored]);
+        $viaCanonical = $f->format(new \RuntimeException("read $canonical denied"));
+        $viaAuthored = $f->format(new \RuntimeException("read $authored denied"));
+
+        @unlink($dir . '/nested/secret.key');
+        @rmdir($dir . '/nested');
+        @rmdir($dir);
+
+        $this->assertStringContainsString('read [redacted] denied', $viaCanonical);
+        $this->assertStringNotContainsString('secret.key', $viaCanonical);
+        $this->assertStringContainsString('read [redacted] denied', $viaAuthored);
+    }
+
+    public function testTabBearingSecretRedactsOnRawBytesBeforeTheSweep(): void
+    {
+        // Order discriminator (redact-then-ctrl, never the reverse): a tab is
+        // legal in a POSIX file name, so the configured secret itself carries
+        // a byte ctrl() would fold. Sweep-first would fold the subject away
+        // from the still-tabbed needle and leak it. Built with chr(9): a
+        // "\t" literal immediately followed by 't' eats that 't' into the
+        // escape sequence and quietly changes the needle.
+        $secret = '/srv/ke' . \chr(9) . 'ty/file';
+        $f = PanicFormatter::plain(false, [$secret]);
+        $out = $f->format(new \RuntimeException('cannot read ' . $secret));
+
+        $this->assertStringContainsString('[redacted]', $out);
+        $this->assertStringNotContainsString('ty/file', $out);
     }
 }
