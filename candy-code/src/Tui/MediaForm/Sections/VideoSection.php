@@ -364,6 +364,9 @@ final class VideoSection implements Section, FieldValuedSection
 
     public function withFieldValues(array $values): self
     {
+        // RULING (2026-11-12, S-U12): no-change identity fast path - a
+        // disabled video tab ignores hydration and returns $this (immutable
+        // section; callers may compare by identity).
         if (!$this->enabled) {
             return $this;
         }

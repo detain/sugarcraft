@@ -161,6 +161,10 @@ trait RegistrySection
 
         [$specs, $changed] = \SugarCraft\Code\Tui\MediaForm\DisplayOverrides::apply($this->specs, $overrides);
         $hidden = array_diff_key($this->specs, $specs);
+        // RULING (2026-11-12, S-U12): no-change identity fast path. Returning
+        // $this when nothing moved is the Section contract (callers compare by
+        // identity to skip a rebuild); it is not an accidental aliasing of
+        // mutable state, since sections are immutable.
         if ($changed === [] && $hidden === []) {
             return $this;
         }

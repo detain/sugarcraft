@@ -14,6 +14,13 @@ use SugarCraft\Code\Util\TokenCount;
  * display name, operational status, current task, elapsed wall-clock
  * time, and accumulated token usage without the renderer needing to
  * know about internal agent state.
+ *
+ * RULING (2026-11-12, S-U12): the promoted properties are deliberately public
+ * and MUTABLE, not readonly. These rows are rebuilt every frame from the pool
+ * and the pane patches fields in place; subclassing ({@see AgentOutputState})
+ * is in use, so the class is not final. A readonly + with*() rewrite would
+ * allocate per frame for no invariant gain; revisit only under the G-16
+ * carrier-sweep family, not ad hoc. Do not copy this to long-lived state.
  */
 class AgentDisplayState
 {

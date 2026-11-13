@@ -13,6 +13,10 @@ namespace SugarCraft\Code\Tui;
  * Collected from the agent pool at render time so AgentOutputPane can render
  * the live response buffer without the renderer needing to know about internal
  * agent state.
+ *
+ * RULING (2026-11-12, S-U12): per-frame mutable state, same as the parent
+ * {@see AgentDisplayState} ruling. Properties stay public and non-readonly on
+ * purpose; the buffer is a bounded tail replaced each frame.
  */
 final class AgentOutputState extends AgentDisplayState
 {

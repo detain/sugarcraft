@@ -70,6 +70,9 @@ final class OutputSection implements Section
 
     public function withField(Field $field): Section
     {
+        // RULING (2026-11-12, S-U12): identity return is contract-sanctioned -
+        // this section has no Field rows (fieldAt() is null), so there is
+        // nothing to replace and no copy is warranted.
         return $this;
     }
 
