@@ -221,32 +221,39 @@ final class Sparkline
 
     private function renderBuffer(int $w, array $points, float $min, float $range): string
     {
-        $buffer = Buffer::new($w, 1);
+        // sugar-charts-011: looping withCellAt() on the IMMUTABLE Buffer
+        // cloned the whole grid per cell — O(width²) (~0.2s at w=6400,
+        // never finishing at w=100000). Assemble the row-major cell list
+        // in the loop and hand it to cellbuffer's documented bulk escape
+        // hatch: one fromGrid(), O(width). The array mirrors the old
+        // last-write-wins semantics exactly: a wide lead's continuation at
+        // $col+1 is overwritten by the next point, as withCellAt did.
         $bufferStyle = $this->style !== null ? BufferHelper::toBufferStyle($this->style) : null;
-        $missing = $w - count($points);
-        $col = 0;
+        $missing     = $w - count($points);
+        $blank       = new Cell(self::GLYPHS[0], $bufferStyle, null, 1);
+        $cells       = [];
 
         // Leading empty glyphs
         for ($i = 0; $i < $missing; $i++) {
-            $buffer = $buffer->withCellAt($col, 0, new Cell(self::GLYPHS[0], $bufferStyle, null, 1));
-            $col++;
+            $cells[] = $blank;
         }
 
         // Data glyphs
+        $col = $missing;
         foreach ($points as $v) {
-            $g = self::glyph((float) $v, $min, $range);
+            $g  = self::glyph((float) $v, $min, $range);
             $gw = BufferHelper::graphemeWidth($g);
-            $buffer = $buffer->withCellAt($col, 0, new Cell($g, $bufferStyle, null, $gw));
+            $cells[$col] = new Cell($g, $bufferStyle, null, $gw);
             // Wide-char continuation arm: the block glyphs are
             // East-Asian *Ambiguous*, so a wide-assumption host can
             // measure them as 2 cells — the arm is defensive, not dead.
             if ($gw === 2 && $col + 1 < $w) {
-                $buffer = $buffer->withCellAt($col + 1, 0, Cell::continuation());
+                $cells[$col + 1] = Cell::continuation();
             }
             $col++;
         }
 
-        return $buffer->toAnsi();
+        return Buffer::fromGrid($w, 1, $cells)->toAnsi();
     }
 
     private function styled(string $rendered): string
