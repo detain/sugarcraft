@@ -296,6 +296,10 @@ trait ServeManagement
         try {
             $state = StateDir::open(self::stateDirPath($env));
             $store = TokenStore::new($state->path);
+            // The control socket authenticates BEFORE any verb runs (S-O02), against
+            // the token the running server still holds in memory: that is the OLD
+            // one until the reload lands, so the reload request has to carry it.
+            $previous = $rotate ? $store->token() : null;
             $token = $rotate ? $store->rotate() : $store->token();
         } catch (\RuntimeException $e) {
             return NonInteractive::failUsage('candy-code serve token: ' . $e->getMessage(), $args->outputFormat);
@@ -307,7 +311,7 @@ trait ServeManagement
             // A running server reloads the file now and signs every client of
             // the old token out; one that cannot be reached keeps the old
             // token until it restarts, and says so.
-            $answer = self::controlRequest($state, self::CONTROL_RELOAD_TOKEN . ' ' . $token);
+            $answer = self::controlRequest($state, self::CONTROL_RELOAD_TOKEN . ' ' . $previous);
             $reloaded = \is_array($answer) && ($answer['ok'] ?? false) === true;
             $closed = (int) ($answer['closed'] ?? 0);
             $params = ['pid' => $running->pid, 'count' => $closed];

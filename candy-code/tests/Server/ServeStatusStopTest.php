@@ -265,8 +265,12 @@ final class ServeStatusStopTest extends TestCase
 
     public function testTokenPrintsAndRotatesTheStoredTokenOnly(): void
     {
+        // S-H06: a plain print with no live server still prints the stored
+        // token but exits 1 (status/stop/url agree), so a readiness probe is not
+        // falsified; --rotate below is a legitimate offline operation and stays 0.
         $first = $this->bin(['serve', 'token']);
-        self::assertSame(0, $first['status'], $first['stderr']);
+        self::assertSame(1, $first['status'], $first['stderr']);
+        self::assertStringContainsString('no server is running (stored token shown)', $first['stderr']);
         self::assertMatchesRegularExpression('/^[0-9a-f]{64}\n$/', $first['stdout']);
         self::assertSame(\trim($first['stdout']), \trim((string) \file_get_contents($this->stateDir . '/token')));
         self::assertSame($first['stdout'], $this->bin(['serve', 'token'])['stdout'], 'printing does not mint');
