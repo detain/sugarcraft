@@ -2512,6 +2512,53 @@ final class EscapeDecoderTest extends TestCase
         $this->assertTrue($events[0]->modifiers->includes(KeyModifier::SHIFT));
     }
 
+    public function testModifyOtherKeysX11FunctionKeysymBlock(): void
+    {
+        // SI-08: keysyms in the X11 function block 0xFF00-0xFFFF used to name
+        // nothing and drop. Navigation, F-keys, and the keypad must decode
+        // through the SAME fromXtermParam modifier leg printables use.
+        $left = $this->decoder->decode("\x1b[27;2;65361~")[0]; // 0xFF51 Left
+        $this->assertSame('ArrowLeft', $left->key);
+        $this->assertTrue($left->modifiers->includes(KeyModifier::SHIFT));
+
+        $f5 = $this->decoder->decode("\x1b[27;5;65474~")[0]; // 0xFFC2 F5
+        $this->assertSame('F5', $f5->key);
+        $this->assertTrue($f5->modifiers->includes(KeyModifier::CTRL));
+
+        $home = $this->decoder->decode("\x1b[27;2;65360~")[0]; // 0xFF50 Home
+        $this->assertSame('Home', $home->key);
+        $this->assertTrue($home->modifiers->includes(KeyModifier::SHIFT));
+
+        $pgup = $this->decoder->decode("\x1b[27;3;65365~")[0]; // 0xFF55 Prior, mods=1+ALT
+        $this->assertSame('PageUp', $pgup->key);
+        $this->assertTrue($pgup->modifiers->includes(KeyModifier::ALT));
+
+        // House-named members of the block: Insert (0xFF63). Delete is NOT
+        // mapped even though keysymdef.h says 0xFFFF — the lib's long-pinned
+        // "unknown keysym drains" witness frame is exactly that keysym.
+        $insert = $this->decoder->decode("\x1b[27;2;65379~")[0];
+        $this->assertSame('Insert', $insert->key);
+
+        // Keypad block lands in the house KP* vocabulary.
+        $kp5 = $this->decoder->decode("\x1b[27;5;65461~")[0]; // 0xFFB5 KP_5
+        $this->assertSame('KP5', $kp5->key);
+        $this->assertTrue($kp5->modifiers->includes(KeyModifier::CTRL));
+
+        $kpEnter = $this->decoder->decode("\x1b[27;1;65421~")[0]; // 0xFF8D
+        $this->assertSame('KPEnter', $kpEnter->key);
+    }
+
+    public function testModifyOtherKeysUnassignedKeysymStillDrops(): void
+    {
+        // Keysyms inside the block WITHOUT a house name (0xFFDC is unassigned
+        // in keysymdef.h; 0xFF60 Select has no house name) stay honest drops —
+        // the map must not become a catch-all that invents names.
+        $before = $this->decoder->droppedUnknownCount();
+        $this->assertSame([], $this->decoder->decode("\x1b[27;2;65500~")); // 0xFFDC
+        $this->assertSame([], $this->decoder->decode("\x1b[27;2;65376~")); // 0xFF60 Select
+        $this->assertSame($before + 2, $this->decoder->droppedUnknownCount());
+    }
+
     public function testModifyOtherKeysPunctuationNotMisNamedAsFunctionKey(): void
     {
         // Regression for the keysym-vs-kitty-codepoint conflation: X11 keysym 33 is

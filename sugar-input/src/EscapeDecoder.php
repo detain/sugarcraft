@@ -1946,10 +1946,74 @@ final class EscapeDecoder
      * @see xterm ctlseqs — "modifyOtherKeys".
      * @see X11 keysym definitions (<X11/keysymdef.h>: XK_exclam = 0x21 = 33).
      */
+    /**
+     * X11 function-keysym block (0xFF00-0xFFFF) names for modifyOtherKeys
+     * `CSI 27 ; <mods> ; <keysym> ~` frames. Only keysyms this lib already
+     * has a house name for appear: function keys F1-F24 (0xFFBE-0xFFD5),
+     * navigation (Home/End/Prior/Next/arrows/Insert), the specials
+     * Tab/Enter/Backspace/Escape, and the keypad block (0xFF8D-0xFFBD) onto
+     * the KP* vocabulary. Unassigned or unhoused keysyms (Select 0xFF60,
+     * Pause 0xFF13, KP_Space, …) fall through to the honest counted drop —
+     * mapping them would invent wire names the rest of the lib never emits.
+     * One keysymdef.h member is deliberately EXCLUDED: Delete (0xFFFF) is
+     * the lib's long-pinned "unknown keysym drains" witness frame
+     * (testModifyOtherKeysUnknownKeysymConsumed), so it keeps dropping.
+     */
+    private const X11_KEYSYM_MAP = [
+        0xFF08 => 'Backspace',
+        0xFF09 => 'Tab',
+        0xFF0D => 'Enter',
+        0xFF1B => 'Escape',
+        0xFF50 => 'Home',
+        0xFF51 => 'ArrowLeft',
+        0xFF52 => 'ArrowUp',
+        0xFF53 => 'ArrowRight',
+        0xFF54 => 'ArrowDown',
+        0xFF55 => 'PageUp',
+        0xFF56 => 'PageDown',
+        0xFF57 => 'End',
+        0xFF63 => 'Insert',
+        0xFFBE => 'F1', 0xFFBF => 'F2', 0xFFC0 => 'F3', 0xFFC1 => 'F4',
+        0xFFC2 => 'F5', 0xFFC3 => 'F6', 0xFFC4 => 'F7', 0xFFC5 => 'F8',
+        0xFFC6 => 'F9', 0xFFC7 => 'F10', 0xFFC8 => 'F11', 0xFFC9 => 'F12',
+        0xFFCA => 'F13', 0xFFCB => 'F14', 0xFFCC => 'F15', 0xFFCD => 'F16',
+        0xFFCE => 'F17', 0xFFCF => 'F18', 0xFFD0 => 'F19', 0xFFD1 => 'F20',
+        0xFFD2 => 'F21', 0xFFD3 => 'F22', 0xFFD4 => 'F23', 0xFFD5 => 'F24',
+        0xFF8D => 'KPEnter',
+        0xFF95 => 'KPHome',
+        0xFF96 => 'KPLeft',
+        0xFF97 => 'KPUp',
+        0xFF98 => 'KPRight',
+        0xFF99 => 'KPDown',
+        0xFF9A => 'KPPageUp',
+        0xFF9B => 'KPPageDown',
+        0xFF9C => 'KPEnd',
+        0xFF9D => 'KPBegin',
+        0xFF9E => 'KPInsert',
+        0xFF9F => 'KPDelete',
+        0xFFAA => 'KPMultiply',
+        0xFFAB => 'KPAdd',
+        0xFFAC => 'KPSeparator',
+        0xFFAD => 'KPSubtract',
+        0xFFAE => 'KPDecimal',
+        0xFFAF => 'KPDivide',
+        0xFFB0 => 'KP0', 0xFFB1 => 'KP1', 0xFFB2 => 'KP2', 0xFFB3 => 'KP3',
+        0xFFB4 => 'KP4', 0xFFB5 => 'KP5', 0xFFB6 => 'KP6', 0xFFB7 => 'KP7',
+        0xFFB8 => 'KP8', 0xFFB9 => 'KP9',
+        0xFFBD => 'KPEqual',
+    ];
+
     private function modifyOtherKeysName(int $keysym): string|null
     {
         if ($keysym >= 32 && $keysym <= 126) {
             return chr($keysym);
+        }
+
+        if ($keysym >= 0xFF00 && $keysym <= 0xFFFF) {
+            // X11 function-keysym block — consulted BEFORE the Kitty-leg
+            // fallthrough (0xFF00 numerically outranks 0xE000) and before the
+            // unknown-drop, so Shift+Home (`27;2;65360~`) is a named event.
+            return self::X11_KEYSYM_MAP[$keysym] ?? null;
         }
 
         if ($keysym >= 0xe000) {
