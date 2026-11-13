@@ -578,19 +578,26 @@ function cmdUserAdd(array $args): int
         return error(Lang::t('cli.username_invalid', ['username' => $username]) . "\n");
     }
 
+    // Digest first: bcrypt belongs OUTSIDE the store lock — serializing
+    // a 300 ms hashing window under contention is its own slow shape.
+    $user = User::new($username)->withAdmin($admin);
+    if ($password !== null) {
+        // Only the password_hash() digest is persisted; the plaintext
+        // is used once and discarded (never reaches users.json).
+        $user = $user->withPasswordHash(\password_hash($password, \PASSWORD_DEFAULT));
+    }
+
     try {
         $store = UserStore::forDataPath($dataPath);
-        if ($store->find($username) !== null) {
+        // S11 (findings 010, 105): the duplicate answer comes from
+        // INSIDE the transaction and add()'s bool is finally CHECKED —
+        // the old shape pre-checked against a snapshot (TOCTOU), discarded
+        // the refusal, and let two racing adds both print success while
+        // the later rename erased one account.
+        $added = $store->transaction(static fn (UserStore $store): bool => $store->add($user));
+        if (!$added) {
             return error(Lang::t('cli.user_exists', ['username' => $username, 'path' => $store->path()]) . "\n");
         }
-        $user = User::new($username)->withAdmin($admin);
-        if ($password !== null) {
-            // Only the password_hash() digest is persisted; the plaintext
-            // is used once and discarded (never reaches users.json).
-            $user = $user->withPasswordHash(\password_hash($password, \PASSWORD_DEFAULT));
-        }
-        $store->add($user);
-        $store->save();
     } catch (\RuntimeException $e) {
         return error('candy-git-server: ' . $e->getMessage() . "\n");
     }
@@ -623,14 +630,25 @@ function cmdUserKey(array $args): int
         $store = UserStore::forDataPath($dataPath);
         // Keys belong to accounts that EXIST in the store — the pre-fix
         // version built a throwaway User in memory, printed success, and
-        // persisted nothing.
-        $user = $store->find($username);
-        if ($user === null) {
+        // persisted nothing. S11 moved the whole check-and-write under
+        // the transaction lock, so a concurrent `user add` cannot land
+        // between reading the account and saving its new key list.
+        // Returns the UPDATED account (immutable VO — safe to carry out of
+        // the lock) or null for "no such account", so the honest key-list
+        // echo below reflects exactly what was persisted.
+        $updated = $store->transaction(function (UserStore $store) use ($username, $key): ?User {
+            $user = $store->find($username);
+            if ($user === null) {
+                return null;
+            }
+            $next = $user->addAuthorizedKey(\trim($key));
+            $store->put($next);
+
+            return $next;
+        });
+        if ($updated === null) {
             return error(Lang::t('cli.user_not_found', ['username' => $username, 'path' => $store->path()]) . "\n");
         }
-        $updated = $user->addAuthorizedKey(\trim($key));
-        $store->put($updated);
-        $store->save();
     } catch (\InvalidArgumentException $e) {
         return error('candy-git-server: ' . $e->getMessage() . "\n");
     } catch (\RuntimeException $e) {

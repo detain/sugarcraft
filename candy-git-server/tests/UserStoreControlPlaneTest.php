@@ -107,7 +107,9 @@ final class UserStoreControlPlaneTest extends TestCase
         // only durable ordering. Pinned structurally on the method source:
         // every functional save still passes when the fsync is removed, so
         // a behavior test here would be vacuous by construction.
-        $reflection = new \ReflectionMethod(UserStore::class, 'save');
+        // (S11 moved the durable body behind save() into publish(); the
+        // chain being pinned is unchanged, only its address.)
+        $reflection = new \ReflectionMethod(UserStore::class, 'publish');
         $lines = \file((string) $reflection->getFileName());
         $body = \implode('', \array_slice(
             (array) $lines,
@@ -267,5 +269,119 @@ final class UserStoreControlPlaneTest extends TestCase
         $r = $this->runBin(['user', 'token', 'alice'], ['CANDY_GIT_SERVER_DATA_PATH' => $this->tmpDir]);
         $this->assertSame(0, $r['rc'], $r['out'] . $r['err']);
         $this->assertMatchesRegularExpression('/^\d+\.[0-9a-f]{64}$/', \trim($r['out']));
+    }
+
+    // -------------------------------------------------------------------------
+    // S11: version stamp, map-key integrity, transaction semantics
+    // -------------------------------------------------------------------------
+
+    public function testSaveStampsTheVersionAndALegacyUnstampedFileStillReads(): void
+    {
+        // Legacy (v0-era) file: no version key at all — must read fine.
+        $path = $this->tmpDir . '/users.json';
+        \file_put_contents($path, \json_encode([
+            'users' => ['old' => ['username' => 'old', 'admin' => true, 'active' => true, 'authorized_keys' => []]],
+        ]));
+        $store = new UserStore($path);
+        $this->assertNotNull($store->find('old'));
+
+        // And the first save re-publishes it stamped.
+        $store->put(User::new('old')->withAdmin(true));
+        $store->save();
+        $decoded = (array) \json_decode((string) \file_get_contents($path), true);
+        $this->assertSame(UserStore::VERSION, $decoded['version']);
+    }
+
+    public function testNewerFormatRefusesToLoadInsteadOfDroppingFields(): void
+    {
+        $path = $this->tmpDir . '/users.json';
+        \file_put_contents($path, \json_encode([
+            'version' => 999,
+            'users' => ['x' => ['username' => 'x', 'admin' => false, 'active' => true]],
+        ]));
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessageMatches('/newer than this server/');
+        new UserStore($path);
+    }
+
+    public function testMapKeyDivergingFromRowUsernameRefusesAsCorruption(): void
+    {
+        // Finding 106: an access decision keyed by the payload while the
+        // file labels it differently is identity smuggling, not a quirk.
+        $path = $this->tmpDir . '/users.json';
+        \file_put_contents($path, \json_encode([
+            'users' => ['alice' => ['username' => 'mallory', 'admin' => true, 'active' => true, 'authorized_keys' => []]],
+        ]));
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessageMatches('/map key .alice. carries username .mallory./');
+        new UserStore($path);
+    }
+
+    public function testTransactionReReadsUnderTheLockSoAStaleInstanceSeesFreshBytes(): void
+    {
+        $path = $this->tmpDir . '/users.json';
+        $early = new UserStore($path);   // snapshot: empty world
+
+        $late = new UserStore($path);
+        $late->transaction(static function (UserStore $s): bool {
+            return $s->add(User::new('first'));
+        });
+
+        // The stale instance's NEXT transaction must see the other
+        // writer's committed row — that re-read is what serializes CLI
+        // processes instead of losing updates.
+        $sawFirst = null;
+        $early->transaction(static function (UserStore $s) use (&$sawFirst): void {
+            $sawFirst = $s->find('first') !== null;
+            $s->add(User::new('second'));
+        });
+        $this->assertTrue($sawFirst, 'transaction must not operate on the constructor snapshot');
+
+        $final = new UserStore($path);
+        $this->assertNotNull($final->find('first'));
+        $this->assertNotNull($final->find('second'), 'both writers must survive');
+    }
+
+    public function testTransactionAbortsThePublishWhenTheMutatorThrows(): void
+    {
+        $path = $this->tmpDir . '/users.json';
+        $store = new UserStore($path);
+        $store->transaction(static function (UserStore $s): void {
+            $s->add(User::new('kept'));
+        });
+
+        try {
+            $store->transaction(static function (UserStore $s): void {
+                $s->add(User::new('rolled-back'));
+                throw new \RuntimeException('mid-flight fault');
+            });
+            $this->fail('the mutator exception must propagate');
+        } catch (\RuntimeException $e) {
+            $this->assertSame('mid-flight fault', $e->getMessage());
+        }
+
+        $after = new UserStore($path);
+        $this->assertNotNull($after->find('kept'));
+        $this->assertNull($after->find('rolled-back'), 'a thrown transaction publishes nothing');
+
+        // And the re-entry guard released with the exception:
+        $after->transaction(static function (UserStore $s): void {
+            $s->add(User::new('next-one-works'));
+        });
+        $this->assertNotNull((new UserStore($path))->find('next-one-works'));
+    }
+
+    public function testNestedTransactionRefusesLoudly(): void
+    {
+        $store = new UserStore($this->tmpDir . '/users.json');
+
+        $this->expectException(\LogicException::class);
+        $store->transaction(static function (UserStore $s): void {
+            $s->transaction(static function (UserStore $inner): void {
+                $inner->add(User::new('never'));
+            });
+        });
     }
 }
