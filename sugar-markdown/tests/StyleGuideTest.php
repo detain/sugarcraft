@@ -336,4 +336,58 @@ final class StyleGuideTest extends TestCase
             }
         }
     }
+
+    /**
+     * SM-S17 pin: all seven documented flags land on their own SGR arm.
+     * One flag per slot so a `underline → strike()` mis-wire in
+     * Theme::parseStyle() shows up as a byte mismatch, not a false pass.
+     */
+    public function testSevenSgrFlagsLandTheirOwnByteArms(): void
+    {
+        $json = '{"heading1":{"bold":true},"heading2":{"italic":true},"heading3":{"faint":true},'
+            . '"heading4":{"underline":true},"heading5":{"strike":true},"heading6":{"blink":true},'
+            . '"text":{"reverse":true}}';
+        $theme = Theme::fromJsonString($json);
+
+        $this->assertSame("\x1b[1mx\x1b[0m", $theme->heading1->render('x'));
+        $this->assertSame("\x1b[3mx\x1b[0m", $theme->heading2->render('x'));
+        $this->assertSame("\x1b[2mx\x1b[0m", $theme->heading3->render('x'));
+        $this->assertSame("\x1b[4mx\x1b[0m", $theme->heading4->render('x'));
+        $this->assertSame("\x1b[9mx\x1b[0m", $theme->heading5->render('x'));
+        $this->assertSame("\x1b[5mx\x1b[0m", $theme->heading6->render('x'));
+        $this->assertSame("\x1b[7mx\x1b[0m", $theme->text->render('x'));
+    }
+
+    /**
+     * SM-S18 pins: the three gaps real glamour corpora exercise but the
+     * decoder never had a byte test for — `background_color`, the
+     * `strikethrough` spelling of the strike flag, and integer flags
+     * (`"bold": 1`), all through StyleGuide::styleFrom().
+     */
+    public function testGlamourBackgroundStrikeAndIntFlagsRenderBytes(): void
+    {
+        $guide = StyleGuide::fromJsonString('{"document":{},"strong":{"background_color":"#ff0000"}}');
+        $this->assertSame(
+            "\x1b[48;2;255;0;0mx\x1b[0m",
+            $guide->theme()->bold->render('x'),
+            'background_color must reach the background arm',
+        );
+
+        $guide = StyleGuide::fromJsonString('{"document":{},"strikethrough":{"strikethrough":true}}');
+        $this->assertSame(
+            "\x1b[9mx\x1b[0m",
+            $guide->theme()->strike->render('x'),
+            'glamour spells the flag `strikethrough`',
+        );
+
+        $guide = StyleGuide::fromJsonString('{"document":{},"emph":{"bold":1}}');
+        $this->assertSame(
+            "\x1b[1mx\x1b[0m",
+            $guide->theme()->italic->render('x'),
+            'int 1 is flag-on, matching glamour JSON corpora',
+        );
+
+        $guide = StyleGuide::fromJsonString('{"document":{},"emph":{"bold":0}}');
+        $this->assertSame('x', $guide->theme()->italic->render('x'), 'int 0 is flag-off');
+    }
 }
