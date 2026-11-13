@@ -251,4 +251,45 @@ final class ProbeInfocmpTest extends TestCase
             Probe::_reset();
         }
     }
+
+    public function testDumpMemoClearsAtTheCardinalityCeiling(): void
+    {
+        // 072: the grammar gate bounds a NAME's shape, not the table's
+        // cardinality — a process probed across 257 distinct safe-shaped
+        // TERMs must not accumulate 257 entries for its whole life. The
+        // fake counts every launch, so the pin also proves the fill was
+        // real (one child per distinct name, clear-on-full, never silent
+        // eviction of an answer that was never asked again).
+        $counter = (string) \tempnam(\sys_get_temp_dir(), 'cp-exec-count');
+        $printer = \tempnam(\sys_get_temp_dir(), 'infocmp');
+        $this->assertIsString($printer);
+        \file_put_contents(
+            $printer,
+            "#!/bin/sh\nprintf 'x\\n' >> " . \escapeshellarg($counter) . "\nprintf '\\tTc,\\n'\n",
+        );
+        \chmod($printer, 0755);
+        (new \ReflectionProperty(InfocmpBinary::class, 'path'))->setValue(null, $printer);
+
+        try {
+            $memo = new \ReflectionProperty(InfocmpBinary::class, 'dumpMemo');
+            $terms = 257;
+            for ($i = 0; $i < $terms; $i++) {
+                // Safe-shaped distinct names (no leading dash, [a-z0-9-]).
+                $this->assertNotNull(InfocmpBinary::runBounded('cp12-term-' . $i));
+            }
+
+            $live = $memo->getValue(null);
+            $this->assertIsArray($live);
+            $this->assertLessThanOrEqual(256, count($live), 'the memo grew past its ceiling');
+            // Deterministic shape: the 257th write found a full 256-entry
+            // table, cleared it, and stood alone.
+            $this->assertCount(1, $live, 'full-memo reset did not leave exactly the newest entry');
+            $this->assertArrayHasKey('cp12-term-256', $live, 'the survivor must be the newest verdict');
+            $this->assertCount($terms, \file($counter), 'every distinct TERM minted exactly one child');
+        } finally {
+            @\unlink($printer);
+            @\unlink($counter);
+            Probe::_reset();
+        }
+    }
 }

@@ -65,10 +65,22 @@ final class InfocmpBinary
      * Per-lowercased-TERM dump memo behind {@see runBounded()} — the ONE
      * shared table every sync exec surface answers from (a null entry is a
      * recorded miss: absent binary or overrun, never re-execed either).
+     * Bounded cardinality via {@see self::MEMO_MAX_ENTRIES} — see memoWrite().
      *
      * @var array<string, string|null>
      */
     private static array $dumpMemo = [];
+
+    /**
+     * Ceiling on {@see self::$dumpMemo} entries. A long-lived server that
+     * honors attacker-influenced TERM shapes must not creep this table for
+     * the life of the process: the grammar gate (isSafeTermName) bounds a
+     * NAME's shape, not its cardinality — every distinct safe-shaped TERM
+     * mints an entry, misses included. Full ⇒ clear (one bulk reset, not
+     * an LRU), because re-derivation is cheap and time-bounded by the
+     * deadline ladder on the other side of this door.
+     */
+    private const MEMO_MAX_ENTRIES = 256;
 
     /**
      * Absolute path to infocmp, or null when no roster candidate is a
@@ -122,7 +134,9 @@ final class InfocmpBinary
      *
      * Results are memoized per lowercased TERM for the process lifetime —
      * including the null verdicts, so a failing binary is never re-execed
-     * either. {@see reset()} drains the table (test isolation).
+     * either — with the cardinality ceiling documented at
+     * {@see self::MEMO_MAX_ENTRIES} (full ⇒ clear). {@see reset()} drains
+     * the table (test isolation).
      *
      * @param float|null $timeoutSeconds test seam for a shorter deadline
      */
@@ -142,10 +156,25 @@ final class InfocmpBinary
 
         $binary = self::path();
         if ($binary === null) {
-            return self::$dumpMemo[$key] = null;
+            return self::memoWrite($key, null);
         }
 
-        return self::$dumpMemo[$key] = self::execOnce($binary, $term, $timeoutSeconds ?? self::TIMEOUT_SECONDS);
+        return self::memoWrite($key, self::execOnce($binary, $term, $timeoutSeconds ?? self::TIMEOUT_SECONDS));
+    }
+
+    /**
+     * Sole write site of the dump memo, enforcing the cardinality ceiling:
+     * at {@see self::MEMO_MAX_ENTRIES} the table clears before the write.
+     * Both verdict shapes (answer and recorded miss) pass through here so
+     * the cap cannot be drifted around by a future second writer.
+     */
+    private static function memoWrite(string $key, ?string $value): ?string
+    {
+        if (count(self::$dumpMemo) >= self::MEMO_MAX_ENTRIES) {
+            self::$dumpMemo = [];
+        }
+
+        return self::$dumpMemo[$key] = $value;
     }
 
     /**
