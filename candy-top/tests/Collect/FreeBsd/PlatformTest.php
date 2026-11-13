@@ -111,6 +111,54 @@ final class PlatformTest extends TestCase
         $this->assertInstanceOf(FreeBsd\Freq::class, $freq->withPerCore(false), 'same retuning surface as the Linux collector');
     }
 
+    public function testAPartiallyHealthyBoxKeepsEverySourceAnswering(): void
+    {
+        // S-P21 (candy-top-089): one mixed-health FreeBSD box wired through
+        // the real Platform: sysctl-based panels and the two survivors
+        // (swapinfo, ps) answer with real numbers, while netstat, ifconfig,
+        // iostat, mount and procstat all fail. No collector may throw, and
+        // a dead tool must degrade ONLY its own panel — never the box.
+        $probe = new FixtureProbe(
+            FixtureProbe::fixture('sysctl-reference.txt'),
+            [
+                'swapinfo' => FixtureProbe::fixture('swapinfo-k.txt'),
+                'ps' => FixtureProbe::fixture('ps-root.synthetic.txt'),
+                'netstat' => null,
+                'ifconfig' => null,
+                'iostat' => null,
+                'mount' => null,
+                'procstat' => null,
+            ],
+        );
+        $platform = Platform::for('FreeBSD', $probe);
+
+        [$cpu] = $platform->cpu()->sample();
+        $this->assertGreaterThan(1, count($cpu->cores), 'kern.cp_times survives: every core answers');
+
+        [$mem] = $platform->memory()->sample();
+        $this->assertSame(1005423 * 4096, $mem->total, 'swapinfo survived');
+
+        [$net] = $platform->net('')->sample();
+        $this->assertSame([], $net->interfaces, 'netstat+ifconfig down: no interfaces, no exception');
+
+        [$disk] = $platform->diskIo(true)->sample();
+        $this->assertSame([], $disk->devices, 'iostat down: an empty device list');
+
+        [$mounts] = $platform->mounts(true)->sample();
+        $this->assertSame([], $mounts->mounts, 'mount down: an empty table');
+
+        [$proc] = $platform->procList()->sample();
+        $this->assertGreaterThan(0, count($proc->processes), 'ps survived — the proc table stands without procstat');
+
+        [$freq] = $platform->freq(FreqMode::First, true)->sample();
+        $this->assertIsObject($freq, 'the sysctl freq panel answers through kern.cp_times despite no cpufreq driver');
+
+        foreach ([$platform->temp(), $platform->battery()] as $source) {
+            [$snap] = $source->sample();
+            $this->assertIsObject($snap, 'sysctl-backed panels answer on a sensor-less/battery-less box');
+        }
+    }
+
     public function testHostInfoFromTheReferenceHost(): void
     {
         $host = Platform::for('FreeBSD', new FixtureProbe(FixtureProbe::fixture('sysctl-reference.txt')))->hostInfo();
