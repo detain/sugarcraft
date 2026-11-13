@@ -19,7 +19,7 @@ namespace SugarCraft\Input;
  * replies share the keystroke channel, so hosts that match only concrete
  * key/mouse events should expect unknown Event instances to pass through.
  *
- * Pull-based counterpart of the charmbracelet/bubbletea input loop.
+ * This is the pull-based counterpart of the charmbracelet/bubbletea input loop.
  *
  * @see Driver\StreamInputDriver
  * @see Driver\SignalResizeDriver

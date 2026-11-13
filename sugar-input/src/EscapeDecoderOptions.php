@@ -43,7 +43,7 @@ final class EscapeDecoderOptions
      *                            never decoded as literal keys. The application resolves the held ESC by
      *                            calling EscapeDecoder::flushDeferredEscape() after its input-idle timer
      *                            fires. When false (default) a trailing ESC resolves eagerly to Escape —
-     *                            the historical contract. Caveat with true: a deferred ESC followed later
+     *                            the historical contract. Caveat when enabled: a deferred ESC followed later
      *                            by a plain byte merges into Alt+<char> unless flushed first.
      */
     public function __construct(

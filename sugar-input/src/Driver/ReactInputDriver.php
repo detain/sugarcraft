@@ -98,8 +98,8 @@ final class ReactInputDriver implements ReadableStreamInterface
      * Pauses receiving data events.
      *
      * The call forwards to the underlying stream, but it defers EMISSION, not
-     * decoding: events already decoded from an in-flight chunk park in the
-     * internal event buffer (see emitEvent) and flush on resume() — a listener
+     * decoding: events already decoded from an in-flight chunk are retained
+     * in the internal event buffer (see `emitEvent()`) and flush on resume() — a listener
      * that pauses mid-chunk never strands those events until stream end.
      */
     public function pause(): void
@@ -111,8 +111,8 @@ final class ReactInputDriver implements ReadableStreamInterface
     /**
      * Resumes receiving data events.
      *
-     * A listener that paused mid-chunk left already-decoded events parked in
-     * the event buffer (see emitEvent); resume flushes them before new input
+     * A listener that paused mid-chunk left already-decoded events retained in
+     * the event buffer (see `emitEvent()`); resume flushes them before new input
      * is consumed, so buffered events never strand until stream end.
      */
     public function resume(): void
@@ -247,9 +247,10 @@ final class ReactInputDriver implements ReadableStreamInterface
      * Emit buffered events in arrival order, stopping the moment the stream
      * is closed or a listener re-pauses mid-flush (the rest stays buffered
      * for the next resume(); a stream that ends drains them regardless of
-     * pause state — see handleEnd).
+     * pause state — see `handleEnd()`).
      *
-     * Consumption advances a cursor instead of array_shift-ing so a listener
+     * Consumption advances a cursor instead of shifting one event off the
+     * front (`array_shift`), so a listener
      * that re-pauses mid-drain can never have already-delivered events
      * reindexed and re-emitted.
      */
@@ -270,8 +271,8 @@ final class ReactInputDriver implements ReadableStreamInterface
      * Handle the 'end' event from the underlying stream.
      *
      * pause() defers EMISSION, not existence: events already decoded from an
-     * in-flight chunk park in the buffer, and a stream that has ended can
-     * never be resumed — so the parked events drain here REGARDLESS of
+     * in-flight chunk are retained in the buffer, and a stream that has ended can
+     * never be resumed — so the retained events drain here REGARDLESS of
      * $paused, before 'end'. (They used to strand: this leg called
      * flushBuffer(), whose pause gate silently held them back.)
      */
@@ -281,8 +282,8 @@ final class ReactInputDriver implements ReadableStreamInterface
             return;
         }
 
-        // Drain the parked events first, in arrival order, bypassing the
-        // pause gate (the docblock on flushBuffer documents that difference).
+        // Drain the retained events first, in arrival order, bypassing the
+        // pause gate (the docblock on `flushBuffer()` documents that difference).
         while ($this->bufferOffset < count($this->eventBuffer)) {
             $event = $this->eventBuffer[$this->bufferOffset++];
             $this->emit('data', [$event]);

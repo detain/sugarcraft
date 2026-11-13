@@ -136,7 +136,7 @@ final class SignalResizeDriver implements InputDriver
      * if the tput last resort is reached. Construction alone never does
      * any of that — callers who only build (or test-build) a driver leave the
      * process disposition untouched. Calling arm() twice is harmless: the
-     * WeakMap set is idempotent and the handler re-install is the same closure.
+     * WeakMap set is idempotent and the handler reinstall is the same closure.
      *
      * @return bool false when ext-pcntl is absent — the driver cannot detect
      *               resizes in that environment and read() will always return
@@ -168,8 +168,8 @@ final class SignalResizeDriver implements InputDriver
      *
      * Removes this driver from the fan-out registry. When it was the LAST
      * armed driver, the process-wide SIGWINCH disposition is restored —
-     * to whatever handler predates the first ever arm() in this process,
-     * or SIG_DFL if none existed — so a host that armed this driver for a
+     * to whatever handler was installed before the first `arm()` in this
+     * process, or SIG_DFL if none existed — so a host that armed this driver for a
      * phase can hand the signal back intact instead of leaking the
      * replacement. pcntl_async_signals() mode is deliberately NOT restored:
      * flipping a process-wide dispatch mode off could strand signal code
@@ -204,7 +204,7 @@ final class SignalResizeDriver implements InputDriver
 
     /**
      * Install the single process-wide SIGWINCH handler that marks every live
-     * registered driver. Safe to call from each arm(): re-installing the
+     * registered driver. Safe to call from each arm(): reinstalling the
      * same fan-out handler is idempotent.
      */
     private static function installSigwinchHandler(): void
@@ -248,7 +248,7 @@ final class SignalResizeDriver implements InputDriver
      * the probe only forks on the tput last-resort arm: the Tty ioctl/env
      * legs are in-process (see probeDimensions).
      *
-     * @return Event|ResizeEvent|null
+     * @return ResizeEvent|null
      */
     public function read(): Event|ResizeEvent|null
     {
@@ -324,9 +324,6 @@ final class SignalResizeDriver implements InputDriver
     /**
      * Fork a `tput` and return its numeric answer, or 0 on failure — the
      * last-resort arm of probeDimensions(), named for the fork+parse it does.
-     *
-     * @throws \InvalidArgumentException when the capability is not a
-     *                   well-formed terminfo name — never shelled.
      */
     private function probeTput(string $capability): int
     {
@@ -344,6 +341,10 @@ final class SignalResizeDriver implements InputDriver
      * Fail-fast: an unparseable capability throws before any shell-out.
      * The validated name is still escapeshellarg()'d (AGENTS.md: pass ALL
      * external-CLI flags every invocation via escapeshellarg()).
+     *
+     * @throws \InvalidArgumentException when the capability is not a
+     *                   well-formed terminfo name — it is never passed to
+     *                   the shell.
      */
     private static function tputCommand(string $capability): string
     {
