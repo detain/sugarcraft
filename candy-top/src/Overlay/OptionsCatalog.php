@@ -52,6 +52,16 @@ final class OptionsCatalog
         'proc_info_smaps', 'nvml_measure_pcie_speeds', 'rsmi_measure_pcie_speeds',
     ];
 
+    /**
+     * Values the option accepts but candy-top never acts on, per option —
+     * the option itself works, one token selects nothing. The README says
+     * so at the token's seat (candy-top-015: shown_gpus=apple with no macOS
+     * collector to match).
+     */
+    public const TOKEN_NOTE = [
+        'shown_gpus' => '**Accepted, not acted on:** `apple` is stored and shown back, but candy-top ships no macOS collector, so no Apple card is ever there for the filter to keep.',
+    ];
+
     private const TABLE = [
         'general' => [
             '@appearance', 'color_theme', 'theme_background', 'truecolor',

@@ -126,8 +126,10 @@ final class Accelerators
 
     /**
      * Restrict the GPU backends to btop `shown_gpus` tokens ("nvidia amd
-     * intel"; unknown tokens such as "apple" are ignored). NPU backends are
-     * not filtered — shown_gpus has no NPU token. Null = every vendor.
+     * intel"; unknown tokens are accepted, not acted on — "apple" is stored
+     * by the option but candy-top ships no macOS collector, so no Apple card
+     * is ever there to keep). NPU backends are not filtered — shown_gpus has
+     * no NPU token. Null = every vendor.
      *
      * @param list<string>|null $tokens
      */

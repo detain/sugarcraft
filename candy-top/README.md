@@ -534,7 +534,7 @@ These are all persisted keys, in config.conf write order, generated from `SugarC
 | `nvml_measure_pcie_speeds` | bool | `true` | `true`, `false` | 5 gpu › Telemetry | **Accepted for btop.conf compatibility, not used yet.** Measure PCIe throughput on NVIDIA cards, may impact performance on certain cards. |
 | `rsmi_measure_pcie_speeds` | bool | `true` | `true`, `false` | 5 gpu › Telemetry | **Accepted for btop.conf compatibility, not used yet.** Measure PCIe throughput on AMD cards, may impact performance on certain cards. |
 | `gpu_mirror_graph` | bool | `true` | `true`, `false` | 5 gpu › Display | Horizontally mirror the GPU graph. |
-| `shown_gpus` | string | `"nvidia amd intel apple"` | any text | 5 gpu › Display | Set which GPU vendors to show. Available values are "nvidia amd intel apple" |
+| `shown_gpus` | string | `"nvidia amd intel apple"` | any text | 5 gpu › Display | Set which GPU vendors to show. Available values are "nvidia amd intel apple"<br>**Accepted, not acted on:** `apple` is stored and shown back, but candy-top ships no macOS collector, so no Apple card is ever there for the filter to keep. |
 | `custom_gpu_name0` | string | `""` | any text | 5 gpu › Names | Custom gpu0 model name, empty string to disable. |
 | `custom_gpu_name1` | string | `""` | any text | 5 gpu › Names | Custom gpu1 model name, empty string to disable. |
 | `custom_gpu_name2` | string | `""` | any text | 5 gpu › Names | Custom gpu2 model name, empty string to disable. |
@@ -657,7 +657,7 @@ GPUs and NPUs are read by a multi-vendor collector (`Collect\Gpu\Accelerators`),
 - **Intel** (btop #1888): every i915 and xe card, with utilisation from DRM fdinfo, clocks, and power and temperature on discrete cards. VRAM is not read, because neither driver exposes it in sysfs.
 - **NPUs**: Intel NPUs through `intel_vpu` sysfs (btop #985: utilisation, memory in use, clock) and AMD Ryzen AI NPUs through `amdxdna` (btop #1839, detection only: the device is listed, every reading `n/a`).
 
-On FreeBSD only the NVIDIA backend runs. `shown_gpus` filters the GPU vendors live (NPUs are never filtered), and `custom_gpu_nameN` renames a device in its gpu box.
+On FreeBSD only the NVIDIA backend runs. `shown_gpus` filters the GPU vendors live (NPUs are never filtered), and `custom_gpu_nameN` renames a device in its gpu box. The `apple` token is accepted, not acted on: without a macOS collector there is no Apple card for the filter to keep.
 
 GPUs are numbered `0..n-1` in backend order (NVIDIA, AMD, Intel) and NPUs number after them. A device keeps its index when its backend briefly drops it, so its graphs never jump to another device. One shared sampler feeds the [gpu boxes](#gpu-boxes), the cpu box's [GPU sub-graphs](#cpu) and the proc box's [GPU columns](#proc), so they all show the same snapshot and the host is sampled once per update however many of them are shown.
 

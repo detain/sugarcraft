@@ -79,6 +79,9 @@ final class ReadmeTables
             if (\in_array($name, OptionsCatalog::UNUSED, true)) {
                 $description = '**Accepted for btop.conf compatibility, not used yet.** ' . $description;
             }
+            if (isset(OptionsCatalog::TOKEN_NOTE[$name])) {
+                $description .= ($description === '' ? '' : '<br>') . OptionsCatalog::TOKEN_NOTE[$name];
+            }
             $out .= '| ' . self::code($name)
                 . ' | ' . $option->type->value
                 . ' | ' . self::code(self::scalar($option->default))
