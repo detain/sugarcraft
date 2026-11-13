@@ -439,4 +439,29 @@ final class TableColumnWidthTest extends TestCase
         $resolved = $wider->computeColumnWidths(100);
         $this->assertGreaterThan($narrow[1], $resolved[1], 'new content width must be measured, not replayed');
     }
+
+    /**
+     * ST-11 hook-pin: the hidden set is a solve input, so swapping it must
+     * bust the caches exactly like replacing rows would, and the total width
+     * must re-derive on the visible basis (borders AND widths).
+     */
+    public function testWithHiddenColsTriggersReSolve(): void
+    {
+        $t = Table::fromColumns([
+            Column::new('a', 'A', 10),
+            Column::new('b', 'B', 0)->withColumnWidth(ColumnWidth::Dynamic),
+            Column::new('c', 'C', 30),
+        ])->withRows([Row::new(RowData::from(['a' => 'x', 'b' => 'y', 'c' => 'z']))]);
+
+        $visible = $this->computeTotalWidthOf($t);
+        $this->assertSame([1], \array_keys($this->contentMemoOf($t)), 'the Dynamic column was scanned during the solve');
+
+        $hidden = $t->withHiddenCols([1]);
+        $this->assertSame([], $this->contentMemoOf($hidden), 'hiding a column must drop the solve caches');
+
+        // Fixed survivors 10 + 30 with a single between-visible border; the
+        // all-columns basis (two borders, hidden width in the seed) is gone.
+        $this->assertSame(41, $this->computeTotalWidthOf($hidden));
+        $this->assertGreaterThan(41, $visible);
+    }
 }

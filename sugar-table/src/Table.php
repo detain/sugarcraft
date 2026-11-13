@@ -651,9 +651,11 @@ final class Table
     /**
      * Hide columns by index without removing them from the table.
      *
-     * Hidden columns are excluded from rendering but still participate in
-     * data storage, filtering, sorting, and search operations. This is
-     * useful for optional columns that can be toggled visible/invisible.
+     * Hidden columns are excluded from rendering AND from the width solve
+     * (audit ST-11: they consume no border, budget, share or slack) but
+     * still participate in data storage, filtering, sorting, and search
+     * operations. This is useful for optional columns that can be toggled
+     * visible/invisible.
      *
      * @param list<int> $indices Column indices to hide
      */
@@ -667,6 +669,9 @@ final class Table
         }
         $clone = clone $this;
         $clone->hiddenCols = $indices;
+        // The hidden set is a solve input — swapping it must re-solve, the
+        // same way replacing rows does (ST-11 cache-bust leg).
+        $clone->invalidateRenderCaches();
         return $clone;
     }
 
@@ -1422,6 +1427,13 @@ final class Table
     /**
      * Actual column-width computation (called after cache check).
      *
+     * The solve runs against the VISIBLE column set (audit ST-11): hidden
+     * columns are neutral placeholders — they consume no border, no fixed
+     * budget, no flex share, and no slack basis — because the renderer lays
+     * out visible columns only. Planning against all columns solved a hidden
+     * third to 1/3 of the width while the frame drew the survivors short of
+     * their documented full absorption.
+     *
      * @return array<int, int>  colIndex => computed width in chars
      */
     private function doComputeColumnWidths(int $tableWidth): array
@@ -1430,21 +1442,31 @@ final class Table
         $flexCount = 0;
         $reservedWidth = 0;  // borders between columns
 
+        $hiddenLookup = \array_flip($this->hiddenCols);
+        $visibleCount = 0;
+
         // First pass: collect Fixed/Percent widths, count flexible columns
-        foreach ($this->columns as $col) {
+        foreach ($this->columns as $i => $col) {
+            if (isset($hiddenLookup[$i])) {
+                // Never rendered; carry the declared width as a neutral
+                // placeholder so index-based consumers keep their addressing.
+                $widths[$i] = $col->width;
+                continue;
+            }
+            $visibleCount++;
             $cw = $col->columnWidth;
             if ($cw === ColumnWidth::Fixed) {
-                $widths[] = $col->width;
+                $widths[$i] = $col->width;
             } elseif ($cw === ColumnWidth::Percent) {
-                $widths[] = (int) \floor($tableWidth * $col->percentValue / 100);
+                $widths[$i] = (int) \floor($tableWidth * $col->percentValue / 100);
             } else {
-                $widths[] = null;  // Dynamic or Content — placeholder
+                $widths[$i] = null;  // Dynamic or Content — placeholder
                 $flexCount++;
             }
         }
 
-        // Count borders: one between each column
-        $borderCount = \count($this->columns) - 1;
+        // Count borders: one between each VISIBLE column
+        $borderCount = $visibleCount - 1;
         if ($borderCount > 0) {
             $reservedWidth += $borderCount;
         }
@@ -1452,9 +1474,9 @@ final class Table
         // Flexible columns get remaining space
         if ($flexCount > 0) {
             $fixedWidth = 0;
-            foreach ($widths as $w) {
-                if ($w !== null) {
-                    $fixedWidth += $w;
+            foreach ($this->columns as $i => $col) {
+                if ($widths[$i] !== null && !isset($hiddenLookup[$i])) {
+                    $fixedWidth += $widths[$i];
                 }
             }
             $remaining = $tableWidth - $reservedWidth - $fixedWidth;
@@ -1515,12 +1537,17 @@ final class Table
         if ($this->targetWidth > 0) {
             $lastFlex = null;
             foreach ($this->columns as $i => $col) {
-                if ($col->columnWidth === ColumnWidth::Flex) {
+                if ($col->columnWidth === ColumnWidth::Flex && !isset($hiddenLookup[$i])) {
                     $lastFlex = $i;
                 }
             }
             if ($lastFlex !== null) {
-                $used = \array_sum($widths) + \max(0, \count($this->columns) - 1);
+                $used = $borderCount;  // inter-column gaps BETWEEN VISIBLE COLUMNS
+                foreach ($this->columns as $i => $col) {
+                    if (!isset($hiddenLookup[$i])) {
+                        $used += $widths[$i];
+                    }
+                }
                 $widths[$lastFlex] = \max(0, $widths[$lastFlex] + ($tableWidth - $used));
             }
         }
@@ -2725,13 +2752,23 @@ final class Table
             return $this->targetWidth;
         }
 
-        // Borders: one char between each column.
-        $borderCount = \max(0, \count($this->columns) - 1);
+        // Borders: one char between each VISIBLE column (ST-11 basis).
+        $hiddenLookup = \array_flip($this->hiddenCols);
+        $visibleCount = 0;
+        foreach ($this->columns as $i => $col) {
+            if (!isset($hiddenLookup[$i])) {
+                $visibleCount++;
+            }
+        }
+        $borderCount = \max(0, $visibleCount - 1);
 
-        // Seed the solve with the raw declared widths + inter-column gaps.
+        // Seed the solve with the raw declared widths of the VISIBLE columns,
+        // plus inter-column gaps.
         $width = $borderCount;
-        foreach ($this->columns as $col) {
-            $width += $col->width;
+        foreach ($this->columns as $i => $col) {
+            if (!isset($hiddenLookup[$i])) {
+                $width += $col->width;
+            }
         }
 
         // Percent columns size themselves as a fraction of the TOTAL width, yet

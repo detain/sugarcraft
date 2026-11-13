@@ -75,4 +75,33 @@ final class TableFlexWidthTest extends TestCase
         $widths = $t->computeColumnWidths(42);
         $this->assertSame(42, \array_sum($widths) + 1);
     }
+
+    /**
+     * ST-11 pin: hiding a flex column must drop it from the solve basis. The
+     * finding's probe — three equal Flex columns, middle one hidden — used to
+     * keep border reserve, shares and slack on the ALL-columns basis while
+     * the frame laid out two survivors: every rendered line fell short of
+     * the pinned width, breaking the documented "flex absorbs all available
+     * width" invariant and right-edge selection reach.
+     */
+    public function testHiddenFlexColumnDoesNotConsumeWidth(): void
+    {
+        $t = $this->flexTable(
+            Column::new('a', 'A', 0)->withColumnWidth(ColumnWidth::Flex),
+            Column::new('b', 'B', 0)->withColumnWidth(ColumnWidth::Flex),
+            Column::new('c', 'C', 0)->withColumnWidth(ColumnWidth::Flex),
+        )->withHiddenCols([1])->withWidth(41);
+
+        $widths = $t->computeColumnWidths(41);
+
+        // 41 minus the ONE visible-column border = 40 split 20/20; the hidden
+        // slot stays a neutral placeholder carrying its declared width.
+        $this->assertSame(20, $widths[0]);
+        $this->assertSame(20, $widths[2]);
+        $this->assertSame(0, $widths[1]);
+
+        // The visible basis sums exactly to the pinned width — the frame
+        // reaches the right edge instead of rendering a third short.
+        $this->assertSame(41, $widths[0] + $widths[2] + 1);
+    }
 }
