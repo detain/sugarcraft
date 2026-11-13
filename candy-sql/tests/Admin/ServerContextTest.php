@@ -9,7 +9,7 @@ use SugarCraft\Sql\Admin\CacheTtl;
 use SugarCraft\Sql\Admin\ServerContext;
 use SugarCraft\Sql\Admin\ServerContextInterface;
 use SugarCraft\Sql\Db\Flavor;
-use SugarCraft\Sql\Db\Version;
+use SugarCraft\Sql\Db\ServerVersion;
 
 /**
  * Tests for ServerContext and ServerContextInterface.

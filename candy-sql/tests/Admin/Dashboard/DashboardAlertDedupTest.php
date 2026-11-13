@@ -10,7 +10,7 @@ use SugarCraft\Sql\Admin\Alerts\AlertNotifierInterface;
 use SugarCraft\Sql\Admin\Dashboard\DashboardPage;
 use SugarCraft\Sql\Admin\ServerContextInterface;
 use SugarCraft\Sql\Db\Flavor;
-use SugarCraft\Sql\Db\Version;
+use SugarCraft\Sql\Db\ServerVersion;
 use SugarCraft\Toast\Toast;
 
 /**
@@ -91,7 +91,7 @@ final class DashboardAlertDedupTest extends TestCase
         $context->method('statusVariables')->willReturn([]);
         $context->method('serverVariables')->willReturn([]);
         $context->method('statusVariablesTs')->willReturn(0.0);
-        $context->method('version')->willReturn(Version::parse('8.0.36'));
+        $context->method('version')->willReturn(ServerVersion::parse('8.0.36'));
         $context->method('versionString')->willReturn('8.0.36');
 
         return (new DashboardPage($context))->withAlertNotifier($notifier);

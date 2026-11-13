@@ -9,7 +9,7 @@ use SugarCraft\Sql\Admin\Format;
 use SugarCraft\Sql\Admin\PageBase;
 use SugarCraft\Sql\Admin\ServerContextInterface;
 use SugarCraft\Sql\Db\Flavor;
-use SugarCraft\Sql\Db\Version;
+use SugarCraft\Sql\Db\ServerVersion;
 use SugarCraft\Sql\Tests\Admin\FakeDatabase;
 
 /**

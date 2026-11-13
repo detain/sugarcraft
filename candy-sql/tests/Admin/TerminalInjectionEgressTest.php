@@ -154,7 +154,7 @@ final class TerminalInjectionEgressTest extends TestCase
         $context = $this->createMock(\SugarCraft\Sql\Admin\ServerContextInterface::class);
         $context->method('connection')->willReturn($this->makeDb());
         $context->method('flavor')->willReturn(\SugarCraft\Sql\Db\Flavor::MySQL);
-        $context->method('version')->willReturn(\SugarCraft\Sql\Db\Version::parse('8.0.32'));
+        $context->method('version')->willReturn(\SugarCraft\Sql\Db\ServerVersion::parse('8.0.32'));
         $context->method('versionString')->willReturn('8.0.32' . self::OSC8);
         $context->method('statusVariables')->willReturn(['Uptime' => '3600']);
         $context->method('serverVariables')->willReturn([

@@ -11,7 +11,7 @@ use SugarCraft\Sql\Admin\ServerContextInterface;
 use SugarCraft\Sql\Db\DatabaseInterface;
 use SugarCraft\Sql\Db\Flavor;
 use SugarCraft\Sql\Db\PreparedStatementInterface;
-use SugarCraft\Sql\Db\Version;
+use SugarCraft\Sql\Db\ServerVersion;
 use SugarCraft\Sql\Tests\Admin\FakeDatabase;
 
 final class ProcesslistProviderTest extends TestCase
@@ -215,9 +215,9 @@ final class TestServerContext implements ServerContextInterface
         return [];
     }
 
-    public function version(): Version
+    public function version(): ServerVersion
     {
-        return Version::new('8.0.33', Flavor::MySQL);
+        return ServerVersion::new('8.0.33', Flavor::MySQL);
     }
 
     public function flavor(): Flavor

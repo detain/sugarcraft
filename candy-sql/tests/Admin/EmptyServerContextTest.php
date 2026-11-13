@@ -7,7 +7,7 @@ namespace SugarCraft\Sql\Tests\Admin;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Sql\Admin\EmptyServerContext;
 use SugarCraft\Sql\Db\Flavor;
-use SugarCraft\Sql\Db\Version;
+use SugarCraft\Sql\Db\ServerVersion;
 
 /**
  * Tests for EmptyServerContext — placeholder context for unsupported
@@ -33,7 +33,7 @@ final class EmptyServerContextTest extends TestCase
 
     public function testVersionReturnsZeroVersion(): void
     {
-        // STEP 1.1: version() now returns Version::parse('') which produces
+        // STEP 1.1: version() now returns ServerVersion::parse('') which produces
         // a zero version (0.0.0, raw='') instead of throwing. This enables
         // DashboardPage initialization with SQLite. Pages that need real
         // version data should check flavor() first.

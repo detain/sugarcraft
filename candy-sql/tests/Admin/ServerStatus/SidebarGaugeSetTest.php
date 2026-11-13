@@ -12,7 +12,7 @@ use SugarCraft\Sql\Admin\ServerContextInterface;
 use SugarCraft\Sql\Admin\Sampler;
 use SugarCraft\Sql\Admin\ServerStatusSnapshotAdapter;
 use SugarCraft\Sql\Db\Flavor;
-use SugarCraft\Sql\Db\Version;
+use SugarCraft\Sql\Db\ServerVersion;
 
 /**
  * Tests for SidebarGaugeSet.
@@ -323,9 +323,9 @@ final class FakeServerContext implements ServerContextInterface
         return [];
     }
 
-    public function version(): Version
+    public function version(): ServerVersion
     {
-        return Version::parse('8.0.33');
+        return ServerVersion::parse('8.0.33');
     }
 
     public function flavor(): Flavor

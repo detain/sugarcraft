@@ -11,7 +11,7 @@ use SugarCraft\Sql\Admin\ServerContextInterface;
 use SugarCraft\Sql\Db\DatabaseInterface;
 use SugarCraft\Sql\Db\Flavor;
 use SugarCraft\Sql\Db\PreparedStatementInterface;
-use SugarCraft\Sql\Db\Version;
+use SugarCraft\Sql\Db\ServerVersion;
 
 final class ConnectionActionsTest extends TestCase
 {
@@ -331,7 +331,7 @@ final class TestCtx implements ServerContextInterface
     public function statusVariables(): array { return []; }
     public function statusVariablesTs(): float { return 0.0; }
     public function plugins(): array { return []; }
-    public function version(): Version { return Version::new('8.0.33', Flavor::MySQL); }
+    public function version(): ServerVersion { return ServerVersion::new('8.0.33', Flavor::MySQL); }
     public function flavor(): Flavor { return Flavor::MySQL; }
     public function versionString(): string { return 'MySQL 8.0.33'; }
     public function password(): string { return ''; }

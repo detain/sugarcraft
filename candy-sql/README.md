@@ -209,8 +209,8 @@ Digit `4` selects **Debug** (a Management-section page); digit `8` selects **Per
 ## Architecture
 
 Names in the `File` column below are resolved against the `SugarCraft\Sql\` root namespace:
-prepend `SugarCraft\Sql\` to any entry for its exact import (e.g. `Db\Version` is
-`SugarCraft\Sql\Db\Version`). The DB server-version parser is `Db\Version`; the app's
+prepend `SugarCraft\Sql\` to any entry for its exact import (e.g. `Db\ServerVersion` is
+`SugarCraft\Sql\Db\ServerVersion`). The DB server-version parser is `Db\ServerVersion`; the app's
 `--version` resolver lives in `src/Version.php` (`SugarCraft\Sql\Version`) and is not in
 these tables.
 
@@ -219,7 +219,7 @@ these tables.
 | `Db\ConnectionConfig`| Readonly value object: driver, host, port, user, pass, dbname, sslMode, dsn. Pass never echoed. |
 | `Db\ConnectionFactory`| Static factory — four entries: `fromDsn()` parses a DSN into a `ConnectionConfig` without connecting; `fromConfig()` and `fromArgv()` connect and return a `DatabaseInterface`; `fromPath()` opens a bare SQLite file path.    |
 | `Db\Flavor`          | Enum: `MySQL`, `MariaDB`, `Percona`, `Postgres`, `Sqlite`. Used to identify database flavor. `Flavor::detectFromDriver(string $driverName, string $version = '', string $versionComment = '')` detects flavor from a PDO driver name plus an optional version string and version comment — the comment carries the MariaDB/Percona discriminator that a bare `5.5.5-`-prefixed version string hides. |
-| `Db\Version`         | Parser for server version strings. Handles MariaDB `5.5.5-` prefix. `isAtLeast(int $major, int $minor = 0, int $release = 0): bool` compares versions. |
+| `Db\ServerVersion`  | Parser for server version strings. Handles MariaDB `5.5.5-` prefix. `isAtLeast(int $major, int $minor = 0, int $release = 0): bool` compares versions. |
 | `Database`        | ⚠️ Deprecated thin alias to `SqliteDatabase`. Use `DatabaseInterface` for driver-agnostic code.   |
 | `Db\MysqlDatabase`   | `DatabaseInterface` implementation via PDO `mysql`. Implements `serverVersion()`, `driverName()`, `ping()`, `databases()`. |
 | `Db\PostgresDatabase`| `DatabaseInterface` implementation via PDO `pgsql`. Implements `serverVersion()`, `driverName()`, `ping()`, `databases()`. |

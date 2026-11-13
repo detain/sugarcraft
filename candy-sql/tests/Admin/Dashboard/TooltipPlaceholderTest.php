@@ -7,7 +7,7 @@ namespace SugarCraft\Sql\Tests\Admin\Dashboard;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Sql\Admin\Dashboard\Widget;
 use SugarCraft\Sql\Admin\Dashboard\WidgetRegistry;
-use SugarCraft\Sql\Db\Version;
+use SugarCraft\Sql\Db\ServerVersion;
 
 /**
  * SQL-P17 (adminpages-018): catalog tooltips must be renderable templates.
@@ -22,7 +22,7 @@ final class TooltipPlaceholderTest extends TestCase
     /** @return list<Widget> */
     private function allWidgets(): array
     {
-        $widgets = WidgetRegistry::build(Version::parse('MySQL version 8.0.33'));
+        $widgets = WidgetRegistry::build(ServerVersion::parse('MySQL version 8.0.33'));
         foreach (WidgetRegistry::buildForPostgres() as $widget) {
             $widgets[] = $widget;
         }

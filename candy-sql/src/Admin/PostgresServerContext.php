@@ -7,7 +7,7 @@ namespace SugarCraft\Sql\Admin;
 use SugarCraft\Sql\Admin\Providers\PostgresAdminProvider;
 use SugarCraft\Sql\Db\DatabaseInterface;
 use SugarCraft\Sql\Db\Flavor;
-use SugarCraft\Sql\Db\Version;
+use SugarCraft\Sql\Db\ServerVersion;
 
 /**
  * PostgreSQL adapter that implements ServerContextInterface.
@@ -152,9 +152,9 @@ final class PostgresServerContext implements ServerContextInterface
         return [];
     }
 
-    public function version(): Version
+    public function version(): ServerVersion
     {
-        return Version::parse($this->versionString);
+        return ServerVersion::parse($this->versionString);
     }
 
     public function flavor(): Flavor

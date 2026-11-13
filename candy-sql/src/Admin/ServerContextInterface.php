@@ -50,7 +50,7 @@ interface ServerContextInterface
     /**
      * Parsed server version.
      */
-    public function version(): \SugarCraft\Sql\Db\Version;
+    public function version(): \SugarCraft\Sql\Db\ServerVersion;
 
     /**
      * Detected database flavor.

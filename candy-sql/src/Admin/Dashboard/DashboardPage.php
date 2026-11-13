@@ -14,7 +14,7 @@ use SugarCraft\Sql\Admin\PageBase;
 use SugarCraft\Sql\Admin\QueryLogger;
 use SugarCraft\Sql\Admin\ServerContextInterface;
 use SugarCraft\Sql\Db\Flavor;
-use SugarCraft\Sql\Db\Version;
+use SugarCraft\Sql\Db\ServerVersion;
 use SugarCraft\Sql\CellValue;
 use SugarCraft\Sql\Renderer;
 use SugarCraft\Constraints\Region;
@@ -90,7 +90,7 @@ final class DashboardPage extends PageBase
 
     public function __construct(
         ServerContextInterface $context,
-        ?Version $version = null,
+        ?ServerVersion $version = null,
     ) {
         parent::__construct($context);
         $this->isPostgres = $this->context->flavor() === Flavor::Postgres;

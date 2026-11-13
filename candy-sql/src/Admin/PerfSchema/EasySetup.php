@@ -7,7 +7,7 @@ namespace SugarCraft\Sql\Admin\PerfSchema;
 use SugarCraft\Sql\Admin\ServerContextInterface;
 use SugarCraft\Sql\Db\Flavor;
 use SugarCraft\Sql\Db\Identifier;
-use SugarCraft\Sql\Db\Version;
+use SugarCraft\Sql\Db\ServerVersion;
 
 /**
  * Performance Schema easy setup utility providing toggle statements and defaults.
@@ -102,7 +102,7 @@ final class EasySetup
      *
      * @return list<string>
      */
-    public static function defaultInstrumentsForVersion(Version $version): array
+    public static function defaultInstrumentsForVersion(ServerVersion $version): array
     {
         return $version->isAtLeast(5, 7)
             ? self::DEFAULT_INSTRUMENTS_57
@@ -114,27 +114,27 @@ final class EasySetup
      *
      * @return list<string>
      */
-    public static function defaultConsumersForVersion(Version $version): array
+    public static function defaultConsumersForVersion(ServerVersion $version): array
     {
         return $version->isAtLeast(5, 7)
             ? self::DEFAULT_CONSUMERS_57
             : self::DEFAULT_CONSUMERS_56;
     }
 
-    private readonly Version $version;
+    private readonly ServerVersion $version;
 
     /**
-     * @param Version|null $version Server version (defaults to 5.6 profile if null)
+     * @param ServerVersion|null $version Server version (defaults to 5.6 profile if null)
      */
-    public function __construct(?Version $version = null)
+    public function __construct(?ServerVersion $version = null)
     {
-        $this->version = $version ?? Version::parse('5.6.0');
+        $this->version = $version ?? ServerVersion::parse('5.6.0');
     }
 
     /**
      * Factory method to create a new EasySetup instance.
      */
-    public static function new(?Version $version = null): self
+    public static function new(?ServerVersion $version = null): self
     {
         return new self($version);
     }

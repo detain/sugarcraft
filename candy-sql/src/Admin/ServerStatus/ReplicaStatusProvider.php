@@ -6,7 +6,7 @@ namespace SugarCraft\Sql\Admin\ServerStatus;
 
 use SugarCraft\Sql\Admin\ServerContextInterface;
 use SugarCraft\Sql\Db\Flavor;
-use SugarCraft\Sql\Db\Version;
+use SugarCraft\Sql\Db\ServerVersion;
 use SugarCraft\Sql\Db\DatabaseInterface;
 
 /**

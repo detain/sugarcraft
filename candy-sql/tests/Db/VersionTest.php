@@ -5,16 +5,16 @@ declare(strict_types=1);
 namespace SugarCraft\Sql\Tests\Db;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Sql\Db\Version;
+use SugarCraft\Sql\Db\ServerVersion;
 
 /**
- * Tests for Version immutable value object.
+ * Tests for ServerVersion immutable value object.
  */
 final class VersionTest extends TestCase
 {
     public function testParseSimpleVersion(): void
     {
-        $version = Version::parse('8.0.33');
+        $version = ServerVersion::parse('8.0.33');
 
         $this->assertSame(8, $version->major);
         $this->assertSame(0, $version->minor);
@@ -25,7 +25,7 @@ final class VersionTest extends TestCase
     public function testParseMariaDBVersionWithPrefix(): void
     {
         // MariaDB version string with the MySQL compatibility prefix
-        $version = Version::parse('5.5.5-10.11.4-MariaDB-1:10.11.4+maria~ubu2201');
+        $version = ServerVersion::parse('5.5.5-10.11.4-MariaDB-1:10.11.4+maria~ubu2201');
 
         $this->assertSame(10, $version->major);
         $this->assertSame(11, $version->minor);
@@ -35,7 +35,7 @@ final class VersionTest extends TestCase
 
     public function testParseMariaDBVersionShortForm(): void
     {
-        $version = Version::parse('10.11.4-MariaDB-ubu2201');
+        $version = ServerVersion::parse('10.11.4-MariaDB-ubu2201');
 
         $this->assertSame(10, $version->major);
         $this->assertSame(11, $version->minor);
@@ -44,7 +44,7 @@ final class VersionTest extends TestCase
 
     public function testParsePostgresVersion(): void
     {
-        $version = Version::parse('PostgreSQL 16.0');
+        $version = ServerVersion::parse('PostgreSQL 16.0');
 
         $this->assertSame(16, $version->major);
         $this->assertSame(0, $version->minor);
@@ -54,7 +54,7 @@ final class VersionTest extends TestCase
 
     public function testParseSqliteVersion(): void
     {
-        $version = Version::parse('3.41.0');
+        $version = ServerVersion::parse('3.41.0');
 
         $this->assertSame(3, $version->major);
         $this->assertSame(41, $version->minor);
@@ -64,7 +64,7 @@ final class VersionTest extends TestCase
 
     public function testIsAtLeastExactMatch(): void
     {
-        $version = Version::parse('8.0.33');
+        $version = ServerVersion::parse('8.0.33');
 
         $this->assertTrue($version->isAtLeast(8, 0, 33));
         $this->assertTrue($version->isAtLeast(8, 0, 0));
@@ -76,7 +76,7 @@ final class VersionTest extends TestCase
 
     public function testIsAtLeastWhenVersionIsGreater(): void
     {
-        $version = Version::parse('8.0.33');
+        $version = ServerVersion::parse('8.0.33');
 
         $this->assertTrue($version->isAtLeast(8, 0, 30));
         $this->assertTrue($version->isAtLeast(8, 0, 32));
@@ -86,7 +86,7 @@ final class VersionTest extends TestCase
 
     public function testIsAtLeastReturnsFalseWhenOlder(): void
     {
-        $version = Version::parse('8.0.33');
+        $version = ServerVersion::parse('8.0.33');
 
         $this->assertFalse($version->isAtLeast(8, 0, 34));
         $this->assertFalse($version->isAtLeast(8, 1));
@@ -95,7 +95,7 @@ final class VersionTest extends TestCase
 
     public function testIsAtLeastWithMariaDBVersion(): void
     {
-        $version = Version::parse('5.5.5-10.11.4-MariaDB-1:10.11.4+maria~ubu2201');
+        $version = ServerVersion::parse('5.5.5-10.11.4-MariaDB-1:10.11.4+maria~ubu2201');
 
         // Should be treated as MariaDB 10.11.4
         $this->assertTrue($version->isAtLeast(10, 11));
@@ -108,21 +108,21 @@ final class VersionTest extends TestCase
 
     public function testToStringReturnsRaw(): void
     {
-        $version = Version::parse('8.0.33');
+        $version = ServerVersion::parse('8.0.33');
 
         $this->assertSame('8.0.33', (string) $version);
     }
 
     public function testToStringWithMariaDBVersion(): void
     {
-        $version = Version::parse('5.5.5-10.11.4-MariaDB-1:10.11.4+maria~ubu2201');
+        $version = ServerVersion::parse('5.5.5-10.11.4-MariaDB-1:10.11.4+maria~ubu2201');
 
         $this->assertSame('5.5.5-10.11.4-MariaDB-1:10.11.4+maria~ubu2201', (string) $version);
     }
 
     public function testParseEmptyVersion(): void
     {
-        $version = Version::parse('');
+        $version = ServerVersion::parse('');
 
         $this->assertSame(0, $version->major);
         $this->assertSame(0, $version->minor);
@@ -132,7 +132,7 @@ final class VersionTest extends TestCase
 
     public function testParsePartialVersion(): void
     {
-        $version = Version::parse('8.0');
+        $version = ServerVersion::parse('8.0');
 
         $this->assertSame(8, $version->major);
         $this->assertSame(0, $version->minor);
@@ -146,7 +146,7 @@ final class VersionTest extends TestCase
         // The reported numbers are normalised from the 5.5.5- prefix, so the
         // marker is the only thing that distinguishes MariaDB from MySQL at
         // the same parsed major.
-        $maria = Version::parse('5.5.5-10.6.7-MariaDB-1:10.6.7+maria~ubu2204');
+        $maria = ServerVersion::parse('5.5.5-10.6.7-MariaDB-1:10.6.7+maria~ubu2204');
 
         $this->assertTrue($maria->isMariaDb());
         $this->assertSame(10, $maria->major, 'the numbers still ride the compatibility normalisation');
@@ -154,17 +154,34 @@ final class VersionTest extends TestCase
 
     public function testIsMariaDbIsFalseForPlainMySQL(): void
     {
-        $this->assertFalse(Version::parse('8.0.16')->isMariaDb());
-        $this->assertFalse(Version::parse('5.7.44-log')->isMariaDb());
+        $this->assertFalse(ServerVersion::parse('8.0.16')->isMariaDb());
+        $this->assertFalse(ServerVersion::parse('5.7.44-log')->isMariaDb());
     }
 
     public function testMariaDbCanPassIsAtLeastWhileLackingTheCapability(): void
     {
         // Non-vacuity for the gate: MariaDB 10.6 numerically satisfies the
         // old isAtLeast(8,0) PERSIST gate yet must be refused by isMariaDb().
-        $maria = Version::parse('5.5.5-10.6.7-MariaDB-1:10.6.7+maria~ubu2204');
+        $maria = ServerVersion::parse('5.5.5-10.6.7-MariaDB-1:10.6.7+maria~ubu2204');
 
         $this->assertTrue($maria->isAtLeast(8, 0), 'numbers say "8+" — the exact trap the gate must not fall for');
         $this->assertTrue($maria->isMariaDb(), 'but the vendor marker catches it');
+    }
+
+    /**
+     * SQL-C25: the retired Db\Version FQN still resolves, to the same class,
+     * and carries the removal marker.
+     */
+    public function testLegacyVersionAliasResolvesToServerVersion(): void
+    {
+        $legacy = '\\SugarCraft\\Sql\\Db\\Version';
+
+        $this->assertTrue(class_exists($legacy));
+        $this->assertInstanceOf(ServerVersion::class, $legacy::parse('8.0.33'));
+        $this->assertSame(ServerVersion::class, (new \ReflectionClass($legacy))->getName());
+
+        $src = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Db/Version.php');
+        $this->assertStringContainsString('@deprecated', $src);
+        $this->assertStringContainsString(\SugarCraft\Sql\Tests\AccessorDeprecationTest::MARKER, $src);
     }
 }

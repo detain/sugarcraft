@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Sql\Admin\Dashboard;
 
-use SugarCraft\Sql\Db\Version;
+use SugarCraft\Sql\Db\ServerVersion;
 
 /**
  * Widget kind constants and version-gated widget assembly.
@@ -34,10 +34,10 @@ final class WidgetRegistry
      * Combines NETWORK + (MYSQL_PRE80 or MYSQL_POST80) + INNODB widgets
      * based on whether the server version is at least 8.0.
      *
-     * @param Version $version Parsed MySQL version
+     * @param ServerVersion $version Parsed MySQL version
      * @return list<Widget>
      */
-    public static function build(Version $version): array
+    public static function build(ServerVersion $version): array
     {
         $catalog = new WidgetCatalog();
         $mysqlWidgets = $version->isAtLeast(8, 0, 0)
@@ -66,10 +66,10 @@ final class WidgetRegistry
     /**
      * Get only the MySQL panel widgets for a given version.
      *
-     * @param Version $version
+     * @param ServerVersion $version
      * @return list<Widget>
      */
-    public static function mysql(Version $version): array
+    public static function mysql(ServerVersion $version): array
     {
         $catalog = new WidgetCatalog();
         $entries = $version->isAtLeast(8, 0, 0)

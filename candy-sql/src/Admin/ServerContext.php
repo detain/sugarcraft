@@ -6,7 +6,7 @@ namespace SugarCraft\Sql\Admin;
 
 use SugarCraft\Sql\Db\DatabaseInterface;
 use SugarCraft\Sql\Db\Flavor;
-use SugarCraft\Sql\Db\Version;
+use SugarCraft\Sql\Db\ServerVersion;
 
 /**
  * MySQL-focused ServerContext implementation.
@@ -58,7 +58,7 @@ final class ServerContext implements ServerContextInterface
     private ?float $statusVariablesTsCache = null;
     /** @var list<array<string, mixed>>|null */
     private ?array $pluginsCache = null;
-    private ?Version $versionCache = null;
+    private ?ServerVersion $versionCache = null;
     private ?Flavor $flavorCache = null;
     private ?string $versionStringCache = null;
     private ?bool $wasResetCache = null;
@@ -185,7 +185,7 @@ final class ServerContext implements ServerContextInterface
         return $this->pluginsCache;
     }
 
-    public function version(): Version
+    public function version(): ServerVersion
     {
         if ($this->versionCache !== null) {
             return $this->versionCache;
@@ -193,7 +193,7 @@ final class ServerContext implements ServerContextInterface
 
         $raw = $this->connection()->serverVersion();
         $this->versionStringCache = $raw;
-        $this->versionCache = Version::parse($raw);
+        $this->versionCache = ServerVersion::parse($raw);
         return $this->versionCache;
     }
 

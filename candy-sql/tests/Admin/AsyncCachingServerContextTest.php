@@ -139,7 +139,7 @@ final class AsyncCachingServerContextTest extends TestCase
         // wrapper must delegate rather than issue a MySQL-only SELECT VERSION().
         $inner = $this->createMock(ServerContextInterface::class);
         $inner->method('flavor')->willReturn(Flavor::Postgres);
-        $inner->method('version')->willReturn(\SugarCraft\Sql\Db\Version::parse('PostgreSQL 16.2'));
+        $inner->method('version')->willReturn(\SugarCraft\Sql\Db\ServerVersion::parse('PostgreSQL 16.2'));
         $inner->method('versionString')->willReturn('PostgreSQL 16.2 on x86_64');
         $inner->method('plugins')->willReturn([]);
 

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Sql\Tests\Admin\Dashboard;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Sql\Db\Version;
+use SugarCraft\Sql\Db\ServerVersion;
 use SugarCraft\Sql\Admin\AdminQueryCache;
 use SugarCraft\Sql\Admin\AsyncCachingServerContext;
 use SugarCraft\Sql\Admin\Dashboard\DashboardPage;
@@ -91,7 +91,7 @@ final class DashboardPageReloadTest extends TestCase
         $inner->method('statusVariables')->willReturn(['Uptime' => '7']);
         $inner->method('serverVariables')->willReturn(['max_connections' => '100']);
         $inner->method('statusVariablesTs')->willReturn(microtime(true));
-        $inner->method('version')->willReturn(Version::parse('8.0.36'));
+        $inner->method('version')->willReturn(ServerVersion::parse('8.0.36'));
 
         $page = new DashboardPage($inner);
         [$same, $cmd] = $page->update(new \SugarCraft\Sql\Core\Msg\ReloadReportMsg());

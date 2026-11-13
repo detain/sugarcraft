@@ -9,7 +9,7 @@ use SugarCraft\Sql\Admin\Dashboard\DashboardPage;
 use SugarCraft\Sql\Admin\Dashboard\WidgetRegistry;
 use SugarCraft\Sql\Admin\ServerContextInterface;
 use SugarCraft\Sql\Db\Flavor;
-use SugarCraft\Sql\Db\Version;
+use SugarCraft\Sql\Db\ServerVersion;
 
 /**
  * Tests for DashboardPage.
@@ -31,7 +31,7 @@ final class DashboardPageTest extends TestCase
             'max_connections' => '100',
         ]);
         $context->method('statusVariablesTs')->willReturn(microtime(true));
-        $context->method('version')->willReturn(Version::parse('8.0.36'));
+        $context->method('version')->willReturn(ServerVersion::parse('8.0.36'));
         $context->method('versionString')->willReturn('8.0.36');
 
         $page = new DashboardPage($context);
@@ -46,7 +46,7 @@ final class DashboardPageTest extends TestCase
         $context->method('statusVariables')->willReturn([]);
         $context->method('serverVariables')->willReturn([]);
         $context->method('statusVariablesTs')->willReturn(0.0);
-        $context->method('version')->willReturn(Version::parse('8.0.36'));
+        $context->method('version')->willReturn(ServerVersion::parse('8.0.36'));
 
         $page = new DashboardPage($context);
 
@@ -72,7 +72,7 @@ final class DashboardPageTest extends TestCase
             'max_connections' => '100',
         ]);
         $context->method('statusVariablesTs')->willReturn(microtime(true));
-        $context->method('version')->willReturn(Version::parse('8.0.36'));
+        $context->method('version')->willReturn(ServerVersion::parse('8.0.36'));
         $context->method('versionString')->willReturn('8.0.36');
 
         $page = new DashboardPage($context);
@@ -89,7 +89,7 @@ final class DashboardPageTest extends TestCase
         $context->method('statusVariables')->willReturn([]);
         $context->method('serverVariables')->willReturn([]);
         $context->method('statusVariablesTs')->willReturn(0.0);
-        $context->method('version')->willReturn(Version::parse('8.0.36'));
+        $context->method('version')->willReturn(ServerVersion::parse('8.0.36'));
 
         $page = new DashboardPage($context);
 
@@ -112,7 +112,7 @@ final class DashboardPageTest extends TestCase
         $context->method('statusVariables')->willReturn([]);
         $context->method('serverVariables')->willReturn([]);
         $context->method('statusVariablesTs')->willReturn(0.0);
-        $context->method('version')->willReturn(Version::parse('8.0.36'));
+        $context->method('version')->willReturn(ServerVersion::parse('8.0.36'));
 
         $page = new DashboardPage($context);
 
@@ -143,7 +143,7 @@ final class DashboardPageTest extends TestCase
             'max_connections' => '100',
         ]);
         $context->method('statusVariablesTs')->willReturn(microtime(true));
-        $context->method('version')->willReturn(Version::parse('8.0.36'));
+        $context->method('version')->willReturn(ServerVersion::parse('8.0.36'));
         $context->method('versionString')->willReturn('8.0.36');
 
         $page = new DashboardPage($context);
@@ -184,7 +184,7 @@ final class DashboardPageTest extends TestCase
         ]);
         $context->method('serverVariables')->willReturn(['max_connections' => '100']);
         $context->method('statusVariablesTs')->willReturn(microtime(true));
-        $context->method('version')->willReturn(Version::parse('8.0.36'));
+        $context->method('version')->willReturn(ServerVersion::parse('8.0.36'));
         $context->method('versionString')->willReturn('8.0.36');
 
         $view = (new DashboardPage($context))->view();
@@ -208,7 +208,7 @@ final class DashboardPageTest extends TestCase
         ]);
         $context->method('serverVariables')->willReturn(['max_connections' => '100']);
         $context->method('statusVariablesTs')->willReturn(microtime(true));
-        $context->method('version')->willReturn(Version::parse('8.0.36'));
+        $context->method('version')->willReturn(ServerVersion::parse('8.0.36'));
         $context->method('versionString')->willReturn('8.0.36');
 
         $view = (new DashboardPage($context))->view();
@@ -224,7 +224,7 @@ final class DashboardPageTest extends TestCase
         $context->method('statusVariables')->willReturn([]);
         $context->method('serverVariables')->willReturn([]);
         $context->method('statusVariablesTs')->willReturn(0.0);
-        $context->method('version')->willReturn(Version::parse('8.0.36'));
+        $context->method('version')->willReturn(ServerVersion::parse('8.0.36'));
 
         $page = new DashboardPage($context);
 
@@ -258,7 +258,7 @@ final class DashboardPageTest extends TestCase
         $context->method('statusVariables')->willReturn([]);
         $context->method('serverVariables')->willReturn([]);
         $context->method('statusVariablesTs')->willReturn(0.0);
-        $context->method('version')->willReturn(Version::parse('8.0.36'));
+        $context->method('version')->willReturn(ServerVersion::parse('8.0.36'));
 
         $page = new DashboardPage($context);
 

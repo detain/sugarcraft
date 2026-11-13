@@ -11,7 +11,7 @@ use SugarCraft\Sql\Admin\ServerContextInterface;
 use SugarCraft\Sql\Admin\ServerStatus\MetricsColumn;
 use SugarCraft\Sql\Db\DatabaseInterface;
 use SugarCraft\Sql\Db\Flavor;
-use SugarCraft\Sql\Db\Version;
+use SugarCraft\Sql\Db\ServerVersion;
 use SugarCraft\Sql\Tests\Admin\FakeDatabase;
 
 /**
@@ -299,9 +299,9 @@ final class ColumnFakeContext implements ServerContextInterface
         return [];
     }
 
-    public function version(): Version
+    public function version(): ServerVersion
     {
-        return Version::parse('8.0.33');
+        return ServerVersion::parse('8.0.33');
     }
 
     public function flavor(): Flavor

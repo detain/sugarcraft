@@ -8,7 +8,7 @@ use SugarCraft\Sql\Admin\ServerContextInterface;
 use SugarCraft\Sql\Db\DatabaseInterface;
 use SugarCraft\Sql\Db\Flavor;
 use SugarCraft\Sql\Db\Identifier;
-use SugarCraft\Sql\Db\Version;
+use SugarCraft\Sql\Db\ServerVersion;
 
 /**
  * Detects the current Performance Schema setup state via COUNT/SUM queries.
@@ -111,23 +111,23 @@ final class EasySetupDetector
         'statements_digest',
     ];
 
-    private readonly Version $version;
+    private readonly ServerVersion $version;
 
     /**
      * @param DatabaseInterface         $db      Database connection for querying PS tables
-     * @param Version|null              $version Server version (if null, defaults to MySQL 5.6 profile)
+     * @param ServerVersion|null              $version Server version (if null, defaults to MySQL 5.6 profile)
      */
     public function __construct(
         private readonly DatabaseInterface $db,
-        ?Version $version = null,
+        ?ServerVersion $version = null,
     ) {
-        $this->version = $version ?? Version::parse('5.6.0');
+        $this->version = $version ?? ServerVersion::parse('5.6.0');
     }
 
     /**
      * Factory method to create a new detector.
      */
-    public static function new(DatabaseInterface $db, ?Version $version = null): self
+    public static function new(DatabaseInterface $db, ?ServerVersion $version = null): self
     {
         return new self($db, $version);
     }

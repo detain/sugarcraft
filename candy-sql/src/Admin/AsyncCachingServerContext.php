@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Sql\Admin;
 
 use SugarCraft\Sql\Db\Flavor;
-use SugarCraft\Sql\Db\Version;
+use SugarCraft\Sql\Db\ServerVersion;
 
 /**
  * ServerContext wrapper that returns cached status/server variables when available.
@@ -127,7 +127,7 @@ final class AsyncCachingServerContext implements ServerContextInterface
         return $this->cache()->lookup(self::PLUGINS_SQL) ?? [];
     }
 
-    public function version(): Version
+    public function version(): ServerVersion
     {
         // SELECT VERSION() is a synchronous PDO round-trip on the inner MySQL
         // context; serve it from the async cache instead so view() never blocks.
@@ -140,7 +140,7 @@ final class AsyncCachingServerContext implements ServerContextInterface
 
         $raw = $this->cachedVersionRaw();
 
-        return Version::parse($raw ?? '');
+        return ServerVersion::parse($raw ?? '');
     }
 
     public function flavor(): Flavor

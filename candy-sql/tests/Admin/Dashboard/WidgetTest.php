@@ -11,7 +11,7 @@ use SugarCraft\Sql\Admin\Calc\MakeTuple;
 use SugarCraft\Sql\Admin\Dashboard\Widget;
 use SugarCraft\Sql\Admin\Dashboard\WidgetCatalog;
 use SugarCraft\Sql\Admin\Dashboard\WidgetRegistry;
-use SugarCraft\Sql\Db\Version;
+use SugarCraft\Sql\Db\ServerVersion;
 
 /**
  * Tests for dashboard widget model, catalog, and registry.
@@ -272,7 +272,7 @@ final class WidgetTest extends TestCase
 
     public function testWidgetRegistryBuildForPre80(): void
     {
-        $version = Version::parse('5.7.42');
+        $version = ServerVersion::parse('5.7.42');
         $widgets = WidgetRegistry::build($version);
 
         $this->assertNotEmpty($widgets);
@@ -282,7 +282,7 @@ final class WidgetTest extends TestCase
 
     public function testWidgetRegistryBuildForPost80(): void
     {
-        $version = Version::parse('8.0.36');
+        $version = ServerVersion::parse('8.0.36');
         $widgets = WidgetRegistry::build($version);
 
         $this->assertNotEmpty($widgets);
