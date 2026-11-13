@@ -18,7 +18,12 @@ sugar-colorprofile — terminal color profile detection and color degradation fo
 ## Features
 
 - **Detect terminal color profile** from environment variables and TTY info
-- **ColorProfile enum**: the color-depth vocabulary shared by every surface of this library (8 levels, `TrueColor` 24-bit → `Ansi256` 256-color → `Ansi240` fixed slots 16-255 → `Ansi` 16-color → `Ansi8` basic 8 → `Fgbg` two-color fg/bg → `Ascii` colorless (decoration kept) → `NoTTY`); the former renderer-facing `Profile` enum is now a deprecated `class_alias` façade over it — every old `Profile::X` spelling still resolves
+- **ColorProfile enum**: the color-depth vocabulary shared by every surface of
+  this library. It carries eight levels: `TrueColor` (24-bit), `Ansi256`
+  (256-color), `Ansi240` (fixed slots 16-255), `Ansi` (16-color), `Ansi8`
+  (basic 8), `Fgbg` (two-color fg/bg), `Ascii` (colorless, decoration kept)
+  and `NoTTY`. The former renderer-facing `Profile` enum is now a deprecated
+  `class_alias` façade over it; every old `Profile::X` spelling still resolves
 - **Color conversion**: downsample RGBA colors to any target profile
 - **ProfileWriter**: wrap a stream and automatically match its output to the terminal — `degrade()` on the color rungs, full `stripAnsi()` on `NoTTY`
 - **ANSI stripping**: `NoTTY` output runs through `Palette::stripAnsi()`, which
@@ -28,7 +33,8 @@ sugar-colorprofile — terminal color profile detection and color degradation fo
   `Ascii` rung instead — color codes dropped, decoration kept; `NoTTY` is
   reserved for hardware absence (a non-TTY stream)
 - **Environment-aware**: reads `CLICOLOR_FORCE`, `FORCE_COLOR`, `NO_COLOR`, `CLICOLOR`, `TERM`, `COLORTERM`, `TERM_PROGRAM`, `WT_SESSION`, `GOOGLE_CLOUD_SHELL`, `TMUX`, `STY`, `REDUCE_MOTION`, `PREFERS_REDUCED_MOTION`
-- **Probe class**: static convenience layer over the shared detection chain + infocmp Phase 2 upgrade
+- **Probe class**: static convenience layer over the shared detection chain
+  and the infocmp Phase-2 upgrade
 - **Perceptual color distance**: CIELAB conversion + ΔE*₇₆ / ΔE*₉₄ / ΔE*₀₀ (CIEDE2000) metrics with an opt-in nearest-palette matcher (`NearestColor`), palette Lab values memoized for hot loops, a PCA-bucketed exact lookup index for repeated queries (`PaletteIndex`), and error-compensated quantization for dither chains (`NearestColor::withError()`)
 
 ## Install
@@ -116,7 +122,7 @@ collapses toward the nearest color the profile can actually render.
 | Ansi8        | 8         | Basic ANSI, no bright variants                  | no — request-only |
 | Fgbg         | 2         | Two-color fg/bg by brightness (chafa FGBG)      | no — request-only |
 | Ascii        | 0         | Colorless — no color codes; decoration kept (CP-05)  | yes — suppression + falsy-`FORCE_COLOR` floor (steps 2-5) |
-| NoTTY        | 0         | No color — `stripAnsi()` drops every escape incl. decoration | yes              |
+| NoTTY        | 0         | No color — `stripAnsi()` drops every escape including decoration | yes              |
 
 `Profile` is the deprecated alias of `ColorProfile`; `Profile::ANSI256`
 and `Profile::ANSI` keep resolving through deprecated constant bridges.
@@ -127,11 +133,12 @@ The color-depth answer comes from one canonical 14-step chain (`DetectionChain`)
 canonical across every surface of this library; `sugar-core` carries a separate
 fork with its own ladder, see Fleet integration below.
 `Probe`, `Palette` and `Probe\TerminalProbe` all consult it, so the same
-environment never answers differently **at the env-ladder rung**; the final
-surface answers may still diverge, because `Probe` layers an opt-in terminfo
-phase (Phase 2) on top and `TerminalProbe` the terminfo and `TERM_PROGRAM`
-upgrade phases (Phases 2-3) — the chain's answer is the floor those phases can
-raise, never the ceiling. Measured: `{TERM_PROGRAM: WezTerm, TERM: xterm}`
+environment never answers differently **at the env-ladder rung**. The surfaces
+can still arrive at different final answers, because each one may add phases
+after the ladder: `Probe` layers an opt-in terminfo phase (Phase 2) on top,
+and `TerminalProbe` layers the terminfo and `TERM_PROGRAM` upgrade phases
+(Phases 2-3). The chain's answer is the floor those phases can raise, never
+the ceiling. Measured: `{TERM_PROGRAM: WezTerm, TERM: xterm}`
 answers Ansi on `Palette` but TrueColor on `TerminalProbe` (Phase-3 upgrade) —
 quoted on an interactive stream: on a piped `Palette` the step-0 stream gate
 floors the answer before any rung gets to speak.
@@ -142,7 +149,7 @@ list below and the docblock are twins pinned by `LadderDriftTest` — see
 Maintenance):
 
 1. `CLICOLOR_FORCE=1` → TrueColor (overrides every env leg — and since CP-07 outranks the step-0 stream gate too)
-2. `FORCE_COLOR` (non-empty) → level: numeric 3+ → TrueColor (as do `true`/`yes`/`on` in any case), `2` → Ansi256, `1` → Ansi; every other spelling (`0`/`false`/`off`/…) → `Ascii` floor (colorless — color codes dropped, decoration kept)
+2. `FORCE_COLOR` (non-empty) → level: numeric 3+ → TrueColor (as do `true`/`yes`/`on` in any case), `2` → Ansi256, `1` → Ansi; every other spelling (`0`/`false`/`no`/`off`/…) → `Ascii` floor (colorless — color codes dropped, decoration kept)
 3. `NO_COLOR` (set and **non**-empty; `""` = unset — the NO_COLOR standard treats any present-and-not-empty value as "off" — content never matters) → the colorless `Ascii` rung — color codes dropped, decoration (`\x1b[1m`/`\x1b[4m`) kept; this is what `Palette::withProfile(ColorProfile::Ascii)` pins, so the pin is now the same answer the env already gives
 4. `CLICOLOR=0` → `Ascii` (the colorless rung)
 5. `TERM=dumb` (case-insensitive) → `Ascii` (the colorless rung)
@@ -203,9 +210,9 @@ Measured: piped STDOUT with `FORCE_COLOR=3` now gives `Palette::detect(STDOUT)`
 environment answered `NoTTY` — a fork-only divergence from the env-anchored
 surfaces). `ProfileWriter::wrap($stream, …)`
 inherits the gate because it delegates to `Palette::detect($stream, …)`, and a
-`NoTTY` answer makes `ProfileWriter::write()` strip the ANSI. So every
-"overrides everything"/"past every suppression leg" claim below holds
-literally: the force legs outrank the gate too. Surfaces that gate: `Palette::detect($stream, …)` and `ProfileWriter`
+`NoTTY` answer makes `ProfileWriter::write()` strip the ANSI. Every claim
+below that a force variable outranks all the color-suppressing ones therefore
+holds literally: the force legs outrank the gate too. Surfaces that gate: `Palette::detect($stream, …)` and `ProfileWriter`
 with a non-TTY stream. Surfaces that never gate: `Probe`, `AsyncProbe` and
 `Probe\TerminalProbe` — they report what the environment *can* do, not where
 the bytes are about to land.
@@ -220,15 +227,16 @@ sixel graphics. Before any surface execs
 the binary, `TERM` must pass one shared name-shape predicate
 (`Probe\InfocmpBinary::isSafeTermName()`): alnum first byte, then only the
 characters real terminfo names use — so a value beginning with `-` never
-reaches infocmp (quoted, it is still an *option* to the program: `TERM=-D`
-measured as infocmp exiting 0 and printing its terminfo search path to the
-probe's stdout), and the env-anchored chain answer stands. `TerminalProbe` runs its
+reaches infocmp: measured with `TERM=-D`, infocmp exits 0 and prints its
+terminfo search path to the probe's stdout, because quoting it still leaves it
+an *option* to the program. The env-anchored chain answer stands. `TerminalProbe` runs its
 terminfo phase more broadly: unless the env phase delivered a suppression
 decision (the `NoColor` capability — `NO_COLOR`, `CLICOLOR=0`, `TERM=dumb`) or
 the falsy-`FORCE_COLOR` `Ascii` floor, it queries the database even when the
 env rung already answered TrueColor — its report covers capabilities beyond
-color depth. That suppression check is a decision, not one input among many,
-which is why it also gates the escape-query phase. A bare `Palette::detect()`
+color depth. That suppression check is a decision, not one more input to
+weigh: an operator who said "no color" means no color, queried upgrades
+included — which is why the same check gates the escape-query phase. A bare `Palette::detect()`
 never runs terminfo; it is the ladder plus the step-0 stream gate.
 
 **The synchronous probe is bounded:** every `infocmp` child on the sync faces
@@ -247,8 +255,8 @@ The ladder's env legs, one table row per variable, in ladder order:
 
 | Env var | Ladder step | Effect |
 |---------|-------------|--------|
-| `CLICOLOR_FORCE=1` | 1 | force TrueColor past every env suppression leg, `NO_COLOR` included (step 1; since CP-07 the step-0 stream TTY gate yields to it too). Silently re-enables color over `NO_COLOR` — see the a11y caveat under this table |
-| `FORCE_COLOR` | 2 | non-empty level override honored by **all** surfaces through the chain (step 2; like `CLICOLOR_FORCE` it outranks the step-0 gate since CP-07, colorless floor included): numeric 3+ → TrueColor (as do `true`/`yes`/`on` in any case), `2` → Ansi256, `1` → Ansi; every other spelling (`0`/`false`/`off`/`no`/…) lands on the `Ascii` floor — decoration kept, color codes dropped. Outranks `NO_COLOR` by design — see the a11y caveat under this table |
+| `CLICOLOR_FORCE=1` | 1 | force TrueColor past every other env variable, `NO_COLOR` included (since CP-07 the step-0 stream TTY gate yields to it too). Silently re-enables color over `NO_COLOR` — see the a11y caveat under this table |
+| `FORCE_COLOR` | 2 | non-empty level override honored by **all** surfaces through the chain (like `CLICOLOR_FORCE` it outranks the step-0 gate since CP-07, colorless floor included): numeric 3+ → TrueColor (as do `true`/`yes`/`on` in any case), `2` → Ansi256, `1` → Ansi; every other spelling (`0`/`false`/`no`/`off`/…) lands on the `Ascii` floor — decoration kept, color codes dropped. Outranks `NO_COLOR` by design — see the a11y caveat under this table |
 | `NO_COLOR` | 3 | set to a **non-empty** value (`""` = unset — the NO_COLOR standard treats any present-and-not-empty value as "off" — content never matters) → the colorless `Ascii` rung / `NoColor` capability — color codes dropped, decoration (`\x1b[1m`/`\x1b[4m`) kept, the reading no-color.org itself states (color attributes only). Contrast: `NoTTY`'s full strip answers only hardware absence (the step-0 stream gate). Report surfaces still observe the `NoColor` capability for every suppression leg (`Probe::isNoColor()` names the `NO_COLOR` one) |
 | `CLICOLOR=0` | 4 | suppress color |
 | `TERM=dumb` | 5 | case-insensitive; suppresses color — outranks `COLORTERM` (dumb is a promise of minimal capabilities) |
