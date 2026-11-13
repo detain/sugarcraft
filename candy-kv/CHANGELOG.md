@@ -52,8 +52,10 @@ consumers can observe:
 - **Pattern operations are case-sensitive** (`PRAGMA case_sensitive_like`),
   matching exact-key operations; previously `delete 'Abc-*'` could touch
   `abc-1`.
-- **`\*` / `\?` escape literal glob characters**; `?` matches one byte
-  (documented). A backslash before anything else stays literal.
+- **`\*` / `\?` escape literal glob characters**; `?` matches one
+  character (the LIKE runs over the stored TEXT, so a multi-byte codepoint
+  fills the single wildcard — pinned by `StorageContractTest`). A backslash
+  before anything else stays literal.
 - **Expired rows are invisible to `delete`/`deleteMany`** — they are
   `pruneExpired()`'s complement now; readers, deleters and `count` all agree
   on the live set.
