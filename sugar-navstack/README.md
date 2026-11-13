@@ -253,10 +253,13 @@ for one navigation operation; neither is privileged.
 `Shell` is a convenience facade pairing a stack with a renderer through
 immutable operations — every `with*` (and `pushDirectory`) returns a NEW
 `Shell` and never mutates the receiver. The boundary is thinner than
-"immutable" suggests: the new Shell SHARES THE SAME (mutable-by-design)
-`Breadcrumb` instance, and its item list carries the same `NavigationItem`
-objects (titles and payloads are readonly, so sharing is safe to read) — the
-class docblock spells out the full boundary. Usage:
+"immutable" suggests in one way: the item list carries the same
+`NavigationItem` objects (titles and payloads are readonly, so sharing is
+safe to read). The renderer does NOT leak: every derived Shell gets its own
+copy of the (mutable-by-design) `Breadcrumb`, so `setSeparator()`-style
+configuration on one Shell is invisible to its ancestors — pass a bar
+deliberately through `withBreadcrumb()` when you WANT one shared instance.
+The class docblock spells out the full boundary. Usage:
 
 ```php
 use SugarCraft\NavStack\Shell;

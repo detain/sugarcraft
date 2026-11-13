@@ -323,19 +323,44 @@ final class ShellTest extends TestCase
         $this->assertSame(1, $modified->stack->depth());
     }
 
-    // ─── Honest immutability: shared Breadcrumb + side door ─────────────────
+    // ─── Honest immutability: owned Breadcrumb copies + stack side door ─────
 
-    public function testDerivedShellsShareTheSameMutableBreadcrumb(): void
+    public function testDerivedShellsGetTheirOwnBreadcrumb(): void
     {
         $base = Shell::new();
         $derived = $base->withPush('Anywhere')->withPush('Deeper');
 
-        // Documented aliasing: the SAME Breadcrumb instance rides every derived
-        // Shell, so configuration through one is visible through the other.
-        $this->assertSame($base->breadcrumb, $derived->breadcrumb);
+        // NS-02 closed the shared-mutable side-door: each derived Shell
+        // carries its OWN copy, so configuration cannot leak sideways
+        // (deliberate pin flip — the old shared-identity behavior was the
+        // hazard: a proven cross-Shell separator bleed).
+        $this->assertNotSame($base->breadcrumb, $derived->breadcrumb);
 
-        $base->breadcrumb->setSeparator(' | ');
+        $derived->breadcrumb->setSeparator(' | ');
         $this->assertSame('Anywhere | Deeper', $derived->renderBreadcrumb());
+        $this->assertSame('', $base->renderBreadcrumb(), 'ancestor unaffected');
+
+        $base2 = Shell::new()->withPush('Home');
+        $deep  = $base2->withPush('Settings');
+        $deep->breadcrumb->setMaxWidth(4);
+        $this->assertSame('Home', $base2->renderBreadcrumb(), 'ancestor breadcrumb carries no cap');
+        // A later derivation from the ancestor copies the UNCONFIGURED bar:
+        $wide = $base2->withPush('Also')->withPush('More');
+        $this->assertSame('Home › Also › More', $wide->renderBreadcrumb(), 'cap never leaked sideways');
+    }
+
+    public function testWithBreadcrumbHonoursDeliberateSharing(): void
+    {
+        // The opt-in door stays honest: an explicitly passed bar IS shared.
+        $shared = new Breadcrumb();
+        $shell  = Shell::new()->withPush('Home')->withBreadcrumb($shared);
+        $this->assertSame($shared, $shell->breadcrumb);
+
+        $shared->setSeparator(' / ');
+        $this->assertSame('Home', $shell->renderBreadcrumb());
+        $fork = $shell->withPush('Deeper');
+        $this->assertSame($shared, $shell->breadcrumb);
+        $this->assertNotSame($shell->breadcrumb, $fork->breadcrumb, 'with* copies again');
     }
 
     public function testPublicStackPropertyIsALiveSideDoor(): void

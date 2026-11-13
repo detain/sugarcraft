@@ -13,18 +13,19 @@ namespace SugarCraft\NavStack;
  * logical.
  *
  * **Honest immutability.** The `with*()` family returns new Shell objects,
- * but the boundary is thinner than "immutable" suggests, in two ways hosts
+ * but the boundary is thinner than "immutable" suggests in one way hosts
  * must know:
  *
- *  - The NEW Shell SHARES THE SAME Breadcrumb instance as the old one.
- *    Breadcrumb is mutable by design, so `$shell->breadcrumb->setSeparator()`
- *    is visible through every Shell derived from it (and through the
- *    original). Give each Shell its own Breadcrumb
- *    (`new Shell($stack, new Breadcrumb())`) if they must not.
  *  - The stack LIST is copied into the new NavStack, but the
  *    {@see NavigationItem}s inside are the same objects (titles+data are
  *    readonly, so item sharing is safe to read — but `identity($a,$b)`
  *    holds across Shells).
+ *
+ * Each derived Shell gets its OWN copy of the Breadcrumb (Breadcrumb is
+ * mutable by design — sharing one instance between Shells would leak
+ * `setSeparator()`-style configuration sideways; proven hazard). A host
+ * that deliberately wants one bar shared across Shells says so through
+ * {@see withBreadcrumb()}.
  *
  * Additionally the stack/breadcrumb props are `public readonly` — readonly
  * protects the READING of the property, not mutation THROUGH the object:
@@ -55,8 +56,8 @@ final class Shell
     /**
      * Push a new navigation item and return a new Shell.
      *
-     * "New Shell" = new stack object sharing items and the SAME
-     * Breadcrumb instance (see class docblock). Titles pass the same
+     * "New Shell" = new stack object sharing items, with its OWN copy of
+     * the Breadcrumb (see class docblock). Titles pass the same
      * guards as {@see NavStack::push()} (non-empty, depth cap).
      *
      * Project addition (research §10) — upstream KevM/bubbleo Shell has no
@@ -66,7 +67,7 @@ final class Shell
     {
         $newStack = (new NavStack())->setItems($this->stack->items());
         $newStack->push($title, $data);
-        return new self($newStack, $this->breadcrumb);
+        return new self($newStack, clone $this->breadcrumb);
     }
 
     /**
@@ -84,7 +85,7 @@ final class Shell
     {
         $newStack = (new NavStack())->setItems($this->stack->items());
         $newStack->pop();
-        return new self($newStack, $this->breadcrumb);
+        return new self($newStack, clone $this->breadcrumb);
     }
 
     /**
@@ -99,7 +100,18 @@ final class Shell
     {
         $newStack = (new NavStack())->setItems($this->stack->items());
         $newStack->popTo($index);
-        return new self($newStack, $this->breadcrumb);
+        return new self($newStack, clone $this->breadcrumb);
+    }
+
+    /**
+     * Return a new Shell carrying a DELIBERATELY chosen Breadcrumb — the
+     * opt-in door for hosts that want one mutable bar shared across
+     * Shells (the `with*()` family otherwise copies the breadcrumb so
+     * configuration cannot leak sideways).
+     */
+    public function withBreadcrumb(Breadcrumb $breadcrumb): self
+    {
+        return new self($this->stack, $breadcrumb);
     }
 
     public function renderBreadcrumb(): string
@@ -160,6 +172,6 @@ final class Shell
             $acc .= '/' . $segment;
             $newStack->push($segment, $acc);
         }
-        return new self($newStack, $this->breadcrumb);
+        return new self($newStack, clone $this->breadcrumb);
     }
 }
