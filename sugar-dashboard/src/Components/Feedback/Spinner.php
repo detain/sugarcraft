@@ -31,10 +31,21 @@ final class Spinner implements \SugarCraft\Dashboard\Foundation\SizedItem
 
     public function __construct(
         private readonly array $frames = self::DEFAULT_FRAMES,
-        private readonly int $interval = 80,
+        int $interval = 80,
         private readonly ?Color $color = null,
         private readonly string $message = '',
-    ) {}
+    ) {
+        // 78: the interface-documented 1ms floor lived only in the
+        // withInterval wither, so `new Spinner(['|'], 0)` — reachable
+        // without any wither — crashed the FIRST render with a
+        // DivisionByZeroError. The contract belongs at the boundary.
+        $this->interval = max(1, $interval);
+    }
+
+    /**
+     * Spin interval in milliseconds (floored at 1 by the constructor).
+     */
+    private readonly int $interval;
 
     /**
      * Create a new spinner with default styling.

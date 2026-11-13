@@ -190,6 +190,19 @@ final class SpinnerTest extends TestCase
         $this->assertSame(1, $this->invokePrivate('getInterval', $spinner));
     }
 
+    public function testConstructorClampsZeroIntervalToOne(): void
+    {
+        // 78: the ctor used to store the raw value, so the
+        // interface-documented path new Spinner(['|'], 0) crashed the
+        // first render with a DivisionByZeroError instead of flooring
+        // at 1 ms like the wither does.
+        $spinner = new Spinner(['|'], 0);
+        $this->assertSame(1, $this->invokePrivate('getInterval', $spinner));
+        $this->assertSame('|', $spinner->currentFrame());
+
+        (new Spinner(['-', '\\'], -10))->render(); // must not throw
+    }
+
     // ═══════════════════════════════════════════════════════════════
     // Withers / fluent API
     // ═══════════════════════════════════════════════════════════════
