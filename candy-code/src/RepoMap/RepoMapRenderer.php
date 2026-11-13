@@ -56,6 +56,9 @@ final class RepoMapRenderer
     /** @var array<string, list<string>> memoized source lines per file */
     private array $lineCache = [];
 
+    /** @var array<string, array<string, list<Tag>>> path => scope name => class-like definitions, built once per path */
+    private array $scopeIndex = [];
+
     /**
      * @param \Closure(string): list<string> $lines        root-relative path => its source lines, 0-based
      * @param array<string, list<Tag>>       $tagsByFile   every tag the map was built from, for scope headers
@@ -217,15 +220,19 @@ final class RepoMapRenderer
             return null;
         }
 
+        if (!isset($this->scopeIndex[$path])) {
+            $index = [];
+            foreach ($this->tagsByFile[$path] ?? [] as $candidate) {
+                if ($candidate->isDefinition() && \in_array($candidate->type, self::SCOPE_TYPES, true)) {
+                    $index[$candidate->name][] = $candidate;
+                }
+            }
+            $this->scopeIndex[$path] = $index;
+        }
+
         $best = null;
-        foreach ($this->tagsByFile[$path] ?? [] as $candidate) {
-            if (
-                $candidate->isDefinition()
-                && $candidate->name === $tag->scope
-                && \in_array($candidate->type, self::SCOPE_TYPES, true)
-                && $candidate->line <= $tag->line
-                && ($best === null || $candidate->line > $best->line)
-            ) {
+        foreach ($this->scopeIndex[$path][$tag->scope] ?? [] as $candidate) {
+            if ($candidate->line <= $tag->line && ($best === null || $candidate->line > $best->line)) {
                 $best = $candidate;
             }
         }

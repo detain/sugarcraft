@@ -441,16 +441,11 @@ final class SymbolGraph
             $byRank[] = [(string) $file, $rank];
         }
         \usort($byRank, static fn (array $a, array $b): int => [$b[1], $b[0]] <=> [$a[1], $a[0]]);
-        foreach ($byRank as [$file]) {
+        // Rank order first, then any file the rank map omitted, in one pass.
+        foreach ([...\array_column($byRank, 0), ...$this->files] as $file) {
             if (!isset($included[$file]) && !isset($this->focus[$file])) {
                 $entries[] = ['path' => $file, 'tag' => null];
                 $included[$file] = true;
-            }
-        }
-
-        foreach ($this->files as $file) {
-            if (!isset($included[$file]) && !isset($this->focus[$file])) {
-                $entries[] = ['path' => $file, 'tag' => null];
             }
         }
 
