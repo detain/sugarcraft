@@ -3286,18 +3286,11 @@ final class Renderer
      * -prompt segment uses: {@see fitStatusBar()} would cut a segment that did
      * not fit, and an ellipsised stub of a status line says nothing.
      *
-     * WHAT THE CACHED LINE COSTS PER FRAME, since this method is the only
-     * reader of it: `Width::of($line)` is a grapheme walk over the WHOLE cached
-     * line, run once per frame — i.e. once per keystroke — and the line is
-     * bounded only by
-     * {@see \SugarCraft\Code\Config\StatusLineCommand::MAX_OUTPUT_BYTES}
-     * (16 KiB), not by `$cols`. A command emitting just under the cap therefore
-     * pays a 16 KiB grapheme walk on every repaint. NOT FIXED and recorded
-     * rather than guessed at: no walk-per-keystroke figure has been measured on
-     * this box, and pre-clipping in the runner would need a width bound the
-     * runner does not have (it has no `Chat` and no `$cols`). A run that
-     * EXCEEDS the cap costs nothing, because that path blanks the segment —
-     * see `MAX_OUTPUT_BYTES`.
+     * WHAT THE CACHED LINE COSTS PER FRAME: nothing beyond the clip. The
+     * sanitised line and its width are computed once, where the line is
+     * written ({@see \SugarCraft\Code\Config\StatusLineCommand::settle()} /
+     * `refresh()`), and read here as plain statics; only a line that must be
+     * truncated pays a walk.
      *
      * @param int $cols the terminal width from the last
      *        {@see \SugarCraft\Core\Msg\WindowSizeMsg}, which is the size
@@ -3305,7 +3298,7 @@ final class Renderer
      */
     private static function withStatusLineCommand(string $bar, int $cols): string
     {
-        $line = self::untrusted(StatusLineCommand::line());
+        $line = StatusLineCommand::display();
         if ($line === '') {
             return $bar;
         }
@@ -3316,7 +3309,7 @@ final class Renderer
             return $bar;
         }
 
-        if (Width::of($line) > $room) {
+        if (StatusLineCommand::displayWidth() > $room) {
             // $room >= 1, so the ellipsis always has its own column and
             // truncate() is asked for a non-negative width.
             $line = Width::truncate($line, $room - 1) . '…';
@@ -7661,7 +7654,9 @@ final class Renderer
         $lines = [
             '🔍 ' . mb_substr($cleanQuery, 0, $caretAt, 'UTF-8')
                 . $caret
-                . mb_substr($cleanQuery, $caretAt, null, 'UTF-8'),
+                . mb_substr($cleanQuery, $caretAt, null, 'UTF-8')
+                // S-U06: the query is capped, so say so rather than eat input silently.
+                . ($palette->queryAtCap() ? '…' : ''),
             '',
         ];
         /** @var array<int, string> $rows row index => the content line it produced */

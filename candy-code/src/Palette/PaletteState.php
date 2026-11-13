@@ -27,6 +27,15 @@ namespace SugarCraft\Code\Palette;
  */
 final class PaletteState
 {
+    /**
+     * Longest query (code points) the palette keeps. The box paints ~48
+     * columns, so this is a generous ~4x; past it a paste would only feed the
+     * matcher and the per-frame sanitiser work nobody can see. The renderer
+     * paints a trailing ellipsis while the query sits at the cap, so the cut
+     * is never silent (S-U06).
+     */
+    public const MAX_QUERY_LENGTH = 192;
+
     public function __construct(
         public readonly string $mode,
         public readonly string $query,
@@ -48,6 +57,9 @@ final class PaletteState
      */
     public function withQuery(string $query, ?int $queryCursor = null): self
     {
+        if (mb_strlen($query, 'UTF-8') > self::MAX_QUERY_LENGTH) {
+            $query = mb_substr($query, 0, self::MAX_QUERY_LENGTH, 'UTF-8');
+        }
         return new self(
             $this->mode,
             $query,
@@ -55,6 +67,12 @@ final class PaletteState
             self::clampInto($query, $queryCursor ?? mb_strlen($query, 'UTF-8')),
             $this->provider,
         );
+    }
+
+    /** Whether the query has hit {@see MAX_QUERY_LENGTH} (further input is dropped). */
+    public function queryAtCap(): bool
+    {
+        return mb_strlen($this->query, 'UTF-8') >= self::MAX_QUERY_LENGTH;
     }
 
     /** Pure caret move: same text, row selection kept. */
