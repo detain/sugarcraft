@@ -423,9 +423,12 @@ final readonly class PosterCard
         // Plain titles are DB-sourced, so they go through the same scanner the
         // styled-title guard uses: every C0/C1 control and any stray escape
         // sequence (SGR included) is removed before the row is drawn. A styled
-        // title is the caller's own bytes and takes the ANSI-preserving path.
+        // title is the caller's own bytes and takes the ANSI-preserving path —
+        // and the SAME budget law: an overflowing styled title shows the ellipsis
+        // a plain one gets, so silent truncation never reads as a finished title
+        // (sugar-gallery-032: the asymmetry was an affordance lie).
         $title = $this->styledTitle !== null
-            ? Width::truncateAnsi($this->styledTitle, $width - 2)
+            ? self::truncateStyled($this->styledTitle, $width - 2)
             : self::truncate(AnsiGuard::stripControls($this->title), $width - 2);
         $lines[] = Width::padRight($marker . ' ' . $title, $width);
 
@@ -690,6 +693,20 @@ final readonly class PosterCard
         $max = max(1, $max);
 
         return Width::string($text) <= $max ? $text : Width::truncate($text, max(0, $max - 1)) . '…';
+    }
+
+    /**
+     * The ANSI-preserving twin of {@see self::truncate()} (sugar-gallery-032):
+     * same budget, same trailing '…' on overflow — a caller who styled the
+     * title must not lose the visual signal the plain path gives for free.
+     * Width::truncateAnsi counts cells (not escape bytes), so the ellipsis
+     * lands after the last surviving cell.
+     */
+    private static function truncateStyled(string $styled, int $max): string
+    {
+        $max = max(1, $max);
+
+        return Width::string($styled) <= $max ? $styled : Width::truncateAnsi($styled, max(0, $max - 1)) . '…';
     }
 
     /**

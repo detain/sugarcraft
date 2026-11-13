@@ -203,6 +203,15 @@ $card = $card->withProgress(0.6);           // optional continue-watching bar
 echo $card->render(focused: true, width: 16, posterHeight: 9);
 ```
 
+The bar `withProgress()` draws carries a numeric readout when the row has room: the
+`▓`/`░` run is followed by an exact `(NN%)` label — the glyph run alone saturates, so
+a wide-enough download is picturally indistinguishable from a finished one. Below two
+bar cells of room the label is dropped and the run reclaims its cells; there the
+bar's unfilled leg shares the skeleton's `░` glyph (sugar-gallery-040), so a
+downloading card is distinguished from a not-yet-started one by its `▓` leg only. A
+host that needs a guaranteed readout — anything that cannot see the bar at all —
+surfaces the percentage itself.
+
 Every card row is exactly `width` cells wide and the grid normalizes each cell
 to `cardWidth × (posterHeight + 2)`, so columns and rows always line up whether
 or not a card carries a progress bar. The one exception: a verbatim
@@ -289,8 +298,9 @@ that one as a control, so it goes.
 
 `withStyledTitle($ansi)` is the **escape hatch** for a *pre-styled* title (e.g. a
 [sugar-fuzzy](https://github.com/sugarcraft/sugar-fuzzy) match highlight). It is
-emitted **verbatim** — only ANSI-aware *truncated*, never stripped — because
-sanitising it would destroy the very SGR escapes it exists to carry. That makes
+emitted **verbatim** — only ANSI-aware *truncated* (with the same `…` the plain path
+shows on overflow; sugar-gallery-032), never stripped — because sanitising it would
+destroy the very SGR escapes it exists to carry. That makes
 **you** the trust boundary: pass only styling you produced yourself over
 already-safe text, **never** raw untrusted / DB-sourced bytes. When the source
 is untrusted, leave the styled title unset and rely on the sanitised plain

@@ -146,6 +146,34 @@ final class PosterCardTest extends TestCase
         self::assertStringContainsString("\e[1m", $titleLine, 'the leading style survives the truncation');
     }
 
+    public function testStyledTitleOverflowAppendsTheEllipsisLikeAPlainTitle(): void
+    {
+        // sugar-gallery-032 (gate G-6 leg (c)): the plain path flags clipped
+        // text with '…'; the styled path used to drop cells silently — the
+        // asymmetry made a cut styled title read as a complete one.
+        $styled = (new PosterCard('1', 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'))
+            ->withStyledTitle("\e[1mABCDE\e[0mFGHIJKLMNOPQRSTUVWXYZ");
+        $plain = new PosterCard('1', 'ABCDEFGHIJKLMNOPQRSTUVWXYZ');
+        $styledLine = explode("\n", $styled->render(false, 10, 1))[1];
+        $plainLine = explode("\n", $plain->render(false, 10, 1))[1];
+
+        self::assertStringEndsWith('…', $styledLine, 'an overflowing styled title is marked, not silently shortened');
+        self::assertSame(10, Width::string($styledLine), 'the ellipsis rides the budget, it never overflows the cell');
+        self::assertStringEndsWith('…', $plainLine, 'the plain path keeps its mark (parity witness)');
+        self::assertSame(
+            substr_count($plainLine, '…'),
+            substr_count($styledLine, '…'),
+            'both branches clip with exactly one ellipsis'
+        );
+
+        $fitted = (new PosterCard('1', 'Short'))->withStyledTitle("\e[1mShort\e[0m");
+        self::assertStringNotContainsString(
+            '…',
+            explode("\n", $fitted->render(false, 10, 1))[1],
+            'a styled title that fits is never marked'
+        );
+    }
+
     public function testWithStyledTitleKeepsThePlainTitleForIdentity(): void
     {
         $card = (new PosterCard('id-1', 'Plain'))->withStyledTitle("\e[1mP\e[0mlain");
