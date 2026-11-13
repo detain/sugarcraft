@@ -45,11 +45,14 @@ final class Segment implements \SugarCraft\Dashboard\Foundation\SizedItem
         'E' => [true,  false, false, true,  true,  true,  true],  // A,D,E,F,G
         'F' => [true,  false, false, false, true,  true,  true],  // A,E,F,G
         '-' => [false, false, false, false, false, false, true],  // G only
-        '.' => [false, false, false, false, false, false, false], // decimal point only
         ' ' => [false, false, false, false, false, false, false], // all off
         '°' => [true,  true,  false, false, false, true,  false], // A,B,F (degree)
-        'C2' => [true,  true,  true,  true,  true,  true,  false], // All but G (superscript 2)
         '³' => [false, true,  true,  false, false, true,  true],  // B,C,F,G (superscript 3)
+        // D-50 (finding 040) dropped two dead roster entries: the
+        // two-character key 'C2' can never match the one-character
+        // mb_str_split() walker, and '.' was an all-off entry that
+        // rendered blank — a decimal point that is not drawn is not a
+        // feature. '.' now takes the documented unknown-char blank fallback.
     ];
 
     /**
@@ -235,38 +238,67 @@ final class Segment implements \SugarCraft\Dashboard\Foundation\SizedItem
     }
 
     /**
-     * Render a colon between digits.
+     * Render the colon separator column.
+     *
+     * D-50 (finding 040): the column is exactly ONE cell wide — every
+     * multi-char line is built by concatenating columns, so a colon row
+     * that padded wider than it was counted would desync render from
+     * innerSize (the old mixed width/width+1 rows did just that). The two
+     * vertically centered dots are the 7-segment colon.
      */
     private function renderColon(ColorProfile $profile): array
     {
-        $width = max(2, $this->digitWidth);
+        $dot = $this->onColor !== null
+            ? $this->onColor->toFg($profile) . '●' . Ansi::reset()
+            : '●';
 
         return [
-            0 => str_repeat(' ', $width),
-            1 => $this->onColor !== null
-                ? $this->onColor->toFg($profile) . '●' . Ansi::reset() . str_repeat(' ', $width - 1)
-                : '●' . str_repeat(' ', $width - 1),
-            2 => str_repeat(' ', $width + 1),
-            3 => $this->onColor !== null
-                ? $this->onColor->toFg($profile) . '●' . Ansi::reset() . str_repeat(' ', $width - 1)
-                : '●' . str_repeat(' ', $width - 1),
-            4 => str_repeat(' ', $width),
+            0 => ' ',
+            1 => $dot,
+            2 => ' ',
+            3 => $dot,
+            4 => ' ',
         ];
     }
 
     /**
      * Render the 7-segment display.
+     *
+     * Separator contract (finding sugar-dashboard-040, rewritten honest):
+     * a literal ':' in the content renders as the colon column; a digit
+     * stream WITHOUT any literal colon gets clock pair-grouping
+     * ('123456' renders 12:34:56); everything else — two-digit numbers,
+     * letters, punctuation — grows no spurious separator. The old loop
+     * inserted a colon between EVERY adjacent pair of characters after a
+     * digit, so '95' became '9:5' and a literal ':' consumed the all-off
+     * digit fallback as a blank.
      */
     public function render(): string
     {
         $profile = ColorMode::profile();
         $chars = mb_str_split($this->content, 1, 'UTF-8');
+        $hasLiteralColon = in_array(':', $chars, true);
 
         $allRows = ['', '', '', '', ''];
-        $addColon = false;
+        $consecutiveDigits = 0;
 
         foreach ($chars as $char) {
-            if ($addColon && $this->showColon) {
+            if ($char === ':') {
+                $colonRows = $this->renderColon($profile);
+                for ($i = 0; $i < 5; $i++) {
+                    $allRows[$i] .= $colonRows[$i];
+                }
+                $consecutiveDigits = 0;
+                continue;
+            }
+
+            if (
+                $this->showColon
+                && !$hasLiteralColon
+                && ctype_digit($char)
+                && $consecutiveDigits > 0
+                && $consecutiveDigits % 2 === 0
+            ) {
                 $colonRows = $this->renderColon($profile);
                 for ($i = 0; $i < 5; $i++) {
                     $allRows[$i] .= $colonRows[$i];
@@ -278,12 +310,7 @@ final class Segment implements \SugarCraft\Dashboard\Foundation\SizedItem
                 $allRows[$i] .= $digitRows[$i];
             }
 
-            $addColon = ($char === ':' || ctype_digit($char));
-        }
-
-        // Add trailing colon for time display if last char was digit
-        if ($addColon && $this->showColon && !str_ends_with($this->content, ':')) {
-            // Already handled above
+            $consecutiveDigits = ctype_digit($char) ? $consecutiveDigits + 1 : 0;
         }
 
         return implode("\n", $allRows);
@@ -292,14 +319,44 @@ final class Segment implements \SugarCraft\Dashboard\Foundation\SizedItem
     /**
      * Calculate the natural dimensions of this display.
      *
+     * Every non-colon character occupies one digit-width column; each
+     * separator (literal or pair-grouping auto) is one cell. The budget
+     * render() actually spends and this reports are now the same model.
+     *
      * @return array{0:int,1:int} [width, height]
      */
     public function innerSize(): array
     {
-        $digitCount = mb_strlen($this->content, 'UTF-8');
-        // Each digit is digitWidth chars wide, with 1 char gap for colon
-        $colonSpaces = (int) floor($digitCount / 2);
-        $width = ($digitCount * $this->digitWidth) + $colonSpaces;
+        $chars = mb_str_split($this->content, 1, 'UTF-8');
+        $hasLiteralColon = in_array(':', $chars, true);
+
+        $cells = 0;
+        $literalColons = 0;
+        $autoColons = 0;
+        $consecutiveDigits = 0;
+
+        foreach ($chars as $char) {
+            if ($char === ':') {
+                $literalColons++;
+                $consecutiveDigits = 0;
+                continue;
+            }
+
+            if (
+                $this->showColon
+                && !$hasLiteralColon
+                && ctype_digit($char)
+                && $consecutiveDigits > 0
+                && $consecutiveDigits % 2 === 0
+            ) {
+                $autoColons++;
+            }
+
+            $cells++;
+            $consecutiveDigits = ctype_digit($char) ? $consecutiveDigits + 1 : 0;
+        }
+
+        $width = $cells * max(2, $this->digitWidth) + $literalColons + $autoColons;
         return [$width, self::DIGIT_HEIGHT];
     }
 

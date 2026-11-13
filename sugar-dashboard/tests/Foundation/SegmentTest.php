@@ -108,9 +108,90 @@ final class SegmentTest extends TestCase
         $segment = Segment::new('12:34');
         [$width, $height] = $segment->innerSize();
 
-        // 5 digits + 2 colons = 5*3 + 2 = 17
-        $this->assertSame(17, $width);
+        // D-50 DISCLOSED flip (finding 040): the old 17 came from counting
+        // the literal ':' as a full digit column PLUS a phantom floor(n/2)
+        // separator roster render() never matched. Honest model: 4 digit
+        // cells x 3 + one 1-cell colon column = 13, and every rendered
+        // line is exactly that wide.
+        $this->assertSame(13, $width);
         $this->assertSame(5, $height);
+        $this->assertEveryLineIsThePromisedWidth($segment, 13);
+    }
+
+    /**
+     * Escape-stripped line width census: render() and innerSize() must
+     * agree on every row (the old mixed-width colon rows desynced them).
+     */
+    private function assertEveryLineIsThePromisedWidth(Segment $segment, int $expect): void
+    {
+        foreach (explode("\n", $segment->render()) as $line) {
+            $this->assertSame($expect, mb_strlen(\SugarCraft\Core\Util\Ansi::strip($line), 'UTF-8'));
+        }
+    }
+
+    public function testTwoDigitNumberGrowsNoSpuriousColon(): void
+    {
+        // The finding headline: '95' rendered 9-blank-5 under the old
+        // every-pair auto-insert.
+        $segment = Segment::new('95');
+        $this->assertStringNotContainsString('●', $segment->render());
+        $this->assertSame([6, 5], $segment->innerSize());
+        $this->assertEveryLineIsThePromisedWidth($segment, 6);
+    }
+
+    public function testClockShapesRenderTheirColons(): void
+    {
+        $nine = Segment::new('9:5');
+        $this->assertSame(2, substr_count($nine->render(), '●'));
+        $this->assertSame([7, 5], $nine->innerSize());
+        $this->assertEveryLineIsThePromisedWidth($nine, 7);
+
+        $hour = Segment::new('12:34');
+        $this->assertSame(2, substr_count($hour->render(), '●'));
+        $this->assertEveryLineIsThePromisedWidth($hour, 13);
+
+        $full = Segment::new('12:34:56');
+        $this->assertSame(4, substr_count($full->render(), '●'));
+        $this->assertSame([6 * 3 + 2, 5], $full->innerSize());
+        $this->assertEveryLineIsThePromisedWidth($full, 20);
+    }
+
+    public function testColonlessDigitStreamGetsClockPairGrouping(): void
+    {
+        // The honest auto-insert: a six-digit stream groups as 12:34:56
+        // (two auto colon columns, each drawn as a two-dot pair).
+        $segment = Segment::new('123456');
+        $this->assertSame(4, substr_count($segment->render(), '●'));
+        $this->assertSame([20, 5], $segment->innerSize());
+        $this->assertEveryLineIsThePromisedWidth($segment, 20);
+
+        // ...and the opt-out suppresses the grouping only.
+        $plain = $segment->withShowColon(false);
+        $this->assertStringNotContainsString('●', $plain->render());
+        $this->assertSame([18, 5], $plain->innerSize());
+        $this->assertEveryLineIsThePromisedWidth($plain, 18);
+    }
+
+    public function testLiteralColonsAreNeverDoubledByAutoGrouping(): void
+    {
+        // Content that spells its own separators keeps them verbatim:
+        // '12:3' has one colon column, not one plus an auto-insert.
+        $segment = Segment::new('12:3');
+        $this->assertSame(2, substr_count($segment->render(), '●'));
+        $this->assertSame([3 * 3 + 1, 5], $segment->innerSize());
+        $this->assertEveryLineIsThePromisedWidth($segment, 10);
+    }
+
+    public function testDotTakesTheUnknownCharBlankFallbackWithoutADeadMapEntry(): void
+    {
+        // D-50 removed the all-off '.' entry (and the unreachable 'C2'
+        // key). A '.' consumes one digit column rendered all-dark, exactly
+        // as it did before — the roster no longer advertises a decimal
+        // point that was never drawn.
+        $segment = Segment::new('9.5');
+        $this->assertStringNotContainsString('●', $segment->render());
+        $this->assertSame([9, 5], $segment->innerSize());
+        $this->assertEveryLineIsThePromisedWidth($segment, 9);
     }
 
     public function testWithDigitWidthReturnsNewInstance(): void
