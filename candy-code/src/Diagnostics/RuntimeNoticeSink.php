@@ -159,8 +159,12 @@ use SugarCraft\Code\Support\Log;
  * pre-fork and post-fork writes among them, read non-blocking via
  * `stream_socket_recvfrom()` until it returns `''`.
  *
- * TWO MEASURED FAILURE MODES, BOTH DELIBERATELY SILENT HERE BECAUSE THE
- * `error_log()` COPY ALREADY HAS THE TEXT:
+ * TWO MEASURED FAILURE MODES, BOTH SILENT AT THE `fwrite()` ITSELF (no PHP
+ * diagnostic reaches fd 2) — BUT NOT UNCOUNTED (audit once-067): a refused write
+ * bumps a child-side counter, the first refusal writes its text to `error_log`
+ * (unless that is still stderr), and the next write the pipe accepts is
+ * preceded by one "N more runtime notices" row, so the gap is reported rather
+ * than invisible ({@see NoticeSink::flushDropReport()}):
  *
  *  1. The kernel send buffer fills when nobody drains. Same box: 167 datagrams
  *     of 500 bytes were accepted and the 168th `fwrite()` returned 0 with NO
@@ -605,6 +609,18 @@ final class RuntimeNoticeSink
     public static function arm(bool $crossFork = true): bool
     {
         return self::current()->arm($crossFork);
+    }
+
+    /** Notices this process's transport write refused and has not yet reported. */
+    public static function transportDropped(): int
+    {
+        return self::current()->transportDropped();
+    }
+
+    /** One more attempt to send the owed "N notices dropped" row; see {@see NoticeSink::flushDropReport()}. */
+    public static function flushDropReport(): bool
+    {
+        return self::current()->flushDropReport();
     }
 
     /** Whether {@see arm()} has run in this process, on either backend. */

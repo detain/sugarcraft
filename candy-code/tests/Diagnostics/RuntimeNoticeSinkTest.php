@@ -583,6 +583,35 @@ final class RuntimeNoticeSinkTest extends TestCase
         self::assertLessThan(10.0, $elapsed, 'a refused write blocked instead of returning');
     }
 
+    /** S-O55: a full pipe is counted child-side and reported once it accepts writes again. */
+    public function testRefusedTransportWritesAreCountedAndReportedOnceThePipeDrains(): void
+    {
+        RuntimeNoticeSink::arm();
+
+        $refused = 0;
+        for ($i = 0; $i < 100000 && $refused < 3; $i++) {
+            if (!RuntimeNoticeSink::record(str_repeat('q', 500))) {
+                $refused++;
+            }
+        }
+        self::assertSame(3, $refused, 'the full-pipe fixture never refused');
+        self::assertSame(3, RuntimeNoticeSink::transportDropped());
+        self::assertFalse(RuntimeNoticeSink::flushDropReport(), 'still full: the count is kept');
+        self::assertSame(3, RuntimeNoticeSink::transportDropped());
+
+        // drain() is bounded per call, so empty the socket completely.
+        do {
+            $rows = RuntimeNoticeSink::drain();
+        } while ($rows !== []);
+
+        self::assertTrue(RuntimeNoticeSink::record('after the gap'));
+        self::assertSame(0, RuntimeNoticeSink::transportDropped());
+        $after = RuntimeNoticeSink::drain();
+        self::assertCount(2, $after);
+        self::assertStringContainsString('and 3 more runtime notices', $after[0]);
+        self::assertSame('after the gap', $after[1]);
+    }
+
     public function testAWriteAfterTheReaderIsGoneRaisesNothingPhpWouldPrint(): void
     {
         // MEASURED, PHP 8.3.6 / Linux 6.8: an fwrite() to a dgram pair whose

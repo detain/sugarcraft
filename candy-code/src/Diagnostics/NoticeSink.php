@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Diagnostics;
 
 use React\EventLoop\Loop;
+use SugarCraft\Code\Support\Log;
 
 /**
  * One session's runtime-notice inbox: the per-instance half of the mid-session
@@ -54,6 +55,19 @@ final class NoticeSink
 
     /** Notices the in-process backend refused because {@see RuntimeNoticeSink::NOTICE_LIMIT} was reached. */
     private int $dropped = 0;
+
+    /**
+     * Notices THIS process's transport write refused (kernel send buffer full,
+     * or the reader gone) since the last drop report got through. Counted
+     * child-side because the refusal happens in whichever process wrote; the
+     * parent can never learn of it from the socket it is waiting on (audit
+     * once-067). Reported by {@see flushDropReport()} on the next write that
+     * the pipe accepts.
+     */
+    private int $transportDropped = 0;
+
+    /** Whether the first refusal's forensic `error_log` copy has been written. */
+    private bool $dropForensicLogged = false;
 
     /** Whether the per-turn budget (E199) is armed — true from the first {@see beginTurn()} until {@see reset()}. */
     private bool $turnAccounting = false;
@@ -110,9 +124,17 @@ final class NoticeSink
         if ($this->transportWrite !== null) {
             // `@` is load-bearing — see RuntimeNoticeSink's doc-block on the
             // measured `errno=111` diagnostic. A datagram is all-or-nothing.
+            // A drop report owed from an earlier refusal goes first, so the
+            // transcript reads in order: the gap, then what followed it.
+            $this->flushDropReport();
             $written = @fwrite($this->transportWrite, $notice);
+            if ($written !== false && $written > 0) {
+                return true;
+            }
 
-            return $written !== false && $written > 0;
+            $this->noteTransportDrop($notice);
+
+            return false;
         }
 
         if (count($this->queue) >= RuntimeNoticeSink::NOTICE_LIMIT) {
@@ -124,6 +146,60 @@ final class NoticeSink
         $this->queue[] = $notice;
 
         return true;
+    }
+
+    /**
+     * Notices this process's transport refused and has not yet reported.
+     * Test and diagnostics seam; the report itself rides {@see flushDropReport()}.
+     */
+    public function transportDropped(): int
+    {
+        return $this->transportDropped;
+    }
+
+    /**
+     * Send the owed "N notices dropped" row, if any, through the transport.
+     * Returns true when nothing is owed or the row got through; false while the
+     * pipe is still refusing (the count is kept for the next attempt). Public
+     * so a child about to exit can make one last attempt.
+     */
+    public function flushDropReport(): bool
+    {
+        if ($this->transportDropped === 0) {
+            return true;
+        }
+        if ($this->transportWrite === null) {
+            return false;
+        }
+
+        $report = $this->overflowNotice($this->transportDropped);
+        $written = @fwrite($this->transportWrite, $report);
+        if ($written === false || $written <= 0) {
+            return false;
+        }
+
+        $this->transportDropped = 0;
+
+        return true;
+    }
+
+    /**
+     * Count one refused transport write and, on the first, keep the text where a
+     * reader can find it. The copy is skipped exactly when the log still points
+     * at stderr: in the TUI that fd is the renderer's tty, so a line written
+     * there would corrupt the frame (the C2a rule {@see RuntimeNoticeSink::warn()}
+     * states).
+     */
+    private function noteTransportDrop(string $notice): void
+    {
+        $this->transportDropped++;
+        if ($this->dropForensicLogged) {
+            return;
+        }
+        $this->dropForensicLogged = true;
+        if (!TuiErrorLog::destinationIsStderr(ini_get('error_log'))) {
+            Log::raw('runtime notice transport refused a write; first dropped notice: ' . $notice);
+        }
     }
 
     /**
@@ -461,6 +537,8 @@ final class NoticeSink
         $this->readerPid = null;
         $this->queue = [];
         $this->dropped = 0;
+        $this->transportDropped = 0;
+        $this->dropForensicLogged = false;
 
         $this->turnAccounting = false;
         $this->turnSurfaced = 0;
