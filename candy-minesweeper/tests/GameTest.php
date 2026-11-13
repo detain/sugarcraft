@@ -394,35 +394,42 @@ final class GameTest extends TestCase
 
     public function testRecordResultUpdatesStatsOnWin(): void
     {
-        // Test that recordResult correctly updates stats when called with a win
-        $g = Game::withDifficulty(Difficulty::Easy);
-
-        // Manually trigger a win state by modifying the board (not possible with immutable design)
-        // Instead, test that recordResult updates stats for a known win condition
-        // by creating a game that we can verify has isWon=true
-        $rand = static fn(int $_max): int => 0;
-        $g = Game::withDifficulty(Difficulty::Easy, $rand);
-
-        // Reveal cells - if we happen to win, great. If not, we still test the stats mechanism.
-        for ($i = 0; $i < 20; $i++) {
-            [$g, ] = $g->update(self::key(KeyType::Space));
+        // msw-35 (finding -060): this leg's old fixture drove 20 Spaces at a
+        // FROZEN cursor on a fresh Easy board — at most one reveal landed,
+        // isWon() never turned true, and the win-body assertions were dead
+        // code behind an else that always ran. The board below is a REAL
+        // 9×9/10 win state built at construction (no update(), so the -08
+        // transition auto-record never fires) and recordResult() answers
+        // unconditionally.
+        $mineSet = ['0,0', '1,0', '2,0', '3,0', '4,0', '5,0', '6,0', '7,0', '8,0', '7,7'];
+        $rows = [];
+        for ($y = 0; $y < 9; $y++) {
+            $row = [];
+            for ($x = 0; $x < 9; $x++) {
+                $isMine = in_array("$x,$y", $mineSet, true);
+                $adj    = 0;
+                for ($dy = -1; $dy <= 1; $dy++) {
+                    for ($dx = -1; $dx <= 1; $dx++) {
+                        if (in_array(($x + $dx) . ',' . ($y + $dy), $mineSet, true)) {
+                            $adj++;
+                        }
+                    }
+                }
+                $row[] = new Cell($isMine, !$isMine, false, $isMine ? 0 : $adj);
+            }
+            $rows[] = $row;
         }
+        $board = Board::fromRows(9, 9, 10, $rows, true, false, 71, 0);
+        $g     = new Game(board: $board, cursorX: 0, cursorY: 0, rand: static fn (int $_max): int => 0);
+        $this->assertTrue($g->board->isWon(), 'sanity: the direct-construction fixture really wins');
 
-        // Record result with known elapsed time - verify stats mechanism works
         $g = $g->recordResult(42);
-        $stats = $g->stats();
 
+        $stats = $g->stats();
         $this->assertSame(1, $stats->gamesPlayed(Difficulty::Easy));
-        // Win count depends on whether we actually won
-        if ($g->board->isWon()) {
-            $this->assertSame(1, $stats->wins(Difficulty::Easy));
-            $this->assertSame(42, $stats->bestTime(Difficulty::Easy));
-            $this->assertEqualsWithDelta(100.0, $stats->winRate(Difficulty::Easy), 0.01);
-        } else {
-            $this->assertSame(0, $stats->wins(Difficulty::Easy));
-            $this->assertNull($stats->bestTime(Difficulty::Easy));
-            $this->assertEqualsWithDelta(0.0, $stats->winRate(Difficulty::Easy), 0.01);
-        }
+        $this->assertSame(1, $stats->wins(Difficulty::Easy));
+        $this->assertSame(42, $stats->bestTime(Difficulty::Easy));
+        $this->assertEqualsWithDelta(100.0, $stats->winRate(Difficulty::Easy), 0.01);
     }
 
     public function testRecordResultUpdatesStatsOnLoss(): void
@@ -881,14 +888,13 @@ final class GameTest extends TestCase
     public function testClickOutsideBoardIsNoop(): void
     {
         $g = Game::start(3, 3, 1, static fn(int $_max): int => 0);
-        $originalExploded = $g->board->exploded;
-        $originalRevealedCount = $g->board->revealedCount;
 
-        // Click at (1,1) which is outside the interior (interior starts at 3,2 for 3×3).
+        // msw-35 (finding -090): the old leg pinned two snapshot fields a
+        // dead board could also pass. Production answers an unresolvable
+        // click with $this — the contract is IDENTITY, so assert that.
         [$next, ] = $g->update(self::mouseClick(1, 1, MouseButton::Left));
 
-        $this->assertSame($originalExploded, $next->board->exploded);
-        $this->assertSame($originalRevealedCount, $next->board->revealedCount);
+        $this->assertSame($g, $next, 'a click with no zone must return the very same instance');
     }
 
     // ─── Mouse ignored after game over ─────────────────────────────────────
@@ -907,11 +913,12 @@ final class GameTest extends TestCase
 
         $this->assertTrue($g->board->exploded);
 
-        // Any click should be a no-op.
+        // msw-35 (finding -090): identity is the real contract — the
+        // post-mortem gate returns the untouched instance, not a board
+        // snapshot that merely happens to match.
         [$next, ] = $g->update(self::mouseClick(5, 4, MouseButton::Left));
 
-        $this->assertSame($g->board->exploded, $next->board->exploded);
-        $this->assertSame($g->board->revealedCount, $next->board->revealedCount);
+        $this->assertSame($g, $next, 'mouse input after game over must be a true no-op');
     }
 
     // ─── M3: the shipped default shape records (Standard preset) ────────────

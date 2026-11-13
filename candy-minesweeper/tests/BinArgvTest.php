@@ -161,10 +161,12 @@ final class BinArgvTest extends TestCase
         $this->assertStringContainsString('unknown option --?', $err, 'control bytes become ? marks');
 
         // Positive control that the child CAN emit raw bytes when it means to
-        // (locale-independent): --version rides Version::line() verbatim.
+        // (locale-independent). msw-35 (finding -090): non-emptiness was the
+        // whole claim — a half-version or a random banner passed. Byte-pin
+        // the child against the single source of truth, Version::line().
         [$vcode, $vout] = self::runBinary(['--version']);
         $this->assertSame(0, $vcode);
-        $this->assertNotEmpty($vout);
+        $this->assertSame(\SugarCraft\Minesweeper\Support\Version::line(), $vout, 'the --version child speaks Version::line() verbatim');
     }
 
     public function testLegacyEnvRemedyNamesTheVarsOwnReplacement(): void
@@ -292,7 +294,9 @@ final class BinArgvTest extends TestCase
 
         [$code, $out, $err] = self::runBinary(['--version']);
         $this->assertSame(0, $code, 'stderr was: ' . $err);
-        $this->assertNotEmpty($out);
+        // msw-35 (finding -090): not-empty was a dud gate — any stray byte
+        // passed. The pipe leg must pin the SAME single source of truth.
+        $this->assertSame(\SugarCraft\Minesweeper\Support\Version::line(), $out, 'the piped child speaks Version::line() verbatim');
     }
 
     // ---- msw-31: env-derived echoes obey the cliVisible law (finding -069) ----

@@ -13,6 +13,7 @@ use SugarCraft\Minesweeper\Board;
 use SugarCraft\Minesweeper\Cell;
 use SugarCraft\Minesweeper\Difficulty;
 use SugarCraft\Minesweeper\Game;
+use SugarCraft\Minesweeper\Lang;
 use SugarCraft\Minesweeper\Renderer;
 use SugarCraft\Minesweeper\Stats;
 use SugarCraft\Core\Util\Width;
@@ -26,12 +27,44 @@ use SugarCraft\Core\Util\Width;
  *
  * Status lines are locale-rendered too: the guard pins fresh, exploded and
  * won-with-a-three-digit-time boards, so banners and the timer format ride
- * the same budget. The notice toast is excluded by construction (the games
- * here carry none — the toast strings are short save/load announcements).
+ * the same budget. The notice toast used to be "excluded by construction"
+ * on an unguarded claim (finding -087) — every toast key the code can
+ * produce now rides the budget with its LOCALE'S OWN translated value in
+ * both arms.
  */
 final class FooterWidthGuardTest extends TestCase
 {
     private const MAX_LINE = 80;
+
+    /**
+     * The full roster of notice toasts Game::withNotice/notice-mutate can
+     * carry (msw-35, finding -087) — keys, not baked strings, so the guard
+     * renders each locale's own value.
+     *
+     * @var list<string>
+     */
+    private const NOTICE_KEYS = [
+        'ui.saved',
+        'ui.save_failed',
+        'ui.loaded',
+        'ui.no_save',
+        'ui.load_refused',
+        'ui.restarted',
+        'ui.confirm_quit',
+        'ui.chord_not_ready',
+    ];
+
+    /**
+     * @return list<array{0:string,1:Game}>
+     */
+    private static function toastFixtures(): array
+    {
+        $legs = [];
+        foreach (self::NOTICE_KEYS as $key) {
+            $legs[] = ['toast ' . $key, Game::withDifficulty(Difficulty::Standard, notice: Lang::t($key))];
+        }
+        return $legs;
+    }
 
     /** @return list<array{0:string,1:Game}> */
     private function fixtures(): array
@@ -133,6 +166,9 @@ final class FooterWidthGuardTest extends TestCase
             // message) ride the same 80-cell budget as the game frame.
             ['picker', self::pickerFixture()],
             ['form-refused', self::refusedFormFixture()],
+            // msw-35 (finding -087): the toast legs — every notice key, in
+            // this locale's own words, on the 80-cell budget.
+            ...self::toastFixtures(),
         ];
     }
 
@@ -205,7 +241,9 @@ final class FooterWidthGuardTest extends TestCase
         $fixtures = static fn(): array => [
             ['fresh', Game::withDifficulty(Difficulty::Easy)],
             ['expert', Game::withDifficulty(Difficulty::Expert)],
-            ['toasted', Game::withDifficulty(Difficulty::Standard, notice: 'saved')],
+            // msw-35 (finding -087): real translated toasts, not the old
+            // literal 'saved' that no production code path can produce.
+            ...self::toastFixtures(),
             // msw-08 stats status must word-wrap inside the live columns too.
             ['stats', Game::withDifficulty(
                 Difficulty::Expert,

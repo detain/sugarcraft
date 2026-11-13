@@ -109,13 +109,44 @@ final class I18nWiringTest extends TestCase
     public function testFooterNamesEveryBoundKey(): void
     {
         // The footer is the only discoverability surface; the E3 finding was
-        // that it advertised a third of its own bindings. Derive the bound
-        // letters from the source text of update()'s match arms instead of
-        // hard-coding a list that rots.
+        // that it advertised a third of its own bindings. msw-35 (finding
+        // -092) keeps the promise the old comment only made: the LETTER
+        // bindings are derived from the source text of update()'s own arms,
+        // so a newly bound rune that skips the legend reddens this test by
+        // name. Chrome decorations (arrows, space/enter, Esc, Ctrl+C, the
+        // mouse buttons) cannot be derived from char-comparison syntax and
+        // stay pinned as data.
+        $source = file_get_contents(__DIR__ . '/../src/Game.php');
+        $this->assertIsString($source);
+        $this->assertSame(
+            1,
+            preg_match('/public function update\(.*?\n    \}\n/s', $source, $m),
+            'sanity: the update() body must be sliceable from the source',
+        );
+        preg_match_all("/char === '([A-Za-z])'/", $m[0], $bound);
+        $letters = array_values(array_unique($bound[1]));
+        $this->assertNotEmpty($letters, 'sanity: update() binds letters');
+
+        // `n` is the overlay door — the picker and the end-of-game banner
+        // teach it; it is deliberately absent from the GAME legend (msw-09
+        // ruling G5-b). Any other derived letter must appear in the footer.
+        $exempt = ['n'];
+
         T::setLocale('en');
         $view = Renderer::render(self::freshGame());
 
-        foreach (['↑', '↓', '←', '→', 'hjkl', 'space', 'enter', 'f', 'c', 'S  save', 'L  load', 'r', 'q', 'Esc', 'Ctrl+C', 'left-click', 'right-click', 'middle-click'] as $token) {
+        foreach ($letters as $letter) {
+            if (in_array($letter, $exempt, true)) {
+                continue;
+            }
+            $this->assertStringContainsString(
+                $letter,
+                $view,
+                "footer must advertise the bound key `$letter` (derived from update()'s arms)",
+            );
+        }
+
+        foreach (['↑', '↓', '←', '→', 'hjkl', 'space', 'enter', 'S  save', 'L  load', 'r', 'q', 'Esc', 'Ctrl+C', 'left-click', 'right-click', 'middle-click'] as $token) {
             $this->assertStringContainsString($token, $view, "footer must advertise `$token`");
         }
     }

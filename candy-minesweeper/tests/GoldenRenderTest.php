@@ -137,6 +137,7 @@ final class GoldenRenderTest extends TestCase
         [, $scanner] = Renderer::renderWithScanner($g);
 
         $b = $g->board;
+        $hits = 0;
         for ($y = 0; $y < $b->height; $y++) {
             for ($x = 0; $x < $b->width; $x++) {
                 $c = $b->cell($x, $y);
@@ -148,13 +149,18 @@ final class GoldenRenderTest extends TestCase
                     $result = Renderer::resolveClick($g, $zone->startCol, $zone->startRow);
                     $this->assertNotNull($result, "resolveClick should hit cell at screen ({$zone->startCol}, {$zone->startRow})");
                     [$col, $row] = $result;
-                    $this->assertSame($x, $col, 'resolved col should match board x');
-                    $this->assertSame($y, $row, 'resolved row should match board y');
-                    return;
+                    $this->assertSame($x, $col, "resolved col should match board x at {$zoneId}");
+                    $this->assertSame($y, $row, "resolved row should match board y at {$zoneId}");
+                    $hits++;
                 }
             }
         }
-        $this->fail('No revealed non-mine cell found to test resolveClick');
+        // msw-35 (finding -061): the old leg RETURNED after the first hit —
+        // the deterministic fixture's first revealed cell is (0,0), so the
+        // only decode assertion ever made was on the diagonal, where a
+        // swapped [row,col] is indistinguishable. Every revealed cell now
+        // round-trips, off-diagonal ones included.
+        $this->assertGreaterThan(1, $hits, 'sanity: the sweep must cover off-diagonal cells too');
     }
 
     public function testResolveClickReturnsNullForOutOfBounds(): void

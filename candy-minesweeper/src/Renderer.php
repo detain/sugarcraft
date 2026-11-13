@@ -436,6 +436,35 @@ final class Renderer
                 if ($word === '') {
                     continue;
                 }
+                // msw-35 (finding -087 surfacing a latent defect): this was
+                // a word-wrapper only, and a word with no break point — the
+                // ja save-refusal toast is 49 cells of spaceless CJK — blew
+                // straight through the budget. Words wider than $width are
+                // hard-broken on codepoints now (measure-then-keep, the same
+                // discipline cliVisible uses), so every line this returns
+                // honours $width by construction.
+                while (Width::of($word) > $width) {
+                    if ($line !== '') {
+                        $out[] = $line;
+                        $line = '';
+                    }
+                    $chunk = '';
+                    $rest  = '';
+                    foreach (preg_split('//u', $word, -1, PREG_SPLIT_NO_EMPTY) ?: [] as $char) {
+                        // The first char always joins the chunk ($chunk ===
+                        // '') even in the pathological width-below-one-glyph
+                        // case — without it the outer while could never
+                        // shrink the word. Budgets here are >= 20 cells, so
+                        // the branch is termination insurance, not policy.
+                        if ($rest === '' && ($chunk === '' || Width::of($chunk . $char) <= $width)) {
+                            $chunk .= $char;
+                        } else {
+                            $rest .= $char;
+                        }
+                    }
+                    $out[] = $chunk;
+                    $word  = $rest;
+                }
                 $candidate = $line === '' ? $word : $line . ' ' . $word;
                 if (Width::of($candidate) > $width && $line !== '') {
                     $out[] = $line;

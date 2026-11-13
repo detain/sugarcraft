@@ -69,6 +69,33 @@ final class LocaleParityTest extends TestCase
      * shipped count is pinned HERE so a removed (or added) locale file goes
      * red on its own, and the provider roster below names the expected codes.
      */
+    #[DataProvider('localeFiles')]
+    public function testEveryLocaleCarriesTheEnglishPlaceholderTokens(string $code, string $path): void
+    {
+        // msw-35 (finding -062): parity of KEYS never implied parity of the
+        // {placeholder} slots inside the values. The status line is the
+        // most-visible string in the app (mines/flags/remaining/time all
+        // interpolate) and a dropped token renders as literal brace garbage
+        // every frame with all the old legs green. Prospective guard: all
+        // sixteen locales are clean today — deleting any token from any
+        // value must redden this test by name.
+        $en = require __DIR__ . '/../lang/en.php';
+        $locale = require $path;
+        foreach ((array) $en as $key => $english) {
+            $mine = static function (string $value): array {
+                preg_match_all('/\{\w+\}/', $value, $m);
+                $tokens = $m[0];
+                sort($tokens);
+                return $tokens;
+            };
+            $this->assertSame(
+                $mine((string) $english),
+                $mine((string) $locale[$key]),
+                "locale '$code' must interpolate key '$key' with exactly the english {tokens}",
+            );
+        }
+    }
+
     public function testTheShippedLocaleRosterIsExactlySixteenFiles(): void
     {
         $codes = array_keys(self::localeFiles());
