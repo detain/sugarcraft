@@ -9,7 +9,7 @@ declare(strict_types=1);
  * continue-watching progress bars), drops them into a PosterGrid, and prints
  * one focused frame. The ▸ tile is the cursor; the ░ tile is an index whose
  * page has not been fetched yet, so the grid draws a skeleton in its place —
- * the header of the lib's sparse, owner-paged virtualization.
+ * the hallmark of the lib's sparse, owner-paged virtualization.
  *
  *   php examples/poster-grid.php
  *
