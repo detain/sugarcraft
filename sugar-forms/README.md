@@ -337,6 +337,23 @@ mismatch `-3`, gap open `-5`, gap extend `-1`, adjacent bonus `+5`).
 debounce; `SugarCraft\Core\Msg\SuggestionsReadyMsg` (defined in sugar-core)
 arrives via the event loop when fresh results land.
 
+### Async validation gate
+
+`withAsyncValidator(Closure $validator)` on the async-capable fields (Input
+and Text — they implement `SugarCraft\Forms\AsyncValidatable`) registers a
+check returning `PromiseInterface<?string>` (null/empty verdict = clean, a
+string = blocking). Enter on the last field runs the sync gate first; when
+sync is clean but async validators are still answering the form does **not**
+submit: it parks in a pending round (a `validating…` hint paints while the
+batch is in flight, and further Enter is ignored until it settles). Verdicts
+return as one `FormAsyncValidatedMsg`: rejections keep the form open, paint
+the blocking verdict on the field (and in the error summary when enabled)
+and move focus to the first failing field; a clean round fires the deferred
+submit. Any value edit clears the overlay — verdicts judged pre-edit bytes.
+A validator that fails to answer BLOCKS with a typed verdict (an unanswered
+check never waves data through), and a seq generation guard drops late
+verdicts aimed at superseded or resolved forms.
+
 ### ActionSpinner
 
 A standalone blocking spinner for scripts and CLIs that need a visible

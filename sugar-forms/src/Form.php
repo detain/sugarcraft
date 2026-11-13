@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Forms;
 
 use React\Promise\PromiseInterface;
+use SugarCraft\Core\AsyncCmd;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
@@ -80,6 +81,18 @@ final class Form implements Model
         public readonly int $timeoutMs = 0,
         public readonly ?KeyMap $keyMap = null,
         public readonly ?array $constraints = null,
+        /**
+         * SF-20 (sugar-forms-020) submit-gate flight state: an Enter that
+         * cleared the sync gate but has {@see AsyncValidatable} fields still
+         * answering sets this flag; the verdicts ride back on a
+         * {@see FormAsyncValidatedMsg} carrying the same $asyncValidationSeq
+         * generation, and further Enter is ignored while a round is pending.
+         */
+        public readonly bool $asyncValidating = false,
+        /** @var array<string,string> fieldKey => last async blocking verdict */
+        public readonly array $asyncErrors = [],
+        /** Monotonic generation counter for async validation rounds. */
+        public readonly int $asyncValidationSeq = 0,
     ) {}
 
     /**
@@ -364,8 +377,14 @@ final class Form implements Model
             // E736-F2/6.8: every late-settling async suggestion (and any
             // other message) is discarded at this door — the pending-async
             // surface of all fields turns inert once the form resolves, so
-            // no explicit cancel-on-submit bookkeeping is required.
+            // no explicit cancel-on-submit bookkeeping is required. The
+            // SF-20 async-validation verdict shares this discard contract:
+            // a settled round after submit/abort changes nothing.
             return [$this, null];
+        }
+
+        if ($msg instanceof FormAsyncValidatedMsg) {
+            return $this->applyAsyncVerdicts($msg);
         }
 
         $idx           = $this->focusedIndex;
@@ -419,7 +438,45 @@ final class Form implements Model
             }
         }
 
+        // SF-20: an edit invalidates the last async verdict overlay — the
+        // verdicts judged pre-edit values, so they stop blocking (and stop
+        // painting the summary) the moment the user changes anything.
+        if ($this->asyncErrors !== [] && self::isValueEdit($msg)) {
+            return $this->clearAsyncErrorsOn($this->forward($msg));
+        }
+
         return $this->forward($msg);
+    }
+
+    /**
+     * The mutating keystrokes that change a field value (and thus make a
+     * settled {@see FormAsyncValidatedMsg} overlay stale). Navigation,
+     * abort and submit chords keep their verdicts.
+     */
+    private static function isValueEdit(Msg $msg): bool
+    {
+        return $msg instanceof KeyMsg && in_array(
+            $msg->type,
+            [KeyType::Char, KeyType::Space, KeyType::Backspace, KeyType::Delete],
+            true,
+        );
+    }
+
+    /**
+     * Apply the async-error clear on top of whatever forward() produced
+     * (the forwarded field state is kept; only the Form overlay resets).
+     *
+     * @param array{0:Model, 1:?\Closure} $result
+     * @return array{0:Model, 1:?\Closure}
+     */
+    private function clearAsyncErrorsOn(array $result): array
+    {
+        $next = $result[0];
+        if ($next instanceof self && $next->asyncErrors !== []) {
+            $result[0] = $next->mutate(asyncErrors: []);
+        }
+
+        return $result;
     }
 
     /**
@@ -438,11 +495,34 @@ final class Form implements Model
      */
     private function submitOrGateLastGroup(): array
     {
+        // SF-20: a round is already in flight — a second Enter (or any
+        // submit chord) is ignored rather than restarting the batch and
+        // orphaning the pending verdicts.
+        if ($this->asyncValidating) {
+            return [$this, null];
+        }
         // Revalidate every field in the current group so that untouched-but-
         // required fields surface their errors, tracking the first that fails.
         $revalidated = [];
         $firstErrorIdx = null;
         $hidden = $this->hiddenFieldsIn($this->groupIndex);
+        // SF-20 pre-scan: fields that will still be answering when the sync
+        // gate passes. A field implementing AsyncValidatable without a set
+        // async validator is a settled no-op — it must not delay submit.
+        // asyncValidator() lives on the HasAsyncValidation trait, not the
+        // interface, so custom implementors are trusted with their own
+        // always-async shape (method_exists seam, no interface BC break).
+        $asyncFlights = [];
+        foreach ($this->fieldsByGroup[$this->groupIndex] as $i => $f) {
+            if (isset($hidden[$i]) || $f->skippable()) {
+                continue;
+            }
+            if ($f instanceof AsyncValidatable
+                && (!method_exists($f, 'asyncValidator') || $f->asyncValidator() !== null)
+            ) {
+                $asyncFlights[$f->key()] = $f;
+            }
+        }
         foreach ($this->fieldsByGroup[$this->groupIndex] as $i => $f) {
             // A hidden field does not exist for the submit gate: its
             // (possibly stale, possibly required-and-empty) value must
@@ -458,21 +538,134 @@ final class Form implements Model
             }
         }
         if ($firstErrorIdx === null) {
-            return [$this->mutate(submitted: true), Cmd::quit()];
+            if ($asyncFlights === []) {
+                return [$this->mutate(submitted: true), Cmd::quit()];
+            }
+            // Sync-clean but async validators are still answering: the form
+            // stays open in a pending round (sugar-forms-020 — the gate is
+            // WIRED here, not disclosed as a host duty per the fix-not-
+            // delete ruling). Further Enter is ignored while in flight;
+            // the batch settles onto FormAsyncValidatedMsg at the door.
+            $seq = $this->asyncValidationSeq + 1;
+
+            return [
+                $this->mutate(asyncValidating: true, asyncErrors: [], asyncValidationSeq: $seq),
+                fn (): AsyncCmd => $this->asyncValidationCmd($asyncFlights, $seq),
+            ];
         }
 
-        $cmd = null;
-        if ($firstErrorIdx !== $this->focusedIndex) {
-            if (isset($revalidated[$this->focusedIndex])) {
-                $revalidated[$this->focusedIndex] = $revalidated[$this->focusedIndex]->blur();
-            }
-            [$focused, $cmd] = $revalidated[$firstErrorIdx]->focus();
-            $revalidated[$firstErrorIdx] = $focused;
-        }
+        [$rows, $cmd] = $this->gateFocus($revalidated, $firstErrorIdx);
         $newByGroup = $this->fieldsByGroup;
-        $newByGroup[$this->groupIndex] = $revalidated;
+        $newByGroup[$this->groupIndex] = $rows;
 
         return [$this->mutate(fieldsByGroup: $newByGroup, focusedIndex: $firstErrorIdx), $cmd];
+    }
+
+    /**
+     * Move focus to a failing field: blur the incumbent so exactly one
+     * cursor paints, and take the blink Cmd from the target's focus().
+     * Shared by the sync gate and the SF-20 async verdict application.
+     *
+     * @param array<int, Field> $rows
+     * @return array{0:array<int, Field>, 1:?\Closure}
+     */
+    private function gateFocus(array $rows, int $targetIdx): array
+    {
+        $cmd = null;
+        if ($targetIdx !== $this->focusedIndex) {
+            if (isset($rows[$this->focusedIndex])) {
+                $rows[$this->focusedIndex] = $rows[$this->focusedIndex]->blur();
+            }
+            [$focused, $cmd] = $rows[$targetIdx]->focus();
+            $rows[$targetIdx] = $focused;
+        }
+
+        return [$rows, $cmd];
+    }
+
+    /**
+     * The in-flight batch promise (SF-20): every async validator answers
+     * (or fails) and the settled verdicts ride back as one
+     * {@see FormAsyncValidatedMsg}. Rejections are ABSORBED per field — a
+     * validator that cannot answer BLOCKS submit with a typed verdict
+     * (fail-closed: an unanswered security-flavored check must never wave
+     * data through) — so the batch promise never rejects and the Program
+     * otherwise-arm stays a true can't-happen for this path.
+     *
+     * @param array<string, AsyncValidatable> $flights
+     */
+    private function asyncValidationCmd(array $flights, int $seq): AsyncCmd
+    {
+        $settled = [];
+        foreach ($flights as $key => $field) {
+            $settled[$key] = $field->validateAsync()
+                ->then(static fn (mixed $verdict): ?string => $verdict === true || $verdict === null || $verdict === ''
+                    ? null
+                    : (string) $verdict)
+                ->otherwise(static fn (\Throwable $e): string => Lang::t('form.async_unavailable', ['field' => $key, 'reason' => $e->getMessage()]));
+        }
+
+        $round = \React\Promise\all($settled)->then(
+            /** @param array<string,string|null> $verdicts */
+            static function (array $verdicts) use ($seq): FormAsyncValidatedMsg {
+                $errors = [];
+                foreach ($verdicts as $key => $verdict) {
+                    if ($verdict !== null && $verdict !== '') {
+                        $errors[$key] = $verdict;
+                    }
+                }
+
+                return new FormAsyncValidatedMsg($errors, $seq);
+            }
+        );
+
+        return new AsyncCmd($round);
+    }
+
+    /**
+     * Apply a settled round: clean -> submit and quit (the submit the user
+     * pressed); failures -> stay open, overlay the verdicts, and move focus
+     * to the first failing visible field (mirroring the sync gate). A
+     * verdict from a superseded round is dropped — the seq guard says which
+     * state it judged.
+     */
+    private function applyAsyncVerdicts(FormAsyncValidatedMsg $msg): array
+    {
+        if ($msg->seq !== $this->asyncValidationSeq) {
+            return [$this, null];
+        }
+        if ($msg->errors === []) {
+            return [$this->mutate(asyncValidating: false, asyncErrors: [], submitted: true), Cmd::quit()];
+        }
+
+        $byGroup = $this->fieldsByGroup;
+        $rows    = $byGroup[$this->groupIndex];
+        $target  = null;
+        foreach ($rows as $i => $f) {
+            if (isset($msg->errors[$f->key()])) {
+                $target = $i;
+                break;
+            }
+        }
+        if ($target === null) {
+            // Verdicts for fields no longer visible (host hide between
+            // press and settle): keep the overlay blocking the summary,
+            // leave focus where it is, end the round.
+            return [$this->mutate(asyncValidating: false, asyncErrors: $msg->errors), null];
+        }
+
+        [$rows, $cmd] = $this->gateFocus($rows, $target);
+        $byGroup[$this->groupIndex] = $rows;
+
+        return [
+            $this->mutate(
+                fieldsByGroup: $byGroup,
+                focusedIndex: $target,
+                asyncValidating: false,
+                asyncErrors: $msg->errors,
+            ),
+            $cmd,
+        ];
     }
 
     /**
@@ -512,6 +705,20 @@ final class Form implements Model
             } else {
                 $blocks[] = $f->view($this->showErrors, $theme);
             }
+            // SF-20: a settled async verdict on THIS field paints as its
+            // error row too — sync errors come from the field's own
+            // validator, async ones are form-held overlay state (the field
+            // cannot know them), so the Form composes the row. showErrors
+            // gates it exactly like the field-level inline row.
+            $asyncVerdict = $this->asyncErrors[$f->key()] ?? null;
+            if ($this->showErrors && $asyncVerdict !== null && $asyncVerdict !== '') {
+                $blocks[] = $this->clipToWidth($theme->error->render('! ' . RenderSafe::clean($asyncVerdict)));
+            }
+        }
+        if ($this->asyncValidating) {
+            // SF-20: the round is in flight — say so instead of painting a
+            // dead form while the async validators answer.
+            $blocks[] = $this->clipToWidth($theme->description->render(Lang::t('form.validating')));
         }
         if (count($this->groups) > 1 && $this->showHelp && $group->showHelp) {
             $blocks[] = $this->clipToWidth($theme->help->render(
@@ -1138,6 +1345,12 @@ final class Form implements Model
                 }
             }
         }
+        // SF-20: settled async verdicts join the error surface (summary +
+        // hasErrors read this method). A sync field error wins over the
+        // overlay for the same key — the sync gate ran on the same value.
+        foreach ($this->asyncErrors as $key => $verdict) {
+            $out[$key] ??= $verdict;
+        }
         return $out;
     }
 
@@ -1536,6 +1749,9 @@ final class Form implements Model
         ?int $timeoutMs = null,
         ?KeyMap $keyMap = null, bool $keyMapSet = false,
         ?array $constraints = null, bool $constraintsSet = false,
+        ?bool $asyncValidating = null,
+        ?array $asyncErrors = null,
+        ?int $asyncValidationSeq = null,
     ): self {
         return new self(
             groups:         $this->groups,
@@ -1555,6 +1771,9 @@ final class Form implements Model
             timeoutMs:      $timeoutMs      ?? $this->timeoutMs,
             keyMap:         $keyMapSet      ? $keyMap : $this->keyMap,
             constraints:    $constraintsSet ? $constraints : $this->constraints,
+            asyncValidating:     $asyncValidating     ?? $this->asyncValidating,
+            asyncErrors:         $asyncErrors         ?? $this->asyncErrors,
+            asyncValidationSeq:  $asyncValidationSeq  ?? $this->asyncValidationSeq,
         );
     }
 

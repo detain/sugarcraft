@@ -6,6 +6,8 @@ return [
     'viewport.dim_nonneg' => 'Dimensions must be non-negative',
     'viewport.width_nonneg' => 'Width must be non-negative',
     'viewport.height_nonneg' => 'Height must be non-negative',
+    'form.validating' => 'validating…',
+    'form.async_unavailable' => 'field {field}: async validation could not be completed ({reason})',
     'list.dim_nonneg' => 'Dimensions must be non-negative',
     'list.title_multiline' => 'Item titles must be single-line; put extra lines in the description',
     'spinner.empty_frames' => 'spinner style needs at least one frame',
