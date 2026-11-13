@@ -35,8 +35,22 @@ namespace SugarCraft\ColorProfile\Probe;
  */
 final class InfocmpBinary
 {
-    /** Candidate absolute paths, checked in order. */
-    private const CANDIDATES = ['/usr/bin/infocmp', '/bin/infocmp'];
+    /**
+     * Candidate absolute paths, checked in order — the existing two first so
+     * the hot path on glibc hosts stays two-stat-stable, then the published
+     * alternate layouts: NixOS system profile, FreeBSD/Nix-multi-user local
+     * seat, Termux (Android) prefix. Absolute-only IS the security posture:
+     * no PATH scanning happens here or anywhere in src (a rostered path the
+     * attacker cannot rename into is the whole point), and each candidate
+     * still faces the is_file AND is_executable gate.
+     */
+    private const CANDIDATES = [
+        '/usr/bin/infocmp',
+        '/bin/infocmp',
+        '/run/current-system/sw/bin/infocmp',
+        '/usr/local/bin/infocmp',
+        '/data/data/com.termux/files/usr/bin/infocmp',
+    ];
 
     /**
      * Name shape a TERM must have to reach infocmp: alnum first byte, then

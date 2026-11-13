@@ -84,10 +84,20 @@ final class InfocmpBinaryGateTest extends TestCase
             static fn (string $p): string => "'" . addslashes($p) . "'",
             $candidates,
         )) . ']';
-        $code = strtr($src, [
-            'final class InfocmpBinary' => 'final class ' . $name,
-            "private const CANDIDATES = ['/usr/bin/infocmp', '/bin/infocmp'];" => 'private const CANDIDATES = ' . $quoted . ';',
-        ]);
+        $code = strtr($src, ['final class InfocmpBinary' => 'final class ' . $name]);
+        // Anchor on the declaration SHAPE, not its value: the roster is a
+        // documented security surface that legitimately grows (CP-38), and
+        // a value-literal rewrite anchor would silently stop applying the
+        // day a seat is added — the vacuity this harness itself refuses.
+        $rewritten = (string) preg_replace_callback(
+            '/private const CANDIDATES = \[[^\]]*\];/s',
+            static fn (array $m): string => 'private const CANDIDATES = ' . $quoted . ';',
+            $code,
+            1,
+            $applied,
+        );
+        $this->assertSame(1, $applied, 'roster rewrite anchor must match the shipped const');
+        $code = $rewritten;
 
         // An unapplied rewrite would run the REAL roster and make every
         // assertion below vacuous — fail loudly instead.
@@ -114,5 +124,37 @@ final class InfocmpBinaryGateTest extends TestCase
         chmod($file, $mode);
 
         return $file;
+    }
+
+    /**
+     * CP-38 drift-free roster matrix: the shipped CANDIDATES literal itself
+     * is the fixture (read from source — the private const cannot be
+     * reflected, and re-hardcoding it here would defeat the pin). Legacy
+     * seats first, published alternates (NixOS, FreeBSD/usr-local, Termux)
+     * appended, every entry absolute — the no-PATH-scanning invariant the
+     * class docblock claims is asserted, not narrated.
+     */
+    public function testTheShippedRosterIsOrderedAbsoluteAndCoversThePublishedLayouts(): void
+    {
+        $source = (string) file_get_contents(
+            dirname(__DIR__, 2) . '/src/Probe/InfocmpBinary.php'
+        );
+        $this->assertSame(1, preg_match(
+            "/private const CANDIDATES = (\[[^\]]*\]);/s",
+            $source,
+            $match,
+        ), 'the CANDIDATES literal drifted out of the shape this pin reads');
+
+        /** @var list<string> $candidates */
+        $candidates = eval('return ' . $match[1] . ';');
+
+        $this->assertSame(['/usr/bin/infocmp', '/bin/infocmp'], array_slice($candidates, 0, 2),
+            'legacy hot-path seats must stay first, in order');
+        $this->assertContains('/run/current-system/sw/bin/infocmp', $candidates, 'NixOS system profile');
+        $this->assertContains('/usr/local/bin/infocmp', $candidates, 'FreeBSD standard location / Nix multi-user');
+        $this->assertContains('/data/data/com.termux/files/usr/bin/infocmp', $candidates, 'Termux prefix');
+        foreach ($candidates as $path) {
+            $this->assertSame('/', $path[0], 'roster is absolute-only — never PATH-derived');
+        }
     }
 }
