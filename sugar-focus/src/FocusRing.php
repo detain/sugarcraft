@@ -351,6 +351,31 @@ final class FocusRing implements \Countable, \IteratorAggregate, \JsonSerializab
     }
 
     /**
+     * Whether {@see focus()} would actually MOVE focus to $id: registered,
+     * enabled, and not already focused. One bool for all three refusal causes
+     * — the same wall focus() respects; pair with has()/isEnabled() when the
+     * caller must know WHICH refusal happened.
+     */
+    public function canFocus(string $id): bool
+    {
+        return $this->has($id) && $this->isEnabled($id) && $this->current() !== $id;
+    }
+
+    /**
+     * Ask-and-refuse form of {@see focus()}: the moved ring when focus
+     * relocates, null when it would not (unknown id, disabled id, already
+     * focused — an empty ring refuses everything, so it answers null too).
+     * focus()'s identity-return and this null are the same fact in two
+     * grammars; the shared call keeps them from drifting apart.
+     */
+    public function tryFocus(string $id): ?self
+    {
+        $moved = $this->focus($id);
+
+        return $moved === $this ? null : $moved;
+    }
+
+    /**
      * Focus the first ENABLED region in traversal order — disabled heads are
      * skipped. A no-op when nothing is enabled, or when focus already sits
      * there.

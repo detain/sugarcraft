@@ -129,6 +129,14 @@ strength itself under 1.4.11 *Non-text Contrast*).
   `unregister()` clears the removed id's flag, and `reorder()` keeps flags
   only for ids that survive — so a region dropped while disabled and later
   re-added comes back enabled.
+- **Three refusal grammars, never mixed.** Malformed ids at CONSTRUCTION
+  (`ofStrict()` duplicates, `restore()` non-string id lists) throw — a
+  programmer error named loudly. Steady-state mutations answer their own
+  receiver as a silent no-op when there is nothing to move (`focus()` onto a
+  disabled id, `next()` with one enabled region). When a caller wants to
+  branch, ask: `canFocus()` / `tryFocus()` return the honest false/null for
+  every refusal, so "nothing moved" stops being detected by identity
+  comparison.
 
 ### Iteration, counting and persistence
 
@@ -233,6 +241,7 @@ perceivable (2.4.7 *Focus Visible*).
 | `unregister(string $id): self` | Remove a region, preserving focus where possible. |
 | `reorder(string ...$ids): self` | Replace the traversal order, keeping focus on the current id when it survives. |
 | `focus(string $id): self` | Focus a specific registered, **enabled** region (no-op otherwise). |
+| `canFocus(string $id): bool` / `tryFocus(string $id): ?self` | The ask-first pair over `focus()`: `canFocus()` is true exactly when `focus()` would move (registered, enabled, not already focused — one bool for all three refusals); `tryFocus()` returns the moved ring or **null** when focus would not move. |
 | `next(): self` / `previous(): self` | Tab / Shift-Tab traversal (wrapping, skipping disabled regions). |
 | `nextOf(string $id): ?string` / `previousOf(string $id): ?string` | Pure query: the id traversal would land on if focus sat on `$id` (focus not moved; `null` for unregistered ids). |
 | `peekNext(): ?string` / `peekPrevious(): ?string` | The ring-level pair: where `next()` / `previous()` would land from the CURRENT focus (focus not moved; `null` on an empty ring; the no-op shape answers the current id, so `peekNext() === current()` means Tab would do nothing). |

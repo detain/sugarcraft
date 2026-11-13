@@ -145,7 +145,29 @@ final class FocusRingTest extends TestCase
 
         // Focus may still STAY on a region that becomes disabled afterwards.
         $parked = FocusRing::of('a', 'b')->focus('b')->disable('b');
+
         self::assertSame('b', $parked->current());
+    }
+
+    public function testCanFocusAndTryFocusAnswerEveryRefusal(): void
+    {
+        $ring = FocusRing::of('a', 'b', 'c')->disable('b');
+
+        self::assertTrue($ring->canFocus('c'));
+        self::assertFalse($ring->canFocus('a'), 'already focused is a refusal');
+        self::assertFalse($ring->canFocus('b'), 'the enabled wall refuses too');
+        self::assertFalse($ring->canFocus('zz'), 'unknown is a refusal');
+        self::assertFalse($ring->canFocus(''), 'the empty id is just another unknown');
+
+        $moved = $ring->tryFocus('c');
+        self::assertNotNull($moved, 'canFocus yes <=> tryFocus moves');
+        self::assertSame('c', $moved->current());
+        self::assertNull($ring->tryFocus('a'), 'already focused answers null, not the identity ring');
+        self::assertNull($ring->tryFocus('b'));
+        self::assertNull($ring->tryFocus('zz'));
+        self::assertNull(FocusRing::new()->tryFocus('a'), 'an empty ring refuses everything');
+
+        self::assertSame($ring, $ring->focus('b'), 'focus() keeps its identity grammar beside the nullable ask');
     }
 
     public function testUnregisterUnknownRegionIsANoOp(): void
@@ -722,6 +744,7 @@ final class FocusRingTest extends TestCase
             'register',
             'reorder',
             'restore',
+            'tryFocus',
             'unregister',
         ];
         self::assertSame($pinned, $roster, 'a new ring-returning member must join this roster and the walk plan');
@@ -753,6 +776,7 @@ final class FocusRingTest extends TestCase
             'register' => static fn (FocusRing $r): FocusRing => $r->register('e'),
             'reorder' => static fn (FocusRing $r): FocusRing => $r->reorder('d', 'c', 'b', 'a'),
             'restore' => static fn (FocusRing $r): FocusRing => FocusRing::restore(['ids' => ['a', 'b'], 'focused' => 'b']),
+            'tryFocus' => static fn (FocusRing $r): ?FocusRing => $r->tryFocus('c'),
             'unregister' => static fn (FocusRing $r): FocusRing => $r->unregister('b'),
         ];
     }
