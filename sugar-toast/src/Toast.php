@@ -2007,11 +2007,37 @@ final class Toast
         return max(1, min($cap, max($this->minWidth, min($needed, $this->maxWidth))));
     }
 
+    /**
+     * Wrap text into display-cell lines, one row per paragraph (or
+     * overflow chunk).
+     *
+     * An empty paragraph emits ONE spacer row: "First\n\nSecond" is three
+     * rows, not two. Collapsing deliberate blank lines would silently
+     * delete layout the host authored. A single trailing newline is
+     * dropped instead, mirroring splitLines().
+     *
+     * Carve-out: an OVERSIZED word is chunked with its ANSI stripped. The
+     * walker advances $remaining by strlen(), which requires every chunk
+     * to be a byte prefix of $remaining; truncateAnsi() appends reset
+     * sequences that are not prefix bytes, and miscounted advancement
+     * then shifts each following chunk into the word itself (measured:
+     * cells vanished at every boundary). Style on that one word
+     * therefore degrades to plain cells — every CELL survives, which is
+     * the stronger half of the contract.
+     */
     private function wordWrap(string $text, int $width): array
     {
         if ($width <= 0) return [''];
+        $paragraphs = \explode("\n", $text);
+        if (\count($paragraphs) > 1 && \end($paragraphs) === '') {
+            \array_pop($paragraphs);
+        }
         $result = [];
-        foreach (\explode("\n", $text) as $para) {
+        foreach ($paragraphs as $para) {
+            if ($para === '') {
+                $result[] = '';
+                continue;
+            }
             $words = \preg_split('/\s+/', $para) ?: [];
             $current = '';
             foreach ($words as $word) {
@@ -2024,8 +2050,9 @@ final class Toast
                     if ($current !== '') $result[] = $current;
                     if (Width::string($word) > $width) {
                         // Split oversized word at cell boundaries (never
-                        // mid-grapheme).
-                        $remaining = $word;
+                        // mid-grapheme), on ANSI-stripped bytes so the
+                        // strlen() walk stays exact (see docblock).
+                        $remaining = Ansi::strip($word);
                         while (Width::string($remaining) > $width) {
                             $chunk = Width::truncate($remaining, $width);
                             if ($chunk === '') {

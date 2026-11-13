@@ -218,4 +218,89 @@ final class ToastStyledRenderTest extends TestCase
         $ref->setAccessible(true);
         return $ref->getValue($t);
     }
+
+    public function testBlankParagraphEmitsOneSpacerRow(): void
+    {
+        // finding 059: "First\n\nSecond" used to weld into two rows,
+        // silently deleting the layout the host authored.
+        $toast = Toast::new(30)->alert(ToastType::Info, "First\n\nSecond");
+        $rows = \explode("\n", $toast->view('bg', 40, 6));
+
+        $first = null;
+        $second = null;
+        foreach ($rows as $i => $row) {
+            if (\str_contains($row, 'First')) {
+                $first = $i;
+            }
+            if (\str_contains($row, 'Second')) {
+                $second = $i;
+            }
+        }
+        $this->assertNotNull($first, 'First row must render');
+        $this->assertNotNull($second, 'Second row must render');
+        $this->assertSame(2, $second - $first, 'exactly one spacer row between paragraphs');
+        $this->assertSame('', \trim((string) $this->innerCells($rows[$first + 1])), 'the middle row is empty content');
+    }
+
+    public function testOversizedStyledWordKeepsEveryCellStrippedOfStyle(): void
+    {
+        // finding 029 carve-out: style on an oversized word degrades to
+        // plain cells, but EVERY cell survives - the strlen() walk runs on
+        // ANSI-free bytes so chunks stay byte prefixes (the pre-fix walker
+        // lost cells at every boundary while trying to carry the style).
+        $word = 'SUPER_CALIFRAGILISTICALLY_EXCELISPUSHOVER';
+        $toast = Toast::new(20)->alert(ToastType::Info, "\x1b[1m{$word}\x1b[0m end");
+        $rows = \explode("\n", $toast->view('bg', 40, 8));
+
+        $content = '';
+        foreach ($rows as $row) {
+            if (!\str_starts_with($row, "\u{2502}")) {
+                continue;
+            }
+            $inner = $this->innerCells($row);
+            if ($inner === null) {
+                continue;
+            }
+            $this->assertStringNotContainsString("\x1b[1m", $row, 'the carve-out strips style, never half-emits it');
+            // SGR-stripped, icon-stripped visible cells.
+            $clean = \preg_replace('/\x1b\[[0-9;]*m/', '', $inner) ?? $inner;
+            $content .= \trim(\preg_replace('/^\x{2139}/u', '', $clean) ?? '');
+        }
+        // Chunks join WITHOUT a space; the following word re-joins the last
+        // chunk row when it fits. Compare space-free visible text so lost or
+        // duplicated cells anywhere in the walk fail loud (pre-fix the
+        // byte-offset drift ate cells at every styled boundary).
+        $this->assertSame(
+            $word . 'end',
+            \str_replace(' ', '', $content),
+            'every cell of the oversized word survives across chunks, then the next word'
+        );
+    }
+
+    public function testSingleTrailingNewlineIsDroppedNotSpaced(): void
+    {
+        // mirrors splitLines(): one trailing newline is line noise, not an
+        // authored spacer; the paragraph arms above keep genuine blanks.
+        $toast = Toast::new(30)->alert(ToastType::Info, "First\n");
+        $rows = \explode("\n", $toast->view('bg', 40, 6));
+        foreach ($rows as $i => $row) {
+            if (\str_contains($row, 'First')) {
+                $this->assertStringStartsWith("\u{2570}", $rows[$i + 1], 'box closes directly after the single content row - no authored spacer from a bare trailing newline');
+                return;
+            }
+        }
+        $this->fail('First row must render');
+    }
+
+    /** The text between the first and second box wall of a content row. */
+    private function innerCells(string $row): ?string
+    {
+        $wall = "\u{2502}";
+        if (!\str_starts_with($row, $wall)) {
+            return null;
+        }
+        $rest = \substr($row, \strlen($wall));
+        $end = \strpos($rest, $wall);
+        return $end === false ? null : \substr($rest, 0, $end);
+    }
 }
