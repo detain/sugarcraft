@@ -67,13 +67,13 @@ final class AsciiRenderer implements Renderer, AcceptsOptimization
     ) {
         if ($ramp === '') {
             // Fail fast at construction: an empty table cannot index a glyph.
-            throw new \InvalidArgumentException('ascii ramp must contain at least one character');
+            throw new \InvalidArgumentException(Lang::t('ascii.empty_ramp'));
         }
-        // Same refusal shape as the ctor above (this renderer's house style is
-        // plain literal messages) and the same NaN rule as SixelRenderer:
-        // PHP orders NAN above every number, so it is refused by name.
+        // Lang::t'd like every other refusal in this lib (SI-35); the wording is
+        // byte-what-it-always-was, and the same NaN rule as SixelRenderer
+        // applies: PHP orders NAN above every number, so it is refused by name.
         if ($intensity !== null && (is_nan($intensity) || $intensity < 0.0)) {
-            throw new \InvalidArgumentException('ascii intensity must be between 0.0 and 1.0');
+            throw new \InvalidArgumentException(Lang::t('ascii.intensity_out_of_range'));
         }
         $this->intensity = $intensity === null ? null : min(1.0, $intensity);
     }

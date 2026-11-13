@@ -76,6 +76,16 @@ return [
     'sixel.alpha_threshold_out_of_range' => 'alphaThreshold must be 0-127 (GD alpha scale), got {alphaThreshold}',
     'sixel.canvas_too_large'        => 'Sixel canvas {width}×{height} px for a {cols}×{rows}-cell box exceeds the {max}-pixel ceiling',
     'sixel.cell_size_out_of_range'  => 'cell size must be positive, got {cellWidth}×{cellHeight}',
+    'sixel.unknown_quirk_bits'      => 'unknown quirk bits: {quirks}',
+
+    // Ascii
+    'ascii.empty_ramp'              => 'ascii ramp must contain at least one character',
+    'ascii.intensity_out_of_range'  => 'ascii intensity must be between 0.0 and 1.0',
+
+    // Band partitioning (Render\Bands)
+    'bands.negative_rows'           => 'band partition needs a non-negative row count, got {totalRows}',
+    'bands.unit_below_one'          => 'band unit must be at least one row, got {unit}',
+    'bands.max_bands_below_one'     => 'band count ceiling must be at least one, got {maxBands}',
 
     // Paced async rendering
     'paced.slice_ms'       => 'sliceMs must be >= 1, got {ms}',

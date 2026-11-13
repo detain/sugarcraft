@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Image\Render;
 
 use InvalidArgumentException;
+use SugarCraft\Image\Lang;
 
 /**
  * Unit-aligned band partition — splits a pixel/cell row range into
@@ -117,13 +118,13 @@ final class Bands
     public static function partition(int $totalRows, int $unit = self::SIXEL_UNIT, int $maxBands = 1): array
     {
         if ($totalRows < 0) {
-            throw new InvalidArgumentException("band partition needs a non-negative row count, got {$totalRows}");
+            throw new InvalidArgumentException(Lang::t('bands.negative_rows', ['totalRows' => $totalRows]));
         }
         if ($unit < 1) {
-            throw new InvalidArgumentException("band unit must be at least one row, got {$unit}");
+            throw new InvalidArgumentException(Lang::t('bands.unit_below_one', ['unit' => $unit]));
         }
         if ($maxBands < 1) {
-            throw new InvalidArgumentException("band count ceiling must be at least one, got {$maxBands}");
+            throw new InvalidArgumentException(Lang::t('bands.max_bands_below_one', ['maxBands' => $maxBands]));
         }
 
         // A zero-row canvas carries no work: no bands at all, not even an

@@ -786,7 +786,7 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
     public function withQuirks(?int $quirks): self
     {
         if ($quirks !== null && ($quirks & ~TermInfo::ALL_QUIRKS) !== 0) {
-            throw new \InvalidArgumentException("unknown quirk bits: {$quirks}");
+            throw new \InvalidArgumentException(Lang::t('sixel.unknown_quirk_bits', ['quirks' => $quirks]));
         }
 
         return new self(
