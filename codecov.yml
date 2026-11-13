@@ -217,6 +217,10 @@ flag_management:
       paths: ["sugar-vterm/src/**"]
       carryforward: true
 
+    - name: sugar-pty
+      paths: ["sugar-pty/src/**"]
+      carryforward: true
+
 # ── Components ────────────────────────────────────────────────────────────────
 # Each component links to its flag via flag_regexes.  Because both
 # flag_regexes AND paths are set, a file must satisfy BOTH to belong to the
@@ -599,3 +603,10 @@ component_management:
         - "sugar-vterm/src/**"
       flag_regexes:
         - "^sugar-vterm$"
+
+    - component_id: sugar-pty
+      name: sugar-pty
+      paths:
+        - "sugar-pty/src/**"
+      flag_regexes:
+        - "^sugar-pty$"
