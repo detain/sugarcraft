@@ -105,6 +105,40 @@ final class SSHServerTest extends TestCase
         $this->assertSame(1, $result);
     }
 
+    /**
+     * Finding 099: the anonymous-read gate answers AccessControl alone.
+     * The ssh2 extension never participates in authentication, so its
+     * presence must not be consulted there — on a host without ssh2 the
+     * old coupling silently refused every anonymous read even with the
+     * lever armed. This host loads ssh2, so no behavior pin can see the
+     * difference; the structural pin is the honest guard (mutation-proof:
+     * re-adding the condition to authenticate() reddens it).
+     */
+    public function testAnonymousReadGateConsultsAccessControlNotSsh2Capability(): void
+    {
+        $source = \file_get_contents(__DIR__ . '/../../src/SSH/SSHServer.php');
+        $this->assertIsString($source);
+
+        $start = \strpos($source, 'private function authenticate(');
+        $this->assertIsInt($start, 'the authenticate method must exist to be policed');
+        $body = \substr($source, $start, \strpos($source, "\n    }", $start) - $start);
+
+        $this->assertStringNotContainsString(
+            'extension_loaded',
+            $body,
+            'finding 099: an extension the auth path never calls must not gate anonymous reads'
+        );
+
+        // The capability gate stays exactly where the capability is used.
+        $userSource = \file_get_contents(__DIR__ . '/../../src/User.php');
+        $this->assertIsString($userSource);
+        $this->assertMatchesRegularExpression(
+            '/function generateKeyPair\(\)[\s\S]{0,120}extension_loaded\(\'ssh2\'\)/',
+            $userSource,
+            'generateKeyPair keeps its correct ssh2 gate'
+        );
+    }
+
     public function testLogSafeNeutralizesControlCharactersClipsAndStaysIdentityOnRealNames(): void
     {
         /** @var callable(string): string $logSafe */

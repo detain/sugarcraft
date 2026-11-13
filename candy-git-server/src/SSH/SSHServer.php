@@ -197,9 +197,13 @@ final class SSHServer
     private function authenticate($stream, ?User $user, ?string $presentedKey = null): bool
     {
         if ($user === null) {
-            // Anonymous access — allowed only if server permits it
+            // Anonymous access is a posture question for AccessControl
+            // alone. The ssh2 extension is never consulted by this auth
+            // path, so gating on it let an unrelated build detail flip a
+            // security posture (finding 099). User::generateKeyPair keeps
+            // the correct capability gate where ssh2 is actually used.
             $ac = AccessControl::instance();
-            return \extension_loaded('ssh2') && $ac->allowAnonymousRead();
+            return $ac->allowAnonymousRead();
         }
 
         // A known username is not proof of identity: authenticating AS a user
