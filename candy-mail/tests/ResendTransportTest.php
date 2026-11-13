@@ -143,6 +143,194 @@ final class ResendTransportTest extends TestCase
         }
     }
 
+    // -------------------------------------------------------------------------
+    // API response arms over the test seam (CM-08) — a forked one-shot fake
+    // HTTP server owns the loopback port; the parent's send() dials only it,
+    // never api.resend.com (house law: no external network from tests).
+    // -------------------------------------------------------------------------
+
+    public function testHttp200ArmCompletesAndPostsJsonWithBearerAuth(): void
+    {
+        [$port, $pid, $log] = $this->forkFakeApi(200, 'OK', '{"id":"fake-1"}');
+        try {
+            $transport = new ResendTransport('re_arm_key', "http://127.0.0.1:$port/emails");
+            $email     = new Email(
+                from:    ['sender@example.com'],
+                to:      ['them@example.com'],
+                subject: 'Arms',
+                body:    'Hello from the arm test.',
+            );
+
+            // The happy arm must COMPLETE without throwing — the point the
+            // tautology-era suite never proved.
+            $transport->send($email);
+
+            $request = $this->pollText($log, 'Content-Length:');
+            $this->assertStringStartsWith('POST /emails HTTP/', $request, 'the request line: ' . \substr($request, 0, 40));
+            $this->assertStringContainsString("Authorization: Bearer re_arm_key\r\n", $request);
+            $this->assertStringContainsString('Content-Type: application/json', $request);
+            $this->assertStringContainsString('"subject":"Arms"', $request);
+            $this->assertStringContainsString('"to":["them@example.com"]', $request);
+        } finally {
+            $this->reap($pid);
+            @\unlink($log);
+        }
+    }
+
+    public function testHttp500ArmRaisesApiErrorWithBodyTruncatedToFiveHundred(): void
+    {
+        // The 500-char truncation at send()'s error arm has only ever been
+        // read, never exercised: an unbounded provider body would pour a
+        // whole HTML error page into the operator's terminal.
+        $body = \str_repeat('A', 500) . 'BEYOND-THE-CAP';
+        [$port, $pid, $log] = $this->forkFakeApi(500, 'Internal Server Error', $body);
+        try {
+            $transport = new ResendTransport('re_arm_key', "http://127.0.0.1:$port/emails");
+            $email     = new Email(from: ['sender@example.com'], to: ['them@example.com'], subject: 'Arms');
+
+            try {
+                $transport->send($email);
+                $this->fail('the 5xx arm must throw');
+            } catch (\RuntimeException $e) {
+                $this->assertStringContainsString('Resend API error (500)', $e->getMessage());
+                $this->assertStringContainsString(\str_repeat('A', 500), $e->getMessage());
+                $this->assertStringNotContainsString('BEYOND-THE-CAP', $e->getMessage());
+            }
+        } finally {
+            $this->reap($pid);
+            @\unlink($log);
+        }
+    }
+
+    public function testClosedPortArmRaisesNetworkError(): void
+    {
+        // The third arm (curl transport-level failure -> resend.network_error)
+        // is the one shape that needs no server at all: bind an ephemeral
+        // port, take its number, hang up — the dial is refused.
+        if (!\function_exists('curl_init')) {
+            $this->markTestSkipped('ext-curl unavailable');
+        }
+
+        $server = @\stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
+        $this->assertIsResource($server, "ephemeral listen failed: $errstr");
+        $port = (int) \substr((string) \strrchr((string) \stream_socket_get_name($server, false), ':'), 1);
+        \fclose($server);
+
+        $transport = new ResendTransport('re_arm_key', "http://127.0.0.1:$port/emails");
+        $email     = new Email(from: ['sender@example.com'], to: ['them@example.com'], subject: 'Arms');
+
+        try {
+            $transport->send($email);
+            $this->fail('a refused dial must throw');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('Resend network error', $e->getMessage());
+        }
+    }
+
+    /**
+     * Fork a one-shot fake HTTP server on an ephemeral loopback port. The
+     * child accepts exactly one connection, captures the request (headers to
+     * the blank line, then the full Content-Length body), logs it to a temp
+     * file, answers with the canned status/body, and SIGKILLs itself so no
+     * child ever runs parent PHPUnit hooks.
+     *
+     * @return array{0:int,1:int,2:string}  [port, child pid, request-log path]
+     */
+    private function forkFakeApi(int $status, string $reason, string $body): array
+    {
+        if (!\function_exists('pcntl_fork')) {
+            $this->markTestSkipped('pcntl_fork unavailable');
+        }
+        if (!\function_exists('curl_init')) {
+            $this->markTestSkipped('ext-curl unavailable');
+        }
+
+        $server = @\stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
+        $this->assertIsResource($server, "ephemeral listen failed: $errstr");
+        $port = (int) \substr((string) \strrchr((string) \stream_socket_get_name($server, false), ':'), 1);
+        $log  = (string) \tempnam(\sys_get_temp_dir(), 'candy-mail-http-');
+
+        $pid = \pcntl_fork();
+        $this->assertGreaterThanOrEqual(0, $pid, 'fork failed');
+        if ($pid === 0) {
+            // The child: serve one request, record it, and die without
+            // touching the parent's registered shutdown/teardown.
+            $conn = @\stream_socket_accept($server, 10.0);
+            if (\is_resource($conn)) {
+                \stream_set_timeout($conn, 5);
+                $request = '';
+                while (($line = \fgets($conn)) !== false) {
+                    $request .= $line;
+                    if ($line === "\r\n" || $line === "\n") {
+                        break;
+                    }
+                }
+                if (\preg_match('/^Content-Length:\s*(\d+)/mi', $request, $m) === 1) {
+                    $left = (int) $m[1];
+                    while ($left > 0 && \strlen((string) $chunk = \fread($conn, \min(8192, $left))) > 0) {
+                        $request .= $chunk;
+                        $left    -= \strlen($chunk);
+                    }
+                }
+                $response = "HTTP/1.1 {$status} {$reason}\r\n"
+                    . 'Content-Length: ' . \strlen($body) . "\r\n"
+                    . "Connection: close\r\n"
+                    . "\r\n"
+                    . $body;
+                \fwrite($conn, $response);
+                \fclose($conn);
+            }
+            \file_put_contents($log, $request ?? '');
+            if (\function_exists('posix_kill')) {
+                \posix_kill(\getmypid(), \SIGKILL);
+            }
+            exit(0);
+        }
+
+        \fclose($server);
+
+        return [$port, $pid, $log];
+    }
+
+    /**
+     * Poll $path until its content carries $needle or the budget burns out;
+     * the final content answers either way so the assertion fails informatively.
+     */
+    private function pollText(string $path, string $needle, float $budget = 5.0): string
+    {
+        $deadline = \microtime(true) + $budget;
+        $content  = '';
+        do {
+            $content = (string) @\file_get_contents($path);
+            if ($needle === '' ? $content !== '' : \str_contains($content, $needle)) {
+                return $content;
+            }
+            \usleep(20000);
+        } while (\microtime(true) < $deadline);
+
+        return $content;
+    }
+
+    /**
+     * Reap a forked helper (the children SIGKILL themselves, so this only
+     * collects the zombie; WNOHANG keeps a wedged child from hanging the run).
+     */
+    private function reap(int $pid): void
+    {
+        if ($pid <= 0 || !\function_exists('pcntl_waitpid')) {
+            return;
+        }
+        $status   = 0;
+        $deadline = \microtime(true) + 5.0;
+        while (\microtime(true) < $deadline) {
+            $res = \pcntl_waitpid($pid, $status, \WNOHANG);
+            if ($res === $pid || $res === -1) {
+                return;
+            }
+            \usleep(20000);
+        }
+    }
+
     /**
      * @return array<int, mixed>
      */
