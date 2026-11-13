@@ -58,3 +58,15 @@ $fallback = Veil::centered("[!] dialog needs 40 cols — canvas has 30\n    pres
 printf("silent clip frame row 1: %s\n", strtok($clipped, "\n"));
 printf("warned frame  row 1: %s\n", strtok($fallback, "\n"));
 echo "overflowFor() told the host before either byte hit the screen.\n";
+
+// The other edge of the same contract: an EMPTY background has no canvas
+// to clip against, so there is no overhang to report — overflowFor() says
+// null and composite() paints the overlay as the whole frame. A host
+// treating "no backdrop yet" (first paint, cleared screen) as a special
+// case gets the documented pass-through, not a mismeasured clip.
+$emptyOverhang = Veil::new()->overflowFor($dialog, '', Position::CENTER, Position::CENTER);
+printf(
+    "empty canvas: overflowFor=%s, first row of bare composite: %s\n",
+    $emptyOverhang === null ? 'null (no clipping)' : 'unexpected',
+    strtok(Veil::new()->composite($dialog, '', Position::CENTER, Position::CENTER), "\n"),
+);
