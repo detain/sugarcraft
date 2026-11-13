@@ -226,6 +226,11 @@ final class Table
      * order ('B' first, every accented word last) would read as a bug
      * to every human looking at a sorted name column in a 12-locale
      * ecosystem.
+     *
+     * A primary-key tie falls through to the columns authored through
+     * Column::sorted(), walked in priority order (1 first; 0 consulted
+     * last, in column order), each with its own direction — clicking
+     * never rewrites those declarations (FBX-37).
      */
     public function withSort(int $colIndex, bool $ascending = true): self
     {
@@ -240,7 +245,6 @@ final class Table
         $clone->followSelection();
         $clone->sortColIndex = $colIndex;
         $clone->sortAscending = $ascending;
-        $clone->syncSortedColumns();
         $clone->viewDirty = true;
         return $clone;
     }
@@ -433,6 +437,17 @@ final class Table
     }
 
     /**
+     * The column roster, index-addressed exactly as the sort keys and
+     * header render see it.
+     *
+     * @return list<Column>
+     */
+    public function columns(): array
+    {
+        return $this->columns;
+    }
+
+    /**
      * The cursor's index in the materialized view, settling any pending
      * sort/filter first — the same law as currentRow(). Null means the
      * index addresses no visible row: with FBX-26's refused out-of-range
@@ -515,8 +530,15 @@ final class Table
         // Header
         $headerCols = [];
         foreach ($this->columns as $ci => $col) {
-            $title = $col->sortDir() !== 0
-                ? ($col->sortDir() > 0 ? '▲ ' : '▼ ') . $col->title
+            // The active column's arrow comes from the Table's own sort
+            // state (a click owns it, nothing else); every other column's
+            // arrow is authored Column::sorted() state — the secondary
+            // tiebreak keys, shown honestly (FBX-37).
+            $arrow = $ci === $this->sortColIndex
+                ? ($this->sortAscending ? 1 : -1)
+                : $col->sortDir();
+            $title = $arrow !== 0
+                ? ($arrow > 0 ? '▲ ' : '▼ ') . $col->title
                 : $col->title;
 
             $titleStr = $this->padHeader($title, $col->width, $col->align);
@@ -627,20 +649,32 @@ final class Table
     // -------------------------------------------------------------------------
 
     /**
-     * Sync each Column's sorted() state to the current sort target so the
-     * header renders the ▲/▼ arrow on the sorted column and clears it on the
-     * others. Column is immutable, so the columns array is rebuilt with the
-     * updated Column instances. Sort ordering is untouched — this only mirrors
-     * the sort state into the column value objects that the header reads.
+     * The authored secondary sort keys, in tiebreak order: every column
+     * that declares sorted() — other than the active one, which the
+     * Table owns outright — walked by explicit priority first (1 = the
+     * FIRST tiebreak; priority 0 means 'authored but unprioritised' and
+     * sorts after every numbered one, in column order).
+     *
+     * A sort click never authors and never erases these (FBX-37): the
+     * old sync clobbered the whole roster, so sorted(-1, 5) survived
+     * exactly zero interactions with sortBy(). Column::sorted() is the
+     * only writer; this is the only reader.
+     *
+     * @return list<array{col: int, dir: int, priority: int}>
      */
-    private function syncSortedColumns(): void
+    private function secondarySortKeys(): array
     {
-        $dir = $this->sortAscending ? 1 : -1;
+        $secs = [];
         foreach ($this->columns as $i => $col) {
-            $this->columns[$i] = ($i === $this->sortColIndex)
-                ? $col->sorted($dir)
-                : $col->unsorted();
+            if ($i !== $this->sortColIndex && $col->sortDir() !== 0) {
+                $secs[] = ['col' => $i, 'dir' => $col->sortDir(), 'priority' => $col->sortPriority()];
+            }
         }
+        \usort($secs, static fn (array $a, array $b): int =>
+            [$a['priority'] > 0 ? $a['priority'] : \PHP_INT_MAX, $a['col']]
+            <=> [$b['priority'] > 0 ? $b['priority'] : \PHP_INT_MAX, $b['col']]
+        );
+        return $secs;
     }
 
     /**
@@ -676,14 +710,32 @@ final class Table
         $sorting = $this->sortColIndex >= 0 && $this->sortColIndex < \count($this->columns);
         if ($sorting) {
             $colIdx = $this->sortColIndex;
+            $secs   = $this->secondarySortKeys();
+            $secKeys = [];
             foreach ($this->allRows as $i => $row) {
-                $items[] = [$i, $row];
-                $keys[$i] = $this->sortKey($row[$colIdx] ?? '', $i);
+                $items[]  = [$i, $row];
+                $folded   = $this->foldedRow($i);
+                $keys[$i] = $this->sortKey($row[$colIdx] ?? '', $folded[$colIdx] ?? '');
+                foreach ($secs as $sec) {
+                    $secKeys[$sec['col']][$i] =
+                        $this->sortKey($row[$sec['col']] ?? '', $folded[$sec['col']] ?? '');
+                }
             }
             $asc = $this->sortAscending;
-            \usort($items, static function (array $a, array $b) use ($keys, $asc): int {
+            \usort($items, static function (array $a, array $b) use ($keys, $secKeys, $secs, $asc): int {
                 $cmp = self::compareSortKeys($keys[$a[0]], $keys[$b[0]]);
-                return $asc ? $cmp : -$cmp;
+                if ($cmp !== 0) {
+                    return $asc ? $cmp : -$cmp;
+                }
+                // Primary tie: walk the authored secondary keys in
+                // priority order, each with its own direction.
+                foreach ($secs as $sec) {
+                    $tie = self::compareSortKeys($secKeys[$sec['col']][$a[0]], $secKeys[$sec['col']][$b[0]]);
+                    if ($tie !== 0) {
+                        return $sec['dir'] > 0 ? $tie : -$tie;
+                    }
+                }
+                return 0;
             });
         } else {
             foreach ($this->allRows as $i => $row) {
@@ -727,7 +779,7 @@ final class Table
      *
      * @return array{digit: ?string, num: ?float, fold: string}
      */
-    private function sortKey(string $value, int $rowIndex): array
+    private function sortKey(string $value, string $fold): array
     {
         return [
             // Digit-only strings keep their EXACT value as a zero-stripped
@@ -736,7 +788,7 @@ final class Table
             // precision, and the sort order becomes insertion order).
             'digit' => ($value !== '' && \ctype_digit($value)) ? (ltrim($value, '0') ?: '0') : null,
             'num'   => \is_numeric($value) ? (float) $value : null,
-            'fold'  => $this->foldedRow($rowIndex)[$this->sortColIndex] ?? '',
+            'fold'  => $fold,
         ];
     }
 

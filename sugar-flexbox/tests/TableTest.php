@@ -722,6 +722,77 @@ final class TableTest extends TestCase
         $this->assertSame('100', $t->withCursor(0)->currentCell(0), 'the settled view still heads with 100');
     }
 
+    // ---- authored secondary tiebreak (FBX-37) ---------------------------
+
+    public function testAuthoredPrioritiesBreakThePrimaryTieInOrder(): void
+    {
+        $t = Table::new()
+            ->addColumn(Column::new('City', 8)->sorted(1, 1))     // asc, first tiebreak
+            ->addColumn(Column::new('Region', 8)->sorted(-1, 2))  // desc, second tiebreak
+            ->addColumn(Column::new('Name', 8))                   // clicked primary
+            ->addRow(['Paris', 'north', 'x'])
+            ->addRow(['Berlin', 'north', 'x'])
+            ->addRow(['Paris', 'south', 'x'])
+            ->withSort(2, true); // every Name ties at 'x'
+
+        // City asc puts Berlin first; the two Paris rows tie on City and
+        // fall to Region DESC — 'south' before 'north'.
+        $this->assertSame(
+            [['Berlin', 'north', 'x'], ['Paris', 'south', 'x'], ['Paris', 'north', 'x']],
+            array_map(static fn(int $i): array => $t->currentRow() ?? [], [])
+                ?: array_values(array_map(
+                    static fn(string $line): array => array_map('trim', explode(' │ ', $line)),
+                    array_slice($t->buildLines(), 2)
+                )),
+        );
+    }
+
+    public function testUnprioritisedSecondaryIsConsultedAfterNumberedOnes(): void
+    {
+        // Region (priority 1) must outrank City (authored, priority 0):
+        // rows chosen so the two legs DISAGREE — the visible order names
+        // the winner.
+        $t = Table::new()
+            ->addColumn(Column::new('City', 8)->sorted(-1, 0))    // desc, unprioritised
+            ->addColumn(Column::new('Region', 8)->sorted(1, 1))   // asc, FIRST tiebreak
+            ->addColumn(Column::new('Name', 6))
+            ->addRow(['Paris', 'south', 'x'])
+            ->addRow(['Berlin', 'north', 'x'])
+            ->withSort(2, true);
+
+        // City desc alone would lead with Paris; Region asc (north <
+        // south) outranks it, so Berlin leads.
+        $this->assertSame('Berlin', $this->dataColumn($t, 0)[0]);
+    }
+
+    public function testTheSortClickNeverTouchesAuthoredColumns(): void
+    {
+        $t = Table::new()
+            ->addColumn(Column::new('City', 8)->sorted(-1, 3))
+            ->addColumn(Column::new('Name', 8))
+            ->addRow(['Paris', 'a'])
+            ->addRow(['Berlin', 'b'])
+            ->withSort(1, true);
+
+        $this->assertSame(-1, $t->columns()[0]->sortDir(), 'the click owns column 1, not column 0');
+        $this->assertSame(3, $t->columns()[0]->sortPriority());
+        $this->assertSame(0, $t->columns()[1]->sortDir(),
+            'the active column is not stamped — the Table answers its arrow from click state');
+    }
+
+    public function testHeaderShowsAuthoredArrowsBesideTheActiveOne(): void
+    {
+        $t = Table::new()
+            ->addColumn(Column::new('City', 8)->sorted(-1, 1))
+            ->addColumn(Column::new('Name', 8))
+            ->addRow(['Paris', 'a'])
+            ->withSort(1, true); // active ascending
+
+        $header = $t->buildLines()[0];
+        $this->assertStringContainsString('▼ City', $header, 'authored secondary renders its own arrow');
+        $this->assertStringContainsString('▲ Name', $header, 'the active column arrow comes from the Table state');
+    }
+
     public function testNumericSortKeepsEveryDigitBeyondFloatPrecision(): void
     {
         // A float cast collapses 10^18 and 10^18+1 onto the SAME double,

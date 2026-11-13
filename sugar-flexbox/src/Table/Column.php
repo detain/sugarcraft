@@ -135,15 +135,18 @@ final class Column
     }
 
     /**
-     * Mark this column as sorted. The direction is NORMALIZED to the
-     * header-arrow contract: > 0 renders as +1 (ascending), < 0 as -1
-     * (descending), 0 clears the marker.
+     * Author this column as a sort key. The direction is NORMALIZED to
+     * the header-arrow contract: > 0 renders as +1 (ascending), < 0 as
+     * -1 (descending), 0 clears the marker.
      *
-     * NOTE: Table implements single-column sorting driven by
-     * Table::sortBy(); $priority is stored and readable through
-     * sortPriority() but is NOT consumed by the current sort — it is a
-     * carrier for a future multi-column ordering, never a tiebreaker
-     * today.
+     * This declaration is the ONLY writer of secondary sort state — a
+     * click-driven Table::withSort() owns the primary key and never
+     * authors or erases these (FBX-37). On a primary tie the settle
+     * walks every declaration in priority order: 1 is the FIRST
+     * tiebreaker, and priority 0 means 'authored but unprioritised' —
+     * consulted after all numbered ones, in column order. Each
+     * secondary leg compares with its own direction, and its arrow
+     * shows in the header beside the active column's.
      */
     public function sorted(int $direction = 1, int $priority = 0): self
     {
