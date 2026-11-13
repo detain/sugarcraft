@@ -354,13 +354,27 @@ final class Tabs implements Model
         );
     }
 
+    /**
+     * Activate tab `$index`. Out-of-range indices are a programming
+     * error, not a style choice: typed throw naming the grammar-free
+     * range (the `tabs.bad_index` the vocabulary promised). An empty
+     * tab list has no selection to move — `$this` is returned. The
+     * constructor carries the same guard; render-time clamping stays
+     * as a defensive belt for hand-built instances, not a substitute
+     * for setter enforcement.
+     *
+     * @throws \InvalidArgumentException when count > 0 and the index
+     *         is outside 0..count-1.
+     */
     public function withActive(int $index): self
     {
         $count = count($this->labels);
         if ($count === 0) {
             return $this;
         }
-        $index = max(0, min($index, $count - 1));
+        if ($index < 0 || $index >= $count) {
+            throw new \InvalidArgumentException(Lang::t('tabs.bad_index'));
+        }
         return $this->copy(active: $index)->adjustScroll($index);
     }
 

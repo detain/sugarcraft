@@ -218,16 +218,24 @@ final class TabsTest extends TestCase
         $this->assertSame(2, $t->active());
     }
 
-    public function testWithActiveClampsToLast(): void
+    public function testWithActiveRejectsAboveEnd(): void
     {
-        $t = $this->tabs()->withActive(99);
-        $this->assertSame(2, $t->active());
+        // W-39: the silent clamp became a typed throw — bad indices are
+        // programming errors; the render-time clamp remains a belt.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->tabs()->withActive(99);
     }
 
-    public function testWithActiveClampsToZero(): void
+    public function testWithActiveRejectsBelowZero(): void
     {
-        $t = $this->tabs()->withActive(-1);
-        $this->assertSame(0, $t->active());
+        $this->expectException(\InvalidArgumentException::class);
+        $this->tabs()->withActive(-1);
+    }
+
+    public function testWithActiveOnEmptyTabsIsNoOp(): void
+    {
+        $t = Tabs::new([]);
+        $this->assertSame($t, $t->withActive(0));
     }
 
     public function testWithLabels(): void
