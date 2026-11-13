@@ -766,6 +766,9 @@ Options:
   --help, -h           Show this help
   Short aliases: -f/--from, -t/--to, -s/--subject, -a/--attach (space form
   only — a value glued with "=" needs the long option, e.g. --from=value).
+  Exit codes: 0 success (including --help/--version/--render); 1 every
+  refusal (config, TLS, relay). Differentiated refusal codes are an open
+  CONV/CLI decision — see the Exit codes table in README.md.
 
 Environment variables:
   RESEND_API_KEY                   Resend API key (preferred transport)

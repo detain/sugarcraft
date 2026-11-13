@@ -625,6 +625,18 @@ final class CliTest extends TestCase
         $this->assertSame('subject', \SugarCraft\Mail\canonicalFlagName('--subject'));
     }
 
+    public function testHelpStatesTheExitCodeContract(): void
+    {
+        // CM-14: the help tail must carry the exit-code contract itself, not
+        // only the README — an author piping the bin into a cron guard reads
+        // `--help`, and 0 = success (help/version/render included) / 1 = every
+        // refusal is what makes `|| alert` writable from the terminal alone.
+        $help = \SugarCraft\Mail\help('candy-mail');
+        $this->assertStringContainsString('Exit codes: 0 success', $help);
+        $this->assertStringContainsString('1 every', $help);
+        $this->assertStringContainsString('Exit codes table in README.md', $help);
+    }
+
     private function readProperty(object $subject, string $name): mixed
     {
         $property = new \ReflectionProperty($subject, $name);
