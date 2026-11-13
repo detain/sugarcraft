@@ -57,8 +57,10 @@ php tools/check-path-repos.php --no-lib-path-repos   # must exit 0
 
 These gates run in `.github/workflows/ci.yml` without a
 `composer install`. They live in two jobs: the first command below is the
-`tools-guards` job, and the other six are `path-repo-check`, which `needs:`
-it. Run the whole set before you push; each must exit 0:
+`tools-guards` job, the rest are `path-repo-check`, which `needs:` it. The
+job steps in `ci.yml` are the authority — if this list and the job ever
+disagree, the workflow wins and this page is the stale one. Run the whole
+set before you push; each must exit 0:
 
 ```sh
 phpunit --no-configuration --colors=never tools/tests/  # the checker's own guards
@@ -70,6 +72,7 @@ php tools/check-path-repos.php --fix --strict-closure \
   && git checkout -- '*/composer.json'                  # injection restores a full local closure
 php tools/check-child-lifetimes.php                     # every exposed proc_open child is accounted for
 php tools/check-one-type-per-file.php                   # every PSR-4 file declares only its own type
+php tools/check-lib-licenses.php                        # every split package carries the root LICENSE
 ```
 
 The last gate exists because Composer's PSR-4 autoloader finds a type only in
