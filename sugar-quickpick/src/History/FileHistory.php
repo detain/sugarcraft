@@ -42,11 +42,21 @@ use SugarCraft\QuickPick\Item;
  *  - {@see self::clear()} truncates in place under an exclusive lock rather
  *    than unlinking, so a concurrent writer's new file cannot be swapped
  *    underneath the clear.
+ *  - One lock policy class-wide (-033): write-side operations (append(),
+ *    clear()) HARD-REQUIRE their exclusive lock — a failed flock throws
+ *    before any byte changes, so the destructive ftruncate never runs
+ *    unlocked racing appends. The read-side LOCK_SH in all() is ADVISORY by
+ *    design: tolerating its failure costs at most one torn line, which the
+ *    JSON-shape gate drops anyway.
  *
  * On shared hosts pass a private $baseDir (e.g. your home directory) so the
  * confinement jail also applies: see {@see self::__construct()}.
+ *
+ * The class is not final for exactly one reason: the lock seam {@see
+ * self::lockHandle()} must be overridable so a test can inject a
+ * deterministic flock failure instead of racing a second process.
  */
-final class FileHistory
+class FileHistory
 {
     /**
      * Byte budget for a single history line as read by all(): fgets() with
@@ -220,6 +230,22 @@ final class FileHistory
     }
 
     /**
+     * Lock seam: every advisory lock in this class is acquired through here.
+     *
+     * Production behaviour is a plain flock(). The method exists, protected
+     * and the class non-final solely for it, so a test can deterministically
+     * inject a lock failure rather than racing a second process — the
+     * clear()-fails-locked contract was otherwise unpinnable (-033).
+     *
+     * @param resource $handle
+     * @param int      $operation LOCK_EX for the write-side ops, LOCK_SH for the read side
+     */
+    protected function lockHandle($handle, int $operation): bool
+    {
+        return \flock($handle, $operation);
+    }
+
+    /**
      * Append an item to the history file.
      *
      * Creates the file exclusively when it does not exist yet and chmod's it
@@ -277,7 +303,7 @@ final class FileHistory
                 @\chmod($this->path, 0600);
             }
             $this->verifyHandle($handle, 'append');
-            if (\flock($handle, \LOCK_EX) === false) {
+            if ($this->lockHandle($handle, \LOCK_EX) === false) {
                 throw new \RuntimeException(
                     \sprintf('Cannot lock QuickPick history file: %s', $this->path),
                 );
@@ -344,7 +370,7 @@ final class FileHistory
         $this->droppedOversized = 0;
         try {
             $this->verifyHandle($handle, 'read');
-            \flock($handle, \LOCK_SH);
+            $this->lockHandle($handle, \LOCK_SH); // advisory: failure tolerated by policy (class docblock, -033)
             while (($line = \fgets($handle, self::READ_CHUNK_BYTES)) !== false) {
                 if (\strlen($line) === self::READ_CHUNK_BYTES - 1 && \substr($line, -1) !== "\n") {
                     // Cap hit: the line does not fit the read buffer. An
@@ -429,9 +455,12 @@ final class FileHistory
      * never owned.
      *
      * @throws \RuntimeException when the path is a symlink, the file
-     *                           exists but cannot be opened for writing, or
-     *                           the opened handle fails
-     *                           {@see self::verifyHandle()}
+     *                           exists but cannot be opened for writing, the
+     *                           opened handle fails
+     *                           {@see self::verifyHandle()}, or the
+     *                           exclusive lock cannot be taken — the
+     *                           ftruncate would otherwise run UNLOCKED
+     *                           racing concurrent appends (-033)
      */
     public function clear(): void
     {
@@ -450,7 +479,11 @@ final class FileHistory
 
         try {
             $this->verifyHandle($handle, 'clear');
-            \flock($handle, \LOCK_EX);
+            if ($this->lockHandle($handle, \LOCK_EX) === false) {
+                throw new \RuntimeException(
+                    \sprintf('Cannot lock QuickPick history file: %s', $this->path),
+                );
+            }
             \ftruncate($handle, 0);
             \flock($handle, \LOCK_UN);
         } finally {

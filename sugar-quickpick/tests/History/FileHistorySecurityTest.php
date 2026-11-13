@@ -283,6 +283,80 @@ final class FileHistorySecurityTest extends TestCase
     }
 
     /**
+     * S-19/-033: the class docblock promised clear() truncates "under an
+     * exclusive lock" while the code discarded the flock() result — a failed
+     * lock let the destructive ftruncate run unlocked, racing appends.
+     * Lock-failure injection through the lockHandle() seam (deterministic,
+     * no second process): clear() must throw LIKE append() does and leave
+     * every byte alone.
+     */
+    public function testClearRefusesToTruncateWhenTheLockFails(): void
+    {
+        $path = $this->tempPath();
+        (new FileHistory($path))->append(new FilteredItem(1, 'must-survive'));
+        \clearstatcache(true, $path);
+        $sizeBefore = \filesize($path);
+
+        $lockedOut = new class ($path) extends FileHistory {
+            /** exclusive locks refused, shared locks passed through */
+            protected function lockHandle($handle, int $operation): bool
+            {
+                return $operation === \LOCK_SH ? \flock($handle, $operation) : false;
+            }
+        };
+
+        try {
+            $lockedOut->clear();
+            self::fail('expected RuntimeException for a refused exclusive lock');
+        } catch (RuntimeException $e) {
+            self::assertStringContainsString('Cannot lock QuickPick history file', $e->getMessage());
+        }
+
+        self::assertSame($sizeBefore, \filesize($path), 'ftruncate must not run when the lock fails');
+        self::assertSame(
+            ['must-survive'],
+            array_map(static fn($i) => $i->value(), (new FileHistory($path))->all()),
+        );
+    }
+
+    /**
+     * S-19/-033 policy arms: the read side deliberately ADVISES with LOCK_SH
+     * and survives failure (a torn line is dropped by the shape gate
+     * anyway), while the write side hard-refuses — one lock-policy story,
+     * both arms pinned on the same double.
+     */
+    public function testReadSideToleratesLockFailureWhileWriteSideRefusesIt(): void
+    {
+        $path = $this->tempPath();
+        (new FileHistory($path))->append(new FilteredItem(1, 'legacy-row'));
+
+        $noLocks = new class ($path) extends FileHistory {
+            protected function lockHandle($handle, int $operation): bool
+            {
+                return false;
+            }
+        };
+
+        self::assertSame(
+            ['legacy-row'],
+            array_map(static fn($i) => $i->value(), $noLocks->all()),
+            'the advisory LOCK_SH arm must stay tolerant',
+        );
+
+        try {
+            $noLocks->append(new FilteredItem(2, 'never-lands'));
+            self::fail('expected RuntimeException for a refused exclusive lock');
+        } catch (RuntimeException $e) {
+            self::assertStringContainsString('Cannot lock QuickPick history file', $e->getMessage());
+        }
+
+        self::assertSame(
+            ['legacy-row'],
+            array_map(static fn($i) => $i->value(), (new FileHistory($path))->all()),
+        );
+    }
+
+    /**
      * S-16/-008: the pre-open symlink check cannot speak for the inode the
      * open LANDS on. A regular-but-readable-by-others file (the classic
      * shared-/tmp pre-plant: attacker creates the path first, world can
