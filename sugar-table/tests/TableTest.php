@@ -1581,4 +1581,61 @@ final class TableTest extends TestCase
         $this->expectExceptionMessage('fromColumns()[1] must be Column, got array');
         Table::fromColumns([Column::new('id', 'ID', 5), ['id']]);
     }
+
+    /**
+     * ST-03: the query-state readouts reflect the setters' state, and the
+     * returned arrays are value copies — mutating them cannot touch the table.
+     */
+    public function testQueryStateAccessorsRoundTrip(): void
+    {
+        $t = Table::fromColumns([
+            Column::new('name', 'Name', 8),
+            Column::new('city', 'City', 8),
+        ])->withRows([
+            Row::new(RowData::from(['name' => 'Ann', 'city' => 'Rome'])),
+            Row::new(RowData::from(['name' => 'Bob', 'city' => 'Oslo'])),
+        ]);
+
+        $this->assertSame([], $t->sortColumns());
+        $this->assertSame([], $t->activeFilters());
+        $this->assertSame('', $t->searchText());
+
+        $sorted = $t->SortBy('city')->SortBy('name', ascending: false, primary: false);
+        $this->assertSame(
+            [['key' => 'city', 'asc' => true], ['key' => 'name', 'asc' => false]],
+            $sorted->sortColumns()
+        );
+
+        $filtered = $sorted->Filter('city', 'Oslo');
+        $this->assertSame(['city' => 'Oslo'], $filtered->activeFilters());
+
+        $searched = $filtered->search('ann');
+        $this->assertSame('ann', $searched->searchText());
+
+        // Defensive copies: PHP array returns are already copies, and the
+        // accessor must not expose live storage under any write-through.
+        $copy = $searched->sortColumns();
+        $copy[] = ['key' => 'rogue', 'asc' => true];
+        $filters = $searched->activeFilters();
+        $filters['city'] = 'tampered';
+        $this->assertSame($sorted->sortColumns(), $searched->sortColumns());
+        $this->assertSame(['city' => 'Oslo'], $searched->activeFilters());
+    }
+
+    /**
+     * ST-03 (finding 075): totalWidth() reports the solved render budget —
+     * the pinned frame when set, else content widths plus inter-column borders.
+     */
+    public function testTotalWidthReadoutFollowsTheSolve(): void
+    {
+        $t = Table::fromColumns([
+            Column::new('a', 'A', 4),
+            Column::new('b', 'B', 6),
+        ]);
+
+        $this->assertSame(11, $t->totalWidth(), 'fixed 4 + 6 plus one inter-column border');
+
+        $pinned = $t->withWidth(30);
+        $this->assertSame(30, $pinned->totalWidth(), 'a pinned frame is honoured exactly');
+    }
 }

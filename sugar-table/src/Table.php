@@ -1521,6 +1521,46 @@ final class Table
         return $this->pageSize;
     }
 
+    /**
+     * Active sort stack in priority order: the first entry is the primary
+     * key, later entries tie-break it (audit ST-03 — the state SortBy() and
+     * ClearSort() mutate was write-only; hosts re-tracked it blind).
+     *
+     * @return list<array{key: string, asc: bool}>
+     */
+    public function sortColumns(): array
+    {
+        return $this->sortColumns; // value copy: callers cannot mutate table state
+    }
+
+    /**
+     * Active per-column filter texts, keyed by column key (the state
+     * Filter()/ClearFilter() mutate; an empty map means unfiltered).
+     *
+     * @return array<string, string>
+     */
+    public function activeFilters(): array
+    {
+        return $this->filterText;
+    }
+
+    /** Active global search needle ('' when unset). */
+    public function searchText(): string
+    {
+        return $this->searchText;
+    }
+
+    /**
+     * Total rendered width of the table in columns (pinned width when
+     * set, else the solved content widths plus inter-column borders) —
+     * the pre-render budget readout candy-sql hand-computes today
+     * (audit finding 075; cross-lib note is report-only, out of group).
+     */
+    public function totalWidth(): int
+    {
+        return $this->computeTotalWidth();
+    }
+
     public function PageFooter(): string
     {
         return Lang::t('page_of', ['page' => $this->page + 1, 'total' => $this->TotalPages()]);

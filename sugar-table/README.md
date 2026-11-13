@@ -190,9 +190,14 @@ $t->CurrentRow();                   // selected Row or null (not RowData!)
 $t->CurrentRowData();                // selected RowData or null
 ```
 
-The rendered table carries no sort-direction or filter marker in its output, and
-no public accessor exposes the active sort/filter/search state — hosts that show
-one (sort arrows, filter chips) must track the state they pass in themselves.
+The rendered table carries no sort-direction or filter marker in its output —
+but the active state is readable, not write-only: `sortColumns()` returns the
+sort stack in priority order, `activeFilters()` the per-column filter texts,
+and `searchText()` the global needle, so hosts that show their own decorations
+(sort arrows, filter chips) read them back instead of shadow-tracking what
+they passed in. `totalWidth()` exposes the solved render budget in columns —
+the number the frame lays out against — so a host composes panes around the
+table without pre-computing it by hand.
 
 `SortBy()` has the full signature `SortBy(string $colKey, bool $ascending = true, bool $primary = true)`:
 
@@ -1034,7 +1039,9 @@ $t->isExpanded(5);   // depends on whether that row was expanded on page 2
 sugar-table exposes **zero** `getFoo()`-form property accessors: property reads
 ride public `readonly` state (`$column->style`, `$column->width`,
 `$row->data`, `$cell->value`) or bare methods (`Table::Columns()`,
-`Table::CurrentRow()`, `Table::scrollY()`). The only public names carrying
+`Table::CurrentRow()`, `Table::scrollY()`, plus the query-state readouts
+`Table::sortColumns()`, `Table::activeFilters()`, `Table::searchText()`,
+`Table::totalWidth()` — audit ST-03, value copies, never live storage). The only public names carrying
 get/has/is vocabulary are ruled lookups, not property accessors:
 `RowData::get($key)` and `RowData::has($key)` are keyed map lookup and
 key-presence test (the fleet's single-word lookup vocabulary), and
