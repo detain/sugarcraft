@@ -10,16 +10,20 @@
 
 # CandyMail
 
-candy-mail — an email **sender** for PHP 8.3+, via the Resend HTTP API or direct SMTP.
+candy-mail — an email **sender** for PHP 8.3+, a native PHP port of Charmbracelet's
+**pop** mail tool, delivering via the Resend HTTP API or direct SMTP.
 Send-only by design: candy-mail composes and dispatches mail; it does not read,
 store, or manage an inbox.
 
 > Formerly published as `sugarcraft/sugar-post` (renamed 2026-10). <!-- @rename-keep -->
 > Namespace changed: `SugarCraft\Post\` → `SugarCraft\Mail\`. <!-- @rename-keep -->
 
+![candy-mail demo](https://raw.githubusercontent.com/detain/sugarcraft/master/candy-mail/.vhs/showcase.gif)
+
 ## Features
 
-- **Dual transport** — send via the Resend HTTP API or raw SMTP
+- **Dual transport** — send via the Resend HTTP API (Resend is a hosted email API:
+  sign up at [resend.com](https://resend.com), create an API key) or raw SMTP
 - **Send-path scope** — the upstream TUI parity leg is deliberately descoped
   2026-11-12 (owner ruling 6a) because the pop-parity surface this app commits to is
   composing and dispatching mail (CLI + library), not an interactive client; a TUI
@@ -50,7 +54,8 @@ store, or manage an inbox.
 - **TLS by default** — STARTTLS is required on SMTP unless explicitly relaxed (see below);
   credentials are never sent over a plaintext channel
 - **CLI** — one-shot sending with STDIN compose, `--render` for offline MIME preview, and
-  translated error messages (the CLI itself; the library is transport-agnostic)
+  translated error messages (the CLI translates at startup; library errors route through
+  the same facade — see [Internationalisation](#internationalisation))
 - **PHP 8.3+** — pure PHP. `suggest`ed extensions, honestly scoped: `ext-curl` is
   needed only for the Resend transport, `ext-fileinfo` improves automatic MIME
   detection for path attachments, and `ext-openssl` is required for TLS — without
@@ -263,7 +268,8 @@ Embedding behind another bin? `require` the bootstrap and call
 Environment variables:
 
 ```bash
-export RESEND_API_KEY=re_xxxxx                # Resend API key (enables the Resend transport)
+export RESEND_API_KEY=re_xxxxx                # Resend API key — sign up at resend.com and
+                                              # create one (enables the Resend transport)
 export CANDY_MAIL_SMTP_HOST=smtp.gmail.com    # SMTP host (Resend key wins if both set —
                                               # force SMTP with --transport=smtp)
 export CANDY_MAIL_SMTP_PORT=587               # SMTP port (default: 587)
@@ -409,4 +415,6 @@ MIT
 
 ## Credits & inspiration
 
-Originally inspired by the Go [Charm](https://github.com/charmbracelet) ecosystem; SugarCraft is developed as a native PHP project.
+Originally inspired by the Go [Charm](https://github.com/charmbracelet) ecosystem — specifically
+its [`pop`](https://github.com/charmbracelet/pop) mail tool, which this package ports; SugarCraft
+is developed as a native PHP project.
