@@ -158,6 +158,17 @@ arguments it checks against the grid's own current viewport — below
 `cardWidth` × `cellHeight` the layout silently floors at one column and one
 row, so a too-narrow viewport *lies*; detect it with this predicate instead.
 
+**Frame geometry.** A painted frame is exactly `min(visibleRows(), totalRows() -
+scrollRow())` cell rows tall — `rows * cellHeight() + (rows - 1) * vSpacing()`
+lines, `columns() * cardWidth() + (columns() - 1) * hSpacing()` cells wide; all
+six terms are accessors, so the box an owner clips to is provable without
+painting. Lines join with `"\n"` and the frame never carries a trailing newline.
+Two edges: the bottom-most page can be SHORTER than the viewport window (the
+library ends mid-screen), and an empty grid emits zero rows, not a blank frame.
+A line-diff painter that clears only changed lines must clear the leftover tail
+of its reserved box when the page shrinks — otherwise stale ghost cards sit at
+the end of the library, exactly where the user scrolled.
+
 Pass a [sugar-mouse](https://github.com/sugarcraft/sugar-mouse) `Manager` to make
 cells mouse-clickable — each is wrapped as zone id `cell:<index>`:
 
