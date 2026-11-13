@@ -224,6 +224,35 @@ construction. Inside a **text** line,
 array context values render as `[a b c]`: elements joined positionally,
 associative keys not shown — use JSON or logfmt when key names matter.
 
+### Writing a formatter
+
+`Formatter` is a single method — `format(Level, string, array, DateTimeImmutable, ?string $caller, ?string $prefix): string` — and you own the entire rendered line: label, layout, escaping and the terminator, which must be a **bare `\n`** (`Logger::emit()` writes your bytes untouched, and `PHP_EOL` would bake CRLF into shared logs; the interface docblock carries the same contract). Two record-integrity rules are yours to reproduce: fold context keys through `RecordKeys::claim()`, which namespaces reserved names, empty keys and repeats to a `ctx_…` spelling, and note that the `PartsOrder` honour contract is `TextFormatter`-only — a custom formatter's part order is whatever `format()` emits.
+
+```php
+use SugarCraft\Log\Formatter;
+use SugarCraft\Log\Formatter\RecordKeys;
+use SugarCraft\Log\Level;
+use SugarCraft\Log\Logger;
+
+final class ClockFormatter implements Formatter
+{
+    public function format(Level $level, string $message, array $context, \DateTimeImmutable $time, ?string $caller, ?string $prefix): string
+    {
+        $used = [];
+        $pairs = [];
+        foreach ($context as $key => $value) {
+            $pairs[] = RecordKeys::claim((string) $key, $used) . '=' . $value;
+        }
+
+        return $time->format('H:i:s') . ' ' . $level->name . ' ' . $message
+            . ($pairs === [] ? '' : ' ' . implode(' ', $pairs)) . "\n";
+    }
+}
+
+$log = Logger::new(formatter: new ClockFormatter());
+$log->info('oven ready', ['temperature' => 180]);
+```
+
 ## Styling
 
 Styles are applied only when the destination can render them, and two
