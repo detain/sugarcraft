@@ -28,6 +28,10 @@ use SugarCraft\Style\VAlign;
  *
  * Design antecedent: treilik/bubbleboxer — SugarPanels is a native PHP
  * project that grew its own flex/solver/diff machinery beyond the original.
+ * Biggest divergence (recorded 2026-11): upstream places separator rules
+ * between panels and shares edges; we frame every node individually, because
+ * border presets, titles and margins are per-node properties a shared edge
+ * cannot express (see README *Border Characters*).
  *
  * @see https://github.com/treilik/bubbleboxer
  */

@@ -106,7 +106,8 @@ and natural sizes*). Every row the renderer emits is padded to the viewport
 width, `Bottom bar`'s included.
 
 The doubled `││` seam between the boxes is the documented frame rule (each panel
-draws its own edge; borders are never merged into junction glyphs).
+draws its own edge; borders are never merged into junction glyphs — the
+divergence from the antecedent is deliberate, see *Border Characters*).
 
 ## Flex and natural sizes
 
@@ -273,6 +274,12 @@ Each panel draws its own frame — the renderer does **not** merge adjacent
 borders into the junction glyphs (├ ┤ ┬ ┴ ┼) sketched above. Where two bordered
 panels meet, the neighbour's left/top edge characters stand in for the join, so a
 nested layout reads as doubled `││` seams rather than crosses.
+
+**Divergences from the antecedent (recorded 2026-11):** this per-node framing is
+the biggest one — upstream treilik/bubbleboxer places separator rules *between*
+panels and shares edges, while sugar-panels frames every node individually
+because border presets, titles and margins are per-node properties that a shared
+edge cannot express.
 
 At `withSpacing(0)` the divider has no gap of its own and shares the previous
 child's boundary. It never paints over a visible glyph, and the verdict is taken
