@@ -47,6 +47,7 @@ return [
     'cli.export_window_too_large' => 'candy-codetime: {command}: ウィンドウが {max} 日を超えています',
     'cli.export_missing_filter' => 'candy-codetime: {flag} は等号の後に値が必要です',
     'cli.gaps_no_data' => "ギャップは見つかりませんでした。",
+    'cli.gaps_empty' => 'gaps: その期間の追跡データはありません',
     'cli.gaps_header' => "未追跡の時間ギャップ:",
     'cli.gaps_entry' => "  {start} – {end}  ({seconds}s untracked)",
     'cli.backup_done' => "backup: {count} 個のファイルをアーカイブしました",

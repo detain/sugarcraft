@@ -47,6 +47,7 @@ return [
     'cli.export_window_too_large' => 'candy-codetime: {command}: okno zahrnuje více než {max} dnů',
     'cli.export_missing_filter' => 'candy-codetime: {flag} vyžaduje hodnotu za rovnítkem',
     'cli.gaps_no_data' => "Nebyly nalezeny žádné mezery.",
+    'cli.gaps_empty' => 'gaps: za toto období nejsou zaznamenána žádná data',
     'cli.gaps_header' => "Nesledované časové mezery:",
     'cli.gaps_entry' => "  {start} – {end}  ({seconds}s untracked)",
     'cli.backup_done' => "backup: {count} souborů archivováno",

@@ -47,6 +47,7 @@ return [
     'cli.export_window_too_large' => 'candy-codetime: {command}: 창이 {max}일보다 깁니다',
     'cli.export_missing_filter' => 'candy-codetime: {flag}는 등호 뒤에 값이 필요합니다',
     'cli.gaps_no_data' => "공백을 찾지 못했습니다.",
+    'cli.gaps_empty' => 'gaps: 해당 기간에 추적된 데이터가 없습니다',
     'cli.gaps_header' => "추적되지 않은 시간 공백:",
     'cli.gaps_entry' => "  {start} – {end}  ({seconds}s untracked)",
     'cli.backup_done' => "backup: 파일 {count} 개를 보관했습니다",

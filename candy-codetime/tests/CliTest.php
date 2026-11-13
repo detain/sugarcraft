@@ -1568,4 +1568,18 @@ final class CliTest extends TestCase
         self::assertSame(1, $empty['exit']);
         self::assertStringContainsString('needs a value', $empty['stderr']);
     }
+
+    public function testGapsOnAnEmptyStoreSaysThereIsNoDataNotThatAllIsWell(): void
+    {
+        $res = $this->runCli(['gaps']);
+        $this->assertSame(0, $res['exit'], $res['stderr']);
+        $this->assertStringContainsString('no tracked data', $res['stdout']);
+        $this->assertStringNotContainsString('No gaps', $res['stdout'], 'absence must not answer as reassurance');
+
+        $push = $this->runCli(['push', 'proj', 'php', '/x/a.php', '60']);
+        $this->assertSame(0, $push['exit'], $push['stdout'] . $push['stderr']);
+        $after = $this->runCli(['gaps']);
+        $this->assertSame(0, $after['exit'], $after['stderr']);
+        $this->assertStringContainsString('No gaps', $after['stdout'], 'a tracked window with no gap keeps the old line');
+    }
 }

@@ -47,6 +47,7 @@ return [
     'cli.export_window_too_large' => 'candy-codetime: {command}: das Fenster umfasst mehr als {max} Tage',
     'cli.export_missing_filter' => 'candy-codetime: {flag} benötigt einen Wert nach dem Gleichheitszeichen',
     'cli.gaps_no_data' => "Keine Lücken gefunden.",
+    'cli.gaps_empty' => 'gaps: für diesen Zeitraum sind keine Daten erfasst',
     'cli.gaps_header' => "Nicht erfasste Zeitlücken:",
     'cli.gaps_entry' => "  {start} – {end}  ({seconds}s untracked)",
     'cli.backup_done' => "backup: {count} Dateien archiviert",

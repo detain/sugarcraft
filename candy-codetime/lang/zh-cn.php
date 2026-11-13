@@ -47,6 +47,7 @@ return [
     'cli.export_window_too_large' => 'candy-codetime: {command}: 窗口跨度超过 {max} 天',
     'cli.export_missing_filter' => 'candy-codetime: {flag} 需要在等号后提供值',
     'cli.gaps_no_data' => "未发现空档。",
+    'cli.gaps_empty' => 'gaps: 该时间段没有跟踪数据',
     'cli.gaps_header' => "未跟踪的时间空档:",
     'cli.gaps_entry' => "  {start} – {end}  ({seconds}s untracked)",
     'cli.backup_done' => "backup: 已归档 {count} 个文件",

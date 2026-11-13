@@ -47,6 +47,7 @@ return [
     'cli.export_window_too_large' => 'candy-codetime: {command}: a janela abrange mais de {max} dias',
     'cli.export_missing_filter' => 'candy-codetime: {flag} precisa de um valor após o sinal de igual',
     'cli.gaps_no_data' => "Nenhum intervalo encontrado.",
+    'cli.gaps_empty' => 'gaps: sem dados registrados nesse período',
     'cli.gaps_header' => "Intervalos não rastreados:",
     'cli.gaps_entry' => "  {start} – {end}  ({seconds}s untracked)",
     'cli.backup_done' => "backup: {count} arquivos arquivados",

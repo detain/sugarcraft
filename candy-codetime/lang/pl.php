@@ -47,6 +47,7 @@ return [
     'cli.export_window_too_large' => 'candy-codetime: {command}: okno obejmuje więcej niż {max} dni',
     'cli.export_missing_filter' => 'candy-codetime: {flag} wymaga wartości po znaku równości',
     'cli.gaps_no_data' => "Nie znaleziono przerw.",
+    'cli.gaps_empty' => 'gaps: brak zapisanych danych w tym okresie',
     'cli.gaps_header' => "Niesledzone przerwy w czasie:",
     'cli.gaps_entry' => "  {start} – {end}  ({seconds}s untracked)",
     'cli.backup_done' => "backup: zarchiwizowano {count} plików",

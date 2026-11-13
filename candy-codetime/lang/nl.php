@@ -47,6 +47,7 @@ return [
     'cli.export_window_too_large' => 'candy-codetime: {command}: het venster beslaat meer dan {max} dagen',
     'cli.export_missing_filter' => 'candy-codetime: {flag} heeft een waarde nodig na het = teken',
     'cli.gaps_no_data' => "Geen gaten gevonden.",
+    'cli.gaps_empty' => 'gaps: geen vastgelegde gegevens voor die periode',
     'cli.gaps_header' => "Niet-vastgelegde tijdsgaten:",
     'cli.gaps_entry' => "  {start} – {end}  ({seconds}s untracked)",
     'cli.backup_done' => "backup: {count} bestanden gearchiveerd",

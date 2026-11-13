@@ -47,6 +47,7 @@ return [
     'cli.export_window_too_large' => 'candy-codetime: {command}: تتجاوز النافذة {max} يومًا',
     'cli.export_missing_filter' => 'candy-codetime: {flag} تحتاج قيمة بعد علامة التساوي',
     'cli.gaps_no_data' => "لم يتم العثور على فترات فراغ.",
+    'cli.gaps_empty' => 'gaps: لا توجد بيانات متتبَّلة لهذه الفترة',
     'cli.gaps_header' => "فترات زمنية غير متتبَّعة:",
     'cli.gaps_entry' => "  {start} – {end}  ({seconds}s untracked)",
     'cli.backup_done' => "backup: تمت أرشفة {count} ملفات",

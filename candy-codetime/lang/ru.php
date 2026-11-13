@@ -47,6 +47,7 @@ return [
     'cli.export_window_too_large' => 'candy-codetime: {command}: окно охватывает более {max} дней',
     'cli.export_missing_filter' => 'candy-codetime: {flag} требует значение после знака равенства',
     'cli.gaps_no_data' => "Промежутки не найдены.",
+    'cli.gaps_empty' => 'gaps: за этот период нет отслеженных данных',
     'cli.gaps_header' => "Неотслеженные промежутки:",
     'cli.gaps_entry' => "  {start} – {end}  ({seconds}s untracked)",
     'cli.backup_done' => "backup: заархивировано файлов: {count}",

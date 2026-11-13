@@ -826,6 +826,14 @@ if ($cmd === 'gaps') {
         $minGapSeconds = (int) $minSecondsOpt;
     }
 
+    // CT-S48 (finding 056): an empty window and a gap-free window are
+    // different facts — "No gaps found." on a fresh store manufactured
+    // reassurance out of absence (or a mis-selected backend).
+    if ($beats === []) {
+        fwrite(STDOUT, Lang::t('cli.gaps_empty') . "\n");
+        exit(0);
+    }
+
     $report = new GapsReport($beats, $minGapSeconds);
     $gaps = $report->gaps();
 

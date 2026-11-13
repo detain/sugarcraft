@@ -47,6 +47,7 @@ return [
     'cli.export_window_too_large' => 'candy-codetime: {command}: pencere {max} günden uzun bir aralığı kapsıyor',
     'cli.export_missing_filter' => 'candy-codetime: {flag} eşitlik işaretinden sonra bir değer ister',
     'cli.gaps_no_data' => "Boşluk bulunamadı.",
+    'cli.gaps_empty' => 'gaps: o dönem için izlenen veri yok',
     'cli.gaps_header' => "İzlenmeyen zaman boşlukları:",
     'cli.gaps_entry' => "  {start} – {end}  ({seconds}s untracked)",
     'cli.backup_done' => "backup: {count} dosya arşivlendi",

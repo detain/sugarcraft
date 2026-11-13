@@ -47,6 +47,7 @@ return [
     'cli.export_window_too_large' => 'candy-codetime: {command}: la ventana abarca más de {max} días',
     'cli.export_missing_filter' => 'candy-codetime: {flag} necesita un valor tras el signo igual',
     'cli.gaps_no_data' => "No se encontraron huecos.",
+    'cli.gaps_empty' => 'gaps: no hay datos registrados en ese periodo',
     'cli.gaps_header' => "Huecos sin seguimiento:",
     'cli.gaps_entry' => "  {start} – {end}  ({seconds}s untracked)",
     'cli.backup_done' => "backup: {count} archivos archivados",
