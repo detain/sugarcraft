@@ -494,4 +494,47 @@ final class ReportsPageTest extends TestCase
         $nextPage = $page->withSelectNextColumn();
         $this->assertSame(0, $nextPage->selectedColumnIndex());
     }
+
+    // ─── SQL-P14 (adminpages-025): pane seeds make the rows real ───────────
+
+    public function testQueryStatsAndTableStatsProbesDiffer(): void
+    {
+        $this->context->method('connection')->willReturn($this->db);
+
+        $query = ReportsPage::new($this->context, $this->db, ReportsPage::seedCategoryFor(\SugarCraft\Sql\Admin\AdminPane::QueryStats), 'Query Stats');
+        $query->view();
+        $table = ReportsPage::new($this->context, $this->db, ReportsPage::seedCategoryFor(\SugarCraft\Sql\Admin\AdminPane::TableStats), 'Table Stats');
+        $table->view();
+
+        $this->assertSame('problems', $query->selectedCategory(), 'Query Stats opens on the statement-problems family');
+        $this->assertSame('schema', $table->selectedCategory(), 'Table Stats opens on the schema/tables family');
+        $this->assertNotSame($query->selectedReport(), $table->selectedReport(), 'the two digits land on different reports');
+
+        $queryView = $query->view();
+        $tableView = $table->view();
+        $this->assertStringContainsString('Query Stats', $queryView, 'the header answers what was pressed');
+        $this->assertStringContainsString('Table Stats', $tableView);
+        $this->assertStringNotContainsString('Table Stats', $queryView, 'the headers do not bleed across panes');
+    }
+
+    public function testUnseededPageKeepsTheLegacyFirstCategory(): void
+    {
+        $this->context->method('connection')->willReturn($this->db);
+
+        $page = ReportsPage::new($this->context, $this->db);
+        $page->view();
+
+        $this->assertNotNull($page->selectedCategory(), 'non-vacuity: catalog seeded a default');
+        $this->assertStringNotContainsString('·', $page->view(), 'no pane label, no decorated header (embedders unchanged)');
+    }
+
+    public function testForeignSeedFallsBackToTheFirstCategory(): void
+    {
+        $this->context->method('connection')->willReturn($this->db);
+
+        $page = ReportsPage::new($this->context, $this->db, 'no-such-category');
+        $page->view();
+
+        $this->assertSame('problems', $page->selectedCategory(), 'an unavailable seed must not blank the tree');
+    }
 }

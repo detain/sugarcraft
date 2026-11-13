@@ -1161,7 +1161,11 @@ final class App implements Model
                 AdminPane::Dashboard => new DashboardPage($context),
                 AdminPane::Variables => self::buildVariablesPage($context),
                 AdminPane::Status => self::buildServerStatusPage($context),
-                AdminPane::QueryStats, AdminPane::TableStats => ReportsPage::new($context, $context->connection()),
+                // SQL-P14 (adminpages-025): both report panes shared one
+                // undifferentiated page; each now seeds its own category and
+                // surfaces its pane name in the header.
+                AdminPane::QueryStats => ReportsPage::new($context, $context->connection(), ReportsPage::seedCategoryFor(AdminPane::QueryStats), AdminPane::QueryStats->label()),
+                AdminPane::TableStats => ReportsPage::new($context, $context->connection(), ReportsPage::seedCategoryFor(AdminPane::TableStats), AdminPane::TableStats->label()),
                 AdminPane::PerfSchema => PerfSchemaPage::new($context, EasySetupDetector::fromContext($context)),
                 AdminPane::Debug => DebugPage::new($context),
             };

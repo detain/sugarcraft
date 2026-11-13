@@ -12,6 +12,7 @@ use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Forms\Spinner\Spinner;
 use SugarCraft\Forms\Spinner\Style as SpinnerStyle;
+use SugarCraft\Sql\Admin\AdminPane;
 use SugarCraft\Sql\Admin\PageBase;
 use SugarCraft\Sql\Admin\RowNavigable;
 use SugarCraft\Sql\Admin\ServerContextInterface;
@@ -120,6 +121,8 @@ final class ReportsPage extends PageBase implements RowNavigable
     public function __construct(
         ServerContextInterface $context,
         ?DatabaseInterface $db = null,
+        private readonly ?string $initialCategory = null,
+        private readonly ?string $paneLabel = null,
     ) {
         parent::__construct($context);
         $this->db = $db;
@@ -127,10 +130,31 @@ final class ReportsPage extends PageBase implements RowNavigable
 
     /**
      * Create a new ReportsPage from the server context.
+     *
+     * SQL-P14 (adminpages-025): $initialCategory seeds the category tree so
+     * the Query Stats and Table Stats panes open on their own subject
+     * instead of one undifferentiated page; $paneLabel surfaces the pane
+     * the digit opened (headers carrying it answer "what did I press?").
      */
-    public static function new(ServerContextInterface $context, ?DatabaseInterface $db = null): self
+    public static function new(ServerContextInterface $context, ?DatabaseInterface $db = null, ?string $initialCategory = null, ?string $paneLabel = null): self
     {
-        return new self($context, $db);
+        return new self($context, $db, $initialCategory, $paneLabel);
+    }
+
+    /**
+     * The admin panes that share this page and the category each seeds,
+     * keyed by AdminPane value (SQL-P14).
+     *
+     * @var array<string,string>
+     */
+    public const PANE_SEEDS = [
+        'query_stats' => 'problems',
+        'table_stats' => 'schema',
+    ];
+
+    public static function seedCategoryFor(AdminPane $pane): ?string
+    {
+        return self::PANE_SEEDS[$pane->value] ?? null;
     }
 
     /**
@@ -161,8 +185,13 @@ final class ReportsPage extends PageBase implements RowNavigable
 
             // Default selection from catalog (availability filtering happens
             // in loadCurrentReport via AsyncCachedConnection async query).
+            // SQL-P14: a pane seed wins over the raw first category when it
+            // exists on this server's catalog.
             if ($this->selectedCategory === null && !empty($this->categories)) {
-                $this->selectedCategory = $this->categories[0];
+                $this->selectedCategory = $this->initialCategory !== null
+                    && isset($this->reportsByCategory[$this->initialCategory])
+                    ? $this->initialCategory
+                    : $this->categories[0];
             }
 
             if ($this->selectedReport === null && isset($this->reportsByCategory[$this->selectedCategory])) {
@@ -592,7 +621,13 @@ final class ReportsPage extends PageBase implements RowNavigable
 
     private function renderHeader(): string
     {
-        return Style::new()->bold()->foreground(Color::hex('#22d3ee'))->render('Performance Reports');
+        // SQL-P14: when a pane opened this page, say which one — the two
+        // report panes must be tellable apart from the page itself.
+        $base = 'Performance Reports';
+
+        return Style::new()->bold()->foreground(Color::hex('#22d3ee'))->render(
+            $this->paneLabel !== null ? $base . ' · ' . $this->paneLabel : $base,
+        );
     }
 
     private function renderLayout(): string
