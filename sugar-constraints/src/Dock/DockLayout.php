@@ -92,6 +92,8 @@ final class DockLayout
         public readonly int $centerMinCols,
         public readonly int $sideMinCols,
         public readonly int $dividerCols,
+        public readonly int $leftFixedCols = 0,
+        public readonly int $rightFixedCols = 0,
     ) {
         if ($centerPaneId === '') {
             throw new \InvalidArgumentException('DockLayout centerPaneId must be a non-empty string');
@@ -119,6 +121,11 @@ final class DockLayout
         }
         if ($dividerCols !== 1) {
             throw new \InvalidArgumentException("DockLayout dividerCols is fixed at 1 until a mutator ships; got {$dividerCols}");
+        }
+        if ($leftFixedCols < 0 || $rightFixedCols < 0) {
+            throw new \InvalidArgumentException(
+                "DockLayout fixed columns must be >= 0; got left={$leftFixedCols}, right={$rightFixedCols}"
+            );
         }
         // resolve() splits each stack in exact integer arithmetic over the
         // stack's common denominator; a weight set whose scaled sum cannot be
@@ -400,6 +407,31 @@ final class DockLayout
     }
 
     /**
+     * Claim EXACTLY $cols columns for a side, bypassing the share pass —
+     * "20 columns, always" is what the share-only surface could not express.
+     * $cols = 0 returns the side to share-driven planning (the default). The
+     * center's floor ladder still applies to the remaining pool: a fixed side
+     * that starves the center below `centerMinCols` is dropped by the same
+     * degradation ladder that removes share-driven sides, and — by design —
+     * the min-protection RAISE never touches a fixed side, since a raise
+     * would undo the exactness the caller declared.
+     */
+    public function withFixedColumns(Side $side, int $cols): self
+    {
+        if ($cols < 0) {
+            throw new \InvalidArgumentException(
+                "Fixed columns for {$side->name} side must be >= 0; got {$cols}"
+            );
+        }
+
+        if ($side === Side::Left) {
+            return $this->mutate(['leftFixedCols' => $cols]);
+        }
+
+        return $this->mutate(['rightFixedCols' => $cols]);
+    }
+
+    /**
      * Set the column minimums; both must be >= 1.
      */
     public function withMinimums(int $centerMinCols, int $sideMinCols): self
@@ -493,6 +525,8 @@ final class DockLayout
             centerMinCols: $values['centerMinCols'],
             sideMinCols: $values['sideMinCols'],
             dividerCols: $values['dividerCols'],
+            leftFixedCols: $values['leftFixedCols'],
+            rightFixedCols: $values['rightFixedCols'],
         );
     }
 
@@ -592,8 +626,35 @@ final class DockLayout
             return null;
         }
 
-        $cols = [];
+        // Fixed columns (withFixedColumns) are consumed BEFORE the share pass:
+        // a side that declared an exact width takes it — no ceiling, no
+        // raise — and the share-driven sides plus the center split what
+        // remains. A zero fixed value is share-driven, so the original walk
+        // is byte-identical for every shape that never used this mutator.
+        $fixedCols = [];
+        $variable = [];
+        $fixedTotal = 0;
         foreach ($active as $side) {
+            $fixed = $side === Side::Left ? $this->leftFixedCols : $this->rightFixedCols;
+            if ($fixed > 0) {
+                $fixedCols[self::key($side)] = $fixed;
+                $fixedTotal += $fixed;
+                continue;
+            }
+            $variable[] = $side;
+        }
+
+        $pool = $usable - $fixedTotal;
+        if ($pool < 0) {
+            // The declared exact widths already swallow every usable column:
+            // the center stands below its >= 1 minimum whatever protection
+            // does — infeasible, degrade (the fixed side loses its columns to
+            // the ladder exactly like a share-driven starver).
+            return null;
+        }
+
+        $cols = $fixedCols;
+        foreach ($variable as $side) {
             $share = $this->columnShare($side);
             if ($share['num'] >= $share['denom']) {
                 // A share >= 1 (reachable only through the constructor or a
@@ -602,19 +663,21 @@ final class DockLayout
                 // whatever min-protection does: infeasible, degrade.
                 return null;
             }
-            $cols[self::key($side)] = self::mulDivFloor($usable, $share['num'], $share['denom']);
+            $cols[self::key($side)] = self::mulDivFloor($pool, $share['num'], $share['denom']);
         }
 
-        // Min-protection pass, Left first then Right: a side short of
-        // sideMinCols is raised only while the center still keeps its minimum.
-        foreach ($active as $side) {
+        // Min-protection pass, Left first then Right — VARIABLE sides only (a
+        // raise of a fixed side would undo its declared exactness): a side
+        // short of sideMinCols is raised only while the center keeps its
+        // minimum, charged against the same reduced pool.
+        foreach ($variable as $side) {
             $k = self::key($side);
             if ($cols[$k] >= $this->sideMinCols) {
                 continue;
             }
             $raised = $cols;
             $raised[$k] = $this->sideMinCols;
-            if ($usable - array_sum($raised) >= $this->centerMinCols) {
+            if ($pool - (array_sum($raised) - $fixedTotal) >= $this->centerMinCols) {
                 $cols = $raised;
             }
             // Refused raise: the side keeps its natural floor — possibly 0 cols.
@@ -831,8 +894,11 @@ final class DockLayout
             $slots,
         );
 
-        return [
-            'version' => 1,
+        $manifest = [
+            // v2 exists the moment an exact-width side appears; a manifest
+            // without fixed columns stays byte-identical to the v1 shape
+            // (round-trip identity for every blob that predates the mutator).
+            'version' => ($this->leftFixedCols > 0 || $this->rightFixedCols > 0) ? 2 : 1,
             'center' => $this->centerPaneId,
             'sides' => [
                 'left' => $encodeSlots($this->leftSlots),
@@ -844,6 +910,15 @@ final class DockLayout
             ],
             'minimums' => [$this->centerMinCols, $this->sideMinCols],
         ];
+
+        if ($manifest['version'] === 2) {
+            $manifest['fixed'] = [
+                'left' => $this->leftFixedCols,
+                'right' => $this->rightFixedCols,
+            ];
+        }
+
+        return $manifest;
     }
 
     /**
@@ -865,9 +940,12 @@ final class DockLayout
      */
     public static function fromArray(array $data): self
     {
-        if (array_key_exists('version', $data) === false || $data['version'] !== 1) {
+        if (array_key_exists('version', $data) === false
+            || (is_int($data['version']) === false)
+            || ($data['version'] !== 1 && $data['version'] !== 2)
+        ) {
             throw new \InvalidArgumentException(
-                "Dock manifest key 'version' must be int 1; got " . var_export($data['version'] ?? null, true)
+                "Dock manifest key 'version' must be int 1 or 2; got " . var_export($data['version'] ?? null, true)
             );
         }
         if (isset($data['center']) === false || is_string($data['center']) === false || $data['center'] === '') {
@@ -945,6 +1023,29 @@ final class DockLayout
             );
         }
 
+        // Optional in BOTH versions: absent means share-driven [0, 0], so a
+        // v1 blob parses unchanged and a hand-edited v1 may already carry the
+        // key. Forward-compat law (the version is a floor, never a ceiling):
+        // unknown keys are ignored, this one is validated when present.
+        $leftFixedCols = 0;
+        $rightFixedCols = 0;
+        if (array_key_exists('fixed', $data)) {
+            if (is_array($data['fixed']) === false) {
+                throw new \InvalidArgumentException("Dock manifest key 'fixed' must be an array");
+            }
+            $fixedFor = static function (string $sideKey) use ($data): int {
+                $value = $data['fixed'][$sideKey] ?? 0;
+                if (is_int($value) === false || $value < 0) {
+                    throw new \InvalidArgumentException(
+                        "Dock manifest key 'fixed.{$sideKey}' must be an int >= 0; got " . var_export($value, true)
+                    );
+                }
+                return $value;
+            };
+            $leftFixedCols = $fixedFor('left');
+            $rightFixedCols = $fixedFor('right');
+        }
+
         return new self(
             centerPaneId: $data['center'],
             leftSlots: $leftSlots,
@@ -956,6 +1057,8 @@ final class DockLayout
             centerMinCols: $data['minimums'][0],
             sideMinCols: $data['minimums'][1],
             dividerCols: 1,
+            leftFixedCols: $leftFixedCols,
+            rightFixedCols: $rightFixedCols,
         );
     }
 

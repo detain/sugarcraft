@@ -111,6 +111,70 @@ final class DockLayoutTest extends TestCase
         $layout->withStackWeightFor(Side::Left, 'term', 3, 1);
     }
 
+    public function testFixedColumnsYieldExactWidthsAcrossFrameSizes(): void
+    {
+        $layout = DockLayout::new('sidebar-demo')
+            ->withSlotAdded(Side::Left, 'files')
+            ->withFixedColumns(Side::Left, 20);
+
+        foreach ([100, 300] as $width) {
+            $geometry = $layout->resolve(Region::fromSize($width, 30));
+            $this->assertSame(20, $geometry->regionFor('files')?->width, "a fixed side stays 20 cols at frame {$width}");
+            $this->assertSame($width - 21, $geometry->regionFor('sidebar-demo')?->width, 'center absorbs the rest');
+        }
+
+        // The share-driven twin proves the mutator is the difference-maker:
+        // 1/3 of 100 is 33, of 300 it is 99.
+        $shareDriven = $layout->withFixedColumns(Side::Left, 0);
+        $this->assertSame(0, $shareDriven->leftFixedCols);
+        $this->assertNotSame(20, $shareDriven->resolve(Region::fromSize(300, 30))->regionFor('files')?->width);
+    }
+
+    public function testFixedSideStarvingCenterDegradesThroughTheLadder(): void
+    {
+        $layout = DockLayout::new()
+            ->withSlotAdded(Side::Left, 'files')
+            ->withMinimums(90, 20)
+            ->withFixedColumns(Side::Left, 20);
+
+        // usable 99, fixed 20 leaves 79 < the 90-col center floor: the plan
+        // is infeasible and the SAME ladder that drops share-driven starvers
+        // removes the fixed side — center takes the whole frame.
+        $geometry = $layout->resolve(Region::fromSize(100, 30));
+
+        $this->assertNull($geometry->regionFor('files'));
+        $this->assertEquals(new Region(0, 0, 100, 30), $geometry->regionFor('center'));
+    }
+
+    public function testFixedAndShareDrivenSidesCoexist(): void
+    {
+        $layout = DockLayout::new()
+            ->withSlotAdded(Side::Left, 'files')
+            ->withSlotAdded(Side::Right, 'term')
+            ->withFixedColumns(Side::Left, 20);
+
+        $geometry = $layout->resolve(Region::fromSize(100, 30));
+
+        // usable 98, pool 78: right 1/3 floors to 26, center keeps 52.
+        $this->assertSame(20, $geometry->regionFor('files')?->width);
+        $this->assertSame(26, $geometry->regionFor('term')?->width);
+        $this->assertSame(52, $geometry->regionFor('center')?->width);
+        // Regions sum to 98 — the two 1-column dividers are the frame's other
+        // 2 cells (x 0..19, div 20, center 21..72, div 73, term 74..99).
+        $this->assertSame(98, array_sum(array_map(static fn(Region $r): int => $r->width, $geometry->regions)));
+        $this->assertSame(
+            [['x' => 20, 'side' => Side::Left], ['x' => 73, 'side' => Side::Right]],
+            $geometry->dividerColumns(),
+        );
+    }
+
+    public function testNegativeFixedColumnsRefusedAtTheMutator(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Fixed columns for Left side must be >= 0; got -1');
+        DockLayout::new()->withFixedColumns(Side::Left, -1);
+    }
+
     public function testResolvePaintPathRidesTheConstructorCache(): void
     {
         $layout = DockLayout::new()
@@ -1014,7 +1078,7 @@ final class DockLayoutTest extends TestCase
     public function testFromRejectsMissingVersion(): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage("key 'version' must be int 1");
+        $this->expectExceptionMessage("key 'version' must be int 1 or 2");
         $data = $this->validManifest();
         unset($data['version']);
         DockLayout::fromArray($data);
@@ -1022,9 +1086,42 @@ final class DockLayoutTest extends TestCase
 
     public function testFromRejectsWrongVersion(): void
     {
+        // v2 became the fixed-columns manifest; the refused frontier moves to
+        // the next unknown version (forward-compat: version is a floor).
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage("key 'version' must be int 1");
-        DockLayout::fromArray(['version' => 2] + $this->validManifest());
+        $this->expectExceptionMessage("key 'version' must be int 1 or 2");
+        DockLayout::fromArray(['version' => 3] + $this->validManifest());
+    }
+
+    public function testVersionTwoManifestRoundTripsFixedColumns(): void
+    {
+        $layout = DockLayout::new()
+            ->withSlotAdded(Side::Left, 'files')
+            ->withFixedColumns(Side::Left, 20);
+
+        $manifest = $layout->toArray();
+        $this->assertSame(2, $manifest['version']);
+        $this->assertSame(['left' => 20, 'right' => 0], $manifest['fixed']);
+
+        $restored = DockLayout::fromArray($manifest);
+        $this->assertSame(20, $restored->leftFixedCols);
+        $this->assertSame(0, $restored->rightFixedCols);
+        $this->assertSame($manifest, $restored->toArray(), 'v2 round-trip identity');
+
+        // A share-driven shape never learned about v2: byte-identical v1.
+        $plain = DockLayout::new()->withSlotAdded(Side::Left, 'files')->toArray();
+        $this->assertSame(1, $plain['version']);
+        $this->assertArrayNotHasKey('fixed', $plain);
+    }
+
+    public function testMalformedFixedKeyIsRefusedNamingIt(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("key 'fixed.left' must be an int >= 0");
+        DockLayout::fromArray([
+            'version' => 2,
+            'fixed' => ['left' => -5],
+        ] + $this->validManifest());
     }
 
     public function testFromRejectsMissingCenter(): void

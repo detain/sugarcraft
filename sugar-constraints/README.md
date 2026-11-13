@@ -274,9 +274,10 @@ and names the miss instead of trusting `0..count-1`.
 - **Floors are soft.** `Min` clamps proportionally under demand; `Length`
   truncates; the reclaim ladder can inflate "fixed" types (above).
 - **No aspect-ratio lock** — `Ratio` is single-axis (above).
-- **Dock sides are share-only.** `withColumnShare()` rationals plus
-  `sideMinCols` floors; a "20 columns, always" sidebar is inexpressible
-  (1/5 of 100 is 20, of 300 it is 49). No fixed-columns mutator ships.
+- **Dock sides: exact widths ride the center floor.** `withFixedColumns()`
+  grants exact columns (below) but a fixed side that starves the centre below
+  `centerMinCols` is dropped by the degradation ladder — exactness never
+  outranks the centre's floor.
 - **Spare cells go first-wins by list order, weight-blind** — a 101-span
   `[fill(1), fill(2)]` yields `[34, 67]`; the ordering of your list is part
   of the layout.
@@ -372,6 +373,19 @@ stack weight set whose scaled sum would exceed `PHP_INT_MAX` is refused with
 `InvalidArgumentException` at the mutator or manifest that introduces it —
 `resolve()` itself never throws.
 
+**Fixed columns.** `withFixedColumns(Side, int $cols)` claims EXACTLY that many
+columns for a side before the share pass — the "20 columns, always" sidebar the
+share-only surface could not express (1/5 of 100 is 20, of 300 it is 49; fixed
+20 is 20 on both frames). Share-driven sides split the reduced pool with their
+rationals; the `sideMinCols` raise never touches a fixed side (a raise would
+undo the declared exactness), and the centre's floor still outranks exactness:
+a fixed side that starves the centre below `centerMinCols` is dropped by the
+same degradation ladder that removes share-driven starvers. `$cols = 0`
+returns the side to share-driven planning — the default, and the reason every
+pre-existing shape resolves byte-identically. Fixed widths ride the version-2
+manifest (`'fixed' => ['left' => n, 'right' => m]`); a share-driven dock keeps
+emitting the byte-identical version-1 shape, and `fromArray` accepts both.
+
 **Gutters.** The stack gap is one fixed row (internal constant). The divider
 width is fixed at 1 column with no public configuration:
 `DockLayout::__construct` is private, `new()` takes only the centre pane id
@@ -382,7 +396,12 @@ shape. The constructor guard refuses any other value, so no host can drift
 from the persisted shape even through the private surface.
 
 **Persistence.** `toArray()`/`fromArray()` ship an exact versioned shape:
-`['version' => 1, 'center' => 'chat', 'sides' => ['left' => [['id' => …, 'weight' => [n, d]], …], 'right' => […]], 'columnShare' => ['left' => [1, 3], 'right' => [1, 3]], 'minimums' => [24, 20]]`.
+`['version' => 1, 'center' => 'chat', 'sides' => ['left' => [['id' => …, 'weight' => [n, d]], …], 'right' => […]], 'columnShare' => ['left' => [1, 3], 'right' => [1, 3]], 'minimums' => [24, 20]]`
+— that exact v1 shape while the dock is share-driven; a dock with fixed
+columns emits version 2 plus a `'fixed' => ['left' => n, 'right' => m]` map.
+`fromArray` accepts version 1 or 2 (missing or out-of-range `version` is
+refused; an absent `fixed` key means `[0, 0]`, so every v1 blob round-trips
+byte-identically).
 Malformed manifests throw `InvalidArgumentException` naming the failed key —
 including a slot id that collides with the center pane's (a pane has exactly
 one home; `withSlotAdded()` refuses the same collision). `dividerCols` has no
