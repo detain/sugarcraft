@@ -383,6 +383,14 @@ jobs:
         run: php tools/check-docs-assets.php
       - name: Verify root-doc lib rows match the post-drain seed corpus
         run: php tools/check-root-rows.php
+      # RT-32 (repo-tooling-035, OG-8 recommend arm): gen-ansi-readme's header has
+      # called --check "the CI guard" since it was written, yet no workflow ran it —
+      # the same documented-guard-without-seat class as RT-19. Pure PHP, composer-less
+      # like its neighbours, and it passes today (3,595 pieces agree), so seating
+      # costs one CI minute and makes the header's claim true. tools/tests/
+      # GenAnsiReadmeTest.php pins this seat and guards the checker itself.
+      - name: Verify ansi/README.md tables match the art-corpus JSON
+        run: php tools/gen-ansi-readme.php --check
 
   # RT-19 (repo-tooling-021): the committed narrative pages under docs/
   # (GETTING-STARTED, GLOSSARY, KEYMAPS, TRUST-BOUNDARY and friends) are

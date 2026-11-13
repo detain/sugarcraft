@@ -299,7 +299,16 @@ function ansi_render_readme(string $readme, array $index): string
         $category = $section === 'SugarCraft' ? 'sugarcraft' : $section;
 
         $out[] = $line;
-        $out[] = $lines[++$i];                    // the |---|---| separator, copied as-is
+        if ($i + 1 >= $n) {
+            // RT-32 (repo-tooling-043): a table header as the file's literal last
+            // line had no separator to copy — the old `$lines[++$i]` reached past
+            // the end, emitted an undefined-offset warning and spliced NULL into
+            // the output even under --check. Malformed input is exit 2, named.
+            fwrite(STDERR, 'gen-ansi-readme: table header at line ' . ($i + 1) . " has no separator row — truncated README?\n");
+            exit(2);
+        }
+        $i++;
+        $out[] = $lines[$i];                    // the |---|---| separator, copied as-is
         foreach (ansi_section_rows($index, $category, $withDepth) as $row) {
             $out[] = $row;
         }

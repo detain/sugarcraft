@@ -502,6 +502,45 @@ final class GenAnsiReadmeTest extends TestCase
         $this->assertStringContainsString('agree across', $result['output']);
     }
 
+    /**
+     * RT-32 (repo-tooling-043): a table header as the file's literal last line
+     * used to reach past the array end — the old `$lines[++$i]` warned about an
+     * undefined offset, spliced NULL into the output, and --check merely carried
+     * on. Malformed input must fail LOUD with the line named (exit 2, the tool's
+     * input-corruption code — distinct from exit 1 drift).
+     */
+    public function testATruncatedReadmeFailsLoudNamingTheHeaderLine(): void
+    {
+        $root = $this->makeFixtureRoot();
+        // Header as the very last byte — no separator, no trailing newline.
+        \file_put_contents($root . '/README.md', "## SugarCraft\n| File | Size | Colors | Description |");
+
+        $result = $this->runScript($root, ['--check']);
+
+        $this->assertSame(2, $result['exit'], "truncated README must exit 2, got {$result['exit']}:\n" . $result['output']);
+        $this->assertStringContainsString('line 2', $result['output'], 'the failing header line must be named');
+        $this->assertStringContainsString('separator', $result['output'], 'the error must say what is missing');
+    }
+
+    /**
+     * RT-32 (repo-tooling-035): the header calls --check "the CI guard"; this
+     * pin is what makes that sentence true. Same documented-guard-without-seat
+     * class as gen-docs (RT-14) and gen-doc-pages (RT-19) — a seat quoted in
+     * prose rots the moment someone moves the job, so the prose is checked
+     * against the bytes. CheckPathReposTest's ci.yml divergence arm is the model.
+     */
+    public function testTheCiSeatForCheckModeIsReal(): void
+    {
+        $workflow = (string) \file_get_contents(\dirname(__DIR__, 2) . '/.github/workflows/ci.yml');
+
+        $this->assertStringContainsString(
+            'php tools/gen-ansi-readme.php --check',
+            $workflow,
+            'gen-ansi-readme --check is described as the CI guard but no longer runs in '
+            . '.github/workflows/ci.yml — seat it in the docs-generated job or the header claim lies.'
+        );
+    }
+
     // -----------------------------------------------------------------
     // Helpers
     // -----------------------------------------------------------------
